@@ -27,7 +27,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.SortedMap;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /** The type of a tuple value. */
 public class TupleType extends BaseType implements RecordLikeType {
@@ -49,7 +49,8 @@ public class TupleType extends BaseType implements RecordLikeType {
     return typeVisitor.visit(this);
   }
 
-  public Type copy(TypeSystem typeSystem, Function<Type, Type> transform) {
+  @Override public TupleType copy(TypeSystem typeSystem,
+      UnaryOperator<Type> transform) {
     int differenceCount = 0;
     final ImmutableList.Builder<Type> argTypes2 = ImmutableList.builder();
     for (Type argType : argTypes) {

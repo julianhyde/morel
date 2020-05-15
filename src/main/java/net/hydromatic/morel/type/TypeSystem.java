@@ -40,9 +40,11 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
+
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import static java.text.MessageFormat.format;
-import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** A table that contains all types in use, indexed by their description (e.g.
  * "{@code int -> int}"). */
@@ -75,7 +77,7 @@ public class TypeSystem {
 
   private Type wrap(DataType dataType, Type type) {
     @SuppressWarnings("UnstableApiUsage") final List<TypeVar> typeVars =
-        dataType.typeVars.stream().filter(t -> t instanceof TypeVar)
+        dataType.parameterTypes.stream().filter(t -> t instanceof TypeVar)
             .map(t -> (TypeVar) t)
             .collect(ImmutableList.toImmutableList());
     return typeVars.isEmpty() ? type : forallType(typeVars, type);
@@ -262,7 +264,7 @@ public class TypeSystem {
   }
 
   /** Creates a "forall" type. */
-  public Type forallType(Iterable<TypeVar> typeVars, Type type) {
+  public ForallType forallType(Iterable<TypeVar> typeVars, Type type) {
     final StringBuilder b = new StringBuilder();
     b.append("forall");
     for (TypeVar typeVar : typeVars) {
@@ -272,7 +274,7 @@ public class TypeSystem {
     unparse(b, type, 0, 0);
 
     final String description = b.toString();
-    return typeByName.computeIfAbsent(description,
+    return (ForallType) typeByName.computeIfAbsent(description,
         d -> new ForallType(d, ImmutableList.copyOf(typeVars), type));
   }
 
@@ -307,8 +309,8 @@ public class TypeSystem {
    *
    * <p>(Temporary types exist for a brief period while defining a recursive
    * {@code datatype}.) */
-  public TemporaryType temporaryType(String name) {
-    final TemporaryType temporaryType = new TemporaryType(this, name);
+  public TemporaryType temporaryType(String name, List<TypeVar> typeVars) {
+    final TemporaryType temporaryType = new TemporaryType(this, name, typeVars);
     typeByName.put(name, temporaryType);
     return temporaryType;
   }
@@ -322,20 +324,28 @@ public class TypeSystem {
   }
 
   public Type apply(Type type, List<Type> types) {
+    if (type instanceof TemporaryType) {
+      final TemporaryType temporaryType = (TemporaryType) type;
+      if (types.equals(temporaryType.typeVars)) {
+        return type;
+      }
+      throw new AssertionError();
+    }
     if (type instanceof PolymorphicDataType) {
       // Create a copy of the datatype with type variables substituted with
       // actual types.
       final PolymorphicDataType dataType = (PolymorphicDataType) type;
-      assert types.size() == dataType.typeVars.size()
-          : format("types {0} vs typeVars {1}", types, dataType.typeVars);
-      final TypeVisitor<Type> typeVisitor = new TypeVisitor<Type>() {
+      assert types.size() == dataType.parameterTypes.size()
+          : format("types {0} vs typeVars {1}", types, dataType.parameterTypes);
+      final TypeShuttle typeVisitor = new TypeShuttle(this) {
         @Override public Type visit(TypeVar typeVar) {
           return types.get(typeVar.ordinal);
         }
       };
       final SortedMap<String, Type> typeConstructors = new TreeMap<>();
       dataType.typeConstructors.forEach((tyConName, tyConType) ->
-          typeConstructors.put(tyConName, tyConType.accept(typeVisitor)));
+          typeConstructors.put(tyConName,
+              tyConType.accept(typeVisitor)));
       return dataType(dataType.name, types, typeConstructors);
     }
     final String description = ApplyType.computeDescription(type, types);
@@ -403,10 +413,13 @@ public class TypeSystem {
   public static class TemporaryType implements NamedType {
     private final TypeSystem typeSystem;
     private final String name;
+    public final List<TypeVar> typeVars;
 
-    private TemporaryType(TypeSystem typeSystem, String name) {
+    private TemporaryType(TypeSystem typeSystem, String name,
+        List<TypeVar> typeVars) {
       this.typeSystem = Objects.requireNonNull(typeSystem);
       this.name = Objects.requireNonNull(name);
+      this.typeVars = ImmutableList.copyOf(typeVars);
     }
 
     @Override public String description() {
@@ -421,7 +434,8 @@ public class TypeSystem {
       return name;
     }
 
-    public Type copy(TypeSystem typeSystem, Function<Type, Type> transform) {
+    @Override public Type copy(TypeSystem typeSystem,
+        UnaryOperator<Type> transform) {
       return transform.apply(this);
     }
 

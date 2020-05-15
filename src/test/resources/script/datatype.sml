@@ -93,9 +93,9 @@ Node(Empty, 2, Node(Node(Empty, 3, Empty), 4, Empty));
 height it;
 
 (*) Recursive
-(*  disabled - need generics
-datatype 'a tree = Empty | Node of 'a tree * 'a * 'a tree;
+datatype 'x tree = Empty | Node of 'x tree * 'x * 'x tree;
 fun max (x, y) = if x < y then y else x;
+(*
 fun height Empty = 0
   | height (Node (lft, _, rht)) = 1 + max (height lft, height rht);
 Empty;
@@ -105,6 +105,11 @@ height it;
 Node(Empty, 2, Node(Node(Empty, 3, Empty), Empty));
 height it;
 *)
+
+(*) Two type parameters
+datatype ('y, 'x) tree =
+   Empty
+ | Node of ('y, 'x) tree * 'x * 'y * ('y, 'x) tree;
 
 (*) Mutually recursive
 (*  disabled - need generics
@@ -119,16 +124,12 @@ Node (1, Cons (Empty, Nil));
 (*) Parentheses are required for 2 or more type parameters,
 (*) optional for 1 type parameter,
 (*) not allowed for 0 type parameters.
-(*  disabled - need generics
 datatype ('a, 'b) pair = Pair of 'a * 'b;
-*)
 (* disabled; should throw
 datatype 'a, 'b pair = Pair of 'a * 'b; (*) not valid
 *)
-(*  disabled - need generics
 datatype 'a single = Single of 'a;
 datatype ('a) single = Single of 'a;
-*)
 (* disabled; should throw
 datatype () void = Void of unit; (*) not valid
 datatype () void = Void; (*) not valid

@@ -21,7 +21,7 @@ package net.hydromatic.morel.type;
 import net.hydromatic.morel.ast.Op;
 
 import java.util.Objects;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /** The type of a list value. */
 // TODO: remove this, and use datatype?
@@ -37,7 +37,8 @@ public class ListType extends BaseType {
     return typeVisitor.visit(this);
   }
 
-  public Type copy(TypeSystem typeSystem, Function<Type, Type> transform) {
+  @Override public ListType copy(TypeSystem typeSystem,
+      UnaryOperator<Type> transform) {
     final Type elementType2 = elementType.copy(typeSystem, transform);
     return elementType2 == elementType
         ? this
