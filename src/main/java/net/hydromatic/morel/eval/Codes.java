@@ -1939,16 +1939,13 @@ public abstract class Codes {
 
   /** Creates an empty evaluation environment. */
   public static EvalEnv emptyEnv() {
-    final Map<String, Object> map = new HashMap<>();
-    populateBuiltIns(map);
-    return EvalEnvs.copyOf(map);
+    return EvalEnvs.copyOf(BUILT_IN_MAP2);
   }
 
   /** Creates an evaluation environment that contains the bound values from a
    * compilation environment. */
   public static EvalEnv emptyEnvWith(Session session, Environment env) {
-    final Map<String, Object> map = new HashMap<>();
-    populateBuiltIns(map);
+    final Map<String, Object> map = new HashMap<>(BUILT_IN_MAP2);
     env.forEachValue(map::put);
     map.put(EvalEnv.SESSION, session);
     return EvalEnvs.copyOf(map);
@@ -2145,6 +2142,9 @@ public abstract class Codes {
   public static final Map<Applicable, BuiltIn> BUILT_IN_MAP =
       ((Supplier<Map<Applicable, BuiltIn>>) Codes::get).get();
 
+  private static final Map<String, Object> BUILT_IN_MAP2 = // TODO: needed?
+      ((Supplier<Map<String, Object>>) Codes::get2).get();
+
   private static Map<Applicable, BuiltIn> get() {
     final IdentityHashMap<Applicable, BuiltIn> b = new IdentityHashMap<>();
     BUILT_IN_VALUES.forEach((builtIn, o) -> {
@@ -2153,6 +2153,12 @@ public abstract class Codes {
       }
     });
     return ImmutableMap.copyOf(b);
+  }
+
+  private static Map<String, Object> get2() {
+    final Map<String, Object> map = new HashMap<>();
+    populateBuiltIns(map);
+    return ImmutableMap.copyOf(map);
   }
 
   /** A code that evaluates expressions and creates a tuple with the results.

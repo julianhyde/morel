@@ -503,7 +503,7 @@ public class Compiler {
             ImmutableList.copyOf(newBindings);
         actions.add((output, outBindings, evalEnv) -> {
           String description = dataType.description();
-          output.add("datatype " + dataType.name + " = "
+          output.add("datatype " + dataType.moniker + " = "
               + description.substring(1, description.length() - 1));
           outBindings.addAll(immutableBindings);
         });

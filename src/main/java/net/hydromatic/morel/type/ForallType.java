@@ -24,7 +24,7 @@ import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /** Universally quantified type. */
 public class ForallType extends BaseType {
@@ -41,7 +41,8 @@ public class ForallType extends BaseType {
     return typeVisitor.visit(this);
   }
 
-  public Type copy(TypeSystem typeSystem, Function<Type, Type> transform) {
+  @Override public ForallType copy(TypeSystem typeSystem,
+      UnaryOperator<Type> transform) {
     final Type type2 = type.copy(typeSystem, transform);
     return type2 == type
         ? this

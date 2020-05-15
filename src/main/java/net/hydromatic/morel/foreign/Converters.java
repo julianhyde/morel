@@ -288,7 +288,7 @@ public class Converters {
       case DATA_TYPE:
         final DataType dataType = (DataType) type;
         if (dataType.name.equals("option")) {
-          return forMorel(dataType.typeVars.get(0), typeFactory, true,
+          return forMorel(dataType.parameterTypes.get(0), typeFactory, true,
               false);
         }
         throw new AssertionError("unknown type " + type);
