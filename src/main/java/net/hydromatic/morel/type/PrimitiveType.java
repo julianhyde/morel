@@ -24,7 +24,7 @@ import com.google.common.collect.ImmutableSortedMap;
 
 import java.util.Locale;
 import java.util.SortedMap;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /** Primitive type. */
 public enum PrimitiveType implements RecordLikeType {
@@ -59,8 +59,9 @@ public enum PrimitiveType implements RecordLikeType {
     return typeVisitor.visit(this);
   }
 
-  public Type copy(TypeSystem typeSystem, Function<Type, Type> transform) {
-    return transform.apply(this);
+  @Override public PrimitiveType copy(TypeSystem typeSystem,
+      UnaryOperator<Type> transform) {
+    return this;
   }
 
   @Override public SortedMap<String, Type> argNameTypes() {
