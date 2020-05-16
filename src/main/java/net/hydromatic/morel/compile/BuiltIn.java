@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.DummyType;
+import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
@@ -1261,7 +1262,9 @@ public enum BuiltIn {
         return tyVars.get(i);
       }
     });
-    final DataType dataType = ts.dataType(name, tyVars, tyCons);
+    final Type type = ts.dataTypeScheme(name, tyVars, tyCons, null);
+    final DataType dataType = (DataType) (type instanceof DataType ? type
+        : ((ForallType) type).type);
     tyCons.keySet().forEach(tyConName ->
         bindings.add(ts.bindTyCon(dataType, tyConName)));
   }
