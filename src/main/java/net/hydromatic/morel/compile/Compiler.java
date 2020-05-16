@@ -523,8 +523,7 @@ public class Compiler {
             ImmutableList.copyOf(newBindings);
         actions.add((outLines, outBindings, evalEnv) -> {
           String description = dataType.description();
-          outLines.accept("datatype " + dataType.name + " = "
-              + description.substring(1, description.length() - 1));
+          outLines.accept("datatype " + dataType.name + " = " + description);
           immutableBindings.forEach(outBindings);
         });
       }

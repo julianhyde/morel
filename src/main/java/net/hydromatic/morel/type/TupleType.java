@@ -54,7 +54,7 @@ public class TupleType extends BaseType implements RecordLikeType {
     int differenceCount = 0;
     final ImmutableList.Builder<Type> argTypes2 = ImmutableList.builder();
     for (Type argType : argTypes) {
-      final Type argType2 = argType.copy(typeSystem, transform);
+      final Type argType2 = transform.apply(argType);
       if (argType != argType2) {
         ++differenceCount;
       }
