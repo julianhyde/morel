@@ -25,8 +25,11 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.function.UnaryOperator;
+
+import static java.util.Objects.requireNonNull;
 
 /** Type variable (e.g. {@code 'a}). */
 public class TypeVar implements Type {
@@ -37,6 +40,7 @@ public class TypeVar implements Type {
       CacheBuilder.newBuilder().build(CacheLoader.from(TypeVar::name));
 
   final int ordinal;
+  private final String name;
 
   /** Creates a type variable with a given ordinal.
    *
@@ -44,6 +48,11 @@ public class TypeVar implements Type {
   public TypeVar(int ordinal) {
     Preconditions.checkArgument(ordinal >= 0);
     this.ordinal = ordinal;
+    try {
+      this.name = requireNonNull(NAME_CACHE.get(ordinal));
+    } catch (ExecutionException e) {
+      throw new RuntimeException(e.getCause());
+    }
   }
 
   @Override public int hashCode() {
@@ -56,9 +65,9 @@ public class TypeVar implements Type {
         && this.ordinal == ((TypeVar) obj).ordinal;
   }
 
-  /** Returns a string for debugging; see also {@link #description()}. */
+  /** Returns a string for debugging. */
   @Override public String toString() {
-    return "'#" + ordinal;
+    return name;
   }
 
   public <R> R accept(TypeVisitor<R> typeVisitor) {
@@ -70,7 +79,7 @@ public class TypeVar implements Type {
    * <p>0 &rarr; 'a, 1 &rarr; 'b, 26 &rarr; 'z, 27 &rarr; 'ba, 28 &rarr; 'bb,
    * 675 &rarr; 'zz, 676 &rarr; 'baa, etc. (Think of it is a base 26 number,
    * with "a" as 0, "z" as 25.) */
-  private static String name(int i) {
+  static String name(int i) {
     if (i < 0) {
       throw new IllegalArgumentException();
     }
@@ -85,12 +94,8 @@ public class TypeVar implements Type {
     }
   }
 
-  @Override public String description() {
-    try {
-      return NAME_CACHE.get(ordinal);
-    } catch (ExecutionException e) {
-      throw new RuntimeException(e.getCause());
-    }
+  @Override public Key key() {
+    return Keys.ordinal(ordinal);
   }
 
   @Override public Op op() {
@@ -100,6 +105,18 @@ public class TypeVar implements Type {
   @Override public TypeVar copy(TypeSystem typeSystem,
       UnaryOperator<Type> transform) {
     return this;
+  }
+
+  /** Returns whether a list is the type variables [0, 1, 2, ..., n]. */
+  // TODO remove
+  public static boolean is123(List<Type> types) {
+    int i = 0;
+    for (Type type : types) {
+      if (!(type instanceof TypeVar && ((TypeVar) type).ordinal == i++)) {
+        return false;
+      }
+    }
+    return true;
   }
 }
 

@@ -389,9 +389,8 @@ public class Compiler {
   }
 
   private ImmutableList<String> bindingNames(List<Binding> bindings) {
-    //noinspection UnstableApiUsage
     return bindings.stream().map(b -> b.id.name)
-        .collect(ImmutableList.toImmutableList());
+        .collect(toImmutableList());
   }
 
   /** Compiles a function value to an {@link Applicable}, if possible, or
@@ -502,8 +501,11 @@ public class Compiler {
         final List<Binding> immutableBindings =
             ImmutableList.copyOf(newBindings);
         actions.add((output, outBindings, evalEnv) -> {
-          String description = dataType.description();
-          output.add("datatype " + dataType.moniker + " = " + description);
+          final StringBuilder buf =
+              new StringBuilder().append("datatype ")
+                  .append(dataType.moniker).append(" = ");
+          dataType.def().describe(buf);
+          output.add(buf.toString());
           outBindings.addAll(immutableBindings);
         });
       }
@@ -543,11 +545,10 @@ public class Compiler {
    */
   private Code compileMatchList(Context cx,
       List<Core.Match> matchList) {
-    @SuppressWarnings("UnstableApiUsage")
     final ImmutableList<Pair<Core.Pat, Code>> patCodes =
         matchList.stream()
             .map(match -> compileMatch(cx, match))
-            .collect(ImmutableList.toImmutableList());
+            .collect(toImmutableList());
     return new MatchCode(patCodes);
   }
 

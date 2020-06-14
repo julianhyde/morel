@@ -29,6 +29,8 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+import static net.hydromatic.morel.util.Static.skip;
+
 /** Value that is sufficient for a function to bind its argument
  * and evaluate its body. */
 public class Closure implements Comparable<Closure>, Applicable {
@@ -183,7 +185,7 @@ public class Closure implements Comparable<Closure>, Applicable {
         return false;
       }
       final Object head = consValue.get(0);
-      final List<Object> tail = Util.skip(consValue);
+      final List<Object> tail = skip(consValue);
       List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
       return bindRecurse(patArgs.get(0), envRef, head)
           && bindRecurse(patArgs.get(1), envRef, tail);
