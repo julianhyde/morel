@@ -32,6 +32,7 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.Static;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
@@ -62,6 +63,8 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.util.Static.toImmutableList;
 
 /** Helpers for {@link Code}. */
 @SuppressWarnings({"rawtypes", "unchecked"})
@@ -471,9 +474,8 @@ public abstract class Codes {
   /** Creates a {@link RowSink} for a {@code order} clause. */
   public static RowSink orderRowSink(ImmutableList<Pair<Code, Boolean>> codes,
       ImmutableList<Binding> bindings, RowSink rowSink) {
-    @SuppressWarnings("UnstableApiUsage")
     final ImmutableList<String> labels = bindings.stream().map(b -> b.id.name)
-        .collect(ImmutableList.toImmutableList());
+        .collect(toImmutableList());
     return new OrderRowSink(codes, labels, rowSink);
   }
 
@@ -1916,6 +1918,9 @@ public abstract class Codes {
       };
 
   private static void populateBuiltIns(Map<String, Object> valueMap) {
+    if (Static.SKIP) {
+      return;
+    }
     // Dummy type system, thrown away after this method
     final TypeSystem typeSystem = new TypeSystem();
     BuiltIn.dataTypes(typeSystem, new ArrayList<>());
@@ -1931,12 +1936,11 @@ public abstract class Codes {
         valueMap.put(key.alias, value);
       }
     });
-    //noinspection UnstableApiUsage
     BuiltIn.forEachStructure(typeSystem, (structure, type) ->
         valueMap.put(structure.name,
             structure.memberMap.values().stream()
                 .map(BUILT_IN_VALUES::get)
-                .collect(ImmutableList.toImmutableList())));
+                .collect(toImmutableList())));
   }
 
   /** Creates an empty evaluation environment. */
