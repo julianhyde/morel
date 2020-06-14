@@ -47,11 +47,11 @@ public enum PrimitiveType implements RecordLikeType {
     return moniker;
   }
 
-  public String description() {
-    return moniker;
+  @Override public Key key() {
+    return Keys.name(moniker);
   }
 
-  public Op op() {
+  @Override public Op op() {
     return Op.ID;
   }
 

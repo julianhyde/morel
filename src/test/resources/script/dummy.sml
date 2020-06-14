@@ -16,6 +16,6 @@
  * language governing permissions and limitations under the
  * License.
  *)
-datatype 'a liszt = Nil | Cons of ('a * 'a liszt);
-
+Option;
+(*) datatype 'a liszt = Nil | Cons of ('a * 'a liszt);
 (*) End dummy.sml
