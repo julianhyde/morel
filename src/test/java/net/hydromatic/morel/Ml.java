@@ -18,11 +18,15 @@
  */
 package net.hydromatic.morel;
 
+import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.rel.RelNode;
+
 import com.google.common.collect.ImmutableMap;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.compile.CalciteCompiler;
 import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
@@ -47,11 +51,13 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.Matchers.isAst;
+import static net.hydromatic.morel.type.RecordType.ORDERING;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -211,6 +217,31 @@ class Ml {
     });
   }
 
+  Ml assertCalcite(Matcher<String> matcher) {
+    try {
+      final Ast.Exp e = new MorelParserImpl(new StringReader(ml)).expression();
+      final TypeSystem typeSystem = new TypeSystem();
+
+      final Calcite calcite = Calcite.withDataSets(dataSetMap);
+      final Environment env =
+          Environments.env(typeSystem, calcite.foreignValues());
+      final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+      final TypeResolver.Resolved resolved =
+          TypeResolver.deduceType(env, valDecl, typeSystem);
+      final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+      final Resolver resolver = new Resolver(resolved.typeMap);
+      final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
+      final RelNode rel =
+          new CalciteCompiler(typeSystem, calcite)
+              .toRel(env, Compiles.toExp(valDecl3));
+      final String relString = RelOptUtil.toString(rel);
+      assertThat(relString, matcher);
+      return this;
+    } catch (ParseException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   /** Asserts that after parsing the current expression and converting it to
    * Core, the Core string converts to the expected value. Which is usually
    * the original string. */
@@ -301,6 +332,36 @@ class Ml {
       assertThat(e, matcher);
     }
     return this;
+  }
+
+
+  Ml assertEvalSame() {
+    try {
+      final Ast.Exp e = new MorelParserImpl(new StringReader(ml)).expression();
+      final TypeSystem typeSystem = new TypeSystem();
+      final Calcite calcite = Calcite.withDataSets(dataSetMap);
+      final Environment env =
+          Environments.env(typeSystem, calcite.foreignValues());
+      final Session session = new Session();
+      session.map.putAll(propMap);
+      Prop.HYBRID.set(session.map, false);
+      final Object value = eval(session, env, typeSystem, e, null, null);
+      Prop.HYBRID.set(session.map, true);
+      final Object value2 = eval(session, env, typeSystem, e, null, null);
+      if (!Objects.equals(value, value2)
+          && value instanceof List
+          && value2 instanceof List
+          && !ml.contains("order")) {
+        final List list = ORDERING.immutableSortedCopy((List) value);
+        final List list2 = ORDERING.immutableSortedCopy((List) value2);
+        assertThat(list2, is(list));
+      } else {
+        assertThat(value2, is(value));
+      }
+      return this;
+    } catch (ParseException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   Ml assertError(Matcher<String> matcher) {
