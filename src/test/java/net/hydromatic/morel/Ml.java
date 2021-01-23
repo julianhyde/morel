@@ -22,6 +22,7 @@ import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Ordering;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
@@ -57,7 +58,6 @@ import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.Matchers.isAst;
-import static net.hydromatic.morel.type.RecordType.ORDERING;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -334,6 +334,29 @@ class Ml {
     return this;
   }
 
+  private static final Ordering<Object> ORDERING =
+      Ordering.from(Ml::compareObjects);
+
+  private static int compareObjects(Object o1, Object o2) {
+    if (o1 instanceof List && o2 instanceof List) {
+      return compareLists((List) o1, (List) o2);
+    } else {
+      return ((Comparable) o1).compareTo(o2);
+    }
+  }
+
+  private static int compareLists(List o1, List o2) {
+    for (int i = 0; i < o1.size(); i++) {
+      if (i >= o2.size()) {
+        return -1;
+      }
+      int c = compareObjects(o1.get(i), o2.get(i));
+      if (c != 0) {
+        return c;
+      }
+    }
+    return 1;
+  }
 
   Ml assertEvalSame() {
     try {
