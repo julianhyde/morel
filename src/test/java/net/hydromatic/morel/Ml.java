@@ -57,6 +57,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.Matchers.isAst;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -234,6 +235,7 @@ class Ml {
       final RelNode rel =
           new CalciteCompiler(typeSystem, calcite)
               .toRel(env, Compiles.toExp(valDecl3));
+      requireNonNull(rel);
       final String relString = RelOptUtil.toString(rel);
       assertThat(relString, matcher);
       return this;
