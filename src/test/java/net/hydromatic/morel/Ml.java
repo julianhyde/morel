@@ -57,13 +57,14 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
-import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.Matchers.isAst;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.fail;
+
+import static java.util.Objects.requireNonNull;
 
 /** Fluent test helper. */
 class Ml {

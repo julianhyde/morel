@@ -18,12 +18,6 @@
  */
 package net.hydromatic.morel.compile;
 
-import org.apache.calcite.DataContext;
-import org.apache.calcite.interpreter.Interpreter;
-import org.apache.calcite.linq4j.Enumerable;
-import org.apache.calcite.plan.RelOptUtil;
-import org.apache.calcite.rel.RelNode;
-
 import com.google.common.collect.ImmutableList;
 
 import net.hydromatic.morel.ast.Core;
