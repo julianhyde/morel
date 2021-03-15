@@ -19,11 +19,13 @@
 package net.hydromatic.morel.compile;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.type.TypeSystem;
 
@@ -68,9 +70,13 @@ public abstract class Compiles {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
-    final Compiler compiler =
-        hybrid ? new CalciteCompiler(resolved.typeMap)
-            : new Compiler(resolved.typeMap);
+    final Compiler compiler;
+    if (hybrid) {
+      compiler = new CalciteCompiler(resolved.typeMap,
+          Calcite.withDataSets(ImmutableMap.of()));
+    } else {
+      compiler = new Compiler(resolved.typeMap);
+    }
     return compiler.compileStatement(env, resolved.node);
   }
 
