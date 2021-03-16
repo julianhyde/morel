@@ -153,7 +153,7 @@ public class Converters {
   public static Function<Object, Enumerable<Object[]>> toCalciteEnumerable(
       Type type, RelDataTypeFactory typeFactory) {
     final C2m converter =
-        C2m.forMorel(type, typeFactory, false, false);
+        C2m.forMorel(type, typeFactory, false, true);
     return converter::toEnumerable;
   }
 
@@ -345,16 +345,24 @@ public class Converters {
         final C2m c =
             new C2m(calciteType.getComponentType(),
                 listType.elementType);
-        return EnumerableDefaults.select(enumerable, c::toArray);
+        if (c.calciteType.isStruct() && c.morelType instanceof PrimitiveType) {
+          return EnumerableDefaults.select(enumerable, c::scalarToArray);
+        } else {
+          return EnumerableDefaults.select(enumerable, c::listToArray);
+        }
       default:
         throw new AssertionError("cannot convert " + morelType);
       }
     }
 
-    private Object[] toArray(Object o) {
+    private Object[] listToArray(Object o) {
       @SuppressWarnings("unchecked")
       List<Object> list = (List<Object>) o;
       return list.toArray();
+    }
+
+    private Object[] scalarToArray(Object o) {
+      return new Object[] {o};
     }
   }
 }
