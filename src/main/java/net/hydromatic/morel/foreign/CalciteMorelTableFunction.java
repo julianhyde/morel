@@ -43,8 +43,6 @@ import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlUserDefinedTableFunction;
 
-import com.google.common.collect.ImmutableMap;
-
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.Compiler;
@@ -56,6 +54,7 @@ import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
+import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.Type;
@@ -70,6 +69,9 @@ import java.util.stream.Collectors;
 /** Calcite table-valued user-defined function that evaluates a Morel
  * expression and returns the result as a relation. */
 public class CalciteMorelTableFunction {
+  public static final ThreadLocal<Context> THREAD_ENV =
+      new ThreadLocal<>();
+
   private CalciteMorelTableFunction() {
   }
 
@@ -92,20 +94,18 @@ public class CalciteMorelTableFunction {
     } catch (ParseException pe) {
       throw new RuntimeException(pe);
     }
-    final TypeSystem typeSystem = new TypeSystem();
-    final Environment env =
-        Environments.env(typeSystem, ImmutableMap.of());
+    final Context cx = THREAD_ENV.get();
     final Ast.ValDecl valDecl = Compiles.toValDecl(e);
     final TypeResolver.Resolved resolved =
-        TypeResolver.deduceType(env, valDecl, typeSystem);
+        TypeResolver.deduceType(cx.env, valDecl, cx.typeSystem);
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
     final Resolver resolver = new Resolver(resolved.typeMap);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
     final Core.Exp e2 = Compiles.toExp(valDecl3);
     Type type = resolved.typeMap.getType(e2);
-    final Code code = new Compiler(typeSystem).compile(env, e2);
+    final Code code = new Compiler(resolved.typeMap.typeSystem).compile(cx.env, e2);
+    final EvalEnv evalEnv = Codes.emptyEnvWith(cx.session, cx.env);
     return new ScannableTable() {
-
       @Override public RelDataType getRowType(RelDataTypeFactory factory) {
         try {
           return RelJsonReader.readType(factory, typeJson);
@@ -117,7 +117,6 @@ public class CalciteMorelTableFunction {
       @Override public Enumerable<Object[]> scan(DataContext root) {
         final Function<Object, Enumerable<Object[]>> f =
             Converters.toCalciteEnumerable(type, root.getTypeFactory());
-        final EvalEnv evalEnv = Codes.emptyEnv();
         Object v = code.eval(evalEnv);
         return f.apply(v);
       }
@@ -177,6 +176,19 @@ public class CalciteMorelTableFunction {
           return optional;
         }
       };
+    }
+  }
+
+  /** Execution context. */
+  public static class Context {
+    public final Session session;
+    public final Environment env;
+    public final TypeSystem typeSystem;
+
+    public Context(Session session, Environment env, TypeSystem typeSystem) {
+      this.session = session;
+      this.env = env;
+      this.typeSystem = typeSystem;
     }
   }
 }

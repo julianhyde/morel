@@ -126,3 +126,84 @@ val it =
    {ename="ADAMS",job="CLERK",salIn2020=1320.0,salIn2021=1540.0},
    {ename="JAMES",job="CLERK",salIn2020=1140.0,salIn2021=1330.0},...]
   : {ename:string, job:string, salIn2020:real, salIn2021:real} list
+
+
+(*) Query in Hybrid mode (100% Calcite)
+Sys.set ("hybrid", true);
+val it = () : unit
+
+from e in scott.emp
+where e.deptno = 20
+yield e.empno;
+val it = [7369,7566,7788,7876,7902] : int list
+
+Sys.plan();
+val it =
+  "calcite(plan LogicalProject(empno=[$2])
+  LogicalFilter(condition=[=($1, 20)])
+    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+      JdbcTableScan(table=[[scott, EMP]])
+)"
+  : string
+
+
+(*) Query in Hybrid mode (80% Calcite)
+from e in (List.filter (fn e2 => e2.empno < 7700) scott.emp)
+where e.deptno = 20
+yield e.empno;
+val it = [7369,7566] : int list
+
+Sys.plan();
+val it =
+  "calcite(plan LogicalProject(empno=[$2])
+  LogicalFilter(condition=[=($1, 20)])
+    LogicalTableFunctionScan(invocation=[morel('#filter List (fn e2 => #empno e2 < 7700) (#emp scott)', '{
+  \"fields\": [
+    {
+      \"type\": \"REAL\",
+      \"nullable\": false,
+      \"name\": \"comm\"
+    },
+    {
+      \"type\": \"INTEGER\",
+      \"nullable\": false,
+      \"name\": \"deptno\"
+    },
+    {
+      \"type\": \"INTEGER\",
+      \"nullable\": false,
+      \"name\": \"empno\"
+    },
+    {
+      \"type\": \"VARCHAR\",
+      \"nullable\": false,
+      \"precision\": -1,
+      \"name\": \"ename\"
+    },
+    {
+      \"type\": \"VARCHAR\",
+      \"nullable\": false,
+      \"precision\": -1,
+      \"name\": \"hiredate\"
+    },
+    {
+      \"type\": \"VARCHAR\",
+      \"nullable\": false,
+      \"precision\": -1,
+      \"name\": \"job\"
+    },
+    {
+      \"type\": \"INTEGER\",
+      \"nullable\": false,
+      \"name\": \"mgr\"
+    },
+    {
+      \"type\": \"REAL\",
+      \"nullable\": false,
+      \"name\": \"sal\"
+    }
+  ],
+  \"nullable\": false
+}')], rowType=[RecordType(REAL comm, INTEGER deptno, INTEGER empno, VARCHAR ename, VARCHAR hiredate, VARCHAR job, INTEGER mgr, REAL sal)])
+)"
+  : string

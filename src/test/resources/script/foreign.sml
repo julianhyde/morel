@@ -49,4 +49,17 @@ val emp2 =
 from e in emp2
   yield {e.ename, e.job, salIn2020 = e.salIn 2020.0, salIn2021 = e.salIn 2021.0};
 
+(*) Query in Hybrid mode (100% Calcite)
+Sys.set ("hybrid", true);
+from e in scott.emp
+where e.deptno = 20
+yield e.empno;
+Sys.plan();
+
+(*) Query in Hybrid mode (80% Calcite)
+from e in (List.filter (fn e2 => e2.empno < 7700) scott.emp)
+where e.deptno = 20
+yield e.empno;
+Sys.plan();
+
 (*) End foreign.sml

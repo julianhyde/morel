@@ -710,6 +710,11 @@ from r in
 yield {r.j, r.s};
 Sys.plan();
 
+(*) List expression in Hybrid mode (0% Calcite)
+List.filter (fn {i, j} => i mod 2 = 0) [{i = 1, j = 1}, {i = 2, j = 2}, {i = 3, j = 3}, {i = 4, j = 5}];
+List.filter (fn (i, j) => i mod 2 = 0) [(1, 1), (2, 2), (3, 3), (4, 5)];
+(*) List.filter (fn i => i mod 2 = 0) [1, 2, 3, 4];
+
 (*) dummy
 from message in ["the end"];
 

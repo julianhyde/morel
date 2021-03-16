@@ -45,6 +45,7 @@ import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.EvalEnvs;
+import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.CalciteMorelTableFunction;
@@ -55,6 +56,8 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.ThreadLocals;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -217,9 +220,12 @@ public class CalciteCompiler extends Compiler {
             jsonBuilder.toJsonString(
                 new RelJson(jsonBuilder).toJson(rowType));
         final String morelCode = apply.toString();
-        cx.relBuilder.functionScan(CalciteMorelTableFunction.OPERATOR, 0,
-            cx.relBuilder.literal(morelCode),
-            cx.relBuilder.literal(jsonRowType));
+        ThreadLocals.let(CalciteMorelTableFunction.THREAD_ENV,
+            new CalciteMorelTableFunction.Context(new Session(), cx.env,
+                typeSystem), () ->
+            cx.relBuilder.functionScan(CalciteMorelTableFunction.OPERATOR, 0,
+                cx.relBuilder.literal(morelCode),
+                cx.relBuilder.literal(jsonRowType)));
         return true;
       }
     };

@@ -40,11 +40,14 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
+import net.hydromatic.morel.foreign.CalciteMorelTableFunction;
+import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.DataSet;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ThreadLocals;
 
 import org.hamcrest.Matcher;
 
