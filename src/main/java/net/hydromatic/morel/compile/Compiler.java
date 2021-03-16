@@ -32,6 +32,7 @@ import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
+import net.hydromatic.morel.foreign.CalciteMorelTableFunction;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
@@ -40,6 +41,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.TailList;
+import net.hydromatic.morel.util.ThreadLocals;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -80,10 +82,14 @@ public class Compiler {
 
       public void eval(Session session, Environment env, List<String> output,
           List<Binding> bindings) {
-        final EvalEnv evalEnv = Codes.emptyEnvWith(session, env);
-        for (Action entry : actions) {
-          entry.apply(output, bindings, evalEnv);
-        }
+        ThreadLocals.let(CalciteMorelTableFunction.THREAD_ENV,
+            new CalciteMorelTableFunction.Context(session, env,
+                typeMap.typeSystem), () -> {
+              final EvalEnv evalEnv = Codes.emptyEnvWith(session, env);
+              for (Action entry : actions) {
+                entry.apply(output, bindings, evalEnv);
+              }
+            });
       }
     };
   }
