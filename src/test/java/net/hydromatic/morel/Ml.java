@@ -42,12 +42,14 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
+import net.hydromatic.morel.foreign.CalciteMorelTableFunction;
 import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.DataSet;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ThreadLocals;
 
 import org.hamcrest.Matcher;
 
@@ -346,7 +348,10 @@ class Ml {
     final Type type = resolved.typeMap.getType(e);
     final Function<Enumerable<Object[]>, List<Object>> converter =
         Converters.fromEnumerable(rel, type);
-    return converter.apply(interpreter);
+    return ThreadLocals.let(CalciteMorelTableFunction.THREAD_ENV,
+        new CalciteMorelTableFunction.Context(new Session(), env,
+            resolved.typeMap.typeSystem),
+        () -> converter.apply(interpreter));
   }
 
   Ml assertError(Matcher<String> matcher) {
