@@ -36,6 +36,7 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Ord;
 
@@ -44,7 +45,9 @@ import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
@@ -62,14 +65,21 @@ public class Converters {
   }
 
   public static Converter ofRow2(RelDataType rowType, RecordType type) {
-    AtomicInteger ordinal = new AtomicInteger();
-    return ofRow3(rowType.getFieldList(), ordinal, type);
+    return ofRow3(rowType.getFieldList(), new AtomicInteger(),
+        type.argNameTypes);
+  }
+
+  public static Converter ofRow2(RelDataType rowType, TupleType type) {
+    final Map<String, Type> argNameTypes = new LinkedHashMap<>();
+    Ord.forEach(type.argTypes, (argType, i) ->
+        argNameTypes.put(Integer.toString(i), argType));
+    return ofRow3(rowType.getFieldList(), new AtomicInteger(), argNameTypes);
   }
 
   static Converter ofRow3(List<RelDataTypeField> fields,
-      AtomicInteger ordinal, RecordType type) {
+      AtomicInteger ordinal, Map<String, Type> argNameTypes) {
     final List<Converter> converters = new ArrayList<>();
-    for (Type fieldType : type.argNameTypes.values()) {
+    for (Type fieldType : argNameTypes.values()) {
       converters.add(ofField2(fields, ordinal, fieldType));
     }
     return new CalciteForeignValue.RecordConverter(converters);
@@ -83,7 +93,7 @@ public class Converters {
   static Converter ofField2(List<RelDataTypeField> fields,
       AtomicInteger ordinal, Type type) {
     if (type instanceof RecordType) {
-      return ofRow3(fields, ordinal, (RecordType) type);
+      return ofRow3(fields, ordinal, ((RecordType) type).argNameTypes);
     }
     final int i = ordinal.getAndIncrement();
     return ofField3(fields.get(i), i, type);
@@ -115,6 +125,9 @@ public class Converters {
     if (type instanceof RecordType) {
       return ofRow2(fromType, (RecordType) type);
     }
+    if (type instanceof TupleType) {
+      return ofRow2(fromType, (TupleType) type);
+    }
     if (type instanceof PrimitiveType) {
       RelDataTypeField field =
           Iterables.getOnlyElement(fromType.getFieldList());
@@ -132,7 +145,7 @@ public class Converters {
 
   public static RelDataType toCalciteType(Type type,
       RelDataTypeFactory typeFactory) {
-    return C2m.forMorel(type, typeFactory, false).calciteType;
+    return C2m.forMorel(type, typeFactory, false, true).calciteType;
   }
 
   /** Returns a function that converts from Morel objects to an Enumerable
@@ -140,7 +153,7 @@ public class Converters {
   public static Function<Object, Enumerable<Object[]>> toCalciteEnumerable(
       Type type, RelDataTypeFactory typeFactory) {
     final C2m converter =
-        C2m.forMorel(type, typeFactory, false);
+        C2m.forMorel(type, typeFactory, false, false);
     return converter::toEnumerable;
   }
 
@@ -239,31 +252,47 @@ public class Converters {
 
     /** Creates a converter for a given Morel type, in the process deducing the
      * corresponding Calcite type. */
-    static C2m forMorel(Type type,
-        RelDataTypeFactory typeFactory,
-        boolean nullable) {
+    static C2m forMorel(Type type, RelDataTypeFactory typeFactory,
+        boolean nullable, boolean recordList) {
+      final RelDataTypeFactory.Builder typeBuilder;
       switch (type.op()) {
       case DATA_TYPE:
         final DataType dataType = (DataType) type;
         if (dataType.name.equals("option")) {
-          return forMorel(dataType.typeVars.get(0), typeFactory, true);
+          return forMorel(dataType.typeVars.get(0), typeFactory, true,
+              false);
         }
         throw new AssertionError("unknown type " + type);
 
       case LIST:
         final ListType listType = (ListType) type;
+        RelDataType elementType =
+            forMorel(listType.elementType, typeFactory, nullable, false)
+                .calciteType;
+        if (recordList && !elementType.isStruct()) {
+          elementType = typeFactory.builder()
+              .add("1", elementType)
+              .build();
+        }
         return new C2m(
-            typeFactory.createMultisetType(
-                forMorel(listType.elementType, typeFactory, nullable)
-                    .calciteType, -1),
+            typeFactory.createMultisetType(elementType, -1),
             type);
 
       case RECORD_TYPE:
-        final RelDataTypeFactory.Builder typeBuilder = typeFactory.builder();
+        typeBuilder = typeFactory.builder();
         final RecordType recordType = (RecordType) type;
         recordType.argNameTypes.forEach((name, argType) ->
             typeBuilder.add(name,
-                forMorel(argType, typeFactory, nullable).calciteType));
+                forMorel(argType, typeFactory, nullable, recordList)
+                    .calciteType));
+        return new C2m(typeBuilder.build(), type);
+
+      case TUPLE_TYPE:
+        typeBuilder = typeFactory.builder();
+        final TupleType tupleType = (TupleType) type;
+        Ord.forEach(tupleType.argTypes, (argType, i) ->
+            typeBuilder.add(Integer.toString(i),
+                forMorel(argType, typeFactory, nullable, false).calciteType));
         return new C2m(typeBuilder.build(), type);
 
       case ID:
