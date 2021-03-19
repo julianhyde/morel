@@ -18,9 +18,6 @@
  */
 package net.hydromatic.morel;
 
-import org.apache.calcite.DataContext;
-import org.apache.calcite.interpreter.Interpreter;
-import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 
@@ -31,35 +28,29 @@ import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.compile.CalciteCompiler;
 import net.hydromatic.morel.compile.CompiledStatement;
-import net.hydromatic.morel.compile.Compiler;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.TypeMap;
 import net.hydromatic.morel.compile.TypeResolver;
-import net.hydromatic.morel.eval.Code;
-import net.hydromatic.morel.eval.Codes;
-import net.hydromatic.morel.eval.EvalEnv;
+import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
-import net.hydromatic.morel.foreign.CalciteMorelTableFunction;
-import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.DataSet;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
-import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.ThreadLocals;
 
 import org.hamcrest.Matcher;
 
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static net.hydromatic.morel.Matchers.isAst;
 
@@ -72,15 +63,18 @@ import static org.junit.jupiter.api.Assertions.fail;
 class Ml {
   private final String ml;
   private final Map<String, DataSet> dataSetMap;
+  private final Map<Prop, Object> propMap;
 
-  Ml(String ml, Map<String, DataSet> dataSetMap) {
+  Ml(String ml, Map<String, DataSet> dataSetMap,
+      Map<Prop, Object> propMap) {
     this.ml = ml;
     this.dataSetMap = ImmutableMap.copyOf(dataSetMap);
+    this.propMap = ImmutableMap.copyOf(propMap);
   }
 
   /** Creates an {@code Ml}. */
   static Ml ml(String ml) {
-    return new Ml(ml, ImmutableMap.of());
+    return new Ml(ml, ImmutableMap.of(), ImmutableMap.of());
   }
 
   /** Runs a task and checks that it throws an exception.
@@ -253,12 +247,9 @@ class Ml {
       final Calcite calcite = Calcite.withDataSets(dataSetMap);
       final Environment env =
           Environments.env(typeSystem, calcite.foreignValues());
-      final Ast.ValDecl valDecl = Compiles.toValDecl(e);
-      final TypeResolver.Resolved resolved =
-          TypeResolver.deduceType(env, valDecl, typeSystem);
-      final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-      final Ast.Exp e2 = Compiles.toExp(valDecl2);
-      final Object value = eval(env, resolved, e2);
+      final Session session = new Session();
+      session.map.putAll(propMap);
+      final Object value = eval(session, env, typeSystem, e);
       assertThat(value, matcher);
       return this;
     } catch (ParseException e) {
@@ -266,11 +257,19 @@ class Ml {
     }
   }
 
-  private Object eval(Environment env, TypeResolver.Resolved resolved,
-      Ast.Exp e) {
-    final Code code = new Compiler(resolved.typeMap).compile(env, e);
-    final EvalEnv evalEnv = Codes.emptyEnvWith(new Session(), env);
-    return code.eval(evalEnv);
+  private Object eval(Session session, Environment env,
+      TypeSystem typeSystem, Ast.Exp e) {
+    CompiledStatement compiledStatement =
+        Compiles.prepareStatement(typeSystem, session, env, e);
+    final List<String> output = new ArrayList<>();
+    final List<Binding> bindings = new ArrayList<>();
+    compiledStatement.eval(session, env, output, bindings);
+    for (Binding binding : bindings) {
+      if (binding.name.equals("it")) {
+        return binding.value;
+      }
+    }
+    return null;
   }
 
   Ml assertEvalError(Matcher<Throwable> matcher) {
@@ -314,13 +313,12 @@ class Ml {
       final Calcite calcite = Calcite.withDataSets(dataSetMap);
       final Environment env =
           Environments.env(typeSystem, calcite.foreignValues());
-      final Ast.ValDecl valDecl = Compiles.toValDecl(e);
-      final TypeResolver.Resolved resolved =
-          TypeResolver.deduceType(env, valDecl, typeSystem);
-      final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-      final Ast.Exp e2 = Compiles.toExp(valDecl2);
-      final Object value = eval(env, resolved, e2);
-      final Object value2 = evalCalcite(calcite, env, resolved, e2);
+      final Session session = new Session();
+      session.map.putAll(propMap);
+      Prop.HYBRID.set(session.map, false);
+      final Object value = eval(session, env, typeSystem, e);
+      Prop.HYBRID.set(session.map, true);
+      final Object value2 = eval(session, env, typeSystem, e);
       if (!Objects.equals(value, value2)
           && value instanceof List
           && value2 instanceof List
@@ -337,23 +335,6 @@ class Ml {
     }
   }
 
-  private Object evalCalcite(Calcite calcite, Environment env,
-      TypeResolver.Resolved resolved, Ast.Exp e) {
-    final RelNode rel =
-        new CalciteCompiler(resolved.typeMap, calcite)
-            .toRel(env, e);
-    Objects.requireNonNull(rel);
-    final DataContext dataContext = calcite.dataContext;
-    final Interpreter interpreter = new Interpreter(dataContext, rel);
-    final Type type = resolved.typeMap.getType(e);
-    final Function<Enumerable<Object[]>, List<Object>> converter =
-        Converters.fromEnumerable(rel, type);
-    return ThreadLocals.let(CalciteMorelTableFunction.THREAD_ENV,
-        new CalciteMorelTableFunction.Context(new Session(), env,
-            resolved.typeMap.typeSystem),
-        () -> converter.apply(interpreter));
-  }
-
   Ml assertError(Matcher<String> matcher) {
     // TODO: execute code, and check error occurs
     return this;
@@ -364,7 +345,11 @@ class Ml {
   }
 
   Ml withBinding(String name, DataSet dataSet) {
-    return new Ml(ml, plus(dataSetMap, name, dataSet));
+    return new Ml(ml, plus(dataSetMap, name, dataSet), propMap);
+  }
+
+  Ml with(Prop prop, Object value) {
+    return new Ml(ml, dataSetMap, plus(propMap, prop, value));
   }
 
   /** Returns a map plus one (key, value) entry. */

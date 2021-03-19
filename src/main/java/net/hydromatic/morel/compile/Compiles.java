@@ -62,7 +62,7 @@ public abstract class Compiles {
   }
 
   /**
-   * Validates and compiles an declaration, and compiles it to
+   * Validates and compiles a declaration, and compiles it to
    * code that can be evaluated by the interpreter.
    */
   private static CompiledStatement prepareDecl(TypeSystem typeSystem,

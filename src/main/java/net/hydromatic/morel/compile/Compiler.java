@@ -86,8 +86,8 @@ public class Compiler {
             new CalciteMorelTableFunction.Context(session, env,
                 typeMap.typeSystem), () -> {
               final EvalEnv evalEnv = Codes.emptyEnvWith(session, env);
-              for (Action entry : actions) {
-                entry.apply(output, bindings, evalEnv);
+              for (Action action : actions) {
+                action.apply(output, bindings, evalEnv);
               }
             });
       }
