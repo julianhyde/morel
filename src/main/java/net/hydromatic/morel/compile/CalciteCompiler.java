@@ -56,7 +56,6 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
-import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.ThreadLocals;
 
 import java.math.BigDecimal;

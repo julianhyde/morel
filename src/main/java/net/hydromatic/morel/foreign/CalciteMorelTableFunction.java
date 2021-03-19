@@ -48,7 +48,6 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.Compiler;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
-import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Code;
