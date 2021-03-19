@@ -121,7 +121,12 @@ public class CalciteCompiler extends Compiler {
   }
 
   boolean toRel(RelContext cx, Ast.Exp expression) {
-    return ((RelCode) compile(cx, expression)).toRel(cx);
+    final Code code = compile(cx, expression);
+    if (code instanceof RelCode) {
+      return ((RelCode) code).toRel(cx);
+    } else {
+      return false;
+    }
   }
 
   @Override protected Code compileLet(Context cx, Ast.Decl decl, Ast.Exp e) {
