@@ -23,6 +23,7 @@ import org.apache.calcite.rel.RelNode;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
@@ -298,6 +299,7 @@ class Ml {
     }
   }
 
+  @CanIgnoreReturnValue
   private Object eval(Session session, Environment env,
       TypeSystem typeSystem, Ast.Exp e,
       @Nullable Matcher<Object> resultMatcher,

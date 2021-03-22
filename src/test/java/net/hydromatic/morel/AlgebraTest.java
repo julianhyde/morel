@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel;
 
+import net.hydromatic.morel.eval.Prop;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.stream.Stream;
@@ -228,6 +230,55 @@ public class AlgebraTest {
         + "    {i, j = i + 3, s = String.substring (\"morel\", 0, i)})\n"
         + "yield {r.j, r.s}";
     checkEqual(query);
+  }
+
+  /** Tests a query that can mostly be executed in Calcite, but is followed by
+   * List.filter, which must be implemented in Morel. Therefore Morel calls
+   * into the internal "calcite" function, passing the Calcite plan to be
+   * executed. */
+  @Test void testHybridCalciteToMorel() {
+    final String ml = "List.filter\n"
+        + "  (fn e => e.empno < 7500)\n"
+        + "  (from e in scott.emp\n"
+        + "  where e.job = \"CLERK\"\n"
+        + "  yield {e.empno, e.deptno, d5 = e.deptno + 5})";
+    String plan = ""
+        + "apply("
+        + "fnCode apply(fnValue List.filter, "
+        + "argCode match(e, apply(fnValue <, "
+        + "argCode tuple(apply(fnValue nth, argCode get(name e)),"
+        + " constant(7500))))), "
+        + "argCode calcite("
+        + "plan LogicalProject(d5=[+($1, 5)], deptno=[$1], empno=[$2])\n"
+        + "  LogicalFilter(condition=[=($5, 'CLERK')])\n"
+        + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
+        + "hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n"
+        + "      JdbcTableScan(table=[[scott, EMP]])\n))";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("{d5:int, deptno:int, empno:int} list")
+        .assertEvalIter(equalsOrdered(list(25, 20, 7369)))
+        .assertPlan(is(plan));
+  }
+
+  /** Tests a query that can be fully executed in Calcite. */
+  @Test void testFullCalcite() {
+    final String ml = "from e in scott.emp\n"
+        + "  where e.empno < 7500\n"
+        + "  yield {e.empno, e.deptno, d5 = e.deptno + 5})";
+    String plan = "calcite("
+        + "plan LogicalProject(d5=[+($1, 5)], deptno=[$1], empno=[$2])\n"
+        + "  LogicalFilter(condition=[<($2, 7500)])\n"
+        + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
+        + "hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n"
+        + "      JdbcTableScan(table=[[scott, EMP]])\n)";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("{d5:int, deptno:int, empno:int} list")
+        .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)))
+        .assertPlan(is(plan));
   }
 
   void checkEqual(String ml) {

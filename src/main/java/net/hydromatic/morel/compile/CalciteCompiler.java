@@ -41,6 +41,7 @@ import com.google.common.collect.Ordering;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
@@ -98,6 +99,7 @@ public class CalciteCompiler extends Compiler {
           .put(Op.ANDALSO, SqlStdOperatorTable.AND)
           .put(Op.ORELSE, SqlStdOperatorTable.OR)
           .build();
+
   final Calcite calcite;
 
   public CalciteCompiler(TypeSystem typeSystem, Calcite calcite) {
@@ -214,6 +216,9 @@ public class CalciteCompiler extends Compiler {
         if (rowType == null) {
           return false;
         }
+        if (!aggressive) {
+          return false;
+        }
         final JsonBuilder jsonBuilder = new JsonBuilder();
         final String jsonRowType =
             jsonBuilder.toJsonString(
@@ -228,6 +233,32 @@ public class CalciteCompiler extends Compiler {
         return true;
       }
     };
+  }
+
+  @Override protected Code finishCompileApply(Context cx, Code fnCode,
+      Code argCode, Type argType) {
+    if (argCode instanceof RelCode && cx instanceof RelContext) {
+      final RelContext rx = (RelContext) cx;
+      if (((RelCode) argCode).toRel(rx, false)) {
+        final Code argCode2 =
+            calcite.code(rx.env, rx.relBuilder.build(), argType);
+        return finishCompileApply(cx, fnCode, argCode2, argType);
+      }
+    }
+    return super.finishCompileApply(cx, fnCode, argCode, argType);
+  }
+
+  @Override protected Code finishCompileApply(Context cx, Applicable fnValue,
+      Code argCode, Type argType) {
+    if (argCode instanceof RelCode && cx instanceof RelContext) {
+      final RelContext rx = (RelContext) cx;
+      if (((RelCode) argCode).toRel(rx, false)) {
+        final Code argCode2 =
+            calcite.code(rx.env, rx.relBuilder.build(), argType);
+        return finishCompileApply(cx, fnValue, argCode2, argType);
+      }
+    }
+    return super.finishCompileApply(cx, fnValue, argCode, argType);
   }
 
   private static void harmonizeRowTypes(RelBuilder relBuilder, int inputCount) {
@@ -575,6 +606,15 @@ public class CalciteCompiler extends Compiler {
       this.relBuilder = relBuilder;
       this.map = map;
       this.inputCount = inputCount;
+    }
+
+    @Override RelContext bind(String name, Type type, Object value) {
+      return new RelContext(env.bind(name, type, value), relBuilder,
+          map, inputCount);
+    }
+
+    @Override RelContext bindAll(Iterable<Binding> bindings) {
+      return new RelContext(env.bindAll(bindings), relBuilder, map, inputCount);
     }
   }
 
