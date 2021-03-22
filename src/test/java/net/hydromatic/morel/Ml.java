@@ -23,6 +23,7 @@ import org.apache.calcite.rel.RelNode;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
@@ -33,6 +34,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.TypeMap;
 import net.hydromatic.morel.compile.TypeResolver;
+import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
@@ -51,6 +53,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.Matchers.isAst;
 
@@ -236,11 +239,19 @@ class Ml {
     }
   }
 
+  Ml assertPlan(Matcher<String> planMatcher) {
+    return assertEval(null, planMatcher);
+  }
+
   <E> Ml assertEvalIter(Matcher<Iterable<E>> matcher) {
     return assertEval((Matcher) matcher);
   }
 
-  Ml assertEval(Matcher<Object> matcher) {
+  Ml assertEval(Matcher<Object> resultMatcher) {
+    return assertEval(resultMatcher, null);
+  }
+
+  Ml assertEval(Matcher<Object> resultMatcher, Matcher<String> planMatcher) {
     try {
       final Ast.Exp e = new MorelParserImpl(new StringReader(ml)).expression();
       final TypeSystem typeSystem = new TypeSystem();
@@ -249,21 +260,35 @@ class Ml {
           Environments.env(typeSystem, calcite.foreignValues());
       final Session session = new Session();
       session.map.putAll(propMap);
-      final Object value = eval(session, env, typeSystem, e);
-      assertThat(value, matcher);
+      eval(session, env, typeSystem, e, resultMatcher, planMatcher);
       return this;
     } catch (ParseException e) {
       throw new RuntimeException(e);
     }
   }
 
+  @CanIgnoreReturnValue
   private Object eval(Session session, Environment env,
-      TypeSystem typeSystem, Ast.Exp e) {
+      TypeSystem typeSystem, Ast.Exp e,
+      @Nullable Matcher<Object> resultMatcher,
+      @Nullable Matcher<String> planMatcher) {
     CompiledStatement compiledStatement =
         Compiles.prepareStatement(typeSystem, session, env, e);
     final List<String> output = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     compiledStatement.eval(session, env, output, bindings);
+    final Object result = getIt(bindings);
+    if (resultMatcher != null) {
+      assertThat(result, resultMatcher);
+    }
+    if (planMatcher != null) {
+      final String plan = Codes.describe(session.code);
+      assertThat(plan, planMatcher);
+    }
+    return result;
+  }
+
+  private Object getIt(List<Binding> bindings) {
     for (Binding binding : bindings) {
       if (binding.name.equals("it")) {
         return binding.value;
@@ -316,9 +341,9 @@ class Ml {
       final Session session = new Session();
       session.map.putAll(propMap);
       Prop.HYBRID.set(session.map, false);
-      final Object value = eval(session, env, typeSystem, e);
+      final Object value = eval(session, env, typeSystem, e, null, null);
       Prop.HYBRID.set(session.map, true);
-      final Object value2 = eval(session, env, typeSystem, e);
+      final Object value2 = eval(session, env, typeSystem, e, null, null);
       if (!Objects.equals(value, value2)
           && value instanceof List
           && value2 instanceof List
