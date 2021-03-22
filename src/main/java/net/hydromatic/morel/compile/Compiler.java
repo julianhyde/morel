@@ -128,6 +128,11 @@ public class Compiler {
     return compile(Context.of(env), expression);
   }
 
+  /** Compiles the argument to "apply". */
+  public Code compileArg(Context cx, Ast.Exp expression) {
+    return compile(cx, expression);
+  }
+
   public Code compile(Context cx, Ast.Exp expression) {
     final Ast.Literal literal;
     final Code argCode;
@@ -234,13 +239,23 @@ public class Compiler {
   protected Code compileApply(Context cx, Ast.Apply apply) {
     Code argCode;
     assignSelector(apply);
-    argCode = compile(cx, apply.arg);
+    argCode = compileArg(cx, apply.arg);
     final Type argType = typeMap.getType(apply.arg);
     final Applicable fnValue = compileApplicable(cx, apply.fn, argType);
     if (fnValue != null) {
-      return Codes.apply(fnValue, argCode);
+      return finishCompileApply(cx, fnValue, argCode, argType);
     }
     final Code fnCode = compile(cx, apply.fn);
+    return finishCompileApply(cx, fnCode, argCode, argType);
+  }
+
+  protected Code finishCompileApply(Context cx, Applicable fnValue,
+      Code argCode, Type argType) {
+    return Codes.apply(fnValue, argCode);
+  }
+
+  protected Code finishCompileApply(Context cx, Code fnCode, Code argCode,
+      Type argType) {
     return Codes.apply(fnCode, argCode);
   }
 
@@ -637,15 +652,12 @@ public class Compiler {
       });
     }
     final Context cx1 = cx.bindAll(bindings);
-    final Code code1 = refine(cx1.env, valBind.e);
-    final Code code;
-    if (code1 != null) {
-      code = code1;
-    } else {
-      code = compile(cx1, valBind.e);
-      if (!linkCodes.isEmpty()) {
-        link(linkCodes, valBind.pat, code);
-      }
+    // Using 'compileArg' rather than 'compile' encourages CalciteCompiler
+    // to use a pure Calcite implementation if possible, and has no effect
+    // in the basic Compiler.
+    final Code code = compileArg(cx1, valBind.e);
+    if (!linkCodes.isEmpty()) {
+      link(linkCodes, valBind.pat, code);
     }
     newBindings.clear();
     final ImmutableList<Pair<Ast.Pat, Code>> patCodes =
@@ -672,10 +684,6 @@ public class Compiler {
         output.add(out);
       });
     }
-  }
-
-  protected Code refine(Environment env, Ast.Exp e) {
-    return null;
   }
 
   private void link(Map<Ast.IdPat, LinkCode> linkCodes, Ast.Pat pat,

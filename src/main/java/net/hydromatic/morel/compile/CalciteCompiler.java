@@ -18,10 +18,6 @@
  */
 package net.hydromatic.morel.compile;
 
-import org.apache.calcite.DataContext;
-import org.apache.calcite.interpreter.Interpreter;
-import org.apache.calcite.linq4j.Enumerable;
-import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.externalize.RelJson;
@@ -31,8 +27,6 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Util;
@@ -46,6 +40,7 @@ import com.google.common.collect.Ordering;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
@@ -60,6 +55,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.ThreadLocals;
 
@@ -102,6 +98,7 @@ public class CalciteCompiler extends Compiler {
           .put(Op.ANDALSO, SqlStdOperatorTable.AND)
           .put(Op.ORELSE, SqlStdOperatorTable.OR)
           .build();
+
   final Calcite calcite;
 
   public CalciteCompiler(TypeMap typeMap, Calcite calcite) {
@@ -110,23 +107,37 @@ public class CalciteCompiler extends Compiler {
   }
 
   public @Nullable RelNode toRel(Environment env, Ast.Exp expression) {
-    final FrameworkConfig config = Frameworks.newConfigBuilder().build();
-    final RelBuilder relBuilder = RelBuilder.create(config);
-    final RelContext cx = new RelContext(env, relBuilder, ImmutableMap.of(), 0);
-    if (toRel(cx, expression)) {
-      return relBuilder.build();
+    return toRel2(
+        new RelContext(env, calcite.relBuilder(), ImmutableMap.of(), 0),
+        expression);
+  }
+
+  private RelNode toRel2(RelContext cx, Ast.Exp expression) {
+    if (toRel3(cx, expression, false)) {
+      return cx.relBuilder.build();
     } else {
       return null;
     }
   }
 
-  boolean toRel(RelContext cx, Ast.Exp expression) {
+  boolean toRel3(RelContext cx, Ast.Exp expression, boolean aggressive) {
     final Code code = compile(cx, expression);
-    if (code instanceof RelCode) {
-      return ((RelCode) code).toRel(cx);
-    } else {
-      return false;
+    return code instanceof RelCode
+        && ((RelCode) code).toRel(cx, aggressive);
+  }
+
+  @Override public Code compileArg(Context cx, Ast.Exp expression) {
+    Code code = super.compileArg(cx, expression);
+    if (code instanceof RelCode && !(cx instanceof RelContext)) {
+      final RelBuilder relBuilder = calcite.relBuilder();
+      final RelContext rx =
+          new RelContext(cx.env, relBuilder, ImmutableMap.of(), 0);
+      if (toRel3(rx, expression, false)) {
+        final Type type = typeMap.getType(expression);
+        return calcite.code(rx.relBuilder.build(), type);
+      }
     }
+    return code;
   }
 
   @Override protected Code compileLet(Context cx, Ast.Decl decl, Ast.Exp e) {
@@ -140,13 +151,12 @@ public class CalciteCompiler extends Compiler {
         return code.eval(env);
       }
 
-      @Override public boolean toRel(RelContext cx) {
+      @Override public boolean toRel(RelContext cx, boolean aggressive) {
         final List<Code> varCodes = new ArrayList<>();
         final List<Binding> bindings = new ArrayList<>();
         compileDecl(cx, decl, varCodes, bindings, null);
-        Context cx2 = cx.bindAll(bindings);
-        final Code resultCode = compile(cx2, e);
-        throw new AssertionError("TODO");
+        final RelContext cx2 = cx.bindAll(bindings);
+        return toRel3(cx2, e, false);
       }
     };
   }
@@ -162,7 +172,7 @@ public class CalciteCompiler extends Compiler {
         return code.eval(env);
       }
 
-      @Override public boolean toRel(RelContext cx) {
+      @Override public boolean toRel(RelContext cx, boolean aggressive) {
         final Type type = typeMap.getType(apply);
         if (!(type instanceof ListType)) {
           return false;
@@ -184,7 +194,7 @@ public class CalciteCompiler extends Compiler {
             // For example, '[1, 2, 3] union (from scott.dept yield deptno)'
             final Ast.Tuple tuple = (Ast.Tuple) apply.arg;
             for (Ast.Exp arg : tuple.args) {
-              if (!CalciteCompiler.this.toRel(cx, arg)) {
+              if (!CalciteCompiler.this.toRel3(cx, arg, false)) {
                 return false;
               }
             }
@@ -211,6 +221,9 @@ public class CalciteCompiler extends Compiler {
         if (rowType == null) {
           return false;
         }
+        if (!aggressive) {
+          return false;
+        }
         final JsonBuilder jsonBuilder = new JsonBuilder();
         final String jsonRowType =
             jsonBuilder.toJsonString(
@@ -227,6 +240,30 @@ public class CalciteCompiler extends Compiler {
     };
   }
 
+  @Override protected Code finishCompileApply(Context cx, Code fnCode,
+      Code argCode, Type argType) {
+    if (argCode instanceof RelCode && cx instanceof RelContext) {
+      final RelContext rx = (RelContext) cx;
+      if (((RelCode) argCode).toRel(rx, false)) {
+        final Code argCode2 = calcite.code(rx.relBuilder.build(), argType);
+        return finishCompileApply(cx, fnCode, argCode2, argType);
+      }
+    }
+    return super.finishCompileApply(cx, fnCode, argCode, argType);
+  }
+
+  @Override protected Code finishCompileApply(Context cx, Applicable fnValue,
+      Code argCode, Type argType) {
+    if (argCode instanceof RelCode && cx instanceof RelContext) {
+      final RelContext rx = (RelContext) cx;
+      if (((RelCode) argCode).toRel(rx, false)) {
+        final Code argCode2 = calcite.code(rx.relBuilder.build(), argType);
+        return finishCompileApply(cx, fnValue, argCode2, argType);
+      }
+    }
+    return super.finishCompileApply(cx, fnValue, argCode, argType);
+  }
+
   @Override protected Code compileList(Context cx, Ast.List list) {
     final Code code = super.compileList(cx, list);
     return new RelCode() {
@@ -238,7 +275,7 @@ public class CalciteCompiler extends Compiler {
         return code.eval(env);
       }
 
-      @Override public boolean toRel(RelContext cx) {
+      @Override public boolean toRel(RelContext cx, boolean aggressive) {
         for (Ast.Exp arg : list.args) {
           cx.relBuilder.values(new String[] {"T"}, true);
           yield_(cx, arg);
@@ -273,14 +310,19 @@ public class CalciteCompiler extends Compiler {
         return code.eval(env);
       }
 
-      @Override public boolean toRel(RelContext cx) {
+      @Override public boolean toRel(RelContext cx, boolean aggressive) {
         final Environment env = cx.env;
         final RelBuilder relBuilder = cx.relBuilder;
         final Map<Ast.Pat, RelNode> sourceCodes = new LinkedHashMap<>();
         final List<Binding> bindings = new ArrayList<>();
         for (Map.Entry<Ast.Pat, Ast.Exp> patExp : from.sources.entrySet()) {
-          final RelNode expCode =
-              CalciteCompiler.this.toRel(env.bindAll(bindings), patExp.getValue());
+          final RelContext cx2 =
+              new RelContext(env.bindAll(bindings), calcite.relBuilder(),
+                  cx.map, 0);
+          if (!toRel3(cx2, patExp.getValue(), true)) {
+            return false;
+          }
+          final RelNode expCode = cx2.relBuilder.build();
           final Ast.Pat pat0 = patExp.getKey();
           final ListType listType = (ListType) typeMap.getType(patExp.getValue());
           final Ast.Pat pat = expandRecordPattern(pat0, listType.elementType);
@@ -389,6 +431,12 @@ public class CalciteCompiler extends Compiler {
       return cx.relBuilder.project(
           Util.transform(record.args.values(), e -> translate(cx, e)),
           record.args.keySet());
+
+    case TUPLE:
+      final Ast.Tuple tuple = (Ast.Tuple) exp;
+      return cx.relBuilder.project(
+          Util.transform(tuple.args, e -> translate(cx, e)),
+          Util.transformIndexed(tuple.args, (e, i) -> Integer.toString(i)));
     }
     RexNode rex = translate(cx, exp);
     return cx.relBuilder.project(rex);
@@ -396,6 +444,8 @@ public class CalciteCompiler extends Compiler {
 
   private RexNode translate(RelContext cx, Ast.Exp exp) {
     final Ast.Record record;
+    final RelDataTypeFactory.Builder builder;
+    final List<RexNode> operands;
     switch (exp.op) {
     case BOOL_LITERAL:
     case CHAR_LITERAL:
@@ -477,18 +527,28 @@ public class CalciteCompiler extends Compiler {
       final SqlOperator op = INFIX_OPERATORS.get(infix.op);
       return cx.relBuilder.call(op, translateList(cx, infix.args()));
 
+    case TUPLE:
+      final Ast.Tuple tuple = (Ast.Tuple) exp;
+      builder = cx.relBuilder.getTypeFactory().builder();
+      operands = new ArrayList<>();
+      Ord.forEach(tuple.args, (arg, i) -> {
+        final RexNode e = translate(cx, arg);
+        operands.add(e);
+        builder.add(Integer.toString(i), e.getType());
+      });
+      return cx.relBuilder.getRexBuilder().makeCall(builder.build(),
+          SqlStdOperatorTable.ROW, operands);
+
     case RECORD:
       record = (Ast.Record) exp;
-      final RelDataTypeFactory.Builder builder =
-          cx.relBuilder.getTypeFactory().builder();
-      final List<RexNode> operands = new ArrayList<>();
+      builder = cx.relBuilder.getTypeFactory().builder();
+      operands = new ArrayList<>();
       record.args.forEach((name, arg) -> {
         final RexNode e = translate(cx, arg);
         operands.add(e);
         builder.add(name, e.getType());
       });
-      final RelDataType type = builder.build();
-      return cx.relBuilder.getRexBuilder().makeCall(type,
+      return cx.relBuilder.getRexBuilder().makeCall(builder.build(),
           SqlStdOperatorTable.ROW, operands);
     }
 
@@ -597,28 +657,6 @@ public class CalciteCompiler extends Compiler {
     throw new AssertionError("unknown aggregate function: " + aggregate);
   }
 
-  @Override protected Code refine(Environment env, Ast.Exp e) {
-    final RelNode rel = toRel(env, e);
-    if (rel == null) {
-      return null;
-    }
-    final DataContext dataContext = calcite.dataContext;
-    final Interpreter interpreter = new Interpreter(dataContext, rel);
-    final Type type = typeMap.getType(e);
-    final Function<Enumerable<Object[]>, List<Object>> converter =
-        Converters.fromEnumerable(rel, type);
-    return new Code() {
-      @Override public Describer describe(Describer describer) {
-        return describer.start("calcite", d ->
-            d.arg("plan", RelOptUtil.toString(rel)));
-      }
-
-      @Override public Object eval(EvalEnv evalEnv) {
-        return converter.apply(interpreter);
-      }
-    };
-  }
-
   private static EvalEnv evalEnvOf(Environment env) {
     final Map<String, Object> map = new HashMap<>();
     env.forEachValue(map::put);
@@ -639,12 +677,21 @@ public class CalciteCompiler extends Compiler {
       this.map = map;
       this.inputCount = inputCount;
     }
+
+    @Override RelContext bind(String name, Type type, Object value) {
+      return new RelContext(env.bind(name, type, value), relBuilder,
+          map, inputCount);
+    }
+
+    @Override RelContext bindAll(Iterable<Binding> bindings) {
+      return new RelContext(env.bindAll(bindings), relBuilder, map, inputCount);
+    }
   }
 
   /** Extension to {@link Code} that can also provide a translation to
    * relational algebra. */
   interface RelCode extends Code {
-    boolean toRel(RelContext cx);
+    boolean toRel(RelContext cx, boolean aggressive);
 
     static RelCode of(Code code, Function<RelContext, Boolean> c) {
       return new RelCode() {
@@ -656,7 +703,7 @@ public class CalciteCompiler extends Compiler {
           return code.eval(env);
         }
 
-        @Override public boolean toRel(RelContext cx) {
+        @Override public boolean toRel(RelContext cx, boolean aggressive) {
           return c.apply(cx);
         }
       };
