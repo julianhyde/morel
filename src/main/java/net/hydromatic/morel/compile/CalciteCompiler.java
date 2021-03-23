@@ -152,9 +152,9 @@ public class CalciteCompiler extends Compiler {
       }
 
       @Override public boolean toRel(RelContext cx, boolean aggressive) {
-        final List<Code> varCodes = new ArrayList<>();
+        final List<Code> matchCodes = new ArrayList<>();
         final List<Binding> bindings = new ArrayList<>();
-        compileDecl(cx, decl, varCodes, bindings, null);
+        compileDecl(cx, decl, matchCodes, bindings, null);
         final RelContext cx2 = cx.bindAll(bindings);
         return toRel3(cx2, e, false);
       }
