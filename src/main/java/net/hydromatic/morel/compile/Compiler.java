@@ -68,11 +68,11 @@ public class Compiler {
   }
 
   CompiledStatement compileStatement(Environment env, Ast.Decl decl) {
-    final List<Code> varCodes = new ArrayList<>();
+    final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     final List<Action> actions = new ArrayList<>();
     final Context cx = Context.of(env);
-    compileDecl(cx, decl, varCodes, bindings, actions);
+    compileDecl(cx, decl, matchCodes, bindings, actions);
     final Type type = typeMap.getType(decl);
 
     return new CompiledStatement() {
@@ -455,12 +455,12 @@ public class Compiler {
   }
 
   protected Code compileLet(Context cx, Ast.Decl decl, Ast.Exp e) {
-    final List<Code> varCodes = new ArrayList<>();
+    final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
-    compileDecl(cx, decl, varCodes, bindings, null);
+    compileDecl(cx, decl, matchCodes, bindings, null);
     Context cx2 = cx.bindAll(bindings);
     final Code resultCode = compile(cx2, e);
-    return Codes.let(varCodes, resultCode);
+    return Codes.let(matchCodes, resultCode);
   }
 
   protected Ast.LetExp flattenLet(List<Ast.Decl> decls, Ast.Exp e) {
@@ -472,11 +472,11 @@ public class Compiler {
     }
   }
 
-  void compileDecl(Context cx, Ast.Decl decl, List<Code> varCodes,
+  void compileDecl(Context cx, Ast.Decl decl, List<Code> matchCodes,
       List<Binding> bindings, List<Action> actions) {
     switch (decl.op) {
     case VAL_DECL:
-      compileValDecl(cx, (Ast.ValDecl) decl, varCodes, bindings, actions);
+      compileValDecl(cx, (Ast.ValDecl) decl, matchCodes, bindings, actions);
       break;
     case DATATYPE_DECL:
       final Ast.DatatypeDecl datatypeDecl = (Ast.DatatypeDecl) decl;
@@ -491,7 +491,7 @@ public class Compiler {
   }
 
   private void compileValDecl(Context cx, Ast.ValDecl valDecl,
-      List<Code> varCodes, List<Binding> bindings, List<Action> actions) {
+      List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
     if (valDecl.valBinds.size() > 1) {
       // Transform "let val v1 = e1 and v2 = e2 in e"
       // to "let val (v1, v2) = (e1, e2) in e"
@@ -519,7 +519,7 @@ public class Compiler {
           }));
     }
     for (Ast.ValBind valBind : valDecl.valBinds) {
-      compileValBind(cx, valBind, varCodes, bindings, actions);
+      compileValBind(cx, valBind, matchCodes, bindings, actions);
     }
   }
 
@@ -637,7 +637,7 @@ public class Compiler {
   }
 
   private void compileValBind(Context cx, Ast.ValBind valBind,
-      List<Code> varCodes, List<Binding> bindings, List<Action> actions) {
+      List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
     final List<Binding> newBindings = new TailList<>(bindings);
     final Map<Ast.IdPat, LinkCode> linkCodes = new IdentityHashMap<>();
     if (valBind.rec) {
@@ -662,7 +662,7 @@ public class Compiler {
     newBindings.clear();
     final ImmutableList<Pair<Ast.Pat, Code>> patCodes =
         ImmutableList.of(Pair.of(valBind.pat, code));
-    varCodes.add(new MatchCode(patCodes));
+    matchCodes.add(new MatchCode(patCodes));
 
     if (actions != null) {
       final String name = ((Ast.IdPat) valBind.pat).name;
