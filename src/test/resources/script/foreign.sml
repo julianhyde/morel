@@ -56,7 +56,7 @@ where e.deptno = 20
 yield e.empno;
 Sys.plan();
 
-(*) Query in Hybrid mode (80% Calcite)
+(*) Query in Hybrid mode (20% Morel -> 80% Calcite)
 from e in (List.filter (fn e2 => e2.empno < 7700) scott.emp)
 where e.deptno = 20
 yield e.empno;
@@ -74,14 +74,14 @@ end;
 Sys.plan();
 
 (*) Query in Hybrid mode (90% Calcite; Calcite code references a variable
-(*) from the enclosing environment)
+(*) and an expression from the enclosing environment)
 let
   val ten = 10
-  val twenty = ten + ten
+  val deptNos = ten :: 20 :: 30 :: [40]
 in
   from e in scott.emp
-  where e.deptno = twenty
-  yield e.empno + ten
+  where e.deptno = List.nth (deptNos, 1)
+  yield e.empno + 13 mod ten
 end;
 Sys.plan();
 
