@@ -551,21 +551,7 @@ public class CalciteCompiler extends Compiler {
         final Function<RelBuilder, RexNode> fn = cx.map.get(id.name);
         return fn.apply(cx.relBuilder);
       }
-
-      // Translate as a call to a scalar function
-      final Type type = typeMap.getType(id);
-      final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
-      final RelDataType calciteType =
-          Converters.toCalciteType(type, typeFactory);
-      final JsonBuilder jsonBuilder = new JsonBuilder();
-      final String jsonType =
-          jsonBuilder.toJsonString(
-              new RelJson(jsonBuilder).toJson(calciteType));
-      final String morelCode = id.toString();
-      operands = Arrays.asList(cx.relBuilder.literal(morelCode),
-          cx.relBuilder.literal(jsonType));
-      return cx.relBuilder.getRexBuilder().makeCall(calciteType,
-          CalciteTableFunctions.SCALAR_OPERATOR, operands);
+      break;
 
     case APPLY:
       final Ast.Apply apply = (Ast.Apply) exp;
@@ -616,7 +602,20 @@ public class CalciteCompiler extends Compiler {
           SqlStdOperatorTable.ROW, operands);
     }
 
-    throw new AssertionError("cannot translate " + exp.op + " [" + exp + "]");
+    // Translate as a call to a scalar function
+    final Type type = typeMap.getType(exp);
+    final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
+    final RelDataType calciteType =
+        Converters.toCalciteType(type, typeFactory);
+    final JsonBuilder jsonBuilder = new JsonBuilder();
+    final String jsonType =
+        jsonBuilder.toJsonString(
+            new RelJson(jsonBuilder).toJson(calciteType));
+    final String morelCode = exp.toString();
+    operands = Arrays.asList(cx.relBuilder.literal(morelCode),
+        cx.relBuilder.literal(jsonType));
+    return cx.relBuilder.getRexBuilder().makeCall(calciteType,
+        CalciteTableFunctions.SCALAR_OPERATOR, operands);
   }
 
   private Ast.Record toRecord(RelContext cx, Ast.Id id) {
