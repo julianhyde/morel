@@ -19,6 +19,7 @@
 package net.hydromatic.morel.util;
 
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /**
  * Utilities for {@link ThreadLocal}.
@@ -54,6 +55,21 @@ public class ThreadLocals {
       // original value was present because threadLocal was initially not set.
       threadLocal.set(originalValue);
     }
+  }
+
+  /** Performs an action with a thread-local set to a value derived from its
+   * current value via a transformer. */
+  public static <T> void mutate(ThreadLocal<T> threadLocal,
+      UnaryOperator<T> transform, Runnable runnable) {
+    let(threadLocal, transform.apply(threadLocal.get()), runnable);
+  }
+
+  /** Performs an action with a thread-local set to a value derived from its
+   * current value via a transformer,
+   * and returns the result. */
+  public static <T, R> R mutate(ThreadLocal<T> threadLocal,
+      UnaryOperator<T> transform, Supplier<R> supplier) {
+    return let(threadLocal, transform.apply(threadLocal.get()), supplier);
   }
 }
 

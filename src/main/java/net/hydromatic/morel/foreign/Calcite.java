@@ -32,10 +32,12 @@ import org.apache.calcite.tools.RelBuilder;
 
 import com.google.common.collect.ImmutableMap;
 
+import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.util.ThreadLocals;
 
 import java.util.List;
 import java.util.Map;
@@ -74,8 +76,7 @@ public class Calcite {
 
   /** Creates a {@code Code} that evaluates a Calcite relational expression,
    * converting it to Morel list type {@code type}. */
-  public Code code(RelNode rel, Type type) {
-    final Interpreter interpreter = new Interpreter(dataContext, rel);
+  public Code code(Environment env, RelNode rel, Type type) {
     final Function<Enumerable<Object[]>, List<Object>> converter =
         Converters.fromEnumerable(rel, type);
     return new Code() {
@@ -85,7 +86,15 @@ public class Calcite {
       }
 
       @Override public Object eval(EvalEnv evalEnv) {
-        return converter.apply(interpreter);
+        return ThreadLocals.let(CalciteTableFunctions.THREAD_EVAL_ENV,
+            evalEnv, () ->
+                ThreadLocals.mutate(CalciteTableFunctions.THREAD_ENV,
+                    c -> c.withEnv(env),
+                    () -> {
+                      final Interpreter interpreter =
+                          new Interpreter(dataContext, rel);
+                      return converter.apply(interpreter);
+                    }));
       }
     };
   }
