@@ -266,7 +266,7 @@ public class AlgebraTest {
   @Test public void testFullCalcite() {
     final String ml = "from e in scott.emp\n"
         + "  where e.empno < 7500\n"
-        + "  yield {e.empno, e.deptno, d5 = e.deptno + 5})";
+        + "  yield {e.empno, e.deptno, d5 = e.deptno + 5}";
     String plan = "calcite("
         + "plan LogicalProject(d5=[+($1, 5)], deptno=[$1], empno=[$2])\n"
         + "  LogicalFilter(condition=[<($2, 7500)])\n"
@@ -279,6 +279,41 @@ public class AlgebraTest {
         .assertType("{d5:int, deptno:int, empno:int} list")
         .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)))
         .assertPlan(is(plan));
+  }
+
+  /** Tests a query that is executed in Calcite except for a variable, 'five',
+   * whose value happens to always be 5. */
+  @Test public void testCalciteWithVariable() {
+    final String ml = "let\n"
+        + "  val five = 5\n"
+        + "  val ten = five + five\n"
+        + "in\n"
+        + "  from e in scott.emp\n"
+        + "  where e.empno < 7500 + ten\n"
+        + "  yield {e.empno, e.deptno, d5 = e.deptno + five}\n"
+        + "end";
+    String plan = "let(matchCode0 match(five, constant(5)), "
+        + "resultCode let("
+        + "matchCode0 match(ten, apply(fnValue +, "
+        + "argCode tuple(get(name five), get(name five)))), "
+        + "resultCode calcite(plan "
+        + "LogicalProject(d5=[+($1, morelScalar('five', '{\n"
+        + "  \"type\": \"INTEGER\",\n"
+        + "  \"nullable\": false\n"
+        + "}'))], deptno=[$1], empno=[$2])\n"
+        + "  LogicalFilter(condition=[<($2, +(7500, morelScalar('ten', '{\n"
+        + "  \"type\": \"INTEGER\",\n"
+        + "  \"nullable\": false\n"
+        + "}')))])\n"
+        + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
+        + "hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n"
+        + "      JdbcTableScan(table=[[scott, EMP]])\n)))";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("{d5:int, deptno:int, empno:int} list")
+        .assertPlan(is(plan))
+        .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)));
   }
 
   void checkEqual(String ml) {

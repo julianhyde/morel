@@ -29,7 +29,6 @@ import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.type.SqlTypeName;
 
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.DataType;
@@ -113,9 +112,7 @@ public class Converters {
     final RelDataType rowType = rel.getRowType();
     final Function<Object[], Object> elementConverter =
         forType(rowType, listType.elementType);
-    return iterable ->
-        Lists.newArrayList(
-            Iterables.transform(iterable, elementConverter::apply));
+    return enumerable -> enumerable.select(elementConverter::apply).toList();
   }
 
   public static Function forType(RelDataType fromType, Type type) {
@@ -155,6 +152,14 @@ public class Converters {
     final C2m converter =
         C2m.forMorel(type, typeFactory, false, true);
     return converter::toEnumerable;
+  }
+
+  /** Returns a function that converts from Morel objects to Calcite objects. */
+  public static Function<Object, Object> toCalcite(Type type,
+      RelDataTypeFactory typeFactory) {
+    final C2m converter =
+        C2m.forMorel(type, typeFactory, false, true);
+    return converter::toObject;
   }
 
   /** Converts a field from Calcite to Morel format. */
@@ -333,6 +338,10 @@ public class Converters {
         }
       }
       throw new UnsupportedOperationException("cannot convert type " + type);
+    }
+
+    public Object toObject(Object v) {
+      return v;
     }
 
     public Enumerable<Object[]> toEnumerable(Object v) {

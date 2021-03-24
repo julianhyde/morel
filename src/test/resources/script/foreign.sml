@@ -62,4 +62,27 @@ where e.deptno = 20
 yield e.empno;
 Sys.plan();
 
+(*) Query in Hybrid mode (99% Calcite; there is a variable but it is not
+(*) referenced by Calcite code)
+let
+  val twenty = 20
+in
+  from e in scott.emp
+  where e.deptno = 20
+  yield e.empno
+end;
+Sys.plan();
+
+(*) Query in Hybrid mode (90% Calcite; Calcite code references a variable
+(*) from the enclosing environment)
+let
+  val ten = 10
+  val twenty = ten + ten
+in
+  from e in scott.emp
+  where e.deptno = twenty
+  yield e.empno + ten
+end;
+Sys.plan();
+
 (*) End foreign.sml

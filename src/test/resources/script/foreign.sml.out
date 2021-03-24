@@ -207,3 +207,52 @@ val it =
 }')], rowType=[RecordType(REAL comm, INTEGER deptno, INTEGER empno, VARCHAR ename, VARCHAR hiredate, VARCHAR job, INTEGER mgr, REAL sal)])
 )"
   : string
+
+
+(*) Query in Hybrid mode (99% Calcite; there is a variable but it is not
+(*) referenced by Calcite code)
+let
+  val twenty = 20
+in
+  from e in scott.emp
+  where e.deptno = 20
+  yield e.empno
+end;
+val it = [7369,7566,7788,7876,7902] : int list
+
+Sys.plan();
+val it =
+  "let(matchCode0 match(twenty, constant(20)), resultCode calcite(plan LogicalProject(empno=[$2])
+  LogicalFilter(condition=[=($1, 20)])
+    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+      JdbcTableScan(table=[[scott, EMP]])
+))"
+  : string
+
+
+(*) Query in Hybrid mode (90% Calcite; Calcite code references a variable
+(*) from the enclosing environment)
+let
+  val ten = 10
+  val twenty = ten + ten
+in
+  from e in scott.emp
+  where e.deptno = twenty
+  yield e.empno + ten
+end;
+val it = [7379,7576,7798,7886,7912] : int list
+
+Sys.plan();
+val it =
+  "let(matchCode0 match(ten, constant(10)), resultCode let(matchCode0 match(twenty, apply(fnValue +, argCode tuple(get(name ten), get(name ten)))), resultCode calcite(plan LogicalProject($f0=[+($2, morelScalar('ten', '{
+  \"type\": \"INTEGER\",
+  \"nullable\": false
+}'))])
+  LogicalFilter(condition=[=($1, morelScalar('twenty', '{
+  \"type\": \"INTEGER\",
+  \"nullable\": false
+}'))])
+    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+      JdbcTableScan(table=[[scott, EMP]])
+)))"
+  : string
