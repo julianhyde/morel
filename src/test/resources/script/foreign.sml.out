@@ -147,7 +147,7 @@ val it =
   : string
 
 
-(*) Query in Hybrid mode (80% Calcite)
+(*) Query in Hybrid mode (20% Morel -> 80% Calcite)
 from e in (List.filter (fn e2 => e2.empno < 7700) scott.emp)
 where e.deptno = 20
 yield e.empno;
@@ -231,24 +231,24 @@ val it =
 
 
 (*) Query in Hybrid mode (90% Calcite; Calcite code references a variable
-(*) from the enclosing environment)
+(*) and an expression from the enclosing environment)
 let
   val ten = 10
-  val twenty = ten + ten
+  val deptNos = ten :: 20 :: 30 :: [40]
 in
   from e in scott.emp
-  where e.deptno = twenty
-  yield e.empno + ten
+  where e.deptno = List.nth (deptNos, 1)
+  yield e.empno + 13 mod ten
 end;
-val it = [7379,7576,7798,7886,7912] : int list
+val it = [7372,7569,7791,7879,7905] : int list
 
 Sys.plan();
 val it =
-  "let(matchCode0 match(ten, constant(10)), resultCode let(matchCode0 match(twenty, apply(fnValue +, argCode tuple(get(name ten), get(name ten)))), resultCode calcite(plan LogicalProject($f0=[+($2, morelScalar('ten', '{
+  "let(matchCode0 match(ten, constant(10)), resultCode let(matchCode0 match(deptNos, apply(fnValue ::, argCode tuple(get(name ten), apply(fnValue ::, argCode tuple(constant(20), apply(fnValue ::, argCode tuple(constant(30), tuple(constant(40))))))))), resultCode calcite(plan LogicalProject($f0=[+($2, MOD(13, morelScalar('ten', '{
   \"type\": \"INTEGER\",
   \"nullable\": false
-}'))])
-  LogicalFilter(condition=[=($1, morelScalar('twenty', '{
+}')))])
+  LogicalFilter(condition=[=($1, morelScalar('#nth List (deptNos, 1)', '{
   \"type\": \"INTEGER\",
   \"nullable\": false
 }'))])
