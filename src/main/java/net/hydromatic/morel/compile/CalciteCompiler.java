@@ -49,7 +49,7 @@ import net.hydromatic.morel.eval.EvalEnvs;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.Calcite;
-import net.hydromatic.morel.foreign.CalciteMorelTableFunction;
+import net.hydromatic.morel.foreign.CalciteTableFunctions;
 import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
@@ -61,6 +61,7 @@ import net.hydromatic.morel.util.ThreadLocals;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -224,10 +225,10 @@ public class CalciteCompiler extends Compiler {
             jsonBuilder.toJsonString(
                 new RelJson(jsonBuilder).toJson(rowType));
         final String morelCode = apply.toString();
-        ThreadLocals.let(CalciteMorelTableFunction.THREAD_ENV,
-            new CalciteMorelTableFunction.Context(new Session(), cx.env,
-                typeSystem), () ->
-            cx.relBuilder.functionScan(CalciteMorelTableFunction.OPERATOR, 0,
+        ThreadLocals.let(CalciteTableFunctions.THREAD_ENV,
+            new CalciteTableFunctions.Context(new Session(), cx.env,
+                typeSystem, cx.relBuilder.getTypeFactory()), () ->
+            cx.relBuilder.functionScan(CalciteTableFunctions.TABLE_OPERATOR, 0,
                 cx.relBuilder.literal(morelCode),
                 cx.relBuilder.literal(jsonRowType)));
         return true;
@@ -458,7 +459,21 @@ public class CalciteCompiler extends Compiler {
         final Function<RelBuilder, RexNode> fn = cx.map.get(id.name);
         return fn.apply(cx.relBuilder);
       }
-      break;
+
+      // Translate as a call to a scalar function
+      final Type type = id.type;
+      final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
+      final RelDataType calciteType =
+          Converters.toCalciteType(type, typeFactory);
+      final JsonBuilder jsonBuilder = new JsonBuilder();
+      final String jsonType =
+          jsonBuilder.toJsonString(
+              new RelJson(jsonBuilder).toJson(calciteType));
+      final String morelCode = id.toString();
+      operands = Arrays.asList(cx.relBuilder.literal(morelCode),
+          cx.relBuilder.literal(jsonType));
+      return cx.relBuilder.getRexBuilder().makeCall(calciteType,
+          CalciteTableFunctions.SCALAR_OPERATOR, operands);
 
     case APPLY:
       final Core.Apply apply = (Core.Apply) exp;
