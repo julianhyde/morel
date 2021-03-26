@@ -86,9 +86,9 @@ public class Calcite {
       }
 
       @Override public Object eval(EvalEnv evalEnv) {
-        return ThreadLocals.let(CalciteTableFunctions.THREAD_EVAL_ENV,
+        return ThreadLocals.let(CalciteFunctions.THREAD_EVAL_ENV,
             evalEnv, () ->
-                ThreadLocals.mutate(CalciteTableFunctions.THREAD_ENV,
+                ThreadLocals.mutate(CalciteFunctions.THREAD_ENV,
                     c -> c.withEnv(env),
                     () -> {
                       final Interpreter interpreter =
