@@ -48,7 +48,7 @@ import net.hydromatic.morel.eval.EvalEnvs;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.Calcite;
-import net.hydromatic.morel.foreign.CalciteTableFunctions;
+import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
@@ -139,10 +139,10 @@ public class CalciteCompiler extends Compiler {
     return code;
   }
 
-  @Override protected CalciteTableFunctions.Context createContext(
+  @Override protected CalciteFunctions.Context createContext(
       Environment env) {
     final Session dummySession = new Session();
-    return new CalciteTableFunctions.Context(dummySession, env,
+    return new CalciteFunctions.Context(dummySession, env,
         typeMap.typeSystem, calcite.dataContext.getTypeFactory());
   }
 
@@ -275,12 +275,11 @@ public class CalciteCompiler extends Compiler {
             jsonBuilder.toJsonString(
                 new RelJson(jsonBuilder).toJson(rowType));
         final String morelCode = apply.toString();
-        ThreadLocals.let(
-            CalciteTableFunctions.THREAD_ENV,
-            new CalciteTableFunctions.Context(new Session(), cx.env,
+        ThreadLocals.let(CalciteFunctions.THREAD_ENV,
+            new CalciteFunctions.Context(new Session(), cx.env,
                 typeMap.typeSystem, cx.relBuilder.getTypeFactory()), () ->
             cx.relBuilder.functionScan(
-                CalciteTableFunctions.TABLE_OPERATOR, 0,
+                CalciteFunctions.TABLE_OPERATOR, 0,
                 cx.relBuilder.literal(morelCode),
                 cx.relBuilder.literal(jsonRowType)));
         return true;
@@ -615,7 +614,7 @@ public class CalciteCompiler extends Compiler {
     operands = Arrays.asList(cx.relBuilder.literal(morelCode),
         cx.relBuilder.literal(jsonType));
     return cx.relBuilder.getRexBuilder().makeCall(calciteType,
-        CalciteTableFunctions.SCALAR_OPERATOR, operands);
+        CalciteFunctions.SCALAR_OPERATOR, operands);
   }
 
   private Ast.Record toRecord(RelContext cx, Ast.Id id) {
