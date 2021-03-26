@@ -85,4 +85,14 @@ in
 end;
 Sys.plan();
 
+(*) Query in Hybrid mode (90% Calcite; Calcite code references a function
+(*) from the enclosing environment)
+let
+  fun double x = x * 2
+in
+  from d in scott.dept
+  yield double d.deptno
+end;
+Sys.plan();
+
 (*) End foreign.sml

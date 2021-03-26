@@ -562,9 +562,9 @@ public class CalciteCompiler extends Compiler {
         return cx.relBuilder.field(range, ((Ast.RecordSelector) apply.fn).name);
       }
       if (apply.fn instanceof Ast.Id) {
-        final Ast.Tuple tuple = (Ast.Tuple) apply.arg;
         final SqlOperator op = DIRECT_OPS.get(((Ast.Id) apply.fn).name);
         if (op != null) {
+          final Ast.Tuple tuple = (Ast.Tuple) apply.arg;
           return cx.relBuilder.call(op, translateList(cx, tuple.args()));
         }
       }
