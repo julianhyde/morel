@@ -30,7 +30,7 @@ import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
-import net.hydromatic.morel.foreign.CalciteTableFunctions;
+import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -74,7 +74,7 @@ public class Compiler {
     final Type type = decl instanceof Core.ValDecl
         ? ((Core.ValDecl) decl).pat.type
         : PrimitiveType.UNIT;
-    final CalciteTableFunctions.Context context = createContext(env);
+    final CalciteFunctions.Context context = createContext(env);
 
     return new CompiledStatement() {
       public Type getType() {
@@ -83,7 +83,7 @@ public class Compiler {
 
       public void eval(Session session, Environment env, List<String> output,
           List<Binding> bindings) {
-        ThreadLocals.let(CalciteTableFunctions.THREAD_ENV, context,
+        ThreadLocals.let(CalciteFunctions.THREAD_ENV, context,
             () -> {
               final EvalEnv evalEnv = Codes.emptyEnvWith(session, env);
               for (Action action : actions) {
@@ -108,9 +108,9 @@ public class Compiler {
    * <li>The dummy session is there because session is mandatory, but we have
    * not created a session yet. Lifecycle confusion.
    * </ul> */
-  protected CalciteTableFunctions.Context createContext(Environment env) {
+  protected CalciteFunctions.Context createContext(Environment env) {
     final Session dummySession = new Session();
-    return new CalciteTableFunctions.Context(dummySession, env, typeSystem, null);
+    return new CalciteFunctions.Context(dummySession, env, typeSystem, null);
   }
 
   /** Something that needs to happen when a declaration is evaluated.

@@ -71,7 +71,7 @@ import javax.annotation.Nullable;
 
 /** Calcite table-valued user-defined function that evaluates a Morel
  * expression and returns the result as a relation. */
-public class CalciteTableFunctions {
+public class CalciteFunctions {
   public static final ThreadLocal<Context> THREAD_ENV =
       new ThreadLocal<>();
 
@@ -86,7 +86,7 @@ public class CalciteTableFunctions {
   public static final ThreadLocal<EvalEnv> THREAD_EVAL_ENV =
       new ThreadLocal<>();
 
-  private CalciteTableFunctions() {
+  private CalciteFunctions() {
   }
 
   public static final SqlOperator TABLE_OPERATOR =
@@ -98,100 +98,121 @@ public class CalciteTableFunctions {
                   SqlTypeFamily.STRING, false),
               Arg.of("typeJson", f -> f.createSqlType(SqlTypeName.VARCHAR),
                   SqlTypeFamily.STRING, false)),
-          TableFunctionImpl.create(CalciteTableFunctions.class, "evalTable"));
+          TableFunctionImpl.create(CalciteFunctions.MorelTableFunction.class,
+              "eval"));
 
   public static final SqlOperator SCALAR_OPERATOR =
       new SqlUserDefinedFunction(
           new SqlIdentifier("morelScalar", SqlParserPos.ZERO),
-          SqlKind.OTHER_FUNCTION, CalciteTableFunctions::inferReturnType,
+          SqlKind.OTHER_FUNCTION, CalciteFunctions::inferReturnType,
           InferTypes.ANY_NULLABLE,
           Arg.metadata(
               Arg.of("code", f -> f.createSqlType(SqlTypeName.VARCHAR),
                   SqlTypeFamily.STRING, false),
               Arg.of("typeJson", f -> f.createSqlType(SqlTypeName.VARCHAR),
                   SqlTypeFamily.STRING, false)),
-          ScalarFunctionImpl.create(CalciteTableFunctions.class, "evalScalar"));
-
-  @SuppressWarnings("unused") // called via reflection
-  public static ScannableTable evalTable(String ml, String typeJson) {
-    final Ast.Exp e;
-    try {
-      e = new MorelParserImpl(new StringReader(ml)).expression();
-    } catch (ParseException pe) {
-      throw new RuntimeException(pe);
-    }
-    final Context cx = THREAD_ENV.get();
-    final Ast.ValDecl valDecl = Compiles.toValDecl(e);
-    final TypeResolver.Resolved resolved =
-        TypeResolver.deduceType(cx.env, valDecl, cx.typeSystem);
-    final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-    final Resolver resolver = new Resolver(resolved.typeMap);
-    final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
-    final Core.Exp e2 = Compiles.toExp(valDecl3);
-    Type type = resolved.typeMap.getType(e2);
-    final Code code = new Compiler(resolved.typeMap.typeSystem).compile(cx.env, e2);
-    final EvalEnv evalEnv = Codes.emptyEnvWith(cx.session, cx.env);
-    return new ScannableTable() {
-      @Override public RelDataType getRowType(RelDataTypeFactory factory) {
-        try {
-          return RelJsonReader.readType(factory, typeJson);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-
-      @Override public Enumerable<Object[]> scan(DataContext root) {
-        final Function<Object, Enumerable<Object[]>> f =
-            Converters.toCalciteEnumerable(type, root.getTypeFactory());
-        Object v = code.eval(evalEnv);
-        return f.apply(v);
-      }
-
-      @Override public Statistic getStatistic() {
-        return Statistics.UNKNOWN;
-      }
-
-      @Override public Schema.TableType getJdbcTableType() {
-        return Schema.TableType.OTHER;
-      }
-
-      @Override public boolean isRolledUp(String column) {
-        return false;
-      }
-
-      @Override public boolean rolledUpColumnValidInsideAgg(String column,
-          SqlCall call, SqlNode parent, CalciteConnectionConfig config) {
-        return false;
-      }
-    };
-  }
-
-  @SuppressWarnings("unused") // called via reflection
-  public static Object evalScalar(String ml, String typeJson) {
-    final Ast.Exp e;
-    try {
-      e = new MorelParserImpl(new StringReader(ml)).expression();
-    } catch (ParseException pe) {
-      throw new RuntimeException(pe);
-    }
-    final Context cx = THREAD_ENV.get();
-    final Ast.ValDecl valDecl = Compiles.toValDecl(e);
-    final TypeResolver.Resolved resolved =
-        TypeResolver.deduceType(cx.env, valDecl, cx.typeSystem);
-    final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-    final Core.ValDecl valDecl3 =
-        new Resolver(resolved.typeMap).toCore(valDecl2);
-    final Core.Exp e3 = Compiles.toExp(valDecl3);
-    final Code code = new Compiler(resolved.typeMap.typeSystem).compile(cx.env, e3);
-    final Function<Object, Object> f =
-        Converters.toCalcite(e3.type, cx.typeFactory);
-    final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
-    Object v = code.eval(evalEnv);
-    return f.apply(v);
-  }
+          ScalarFunctionImpl.create(CalciteFunctions.MorelScalarFunction.class,
+              "eval"));
 
   private static RelDataType inferReturnType(SqlOperatorBinding b) {
     return b.getTypeFactory().createSqlType(SqlTypeName.INTEGER);
+  }
+
+  /** Calcite user-defined function that evaluates a Morel string and
+   * returns a table. */
+  public static class MorelTableFunction {
+    private final Context cx;
+
+    public MorelTableFunction() {
+      cx = THREAD_ENV.get();
+    }
+
+    @SuppressWarnings("unused") // called via reflection
+    public ScannableTable eval(String ml, String typeJson) {
+      final Ast.Exp e;
+      try {
+        e = new MorelParserImpl(new StringReader(ml)).expression();
+      } catch (ParseException pe) {
+        throw new RuntimeException(pe);
+      }
+      final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+      final TypeResolver.Resolved resolved =
+          TypeResolver.deduceType(cx.env, valDecl, cx.typeSystem);
+      final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+      final Core.ValDecl valDecl3 =
+          new Resolver(resolved.typeMap).toCore(valDecl2);
+      final Core.Exp e3 = Compiles.toExp(valDecl3);
+      final Code code = new Compiler(cx.typeSystem).compile(cx.env, e3);
+      final EvalEnv evalEnv = Codes.emptyEnvWith(cx.session, cx.env);
+
+      return new ScannableTable() {
+        @Override public RelDataType getRowType(RelDataTypeFactory factory) {
+          try {
+            return RelJsonReader.readType(factory, typeJson);
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        }
+
+        @Override public Enumerable<Object[]> scan(DataContext root) {
+          final Function<Object, Enumerable<Object[]>> f =
+              Converters.toCalciteEnumerable(e3.type, root.getTypeFactory());
+          Object v = code.eval(evalEnv);
+          return f.apply(v);
+        }
+
+        @Override public Statistic getStatistic() {
+          return Statistics.UNKNOWN;
+        }
+
+        @Override public Schema.TableType getJdbcTableType() {
+          return Schema.TableType.OTHER;
+        }
+
+        @Override public boolean isRolledUp(String column) {
+          return false;
+        }
+
+        @Override public boolean rolledUpColumnValidInsideAgg(String column,
+            SqlCall call, SqlNode parent, CalciteConnectionConfig config) {
+          return false;
+        }
+      };
+    }
+  }
+
+  /** Calcite user-defined function that evaluates a Morel string and returns
+   * a scalar value. */
+  public static class MorelScalarFunction {
+    private final Context cx;
+
+    public MorelScalarFunction() {
+      cx = THREAD_ENV.get();
+    }
+
+    @SuppressWarnings("unused") // called via reflection
+    public Object eval(String ml, String typeJson) {
+      final Ast.Exp e;
+      try {
+        e = new MorelParserImpl(new StringReader(ml)).expression();
+      } catch (ParseException pe) {
+        throw new RuntimeException(pe);
+      }
+      final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+      final TypeResolver.Resolved resolved =
+          TypeResolver.deduceType(cx.env, valDecl, cx.typeSystem);
+      final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+      final Core.ValDecl valDecl3 =
+          new Resolver(resolved.typeMap).toCore(valDecl2);
+      final Core.Exp e3 = Compiles.toExp(valDecl3);
+      Type type = e3.type;
+      final Code code = new Compiler(cx.typeSystem).compile(cx.env, e3);
+      final Function<Object, Object> f =
+          Converters.toCalcite(type, cx.typeFactory);
+      final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
+      Object v = code.eval(evalEnv);
+      return f.apply(v);
+    }
   }
 
   /** Operand to a user-defined function. */
@@ -254,4 +275,4 @@ public class CalciteTableFunctions {
   }
 }
 
-// End CalciteTableFunctions.java
+// End CalciteFunctions.java
