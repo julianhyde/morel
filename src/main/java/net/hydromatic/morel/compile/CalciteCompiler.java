@@ -472,7 +472,9 @@ public class CalciteCompiler extends Compiler {
         final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
         return cx.relBuilder.field(range, selector.fieldName());
       }
-      break;
+      final RexNode fnRex = translate(cx, apply.fn);
+      final RexNode argRex = translate(cx, apply.arg);
+      return morelApply(cx, apply.type, apply.arg.type, fnRex, argRex);
 
     case TUPLE:
       final Core.Tuple tuple = (Core.Tuple) exp;
@@ -488,6 +490,10 @@ public class CalciteCompiler extends Compiler {
     }
 
     // Translate as a call to a scalar function
+    return morelScalar(cx, exp);
+  }
+
+  private RexNode morelScalar(RelContext cx, Core.Exp exp) {
     final Type type = exp.type;
     final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
     final RelDataType calciteType =
@@ -497,10 +503,21 @@ public class CalciteCompiler extends Compiler {
         jsonBuilder.toJsonString(
             new RelJson(jsonBuilder).toJson(calciteType));
     final String morelCode = exp.toString();
-    operands = Arrays.asList(cx.relBuilder.literal(morelCode),
-        cx.relBuilder.literal(jsonType));
     return cx.relBuilder.getRexBuilder().makeCall(calciteType,
-        CalciteFunctions.SCALAR_OPERATOR, operands);
+        CalciteFunctions.SCALAR_OPERATOR,
+        Arrays.asList(cx.relBuilder.literal(morelCode),
+            cx.relBuilder.literal(jsonType)));
+  }
+
+  private RexNode morelApply(RelContext cx, Type type, Type argType, RexNode fn,
+      RexNode arg) {
+    final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
+    final RelDataType calciteType =
+        Converters.toCalciteType(type, typeFactory);
+    final String morelArgType = argType.toString();
+    return cx.relBuilder.getRexBuilder().makeCall(calciteType,
+        CalciteFunctions.APPLY_OPERATOR,
+        Arrays.asList(cx.relBuilder.literal(morelArgType), fn, arg));
   }
 
   private Core.Tuple toRecord(RelContext cx, Core.Id id) {

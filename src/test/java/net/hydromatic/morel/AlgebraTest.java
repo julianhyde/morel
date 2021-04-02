@@ -253,7 +253,8 @@ public class AlgebraTest {
         + "  LogicalFilter(condition=[=($5, 'CLERK')])\n"
         + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
         + "hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n"
-        + "      JdbcTableScan(table=[[scott, EMP]])\n))";
+        + "      JdbcTableScan(table=[[scott, EMP]])\n"
+        + "))";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
@@ -272,7 +273,8 @@ public class AlgebraTest {
         + "  LogicalFilter(condition=[<($2, 7500)])\n"
         + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
         + "hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n"
-        + "      JdbcTableScan(table=[[scott, EMP]])\n)";
+        + "      JdbcTableScan(table=[[scott, EMP]])\n"
+        + ")";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
@@ -307,13 +309,78 @@ public class AlgebraTest {
         + "}')))])\n"
         + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
         + "hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n"
-        + "      JdbcTableScan(table=[[scott, EMP]])\n)))";
+        + "      JdbcTableScan(table=[[scott, EMP]])\n"
+        + ")))";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
         .assertType("{d5:int, deptno:int, empno:int} list")
         .assertPlan(is(plan))
         .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)));
+  }
+
+  /** Tests a query that is executed in Calcite except for a function,
+   * 'twice'. */
+  @Test void testCalciteWithFunction() {
+    final String ml = "let\n"
+        + "  fun twice x = x + x\n"
+        + "in\n"
+        + "  from d in scott.dept\n"
+        + "  yield twice d.deptno\n"
+        + "end";
+    String plan = "let(matchCode0 match(twice, match(x, "
+        + "apply(fnValue +, argCode tuple(get(name x), get(name x))))), "
+        + "resultCode calcite(plan "
+        + "LogicalProject($f0=[morelScalar('int', "
+        + "morelScalar('twice', '{\n"
+        + "  \"type\": \"ANY\",\n"
+        + "  \"nullable\": false,\n"
+        + "  \"precision\": -1,\n"
+        + "  \"scale\": -1\n"
+        + "}'), $0)])\n"
+        + "  JdbcTableScan(table=[[scott, DEPT]])\n"
+        + "))";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("int list")
+        .assertPlan(is(plan))
+        .assertEvalIter(equalsOrdered(20, 40, 60, 80));
+  }
+
+  /** Tests a query that is executed in Calcite except for a function,
+   * 'plus'; one of its arguments comes from a relational record, and another
+   * from the Morel environment. */
+  @Test void testCalciteWithHybridFunction() {
+    final String ml = "let\n"
+        + "  fun plus (x, y) = x + y\n"
+        + "  val five = 5\n"
+        + "in\n"
+        + "  from d in scott.dept\n"
+        + "  yield plus (d.deptno, five)\n"
+        + "end";
+    String plan = "let(matchCode0 match(plus, match((x, y), "
+        + "apply(fnValue +, argCode tuple(get(name x), get(name y))))), "
+        + "resultCode let(matchCode0 match(five, constant(5)), "
+        + "resultCode calcite(plan "
+        + "LogicalProject($f0=[morelScalar('int * int', "
+        + "morelScalar('plus', '{\n"
+        + "  \"type\": \"ANY\",\n"
+        + "  \"nullable\": false,\n"
+        + "  \"precision\": -1,\n"
+        + "  \"scale\": -1\n"
+        + "}'), ROW($0, morelScalar('five', '{\n"
+        + "  \"type\": \"INTEGER\",\n"
+        + "  \"nullable\": false\n"
+        + "}')))])\n"
+        + "  JdbcTableScan(table=[[scott, DEPT]])\n"
+        + ")))";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("int list")
+        .assertPlan(is(plan))
+        .assertEvalIter(equalsOrdered(15, 25, 35, 45));
   }
 
   void checkEqual(String ml) {

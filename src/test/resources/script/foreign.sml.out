@@ -157,7 +157,7 @@ Sys.plan();
 val it =
   "calcite(plan LogicalProject(empno=[$2])
   LogicalFilter(condition=[=($1, 20)])
-    LogicalTableFunctionScan(invocation=[morel('#filter List (fn e2 => #empno e2 < 7700) (#emp scott)', '{
+    LogicalTableFunctionScan(invocation=[morelTable('#filter List (fn e2 => #empno e2 < 7700) (#emp scott)', '{
   \"fields\": [
     {
       \"type\": \"REAL\",
@@ -255,4 +255,26 @@ val it =
     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
       JdbcTableScan(table=[[scott, EMP]])
 )))"
+  : string
+
+(*) Query in Hybrid mode (90% Calcite; Calcite code references a function
+(*) from the enclosing environment)
+let
+  fun double x = x * 2
+in
+  from d in scott.dept
+  yield double d.deptno
+end;
+val it = [20,40,60,80] : int list
+
+Sys.plan();
+val it =
+  "let(matchCode0 match(double, match(x, apply(fnValue *, argCode tuple(get(name x), constant(2))))), resultCode calcite(plan LogicalProject($f0=[morelScalar('int', morelScalar('double', '{
+  \"type\": \"ANY\",
+  \"nullable\": false,
+  \"precision\": -1,
+  \"scale\": -1
+}'), $0)])
+  JdbcTableScan(table=[[scott, DEPT]])
+))"
   : string

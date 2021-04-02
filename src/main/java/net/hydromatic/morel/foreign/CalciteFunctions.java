@@ -21,6 +21,7 @@ package net.hydromatic.morel.foreign;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.linq4j.Enumerable;
+import org.apache.calcite.plan.Contexts;
 import org.apache.calcite.rel.externalize.RelJsonReader;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -53,6 +54,7 @@ import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
+import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
@@ -65,6 +67,7 @@ import net.hydromatic.morel.type.TypeSystem;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -91,7 +94,7 @@ public class CalciteFunctions {
 
   public static final SqlOperator TABLE_OPERATOR =
       new SqlUserDefinedTableFunction(
-          new SqlIdentifier("morel", SqlParserPos.ZERO),
+          new SqlIdentifier("morelTable", SqlParserPos.ZERO),
           SqlKind.OTHER_FUNCTION, ReturnTypes.CURSOR, InferTypes.ANY_NULLABLE,
           Arg.metadata(
               Arg.of("code", f -> f.createSqlType(SqlTypeName.VARCHAR),
@@ -114,6 +117,21 @@ public class CalciteFunctions {
           ScalarFunctionImpl.create(CalciteFunctions.MorelScalarFunction.class,
               "eval"));
 
+  public static final SqlOperator APPLY_OPERATOR =
+      new SqlUserDefinedFunction(
+          new SqlIdentifier("morelScalar", SqlParserPos.ZERO),
+          SqlKind.OTHER_FUNCTION, CalciteFunctions::inferReturnType,
+          InferTypes.ANY_NULLABLE,
+          Arg.metadata(
+              Arg.of("typeJson", f -> f.createSqlType(SqlTypeName.VARCHAR),
+                  SqlTypeFamily.STRING, false),
+              Arg.of("fn", f -> f.createSqlType(SqlTypeName.INTEGER),
+                  SqlTypeFamily.INTEGER, false),
+              Arg.of("arg", f -> f.createSqlType(SqlTypeName.VARCHAR),
+                  SqlTypeFamily.STRING, false)),
+          ScalarFunctionImpl.create(CalciteFunctions.MorelApplyFunction.class,
+              "eval"));
+
   private static RelDataType inferReturnType(SqlOperatorBinding b) {
     return b.getTypeFactory().createSqlType(SqlTypeName.INTEGER);
   }
@@ -121,30 +139,33 @@ public class CalciteFunctions {
   /** Calcite user-defined function that evaluates a Morel string and
    * returns a table. */
   public static class MorelTableFunction {
-    private final Context cx;
+    private final Context cx = THREAD_ENV.get();
+    private final Compiled compiled;
 
+    public MorelTableFunction(org.apache.calcite.plan.Context context) {
+      final List<Object> args = context.unwrap(List.class);
+      if (args != null) {
+        String ml = (String) args.get(0);
+        String typeJson = (String) args.get(1);
+        compiled =
+            new Compiled(ml, typeJson, cx.typeFactory, cx.env, cx.typeSystem,
+                cx.session);
+      } else {
+        compiled = null;
+      }
+    }
+
+    @SuppressWarnings("unused") // called via reflection
     public MorelTableFunction() {
-      cx = THREAD_ENV.get();
+      this(Contexts.EMPTY_CONTEXT);
     }
 
     @SuppressWarnings("unused") // called via reflection
     public ScannableTable eval(String ml, String typeJson) {
-      final Ast.Exp e;
-      try {
-        e = new MorelParserImpl(new StringReader(ml)).expression();
-      } catch (ParseException pe) {
-        throw new RuntimeException(pe);
-      }
-      final Ast.ValDecl valDecl = Compiles.toValDecl(e);
-      final TypeResolver.Resolved resolved =
-          TypeResolver.deduceType(cx.env, valDecl, cx.typeSystem);
-      final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-      final Core.ValDecl valDecl3 =
-          new Resolver(resolved.typeMap).toCore(valDecl2);
-      final Core.Exp e3 = Compiles.toExp(valDecl3);
-      final Code code = new Compiler(cx.typeSystem).compile(cx.env, e3);
-      final EvalEnv evalEnv = Codes.emptyEnvWith(cx.session, cx.env);
-
+      final Compiled compiled =
+          this.compiled != null ? this.compiled
+              : new Compiled(ml, typeJson, cx.typeFactory, cx.env,
+                  cx.typeSystem, cx.session);
       return new ScannableTable() {
         @Override public RelDataType getRowType(RelDataTypeFactory factory) {
           try {
@@ -155,10 +176,8 @@ public class CalciteFunctions {
         }
 
         @Override public Enumerable<Object[]> scan(DataContext root) {
-          final Function<Object, Enumerable<Object[]>> f =
-              Converters.toCalciteEnumerable(e3.type, root.getTypeFactory());
-          Object v = code.eval(evalEnv);
-          return f.apply(v);
+          Object v = compiled.code.eval(compiled.evalEnv);
+          return compiled.f.apply(v);
         }
 
         @Override public Statistic getStatistic() {
@@ -179,39 +198,140 @@ public class CalciteFunctions {
         }
       };
     }
+
+    /** Compiled state. */
+    private static class Compiled {
+      final Code code;
+      final EvalEnv evalEnv;
+      final Function<Object, Enumerable<Object[]>> f;
+
+      Compiled(String ml, String typeJson, RelDataTypeFactory typeFactory,
+          Environment env, TypeSystem typeSystem, Session session) {
+        final Ast.Exp e;
+        try {
+          e = new MorelParserImpl(new StringReader(ml)).expression();
+        } catch (ParseException pe) {
+          throw new RuntimeException(pe);
+        }
+        final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+        final TypeResolver.Resolved resolved =
+            TypeResolver.deduceType(env, valDecl, typeSystem);
+        final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+        final Core.ValDecl valDecl3 =
+            new Resolver(resolved.typeMap).toCore(valDecl2);
+        final Core.Exp e3 = Compiles.toExp(valDecl3);
+        code = new Compiler(typeSystem).compile(env, e3);
+        evalEnv = Codes.emptyEnvWith(session, env);
+        f = Converters.toCalciteEnumerable(e3.type, typeFactory);
+      }
+    }
   }
 
   /** Calcite user-defined function that evaluates a Morel string and returns
    * a scalar value. */
   public static class MorelScalarFunction {
-    private final Context cx;
+    private final Context cx = THREAD_ENV.get();
+    private final Compiled compiled;
 
+    public MorelScalarFunction(org.apache.calcite.plan.Context context) {
+      final List<Object> args = context.unwrap(List.class);
+      if (args != null) {
+        compiled = new Compiled(cx.env, cx.typeSystem, cx.typeFactory,
+            (String) args.get(0), (String) args.get(1));
+      } else {
+        compiled = null;
+      }
+    }
+
+    @SuppressWarnings("unused") // called via reflection
     public MorelScalarFunction() {
-      cx = THREAD_ENV.get();
+      this(Contexts.EMPTY_CONTEXT);
     }
 
     @SuppressWarnings("unused") // called via reflection
     public Object eval(String ml, String typeJson) {
-      final Ast.Exp e;
-      try {
-        e = new MorelParserImpl(new StringReader(ml)).expression();
-      } catch (ParseException pe) {
-        throw new RuntimeException(pe);
-      }
-      final Ast.ValDecl valDecl = Compiles.toValDecl(e);
-      final TypeResolver.Resolved resolved =
-          TypeResolver.deduceType(cx.env, valDecl, cx.typeSystem);
-      final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-      final Core.ValDecl valDecl3 =
-          new Resolver(resolved.typeMap).toCore(valDecl2);
-      final Core.Exp e3 = Compiles.toExp(valDecl3);
-      Type type = e3.type;
-      final Code code = new Compiler(cx.typeSystem).compile(cx.env, e3);
-      final Function<Object, Object> f =
-          Converters.toCalcite(type, cx.typeFactory);
+      final Compiled compiled =
+          this.compiled != null ? this.compiled
+              : new Compiled(cx.env, cx.typeSystem, cx.typeFactory, ml,
+                  typeJson);
       final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
-      Object v = code.eval(evalEnv);
-      return f.apply(v);
+      Object v = compiled.code.eval(evalEnv);
+      return compiled.f.apply(v);
+    }
+
+    /** Compiled state. */
+    private static class Compiled {
+      final Code code;
+      final Function<Object, Object> f;
+
+      Compiled(Environment env, TypeSystem typeSystem,
+          RelDataTypeFactory typeFactory, String ml, String typeJson) {
+        final Ast.Exp e;
+        try {
+          e = new MorelParserImpl(new StringReader(ml)).expression();
+        } catch (ParseException pe) {
+          throw new RuntimeException(pe);
+        }
+        final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+        final TypeResolver.Resolved resolved =
+            TypeResolver.deduceType(env, valDecl, typeSystem);
+        final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+        final Core.ValDecl valDecl3 =
+            new Resolver(resolved.typeMap).toCore(valDecl2);
+        final Core.Exp e3 = Compiles.toExp(valDecl3);
+        code = new Compiler(typeSystem).compile(env, e3);
+        f = Converters.toCalcite(e3.type, typeFactory);
+      }
+    }
+  }
+
+  /** Calcite user-defined function that applies a Morel function (or closure)
+   * to an argument. */
+  public static class MorelApplyFunction {
+    final Context cx = THREAD_ENV.get();
+    final Compiled compiled;
+
+    public MorelApplyFunction(org.apache.calcite.plan.Context context) {
+      final List<Object> args = context.unwrap(List.class);
+      if (args != null) {
+        final String morelArgTypeJson = (String) args.get(0);
+        compiled = new Compiled(morelArgTypeJson, cx.typeFactory, cx.typeSystem);
+      } else {
+        compiled = null;
+      }
+    }
+
+    @SuppressWarnings("unused") // called via reflection
+    public MorelApplyFunction() {
+      this(Contexts.EMPTY_CONTEXT);
+    }
+
+    @SuppressWarnings("unused") // called via reflection
+    public Object eval(String morelArgTypeJson, Object closure, Object arg) {
+      final Compiled compiled =
+          this.compiled != null ? this.compiled
+              : new Compiled(morelArgTypeJson, cx.typeFactory, cx.typeSystem);
+      final Closure fn = (Closure) closure;
+      final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
+      final Object o = compiled.converter.apply(arg);
+      return fn.apply(evalEnv, o);
+    }
+
+    /** Compiled state. */
+    private static class Compiled {
+      final Function<Object, Object> converter;
+
+      Compiled(String morelArgType, RelDataTypeFactory typeFactory,
+          TypeSystem typeSystem) {
+        Ast.Type typeAst;
+        try {
+          typeAst = new MorelParserImpl(new StringReader(morelArgType)).type();
+        } catch (ParseException pe) {
+          throw new RuntimeException(pe);
+        }
+        final Type argType = TypeResolver.toType(typeAst, typeSystem);
+        converter = Converters.toMorel(argType, typeFactory);
+      }
     }
   }
 
