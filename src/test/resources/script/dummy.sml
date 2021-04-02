@@ -17,15 +17,5 @@
  * License.
  *)
 "this is a simple script; modify it for debugging test cases";
-Sys.set ("hybrid", true);
-(*) Query in Hybrid mode (90% Calcite; Calcite code references a function
-(*) from the enclosing environment)
-let
-  fun twice x = x * 2
-in
-  from d in scott.dept
-  yield twice (d.deptno)
-end;
-Sys.plan();
 
 (*) End dummy.sml
