@@ -160,28 +160,6 @@ public class CalciteCompiler extends Compiler {
     return code;
   }
 
-//  @Override // TODO
-  protected Code compileLet_(Context cx, Ast.Decl decl, Ast.Exp e) {
-    Code code = super.compileLet(cx, decl, e);
-    return new RelCode() {
-      @Override public Describer describe(Describer describer) {
-        return code.describe(describer);
-      }
-
-      @Override public Object eval(EvalEnv env) {
-        return code.eval(env);
-      }
-
-      @Override public boolean toRel(RelContext cx, boolean aggressive) {
-        final List<Code> matchCodes = new ArrayList<>();
-        final List<Binding> bindings = new ArrayList<>();
-        compileDecl(cx, decl, matchCodes, bindings, null);
-        final RelContext cx2 = cx.bindAll(bindings);
-        return toRel3(cx2, e, false);
-      }
-    };
-  }
-
   @Override protected Code finishCompileLet(Context cx, List<Code> matchCodes_,
       Code resultCode_, Type resultType) {
     final Code resultCode = toRel4(cx.env, resultCode_, resultType);
@@ -278,8 +256,7 @@ public class CalciteCompiler extends Compiler {
         ThreadLocals.let(CalciteFunctions.THREAD_ENV,
             new CalciteFunctions.Context(new Session(), cx.env,
                 typeMap.typeSystem, cx.relBuilder.getTypeFactory()), () ->
-            cx.relBuilder.functionScan(
-                CalciteFunctions.TABLE_OPERATOR, 0,
+            cx.relBuilder.functionScan(CalciteFunctions.TABLE_OPERATOR, 0,
                 cx.relBuilder.literal(morelCode),
                 cx.relBuilder.literal(jsonRowType)));
         return true;
@@ -568,7 +545,10 @@ public class CalciteCompiler extends Compiler {
           return cx.relBuilder.call(op, translateList(cx, tuple.args()));
         }
       }
-      break;
+      final RexNode fnRex = translate(cx, apply.fn);
+      final RexNode argRex = translate(cx, apply.arg);
+      return morelApply(cx, typeMap.getType(apply), typeMap.getType(apply.arg),
+          fnRex, argRex);
 
     case ANDALSO:
     case ORELSE:
@@ -602,6 +582,10 @@ public class CalciteCompiler extends Compiler {
     }
 
     // Translate as a call to a scalar function
+    return morelScalar(cx, exp);
+  }
+
+  private RexNode morelScalar(RelContext cx, Ast.Exp exp) {
     final Type type = typeMap.getType(exp);
     final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
     final RelDataType calciteType =
@@ -611,10 +595,21 @@ public class CalciteCompiler extends Compiler {
         jsonBuilder.toJsonString(
             new RelJson(jsonBuilder).toJson(calciteType));
     final String morelCode = exp.toString();
-    operands = Arrays.asList(cx.relBuilder.literal(morelCode),
-        cx.relBuilder.literal(jsonType));
     return cx.relBuilder.getRexBuilder().makeCall(calciteType,
-        CalciteFunctions.SCALAR_OPERATOR, operands);
+        CalciteFunctions.SCALAR_OPERATOR,
+        Arrays.asList(cx.relBuilder.literal(morelCode),
+            cx.relBuilder.literal(jsonType)));
+  }
+
+  private RexNode morelApply(RelContext cx, Type type, Type argType, RexNode fn,
+      RexNode arg) {
+    final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
+    final RelDataType calciteType =
+        Converters.toCalciteType(type, typeFactory);
+    final String morelArgType = argType.toString();
+    return cx.relBuilder.getRexBuilder().makeCall(calciteType,
+        CalciteFunctions.APPLY_OPERATOR,
+        Arrays.asList(cx.relBuilder.literal(morelArgType), fn, arg));
   }
 
   private Ast.Record toRecord(RelContext cx, Ast.Id id) {
