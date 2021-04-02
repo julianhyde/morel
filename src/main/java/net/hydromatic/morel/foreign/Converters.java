@@ -28,6 +28,7 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.type.SqlTypeName;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 
 import net.hydromatic.morel.eval.Unit;
@@ -38,11 +39,13 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.Pair;
 
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -151,7 +154,7 @@ public class Converters {
       Type type, RelDataTypeFactory typeFactory) {
     final C2m converter =
         C2m.forMorel(type, typeFactory, false, true);
-    return converter::toEnumerable;
+    return converter::toCalciteEnumerable;
   }
 
   /** Returns a function that converts from Morel objects to Calcite objects. */
@@ -159,7 +162,15 @@ public class Converters {
       RelDataTypeFactory typeFactory) {
     final C2m converter =
         C2m.forMorel(type, typeFactory, false, true);
-    return converter::toObject;
+    return converter::toCalciteObject;
+  }
+
+  /** Returns a function that converts from Calcite objects to Morel objects. */
+  public static Function<Object, Object> toMorel(Type type,
+      RelDataTypeFactory typeFactory) {
+    final C2m converter =
+        C2m.forMorel(type, typeFactory, false, true);
+    return converter.toMorelObjectFunction();
   }
 
   /** Converts a field from Calcite to Morel format. */
@@ -269,6 +280,11 @@ public class Converters {
         }
         throw new AssertionError("unknown type " + type);
 
+      case FUNCTION_TYPE:
+        // Represent Morel functions (and closures) as SQL type ANY. UDFs have a
+        // parameter of type Object, and the value is cast to Closure.
+        return new C2m(typeFactory.createSqlType(SqlTypeName.ANY), type);
+
       case LIST:
         final ListType listType = (ListType) type;
         RelDataType elementType =
@@ -340,11 +356,22 @@ public class Converters {
       throw new UnsupportedOperationException("cannot convert type " + type);
     }
 
-    public Object toObject(Object v) {
+    public Object toCalciteObject(Object v) {
       return v;
     }
 
-    public Enumerable<Object[]> toEnumerable(Object v) {
+    public Object toMorelObject(Object v) {
+      switch (morelType.op()) {
+      case TUPLE_TYPE:
+        final Object[] values = (Object[]) v;
+      }
+      if (v instanceof Byte) {
+        return ((Byte) v).intValue();
+      }
+      return v;
+    }
+
+    public Enumerable<Object[]> toCalciteEnumerable(Object v) {
       @SuppressWarnings("unchecked")
       final Enumerable<Object> enumerable =
           Linq4j.asEnumerable((List<Object>) v);
@@ -372,6 +399,42 @@ public class Converters {
 
     private Object[] scalarToArray(Object o) {
       return new Object[] {o};
+    }
+
+    public Function<Object, Object> toMorelObjectFunction() {
+      switch (morelType.op()) {
+      case TUPLE_TYPE:
+        final ImmutableList.Builder<Function<Object, Object>> b =
+            ImmutableList.builder();
+        Pair.forEach(calciteType.getFieldList(),
+            ((TupleType) morelType).argTypes, (field, argType) ->
+                b.add(new C2m(field.getType(), argType)
+                    .toMorelObjectFunction()));
+        final ImmutableList<Function<Object, Object>> converters = b.build();
+        return v -> {
+          final Object[] values = (Object[]) v;
+          return new AbstractList<Object>() {
+            @Override public int size() {
+              return values.length;
+            }
+
+            @Override public Object get(int index) {
+              return converters.get(index).apply(values[index]);
+            }
+          };
+        };
+
+      case ID: // primitive type, e.g. int
+        switch ((PrimitiveType) morelType) {
+        case INT:
+          return v -> ((Number) v).intValue();
+        default:
+          return v -> v;
+        }
+
+      default:
+        throw new AssertionError("unknown type " + morelType);
+      }
     }
   }
 }
