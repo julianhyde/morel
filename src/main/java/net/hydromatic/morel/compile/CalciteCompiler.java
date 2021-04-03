@@ -532,7 +532,8 @@ public class CalciteCompiler extends Compiler {
     case APPLY:
       final Ast.Apply apply = (Ast.Apply) exp;
       if (apply.fn instanceof Ast.RecordSelector
-          && apply.arg instanceof Ast.Id) {
+          && apply.arg instanceof Ast.Id
+          && cx.map.containsKey(((Ast.Id) apply.arg).name)) {
         // Something like '#deptno e',
         final RexNode range =
             cx.map.get(((Ast.Id) apply.arg).name).apply(cx.relBuilder);
