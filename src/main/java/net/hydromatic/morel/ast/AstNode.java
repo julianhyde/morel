@@ -55,7 +55,7 @@ public abstract class AstNode {
   /** Accepts a visitor, calling the
    * {@link net.hydromatic.morel.ast.Shuttle#visit}
    * method appropriate to the type of this node, and returning the result. */
-  public abstract <E> E accept(Visitor<E> visitor);
+  public abstract void accept(Visitor visitor);
 }
 
 // End AstNode.java
