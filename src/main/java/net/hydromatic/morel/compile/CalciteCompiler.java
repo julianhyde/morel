@@ -476,7 +476,10 @@ public class CalciteCompiler extends Compiler {
         final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
         return cx.relBuilder.field(range, selector.fieldName());
       }
-      final Set<String> vars = getRelationalVariables(apply);
+      final Set<String> vars = getRelationalVariables(cx.env, cx.map, apply);
+      if (vars.isEmpty()) {
+        return morelScalar(cx, apply);
+      }
       final RexNode fnRex = translate(cx, apply.fn);
       final RexNode argRex = translate(cx, apply.arg);
       return morelApply(cx, apply.type, apply.arg.type, fnRex, argRex);
@@ -498,9 +501,16 @@ public class CalciteCompiler extends Compiler {
     return morelScalar(cx, exp);
   }
 
-  private Set<String> getRelationalVariables(AstNode node) {
+  private Set<String> getRelationalVariables(Environment env,
+      Map<String, Function<RelBuilder, RexNode>> map,
+      AstNode node) {
     final Set<String> varNames = new LinkedHashSet<>();
     node.accept(new Visitor() {
+      @Override protected void visit(Ast.Id id) {
+        if (map.containsKey(id.name)) {
+          varNames.add(id.name);
+        }
+      }
     });
     return varNames;
   }

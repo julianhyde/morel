@@ -914,10 +914,6 @@ public class Ast {
       this.type = type; // optional
     }
 
-    @Override public void accept(Visitor visitor) {
-      visitor.visit(this);
-    }
-
     AstWriter unparse(AstWriter w, int left, int right) {
       if (type != null) {
         return w.append(id, left, op.left)
@@ -930,6 +926,10 @@ public class Ast {
 
     public AstNode accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
   }
 
@@ -1059,16 +1059,16 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       w.id(name);
       for (Pat pat : patList) {
         w.append(" ").append(pat, Op.APPLY.left, Op.APPLY.right);
       }
       return w.append(" = ").append(e, 0, right);
-    }
-
-    @Override public void accept(Visitor visitor) {
-      visitor.visit(this);
     }
   }
 
@@ -1618,10 +1618,6 @@ public class Ast {
       this.direction = requireNonNull(direction);
     }
 
-    @Override public void accept(Visitor visitor) {
-      visitor.visit(this);
-    }
-
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(exp, 0, 0)
           .append(direction == Direction.DESC ? " desc" : "");
@@ -1629,6 +1625,10 @@ public class Ast {
 
     public AstNode accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     public OrderItem copy(Exp exp, Direction direction) {

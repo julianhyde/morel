@@ -16,14 +16,6 @@
  * language governing permissions and limitations under the
  * License.
  *)
-Sys.set ("hybrid", true);
-let
-  val ten = 10
-  val deptNos = ten :: 20 :: 30 :: [40]
-in
-  from e in scott.emp
-  where e.deptno = List.nth (deptNos, 1)
-  yield e.empno + 13 mod ten
-end;
+"this is a simple script; modify it for debugging test cases";
 
 (*) End dummy.sml

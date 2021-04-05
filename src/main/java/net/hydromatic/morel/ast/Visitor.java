@@ -18,11 +18,12 @@
  */
 package net.hydromatic.morel.ast;
 
-/** Visits syntax trees.
- *
- * <p>TODO: convert the remaining methods to call 'node.accept(this)'
- * and return 'R'. */
+/** Visits syntax trees. */
 public class Visitor {
+
+  private <E extends AstNode> void accept(E e) {
+    e.accept(this);
+  }
 
   // expressions
 
@@ -323,10 +324,6 @@ public class Visitor {
   }
 
   protected void visit(Core.WildcardPat wildcardPat) {
-  }
-
-  private <E extends AstNode> void accept(E e) {
-    e.accept(this);
   }
 }
 
