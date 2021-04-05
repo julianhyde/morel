@@ -39,8 +39,10 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 
 import net.hydromatic.morel.ast.Ast;
+import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Describer;
@@ -65,8 +67,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
@@ -472,6 +476,7 @@ public class CalciteCompiler extends Compiler {
         final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
         return cx.relBuilder.field(range, selector.fieldName());
       }
+      final Set<String> vars = getRelationalVariables(apply);
       final RexNode fnRex = translate(cx, apply.fn);
       final RexNode argRex = translate(cx, apply.arg);
       return morelApply(cx, apply.type, apply.arg.type, fnRex, argRex);
@@ -491,6 +496,13 @@ public class CalciteCompiler extends Compiler {
 
     // Translate as a call to a scalar function
     return morelScalar(cx, exp);
+  }
+
+  private Set<String> getRelationalVariables(AstNode node) {
+    final Set<String> varNames = new LinkedHashSet<>();
+    node.accept(new Visitor() {
+    });
+    return varNames;
   }
 
   private RexNode morelScalar(RelContext cx, Core.Exp exp) {
