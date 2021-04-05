@@ -257,6 +257,7 @@ val it =
 )))"
   : string
 
+
 (*) Query in Hybrid mode (90% Calcite; Calcite code references a function
 (*) from the enclosing environment)
 let

@@ -89,6 +89,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(name);
     }
@@ -124,6 +128,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendLiteral(value);
     }
@@ -150,6 +158,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("_");
     }
@@ -168,6 +180,10 @@ public class Ast {
 
     public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override public void forEachArg(ObjIntConsumer<Pat> action) {
@@ -211,6 +227,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override public void forEachArg(ObjIntConsumer<Pat> action) {
       action.accept(pat, 0);
     }
@@ -247,6 +267,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return tyCon.unparse(w, left, right);
     }
@@ -273,6 +297,10 @@ public class Ast {
 
     public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override public void forEachArg(ObjIntConsumer<Pat> action) {
@@ -309,6 +337,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override public void forEachArg(ObjIntConsumer<Pat> action) {
       Ord.forEach(args, action);
     }
@@ -342,6 +374,10 @@ public class Ast {
 
     public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override public void forEachArg(ObjIntConsumer<Pat> action) {
@@ -384,6 +420,10 @@ public class Ast {
 
     public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
@@ -441,6 +481,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.infix(left, e, op, type, right);
     }
@@ -471,6 +515,10 @@ public class Ast {
 
     public Type accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
@@ -514,6 +562,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(name);
     }
@@ -543,6 +595,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       w.append("{");
       Ord.forEach(fieldTypes, (i, field, type) ->
@@ -563,6 +619,10 @@ public class Ast {
 
     public Type accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
@@ -594,6 +654,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       w.append("(");
       Ord.forEach(types, (arg, i) ->
@@ -615,6 +679,10 @@ public class Ast {
 
     public Type accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
@@ -668,6 +736,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(name);
     }
@@ -706,6 +778,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("#").append(name);
     }
@@ -733,6 +809,10 @@ public class Ast {
 
     public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
@@ -771,6 +851,10 @@ public class Ast {
 
     public DatatypeDecl accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -812,6 +896,10 @@ public class Ast {
 
     public DatatypeBind accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -858,6 +946,10 @@ public class Ast {
     public AstNode accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
   }
 
   /** Parse tree node of a value declaration. */
@@ -882,6 +974,10 @@ public class Ast {
 
     public ValDecl accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -928,6 +1024,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendAll(funBinds, "fun ", " and ", "");
     }
@@ -952,6 +1052,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendAll(matchList, " | ");
     }
@@ -972,6 +1076,10 @@ public class Ast {
 
     public FunMatch accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
@@ -998,6 +1106,10 @@ public class Ast {
 
     public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -1028,6 +1140,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       w.append("[");
       forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
@@ -1051,6 +1167,10 @@ public class Ast {
 
     public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -1085,6 +1205,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.infix(left, a0, op, a1, right);
     }
@@ -1116,6 +1240,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.prefix(left, op, a, right);
     }
@@ -1136,6 +1264,10 @@ public class Ast {
 
     public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -1170,6 +1302,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendAll(decls, "let ", "; ", " in ")
           .append(e, 0, 0).append(" end");
@@ -1200,6 +1336,10 @@ public class Ast {
 
     public AstNode accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -1235,6 +1375,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(pat, 0, 0).append(" => ").append(e, 0, right);
     }
@@ -1263,6 +1407,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("fn ").appendAll(matchList, 0, Op.BAR, right);
     }
@@ -1289,6 +1437,10 @@ public class Ast {
 
     public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -1359,6 +1511,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       if (left > op.left || op.right < right) {
         return w.append("(").append(this, 0, 0).append(")");
@@ -1426,6 +1582,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     public Where copy(Exp exp) {
       return this.exp.equals(exp) ? this : new Where(pos, exp);
     }
@@ -1446,6 +1606,10 @@ public class Ast {
 
     @Override public AstNode accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     public Order copy(java.util.List<OrderItem> orderItems) {
@@ -1473,6 +1637,10 @@ public class Ast {
 
     public AstNode accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     public OrderItem copy(Exp exp, Direction direction) {
@@ -1517,6 +1685,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override public void deriveOutBindings(Iterable<Binding> inBindings,
         BiFunction<String, AstNode, Binding> binder,
         Consumer<Binding> outBindings) {
@@ -1548,6 +1720,10 @@ public class Ast {
 
     public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -1592,6 +1768,10 @@ public class Ast {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     public Aggregate copy(Exp aggregate, Exp argument, Id id) {
       return this.aggregate.equals(aggregate)
           && Objects.equals(this.argument, argument)
@@ -1615,6 +1795,10 @@ public class Ast {
 
     public Ast.Exp accept(Shuttle shuttle) {
       return this;
+    }
+
+    @Override public void accept(Visitor visitor) {
+      // no-op
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {

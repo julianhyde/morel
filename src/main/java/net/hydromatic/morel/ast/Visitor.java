@@ -18,13 +18,12 @@
  */
 package net.hydromatic.morel.ast;
 
-import static net.hydromatic.morel.ast.AstBuilder.ast;
-
-/** Visits syntax trees.
- *
- * <p>TODO: convert the remaining methods to call 'node.accept(this)'
- * and return 'R'. */
+/** Visits syntax trees. */
 public class Visitor {
+
+  private <E extends AstNode> void accept(E e) {
+    e.accept(this);
+  }
 
   // expressions
 
@@ -62,7 +61,7 @@ public class Visitor {
     infixCall.a1.accept(this);
   }
 
-  public void visit(Ast.PrefixCall prefixCall) {
+  protected void visit(Ast.PrefixCall prefixCall) {
     prefixCall.a.accept(this);
   }
 
@@ -99,12 +98,12 @@ public class Visitor {
     annotatedPat.type.accept(this);
   }
 
-  public void visit(Ast.ConPat conPat) {
+  protected void visit(Ast.ConPat conPat) {
     conPat.tyCon.accept(this);
     conPat.pat.accept(this);
   }
 
-  public void visit(Ast.Con0Pat con0Pat) {
+  protected void visit(Ast.Con0Pat con0Pat) {
     con0Pat.tyCon.accept(this);
   }
 
@@ -157,81 +156,91 @@ public class Visitor {
   }
 
   protected void visit(Ast.FunBind funBind) {
-    return funBind.accept(this);
+    funBind.matchList.forEach(this::accept);
   }
 
   protected void visit(Ast.FunMatch funMatch) {
-    return funMatch.accept(this);
+    funMatch.patList.forEach(this::accept);
+    funMatch.e.accept(this);
   }
 
   protected void visit(Ast.ValDecl valDecl) {
-    return valDecl.accept(this);
+    valDecl.valBinds.forEach(this::accept);
   }
 
-  protected Ast.ValBind visit(Ast.ValBind valBind) {
-    return ast.valBind(valBind.pos, valBind.rec, valBind.pat, valBind.e);
+  protected void visit(Ast.ValBind valBind) {
+    valBind.pat.accept(this);
+    valBind.e.accept(this);
   }
 
-  public Ast.Exp visit(Ast.From from) {
-    return ast.from(from.pos, from.sources, from.steps, from.yieldExp);
+  protected void visit(Ast.From from) {
+    from.sources.forEach((pat, exp) -> {
+      pat.accept(this);
+      exp.accept(this);
+    });
+    from.steps.forEach(this::accept);
+    if (from.yieldExp != null) {
+      from.yieldExp.accept(this);
+    }
   }
 
-  public AstNode visit(Ast.Order order) {
-    return ast.order(order.pos, order.orderItems);
+  protected void visit(Ast.Order order) {
+    order.orderItems.forEach(this::accept);
   }
 
-  public AstNode visit(Ast.OrderItem orderItem) {
-    return ast.orderItem(orderItem.pos, orderItem.exp, orderItem.direction);
+  protected void visit(Ast.OrderItem orderItem) {
+    orderItem.exp.accept(this);
   }
 
-  public void visit(Ast.Where where) {
-    return where.accept(this);
+  protected void visit(Ast.Where where) {
+    where.exp.accept(this);
   }
 
-  public AstNode visit(Ast.Group group) {
-    return ast.group(group.pos, group.groupExps, group.aggregates);
+  protected void visit(Ast.Group group) {
+    group.groupExps.forEach(p -> {
+      p.left.accept(this);
+      p.right.accept(this);
+    });
+    group.aggregates.forEach(this::accept);
   }
 
-  public AstNode visit(Ast.Aggregate aggregate) {
-    return ast.aggregate(aggregate.pos, aggregate.aggregate, aggregate.argument,
-        aggregate.id);
+  protected void visit(Ast.Aggregate aggregate) {
+    aggregate.aggregate.accept(this);
+    if (aggregate.argument != null) {
+      aggregate.argument.accept(this);
+    }
+    aggregate.id.accept(this);
   }
 
-  public void visit(Ast.DatatypeDecl datatypeDecl) {
-    return datatypeDecl.accept(this);
+  protected void visit(Ast.DatatypeDecl datatypeDecl) {
+    datatypeDecl.binds.forEach(this::accept);
   }
 
-  public void visit(Ast.DatatypeBind datatypeBind) {
-    return datatypeBind.accept(this);
+  protected void visit(Ast.DatatypeBind datatypeBind) {
+    datatypeBind.tyVars.forEach(this::accept);
+    datatypeBind.tyCons.forEach(this::accept);
   }
 
-  public void visit(Ast.TyCon tyCon) {
-    return tyCon.accept(this);
+  protected void visit(Ast.TyCon tyCon) {
+    tyCon.type.accept(this);
+    tyCon.id.accept(this);
   }
 
-  public void visit(Ast.RecordType recordType) {
-    return recordType.accept(this);
+  protected void visit(Ast.RecordType recordType) {
+    recordType.fieldTypes.values().forEach(this::accept);
   }
 
-  public void visit(Ast.TupleType tupleType) {
-    return tupleType.accept(this);
+  protected void visit(Ast.TupleType tupleType) {
+    tupleType.types.forEach(this::accept);
   }
 
-  public Ast.Type visit(Ast.FunctionType functionType) {
-    return ast.functionType(functionType.pos, functionType.paramType,
-        functionType.resultType);
+  protected void visit(Ast.FunctionType functionType) {
+    functionType.paramType.accept(this);
+    functionType.resultType.accept(this);
   }
 
-  public void visit(Ast.CompositeType compositeType) {
-    return compositeType.accept(this);
-  }
-
-  private void accept(Ast.Match e) {
-    e.accept(this);
-  }
-
-  private <E extends AstNode> void accept(E e) {
-    e.accept(this);
+  protected void visit(Ast.CompositeType compositeType) {
+    compositeType.types.forEach(this::accept);
   }
 }
 
