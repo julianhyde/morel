@@ -41,6 +41,7 @@ import com.google.common.collect.Ordering;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
@@ -242,6 +243,21 @@ public class CalciteCompiler extends Compiler {
             }
           }
         }
+        Pair<Ast.Exp, Ast.Exp> applyFilter = matchApply(apply, BuiltIn.LIST_FILTER);
+        if (applyFilter != null) {
+          Pos pos = apply.pos;
+          Ast.Id z =
+              reg(ast.id(pos, "z"),
+                  ((ListType) getType(applyFilter.right)).elementType);
+          Code code = compileFrom(cx,
+              ast.from(pos,
+                  ImmutableMap.of(reg(z.toPat(), z), applyFilter.right),
+                  ImmutableList.of(
+                      ast.where(pos,
+                          ast.apply(applyFilter.left, z))),
+                  null));
+          System.out.println("yes, " + code); // TODO
+        }
         final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
         final RelDataType calciteType =
             Converters.toCalciteType(type, typeFactory);
@@ -260,10 +276,33 @@ public class CalciteCompiler extends Compiler {
         ThreadLocals.let(CalciteFunctions.THREAD_ENV,
             new CalciteFunctions.Context(new Session(), cx.env,
                 typeMap.typeSystem, cx.relBuilder.getTypeFactory()), () ->
-            cx.relBuilder.functionScan(CalciteFunctions.TABLE_OPERATOR, 0,
-                cx.relBuilder.literal(morelCode),
-                cx.relBuilder.literal(jsonRowType)));
+                cx.relBuilder.functionScan(CalciteFunctions.TABLE_OPERATOR, 0,
+                    cx.relBuilder.literal(morelCode),
+                    cx.relBuilder.literal(jsonRowType)));
         return true;
+      }
+
+      private Pair<Ast.Exp, Ast.Exp> matchApply(Ast.Apply apply, BuiltIn builtIn) {
+        return matchCallTo2(apply.fn, builtIn, apply.arg);
+      }
+
+      private Pair<Ast.Exp, Ast.Exp> matchCallTo2(Ast.Exp exp, BuiltIn builtIn,
+          Ast.Exp arg) {
+        return exp instanceof Ast.Apply
+            ? matchCallTo(((Ast.Apply) exp).fn, builtIn)
+            ? Pair.of(((Ast.Apply) exp).arg, arg) : null : null;
+      }
+
+      private boolean matchCallTo(Ast.Exp exp, BuiltIn builtIn) {
+        return exp instanceof Ast.Apply
+            && matchApply0((Ast.Apply) exp, builtIn);
+      }
+
+      private boolean matchApply0(Ast.Apply apply, BuiltIn builtIn) {
+        return apply.fn instanceof Ast.RecordSelector
+            && ((Ast.RecordSelector) apply.fn).name.equals(builtIn.mlName)
+            && apply.arg instanceof Ast.Id
+            && ((Ast.Id) apply.arg).name.equals(builtIn.structure);
       }
     };
   }

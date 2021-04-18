@@ -383,6 +383,33 @@ public class AlgebraTest {
         .assertEvalIter(equalsOrdered(15, 25, 35, 45));
   }
 
+  @Test public void testFilter() {
+    String ml = "from e in scott.emp\n"
+        + "where e.deptno < 30";
+    String ml2 = "List.filter (fn e => e.deptno < 30) (from e in scott.emp)";
+    final Matchers.LearningMatcher<String> planMatcher =
+        Matchers.learning(String.class);
+    final Matchers.LearningMatcher<Object> resultMatcher =
+        Matchers.learning(Object.class);
+    // Check that query 1 gets the same result
+    // in non-hybrid and hybrid modes.
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertEval(resultMatcher)
+        .with(Prop.HYBRID, true)
+        .assertEval(is(resultMatcher.get()))
+        .assertPlan(planMatcher);
+    // Check that query 2 gets the same result as query 1
+    // in non-hybrid and hybrid modes,
+    // and that query 2 has the same plan as query 1 in hybrid mode.
+    ml(ml2)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertEval(is(resultMatcher.get()))
+        .with(Prop.HYBRID, true)
+        .assertEval(is(resultMatcher.get()))
+        .assertPlan(is(planMatcher.get()));
+  }
+
 }
 
 // End AlgebraTest.java

@@ -45,6 +45,7 @@ import net.hydromatic.morel.util.ThreadLocals;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,6 +63,11 @@ public class Compiler {
   protected static final EvalEnv EMPTY_ENV = Codes.emptyEnv();
 
   protected final TypeMap typeMap;
+
+  /** To work around the fact that we create expressions during compilation.
+   * Ideally we'd be working with a "core language" of expressions that know
+   * their own type. */
+  protected final Map<Ast.TypedNode, Type> mutableTypeMap = new HashMap<>();
 
   public Compiler(TypeMap typeMap) {
     this.typeMap = typeMap;
@@ -240,8 +246,7 @@ public class Compiler {
     case ANDALSO:
     case ORELSE:
     case CONS:
-      return compileInfix(cx, (Ast.InfixCall) expression,
-          typeMap.getType(expression));
+      return compileInfix(cx, (Ast.InfixCall) expression, getType(expression));
 
     default:
       throw new AssertionError("op not handled: " + expression.op);
@@ -260,7 +265,7 @@ public class Compiler {
     Code argCode;
     assignSelector(apply);
     argCode = compileArg(cx, apply.arg);
-    final Type argType = typeMap.getType(apply.arg);
+    final Type argType = getType(apply.arg);
     final Applicable fnValue = compileApplicable(cx, apply.fn, argType);
     if (fnValue != null) {
       return finishCompileApply(cx, fnValue, argCode, argType);
@@ -285,13 +290,13 @@ public class Compiler {
     for (Map.Entry<Ast.Pat, Ast.Exp> patExp : from.sources.entrySet()) {
       final Code expCode = compile(cx.bindAll(bindings), patExp.getValue());
       final Ast.Pat pat0 = patExp.getKey();
-      final ListType listType = (ListType) typeMap.getType(patExp.getValue());
+      final ListType listType = (ListType) getType(patExp.getValue());
       final Ast.Pat pat = expandRecordPattern(pat0, listType.elementType);
       sourceCodes.put(pat, expCode);
       pat.visit(p -> {
         if (p instanceof Ast.IdPat) {
           final Ast.IdPat idPat = (Ast.IdPat) p;
-          bindings.add(Binding.of(idPat.name, typeMap.getType(p)));
+          bindings.add(Binding.of(idPat.name, getType(p)));
         }
       });
     }
@@ -352,7 +357,7 @@ public class Compiler {
           argumentType = typeMap.typeSystem.recordOrScalarType(argNameTypes);
           argumentCode = null;
         } else {
-          argumentType = typeMap.getType(aggregate.argument);
+          argumentType = getType(aggregate.argument);
           argumentCode = compile(cx, aggregate.argument);
         }
         final Applicable aggregateApplicable =
@@ -389,7 +394,7 @@ public class Compiler {
     if (apply.fn instanceof Ast.RecordSelector) {
       final Ast.RecordSelector selector = (Ast.RecordSelector) apply.fn;
       if (selector.slot < 0) {
-        final Type argType = typeMap.getType(apply.arg);
+        final Type argType = getType(apply.arg);
         if (argType instanceof RecordType) {
           final RecordType recordType = (RecordType) argType;
           final Ord<Type> field = recordType.lookupField(selector.name);
@@ -532,7 +537,7 @@ public class Compiler {
       valDecl = ast.valDecl(pos, ast.valBind(pos, rec, pat, e2));
       matches.forEach((key, value) ->
           bindings.add(
-              Binding.of(((Ast.IdPat) key).name, typeMap.getType(value),
+              Binding.of(((Ast.IdPat) key).name, getType(value),
                   Unit.INSTANCE)));
     } else {
       valDecl.valBinds.forEach(valBind ->
@@ -691,7 +696,7 @@ public class Compiler {
 
     if (actions != null) {
       final String name = ((Ast.IdPat) valBind.pat).name;
-      final Type type0 = typeMap.getType(valBind.e);
+      final Type type0 = getType(valBind.e);
       final Type type = typeMap.typeSystem.ensureClosed(type0);
       actions.add((output, outBindings, evalEnv) -> {
         final StringBuilder buf = new StringBuilder();
@@ -727,6 +732,22 @@ public class Compiler {
             link(linkCodes, pat1, code1));
       }
     }
+  }
+
+  /** Registers that an expression has a type. */
+  protected <E extends Ast.TypedNode> E reg(E e, Type type) {
+    mutableTypeMap.put(e, type);
+    return e;
+  }
+
+  /** Registers that an expression has the same type as a given expression. */
+  protected <E extends Ast.TypedNode> E reg(E e, Ast.TypedNode e2) {
+    return reg(e, getType(e2));
+  }
+
+  protected Type getType(Ast.TypedNode e) {
+    final Type type = mutableTypeMap.get(e);
+    return type != null ? type : typeMap.getType(e);
   }
 
   /** A piece of code that is references another piece of code.

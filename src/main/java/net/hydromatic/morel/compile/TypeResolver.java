@@ -662,8 +662,7 @@ public class TypeResolver {
       } else {
         type = dataType;
       }
-      termMap.put((Ast.IdPat) ast.idPat(tyCon.pos, tyCon.id.name),
-          toTerm(type, Subst.EMPTY));
+      termMap.put((Ast.IdPat) tyCon.id.toPat(), toTerm(type, Subst.EMPTY));
       map.put(tyCon, toTerm(type, Subst.EMPTY));
     }
   }
@@ -734,10 +733,10 @@ public class TypeResolver {
       e = funBind.matchList.get(0).e;
       vars = funBind.matchList.get(0).patList;
     } else {
-      final List<String> varNames =
+      final List<Ast.Id> varNames =
           MapList.of(funBind.matchList.get(0).patList.size(),
-              index -> "v" + index);
-      vars = Lists.transform(varNames, v -> ast.idPat(Pos.ZERO, v));
+              index -> ast.id(Pos.ZERO, "v" + index));
+      vars = Lists.transform(varNames, Ast.Id::toPat);
       final List<Ast.Match> matchList = new ArrayList<>();
       for (Ast.FunMatch funMatch : funBind.matchList) {
         matchList.add(
@@ -750,7 +749,7 @@ public class TypeResolver {
     for (Ast.Pat var : Lists.reverse(vars)) {
       e = ast.fn(pos, ast.match(pos, var, e));
     }
-    return ast.valBind(pos, true, ast.idPat(pos, funBind.name), e);
+    return ast.valBind(pos, true, funBind.toPat(), e);
   }
 
   /** Converts a list of variable names to a variable or tuple.
@@ -758,9 +757,7 @@ public class TypeResolver {
    * <p>For example, ["x"] becomes "{@code x}" (an {@link Ast.Id}),
    * and ["x", "y"] becomes "{@code (x, y)}" (a {@link Ast.Tuple} of
    * {@link Ast.Id Ids}). */
-  private static Ast.Exp idTuple(List<String> vars) {
-    final List<Ast.Id> idList =
-        Lists.transform(vars, v -> ast.id(Pos.ZERO, v));
+  private static Ast.Exp idTuple(List<Ast.Id> idList) {
     if (idList.size() == 1) {
       return idList.get(0);
     }

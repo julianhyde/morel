@@ -57,7 +57,7 @@ public class Ast {
    *
    * <p>For example, "x" in "val x = 5" is a {@link IdPat};
    * the "(x, y) in "val (x, y) = makePair 1 2" is a {@link TuplePat}. */
-  public abstract static class Pat extends AstNode {
+  public abstract static class Pat extends TypedNode {
     Pat(Pos pos, Op op) {
       super(pos, op);
     }
@@ -692,8 +692,15 @@ public class Ast {
     }
   }
 
+  /** Base class of ASTs that can have a type. */
+  public abstract static class TypedNode extends AstNode {
+    public TypedNode(Pos pos, Op op) {
+      super(pos, op);
+    }
+  }
+
   /** Base class of expression ASTs. */
-  public abstract static class Exp extends AstNode {
+  public abstract static class Exp extends TypedNode {
     Exp(Pos pos, Op op) {
       super(pos, op);
     }
@@ -742,6 +749,11 @@ public class Ast {
 
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(name);
+    }
+
+    /** Converts this Id to an equivalent Pat. */
+    public Pat toPat() {
+      return ast.idPat(pos, name);
     }
   }
 
@@ -1058,6 +1070,11 @@ public class Ast {
 
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendAll(matchList, " | ");
+    }
+
+    /** Converts this FunBind to an equivalent Pat. */
+    public Pat toPat() {
+      return ast.idPat(pos, name);
     }
   }
 
