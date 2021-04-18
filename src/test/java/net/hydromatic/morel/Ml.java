@@ -332,32 +332,12 @@ class Ml {
   }
 
   Ml assertEvalSame() {
-    try {
-      final Ast.Exp e = new MorelParserImpl(new StringReader(ml)).expression();
-      final TypeSystem typeSystem = new TypeSystem();
-      final Calcite calcite = Calcite.withDataSets(dataSetMap);
-      final Environment env =
-          Environments.env(typeSystem, calcite.foreignValues());
-      final Session session = new Session();
-      session.map.putAll(propMap);
-      Prop.HYBRID.set(session.map, false);
-      final Object value = eval(session, env, typeSystem, e, null, null);
-      Prop.HYBRID.set(session.map, true);
-      final Object value2 = eval(session, env, typeSystem, e, null, null);
-      if (!Objects.equals(value, value2)
-          && value instanceof List
-          && value2 instanceof List
-          && !ml.contains("order")) {
-        final List list = ORDERING.immutableSortedCopy((List) value);
-        final List list2 = ORDERING.immutableSortedCopy((List) value2);
-        assertThat(list2, is(list));
-      } else {
-        assertThat(value2, is(value));
-      }
-      return this;
-    } catch (ParseException e) {
-      throw new RuntimeException(e);
-    }
+    final Matchers.LearningMatcher<Object> resultMatcher =
+        Matchers.learning(Object.class);
+    return with(Prop.HYBRID, false)
+        .assertEval(resultMatcher)
+        .with(Prop.HYBRID, true)
+        .assertEval(Matchers.isUnordered(resultMatcher.get()));
   }
 
   Ml assertError(Matcher<String> matcher) {
@@ -377,9 +357,20 @@ class Ml {
     return new Ml(ml, dataSetMap, plus(propMap, prop, value));
   }
 
-  /** Returns a map plus one (key, value) entry. */
+  /** Returns a map plus (adding or overwriting) one (key, value) entry. */
   private static <K, V> Map<K, V> plus(Map<K, V> map, K k, V v) {
-    return ImmutableMap.<K, V>builder().putAll(map).put(k, v).build();
+    final ImmutableMap.Builder<K, V> builder = ImmutableMap.builder();
+    if (map.containsKey(k)) {
+      map.forEach((k2, v2) -> {
+        if (!k2.equals(k)) {
+          builder.put(k, v);
+        }
+      });
+    } else {
+      builder.putAll(map);
+    }
+    builder.put(k, v);
+    return builder.build();
   }
 }
 
