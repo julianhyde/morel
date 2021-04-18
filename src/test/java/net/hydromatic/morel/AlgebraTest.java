@@ -214,7 +214,7 @@ public class AlgebraTest {
     };
     Stream.of(queries).filter(q -> !q.startsWith("#")).forEach(query -> {
       try {
-        checkEqual(query);
+        ml(query).withBinding("scott", BuiltInDataSet.SCOTT).assertEvalSame();
       } catch (AssertionError | RuntimeException e) {
         throw new RuntimeException("during query [" + query + "]", e);
       }
@@ -229,7 +229,7 @@ public class AlgebraTest {
         + "  List.tabulate (6, fn i =>\n"
         + "    {i, j = i + 3, s = String.substring (\"morel\", 0, i)})\n"
         + "yield {r.j, r.s}";
-    checkEqual(query);
+    ml(query).withBinding("scott", BuiltInDataSet.SCOTT).assertEvalSame();
   }
 
   /** Tests a query that can mostly be executed in Calcite, but is followed by
@@ -383,9 +383,6 @@ public class AlgebraTest {
         .assertEvalIter(equalsOrdered(15, 25, 35, 45));
   }
 
-  void checkEqual(String ml) {
-    ml(ml).withBinding("scott", BuiltInDataSet.SCOTT).assertEvalSame();
-  }
 }
 
 // End AlgebraTest.java
