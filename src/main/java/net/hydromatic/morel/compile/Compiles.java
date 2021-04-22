@@ -71,6 +71,7 @@ public abstract class Compiles {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
+    final Resolver resolver = new Resolver(resolved.typeMap);
     final Compiler compiler;
     if (hybrid) {
       compiler = new CalciteCompiler(resolved.typeMap,

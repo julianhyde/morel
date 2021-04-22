@@ -24,6 +24,7 @@ import com.google.common.collect.Iterables;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.core.Core;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
@@ -61,19 +62,16 @@ import static net.hydromatic.morel.util.Static.toImmutableList;
 public class Compiler {
   protected static final EvalEnv EMPTY_ENV = Codes.emptyEnv();
 
-  protected final TypeMap typeMap;
-
-  public Compiler(TypeMap typeMap) {
-    this.typeMap = typeMap;
+  public Compiler() {
   }
 
-  CompiledStatement compileStatement(Environment env, Ast.Decl decl) {
+  CompiledStatement compileStatement(Environment env, Core.Decl decl) {
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     final List<Action> actions = new ArrayList<>();
     final Context cx = Context.of(env);
     compileDecl(cx, decl, matchCodes, bindings, actions);
-    final Type type = typeMap.getType(decl);
+    final Type type = decl.type;
     final CalciteFunctions.Context context = createContext(env);
 
     return new CompiledStatement() {
@@ -497,14 +495,14 @@ public class Compiler {
     }
   }
 
-  void compileDecl(Context cx, Ast.Decl decl, List<Code> matchCodes,
+  void compileDecl(Context cx, Core.Decl decl, List<Code> matchCodes,
       List<Binding> bindings, List<Action> actions) {
     switch (decl.op) {
     case VAL_DECL:
-      compileValDecl(cx, (Ast.ValDecl) decl, matchCodes, bindings, actions);
+      compileValDecl(cx, (Core.ValDecl) decl, matchCodes, bindings, actions);
       break;
     case DATATYPE_DECL:
-      final Ast.DatatypeDecl datatypeDecl = (Ast.DatatypeDecl) decl;
+      final Ast.DatatypeDecl datatypeDecl = (Core.DatatypeDecl) decl;
       compileDatatypeDecl(cx, datatypeDecl, bindings, actions);
       break;
     case FUN_DECL:
