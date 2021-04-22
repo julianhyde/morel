@@ -26,6 +26,8 @@ import com.google.common.collect.Iterables;
 
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 

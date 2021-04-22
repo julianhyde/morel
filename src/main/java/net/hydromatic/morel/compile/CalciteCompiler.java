@@ -243,7 +243,8 @@ public class CalciteCompiler extends Compiler {
             }
           }
         }
-        Pair<Ast.Exp, Ast.Exp> applyFilter = matchApply(apply, BuiltIn.LIST_FILTER);
+        final Pair<Ast.Exp, Ast.Exp> applyFilter =
+            matchApply(apply, BuiltIn.LIST_FILTER);
         if (applyFilter != null) {
           Pos pos = apply.pos;
           Ast.Id z =
@@ -254,9 +255,13 @@ public class CalciteCompiler extends Compiler {
                   ImmutableMap.of(reg(z.toPat(), z), applyFilter.right),
                   ImmutableList.of(
                       ast.where(pos,
-                          ast.apply(applyFilter.left, z))),
+                          reg(ast.apply(applyFilter.left, z),
+                              applyFilter.left))),
                   null));
-          System.out.println("yes, " + code); // TODO
+          if (code instanceof RelCode
+              && ((RelCode) code).toRel(cx, true)) {
+            return true;
+          }
         }
         final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
         final RelDataType calciteType =
@@ -282,27 +287,30 @@ public class CalciteCompiler extends Compiler {
         return true;
       }
 
-      private Pair<Ast.Exp, Ast.Exp> matchApply(Ast.Apply apply, BuiltIn builtIn) {
-        return matchCallTo2(apply.fn, builtIn, apply.arg);
+      /** Matches a call "builtIn x y" and returns a pair "(x, y)" if matched,
+       * null if not. */
+      private Pair<Ast.Exp, Ast.Exp> matchApply(Ast.Apply apply,
+          BuiltIn builtIn) {
+        return apply.fn instanceof Ast.Apply
+            ? matchApply1((Ast.Apply) apply.fn, builtIn, apply.arg)
+            : null;
       }
 
-      private Pair<Ast.Exp, Ast.Exp> matchCallTo2(Ast.Exp exp, BuiltIn builtIn,
-          Ast.Exp arg) {
-        return exp instanceof Ast.Apply
-            ? matchCallTo(((Ast.Apply) exp).fn, builtIn)
-            ? Pair.of(((Ast.Apply) exp).arg, arg) : null : null;
+      private Pair<Ast.Exp, Ast.Exp> matchApply1(Ast.Apply apply,
+          BuiltIn builtIn, Ast.Exp arg) {
+        return apply.fn instanceof Ast.Apply
+            ? matchApply0((Ast.Apply) apply.fn, builtIn, apply.arg, arg)
+            : null;
       }
 
-      private boolean matchCallTo(Ast.Exp exp, BuiltIn builtIn) {
-        return exp instanceof Ast.Apply
-            && matchApply0((Ast.Apply) exp, builtIn);
-      }
-
-      private boolean matchApply0(Ast.Apply apply, BuiltIn builtIn) {
+      private Pair<Ast.Exp, Ast.Exp> matchApply0(Ast.Apply apply,
+          BuiltIn builtIn, Ast.Exp arg0, Ast.Exp arg1) {
         return apply.fn instanceof Ast.RecordSelector
             && ((Ast.RecordSelector) apply.fn).name.equals(builtIn.mlName)
             && apply.arg instanceof Ast.Id
-            && ((Ast.Id) apply.arg).name.equals(builtIn.structure);
+            && ((Ast.Id) apply.arg).name.equals(builtIn.structure)
+            ? Pair.of(arg0, arg1)
+            : null;
       }
     };
   }
@@ -399,7 +407,7 @@ public class CalciteCompiler extends Compiler {
           pat.visit(p -> {
             if (p instanceof Ast.IdPat) {
               final Ast.IdPat idPat = (Ast.IdPat) p;
-              bindings.add(Binding.of(idPat.name, typeMap.getType(p)));
+              bindings.add(Binding.of(idPat.name, getType(p)));
             }
           });
         }
@@ -421,7 +429,7 @@ public class CalciteCompiler extends Compiler {
                   b.getRexBuilder().makeRangeReference(r.getRowType(),
                       finalOffset, false));
               varOffsets.put(((Ast.IdPat) pat).name,
-                  new VarData(typeMap.getType(pat), offset, r.getRowType()));
+                  new VarData(getType(pat), offset, r.getRowType()));
             }
             offset += r.getRowType().getFieldCount();
             if (++i == 2) {
@@ -595,7 +603,7 @@ public class CalciteCompiler extends Compiler {
       }
       final RexNode fnRex = translate(cx, apply.fn);
       final RexNode argRex = translate(cx, apply.arg);
-      return morelApply(cx, typeMap.getType(apply), typeMap.getType(apply.arg),
+      return morelApply(cx, getType(apply), getType(apply.arg),
           fnRex, argRex);
 
     case ANDALSO:
