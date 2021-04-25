@@ -23,8 +23,11 @@ import java.util.function.Function;
 /** Converts from a Calcite row to a Morel value (often a record).
  *
  * <p>The Calcite row is represented as an array, ordered by field ordinal;
- * the SML record is represented by a list, ordered by field name. */
-public interface Converter extends Function<Object[], Object> {
+ * the SML record is represented by a list, ordered by field name.
+ *
+ * @param <E> Source object type
+ */
+public interface Converter<E> extends Function<E, Object> {
 }
 
 // End Converter.java
