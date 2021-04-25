@@ -27,11 +27,14 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.CalciteCompiler;
 import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.Inliner;
+import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeMap;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Codes;
@@ -174,8 +177,8 @@ class Ml {
         final Calcite calcite = Calcite.withDataSets(dataSetMap);
         final TypeResolver.Resolved resolved =
             Compiles.validateExpression(expression, calcite.foreignValues());
-        final Ast.Exp resolvedExp =
-            Compiles.toExp((Ast.ValDecl) resolved.node);
+        final Ast.ValDecl valDecl = (Ast.ValDecl) resolved.node;
+        final Ast.Exp resolvedExp = valDecl.valBinds.get(0).e;
         action.accept(resolvedExp, resolved.typeMap);
       } catch (ParseException e) {
         throw new RuntimeException(e);
@@ -227,9 +230,11 @@ class Ml {
       final TypeResolver.Resolved resolved =
           TypeResolver.deduceType(env, valDecl, typeSystem);
       final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+      final Resolver resolver = new Resolver(resolved.typeMap);
+      final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
       final RelNode rel =
-          new CalciteCompiler(resolved.typeMap, calcite)
-              .toRel(env, Compiles.toExp(valDecl2));
+          new CalciteCompiler(typeSystem, calcite)
+              .toRel(env, Compiles.toExp(valDecl3));
       Objects.requireNonNull(rel);
       final String relString = RelOptUtil.toString(rel);
       assertThat(relString, matcher);
@@ -237,6 +242,31 @@ class Ml {
     } catch (ParseException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  /** Asserts that after parsing the current expression and converting it to
+   * Core, the Core string converts to the expected value. Which is usually
+   * the original string. */
+  public void assertCoreString(Matcher<String> matcher) {
+    final Ast.Exp e;
+    try {
+      e = new MorelParserImpl(new StringReader(ml)).expression();
+    } catch (ParseException parseException) {
+      throw new RuntimeException(parseException);
+    }
+    final TypeSystem typeSystem = new TypeSystem();
+
+    final Environment env =
+        Environments.env(typeSystem, ImmutableMap.of());
+    final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+    final TypeResolver.Resolved resolved =
+        TypeResolver.deduceType(env, valDecl, typeSystem);
+    final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+    final Resolver resolver = new Resolver(resolved.typeMap);
+    final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
+    final Core.ValDecl valDecl4 = valDecl3.accept(Inliner.of(typeSystem, env));
+    final String coreString = valDecl4.e.toString();
+    assertThat(coreString, matcher);
   }
 
   Ml assertPlan(Matcher<String> planMatcher) {

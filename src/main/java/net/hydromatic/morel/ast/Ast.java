@@ -24,24 +24,24 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 
-import net.hydromatic.morel.eval.Applicable;
-import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.function.BiFunction;
+import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
+
+import static java.util.Objects.requireNonNull;
 
 /** Various sub-classes of AST nodes. */
 public class Ast {
@@ -88,7 +88,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(name);
+      return w.id(name);
     }
   }
 
@@ -100,7 +100,7 @@ public class Ast {
 
     LiteralPat(Pos pos, Op op, Comparable value) {
       super(pos, op);
-      this.value = Objects.requireNonNull(value);
+      this.value = requireNonNull(value);
       Preconditions.checkArgument(op == Op.BOOL_LITERAL_PAT
           || op == Op.CHAR_LITERAL_PAT
           || op == Op.INT_LITERAL_PAT
@@ -168,8 +168,8 @@ public class Ast {
 
     InfixPat(Pos pos, Op op, Pat p0, Pat p1) {
       super(pos, op);
-      this.p0 = Objects.requireNonNull(p0);
-      this.p1 = Objects.requireNonNull(p1);
+      this.p0 = requireNonNull(p0);
+      this.p1 = requireNonNull(p1);
     }
 
     public Pat accept(Shuttle shuttle) {
@@ -213,8 +213,8 @@ public class Ast {
 
     ConPat(Pos pos, Id tyCon, Pat pat) {
       super(pos, Op.CON_PAT);
-      this.tyCon = Objects.requireNonNull(tyCon);
-      this.pat = Objects.requireNonNull(pat);
+      this.tyCon = requireNonNull(tyCon);
+      this.pat = requireNonNull(pat);
     }
 
     public Pat accept(Shuttle shuttle) {
@@ -254,7 +254,7 @@ public class Ast {
 
     Con0Pat(Pos pos, Id tyCon) {
       super(pos, Op.CON0_PAT);
-      this.tyCon = Objects.requireNonNull(tyCon);
+      this.tyCon = requireNonNull(tyCon);
     }
 
     public Pat accept(Shuttle shuttle) {
@@ -282,11 +282,11 @@ public class Ast {
    *
    * <p>For example, "(x, y)" in "fun sum (x, y) = x + y". */
   public static class TuplePat extends Pat {
-    public final java.util.List<Pat> args;
+    public final List<Pat> args;
 
     TuplePat(Pos pos, ImmutableList<Pat> args) {
       super(pos, Op.TUPLE_PAT);
-      this.args = Objects.requireNonNull(args);
+      this.args = requireNonNull(args);
     }
 
     public Pat accept(Shuttle shuttle) {
@@ -309,22 +309,22 @@ public class Ast {
 
     /** Creates a copy of this {@code TuplePat} with given contents,
      * or {@code this} if the contents are the same. */
-    public TuplePat copy(java.util.List<Pat> args) {
+    public TuplePat copy(List<Pat> args) {
       return this.args.equals(args)
           ? this
           : ast.tuplePat(pos, args);
     }
   }
 
-  /** List pattern, the pattern analog of the {@link List} expression.
+  /** List pattern, the pattern analog of the {@link ListExp} expression.
    *
    * <p>For example, "[x, y]" in "fun sum [x, y] = x + y". */
   public static class ListPat extends Pat {
-    public final java.util.List<Pat> args;
+    public final List<Pat> args;
 
     ListPat(Pos pos, ImmutableList<Pat> args) {
       super(pos, Op.LIST_PAT);
-      this.args = Objects.requireNonNull(args);
+      this.args = requireNonNull(args);
     }
 
     public Pat accept(Shuttle shuttle) {
@@ -347,7 +347,7 @@ public class Ast {
 
     /** Creates a copy of this {@code ListPat} with given contents,
      * or {@code this} if the contents are the same. */
-    public ListPat copy(java.util.List<Pat> args) {
+    public ListPat copy(List<Pat> args) {
       return this.args.equals(args)
           ? this
           : ast.listPat(pos, args);
@@ -362,7 +362,7 @@ public class Ast {
     RecordPat(Pos pos, boolean ellipsis, ImmutableSortedMap<String, Pat> args) {
       super(pos, Op.RECORD_PAT);
       this.ellipsis = ellipsis;
-      this.args = Objects.requireNonNull(args);
+      this.args = requireNonNull(args);
       Preconditions.checkArgument(args.comparator() == ORDERING);
     }
 
@@ -383,10 +383,7 @@ public class Ast {
       Ord.forEach(args, (i, k, v) ->
           w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
       if (ellipsis) {
-        if (!args.isEmpty()) {
-          w.append(", ");
-        }
-        w.append("...");
+        w.append(args.isEmpty() ? "..." : ", ...");
       }
       return w.append("}");
     }
@@ -456,8 +453,8 @@ public class Ast {
     /** Creates a type annotation. */
     AnnotatedExp(Pos pos, Type type, Exp e) {
       super(pos, Op.ANNOTATED_EXP);
-      this.type = Objects.requireNonNull(type);
-      this.e = Objects.requireNonNull(e);
+      this.type = requireNonNull(type);
+      this.e = requireNonNull(e);
     }
 
     @Override public int hashCode() {
@@ -486,14 +483,14 @@ public class Ast {
 
   /** Parse tree for a named type (e.g. "int" or "(int, string) list"). */
   public static class NamedType extends Type {
-    public final java.util.List<Type> types;
+    public final List<Type> types;
     public final String name;
 
     /** Creates a type. */
     NamedType(Pos pos, ImmutableList<Type> types, String name) {
       super(pos, Op.NAMED_TYPE);
-      this.types = Objects.requireNonNull(types);
-      this.name = Objects.requireNonNull(name);
+      this.types = requireNonNull(types);
+      this.name = requireNonNull(name);
     }
 
     @Override public int hashCode() {
@@ -518,16 +515,16 @@ public class Ast {
     AstWriter unparse(AstWriter w, int left, int right) {
       switch (types.size()) {
       case 0:
-        return w.append(name);
+        return w.id(name);
       case 1:
         return w.append(types.get(0), left, op.left)
-            .append(" ").append(name);
+            .append(" ").id(name);
       default:
         w.append("(");
         Ord.forEach(types, (type, i) ->
             w.append(i == 0 ? "" : ", ").append(type, 0, 0));
         return w.append(") ")
-            .append(name);
+            .id(name);
       }
     }
   }
@@ -539,7 +536,7 @@ public class Ast {
     /** Creates a TyVar. */
     TyVar(Pos pos, String name) {
       super(pos, Op.TY_VAR);
-      this.name = Objects.requireNonNull(name);
+      this.name = requireNonNull(name);
     }
 
     @Override public int hashCode() {
@@ -561,7 +558,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(name);
+      return w.id(name);
     }
   }
 
@@ -572,7 +569,7 @@ public class Ast {
     /** Creates a TyVar. */
     RecordType(Pos pos, ImmutableMap<String, Type> fieldTypes) {
       super(pos, Op.RECORD_TYPE);
-      this.fieldTypes = Objects.requireNonNull(fieldTypes);
+      this.fieldTypes = requireNonNull(fieldTypes);
     }
 
     @Override public int hashCode() {
@@ -597,18 +594,18 @@ public class Ast {
       w.append("{");
       Ord.forEach(fieldTypes, (i, field, type) ->
           w.append(i > 0 ? ", " : "")
-              .append(field).append(": ").append(type, 0, 0));
+              .id(field).append(": ").append(type, 0, 0));
       return w.append("}");
     }
   }
 
   /** Tuple type. */
   public static class TupleType extends Type {
-    public final java.util.List<Type> types;
+    public final List<Type> types;
 
     TupleType(Pos pos, ImmutableList<Type> types) {
       super(pos, Op.TUPLE_TYPE);
-      this.types = Objects.requireNonNull(types);
+      this.types = requireNonNull(types);
     }
 
     public Type accept(Shuttle shuttle) {
@@ -637,11 +634,11 @@ public class Ast {
    * then {@code int} and {@code string} becomes the two type parameters to
    * the {@code list} {@link NamedType}. */
   public static class CompositeType extends Type {
-    public final java.util.List<Type> types;
+    public final List<Type> types;
 
     CompositeType(Pos pos, ImmutableList<Type> types) {
       super(pos, Op.TUPLE_TYPE);
-      this.types = Objects.requireNonNull(types);
+      this.types = requireNonNull(types);
     }
 
     public Type accept(Shuttle shuttle) {
@@ -667,8 +664,8 @@ public class Ast {
 
     FunctionType(Pos pos, Type paramType, Type resultType) {
       super(pos, Op.FUNCTION_TYPE);
-      this.paramType = Objects.requireNonNull(paramType);
-      this.resultType = Objects.requireNonNull(resultType);
+      this.paramType = requireNonNull(paramType);
+      this.resultType = requireNonNull(resultType);
     }
 
     public Type accept(Shuttle shuttle) {
@@ -699,7 +696,7 @@ public class Ast {
     @Override public abstract Exp accept(Shuttle shuttle);
 
     /** Returns a list of all arguments. */
-    public final java.util.List<Exp> args() {
+    public final List<Exp> args() {
       final ImmutableList.Builder<Exp> args = ImmutableList.builder();
       forEachArg((exp, value) -> args.add(exp));
       return args.build();
@@ -713,17 +710,7 @@ public class Ast {
     /** Creates an Id. */
     Id(Pos pos, String name) {
       super(pos, Op.ID);
-      this.name = Objects.requireNonNull(name);
-    }
-
-    @Override public int hashCode() {
-      return name.hashCode();
-    }
-
-    @Override public boolean equals(Object o) {
-      return o == this
-          || o instanceof Id
-          && this.name.equals(((Id) o).name);
+      this.name = requireNonNull(name);
     }
 
     public Id accept(Shuttle shuttle) {
@@ -735,7 +722,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(name);
+      return w.id(name);
     }
   }
 
@@ -754,7 +741,7 @@ public class Ast {
     /** Creates a record selector. */
     RecordSelector(Pos pos, String name) {
       super(pos, Op.RECORD_SELECTOR);
-      this.name = Objects.requireNonNull(name);
+      this.name = requireNonNull(name);
       assert !name.startsWith("#");
     }
 
@@ -788,7 +775,7 @@ public class Ast {
     /** Creates a Literal. */
     Literal(Pos pos, Op op, Comparable value) {
       super(pos, op);
-      this.value = Objects.requireNonNull(value);
+      this.value = requireNonNull(value);
     }
 
     @Override public int hashCode() {
@@ -809,7 +796,7 @@ public class Ast {
       visitor.visit(this);
     }
 
-    AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendLiteral(value);
     }
   }
@@ -825,11 +812,11 @@ public class Ast {
 
   /** Parse tree node of a datatype declaration. */
   public static class DatatypeDecl extends Decl {
-    public final java.util.List<DatatypeBind> binds;
+    public final List<DatatypeBind> binds;
 
     DatatypeDecl(Pos pos, ImmutableList<DatatypeBind> binds) {
       super(pos, Op.DATATYPE_DECL);
-      this.binds = Objects.requireNonNull(binds);
+      this.binds = requireNonNull(binds);
       Preconditions.checkArgument(!this.binds.isEmpty());
     }
 
@@ -863,16 +850,16 @@ public class Ast {
    * consists of type bindings {@code 'a x = X1 of 'a | X2} and
    * {@code y = Y}. */
   public static class DatatypeBind extends AstNode {
-    public final java.util.List<TyVar> tyVars;
+    public final List<TyVar> tyVars;
     public final Id name;
-    public final java.util.List<TyCon> tyCons;
+    public final List<TyCon> tyCons;
 
     DatatypeBind(Pos pos, ImmutableList<TyVar> tyVars, Id name,
         ImmutableList<TyCon> tyCons) {
       super(pos, Op.DATATYPE_DECL);
-      this.tyVars = Objects.requireNonNull(tyVars);
-      this.name = Objects.requireNonNull(name);
-      this.tyCons = Objects.requireNonNull(tyCons);
+      this.tyVars = requireNonNull(tyVars);
+      this.name = requireNonNull(name);
+      this.tyCons = requireNonNull(tyCons);
       Preconditions.checkArgument(!this.tyCons.isEmpty());
     }
 
@@ -906,7 +893,7 @@ public class Ast {
       default:
         w.appendAll(tyVars, "(", ", ", ") ");
       }
-      return w.append(name.name)
+      return w.id(name.name)
           .appendAll(tyCons, " = ", " | ", "");
     }
   }
@@ -923,7 +910,7 @@ public class Ast {
 
     TyCon(Pos pos, Id id, Type type) {
       super(pos, Op.TY_CON);
-      this.id = Objects.requireNonNull(id);
+      this.id = requireNonNull(id);
       this.type = type; // optional
     }
 
@@ -948,11 +935,11 @@ public class Ast {
 
   /** Parse tree node of a value declaration. */
   public static class ValDecl extends Decl {
-    public final java.util.List<ValBind> valBinds;
+    public final List<ValBind> valBinds;
 
-    ValDecl(Pos pos, ImmutableList<ValBind> valBinds) {
+    protected ValDecl(Pos pos, ImmutableList<ValBind> valBinds) {
       super(pos, Op.VAL_DECL);
-      this.valBinds = Objects.requireNonNull(valBinds);
+      this.valBinds = requireNonNull(valBinds);
       Preconditions.checkArgument(!valBinds.isEmpty());
     }
 
@@ -995,11 +982,11 @@ public class Ast {
 
   /** Parse tree node of a function declaration. */
   public static class FunDecl extends Decl {
-    public final java.util.List<FunBind> funBinds;
+    public final List<FunBind> funBinds;
 
     FunDecl(Pos pos, ImmutableList<FunBind> funBinds) {
       super(pos, Op.FUN_DECL);
-      this.funBinds = Objects.requireNonNull(funBinds);
+      this.funBinds = requireNonNull(funBinds);
       Preconditions.checkArgument(!funBinds.isEmpty());
       // TODO: check that functions have the same name
     }
@@ -1030,7 +1017,7 @@ public class Ast {
   /** One of the branches (separated by 'and') in a 'fun' function
    * declaration. */
   public static class FunBind extends AstNode {
-    public final java.util.List<FunMatch> matchList;
+    public final List<FunMatch> matchList;
     public final String name;
 
     FunBind(Pos pos, ImmutableList<FunMatch> matchList) {
@@ -1058,7 +1045,7 @@ public class Ast {
   /** One of the branches (separated by '|') in a 'fun' function declaration. */
   public static class FunMatch extends AstNode {
     public final String name;
-    public final java.util.List<Pat> patList;
+    public final List<Pat> patList;
     public final Exp e;
 
     FunMatch(Pos pos, String name, ImmutableList<Pat> patList, Exp e) {
@@ -1077,7 +1064,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(name);
+      w.id(name);
       for (Pat pat : patList) {
         w.append(" ").append(pat, Op.APPLY.left, Op.APPLY.right);
       }
@@ -1087,7 +1074,7 @@ public class Ast {
 
   /** Tuple. */
   public static class Tuple extends Exp {
-    public final java.util.List<Exp> args;
+    public final List<Exp> args;
 
     Tuple(Pos pos, Iterable<? extends Exp> args) {
       super(pos, Op.TUPLE);
@@ -1112,16 +1099,16 @@ public class Ast {
       return w.append(")");
     }
 
-    public Tuple copy(java.util.List<Exp> args) {
+    public Tuple copy(List<Exp> args) {
       return this.args.equals(args) ? this : new Tuple(pos, args);
     }
   }
 
-  /** List. */
-  public static class List extends Exp {
-    public final java.util.List<Exp> args;
+  /** List expression. */
+  public static class ListExp extends Exp {
+    public final List<Exp> args;
 
-    List(Pos pos, Iterable<? extends Exp> args) {
+    ListExp(Pos pos, Iterable<? extends Exp> args) {
       super(pos, Op.LIST);
       this.args = ImmutableList.copyOf(args);
     }
@@ -1130,7 +1117,7 @@ public class Ast {
       Ord.forEach(args, action);
     }
 
-    public List accept(Shuttle shuttle) {
+    public ListExp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -1143,6 +1130,11 @@ public class Ast {
       forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
       return w.append("]");
     }
+
+    public ListExp copy(List<Exp> args) {
+      return args.equals(this.args) ? this
+          : ast.list(pos, args);
+    }
   }
 
   /** Record. */
@@ -1151,7 +1143,7 @@ public class Ast {
 
     Record(Pos pos, ImmutableSortedMap<String, Exp> args) {
       super(pos, Op.RECORD);
-      this.args = Objects.requireNonNull(args);
+      this.args = requireNonNull(args);
       Preconditions.checkArgument(args.comparator() == ORDERING);
     }
 
@@ -1174,8 +1166,8 @@ public class Ast {
       return w.append("}");
     }
 
-    public Record copy(Map<String, Ast.Exp> map) {
-      return ast.record(pos, map);
+    public Record copy(Map<String, Ast.Exp> args) {
+      return args.equals(this.args) ? this : ast.record(pos, args);
     }
   }
 
@@ -1186,8 +1178,8 @@ public class Ast {
 
     InfixCall(Pos pos, Op op, Exp a0, Exp a1) {
       super(pos, op);
-      this.a0 = Objects.requireNonNull(a0);
-      this.a1 = Objects.requireNonNull(a1);
+      this.a0 = requireNonNull(a0);
+      this.a1 = requireNonNull(a1);
     }
 
     @Override public void forEachArg(ObjIntConsumer<Exp> action) {
@@ -1217,13 +1209,13 @@ public class Ast {
     }
   }
 
-  /** Call to an prefix operator. */
+  /** Call to a prefix operator. */
   public static class PrefixCall extends Exp {
     public final Exp a;
 
     PrefixCall(Pos pos, Op op, Exp a) {
       super(pos, op);
-      this.a = Objects.requireNonNull(a);
+      this.a = requireNonNull(a);
     }
 
     @Override public void forEachArg(ObjIntConsumer<Exp> action) {
@@ -1251,9 +1243,9 @@ public class Ast {
 
     public If(Pos pos, Exp condition, Exp ifTrue, Exp ifFalse) {
       super(pos, Op.IF);
-      this.condition = Objects.requireNonNull(condition);
-      this.ifTrue = Objects.requireNonNull(ifTrue);
-      this.ifFalse = Objects.requireNonNull(ifFalse);
+      this.condition = requireNonNull(condition);
+      this.ifTrue = requireNonNull(ifTrue);
+      this.ifFalse = requireNonNull(ifFalse);
     }
 
     public Exp accept(Shuttle shuttle) {
@@ -1282,14 +1274,14 @@ public class Ast {
   }
 
   /** "Let" expression. */
-  public static class LetExp extends Exp {
-    public final java.util.List<Decl> decls;
+  public static class Let extends Exp {
+    public final List<Decl> decls;
     public final Exp e;
 
-    LetExp(Pos pos, ImmutableList<Decl> decls, Exp e) {
+    Let(Pos pos, ImmutableList<Decl> decls, Exp e) {
       super(pos, Op.LET);
-      this.decls = Objects.requireNonNull(decls);
-      this.e = Objects.requireNonNull(e);
+      this.decls = requireNonNull(decls);
+      this.e = requireNonNull(e);
     }
 
     public Exp accept(Shuttle shuttle) {
@@ -1307,7 +1299,7 @@ public class Ast {
 
     /** Creates a copy of this {@code LetExp} with given contents,
      * or {@code this} if the contents are the same. */
-    public LetExp copy(Iterable<Decl> decls, Exp e) {
+    public Let copy(Iterable<Decl> decls, Exp e) {
       return Iterables.elementsEqual(this.decls, decls)
           && Objects.equals(this.e, e)
           ? this
@@ -1389,11 +1381,11 @@ public class Ast {
 
   /** Lambda expression. */
   public static class Fn extends Exp {
-    public final java.util.List<Match> matchList;
+    public final List<Match> matchList;
 
     Fn(Pos pos, ImmutableList<Match> matchList) {
       super(pos, Op.FN);
-      this.matchList = Objects.requireNonNull(matchList);
+      this.matchList = requireNonNull(matchList);
       Preconditions.checkArgument(!matchList.isEmpty());
     }
 
@@ -1411,7 +1403,7 @@ public class Ast {
 
     /** Creates a copy of this {@code Fn} with given contents,
      * or this if the contents are the same. */
-    public Fn copy(java.util.List<Match> matchList) {
+    public Fn copy(List<Match> matchList) {
       return this.matchList.equals(matchList)
           ? this
           : ast.fn(pos, matchList);
@@ -1421,7 +1413,7 @@ public class Ast {
   /** Case expression. */
   public static class Case extends Exp {
     public final Exp e;
-    public final java.util.List<Match> matchList;
+    public final List<Match> matchList;
 
     Case(Pos pos, Exp e, ImmutableList<Match> matchList) {
       super(pos, Op.CASE);
@@ -1442,7 +1434,7 @@ public class Ast {
           .appendAll(matchList, left, Op.BAR, right);
     }
 
-    public Case copy(Exp e, java.util.List<Match> matchList) {
+    public Case copy(Exp e, List<Match> matchList) {
       return this.e.equals(e)
           && this.matchList.equals(matchList)
           ? this
@@ -1460,10 +1452,24 @@ public class Ast {
     public final Exp yieldExpOrDefault;
 
     From(Pos pos, ImmutableMap<Pat, Exp> sources, ImmutableList<FromStep> steps,
-        Exp yieldExp) {
+        @Nullable Exp yieldExp, Exp yieldExpOrDefault) {
       super(pos, Op.FROM);
-      this.sources = Objects.requireNonNull(sources);
-      this.steps = Objects.requireNonNull(steps);
+      this.sources = requireNonNull(sources);
+      this.steps = requireNonNull(steps);
+      this.yieldExp = yieldExp;
+      this.yieldExpOrDefault = requireNonNull(yieldExpOrDefault);
+      Preconditions.checkArgument(yieldExp == null
+          || yieldExp == yieldExpOrDefault);
+    }
+
+    From(Pos pos, ImmutableMap<Pat, Exp> sources, ImmutableList<FromStep> steps,
+        @Nullable Exp yieldExp) {
+      this(pos, sources, steps, yieldExp,
+          defaultYieldExp(pos, sources, steps, yieldExp));
+    }
+
+    private static Exp defaultYieldExp(Pos pos, ImmutableMap<Pat, Exp> sources,
+        ImmutableList<FromStep> steps, @Nullable Exp yieldExp) {
       final Set<Id> firstFields = new HashSet<>();
       sources.keySet().forEach(pat ->
           pat.visit(p -> {
@@ -1488,17 +1494,15 @@ public class Ast {
           fields = nextFields;
         }
       }
-      this.yieldExp = yieldExp;
       if (yieldExp != null) {
-        this.yieldExpOrDefault = this.yieldExp;
+        return yieldExp;
       } else if (fields.size() == 1) {
-        this.yieldExpOrDefault = Iterables.getOnlyElement(fields);
+        return Iterables.getOnlyElement(fields);
       } else {
-        this.yieldExpOrDefault =
-            ast.record(pos, fields.stream()
-                .collect(Collectors.toMap(id -> id.name, id -> id)));
+        final SortedMap<String, Exp> map = new TreeMap<>(ORDERING);
+        fields.forEach(field -> map.put(field.name, field));
+        return ast.record(pos, map);
       }
-      Objects.requireNonNull(this.yieldExpOrDefault);
     }
 
     public Exp accept(Shuttle shuttle) {
@@ -1530,13 +1534,14 @@ public class Ast {
 
     /** Creates a copy of this {@code From} with given contents,
      * or {@code this} if the contents are the same. */
-    public From copy(Map<Ast.Pat, Ast.Exp> sources,
-        java.util.List<FromStep> steps, Ast.Exp yieldExp) {
+    public From copy(Map<Pat, Exp> sources,
+        List<FromStep> steps, Exp yieldExp, Exp yieldExpOrDefault) {
       return this.sources.equals(sources)
           && this.steps.equals(steps)
           && Objects.equals(this.yieldExp, yieldExp)
+          && Objects.equals(this.yieldExpOrDefault, yieldExpOrDefault)
           ? this
-          : ast.from(pos, sources, steps, yieldExp);
+          : ast.from(pos, sources, steps, yieldExp, yieldExpOrDefault);
     }
   }
 
@@ -1545,17 +1550,6 @@ public class Ast {
   public abstract static class FromStep extends AstNode {
     FromStep(Pos pos, Op op) {
       super(pos, op);
-    }
-
-    /** Returns the names of the fields produced by this step, given the names
-     * of the fields that are input to this step.
-     *
-     * <p>By default, a step outputs the same fields as it inputs.
-     */
-    public void deriveOutBindings(Iterable<Binding> inBindings,
-        BiFunction<String, AstNode, Binding> binder,
-        Consumer<Binding> outBindings) {
-      inBindings.forEach(outBindings);
     }
   }
 
@@ -1591,7 +1585,7 @@ public class Ast {
 
     Order(Pos pos, ImmutableList<OrderItem> orderItems) {
       super(pos, Op.ORDER);
-      this.orderItems = Objects.requireNonNull(orderItems);
+      this.orderItems = requireNonNull(orderItems);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -1606,7 +1600,7 @@ public class Ast {
       visitor.visit(this);
     }
 
-    public Order copy(java.util.List<OrderItem> orderItems) {
+    public Order copy(List<OrderItem> orderItems) {
       return this.orderItems.equals(orderItems)
           ? this
           : new Order(pos, ImmutableList.copyOf(orderItems));
@@ -1620,8 +1614,8 @@ public class Ast {
 
     OrderItem(Pos pos, Exp exp, Direction direction) {
       super(pos, Op.ORDER_ITEM);
-      this.exp = Objects.requireNonNull(exp);
-      this.direction = Objects.requireNonNull(direction);
+      this.exp = requireNonNull(exp);
+      this.direction = requireNonNull(direction);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
@@ -1683,17 +1677,8 @@ public class Ast {
       visitor.visit(this);
     }
 
-    @Override public void deriveOutBindings(Iterable<Binding> inBindings,
-        BiFunction<String, AstNode, Binding> binder,
-        Consumer<Binding> outBindings) {
-      groupExps.forEach(idExp ->
-          outBindings.accept(binder.apply(idExp.left.name, idExp.left)));
-      aggregates.forEach(aggregate ->
-          outBindings.accept(binder.apply(aggregate.id.name, aggregate)));
-    }
-
-    public Group copy(java.util.List<Pair<Id, Exp>> groupExps,
-        java.util.List<Aggregate> aggregates) {
+    public Group copy(List<Pair<Id, Exp>> groupExps,
+        List<Aggregate> aggregates) {
       return this.groupExps.equals(groupExps)
           && this.aggregates.equals(aggregates)
           ? this
@@ -1732,7 +1717,7 @@ public class Ast {
 
   /** Call to an aggregate function in a {@code compute} clause.
    *
-   * <p>For example, in {@code sum of #id e as sumId},
+   * <p>For example, in {@code compute sumId = sum of #id e},
    * {@code aggregate} is "sum", {@code argument} is "#id e",
    * and {@code id} is "sumId". */
   public static class Aggregate extends AstNode {
@@ -1742,13 +1727,13 @@ public class Ast {
 
     Aggregate(Pos pos, Exp aggregate, @Nullable Exp argument, Id id) {
       super(pos, Op.AGGREGATE);
-      this.aggregate = Objects.requireNonNull(aggregate);
+      this.aggregate = requireNonNull(aggregate);
       this.argument = argument;
-      this.id = Objects.requireNonNull(id);
+      this.id = requireNonNull(id);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(id.name)
+      w.id(id.name)
           .append(" = ")
           .append(aggregate, 0, 0);
       if (argument != null) {
@@ -1772,31 +1757,6 @@ public class Ast {
           && this.id.equals(id)
           ? this
           : ast.aggregate(pos, aggregate, argument, id);
-    }
-  }
-
-  /** Expression that is a wrapped {@link Applicable}.
-   *
-   * <p>Does not occur in the output of the parser, only as an intermediate
-   * value during compilation. */
-  public static class ApplicableExp extends Ast.Exp {
-    public final Applicable applicable;
-
-    ApplicableExp(Applicable applicable) {
-      super(Pos.ZERO, Op.WRAPPED_APPLICABLE);
-      this.applicable = Objects.requireNonNull(applicable);
-    }
-
-    public Ast.Exp accept(Shuttle shuttle) {
-      return this;
-    }
-
-    @Override public void accept(Visitor visitor) {
-      // no-op
-    }
-
-    AstWriter unparse(AstWriter w, int left, int right) {
-      return w;
     }
   }
 }

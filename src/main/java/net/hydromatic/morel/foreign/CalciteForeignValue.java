@@ -24,7 +24,6 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Schemas;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.tools.RelBuilder;
-import org.apache.calcite.util.ImmutableNullableList;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
@@ -100,7 +99,7 @@ public class CalciteForeignValue implements ForeignValue {
           .collect(Collectors.toList());
       b.project(exprList, ImmutableList.of(), true);
       final RelNode rel = b.build();
-      final Converter converter = Converters.ofRow(rel.getRowType());
+      final Converter<Object[]> converter = Converters.ofRow(rel.getRowType());
       fieldValues.add(new RelList(rel, calcite.dataContext, converter));
     });
     return fieldValues.build();
@@ -109,25 +108,6 @@ public class CalciteForeignValue implements ForeignValue {
   /** Returns a copy of a list with one element appended. */
   private static <E> List<E> plus(List<E> list, E e) {
     return ImmutableList.<E>builder().addAll(list).add(e).build();
-  }
-
-  /** Converter that creates a record. Uses one sub-Converter per output
-   * field. */
-  static class RecordConverter implements Converter {
-    final Object[] tempValues;
-    final Converter[] converters;
-
-    RecordConverter(List<Converter> converterList) {
-      tempValues = new Object[converterList.size()];
-      converters = converterList.toArray(new Converter[0]);
-    }
-
-    @Override public List<Object> apply(Object[] a) {
-      for (int i = 0; i < tempValues.length; i++) {
-        tempValues[i] = converters[i].apply(a);
-      }
-      return ImmutableNullableList.copyOf(tempValues);
-    }
   }
 
 }

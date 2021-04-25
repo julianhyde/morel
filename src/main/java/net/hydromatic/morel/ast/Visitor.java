@@ -44,7 +44,7 @@ public class Visitor {
     anIf.ifFalse.accept(this);
   }
 
-  protected void visit(Ast.LetExp e) {
+  protected void visit(Ast.Let e) {
     e.decls.forEach(this::accept);
     e.e.accept(this);
   }
@@ -113,7 +113,7 @@ public class Visitor {
     tuple.args.forEach(this::accept);
   }
 
-  protected void visit(Ast.List list) {
+  protected void visit(Ast.ListExp list) {
     list.args.forEach(this::accept);
   }
 
@@ -241,6 +241,89 @@ public class Visitor {
 
   protected void visit(Ast.CompositeType compositeType) {
     compositeType.types.forEach(this::accept);
+  }
+
+  // core expressions
+
+  protected void visit(Core.Literal literal) {
+  }
+
+  protected void visit(Core.Id id) {
+  }
+
+  protected void visit(Core.Let e) {
+    e.decl.accept(this);
+    e.e.accept(this);
+  }
+
+  protected void visit(Core.Case kase) {
+    kase.e.accept(this);
+    kase.matchList.forEach(this::accept);
+  }
+
+  protected void visit(Core.Apply apply) {
+    apply.fn.accept(this);
+    apply.arg.accept(this);
+  }
+
+  protected void visit(Core.RecordSelector recordSelector) {
+  }
+
+  protected void visit(Core.Tuple tuple) {
+    tuple.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.DatatypeDecl datatypeDecl) {
+  }
+
+  protected void visit(Core.Where where) {
+    where.exp.accept(this);
+  }
+
+  protected void visit(Core.ValDecl valDecl) {
+    valDecl.pat.accept(this);
+    valDecl.e.accept(this);
+  }
+
+  protected void visit(Core.Group group) {
+    group.groupExps.values().forEach(this::accept);
+    group.aggregates.values().forEach(this::accept);
+  }
+
+  protected void visit(Core.Order order) {
+    order.orderItems.forEach(this::accept);
+  }
+
+  protected void visit(Core.OrderItem orderItem) {
+    orderItem.exp.accept(this);
+  }
+
+  protected void visit(Core.TuplePat tuplePat) {
+    tuplePat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.RecordPat recordPat) {
+    recordPat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.ListPat listPat) {
+    listPat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.ConPat conPat) {
+    conPat.pat.accept(this);
+  }
+
+  protected void visit(Core.Con0Pat con0Pat) {
+  }
+
+  protected void visit(Core.IdPat idPat) {
+  }
+
+  protected void visit(Core.LiteralPat idPat) {
+  }
+
+  protected void visit(Core.WildcardPat wildcardPat) {
   }
 }
 

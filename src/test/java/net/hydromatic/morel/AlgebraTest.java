@@ -187,6 +187,11 @@ public class AlgebraTest {
             + "  andalso e.sal < g.hisal\n"
             + "  andalso d.deptno = e.deptno\n"
             + "group g.grade compute c = count",
+        "from x in (from e in scott.emp yield {e.deptno, z = 1})\n"
+            + "  union (from d in scott.dept yield {d.deptno, z = 2})",
+        "#from x in (from e in scott.emp yield e.deptno)\n"
+            + "  union (from d in scott.dept yield d.deptno)\n"
+            + "group x compute c = count",
         "[1, 2, 3] union [2, 3, 4]",
         "[10, 15, 20] union (from d in scott.dept yield d.deptno)",
         "[10, 15, 20] except (from d in scott.dept yield d.deptno)",
@@ -194,14 +199,14 @@ public class AlgebraTest {
 
         // the following 4 are equivalent
         "from e in scott.emp where e.deptno = 30 yield e.empno",
-        "#let\n"
+        "let\n"
             + "  val emps = #emp scott\n"
             + "in\n"
             + "  from e in emps\n"
             + "  where e.deptno = 30\n"
             + "  yield e.empno\n"
             + "end",
-        "#let\n"
+        "let\n"
             + "  val emps = #emp scott\n"
             + "  val thirty = 30\n"
             + "in\n"
@@ -210,7 +215,7 @@ public class AlgebraTest {
             + "  yield e.empno\n"
             + "end",
         "#map (fn e => (#empno e))\n"
-            + "  (filter (fn e => (#deptno e) = 30) (#emp scott))",
+            + "  (List.filter (fn e => (#deptno e) = 30) (#emp scott))",
     };
     Stream.of(queries).filter(q -> !q.startsWith("#")).forEach(query -> {
       try {
@@ -238,15 +243,15 @@ public class AlgebraTest {
    * executed. */
   @Test public void testHybridCalciteToMorel() {
     final String ml = "List.filter\n"
-        + "  (fn e => e.empno < 7500)\n"
+        + "  (fn x => x.empno < 7500)\n"
         + "  (from e in scott.emp\n"
         + "  where e.job = \"CLERK\"\n"
         + "  yield {e.empno, e.deptno, d5 = e.deptno + 5})";
     String plan = ""
         + "apply("
         + "fnCode apply(fnValue List.filter, "
-        + "argCode match(e, apply(fnValue <, "
-        + "argCode tuple(apply(fnValue nth, argCode get(name e)),"
+        + "argCode match(x, apply(fnValue <, "
+        + "argCode tuple(apply(fnValue nth:2, argCode get(name x)),"
         + " constant(7500))))), "
         + "argCode calcite("
         + "plan LogicalProject(d5=[+($1, 5)], deptno=[$1], empno=[$2])\n"
@@ -281,6 +286,18 @@ public class AlgebraTest {
         .assertType("{d5:int, deptno:int, empno:int} list")
         .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)))
         .assertPlan(is(plan));
+  }
+
+  /** Tests a query that is "from" over no variables. The result has one row
+   * and zero columns. */
+  @Test public void testCalciteFrom() {
+    final String ml = "from";
+    String plan = "calcite(plan LogicalValues(tuples=[[{  }]])\n)";
+    ml(ml)
+        .with(Prop.HYBRID, true)
+        .assertType("unit list")
+        .assertPlan(is(plan))
+        .assertEvalIter(equalsOrdered(list()));
   }
 
   /** Tests a query that is executed in Calcite except for a variable, 'five',

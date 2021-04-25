@@ -40,6 +40,7 @@ import com.google.common.collect.Ordering;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
@@ -55,13 +56,13 @@ import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
-import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.ThreadLocals;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -77,47 +78,54 @@ import java.util.function.Function;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Compiles an expression to code that can be evaluated. */
 public class CalciteCompiler extends Compiler {
   /** Morel operators and their exact equivalents in Calcite. */
-  static final Map<String, SqlOperator> DIRECT_OPS =
-      ImmutableMap.<String, SqlOperator>builder()
-          .put("op =", SqlStdOperatorTable.EQUALS)
-          .put("op <>", SqlStdOperatorTable.NOT_EQUALS)
-          .put("op <", SqlStdOperatorTable.LESS_THAN)
-          .put("op <=", SqlStdOperatorTable.LESS_THAN_OR_EQUAL)
-          .put("op >", SqlStdOperatorTable.GREATER_THAN)
-          .put("op >=", SqlStdOperatorTable.GREATER_THAN_OR_EQUAL)
-          .put("op +", SqlStdOperatorTable.PLUS)
-          .put("op -", SqlStdOperatorTable.MINUS)
-          .put("op ~", SqlStdOperatorTable.UNARY_MINUS)
-          .put("op *", SqlStdOperatorTable.MULTIPLY)
-          .put("op /", SqlStdOperatorTable.DIVIDE)
-          .put("op mod", SqlStdOperatorTable.MOD)
-          .build();
-
-  static final Map<Op, SqlOperator> INFIX_OPERATORS =
-      ImmutableMap.<Op, SqlOperator>builder()
-          .put(Op.ANDALSO, SqlStdOperatorTable.AND)
-          .put(Op.ORELSE, SqlStdOperatorTable.OR)
+  static final Map<BuiltIn, SqlOperator> INFIX_OPERATORS =
+      ImmutableMap.<BuiltIn, SqlOperator>builder()
+          .put(BuiltIn.OP_EQ, SqlStdOperatorTable.EQUALS)
+          .put(BuiltIn.OP_NE, SqlStdOperatorTable.NOT_EQUALS)
+          .put(BuiltIn.OP_LT, SqlStdOperatorTable.LESS_THAN)
+          .put(BuiltIn.OP_LE, SqlStdOperatorTable.LESS_THAN_OR_EQUAL)
+          .put(BuiltIn.OP_GT, SqlStdOperatorTable.GREATER_THAN)
+          .put(BuiltIn.OP_GE, SqlStdOperatorTable.GREATER_THAN_OR_EQUAL)
+          .put(BuiltIn.OP_NEGATE, SqlStdOperatorTable.UNARY_MINUS)
+          .put(BuiltIn.Z_NEGATE_INT, SqlStdOperatorTable.UNARY_MINUS)
+          .put(BuiltIn.Z_NEGATE_REAL, SqlStdOperatorTable.UNARY_MINUS)
+          .put(BuiltIn.OP_PLUS, SqlStdOperatorTable.PLUS)
+          .put(BuiltIn.Z_PLUS_INT, SqlStdOperatorTable.PLUS)
+          .put(BuiltIn.Z_PLUS_REAL, SqlStdOperatorTable.PLUS)
+          .put(BuiltIn.OP_MINUS, SqlStdOperatorTable.MINUS)
+          .put(BuiltIn.Z_MINUS_INT, SqlStdOperatorTable.MINUS)
+          .put(BuiltIn.Z_MINUS_REAL, SqlStdOperatorTable.MINUS)
+          .put(BuiltIn.OP_TIMES, SqlStdOperatorTable.MULTIPLY)
+          .put(BuiltIn.Z_TIMES_INT, SqlStdOperatorTable.MULTIPLY)
+          .put(BuiltIn.Z_TIMES_REAL, SqlStdOperatorTable.MULTIPLY)
+          .put(BuiltIn.OP_DIVIDE, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.Z_DIVIDE_INT, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.Z_DIVIDE_REAL, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.OP_DIV, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.OP_MOD, SqlStdOperatorTable.MOD)
+          .put(BuiltIn.Z_ANDALSO, SqlStdOperatorTable.AND)
+          .put(BuiltIn.Z_ORELSE, SqlStdOperatorTable.OR)
           .build();
 
   final Calcite calcite;
 
-  public CalciteCompiler(TypeMap typeMap, Calcite calcite) {
-    super(typeMap);
+  public CalciteCompiler(TypeSystem typeSystem, Calcite calcite) {
+    super(typeSystem);
     this.calcite = calcite;
   }
 
-  public @Nullable RelNode toRel(Environment env, Ast.Exp expression) {
+  public @Nullable RelNode toRel(Environment env, Core.Exp expression) {
     return toRel2(
         new RelContext(env, calcite.relBuilder(), ImmutableMap.of(), 0),
         expression);
   }
 
-  private RelNode toRel2(RelContext cx, Ast.Exp expression) {
+  private RelNode toRel2(RelContext cx, Core.Exp expression) {
     if (toRel3(cx, expression, false)) {
       return cx.relBuilder.build();
     } else {
@@ -125,7 +133,7 @@ public class CalciteCompiler extends Compiler {
     }
   }
 
-  boolean toRel3(RelContext cx, Ast.Exp expression, boolean aggressive) {
+  boolean toRel3(RelContext cx, Core.Exp expression, boolean aggressive) {
     final Code code = compile(cx, expression);
     return code instanceof RelCode
         && ((RelCode) code).toRel(cx, aggressive);
@@ -146,19 +154,18 @@ public class CalciteCompiler extends Compiler {
   @Override protected CalciteFunctions.Context createContext(
       Environment env) {
     final Session dummySession = new Session();
-    return new CalciteFunctions.Context(dummySession, env,
-        typeMap.typeSystem, calcite.dataContext.getTypeFactory());
+    return new CalciteFunctions.Context(dummySession, env, typeSystem,
+        calcite.dataContext.getTypeFactory());
   }
 
-  @Override public Code compileArg(Context cx, Ast.Exp expression) {
+  @Override public Code compileArg(Context cx, Core.Exp expression) {
     Code code = super.compileArg(cx, expression);
     if (code instanceof RelCode && !(cx instanceof RelContext)) {
       final RelBuilder relBuilder = calcite.relBuilder();
       final RelContext rx =
           new RelContext(cx.env, relBuilder, ImmutableMap.of(), 0);
       if (toRel3(rx, expression, false)) {
-        final Type type = typeMap.getType(expression);
-        return calcite.code(rx.env, rx.relBuilder.build(), type);
+        return calcite.code(rx.env, rx.relBuilder.build(), expression.type);
       }
     }
     return code;
@@ -189,7 +196,7 @@ public class CalciteCompiler extends Compiler {
     };
   }
 
-  @Override protected RelCode compileApply(Context cx, Ast.Apply apply) {
+  @Override protected RelCode compileApply(Context cx, Core.Apply apply) {
     final Code code = super.compileApply(cx, apply);
     return new RelCode() {
       @Override public Describer describe(Describer describer) {
@@ -201,50 +208,63 @@ public class CalciteCompiler extends Compiler {
       }
 
       @Override public boolean toRel(RelContext cx, boolean aggressive) {
-        final Type type = typeMap.getType(apply);
-        if (!(type instanceof ListType)) {
+        if (!(apply.type instanceof ListType)) {
           return false;
         }
-        if (apply.fn instanceof Ast.RecordSelector
-            && apply.arg instanceof Ast.Id) {
-          // Something like '#emp scott', 'scott' is a foreign value
-          final Object o = code.eval(evalEnvOf(cx.env));
-          if (o instanceof RelList) {
-            cx.relBuilder.push(((RelList) o).rel);
-            return true;
+        switch (apply.fn.op) {
+        case RECORD_SELECTOR:
+          if (apply.arg instanceof Core.Id) {
+            // Something like '#emp scott', 'scott' is a foreign value
+            final Object o = code.eval(evalEnvOf(cx.env));
+            if (o instanceof RelList) {
+              cx.relBuilder.push(((RelList) o).rel);
+              return true;
+            }
           }
-        }
-        if (apply.fn instanceof Ast.Id) {
-          switch (((Ast.Id) apply.fn).name) {
-          case "op union":
-          case "op except":
-          case "op intersect":
+          break;
+
+        case FN_LITERAL:
+          final Core.Literal literal = (Core.Literal) apply.fn;
+          final BuiltIn builtIn = (BuiltIn) literal.value;
+          switch (builtIn) {
+          case Z_LIST:
+            final List<Core.Exp> args = ((Core.Tuple) apply.arg).args;
+            for (Core.Exp arg : args) {
+              cx.relBuilder.values(new String[] {"T"}, true);
+              yield_(cx, arg);
+            }
+            cx.relBuilder.union(true, args.size());
+            return true;
+
+          case OP_UNION:
+          case OP_EXCEPT:
+          case OP_INTERSECT:
             // For example, '[1, 2, 3] union (from scott.dept yield deptno)'
-            final Ast.Tuple tuple = (Ast.Tuple) apply.arg;
-            for (Ast.Exp arg : tuple.args) {
+            final Core.Tuple tuple = (Core.Tuple) apply.arg;
+            for (Core.Exp arg : tuple.args) {
               if (!CalciteCompiler.this.toRel3(cx, arg, false)) {
                 return false;
               }
             }
             harmonizeRowTypes(cx.relBuilder, tuple.args.size());
-            switch (((Ast.Id) apply.fn).name) {
-            case "op union":
+            switch (builtIn) {
+            case OP_UNION:
               cx.relBuilder.union(true, tuple.args.size());
               return true;
-            case "op except":
+            case OP_EXCEPT:
               cx.relBuilder.minus(false, tuple.args.size());
               return true;
-            case "op intersect":
+            case OP_INTERSECT:
               cx.relBuilder.intersect(false, tuple.args.size());
               return true;
             default:
-              throw new AssertionError(apply.fn);
+              throw new AssertionError(builtIn);
             }
           }
         }
         final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
         final RelDataType calciteType =
-            Converters.toCalciteType(type, typeFactory);
+            Converters.toCalciteType(apply.type, typeFactory);
         final RelDataType rowType = calciteType.getComponentType();
         if (rowType == null) {
           return false;
@@ -259,7 +279,7 @@ public class CalciteCompiler extends Compiler {
         final String morelCode = apply.toString();
         ThreadLocals.let(CalciteFunctions.THREAD_ENV,
             new CalciteFunctions.Context(new Session(), cx.env,
-                typeMap.typeSystem, cx.relBuilder.getTypeFactory()), () ->
+                typeSystem, cx.relBuilder.getTypeFactory()), () ->
             cx.relBuilder.functionScan(CalciteFunctions.TABLE_OPERATOR, 0,
                 cx.relBuilder.literal(morelCode),
                 cx.relBuilder.literal(jsonRowType)));
@@ -294,28 +314,6 @@ public class CalciteCompiler extends Compiler {
     return super.finishCompileApply(cx, fnValue, argCode, argType);
   }
 
-  @Override protected Code compileList(Context cx, Ast.List list) {
-    final Code code = super.compileList(cx, list);
-    return new RelCode() {
-      @Override public Describer describe(Describer describer) {
-        return code.describe(describer);
-      }
-
-      @Override public Object eval(EvalEnv env) {
-        return code.eval(env);
-      }
-
-      @Override public boolean toRel(RelContext cx, boolean aggressive) {
-        for (Ast.Exp arg : list.args) {
-          cx.relBuilder.values(new String[] {"T"}, true);
-          yield_(cx, arg);
-        }
-        cx.relBuilder.union(true, list.args.size());
-        return true;
-      }
-    };
-  }
-
   private static void harmonizeRowTypes(RelBuilder relBuilder, int inputCount) {
     final List<RelNode> inputs = new ArrayList<>();
     for (int i = 0; i < inputCount; i++) {
@@ -329,7 +327,7 @@ public class CalciteCompiler extends Compiler {
     }
   }
 
-  @Override protected RelCode compileFrom(Context cx, Ast.From from) {
+  @Override protected RelCode compileFrom(Context cx, Core.From from) {
     final Code code = super.compileFrom(cx, from);
     return new RelCode() {
       @Override public Describer describe(Describer describer) {
@@ -343,9 +341,9 @@ public class CalciteCompiler extends Compiler {
       @Override public boolean toRel(RelContext cx, boolean aggressive) {
         final Environment env = cx.env;
         final RelBuilder relBuilder = cx.relBuilder;
-        final Map<Ast.Pat, RelNode> sourceCodes = new LinkedHashMap<>();
+        final Map<Core.Pat, RelNode> sourceCodes = new LinkedHashMap<>();
         final List<Binding> bindings = new ArrayList<>();
-        for (Map.Entry<Ast.Pat, Ast.Exp> patExp : from.sources.entrySet()) {
+        for (Map.Entry<Core.Pat, Core.Exp> patExp : from.sources.entrySet()) {
           final RelContext cx2 =
               new RelContext(env.bindAll(bindings), calcite.relBuilder(),
                   cx.map, 0);
@@ -353,36 +351,31 @@ public class CalciteCompiler extends Compiler {
             return false;
           }
           final RelNode expCode = cx2.relBuilder.build();
-          final Ast.Pat pat0 = patExp.getKey();
-          final ListType listType = (ListType) typeMap.getType(patExp.getValue());
-          final Ast.Pat pat = expandRecordPattern(pat0, listType.elementType);
+          final Core.Pat pat = patExp.getKey();
           sourceCodes.put(pat, expCode);
-          pat.visit(p -> {
-            if (p instanceof Ast.IdPat) {
-              final Ast.IdPat idPat = (Ast.IdPat) p;
-              bindings.add(Binding.of(idPat.name, typeMap.getType(p)));
-            }
-          });
+          pat.accept(Compiles.binding(typeSystem, bindings));
         }
         final Map<String, Function<RelBuilder, RexNode>> map = new HashMap<>();
         if (sourceCodes.size() == 0) {
-          relBuilder.values(new String[] {"ZERO"}, 0);
+          // One row, zero columns
+          relBuilder.values(ImmutableList.of(ImmutableList.of()),
+              relBuilder.getTypeFactory().builder().build());
         } else {
           final SortedMap<String, VarData> varOffsets = new TreeMap<>();
           int i = 0;
           int offset = 0;
-          for (Map.Entry<Ast.Pat, RelNode> pair : sourceCodes.entrySet()) {
-            final Ast.Pat pat = pair.getKey();
+          for (Map.Entry<Core.Pat, RelNode> pair : sourceCodes.entrySet()) {
+            final Core.Pat pat = pair.getKey();
             final RelNode r = pair.getValue();
             relBuilder.push(r);
-            if (pat instanceof Ast.IdPat) {
-              relBuilder.as(((Ast.IdPat) pat).name);
+            if (pat instanceof Core.IdPat) {
+              relBuilder.as(((Core.IdPat) pat).name);
               final int finalOffset = offset;
-              map.put(((Ast.IdPat) pat).name, b ->
+              map.put(((Core.IdPat) pat).name, b ->
                   b.getRexBuilder().makeRangeReference(r.getRowType(),
                       finalOffset, false));
-              varOffsets.put(((Ast.IdPat) pat).name,
-                  new VarData(typeMap.getType(pat), offset, r.getRowType()));
+              varOffsets.put(((Core.IdPat) pat).name,
+                  new VarData(pat.type, offset, r.getRowType()));
             }
             offset += r.getRowType().getFieldCount();
             if (++i == 2) {
@@ -413,16 +406,16 @@ public class CalciteCompiler extends Compiler {
           relBuilder.project(relBuilder.fields(list(biMap)));
         }
         cx = new RelContext(env.bindAll(bindings), relBuilder, map, 1);
-        for (Ast.FromStep fromStep : from.steps) {
+        for (Core.FromStep fromStep : from.steps) {
           switch (fromStep.op) {
           case WHERE:
-            cx = where(cx, (Ast.Where) fromStep);
+            cx = where(cx, (Core.Where) fromStep);
             break;
           case ORDER:
-            cx = order(cx, (Ast.Order) fromStep);
+            cx = order(cx, (Core.Order) fromStep);
             break;
           case GROUP:
-            cx = group(cx, (Ast.Group) fromStep);
+            cx = group(cx, (Core.Group) fromStep);
             break;
           default:
             throw new AssertionError(fromStep);
@@ -445,35 +438,29 @@ public class CalciteCompiler extends Compiler {
     return ImmutableList.copyOf(list);
   }
 
-  private RelBuilder yield_(RelContext cx, Ast.Exp exp) {
-    final Ast.Record record;
+  private RelBuilder yield_(RelContext cx, Core.Exp exp) {
+    final Core.Tuple record;
     switch (exp.op) {
     case ID:
-      final Ast.Id id = (Ast.Id) exp;
+      final Core.Id id = (Core.Id) exp;
       record = toRecord(cx, id);
       if (record != null) {
         return yield_(cx, record);
       }
       break;
 
-    case RECORD:
-      record = (Ast.Record) exp;
-      return cx.relBuilder.project(
-          Util.transform(record.args.values(), e -> translate(cx, e)),
-          record.args.keySet());
-
     case TUPLE:
-      final Ast.Tuple tuple = (Ast.Tuple) exp;
+      final Core.Tuple tuple = (Core.Tuple) exp;
       return cx.relBuilder.project(
           Util.transform(tuple.args, e -> translate(cx, e)),
-          Util.transformIndexed(tuple.args, (e, i) -> Integer.toString(i)));
+          ImmutableList.copyOf(tuple.type().argNameTypes().keySet()));
     }
     RexNode rex = translate(cx, exp);
     return cx.relBuilder.project(rex);
   }
 
-  private RexNode translate(RelContext cx, Ast.Exp exp) {
-    final Ast.Record record;
+  private RexNode translate(RelContext cx, Core.Exp exp) {
+    final Core.Tuple record;
     final RelDataTypeFactory.Builder builder;
     final List<RexNode> operands;
     switch (exp.op) {
@@ -483,7 +470,7 @@ public class CalciteCompiler extends Compiler {
     case REAL_LITERAL:
     case STRING_LITERAL:
     case UNIT_LITERAL:
-      final Ast.Literal literal = (Ast.Literal) exp;
+      final Core.Literal literal = (Core.Literal) exp;
       switch (exp.op) {
       case CHAR_LITERAL:
         // convert from Character to singleton String
@@ -497,29 +484,12 @@ public class CalciteCompiler extends Compiler {
     case ID:
       // In 'from e in emps yield e', 'e' expands to a record,
       // '{e.deptno, e.ename}'
-      final Ast.Id id = (Ast.Id) exp;
+      final Core.Id id = (Core.Id) exp;
       final Binding binding = cx.env.getOpt(id.name);
       if (binding != null && binding.value != Unit.INSTANCE) {
-        if (binding.value instanceof Boolean) {
-          final Boolean b = (Boolean) binding.value;
-          return translate(cx, ast.boolLiteral(id.pos, b));
-        }
-        if (binding.value instanceof Character) {
-          final Character c = (Character) binding.value;
-          return translate(cx, ast.charLiteral(id.pos, c));
-        }
-        if (binding.value instanceof Integer) {
-          final BigDecimal bd = BigDecimal.valueOf((Integer) binding.value);
-          return translate(cx, ast.intLiteral(id.pos, bd));
-        }
-        if (binding.value instanceof Float) {
-          final BigDecimal bd = BigDecimal.valueOf((Float) binding.value);
-          return translate(cx, ast.realLiteral(id.pos, bd));
-        }
-        if (binding.value instanceof String) {
-          final String s = (String) binding.value;
-          return translate(cx, ast.stringLiteral(id.pos, s));
-        }
+        final Core.Literal coreLiteral =
+            core.literal((PrimitiveType) binding.type, binding.value);
+        return translate(cx, coreLiteral);
       }
       record = toRecord(cx, id);
       if (record != null) {
@@ -534,21 +504,26 @@ public class CalciteCompiler extends Compiler {
       break;
 
     case APPLY:
-      final Ast.Apply apply = (Ast.Apply) exp;
-      if (apply.fn instanceof Ast.RecordSelector
-          && apply.arg instanceof Ast.Id
-          && cx.map.containsKey(((Ast.Id) apply.arg).name)) {
+      final Core.Apply apply = (Core.Apply) exp;
+      switch (apply.fn.op) {
+      case FN_LITERAL:
+        BuiltIn op = (BuiltIn) ((Core.Literal) apply.fn).value;
+        final SqlOperator operator = INFIX_OPERATORS.get(op);
+        assert apply.arg.op == Op.TUPLE;
+        return cx.relBuilder.call(operator,
+            translateList(cx, ((Core.Tuple) apply.arg).args));
+
+      default:
+        // fall through
+      }
+      if (apply.fn instanceof Core.RecordSelector
+          && apply.arg instanceof Core.Id
+          && cx.map.containsKey(((Core.Id) apply.arg).name)) {
         // Something like '#deptno e',
         final RexNode range =
-            cx.map.get(((Ast.Id) apply.arg).name).apply(cx.relBuilder);
-        return cx.relBuilder.field(range, ((Ast.RecordSelector) apply.fn).name);
-      }
-      if (apply.fn instanceof Ast.Id) {
-        final SqlOperator op = DIRECT_OPS.get(((Ast.Id) apply.fn).name);
-        if (op != null) {
-          final Ast.Tuple tuple = (Ast.Tuple) apply.arg;
-          return cx.relBuilder.call(op, translateList(cx, tuple.args()));
-        }
+            cx.map.get(((Core.Id) apply.arg).name).apply(cx.relBuilder);
+        final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
+        return cx.relBuilder.field(range, selector.fieldName());
       }
       final Set<String> vars = getRelationalVariables(cx.env, cx.map, apply);
       if (vars.isEmpty()) {
@@ -556,35 +531,16 @@ public class CalciteCompiler extends Compiler {
       }
       final RexNode fnRex = translate(cx, apply.fn);
       final RexNode argRex = translate(cx, apply.arg);
-      return morelApply(cx, typeMap.getType(apply), typeMap.getType(apply.arg),
-          fnRex, argRex);
-
-    case ANDALSO:
-    case ORELSE:
-      final Ast.InfixCall infix = (Ast.InfixCall) exp;
-      final SqlOperator op = INFIX_OPERATORS.get(infix.op);
-      return cx.relBuilder.call(op, translateList(cx, infix.args()));
+      return morelApply(cx, apply.type, apply.arg.type, fnRex, argRex);
 
     case TUPLE:
-      final Ast.Tuple tuple = (Ast.Tuple) exp;
+      final Core.Tuple tuple = (Core.Tuple) exp;
       builder = cx.relBuilder.getTypeFactory().builder();
       operands = new ArrayList<>();
       Ord.forEach(tuple.args, (arg, i) -> {
         final RexNode e = translate(cx, arg);
         operands.add(e);
         builder.add(Integer.toString(i), e.getType());
-      });
-      return cx.relBuilder.getRexBuilder().makeCall(builder.build(),
-          SqlStdOperatorTable.ROW, operands);
-
-    case RECORD:
-      record = (Ast.Record) exp;
-      builder = cx.relBuilder.getTypeFactory().builder();
-      operands = new ArrayList<>();
-      record.args.forEach((name, arg) -> {
-        final RexNode e = translate(cx, arg);
-        operands.add(e);
-        builder.add(name, e.getType());
       });
       return cx.relBuilder.getRexBuilder().makeCall(builder.build(),
           SqlStdOperatorTable.ROW, operands);
@@ -599,7 +555,7 @@ public class CalciteCompiler extends Compiler {
       AstNode node) {
     final Set<String> varNames = new LinkedHashSet<>();
     node.accept(new Visitor() {
-      @Override protected void visit(Ast.Id id) {
+      @Override protected void visit(Core.Id id) {
         if (map.containsKey(id.name)) {
           varNames.add(id.name);
         }
@@ -608,11 +564,10 @@ public class CalciteCompiler extends Compiler {
     return varNames;
   }
 
-  private RexNode morelScalar(RelContext cx, Ast.Exp exp) {
-    final Type type = typeMap.getType(exp);
+  private RexNode morelScalar(RelContext cx, Core.Exp exp) {
     final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
     final RelDataType calciteType =
-        Converters.toCalciteType(type, typeFactory);
+        Converters.toCalciteType(exp.type, typeFactory);
     final JsonBuilder jsonBuilder = new JsonBuilder();
     final String jsonType =
         jsonBuilder.toJsonString(
@@ -635,32 +590,35 @@ public class CalciteCompiler extends Compiler {
         Arrays.asList(cx.relBuilder.literal(morelArgType), fn, arg));
   }
 
-  private Ast.Record toRecord(RelContext cx, Ast.Id id) {
+  private Core.Tuple toRecord(RelContext cx, Core.Id id) {
     final Type type = cx.env.get(id.name).type;
     if (type instanceof RecordType) {
-      final SortedMap<String, Ast.Exp> map = new TreeMap<>();
-      ((RecordType) type).argNameTypes.keySet().forEach(field ->
-          map.put(field,
-              ast.apply(ast.recordSelector(id.pos, field), id)));
-      return ast.record(id.pos, map);
+      final RecordType recordType = (RecordType) type;
+      final List<Core.Exp> args = new ArrayList<>();
+      recordType.argNameTypes.forEach((field, fieldType) ->
+          args.add(
+              core.apply(fieldType,
+                  core.recordSelector(typeSystem, recordType, field),
+                  id)));
+      return core.tuple(recordType, args);
     }
     return null;
   }
 
-  private List<RexNode> translateList(RelContext cx, List<Ast.Exp> exps) {
+  private List<RexNode> translateList(RelContext cx, List<Core.Exp> exps) {
     final ImmutableList.Builder<RexNode> list = ImmutableList.builder();
-    for (Ast.Exp exp : exps) {
+    for (Core.Exp exp : exps) {
       list.add(translate(cx, exp));
     }
     return list.build();
   }
 
-  private RelContext where(RelContext cx, Ast.Where where) {
+  private RelContext where(RelContext cx, Core.Where where) {
     cx.relBuilder.filter(translate(cx, where.exp));
     return cx;
   }
 
-  private RelContext order(RelContext cx, Ast.Order order) {
+  private RelContext order(RelContext cx, Core.Order order) {
     final List<RexNode> exps = new ArrayList<>();
     order.orderItems.forEach(i -> {
       RexNode exp = translate(cx, i.exp);
@@ -673,29 +631,28 @@ public class CalciteCompiler extends Compiler {
     return cx;
   }
 
-  private RelContext group(RelContext cx, Ast.Group group) {
+  private RelContext group(RelContext cx, Core.Group group) {
     final Map<String, Function<RelBuilder, RexNode>> map = new HashMap<>();
     final List<Binding> bindings = new ArrayList<>();
     final List<RexNode> nodes = new ArrayList<>();
     final List<String> names = new ArrayList<>();
-    Pair.forEach(group.groupExps, (id, exp) -> {
-      bindings.add(Binding.of(id.name, typeMap.getType(id)));
+    group.groupExps.forEach((name, exp) -> {
+      bindings.add(Binding.of(name, exp.type));
       nodes.add(translate(cx, exp));
-      names.add(id.name);
+      names.add(name);
     });
     final RelBuilder.GroupKey groupKey = cx.relBuilder.groupKey(nodes);
     final List<RelBuilder.AggCall> aggregateCalls = new ArrayList<>();
-    group.aggregates.forEach(aggregate -> {
-      bindings.add(Binding.of(aggregate.id.name, typeMap.getType(aggregate)));
+    group.aggregates.forEach((name, aggregate) -> {
+      bindings.add(Binding.of(name, aggregate.type));
       final SqlAggFunction op = aggOp(aggregate.aggregate);
       final ImmutableList.Builder<RexNode> args = ImmutableList.builder();
       if (aggregate.argument != null) {
         args.add(translate(cx, aggregate.argument));
       }
       aggregateCalls.add(
-          cx.relBuilder.aggregateCall(op, args.build())
-              .as(aggregate.id.name));
-      names.add(aggregate.id.name);
+          cx.relBuilder.aggregateCall(op, args.build()).as(name));
+      names.add(name);
     });
 
     // Create an Aggregate operator.
@@ -704,7 +661,8 @@ public class CalciteCompiler extends Compiler {
     // Permute the fields so that they are sorted by name, per Morel records.
     final List<String> sortedNames =
         Ordering.natural().immutableSortedCopy(names);
-    cx.relBuilder.project(cx.relBuilder.fields(sortedNames));
+    cx.relBuilder.rename(names)
+        .project(cx.relBuilder.fields(sortedNames));
     sortedNames.forEach(name -> {
       final int i = map.size();
       map.put(name, b -> b.field(1, 0, i));
@@ -720,17 +678,19 @@ public class CalciteCompiler extends Compiler {
    * <p>Future work: rather than resolving by name, look up aggregate function
    * in environment, and compare with standard implementation of "sum" etc.;
    * support aggregate functions defined by expressions (e.g. lambdas). */
-  @Nonnull private SqlAggFunction aggOp(Ast.Exp aggregate) {
-    if (aggregate instanceof Ast.Id) {
-      final String name = ((Ast.Id) aggregate).name;
-      switch (name) {
-      case "sum":
+  @Nonnull private SqlAggFunction aggOp(Core.Exp aggregate) {
+    if (aggregate instanceof Core.Literal) {
+      final Core.Literal literal = (Core.Literal) aggregate;
+      switch ((BuiltIn) literal.value) {
+      case RELATIONAL_SUM:
+      case Z_SUM_INT:
+      case Z_SUM_REAL:
         return SqlStdOperatorTable.SUM;
-      case "count":
+      case RELATIONAL_COUNT:
         return SqlStdOperatorTable.COUNT;
-      case "min":
+      case RELATIONAL_MIN:
         return SqlStdOperatorTable.MIN;
-      case "max":
+      case RELATIONAL_MAX:
         return SqlStdOperatorTable.MAX;
       }
     }
