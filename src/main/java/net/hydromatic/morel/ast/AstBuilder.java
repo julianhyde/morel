@@ -183,8 +183,8 @@ public enum AstBuilder {
     return new Ast.Tuple(pos, list);
   }
 
-  public Ast.List list(Pos pos, Iterable<? extends Ast.Exp> list) {
-    return new Ast.List(pos, list);
+  public Ast.ListExp list(Pos pos, Iterable<? extends Ast.Exp> list) {
+    return new Ast.ListExp(pos, list);
   }
 
   public Ast.Record record(Pos pos, Map<String, Ast.Exp> map) {
@@ -440,10 +440,12 @@ public enum AstBuilder {
     return new Ast.Group(pos, ImmutableList.copyOf(groupExps),
         ImmutableList.copyOf(aggregates));
   }
+
   public Ast.FromStep where(Pos pos, Ast.Exp exp) {
     return new Ast.Where(pos, exp);
   }
 
+  // TODO: is this still used?
   public Ast.ApplicableExp wrapApplicable(Applicable applicable) {
     return new Ast.ApplicableExp(applicable);
   }

@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableMap;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
@@ -71,14 +72,16 @@ public abstract class Compiles {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
+    final Resolver resolver = new Resolver(resolved.typeMap);
+    final Core.Decl coreDecl = resolver.toCore(resolved.node);
     final Compiler compiler;
     if (hybrid) {
-      compiler = new CalciteCompiler(resolved.typeMap,
-          Calcite.withDataSets(ImmutableMap.of()));
+      final Calcite calcite = Calcite.withDataSets(ImmutableMap.of());
+      compiler = new CalciteCompiler(typeSystem, calcite);
     } else {
-      compiler = new Compiler(resolved.typeMap);
+      compiler = new Compiler(typeSystem);
     }
-    return compiler.compileStatement(env, resolved.node);
+    return compiler.compileStatement(env, coreDecl);
   }
 
   /** Converts {@code e} to {@code val = e}. */
@@ -91,8 +94,15 @@ public abstract class Compiles {
 
   /** Converts {@code val = e} to {@code e};
    * the converse of {@link #toValDecl(Ast.Exp)}. */
+  // TODO: remove if not used
   public static Ast.Exp toExp(Ast.ValDecl decl) {
     return decl.valBinds.get(0).e;
+  }
+
+  /** Converts {@code val = e} to {@code e};
+   * the converse of {@link #toValDecl(Ast.Exp)}. */
+  public static Core.Exp toExp(Core.ValDecl decl) {
+    return decl.valBind.e;
   }
 }
 

@@ -29,12 +29,12 @@ import com.google.common.collect.Multimaps;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
 
-import net.hydromatic.morel.ast.Ast;
-import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.TupleType;
@@ -56,7 +56,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
-import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Helpers for {@link Code}. */
 @SuppressWarnings({"rawtypes", "unchecked"})
@@ -261,24 +261,27 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#OP_NEGATE */
-  private static final Macro OP_NEGATE = (env, argType) -> {
+  private static final Macro OP_NEGATE = (typeSystem, env, argType) -> {
+    final FnType fnType = typeSystem.fnType(argType, argType);
     switch ((PrimitiveType) argType) {
     case INT:
-      return ast.wrapApplicable(NEGATE_INT);
+      return core.wrapApplicable(fnType, NEGATE_INT);
     case REAL:
-      return ast.wrapApplicable(NEGATE_REAL);
+      return core.wrapApplicable(fnType, NEGATE_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
   };
 
   /** @see BuiltIn#OP_DIVIDE */
-  private static final Macro OP_DIVIDE = (env, argType) -> {
-    switch ((PrimitiveType) ((TupleType) argType).argTypes.get(0)) {
+  private static final Macro OP_DIVIDE = (typeSystem, env, argType) -> {
+    final Type resultType = ((TupleType) argType).argTypes.get(0);
+    final FnType fnType = typeSystem.fnType(argType, resultType);
+    switch ((PrimitiveType) resultType) {
     case INT:
-      return ast.wrapApplicable(DIVIDE_INT);
+      return core.wrapApplicable(fnType, DIVIDE_INT);
     case REAL:
-      return ast.wrapApplicable(DIVIDE_REAL);
+      return core.wrapApplicable(fnType, DIVIDE_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -430,7 +433,7 @@ public abstract class Codes {
     };
   }
 
-  public static Code from(Map<Ast.Pat, Code> sources,
+  public static Code from(Map<Core.Pat, Code> sources,
       Supplier<RowSink> rowSinkFactory) {
     if (sources.size() == 0) {
       return new Code() {
@@ -445,7 +448,7 @@ public abstract class Codes {
         }
       };
     }
-    final ImmutableList<Ast.Pat> pats = ImmutableList.copyOf(sources.keySet());
+    final ImmutableList<Core.Pat> pats = ImmutableList.copyOf(sources.keySet());
     final ImmutableList<Code> codes = ImmutableList.copyOf(sources.values());
     return new Code() {
       @Override public Describer describe(Describer describer) {
@@ -527,12 +530,14 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#OP_MINUS */
-  private static final Macro OP_MINUS = (env, argType) -> {
-    switch ((PrimitiveType) ((TupleType) argType).argTypes.get(0)) {
+  private static final Macro OP_MINUS = (typeSystem, env, argType) -> {
+    final Type resultType = ((TupleType) argType).argTypes.get(0);
+    final FnType fnType = typeSystem.fnType(argType, resultType);
+    switch ((PrimitiveType) resultType) {
     case INT:
-      return ast.wrapApplicable(MINUS_INT);
+      return core.wrapApplicable(fnType, MINUS_INT);
     case REAL:
-      return ast.wrapApplicable(MINUS_REAL);
+      return core.wrapApplicable(fnType, MINUS_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -548,24 +553,28 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#OP_PLUS */
-  private static final Macro OP_PLUS = (env, argType) -> {
-    switch ((PrimitiveType) ((TupleType) argType).argTypes.get(0)) {
+  private static final Macro OP_PLUS = (typeSystem, env, argType) -> {
+    final Type resultType = ((TupleType) argType).argTypes.get(0);
+    final FnType fnType = typeSystem.fnType(argType, resultType);
+    switch ((PrimitiveType) resultType) {
     case INT:
-      return ast.wrapApplicable(PLUS_INT);
+      return core.wrapApplicable(fnType, PLUS_INT);
     case REAL:
-      return ast.wrapApplicable(PLUS_REAL);
+      return core.wrapApplicable(fnType, PLUS_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
   };
 
   /** @see BuiltIn#OP_TIMES */
-  private static final Macro OP_TIMES = (env, argType) -> {
-    switch ((PrimitiveType) ((TupleType) argType).argTypes.get(0)) {
+  private static final Macro OP_TIMES = (typeSystem, env, argType) -> {
+    final Type resultType = ((TupleType) argType).argTypes.get(0);
+    final FnType fnType = typeSystem.fnType(argType, resultType);
+    switch ((PrimitiveType) resultType) {
     case INT:
-      return ast.wrapApplicable(TIMES_INT);
+      return core.wrapApplicable(fnType, TIMES_INT);
     case REAL:
-      return ast.wrapApplicable(TIMES_REAL);
+      return core.wrapApplicable(fnType, TIMES_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -1444,13 +1453,15 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#RELATIONAL_SUM */
-  private static final Macro RELATIONAL_SUM = (env, argType) -> {
+  private static final Macro RELATIONAL_SUM = (typeSystem, env, argType) -> {
     if (argType instanceof ListType) {
-      switch ((PrimitiveType) ((ListType) argType).elementType) {
+      final Type resultType = ((ListType) argType).elementType;
+      final FnType fnType = typeSystem.fnType(argType, resultType);
+      switch ((PrimitiveType) resultType) {
       case INT:
-        return ast.wrapApplicable(RELATIONAL_SUM_INT);
+        return core.wrapApplicable(fnType, RELATIONAL_SUM_INT);
       case REAL:
-        return ast.wrapApplicable(RELATIONAL_SUM_REAL);
+        return core.wrapApplicable(fnType, RELATIONAL_SUM_REAL);
       }
     }
     throw new AssertionError("bad type " + argType);
@@ -1473,18 +1484,20 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#SYS_ENV */
-  private static Ast.Exp sysEnv(Environment env, Type argType) {
-    return ast.list(Pos.ZERO,
+  private static Core.Exp sysEnv(TypeSystem typeSystem, Environment env,
+      Type argType) {
+    return core.list(typeSystem.listType(argType),
         env.getValueMap()
             .entrySet()
             .stream()
             .sorted(Map.Entry.comparingByKey())
             .map(entry ->
-                ast.tuple(Pos.ZERO,
+                core.tuple(
+                    typeSystem.tupleType(PrimitiveType.STRING,
+                        PrimitiveType.STRING),
                     ImmutableList.of(
-                        ast.stringLiteral(Pos.ZERO, entry.getKey()),
-                        ast.stringLiteral(Pos.ZERO,
-                            entry.getValue().type.moniker()))))
+                        core.stringLiteral(entry.getKey()),
+                        core.stringLiteral(entry.getValue().type.moniker()))))
             .collect(Collectors.toList()));
   }
 
@@ -2039,11 +2052,11 @@ public abstract class Codes {
     private final ImmutableList<Code> codes;
     private final RowSink rowSink;
 
-    Looper(ImmutableList<Ast.Pat> pats, ImmutableList<Code> codes, EvalEnv env,
+    Looper(ImmutableList<Core.Pat> pats, ImmutableList<Code> codes, EvalEnv env,
         RowSink rowSink) {
       this.codes = codes;
       this.rowSink = rowSink;
-      for (Ast.Pat pat : pats) {
+      for (Core.Pat pat : pats) {
         final MutableEvalEnv mutableEnv = env.bindMutablePat(pat);
         mutableEvalEnvs.add(mutableEnv);
         env = mutableEnv;

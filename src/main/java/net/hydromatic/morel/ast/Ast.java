@@ -25,16 +25,15 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 
 import net.hydromatic.morel.eval.Applicable;
-import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
 import java.util.stream.Collectors;
@@ -68,6 +67,7 @@ public class Ast {
 
     @Override public abstract Pat accept(Shuttle shuttle);
 
+    // TODO: is this used?
     public void visit(Consumer<Pat> consumer) {
       consumer.accept(this);
       forEachArg((arg, i) -> arg.visit(consumer));
@@ -288,7 +288,7 @@ public class Ast {
    *
    * <p>For example, "(x, y)" in "fun sum (x, y) = x + y". */
   public static class TuplePat extends Pat {
-    public final java.util.List<Pat> args;
+    public final List<Pat> args;
 
     TuplePat(Pos pos, ImmutableList<Pat> args) {
       super(pos, Op.TUPLE_PAT);
@@ -315,18 +315,18 @@ public class Ast {
 
     /** Creates a copy of this {@code TuplePat} with given contents,
      * or {@code this} if the contents are the same. */
-    public TuplePat copy(java.util.List<Pat> args) {
+    public TuplePat copy(List<Pat> args) {
       return this.args.equals(args)
           ? this
           : ast.tuplePat(pos, args);
     }
   }
 
-  /** List pattern, the pattern analog of the {@link List} expression.
+  /** List pattern, the pattern analog of the {@link ListExp} expression.
    *
    * <p>For example, "[x, y]" in "fun sum [x, y] = x + y". */
   public static class ListPat extends Pat {
-    public final java.util.List<Pat> args;
+    public final List<Pat> args;
 
     ListPat(Pos pos, ImmutableList<Pat> args) {
       super(pos, Op.LIST_PAT);
@@ -353,7 +353,7 @@ public class Ast {
 
     /** Creates a copy of this {@code ListPat} with given contents,
      * or {@code this} if the contents are the same. */
-    public ListPat copy(java.util.List<Pat> args) {
+    public ListPat copy(List<Pat> args) {
       return this.args.equals(args)
           ? this
           : ast.listPat(pos, args);
@@ -492,7 +492,7 @@ public class Ast {
 
   /** Parse tree for a named type (e.g. "int" or "(int, string) list"). */
   public static class NamedType extends Type {
-    public final java.util.List<Type> types;
+    public final List<Type> types;
     public final String name;
 
     /** Creates a type. */
@@ -610,7 +610,7 @@ public class Ast {
 
   /** Tuple type. */
   public static class TupleType extends Type {
-    public final java.util.List<Type> types;
+    public final List<Type> types;
 
     TupleType(Pos pos, ImmutableList<Type> types) {
       super(pos, Op.TUPLE_TYPE);
@@ -643,7 +643,7 @@ public class Ast {
    * then {@code int} and {@code string} becomes the two type parameters to
    * the {@code list} {@link NamedType}. */
   public static class CompositeType extends Type {
-    public final java.util.List<Type> types;
+    public final List<Type> types;
 
     CompositeType(Pos pos, ImmutableList<Type> types) {
       super(pos, Op.TUPLE_TYPE);
@@ -705,7 +705,7 @@ public class Ast {
     @Override public abstract Exp accept(Shuttle shuttle);
 
     /** Returns a list of all arguments. */
-    public final java.util.List<Exp> args() {
+    public final List<Exp> args() {
       final ImmutableList.Builder<Exp> args = ImmutableList.builder();
       forEachArg((exp, value) -> args.add(exp));
       return args.build();
@@ -831,7 +831,7 @@ public class Ast {
 
   /** Parse tree node of a datatype declaration. */
   public static class DatatypeDecl extends Decl {
-    public final java.util.List<DatatypeBind> binds;
+    public final List<DatatypeBind> binds;
 
     DatatypeDecl(Pos pos, ImmutableList<DatatypeBind> binds) {
       super(pos, Op.DATATYPE_DECL);
@@ -869,9 +869,9 @@ public class Ast {
    * consists of type bindings {@code 'a x = X1 of 'a | X2} and
    * {@code y = Y}. */
   public static class DatatypeBind extends AstNode {
-    public final java.util.List<TyVar> tyVars;
+    public final List<TyVar> tyVars;
     public final Id name;
-    public final java.util.List<TyCon> tyCons;
+    public final List<TyCon> tyCons;
 
     DatatypeBind(Pos pos, ImmutableList<TyVar> tyVars, Id name,
         ImmutableList<TyCon> tyCons) {
@@ -954,9 +954,9 @@ public class Ast {
 
   /** Parse tree node of a value declaration. */
   public static class ValDecl extends Decl {
-    public final java.util.List<ValBind> valBinds;
+    public final List<ValBind> valBinds;
 
-    ValDecl(Pos pos, ImmutableList<ValBind> valBinds) {
+    protected ValDecl(Pos pos, ImmutableList<ValBind> valBinds) {
       super(pos, Op.VAL_DECL);
       this.valBinds = Objects.requireNonNull(valBinds);
       Preconditions.checkArgument(!valBinds.isEmpty());
@@ -1001,7 +1001,7 @@ public class Ast {
 
   /** Parse tree node of a function declaration. */
   public static class FunDecl extends Decl {
-    public final java.util.List<FunBind> funBinds;
+    public final List<FunBind> funBinds;
 
     FunDecl(Pos pos, ImmutableList<FunBind> funBinds) {
       super(pos, Op.FUN_DECL);
@@ -1036,7 +1036,7 @@ public class Ast {
   /** One of the branches (separated by 'and') in a 'fun' function
    * declaration. */
   public static class FunBind extends AstNode {
-    public final java.util.List<FunMatch> matchList;
+    public final List<FunMatch> matchList;
     public final String name;
 
     FunBind(Pos pos, ImmutableList<FunMatch> matchList) {
@@ -1064,7 +1064,7 @@ public class Ast {
   /** One of the branches (separated by '|') in a 'fun' function declaration. */
   public static class FunMatch extends AstNode {
     public final String name;
-    public final java.util.List<Pat> patList;
+    public final List<Pat> patList;
     public final Exp e;
 
     FunMatch(Pos pos, String name, ImmutableList<Pat> patList, Exp e) {
@@ -1093,7 +1093,7 @@ public class Ast {
 
   /** Tuple. */
   public static class Tuple extends Exp {
-    public final java.util.List<Exp> args;
+    public final List<Exp> args;
 
     Tuple(Pos pos, Iterable<? extends Exp> args) {
       super(pos, Op.TUPLE);
@@ -1118,16 +1118,16 @@ public class Ast {
       return w.append(")");
     }
 
-    public Tuple copy(java.util.List<Exp> args) {
+    public Tuple copy(List<Exp> args) {
       return this.args.equals(args) ? this : new Tuple(pos, args);
     }
   }
 
-  /** List. */
-  public static class List extends Exp {
-    public final java.util.List<Exp> args;
+  /** List expression. */
+  public static class ListExp extends Exp {
+    public final List<Exp> args;
 
-    List(Pos pos, Iterable<? extends Exp> args) {
+    ListExp(Pos pos, Iterable<? extends Exp> args) {
       super(pos, Op.LIST);
       this.args = ImmutableList.copyOf(args);
     }
@@ -1136,7 +1136,7 @@ public class Ast {
       Ord.forEach(args, action);
     }
 
-    public List accept(Shuttle shuttle) {
+    public ListExp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -1289,7 +1289,7 @@ public class Ast {
 
   /** "Let" expression. */
   public static class LetExp extends Exp {
-    public final java.util.List<Decl> decls;
+    public final List<Decl> decls;
     public final Exp e;
 
     LetExp(Pos pos, ImmutableList<Decl> decls, Exp e) {
@@ -1395,7 +1395,7 @@ public class Ast {
 
   /** Lambda expression. */
   public static class Fn extends Exp {
-    public final java.util.List<Match> matchList;
+    public final List<Match> matchList;
 
     Fn(Pos pos, ImmutableList<Match> matchList) {
       super(pos, Op.FN);
@@ -1417,7 +1417,7 @@ public class Ast {
 
     /** Creates a copy of this {@code Fn} with given contents,
      * or this if the contents are the same. */
-    public Fn copy(java.util.List<Match> matchList) {
+    public Fn copy(List<Match> matchList) {
       return this.matchList.equals(matchList)
           ? this
           : ast.fn(pos, matchList);
@@ -1427,7 +1427,7 @@ public class Ast {
   /** Case expression. */
   public static class Case extends Exp {
     public final Exp e;
-    public final java.util.List<Match> matchList;
+    public final List<Match> matchList;
 
     Case(Pos pos, Exp e, ImmutableList<Match> matchList) {
       super(pos, Op.CASE);
@@ -1448,7 +1448,7 @@ public class Ast {
           .appendAll(matchList, left, Op.BAR, right);
     }
 
-    public Case copy(Exp e, java.util.List<Match> matchList) {
+    public Case copy(Exp e, List<Match> matchList) {
       return this.e.equals(e)
           && this.matchList.equals(matchList)
           ? this
@@ -1537,7 +1537,7 @@ public class Ast {
     /** Creates a copy of this {@code From} with given contents,
      * or {@code this} if the contents are the same. */
     public From copy(Map<Ast.Pat, Ast.Exp> sources,
-        java.util.List<FromStep> steps, Ast.Exp yieldExp) {
+        List<FromStep> steps, Ast.Exp yieldExp) {
       return this.sources.equals(sources)
           && this.steps.equals(steps)
           && Objects.equals(this.yieldExp, yieldExp)
@@ -1551,17 +1551,6 @@ public class Ast {
   public abstract static class FromStep extends AstNode {
     FromStep(Pos pos, Op op) {
       super(pos, op);
-    }
-
-    /** Returns the names of the fields produced by this step, given the names
-     * of the fields that are input to this step.
-     *
-     * <p>By default, a step outputs the same fields as it inputs.
-     */
-    public void deriveOutBindings(Iterable<Binding> inBindings,
-        BiFunction<String, AstNode, Binding> binder,
-        Consumer<Binding> outBindings) {
-      inBindings.forEach(outBindings);
     }
   }
 
@@ -1612,7 +1601,7 @@ public class Ast {
       visitor.visit(this);
     }
 
-    public Order copy(java.util.List<OrderItem> orderItems) {
+    public Order copy(List<OrderItem> orderItems) {
       return this.orderItems.equals(orderItems)
           ? this
           : new Order(pos, ImmutableList.copyOf(orderItems));
@@ -1689,17 +1678,8 @@ public class Ast {
       visitor.visit(this);
     }
 
-    @Override public void deriveOutBindings(Iterable<Binding> inBindings,
-        BiFunction<String, AstNode, Binding> binder,
-        Consumer<Binding> outBindings) {
-      groupExps.forEach(idExp ->
-          outBindings.accept(binder.apply(idExp.left.name, idExp.left)));
-      aggregates.forEach(aggregate ->
-          outBindings.accept(binder.apply(aggregate.id.name, aggregate)));
-    }
-
-    public Group copy(java.util.List<Pair<Id, Exp>> groupExps,
-        java.util.List<Aggregate> aggregates) {
+    public Group copy(List<Pair<Id, Exp>> groupExps,
+        List<Aggregate> aggregates) {
       return this.groupExps.equals(groupExps)
           && this.aggregates.equals(aggregates)
           ? this
@@ -1738,7 +1718,7 @@ public class Ast {
 
   /** Call to an aggregate function in a {@code compute} clause.
    *
-   * <p>For example, in {@code sum of #id e as sumId},
+   * <p>For example, in {@code compute sumId = sum of #id e},
    * {@code aggregate} is "sum", {@code argument} is "#id e",
    * and {@code id} is "sumId". */
   public static class Aggregate extends AstNode {

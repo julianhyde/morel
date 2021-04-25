@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Visits and transforms syntax trees. */
 public class Shuttle {
@@ -132,7 +133,7 @@ public class Shuttle {
     return ast.tuple(tuple.pos, visitList(tuple.args));
   }
 
-  protected Ast.List visit(Ast.List list) {
+  protected Ast.ListExp visit(Ast.ListExp list) {
     return ast.list(list.pos, visitList(list.args));
   }
 
@@ -187,8 +188,16 @@ public class Shuttle {
     return ast.valDecl(valDecl.pos, visitList(valDecl.valBinds));
   }
 
+  protected Core.ValDecl visit(Core.ValDecl valDecl) {
+    return core.valDecl(visit(valDecl.valBind));
+  }
+
   protected Ast.ValBind visit(Ast.ValBind valBind) {
     return ast.valBind(valBind.pos, valBind.rec, valBind.pat, valBind.e);
+  }
+
+  protected Core.ValBind visit(Core.ValBind valBind) {
+    return core.valBind(valBind.rec, valBind.pat, valBind.e);
   }
 
   public Ast.Exp visit(Ast.From from) {

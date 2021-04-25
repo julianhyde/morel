@@ -18,8 +18,9 @@
  */
 package net.hydromatic.morel.compile;
 
-import net.hydromatic.morel.ast.Ast;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 
 /** A function that is 'called' at compile time,
  * and generates an expanded parse tree.
@@ -29,7 +30,7 @@ import net.hydromatic.morel.type.Type;
  * Its type is derived before expansion.
  * Expansion must preserve the type. */
 public interface Macro {
-  Ast.Exp expand(Environment env, Type argType);
+  Core.Exp expand(TypeSystem typeSystem, Environment env, Type argType);
 }
 
 // End Macro.java

@@ -113,7 +113,7 @@ public class Visitor {
     tuple.args.forEach(this::accept);
   }
 
-  protected void visit(Ast.List list) {
+  protected void visit(Ast.ListExp list) {
     list.args.forEach(this::accept);
   }
 
@@ -242,6 +242,31 @@ public class Visitor {
   protected void visit(Ast.CompositeType compositeType) {
     compositeType.types.forEach(this::accept);
   }
+
+  // core expressions
+
+  protected void visit(Core.Literal literal) {
+  }
+
+  protected void visit(Core.Id id) {
+  }
+
+  protected void visit(Core.If anIf) {
+    anIf.condition.accept(this);
+    anIf.ifTrue.accept(this);
+    anIf.ifFalse.accept(this);
+  }
+
+  protected void visit(Core.LetExp e) {
+    e.decl.accept(this);
+    e.e.accept(this);
+  }
+
+  protected void visit(Core.Case kase) {
+    kase.e.accept(this);
+    kase.matchList.forEach(this::accept);
+  }
+
 }
 
 // End Visitor.java

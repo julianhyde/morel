@@ -27,11 +27,13 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.CalciteCompiler;
 import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeMap;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Codes;
@@ -227,9 +229,11 @@ class Ml {
       final TypeResolver.Resolved resolved =
           TypeResolver.deduceType(env, valDecl, typeSystem);
       final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+      final Resolver resolver = new Resolver(resolved.typeMap);
+      final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
       final RelNode rel =
-          new CalciteCompiler(resolved.typeMap, calcite)
-              .toRel(env, Compiles.toExp(valDecl2));
+          new CalciteCompiler(typeSystem, calcite)
+              .toRel(env, Compiles.toExp(valDecl3));
       Objects.requireNonNull(rel);
       final String relString = RelOptUtil.toString(rel);
       assertThat(relString, matcher);

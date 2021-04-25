@@ -205,7 +205,7 @@ public class TypeResolver {
       return reg(tuple.copy(args2), v, tuple(types));
 
     case LIST:
-      final Ast.List list = (Ast.List) node;
+      final Ast.ListExp list = (Ast.ListExp) node;
       final Unifier.Variable vArg2 = unifier.variable();
       for (Ast.Exp arg : list.args) {
         deduceType(env, arg, vArg2);
