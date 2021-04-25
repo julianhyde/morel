@@ -48,9 +48,11 @@ import org.apache.calcite.sql.validate.SqlUserDefinedFunction;
 import org.apache.calcite.sql.validate.SqlUserDefinedTableFunction;
 
 import net.hydromatic.morel.ast.Ast;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.Compiler;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
@@ -215,11 +217,12 @@ public class CalciteFunctions {
         final TypeResolver.Resolved resolved =
             TypeResolver.deduceType(env, valDecl, typeSystem);
         final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-        final Ast.Exp e2 = Compiles.toExp(valDecl2);
-        Type type = resolved.typeMap.getType(e2);
-        code = new Compiler(resolved.typeMap).compile(env, e2);
+        final Core.ValDecl valDecl3 =
+            new Resolver(resolved.typeMap).toCore(valDecl2);
+        final Core.Exp e3 = Compiles.toExp(valDecl3);
+        code = new Compiler(typeSystem).compile(env, e3);
         evalEnv = Codes.emptyEnvWith(session, env);
-        f = Converters.toCalciteEnumerable(type, typeFactory);
+        f = Converters.toCalciteEnumerable(e3.type, typeFactory);
       }
     }
   }
@@ -273,10 +276,11 @@ public class CalciteFunctions {
         final TypeResolver.Resolved resolved =
             TypeResolver.deduceType(env, valDecl, typeSystem);
         final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-        final Ast.Exp e2 = Compiles.toExp(valDecl2);
-        Type type = resolved.typeMap.getType(e2);
-        code = new Compiler(resolved.typeMap).compile(env, e2);
-        f = Converters.toCalcite(type, typeFactory);
+        final Core.ValDecl valDecl3 =
+            new Resolver(resolved.typeMap).toCore(valDecl2);
+        final Core.Exp e3 = Compiles.toExp(valDecl3);
+        code = new Compiler(typeSystem).compile(env, e3);
+        f = Converters.toCalcite(e3.type, typeFactory);
       }
     }
   }

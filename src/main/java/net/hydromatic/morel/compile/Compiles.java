@@ -23,13 +23,17 @@ import com.google.common.collect.ImmutableMap;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.ForeignValue;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 
+import java.util.List;
 import java.util.Map;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
@@ -71,14 +75,18 @@ public abstract class Compiles {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
+    final Resolver resolver = new Resolver(resolved.typeMap);
+    final Core.Decl coreDecl = resolver.toCore(resolved.node);
+    final Inliner inliner = Inliner.of(typeSystem, env);
+    final Core.Decl coreDecl2 = coreDecl.accept(inliner);
     final Compiler compiler;
     if (hybrid) {
-      compiler = new CalciteCompiler(resolved.typeMap,
-          Calcite.withDataSets(ImmutableMap.of()));
+      final Calcite calcite = Calcite.withDataSets(ImmutableMap.of());
+      compiler = new CalciteCompiler(typeSystem, calcite);
     } else {
-      compiler = new Compiler(resolved.typeMap);
+      compiler = new Compiler(typeSystem);
     }
-    return compiler.compileStatement(env, resolved.node);
+    return compiler.compileStatement(env, coreDecl2);
   }
 
   /** Converts {@code e} to {@code val = e}. */
@@ -91,8 +99,39 @@ public abstract class Compiles {
 
   /** Converts {@code val = e} to {@code e};
    * the converse of {@link #toValDecl(Ast.Exp)}. */
-  public static Ast.Exp toExp(Ast.ValDecl decl) {
-    return decl.valBinds.get(0).e;
+  public static Core.Exp toExp(Core.ValDecl decl) {
+    return decl.e;
+  }
+
+  static PatternBinder binding(TypeSystem typeSystem, List<Binding> bindings) {
+    return new PatternBinder(typeSystem, bindings);
+  }
+
+  /** Visitor that adds a {@link Binding} each time it see an
+   * {@link Core.IdPat}. */
+  private static class PatternBinder extends Visitor {
+    private final TypeSystem typeSystem;
+    private final List<Binding> bindings;
+
+    PatternBinder(TypeSystem typeSystem, List<Binding> bindings) {
+      this.typeSystem = typeSystem;
+      this.bindings = bindings;
+    }
+
+    @Override public void visit(Core.IdPat idPat) {
+      bindings.add(Binding.of(idPat.name, idPat.type));
+    }
+
+    @Override protected void visit(Core.ValDecl valBind) {
+      // The super method visits valBind.e; we do not
+      valBind.pat.accept(this);
+    }
+
+    @Override protected void visit(Core.DatatypeDecl datatypeDecl) {
+      datatypeDecl.dataTypes.forEach(dataType ->
+          dataType.typeConstructors.keySet().forEach(name ->
+              bindings.add(typeSystem.bindTyCon(dataType, name))));
+    }
   }
 }
 
