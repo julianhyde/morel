@@ -167,6 +167,7 @@ public class TypeResolver {
   }
 
   private Ast.Exp deduceType(TypeEnv env, Ast.Exp node, Unifier.Variable v) {
+    final List<Ast.Exp> args2;
     final Unifier.Variable v2;
     final Unifier.Variable v3;
     final Map<Ast.IdPat, Unifier.Term> termMap;
@@ -196,7 +197,7 @@ public class TypeResolver {
     case TUPLE:
       final Ast.Tuple tuple = (Ast.Tuple) node;
       final List<Unifier.Term> types = new ArrayList<>();
-      final List<Ast.Exp> args2 = new ArrayList<>();
+      args2 = new ArrayList<>();
       for (Ast.Exp arg : tuple.args) {
         final Unifier.Variable vArg = unifier.variable();
         args2.add(deduceType(env, arg, vArg));
@@ -207,10 +208,11 @@ public class TypeResolver {
     case LIST:
       final Ast.ListExp list = (Ast.ListExp) node;
       final Unifier.Variable vArg2 = unifier.variable();
+      args2 = new ArrayList<>();
       for (Ast.Exp arg : list.args) {
-        deduceType(env, arg, vArg2);
+        args2.add(deduceType(env, arg, vArg2));
       }
-      return reg(list, v, unifier.apply(LIST_TY_CON, vArg2));
+      return reg(list.copy(args2), v, unifier.apply(LIST_TY_CON, vArg2));
 
     case RECORD:
       final Ast.Record record = (Ast.Record) node;
@@ -379,7 +381,8 @@ public class TypeResolver {
           deduceType(env2, from.yieldExpOrDefault, v3);
       final Ast.Exp yieldExp2 =
           from.yieldExp == null ? null : yieldExpOrDefault2;
-      final Ast.From from2 = from.copy(fromSources, fromSteps, yieldExp2);
+      final Ast.From from2 =
+          from.copy(fromSources, fromSteps, yieldExp2, yieldExpOrDefault2);
       return reg(from2, v, unifier.apply(LIST_TY_CON, v3));
 
     case ID:
@@ -813,9 +816,6 @@ public class TypeResolver {
       Map<Ast.IdPat, Unifier.Term> termMap, NavigableSet<String> labelNames,
       Unifier.Variable v) {
     switch (pat.op) {
-    case WILDCARD_PAT:
-      return pat;
-
     case BOOL_LITERAL_PAT:
       return reg(pat, v, toTerm(PrimitiveType.BOOL));
 
@@ -833,6 +833,9 @@ public class TypeResolver {
 
     case ID_PAT:
       termMap.put((Ast.IdPat) pat, v);
+      // fall through
+
+    case WILDCARD_PAT:
       return reg(pat, null, v);
 
     case TUPLE_PAT:

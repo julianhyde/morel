@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.ast;
 
+import org.apache.calcite.util.Util;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -27,8 +29,9 @@ import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Ord;
 
@@ -73,7 +76,7 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("cannot unparse " + getClass());
     }
 
     @Override public AstNode accept(Shuttle shuttle) {
@@ -97,6 +100,11 @@ public class Core {
       this.type = requireNonNull(type);
     }
 
+    /** Returns the type. */
+    public Type type() {
+      return type;
+    }
+
     public void forEachArg(ObjIntConsumer<Pat> action) {
       // no args
     }
@@ -118,6 +126,10 @@ public class Core {
     IdPat(Type type, String name) {
       super(Op.ID_PAT, type);
       this.name = name;
+    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(name);
     }
   }
 
@@ -152,11 +164,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.appendLiteral(value);
 //    }
   }
@@ -181,11 +193,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append("_");
 //    }
   }
@@ -206,7 +218,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -215,7 +227,7 @@ public class Core {
       action.accept(p1, 1);
     }
 
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.infix(left, p0, op, p1, right);
 //    }
 //
@@ -241,17 +253,28 @@ public class Core {
     public final String tyCon;
     public final Pat pat;
 
-    ConPat(Type type, String tyCon, Pat pat) {
-      super(Op.CON_PAT, type);
+    /** Mostly-private constructor.
+     *
+     * <p>Exposed so that "op ::" (cons) can supply a differnt {@link Op}
+     * value. The "list" datatype is not represented the same as other
+     * datatypes, and the separate "op" value allows us to deconstruct it in a
+     * different way. */
+    ConPat(Op op, Type type, String tyCon, Pat pat) {
+      super(op, type);
       this.tyCon = requireNonNull(tyCon);
       this.pat = requireNonNull(pat);
+      Preconditions.checkArgument(op == Op.CON_PAT || op == Op.CONS_PAT);
+    }
+
+    ConPat(Type type, String tyCon, Pat pat) {
+      this(Op.CON_PAT, type, tyCon, pat);
     }
 
 //    public Pat accept(CoreShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -259,10 +282,10 @@ public class Core {
       action.accept(pat, 0);
     }
 
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
-//      return w.infix(left, tyCon, op, pat, right);
-//    }
-//
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(tyCon).append("(").append(pat, 0, 0).append(")");
+    }
+
 //    /** Creates a copy of this {@code ConPat} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public ConPat copy(Id tyCon, Pat pat) {
@@ -287,15 +310,19 @@ public class Core {
       this.tyCon = requireNonNull(tyCon);
     }
 
+    @Override public DataType type() {
+      return (DataType) type;
+    }
+
 //    public Pat accept(CoreShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return tyCon.unparse(w, left, right);
 //    }
 //
@@ -323,7 +350,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -331,12 +358,12 @@ public class Core {
       Ord.forEach(args, action);
     }
 
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
-//      w.append("(");
-//      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
-//      return w.append(")");
-//    }
-//
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      w.append("(");
+      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
+      return w.append(")");
+    }
+
 //    /** Creates a copy of this {@code TuplePat} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public TuplePat copy(List<Pat> args) {
@@ -361,7 +388,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -369,12 +396,12 @@ public class Core {
       Ord.forEach(args, action);
     }
 
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
-//      w.append("[");
-//      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
-//      return w.append("]");
-//    }
-//
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      w.append("[");
+      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
+      return w.append("]");
+    }
+
 //    /** Creates a copy of this {@code ListPat} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public ListPat copy(List<Pat> args) {
@@ -401,7 +428,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -409,7 +436,7 @@ public class Core {
 //      Ord.forEach(args.values(), action);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      w.append("{");
 //      Ord.forEach(args, (i, k, v) ->
 //          w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
@@ -447,11 +474,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.infix(left, pat, op, type, right);
 //    }
 //
@@ -506,11 +533,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.infix(left, e, op, type, right);
 //    }
 //  }
@@ -542,11 +569,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      switch (types.size()) {
 //      case 0:
 //        return w.append(name);
@@ -587,11 +614,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append(name);
 //    }
 //  }
@@ -620,11 +647,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      w.append("{");
 //      Ord.forEach(fieldTypes, (i, field, type) ->
 //          w.append(i > 0 ? ", " : "")
@@ -646,11 +673,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      // "*" is non-associative. Elevate both left and right precedence
 //      // to force parentheses if the inner expression is also "*".
 //      Ord.forEach(types, (arg, i) ->
@@ -679,11 +706,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      w.append("(");
 //      Ord.forEach(types, (arg, i) ->
 //          w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
@@ -706,11 +733,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append(paramType, left, op.left)
 //          .append(" -> ")
 //          .append(resultType, op.right, right);
@@ -728,6 +755,11 @@ public class Core {
 
     public void forEachArg(ObjIntConsumer<Exp> action) {
       // no args
+    }
+
+    /** Returns the type. */
+    public Type type() {
+      return type;
     }
   }
 
@@ -761,11 +793,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append(name);
 //    }
   }
@@ -784,8 +816,8 @@ public class Core {
       super(Op.RECORD_SELECTOR, fnType);
       this.name = requireNonNull(name);
       Preconditions.checkArgument(!name.startsWith("#"));
-      final RecordType recordType = (RecordType) fnType.paramType;
-      slot = new ArrayList<>(recordType.argNameTypes.keySet()).indexOf(name);
+      final RecordLikeType recordType = (RecordLikeType) fnType.paramType;
+      slot = new ArrayList<>(recordType.argNameTypes().keySet()).indexOf(name);
       Preconditions.checkArgument(slot >= 0);
     }
 
@@ -799,15 +831,19 @@ public class Core {
           && this.name.equals(((RecordSelector) o).name);
     }
 
+    @Override public FnType type() {
+      return (FnType) type;
+    }
+
 //    public Exp accept(CoreShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append("#").append(name);
 //    }
   }
@@ -865,11 +901,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.appendAll(binds, "datatype ", " and ", "");
 //    }
   }
@@ -910,11 +946,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      switch (tyVars.size()) {
 //      case 0:
 //        break;
@@ -945,7 +981,7 @@ public class Core {
 //      this.type = type; // optional
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      if (type != null) {
 //        return w.append(id, left, op.left)
 //            .append(" of ")
@@ -959,7 +995,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //  }
@@ -1026,11 +1062,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.appendAll(funBinds, "fun ", " and ", "");
 //    }
 //  }
@@ -1054,11 +1090,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.appendAll(matchList, " | ");
 //    }
 //  }
@@ -1080,11 +1116,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      w.append(name);
 //      for (Pat pat : patList) {
 //        w.append(" ").append(pat, Op.APPLY.left, Op.APPLY.right);
@@ -1113,6 +1149,7 @@ public class Core {
   }
 
   /** List. */
+  // TODO: remove; replace with call to list constructor function
   public static class ListExp extends Exp {
     public final List<Exp> args;
 
@@ -1129,11 +1166,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      w.append("[");
 //      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
 //      return w.append("]");
@@ -1143,27 +1180,32 @@ public class Core {
   /** Record. */
   // TODO: remove? Functionally equivalent to Tuple
   public static class Record extends Exp {
-    public final SortedMap<String, Exp> args;
+    public final List<Exp> args;
 
-    Record(RecordType type, ImmutableSortedMap<String, Exp> args) {
+    Record(RecordLikeType type, ImmutableList<Exp> args) {
       super(Op.RECORD, type);
       this.args = requireNonNull(args);
-      Preconditions.checkArgument(args.comparator() == ORDERING);
+      Preconditions.checkArgument(Util.transform(args, a -> a.type)
+          .equals(type.argNameTypes().values()));
+    }
+
+    @Override public RecordLikeType type() {
+      return (RecordLikeType) type;
     }
 
     @Override public void forEachArg(ObjIntConsumer<Exp> action) {
-      Ord.forEach(args.values(), action);
+      Ord.forEach(args, action);
     }
 
 //    public Exp accept(CoreShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      w.append("{");
 //      Ord.forEach(args, (i, k, v) ->
 //          w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
@@ -1195,11 +1237,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.infix(left, a0, op, a1, right);
 //    }
 //
@@ -1230,11 +1272,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.prefix(left, op, a, right);
 //    }
 //  }
@@ -1259,11 +1301,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append("if ").append(condition, 0, 0)
 //          .append(" then ").append(ifTrue, 0, 0)
 //          .append(" else ").append(ifFalse, 0, right);
@@ -1295,11 +1337,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.appendAll(decls, "let ", "; ", " in ")
 //          .append(e, 0, 0).append(" end");
 //    }
@@ -1332,11 +1374,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      if (rec) {
 //        w.append("rec ");
 //      }
@@ -1369,11 +1411,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append(pat, 0, 0).append(" => ").append(e, 0, right);
 //    }
 //
@@ -1397,15 +1439,19 @@ public class Core {
       Preconditions.checkArgument(!matchList.isEmpty());
     }
 
+    @Override public FnType type() {
+      return (FnType) type;
+    }
+
 //    public Fn accept(CoreShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append("fn ").appendAll(matchList, 0, Op.BAR, right);
 //    }
 //
@@ -1433,11 +1479,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append("case ").append(e, 0, 0).append(" of ")
 //          .appendAll(matchList, left, Op.BAR, right);
 //    }
@@ -1456,23 +1502,28 @@ public class Core {
     public final ImmutableList<FromStep> steps;
     public final Exp yieldExp;
 
-    From(ImmutableMap<Pat, Exp> sources, ImmutableList<FromStep> steps,
-        Exp yieldExp) {
-      super(Op.FROM, yieldExp.type);
+    From(ListType type, ImmutableMap<Pat, Exp> sources,
+        ImmutableList<FromStep> steps, Exp yieldExp) {
+      super(Op.FROM, type);
       this.sources = requireNonNull(sources);
       this.steps = requireNonNull(steps);
       this.yieldExp = requireNonNull(yieldExp);
+      Preconditions.checkArgument(type.elementType.equals(yieldExp.type));
+    }
+
+    @Override public ListType type() {
+      return (ListType) type;
     }
 
 //    public Exp accept(CoreShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      if (left > op.left || op.right < right) {
 //        return w.append("(").append(this, 0, 0).append(")");
 //      } else {
@@ -1531,7 +1582,7 @@ public class Core {
       this.exp = exp;
     }
 
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append("where ").append(exp, 0, 0);
 //    }
 //
@@ -1539,7 +1590,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1557,7 +1608,7 @@ public class Core {
       this.orderItems = requireNonNull(orderItems);
     }
 
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append("order ").appendAll(orderItems, ", ");
 //    }
 //
@@ -1565,7 +1616,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1587,7 +1638,7 @@ public class Core {
       this.direction = requireNonNull(direction);
     }
 
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.append(exp, 0, 0)
 //          .append(direction == Direction.DESC ? " desc" : "");
 //    }
@@ -1596,7 +1647,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1620,7 +1671,7 @@ public class Core {
       this.aggregates = aggregates;
     }
 
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      Pair.forEachIndexed(groupExps, (i, id, exp) ->
 //          w.append(i == 0 ? "group " : ", ")
 //              .append(id, 0, 0)
@@ -1636,7 +1687,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -1673,11 +1724,11 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
-//    @Override CoreWriter unparse(CoreWriter w, int left, int right) {
+//    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.infix(left, fn, op, arg, right);
 //    }
 //
@@ -1703,7 +1754,7 @@ public class Core {
       this.argument = argument;
     }
 
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      w.append(id.name)
 //          .append(" = ")
 //          .append(aggregate, 0, 0);
@@ -1718,7 +1769,7 @@ public class Core {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1747,11 +1798,11 @@ public class Core {
 //      return this;
 //    }
 //
-//    @Override public void accept(CoreVisitor visitor) {
+//    @Override public void accept(AstVisitor visitor) {
 //       no-op
 //    }
 //
-//    CoreWriter unparse(CoreWriter w, int left, int right) {
+//    AstWriter unparse(AstWriter w, int left, int right) {
 //      return w;
 //    }
   }

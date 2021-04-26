@@ -103,7 +103,7 @@ public class Closure implements Comparable<Closure>, Applicable {
         return code.eval(envRef[0]);
       }
     }
-    throw new AssertionError("no match");
+    throw new AssertionError("no match: " + Pair.left(patCodes));
   }
 
   @Override public Object apply(EvalEnv env, Object argValue) {
@@ -176,7 +176,7 @@ public class Closure implements Comparable<Closure>, Applicable {
       return true;
 
     case CONS_PAT:
-      final Core.InfixPat infixPat = (Core.InfixPat) pat;
+      final Core.ConPat consPat = (Core.ConPat) pat;
       @SuppressWarnings("unchecked") final List<Object> consValue =
           (List) argValue;
       if (consValue.isEmpty()) {
@@ -184,8 +184,9 @@ public class Closure implements Comparable<Closure>, Applicable {
       }
       final Object head = consValue.get(0);
       final List<Object> tail = consValue.subList(1, consValue.size());
-      return bindRecurse(infixPat.p0, envRef, head)
-          && bindRecurse(infixPat.p1, envRef, tail);
+      List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
+      return bindRecurse(patArgs.get(0), envRef, head)
+          && bindRecurse(patArgs.get(1), envRef, tail);
 
     case CON0_PAT:
       final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;

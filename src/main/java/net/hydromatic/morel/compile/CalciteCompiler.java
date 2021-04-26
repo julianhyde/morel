@@ -56,10 +56,12 @@ import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.ThreadLocals;
 
 import java.math.BigDecimal;
@@ -455,9 +457,10 @@ public class CalciteCompiler extends Compiler {
 
     case RECORD:
       record = (Core.Record) exp;
+      final RecordLikeType recordType = record.type();
       return cx.relBuilder.project(
-          Util.transform(record.args.values(), e -> translate(cx, e)),
-          record.args.keySet());
+          Util.transform(record.args, e -> translate(cx, e)),
+          recordType.argNameTypes().keySet());
 
     case TUPLE:
       final Core.Tuple tuple = (Core.Tuple) exp;
@@ -511,7 +514,7 @@ public class CalciteCompiler extends Compiler {
         }
         if (binding.value instanceof Float) {
           final BigDecimal bd = BigDecimal.valueOf((Float) binding.value);
-          return translate(cx, core.realLiteral(id.pos, bd));
+          return translate(cx, core.realLiteral(bd));
         }
         if (binding.value instanceof String) {
           final String s = (String) binding.value;
@@ -584,7 +587,8 @@ public class CalciteCompiler extends Compiler {
       record = (Core.Record) exp;
       builder = cx.relBuilder.getTypeFactory().builder();
       operands = new ArrayList<>();
-      record.args.forEach((name, arg) -> {
+      final Set<String> argNames = record.type().argNameTypes().keySet();
+      Pair.forEach(argNames, record.args, (name, arg) -> {
         final RexNode e = translate(cx, arg);
         operands.add(e);
         builder.add(name, e.getType());
@@ -640,15 +644,15 @@ public class CalciteCompiler extends Compiler {
   private Core.Record toRecord(RelContext cx, Core.Id id) {
     final Type type = cx.env.get(id.name).type;
     if (type instanceof RecordType) {
-      final SortedMap<String, Core.Exp> map = new TreeMap<>();
       final RecordType recordType = (RecordType) type;
+      final List<Core.Exp> args = new ArrayList<>();
       recordType.argNameTypes.forEach((field, fieldType) ->
-          map.put(field,
+          args.add(
               core.apply(fieldType,
                   core.recordSelector(typeSystem.fnType(recordType, fieldType),
                       field),
                   id)));
-      return core.record(recordType, map);
+      return core.record(recordType, args);
     }
     return null;
   }

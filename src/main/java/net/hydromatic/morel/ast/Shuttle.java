@@ -201,7 +201,8 @@ public class Shuttle {
   }
 
   public Ast.Exp visit(Ast.From from) {
-    return ast.from(from.pos, from.sources, from.steps, from.yieldExp);
+    return ast.from(from.pos, from.sources, from.steps, from.yieldExp,
+        from.yieldExpOrDefault);
   }
 
   public AstNode visit(Ast.Order order) {

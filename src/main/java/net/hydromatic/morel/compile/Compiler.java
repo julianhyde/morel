@@ -245,7 +245,7 @@ public class Compiler {
 
     case RECORD:
       final Core.Record record = (Core.Record) expression;
-      return compile(cx, core.tuple(record.type, record.args.values()));
+      return compile(cx, core.tuple(record.type, record.args));
 
     default:
       throw new AssertionError("op not handled: " + expression.op);
@@ -263,14 +263,14 @@ public class Compiler {
   protected Code compileApply(Context cx, Core.Apply apply) {
     // Is this is a call to a built-in operator?
     switch (apply.fn.op) {
-    case ANDALSO:
-    case ORELSE:
-    case CONS:
+    case FN_LITERAL:
       // Argument for an operator is always a tuple; operators are never
       // curried, nor do they evaluate an expression to yield the tuple of
       // arguments.
+      final Core.Literal literal = (Core.Literal) apply.fn;
+      final Op op = (Op) literal.value;
       assert apply.arg.op == Op.TUPLE;
-      return compileCall(cx, apply.fn.op, ((Core.Tuple) apply.arg).args);
+      return compileCall(cx, op, ((Core.Tuple) apply.arg).args);
     }
     final Code argCode = compileArg(cx, apply.arg);
     final Type argType = apply.arg.type;
@@ -433,9 +433,7 @@ public class Compiler {
   private Binding getConstant(Context cx, Core.Exp fn) {
     switch (fn.op) {
     case ID:
-      // TODO: should never happen?
-//      return cx.env.getOpt(((Core.Id) fn).name);
-      throw new AssertionError(fn);
+      return cx.env.getOpt(((Core.Id) fn).name);
 
     case APPLY:
       final Core.Apply apply = (Core.Apply) fn;
@@ -524,7 +522,9 @@ public class Compiler {
         final List<Binding> immutableBindings =
             ImmutableList.copyOf(newBindings);
         actions.add((output, outBindings, evalEnv) -> {
-          output.add("datatype " + dataType);
+          String description = dataType.description();
+          output.add("datatype " + dataType.name + " = "
+              + description.substring(1, description.length() - 1));
           outBindings.addAll(immutableBindings);
         });
       }
@@ -537,10 +537,10 @@ public class Compiler {
     switch (op) {
     case ANDALSO:
       argCodes = compileArgs(cx, args);
-      return Codes.andAlso(argCodes.get(0), argCodes.get(0));
+      return Codes.andAlso(argCodes.get(0), argCodes.get(1));
     case ORELSE:
       argCodes = compileArgs(cx, args);
-      return Codes.orElse(argCodes.get(0), argCodes.get(0));
+      return Codes.orElse(argCodes.get(0), argCodes.get(1));
     default:
       throw new AssertionError("unknown op " + op);
     }

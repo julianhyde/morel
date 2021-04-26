@@ -321,6 +321,12 @@ public enum AstBuilder {
         ImmutableList.copyOf(steps), yieldExp);
   }
 
+  public Ast.From from(Pos pos, Map<Ast.Pat, Ast.Exp> sources,
+      List<Ast.FromStep> steps, Ast.Exp yieldExp, Ast.Exp yieldExpOrDefault) {
+    return new Ast.From(pos, ImmutableMap.copyOf(sources),
+        ImmutableList.copyOf(steps), yieldExp, yieldExpOrDefault);
+  }
+
   public Ast.Fn fn(Pos pos, Ast.Match... matchList) {
     return new Ast.Fn(pos, ImmutableList.copyOf(matchList));
   }

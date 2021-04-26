@@ -33,6 +33,7 @@ public enum Op {
   REAL_LITERAL(true),
   STRING_LITERAL(true),
   UNIT_LITERAL(true),
+  FN_LITERAL(true), // occurs in Core, not in Ast
 
   // patterns
   ID_PAT(true),

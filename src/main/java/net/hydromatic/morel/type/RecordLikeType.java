@@ -18,31 +18,11 @@
  */
 package net.hydromatic.morel.type;
 
-import net.hydromatic.morel.ast.Op;
+import java.util.SortedMap;
 
-import java.util.Objects;
-import java.util.function.Function;
-
-/** The type of a list value. */
-// TODO: remove this, and use datatype?
-public class ListType extends BaseType {
-  public final Type elementType;
-
-  ListType(String description, Type elementType) {
-    super(Op.LIST, description);
-    this.elementType = Objects.requireNonNull(elementType);
-  }
-
-  public <R> R accept(TypeVisitor<R> typeVisitor) {
-    return typeVisitor.visit(this);
-  }
-
-  public Type copy(TypeSystem typeSystem, Function<Type, Type> transform) {
-    final Type elementType2 = elementType.copy(typeSystem, transform);
-    return elementType2 == elementType
-        ? this
-        : typeSystem.listType(elementType2);
-  }
+/** A type that has named fields, as a record type does. */
+public interface RecordLikeType extends Type {
+  SortedMap<String, Type> argNameTypes();
 }
 
-// End ListType.java
+// End RecordLikeType.java

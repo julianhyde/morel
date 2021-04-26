@@ -26,17 +26,22 @@ import com.google.common.collect.ImmutableSortedMap;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
-import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ConsList;
 import net.hydromatic.morel.util.Pair;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
@@ -45,14 +50,23 @@ public class Resolver {
   final TypeMap typeMap;
 
   public Resolver(TypeMap typeMap) {
-
     this.typeMap = typeMap;
+  }
+
+  private static <E, T> ImmutableList<T> transform(Iterable<? extends E> elements,
+      Function<E, T> mapper) {
+    final ImmutableList.Builder<T> b = ImmutableList.builder();
+    elements.forEach(e -> b.add(mapper.apply(e)));
+    return b.build();
   }
 
   public Core.Decl toCore(Ast.Decl node) {
     switch (node.op) {
     case VAL_DECL:
       return toCore((Ast.ValDecl) node);
+
+    case DATATYPE_DECL:
+      return toCore((Ast.DatatypeDecl) node);
 
     default:
       throw new AssertionError("unknown decl [" + node.op + ", " + node + "]");
@@ -69,17 +83,15 @@ public class Resolver {
         flatten(matches, valBind.pat, valBind.e);
         rec |= valBind.rec;
       }
-      final Pos pos = valDecl.pos;
       final List<Type> types = new ArrayList<>();
       final List<Core.Pat> pats = new ArrayList<>();
       final List<Core.Exp> exps = new ArrayList<>();
       matches.forEach((pat, exp) -> {
-        Type type = typeMap.getType(pat);
-        types.add(type);
+        types.add(typeMap.getType(pat));
         pats.add(toCore(pat));
         exps.add(toCore(exp));
       });
-      final Type tupleType = typeMap.typeSystem.tupleType();
+      final Type tupleType = typeMap.typeSystem.tupleType(types);
       final Core.Pat pat = core.tuplePat(tupleType, pats);
       final Core.Exp e2 = core.tuple(tupleType, exps);
       return core.valDecl(core.valBind(rec, pat, e2));
@@ -91,7 +103,7 @@ public class Resolver {
   }
 
   private Core.DatatypeDecl toCore(Ast.DatatypeDecl datatypeDecl) {
-    return core.datatypeDecl(Util.transform(datatypeDecl.binds, this::toCore));
+    return core.datatypeDecl(transform(datatypeDecl.binds, this::toCore));
   }
 
   private DataType toCore(Ast.DatatypeBind bind) {
@@ -99,7 +111,113 @@ public class Resolver {
   }
 
   private Core.Exp toCore(Ast.Exp e) {
-    throw new AssertionError();
+    switch (e.op) {
+    case BOOL_LITERAL:
+      return core.boolLiteral((Boolean) ((Ast.Literal) e).value);
+    case CHAR_LITERAL:
+      return core.charLiteral((Character) ((Ast.Literal) e).value);
+    case INT_LITERAL:
+      return core.intLiteral((BigDecimal) ((Ast.Literal) e).value);
+    case REAL_LITERAL:
+      return core.realLiteral((BigDecimal) ((Ast.Literal) e).value);
+    case STRING_LITERAL:
+      return core.stringLiteral((String) ((Ast.Literal) e).value);
+    case UNIT_LITERAL:
+      return core.unitLiteral();
+    case ID:
+      return toCore((Ast.Id) e);
+    case ANDALSO:
+    case ORELSE:
+      return toCore((Ast.InfixCall) e);
+    case APPLY:
+      return toCore((Ast.Apply) e);
+    case FN:
+      return toCore((Ast.Fn) e);
+    case IF:
+      return toCore((Ast.If) e);
+    case CASE:
+      return toCore((Ast.Case) e);
+    case LET:
+      return toCore((Ast.LetExp) e);
+    case FROM:
+      return toCore((Ast.From) e);
+    case TUPLE:
+      return toCore((Ast.Tuple) e);
+    case RECORD:
+      return toCore((Ast.Record) e);
+    case RECORD_SELECTOR:
+      return toCore((Ast.RecordSelector) e);
+    case LIST:
+      return toCore((Ast.ListExp) e);
+    default:
+      throw new AssertionError("unknown exp " + e.op);
+    }
+  }
+
+  private Core.Id toCore(Ast.Id id) {
+    return core.id(typeMap.getType(id), id.name);
+  }
+
+  private Core.Tuple toCore(Ast.Tuple tuple) {
+    return core.tuple(typeMap.getType(tuple),
+        transform(tuple.args, this::toCore));
+  }
+
+  private Core.Record toCore(Ast.Record record) {
+    return core.record((RecordLikeType) typeMap.getType(record),
+        transform(record.args(), this::toCore));
+  }
+
+  private Core.ListExp toCore(Ast.ListExp list) {
+    return core.list(typeMap.getType(list),
+        transform(list.args, this::toCore));
+  }
+
+  private Core.Apply toCore(Ast.Apply apply) {
+    Core.Exp coreArg = toCore(apply.arg);
+    Type type = typeMap.getType(apply);
+    Core.Exp coreFn;
+    if (apply.fn.op == Op.RECORD_SELECTOR) {
+      // Don't call "toCore(Ast.RecordSelector recordSelector)"; the
+      // type of the record selector is probably not known.
+      // Better to deduce it here, from the apply context.
+      final FnType fnType = typeMap.typeSystem.fnType(coreArg.type, type);
+      final Ast.RecordSelector recordSelector = (Ast.RecordSelector) apply.fn;
+      coreFn = core.recordSelector(fnType, recordSelector.name);
+    } else {
+      coreFn = toCore(apply.fn);
+    }
+    return core.apply(type, coreFn, coreArg);
+  }
+
+  private Core.RecordSelector toCore(Ast.RecordSelector recordSelector) {
+    return core.recordSelector((FnType) typeMap.getType(recordSelector),
+        recordSelector.name);
+  }
+
+  private Core.Apply toCore(Ast.InfixCall call) {
+    Core.Exp core0 = toCore(call.a0);
+    Core.Exp core1 = toCore(call.a1);
+    return core.apply(typeMap.getType(call), core.functionLiteral(call.op),
+        core.tuple(typeMap.typeSystem.tupleType(core0.type, core1.type), core0,
+            core1));
+  }
+
+  private Core.Fn toCore(Ast.Fn fn) {
+    return core.fn((FnType) typeMap.getType(fn),
+        transform(fn.matchList, this::toCore));
+  }
+
+  private Core.If toCore(Ast.If if_) {
+    return core.ifThenElse(toCore(if_.condition), toCore(if_.ifTrue),
+        toCore(if_.ifFalse));
+  }
+
+  private Core.Case toCore(Ast.Case case_) {
+    Iterable<? extends Ast.Match> matchList = case_.matchList;
+    Function<Ast.Match, Core.Match> toCore = this::toCore;
+    return core.caseOf(typeMap.getType(case_), toCore(case_.e),
+        transform(matchList, toCore));
   }
 
   private Core.LetExp toCore(Ast.LetExp let) {
@@ -136,7 +254,18 @@ public class Resolver {
    * or if the arguments are not in the same order as the labels in the type. */
   private Core.Pat toCore(Ast.Pat pat) {
     final Type type = typeMap.getType(pat);
+    final TupleType tupleType;
     switch (pat.op) {
+    case BOOL_LITERAL_PAT:
+    case CHAR_LITERAL_PAT:
+    case INT_LITERAL_PAT:
+    case REAL_LITERAL_PAT:
+    case STRING_LITERAL_PAT:
+      return core.literalPat(pat.op, type, ((Ast.LiteralPat) pat).value);
+
+    case WILDCARD_PAT:
+      return core.wildcardPat(type);
+
     case ID_PAT:
       final Ast.IdPat idPat = (Ast.IdPat) pat;
       if (type.op() == Op.DATA_TYPE
@@ -144,6 +273,28 @@ public class Resolver {
         return core.con0Pat((DataType) type, idPat.name);
       }
       return core.idPat(type, idPat.name);
+
+    case CON_PAT:
+      final Ast.ConPat conPat = (Ast.ConPat) pat;
+      return core.conPat(type, conPat.tyCon.name, toCore(conPat.pat));
+
+    case CON0_PAT:
+      final Ast.Con0Pat con0Pat = (Ast.Con0Pat) pat;
+      return core.con0Pat((DataType) type, con0Pat.tyCon.name);
+
+    case CONS_PAT:
+      // Cons "::" is an infix operator in Ast, a type constructor in Core, so
+      // Ast.InfixPat becomes Core.ConPat.
+      final Ast.InfixPat infixPat = (Ast.InfixPat) pat;
+      final Type type0 = typeMap.getType(infixPat.p0);
+      final Type type1 = typeMap.getType(infixPat.p1);
+      tupleType = typeMap.typeSystem.tupleType(type0, type1);
+      return core.consPat(type, BuiltIn.OP_CONS.mlName,
+          core.tuplePat(tupleType, toCore(infixPat.p0), toCore(infixPat.p1)));
+
+    case LIST_PAT:
+      final Ast.ListPat listPat = (Ast.ListPat) pat;
+      return core.listPat(type, transform(listPat.args, this::toCore));
 
     case RECORD_PAT:
       final RecordType recordType = (RecordType) type;
@@ -157,16 +308,25 @@ public class Resolver {
       });
       return core.recordPat(type, recordPat.ellipsis, args);
 
+    case TUPLE_PAT:
+      final Ast.TuplePat tuplePat = (Ast.TuplePat) pat;
+      final List<Core.Pat> argList = transform(tuplePat.args, this::toCore);
+      return core.tuplePat(type, argList);
+
     default:
       throw new AssertionError("unknown pat " + pat.op);
     }
+  }
+
+  private Core.Match toCore(Ast.Match match) {
+    return core.match(toCore(match.pat), toCore(match.e));
   }
 
   Core.From toCore(Ast.From from) {
     final Map<Core.Pat, Core.Exp> sources = new LinkedHashMap<>();
     from.sources.forEach((pat, exp) -> sources.put(toCore(pat), toCore(exp)));
     return fromStepToCore(sources, from.steps,
-        ImmutableList.of(), from.yieldExp);
+        ImmutableList.of(), from.yieldExpOrDefault);
   }
 
   /** Returns a list with one element appended.
@@ -181,7 +341,8 @@ public class Resolver {
       Ast.Exp yieldExp) {
     if (steps.isEmpty()) {
       final Core.Exp coreYieldExp = toCore(yieldExp);
-      return core.from(sources, coreSteps, coreYieldExp);
+      final ListType listType = typeMap.typeSystem.listType(coreYieldExp.type);
+      return core.from(listType, sources, coreSteps, coreYieldExp);
     }
     final Ast.FromStep step = steps.get(0);
     switch (step.op) {
@@ -194,7 +355,7 @@ public class Resolver {
     case ORDER:
       final Ast.Order order = (Ast.Order) step;
       final Core.FromStep coreOrder =
-          core.order(Util.transform(order.orderItems, this::toCore));
+          core.order(transform(order.orderItems, this::toCore));
       return fromStepToCore(sources, Util.skip(steps),
           append(coreSteps, coreOrder), yieldExp);
 

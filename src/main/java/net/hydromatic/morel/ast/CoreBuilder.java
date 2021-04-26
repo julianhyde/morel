@@ -26,7 +26,9 @@ import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 
@@ -84,7 +86,7 @@ public enum CoreBuilder {
   }
 
   /** Creates a {@code float} literal. */
-  public Core.Literal realLiteral(Pos pos, BigDecimal value) {
+  public Core.Literal realLiteral(BigDecimal value) {
     return new Core.Literal(Op.REAL_LITERAL, PrimitiveType.REAL, value);
   }
 
@@ -94,12 +96,17 @@ public enum CoreBuilder {
   }
 
   /** Creates a unit literal. */
-  public Core.Literal unitLiteral(Pos p) {
+  public Core.Literal unitLiteral() {
     return new Core.Literal(Op.UNIT_LITERAL, PrimitiveType.UNIT, Unit.INSTANCE);
   }
 
+  /** Creates a function literal. */
+  public Core.Literal functionLiteral(Op op) {
+    return new Core.Literal(Op.FN_LITERAL, PrimitiveType.UNIT, op);
+  }
+
   /** Creates a reference to a value. */
-  public Core.Id id(String name, Type type) {
+  public Core.Id id(Type type, String name) {
     return new Core.Id(name, type);
   }
 
@@ -124,12 +131,17 @@ public enum CoreBuilder {
     return new Core.IdPat(type, name);
   }
 
-//  public Core.LiteralPat literalPat(Pos pos, Op op, Comparable value) {
-//    return new Core.LiteralPat(pos, op, value);
-//  }
+  @SuppressWarnings("rawtypes")
+  public Core.LiteralPat literalPat(Op op, Type type, Comparable value) {
+    return new Core.LiteralPat(op, type, value);
+  }
 
   public Core.WildcardPat wildcardPat(Type type) {
     return new Core.WildcardPat(type);
+  }
+
+  public Core.ConPat consPat(Type type, String tyCon, Core.Pat pat) {
+    return new Core.ConPat(Op.CONS_PAT, type, tyCon, pat);
   }
 
   public Core.ConPat conPat(Type type, String tyCon, Core.Pat pat) {
@@ -144,17 +156,17 @@ public enum CoreBuilder {
     return new Core.TuplePat(type, ImmutableList.copyOf(args));
   }
 
-//  public Core.TuplePat tuplePat(Pos pos, Core.Pat... args) {
-//    return new Core.TuplePat(pos, ImmutableList.copyOf(args));
-//  }
-//
-//  public Core.ListPat listPat(Pos pos, Iterable<? extends Core.Pat> args) {
-//    return new Core.ListPat(pos, ImmutableList.copyOf(args));
-//  }
-//
-//  public Core.ListPat listPat(Pos pos, Core.Pat... args) {
-//    return new Core.ListPat(pos, ImmutableList.copyOf(args));
-//  }
+  public Core.TuplePat tuplePat(Type type, Core.Pat... args) {
+    return new Core.TuplePat(type, ImmutableList.copyOf(args));
+  }
+
+  public Core.ListPat listPat(Type type, Iterable<? extends Core.Pat> args) {
+    return new Core.ListPat(type, ImmutableList.copyOf(args));
+  }
+
+  public Core.ListPat listPat(Type type, Core.Pat... args) {
+    return new Core.ListPat(type, ImmutableList.copyOf(args));
+  }
 
   public Core.RecordPat recordPat(Type type, boolean ellipsis,
       Map<String, ? extends Core.Pat> args) {
@@ -170,17 +182,21 @@ public enum CoreBuilder {
 //    return infixPat(p0.pos.plus(p1.pos), Op.CONS_PAT, p0, p1);
 //  }
 
-  public Core.Tuple tuple(Type type, Iterable<? extends Core.Exp> list) {
-    return new Core.Tuple(type, ImmutableList.copyOf(list));
+  public Core.Tuple tuple(Type type, Iterable<? extends Core.Exp> args) {
+    return new Core.Tuple(type, ImmutableList.copyOf(args));
+  }
+
+  public Core.Tuple tuple(Type type, Core.Exp... args) {
+    return new Core.Tuple(type, ImmutableList.copyOf(args));
   }
 
   public Core.ListExp list(Type type, Iterable<? extends Core.Exp> list) {
     return new Core.ListExp(type, ImmutableList.copyOf(list));
   }
 
-  public Core.Record record(RecordType type, Map<String, Core.Exp> map) {
-    return new Core.Record(type,
-        ImmutableSortedMap.copyOf(map, RecordType.ORDERING));
+  public Core.Record record(RecordLikeType type,
+      Iterable<? extends Core.Exp> args) {
+    return new Core.Record(type, ImmutableList.copyOf(args));
   }
 
 //  public Core.Exp equal(Core.Exp a0, Core.Exp a1) {
@@ -295,30 +311,29 @@ public enum CoreBuilder {
     return new Core.ValBind(rec, pat, e);
   }
 
-//  public Core.Match match(Pos pos, Core.Pat pat, Core.Exp e) {
-//    return new Core.Match(pos, pat, e);
-//  }
-//
-//  public Core.Case caseOf(Pos pos, Core.Exp e,
-//      Iterable<? extends Core.Match> matchList) {
-//    return new Core.Case(pos, e, ImmutableList.copyOf(matchList));
-//  }
+  public Core.Match match(Core.Pat pat, Core.Exp e) {
+    return new Core.Match(pat, e);
+  }
 
-  public Core.From from(Map<Core.Pat, Core.Exp> sources,
+  public Core.Case caseOf(Type type, Core.Exp e,
+      Iterable<? extends Core.Match> matchList) {
+    return new Core.Case(type, e, ImmutableList.copyOf(matchList));
+  }
+
+  public Core.From from(ListType type, Map<Core.Pat, Core.Exp> sources,
       List<Core.FromStep> steps, Core.Exp yieldExp) {
-    return new Core.From(ImmutableMap.copyOf(sources),
+    return new Core.From(type, ImmutableMap.copyOf(sources),
         ImmutableList.copyOf(steps), yieldExp);
   }
 
-//  public Core.Fn fn(Pos pos, Core.Match... matchList) {
-//    return new Core.Fn(pos, ImmutableList.copyOf(matchList));
-//  }
-//
-//  public Core.Fn fn(Pos pos,
-//      Iterable<? extends Core.Match> matchList) {
-//    return new Core.Fn(pos, ImmutableList.copyOf(matchList));
-//  }
-//
+  public Core.Fn fn(FnType type, Core.Match... matchList) {
+    return new Core.Fn(type, ImmutableList.copyOf(matchList));
+  }
+
+  public Core.Fn fn(FnType type, Iterable<? extends Core.Match> matchList) {
+    return new Core.Fn(type, ImmutableList.copyOf(matchList));
+  }
+
 //  public Core.FunDecl funDecl(Pos pos,
 //      Iterable<? extends Core.FunBind> valBinds) {
 //    return new Core.FunDecl(pos, ImmutableList.copyOf(valBinds));
@@ -338,11 +353,11 @@ public enum CoreBuilder {
     return new Core.Apply(type, fn, arg);
   }
 
-//  public Core.Exp ifThenElse(Pos pos, Core.Exp condition, Core.Exp ifTrue,
-//      Core.Exp ifFalse) {
-//    return new Core.If(pos, condition, ifTrue, ifFalse);
-//  }
-//
+  public Core.If ifThenElse(Core.Exp condition, Core.Exp ifTrue,
+      Core.Exp ifFalse) {
+    return new Core.If(condition, ifTrue, ifFalse);
+  }
+
 //  public Core.InfixPat infixPat(Pos pos, Op op, Core.Pat p0, Core.Pat p1) {
 //    return new Core.InfixPat(pos, op, p0, p1);
 //  }
@@ -436,6 +451,7 @@ public enum CoreBuilder {
   public Core.ApplicableExp wrapApplicable(FnType fnType, Applicable applicable) {
     return new Core.ApplicableExp(applicable);
   }
+
 }
 
 // End CoreBuilder.java

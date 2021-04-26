@@ -118,8 +118,8 @@ public class TypeSystem {
   }
 
   /** Creates a tuple type from an array of types. */
-  public Type tupleType(Type... argTypes) {
-    return tupleType(ImmutableList.copyOf(argTypes));
+  public TupleType tupleType(Type argType0, Type... argTypes) {
+    return (TupleType) tupleType(Lists.asList(argType0, argTypes));
   }
 
   /** Creates a tuple type. */
