@@ -38,6 +38,7 @@ import java.util.Collections;
 import static net.hydromatic.morel.Matchers.equalsOrdered;
 import static net.hydromatic.morel.Matchers.equalsUnordered;
 import static net.hydromatic.morel.Matchers.isLiteral;
+import static net.hydromatic.morel.Matchers.isUnordered;
 import static net.hydromatic.morel.Matchers.list;
 import static net.hydromatic.morel.Matchers.throwsA;
 import static net.hydromatic.morel.Ml.assertError;
@@ -701,6 +702,28 @@ public class MainTest {
         + "  end\n"
         + "end";
     ml(ml).assertEval(is(11));
+  }
+
+  /** Tests that you can use the same variable name in different parts of the
+   * program without the types getting confused. */
+  @Test public void testSameVariableName() {
+    final String ml = "List.filter\n"
+        + " (fn e => e.x + 2 * e.y > 16)\n"
+        + " (List.map\n"
+        + "   (fn e => {x = e - 1, y = 10 - e})\n"
+        + "   [1, 2, 3, 4, 5])";
+    ml(ml).assertEval(isUnordered(list(list(0, 9), list(1, 8))));
+  }
+
+  /** As {@link #testSameVariableName()} but both variables are records. */
+  @Ignore("TODO fix type resolution bug")
+  @Test public void testSameVariableName2() {
+    final String ml = "List.filter\n"
+        + " (fn e => e.x + 2 * e.y > 16)\n"
+        + " (List.map\n"
+        + "   (fn e => {x = e.a - 1, y = 10 - e.a})\n"
+        + "   [1, 2, 3, 4, 5])";
+    ml(ml).assertEval(isUnordered(list(list(0, 9), list(1, 8))));
   }
 
   /** Tests a closure that uses one variable "x", called in an environment

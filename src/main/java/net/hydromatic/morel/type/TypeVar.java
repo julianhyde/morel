@@ -23,6 +23,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 
+import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
 
 import java.util.concurrent.ExecutionException;
@@ -44,6 +45,16 @@ public class TypeVar implements Type {
   public TypeVar(int ordinal) {
     Preconditions.checkArgument(ordinal >= 0);
     this.ordinal = ordinal;
+  }
+
+  @Override public int hashCode() {
+    return ordinal + 6563;
+  }
+
+  @Override public boolean equals(Object obj) {
+    return obj == this
+        || obj instanceof TypeVar
+        && this.ordinal == ((TypeVar) obj).ordinal;
   }
 
   /** Returns a string for debugging; see also {@link #description()}. */

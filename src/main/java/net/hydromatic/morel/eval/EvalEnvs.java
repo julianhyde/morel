@@ -244,7 +244,7 @@ public class EvalEnvs {
         return true;
 
       case CONS_PAT:
-        final Core.InfixPat infixPat = (Core.InfixPat) pat;
+        final Core.ConPat infixPat = (Core.ConPat) pat;
         @SuppressWarnings("unchecked") final List<Object> consValue =
             (List) argValue;
         if (consValue.isEmpty()) {
@@ -252,8 +252,9 @@ public class EvalEnvs {
         }
         final Object head = consValue.get(0);
         final List<Object> tail = consValue.subList(1, consValue.size());
-        return bindRecurse(infixPat.p0, head)
-            && bindRecurse(infixPat.p1, tail);
+        List<Core.Pat> patArgs = ((Core.TuplePat) infixPat.pat).args;
+        return bindRecurse(patArgs.get(0), head)
+            && bindRecurse(patArgs.get(1), tail);
 
       case CON0_PAT:
         final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;

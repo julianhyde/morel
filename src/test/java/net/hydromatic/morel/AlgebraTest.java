@@ -238,15 +238,15 @@ public class AlgebraTest {
    * executed. */
   @Test public void testHybridCalciteToMorel() {
     final String ml = "List.filter\n"
-        + "  (fn e => e.empno < 7500)\n"
+        + "  (fn x => x.empno < 7500)\n"
         + "  (from e in scott.emp\n"
         + "  where e.job = \"CLERK\"\n"
         + "  yield {e.empno, e.deptno, d5 = e.deptno + 5})";
     String plan = ""
         + "apply("
         + "fnCode apply(fnValue List.filter, "
-        + "argCode match(e, apply(fnValue <, "
-        + "argCode tuple(apply(fnValue nth, argCode get(name e)),"
+        + "argCode match(x, apply(fnValue <, "
+        + "argCode tuple(apply(fnValue nth, argCode get(name x)),"
         + " constant(7500))))), "
         + "argCode calcite("
         + "plan LogicalProject(d5=[+($1, 5)], deptno=[$1], empno=[$2])\n"

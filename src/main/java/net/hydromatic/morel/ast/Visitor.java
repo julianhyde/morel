@@ -267,6 +267,18 @@ public class Visitor {
     kase.matchList.forEach(this::accept);
   }
 
+  protected void visit(Core.Apply apply) {
+    apply.fn.accept(this);
+    apply.arg.accept(this);
+  }
+
+  protected void visit(Core.RecordSelector recordSelector) {
+  }
+
+  protected void visit(Core.Tuple tuple) {
+    tuple.args.forEach(this::accept);
+  }
+
 }
 
 // End Visitor.java

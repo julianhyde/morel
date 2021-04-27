@@ -48,12 +48,6 @@ import static java.util.Objects.requireNonNull;
 public class Ast {
   private Ast() {}
 
-  public static String toString(AstNode node) {
-    final AstWriter w = new AstWriter();
-    node.unparse(w, 0, 0);
-    return w.toString();
-  }
-
   /** Base class for a pattern.
    *
    * <p>For example, "x" in "val x = 5" is a {@link IdPat};
@@ -817,7 +811,7 @@ public class Ast {
       visitor.visit(this);
     }
 
-    AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendLiteral(value);
     }
   }

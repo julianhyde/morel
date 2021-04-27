@@ -535,20 +535,28 @@ public class CalciteCompiler extends Compiler {
 
     case APPLY:
       final Core.Apply apply = (Core.Apply) exp;
-      final SqlOperator op;
+      final SqlOperator operator;
       switch (apply.fn.op) {
       case ANDALSO:
       case ORELSE:
+        // TODO: remove this block if ANDALSO and ORELSE never happen
+        operator = INFIX_OPERATORS.get(apply.fn.op);
         assert apply.arg.op == Op.TUPLE;
-        op = INFIX_OPERATORS.get(apply.fn.op);
-        return cx.relBuilder.call(op,
+        return cx.relBuilder.call(operator,
+            translateList(cx, ((Core.Tuple) apply.arg).args));
+
+      case FN_LITERAL:
+        Op op = (Op) ((Core.Literal) apply.fn).value;
+        operator = INFIX_OPERATORS.get(op);
+        assert apply.arg.op == Op.TUPLE;
+        return cx.relBuilder.call(operator,
             translateList(cx, ((Core.Tuple) apply.arg).args));
 
       case ID:
-        op = DIRECT_OPS.get(((Core.Id) apply.fn).name);
-        if (op != null) {
+        operator = DIRECT_OPS.get(((Core.Id) apply.fn).name);
+        if (operator != null) {
           final Core.Tuple tuple = (Core.Tuple) apply.arg;
-          return cx.relBuilder.call(op, translateList(cx, tuple.args));
+          return cx.relBuilder.call(operator, translateList(cx, tuple.args));
         }
         // fall through
 

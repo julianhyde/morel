@@ -309,6 +309,7 @@ public class Converters {
         return new C2m(typeBuilder.build(), type);
 
       case TUPLE_TYPE:
+        // TODO: merge with previous case, using RecordLikeType
         typeBuilder = typeFactory.builder();
         final TupleType tupleType = (TupleType) type;
         Ord.forEach(tupleType.argTypes, (argType, i) ->

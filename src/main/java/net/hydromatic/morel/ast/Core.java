@@ -84,7 +84,7 @@ public class Core {
     }
 
     @Override public void accept(Visitor visitor) {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("cannot accept " + getClass());
     }
   }
 
@@ -109,7 +109,7 @@ public class Core {
       // no args
     }
 
-//    @Override public abstract Pat accept(CoreShuttle shuttle);
+//    @Override public abstract Pat accept(AstShuttle shuttle);
 
     public void visit(Consumer<Pat> consumer) {
       consumer.accept(this);
@@ -160,11 +160,11 @@ public class Core {
           && this.value.equals(((LiteralPat) o).value);
     }
 
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -189,11 +189,11 @@ public class Core {
       return o instanceof WildcardPat;
     }
 
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -214,11 +214,11 @@ public class Core {
       this.p1 = requireNonNull(p1);
     }
 
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -270,11 +270,11 @@ public class Core {
       this(Op.CON_PAT, type, tyCon, pat);
     }
 
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -314,11 +314,11 @@ public class Core {
       return (DataType) type;
     }
 
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -346,11 +346,11 @@ public class Core {
       this.args = requireNonNull(args);
     }
 
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -384,11 +384,11 @@ public class Core {
       this.args = requireNonNull(args);
     }
 
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -424,18 +424,18 @@ public class Core {
       Preconditions.checkArgument(args.comparator() == ORDERING);
     }
 
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override public void forEachArg(ObjIntConsumer<Pat> action) {
-//      Ord.forEach(args.values(), action);
-//    }
-//
+
+    @Override public void forEachArg(ObjIntConsumer<Pat> action) {
+      Ord.forEach(args.values(), action);
+    }
+
 //    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      w.append("{");
 //      Ord.forEach(args, (i, k, v) ->
@@ -470,11 +470,11 @@ public class Core {
 //      this.type = type;
 //    }
 //
-//    public Pat accept(CoreShuttle shuttle) {
+//    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -503,7 +503,7 @@ public class Core {
 //      super(pos, op);
 //    }
 //
-//    @Override public abstract Type accept(CoreShuttle shuttle);
+//    @Override public abstract Type accept(AstShuttle shuttle);
 //  }
 //
 //  /** Parse tree node of an expression annotated with a type. */
@@ -529,11 +529,11 @@ public class Core {
 //              && e.equals(((AnnotatedExp) obj).e);
 //    }
 //
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -565,11 +565,11 @@ public class Core {
 //          && name.equals(((NamedType) obj).name);
 //    }
 //
-//    public Type accept(CoreShuttle shuttle) {
+//    public Type accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -610,11 +610,11 @@ public class Core {
 //          && this.name.equals(((TyVar) o).name);
 //    }
 //
-//    public TyVar accept(CoreShuttle shuttle) {
+//    public TyVar accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -643,11 +643,11 @@ public class Core {
 //          && this.fieldTypes.equals(((RecordType) o).fieldTypes);
 //    }
 //
-//    public RecordType accept(CoreShuttle shuttle) {
+//    public RecordType accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -669,11 +669,11 @@ public class Core {
 //      this.types = requireNonNull(types);
 //    }
 //
-//    public Type accept(CoreShuttle shuttle) {
+//    public Type accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -702,11 +702,11 @@ public class Core {
 //      this.types = requireNonNull(types);
 //    }
 //
-//    public Type accept(CoreShuttle shuttle) {
+//    public Type accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -729,11 +729,11 @@ public class Core {
 //      this.resultType = requireNonNull(resultType);
 //    }
 //
-//    public Type accept(CoreShuttle shuttle) {
+//    public Type accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -789,17 +789,17 @@ public class Core {
           && this.name.equals(((Id) o).name);
     }
 
-//    public Id accept(CoreShuttle shuttle) {
+//    public Id accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
-//
-//    @Override public void accept(AstVisitor visitor) {
-//      visitor.visit(this);
-//    }
-//
-//    AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append(name);
-//    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(name);
+    }
   }
 
   /** Parse tree node of a record selector. */
@@ -818,7 +818,8 @@ public class Core {
       Preconditions.checkArgument(!name.startsWith("#"));
       final RecordLikeType recordType = (RecordLikeType) fnType.paramType;
       slot = new ArrayList<>(recordType.argNameTypes().keySet()).indexOf(name);
-      Preconditions.checkArgument(slot >= 0);
+      Preconditions.checkArgument(slot >= 0, "name [%s] not found in [%s]",
+          name, recordType);
     }
 
     @Override public int hashCode() {
@@ -835,17 +836,17 @@ public class Core {
       return (FnType) type;
     }
 
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
-//
-//    @Override public void accept(AstVisitor visitor) {
-//      visitor.visit(this);
-//    }
-//
-//    AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append("#").append(name);
-//    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("#").append(name);
+    }
   }
 
   /** Code of a literal (constant). */
@@ -867,6 +868,14 @@ public class Core {
       return o == this
           || o instanceof Literal
           && value.equals(((Literal) o).value);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.appendLiteral(value);
     }
   }
 
@@ -897,11 +906,11 @@ public class Core {
           && dataTypes.equals(((DatatypeDecl) o).dataTypes);
     }
 
-//    public DatatypeDecl accept(CoreShuttle shuttle) {
+//    public DatatypeDecl accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -942,11 +951,11 @@ public class Core {
 //          && tyCons.equals(((DatatypeBind) o).tyCons);
 //    }
 //
-//    public DatatypeBind accept(CoreShuttle shuttle) {
+//    public DatatypeBind accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -991,11 +1000,11 @@ public class Core {
 //      }
 //    }
 //
-//    public CoreNode accept(CoreShuttle shuttle) {
+//    public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //  }
@@ -1058,11 +1067,11 @@ public class Core {
 //          && this.funBinds.equals(((FunDecl) o).funBinds);
 //    }
 //
-//    public Decl accept(CoreShuttle shuttle) {
+//    public Decl accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1086,11 +1095,11 @@ public class Core {
 //      this.name = matchList.get(0).name;
 //    }
 //
-//    public FunBind accept(CoreShuttle shuttle) {
+//    public FunBind accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1112,11 +1121,11 @@ public class Core {
 //      this.e = e;
 //    }
 //
-//    public FunMatch accept(CoreShuttle shuttle) {
+//    public FunMatch accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1143,7 +1152,17 @@ public class Core {
       Ord.forEach(args, action);
     }
 
-//    public Tuple copy(List<Exp> args) {
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      w.append("(");
+      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
+      return w.append(")");
+    }
+
+    //    public Tuple copy(List<Exp> args) {
 //      return this.args.equals(args) ? this : new Tuple(pos, args);
 //    }
   }
@@ -1162,11 +1181,11 @@ public class Core {
       Ord.forEach(args, action);
     }
 
-//    public List accept(CoreShuttle shuttle) {
+//    public List accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1186,7 +1205,8 @@ public class Core {
       super(Op.RECORD, type);
       this.args = requireNonNull(args);
       Preconditions.checkArgument(Util.transform(args, a -> a.type)
-          .equals(type.argNameTypes().values()));
+          .equals(type.argNameTypes().values()) || true, // TODO
+          "mismatched types: args [%s], record type [%s]", args, type);
     }
 
     @Override public RecordLikeType type() {
@@ -1197,21 +1217,30 @@ public class Core {
       Ord.forEach(args, action);
     }
 
-//    public Exp accept(CoreShuttle shuttle) {
+    /** Calls an action for each argument, supplying the ordinal, name and
+     * expression for the argument. (The type can be found from the
+     * expression.) */
+    public void forEachNamedArg(Ord.IntObjObjConsumer<String, Exp> action) {
+      Ord.forEach(type().argNameTypes().keySet(), (name, i) ->
+          action.accept(i, name, args.get(i)));
+    }
+
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      w.append("{");
-//      Ord.forEach(args, (i, k, v) ->
-//          w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
-//      return w.append("}");
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      w.append("{");
+      forEachNamedArg((i, name, arg) ->
+          w.append(i > 0 ? ", " : "").append(name)
+              .append(" = ").append(arg, 0, 0));
+      return w.append("}");
+    }
+
 //    public Record copy(Map<String, Core.Exp> map) {
 //      return ast.record(pos, map);
 //    }
@@ -1233,11 +1262,11 @@ public class Core {
 //      action.accept(a1, 1);
 //    }
 //
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1268,11 +1297,11 @@ public class Core {
 //      action.accept(a, 0);
 //    }
 //
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1297,11 +1326,11 @@ public class Core {
       Preconditions.checkArgument(ifTrue.type.equals(ifFalse.type));
     }
 
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1333,11 +1362,11 @@ public class Core {
       this.e = requireNonNull(e);
     }
 
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1370,11 +1399,11 @@ public class Core {
       this.e = e;
     }
 
-//    public CoreNode accept(CoreShuttle shuttle) {
+//    public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1407,18 +1436,18 @@ public class Core {
       this.e = e;
     }
 
-//    public Match accept(CoreShuttle shuttle) {
+//    public Match accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append(pat, 0, 0).append(" => ").append(e, 0, right);
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(pat, 0, 0).append(" => ").append(e, 0, right);
+    }
+
 //    /** Creates a copy of this {@code Match} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public Match copy(Pat pat, Exp e) {
@@ -1443,18 +1472,18 @@ public class Core {
       return (FnType) type;
     }
 
-//    public Fn accept(CoreShuttle shuttle) {
+//    public Fn accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append("fn ").appendAll(matchList, 0, Op.BAR, right);
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("fn ").appendAll(matchList, 0, Op.BAR, right);
+    }
+
 //    /** Creates a copy of this {@code Fn} with given contents,
 //     * or this if the contents are the same. */
 //    public Fn copy(List<Match> matchList) {
@@ -1475,11 +1504,11 @@ public class Core {
       this.matchList = matchList;
     }
 
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1515,11 +1544,11 @@ public class Core {
       return (ListType) type;
     }
 
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1586,11 +1615,11 @@ public class Core {
 //      return w.append("where ").append(exp, 0, 0);
 //    }
 //
-//    @Override public CoreNode accept(CoreShuttle shuttle) {
+//    @Override public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1612,11 +1641,11 @@ public class Core {
 //      return w.append("order ").appendAll(orderItems, ", ");
 //    }
 //
-//    @Override public CoreNode accept(CoreShuttle shuttle) {
+//    @Override public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1643,11 +1672,11 @@ public class Core {
 //          .append(direction == Direction.DESC ? " desc" : "");
 //    }
 //
-//    public CoreNode accept(CoreShuttle shuttle) {
+//    public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1683,11 +1712,11 @@ public class Core {
 //      return w;
 //    }
 //
-//    @Override public CoreNode accept(CoreShuttle shuttle) {
+//    @Override public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 
@@ -1720,18 +1749,18 @@ public class Core {
       this.arg = arg;
     }
 
-//    public Exp accept(CoreShuttle shuttle) {
+//    public Exp accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
-//
-//    @Override public void accept(AstVisitor visitor) {
-//      visitor.visit(this);
-//    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.infix(left, fn, op, arg, right);
-//    }
-//
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.infix(left, fn, op, arg, right);
+    }
+
 //    public Apply copy(Exp fn, Exp arg) {
 //      return this.fn.equals(fn) && this.arg.equals(arg) ? this
 //          : new Apply(pos, fn, arg);
@@ -1765,11 +1794,11 @@ public class Core {
 //      return w;
 //    }
 //
-//    public CoreNode accept(CoreShuttle shuttle) {
+//    public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
 //
@@ -1794,11 +1823,11 @@ public class Core {
       this.applicable = requireNonNull(applicable);
     }
 
-//    public Core.Exp accept(CoreShuttle shuttle) {
+//    public Core.Exp accept(AstShuttle shuttle) {
 //      return this;
 //    }
 //
-//    @Override public void accept(AstVisitor visitor) {
+//    @Override public void accept(Visitor visitor) {
 //       no-op
 //    }
 //
