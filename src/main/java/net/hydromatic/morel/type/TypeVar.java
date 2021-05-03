@@ -23,7 +23,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 
-import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
 
 import java.util.concurrent.ExecutionException;

@@ -40,6 +40,12 @@ public class AstWriter {
     return this;
   }
 
+  /** Appends an identifier to the output. */
+  public AstWriter id(String s) {
+    b.append(s);
+    return this;
+  }
+
   /** Appends a call to an infix operator. */
   public AstWriter infix(int left, AstNode a0, Op op, AstNode a1, int right) {
     if (op == Op.APPLY && a0.op == Op.ID) {

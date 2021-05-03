@@ -337,7 +337,8 @@ group deptno = e.deptno
 from e in emps, d in depts
 where e.deptno = d.deptno
 group e.deptno, ename = e.name, dname = d.name
-  compute sumId = sum of e.id;
+  compute sumId = sum of e.id
+order ename;
 
 (*) empty 'group'
 from e in emps
@@ -442,7 +443,8 @@ from e in emps,
     d in depts
   where e.deptno = d.deptno
   group x = e.id + d.deptno, e.deptno
-    compute sumId = sum of e.id;
+    compute sumId = sum of e.id
+  order x desc;
 
 (*) Join followed by single group (from right input)
 from e in emps,

@@ -34,6 +34,7 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.Pair;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -70,13 +71,9 @@ public class Core {
   }
 
   /** Abstract base class of Core nodes. */
-  static class BaseNode extends AstNode {
+  abstract static class BaseNode extends AstNode {
     BaseNode(Op op) {
       super(ZERO, op);
-    }
-
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
-      throw new UnsupportedOperationException("cannot unparse " + getClass());
     }
 
     @Override public AstNode accept(Shuttle shuttle) {
@@ -129,7 +126,7 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(name);
+      return w.id(name);
     }
   }
 
@@ -167,10 +164,10 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.appendLiteral(value);
-//    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.appendLiteral(value);
+    }
   }
 
   /** Wildcard pattern.
@@ -196,24 +193,24 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append("_");
-//    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("_");
+    }
   }
 
-  /** Pattern build from an infix operator applied to two patterns. */
+//  /** Pattern build from an infix operator applied to two patterns. */
   // TODO: replace with another composite pattern
-  public static class InfixPat extends Pat {
-    public final Pat p0;
-    public final Pat p1;
-
-    InfixPat(Op op, Type type, Pat p0, Pat p1) {
-      super(op, type);
-      this.p0 = requireNonNull(p0);
-      this.p1 = requireNonNull(p1);
-    }
-
+//  public static class InfixPat extends Pat {
+//    public final Pat p0;
+//    public final Pat p1;
+//
+//    InfixPat(Op op, Type type, Pat p0, Pat p1) {
+//      super(op, type);
+//      this.p0 = requireNonNull(p0);
+//      this.p1 = requireNonNull(p1);
+//    }
+//
 //    public Pat accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
@@ -222,10 +219,10 @@ public class Core {
 //      visitor.visit(this);
 //    }
 
-    @Override public void forEachArg(ObjIntConsumer<Pat> action) {
-      action.accept(p0, 0);
-      action.accept(p1, 1);
-    }
+//    @Override public void forEachArg(ObjIntConsumer<Pat> action) {
+//      action.accept(p0, 0);
+//      action.accept(p1, 1);
+//    }
 
 //    @Override AstWriter unparse(AstWriter w, int left, int right) {
 //      return w.infix(left, p0, op, p1, right);
@@ -240,7 +237,7 @@ public class Core {
 //          ? this
 //          : ast.infixPat(pos, op, p0, p1);
 //    }
-  }
+//  }
 
   /** Type constructor pattern with an argument.
    *
@@ -283,7 +280,7 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(tyCon).append("(").append(pat, 0, 0).append(")");
+      return w.id(tyCon).append("(").append(pat, 0, 0).append(")");
     }
 
 //    /** Creates a copy of this {@code ConPat} with given contents,
@@ -321,11 +318,11 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return tyCon.unparse(w, left, right);
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.id(tyCon);
+    }
+
 //    /** Creates a copy of this {@code Con0Pat} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public Con0Pat copy(Id tyCon) {
@@ -436,19 +433,19 @@ public class Core {
       Ord.forEach(args.values(), action);
     }
 
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      w.append("{");
-//      Ord.forEach(args, (i, k, v) ->
-//          w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
-//      if (ellipsis) {
-//        if (!args.isEmpty()) {
-//          w.append(", ");
-//        }
-//        w.append("...");
-//      }
-//      return w.append("}");
-//    }
-//
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      w.append("{");
+      Ord.forEach(args, (i, k, v) ->
+          w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
+      if (ellipsis) {
+        if (!args.isEmpty()) {
+          w.append(", ");
+        }
+        w.append("...");
+      }
+      return w.append("}");
+    }
+
 //    public RecordPat copy(boolean ellipsis, Map<String, ? extends Pat> args) {
 //      return this.ellipsis == ellipsis
 //          && this.args.equals(args)
@@ -745,7 +742,7 @@ public class Core {
 //  }
 
   /** Base class of core expressions. */
-  public static class Exp extends BaseNode {
+  public abstract static class Exp extends BaseNode {
     public final Type type;
 
     Exp(Op op, Type type) {
@@ -798,7 +795,7 @@ public class Core {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(name);
+      return w.id(name);
     }
   }
 
@@ -913,10 +910,14 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.appendAll(binds, "datatype ", " and ", "");
-//    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      Ord.forEach(dataTypes, (dataType, i) -> {
+        w.append(i == 0 ? "datatype " : " and ")
+            .append(dataType.toString());
+      });
+      return w;
+    }
   }
 
 //  /** Datatype binding.
@@ -1044,6 +1045,10 @@ public class Core {
 //          ? this
 //          : ast.valDecl(pos, valBinds);
 //    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("val ").append(valBind, 0, right);
+    }
   }
 
 //  /** Parse tree node of a function declaration. */
@@ -1188,12 +1193,12 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      w.append("[");
-//      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
-//      return w.append("]");
-//    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      w.append("[");
+      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
+      return w.append("]");
+    }
   }
 
   /** Record. */
@@ -1205,7 +1210,7 @@ public class Core {
       super(Op.RECORD, type);
       this.args = requireNonNull(args);
       Preconditions.checkArgument(Util.transform(args, a -> a.type)
-          .equals(type.argNameTypes().values()) || true, // TODO
+          .equals(type.argNameTypes().values()) || 0 == 0, // TODO
           "mismatched types: args [%s], record type [%s]", args, type);
     }
 
@@ -1236,7 +1241,7 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       w.append("{");
       forEachNamedArg((i, name, arg) ->
-          w.append(i > 0 ? ", " : "").append(name)
+          w.append(i > 0 ? ", " : "").id(name)
               .append(" = ").append(arg, 0, 0));
       return w.append("}");
     }
@@ -1333,13 +1338,13 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append("if ").append(condition, 0, 0)
-//          .append(" then ").append(ifTrue, 0, 0)
-//          .append(" else ").append(ifFalse, 0, right);
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("if ").append(condition, 0, 0)
+          .append(" then ").append(ifTrue, 0, 0)
+          .append(" else ").append(ifFalse, 0, right);
+    }
+
 //    /** Creates a copy of this {@code If} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public If copy(Exp condition, Exp ifTrue, Exp ifFalse) {
@@ -1369,12 +1374,13 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.appendAll(decls, "let ", "; ", " in ")
-//          .append(e, 0, 0).append(" end");
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("let ").append(decl, 0, 0)
+          .append(" in ").append(e, 0, 0)
+          .append(" end");
+    }
+
 //    /** Creates a copy of this {@code LetExp} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public LetExp copy(Iterable<Decl> decls, Exp e) {
@@ -1406,14 +1412,14 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      if (rec) {
-//        w.append("rec ");
-//      }
-//      return w.append(pat, 0, 0).append(" = ").append(e, 0, right);
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      if (rec) {
+        w.append("rec ");
+      }
+      return w.append(pat, 0, 0).append(" = ").append(e, 0, right);
+    }
+
 //    /** Creates a copy of this {@code ValBind} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public ValBind copy(boolean rec, Pat pat, Exp e) {
@@ -1511,12 +1517,12 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append("case ").append(e, 0, 0).append(" of ")
-//          .appendAll(matchList, left, Op.BAR, right);
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("case ").append(e, 0, 0).append(" of ")
+          .appendAll(matchList, left, Op.BAR, right);
+    }
+
 //    public Case copy(Exp e, List<Match> matchList) {
 //      return this.e.equals(e)
 //          && this.matchList.equals(matchList)
@@ -1551,26 +1557,26 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //      visitor.visit(this);
 //    }
-//
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      if (left > op.left || op.right < right) {
-//        return w.append("(").append(this, 0, 0).append(")");
-//      } else {
-//        w.append("from");
-//        Ord.forEach(sources, (i, id, exp) ->
-//            w.append(i == 0 ? " " : ", ")
-//                .append(id, 0, 0).append(" in ").append(exp, 0, 0));
-//        for (FromStep step : steps) {
-//          w.append(" ");
-//          step.unparse(w, 0, 0);
-//        }
-//        if (yieldExp != null) {
-//          w.append(" yield ").append(yieldExp, 0, 0);
-//        }
-//        return w;
-//      }
-//    }
-//
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      if (left > op.left || op.right < right) {
+        return w.append("(").append(this, 0, 0).append(")");
+      } else {
+        w.append("from");
+        Ord.forEach(sources, (i, id, exp) ->
+            w.append(i == 0 ? " " : ", ")
+                .append(id, 0, 0).append(" in ").append(exp, 0, 0));
+        for (FromStep step : steps) {
+          w.append(" ");
+          step.unparse(w, 0, 0);
+        }
+        if (yieldExp != null) {
+          w.append(" yield ").append(yieldExp, 0, 0);
+        }
+        return w;
+      }
+    }
+
 //    /** Creates a copy of this {@code From} with given contents,
 //     * or {@code this} if the contents are the same. */
 //    public From copy(Map<Core.Pat, Core.Exp> sources,
@@ -1611,10 +1617,10 @@ public class Core {
       this.exp = exp;
     }
 
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append("where ").append(exp, 0, 0);
-//    }
-//
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("where ").append(exp, 0, 0);
+    }
+
 //    @Override public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
@@ -1637,10 +1643,10 @@ public class Core {
       this.orderItems = requireNonNull(orderItems);
     }
 
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append("order ").appendAll(orderItems, ", ");
-//    }
-//
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("order ").appendAll(orderItems, ", ");
+    }
+
 //    @Override public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
@@ -1667,11 +1673,11 @@ public class Core {
       this.direction = requireNonNull(direction);
     }
 
-//    AstWriter unparse(AstWriter w, int left, int right) {
-//      return w.append(exp, 0, 0)
-//          .append(direction == Direction.DESC ? " desc" : "");
-//    }
-//
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(exp, 0, 0)
+          .append(direction == Ast.Direction.DESC ? " desc" : "");
+    }
+
 //    public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
@@ -1700,18 +1706,16 @@ public class Core {
       this.aggregates = aggregates;
     }
 
-//    @Override AstWriter unparse(AstWriter w, int left, int right) {
-//      Pair.forEachIndexed(groupExps, (i, id, exp) ->
-//          w.append(i == 0 ? "group " : ", ")
-//              .append(id, 0, 0)
-//              .append(" = ")
-//              .append(exp, 0, 0));
-//      Ord.forEach(aggregates, (aggregate, i) ->
-//          w.append(i == 0 ? " compute " : ", ")
-//              .append(aggregate, 0, 0));
-//      return w;
-//    }
-//
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      Pair.forEachIndexed(groupExps, (i, id, exp) ->
+          w.append(i == 0 ? "group " : ", ")
+              .id(id).append(" = ").append(exp, 0, 0));
+      Pair.forEachIndexed(aggregates, (i, name, aggregate) ->
+          w.append(i == 0 ? " compute " : ", ")
+              .id(name).append(" = ").append(aggregate, 0, 0));
+      return w;
+    }
+
 //    @Override public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
@@ -1783,17 +1787,15 @@ public class Core {
       this.argument = argument;
     }
 
-//    AstWriter unparse(AstWriter w, int left, int right) {
-//      w.append(id.name)
-//          .append(" = ")
-//          .append(aggregate, 0, 0);
-//      if (argument != null) {
-//        w.append(" of ")
-//            .append(argument, 0, 0);
-//      }
-//      return w;
-//    }
-//
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(aggregate, 0, 0);
+      if (argument != null) {
+        w.append(" of ")
+            .append(argument, 0, 0);
+      }
+      return w;
+    }
+
 //    public CoreNode accept(AstShuttle shuttle) {
 //      return shuttle.visit(this);
 //    }
@@ -1830,10 +1832,10 @@ public class Core {
 //    @Override public void accept(Visitor visitor) {
 //       no-op
 //    }
-//
-//    AstWriter unparse(AstWriter w, int left, int right) {
-//      return w;
-//    }
+
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w;
+    }
   }
 }
 

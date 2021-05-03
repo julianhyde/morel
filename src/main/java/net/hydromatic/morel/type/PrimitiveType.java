@@ -59,7 +59,6 @@ public enum PrimitiveType implements RecordLikeType {
     return typeVisitor.visit(this);
   }
 
-
   public Type copy(TypeSystem typeSystem, Function<Type, Type> transform) {
     return transform.apply(this);
   }

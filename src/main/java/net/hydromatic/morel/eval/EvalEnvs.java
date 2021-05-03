@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableMap;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.util.Pair;
 
+import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -50,10 +51,6 @@ public class EvalEnvs {
       this.parentEnv = parentEnv;
       this.name = name;
       this.value = value;
-    }
-
-    @Override public String toString() {
-      return valueMap().toString();
     }
 
     public void visit(BiConsumer<String, Object> consumer) {
@@ -97,14 +94,10 @@ public class EvalEnvs {
     protected Object[] values;
 
     ArraySubEvalEnv(EvalEnv parentEnv, ImmutableList<String> names,
-        Object[] values) {
+        @Nullable Object[] values) {
       this.parentEnv = Objects.requireNonNull(parentEnv);
       this.names = Objects.requireNonNull(names);
       this.values = values; // may be null
-    }
-
-    @Override public String toString() {
-      return valueMap().toString();
     }
 
     public void visit(BiConsumer<String, Object> consumer) {
@@ -129,10 +122,6 @@ public class EvalEnvs {
       implements MutableEvalEnv {
     MutableArraySubEvalEnv(EvalEnv parentEnv, List<String> names) {
       super(parentEnv, ImmutableList.copyOf(names), null);
-    }
-
-    @Override public String toString() {
-      return valueMap().toString();
     }
 
     public void set(Object value) {
@@ -279,10 +268,6 @@ public class EvalEnvs {
 
     MapEvalEnv(Map<String, Object> valueMap) {
       this.valueMap = ImmutableMap.copyOf(valueMap);
-    }
-
-    @Override public String toString() {
-      return valueMap().toString();
     }
 
     public Object getOpt(String name) {

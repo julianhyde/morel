@@ -90,7 +90,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(name);
+      return w.id(name);
     }
   }
 
@@ -385,10 +385,7 @@ public class Ast {
       Ord.forEach(args, (i, k, v) ->
           w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
       if (ellipsis) {
-        if (!args.isEmpty()) {
-          w.append(", ");
-        }
-        w.append("...");
+        w.append(args.isEmpty() ? "..." : ", ...");
       }
       return w.append("}");
     }
@@ -520,16 +517,16 @@ public class Ast {
     AstWriter unparse(AstWriter w, int left, int right) {
       switch (types.size()) {
       case 0:
-        return w.append(name);
+        return w.id(name);
       case 1:
         return w.append(types.get(0), left, op.left)
-            .append(" ").append(name);
+            .append(" ").id(name);
       default:
         w.append("(");
         Ord.forEach(types, (type, i) ->
             w.append(i == 0 ? "" : ", ").append(type, 0, 0));
         return w.append(") ")
-            .append(name);
+            .id(name);
       }
     }
   }
@@ -563,7 +560,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(name);
+      return w.id(name);
     }
   }
 
@@ -599,7 +596,7 @@ public class Ast {
       w.append("{");
       Ord.forEach(fieldTypes, (i, field, type) ->
           w.append(i > 0 ? ", " : "")
-              .append(field).append(": ").append(type, 0, 0));
+              .id(field).append(": ").append(type, 0, 0));
       return w.append("}");
     }
   }
@@ -737,7 +734,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(name);
+      return w.id(name);
     }
   }
 
@@ -908,7 +905,7 @@ public class Ast {
       default:
         w.appendAll(tyVars, "(", ", ", ") ");
       }
-      return w.append(name.name)
+      return w.id(name.name)
           .appendAll(tyCons, " = ", " | ", "");
     }
   }
@@ -1079,7 +1076,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(name);
+      w.id(name);
       for (Pat pat : patList) {
         w.append(" ").append(pat, Op.APPLY.left, Op.APPLY.right);
       }
@@ -1747,7 +1744,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(id.name)
+      w.id(id.name)
           .append(" = ")
           .append(aggregate, 0, 0);
       if (argument != null) {

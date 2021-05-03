@@ -858,24 +858,29 @@ public class TypeResolver {
       //  fun f {a=1,...} = 1 | f {b=2,...} = 2
       //
       // we cannot deduce whether a 'c' field is allowed.
-      final Ast.RecordPat record = (Ast.RecordPat) pat;
+      final Ast.RecordPat recordPat = (Ast.RecordPat) pat;
       final NavigableMap<String, Unifier.Term> labelTerms =
           new TreeMap<>(RecordType.ORDERING);
       if (labelNames == null) {
-        labelNames = new TreeSet<>(record.args.keySet());
+        labelNames = new TreeSet<>(recordPat.args.keySet());
       }
       final Map<String, Ast.Pat> args = new TreeMap<>(RecordType.ORDERING);
+      final Map<String, Ast.Pat> args2 = new TreeMap<>(RecordType.ORDERING);
       for (String labelName : labelNames) {
         final Unifier.Variable vArg = unifier.variable();
         labelTerms.put(labelName, vArg);
-        final Ast.Pat argPat = record.args.get(labelName);
+        final Ast.Pat argPat = recordPat.args.get(labelName);
         if (argPat != null) {
-          args.put(labelName, deducePatType(env, argPat, termMap, null, vArg));
+          args.put(labelName,
+              deducePatType(env, argPat, termMap, null, vArg));
+        } else {
+          final Ast.WildcardPat argPat2 = ast.wildcardPat(Pos.ZERO);
+          args2.put(labelName,
+              deducePatType(env, argPat2, termMap, null, vArg));
         }
       }
-      final Unifier.Variable v2;
-      if (record.ellipsis) {
-        v2 = unifier.variable();
+      if (recordPat.ellipsis) {
+        Unifier.Variable v2 = unifier.variable();
         actionMap.put(v, (v3, t, substitution, termPairs) -> {
           // We now know the type of the source record, say "{a: int, b: real}".
           // So, now we can fill out the ellipsis.
@@ -897,10 +902,15 @@ public class TypeResolver {
             }
           }
         });
+        args.putAll(args2);
+        Unifier.Term record = record(labelTerms);
+        reg(recordPat.copy(false, args), v2, record);
+        return reg(recordPat.copy(recordPat.ellipsis, args), null,
+            record);
       } else {
-        v2 = v;
+        return reg(recordPat.copy(recordPat.ellipsis, args), v,
+            record(labelTerms));
       }
-      return reg(record.copy(record.ellipsis, args), v2, record(labelTerms));
 
     case CON_PAT:
       final Ast.ConPat conPat = (Ast.ConPat) pat;
