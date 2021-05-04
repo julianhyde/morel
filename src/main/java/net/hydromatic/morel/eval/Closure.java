@@ -154,8 +154,7 @@ public class Closure implements Comparable<Closure>, Applicable {
     case RECORD_PAT:
       final Core.RecordPat recordPat = (Core.RecordPat) pat;
       listValue = (List) argValue;
-      for (Pair<Core.Pat, Object> pair
-          : Pair.zip(recordPat.args.values(), listValue)) {
+      for (Pair<Core.Pat, Object> pair : Pair.zip(recordPat.args, listValue)) {
         if (!bindRecurse(pair.left, envRef, pair.right)) {
           return false;
         }

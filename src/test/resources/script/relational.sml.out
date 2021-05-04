@@ -900,9 +900,6 @@ val it = [{a=1,c=3},{a=1,c=4}] : {a:int, c:int} list
 from {a, c, ...} in [{a=1,b=true,c=3},{a=1,b=true,c=4}];
 val it = [{a=1,c=3},{a=1,c=4}] : {a:int, c:int} list
 
-from {a = a, c = c, ...} in [{a=1,b=true,c=3},{a=1,b=true,c=4}];
-val it = [{a=1,c=3},{a=1,c=4}] : {a:int, c:int} list
-
 from {b = y, ...} in [{a=1,b=2}];
 val it = [2] : int list
 

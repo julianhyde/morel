@@ -32,6 +32,7 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
@@ -47,7 +48,6 @@ import java.util.function.ObjIntConsumer;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.Pos.ZERO;
-import static net.hydromatic.morel.type.RecordType.ORDERING;
 
 import static java.util.Objects.requireNonNull;
 
@@ -252,7 +252,7 @@ public class Core {
 
     /** Mostly-private constructor.
      *
-     * <p>Exposed so that "op ::" (cons) can supply a differnt {@link Op}
+     * <p>Exposed so that "op ::" (cons) can supply a different {@link Op}
      * value. The "list" datatype is not represented the same as other
      * datatypes, and the separate "op" value allows us to deconstruct it in a
      * different way. */
@@ -410,15 +410,16 @@ public class Core {
 
   /** Record pattern. */
   public static class RecordPat extends Pat {
-    public final boolean ellipsis;
-    public final SortedMap<String, Pat> args;
+    public final List<Pat> args;
 
-    RecordPat(Type type, boolean ellipsis,
-        ImmutableSortedMap<String, Pat> args) {
+    RecordPat(RecordType type, ImmutableList<Pat> args) {
       super(Op.RECORD_PAT, type);
-      this.ellipsis = ellipsis;
       this.args = requireNonNull(args);
-      Preconditions.checkArgument(args.comparator() == ORDERING);
+      Preconditions.checkArgument(args.size() == type.argNameTypes.size());
+    }
+
+    @Override public RecordType type() {
+      return (RecordType) type;
     }
 
 //    public Pat accept(AstShuttle shuttle) {
@@ -430,19 +431,14 @@ public class Core {
 //    }
 
     @Override public void forEachArg(ObjIntConsumer<Pat> action) {
-      Ord.forEach(args.values(), action);
+      Ord.forEach(args, action);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       w.append("{");
-      Ord.forEach(args, (i, k, v) ->
-          w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
-      if (ellipsis) {
-        if (!args.isEmpty()) {
-          w.append(", ");
-        }
-        w.append("...");
-      }
+      Pair.forEachIndexed(type().argNameTypes.keySet(), args, (i, name, arg) ->
+          w.append(i > 0 ? ", " : "").append(name)
+              .append(" = ").append(arg, 0, 0));
       return w.append("}");
     }
 

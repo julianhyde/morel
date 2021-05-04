@@ -865,7 +865,6 @@ public class TypeResolver {
         labelNames = new TreeSet<>(recordPat.args.keySet());
       }
       final Map<String, Ast.Pat> args = new TreeMap<>(RecordType.ORDERING);
-      final Map<String, Ast.Pat> args2 = new TreeMap<>(RecordType.ORDERING);
       for (String labelName : labelNames) {
         final Unifier.Variable vArg = unifier.variable();
         labelTerms.put(labelName, vArg);
@@ -873,44 +872,37 @@ public class TypeResolver {
         if (argPat != null) {
           args.put(labelName,
               deducePatType(env, argPat, termMap, null, vArg));
-        } else {
-          final Ast.WildcardPat argPat2 = ast.wildcardPat(Pos.ZERO);
-          args2.put(labelName,
-              deducePatType(env, argPat2, termMap, null, vArg));
         }
       }
-      if (recordPat.ellipsis) {
-        Unifier.Variable v2 = unifier.variable();
-        actionMap.put(v, (v3, t, substitution, termPairs) -> {
-          // We now know the type of the source record, say "{a: int, b: real}".
-          // So, now we can fill out the ellipsis.
-          assert v == v3;
-          if (t instanceof Unifier.Sequence) {
-            final Unifier.Sequence sequence = (Unifier.Sequence) t;
-            final List<String> fieldList = fieldList(sequence);
-            if (fieldList != null) {
-              final NavigableMap<String, Unifier.Term> labelTerms2 =
-                  new TreeMap<>(RecordType.ORDERING);
-              Ord.forEach(fieldList, (fieldName, i) -> {
-                if (labelTerms.containsKey(fieldName)) {
-                  labelTerms2.put(fieldName, sequence.terms.get(i));
-                }
-              });
-              final Unifier.Term result2 = substitution.resolve(v2);
-              final Unifier.Term term2 = record(labelTerms2);
-              termPairs.add(new Unifier.TermTerm(result2, term2));
-            }
-          }
-        });
-        args.putAll(args2);
-        Unifier.Term record = record(labelTerms);
-        reg(recordPat.copy(false, args), v2, record);
-        return reg(recordPat.copy(recordPat.ellipsis, args), null,
-            record);
-      } else {
-        return reg(recordPat.copy(recordPat.ellipsis, args), v,
-            record(labelTerms));
+      final Unifier.Term record = record(labelTerms);
+      final Ast.RecordPat recordPat2 = recordPat.copy(recordPat.ellipsis, args);
+      if (!recordPat.ellipsis) {
+        return reg(recordPat2, v, record);
       }
+      final Unifier.Variable v2 = unifier.variable();
+      equiv(record, v2);
+      actionMap.put(v, (v3, t, substitution, termPairs) -> {
+        // We now know the type of the source record, say "{a: int, b: real}".
+        // So, now we can fill out the ellipsis.
+        assert v == v3;
+        if (t instanceof Unifier.Sequence) {
+          final Unifier.Sequence sequence = (Unifier.Sequence) t;
+          final List<String> fieldList = fieldList(sequence);
+          if (fieldList != null) {
+            final NavigableMap<String, Unifier.Term> labelTerms2 =
+                new TreeMap<>(RecordType.ORDERING);
+            Ord.forEach(fieldList, (fieldName, i) -> {
+              if (labelTerms.containsKey(fieldName)) {
+                labelTerms2.put(fieldName, sequence.terms.get(i));
+              }
+            });
+            final Unifier.Term result2 = substitution.resolve(v2);
+            final Unifier.Term term2 = record(labelTerms2);
+            termPairs.add(new Unifier.TermTerm(result2, term2));
+          }
+        }
+      });
+      return reg(recordPat2, null, record);
 
     case CON_PAT:
       final Ast.ConPat conPat = (Ast.ConPat) pat;

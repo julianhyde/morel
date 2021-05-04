@@ -24,12 +24,12 @@ import com.google.common.collect.ImmutableMap;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.util.Pair;
 
-import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiConsumer;
+import javax.annotation.Nullable;
 
 /** Helpers for {@link EvalEnv}. */
 public class EvalEnvs {
@@ -212,7 +212,7 @@ public class EvalEnvs {
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
         listValue = (List) argValue;
         for (Pair<Core.Pat, Object> pair
-            : Pair.zip(recordPat.args.values(), listValue)) {
+            : Pair.zip(recordPat.args, listValue)) {
           if (!bindRecurse(pair.left, pair.right)) {
             return false;
           }

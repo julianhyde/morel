@@ -561,7 +561,6 @@ from {a = a, b = b, c = _} in [{a=1,b=true,c=3},{a=1,b=true,c=4}], d in ["a", "b
 from {a = a, b = b, ...} in [{a=1,b=true,c=3},{a=1,b=true,c=4}];
 from {a = a, c = c, ...} in [{a=1,b=true,c=3},{a=1,b=true,c=4}];
 from {a, c, ...} in [{a=1,b=true,c=3},{a=1,b=true,c=4}];
-from {a = a, c = c, ...} in [{a=1,b=true,c=3},{a=1,b=true,c=4}];
 from {b = y, ...} in [{a=1,b=2}];
 from {b = y, a = (p, q)} in [{a=(1,true),b=2}];
 from {b = y, a = (2, q)} in [{a=(1,true),b=2},{a=(2,false),b=3}];

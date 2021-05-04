@@ -168,10 +168,9 @@ public enum CoreBuilder {
     return new Core.ListPat(type, ImmutableList.copyOf(args));
   }
 
-  public Core.RecordPat recordPat(Type type, boolean ellipsis,
-      Map<String, ? extends Core.Pat> args) {
-    return new Core.RecordPat(type, ellipsis,
-        ImmutableSortedMap.copyOf(args, RecordType.ORDERING));
+  public Core.RecordPat recordPat(RecordType type,
+      List<? extends Core.Pat> args) {
+    return new Core.RecordPat(type, ImmutableList.copyOf(args));
   }
 
 //  public Core.AnnotatedPat annotatedPat(Pos pos, Core.Pat pat, Core.Type type) {

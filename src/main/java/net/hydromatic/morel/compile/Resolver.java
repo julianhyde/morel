@@ -248,12 +248,21 @@ public class Resolver {
     }
   }
 
+  private Core.Pat toCore(Ast.Pat pat) {
+    final Type type = typeMap.getType(pat);
+    return toCore(pat, type, type);
+  }
+
+  private Core.Pat toCore(Ast.Pat pat, Type targetType) {
+    final Type type = typeMap.getType(pat);
+    return toCore(pat, type, targetType);
+  }
+
   /** Converts a pattern to Core.
    *
    * <p>Expands a pattern if it is a record pattern that has an ellipsis
    * or if the arguments are not in the same order as the labels in the type. */
-  private Core.Pat toCore(Ast.Pat pat) {
-    final Type type = typeMap.getType(pat);
+  private Core.Pat toCore(Ast.Pat pat, Type type, Type targetType) {
     final TupleType tupleType;
     switch (pat.op) {
     case BOOL_LITERAL_PAT:
@@ -297,16 +306,16 @@ public class Resolver {
       return core.listPat(type, transform(listPat.args, this::toCore));
 
     case RECORD_PAT:
-      final RecordType recordType = (RecordType) type;
+      final RecordType recordType = (RecordType) targetType;
       final Ast.RecordPat recordPat = (Ast.RecordPat) pat;
-      final Map<String, Core.Pat> args = new LinkedHashMap<>();
+      final ImmutableList.Builder<Core.Pat> args = ImmutableList.builder();
       recordType.argNameTypes.forEach((label, argType) -> {
         final Ast.Pat argPat = recordPat.args.get(label);
         final Core.Pat corePat = argPat != null ? toCore(argPat)
             : core.wildcardPat(argType);
-        args.put(label, corePat);
+        args.add(corePat);
       });
-      return core.recordPat(type, recordPat.ellipsis, args);
+      return core.recordPat(recordType, args.build());
 
     case TUPLE_PAT:
       final Ast.TuplePat tuplePat = (Ast.TuplePat) pat;
@@ -324,7 +333,11 @@ public class Resolver {
 
   Core.From toCore(Ast.From from) {
     final Map<Core.Pat, Core.Exp> sources = new LinkedHashMap<>();
-    from.sources.forEach((pat, exp) -> sources.put(toCore(pat), toCore(exp)));
+    from.sources.forEach((pat, exp) -> {
+      Core.Exp coreExp = toCore(exp);
+      Core.Pat corePat = toCore(pat, ((ListType) coreExp.type).elementType);
+      sources.put(corePat, coreExp);
+    });
     return fromStepToCore(sources, from.steps,
         ImmutableList.of(), from.yieldExpOrDefault);
   }
