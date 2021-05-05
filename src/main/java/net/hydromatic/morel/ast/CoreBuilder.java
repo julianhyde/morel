@@ -45,6 +45,12 @@ public enum CoreBuilder {
   // CHECKSTYLE: IGNORE 1
   core;
 
+  private final Core.LiteralPat truePat =
+      literalPat(Op.BOOL_LITERAL_PAT, PrimitiveType.BOOL, Boolean.TRUE);
+
+  private final Core.WildcardPat boolWildcardPat =
+      wildcardPat(PrimitiveType.BOOL);
+
   /** Creates a {@code boolean} literal. */
   public Core.Literal boolLiteral(boolean b) {
     return new Core.Literal(Op.BOOL_LITERAL, PrimitiveType.BOOL, b);
@@ -182,9 +188,13 @@ public enum CoreBuilder {
     return new Core.Apply(type, fn, arg);
   }
 
-  public Core.If ifThenElse(Core.Exp condition, Core.Exp ifTrue,
+  public Core.Case ifThenElse(Core.Exp condition, Core.Exp ifTrue,
       Core.Exp ifFalse) {
-    return new Core.If(condition, ifTrue, ifFalse);
+    // Translate "if c then a else b"
+    // as if user had written "case c of true => a | _ => b"
+    return new Core.Case(ifTrue.type, condition,
+        ImmutableList.of(match(truePat, ifTrue),
+            match(boolWildcardPat, ifFalse)));
   }
 
   public Core.DatatypeDecl datatypeDecl(Iterable<DataType> dataTypes) {

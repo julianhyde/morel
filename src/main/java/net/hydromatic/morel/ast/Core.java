@@ -546,29 +546,6 @@ public class Core {
     }
   }
 
-  /** "If ... else" expression. */
-  // TODO: replace If(c,t,f) with Case(c, true, t, f)
-  public static class If extends Exp {
-    public final Exp condition;
-    public final Exp ifTrue;
-    public final Exp ifFalse;
-
-    If(Exp condition, Exp ifTrue, Exp ifFalse) {
-      super(Op.IF, ifTrue.type);
-      this.condition = condition;
-      this.ifTrue = ifTrue;
-      this.ifFalse = ifFalse;
-      checkArgument(condition.type == PrimitiveType.BOOL);
-      checkArgument(ifTrue.type.equals(ifFalse.type));
-    }
-
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("if ").append(condition, 0, 0)
-          .append(" then ").append(ifTrue, 0, 0)
-          .append(" else ").append(ifFalse, 0, right);
-    }
-  }
-
   /** "Let" expression. */
   public static class LetExp extends Exp {
     public final Decl decl;
@@ -622,7 +599,9 @@ public class Core {
     }
   }
 
-  /** Case expression. */
+  /** Case expression.
+   *
+   * <p>Also implements {@link Ast.If}. */
   public static class Case extends Exp {
     public final Exp e;
     public final List<Match> matchList;

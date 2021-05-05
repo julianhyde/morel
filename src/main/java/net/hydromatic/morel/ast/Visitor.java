@@ -251,12 +251,6 @@ public class Visitor {
   protected void visit(Core.Id id) {
   }
 
-  protected void visit(Core.If anIf) {
-    anIf.condition.accept(this);
-    anIf.ifTrue.accept(this);
-    anIf.ifFalse.accept(this);
-  }
-
   protected void visit(Core.LetExp e) {
     e.decl.accept(this);
     e.e.accept(this);

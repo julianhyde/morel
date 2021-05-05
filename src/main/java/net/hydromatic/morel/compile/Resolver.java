@@ -207,7 +207,7 @@ public class Resolver {
         transform(fn.matchList, this::toCore));
   }
 
-  private Core.If toCore(Ast.If if_) {
+  private Core.Case toCore(Ast.If if_) {
     return core.ifThenElse(toCore(if_.condition), toCore(if_.ifTrue),
         toCore(if_.ifFalse));
   }

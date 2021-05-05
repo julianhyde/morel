@@ -193,13 +193,6 @@ public class Compiler {
     case UNIT_LITERAL:
       return Codes.constant(Unit.INSTANCE);
 
-    case IF:
-      final Core.If if_ = (Core.If) expression;
-      final Code conditionCode = compile(cx, if_.condition);
-      final Code trueCode = compile(cx, if_.ifTrue);
-      final Code falseCode = compile(cx, if_.ifFalse);
-      return Codes.ifThenElse(conditionCode, trueCode, falseCode);
-
     case LET:
       return compileLet(cx, (Core.LetExp) expression);
 
