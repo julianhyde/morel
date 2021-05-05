@@ -21,12 +21,14 @@ package net.hydromatic.morel.foreign;
 import org.apache.calcite.avatica.util.DateTimeUtils;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.EnumerableDefaults;
+import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.util.ImmutableNullableList;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -35,6 +37,7 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
@@ -46,10 +49,8 @@ import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.AbstractList;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
@@ -58,54 +59,69 @@ public class Converters {
   private Converters() {
   }
 
-  public static Converter ofRow(RelDataType rowType) {
+  public static Converter<Object[]> ofRow(RelDataType rowType) {
     final List<RelDataTypeField> fields = rowType.getFieldList();
-    final List<Converter> converters = new ArrayList<>();
+    final ImmutableList.Builder<Converter<Object[]>> converters =
+        ImmutableList.builder();
     Ord.forEach(fields, (field, i) ->
         converters.add(ofField(field.getType(), i)));
-    return new CalciteForeignValue.RecordConverter(converters);
+    return new RecordConverter(converters.build());
   }
 
-  public static Converter ofRow2(RelDataType rowType, RecordType type) {
-    return ofRow3(rowType.getFieldList(), new AtomicInteger(),
-        type.argNameTypes);
+  public static Converter<Object[]> ofRow2(RelDataType rowType,
+      RecordLikeType type) {
+    return ofRow3(rowType.getFieldList().iterator(),
+        new AtomicInteger(), Linq4j.enumerator(type.argNameTypes().values()));
   }
 
-  public static Converter ofRow2(RelDataType rowType, TupleType type) {
-    final Map<String, Type> argNameTypes = new LinkedHashMap<>();
-    Ord.forEach(type.argTypes, (argType, i) ->
-        argNameTypes.put(Integer.toString(i), argType));
-    return ofRow3(rowType.getFieldList(), new AtomicInteger(), argNameTypes);
-  }
-
-  static Converter ofRow3(List<RelDataTypeField> fields,
-      AtomicInteger ordinal, Map<String, Type> argNameTypes) {
-    final List<Converter> converters = new ArrayList<>();
-    for (Type fieldType : argNameTypes.values()) {
-      converters.add(ofField2(fields, ordinal, fieldType));
+  static Converter<Object[]> ofRow3(Iterator<RelDataTypeField> fields,
+      AtomicInteger ordinal, Enumerator<Type> types) {
+    final ImmutableList.Builder<Converter<Object[]>> converters =
+        ImmutableList.builder();
+    while (types.moveNext()) {
+      converters.add(ofField2(fields, ordinal, types.current()));
     }
-    return new CalciteForeignValue.RecordConverter(converters);
+    return new RecordConverter(converters.build());
   }
 
-  public static Converter ofField(RelDataType type, int ordinal) {
+  public static Converter<Object[]> ofField(RelDataType type, int ordinal) {
     final FieldConverter fieldConverter = FieldConverter.toType(type);
     return values -> fieldConverter.convertFrom(values[ordinal]);
   }
 
-  static Converter ofField2(List<RelDataTypeField> fields,
+  static Converter<Object[]> ofField2(Iterator<RelDataTypeField> fields,
       AtomicInteger ordinal, Type type) {
+    final RelDataTypeField field = fields.next();
     if (type instanceof RecordType) {
-      return ofRow3(fields, ordinal, ((RecordType) type).argNameTypes);
+      if (field.getType().isStruct()) {
+        return offset(ordinal.getAndIncrement(),
+            ofRow3(field.getType().getFieldList().iterator(),
+                new AtomicInteger(),
+                Linq4j.enumerator(((RecordType) type).argNameTypes.values())));
+      } else {
+        return ofRow3(fields, ordinal,
+            Linq4j.enumerator(((RecordType) type).argNameTypes.values()));
+      }
     }
-    final int i = ordinal.getAndIncrement();
-    return ofField3(fields.get(i), i, type);
+    return ofField3(field, ordinal, type);
   }
 
-  static Converter ofField3(RelDataTypeField field, int ordinal,
-      Type type) {
+  /** Creates a converter that applies to the {@code i}th field of the input
+   * array. */
+  static Converter<Object[]> offset(int i, Converter<Object[]> converter) {
+    return values -> converter.apply((Object[]) values[i]);
+  }
+
+  static Converter<Object[]> ofField3(RelDataTypeField field,
+      AtomicInteger ordinal, Type type) {
+    if (field.getType().isStruct()) {
+      return ofRow3(field.getType().getFieldList().iterator(), ordinal,
+          Linq4j.singletonEnumerator(type));
+    }
     final FieldConverter fieldConverter =
         FieldConverter.toType(field.getType());
-    return values -> fieldConverter.convertFrom(values[ordinal]);
+    final int i = ordinal.getAndIncrement();
+    return values -> fieldConverter.convertFrom(values[i]);
   }
 
   @SuppressWarnings("unchecked")
@@ -118,20 +134,18 @@ public class Converters {
     return enumerable -> enumerable.select(elementConverter::apply).toList();
   }
 
-  public static Function forType(RelDataType fromType, Type type) {
+  @SuppressWarnings("unchecked")
+  public static <E> Function<E, Object> forType(RelDataType fromType, Type type) {
     if (type == PrimitiveType.UNIT) {
       return o -> Unit.INSTANCE;
-    }
-    if (type instanceof RecordType) {
-      return ofRow2(fromType, (RecordType) type);
-    }
-    if (type instanceof TupleType) {
-      return ofRow2(fromType, (TupleType) type);
     }
     if (type instanceof PrimitiveType) {
       RelDataTypeField field =
           Iterables.getOnlyElement(fromType.getFieldList());
-      return Converters.ofField(field.getType(), 0);
+      return (Converter<E>) ofField(field.getType(), 0);
+    }
+    if (type instanceof RecordLikeType) {
+      return (Converter<E>) ofRow2(fromType, (RecordLikeType) type);
     }
     if (fromType.isNullable()) {
       return o -> o == null ? BigDecimal.ZERO : o;
@@ -436,6 +450,25 @@ public class Converters {
       default:
         throw new AssertionError("unknown type " + morelType);
       }
+    }
+  }
+
+  /** Converter that creates a record. Uses one sub-Converter per output
+   * field. */
+  private static class RecordConverter implements Converter<Object[]> {
+    final Object[] tempValues;
+    final ImmutableList<Converter<Object[]>> converterList;
+
+    RecordConverter(ImmutableList<Converter<Object[]>> converterList) {
+      tempValues = new Object[converterList.size()];
+      this.converterList = converterList;
+    }
+
+    @Override public List<Object> apply(Object[] a) {
+      for (int i = 0; i < tempValues.length; i++) {
+        tempValues[i] = converterList.get(i).apply(a);
+      }
+      return ImmutableNullableList.copyOf(tempValues);
     }
   }
 }

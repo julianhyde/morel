@@ -283,6 +283,18 @@ public class AlgebraTest {
         .assertPlan(is(plan));
   }
 
+  /** Tests a query that is "from" over no variables. The result has one row
+   * and zero columns. */
+  @Test public void testCalciteFrom() {
+    final String ml = "from";
+    String plan = "calcite(plan LogicalValues(tuples=[[{  }]])\n)";
+    ml(ml)
+        .with(Prop.HYBRID, true)
+        .assertType("unit list")
+        .assertPlan(is(plan))
+        .assertEvalIter(equalsOrdered(list()));
+  }
+
   /** Tests a query that is executed in Calcite except for a variable, 'five',
    * whose value happens to always be 5. */
   @Test public void testCalciteWithVariable() {
