@@ -176,8 +176,8 @@ class Ml {
         final Calcite calcite = Calcite.withDataSets(dataSetMap);
         final TypeResolver.Resolved resolved =
             Compiles.validateExpression(expression, calcite.foreignValues());
-        final Ast.Exp resolvedExp =
-            Compiles.toExp((Ast.ValDecl) resolved.node);
+        final Ast.ValDecl valDecl = (Ast.ValDecl) resolved.node;
+        final Ast.Exp resolvedExp = valDecl.valBinds.get(0).e;
         action.accept(resolvedExp, resolved.typeMap);
       } catch (ParseException e) {
         throw new RuntimeException(e);

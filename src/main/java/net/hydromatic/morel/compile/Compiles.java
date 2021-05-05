@@ -94,15 +94,8 @@ public abstract class Compiles {
 
   /** Converts {@code val = e} to {@code e};
    * the converse of {@link #toValDecl(Ast.Exp)}. */
-  // TODO: remove if not used
-  public static Ast.Exp toExp(Ast.ValDecl decl) {
-    return decl.valBinds.get(0).e;
-  }
-
-  /** Converts {@code val = e} to {@code e};
-   * the converse of {@link #toValDecl(Ast.Exp)}. */
   public static Core.Exp toExp(Core.ValDecl decl) {
-    return decl.valBind.e;
+    return decl.e;
   }
 }
 

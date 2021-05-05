@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 
-import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
@@ -63,7 +62,6 @@ public class Ast {
 
     @Override public abstract Pat accept(Shuttle shuttle);
 
-    // TODO: is this used?
     public void visit(Consumer<Pat> consumer) {
       consumer.accept(this);
       forEachArg((arg, i) -> arg.visit(consumer));
@@ -1221,7 +1219,7 @@ public class Ast {
     }
   }
 
-  /** Call to an prefix operator. */
+  /** Call to a prefix operator. */
   public static class PrefixCall extends Exp {
     public final Exp a;
 
@@ -1768,31 +1766,6 @@ public class Ast {
           && this.id.equals(id)
           ? this
           : ast.aggregate(pos, aggregate, argument, id);
-    }
-  }
-
-  /** Expression that is a wrapped {@link Applicable}.
-   *
-   * <p>Does not occur in the output of the parser, only as an intermediate
-   * value during compilation. */
-  public static class ApplicableExp extends Ast.Exp {
-    public final Applicable applicable;
-
-    ApplicableExp(Applicable applicable) {
-      super(Pos.ZERO, Op.WRAPPED_APPLICABLE);
-      this.applicable = requireNonNull(applicable);
-    }
-
-    public Ast.Exp accept(Shuttle shuttle) {
-      return this;
-    }
-
-    @Override public void accept(Visitor visitor) {
-      // no-op
-    }
-
-    AstWriter unparse(AstWriter w, int left, int right) {
-      return w;
     }
   }
 }

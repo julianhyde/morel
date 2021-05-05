@@ -55,7 +55,6 @@ import java.util.function.Supplier;
 
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
-import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
 /** Compiles an expression to code that can be evaluated. */
@@ -75,7 +74,7 @@ public class Compiler {
     final Context cx = Context.of(env);
     compileDecl(cx, decl, matchCodes, bindings, actions);
     final Type type = decl instanceof Core.ValDecl
-        ? ((Core.ValDecl) decl).valBind.pat.type
+        ? ((Core.ValDecl) decl).pat.type
         : PrimitiveType.UNIT;
     final CalciteFunctions.Context context = createContext(env);
 
@@ -242,10 +241,6 @@ public class Compiler {
         codes.add(compile(cx, arg));
       }
       return Codes.tuple(codes);
-
-    case RECORD:
-      final Core.Record record = (Core.Record) expression;
-      return compile(cx, core.tuple(record.type, record.args));
 
     default:
       throw new AssertionError("op not handled: " + expression.op);
@@ -503,13 +498,13 @@ public class Compiler {
 
   private void compileValDecl(Context cx, Core.ValDecl valDecl,
       List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
-    valDecl.valBind.pat.visit(pat -> {
+    valDecl.pat.visit(pat -> {
       if (pat instanceof Core.IdPat) {
         Core.IdPat idPat = (Core.IdPat) pat;
         bindings.add(Binding.of(idPat.name, idPat.type));
       }
     });
-    compileValBind(cx, valDecl.valBind, matchCodes, bindings, actions);
+    compileValBind(cx, valDecl, matchCodes, bindings, actions);
   }
 
   private void compileDatatypeDecl(Core.DatatypeDecl datatypeDecl,
@@ -574,7 +569,7 @@ public class Compiler {
     return Pair.of(match.pat, code);
   }
 
-  private void compileValBind(Context cx, Core.ValBind valBind,
+  private void compileValBind(Context cx, Core.ValDecl valBind,
       List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
     final List<Binding> newBindings = new TailList<>(bindings);
     final Map<Core.IdPat, LinkCode> linkCodes = new IdentityHashMap<>();

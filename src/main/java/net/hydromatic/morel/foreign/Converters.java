@@ -314,21 +314,13 @@ public class Converters {
             type);
 
       case RECORD_TYPE:
+      case TUPLE_TYPE:
         typeBuilder = typeFactory.builder();
-        final RecordType recordType = (RecordType) type;
-        recordType.argNameTypes.forEach((name, argType) ->
+        final RecordLikeType recordType = (RecordLikeType) type;
+        recordType.argNameTypes().forEach((name, argType) ->
             typeBuilder.add(name,
                 forMorel(argType, typeFactory, nullable, recordList)
                     .calciteType));
-        return new C2m(typeBuilder.build(), type);
-
-      case TUPLE_TYPE:
-        // TODO: merge with previous case, using RecordLikeType
-        typeBuilder = typeFactory.builder();
-        final TupleType tupleType = (TupleType) type;
-        Ord.forEach(tupleType.argTypes, (argType, i) ->
-            typeBuilder.add(Integer.toString(i),
-                forMorel(argType, typeFactory, nullable, false).calciteType));
         return new C2m(typeBuilder.build(), type);
 
       case ID:

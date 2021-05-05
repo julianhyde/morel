@@ -123,13 +123,13 @@ public class TypeSystem {
   }
 
   /** Creates a tuple type. */
-  public Type tupleType(List<? extends Type> argTypes) {
+  public RecordLikeType tupleType(List<? extends Type> argTypes) {
     if (argTypes.isEmpty()) {
       return PrimitiveType.UNIT;
     }
     final String description =
         unparseList(new StringBuilder(), Op.TIMES, 0, 0, argTypes).toString();
-    return typeByName.computeIfAbsent(description,
+    return (RecordLikeType) typeByName.computeIfAbsent(description,
         d -> new TupleType(d, ImmutableList.copyOf(argTypes)));
   }
 

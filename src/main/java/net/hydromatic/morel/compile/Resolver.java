@@ -91,14 +91,13 @@ public class Resolver {
         pats.add(toCore(pat));
         exps.add(toCore(exp));
       });
-      final Type tupleType = typeMap.typeSystem.tupleType(types);
+      final RecordLikeType tupleType = typeMap.typeSystem.tupleType(types);
       final Core.Pat pat = core.tuplePat(tupleType, pats);
       final Core.Exp e2 = core.tuple(tupleType, exps);
-      return core.valDecl(core.valBind(rec, pat, e2));
+      return core.valDecl(rec, pat, e2);
     } else {
       Ast.ValBind valBind = valDecl.valBinds.get(0);
-      return core.valDecl(
-          core.valBind(valBind.rec, toCore(valBind.pat), toCore(valBind.e)));
+      return core.valDecl(valBind.rec, toCore(valBind.pat), toCore(valBind.e));
     }
   }
 
@@ -159,12 +158,12 @@ public class Resolver {
   }
 
   private Core.Tuple toCore(Ast.Tuple tuple) {
-    return core.tuple(typeMap.getType(tuple),
+    return core.tuple((RecordLikeType) typeMap.getType(tuple),
         transform(tuple.args, this::toCore));
   }
 
-  private Core.Record toCore(Ast.Record record) {
-    return core.record((RecordLikeType) typeMap.getType(record),
+  private Core.Tuple toCore(Ast.Record record) {
+    return core.tuple((RecordLikeType) typeMap.getType(record),
         transform(record.args(), this::toCore));
   }
 

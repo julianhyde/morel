@@ -56,12 +56,10 @@ import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
-import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.ThreadLocals;
 
 import java.math.BigDecimal;
@@ -365,7 +363,9 @@ public class CalciteCompiler extends Compiler {
         }
         final Map<String, Function<RelBuilder, RexNode>> map = new HashMap<>();
         if (sourceCodes.size() == 0) {
-          relBuilder.values(new String[] {"ZERO"}, 0);
+          // One row, zero columns
+          relBuilder.values(ImmutableList.of(ImmutableList.of()),
+              relBuilder.getTypeFactory().builder().build());
         } else {
           final SortedMap<String, VarData> varOffsets = new TreeMap<>();
           int i = 0;
@@ -445,7 +445,7 @@ public class CalciteCompiler extends Compiler {
   }
 
   private RelBuilder yield_(RelContext cx, Core.Exp exp) {
-    final Core.Record record;
+    final Core.Tuple record;
     switch (exp.op) {
     case ID:
       final Core.Id id = (Core.Id) exp;
@@ -455,25 +455,18 @@ public class CalciteCompiler extends Compiler {
       }
       break;
 
-    case RECORD:
-      record = (Core.Record) exp;
-      final RecordLikeType recordType = record.type();
-      return cx.relBuilder.project(
-          Util.transform(record.args, e -> translate(cx, e)),
-          recordType.argNameTypes().keySet());
-
     case TUPLE:
       final Core.Tuple tuple = (Core.Tuple) exp;
       return cx.relBuilder.project(
           Util.transform(tuple.args, e -> translate(cx, e)),
-          Util.transformIndexed(tuple.args, (e, i) -> Integer.toString(i)));
+          ImmutableList.copyOf(tuple.type().argNameTypes().keySet()));
     }
     RexNode rex = translate(cx, exp);
     return cx.relBuilder.project(rex);
   }
 
   private RexNode translate(RelContext cx, Core.Exp exp) {
-    final Core.Record record;
+    final Core.Tuple record;
     final RelDataTypeFactory.Builder builder;
     final List<RexNode> operands;
     switch (exp.op) {
@@ -537,14 +530,6 @@ public class CalciteCompiler extends Compiler {
       final Core.Apply apply = (Core.Apply) exp;
       final SqlOperator operator;
       switch (apply.fn.op) {
-      case ANDALSO:
-      case ORELSE:
-        // TODO: remove this block if ANDALSO and ORELSE never happen
-        operator = INFIX_OPERATORS.get(apply.fn.op);
-        assert apply.arg.op == Op.TUPLE;
-        return cx.relBuilder.call(operator,
-            translateList(cx, ((Core.Tuple) apply.arg).args));
-
       case FN_LITERAL:
         Op op = (Op) ((Core.Literal) apply.fn).value;
         operator = INFIX_OPERATORS.get(op);
@@ -587,19 +572,6 @@ public class CalciteCompiler extends Compiler {
         final RexNode e = translate(cx, arg);
         operands.add(e);
         builder.add(Integer.toString(i), e.getType());
-      });
-      return cx.relBuilder.getRexBuilder().makeCall(builder.build(),
-          SqlStdOperatorTable.ROW, operands);
-
-    case RECORD:
-      record = (Core.Record) exp;
-      builder = cx.relBuilder.getTypeFactory().builder();
-      operands = new ArrayList<>();
-      final Set<String> argNames = record.type().argNameTypes().keySet();
-      Pair.forEach(argNames, record.args, (name, arg) -> {
-        final RexNode e = translate(cx, arg);
-        operands.add(e);
-        builder.add(name, e.getType());
       });
       return cx.relBuilder.getRexBuilder().makeCall(builder.build(),
           SqlStdOperatorTable.ROW, operands);
@@ -649,7 +621,7 @@ public class CalciteCompiler extends Compiler {
         Arrays.asList(cx.relBuilder.literal(morelArgType), fn, arg));
   }
 
-  private Core.Record toRecord(RelContext cx, Core.Id id) {
+  private Core.Tuple toRecord(RelContext cx, Core.Id id) {
     final Type type = cx.env.get(id.name).type;
     if (type instanceof RecordType) {
       final RecordType recordType = (RecordType) type;
@@ -660,7 +632,7 @@ public class CalciteCompiler extends Compiler {
                   core.recordSelector(typeSystem.fnType(recordType, fieldType),
                       field),
                   id)));
-      return core.record(recordType, args);
+      return core.tuple(recordType, args);
     }
     return null;
   }
