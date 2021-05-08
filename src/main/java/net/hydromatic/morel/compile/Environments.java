@@ -66,16 +66,18 @@ public abstract class Environments {
       Map<String, ForeignValue> valueMap) {
     final List<Binding> bindings = new ArrayList<>();
     BuiltIn.dataTypes(typeSystem, bindings);
-    for (Map.Entry<BuiltIn, Object> entry : Codes.BUILT_IN_VALUES.entrySet()) {
-      BuiltIn key = entry.getKey();
+    Codes.BUILT_IN_VALUES.forEach((key, value) -> {
+      if ("$".equals(key.structure)) {
+        return; // ignore Z_ANDALSO, Z_LIST, etc.
+      }
       final Type type = key.typeFunction.apply(typeSystem);
       if (key.structure == null) {
-        bindings.add(Binding.of(key.mlName, type, entry.getValue()));
+        bindings.add(Binding.of(key.mlName, type, value));
       }
       if (key.alias != null) {
-        bindings.add(Binding.of(key.alias, type, entry.getValue()));
+        bindings.add(Binding.of(key.alias, type, value));
       }
-    }
+    });
 
     final EvalEnv emptyEnv = Codes.emptyEnv();
     BuiltIn.forEachStructure(typeSystem, (structure, type) ->

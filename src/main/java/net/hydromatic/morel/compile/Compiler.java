@@ -245,9 +245,9 @@ public class Compiler {
       // curried, nor do they evaluate an expression to yield the tuple of
       // arguments.
       final Core.Literal literal = (Core.Literal) apply.fn;
-      final Op op = (Op) literal.value;
+      final BuiltIn builtIn = (BuiltIn) literal.value;
       assert apply.arg.op == Op.TUPLE;
-      return compileCall(cx, op, ((Core.Tuple) apply.arg).args);
+      return compileCall(cx, builtIn, ((Core.Tuple) apply.arg).args);
     }
     final Code argCode = compileArg(cx, apply.arg);
     final Type argType = apply.arg.type;
@@ -508,21 +508,21 @@ public class Compiler {
     }
   }
 
-  private Code compileCall(Context cx, Op op,
+  private Code compileCall(Context cx, BuiltIn builtIn,
       Iterable<? extends Core.Exp> args) {
     final List<Code> argCodes;
-    switch (op) {
-    case ANDALSO:
+    switch (builtIn) {
+    case Z_ANDALSO:
       argCodes = compileArgs(cx, args);
       return Codes.andAlso(argCodes.get(0), argCodes.get(1));
-    case ORELSE:
+    case Z_ORELSE:
       argCodes = compileArgs(cx, args);
       return Codes.orElse(argCodes.get(0), argCodes.get(1));
-    case LIST:
+    case Z_LIST:
       argCodes = compileArgs(cx, args);
       return Codes.list(argCodes);
     default:
-      throw new AssertionError("unknown op " + op);
+      throw new AssertionError("unknown " + builtIn);
     }
   }
 

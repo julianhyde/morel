@@ -30,7 +30,6 @@ import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
 
 import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
@@ -1501,7 +1500,7 @@ public abstract class Codes {
                         core.stringLiteral(entry.getValue().type.moniker()))))
             .collect(Collectors.toList());
     return core.apply(typeSystem.listType(argType),
-        core.functionLiteral(Op.LIST), core.tuple(typeSystem, args));
+        core.functionLiteral(BuiltIn.Z_LIST), core.tuple(typeSystem, args));
   }
 
   /** @see BuiltIn#SYS_PLAN */
@@ -1816,6 +1815,15 @@ public abstract class Codes {
   /** @see BuiltIn#VECTOR_COLLATE */
   private static final Applicable VECTOR_COLLATE = LIST_COLLATE;
 
+  /** @see BuiltIn#Z_LIST */
+  private static final Applicable Z_LIST =
+      new ApplicableImpl("$.list") {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          assert arg instanceof List;
+          return arg;
+        }
+      };
+
   private static void populateBuiltIns(Map<String, Object> valueMap) {
     // Dummy type system, thrown away after this method
     final TypeSystem typeSystem = new TypeSystem();
@@ -2019,6 +2027,9 @@ public abstract class Codes {
           .put(BuiltIn.VECTOR_EXISTS, VECTOR_EXISTS)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_COLLATE, VECTOR_COLLATE)
+          .put(BuiltIn.Z_ANDALSO, Unit.INSTANCE)
+          .put(BuiltIn.Z_ORELSE, Unit.INSTANCE)
+          .put(BuiltIn.Z_LIST, Z_LIST)
           .build();
 
   /** A code that evaluates expressions and creates a tuple with the results.

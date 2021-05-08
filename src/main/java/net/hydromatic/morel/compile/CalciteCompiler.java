@@ -99,10 +99,10 @@ public class CalciteCompiler extends Compiler {
           .put("op mod", SqlStdOperatorTable.MOD)
           .build();
 
-  static final Map<Op, SqlOperator> INFIX_OPERATORS =
-      ImmutableMap.<Op, SqlOperator>builder()
-          .put(Op.ANDALSO, SqlStdOperatorTable.AND)
-          .put(Op.ORELSE, SqlStdOperatorTable.OR)
+  static final Map<BuiltIn, SqlOperator> INFIX_OPERATORS =
+      ImmutableMap.<BuiltIn, SqlOperator>builder()
+          .put(BuiltIn.Z_ANDALSO, SqlStdOperatorTable.AND)
+          .put(BuiltIn.Z_ORELSE, SqlStdOperatorTable.OR)
           .build();
 
   final Calcite calcite;
@@ -247,8 +247,8 @@ public class CalciteCompiler extends Compiler {
 
         case FN_LITERAL:
           final Core.Literal literal = (Core.Literal) apply.fn;
-          switch ((Op) literal.value) {
-          case LIST:
+          switch ((BuiltIn) literal.value) {
+          case Z_LIST:
             final List<Core.Exp> args = ((Core.Tuple) apply.arg).args;
             for (Core.Exp arg : args) {
               cx.relBuilder.values(new String[] {"T"}, true);
@@ -526,7 +526,7 @@ public class CalciteCompiler extends Compiler {
       final SqlOperator operator;
       switch (apply.fn.op) {
       case FN_LITERAL:
-        Op op = (Op) ((Core.Literal) apply.fn).value;
+        BuiltIn op = (BuiltIn) ((Core.Literal) apply.fn).value;
         operator = INFIX_OPERATORS.get(op);
         assert apply.arg.op == Op.TUPLE;
         return cx.relBuilder.call(operator,

@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.DataType;
@@ -85,8 +86,8 @@ public enum CoreBuilder {
   }
 
   /** Creates a function literal. */
-  public Core.Literal functionLiteral(Op op) {
-    return new Core.Literal(Op.FN_LITERAL, PrimitiveType.UNIT, op);
+  public Core.Literal functionLiteral(BuiltIn builtIn) {
+    return new Core.Literal(Op.FN_LITERAL, PrimitiveType.UNIT, builtIn);
   }
 
   /** Creates a reference to a value. */

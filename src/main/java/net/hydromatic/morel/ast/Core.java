@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -775,12 +776,12 @@ public class Core {
       // Here we convert them back to original syntax.
       case FN_LITERAL:
         final List<Exp> args = ((Tuple) arg).args;
-        switch ((Op) ((Literal) fn).value) {
-        case ANDALSO:
+        switch ((BuiltIn) ((Literal) fn).value) {
+        case Z_ANDALSO:
           return w.infix(left, args.get(0), Op.ANDALSO, args.get(1), right);
-        case ORELSE:
+        case Z_ORELSE:
           return w.infix(left, args.get(0), Op.ORELSE, args.get(1), right);
-        case LIST:
+        case Z_LIST:
           w.append("[");
           arg.forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
           return w.append("]");

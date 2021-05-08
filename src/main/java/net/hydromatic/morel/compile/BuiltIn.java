@@ -1011,7 +1011,19 @@ public enum BuiltIn {
           ts.fnType(
               ts.fnType(ts.tupleType(h.get(0), h.get(0)), ts.lookup("order")),
               ts.tupleType(h.vector(0), h.vector(0)),
-              ts.lookup("order"))));
+              ts.lookup("order")))),
+
+  /** Internal operator "andalso", of type "bool * bool &rarr; bool". */
+  Z_ANDALSO("$", "andalso", ts ->
+      ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
+
+  /** Internal operator "orelse", of type "bool * bool &rarr; bool". */
+  Z_ORELSE(null, "op orelse", ts ->
+      ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
+
+  /** Internal list constructor, e.g. "list (1 + 2, 3)" implements "[1 + 2, 3]".
+   * It cannot be assigned a type, because the tuplie is variadic. */
+  Z_LIST("$", "list", ts -> UNIT);
 
   /** Name of the structure (e.g. "List", "String"), or null. */
   public final String structure;
@@ -1042,6 +1054,8 @@ public enum BuiltIn {
       }
       if (builtIn.structure == null) {
         byMlName.put(builtIn.mlName, builtIn);
+      } else if (builtIn.structure.equals("$")) {
+        // ignore internal operators such as "list"
       } else {
         map.compute(builtIn.structure, (name, mapBuilder) -> {
           if (mapBuilder == null) {

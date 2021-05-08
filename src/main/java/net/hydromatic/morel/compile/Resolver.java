@@ -169,7 +169,7 @@ public class Resolver {
 
   private Core.Exp toCore(Ast.ListExp list) {
     final ListType type = (ListType) typeMap.getType(list);
-    return core.apply(type, core.functionLiteral(Op.LIST),
+    return core.apply(type, core.functionLiteral(BuiltIn.Z_LIST),
         core.tuple(typeMap.typeSystem, transform(list.args, this::toCore)));
   }
 
@@ -198,9 +198,20 @@ public class Resolver {
   private Core.Apply toCore(Ast.InfixCall call) {
     Core.Exp core0 = toCore(call.a0);
     Core.Exp core1 = toCore(call.a1);
-    return core.apply(typeMap.getType(call), core.functionLiteral(call.op),
-        core.tuple(typeMap.typeSystem.tupleType(core0.type, core1.type), core0,
-            core1));
+    final BuiltIn builtIn = toBuiltIn(call.op);
+    return core.apply(typeMap.getType(call), core.functionLiteral(builtIn),
+        core.tuple(typeMap.typeSystem, ImmutableList.of(core0, core1)));
+  }
+
+  private BuiltIn toBuiltIn(Op op) {
+    switch (op) {
+    case ANDALSO:
+      return BuiltIn.Z_ANDALSO;
+    case ORELSE:
+      return BuiltIn.Z_ORELSE;
+    default:
+      throw new AssertionError("unknown: " + op);
+    }
   }
 
   private Core.Fn toCore(Ast.Fn fn) {
