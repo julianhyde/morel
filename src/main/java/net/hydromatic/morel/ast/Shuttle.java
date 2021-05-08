@@ -334,6 +334,27 @@ public class Shuttle {
   public Core.Where visit(Core.Where where) {
     return core.where(where.exp.accept(this));
   }
+
+  public Core.Match visit(Core.Match match) {
+    return core.match(match.pat.accept(this), match.e.accept(this));
+  }
+
+  public Core.Group visit(Core.Group group) {
+    return core.group(visitMap(group.groupExps), visitMap(group.aggregates));
+  }
+
+  public Core.Order visit(Core.Order order) {
+    return core.order(visitList(order.orderItems));
+  }
+
+  public Core.Aggregate visit(Core.Aggregate aggregate) {
+    return core.aggregate(aggregate.type, aggregate.aggregate.accept(this),
+        aggregate.argument == null ? null : aggregate.argument.accept(this));
+  }
+
+  public Core.OrderItem visit(Core.OrderItem orderItem) {
+    return core.orderItem(orderItem.exp.accept(this), orderItem.direction);
+  }
 }
 
 // End Shuttle.java

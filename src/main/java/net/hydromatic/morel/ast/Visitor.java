@@ -284,6 +284,19 @@ public class Visitor {
     valDecl.pat.accept(this);
     valDecl.e.accept(this);
   }
+
+  public void visit(Core.Group group) {
+    group.groupExps.values().forEach(this::accept);
+    group.aggregates.values().forEach(this::accept);
+  }
+
+  public void visit(Core.Order order) {
+    order.orderItems.forEach(this::accept);
+  }
+
+  public void visit(Core.OrderItem orderItem) {
+    orderItem.exp.accept(this);
+  }
 }
 
 // End Visitor.java

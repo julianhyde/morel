@@ -627,6 +627,10 @@ public class Core {
       this.e = e;
     }
 
+    @Override public Match accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(pat, 0, 0).append(" => ").append(e, 0, right);
     }
@@ -771,6 +775,14 @@ public class Core {
       this.orderItems = requireNonNull(orderItems);
     }
 
+    @Override public Order accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("order ").appendAll(orderItems, ", ");
     }
@@ -785,6 +797,14 @@ public class Core {
       super(Op.ORDER_ITEM);
       this.exp = requireNonNull(exp);
       this.direction = requireNonNull(direction);
+    }
+
+    @Override public AstNode accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -803,6 +823,14 @@ public class Core {
       super(Op.GROUP);
       this.groupExps = groupExps;
       this.aggregates = aggregates;
+    }
+
+    @Override public Group accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -873,13 +901,21 @@ public class Core {
   public static class Aggregate extends BaseNode {
     public final Type type;
     public final Exp aggregate;
-    public final Exp argument;
+    public final @Nullable Exp argument;
 
     Aggregate(Type type, Exp aggregate, @Nullable Exp argument) {
       super(Op.AGGREGATE);
       this.type = type;
       this.aggregate = requireNonNull(aggregate);
       this.argument = argument;
+    }
+
+    @Override public Aggregate accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      super.accept(visitor);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
