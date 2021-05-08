@@ -34,7 +34,6 @@ import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.TupleType;
@@ -173,7 +172,7 @@ public abstract class Codes {
   }
 
   /** Implements {@link #OP_NEGATE} for type {@code int}. */
-  private static final Applicable NEGATE_INT =
+  private static final Applicable Z_NEGATE_INT =
       new ApplicableImpl("~") {
         @Override public Object apply(EvalEnv env, Object arg) {
           return -((Integer) arg);
@@ -181,7 +180,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_NEGATE} for type {@code real}. */
-  private static final Applicable NEGATE_REAL =
+  private static final Applicable Z_NEGATE_REAL =
       new ApplicableImpl("~") {
         @Override public Object apply(EvalEnv env, Object arg) {
           return -((Float) arg);
@@ -189,7 +188,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_PLUS} for type {@code int}. */
-  private static final Applicable PLUS_INT =
+  private static final Applicable Z_PLUS_INT =
       new ApplicableImpl("+") {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
@@ -198,7 +197,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_PLUS} for type {@code real}. */
-  private static final Applicable PLUS_REAL =
+  private static final Applicable Z_PLUS_REAL =
       new ApplicableImpl("+") {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
@@ -207,7 +206,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_MINUS} for type {@code int}. */
-  private static final Applicable MINUS_INT =
+  private static final Applicable Z_MINUS_INT =
       new ApplicableImpl("-") {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
@@ -216,7 +215,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_MINUS} for type {@code real}. */
-  private static final Applicable MINUS_REAL =
+  private static final Applicable Z_MINUS_REAL =
       new ApplicableImpl("-") {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
@@ -225,7 +224,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_TIMES} for type {@code int}. */
-  private static final Applicable TIMES_INT =
+  private static final Applicable Z_TIMES_INT =
       new ApplicableImpl("*") {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
@@ -234,7 +233,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_TIMES} for type {@code real}. */
-  private static final Applicable TIMES_REAL =
+  private static final Applicable Z_TIMES_REAL =
       new ApplicableImpl("*") {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
@@ -243,7 +242,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_DIVIDE} for type {@code int}. */
-  private static final Applicable DIVIDE_INT =
+  private static final Applicable Z_DIVIDE_INT =
       new ApplicableImpl("/") {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
@@ -252,7 +251,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #OP_DIVIDE} for type {@code real}. */
-  private static final Applicable DIVIDE_REAL =
+  private static final Applicable Z_DIVIDE_REAL =
       new ApplicableImpl("/") {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
@@ -262,12 +261,11 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_NEGATE */
   private static final Macro OP_NEGATE = (typeSystem, env, argType) -> {
-    final FnType fnType = typeSystem.fnType(argType, argType);
     switch ((PrimitiveType) argType) {
     case INT:
-      return core.wrapApplicable(fnType, NEGATE_INT);
+      return core.functionLiteral(BuiltIn.Z_NEGATE_INT);
     case REAL:
-      return core.wrapApplicable(fnType, NEGATE_REAL);
+      return core.functionLiteral(BuiltIn.Z_NEGATE_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -276,12 +274,11 @@ public abstract class Codes {
   /** @see BuiltIn#OP_DIVIDE */
   private static final Macro OP_DIVIDE = (typeSystem, env, argType) -> {
     final Type resultType = ((TupleType) argType).argTypes.get(0);
-    final FnType fnType = typeSystem.fnType(argType, resultType);
     switch ((PrimitiveType) resultType) {
     case INT:
-      return core.wrapApplicable(fnType, DIVIDE_INT);
+      return core.functionLiteral(BuiltIn.Z_DIVIDE_INT);
     case REAL:
-      return core.wrapApplicable(fnType, DIVIDE_REAL);
+      return core.functionLiteral(BuiltIn.Z_DIVIDE_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -532,12 +529,11 @@ public abstract class Codes {
   /** @see BuiltIn#OP_MINUS */
   private static final Macro OP_MINUS = (typeSystem, env, argType) -> {
     final Type resultType = ((TupleType) argType).argTypes.get(0);
-    final FnType fnType = typeSystem.fnType(argType, resultType);
     switch ((PrimitiveType) resultType) {
     case INT:
-      return core.wrapApplicable(fnType, MINUS_INT);
+      return core.functionLiteral(BuiltIn.Z_MINUS_INT);
     case REAL:
-      return core.wrapApplicable(fnType, MINUS_REAL);
+      return core.functionLiteral(BuiltIn.Z_MINUS_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -555,12 +551,11 @@ public abstract class Codes {
   /** @see BuiltIn#OP_PLUS */
   private static final Macro OP_PLUS = (typeSystem, env, argType) -> {
     final Type resultType = ((TupleType) argType).argTypes.get(0);
-    final FnType fnType = typeSystem.fnType(argType, resultType);
     switch ((PrimitiveType) resultType) {
     case INT:
-      return core.wrapApplicable(fnType, PLUS_INT);
+      return core.functionLiteral(BuiltIn.Z_PLUS_INT);
     case REAL:
-      return core.wrapApplicable(fnType, PLUS_REAL);
+      return core.functionLiteral(BuiltIn.Z_PLUS_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -569,12 +564,11 @@ public abstract class Codes {
   /** @see BuiltIn#OP_TIMES */
   private static final Macro OP_TIMES = (typeSystem, env, argType) -> {
     final Type resultType = ((TupleType) argType).argTypes.get(0);
-    final FnType fnType = typeSystem.fnType(argType, resultType);
     switch ((PrimitiveType) resultType) {
     case INT:
-      return core.wrapApplicable(fnType, TIMES_INT);
+      return core.functionLiteral(BuiltIn.Z_TIMES_INT);
     case REAL:
-      return core.wrapApplicable(fnType, TIMES_REAL);
+      return core.functionLiteral(BuiltIn.Z_TIMES_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -1425,7 +1419,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
-  private static final Applicable RELATIONAL_SUM_INT =
+  private static final Applicable Z_SUM_INT =
       new ApplicableImpl("Relational.sum$int") {
         @Override public Object apply(EvalEnv env, Object arg) {
           @SuppressWarnings("unchecked") final List<? extends Number> list =
@@ -1439,7 +1433,7 @@ public abstract class Codes {
       };
 
   /** Implements {@link #RELATIONAL_SUM} for type {@code real list}. */
-  private static final Applicable RELATIONAL_SUM_REAL =
+  private static final Applicable Z_SUM_REAL =
       new ApplicableImpl("Relational.sum$real") {
         @Override public Object apply(EvalEnv env, Object arg) {
           @SuppressWarnings("unchecked") final List<? extends Number> list =
@@ -1456,12 +1450,11 @@ public abstract class Codes {
   private static final Macro RELATIONAL_SUM = (typeSystem, env, argType) -> {
     if (argType instanceof ListType) {
       final Type resultType = ((ListType) argType).elementType;
-      final FnType fnType = typeSystem.fnType(argType, resultType);
       switch ((PrimitiveType) resultType) {
       case INT:
-        return core.wrapApplicable(fnType, RELATIONAL_SUM_INT);
+        return core.functionLiteral(BuiltIn.Z_SUM_INT);
       case REAL:
-        return core.wrapApplicable(fnType, RELATIONAL_SUM_REAL);
+        return core.functionLiteral(BuiltIn.Z_SUM_REAL);
       }
     }
     throw new AssertionError("bad type " + argType);
@@ -2029,6 +2022,18 @@ public abstract class Codes {
           .put(BuiltIn.VECTOR_COLLATE, VECTOR_COLLATE)
           .put(BuiltIn.Z_ANDALSO, Unit.INSTANCE)
           .put(BuiltIn.Z_ORELSE, Unit.INSTANCE)
+          .put(BuiltIn.Z_NEGATE_INT, Z_NEGATE_INT)
+          .put(BuiltIn.Z_NEGATE_REAL, Z_NEGATE_REAL)
+          .put(BuiltIn.Z_DIVIDE_INT, Z_DIVIDE_INT)
+          .put(BuiltIn.Z_DIVIDE_REAL, Z_DIVIDE_REAL)
+          .put(BuiltIn.Z_PLUS_INT, Z_PLUS_INT)
+          .put(BuiltIn.Z_PLUS_REAL, Z_PLUS_REAL)
+          .put(BuiltIn.Z_MINUS_INT, Z_MINUS_INT)
+          .put(BuiltIn.Z_MINUS_REAL, Z_MINUS_REAL)
+          .put(BuiltIn.Z_TIMES_INT, Z_TIMES_INT)
+          .put(BuiltIn.Z_TIMES_REAL, Z_TIMES_REAL)
+          .put(BuiltIn.Z_SUM_INT, Z_SUM_INT)
+          .put(BuiltIn.Z_SUM_REAL, Z_SUM_REAL)
           .put(BuiltIn.Z_LIST, Z_LIST)
           .build();
 

@@ -381,8 +381,10 @@ public class Compiler {
         final Macro value = (Macro) binding.value;
         final Core.Exp e = value.expand(typeSystem, cx.env, argType);
         switch (e.op) {
-        case WRAPPED_APPLICABLE:
-          return ((Core.ApplicableExp) e).applicable;
+        case FN_LITERAL:
+          final Core.Literal literal = (Core.Literal) e;
+          final BuiltIn builtIn = (BuiltIn) literal.value;
+          return (Applicable) Codes.BUILT_IN_VALUES.get(builtIn);
         }
         final Code code = compile(cx, e);
         return new Applicable() {

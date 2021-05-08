@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 
 import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -230,10 +229,6 @@ public enum CoreBuilder {
 
   public Core.Where where(Core.Exp exp) {
     return new Core.Where(exp);
-  }
-
-  public Core.ApplicableExp wrapApplicable(FnType fnType, Applicable applicable) {
-    return new Core.ApplicableExp(applicable);
   }
 
 }

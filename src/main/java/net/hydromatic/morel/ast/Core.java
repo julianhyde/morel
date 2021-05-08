@@ -23,12 +23,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 
 import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
@@ -894,26 +892,6 @@ public class Core {
     }
   }
 
-  /** Expression that is a wrapped {@link Applicable}.
-   *
-   * <p>Does not correspond to any AST node. */
-  // TODO: replace with function literal
-  public static class ApplicableExp extends Core.Exp {
-    public final Applicable applicable;
-
-    ApplicableExp(Applicable applicable) {
-      super(Op.WRAPPED_APPLICABLE, PrimitiveType.UNIT);
-      this.applicable = requireNonNull(applicable);
-    }
-
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w;
-    }
-
-    @Override public Exp accept(Shuttle shuttle) {
-      throw new UnsupportedOperationException();
-    }
-  }
 }
 
 // End Core.java
