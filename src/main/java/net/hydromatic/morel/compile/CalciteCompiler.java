@@ -204,16 +204,19 @@ public class CalciteCompiler extends Compiler {
         if (!(apply.type instanceof ListType)) {
           return false;
         }
-        if (apply.fn instanceof Core.RecordSelector
-            && apply.arg instanceof Core.Id) {
-          // Something like '#emp scott', 'scott' is a foreign value
-          final Object o = code.eval(evalEnvOf(cx.env));
-          if (o instanceof RelList) {
-            cx.relBuilder.push(((RelList) o).rel);
-            return true;
+        switch (apply.fn.op) {
+        case RECORD_SELECTOR:
+          if (apply.arg instanceof Core.Id) {
+            // Something like '#emp scott', 'scott' is a foreign value
+            final Object o = code.eval(evalEnvOf(cx.env));
+            if (o instanceof RelList) {
+              cx.relBuilder.push(((RelList) o).rel);
+              return true;
+            }
           }
-        }
-        if (apply.fn instanceof Core.Id) {
+          break;
+
+        case ID:
           switch (((Core.Id) apply.fn).name) {
           case "op union":
           case "op except":
@@ -239,6 +242,20 @@ public class CalciteCompiler extends Compiler {
             default:
               throw new AssertionError(apply.fn);
             }
+          }
+          break;
+
+        case FN_LITERAL:
+          final Core.Literal literal = (Core.Literal) apply.fn;
+          switch ((Op) literal.value) {
+          case LIST:
+            final List<Core.Exp> args = ((Core.Tuple) apply.arg).args;
+            for (Core.Exp arg : args) {
+              cx.relBuilder.values(new String[] {"T"}, true);
+              yield_(cx, arg);
+            }
+            cx.relBuilder.union(true, args.size());
+            return true;
           }
         }
         final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
@@ -291,28 +308,6 @@ public class CalciteCompiler extends Compiler {
       }
     }
     return super.finishCompileApply(cx, fnValue, argCode, argType);
-  }
-
-  @Override protected Code compileList(Context cx, Core.ListExp list) {
-    final Code code = super.compileList(cx, list);
-    return new RelCode() {
-      @Override public Describer describe(Describer describer) {
-        return code.describe(describer);
-      }
-
-      @Override public Object eval(EvalEnv env) {
-        return code.eval(env);
-      }
-
-      @Override public boolean toRel(RelContext cx, boolean aggressive) {
-        for (Core.Exp arg : list.args) {
-          cx.relBuilder.values(new String[] {"T"}, true);
-          yield_(cx, arg);
-        }
-        cx.relBuilder.union(true, list.args.size());
-        return true;
-      }
-    };
   }
 
   private static void harmonizeRowTypes(RelBuilder relBuilder, int inputCount) {

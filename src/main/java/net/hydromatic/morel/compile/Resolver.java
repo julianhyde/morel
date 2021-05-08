@@ -167,9 +167,10 @@ public class Resolver {
         transform(record.args(), this::toCore));
   }
 
-  private Core.ListExp toCore(Ast.ListExp list) {
-    return core.list(typeMap.getType(list),
-        transform(list.args, this::toCore));
+  private Core.Exp toCore(Ast.ListExp list) {
+    final ListType type = (ListType) typeMap.getType(list);
+    return core.apply(type, core.functionLiteral(Op.LIST),
+        core.tuple(typeMap.typeSystem, transform(list.args, this::toCore)));
   }
 
   private Core.Apply toCore(Ast.Apply apply) {

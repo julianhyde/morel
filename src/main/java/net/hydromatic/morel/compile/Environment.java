@@ -49,7 +49,7 @@ public abstract class Environment {
    * are visited, but after the more obscuring bindings. */
   abstract void visit(Consumer<Binding> consumer);
 
-  @Override public String toString() {
+  public String asString() {
     final StringBuilder b = new StringBuilder();
     getValueMap().forEach((k, v) ->
         b.append(v).append("\n"));

@@ -243,6 +243,30 @@ class Ml {
     }
   }
 
+  /** Asserts that after parsing the current expression and converting it to
+   * Core, the Core string converts to the expected value. Which is usually
+   * the original string. */
+  public void assertCoreString(Matcher<String> matcher) {
+    final Ast.Exp e;
+    try {
+      e = new MorelParserImpl(new StringReader(ml)).expression();
+    } catch (ParseException parseException) {
+      throw new RuntimeException(parseException);
+    }
+    final TypeSystem typeSystem = new TypeSystem();
+
+    final Environment env =
+        Environments.env(typeSystem, ImmutableMap.of());
+    final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+    final TypeResolver.Resolved resolved =
+        TypeResolver.deduceType(env, valDecl, typeSystem);
+    final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+    final Resolver resolver = new Resolver(resolved.typeMap);
+    final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
+    final String coreString = valDecl3.e.toString();
+    assertThat(coreString, matcher);
+  }
+
   Ml assertPlan(Matcher<String> planMatcher) {
     return assertEval(null, planMatcher);
   }

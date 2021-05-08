@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel;
 
+import org.apache.calcite.util.Util;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -1479,6 +1481,27 @@ public class MainTest {
     ml(ml).assertParse(expected)
         .assertType(is("int list"))
         .assertEvalIter(equalsUnordered(3, 7));
+  }
+
+  @Test public void testToCoreAndBack() {
+    final String[] expressions = {
+        "()", null,
+        "true andalso not false", null,
+        "true orelse false", null,
+        "1", null,
+        "[1, 2]", null,
+        "1 :: 2 :: []", null,
+        "1 + ~2", null,
+        "(\"hello\", 2, 3)", null,
+        "String.substring (\"hello\", 2, 3)",
+        "#substring String (\"hello\", 2, 3)",
+        "{a = 1, b = true, c = \"d\"}", "(1, true, \"d\")",
+    };
+    for (int i = 0; i < expressions.length / 2; i++) {
+      String ml = expressions[i * 2];
+      String expected = Util.first(expressions[i  * 2 + 1], ml);
+      ml(ml).assertCoreString(is(expected));
+    }
   }
 
   @Test public void testError() {

@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.ast;
 
+import org.apache.calcite.util.Util;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
@@ -31,6 +33,7 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -149,8 +152,12 @@ public enum CoreBuilder {
     return new Core.Tuple(type, ImmutableList.copyOf(args));
   }
 
-  public Core.ListExp list(Type type, Iterable<? extends Core.Exp> list) {
-    return new Core.ListExp(type, ImmutableList.copyOf(list));
+  /** As {@link #tuple(RecordLikeType, Iterable)}, but derives type. */
+  public Core.Tuple tuple(TypeSystem typeSystem, Iterable<? extends Core.Exp> args) {
+    final ImmutableList<Core.Exp> argList = ImmutableList.copyOf(args);
+    final RecordLikeType tupleType =
+        typeSystem.tupleType(Util.transform(argList, a -> a.type));
+    return new Core.Tuple(tupleType, argList);
   }
 
   public Core.LetExp let(Core.Decl decl, Core.Exp e) {

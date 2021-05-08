@@ -253,7 +253,7 @@ public class Core {
     }
   }
 
-  /** List pattern, the pattern analog of {@link ListExp}.
+  /** List pattern.
    *
    * <p>For example, "[x, y]" in "fun sum [x, y] = x + y". */
   public static class ListPat extends Pat {
@@ -769,6 +769,23 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
+      switch (fn.op) {
+      // Because the Core language is narrower than AST, a few AST expression
+      // types do not exist in Core and are translated to function applications.
+      // Here we convert them back to original syntax.
+      case FN_LITERAL:
+        final List<Exp> args = ((Tuple) arg).args;
+        switch ((Op) ((Literal) fn).value) {
+        case ANDALSO:
+          return w.infix(left, args.get(0), Op.ANDALSO, args.get(1), right);
+        case ORELSE:
+          return w.infix(left, args.get(0), Op.ORELSE, args.get(1), right);
+        case LIST:
+          w.append("[");
+          arg.forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
+          return w.append("]");
+        }
+      }
       return w.infix(left, fn, op, arg, right);
     }
   }

@@ -213,9 +213,6 @@ public class Compiler {
     case APPLY:
       return compileApply(cx, (Core.Apply) expression);
 
-    case LIST:
-      return compileList(cx, (Core.ListExp) expression);
-
     case FROM:
       return compileFrom(cx, (Core.From) expression);
 
@@ -238,14 +235,6 @@ public class Compiler {
     default:
       throw new AssertionError("op not handled: " + expression.op);
     }
-  }
-
-  protected Code compileList(Context cx, Core.ListExp list) {
-    final List<Code> codes = new ArrayList<>();
-    for (Core.Exp arg : list.args) {
-      codes.add(compile(cx, arg));
-    }
-    return Codes.list(codes);
   }
 
   protected Code compileApply(Context cx, Core.Apply apply) {
@@ -529,6 +518,9 @@ public class Compiler {
     case ORELSE:
       argCodes = compileArgs(cx, args);
       return Codes.orElse(argCodes.get(0), argCodes.get(1));
+    case LIST:
+      argCodes = compileArgs(cx, args);
+      return Codes.list(argCodes);
     default:
       throw new AssertionError("unknown op " + op);
     }

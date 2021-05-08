@@ -30,6 +30,7 @@ import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
 
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
@@ -1486,7 +1487,7 @@ public abstract class Codes {
   /** @see BuiltIn#SYS_ENV */
   private static Core.Exp sysEnv(TypeSystem typeSystem, Environment env,
       Type argType) {
-    return core.list(typeSystem.listType(argType),
+    final List<Core.Tuple> args =
         env.getValueMap()
             .entrySet()
             .stream()
@@ -1498,7 +1499,9 @@ public abstract class Codes {
                     ImmutableList.of(
                         core.stringLiteral(entry.getKey()),
                         core.stringLiteral(entry.getValue().type.moniker()))))
-            .collect(Collectors.toList()));
+            .collect(Collectors.toList());
+    return core.apply(typeSystem.listType(argType),
+        core.functionLiteral(Op.LIST), core.tuple(typeSystem, args));
   }
 
   /** @see BuiltIn#SYS_PLAN */
