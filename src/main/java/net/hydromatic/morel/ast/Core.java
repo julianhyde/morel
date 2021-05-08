@@ -68,7 +68,7 @@ public class Core {
     }
 
     @Override public AstNode accept(Shuttle shuttle) {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("cannot accept " + getClass());
     }
 
     @Override public void accept(Visitor visitor) {
@@ -101,6 +101,8 @@ public class Core {
       consumer.accept(this);
       forEachArg((arg, i) -> arg.visit(consumer));
     }
+
+    @Override public abstract Pat accept(Shuttle shuttle);
   }
 
   /** Named pattern.
@@ -116,6 +118,10 @@ public class Core {
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.id(name);
+    }
+
+    @Override public Pat accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
   }
 
@@ -149,6 +155,10 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendLiteral(value);
     }
+
+    @Override public Pat accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
   }
 
   /** Wildcard pattern.
@@ -169,6 +179,10 @@ public class Core {
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("_");
+    }
+
+    @Override public Pat accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
   }
 
@@ -207,6 +221,10 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.id(tyCon).append("(").append(pat, 0, 0).append(")");
     }
+
+    @Override public Pat accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
   }
 
   /** Type constructor pattern with no argument.
@@ -230,6 +248,10 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.id(tyCon);
     }
+
+    @Override public Pat accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
   }
 
   /** Tuple pattern, the pattern analog of the {@link Tuple} expression.
@@ -252,6 +274,10 @@ public class Core {
       forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
       return w.append(")");
     }
+
+    @Override public Pat accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
   }
 
   /** List pattern.
@@ -273,6 +299,10 @@ public class Core {
       w.append("[");
       forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
       return w.append("]");
+    }
+
+    @Override public Pat accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
   }
 
@@ -301,6 +331,10 @@ public class Core {
               .append(" = ").append(arg, 0, 0));
       return w.append("}");
     }
+
+    @Override public Pat accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
   }
 
   /** Base class of core expressions. */
@@ -320,6 +354,8 @@ public class Core {
     public Type type() {
       return type;
     }
+
+    @Override public abstract Exp accept(Shuttle shuttle);
   }
 
   /** Reference to a variable.
@@ -346,6 +382,10 @@ public class Core {
       return o == this
           || o instanceof Id
           && this.name.equals(((Id) o).name);
+    }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
 
     @Override public void accept(Visitor visitor) {
@@ -391,6 +431,10 @@ public class Core {
       return (FnType) type;
     }
 
+    @Override public RecordSelector accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
     }
@@ -421,6 +465,10 @@ public class Core {
           && value.equals(((Literal) o).value);
     }
 
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
     }
@@ -435,6 +483,10 @@ public class Core {
     Decl(Op op) {
       super(op);
     }
+
+    @Override public abstract Decl accept(Shuttle shuttle);
+
+    @Override public abstract void accept(Visitor visitor);
   }
 
   /** Datatype declaration. */
@@ -461,6 +513,14 @@ public class Core {
       Ord.forEach(dataTypes, (dataType, i) ->
           w.append(i == 0 ? "datatype " : " and ").append(dataType.toString()));
       return w;
+    }
+
+    @Override public Decl accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
   }
 
@@ -493,6 +553,14 @@ public class Core {
       return w.append(rec ? "val rec " : "val ")
           .append(pat, 0, 0).append(" = ").append(e, 0, right);
     }
+
+    @Override public Decl accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
   }
 
   /** Tuple expression. Also implements record expression. */
@@ -511,6 +579,10 @@ public class Core {
 
     @Override public void forEachArg(ObjIntConsumer<Exp> action) {
       Ord.forEach(args, action);
+    }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
 
     @Override public void accept(Visitor visitor) {
@@ -539,6 +611,10 @@ public class Core {
       return w.append("let ").append(decl, 0, 0)
           .append(" in ").append(e, 0, 0)
           .append(" end");
+    }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
   }
 
@@ -575,6 +651,10 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("fn ").appendAll(matchList, 0, Op.BAR, right);
     }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
   }
 
   /** Case expression.
@@ -593,6 +673,10 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("case ").append(e, 0, 0).append(" of ")
           .appendAll(matchList, left, Op.BAR, right);
+    }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
   }
 
@@ -613,6 +697,10 @@ public class Core {
 
     @Override public ListType type() {
       return (ListType) type;
+    }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -661,6 +749,14 @@ public class Core {
     Where(Exp exp) {
       super(Op.WHERE);
       this.exp = exp;
+    }
+
+    @Override public Where accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -742,6 +838,10 @@ public class Core {
       this.arg = arg;
     }
 
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
     }
@@ -797,6 +897,7 @@ public class Core {
   /** Expression that is a wrapped {@link Applicable}.
    *
    * <p>Does not correspond to any AST node. */
+  // TODO: replace with function literal
   public static class ApplicableExp extends Core.Exp {
     public final Applicable applicable;
 
@@ -807,6 +908,10 @@ public class Core {
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w;
+    }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      throw new UnsupportedOperationException();
     }
   }
 }

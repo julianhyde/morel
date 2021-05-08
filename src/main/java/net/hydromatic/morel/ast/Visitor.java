@@ -273,6 +273,17 @@ public class Visitor {
     tuple.args.forEach(this::accept);
   }
 
+  public void visit(Core.DatatypeDecl datatypeDecl) {
+  }
+
+  public void visit(Core.Where where) {
+    where.exp.accept(this);
+  }
+
+  public void visit(Core.ValDecl valDecl) {
+    valDecl.pat.accept(this);
+    valDecl.e.accept(this);
+  }
 }
 
 // End Visitor.java

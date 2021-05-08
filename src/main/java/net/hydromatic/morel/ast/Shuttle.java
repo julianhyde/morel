@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Visits and transforms syntax trees. */
 public class Shuttle {
@@ -247,6 +248,91 @@ public class Shuttle {
   public Ast.Type visit(Ast.CompositeType compositeType) {
     return ast.compositeType(compositeType.pos,
         visitList(compositeType.types));
+  }
+
+  // core expressions, patterns
+
+  protected Core.Apply visit(Core.Apply apply) {
+    return core.apply(apply.type, apply.fn.accept(this), apply.arg.accept(this));
+  }
+
+  public Core.Exp visit(Core.Id id) {
+    return core.id(id.type, id.name);
+  }
+
+  public Core.RecordSelector visit(Core.RecordSelector recordSelector) {
+    return core.recordSelector(recordSelector.type(), recordSelector.name);
+  }
+
+  public Core.Exp visit(Core.Literal literal) {
+    return literal;
+  }
+
+  public Core.Exp visit(Core.Tuple tuple) {
+    return core.tuple(tuple.type(), visitList(tuple.args));
+  }
+
+  public Core.Exp visit(Core.LetExp letExp) {
+    return core.let(letExp.decl.accept(this), letExp.e.accept(this));
+  }
+
+  public Core.DatatypeDecl visit(Core.DatatypeDecl datatypeDecl) {
+    return core.datatypeDecl(datatypeDecl.dataTypes);
+  }
+
+  public Core.Decl visit(Core.ValDecl valDecl) {
+    return core.valDecl(valDecl.rec, valDecl.pat.accept(this),
+        valDecl.e.accept(this));
+  }
+
+  public Core.Pat visit(Core.IdPat idPat) {
+    return idPat;
+  }
+
+  public Core.Pat visit(Core.LiteralPat literalPat) {
+    return literalPat;
+  }
+
+  public Core.Pat visit(Core.WildcardPat wildcardPat) {
+    return wildcardPat;
+  }
+
+  public Core.Pat visit(Core.ConPat conPat) {
+    return core.conPat(conPat.type, conPat.tyCon, conPat.pat.accept(this));
+  }
+
+  public Core.Pat visit(Core.Con0Pat con0Pat) {
+    return con0Pat;
+  }
+
+  public Core.Pat visit(Core.TuplePat tuplePat) {
+    return core.tuplePat(tuplePat.type, visitList(tuplePat.args));
+  }
+
+  public Core.Pat visit(Core.ListPat listPat) {
+    return core.listPat(listPat.type, visitList(listPat.args));
+  }
+
+  public Core.Pat visit(Core.RecordPat recordPat) {
+    return core.recordPat(recordPat.type(), visitList(recordPat.args));
+  }
+
+  public Core.Exp visit(Core.Fn fn) {
+    return core.fn(fn.type(), visitList(fn.matchList));
+  }
+
+  public Core.Exp visit(Core.Case aCase) {
+    return core.caseOf(aCase.type, aCase.e.accept(this),
+        visitList(aCase.matchList));
+  }
+
+  public Core.Exp visit(Core.From from) {
+    return core.from(from.type(), visitMap(from.sources), visitList(from.steps),
+        from.yieldExp.accept(this));
+  }
+
+  public Core.Where visit(Core.Where where) {
+    return core.where(where.exp.accept(this));
   }
 }
 

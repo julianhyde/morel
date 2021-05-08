@@ -228,7 +228,7 @@ public enum CoreBuilder {
         ImmutableSortedMap.copyOf(aggregates));
   }
 
-  public Core.FromStep where(Core.Exp exp) {
+  public Core.Where where(Core.Exp exp) {
     return new Core.Where(exp);
   }
 
