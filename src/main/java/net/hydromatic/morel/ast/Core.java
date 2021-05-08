@@ -458,10 +458,8 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      Ord.forEach(dataTypes, (dataType, i) -> {
-        w.append(i == 0 ? "datatype " : " and ")
-            .append(dataType.toString());
-      });
+      Ord.forEach(dataTypes, (dataType, i) ->
+          w.append(i == 0 ? "datatype " : " and ").append(dataType.toString()));
       return w;
     }
   }
@@ -523,27 +521,6 @@ public class Core {
       w.append("(");
       forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
       return w.append(")");
-    }
-  }
-
-  /** List. */
-  // TODO: remove; replace with call to list constructor function
-  public static class ListExp extends Exp {
-    public final List<Exp> args;
-
-    ListExp(Type type, ImmutableList<Exp> args) {
-      super(Op.LIST, type);
-      this.args = requireNonNull(args);
-    }
-
-    @Override public void forEachArg(ObjIntConsumer<Exp> action) {
-      Ord.forEach(args, action);
-    }
-
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
-      w.append("[");
-      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
-      return w.append("]");
     }
   }
 
