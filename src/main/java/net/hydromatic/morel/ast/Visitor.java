@@ -273,29 +273,57 @@ public class Visitor {
     tuple.args.forEach(this::accept);
   }
 
-  public void visit(Core.DatatypeDecl datatypeDecl) {
+  protected void visit(Core.DatatypeDecl datatypeDecl) {
   }
 
-  public void visit(Core.Where where) {
+  protected void visit(Core.Where where) {
     where.exp.accept(this);
   }
 
-  public void visit(Core.ValDecl valDecl) {
+  protected void visit(Core.ValDecl valDecl) {
     valDecl.pat.accept(this);
     valDecl.e.accept(this);
   }
 
-  public void visit(Core.Group group) {
+  protected void visit(Core.Group group) {
     group.groupExps.values().forEach(this::accept);
     group.aggregates.values().forEach(this::accept);
   }
 
-  public void visit(Core.Order order) {
+  protected void visit(Core.Order order) {
     order.orderItems.forEach(this::accept);
   }
 
-  public void visit(Core.OrderItem orderItem) {
+  protected void visit(Core.OrderItem orderItem) {
     orderItem.exp.accept(this);
+  }
+
+  protected void visit(Core.TuplePat tuplePat) {
+    tuplePat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.RecordPat recordPat) {
+    recordPat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.ListPat listPat) {
+    listPat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.ConPat conPat) {
+    conPat.pat.accept(this);
+  }
+
+  protected void visit(Core.Con0Pat con0Pat) {
+  }
+
+  protected void visit(Core.IdPat idPat) {
+  }
+
+  protected void visit(Core.LiteralPat idPat) {
+  }
+
+  protected void visit(Core.WildcardPat wildcardPat) {
   }
 }
 

@@ -95,11 +95,6 @@ public class Core {
       // no args
     }
 
-    public void visit(Consumer<Pat> consumer) {
-      consumer.accept(this);
-      forEachArg((arg, i) -> arg.visit(consumer));
-    }
-
     @Override public abstract Pat accept(Shuttle shuttle);
   }
 
@@ -120,6 +115,10 @@ public class Core {
 
     @Override public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
   }
 
@@ -157,6 +156,10 @@ public class Core {
     @Override public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
   }
 
   /** Wildcard pattern.
@@ -182,6 +185,10 @@ public class Core {
     @Override public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
   }
 
   /** Type constructor pattern with an argument.
@@ -201,7 +208,7 @@ public class Core {
      * value. The "list" datatype is not represented the same as other
      * datatypes, and the separate "op" value allows us to deconstruct it in a
      * different way. */
-    ConPat(Op op, Type type, String tyCon, Pat pat) {
+    protected ConPat(Op op, Type type, String tyCon, Pat pat) {
       super(op, type);
       this.tyCon = requireNonNull(tyCon);
       this.pat = requireNonNull(pat);
@@ -222,6 +229,19 @@ public class Core {
 
     @Override public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    /** Creates a copy of this {@code ConPat} with given contents,
+     * or {@code this} if the contents are the same. */
+    public Core.ConPat copy(String tyCon, Core.Pat pat) {
+      return this.tyCon.equals(tyCon)
+          && this.pat.equals(pat)
+          ? this
+          : new ConPat(op, type, tyCon, pat);
     }
   }
 
@@ -250,6 +270,10 @@ public class Core {
     @Override public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
   }
 
   /** Tuple pattern, the pattern analog of the {@link Tuple} expression.
@@ -276,6 +300,10 @@ public class Core {
     @Override public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
   }
 
   /** List pattern.
@@ -301,6 +329,10 @@ public class Core {
 
     @Override public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
   }
 
@@ -332,6 +364,10 @@ public class Core {
 
     @Override public Pat accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
   }
 

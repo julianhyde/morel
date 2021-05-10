@@ -349,12 +349,7 @@ public class CalciteCompiler extends Compiler {
           final RelNode expCode = cx2.relBuilder.build();
           final Core.Pat pat = patExp.getKey();
           sourceCodes.put(pat, expCode);
-          pat.visit(p -> {
-            if (p instanceof Core.IdPat) {
-              final Core.IdPat idPat = (Core.IdPat) p;
-              bindings.add(Binding.of(idPat.name, p.type));
-            }
-          });
+          pat.accept(Compiles.binding(bindings));
         }
         final Map<String, Function<RelBuilder, RexNode>> map = new HashMap<>();
         if (sourceCodes.size() == 0) {

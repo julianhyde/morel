@@ -28,7 +28,7 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Visits and transforms syntax trees. */
 public class Shuttle {
-  private <E extends AstNode> List<E> visitList(List<E> nodes) {
+  protected <E extends AstNode> List<E> visitList(List<E> nodes) {
     final List<E> list = new ArrayList<>();
     for (E node : nodes) {
       list.add((E) node.accept(this));
@@ -36,7 +36,7 @@ public class Shuttle {
     return list;
   }
 
-  private <K, E extends AstNode> Map<K, E> visitMap(Map<K, E> nodes) {
+  protected <K, E extends AstNode> Map<K, E> visitMap(Map<K, E> nodes) {
     final Map<K, E> map = new LinkedHashMap<>();
     nodes.forEach((k, v) -> map.put(k, (E) v.accept(this)));
     return map;
@@ -79,7 +79,7 @@ public class Shuttle {
         infixCall.a0.accept(this), infixCall.a1.accept(this));
   }
 
-  public Ast.Exp visit(Ast.PrefixCall prefixCall) {
+  protected Ast.Exp visit(Ast.PrefixCall prefixCall) {
     return ast.prefixCall(prefixCall.pos, prefixCall.op,
         prefixCall.a.accept(this));
   }
@@ -119,11 +119,11 @@ public class Shuttle {
         annotatedPat.type.accept(this));
   }
 
-  public Ast.ConPat visit(Ast.ConPat conPat) {
+  protected Ast.ConPat visit(Ast.ConPat conPat) {
     return conPat.copy(conPat.tyCon.accept(this), conPat.pat.accept(this));
   }
 
-  public Ast.Con0Pat visit(Ast.Con0Pat con0Pat) {
+  protected Ast.Con0Pat visit(Ast.Con0Pat con0Pat) {
     return con0Pat.copy(con0Pat.tyCon.accept(this));
   }
 
@@ -192,60 +192,60 @@ public class Shuttle {
     return ast.valBind(valBind.pos, valBind.rec, valBind.pat, valBind.e);
   }
 
-  public Ast.Exp visit(Ast.From from) {
+  protected Ast.Exp visit(Ast.From from) {
     return ast.from(from.pos, from.sources, from.steps, from.yieldExp,
         from.yieldExpOrDefault);
   }
 
-  public AstNode visit(Ast.Order order) {
+  protected AstNode visit(Ast.Order order) {
     return ast.order(order.pos, order.orderItems);
   }
 
-  public AstNode visit(Ast.OrderItem orderItem) {
+  protected AstNode visit(Ast.OrderItem orderItem) {
     return ast.orderItem(orderItem.pos, orderItem.exp, orderItem.direction);
   }
 
-  public AstNode visit(Ast.Where where) {
+  protected AstNode visit(Ast.Where where) {
     return ast.where(where.pos, where.exp.accept(this));
   }
 
-  public AstNode visit(Ast.Group group) {
+  protected AstNode visit(Ast.Group group) {
     return ast.group(group.pos, group.groupExps, group.aggregates);
   }
 
-  public AstNode visit(Ast.Aggregate aggregate) {
+  protected AstNode visit(Ast.Aggregate aggregate) {
     return ast.aggregate(aggregate.pos, aggregate.aggregate, aggregate.argument,
         aggregate.id);
   }
 
-  public Ast.DatatypeDecl visit(Ast.DatatypeDecl datatypeDecl) {
+  protected Ast.DatatypeDecl visit(Ast.DatatypeDecl datatypeDecl) {
     return ast.datatypeDecl(datatypeDecl.pos, visitList(datatypeDecl.binds));
   }
 
-  public Ast.DatatypeBind visit(Ast.DatatypeBind datatypeBind) {
+  protected Ast.DatatypeBind visit(Ast.DatatypeBind datatypeBind) {
     return ast.datatypeBind(datatypeBind.pos, datatypeBind.name.accept(this),
         visitList(datatypeBind.tyVars), visitList(datatypeBind.tyCons));
   }
 
-  public AstNode visit(Ast.TyCon tyCon) {
+  protected AstNode visit(Ast.TyCon tyCon) {
     return ast.typeConstructor(tyCon.pos, tyCon.id.accept(this),
         tyCon.type == null ? null : tyCon.type.accept(this));
   }
 
-  public Ast.RecordType visit(Ast.RecordType recordType) {
+  protected Ast.RecordType visit(Ast.RecordType recordType) {
     return ast.recordType(recordType.pos, visitMap(recordType.fieldTypes));
   }
 
-  public Ast.Type visit(Ast.TupleType tupleType) {
+  protected Ast.Type visit(Ast.TupleType tupleType) {
     return ast.tupleType(tupleType.pos, visitList(tupleType.types));
   }
 
-  public Ast.Type visit(Ast.FunctionType functionType) {
+  protected Ast.Type visit(Ast.FunctionType functionType) {
     return ast.functionType(functionType.pos, functionType.paramType,
         functionType.resultType);
   }
 
-  public Ast.Type visit(Ast.CompositeType compositeType) {
+  protected Ast.Type visit(Ast.CompositeType compositeType) {
     return ast.compositeType(compositeType.pos,
         visitList(compositeType.types));
   }
@@ -256,103 +256,103 @@ public class Shuttle {
     return core.apply(apply.type, apply.fn.accept(this), apply.arg.accept(this));
   }
 
-  public Core.Exp visit(Core.Id id) {
+  protected Core.Exp visit(Core.Id id) {
     return core.id(id.type, id.name);
   }
 
-  public Core.RecordSelector visit(Core.RecordSelector recordSelector) {
+  protected Core.RecordSelector visit(Core.RecordSelector recordSelector) {
     return core.recordSelector(recordSelector.type(), recordSelector.name);
   }
 
-  public Core.Exp visit(Core.Literal literal) {
+  protected Core.Exp visit(Core.Literal literal) {
     return literal;
   }
 
-  public Core.Exp visit(Core.Tuple tuple) {
+  protected Core.Exp visit(Core.Tuple tuple) {
     return core.tuple(tuple.type(), visitList(tuple.args));
   }
 
-  public Core.Exp visit(Core.LetExp letExp) {
+  protected Core.Exp visit(Core.LetExp letExp) {
     return core.let(letExp.decl.accept(this), letExp.e.accept(this));
   }
 
-  public Core.DatatypeDecl visit(Core.DatatypeDecl datatypeDecl) {
+  protected Core.DatatypeDecl visit(Core.DatatypeDecl datatypeDecl) {
     return core.datatypeDecl(datatypeDecl.dataTypes);
   }
 
-  public Core.Decl visit(Core.ValDecl valDecl) {
+  protected Core.Decl visit(Core.ValDecl valDecl) {
     return core.valDecl(valDecl.rec, valDecl.pat.accept(this),
         valDecl.e.accept(this));
   }
 
-  public Core.Pat visit(Core.IdPat idPat) {
+  protected Core.Pat visit(Core.IdPat idPat) {
     return idPat;
   }
 
-  public Core.Pat visit(Core.LiteralPat literalPat) {
+  protected Core.Pat visit(Core.LiteralPat literalPat) {
     return literalPat;
   }
 
-  public Core.Pat visit(Core.WildcardPat wildcardPat) {
+  protected Core.Pat visit(Core.WildcardPat wildcardPat) {
     return wildcardPat;
   }
 
-  public Core.Pat visit(Core.ConPat conPat) {
-    return core.conPat(conPat.type, conPat.tyCon, conPat.pat.accept(this));
+  protected Core.Pat visit(Core.ConPat conPat) {
+    return conPat.copy(conPat.tyCon, conPat.pat.accept(this));
   }
 
-  public Core.Pat visit(Core.Con0Pat con0Pat) {
+  protected Core.Pat visit(Core.Con0Pat con0Pat) {
     return con0Pat;
   }
 
-  public Core.Pat visit(Core.TuplePat tuplePat) {
+  protected Core.Pat visit(Core.TuplePat tuplePat) {
     return core.tuplePat(tuplePat.type, visitList(tuplePat.args));
   }
 
-  public Core.Pat visit(Core.ListPat listPat) {
+  protected Core.Pat visit(Core.ListPat listPat) {
     return core.listPat(listPat.type, visitList(listPat.args));
   }
 
-  public Core.Pat visit(Core.RecordPat recordPat) {
+  protected Core.Pat visit(Core.RecordPat recordPat) {
     return core.recordPat(recordPat.type(), visitList(recordPat.args));
   }
 
-  public Core.Exp visit(Core.Fn fn) {
+  protected Core.Exp visit(Core.Fn fn) {
     return core.fn(fn.type(), visitList(fn.matchList));
   }
 
-  public Core.Exp visit(Core.Case aCase) {
+  protected Core.Exp visit(Core.Case aCase) {
     return core.caseOf(aCase.type, aCase.e.accept(this),
         visitList(aCase.matchList));
   }
 
-  public Core.Exp visit(Core.From from) {
+  protected Core.Exp visit(Core.From from) {
     return core.from(from.type(), visitMap(from.sources), visitList(from.steps),
         from.yieldExp.accept(this));
   }
 
-  public Core.Where visit(Core.Where where) {
+  protected Core.Where visit(Core.Where where) {
     return core.where(where.exp.accept(this));
   }
 
-  public Core.Match visit(Core.Match match) {
+  protected Core.Match visit(Core.Match match) {
     return core.match(match.pat.accept(this), match.e.accept(this));
   }
 
-  public Core.Group visit(Core.Group group) {
+  protected Core.Group visit(Core.Group group) {
     return core.group(visitMap(group.groupExps), visitMap(group.aggregates));
   }
 
-  public Core.Order visit(Core.Order order) {
+  protected Core.Order visit(Core.Order order) {
     return core.order(visitList(order.orderItems));
   }
 
-  public Core.Aggregate visit(Core.Aggregate aggregate) {
+  protected Core.Aggregate visit(Core.Aggregate aggregate) {
     return core.aggregate(aggregate.type, aggregate.aggregate.accept(this),
         aggregate.argument == null ? null : aggregate.argument.accept(this));
   }
 
-  public Core.OrderItem visit(Core.OrderItem orderItem) {
+  protected Core.OrderItem visit(Core.OrderItem orderItem) {
     return core.orderItem(orderItem.exp.accept(this), orderItem.direction);
   }
 }

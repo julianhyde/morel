@@ -25,12 +25,15 @@ import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.ForeignValue;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 
+import java.util.List;
 import java.util.Map;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
@@ -96,6 +99,24 @@ public abstract class Compiles {
    * the converse of {@link #toValDecl(Ast.Exp)}. */
   public static Core.Exp toExp(Core.ValDecl decl) {
     return decl.e;
+  }
+
+  static PatternBinder binding(List<Binding> bindings) {
+    return new PatternBinder(bindings);
+  }
+
+  /** Visitor that adds a {@link Binding} each time it see an
+   * {@link Core.IdPat}. */
+  private static class PatternBinder extends Visitor {
+    private final List<Binding> bindings;
+
+    PatternBinder(List<Binding> bindings) {
+      this.bindings = bindings;
+    }
+
+    @Override public void visit(Core.IdPat idPat) {
+      bindings.add(Binding.of(idPat.name, idPat.type));
+    }
   }
 }
 

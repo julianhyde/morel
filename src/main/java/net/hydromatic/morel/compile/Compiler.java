@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
@@ -275,12 +276,7 @@ public class Compiler {
     from.sources.forEach((pat, exp) -> {
       final Code expCode = compile(cx.bindAll(bindings), exp);
       sourceCodes.put(pat, expCode);
-      pat.visit(p -> {
-        if (p instanceof Core.IdPat) {
-          final Core.IdPat idPat = (Core.IdPat) p;
-          bindings.add(Binding.of(idPat.name, idPat.type));
-        }
-      });
+      pat.accept(Compiles.binding(bindings));
     });
     Supplier<Codes.RowSink> rowSinkFactory =
         createRowSinkFactory(cx, ImmutableList.copyOf(bindings), from.steps,
@@ -482,12 +478,7 @@ public class Compiler {
 
   private void compileValDecl(Context cx, Core.ValDecl valDecl,
       List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
-    valDecl.pat.visit(pat -> {
-      if (pat instanceof Core.IdPat) {
-        Core.IdPat idPat = (Core.IdPat) pat;
-        bindings.add(Binding.of(idPat.name, idPat.type));
-      }
-    });
+    valDecl.pat.accept(Compiles.binding(bindings));
     compileValBind(cx, valDecl, matchCodes, bindings, actions);
   }
 
@@ -545,14 +536,9 @@ public class Compiler {
   }
 
   private Pair<Core.Pat, Code> compileMatch(Context cx, Core.Match match) {
-    final Context[] envHolder = {cx};
-    match.pat.visit(pat -> {
-      if (pat instanceof Core.IdPat) {
-        envHolder[0] = envHolder[0].bind(((Core.IdPat) pat).name,
-            pat.type, Unit.INSTANCE);
-      }
-    });
-    final Code code = compile(envHolder[0], match.e);
+    final List<Binding> bindings = new ArrayList<>();
+    match.pat.accept(Compiles.binding(bindings));
+    final Code code = compile(cx.bindAll(bindings), match.e);
     return Pair.of(match.pat, code);
   }
 
@@ -561,14 +547,14 @@ public class Compiler {
     final List<Binding> newBindings = new TailList<>(bindings);
     final Map<Core.IdPat, LinkCode> linkCodes = new IdentityHashMap<>();
     if (valBind.rec) {
-      valBind.pat.visit(pat -> {
-        if (pat instanceof Core.IdPat) {
-          final Core.IdPat idPat = (Core.IdPat) pat;
-          final LinkCode linkCode = new LinkCode();
-          linkCodes.put(idPat, linkCode);
-          bindings.add(Binding.of(idPat.name, idPat.type, linkCode));
-        }
-      });
+      valBind.pat.accept(
+          new Visitor() {
+            @Override protected void visit(Core.IdPat idPat) {
+              final LinkCode linkCode = new LinkCode();
+              linkCodes.put(idPat, linkCode);
+              bindings.add(Binding.of(idPat.name, idPat.type, linkCode));
+            }
+          });
     }
     final Context cx1 = cx.bindAll(bindings);
     // Using 'compileArg' rather than 'compile' encourages CalciteCompiler
