@@ -444,6 +444,30 @@ intersectAll (from e in emps yield e.deptno)
 val it = [20,10,30] : 'a list
 
 
+(*) union followed by group
+from x in (from e in emps yield e.deptno)
+    union (from d in depts yield d.deptno)
+group x compute c = count
+order c, x;
+val it = [{c=1,x=40},{c=2,x=10},{c=2,x=20},{c=3,x=30}] : {c:int, x:int} list
+
+
+(*) except followed by group
+from x in (from e in emps yield e.deptno)
+    except (from d in depts yield d.deptno)
+group x compute c = count
+order c, x;
+val it = [] : {c:int, x:int} list
+
+
+(*) intersect followed by group
+from x in (from e in emps yield e.deptno)
+    intersect (from d in depts yield d.deptno)
+group x compute c = count
+order c, x;
+val it = [{c=1,x=10},{c=1,x=20},{c=2,x=30}] : {c:int, x:int} list
+
+
 (*) foldl function (built into SML)
 let
   fun foldl f start [] = start

@@ -187,6 +187,11 @@ public class AlgebraTest {
             + "  andalso e.sal < g.hisal\n"
             + "  andalso d.deptno = e.deptno\n"
             + "group g.grade compute c = count",
+        "from x in (from e in scott.emp yield {e.deptno, z = 1})\n"
+            + "  union (from d in scott.dept yield {d.deptno, z = 2})",
+        "#from x in (from e in scott.emp yield e.deptno)\n"
+            + "  union (from d in scott.dept yield d.deptno)\n"
+            + "group x compute c = count",
         "[1, 2, 3] union [2, 3, 4]",
         "[10, 15, 20] union (from d in scott.dept yield d.deptno)",
         "[10, 15, 20] except (from d in scott.dept yield d.deptno)",
@@ -212,7 +217,6 @@ public class AlgebraTest {
         "#map (fn e => (#empno e))\n"
             + "  (filter (fn e => (#deptno e) = 30) (#emp scott))",
     };
-//     Stream.of(queries).filter(q -> q.startsWith("#")).map(q -> q.substring(1)).forEach(query -> {
     Stream.of(queries).filter(q -> !q.startsWith("#")).forEach(query -> {
       try {
         ml(query).withBinding("scott", BuiltInDataSet.SCOTT).assertEvalSame();

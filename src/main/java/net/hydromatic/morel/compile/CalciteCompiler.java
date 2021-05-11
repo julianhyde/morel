@@ -223,39 +223,10 @@ public class CalciteCompiler extends Compiler {
           }
           break;
 
-        case ID:
-          // TODO: the following should be constants, not IDs
-          switch (((Core.Id) apply.fn).name) {
-          case "op union":
-          case "op except":
-          case "op intersect":
-            // For example, '[1, 2, 3] union (from scott.dept yield deptno)'
-            final Core.Tuple tuple = (Core.Tuple) apply.arg;
-            for (Core.Exp arg : tuple.args) {
-              if (!CalciteCompiler.this.toRel3(cx, arg, false)) {
-                return false;
-              }
-            }
-            harmonizeRowTypes(cx.relBuilder, tuple.args.size());
-            switch (((Core.Id) apply.fn).name) {
-            case "op union":
-              cx.relBuilder.union(true, tuple.args.size());
-              return true;
-            case "op except":
-              cx.relBuilder.minus(false, tuple.args.size());
-              return true;
-            case "op intersect":
-              cx.relBuilder.intersect(false, tuple.args.size());
-              return true;
-            default:
-              throw new AssertionError(apply.fn);
-            }
-          }
-          break;
-
         case FN_LITERAL:
           final Core.Literal literal = (Core.Literal) apply.fn;
-          switch ((BuiltIn) literal.value) {
+          final BuiltIn builtIn = (BuiltIn) literal.value;
+          switch (builtIn) {
           case Z_LIST:
             final List<Core.Exp> args = ((Core.Tuple) apply.arg).args;
             for (Core.Exp arg : args) {
@@ -264,6 +235,31 @@ public class CalciteCompiler extends Compiler {
             }
             cx.relBuilder.union(true, args.size());
             return true;
+
+          case OP_UNION:
+          case OP_EXCEPT:
+          case OP_INTERSECT:
+            // For example, '[1, 2, 3] union (from scott.dept yield deptno)'
+            final Core.Tuple tuple = (Core.Tuple) apply.arg;
+            for (Core.Exp arg : tuple.args) {
+              if (!CalciteCompiler.this.toRel3(cx, arg, false)) {
+                return false;
+              }
+            }
+            harmonizeRowTypes(cx.relBuilder, tuple.args.size());
+            switch (builtIn) {
+            case OP_UNION:
+              cx.relBuilder.union(true, tuple.args.size());
+              return true;
+            case OP_EXCEPT:
+              cx.relBuilder.minus(false, tuple.args.size());
+              return true;
+            case OP_INTERSECT:
+              cx.relBuilder.intersect(false, tuple.args.size());
+              return true;
+            default:
+              throw new AssertionError(builtIn);
+            }
           }
         }
         final RelDataTypeFactory typeFactory = cx.relBuilder.getTypeFactory();
@@ -682,7 +678,8 @@ public class CalciteCompiler extends Compiler {
     // Permute the fields so that they are sorted by name, per Morel records.
     final List<String> sortedNames =
         Ordering.natural().immutableSortedCopy(names);
-    cx.relBuilder.project(cx.relBuilder.fields(sortedNames));
+    cx.relBuilder.rename(names)
+        .project(cx.relBuilder.fields(sortedNames));
     sortedNames.forEach(name -> {
       final int i = map.size();
       map.put(name, b -> b.field(1, 0, i));
@@ -699,20 +696,6 @@ public class CalciteCompiler extends Compiler {
    * in environment, and compare with standard implementation of "sum" etc.;
    * support aggregate functions defined by expressions (e.g. lambdas). */
   @Nonnull private SqlAggFunction aggOp(Core.Exp aggregate) {
-    if (aggregate instanceof Core.Id) {
-      final Core.Id id = (Core.Id) aggregate;
-      final String name = id.name;
-      switch (name) { // TODO remove
-      case "sum":
-        return SqlStdOperatorTable.SUM;
-      case "count":
-        return SqlStdOperatorTable.COUNT;
-      case "min":
-        return SqlStdOperatorTable.MIN;
-      case "max":
-        return SqlStdOperatorTable.MAX;
-      }
-    }
     if (aggregate instanceof Core.Literal) {
       final Core.Literal literal = (Core.Literal) aggregate;
       switch ((BuiltIn) literal.value) {

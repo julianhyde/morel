@@ -49,36 +49,15 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Converts AST expressions to Core expressions. */
 public class Resolver {
-  // TODO: move this map
-  public static final ImmutableMap<BuiltIn, Op> BUILT_IN_OP_MAP;
+  /** Map from {@link Op} to {@link BuiltIn}. */
+  public static final ImmutableMap<Op, BuiltIn> OP_BUILT_IN_MAP =
+      Init.INSTANCE.opBuiltInMap;
 
-  public static final ImmutableMap<Op, BuiltIn> OP_BUILT_IN_MAP;
-
-  static {
-    Object[] values = {
-        BuiltIn.Z_ANDALSO, Op.ANDALSO,
-        BuiltIn.Z_ORELSE, Op.ORELSE,
-        BuiltIn.OP_CONS, Op.CONS,
-        BuiltIn.Z_PLUS_INT, Op.PLUS,
-        BuiltIn.Z_PLUS_REAL, Op.PLUS,
-        BuiltIn.OP_EQ, Op.EQ,
-        BuiltIn.OP_NE, Op.NE,
-        BuiltIn.OP_GT, Op.GT,
-        BuiltIn.OP_GE, Op.GE,
-        BuiltIn.OP_LT, Op.LT,
-        BuiltIn.OP_LE, Op.LE,
-    };
-    ImmutableMap.Builder<BuiltIn, Op> b2o = ImmutableMap.builder();
-    Map<Op, BuiltIn> o2b = new HashMap<>();
-    for (int i = 0; i < values.length / 2; i++) {
-      BuiltIn builtIn = (BuiltIn) values[i * 2];
-      Op op = (Op) values[i * 2 + 1];
-      b2o.put(builtIn, op);
-      o2b.put(op, builtIn);
-    }
-    BUILT_IN_OP_MAP = b2o.build();
-    OP_BUILT_IN_MAP = ImmutableMap.copyOf(o2b);
-  }
+  /** Map from {@link BuiltIn}, to {@link Op};
+   * the reverse of {@link #OP_BUILT_IN_MAP}, and needed when we convert
+   * an optimized expression back to human-readable Morel code. */
+  public static final ImmutableMap<BuiltIn, Op> BUILT_IN_OP_MAP =
+      Init.INSTANCE.builtInOpMap;
 
   final TypeMap typeMap;
 
@@ -220,29 +199,6 @@ public class Resolver {
       coreFn = core.recordSelector(fnType, recordSelector.name);
     } else {
       coreFn = toCore(apply.fn);
-      /* TODO
-      if (binding.value instanceof Macro) {
-        final Macro value = (Macro) binding.value;
-        final Core.Exp e = value.expand(typeSystem, cx.env, argType);
-        switch (e.op) {
-        case FN_LITERAL:
-          final Core.Literal literal = (Core.Literal) e;
-          final BuiltIn builtIn = (BuiltIn) literal.value;
-          return (Applicable) Codes.BUILT_IN_VALUES.get(builtIn);
-        }
-        final Code code = compile(cx, e);
-        return new Applicable() {
-          @Override public Describer describe(Describer describer) {
-            return code.describe(describer);
-          }
-
-          @Override public Object apply(EvalEnv evalEnv, Object arg) {
-            return code.eval(evalEnv);
-          }
-        };
-      }
-       */
-
     }
     return core.apply(type, coreFn, coreArg);
   }
@@ -464,6 +420,43 @@ public class Resolver {
     return core.orderItem(toCore(orderItem.exp), orderItem.direction);
   }
 
+  /** Helper for initialization. */
+  private enum Init {
+    INSTANCE;
+
+    final ImmutableMap<Op, BuiltIn> opBuiltInMap;
+    final ImmutableMap<BuiltIn, Op> builtInOpMap;
+
+    Init() {
+      Object[] values = {
+          BuiltIn.LIST_OP_AT, Op.AT,
+          BuiltIn.OP_CONS, Op.CONS,
+          BuiltIn.OP_EQ, Op.EQ,
+          BuiltIn.OP_EXCEPT, Op.EXCEPT,
+          BuiltIn.OP_GE, Op.GE,
+          BuiltIn.OP_GT, Op.GT,
+          BuiltIn.OP_INTERSECT, Op.INTERSECT,
+          BuiltIn.OP_LE, Op.LE,
+          BuiltIn.OP_LT, Op.LT,
+          BuiltIn.OP_NE, Op.NE,
+          BuiltIn.OP_UNION, Op.UNION,
+          BuiltIn.Z_ANDALSO, Op.ANDALSO,
+          BuiltIn.Z_ORELSE, Op.ORELSE,
+          BuiltIn.Z_PLUS_INT, Op.PLUS,
+          BuiltIn.Z_PLUS_REAL, Op.PLUS,
+      };
+      final ImmutableMap.Builder<BuiltIn, Op> b2o = ImmutableMap.builder();
+      final Map<Op, BuiltIn> o2b = new HashMap<>();
+      for (int i = 0; i < values.length / 2; i++) {
+        BuiltIn builtIn = (BuiltIn) values[i * 2];
+        Op op = (Op) values[i * 2 + 1];
+        b2o.put(builtIn, op);
+        o2b.put(op, builtIn);
+      }
+      builtInOpMap = b2o.build();
+      opBuiltInMap = ImmutableMap.copyOf(o2b);
+    }
+  }
 }
 
 // End Resolver.java

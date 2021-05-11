@@ -54,10 +54,7 @@ abstract class EnvShuttle extends Shuttle {
 
   @Override public Core.Exp visit(Core.LetExp e) {
     final List<Binding> bindings = new ArrayList<>();
-    if (e.decl instanceof Core.ValDecl) {
-      // TODO: add Core.Decl.accept and remove 'if'
-      ((Core.ValDecl) e.decl).pat.accept(Compiles.binding(bindings));
-    }
+    e.decl.accept(Compiles.binding(bindings));
     return core.let(e.decl.accept(this), e.e.accept(bind(bindings)));
   }
 

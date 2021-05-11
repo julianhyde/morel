@@ -277,6 +277,24 @@ fun intersectAll l1 l2 =
 intersectAll (from e in emps yield e.deptno)
   (from d in depts yield d.deptno);
 
+(*) union followed by group
+from x in (from e in emps yield e.deptno)
+    union (from d in depts yield d.deptno)
+group x compute c = count
+order c, x;
+
+(*) except followed by group
+from x in (from e in emps yield e.deptno)
+    except (from d in depts yield d.deptno)
+group x compute c = count
+order c, x;
+
+(*) intersect followed by group
+from x in (from e in emps yield e.deptno)
+    intersect (from d in depts yield d.deptno)
+group x compute c = count
+order c, x;
+
 (*) foldl function (built into SML)
 let
   fun foldl f start [] = start

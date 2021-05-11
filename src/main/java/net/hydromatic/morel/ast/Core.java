@@ -913,23 +913,24 @@ public class Core {
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       switch (fn.op) {
-      // Because the Core language is narrower than AST, a few AST expression
-      // types do not exist in Core and are translated to function applications.
-      // Here we convert them back to original syntax.
       case FN_LITERAL:
         final BuiltIn builtIn = (BuiltIn) ((Literal) fn).value;
-        final Op op = Resolver.BUILT_IN_OP_MAP.get(builtIn);
-        if (op != null) {
-          final List<Exp> args = ((Tuple) arg).args;
-          return w.infix(left, args.get(0), op, args.get(1), right);
-        }
+
+        // Because the Core language is narrower than AST, a few AST expression
+        // types do not exist in Core and are translated to function
+        // applications. Here we convert them back to original syntax.
         switch (builtIn) {
-        case NOT:
-          break; // return w.prefix(left, Op.NOT_ELEM, arg, right);
         case Z_LIST:
           w.append("[");
           arg.forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
           return w.append("]");
+        }
+
+        // Convert built-ins to infix operators.
+        final Op op = Resolver.BUILT_IN_OP_MAP.get(builtIn);
+        if (op != null) {
+          final List<Exp> args = ((Tuple) arg).args;
+          return w.infix(left, args.get(0), op, args.get(1), right);
         }
       }
       return w.infix(left, fn, op, arg, right);

@@ -55,21 +55,19 @@ public class Inliner extends EnvShuttle {
     Binding binding = env.getOpt(id.name);
     if (binding != null) {
       Object v = binding.value;
-      BuiltIn builtIn = null;
       if (v instanceof Macro) {
         final Macro macro = (Macro) binding.value;
-        Core.Exp x = macro.expand(typeSystem, env, ((FnType) id.type).paramType);
-        // TODO: just return x? It's already a function literal, probably
-        switch (x.op) {
-        case FN_LITERAL:
-          builtIn = (BuiltIn) ((Core.Literal) x).value;
+        final Core.Exp x =
+            macro.expand(typeSystem, env, ((FnType) id.type).paramType);
+        if (x instanceof Core.Literal) {
+          return x;
         }
       }
       if (v instanceof Applicable) {
-        builtIn = Codes.BUILT_IN_MAP.get(v);
-      }
-      if (builtIn != null) {
-        return CoreBuilder.core.functionLiteral(typeSystem, builtIn);
+        BuiltIn builtIn = Codes.BUILT_IN_MAP.get(v);
+        if (builtIn != null) {
+          return CoreBuilder.core.functionLiteral(typeSystem, builtIn);
+        }
       }
     }
     return super.visit(id);
