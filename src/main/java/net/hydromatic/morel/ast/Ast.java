@@ -33,9 +33,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
@@ -711,16 +711,6 @@ public class Ast {
     Id(Pos pos, String name) {
       super(pos, Op.ID);
       this.name = requireNonNull(name);
-    }
-
-    @Override public int hashCode() {
-      return name.hashCode();
-    }
-
-    @Override public boolean equals(Object o) {
-      return o == this
-          || o instanceof Id
-          && this.name.equals(((Id) o).name);
     }
 
     public Id accept(Shuttle shuttle) {
@@ -1509,8 +1499,9 @@ public class Ast {
       } else if (fields.size() == 1) {
         return Iterables.getOnlyElement(fields);
       } else {
-        return ast.record(pos, fields.stream()
-            .collect(Collectors.toMap(id -> id.name, id -> id)));
+        final SortedMap<String, Exp> map = new TreeMap<>(ORDERING);
+        fields.forEach(field -> map.put(field.name, field));
+        return ast.record(pos, map);
       }
     }
 

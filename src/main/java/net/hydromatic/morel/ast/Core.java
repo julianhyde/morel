@@ -588,7 +588,7 @@ public class Core {
           .append(pat, 0, 0).append(" = ").append(e, 0, right);
     }
 
-    @Override public Decl accept(Shuttle shuttle) {
+    @Override public ValDecl accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -778,6 +778,8 @@ public class Core {
         Consumer<Binding> outBindings) {
       inBindings.forEach(outBindings);
     }
+
+    @Override public abstract FromStep accept(Shuttle shuttle);
   }
 
   /** A {@code where} clause in a {@code from} expression. */

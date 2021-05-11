@@ -280,7 +280,7 @@ public class Shuttle {
     return core.datatypeDecl(datatypeDecl.dataTypes);
   }
 
-  protected Core.Decl visit(Core.ValDecl valDecl) {
+  protected Core.ValDecl visit(Core.ValDecl valDecl) {
     return core.valDecl(valDecl.rec, valDecl.pat.accept(this),
         valDecl.e.accept(this));
   }

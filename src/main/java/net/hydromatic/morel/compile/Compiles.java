@@ -117,6 +117,11 @@ public abstract class Compiles {
     @Override public void visit(Core.IdPat idPat) {
       bindings.add(Binding.of(idPat.name, idPat.type));
     }
+
+    @Override protected void visit(Core.ValDecl valBind) {
+      // The super method visits valBind.e; we do not
+      valBind.pat.accept(this);
+    }
   }
 }
 
