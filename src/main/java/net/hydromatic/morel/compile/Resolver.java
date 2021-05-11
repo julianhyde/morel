@@ -191,12 +191,9 @@ public class Resolver {
     Type type = typeMap.getType(apply);
     Core.Exp coreFn;
     if (apply.fn.op == Op.RECORD_SELECTOR) {
-      // Don't call "toCore(Ast.RecordSelector recordSelector)"; the
-      // type of the record selector is probably not known.
-      // Better to deduce it here, from the apply context.
-      final FnType fnType = typeMap.typeSystem.fnType(coreArg.type, type);
       final Ast.RecordSelector recordSelector = (Ast.RecordSelector) apply.fn;
-      coreFn = core.recordSelector(fnType, recordSelector.name);
+      coreFn = core.recordSelector(typeMap.typeSystem,
+          (RecordLikeType) coreArg.type, recordSelector.name);
     } else {
       coreFn = toCore(apply.fn);
     }
@@ -204,8 +201,9 @@ public class Resolver {
   }
 
   private Core.RecordSelector toCore(Ast.RecordSelector recordSelector) {
-    return core.recordSelector((FnType) typeMap.getType(recordSelector),
-        recordSelector.name);
+    final FnType fnType = (FnType) typeMap.getType(recordSelector);
+    return core.recordSelector(typeMap.typeSystem,
+        (RecordLikeType) fnType.paramType, recordSelector.name);
   }
 
   private Core.Apply toCore(Ast.InfixCall call) {

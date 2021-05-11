@@ -539,7 +539,8 @@ public class CalciteCompiler extends Compiler {
         // Something like '#deptno e',
         final RexNode range =
             cx.map.get(((Core.Id) apply.arg).name).apply(cx.relBuilder);
-        return cx.relBuilder.field(range, ((Core.RecordSelector) apply.fn).name);
+        final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
+        return cx.relBuilder.field(range, selector.fieldName());
       }
       final Set<String> vars = getRelationalVariables(cx.env, cx.map, apply);
       if (vars.isEmpty()) {
@@ -614,8 +615,7 @@ public class CalciteCompiler extends Compiler {
       recordType.argNameTypes.forEach((field, fieldType) ->
           args.add(
               core.apply(fieldType,
-                  core.recordSelector(typeSystem.fnType(recordType, fieldType),
-                      field),
+                  core.recordSelector(typeSystem, recordType, field),
                   id)));
       return core.tuple(recordType, args);
     }

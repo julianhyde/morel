@@ -21,6 +21,7 @@ package net.hydromatic.morel.ast;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Iterables;
 
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Resolver;
@@ -34,7 +35,6 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -90,10 +90,6 @@ public class Core {
     /** Returns the type. */
     public Type type() {
       return type;
-    }
-
-    public void forEachArg(ObjIntConsumer<Pat> action) {
-      // no args
     }
 
     @Override public abstract Pat accept(Shuttle shuttle);
@@ -220,10 +216,6 @@ public class Core {
       this(Op.CON_PAT, type, tyCon, pat);
     }
 
-    @Override public void forEachArg(ObjIntConsumer<Pat> action) {
-      action.accept(pat, 0);
-    }
-
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.id(tyCon).append("(").append(pat, 0, 0).append(")");
     }
@@ -288,13 +280,10 @@ public class Core {
       this.args = requireNonNull(args);
     }
 
-    @Override public void forEachArg(ObjIntConsumer<Pat> action) {
-      Ord.forEach(args, action);
-    }
-
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       w.append("(");
-      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
+      Ord.forEach(args, (arg, i) ->
+          w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
       return w.append(")");
     }
 
@@ -318,13 +307,10 @@ public class Core {
       this.args = requireNonNull(args);
     }
 
-    @Override public void forEachArg(ObjIntConsumer<Pat> action) {
-      Ord.forEach(args, action);
-    }
-
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       w.append("[");
-      forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
+      Ord.forEach(args, (arg, i) ->
+          w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
       return w.append("]");
     }
 
@@ -349,10 +335,6 @@ public class Core {
 
     @Override public RecordType type() {
       return (RecordType) type;
-    }
-
-    @Override public void forEachArg(ObjIntConsumer<Pat> action) {
-      Ord.forEach(args, action);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -432,34 +414,32 @@ public class Core {
     }
   }
 
-  /** Parse tree node of a record selector. */
-  // TODO: remove this class, replace with a call to a special function
+  /** Record selector function. */
   public static class RecordSelector extends Exp {
-    public final String name;
-
     /** The ordinal of the field in the record or tuple that is to be
      * accessed. */
     public final int slot;
 
     /** Creates a record selector. */
-    RecordSelector(FnType fnType, String name) {
+    RecordSelector(FnType fnType, int slot) {
       super(Op.RECORD_SELECTOR, fnType);
-      this.name = requireNonNull(name);
-      checkArgument(!name.startsWith("#"));
-      final RecordLikeType recordType = (RecordLikeType) fnType.paramType;
-      slot = new ArrayList<>(recordType.argNameTypes().keySet()).indexOf(name);
-      checkArgument(slot >= 0, "name [%s] not found in [%s]",
-          name, recordType);
+      this.slot = slot;
     }
 
     @Override public int hashCode() {
-      return name.hashCode();
+      return slot + 2237;
     }
 
     @Override public boolean equals(Object o) {
       return o == this
           || o instanceof RecordSelector
-          && this.name.equals(((RecordSelector) o).name);
+          && this.slot == ((RecordSelector) o).slot
+          && this.type.equals(((RecordSelector) o).type);
+    }
+
+    public String fieldName() {
+      final RecordLikeType recordType = (RecordLikeType) type().paramType;
+      return Iterables.get(recordType.argNameTypes().keySet(), slot);
     }
 
     @Override public FnType type() {
@@ -475,7 +455,7 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("#").append(name);
+      return w.append("#").append(fieldName());
     }
   }
 

@@ -95,8 +95,23 @@ public enum CoreBuilder {
     return new Core.Id(name, type);
   }
 
-  public Core.RecordSelector recordSelector(FnType fnType, String name) {
-    return new Core.RecordSelector(fnType, name);
+  public Core.RecordSelector recordSelector(TypeSystem typeSystem,
+      RecordLikeType recordType, String fieldName) {
+    int slot = 0;
+    for (Map.Entry<String, Type> pair : recordType.argNameTypes().entrySet()) {
+      if (pair.getKey().equals(fieldName)) {
+        final Type fieldType = pair.getValue();
+        final FnType fnType = typeSystem.fnType(recordType, fieldType);
+        return recordSelector(fnType, slot);
+      }
+      ++slot;
+    }
+    throw new IllegalArgumentException("no field '" + fieldName + "' in type '"
+        + recordType + "'");
+  }
+
+  public Core.RecordSelector recordSelector(FnType fnType, int slot) {
+    return new Core.RecordSelector(fnType, slot);
   }
 
   public Core.Pat idPat(Type type, String name) {

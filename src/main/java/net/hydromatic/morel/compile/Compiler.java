@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
@@ -36,10 +37,10 @@ import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.TailList;
 import net.hydromatic.morel.util.ThreadLocals;
@@ -426,24 +427,23 @@ public class Compiler {
         final Binding argBinding = getConstant(cx, apply.arg);
         if (argBinding != null
             && argBinding.value != Unit.INSTANCE
-            && argBinding.type instanceof RecordType) {
-          final RecordType recordType = (RecordType) argBinding.type;
-          final Ord<Type> field = recordType.lookupField(recordSelector.name);
-          if (field != null) {
-            @SuppressWarnings("rawtypes")
-            final List list = (List) argBinding.value;
-            return Binding.of(recordSelector.name, field.e, list.get(field.i));
-          }
+            && argBinding.type instanceof RecordLikeType) {
+          @SuppressWarnings("rawtypes")
+          final List list = (List) argBinding.value;
+          final RecordLikeType recordType = (RecordLikeType) argBinding.type;
+          final Map.Entry<String, Type> nameType =
+              Iterables.get(recordType.argNameTypes().entrySet(),
+                  recordSelector.slot);
+          final String fieldName = nameType.getKey();
+          final Type type = nameType.getValue();
+          return Binding.of(fieldName, type, list.get(recordSelector.slot));
         }
       }
       // fall through
+
     default:
       return null;
     }
-  }
-
-  private Code compileAggregate(Context cx, Ast.Aggregate aggregate) {
-    throw new UnsupportedOperationException(); // TODO
   }
 
   private Code compileLet(Context cx, Core.LetExp let) {

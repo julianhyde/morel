@@ -261,7 +261,7 @@ public class Shuttle {
   }
 
   protected Core.RecordSelector visit(Core.RecordSelector recordSelector) {
-    return core.recordSelector(recordSelector.type(), recordSelector.name);
+    return core.recordSelector(recordSelector.type(), recordSelector.slot);
   }
 
   protected Core.Exp visit(Core.Literal literal) {
