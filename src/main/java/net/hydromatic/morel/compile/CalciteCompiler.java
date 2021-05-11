@@ -83,24 +83,31 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 /** Compiles an expression to code that can be evaluated. */
 public class CalciteCompiler extends Compiler {
   /** Morel operators and their exact equivalents in Calcite. */
-  static final Map<String, SqlOperator> DIRECT_OPS =
-      ImmutableMap.<String, SqlOperator>builder()
-          .put("op =", SqlStdOperatorTable.EQUALS)
-          .put("op <>", SqlStdOperatorTable.NOT_EQUALS)
-          .put("op <", SqlStdOperatorTable.LESS_THAN)
-          .put("op <=", SqlStdOperatorTable.LESS_THAN_OR_EQUAL)
-          .put("op >", SqlStdOperatorTable.GREATER_THAN)
-          .put("op >=", SqlStdOperatorTable.GREATER_THAN_OR_EQUAL)
-          .put("op +", SqlStdOperatorTable.PLUS)
-          .put("op -", SqlStdOperatorTable.MINUS)
-          .put("op ~", SqlStdOperatorTable.UNARY_MINUS)
-          .put("op *", SqlStdOperatorTable.MULTIPLY)
-          .put("op /", SqlStdOperatorTable.DIVIDE)
-          .put("op mod", SqlStdOperatorTable.MOD)
-          .build();
-
   static final Map<BuiltIn, SqlOperator> INFIX_OPERATORS =
       ImmutableMap.<BuiltIn, SqlOperator>builder()
+          .put(BuiltIn.OP_EQ, SqlStdOperatorTable.EQUALS)
+          .put(BuiltIn.OP_NE, SqlStdOperatorTable.NOT_EQUALS)
+          .put(BuiltIn.OP_LT, SqlStdOperatorTable.LESS_THAN)
+          .put(BuiltIn.OP_LE, SqlStdOperatorTable.LESS_THAN_OR_EQUAL)
+          .put(BuiltIn.OP_GT, SqlStdOperatorTable.GREATER_THAN)
+          .put(BuiltIn.OP_GE, SqlStdOperatorTable.GREATER_THAN_OR_EQUAL)
+          .put(BuiltIn.OP_NEGATE, SqlStdOperatorTable.UNARY_MINUS)
+          .put(BuiltIn.Z_NEGATE_INT, SqlStdOperatorTable.UNARY_MINUS)
+          .put(BuiltIn.Z_NEGATE_REAL, SqlStdOperatorTable.UNARY_MINUS)
+          .put(BuiltIn.OP_PLUS, SqlStdOperatorTable.PLUS)
+          .put(BuiltIn.Z_PLUS_INT, SqlStdOperatorTable.PLUS)
+          .put(BuiltIn.Z_PLUS_REAL, SqlStdOperatorTable.PLUS)
+          .put(BuiltIn.OP_MINUS, SqlStdOperatorTable.MINUS)
+          .put(BuiltIn.Z_MINUS_INT, SqlStdOperatorTable.MINUS)
+          .put(BuiltIn.Z_MINUS_REAL, SqlStdOperatorTable.MINUS)
+          .put(BuiltIn.OP_TIMES, SqlStdOperatorTable.MULTIPLY)
+          .put(BuiltIn.Z_TIMES_INT, SqlStdOperatorTable.MULTIPLY)
+          .put(BuiltIn.Z_TIMES_REAL, SqlStdOperatorTable.MULTIPLY)
+          .put(BuiltIn.OP_DIVIDE, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.Z_DIVIDE_INT, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.Z_DIVIDE_REAL, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.OP_DIV, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.OP_MOD, SqlStdOperatorTable.MOD)
           .put(BuiltIn.Z_ANDALSO, SqlStdOperatorTable.AND)
           .put(BuiltIn.Z_ORELSE, SqlStdOperatorTable.OR)
           .build();
@@ -217,6 +224,7 @@ public class CalciteCompiler extends Compiler {
           break;
 
         case ID:
+          // TODO: the following should be constants, not IDs
           switch (((Core.Id) apply.fn).name) {
           case "op union":
           case "op except":
@@ -518,22 +526,13 @@ public class CalciteCompiler extends Compiler {
 
     case APPLY:
       final Core.Apply apply = (Core.Apply) exp;
-      final SqlOperator operator;
       switch (apply.fn.op) {
       case FN_LITERAL:
         BuiltIn op = (BuiltIn) ((Core.Literal) apply.fn).value;
-        operator = INFIX_OPERATORS.get(op);
+        final SqlOperator operator = INFIX_OPERATORS.get(op);
         assert apply.arg.op == Op.TUPLE;
         return cx.relBuilder.call(operator,
             translateList(cx, ((Core.Tuple) apply.arg).args));
-
-      case ID:
-        operator = DIRECT_OPS.get(((Core.Id) apply.fn).name);
-        if (operator != null) {
-          final Core.Tuple tuple = (Core.Tuple) apply.arg;
-          return cx.relBuilder.call(operator, translateList(cx, tuple.args));
-        }
-        // fall through
 
       default:
         // fall through
@@ -701,8 +700,9 @@ public class CalciteCompiler extends Compiler {
    * support aggregate functions defined by expressions (e.g. lambdas). */
   @Nonnull private SqlAggFunction aggOp(Core.Exp aggregate) {
     if (aggregate instanceof Core.Id) {
-      final String name = ((Core.Id) aggregate).name;
-      switch (name) {
+      final Core.Id id = (Core.Id) aggregate;
+      final String name = id.name;
+      switch (name) { // TODO remove
       case "sum":
         return SqlStdOperatorTable.SUM;
       case "count":
@@ -710,6 +710,21 @@ public class CalciteCompiler extends Compiler {
       case "min":
         return SqlStdOperatorTable.MIN;
       case "max":
+        return SqlStdOperatorTable.MAX;
+      }
+    }
+    if (aggregate instanceof Core.Literal) {
+      final Core.Literal literal = (Core.Literal) aggregate;
+      switch ((BuiltIn) literal.value) {
+      case RELATIONAL_SUM:
+      case Z_SUM_INT:
+      case Z_SUM_REAL:
+        return SqlStdOperatorTable.SUM;
+      case RELATIONAL_COUNT:
+        return SqlStdOperatorTable.COUNT;
+      case RELATIONAL_MIN:
+        return SqlStdOperatorTable.MIN;
+      case RELATIONAL_MAX:
         return SqlStdOperatorTable.MAX;
       }
     }

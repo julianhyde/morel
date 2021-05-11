@@ -1496,6 +1496,11 @@ public class MainTest {
         "String.substring (\"hello\", 2, 3)",
         "#substring String (\"hello\", 2, 3)",
         "{a = 1, b = true, c = \"d\"}", "(1, true, \"d\")",
+        "fn x => 1 + x + 3", null,
+        "List.tabulate (6, fn i =>"
+            + " {i, j = i + 3, s = String.substring (\"morel\", 0, i)})",
+        "#tabulate List (6, fn i =>"
+            + " (i, i + 3, #substring String (\"morel\", 0, i)))",
     };
     for (int i = 0; i < expressions.length / 2; i++) {
       String ml = expressions[i * 2];

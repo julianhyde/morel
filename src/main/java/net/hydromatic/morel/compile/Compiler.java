@@ -194,6 +194,10 @@ public class Compiler {
     case UNIT_LITERAL:
       return Codes.constant(Unit.INSTANCE);
 
+    case FN_LITERAL:
+      literal = (Core.Literal) expression;
+      return Codes.constant(literal.value);
+
     case LET:
       return compileLet(cx, (Core.LetExp) expression);
 
@@ -242,13 +246,9 @@ public class Compiler {
     // Is this is a call to a built-in operator?
     switch (apply.fn.op) {
     case FN_LITERAL:
-      // Argument for an operator is always a tuple; operators are never
-      // curried, nor do they evaluate an expression to yield the tuple of
-      // arguments.
       final Core.Literal literal = (Core.Literal) apply.fn;
       final BuiltIn builtIn = (BuiltIn) literal.value;
-      assert apply.arg.op == Op.TUPLE;
-      return compileCall(cx, builtIn, ((Core.Tuple) apply.arg).args);
+      return compileCall(cx, builtIn, apply.arg);
     }
     final Code argCode = compileArg(cx, apply.arg);
     final Type argType = apply.arg.type;
@@ -371,6 +371,15 @@ public class Compiler {
    * returns null. */
   private Applicable compileApplicable(Context cx, Core.Exp fn,
       Type argType) {
+    switch (fn.op) {
+    case FN_LITERAL:
+      final Core.Literal literal = (Core.Literal) fn;
+      final BuiltIn builtIn = (BuiltIn) literal.value;
+      final Object o = Codes.BUILT_IN_VALUES.get(builtIn);
+      if (o instanceof Applicable) {
+        return (Applicable) o;
+      }
+    }
     final Binding binding = getConstant(cx, fn);
     if (binding != null) {
       if (binding.value instanceof Macro) {
@@ -501,20 +510,27 @@ public class Compiler {
     }
   }
 
-  private Code compileCall(Context cx, BuiltIn builtIn,
-      Iterable<? extends Core.Exp> args) {
+  private Code compileCall(Context cx, BuiltIn builtIn, Core.Exp arg) {
     final List<Code> argCodes;
     switch (builtIn) {
     case Z_ANDALSO:
-      argCodes = compileArgs(cx, args);
+      // Argument for a built-in infix operator such as "andalso" is always a
+      // tuple; operators are never curried, nor do they evaluate an expression
+      // to yield the tuple of arguments.
+      argCodes = compileArgs(cx, ((Core.Tuple) arg).args);
       return Codes.andAlso(argCodes.get(0), argCodes.get(1));
     case Z_ORELSE:
-      argCodes = compileArgs(cx, args);
+      argCodes = compileArgs(cx, ((Core.Tuple) arg).args);
       return Codes.orElse(argCodes.get(0), argCodes.get(1));
     case Z_LIST:
-      argCodes = compileArgs(cx, args);
+      argCodes = compileArgs(cx, ((Core.Tuple) arg).args);
       return Codes.list(argCodes);
     default:
+      final Object o = Codes.BUILT_IN_VALUES.get(builtIn);
+      if (o instanceof Applicable) {
+        final Code argCode = compile(cx, arg);
+        return Codes.apply((Applicable) o, argCode);
+      }
       throw new AssertionError("unknown " + builtIn);
     }
   }

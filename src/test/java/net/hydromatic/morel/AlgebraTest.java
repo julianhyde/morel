@@ -212,6 +212,7 @@ public class AlgebraTest {
         "#map (fn e => (#empno e))\n"
             + "  (filter (fn e => (#deptno e) = 30) (#emp scott))",
     };
+//     Stream.of(queries).filter(q -> q.startsWith("#")).map(q -> q.substring(1)).forEach(query -> {
     Stream.of(queries).filter(q -> !q.startsWith("#")).forEach(query -> {
       try {
         ml(query).withBinding("scott", BuiltInDataSet.SCOTT).assertEvalSame();

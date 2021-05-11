@@ -33,6 +33,7 @@ import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.Inliner;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeMap;
 import net.hydromatic.morel.compile.TypeResolver;
@@ -263,7 +264,8 @@ class Ml {
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
     final Resolver resolver = new Resolver(resolved.typeMap);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
-    final String coreString = valDecl3.e.toString();
+    final Core.ValDecl valDecl4 = valDecl3.accept(new Inliner(typeSystem, env));
+    final String coreString = valDecl4.e.toString();
     assertThat(coreString, matcher);
   }
 

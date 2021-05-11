@@ -20,6 +20,8 @@ package net.hydromatic.morel.ast;
 
 import com.google.common.collect.Lists;
 
+import net.hydromatic.morel.compile.BuiltIn;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -189,6 +191,8 @@ public class AstWriter {
         c = c.negate();
       }
       append(c.toString());
+    } else if (value instanceof BuiltIn) {
+      append(((BuiltIn) value).mlName);
     } else {
       append(value.toString());
     }

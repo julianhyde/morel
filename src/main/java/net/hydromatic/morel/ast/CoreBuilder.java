@@ -85,8 +85,9 @@ public enum CoreBuilder {
   }
 
   /** Creates a function literal. */
-  public Core.Literal functionLiteral(BuiltIn builtIn) {
-    return new Core.Literal(Op.FN_LITERAL, PrimitiveType.UNIT, builtIn);
+  public Core.Literal functionLiteral(TypeSystem typeSystem, BuiltIn builtIn) {
+    final Type type = builtIn.typeFunction.apply(typeSystem);
+    return new Core.Literal(Op.FN_LITERAL, type, builtIn);
   }
 
   /** Creates a reference to a value. */

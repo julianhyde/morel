@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 
 import net.hydromatic.morel.ast.Ast;
@@ -38,6 +39,7 @@ import net.hydromatic.morel.util.Pair;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +49,37 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Converts AST expressions to Core expressions. */
 public class Resolver {
+  // TODO: move this map
+  public static final ImmutableMap<BuiltIn, Op> BUILT_IN_OP_MAP;
+
+  public static final ImmutableMap<Op, BuiltIn> OP_BUILT_IN_MAP;
+
+  static {
+    Object[] values = {
+        BuiltIn.Z_ANDALSO, Op.ANDALSO,
+        BuiltIn.Z_ORELSE, Op.ORELSE,
+        BuiltIn.OP_CONS, Op.CONS,
+        BuiltIn.Z_PLUS_INT, Op.PLUS,
+        BuiltIn.Z_PLUS_REAL, Op.PLUS,
+        BuiltIn.OP_EQ, Op.EQ,
+        BuiltIn.OP_NE, Op.NE,
+        BuiltIn.OP_GT, Op.GT,
+        BuiltIn.OP_GE, Op.GE,
+        BuiltIn.OP_LT, Op.LT,
+        BuiltIn.OP_LE, Op.LE,
+    };
+    ImmutableMap.Builder<BuiltIn, Op> b2o = ImmutableMap.builder();
+    Map<Op, BuiltIn> o2b = new HashMap<>();
+    for (int i = 0; i < values.length / 2; i++) {
+      BuiltIn builtIn = (BuiltIn) values[i * 2];
+      Op op = (Op) values[i * 2 + 1];
+      b2o.put(builtIn, op);
+      o2b.put(op, builtIn);
+    }
+    BUILT_IN_OP_MAP = b2o.build();
+    OP_BUILT_IN_MAP = ImmutableMap.copyOf(o2b);
+  }
+
   final TypeMap typeMap;
 
   public Resolver(TypeMap typeMap) {
@@ -169,7 +202,8 @@ public class Resolver {
 
   private Core.Exp toCore(Ast.ListExp list) {
     final ListType type = (ListType) typeMap.getType(list);
-    return core.apply(type, core.functionLiteral(BuiltIn.Z_LIST),
+    return core.apply(type,
+        core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_LIST),
         core.tuple(typeMap.typeSystem, transform(list.args, this::toCore)));
   }
 
@@ -186,6 +220,29 @@ public class Resolver {
       coreFn = core.recordSelector(fnType, recordSelector.name);
     } else {
       coreFn = toCore(apply.fn);
+      /* TODO
+      if (binding.value instanceof Macro) {
+        final Macro value = (Macro) binding.value;
+        final Core.Exp e = value.expand(typeSystem, cx.env, argType);
+        switch (e.op) {
+        case FN_LITERAL:
+          final Core.Literal literal = (Core.Literal) e;
+          final BuiltIn builtIn = (BuiltIn) literal.value;
+          return (Applicable) Codes.BUILT_IN_VALUES.get(builtIn);
+        }
+        final Code code = compile(cx, e);
+        return new Applicable() {
+          @Override public Describer describe(Describer describer) {
+            return code.describe(describer);
+          }
+
+          @Override public Object apply(EvalEnv evalEnv, Object arg) {
+            return code.eval(evalEnv);
+          }
+        };
+      }
+       */
+
     }
     return core.apply(type, coreFn, coreArg);
   }
@@ -199,19 +256,13 @@ public class Resolver {
     Core.Exp core0 = toCore(call.a0);
     Core.Exp core1 = toCore(call.a1);
     final BuiltIn builtIn = toBuiltIn(call.op);
-    return core.apply(typeMap.getType(call), core.functionLiteral(builtIn),
+    return core.apply(typeMap.getType(call),
+        core.functionLiteral(typeMap.typeSystem, builtIn),
         core.tuple(typeMap.typeSystem, ImmutableList.of(core0, core1)));
   }
 
   private BuiltIn toBuiltIn(Op op) {
-    switch (op) {
-    case ANDALSO:
-      return BuiltIn.Z_ANDALSO;
-    case ORELSE:
-      return BuiltIn.Z_ORELSE;
-    default:
-      throw new AssertionError("unknown: " + op);
-    }
+    return OP_BUILT_IN_MAP.get(op);
   }
 
   private Core.Fn toCore(Ast.Fn fn) {

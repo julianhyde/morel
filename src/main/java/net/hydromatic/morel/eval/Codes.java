@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -263,9 +264,9 @@ public abstract class Codes {
   private static final Macro OP_NEGATE = (typeSystem, env, argType) -> {
     switch ((PrimitiveType) argType) {
     case INT:
-      return core.functionLiteral(BuiltIn.Z_NEGATE_INT);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_NEGATE_INT);
     case REAL:
-      return core.functionLiteral(BuiltIn.Z_NEGATE_REAL);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_NEGATE_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -276,9 +277,9 @@ public abstract class Codes {
     final Type resultType = ((TupleType) argType).argTypes.get(0);
     switch ((PrimitiveType) resultType) {
     case INT:
-      return core.functionLiteral(BuiltIn.Z_DIVIDE_INT);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_DIVIDE_INT);
     case REAL:
-      return core.functionLiteral(BuiltIn.Z_DIVIDE_REAL);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_DIVIDE_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -531,9 +532,9 @@ public abstract class Codes {
     final Type resultType = ((TupleType) argType).argTypes.get(0);
     switch ((PrimitiveType) resultType) {
     case INT:
-      return core.functionLiteral(BuiltIn.Z_MINUS_INT);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_MINUS_INT);
     case REAL:
-      return core.functionLiteral(BuiltIn.Z_MINUS_REAL);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_MINUS_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -553,9 +554,9 @@ public abstract class Codes {
     final Type resultType = ((TupleType) argType).argTypes.get(0);
     switch ((PrimitiveType) resultType) {
     case INT:
-      return core.functionLiteral(BuiltIn.Z_PLUS_INT);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_PLUS_INT);
     case REAL:
-      return core.functionLiteral(BuiltIn.Z_PLUS_REAL);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_PLUS_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -566,9 +567,9 @@ public abstract class Codes {
     final Type resultType = ((TupleType) argType).argTypes.get(0);
     switch ((PrimitiveType) resultType) {
     case INT:
-      return core.functionLiteral(BuiltIn.Z_TIMES_INT);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_TIMES_INT);
     case REAL:
-      return core.functionLiteral(BuiltIn.Z_TIMES_REAL);
+      return core.functionLiteral(typeSystem, BuiltIn.Z_TIMES_REAL);
     default:
       throw new AssertionError("bad type " + argType);
     }
@@ -1452,9 +1453,9 @@ public abstract class Codes {
       final Type resultType = ((ListType) argType).elementType;
       switch ((PrimitiveType) resultType) {
       case INT:
-        return core.functionLiteral(BuiltIn.Z_SUM_INT);
+        return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_INT);
       case REAL:
-        return core.functionLiteral(BuiltIn.Z_SUM_REAL);
+        return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_REAL);
       }
     }
     throw new AssertionError("bad type " + argType);
@@ -1493,7 +1494,8 @@ public abstract class Codes {
                         core.stringLiteral(entry.getValue().type.moniker()))))
             .collect(Collectors.toList());
     return core.apply(typeSystem.listType(argType),
-        core.functionLiteral(BuiltIn.Z_LIST), core.tuple(typeSystem, args));
+        core.functionLiteral(typeSystem, BuiltIn.Z_LIST),
+        core.tuple(typeSystem, args));
   }
 
   /** @see BuiltIn#SYS_PLAN */
@@ -2036,6 +2038,19 @@ public abstract class Codes {
           .put(BuiltIn.Z_SUM_REAL, Z_SUM_REAL)
           .put(BuiltIn.Z_LIST, Z_LIST)
           .build();
+
+  public static final Map<Applicable, BuiltIn> BUILT_IN_MAP =
+      ((Supplier<Map<Applicable, BuiltIn>>) Codes::get).get();
+
+  private static Map<Applicable, BuiltIn> get() {
+    final IdentityHashMap<Applicable, BuiltIn> b = new IdentityHashMap<>();
+    BUILT_IN_VALUES.forEach((builtIn, o) -> {
+      if (o instanceof Applicable) {
+        b.put((Applicable) o, builtIn);
+      }
+    });
+    return ImmutableMap.copyOf(b);
+  }
 
   /** A code that evaluates expressions and creates a tuple with the results.
    *

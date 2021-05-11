@@ -77,6 +77,7 @@ public abstract class Compiles {
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
     final Resolver resolver = new Resolver(resolved.typeMap);
     final Core.Decl coreDecl = resolver.toCore(resolved.node);
+    final Core.Decl coreDecl2 = coreDecl.accept(new Inliner(typeSystem, env));
     final Compiler compiler;
     if (hybrid) {
       final Calcite calcite = Calcite.withDataSets(ImmutableMap.of());
@@ -84,7 +85,7 @@ public abstract class Compiles {
     } else {
       compiler = new Compiler(typeSystem);
     }
-    return compiler.compileStatement(env, coreDecl);
+    return compiler.compileStatement(env, coreDecl2);
   }
 
   /** Converts {@code e} to {@code val = e}. */
