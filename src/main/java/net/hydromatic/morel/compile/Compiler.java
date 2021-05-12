@@ -19,11 +19,9 @@
 package net.hydromatic.morel.compile;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Closure;
@@ -37,7 +35,6 @@ import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -54,6 +51,7 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Supplier;
+import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
@@ -199,6 +197,10 @@ public class Compiler {
       literal = (Core.Literal) expression;
       return Codes.constant(literal.value);
 
+    case VALUE_LITERAL:
+      literal = (Core.Literal) expression;
+      return Codes.constant(literal.unwrap());
+
     case LET:
       return compileLet(cx, (Core.Let) expression);
 
@@ -277,7 +279,7 @@ public class Compiler {
     from.sources.forEach((pat, exp) -> {
       final Code expCode = compile(cx.bindAll(bindings), exp);
       sourceCodes.put(pat, expCode);
-      pat.accept(Compiles.binding(bindings));
+      pat.accept(Compiles.binding(typeSystem, bindings));
     });
     Supplier<Codes.RowSink> rowSinkFactory =
         createRowSinkFactory(cx, ImmutableList.copyOf(bindings), from.steps,
@@ -370,80 +372,61 @@ public class Compiler {
 
   /** Compiles a function value to an {@link Applicable}, if possible, or
    * returns null. */
-  private Applicable compileApplicable(Context cx, Core.Exp fn,
-      Type argType) {
+  private Applicable compileApplicable(Context cx, Core.Exp fn, Type argType) {
     switch (fn.op) {
     case FN_LITERAL:
-      final Core.Literal literal = (Core.Literal) fn;
-      final BuiltIn builtIn = (BuiltIn) literal.value;
+      final BuiltIn builtIn = (BuiltIn) ((Core.Literal) fn).value;
       final Object o = Codes.BUILT_IN_VALUES.get(builtIn);
-      if (o instanceof Applicable) {
-        return (Applicable) o;
-      }
-    }
-    final Binding binding = getConstant(cx, fn);
-    if (binding != null) {
-      if (binding.value instanceof Macro) {
-        final Macro value = (Macro) binding.value;
-        final Core.Exp e = value.expand(typeSystem, cx.env, argType);
-        switch (e.op) {
-        case FN_LITERAL:
-          final Core.Literal literal = (Core.Literal) e;
-          final BuiltIn builtIn = (BuiltIn) literal.value;
-          return (Applicable) Codes.BUILT_IN_VALUES.get(builtIn);
-        }
-        final Code code = compile(cx, e);
-        return new Applicable() {
-          @Override public Describer describe(Describer describer) {
-            return code.describe(describer);
-          }
+      return toApplicable(cx, o, argType);
 
-          @Override public Object apply(EvalEnv evalEnv, Object arg) {
-            return code.eval(evalEnv);
-          }
-        };
-      }
-      if (binding.value instanceof Applicable) {
-        return (Applicable) binding.value;
-      }
-    }
-    final Code fnCode = compile(cx, fn);
-    if (fnCode.isConstant()) {
-      return (Applicable) fnCode.eval(EMPTY_ENV);
-    } else {
-      return null;
-    }
-  }
+    case VALUE_LITERAL:
+      final Core.Literal literal = (Core.Literal) fn;
+      return toApplicable(cx, literal.unwrap(), argType);
 
-  private Binding getConstant(Context cx, Core.Exp fn) {
-    switch (fn.op) {
     case ID:
-      return cx.env.getOpt(((Core.Id) fn).name);
-
-    case APPLY:
-      final Core.Apply apply = (Core.Apply) fn;
-      if (apply.fn.op == Op.RECORD_SELECTOR) {
-        final Core.RecordSelector recordSelector = (Core.RecordSelector) apply.fn;
-        final Binding argBinding = getConstant(cx, apply.arg);
-        if (argBinding != null
-            && argBinding.value != Unit.INSTANCE
-            && argBinding.type instanceof RecordLikeType) {
-          @SuppressWarnings("rawtypes")
-          final List list = (List) argBinding.value;
-          final RecordLikeType recordType = (RecordLikeType) argBinding.type;
-          final Map.Entry<String, Type> nameType =
-              Iterables.get(recordType.argNameTypes().entrySet(),
-                  recordSelector.slot);
-          final String fieldName = nameType.getKey();
-          final Type type = nameType.getValue();
-          return Binding.of(fieldName, type, list.get(recordSelector.slot));
-        }
+      final Binding binding = cx.env.getOpt(((Core.Id) fn).name);
+      if (binding == null
+          || binding.value instanceof LinkCode
+          || binding.value == Unit.INSTANCE) {
+        return null;
       }
-      // fall through
+      return toApplicable(cx, binding.value, argType);
+
+    case RECORD_SELECTOR:
+      final Core.RecordSelector recordSelector = (Core.RecordSelector) fn;
+      return Codes.nth(recordSelector.slot);
 
     default:
       return null;
     }
+  }
+
+  private @Nullable Applicable toApplicable(Context cx, Object o,
+      Type argType) {
+    if (o instanceof Applicable) {
+      return (Applicable) o;
+    }
+    if (o instanceof Macro) {
+      final Macro value = (Macro) o;
+      final Core.Exp e = value.expand(typeSystem, cx.env, argType);
+      switch (e.op) {
+      case FN_LITERAL:
+        final Core.Literal literal = (Core.Literal) e;
+        final BuiltIn builtIn = (BuiltIn) literal.value;
+        return (Applicable) Codes.BUILT_IN_VALUES.get(builtIn);
+      }
+      final Code code = compile(cx, e);
+      return new Applicable() {
+        @Override public Describer describe(Describer describer) {
+          return code.describe(describer);
+        }
+
+        @Override public Object apply(EvalEnv evalEnv, Object arg) {
+          return code.eval(evalEnv);
+        }
+      };
+    }
+    return null;
   }
 
   private Code compileLet(Context cx, Core.Let let) {
@@ -487,7 +470,7 @@ public class Compiler {
 
   private void compileValDecl(Context cx, Core.ValDecl valDecl,
       List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
-    valDecl.pat.accept(Compiles.binding(bindings));
+    valDecl.pat.accept(Compiles.binding(typeSystem, bindings));
     compileValBind(cx, valDecl, matchCodes, bindings, actions);
   }
 
@@ -553,7 +536,7 @@ public class Compiler {
 
   private Pair<Core.Pat, Code> compileMatch(Context cx, Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();
-    match.pat.accept(Compiles.binding(bindings));
+    match.pat.accept(Compiles.binding(typeSystem, bindings));
     final Code code = compile(cx.bindAll(bindings), match.e);
     return Pair.of(match.pat, code);
   }

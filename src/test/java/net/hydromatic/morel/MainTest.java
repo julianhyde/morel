@@ -706,6 +706,17 @@ public class MainTest {
     ml(ml).assertEval(is(11));
   }
 
+  /** Tests a closure in a let. */
+  @Test public void testLet5() {
+    final String ml = "let\n"
+        + "  val plus = fn x => fn y => x + y\n"
+        + "  val plusTwo = plus 2\n"
+        + "in\n"
+        + "  plusTwo 3\n"
+        + "end";
+    ml(ml).assertEval(is(5));
+  }
+
   /** Tests that you can use the same variable name in different parts of the
    * program without the types getting confused. */
   @Test public void testSameVariableName() {

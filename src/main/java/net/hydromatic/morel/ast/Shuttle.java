@@ -260,7 +260,7 @@ public class Shuttle {
 
   // core expressions, patterns
 
-  protected Core.Apply visit(Core.Apply apply) {
+  protected Core.Exp visit(Core.Apply apply) {
     return apply.copy(apply.fn.accept(this), apply.arg.accept(this));
   }
 

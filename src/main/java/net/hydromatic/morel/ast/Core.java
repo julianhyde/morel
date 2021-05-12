@@ -25,6 +25,8 @@ import com.google.common.collect.Iterables;
 
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Resolver;
+import net.hydromatic.morel.eval.Closure;
+import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -486,7 +488,15 @@ public class Core {
     /** Creates a Literal. */
     Literal(Op op, Type type, Comparable value) {
       super(op, type);
-      this.value = value;
+      this.value = requireNonNull(value);
+    }
+
+    static Comparable wrap(Exp exp, Object value) {
+      return new Wrapper(exp, value);
+    }
+
+    public Object unwrap() {
+      return ((Wrapper) value).o;
     }
 
     @Override public int hashCode() {
@@ -508,6 +518,10 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
+      if (value instanceof Wrapper) {
+        // Generate the original expression from which this value was derived.
+        return ((Wrapper) value).exp.unparse(w, left, right);
+      }
       return w.appendLiteral(value);
     }
   }
@@ -1044,6 +1058,51 @@ public class Core {
     }
   }
 
+  /** Wraps a value as a Comparable, and stores the global expression from which
+   * the value was derived. That global expression will be used if the value is
+   * converted by to Morel code. */
+  static class Wrapper implements Comparable<Wrapper> {
+    private final Exp exp;
+    private final Object o;
+
+    private Wrapper(Exp exp, Object o) {
+      this.exp = exp;
+      this.o = o;
+      assert isValidValue(exp, o) : o;
+    }
+
+    private static boolean isValidValue(Exp exp, Object o) {
+      if (o instanceof Code) {
+        return false;
+      }
+      if (o instanceof Closure) {
+        return false;
+      }
+      if (o instanceof Id) {
+        final String name = ((Id) exp).name;
+        return !("true".equals(name) || "false".equals(name));
+      }
+      return true;
+    }
+
+    @Override public int compareTo(Wrapper o) {
+      return Integer.compare(this.o.hashCode(), o.o.hashCode());
+    }
+
+    @Override public String toString() {
+      return o.toString();
+    }
+
+    @Override public int hashCode() {
+      return o.hashCode();
+    }
+
+    @Override public boolean equals(Object obj) {
+      return this == obj
+          || obj instanceof Wrapper
+          && this.o.equals(((Wrapper) obj).o);
+    }
+  }
 }
 
 // End Core.java

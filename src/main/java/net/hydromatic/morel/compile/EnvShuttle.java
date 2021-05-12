@@ -50,13 +50,13 @@ abstract class EnvShuttle extends Shuttle {
   @Override protected Core.Match visit(Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();
     final Core.Pat pat2 = match.pat.accept(this);
-    pat2.accept(Compiles.binding(bindings));
+    pat2.accept(Compiles.binding(typeSystem, bindings));
     return core.match(pat2, match.e.accept(bind(bindings)));
   }
 
   @Override public Core.Exp visit(Core.Let e) {
     final List<Binding> bindings = new ArrayList<>();
-    e.decl.accept(Compiles.binding(bindings));
+    e.decl.accept(Compiles.binding(typeSystem, bindings));
     return core.let(e.decl.accept(this), e.e.accept(bind(bindings)));
   }
 
@@ -65,7 +65,7 @@ abstract class EnvShuttle extends Shuttle {
     final Map<Core.Pat, Core.Exp> sources = new LinkedHashMap<>();
     from.sources.forEach((pat, source) -> {
       sources.put(pat, source.accept(bind(bindings)));
-      pat.accept(Compiles.binding(bindings));
+      pat.accept(Compiles.binding(typeSystem, bindings));
     });
 
     final List<Core.FromStep> steps = new ArrayList<>();

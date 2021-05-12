@@ -77,7 +77,8 @@ public abstract class Compiles {
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
     final Resolver resolver = new Resolver(resolved.typeMap);
     final Core.Decl coreDecl = resolver.toCore(resolved.node);
-    final Core.Decl coreDecl2 = coreDecl.accept(new Inliner(typeSystem, env));
+    final Inliner inliner = Inliner.of(typeSystem, env);
+    final Core.Decl coreDecl2 = coreDecl.accept(inliner);
     final Compiler compiler;
     if (hybrid) {
       final Calcite calcite = Calcite.withDataSets(ImmutableMap.of());
@@ -102,16 +103,18 @@ public abstract class Compiles {
     return decl.e;
   }
 
-  static PatternBinder binding(List<Binding> bindings) {
-    return new PatternBinder(bindings);
+  static PatternBinder binding(TypeSystem typeSystem, List<Binding> bindings) {
+    return new PatternBinder(typeSystem, bindings);
   }
 
   /** Visitor that adds a {@link Binding} each time it see an
    * {@link Core.IdPat}. */
   private static class PatternBinder extends Visitor {
+    private final TypeSystem typeSystem;
     private final List<Binding> bindings;
 
-    PatternBinder(List<Binding> bindings) {
+    PatternBinder(TypeSystem typeSystem, List<Binding> bindings) {
+      this.typeSystem = typeSystem;
       this.bindings = bindings;
     }
 
@@ -122,6 +125,12 @@ public abstract class Compiles {
     @Override protected void visit(Core.ValDecl valBind) {
       // The super method visits valBind.e; we do not
       valBind.pat.accept(this);
+    }
+
+    @Override protected void visit(Core.DatatypeDecl datatypeDecl) {
+      datatypeDecl.dataTypes.forEach(dataType ->
+          dataType.typeConstructors.keySet().forEach(name ->
+              bindings.add(typeSystem.bindTyCon(dataType, name))));
     }
   }
 }

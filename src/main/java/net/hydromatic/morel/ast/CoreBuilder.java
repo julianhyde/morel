@@ -58,6 +58,26 @@ public enum CoreBuilder {
   private final Core.WildcardPat boolWildcardPat =
       wildcardPat(PrimitiveType.BOOL);
 
+  /** Creates a literal. */
+  public Core.Literal literal(PrimitiveType type, Object value) {
+    switch (type) {
+    case BOOL:
+      return boolLiteral((Boolean) value);
+    case CHAR:
+      return charLiteral((Character) value);
+    case INT:
+      return intLiteral(value instanceof BigDecimal ? (BigDecimal) value
+          : BigDecimal.valueOf(((Number) value).longValue()));
+    case REAL:
+      return realLiteral(value instanceof BigDecimal ? (BigDecimal) value
+          : BigDecimal.valueOf(((Number) value).doubleValue()));
+    case STRING:
+      return stringLiteral((String) value);
+    default:
+      throw new AssertionError("unexpected " + type);
+    }
+  }
+
   /** Creates a {@code boolean} literal. */
   public Core.Literal boolLiteral(boolean b) {
     return new Core.Literal(Op.BOOL_LITERAL, PrimitiveType.BOOL, b);
@@ -92,6 +112,12 @@ public enum CoreBuilder {
   public Core.Literal functionLiteral(TypeSystem typeSystem, BuiltIn builtIn) {
     final Type type = builtIn.typeFunction.apply(typeSystem);
     return new Core.Literal(Op.FN_LITERAL, type, builtIn);
+  }
+
+  /** Creates a value literal. */
+  public Core.Literal valueLiteral(Core.Exp exp, Object value) {
+    return new Core.Literal(Op.VALUE_LITERAL, exp.type,
+        Core.Literal.wrap(exp, value));
   }
 
   /** Creates a reference to a value. */

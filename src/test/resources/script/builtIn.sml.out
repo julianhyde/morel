@@ -143,7 +143,7 @@ String.maxSize;
 val it = 2147483647 : int
 
 Sys.plan ();
-val it = "apply(fnValue nth, argCode get(name String))" : string
+val it = "constant(2147483647)" : string
 
 
 (*) val size : string -> int
@@ -501,7 +501,7 @@ List.nil;
 val it = [] : 'a list
 
 Sys.plan ();
-val it = "apply(fnValue nth, argCode get(name List))" : string
+val it = "constant([])" : string
 
 
 (*) val null : 'a list -> bool
@@ -1044,7 +1044,7 @@ Option.valOf noneInt;
 uncaught exception Option
 
 Sys.plan ();
-val it = "apply(fnValue Option.valOf, argCode get(name noneInt))" : string
+val it = "apply(fnValue Option.valOf, argCode constant([NONE]))" : string
 
 
 (*) val filter : ('a -> bool) -> 'a -> 'a option
@@ -1087,7 +1087,7 @@ val it = () : unit
 
 Sys.plan ();
 val it =
-  "apply(fnCode apply(fnValue Option.app, argCode apply(fnValue nth, argCode get(name General))), argCode constant([NONE]))"
+  "apply(fnCode apply(fnValue Option.app, argCode constant(General.ignore)), argCode constant([NONE]))"
   : string
 
 
@@ -1100,7 +1100,7 @@ val it = NONE : int option
 
 Sys.plan ();
 val it =
-  "apply(fnCode apply(fnValue Option.map, argCode apply(fnValue nth, argCode get(name String))), argCode constant([NONE]))"
+  "apply(fnCode apply(fnValue Option.map, argCode constant(String.size)), argCode constant([NONE]))"
   : string
 
 
@@ -1141,7 +1141,7 @@ val it = NONE : int option
 
 Sys.plan ();
 val it =
-  "apply(fnCode apply(fnValue Option.compose, argCode tuple(apply(fnValue nth, argCode get(name String)), match(s, apply(fnCode match(true, constant([NONE]), _, apply(fnValue tyCon, argCode apply(fnValue String.substring, argCode tuple(get(name s), constant(0), apply(fnValue String.size, argCode get(name s)))))), argCode apply(fnValue =, argCode tuple(get(name s), constant())))))), argCode constant())"
+  "apply(fnCode apply(fnValue Option.compose, argCode tuple(constant(String.size), match(s, apply(fnCode match(true, constant([NONE]), _, apply(fnValue tyCon, argCode apply(fnValue String.substring, argCode tuple(get(name s), constant(0), apply(fnValue String.size, argCode get(name s)))))), argCode apply(fnValue =, argCode tuple(get(name s), constant())))))), argCode constant())"
   : string
 
 
@@ -1174,7 +1174,7 @@ Relational.count [false];
 val it = 1 : int
 
 Sys.plan ();
-val it = "apply(fnValue Relational.count, argCode tuple(get(name false)))"
+val it = "apply(fnValue Relational.count, argCode tuple(constant(false)))"
   : string
 
 
@@ -1204,7 +1204,7 @@ val it = true : bool
 
 Sys.plan ();
 val it =
-  "apply(fnValue Relational.max, argCode tuple(get(name false), get(name true)))"
+  "apply(fnValue Relational.max, argCode tuple(constant(false), constant(true)))"
   : string
 
 
@@ -1222,7 +1222,7 @@ val it = false : bool
 
 Sys.plan ();
 val it =
-  "apply(fnValue Relational.min, argCode tuple(get(name false), get(name true)))"
+  "apply(fnValue Relational.min, argCode tuple(constant(false), constant(true)))"
   : string
 
 
@@ -1416,7 +1416,7 @@ val it = () : unit
 
 Sys.plan ();
 val it =
-  "apply(fnValue Sys.plan, argCode tuple(constant(hybrid), get(name false)))"
+  "apply(fnValue Sys.plan, argCode tuple(constant(hybrid), constant(false)))"
   : string
 
 
@@ -1497,7 +1497,7 @@ Vector.maxLen;
 val it = 16777215 : int
 
 Sys.plan ();
-val it = "apply(fnValue nth, argCode get(name Vector))" : string
+val it = "constant(16777215)" : string
 
 
 (*) Vector.tabulate : int * (int -> 'a) -> 'a vector

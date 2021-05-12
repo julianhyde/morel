@@ -251,7 +251,7 @@ public class AlgebraTest {
         + "apply("
         + "fnCode apply(fnValue List.filter, "
         + "argCode match(x, apply(fnValue <, "
-        + "argCode tuple(apply(fnValue nth, argCode get(name x)),"
+        + "argCode tuple(apply(fnValue nth:2, argCode get(name x)),"
         + " constant(7500))))), "
         + "argCode calcite("
         + "plan LogicalProject(d5=[+($1, 5)], deptno=[$1], empno=[$2])\n"

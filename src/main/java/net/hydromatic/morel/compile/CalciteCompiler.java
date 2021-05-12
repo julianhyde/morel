@@ -56,13 +56,13 @@ import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.ThreadLocals;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -353,7 +353,7 @@ public class CalciteCompiler extends Compiler {
           final RelNode expCode = cx2.relBuilder.build();
           final Core.Pat pat = patExp.getKey();
           sourceCodes.put(pat, expCode);
-          pat.accept(Compiles.binding(bindings));
+          pat.accept(Compiles.binding(typeSystem, bindings));
         }
         final Map<String, Function<RelBuilder, RexNode>> map = new HashMap<>();
         if (sourceCodes.size() == 0) {
@@ -487,26 +487,9 @@ public class CalciteCompiler extends Compiler {
       final Core.Id id = (Core.Id) exp;
       final Binding binding = cx.env.getOpt(id.name);
       if (binding != null && binding.value != Unit.INSTANCE) {
-        if (binding.value instanceof Boolean) {
-          final Boolean b = (Boolean) binding.value;
-          return translate(cx, core.boolLiteral(b));
-        }
-        if (binding.value instanceof Character) {
-          final Character c = (Character) binding.value;
-          return translate(cx, core.charLiteral(c));
-        }
-        if (binding.value instanceof Integer) {
-          final BigDecimal bd = BigDecimal.valueOf((Integer) binding.value);
-          return translate(cx, core.intLiteral(bd));
-        }
-        if (binding.value instanceof Float) {
-          final BigDecimal bd = BigDecimal.valueOf((Float) binding.value);
-          return translate(cx, core.realLiteral(bd));
-        }
-        if (binding.value instanceof String) {
-          final String s = (String) binding.value;
-          return translate(cx, core.stringLiteral(s));
-        }
+        final Core.Literal coreLiteral =
+            core.literal((PrimitiveType) binding.type, binding.value);
+        return translate(cx, coreLiteral);
       }
       record = toRecord(cx, id);
       if (record != null) {

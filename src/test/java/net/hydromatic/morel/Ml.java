@@ -264,7 +264,7 @@ class Ml {
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
     final Resolver resolver = new Resolver(resolved.typeMap);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
-    final Core.ValDecl valDecl4 = valDecl3.accept(new Inliner(typeSystem, env));
+    final Core.ValDecl valDecl4 = valDecl3.accept(Inliner.of(typeSystem, env));
     final String coreString = valDecl4.e.toString();
     assertThat(coreString, matcher);
   }

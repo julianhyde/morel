@@ -74,7 +74,7 @@ public abstract class Codes {
   private static final List OPTION_NONE = ImmutableList.of("NONE");
 
   /** Returns a Code that evaluates to the same value in all environments. */
-  public static Code constant(Comparable value) {
+  public static Code constant(Object value) {
     return new ConstantCode(value);
   }
 
@@ -495,7 +495,7 @@ public abstract class Codes {
    * record. */
   public static Applicable nth(int slot) {
     assert slot >= 0 : slot;
-    return new ApplicableImpl("nth") {
+    return new ApplicableImpl("nth:" + slot) {
       @Override public Object apply(EvalEnv env, Object arg) {
         return ((List) arg).get(slot);
       }
@@ -2333,9 +2333,9 @@ public abstract class Codes {
   /** Code that implements a constant. */
   @SuppressWarnings("rawtypes")
   private static class ConstantCode implements Code {
-    private final Comparable value;
+    private final Object value;
 
-    ConstantCode(Comparable value) {
+    ConstantCode(Object value) {
       this.value = value;
     }
 
@@ -2343,7 +2343,7 @@ public abstract class Codes {
       return describer.start("constant", d -> d.arg("", value));
     }
 
-    public Comparable eval(EvalEnv env) {
+    public Object eval(EvalEnv env) {
       return value;
     }
 
