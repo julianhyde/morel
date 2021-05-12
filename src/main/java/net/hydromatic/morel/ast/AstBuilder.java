@@ -287,9 +287,9 @@ public enum AstBuilder {
     return foldRight(list, this::cons);
   }
 
-  public Ast.LetExp let(Pos pos, Iterable<? extends Ast.Decl> decls,
+  public Ast.Let let(Pos pos, Iterable<? extends Ast.Decl> decls,
       Ast.Exp e) {
-    return new Ast.LetExp(pos, ImmutableList.copyOf(decls), e);
+    return new Ast.Let(pos, ImmutableList.copyOf(decls), e);
   }
 
   public Ast.ValDecl valDecl(Pos pos,

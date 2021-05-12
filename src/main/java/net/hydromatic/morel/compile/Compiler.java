@@ -200,7 +200,7 @@ public class Compiler {
       return Codes.constant(literal.value);
 
     case LET:
-      return compileLet(cx, (Core.LetExp) expression);
+      return compileLet(cx, (Core.Let) expression);
 
     case FN:
       final Core.Fn fn = (Core.Fn) expression;
@@ -446,7 +446,7 @@ public class Compiler {
     }
   }
 
-  private Code compileLet(Context cx, Core.LetExp let) {
+  private Code compileLet(Context cx, Core.Let let) {
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     compileDecl(cx, let.decl, matchCodes, bindings, null);
@@ -460,7 +460,7 @@ public class Compiler {
     return Codes.let(matchCodes, resultCode);
   }
 
-  protected Ast.LetExp flattenLet(List<Ast.Decl> decls, Ast.Exp e) {
+  protected Ast.Let flattenLet(List<Ast.Decl> decls, Ast.Exp e) {
     if (decls.size() == 1) {
       return ast.let(e.pos, decls, e);
     } else {

@@ -32,12 +32,14 @@ import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -46,6 +48,7 @@ import javax.annotation.Nullable;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.ast.Pos.ZERO;
 
 import static java.util.Objects.requireNonNull;
@@ -294,6 +297,11 @@ public class Core {
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
     }
+
+    public TuplePat copy(TypeSystem typeSystem, List<Pat> args) {
+      return args.equals(this.args) ? this
+          : core.tuplePat(typeSystem, args);
+    }
   }
 
   /** List pattern.
@@ -320,6 +328,11 @@ public class Core {
 
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
+    }
+
+    public ListPat copy(TypeSystem typeSystem, List<Pat> args) {
+      return args.equals(this.args) ? this
+          : core.listPat(typeSystem, args);
     }
   }
 
@@ -351,6 +364,12 @@ public class Core {
 
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
+    }
+
+    public Pat copy(TypeSystem typeSystem, Set<String> argNames,
+        List<Pat> args) {
+      return args.equals(this.args) ? this
+          : core.recordPat(typeSystem, argNames, args);
     }
   }
 
@@ -576,6 +595,11 @@ public class Core {
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
     }
+
+    public ValDecl copy(boolean rec, Pat pat, Exp e) {
+      return rec == this.rec && pat == this.pat && e == this.e ? this
+          : core.valDecl(rec, pat, e);
+    }
   }
 
   /** Tuple expression. Also implements record expression. */
@@ -609,14 +633,19 @@ public class Core {
       forEachArg((arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
       return w.append(")");
     }
+
+    public Tuple copy(TypeSystem typeSystem, List<Exp> args) {
+      return args.equals(this.args) ? this
+          : core.tuple(typeSystem, type(), args);
+    }
   }
 
   /** "Let" expression. */
-  public static class LetExp extends Exp {
+  public static class Let extends Exp {
     public final Decl decl;
     public final Exp e;
 
-    LetExp(Decl decl, Exp e) {
+    Let(Decl decl, Exp e) {
       super(Op.LET, e.type);
       this.decl = requireNonNull(decl);
       this.e = requireNonNull(e);
@@ -630,6 +659,11 @@ public class Core {
 
     @Override public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    public Exp copy(Decl decl, Exp e) {
+      return decl == this.decl && e == this.e ? this
+          : core.let(decl, e);
     }
   }
 
@@ -650,6 +684,11 @@ public class Core {
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(pat, 0, 0).append(" => ").append(e, 0, right);
+    }
+
+    public Match copy(Pat pat, Exp e) {
+      return pat == this.pat && e == this.e ? this
+          : core.match(pat, e);
     }
   }
 
@@ -674,6 +713,11 @@ public class Core {
     @Override public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
+
+    public Exp copy(List<Match> matchList) {
+      return matchList.equals(this.matchList) ? this
+          : core.fn(type(), matchList);
+    }
   }
 
   /** Case expression.
@@ -696,6 +740,11 @@ public class Core {
 
     @Override public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    public Case copy(Exp e, List<Match> matchList) {
+      return e == this.e && matchList.equals(this.matchList) ? this
+          : core.caseOf(type, e, matchList);
     }
   }
 
@@ -740,6 +789,16 @@ public class Core {
         return w;
       }
     }
+
+    public Exp copy(TypeSystem typeSystem, Map<Pat, Exp> sources,
+        List<FromStep> steps, Exp yieldExp) {
+      return sources.equals(this.sources)
+          && steps.equals(this.steps)
+          && yieldExp.equals(this.yieldExp)
+          ? this
+          : core.from(typeSystem.listType(yieldExp.type), sources, steps,
+              yieldExp);
+    }
   }
 
   /** A step in a {@code from} expression - {@code where}, {@code group}
@@ -783,6 +842,11 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("where ").append(exp, 0, 0);
     }
+
+    public Where copy(Exp exp) {
+      return exp == this.exp ? this
+          : core.where(exp);
+    }
   }
 
   /** An {@code order} clause in a {@code from} expression. */
@@ -804,6 +868,11 @@ public class Core {
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append("order ").appendAll(orderItems, ", ");
+    }
+
+    public Order copy(List<OrderItem> orderItems) {
+      return orderItems.equals(this.orderItems) ? this
+          : core.order(orderItems);
     }
   }
 
@@ -829,6 +898,11 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(exp, 0, 0)
           .append(direction == Ast.Direction.DESC ? " desc" : "");
+    }
+
+    public OrderItem copy(Exp exp, Ast.Direction direction) {
+      return exp == this.exp && direction == this.direction ? this
+          : core.orderItem(exp, direction);
     }
   }
 
@@ -869,6 +943,14 @@ public class Core {
           outBindings.accept(binder.apply(id, exp.type)));
       aggregates.forEach((id, aggregate) ->
           outBindings.accept(binder.apply(id, aggregate.type)));
+    }
+
+    public Group copy(Map<String, Exp> groupExps,
+        Map<String, Aggregate> aggregates) {
+      return groupExps.equals(this.groupExps)
+          && aggregates.equals(this.aggregates)
+          ? this
+          : core.group(groupExps, aggregates);
     }
   }
 
@@ -915,6 +997,11 @@ public class Core {
       }
       return w.infix(left, fn, op, arg, right);
     }
+
+    public Apply copy(Exp fn, Exp arg) {
+      return fn == this.fn && arg == this.arg ? this
+          : core.apply(type, fn, arg);
+    }
   }
 
   /** Call to an aggregate function in a {@code compute} clause.
@@ -948,6 +1035,12 @@ public class Core {
             .append(argument, 0, 0);
       }
       return w;
+    }
+
+    public Aggregate copy(Type type, Exp aggregate, @Nullable Exp argument) {
+      return aggregate == this.aggregate && argument == this.argument
+          ? this
+          : core.aggregate(type, aggregate, argument);
     }
   }
 

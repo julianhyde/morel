@@ -149,7 +149,7 @@ public class Resolver {
     case CASE:
       return toCore((Ast.Case) e);
     case LET:
-      return toCore((Ast.LetExp) e);
+      return toCore((Ast.Let) e);
     case FROM:
       return toCore((Ast.From) e);
     case TUPLE:
@@ -183,7 +183,8 @@ public class Resolver {
     final ListType type = (ListType) typeMap.getType(list);
     return core.apply(type,
         core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_LIST),
-        core.tuple(typeMap.typeSystem, transform(list.args, this::toCore)));
+        core.tuple(typeMap.typeSystem, null,
+            transform(list.args, this::toCore)));
   }
 
   private Core.Apply toCore(Ast.Apply apply) {
@@ -212,7 +213,7 @@ public class Resolver {
     final BuiltIn builtIn = toBuiltIn(call.op);
     return core.apply(typeMap.getType(call),
         core.functionLiteral(typeMap.typeSystem, builtIn),
-        core.tuple(typeMap.typeSystem, ImmutableList.of(core0, core1)));
+        core.tuple(typeMap.typeSystem, null, ImmutableList.of(core0, core1)));
   }
 
   private BuiltIn toBuiltIn(Op op) {
@@ -236,11 +237,11 @@ public class Resolver {
         transform(matchList, toCore));
   }
 
-  private Core.LetExp toCore(Ast.LetExp let) {
+  private Core.Let toCore(Ast.Let let) {
     return flattenLet(let.decls, let.e);
   }
 
-  private Core.LetExp flattenLet(List<Ast.Decl> decls, Ast.Exp e) {
+  private Core.Let flattenLet(List<Ast.Decl> decls, Ast.Exp e) {
     final Core.Exp e2 = decls.size() == 1
         ? toCore(e)
         : flattenLet(decls.subList(1, decls.size()), e);

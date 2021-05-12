@@ -34,10 +34,14 @@ import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Pair;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import javax.annotation.Nullable;
 
 /** Builds parse tree nodes. */
@@ -147,6 +151,11 @@ public enum CoreBuilder {
     return new Core.TuplePat(type, ImmutableList.copyOf(args));
   }
 
+  public Core.TuplePat tuplePat(TypeSystem typeSystem, List<Core.Pat> args) {
+    return tuplePat(typeSystem.tupleType(Util.transform(args, Core.Pat::type)),
+        args);
+  }
+
   public Core.ListPat listPat(Type type, Iterable<? extends Core.Pat> args) {
     return new Core.ListPat(type, ImmutableList.copyOf(args));
   }
@@ -155,9 +164,26 @@ public enum CoreBuilder {
     return new Core.ListPat(type, ImmutableList.copyOf(args));
   }
 
+  public Core.ListPat listPat(TypeSystem typeSystem, List<Core.Pat> args) {
+    // We assume that there is at least one pattern, and that all patterns
+    // have the same type. There will be at least one pattern when this method
+    // is called from ListPat.copy.
+    return listPat(typeSystem.listType(args.get(0).type), args);
+  }
+
   public Core.RecordPat recordPat(RecordType type,
       List<? extends Core.Pat> args) {
     return new Core.RecordPat(type, ImmutableList.copyOf(args));
+  }
+
+  public Core.Pat recordPat(TypeSystem typeSystem, Set<String> argNames,
+      List<Core.Pat> args) {
+    final ImmutableSortedMap.Builder<String, Type> argNameTypes =
+        ImmutableSortedMap.orderedBy(RecordType.ORDERING);
+    Pair.forEach(argNames, args, (argName, arg) ->
+        argNameTypes.put(argName, arg.type));
+    return recordPat((RecordType) typeSystem.recordType(argNameTypes.build()),
+        args);
   }
 
   public Core.Tuple tuple(RecordLikeType type, Iterable<? extends Core.Exp> args) {
@@ -168,16 +194,29 @@ public enum CoreBuilder {
     return new Core.Tuple(type, ImmutableList.copyOf(args));
   }
 
-  /** As {@link #tuple(RecordLikeType, Iterable)}, but derives type. */
-  public Core.Tuple tuple(TypeSystem typeSystem, Iterable<? extends Core.Exp> args) {
+  /** As {@link #tuple(RecordLikeType, Iterable)}, but derives type.
+   *
+   * <p>If present, {@code type} serves as a template, dictating whether to
+   * produce a record or a tuple type, and if a record type, the field names.
+   * If not present, the result is a tuple type. */
+  public Core.Tuple tuple(TypeSystem typeSystem, @Nullable RecordLikeType type,
+      Iterable<? extends Core.Exp> args) {
     final ImmutableList<Core.Exp> argList = ImmutableList.copyOf(args);
-    final RecordLikeType tupleType =
-        typeSystem.tupleType(Util.transform(argList, a -> a.type));
+    final RecordLikeType tupleType;
+    if (type instanceof RecordType) {
+      final SortedMap<String, Type> argNameTypes =
+          new TreeMap<>(RecordType.ORDERING);
+      Pair.forEach(type.argNameTypes().keySet(), argList, (name, arg) ->
+          argNameTypes.put(name, arg.type));
+      tupleType = typeSystem.recordType(argNameTypes);
+    } else {
+      tupleType = typeSystem.tupleType(Util.transform(argList, Core.Exp::type));
+    }
     return new Core.Tuple(tupleType, argList);
   }
 
-  public Core.LetExp let(Core.Decl decl, Core.Exp e) {
-    return new Core.LetExp(decl, e);
+  public Core.Let let(Core.Decl decl, Core.Exp e) {
+    return new Core.Let(decl, e);
   }
 
   public Core.ValDecl valDecl(boolean rec, Core.Pat pat, Core.Exp e) {

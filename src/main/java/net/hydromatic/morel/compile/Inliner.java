@@ -32,11 +32,8 @@ import java.util.List;
  * Shuttle that inlines constant values.
  */
 public class Inliner extends EnvShuttle {
-  private final TypeSystem typeSystem;
-
   public Inliner(TypeSystem typeSystem, Environment env) {
-    super(env);
-    this.typeSystem = typeSystem;
+    super(typeSystem, env);
   }
 
   @Override protected Inliner bind(List<Binding> bindingList) {

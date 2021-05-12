@@ -44,7 +44,7 @@ public class Visitor {
     anIf.ifFalse.accept(this);
   }
 
-  protected void visit(Ast.LetExp e) {
+  protected void visit(Ast.Let e) {
     e.decls.forEach(this::accept);
     e.e.accept(this);
   }
@@ -251,7 +251,7 @@ public class Visitor {
   protected void visit(Core.Id id) {
   }
 
-  protected void visit(Core.LetExp e) {
+  protected void visit(Core.Let e) {
     e.decl.accept(this);
     e.e.accept(this);
   }

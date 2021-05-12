@@ -1495,7 +1495,7 @@ public abstract class Codes {
             .collect(Collectors.toList());
     return core.apply(typeSystem.listType(argType),
         core.functionLiteral(typeSystem, BuiltIn.Z_LIST),
-        core.tuple(typeSystem, args));
+        core.tuple(typeSystem, null, args));
   }
 
   /** @see BuiltIn#SYS_PLAN */

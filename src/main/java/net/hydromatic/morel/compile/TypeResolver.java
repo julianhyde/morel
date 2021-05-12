@@ -227,7 +227,7 @@ public class TypeResolver {
       return reg(record.copy(map2), v, record(labelTypes));
 
     case LET:
-      final Ast.LetExp let = (Ast.LetExp) node;
+      final Ast.Let let = (Ast.Let) node;
       termMap = new LinkedHashMap<>();
       TypeEnv env2 = env;
       final List<Ast.Decl> decls = new ArrayList<>();
@@ -237,7 +237,7 @@ public class TypeResolver {
         termMap.clear();
       }
       final Ast.Exp e2 = deduceType(env2, let.e, v);
-      final Ast.LetExp let2 = let.copy(decls, e2);
+      final Ast.Let let2 = let.copy(decls, e2);
       return reg(let2, null, v);
 
     case RECORD_SELECTOR:

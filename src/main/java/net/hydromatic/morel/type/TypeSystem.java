@@ -189,7 +189,7 @@ public class TypeSystem {
 
   /** Creates a record type. (Or a tuple type if the fields are named "1", "2"
    * etc.; or "unit" if the field list is empty.) */
-  public Type recordType(SortedMap<String, ? extends Type> argNameTypes) {
+  public RecordLikeType recordType(SortedMap<String, ? extends Type> argNameTypes) {
     if (argNameTypes.isEmpty()) {
       return PrimitiveType.UNIT;
     }
@@ -207,7 +207,7 @@ public class TypeSystem {
       return tupleType(ImmutableList.copyOf(argNameTypes2.values()));
     }
     final String description = builder.append('}').toString();
-    return this.typeByName.computeIfAbsent(description,
+    return (RecordLikeType) this.typeByName.computeIfAbsent(description,
         d -> new RecordType(d, argNameTypes2));
   }
 

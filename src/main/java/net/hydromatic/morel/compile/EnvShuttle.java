@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.TypeSystem;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,7 +39,8 @@ abstract class EnvShuttle extends Shuttle {
   final Environment env;
 
   /** Creates an EnvShuttle. */
-  protected EnvShuttle(Environment env) {
+  protected EnvShuttle(TypeSystem typeSystem, Environment env) {
+    super(typeSystem);
     this.env = env;
   }
 
@@ -52,7 +54,7 @@ abstract class EnvShuttle extends Shuttle {
     return core.match(pat2, match.e.accept(bind(bindings)));
   }
 
-  @Override public Core.Exp visit(Core.LetExp e) {
+  @Override public Core.Exp visit(Core.Let e) {
     final List<Binding> bindings = new ArrayList<>();
     e.decl.accept(Compiles.binding(bindings));
     return core.let(e.decl.accept(this), e.e.accept(bind(bindings)));
@@ -76,7 +78,7 @@ abstract class EnvShuttle extends Shuttle {
     }
 
     final Core.Exp yieldExp2 = from.yieldExp.accept(bind(bindings));
-    return core.from(from.type(), sources, steps, yieldExp2);
+    return from.copy(typeSystem, sources, steps, yieldExp2);
   }
 
 }

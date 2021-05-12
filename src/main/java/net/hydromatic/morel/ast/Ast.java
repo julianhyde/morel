@@ -1274,11 +1274,11 @@ public class Ast {
   }
 
   /** "Let" expression. */
-  public static class LetExp extends Exp {
+  public static class Let extends Exp {
     public final List<Decl> decls;
     public final Exp e;
 
-    LetExp(Pos pos, ImmutableList<Decl> decls, Exp e) {
+    Let(Pos pos, ImmutableList<Decl> decls, Exp e) {
       super(pos, Op.LET);
       this.decls = requireNonNull(decls);
       this.e = requireNonNull(e);
@@ -1299,7 +1299,7 @@ public class Ast {
 
     /** Creates a copy of this {@code LetExp} with given contents,
      * or {@code this} if the contents are the same. */
-    public LetExp copy(Iterable<Decl> decls, Exp e) {
+    public Let copy(Iterable<Decl> decls, Exp e) {
       return Iterables.elementsEqual(this.decls, decls)
           && Objects.equals(this.e, e)
           ? this
