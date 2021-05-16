@@ -48,12 +48,6 @@ import static net.hydromatic.morel.type.RecordType.ORDERING;
 public class Ast {
   private Ast() {}
 
-  public static String toString(AstNode node) {
-    final AstWriter w = new AstWriter();
-    node.unparse(w, 0, 0);
-    return w.toString();
-  }
-
   /** Base class for a pattern.
    *
    * <p>For example, "x" in "val x = 5" is a {@link IdPat};
