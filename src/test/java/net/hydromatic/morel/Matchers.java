@@ -18,22 +18,17 @@
  */
 package net.hydromatic.morel;
 
-import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multiset;
 import com.google.common.collect.Sets;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 
-import org.hamcrest.BaseMatcher;
 import org.hamcrest.CustomTypeSafeMatcher;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
-import org.hamcrest.core.Is;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -50,7 +45,7 @@ public abstract class Matchers {
   static Matcher<Ast.Literal> isLiteral(Comparable comparable, String ml) {
     return new TypeSafeMatcher<Ast.Literal>() {
       protected boolean matchesSafely(Ast.Literal literal) {
-        final String actualMl = literal.toString();
+        final String actualMl = Ast.toString(literal);
         return literal.value.equals(comparable)
             && actualMl.equals(ml);
       }
@@ -68,7 +63,7 @@ public abstract class Matchers {
     return new CustomTypeSafeMatcher<T>("ast with value " + expected) {
       protected boolean matchesSafely(T t) {
         assertThat(clazz.isInstance(t), is(true));
-        final String s = t.toString();
+        final String s = Ast.toString(t);
         return s.equals(expected) && s.equals(t.toString());
       }
     };
@@ -107,27 +102,6 @@ public abstract class Matchers {
     };
   }
 
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  static <E> Matcher<E> isUnordered(E expected) {
-    final E expectedMultiset = expected instanceof Iterable
-        ? (E) ImmutableMultiset.copyOf((Iterable) expected)
-        : expected;
-    return new TypeSafeMatcher<E>() {
-      @Override public void describeTo(Description description) {
-        description.appendText("equalsOrdered").appendValue(expectedMultiset);
-      }
-
-      @Override protected boolean matchesSafely(E actual) {
-        final E actualMultiset = expectedMultiset instanceof Multiset
-            && (actual instanceof Iterable)
-            && !(actual instanceof Multiset)
-            ? (E) ImmutableMultiset.copyOf((Iterable) actual)
-            : actual;
-        return expectedMultiset.equals(actualMultiset);
-      }
-    };
-  }
-
   static Matcher<Throwable> throwsA(String message) {
     return new CustomTypeSafeMatcher<Throwable>("throwable: " + message) {
       @Override protected boolean matchesSafely(Throwable item) {
@@ -145,73 +119,6 @@ public abstract class Matchers {
             && messageMatcher.matches(item.getMessage());
       }
     };
-  }
-
-  /** Creates a Matcher that behaves the same as a given delegate Matcher,
-   * but remembers the value that was compared.
-   *
-   * @param <T> Type of expected item */
-  public static <T> LearningMatcher<T> learning(Class<T> type) {
-    return new LearningMatcherImpl<>(Is.isA(type));
-  }
-
-  /** Matcher that remembers the actual value it was.
-   *
-   * @param <T> Type of expected item */
-  public interface LearningMatcher<T> extends Matcher<T> {
-    T get();
-  }
-
-  /** Matcher that performs an action when a value is matched.
-   *
-   * @param <T> Type of expected item */
-  private abstract static class MatcherWithConsumer<T> extends BaseMatcher<T> {
-    final Matcher<T> matcher;
-
-    MatcherWithConsumer(Matcher<T> matcher) {
-      this.matcher = matcher;
-    }
-
-    protected abstract void consume(T t);
-
-    @SuppressWarnings("unchecked")
-    @Override public boolean matches(Object o) {
-      if (matcher.matches(o)) {
-        consume((T) o);
-        return true;
-      } else {
-        return false;
-      }
-    }
-
-    @Override public void describeMismatch(Object o,
-        Description description) {
-      matcher.describeMismatch(o, description);
-    }
-
-    @Override public void describeTo(Description description) {
-      matcher.describeTo(description);
-    }
-  }
-
-  /** Implementation of {@link LearningMatcher}.
-   *
-   * @param <T> Type of expected item */
-  private static class LearningMatcherImpl<T> extends MatcherWithConsumer<T>
-      implements LearningMatcher<T> {
-    final List<T> list = new ArrayList<>();
-
-    LearningMatcherImpl(Matcher<T> matcher) {
-      super(matcher);
-    }
-
-    @Override public T get() {
-      return list.get(0);
-    }
-
-    @Override protected void consume(T t) {
-      list.add(t);
-    }
   }
 }
 
