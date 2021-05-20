@@ -527,6 +527,7 @@ public class TypeResolver {
   private Ast.RecordSelector deduceRecordSelectorType(TypeEnv env,
       Unifier.Variable vResult, Unifier.Variable vArg,
       Ast.RecordSelector recordSelector) {
+    final String fieldName = recordSelector.name;
     actionMap.put(vArg, (v, t, substitution, termPairs) -> {
       // We now know that the type arg, say "{a: int, b: real}".
       // So, now we can declare that the type of vResult, say "#b", is
@@ -535,13 +536,12 @@ public class TypeResolver {
         final Unifier.Sequence sequence = (Unifier.Sequence) t;
         final List<String> fieldList = fieldList(sequence);
         if (fieldList != null) {
-          int i = fieldList.indexOf(recordSelector.name);
+          int i = fieldList.indexOf(fieldName);
           if (i >= 0) {
             final Unifier.Term result2 = substitution.resolve(vResult);
             final Unifier.Term term = sequence.terms.get(i);
             final Unifier.Term term2 = substitution.resolve(term);
             termPairs.add(new Unifier.TermTerm(result2, term2));
-            recordSelector.slot = i;
           }
         }
       }
