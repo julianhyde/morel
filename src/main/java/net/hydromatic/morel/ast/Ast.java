@@ -730,14 +730,6 @@ public class Ast {
   public static class RecordSelector extends Exp {
     public final String name;
 
-    /** Set during validation, after the type of the argument has been deduced,
-     * contains the ordinal of the field in the record or tuple that is to be
-     * accessed.
-     *
-     * <p>A mutable field, it is not strictly a parse tree property, but just
-     * convenient storage for a value needed by the compiler. Use with care. */
-    public int slot = -1;
-
     /** Creates a record selector. */
     RecordSelector(Pos pos, String name) {
       super(pos, Op.RECORD_SELECTOR);
