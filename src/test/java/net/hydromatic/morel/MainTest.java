@@ -43,6 +43,7 @@ import static net.hydromatic.morel.Matchers.isLiteral;
 import static net.hydromatic.morel.Matchers.isUnordered;
 import static net.hydromatic.morel.Matchers.list;
 import static net.hydromatic.morel.Matchers.throwsA;
+import static net.hydromatic.morel.Matchers.whenAppliedTo;
 import static net.hydromatic.morel.Ml.assertError;
 import static net.hydromatic.morel.Ml.ml;
 
@@ -720,6 +721,54 @@ public class MainTest {
         + "  plusTwo 3\n"
         + "end";
     ml(ml).assertEval(is(5));
+  }
+
+  /** Tests a predicate in a let. */
+  @Test void testLet6() {
+    final String ml = "let\n"
+        + "  fun isZero x = x = 0\n"
+        + "in\n"
+        + "  fn i => i = 10 andalso isZero i\n"
+        + "end";
+    // With inlining, we want the plan to simplify to "fn i => false"
+    final String plan = "let1(matchCode match(isZero, match(x, "
+        + "apply(fnValue =, argCode tuple(get(name x), constant(0))))), "
+        + "resultCode match(i, andalso(apply(fnValue =, "
+        + "argCode tuple(get(name i), constant(10))), "
+        + "apply(fnCode get(name isZero), argCode get(name i)))))";
+    ml(ml)
+        .assertEval(whenAppliedTo(0, is(false)))
+        .assertEval(whenAppliedTo(10, is(false)))
+        .assertEval(whenAppliedTo(15, is(false)))
+        .assertPlan(is(plan));
+  }
+
+  /** Tests a function in a let. (From <a
+   * href="https://www.microsoft.com/en-us/research/wp-content/uploads/2002/07/inline.pdf">Secrets
+   * of the Glasgow Haskell Compiler inliner</a>, section 2.3. */
+  @Test void testLet7() {
+    final String ml = "let\n"
+        + "  fun g (a, b, c) =\n"
+        + "    let\n"
+        + "      fun f x = x * 3\n"
+        + "    in\n"
+        + "      f (a + b) - c\n"
+        + "    end\n"
+        + "  in\n"
+        + "    g\n"
+        + "  end";
+    // With inlining, we want the plan to simplify to
+    // "fn (a, b, c) => (a + b) * 3 - c"
+    final String plan = "let1(matchCode match(g, match((a, b, c), "
+        + "let1(matchCode match(f, match(x, apply(fnValue *, argCode "
+        + "tuple(get(name x), constant(3))))), resultCode apply(fnValue -, "
+        + "argCode tuple(apply(fnCode get(name f), argCode apply(fnValue +, "
+        + "argCode tuple(get(name a), get(name b)))), get(name c)))))), "
+        + "resultCode get(name g))";
+    ml(ml)
+        // g (4, 3, 2) = (4 + 3) * 3 - 2 = 19
+        .assertEval(whenAppliedTo(list(4, 3, 2), is(19)))
+        .assertPlan(is(plan));
   }
 
   /** Tests that you can use the same variable name in different parts of the
