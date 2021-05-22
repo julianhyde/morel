@@ -1211,6 +1211,33 @@ List.filter (fn i => i mod 2 = 0) [1, 2, 3, 4];
 val it = [2,4] : int list
 
 
+(*) Parameterized view
+Sys.set ("hybrid", false);
+val it = () : unit
+
+let
+  fun empsIn (emps, deptno) =
+    from e in emps
+    where e.deptno = deptno
+in
+  from e in (empsIn (emps, 30))
+  yield e.name
+end;
+val it = ["Shaggy","Scooby"] : string list
+
+
+(*) Same, via a predicate
+let
+  fun empsIn emps predicate =
+    from e in emps
+    where predicate e
+in
+  from e in (empsIn emps (fn e => e.deptno = 30))
+  yield e.name
+end;
+val it = ["Shaggy","Scooby"] : string list
+
+
 (*) dummy
 from message in ["the end"];
 val it = ["the end"] : string list
