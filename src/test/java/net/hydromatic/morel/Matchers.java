@@ -37,7 +37,9 @@ import org.hamcrest.core.Is;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -78,6 +80,14 @@ public abstract class Matchers {
 
   static List<Object> list(Object... values) {
     return Arrays.asList(values);
+  }
+
+  static Map<Object, Object> map(Object... keyValues) {
+    final LinkedHashMap<Object, Object> map = new LinkedHashMap<>();
+    for (int i = 0; i < keyValues.length / 2; i++) {
+      map.put(keyValues[i * 2], keyValues[i + 2 + 1]);
+    }
+    return map;
   }
 
   @SafeVarargs
