@@ -21,66 +21,60 @@ package net.hydromatic.morel.compile;
 import com.google.common.collect.ImmutableList;
 
 import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-
-import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /**
  * Shuttle that keeps an environment of what variables are in scope.
  */
-abstract class EnvShuttle extends Shuttle {
+abstract class EnvVisitor extends Visitor {
+  final TypeSystem typeSystem;
   final Environment env;
 
-  /** Creates an EnvShuttle. */
-  protected EnvShuttle(TypeSystem typeSystem, Environment env) {
-    super(typeSystem);
+  /** Creates an EnvVisitor. */
+  protected EnvVisitor(TypeSystem typeSystem, Environment env) {
+    this.typeSystem = typeSystem;
     this.env = env;
   }
 
   /** Creates a shuttle the same as this but with overriding bindings. */
-  protected abstract EnvShuttle bind(List<Binding> bindingList);
+  protected abstract EnvVisitor bind(List<Binding> bindingList);
 
-  @Override protected Core.Match visit(Core.Match match) {
+  @Override protected void visit(Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();
-    final Core.Pat pat2 = match.pat.accept(this);
-    pat2.accept(Compiles.binding(typeSystem, bindings));
-    return core.match(pat2, match.e.accept(bind(bindings)));
+    match.pat.accept(this);
+    match.pat.accept(Compiles.binding(typeSystem, bindings));
+    match.e.accept(bind(bindings));
   }
 
-  @Override public Core.Exp visit(Core.Let let) {
+  @Override protected void visit(Core.Let let) {
+    let.decl.accept(this);
     final List<Binding> bindings = new ArrayList<>();
     let.decl.accept(Compiles.binding(typeSystem, bindings));
-    return let.copy(let.decl.accept(this), let.e.accept(bind(bindings)));
+    let.e.accept(bind(bindings));
   }
 
-  @Override public Core.Exp visit(Core.From from) {
+  @Override protected void visit(Core.From from) {
     final List<Binding> bindings = new ArrayList<>();
-    final Map<Core.Pat, Core.Exp> sources = new LinkedHashMap<>();
     from.sources.forEach((pat, source) -> {
-      sources.put(pat, source.accept(bind(bindings)));
+      source.accept(bind(bindings));
       pat.accept(Compiles.binding(typeSystem, bindings));
+      pat.accept(this);
     });
 
-    final List<Core.FromStep> steps = new ArrayList<>();
     for (Core.FromStep step : from.steps) {
-      final Core.FromStep step2 = step.accept(bind(bindings));
-      steps.add(step2);
+      step.accept(bind(bindings));
       final List<Binding> previousBindings = ImmutableList.copyOf(bindings);
       bindings.clear();
-      step2.deriveOutBindings(previousBindings, Binding::of, bindings::add);
+      step.deriveOutBindings(previousBindings, Binding::of, bindings::add);
     }
 
-    final Core.Exp yieldExp2 = from.yieldExp.accept(bind(bindings));
-    return from.copy(typeSystem, sources, steps, yieldExp2);
+    from.yieldExp.accept(bind(bindings));
   }
-
 }
 
-// End EnvShuttle.java
+// End EnvVisitor.java

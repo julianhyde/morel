@@ -675,6 +675,10 @@ public class Core {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     public Exp copy(Decl decl, Exp e) {
       return decl == this.decl && e == this.e ? this
           : core.let(decl, e);
@@ -694,6 +698,10 @@ public class Core {
 
     @Override public Match accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -754,6 +762,10 @@ public class Core {
 
     @Override public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     public Case copy(Exp e, List<Match> matchList) {

@@ -21,7 +21,8 @@ package net.hydromatic.morel.ast;
 /** Visits syntax trees. */
 public class Visitor {
 
-  private <E extends AstNode> void accept(E e) {
+  /** For use as a method reference. */
+  protected <E extends AstNode> void accept(E e) {
     e.accept(this);
   }
 
@@ -44,9 +45,9 @@ public class Visitor {
     anIf.ifFalse.accept(this);
   }
 
-  protected void visit(Ast.Let e) {
-    e.decls.forEach(this::accept);
-    e.e.accept(this);
+  protected void visit(Ast.Let let) {
+    let.decls.forEach(this::accept);
+    let.e.accept(this);
   }
 
   protected void visit(Ast.Case kase) {
@@ -251,9 +252,9 @@ public class Visitor {
   protected void visit(Core.Id id) {
   }
 
-  protected void visit(Core.Let e) {
-    e.decl.accept(this);
-    e.e.accept(this);
+  protected void visit(Core.Let let) {
+    let.decl.accept(this);
+    let.e.accept(this);
   }
 
   protected void visit(Core.Case kase) {
@@ -274,6 +275,20 @@ public class Visitor {
   }
 
   protected void visit(Core.DatatypeDecl datatypeDecl) {
+  }
+
+  protected void visit(Core.Match match) {
+    match.pat.accept(this);
+    match.e.accept(this);
+  }
+
+  protected void visit(Core.From from) {
+    from.sources.forEach((pat, exp) -> {
+      pat.accept(this);
+      exp.accept(this);
+    });
+    from.steps.forEach(step -> step.accept(this));
+    from.yieldExp.accept(this);
   }
 
   protected void visit(Core.Where where) {
