@@ -48,14 +48,14 @@ abstract class EnvVisitor extends Visitor {
     final List<Binding> bindings = new ArrayList<>();
     match.pat.accept(this);
     match.pat.accept(Compiles.binding(typeSystem, bindings));
-    match.e.accept(bind(bindings));
+    match.exp.accept(bind(bindings));
   }
 
   @Override protected void visit(Core.Let let) {
     let.decl.accept(this);
     final List<Binding> bindings = new ArrayList<>();
     let.decl.accept(Compiles.binding(typeSystem, bindings));
-    let.e.accept(bind(bindings));
+    let.exp.accept(bind(bindings));
   }
 
   @Override protected void visit(Core.From from) {

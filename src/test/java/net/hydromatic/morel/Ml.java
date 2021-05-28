@@ -27,6 +27,7 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.compile.Analyzer;
 import net.hydromatic.morel.compile.CalciteCompiler;
 import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
@@ -268,6 +269,29 @@ class Ml {
     final Core.ValDecl valDecl4 = valDecl3.accept(Inliner.of(typeSystem, env));
     final String coreString = valDecl4.exp.toString();
     assertThat(coreString, matcher);
+  }
+
+  Ml assertAnalyze(Matcher<Object> matcher) {
+    final Ast.Exp statement;
+    try {
+      statement = new MorelParserImpl(new StringReader(ml)).expression();
+    } catch (ParseException parseException) {
+      throw new RuntimeException(parseException);
+    }
+    final TypeSystem typeSystem = new TypeSystem();
+
+    final Environment env =
+        Environments.env(typeSystem, ImmutableMap.of());
+    final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
+    final TypeResolver.Resolved resolved =
+        TypeResolver.deduceType(env, valDecl, typeSystem);
+    final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
+    final Resolver resolver = new Resolver(resolved.typeMap);
+    final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
+    final Analyzer analyzer = Analyzer.of(typeSystem, env);
+    valDecl3.accept(analyzer);
+    assertThat(analyzer.map().toString(), matcher);
+    return this;
   }
 
   Ml assertPlan(Matcher<String> planMatcher) {

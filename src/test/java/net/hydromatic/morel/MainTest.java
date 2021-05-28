@@ -745,7 +745,7 @@ public class MainTest {
 
   /** Tests a function in a let. (From <a
    * href="https://www.microsoft.com/en-us/research/wp-content/uploads/2002/07/inline.pdf">Secrets
-   * of the Glasgow Haskell Compiler inliner</a>, section 2.3. */
+   * of the Glasgow Haskell Compiler inliner</a> (GHC inlining), section 2.3. */
   @Test void testLet7() {
     final String ml = "let\n"
         + "  fun g (a, b, c) =\n"
@@ -769,6 +769,93 @@ public class MainTest {
         // g (4, 3, 2) = (4 + 3) * 3 - 2 = 19
         .assertEval(whenAppliedTo(list(4, 3, 2), is(19)))
         .assertPlan(is(plan));
+  }
+
+  /** Tests that name capture does not occur during inlining.
+   * (Example is from GHC inlining, section 3.) */
+  @Test void testNameCapture() {
+    final String ml = "fn (a, b) =>\n"
+        + "  let val x = a + b in\n"
+        + "    let val a = 7 in\n"
+        + "      x + a\n"
+        + "    end\n"
+        + "  end";
+    ml(ml)
+        // result should be x + a = (1 + 2) + 7 = 10
+        // if 'a' were wrongly captured, result would be (7 + 2) + 7 = 16
+        .assertEval(whenAppliedTo(list(1, 2), is(10)));
+  }
+
+  @Disabled("until mutual recursion bug is fixed")
+  @Test void testMutualRecursion() {
+    final String ml = "let\n"
+        + "  fun f i = g (i * 2)\n"
+        + "  and g i = if i > 10 then i else f (i + 3)\n"
+        + "in\n"
+        + "  f\n"
+        + "end";
+    ml(ml)
+        // answers checked on SMLJ
+        .assertEval(whenAppliedTo(1, is(26)))
+        .assertEval(whenAppliedTo(2, is(14)))
+        .assertEval(whenAppliedTo(3, is(18)));
+  }
+
+  /** Tests that inlining of mutually recursive functions does not prevent
+   * compilation from terminating.
+   *
+   * <p>Per GHC inlining, (f, g, h), (g, p, q) are strongly connected components
+   * of the dependency graph. In each group, the inliner should choose one
+   * function as 'loop-breaker' that will not be inlined; say f and q. */
+  @Disabled("until mutual recursion bug is fixed")
+  @Test void testMutualRecursionComplex() {
+    final String ml0 = "let\n"
+        + "  fun f i = g (i + 1)\n"
+        + "  and g i = h (i + 2) + p (i + 4)\n"
+        + "  and h i = if i > 100 then i + 8 else f (i + 16)\n"
+        + "  and p i = q (i + 32)\n"
+        + "  and q i = if i > 200 then i + 64 else g (i + 128)\n"
+        + "in\n"
+        + "  g 7\n"
+        + "end";
+    final String ml = "let\n"
+        + "  val rec f = fn i => g (i + 1)\n"
+        + "  and g = fn i => h (i + 2) + p (i + 4)\n"
+        + "  and h = fn i => if i > 100 then i + 8 else f (i + 16)\n"
+        + "  and p = fn i => q (i + 32)\n"
+        + "  and q = fn i => if i > 200 then i + 64 else g (i + 128)\n"
+        + "in\n"
+        + "  g 7\n"
+        + "end";
+    ml(ml)
+        // answers checked on SMLJ
+        .assertEval(whenAppliedTo(1, is(4003)))
+        .assertEval(whenAppliedTo(6, is(3381)))
+        .assertEval(whenAppliedTo(7, is(3394)));
+  }
+
+  @Test void testAnalyze() {
+    final String ml = "let\n"
+        + "  val unused = 0\n"
+        + "  val once1 = 1\n"
+        + "  val once2 = 2\n"
+        + "  val once3 = 3\n"
+        + "  val twice = once1 + once2\n"
+        + "  val multiSafe = once3\n"
+        + "  val x = [1, 2]\n"
+        + "  val z = case x of\n"
+        + "     []            => multiSafe + 1\n"
+        + "   | 1 :: x2 :: x3 => 2\n"
+        + "   | x0 :: xs      => multiSafe + x0\n"
+        + "in\n"
+        + "  twice + twice\n"
+        + "end";
+    final String map = "{it=DEAD, unused=DEAD, once1=ONCE_SAFE,"
+        + " once2=ONCE_SAFE, once3=ONCE_SAFE, twice=MULTI_UNSAFE,"
+        + " op +=MULTI_UNSAFE, multiSafe=MULTI_SAFE, x=ONCE_SAFE, z=DEAD,"
+        + " x0=ONCE_SAFE, x2=DEAD, x3=DEAD, xs=DEAD}";
+    ml(ml)
+        .assertAnalyze(is(map));
   }
 
   /** Tests that you can use the same variable name in different parts of the
