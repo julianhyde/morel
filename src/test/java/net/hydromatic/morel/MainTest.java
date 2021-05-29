@@ -834,30 +834,6 @@ public class MainTest {
         .assertEval(whenAppliedTo(7, is(3394)));
   }
 
-  @Test void testAnalyze() {
-    final String ml = "let\n"
-        + "  val unused = 0\n"
-        + "  val once1 = 1\n"
-        + "  val once2 = 2\n"
-        + "  val once3 = 3\n"
-        + "  val twice = once1 + once2\n"
-        + "  val multiSafe = once3\n"
-        + "  val x = [1, 2]\n"
-        + "  val z = case x of\n"
-        + "     []            => multiSafe + 1\n"
-        + "   | 1 :: x2 :: x3 => 2\n"
-        + "   | x0 :: xs      => multiSafe + x0\n"
-        + "in\n"
-        + "  twice + twice\n"
-        + "end";
-    final String map = "{it=DEAD, unused=DEAD, once1=ONCE_SAFE,"
-        + " once2=ONCE_SAFE, once3=ONCE_SAFE, twice=MULTI_UNSAFE,"
-        + " op +=MULTI_UNSAFE, multiSafe=MULTI_SAFE, x=ONCE_SAFE, z=DEAD,"
-        + " x0=ONCE_SAFE, x2=DEAD, x3=DEAD, xs=DEAD}";
-    ml(ml)
-        .assertAnalyze(is(map));
-  }
-
   /** Tests that you can use the same variable name in different parts of the
    * program without the types getting confused. */
   @Test void testSameVariableName() {
