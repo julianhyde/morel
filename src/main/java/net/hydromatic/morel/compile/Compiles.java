@@ -40,15 +40,15 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 
 /** Helpers for {@link Compiler} and {@link TypeResolver}. */
 public abstract class Compiles {
-  /** Validates an expression, deducing its type and perhaps rewriting the
-   * expression to a form that can more easily be compiled.
+  /** Validates an expression or declaration, deducing its type and perhaps
+   * rewriting the expression to a form that can more easily be compiled.
    *
    * <p>Used for testing. */
-  public static TypeResolver.Resolved validateExpression(Ast.Exp exp,
+  public static TypeResolver.Resolved validateExpression(AstNode statement,
       Map<String, ForeignValue> valueMap) {
     final TypeSystem typeSystem = new TypeSystem();
     final Environment env = Environments.env(typeSystem, valueMap);
-    return TypeResolver.deduceType(env, toValDecl(exp), typeSystem);
+    return TypeResolver.deduceType(env, toDecl(statement), typeSystem);
   }
 
   /**
@@ -95,6 +95,18 @@ public abstract class Compiles {
     return ast.valDecl(pos,
         ImmutableList.of(
             ast.valBind(pos, false, ast.idPat(pos, "it"), statement)));
+  }
+
+  /** Converts an expression or value declaration to a value declaration. */
+  public static Ast.ValDecl toValDecl(AstNode statement) {
+    return statement instanceof Ast.ValDecl ? (Ast.ValDecl) statement
+        : toValDecl((Ast.Exp) statement);
+  }
+
+  /** Converts an expression or declaration to a declaration. */
+  public static Ast.Decl toDecl(AstNode statement) {
+    return statement instanceof Ast.Decl ? (Ast.Decl) statement
+        : toValDecl((Ast.Exp) statement);
   }
 
   /** Converts {@code val = e} to {@code e};

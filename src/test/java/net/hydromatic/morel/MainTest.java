@@ -456,16 +456,19 @@ public class MainTest {
     ml("(fn x => x) \"foo\"").assertEval(is("foo"));
     ml("(fn x => x) true").assertEval(is(true));
     ml("let fun id x = x in id end").assertType("'a -> 'a");
+    ml("fun id x = x").assertType("'a -> 'a");
 
     // first/second
     ml("fn x => fn y => x").assertType("'a -> 'b -> 'a");
     ml("let fun first x y = x in first end")
         .assertType("'a -> 'b -> 'a");
-    ml("let fun second x y = y in second end")
+    ml("fun first x y = x")
+        .assertType("'a -> 'b -> 'a");
+    ml("fun second x y = y")
         .assertType("'a -> 'b -> 'b");
-    ml("let fun choose b x y = if b then x else y in choose end")
+    ml("fun choose b x y = if b then x else y")
         .assertType("bool -> 'a -> 'a -> 'a");
-    ml("let fun choose b (x, y) = if b then x else y in choose end")
+    ml("fun choose b (x, y) = if b then x else y")
         .assertType("bool -> 'a * 'a -> 'a");
   }
 
@@ -747,24 +750,19 @@ public class MainTest {
    * href="https://www.microsoft.com/en-us/research/wp-content/uploads/2002/07/inline.pdf">Secrets
    * of the Glasgow Haskell Compiler inliner</a> (GHC inlining), section 2.3. */
   @Test void testLet7() {
-    final String ml = "let\n"
-        + "  fun g (a, b, c) =\n"
-        + "    let\n"
-        + "      fun f x = x * 3\n"
-        + "    in\n"
-        + "      f (a + b) - c\n"
-        + "    end\n"
+    final String ml = "fun g (a, b, c) =\n"
+        + "  let\n"
+        + "    fun f x = x * 3\n"
         + "  in\n"
-        + "    g\n"
+        + "    f (a + b) - c\n"
         + "  end";
     // With inlining, we want the plan to simplify to
     // "fn (a, b, c) => (a + b) * 3 - c"
-    final String plan = "let1(matchCode match(g, match((a, b, c), "
+    final String plan = "match((a, b, c), "
         + "let1(matchCode match(f, match(x, apply(fnValue *, argCode "
         + "tuple(get(name x), constant(3))))), resultCode apply(fnValue -, "
         + "argCode tuple(apply(fnCode get(name f), argCode apply(fnValue +, "
-        + "argCode tuple(get(name a), get(name b)))), get(name c)))))), "
-        + "resultCode get(name g))";
+        + "argCode tuple(get(name a), get(name b)))), get(name c)))))";
     ml(ml)
         // g (4, 3, 2) = (4 + 3) * 3 - 2 = 19
         .assertEval(whenAppliedTo(list(4, 3, 2), is(19)))
@@ -1064,6 +1062,26 @@ public class MainTest {
     ml(ml).assertEval(is(120));
   }
 
+  /** As {@link #testFun()} but not applied to a value. */
+  @Test void testFunValue() {
+    final String ml = "let\n"
+        + "  fun fact n = if n = 0 then 1 else n * fact (n - 1)\n"
+        + "in\n"
+        + "  fact\n"
+        + "end";
+    ml(ml).assertEval(whenAppliedTo(5, is(120)));
+  }
+
+  /** As {@link #testFunValue()} but without "let".
+   *
+   * <p>This is mainly a test for the test framework. We want to handle bindings
+   * ({@code fun}) as well as values ({@code let} and {@code fn}). So people can
+   * write tests more concisely. */
+  @Test void testFunValueSansLet() {
+    final String ml = "fun fact n = if n = 0 then 1 else n * fact (n - 1)";
+    ml(ml).assertEval(whenAppliedTo(5, is(120)));
+  }
+
   /** As {@link #testFun} but uses case. */
   @Test void testFun2() {
     final String ml = "let\n"
@@ -1133,14 +1151,12 @@ public class MainTest {
   }
 
   @Test void testFunRecord() {
-    final String ml = "let\n"
-        + "  fun f {a=x,b=1,...} = x\n"
-        + "    | f {b=y,c=2,...} = y\n"
-        + "    | f {a=x,b=y,c=z} = x+y+z\n"
-        + "in\n"
-        + "  f\n"
-        + "end";
-    ml(ml).assertType("{a:int, b:int, c:int} -> int");
+    final String ml = ""
+        + "fun f {a=x,b=1,...} = x\n"
+        + "  | f {b=y,c=2,...} = y\n"
+        + "  | f {a=x,b=y,c=z} = x+y+z";
+    ml(ml).assertType("{a:int, b:int, c:int} -> int")
+        .assertEval(whenAppliedTo(list(1, 2, 3), is(6)));
 
     final String ml2 = "let\n"
         + "  fun f {a=x,b=1,...} = x\n"
@@ -1177,9 +1193,9 @@ public class MainTest {
 
   @Test void testDatatype3() {
     final String ml = "let\n"
-        + "datatype intoption = NONE | SOME of int;\n"
-        + "val score = fn z => case z of NONE => 0 | SOME x => x\n"
-        + "in"
+        + "  datatype intoption = NONE | SOME of int;\n"
+        + "  val score = fn z => case z of NONE => 0 | SOME x => x\n"
+        + "in\n"
         + "  score (SOME 5)\n"
         + "end";
     ml(ml).assertParseSame()
@@ -1191,10 +1207,10 @@ public class MainTest {
    *  ... {@code case}. */
   @Test void testDatatype3b() {
     final String ml = "let\n"
-        + "datatype intoption = NONE | SOME of int;\n"
-        + "fun score NONE = 0\n"
-        + "  | score (SOME x) = x\n"
-        + "in"
+        + "  datatype intoption = NONE | SOME of int;\n"
+        + "  fun score NONE = 0\n"
+        + "    | score (SOME x) = x\n"
+        + "in\n"
         + "  score (SOME 5)\n"
         + "end";
     ml(ml).assertParseSame()
@@ -1205,10 +1221,10 @@ public class MainTest {
   /** As {@link #testDatatype3b()} but use a nilary type constructor (NONE). */
   @Test void testDatatype3c() {
     final String ml = "let\n"
-        + "datatype intoption = NONE | SOME of int;\n"
-        + "fun score NONE = 0\n"
-        + "  | score (SOME x) = x\n"
-        + "in"
+        + "  datatype intoption = NONE | SOME of int;\n"
+        + "  fun score NONE = 0\n"
+        + "    | score (SOME x) = x\n"
+        + "in\n"
         + "  score NONE\n"
         + "end";
     ml(ml).assertParseSame()
@@ -1359,7 +1375,7 @@ public class MainTest {
         + "              {name = \"Charlie\",\n"
         + "               pets = [{name = \"Snoopy\", species = \"Dog\"}]},\n"
         + "              {name = \"Danny\", pets = []}]"
-        + "in"
+        + "in\n"
         + "  from e in emps,\n"
         + "      p in e.pets\n"
         + "    yield p.name\n"

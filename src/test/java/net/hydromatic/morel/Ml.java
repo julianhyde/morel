@@ -162,8 +162,8 @@ class Ml {
 
   Ml assertParseThrows(Matcher<Throwable> matcher) {
     try {
-      final AstNode statement =
-          new MorelParserImpl(new StringReader(ml)).statement();
+      final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
+      final AstNode statement = parser.statement();
       fail("expected error, got " + statement);
     } catch (Throwable e) {
       assertThat(e, matcher);
@@ -174,10 +174,10 @@ class Ml {
   private Ml withValidate(BiConsumer<Ast.Exp, TypeMap> action) {
     return withParser(parser -> {
       try {
-        final Ast.Exp expression = parser.expression();
+        final AstNode statement = parser.statement();
         final Calcite calcite = Calcite.withDataSets(dataSetMap);
         final TypeResolver.Resolved resolved =
-            Compiles.validateExpression(expression, calcite.foreignValues());
+            Compiles.validateExpression(statement, calcite.foreignValues());
         final Ast.ValDecl valDecl = (Ast.ValDecl) resolved.node;
         final Ast.Exp resolvedExp = valDecl.valBinds.get(0).e;
         action.accept(resolvedExp, resolved.typeMap);
@@ -221,13 +221,14 @@ class Ml {
 
   Ml assertCalcite(Matcher<String> matcher) {
     try {
-      final Ast.Exp e = new MorelParserImpl(new StringReader(ml)).expression();
+      final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
+      final AstNode statement = parser.statement();
       final TypeSystem typeSystem = new TypeSystem();
 
       final Calcite calcite = Calcite.withDataSets(dataSetMap);
       final Environment env =
           Environments.env(typeSystem, calcite.foreignValues());
-      final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+      final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
       final TypeResolver.Resolved resolved =
           TypeResolver.deduceType(env, valDecl, typeSystem);
       final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
@@ -249,9 +250,10 @@ class Ml {
    * Core, the Core string converts to the expected value. Which is usually
    * the original string. */
   public void assertCoreString(Matcher<String> matcher) {
-    final Ast.Exp e;
+    final AstNode statement;
     try {
-      e = new MorelParserImpl(new StringReader(ml)).expression();
+      final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
+      statement = parser.statement();
     } catch (ParseException parseException) {
       throw new RuntimeException(parseException);
     }
@@ -259,7 +261,7 @@ class Ml {
 
     final Environment env =
         Environments.env(typeSystem, ImmutableMap.of());
-    final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+    final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, valDecl, typeSystem);
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
@@ -271,9 +273,10 @@ class Ml {
   }
 
   Ml assertAnalyze(Matcher<Object> matcher) {
-    final Ast.Exp e;
+    final AstNode statement;
     try {
-      e = new MorelParserImpl(new StringReader(ml)).expression();
+      final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
+      statement = parser.statement();
     } catch (ParseException parseException) {
       throw new RuntimeException(parseException);
     }
@@ -281,7 +284,7 @@ class Ml {
 
     final Environment env =
         Environments.env(typeSystem, ImmutableMap.of());
-    final Ast.ValDecl valDecl = Compiles.toValDecl(e);
+    final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, valDecl, typeSystem);
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
@@ -307,7 +310,8 @@ class Ml {
 
   Ml assertEval(Matcher<Object> resultMatcher, Matcher<String> planMatcher) {
     try {
-      final Ast.Exp e = new MorelParserImpl(new StringReader(ml)).expression();
+      final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
+      final AstNode e = parser.statement();
       final TypeSystem typeSystem = new TypeSystem();
       final Calcite calcite = Calcite.withDataSets(dataSetMap);
       final Environment env =
@@ -323,7 +327,7 @@ class Ml {
 
   @CanIgnoreReturnValue
   private Object eval(Session session, Environment env,
-      TypeSystem typeSystem, Ast.Exp e,
+      TypeSystem typeSystem, AstNode e,
       @Nullable Matcher<Object> resultMatcher,
       @Nullable Matcher<String> planMatcher) {
     CompiledStatement compiledStatement =
@@ -331,7 +335,12 @@ class Ml {
     final List<String> output = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     compiledStatement.eval(session, env, output, bindings);
-    final Object result = getIt(bindings);
+    final Object result;
+    if (e instanceof Ast.Exp) {
+      result = bindingValue(bindings, "it");
+    } else {
+      result = bindings.get(0).value;
+    }
     if (resultMatcher != null) {
       assertThat(result, resultMatcher);
     }
@@ -342,9 +351,9 @@ class Ml {
     return result;
   }
 
-  private Object getIt(List<Binding> bindings) {
+  private Object bindingValue(List<Binding> bindings, String name) {
     for (Binding binding : bindings) {
-      if (binding.name.equals("it")) {
+      if (binding.name.equals(name)) {
         return binding.value;
       }
     }
