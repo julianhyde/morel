@@ -277,6 +277,10 @@ public class Visitor {
   protected void visit(Core.DatatypeDecl datatypeDecl) {
   }
 
+  protected void visit(Core.Fn fn) {
+    fn.matchList.forEach(this::accept);
+  }
+
   protected void visit(Core.Match match) {
     match.pat.accept(this);
     match.e.accept(this);
@@ -303,6 +307,13 @@ public class Visitor {
   protected void visit(Core.Group group) {
     group.groupExps.values().forEach(this::accept);
     group.aggregates.values().forEach(this::accept);
+  }
+
+  protected void visit(Core.Aggregate aggregate) {
+    aggregate.aggregate.accept(this);
+    if (aggregate.argument != null) {
+      aggregate.argument.accept(this);
+    }
   }
 
   protected void visit(Core.Order order) {

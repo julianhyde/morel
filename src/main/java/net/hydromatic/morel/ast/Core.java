@@ -72,11 +72,13 @@ public class Core {
     }
 
     @Override public AstNode accept(Shuttle shuttle) {
-      throw new UnsupportedOperationException("cannot accept " + getClass());
+      throw new UnsupportedOperationException(getClass() + " cannot accept "
+          + shuttle.getClass());
     }
 
     @Override public void accept(Visitor visitor) {
-      throw new UnsupportedOperationException("cannot accept " + getClass());
+      throw new UnsupportedOperationException(getClass() + " cannot accept "
+          + visitor.getClass());
     }
   }
 
@@ -736,6 +738,10 @@ public class Core {
       return shuttle.visit(this);
     }
 
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
     public Exp copy(List<Match> matchList) {
       return matchList.equals(this.matchList) ? this
           : core.fn(type(), matchList);
@@ -795,6 +801,10 @@ public class Core {
 
     @Override public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
@@ -1051,7 +1061,7 @@ public class Core {
     }
 
     @Override public void accept(Visitor visitor) {
-      super.accept(visitor);
+      visitor.visit(this);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
