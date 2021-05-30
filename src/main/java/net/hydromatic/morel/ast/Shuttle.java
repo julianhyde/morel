@@ -327,7 +327,7 @@ public class Shuttle {
   }
 
   protected Core.Exp visit(Core.Fn fn) {
-    return fn.copy(visitList(fn.matchList));
+    return fn.copy((Core.IdPat) fn.idPat.accept(this), fn.e.accept(this));
   }
 
   protected Core.Exp visit(Core.Case caseOf) {

@@ -718,12 +718,13 @@ public class Core {
 
   /** Lambda expression. */
   public static class Fn extends Exp {
-    public final List<Match> matchList;
+    public final IdPat idPat;
+    public final Exp e;
 
-    Fn(FnType type, ImmutableList<Match> matchList) {
+    Fn(FnType type, IdPat idPat, Exp e) {
       super(Op.FN, type);
-      this.matchList = requireNonNull(matchList);
-      checkArgument(!matchList.isEmpty());
+      this.idPat = requireNonNull(idPat);
+      this.e = requireNonNull(e);
     }
 
     @Override public FnType type() {
@@ -731,7 +732,8 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("fn ").appendAll(matchList, 0, Op.BAR, right);
+      return w.append("fn ")
+          .append(idPat, 0, 0).append(" => ").append(e, 0, right);
     }
 
     @Override public Exp accept(Shuttle shuttle) {
@@ -742,9 +744,9 @@ public class Core {
       visitor.visit(this);
     }
 
-    public Exp copy(List<Match> matchList) {
-      return matchList.equals(this.matchList) ? this
-          : core.fn(type(), matchList);
+    public Fn copy(IdPat idPat, Exp e) {
+      return idPat == this.idPat && e == this.e ? this
+          : core.fn(type(), idPat, e);
     }
   }
 

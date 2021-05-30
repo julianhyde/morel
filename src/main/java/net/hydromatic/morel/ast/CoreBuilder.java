@@ -144,7 +144,7 @@ public enum CoreBuilder {
     return new Core.RecordSelector(fnType, slot);
   }
 
-  public Core.Pat idPat(Type type, String name) {
+  public Core.IdPat idPat(Type type, String name) {
     return new Core.IdPat(type, name);
   }
 
@@ -264,12 +264,8 @@ public enum CoreBuilder {
         ImmutableList.copyOf(steps), yieldExp);
   }
 
-  public Core.Fn fn(FnType type, Core.Match... matchList) {
-    return new Core.Fn(type, ImmutableList.copyOf(matchList));
-  }
-
-  public Core.Fn fn(FnType type, Iterable<? extends Core.Match> matchList) {
-    return new Core.Fn(type, ImmutableList.copyOf(matchList));
+  public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp e) {
+    return new Core.Fn(type, idPat, e);
   }
 
   public Core.Apply apply(Type type, Core.Exp fn, Core.Exp arg) {
