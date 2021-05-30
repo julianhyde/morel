@@ -60,6 +60,7 @@ public class Resolver {
       Init.INSTANCE.builtInOpMap;
 
   final TypeMap typeMap;
+  private int id = 0;
 
   public Resolver(TypeMap typeMap) {
     this.typeMap = typeMap;
@@ -221,8 +222,24 @@ public class Resolver {
   }
 
   private Core.Fn toCore(Ast.Fn fn) {
-    return core.fn((FnType) typeMap.getType(fn),
-        transform(fn.matchList, this::toCore));
+    final FnType type = (FnType) typeMap.getType(fn);
+    final ImmutableList<Core.Match> matchList =
+        transform(fn.matchList, this::toCore);
+    if (matchList.size() == 1) {
+      final Core.Match match = matchList.get(0);
+      if (match.pat instanceof Core.IdPat) {
+        return core.fn(type, (Core.IdPat) match.pat, match.e);
+      }
+    }
+    final String name = newName();
+    final Core.IdPat idPat = core.idPat(type.paramType, name);
+    final Core.Id id = core.id(type.paramType, name);
+    return core.fn(type, idPat, core.caseOf(type.resultType, id, matchList));
+  }
+
+  /** Allocates a new variable name. */
+  private String newName() {
+    return "v" + id++;
   }
 
   private Core.Case toCore(Ast.If if_) {
@@ -231,10 +248,8 @@ public class Resolver {
   }
 
   private Core.Case toCore(Ast.Case case_) {
-    Iterable<? extends Ast.Match> matchList = case_.matchList;
-    Function<Ast.Match, Core.Match> toCore = this::toCore;
     return core.caseOf(typeMap.getType(case_), toCore(case_.e),
-        transform(matchList, toCore));
+        transform(case_.matchList, this::toCore));
   }
 
   private Core.Let toCore(Ast.Let let) {

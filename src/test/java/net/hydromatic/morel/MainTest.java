@@ -758,11 +758,12 @@ public class MainTest {
         + "  end";
     // With inlining, we want the plan to simplify to
     // "fn (a, b, c) => (a + b) * 3 - c"
-    final String plan = "match((a, b, c), "
+    final String plan = "match(v0, apply(fnCode match((a, b, c), "
         + "let1(matchCode match(f, match(x, apply(fnValue *, argCode "
         + "tuple(get(name x), constant(3))))), resultCode apply(fnValue -, "
         + "argCode tuple(apply(fnCode get(name f), argCode apply(fnValue +, "
-        + "argCode tuple(get(name a), get(name b)))), get(name c)))))";
+        + "argCode tuple(get(name a), get(name b)))), get(name c))))), "
+        + "argCode get(name v0)))";
     ml(ml)
         // g (4, 3, 2) = (4 + 3) * 3 - 2 = 19
         .assertEval(whenAppliedTo(list(4, 3, 2), is(19)))
