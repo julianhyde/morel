@@ -41,8 +41,16 @@ abstract class EnvVisitor extends Visitor {
     this.env = env;
   }
 
+  /** Creates a shuttle the same as this but overriding a binding. */
+  protected abstract EnvVisitor bind(Binding binding);
+
   /** Creates a shuttle the same as this but with overriding bindings. */
   protected abstract EnvVisitor bind(List<Binding> bindingList);
+
+  @Override protected void visit(Core.Fn fn) {
+    fn.idPat.accept(this);
+    fn.exp.accept(bind(Binding.of(fn.idPat.name, fn.idPat.type)));
+  }
 
   @Override protected void visit(Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();

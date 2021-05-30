@@ -59,6 +59,10 @@ public class Analyzer extends EnvVisitor {
     return b.build();
   }
 
+  @Override protected Analyzer bind(Binding binding) {
+    return new Analyzer(typeSystem, env.bind(binding), map);
+  }
+
   @Override protected Analyzer bind(List<Binding> bindingList) {
     // The "!bindingList.isEmpty()" and "env2 != env" checks are optimizations.
     // If you remove them, this method will have the same effect, just slower.

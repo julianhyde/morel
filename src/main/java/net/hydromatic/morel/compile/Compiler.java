@@ -53,6 +53,7 @@ import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
 /** Compiles an expression to code that can be evaluated. */
@@ -204,7 +205,8 @@ public class Compiler {
 
     case FN:
       final Core.Fn fn = (Core.Fn) expression;
-      return compileMatchList(cx, fn.matchList);
+      return compileMatchList(cx,
+          ImmutableList.of(core.match(fn.idPat, fn.exp)));
 
     case CASE:
       final Core.Case case_ = (Core.Case) expression;

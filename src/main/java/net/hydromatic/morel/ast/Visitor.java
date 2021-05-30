@@ -278,7 +278,8 @@ public class Visitor {
   }
 
   protected void visit(Core.Fn fn) {
-    fn.matchList.forEach(this::accept);
+    fn.idPat.accept(this);
+    fn.exp.accept(this);
   }
 
   protected void visit(Core.Match match) {

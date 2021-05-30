@@ -44,8 +44,17 @@ abstract class EnvShuttle extends Shuttle {
     this.env = env;
   }
 
+  /** Creates a shuttle the same as this but overriding a binding. */
+  protected abstract EnvShuttle bind(Binding binding);
+
   /** Creates a shuttle the same as this but with overriding bindings. */
   protected abstract EnvShuttle bind(List<Binding> bindingList);
+
+  @Override protected Core.Fn visit(Core.Fn fn) {
+    final Core.IdPat idPat2 = (Core.IdPat) fn.idPat.accept(this);
+    final Binding binding = Binding.of(fn.idPat.name, fn.idPat.type);
+    return fn.copy(idPat2, fn.exp.accept(bind(binding)));
+  }
 
   @Override protected Core.Match visit(Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();
