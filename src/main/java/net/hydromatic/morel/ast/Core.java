@@ -565,7 +565,7 @@ public class Core {
       return w;
     }
 
-    @Override public Decl accept(Shuttle shuttle) {
+    @Override public DatatypeDecl accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -658,10 +658,10 @@ public class Core {
 
   /** "Let" expression. */
   public static class Let extends Exp {
-    public final Decl decl;
+    public final ValDecl decl;
     public final Exp exp;
 
-    Let(Decl decl, Exp exp) {
+    Let(ValDecl decl, Exp exp) {
       super(Op.LET, exp.type);
       this.decl = requireNonNull(decl);
       this.exp = requireNonNull(exp);
@@ -681,9 +681,40 @@ public class Core {
       visitor.visit(this);
     }
 
-    public Exp copy(Decl decl, Exp exp) {
+    public Exp copy(ValDecl decl, Exp exp) {
       return decl == this.decl && exp == this.exp ? this
           : core.let(decl, exp);
+    }
+  }
+
+  /** "Local" expression. */
+  public static class Local extends Exp {
+    public final DatatypeDecl decl;
+    public final Exp exp;
+
+    Local(DatatypeDecl decl, Exp exp) {
+      super(Op.LOCAL, exp.type);
+      this.decl = requireNonNull(decl);
+      this.exp = requireNonNull(exp);
+    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("local ").append(decl, 0, 0)
+          .append(" in ").append(exp, 0, 0)
+          .append(" end");
+    }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Exp copy(DatatypeDecl decl, Exp exp) {
+      return decl == this.decl && exp == this.exp ? this
+          : core.local(decl, exp);
     }
   }
 

@@ -257,6 +257,11 @@ public class Visitor {
     let.exp.accept(this);
   }
 
+  protected void visit(Core.Local local) {
+    local.decl.accept(this);
+    local.exp.accept(this);
+  }
+
   protected void visit(Core.Case kase) {
     kase.exp.accept(this);
     kase.matchList.forEach(this::accept);

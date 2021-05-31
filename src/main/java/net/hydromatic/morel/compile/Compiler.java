@@ -203,6 +203,9 @@ public class Compiler {
     case LET:
       return compileLet(cx, (Core.Let) expression);
 
+    case LOCAL:
+      return compileLocal(cx, (Core.Local) expression);
+
     case FN:
       final Core.Fn fn = (Core.Fn) expression;
       return compileMatchList(cx,
@@ -432,7 +435,7 @@ public class Compiler {
   private Code compileLet(Context cx, Core.Let let) {
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
-    compileDecl(cx, let.decl, matchCodes, bindings, null);
+    compileValDecl(cx, let.decl, matchCodes, bindings, null);
     Context cx2 = cx.bindAll(bindings);
     final Code resultCode = compile(cx2, let.exp);
     return finishCompileLet(cx2, matchCodes, resultCode, let.type);
@@ -441,6 +444,13 @@ public class Compiler {
   protected Code finishCompileLet(Context cx, List<Code> matchCodes,
       Code resultCode, Type resultType) {
     return Codes.let(matchCodes, resultCode);
+  }
+
+  private Code compileLocal(Context cx, Core.Local local) {
+    final List<Binding> bindings = new ArrayList<>();
+    compileDatatypeDecl(local.decl, bindings, null);
+    Context cx2 = cx.bindAll(bindings);
+    return compile(cx2, local.exp);
   }
 
   void compileDecl(Context cx, Core.Decl decl, List<Code> matchCodes,

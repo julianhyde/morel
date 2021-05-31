@@ -252,15 +252,21 @@ public class Resolver {
         transform(case_.matchList, this::toCore));
   }
 
-  private Core.Let toCore(Ast.Let let) {
+  private Core.Exp toCore(Ast.Let let) {
     return flattenLet(let.decls, let.exp);
   }
 
-  private Core.Let flattenLet(List<Ast.Decl> decls, Ast.Exp exp) {
-    final Core.Exp e2 = decls.size() == 1
-        ? toCore(exp)
-        : flattenLet(decls.subList(1, decls.size()), exp);
-    return core.let(toCore(decls.get(0)), e2);
+  private Core.Exp flattenLet(List<Ast.Decl> decls, Ast.Exp exp) {
+    if (decls.size() == 0) {
+      return toCore(exp);
+    }
+    final Core.Decl decl = toCore(decls.get(0));
+    final Core.Exp e2 = flattenLet(decls.subList(1, decls.size()), exp);
+    if (decl instanceof Core.ValDecl) {
+      return core.let((Core.ValDecl) decl, e2);
+    } else {
+      return core.local((Core.DatatypeDecl) decl, e2);
+    }
   }
 
   private void flatten(Map<Ast.Pat, Ast.Exp> matches,

@@ -241,8 +241,12 @@ public enum CoreBuilder {
     return new Core.Tuple(tupleType, argList);
   }
 
-  public Core.Let let(Core.Decl decl, Core.Exp exp) {
+  public Core.Let let(Core.ValDecl decl, Core.Exp exp) {
     return new Core.Let(decl, exp);
+  }
+
+  public Core.Local local(Core.DatatypeDecl decl, Core.Exp exp) {
+    return new Core.Local(decl, exp);
   }
 
   public Core.ValDecl valDecl(boolean rec, Core.Pat pat, Core.Exp exp) {
