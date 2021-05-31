@@ -69,6 +69,12 @@ abstract class EnvShuttle extends Shuttle {
     return let.copy(let.decl.accept(this), let.e.accept(bind(bindings)));
   }
 
+  @Override public Core.Exp visit(Core.Local local) {
+    final List<Binding> bindings = new ArrayList<>();
+    local.decl.accept(Compiles.binding(typeSystem, bindings));
+    return local.copy(local.decl.accept(this), local.e.accept(bind(bindings)));
+  }
+
   @Override public Core.Exp visit(Core.From from) {
     final List<Binding> bindings = new ArrayList<>();
     final Map<Core.Pat, Core.Exp> sources = new LinkedHashMap<>();
