@@ -66,6 +66,13 @@ abstract class EnvVisitor extends Visitor {
     let.e.accept(bind(bindings));
   }
 
+  @Override protected void visit(Core.Local local) {
+    local.decl.accept(this);
+    final List<Binding> bindings = new ArrayList<>();
+    local.decl.accept(Compiles.binding(typeSystem, bindings));
+    local.e.accept(bind(bindings));
+  }
+
   @Override protected void visit(Core.From from) {
     final List<Binding> bindings = new ArrayList<>();
     from.sources.forEach((pat, source) -> {

@@ -284,6 +284,10 @@ public class Shuttle {
     return let.copy(let.decl.accept(this), let.e.accept(this));
   }
 
+  protected Core.Exp visit(Core.Local local) {
+    return local.copy(local.decl.accept(this), local.e.accept(this));
+  }
+
   protected Core.DatatypeDecl visit(Core.DatatypeDecl datatypeDecl) {
     return datatypeDecl;
   }
