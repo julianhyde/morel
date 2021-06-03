@@ -267,7 +267,10 @@ class Ml {
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
     final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
-    final Core.ValDecl valDecl4 = valDecl3.accept(Inliner.of(typeSystem, env));
+    final Analyzer.Analysis analysis =
+        Analyzer.analyze(typeSystem, env, valDecl3);
+    final Inliner inliner = Inliner.of(typeSystem, env, analysis);
+    final Core.ValDecl valDecl4 = valDecl3.accept(inliner);
     final String coreString = valDecl4.e.toString();
     assertThat(coreString, matcher);
   }
@@ -290,9 +293,9 @@ class Ml {
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
     final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
-    final Analyzer analyzer = Analyzer.of(typeSystem, env);
-    valDecl3.accept(analyzer);
-    assertThat(analyzer.map().toString(), matcher);
+    final Analyzer.Analysis analysis =
+        Analyzer.analyze(typeSystem, env, valDecl3);
+    assertThat(analysis.map.toString(), matcher);
     return this;
   }
 

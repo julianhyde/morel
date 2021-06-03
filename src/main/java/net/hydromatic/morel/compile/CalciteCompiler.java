@@ -354,7 +354,7 @@ public class CalciteCompiler extends Compiler {
           final RelNode expCode = cx2.relBuilder.build();
           final Core.Pat pat = patExp.getKey();
           sourceCodes.put(pat, expCode);
-          pat.accept(Compiles.binding(typeSystem, bindings));
+          Compiles.bindPattern(typeSystem, bindings, pat);
         }
         final Map<String, Function<RelBuilder, RexNode>> map = new HashMap<>();
         if (sourceCodes.size() == 0) {
