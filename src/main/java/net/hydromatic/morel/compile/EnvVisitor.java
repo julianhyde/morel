@@ -55,21 +55,21 @@ abstract class EnvVisitor extends Visitor {
   @Override protected void visit(Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();
     match.pat.accept(this);
-    match.pat.accept(Compiles.binding(typeSystem, bindings));
+    Compiles.bindPattern(typeSystem, bindings, match.pat);
     match.e.accept(bind(bindings));
   }
 
   @Override protected void visit(Core.Let let) {
     let.decl.accept(this);
     final List<Binding> bindings = new ArrayList<>();
-    let.decl.accept(Compiles.binding(typeSystem, bindings));
+    Compiles.bindPattern(typeSystem, bindings, let.decl);
     let.e.accept(bind(bindings));
   }
 
   @Override protected void visit(Core.Local local) {
     local.decl.accept(this);
     final List<Binding> bindings = new ArrayList<>();
-    local.decl.accept(Compiles.binding(typeSystem, bindings));
+    Compiles.bindPattern(typeSystem, bindings, local.decl);
     local.e.accept(bind(bindings));
   }
 
@@ -77,7 +77,7 @@ abstract class EnvVisitor extends Visitor {
     final List<Binding> bindings = new ArrayList<>();
     from.sources.forEach((pat, source) -> {
       source.accept(bind(bindings));
-      pat.accept(Compiles.binding(typeSystem, bindings));
+      Compiles.bindPattern(typeSystem, bindings, pat);
       pat.accept(this);
     });
 

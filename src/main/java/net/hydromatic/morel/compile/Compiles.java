@@ -77,7 +77,9 @@ public abstract class Compiles {
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
     final Resolver resolver = new Resolver(resolved.typeMap);
     final Core.Decl coreDecl = resolver.toCore(resolved.node);
-    final Inliner inliner = Inliner.of(typeSystem, env);
+    final Analyzer.Analysis analysis =
+        Analyzer.analyze(typeSystem, env, coreDecl);
+    final Inliner inliner = Inliner.of(typeSystem, env, analysis);
     final Core.Decl coreDecl2 = coreDecl.accept(inliner);
     final Compiler compiler;
     if (hybrid) {
@@ -113,6 +115,23 @@ public abstract class Compiles {
    * the converse of {@link #toValDecl(Ast.Exp)}. */
   public static Core.Exp toExp(Core.ValDecl decl) {
     return decl.e;
+  }
+
+  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+      Core.DatatypeDecl datatypeDecl) {
+    datatypeDecl.accept(binding(typeSystem, bindings));
+  }
+
+  /** Richer than {@link #bindPattern(TypeSystem, List, Core.Pat)} because
+   * we have the expression. */
+  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+      Core.ValDecl valDecl) {
+    bindings.add(Binding.of(valDecl.pat.name, valDecl.e));
+  }
+
+  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+      Core.Pat pat) {
+    pat.accept(binding(typeSystem, bindings));
   }
 
   static PatternBinder binding(TypeSystem typeSystem, List<Binding> bindings) {
