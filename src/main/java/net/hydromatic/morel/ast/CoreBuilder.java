@@ -249,7 +249,7 @@ public enum CoreBuilder {
     return new Core.Local(decl, exp);
   }
 
-  public Core.ValDecl valDecl(boolean rec, Core.Pat pat, Core.Exp exp) {
+  public Core.ValDecl valDecl(boolean rec, Core.IdPat pat, Core.Exp exp) {
     return new Core.ValDecl(rec, pat, exp);
   }
 

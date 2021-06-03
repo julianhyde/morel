@@ -469,12 +469,6 @@ public class Compiler {
     }
   }
 
-  private void compileValDecl(Context cx, Core.ValDecl valDecl,
-      List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
-    valDecl.pat.accept(Compiles.binding(typeSystem, bindings));
-    compileValBind(cx, valDecl, matchCodes, bindings, actions);
-  }
-
   private void compileDatatypeDecl(Core.DatatypeDecl datatypeDecl,
       List<Binding> bindings, List<Action> actions) {
     for (DataType dataType : datatypeDecl.dataTypes) {
@@ -542,12 +536,19 @@ public class Compiler {
     return Pair.of(match.pat, code);
   }
 
-  private void compileValBind(Context cx, Core.ValDecl valBind,
+  private void compileValDecl(Context cx, Core.ValDecl valDecl,
       List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
+    valDecl.pat.accept(Compiles.binding(typeSystem, bindings));
+
     final List<Binding> newBindings = new TailList<>(bindings);
     final Map<Core.IdPat, LinkCode> linkCodes = new IdentityHashMap<>();
-    if (valBind.rec) {
-      valBind.pat.accept(
+    if (valDecl.rec) {
+      // Currently, valDecl.pat has type IdPat, so the visit below is trivial.
+      // But in future, a recursive ValDecl will bind several variables (in
+      // order to support mutual recursion, possibly via a new sub-class). So
+      // for now we keep the code as a visitor, and expect to turn it into a
+      // loop someday.
+      valDecl.pat.accept(
           new Visitor() {
             @Override protected void visit(Core.IdPat idPat) {
               final LinkCode linkCode = new LinkCode();
@@ -560,18 +561,16 @@ public class Compiler {
     // Using 'compileArg' rather than 'compile' encourages CalciteCompiler
     // to use a pure Calcite implementation if possible, and has no effect
     // in the basic Compiler.
-    final Code code = compileArg(cx1, valBind.exp);
+    final Code code = compileArg(cx1, valDecl.exp);
     if (!linkCodes.isEmpty()) {
-      link(linkCodes, valBind.pat, code);
+      link(linkCodes, valDecl.pat, code);
     }
     newBindings.clear();
-    final ImmutableList<Pair<Core.Pat, Code>> patCodes =
-        ImmutableList.of(Pair.of(valBind.pat, code));
-    matchCodes.add(new MatchCode(patCodes));
+    matchCodes.add(new MatchCode(ImmutableList.of(Pair.of(valDecl.pat, code))));
 
     if (actions != null) {
-      final String name = ((Core.IdPat) valBind.pat).name;
-      final Type type0 = valBind.exp.type;
+      final String name = valDecl.pat.name;
+      final Type type0 = valDecl.exp.type;
       final Type type = typeSystem.ensureClosed(type0);
       actions.add((output, outBindings, evalEnv) -> {
         final StringBuilder buf = new StringBuilder();
