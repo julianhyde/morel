@@ -699,6 +699,31 @@ public class MainTest {
     ml(ml).assertEval(is(6));
   }
 
+  /** As {@link #testLet3()}, but a tuple is being assigned. */
+  @Test void testLet3b() {
+    // The intermediate form will have nested tuples, something like this:
+    //   val v = (1, (2, 4)) in case v of (x, (y, z)) => y + 3 + x
+    final String ml = "let\n"
+        + "  val x = 1\n"
+        + "  and (y, z) = (2, 4)\n"
+        + "in\n"
+        + "  y + x + 3\n"
+        + "end";
+    ml(ml).assertEval(is(6));
+  }
+
+  @Test void testLet3c() {
+    // The intermediate form will have nested tuples, something like this:
+    //   val v = (1, (2, 4)) in case v of (x, (y, z)) => y + 3 + x
+    final String ml = "let\n"
+        + "  val x1 :: x2 :: xs = [1, 5, 9, 13, 17]\n"
+        + "  and (y, z) = (2, 4)\n"
+        + "in\n"
+        + "  y + x1 + x2 + 3\n"
+        + "end";
+    ml(ml).assertEval(is(11));
+  }
+
   /** Tests that 'and' assignments occur simultaneously. */
   @Test void testLet4() {
     final String ml = "let\n"

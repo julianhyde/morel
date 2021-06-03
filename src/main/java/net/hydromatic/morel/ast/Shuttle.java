@@ -297,7 +297,7 @@ public class Shuttle {
         valDecl.e.accept(this));
   }
 
-  protected Core.Pat visit(Core.IdPat idPat) {
+  protected Core.IdPat visit(Core.IdPat idPat) {
     return idPat;
   }
 
