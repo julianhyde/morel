@@ -22,6 +22,7 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 
+import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
@@ -45,18 +46,27 @@ public class Analyzer extends EnvVisitor {
     this.map = map;
   }
 
-  /** Creates an Analyzer. */
-  public static Analyzer of(TypeSystem typeSystem, Environment env) {
+  /** Analyzes an expression. */
+  public static Analysis analyze(TypeSystem typeSystem, Environment env,
+      AstNode node) {
     // Use a LinkedHashMap to ensure that the order of the map matches the
     // tree traversal order. It's helpful for testing.
-    return new Analyzer(typeSystem, env, new LinkedHashMap<>());
+    final Map<Core.IdPat, MutableUse> map = new LinkedHashMap<>();
+    final Analyzer analyzer = new Analyzer(typeSystem, env, map);
+
+    // Mark all top-level bindings so that they will not be removed
+    if (node instanceof Core.ValDecl) {
+      analyzer.use(((Core.ValDecl) node).pat).top = true;
+    }
+    node.accept(analyzer);
+    return analyzer.result();
   }
 
-  /** Returns the map. */
-  public ImmutableMap<Core.IdPat, Use> map() {
+  /** Returns the result of an analysis. */
+  private Analysis result() {
     final ImmutableMap.Builder<Core.IdPat, Use> b = ImmutableMap.builder();
     map.forEach((k, v) -> b.put(k, v.fix()));
-    return b.build();
+    return new Analysis(b.build());
   }
 
   @Override protected Analyzer bind(Binding binding) {
@@ -121,7 +131,6 @@ public class Analyzer extends EnvVisitor {
           baseUse.parallel = true;
         }
         baseUse.useCount += maxCount;
-
       });
     }
   }
@@ -184,6 +193,7 @@ public class Analyzer extends EnvVisitor {
   /** Work space where the uses of a binding are counted. When all the uses
    * have been found, call {@link #fix} to convert this into a {@link Use}. */
   private static class MutableUse {
+    boolean top;
     boolean parallel;
     int useCount;
 
@@ -200,9 +210,19 @@ public class Analyzer extends EnvVisitor {
     }
 
     Use fix() {
-      return useCount == 0 ? Use.DEAD
+      return top ? Use.MULTI_UNSAFE
+          : useCount == 0 ? Use.DEAD
           : useCount == 1 ? (parallel ? Use.MULTI_SAFE : Use.ONCE_SAFE)
           : Use.MULTI_UNSAFE;
+    }
+  }
+
+  /** Result of an analysis. */
+  public static class Analysis {
+    public final ImmutableMap<Core.IdPat, Use> map;
+
+    Analysis(ImmutableMap<Core.IdPat, Use> map) {
+      this.map = map;
     }
   }
 }

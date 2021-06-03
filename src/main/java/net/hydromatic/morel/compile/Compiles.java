@@ -31,6 +31,7 @@ import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.TypeSystem;
 
 import java.util.List;
@@ -77,7 +78,9 @@ public abstract class Compiles {
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
     final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.Decl coreDecl = resolver.toCore(resolved.node);
-    final Inliner inliner = Inliner.of(typeSystem, env);
+    final Analyzer.Analysis analysis =
+        Analyzer.analyze(typeSystem, env, coreDecl);
+    final Inliner inliner = Inliner.of(typeSystem, env, analysis);
     final Core.Decl coreDecl2 = coreDecl.accept(inliner);
     final Compiler compiler;
     if (hybrid) {
@@ -113,6 +116,34 @@ public abstract class Compiles {
    * the converse of {@link #toValDecl(Ast.Exp)}. */
   public static Core.Exp toExp(Core.ValDecl decl) {
     return decl.exp;
+  }
+
+  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+      Core.DatatypeDecl datatypeDecl) {
+    datatypeDecl.accept(binding(typeSystem, bindings));
+  }
+
+  /** Richer than {@link #bindPattern(TypeSystem, List, Core.Pat)} because
+   * we have the expression. */
+  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+      Core.ValDecl valDecl) {
+    bindings.add(Binding.of(valDecl.pat.name, valDecl.exp));
+  }
+
+  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+      Core.Pat pat) {
+    pat.accept(binding(typeSystem, bindings));
+  }
+
+  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+      Core.IdPat idPat) {
+    bindings.add(Binding.of(idPat.name, idPat.type, idPat));
+  }
+
+  public static void bindDataType(TypeSystem typeSystem, List<Binding> bindings,
+      DataType dataType) {
+    dataType.typeConstructors.keySet().forEach(name ->
+        bindings.add(typeSystem.bindTyCon(dataType, name)));
   }
 
   static PatternBinder binding(TypeSystem typeSystem, List<Binding> bindings) {
@@ -151,7 +182,7 @@ public abstract class Compiles {
     }
 
     @Override public void visit(Core.IdPat idPat) {
-      bindings.add(Binding.of(idPat.name, idPat.type, idPat));
+      bindPattern(typeSystem, bindings, idPat);
     }
 
     @Override protected void visit(Core.ValDecl valBind) {
@@ -161,13 +192,11 @@ public abstract class Compiles {
 
     @Override protected void visit(Core.DatatypeDecl datatypeDecl) {
       datatypeDecl.dataTypes.forEach(dataType ->
-          dataType.typeConstructors.keySet().forEach(name ->
-              bindings.add(typeSystem.bindTyCon(dataType, name))));
+          bindDataType(typeSystem, bindings, dataType));
     }
 
     @Override protected void visit(Core.Local local) {
-      local.dataType.typeConstructors.keySet().forEach(name ->
-          bindings.add(typeSystem.bindTyCon(local.dataType, name)));
+      bindDataType(typeSystem, bindings, local.dataType);
     }
   }
 }

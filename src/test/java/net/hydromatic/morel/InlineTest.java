@@ -44,12 +44,19 @@ public class InlineTest {
         + "in\n"
         + "  twice + twice\n"
         + "end";
-    final String map = "{it=DEAD, unused=DEAD, once1=ONCE_SAFE,"
+    final String map = "{it=MULTI_UNSAFE, unused=DEAD, once1=ONCE_SAFE,"
         + " once2=ONCE_SAFE, once3=ONCE_SAFE, twice=MULTI_UNSAFE,"
         + " op +=MULTI_UNSAFE, multiSafe=MULTI_SAFE, x=ONCE_SAFE, z=DEAD,"
         + " x0=ONCE_SAFE, x2=DEAD, x3=DEAD, xs=DEAD}";
     ml(ml)
         .assertAnalyze(is(map));
+  }
+
+  @Test void testInline() {
+    final String ml = "fun f x = let val y = x + 1 in y + 2 end";
+    final String plan =
+        "match(x, let1(matchCode match(y, apply(fnValue +, argCode tuple(get(name x), constant(1)))), resultCode apply(fnValue +, argCode tuple(get(name y), constant(2)))))";
+    ml(ml).assertPlan(is(plan));
   }
 }
 

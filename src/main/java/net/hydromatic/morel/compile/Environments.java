@@ -92,7 +92,8 @@ public abstract class Environments {
       Map<String, ForeignValue> map, List<Binding> bindings) {
     map.forEach((name, value) ->
         bindings.add(
-            Binding.of(name, value.type(typeSystem), value.value(), true)));
+            Binding.of(name, value.type(typeSystem), value.value())
+                .withParameter(true)));
   }
 
   /** Creates an environment that is a given environment plus bindings. */

@@ -284,7 +284,7 @@ public class Compiler {
     from.sources.forEach((pat, exp) -> {
       final Code expCode = compile(cx.bindAll(bindings), exp);
       sourceCodes.put(pat, expCode);
-      pat.accept(Compiles.binding(typeSystem, bindings));
+      Compiles.bindPattern(typeSystem, bindings, pat);
     });
     Supplier<Codes.RowSink> rowSinkFactory =
         createRowSinkFactory(cx, ImmutableList.copyOf(bindings), from.steps,
@@ -534,15 +534,14 @@ public class Compiler {
 
   private Pair<Core.Pat, Code> compileMatch(Context cx, Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();
-    match.pat.accept(Compiles.binding(typeSystem, bindings));
+    Compiles.bindPattern(typeSystem, bindings, match.pat);
     final Code code = compile(cx.bindAll(bindings), match.exp);
     return Pair.of(match.pat, code);
   }
 
   private void compileValDecl(Context cx, Core.ValDecl valDecl,
       List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
-    valDecl.pat.accept(Compiles.binding(typeSystem, bindings));
-
+    Compiles.bindPattern(typeSystem, bindings, valDecl);
     final List<Binding> newBindings = new TailList<>(bindings);
     final Map<Core.IdPat, LinkCode> linkCodes = new IdentityHashMap<>();
     if (valDecl.rec) {
