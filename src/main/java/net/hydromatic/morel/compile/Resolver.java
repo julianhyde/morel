@@ -86,10 +86,49 @@ public class Resolver {
     }
   }
 
+  /** Creates a factory that will create a "let" around a simple pattern,
+   * and yield {@code resultExp}. ({@link #toLet(Core.Exp)} handles the complex
+   * case.)
+   *
+   * <p>Implements interface {@link ValDeclFactory}. */
+  private static Core.ValDecl toSimpleValDecl(boolean rec, Core.Pat pat,
+      Core.Exp exp) {
+    return core.valDecl(rec, (Core.IdPat) pat, exp);
+  }
+
+  /** Creates a factory that will create a "let" around a "case" and yield
+   * {@code resultExp}. The single-branch "case" is used to deconstruct complex
+   * patterns. */
+  private ValDeclFactory<Core.Let> toLet(Core.Exp resultExp) {
+    return (rec, pat, exp) -> {
+      if (pat instanceof Core.IdPat) {
+        return core.let(core.valDecl(rec, (Core.IdPat) pat, exp), resultExp);
+      } else {
+        final String name = newName();
+        final Core.Id id = core.id(pat.type, name);
+        final Core.IdPat idPat = core.idPat(pat.type, name);
+        return core.let(core.valDecl(rec, idPat, exp),
+            core.caseOf(resultExp.type, id,
+                ImmutableList.of(core.match(pat, resultExp))));
+      }
+    };
+  }
+
+  /** Converts a simple {@link net.hydromatic.morel.ast.Ast.ValDecl},
+   *  of the form {@code val v = e},
+   *  to a Core {@link net.hydromatic.morel.ast.Core.ValDecl}.
+   *
+   *  <p>Declarations such as {@code val (x, y) = (1, 2)}
+   *  and {@code val emp :: rest = emps} are considered complex,
+   *  and are not handled by this method. */
   public Core.ValDecl toCore(Ast.ValDecl valDecl) {
+    return toCore(valDecl, Resolver::toSimpleValDecl);
+  }
+
+  private <R> R toCore(Ast.ValDecl valDecl, ValDeclFactory<R> f) {
     if (valDecl.valBinds.size() > 1) {
-      // Transform "let val v1 = e1 and v2 = e2 in e"
-      // to "let val (v1, v2) = (e1, e2) in e"
+      // Transform "let val v1 = E1 and v2 = E2 in E end"
+      // to "let val v = (v1, v2) in case v of (E1, E2) => E end"
       final Map<Ast.Pat, Ast.Exp> matches = new LinkedHashMap<>();
       boolean rec = false;
       for (Ast.ValBind valBind : valDecl.valBinds) {
@@ -107,10 +146,10 @@ public class Resolver {
       final RecordLikeType tupleType = typeMap.typeSystem.tupleType(types);
       final Core.Pat pat = core.tuplePat(tupleType, pats);
       final Core.Exp e2 = core.tuple(tupleType, exps);
-      return core.valDecl(rec, pat, e2);
+      return f.apply(rec, pat, e2);
     } else {
       Ast.ValBind valBind = valDecl.valBinds.get(0);
-      return core.valDecl(valBind.rec, toCore(valBind.pat), toCore(valBind.e));
+      return f.apply(valBind.rec, toCore(valBind.pat), toCore(valBind.e));
     }
   }
 
@@ -257,15 +296,19 @@ public class Resolver {
   }
 
   private Core.Exp flattenLet(List<Ast.Decl> decls, Ast.Exp e) {
+    //   flattenLet(val x :: xs = [1, 2, 3] and (y, z) = (2, 4), x + y)
+    // becomes
+    //   let v = ([1, 2, 3], (2, 4)) in case v of (x :: xs, (y, z)) => x + y end
     if (decls.size() == 0) {
       return toCore(e);
     }
-    final Core.Decl decl = toCore(decls.get(0));
     final Core.Exp e2 = flattenLet(decls.subList(1, decls.size()), e);
-    if (decl instanceof Core.ValDecl) {
-      return core.let((Core.ValDecl) decl, e2);
+    final Ast.Decl decl = decls.get(0);
+    if (decl instanceof Ast.ValDecl) {
+      return toCore((Ast.ValDecl) decl, toLet(e2));
     } else {
-      return core.local((Core.DatatypeDecl) decl, e2);
+      final Core.DatatypeDecl datatypeDecl = toCore((Ast.DatatypeDecl) decl);
+      return core.local(datatypeDecl, e2);
     }
   }
 
@@ -476,6 +519,18 @@ public class Resolver {
       builtInOpMap = b2o.build();
       opBuiltInMap = ImmutableMap.copyOf(o2b);
     }
+  }
+
+  /** Converts a variable declaration into an appropriate form.
+   *
+   * <p>It might be a {@code let} (via
+   * {@link net.hydromatic.morel.ast.CoreBuilder#let(Core.ValDecl, Core.Exp)} or
+   * some other type of expression.
+   *
+   * @param <R> Result type
+   */
+  interface ValDeclFactory<R> {
+    R apply(boolean rec, Core.Pat pat, Core.Exp exp);
   }
 }
 

@@ -117,7 +117,7 @@ public class Core {
       return w.id(name);
     }
 
-    @Override public Pat accept(Shuttle shuttle) {
+    @Override public IdPat accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -577,10 +577,10 @@ public class Core {
   /** Value declaration. */
   public static class ValDecl extends Decl {
     public final boolean rec;
-    public final Pat pat;
+    public final IdPat pat;
     public final Exp e;
 
-    ValDecl(boolean rec, Pat pat, Exp e) {
+    ValDecl(boolean rec, IdPat pat, Exp e) {
       super(Op.VAL_DECL);
       this.rec = rec;
       this.pat = pat;
@@ -612,7 +612,7 @@ public class Core {
       visitor.visit(this);
     }
 
-    public ValDecl copy(boolean rec, Pat pat, Exp e) {
+    public ValDecl copy(boolean rec, IdPat pat, Exp e) {
       return rec == this.rec && pat == this.pat && e == this.e ? this
           : core.valDecl(rec, pat, e);
     }
@@ -718,7 +718,13 @@ public class Core {
     }
   }
 
-  /** Match. */
+  /** Match.
+   *
+   * <p>In AST, there are several places that can deconstruct values via
+   * patterns: {@link Ast.FunDecl fun}, {@link Ast.Fn fn}, {@link Ast.Let let},
+   * {@link Ast.Case case}. But in Core, there is only {@code Match}, and
+   * {@code Match} only occurs within {@link Ast.Case case}. This makes the Core
+   * language a little more verbose than AST but a lot more uniform. */
   public static class Match extends BaseNode {
     public final Pat pat;
     public final Exp e;
