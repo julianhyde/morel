@@ -759,11 +759,11 @@ public class MainTest {
         + "  fn i => i = 10 andalso isZero i\n"
         + "end";
     // With inlining, we want the plan to simplify to "fn i => false"
-    final String plan = "let1(matchCode match(isZero, match(x, "
-        + "apply(fnValue =, argCode tuple(get(name x), constant(0))))), "
-        + "resultCode match(i, andalso(apply(fnValue =, "
-        + "argCode tuple(get(name i), constant(10))), "
-        + "apply(fnCode get(name isZero), argCode get(name i)))))";
+    final String plan = "match(i, andalso(apply("
+        + "fnValue =, argCode tuple(get(name i), constant(10))), "
+        + "apply(fnCode match(x, "
+        + "apply(fnValue =, argCode tuple(get(name x), constant(0)))), "
+        + "argCode get(name i))))";
     ml(ml)
         .assertEval(whenAppliedTo(0, is(false)))
         .assertEval(whenAppliedTo(10, is(false)))
@@ -784,10 +784,10 @@ public class MainTest {
     // With inlining, we want the plan to simplify to
     // "fn (a, b, c) => (a + b) * 3 - c"
     final String plan = "match(v0, apply(fnCode match((a, b, c), "
-        + "let1(matchCode match(f, match(x, apply(fnValue *, argCode "
-        + "tuple(get(name x), constant(3))))), resultCode apply(fnValue -, "
-        + "argCode tuple(apply(fnCode get(name f), argCode apply(fnValue +, "
-        + "argCode tuple(get(name a), get(name b)))), get(name c))))), "
+        + "apply(fnValue -, argCode tuple(apply(fnCode match(x, "
+        + "apply(fnValue *, argCode "
+        + "tuple(get(name x), constant(3)))), argCode apply(fnValue +, "
+        + "argCode tuple(get(name a), get(name b)))), get(name c)))), "
         + "argCode get(name v0)))";
     ml(ml)
         // g (4, 3, 2) = (4 + 3) * 3 - 2 = 19

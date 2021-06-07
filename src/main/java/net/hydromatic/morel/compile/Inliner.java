@@ -71,11 +71,11 @@ public class Inliner extends EnvShuttle {
     final Binding binding = env.getOpt(id.idPat.name);
     if (binding != null
         && !binding.parameter) {
-      if (binding.e != null) {
+      if (binding.exp != null) {
         final Analyzer.Use use = analysis.map.get(id.idPat);
         switch (use) {
         case ONCE_SAFE:
-          return binding.e;
+          return binding.exp;
         }
       }
       Object v = binding.value;

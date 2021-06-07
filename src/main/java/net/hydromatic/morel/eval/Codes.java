@@ -1867,10 +1867,10 @@ public abstract class Codes {
     BUILT_IN_VALUES.forEach((key, value) -> {
       final Type type = key.typeFunction.apply(typeSystem);
       if (key.structure == null) {
-        hEnv[0] = hEnv[0].bind(key.mlName, type, value);
+        hEnv[0] = hEnv[0].bind(key.mlName, type, null, value);
       }
       if (key.alias != null) {
-        hEnv[0] = hEnv[0].bind(key.alias, type, value);
+        hEnv[0] = hEnv[0].bind(key.alias, type, null, value);
       }
     });
 
@@ -1880,7 +1880,7 @@ public abstract class Codes {
       structure.memberMap.values()
           .forEach(builtIn -> valueList.add(BUILT_IN_VALUES.get(builtIn)));
       hEnv[0] = hEnv[0]
-          .bind(structure.name, type, ImmutableList.copyOf(valueList));
+          .bind(structure.name, type, null, ImmutableList.copyOf(valueList));
     });
     return hEnv[0];
   }

@@ -140,10 +140,6 @@ public class Compiler {
     Context bindAll(Iterable<Binding> bindings) {
       return of(env.bindAll(bindings));
     }
-
-    Context bind(String name, Type type, Object value) {
-      return of(env.bind(name, type, value));
-    }
   }
 
   public final Code compile(Environment env, Core.Exp expression) {

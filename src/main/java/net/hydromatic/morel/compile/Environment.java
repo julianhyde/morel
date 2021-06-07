@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
@@ -74,7 +75,7 @@ public abstract class Environment {
 
   /** Creates an environment that is the same as a given environment, plus one
    * more variable. */
-  public Environment bind(String name, Type type, Object value) {
+  public Environment bind(String name, Type type, Core.Exp exp, Object value) {
     return bind(Binding.of(name, type, value));
   }
 

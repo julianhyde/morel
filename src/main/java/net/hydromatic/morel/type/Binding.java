@@ -29,16 +29,16 @@ import java.util.Objects;
 public class Binding {
   public final String name;
   public final Type type;
-  public final Core.Exp e;
+  public final Core.Exp exp;
   public final Object value;
   /** If true, the binding is ignored by inlining. */
   public final boolean parameter;
 
-  private Binding(String name, Type type, Core.Exp e, Object value,
+  private Binding(String name, Type type, Core.Exp exp, Object value,
       boolean parameter) {
     this.name = name;
     this.type = Objects.requireNonNull(type);
-    this.e = e;
+    this.exp = exp;
     this.value = Objects.requireNonNull(value);
     this.parameter = parameter;
   }
@@ -56,12 +56,12 @@ public class Binding {
   }
 
   public Binding withParameter(boolean parameter) {
-    return new Binding(name, type, e, value, parameter);
+    return new Binding(name, type, exp, value, parameter);
   }
 
   @Override public String toString() {
-    if (e != null) {
-      return name + " = " + e;
+    if (exp != null) {
+      return name + " = " + exp;
     } else if (value == Unit.INSTANCE) {
       return name + " : " + type.moniker();
     } else {

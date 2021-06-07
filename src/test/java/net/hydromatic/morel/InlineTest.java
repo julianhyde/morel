@@ -54,8 +54,9 @@ public class InlineTest {
 
   @Test void testInline() {
     final String ml = "fun f x = let val y = x + 1 in y + 2 end";
-    final String plan =
-        "match(x, let1(matchCode match(y, apply(fnValue +, argCode tuple(get(name x), constant(1)))), resultCode apply(fnValue +, argCode tuple(get(name y), constant(2)))))";
+    final String plan = "match(x, apply(fnValue +, argCode "
+        + "tuple(apply(fnValue +, argCode tuple(get(name x), constant(1))), "
+        + "constant(2))))";
     ml(ml).assertPlan(is(plan));
   }
 }
