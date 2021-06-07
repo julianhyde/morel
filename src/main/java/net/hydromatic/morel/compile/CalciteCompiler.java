@@ -719,13 +719,10 @@ public class CalciteCompiler extends Compiler {
       this.inputCount = inputCount;
     }
 
-    @Override RelContext bind(String name, Type type, Object value) {
-      return new RelContext(env.bind(name, type, value), relBuilder,
-          map, inputCount);
-    }
-
     @Override RelContext bindAll(Iterable<Binding> bindings) {
-      return new RelContext(env.bindAll(bindings), relBuilder, map, inputCount);
+      final Environment env2 = env.bindAll(bindings);
+      return env2 == env ? this
+          : new RelContext(env2, relBuilder, map, inputCount);
     }
   }
 

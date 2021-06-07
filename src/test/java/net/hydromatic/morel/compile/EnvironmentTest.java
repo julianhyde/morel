@@ -41,9 +41,9 @@ public class EnvironmentTest {
    * the binding chain does not get longer. */
   @Test void testOptimizeSubEnvironment() {
     final Environment e0 = Environments.empty()
-        .bind("a", PrimitiveType.INT, 0)
-        .bind("b", PrimitiveType.INT, 1)
-        .bind("c", PrimitiveType.INT, 2);
+        .bind("a", PrimitiveType.INT, null, 0)
+        .bind("b", PrimitiveType.INT, null, 1)
+        .bind("c", PrimitiveType.INT, null, 2);
     assertThat(e0, instanceOf(Environments.SubEnvironment.class));
     checkOptimizeSubEnvironment(e0);
 
@@ -61,24 +61,24 @@ public class EnvironmentTest {
     assertThat(e0, hasEnvLength(5));
 
     // Overwrite "true"; there are still 5 values, but 6 bindings.
-    final Environment e1 = e0.bind("true", PrimitiveType.STRING, "yes");
+    final Environment e1 = e0.bind("true", PrimitiveType.STRING, null, "yes");
     assertThat(e1.getValueMap().keySet(), is(nameSet));
     assertThat(e1, hasEnvLength(6));
 
     // Overwrite "true" again; still 5 values, and still 6 bindings.
-    final Environment e2 = e1.bind("true", PrimitiveType.STRING, "no");
+    final Environment e2 = e1.bind("true", PrimitiveType.STRING, null, "no");
     assertThat(e2.getValueMap().keySet(), is(nameSet));
     assertThat(e2, hasEnvLength(6));
 
     // Add "foo". Value count and binding count increase.
-    final Environment e3 = e2.bind("foo", PrimitiveType.STRING, "baz");
+    final Environment e3 = e2.bind("foo", PrimitiveType.STRING, null, "baz");
     assertThat(e3.getValueMap().keySet(), is(namePlusFooSet));
     assertThat(e3, hasEnvLength(7));
 
     // Add "true". Value count stays at 7, binding count increases.
     // (We do not look beyond the "foo" for the "true"; such optimization would
     // be nice, but is expensive, so we do not do it.)
-    final Environment e4 = e3.bind("true", PrimitiveType.STRING, "yes");
+    final Environment e4 = e3.bind("true", PrimitiveType.STRING, null, "yes");
     assertThat(e4.getValueMap().keySet(), is(namePlusFooSet));
     assertThat(e4, hasEnvLength(8));
   }

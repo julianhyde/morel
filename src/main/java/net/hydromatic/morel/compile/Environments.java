@@ -43,8 +43,8 @@ public abstract class Environments {
   /** An environment with only "true" and "false". */
   private static final Environment BASIC_ENVIRONMENT =
       EmptyEnvironment.INSTANCE
-          .bind("true", PrimitiveType.BOOL, true)
-          .bind("false", PrimitiveType.BOOL, false);
+          .bind("true", PrimitiveType.BOOL, null, true)
+          .bind("false", PrimitiveType.BOOL, null, false);
 
   private Environments() {}
 
