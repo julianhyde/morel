@@ -86,23 +86,6 @@ public class Resolver {
     }
   }
 
-  /** Creates a factory that will create a "let" around a "case" and yield
-   * {@code resultExp}. The single-branch "case" is used to deconstruct complex
-   * patterns. */
-  private Core.Let toLet(Foo foo, Core.Exp resultExp) {
-    if (foo.pat instanceof Core.IdPat) {
-      return core.let(core.valDecl(foo.rec, (Core.IdPat) foo.pat, foo.exp),
-          resultExp);
-    } else {
-      final String name = newName();
-      final Core.IdPat idPat = core.idPat(foo.pat.type, name);
-      final Core.Id id = core.id(idPat.type, idPat.name);
-      return core.let(core.valDecl(foo.rec, idPat, foo.exp),
-          core.caseOf(resultExp.type, id,
-              ImmutableList.of(core.match(foo.pat, resultExp))));
-    }
-  }
-
   /** Converts a simple {@link net.hydromatic.morel.ast.Ast.ValDecl},
    *  of the form {@code val v = e},
    *  to a Core {@link net.hydromatic.morel.ast.Core.ValDecl}.
@@ -111,11 +94,20 @@ public class Resolver {
    *  and {@code val emp :: rest = emps} are considered complex,
    *  and are not handled by this method. */
   public Core.ValDecl toCore(Ast.ValDecl valDecl) {
-    final Foo foo = toFoo(valDecl);
+    final SubFoo foo = toFoo(valDecl);
     return core.valDecl(foo.rec, (Core.IdPat) foo.pat, foo.exp);
   }
 
-  private Foo toFoo(Ast.ValDecl valDecl) {
+  private Foo toFoo(Ast.Decl decl) {
+    if (decl instanceof Ast.DatatypeDecl) {
+      final Core.DatatypeDecl datatypeDecl = toCore((Ast.DatatypeDecl) decl);
+      return new DatatypeFoo(datatypeDecl);
+    } else {
+      return toFoo((Ast.ValDecl) decl);
+    }
+  }
+
+  private SubFoo toFoo(Ast.ValDecl valDecl) {
     if (valDecl.valBinds.size() > 1) {
       // Transform "let val v1 = E1 and v2 = E2 in E end"
       // to "let val v = (v1, v2) in case v of (E1, E2) => E end"
@@ -136,10 +128,10 @@ public class Resolver {
       final RecordLikeType tupleType = typeMap.typeSystem.tupleType(types);
       final Core.Pat pat = core.tuplePat(tupleType, pats);
       final Core.Exp e2 = core.tuple(tupleType, exps);
-      return new Foo(rec, pat, e2);
+      return new SubFoo(rec, pat, e2);
     } else {
       Ast.ValBind valBind = valDecl.valBinds.get(0);
-      return new Foo(valBind.rec, toCore(valBind.pat), toCore(valBind.e));
+      return new SubFoo(valBind.rec, toCore(valBind.pat), toCore(valBind.e));
     }
   }
 
@@ -293,14 +285,9 @@ public class Resolver {
       return toCore(e);
     }
     final Ast.Decl decl = decls.get(0);
+    final Foo foo = toFoo(decl);
     final Core.Exp e2 = flattenLet(decls.subList(1, decls.size()), e);
-    if (decl instanceof Ast.ValDecl) {
-      final Foo foo = toFoo((Ast.ValDecl) decl);
-      return toLet(foo, e2);
-    } else {
-      final Core.DatatypeDecl datatypeDecl = toCore((Ast.DatatypeDecl) decl);
-      return core.local(datatypeDecl, e2);
-    }
+    return foo.toExp(e2);
   }
 
   private void flatten(Map<Ast.Pat, Ast.Exp> matches,
@@ -513,15 +500,49 @@ public class Resolver {
   }
 
   /** TODO */
-  static class Foo {
+  public abstract static class Foo {
+    /** Creates a factory that will create a "let" around a "case" and yield
+     * {@code resultExp}. The single-branch "case" is used to deconstruct
+     * complex patterns. */
+    abstract Core.Exp toExp(Core.Exp resultExp);
+  }
+
+  /** TODO */
+  class SubFoo extends Foo {
     final boolean rec;
     final Core.Pat pat;
     final Core.Exp exp;
 
-    Foo(boolean rec, Core.Pat pat, Core.Exp exp) {
+    SubFoo(boolean rec, Core.Pat pat, Core.Exp exp) {
       this.rec = rec;
       this.pat = pat;
       this.exp = exp;
+    }
+
+    @Override Core.Let toExp(Core.Exp resultExp) {
+      if (pat instanceof Core.IdPat) {
+        return core.let(core.valDecl(rec, (Core.IdPat) pat, exp), resultExp);
+      } else {
+        final String name = newName();
+        final Core.IdPat idPat = core.idPat(pat.type, name);
+        final Core.Id id = core.id(idPat.type, idPat.name);
+        return core.let(core.valDecl(rec, idPat, exp),
+            core.caseOf(resultExp.type, id,
+                ImmutableList.of(core.match(pat, resultExp))));
+      }
+    }
+  }
+
+  /** TODO */
+  static class DatatypeFoo extends Foo {
+    final Core.DatatypeDecl datatypeDecl;
+
+    DatatypeFoo(Core.DatatypeDecl datatypeDecl) {
+      this.datatypeDecl = datatypeDecl;
+    }
+
+    @Override Core.Local toExp(Core.Exp resultExp) {
+      return core.local(datatypeDecl, resultExp);
     }
   }
 
