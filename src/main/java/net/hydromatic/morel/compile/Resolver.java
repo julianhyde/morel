@@ -96,7 +96,7 @@ public class Resolver {
     } else {
       final String name = newName();
       final Core.IdPat idPat = core.idPat(foo.pat.type, name);
-      final Core.Id id = core.id(idPat);
+      final Core.Id id = core.id(idPat.type, idPat.name);
       return core.let(core.valDecl(foo.rec, idPat, foo.exp),
           core.caseOf(resultExp.type, id,
               ImmutableList.of(core.match(foo.pat, resultExp))));
