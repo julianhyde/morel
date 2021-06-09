@@ -86,32 +86,21 @@ public class Resolver {
     }
   }
 
-  /** Creates a factory that will create a "let" around a simple pattern,
-   * and yield {@code resultExp}. ({@link #toLet(Core.Exp)} handles the complex
-   * case.)
-   *
-   * <p>Implements interface {@link ValDeclFactory}. */
-  private static Core.ValDecl toSimpleValDecl(boolean rec, Core.Pat pat,
-      Core.Exp exp) {
-    return core.valDecl(rec, (Core.IdPat) pat, exp);
-  }
-
   /** Creates a factory that will create a "let" around a "case" and yield
    * {@code resultExp}. The single-branch "case" is used to deconstruct complex
    * patterns. */
-  private ValDeclFactory<Core.Let> toLet(Core.Exp resultExp) {
-    return (rec, pat, exp) -> {
-      if (pat instanceof Core.IdPat) {
-        return core.let(core.valDecl(rec, (Core.IdPat) pat, exp), resultExp);
-      } else {
-        final String name = newName();
-        final Core.Id id = core.id(pat.type, name);
-        final Core.IdPat idPat = core.idPat(pat.type, name);
-        return core.let(core.valDecl(rec, idPat, exp),
-            core.caseOf(resultExp.type, id,
-                ImmutableList.of(core.match(pat, resultExp))));
-      }
-    };
+  private Core.Let toLet(Foo foo, Core.Exp resultExp) {
+    if (foo.pat instanceof Core.IdPat) {
+      return core.let(core.valDecl(foo.rec, (Core.IdPat) foo.pat, foo.exp),
+          resultExp);
+    } else {
+      final String name = newName();
+      final Core.IdPat idPat = core.idPat(foo.pat.type, name);
+      final Core.Id id = core.id(idPat);
+      return core.let(core.valDecl(foo.rec, idPat, foo.exp),
+          core.caseOf(resultExp.type, id,
+              ImmutableList.of(core.match(foo.pat, resultExp))));
+    }
   }
 
   /** Converts a simple {@link net.hydromatic.morel.ast.Ast.ValDecl},
@@ -122,10 +111,11 @@ public class Resolver {
    *  and {@code val emp :: rest = emps} are considered complex,
    *  and are not handled by this method. */
   public Core.ValDecl toCore(Ast.ValDecl valDecl) {
-    return toCore(valDecl, Resolver::toSimpleValDecl);
+    final Foo foo = toFoo(valDecl);
+    return core.valDecl(foo.rec, (Core.IdPat) foo.pat, foo.exp);
   }
 
-  private <R> R toCore(Ast.ValDecl valDecl, ValDeclFactory<R> f) {
+  private Foo toFoo(Ast.ValDecl valDecl) {
     if (valDecl.valBinds.size() > 1) {
       // Transform "let val v1 = E1 and v2 = E2 in E end"
       // to "let val v = (v1, v2) in case v of (E1, E2) => E end"
@@ -146,10 +136,10 @@ public class Resolver {
       final RecordLikeType tupleType = typeMap.typeSystem.tupleType(types);
       final Core.Pat pat = core.tuplePat(tupleType, pats);
       final Core.Exp e2 = core.tuple(tupleType, exps);
-      return f.apply(rec, pat, e2);
+      return new Foo(rec, pat, e2);
     } else {
       Ast.ValBind valBind = valDecl.valBinds.get(0);
-      return f.apply(valBind.rec, toCore(valBind.pat), toCore(valBind.e));
+      return new Foo(valBind.rec, toCore(valBind.pat), toCore(valBind.e));
     }
   }
 
@@ -302,10 +292,11 @@ public class Resolver {
     if (decls.size() == 0) {
       return toCore(e);
     }
-    final Core.Exp e2 = flattenLet(decls.subList(1, decls.size()), e);
     final Ast.Decl decl = decls.get(0);
+    final Core.Exp e2 = flattenLet(decls.subList(1, decls.size()), e);
     if (decl instanceof Ast.ValDecl) {
-      return toCore((Ast.ValDecl) decl, toLet(e2));
+      final Foo foo = toFoo((Ast.ValDecl) decl);
+      return toLet(foo, e2);
     } else {
       final Core.DatatypeDecl datatypeDecl = toCore((Ast.DatatypeDecl) decl);
       return core.local(datatypeDecl, e2);
@@ -521,17 +512,19 @@ public class Resolver {
     }
   }
 
-  /** Converts a variable declaration into an appropriate form.
-   *
-   * <p>It might be a {@code let} (via
-   * {@link net.hydromatic.morel.ast.CoreBuilder#let(Core.ValDecl, Core.Exp)} or
-   * some other type of expression.
-   *
-   * @param <R> Result type
-   */
-  interface ValDeclFactory<R> {
-    R apply(boolean rec, Core.Pat pat, Core.Exp exp);
+  /** TODO */
+  static class Foo {
+    final boolean rec;
+    final Core.Pat pat;
+    final Core.Exp exp;
+
+    Foo(boolean rec, Core.Pat pat, Core.Exp exp) {
+      this.rec = rec;
+      this.pat = pat;
+      this.exp = exp;
+    }
   }
+
 }
 
 // End Resolver.java
