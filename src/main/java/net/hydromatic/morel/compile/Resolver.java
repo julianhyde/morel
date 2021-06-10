@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
@@ -44,6 +45,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
@@ -60,10 +62,39 @@ public class Resolver {
       Init.INSTANCE.builtInOpMap;
 
   final TypeMap typeMap;
-  private int id = 0;
+  private final Supplier<String> nameGenerator;
+  private final Environment env;
 
-  public Resolver(TypeMap typeMap) {
+  private Resolver(TypeMap typeMap, Supplier<String> nameGenerator,
+      Environment env) {
     this.typeMap = typeMap;
+    this.env = env;
+    this.nameGenerator = nameGenerator;
+  }
+
+  /** Creates a root Resolver. */
+  public static Resolver of(TypeMap typeMap, Environment env) {
+    final Supplier<String> nameGenerator =
+        new Supplier<String>() {
+          int id = 0;
+
+          @Override public String get() {
+            return "v" + id++;
+          }
+        };
+    return new Resolver(typeMap, nameGenerator, env);
+  }
+
+  /** Binds a Resolver to a new environment. */
+  public Resolver withEnv(Environment env) {
+    return env == this.env ? this
+        : new Resolver(typeMap, nameGenerator, env);
+  }
+
+  /** Binds a Resolver to an environment that consists of the current
+   * environment plus some bindings. */
+  public final Resolver withEnv(Iterable<Binding> bindings) {
+    return withEnv(Environments.bind(env, bindings));
   }
 
   private static <E, T> ImmutableList<T> transform(Iterable<? extends E> elements,
@@ -94,45 +125,58 @@ public class Resolver {
    *  and {@code val emp :: rest = emps} are considered complex,
    *  and are not handled by this method. */
   public Core.ValDecl toCore(Ast.ValDecl valDecl) {
-    final SubFoo foo = toFoo(valDecl);
+    final List<Binding> bindings = new ArrayList<>(); // discard
+    final SubFoo foo = toFoo(valDecl, bindings);
     return core.valDecl(foo.rec, (Core.IdPat) foo.pat, foo.exp);
   }
 
-  private Foo toFoo(Ast.Decl decl) {
+  private Foo toFoo(Ast.Decl decl, List<Binding> bindings) {
     if (decl instanceof Ast.DatatypeDecl) {
       final Core.DatatypeDecl datatypeDecl = toCore((Ast.DatatypeDecl) decl);
       return new DatatypeFoo(datatypeDecl);
     } else {
-      return toFoo((Ast.ValDecl) decl);
+      return toFoo((Ast.ValDecl) decl, bindings);
     }
   }
 
-  private SubFoo toFoo(Ast.ValDecl valDecl) {
+  private SubFoo toFoo(Ast.ValDecl valDecl, List<Binding> bindings) {
+    final boolean rec;
+    final Core.Pat pat2;
+    final Core.Exp e2;
     if (valDecl.valBinds.size() > 1) {
       // Transform "let val v1 = E1 and v2 = E2 in E end"
       // to "let val v = (v1, v2) in case v of (E1, E2) => E end"
       final Map<Ast.Pat, Ast.Exp> matches = new LinkedHashMap<>();
-      boolean rec = false;
+      boolean rec0 = false;
       for (Ast.ValBind valBind : valDecl.valBinds) {
         flatten(matches, valBind.pat, valBind.e);
-        rec |= valBind.rec;
+        rec0 |= valBind.rec;
       }
+      rec = rec0;
       final List<Type> types = new ArrayList<>();
       final List<Core.Pat> pats = new ArrayList<>();
       final List<Core.Exp> exps = new ArrayList<>();
       matches.forEach((pat, exp) -> {
         types.add(typeMap.getType(pat));
         pats.add(toCore(pat));
-        exps.add(toCore(exp));
       });
       final RecordLikeType tupleType = typeMap.typeSystem.tupleType(types);
-      final Core.Pat pat = core.tuplePat(tupleType, pats);
-      final Core.Exp e2 = core.tuple(tupleType, exps);
-      return new SubFoo(rec, pat, e2);
+      pat2 = core.tuplePat(tupleType, pats);
+      Compiles.acceptBinding(typeMap.typeSystem, pat2, bindings);
+      final Resolver r = rec ? withEnv(bindings) : this;
+      matches.forEach((pat, exp) -> {
+        exps.add(r.toCore(exp));
+      });
+      e2 = core.tuple(tupleType, exps);
     } else {
-      Ast.ValBind valBind = valDecl.valBinds.get(0);
-      return new SubFoo(valBind.rec, toCore(valBind.pat), toCore(valBind.e));
+      final Ast.ValBind valBind = valDecl.valBinds.get(0);
+      rec = valBind.rec;
+      pat2 = toCore(valBind.pat);
+      Compiles.acceptBinding(typeMap.typeSystem, pat2, bindings);
+      final Resolver r = rec ? withEnv(bindings) : this;
+      e2 = r.toCore(valBind.e);
     }
+    return new SubFoo(rec, pat2, e2);
   }
 
   private Core.DatatypeDecl toCore(Ast.DatatypeDecl datatypeDecl) {
@@ -188,7 +232,15 @@ public class Resolver {
   }
 
   private Core.Id toCore(Ast.Id id) {
-    return core.id(typeMap.getType(id), id.name);
+    final Binding binding = env.get(id.name);
+    assert binding != null;
+    final Core.IdPat idPat;
+    if (binding.value instanceof Core.IdPat) {
+      idPat = (Core.IdPat) binding.value;
+    } else {
+      idPat = core.idPat(typeMap.getType(id), id.name);
+    }
+    return core.id(idPat);
   }
 
   private Core.Tuple toCore(Ast.Tuple tuple) {
@@ -252,15 +304,10 @@ public class Resolver {
         return core.fn(type, (Core.IdPat) match.pat, match.e);
       }
     }
-    final String name = newName();
+    final String name = nameGenerator.get();
     final Core.IdPat idPat = core.idPat(type.paramType, name);
-    final Core.Id id = core.id(type.paramType, name);
+    final Core.Id id = core.id(idPat);
     return core.fn(type, idPat, core.caseOf(type.resultType, id, matchList));
-  }
-
-  /** Allocates a new variable name. */
-  private String newName() {
-    return "v" + id++;
   }
 
   private Core.Case toCore(Ast.If if_) {
@@ -285,8 +332,9 @@ public class Resolver {
       return toCore(e);
     }
     final Ast.Decl decl = decls.get(0);
-    final Foo foo = toFoo(decl);
-    final Core.Exp e2 = flattenLet(decls.subList(1, decls.size()), e);
+    final List<Binding> bindings = new ArrayList<>();
+    final Foo foo = toFoo(decl, bindings);
+    final Core.Exp e2 = withEnv(bindings).flattenLet(Util.skip(decls), e);
     return foo.toExp(e2);
   }
 
@@ -387,17 +435,25 @@ public class Resolver {
   }
 
   private Core.Match toCore(Ast.Match match) {
-    return core.match(toCore(match.pat), toCore(match.e));
+    final Core.Pat pat = toCore(match.pat);
+    final List<Binding> bindings = new ArrayList<>();
+    Compiles.acceptBinding(typeMap.typeSystem, pat, bindings);
+    final Core.Exp e = withEnv(bindings).toCore(match.e);
+    return core.match(pat, e);
   }
 
   Core.From toCore(Ast.From from) {
     final Map<Core.Pat, Core.Exp> sources = new LinkedHashMap<>();
+    final List<Binding> bindings = new ArrayList<>();
     from.sources.forEach((pat, exp) -> {
-      Core.Exp coreExp = toCore(exp);
-      Core.Pat corePat = toCore(pat, ((ListType) coreExp.type).elementType);
+      final Resolver r = withEnv(bindings);
+      Core.Exp coreExp = r.toCore(exp);
+      Core.Pat corePat = r.toCore(pat, ((ListType) coreExp.type).elementType);
+      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings);
       sources.put(corePat, coreExp);
     });
-    return fromStepToCore(sources, from.steps,
+
+    return fromStepToCore(sources, bindings, from.steps,
         ImmutableList.of(), from.yieldExpOrDefault);
   }
 
@@ -409,10 +465,11 @@ public class Resolver {
   }
 
   private Core.From fromStepToCore(Map<Core.Pat, Core.Exp> sources,
-      List<Ast.FromStep> steps, List<Core.FromStep> coreSteps,
-      Ast.Exp yieldExp) {
+      List<Binding> bindings, List<Ast.FromStep> steps,
+      List<Core.FromStep> coreSteps, Ast.Exp yieldExp) {
+    final Resolver r = withEnv(bindings);
     if (steps.isEmpty()) {
-      final Core.Exp coreYieldExp = toCore(yieldExp);
+      final Core.Exp coreYieldExp = r.toCore(yieldExp);
       final ListType listType = typeMap.typeSystem.listType(coreYieldExp.type);
       return core.from(listType, sources, coreSteps, coreYieldExp);
     }
@@ -420,16 +477,13 @@ public class Resolver {
     switch (step.op) {
     case WHERE:
       final Ast.Where where = (Ast.Where) step;
-      final Core.FromStep coreWhere = core.where(toCore(where.exp));
-      return fromStepToCore(sources, Util.skip(steps),
-          append(coreSteps, coreWhere), yieldExp);
+      return fromStep2(sources, bindings, steps, coreSteps,
+          core.where(r.toCore(where.exp)), yieldExp);
 
     case ORDER:
       final Ast.Order order = (Ast.Order) step;
-      final Core.FromStep coreOrder =
-          core.order(transform(order.orderItems, this::toCore));
-      return fromStepToCore(sources, Util.skip(steps),
-          append(coreSteps, coreOrder), yieldExp);
+      return fromStep2(sources, bindings, steps, coreSteps,
+          core.order(transform(order.orderItems, r::toCore)), yieldExp);
 
     case GROUP:
       final Ast.Group group = (Ast.Group) step;
@@ -438,17 +492,26 @@ public class Resolver {
       final ImmutableSortedMap.Builder<String, Core.Aggregate> aggregates =
           ImmutableSortedMap.orderedBy(RecordType.ORDERING);
       Pair.forEach(group.groupExps, (id, exp) ->
-          groupExps.put(id.name, toCore(exp)));
+          groupExps.put(id.name, r.toCore(exp)));
       group.aggregates.forEach(aggregate ->
-          aggregates.put(aggregate.id.name, toCore(aggregate)));
-      final Core.FromStep coreGroup =
-          core.group(groupExps.build(), aggregates.build());
-      return fromStepToCore(sources, Util.skip(steps),
-          append(coreSteps, coreGroup), yieldExp);
+          aggregates.put(aggregate.id.name, r.toCore(aggregate)));
+      return fromStep2(sources, bindings, steps, coreSteps,
+          core.group(groupExps.build(), aggregates.build()), yieldExp);
 
     default:
       throw new AssertionError("unknown step type " + step.op);
     }
+  }
+
+  private Core.From fromStep2(Map<Core.Pat, Core.Exp> sources,
+      List<Binding> bindings, List<Ast.FromStep> steps,
+      List<Core.FromStep> coreSteps,
+      Core.FromStep coreStep, Ast.Exp yieldExp) {
+    final List<Binding> prevBindings = ImmutableList.copyOf(bindings);
+    bindings.clear();
+    coreStep.deriveOutBindings(prevBindings, Binding::of, bindings::add);
+    return fromStepToCore(sources, bindings, Util.skip(steps),
+        append(coreSteps, coreStep), yieldExp);
   }
 
   private Core.Aggregate toCore(Ast.Aggregate aggregate) {
@@ -523,9 +586,9 @@ public class Resolver {
       if (pat instanceof Core.IdPat) {
         return core.let(core.valDecl(rec, (Core.IdPat) pat, exp), resultExp);
       } else {
-        final String name = newName();
+        final String name = nameGenerator.get();
         final Core.IdPat idPat = core.idPat(pat.type, name);
-        final Core.Id id = core.id(idPat.type, idPat.name);
+        final Core.Id id = core.id(idPat);
         return core.let(core.valDecl(rec, idPat, exp),
             core.caseOf(resultExp.type, id,
                 ImmutableList.of(core.match(pat, resultExp))));

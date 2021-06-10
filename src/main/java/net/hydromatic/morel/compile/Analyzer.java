@@ -36,11 +36,11 @@ import java.util.Map;
  * Shuttle that counts how many times each expression is used.
  */
 public class Analyzer extends EnvVisitor {
-  private final Map<String, MutableUse> map;
+  private final Map<Core.IdPat, MutableUse> map;
 
   /** Private constructor. */
   private Analyzer(TypeSystem typeSystem, Environment env,
-      Map<String, MutableUse> map) {
+      Map<Core.IdPat, MutableUse> map) {
     super(typeSystem, env);
     this.map = map;
   }
@@ -53,8 +53,8 @@ public class Analyzer extends EnvVisitor {
   }
 
   /** Returns the map. */
-  public ImmutableMap<String, Use> map() {
-    final ImmutableMap.Builder<String, Use> b = ImmutableMap.builder();
+  public ImmutableMap<Core.IdPat, Use> map() {
+    final ImmutableMap.Builder<Core.IdPat, Use> b = ImmutableMap.builder();
     map.forEach((k, v) -> b.put(k, v.fix()));
     return b.build();
   }
@@ -76,16 +76,16 @@ public class Analyzer extends EnvVisitor {
   }
 
   @Override protected void visit(Core.IdPat idPat) {
-    use(idPat.name);
+    use(idPat);
   }
 
   @Override public void visit(Core.Id id) {
-    use(id.name).useCount++;
+    use(id.idPat).useCount++;
     super.visit(id);
   }
 
   /** Gets or creates a {@link MutableUse} for a given name. */
-  private MutableUse use(String name) {
+  private MutableUse use(Core.IdPat name) {
     return map.computeIfAbsent(name, k -> new MutableUse());
   }
 
@@ -106,8 +106,8 @@ public class Analyzer extends EnvVisitor {
       // a has use counts [1, 2] and is therefore MULTI_UNSAFE
       // b has use counts [1] and is therefore ONCE_SAFE
       // c has use counts [1, 1] and is therefore MULTI_SAFE
-      final Multimap<String, MutableUse> multimap = HashMultimap.create();
-      final Map<String, MutableUse> subMap = new HashMap<>();
+      final Multimap<Core.IdPat, MutableUse> multimap = HashMultimap.create();
+      final Map<Core.IdPat, MutableUse> subMap = new HashMap<>();
       final Analyzer analyzer = new Analyzer(typeSystem, env, subMap);
       kase.matchList.forEach(e -> {
         subMap.clear();

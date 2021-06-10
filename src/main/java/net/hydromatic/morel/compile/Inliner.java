@@ -62,10 +62,11 @@ public class Inliner extends EnvShuttle {
   }
 
   @Override public Core.Exp visit(Core.Id id) {
-    Binding binding = env.getOpt(id.name);
+    Binding binding = env.getOpt(id.idPat.name);
     if (binding != null
         && !binding.parameter
-        && binding.value != Unit.INSTANCE) {
+        && binding.value != Unit.INSTANCE
+        && !(binding.value instanceof Core.Pat)) { // TODO
       Object v = binding.value;
       if (v instanceof Macro) {
         final Macro macro = (Macro) binding.value;

@@ -75,7 +75,7 @@ public abstract class Compiles {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
-    final Resolver resolver = new Resolver(resolved.typeMap);
+    final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.Decl coreDecl = resolver.toCore(resolved.node);
     final Inliner inliner = Inliner.of(typeSystem, env);
     final Core.Decl coreDecl2 = coreDecl.accept(inliner);
@@ -119,6 +119,26 @@ public abstract class Compiles {
     return new PatternBinder(typeSystem, bindings);
   }
 
+  // TODO
+  public static void acceptBinding(TypeSystem typeSystem, Core.Pat pat,
+      List<Binding> bindings) {
+    pat.accept(binding(typeSystem, bindings));
+  }
+
+  // TODO
+  public static void acceptBinding(TypeSystem typeSystem, Core.Pat pat,
+      Core.Exp exp, List<Binding> bindings) {
+    switch (pat.op) {
+    case ID_PAT:
+      final Core.IdPat idPat = (Core.IdPat) pat;
+      bindings.add(Binding.of(idPat.name, idPat.type, exp));
+      break;
+
+    default:
+      throw new AssertionError("unknown pattern " + pat + " (" + pat.op + ")");
+    }
+  }
+
   /** Visitor that adds a {@link Binding} each time it see an
    * {@link Core.IdPat}. */
   private static class PatternBinder extends Visitor {
@@ -131,7 +151,7 @@ public abstract class Compiles {
     }
 
     @Override public void visit(Core.IdPat idPat) {
-      bindings.add(Binding.of(idPat.name, idPat.type));
+      bindings.add(Binding.of(idPat.name, idPat.type, idPat));
     }
 
     @Override protected void visit(Core.ValDecl valBind) {
