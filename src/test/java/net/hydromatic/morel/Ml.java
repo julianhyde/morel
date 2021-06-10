@@ -232,7 +232,7 @@ class Ml {
       final TypeResolver.Resolved resolved =
           TypeResolver.deduceType(env, valDecl, typeSystem);
       final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-      final Resolver resolver = new Resolver(resolved.typeMap);
+      final Resolver resolver = Resolver.of(resolved.typeMap, env);
       final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
       final RelNode rel =
           new CalciteCompiler(typeSystem, calcite)
@@ -265,7 +265,7 @@ class Ml {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, valDecl, typeSystem);
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-    final Resolver resolver = new Resolver(resolved.typeMap);
+    final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
     final Core.ValDecl valDecl4 = valDecl3.accept(Inliner.of(typeSystem, env));
     final String coreString = valDecl4.exp.toString();
@@ -288,7 +288,7 @@ class Ml {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, valDecl, typeSystem);
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-    final Resolver resolver = new Resolver(resolved.typeMap);
+    final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
     final Analyzer analyzer = Analyzer.of(typeSystem, env);
     valDecl3.accept(analyzer);

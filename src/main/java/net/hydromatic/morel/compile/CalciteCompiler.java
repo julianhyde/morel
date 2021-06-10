@@ -486,7 +486,7 @@ public class CalciteCompiler extends Compiler {
       // In 'from e in emps yield e', 'e' expands to a record,
       // '{e.deptno, e.ename}'
       final Core.Id id = (Core.Id) exp;
-      final Binding binding = cx.env.getOpt(id.name);
+      final Binding binding = cx.env.getOpt(id.idPat.name);
       if (binding != null && binding.value != Unit.INSTANCE) {
         final Core.Literal coreLiteral =
             core.literal((PrimitiveType) binding.type, binding.value);
@@ -496,10 +496,10 @@ public class CalciteCompiler extends Compiler {
       if (record != null) {
         return translate(cx, record);
       }
-      if (cx.map.containsKey(id.name)) {
+      if (cx.map.containsKey(id.idPat.name)) {
         // Not a record, so must be a scalar. It is represented in Calcite
         // as a record with one field.
-        final Function<RelBuilder, RexNode> fn = cx.map.get(id.name);
+        final Function<RelBuilder, RexNode> fn = cx.map.get(id.idPat.name);
         return fn.apply(cx.relBuilder);
       }
       break;
@@ -519,10 +519,10 @@ public class CalciteCompiler extends Compiler {
       }
       if (apply.fn instanceof Core.RecordSelector
           && apply.arg instanceof Core.Id
-          && cx.map.containsKey(((Core.Id) apply.arg).name)) {
+          && cx.map.containsKey(((Core.Id) apply.arg).idPat)) {
         // Something like '#deptno e',
         final RexNode range =
-            cx.map.get(((Core.Id) apply.arg).name).apply(cx.relBuilder);
+            cx.map.get(((Core.Id) apply.arg).idPat).apply(cx.relBuilder);
         final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
         return cx.relBuilder.field(range, selector.fieldName());
       }
@@ -557,8 +557,8 @@ public class CalciteCompiler extends Compiler {
     final Set<String> varNames = new LinkedHashSet<>();
     node.accept(new Visitor() {
       @Override protected void visit(Core.Id id) {
-        if (map.containsKey(id.name)) {
-          varNames.add(id.name);
+        if (map.containsKey(id.idPat.name)) {
+          varNames.add(id.idPat.name);
         }
       }
     });
@@ -592,7 +592,7 @@ public class CalciteCompiler extends Compiler {
   }
 
   private Core.Tuple toRecord(RelContext cx, Core.Id id) {
-    final Type type = cx.env.get(id.name).type;
+    final Type type = cx.env.get(id.idPat.name).type;
     if (type instanceof RecordType) {
       final RecordType recordType = (RecordType) type;
       final List<Core.Exp> args = new ArrayList<>();

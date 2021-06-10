@@ -65,7 +65,7 @@ public class AstWriter {
         // be a function literal, and we would use a reverse mapping to
         // figure out which built-in operator it implements, and whether it
         // is infix (e.g. "+") or in a namespace (e.g. "#translate String")
-        final Op op2 = Op.BY_OP_NAME.get(((Core.Id) a0).name);
+        final Op op2 = Op.BY_OP_NAME.get(((Core.Id) a0).idPat);
         if (op2 != null && op2.left > 0) {
           final List<Core.Exp> args = ((Core.Tuple) a1).args;
           return infix(left, args.get(0), op2, args.get(1), right);

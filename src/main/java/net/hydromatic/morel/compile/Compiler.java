@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.compile;
 
+import org.apache.calcite.util.Util;
+
 import com.google.common.collect.ImmutableList;
 
 import net.hydromatic.morel.ast.Core;
@@ -229,11 +231,11 @@ public class Compiler {
 
     case ID:
       final Core.Id id = (Core.Id) expression;
-      final Binding binding = cx.env.getOpt(id.name);
+      final Binding binding = cx.env.getOpt(id.idPat.name);
       if (binding != null && binding.value instanceof Code) {
         return (Code) binding.value;
       }
-      return Codes.get(id.name);
+      return Codes.get(id.idPat.name);
 
     case TUPLE:
       final Core.Tuple tuple = (Core.Tuple) expression;
@@ -305,8 +307,7 @@ public class Compiler {
         outBindingBuilder::add);
     final ImmutableList<Binding> outBindings = outBindingBuilder.build();
     final Supplier<Codes.RowSink> nextFactory =
-        createRowSinkFactory(cx, outBindings,
-            steps.subList(1, steps.size()), yieldExp);
+        createRowSinkFactory(cx, outBindings, Util.skip(steps), yieldExp);
     switch (firstStep.op) {
     case WHERE:
       final Core.Where where = (Core.Where) firstStep;
@@ -387,7 +388,7 @@ public class Compiler {
       return toApplicable(cx, literal.unwrap(), argType);
 
     case ID:
-      final Binding binding = cx.env.getOpt(((Core.Id) fn).name);
+      final Binding binding = cx.env.getOpt(((Core.Id) fn).idPat.name);
       if (binding == null
           || binding.value instanceof LinkCode
           || binding.value == Unit.INSTANCE) {

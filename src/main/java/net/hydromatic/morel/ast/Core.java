@@ -406,22 +406,22 @@ public class Core {
    * Core; for example, compare {@link Ast.Con0Pat#tyCon}
    * with {@link Con0Pat#tyCon}. */
   public static class Id extends Exp {
-    public final String name;
+    public final IdPat idPat;
 
     /** Creates an Id. */
-    Id(String name, Type type) {
-      super(Op.ID, type);
-      this.name = requireNonNull(name);
+    Id(IdPat idPat) {
+      super(Op.ID, idPat.type);
+      this.idPat = requireNonNull(idPat);
     }
 
     @Override public int hashCode() {
-      return name.hashCode();
+      return idPat.hashCode();
     }
 
     @Override public boolean equals(Object o) {
       return o == this
           || o instanceof Id
-          && this.name.equals(((Id) o).name);
+          && this.idPat.equals(((Id) o).idPat);
     }
 
     @Override public Exp accept(Shuttle shuttle) {
@@ -433,7 +433,7 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.id(name);
+      return w.id(idPat.name);
     }
   }
 
@@ -1140,7 +1140,7 @@ public class Core {
         return false;
       }
       if (o instanceof Id) {
-        final String name = ((Id) exp).name;
+        final String name = ((Id) exp).idPat.name;
         return !("true".equals(name) || "false".equals(name));
       }
       return true;

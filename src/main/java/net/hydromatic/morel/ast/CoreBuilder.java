@@ -121,8 +121,8 @@ public enum CoreBuilder {
   }
 
   /** Creates a reference to a value. */
-  public Core.Id id(Type type, String name) {
-    return new Core.Id(name, type);
+  public Core.Id id(Core.IdPat idPat) {
+    return new Core.Id(idPat);
   }
 
   public Core.RecordSelector recordSelector(TypeSystem typeSystem,
