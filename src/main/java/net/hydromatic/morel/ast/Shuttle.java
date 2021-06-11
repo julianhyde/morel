@@ -285,7 +285,7 @@ public class Shuttle {
   }
 
   protected Core.Exp visit(Core.Local local) {
-    return local.copy(local.decl.accept(this), local.exp.accept(this));
+    return local.copy(local.dataType, local.exp.accept(this));
   }
 
   protected Core.DatatypeDecl visit(Core.DatatypeDecl datatypeDecl) {

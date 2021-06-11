@@ -130,13 +130,29 @@ public class Resolver {
     return core.valDecl(foo.rec, (Core.IdPat) foo.pat, foo.exp);
   }
 
+  public Core.DatatypeDecl toCore(Ast.DatatypeDecl datatypeDecl) {
+    final List<Binding> bindings = new ArrayList<>(); // discard
+    final DatatypeFoo foo = toFoo(datatypeDecl, bindings);
+    return foo.toDecl();
+  }
+
   private Foo toFoo(Ast.Decl decl, List<Binding> bindings) {
     if (decl instanceof Ast.DatatypeDecl) {
-      final Core.DatatypeDecl datatypeDecl = toCore((Ast.DatatypeDecl) decl);
-      return new DatatypeFoo(datatypeDecl);
+      return toFoo((Ast.DatatypeDecl) decl, bindings);
     } else {
       return toFoo((Ast.ValDecl) decl, bindings);
     }
+  }
+
+  private DatatypeFoo toFoo(Ast.DatatypeDecl decl, List<Binding> bindings) {
+    final List<DataType> dataTypes = new ArrayList<>();
+    for (Ast.DatatypeBind bind : decl.binds) {
+      final DataType dataType = toCore(bind);
+      dataTypes.add(dataType);
+      dataType.typeConstructors.keySet().forEach(name ->
+          bindings.add(typeMap.typeSystem.bindTyCon(dataType, name)));
+    }
+    return new DatatypeFoo(ImmutableList.copyOf(dataTypes));
   }
 
   private SubFoo toFoo(Ast.ValDecl valDecl, List<Binding> bindings) {
@@ -175,10 +191,6 @@ public class Resolver {
       exp2 = r.toCore(valBind.exp);
     }
     return new SubFoo(rec, pat2, exp2);
-  }
-
-  private Core.DatatypeDecl toCore(Ast.DatatypeDecl datatypeDecl) {
-    return core.datatypeDecl(transform(datatypeDecl.binds, this::toCore));
   }
 
   private DataType toCore(Ast.DatatypeBind bind) {
@@ -596,14 +608,27 @@ public class Resolver {
 
   /** TODO */
   static class DatatypeFoo extends Foo {
-    final Core.DatatypeDecl datatypeDecl;
+    private final ImmutableList<DataType> dataTypes;
 
-    DatatypeFoo(Core.DatatypeDecl datatypeDecl) {
-      this.datatypeDecl = datatypeDecl;
+    DatatypeFoo(ImmutableList<DataType> dataTypes) {
+      this.dataTypes = dataTypes;
     }
 
-    @Override Core.Local toExp(Core.Exp resultExp) {
-      return core.local(datatypeDecl, resultExp);
+    @Override Core.Exp toExp(Core.Exp resultExp) {
+      return toExp(dataTypes, resultExp);
+    }
+
+    private Core.Exp toExp(List<DataType> dataTypes, Core.Exp resultExp) {
+      if (dataTypes.isEmpty()) {
+        return resultExp;
+      } else {
+        return core.local(dataTypes.get(0),
+            toExp(Util.skip(dataTypes), resultExp));
+      }
+    }
+
+    public Core.DatatypeDecl toDecl() {
+      return core.datatypeDecl(dataTypes);
     }
   }
 

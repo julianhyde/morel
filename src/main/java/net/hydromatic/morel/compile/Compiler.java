@@ -449,7 +449,7 @@ public class Compiler {
 
   private Code compileLocal(Context cx, Core.Local local) {
     final List<Binding> bindings = new ArrayList<>();
-    compileDatatypeDecl(local.decl, bindings, null);
+    compileDatatypeDecl(ImmutableList.of(local.dataType), bindings, null);
     Context cx2 = cx.bindAll(bindings);
     return compile(cx2, local.exp);
   }
@@ -458,11 +458,13 @@ public class Compiler {
       List<Binding> bindings, List<Action> actions) {
     switch (decl.op) {
     case VAL_DECL:
-      compileValDecl(cx, (Core.ValDecl) decl, matchCodes, bindings, actions);
+      final Core.ValDecl valDecl = (Core.ValDecl) decl;
+      compileValDecl(cx, valDecl, matchCodes, bindings, actions);
       break;
 
     case DATATYPE_DECL:
-      compileDatatypeDecl((Core.DatatypeDecl) decl, bindings, actions);
+      final Core.DatatypeDecl datatypeDecl = (Core.DatatypeDecl) decl;
+      compileDatatypeDecl(datatypeDecl.dataTypes, bindings, actions);
       break;
 
     default:
@@ -470,9 +472,9 @@ public class Compiler {
     }
   }
 
-  private void compileDatatypeDecl(Core.DatatypeDecl datatypeDecl,
+  private void compileDatatypeDecl(List<DataType> dataTypes,
       List<Binding> bindings, List<Action> actions) {
-    for (DataType dataType : datatypeDecl.dataTypes) {
+    for (DataType dataType : dataTypes) {
       final List<Binding> newBindings = new TailList<>(bindings);
       dataType.typeConstructors.keySet().forEach(name ->
           bindings.add(typeSystem.bindTyCon(dataType, name)));

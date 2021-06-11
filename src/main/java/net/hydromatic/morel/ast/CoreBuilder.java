@@ -245,8 +245,8 @@ public enum CoreBuilder {
     return new Core.Let(decl, exp);
   }
 
-  public Core.Local local(Core.DatatypeDecl decl, Core.Exp exp) {
-    return new Core.Local(decl, exp);
+  public Core.Local local(DataType dataType, Core.Exp exp) {
+    return new Core.Local(dataType, exp);
   }
 
   public Core.ValDecl valDecl(boolean rec, Core.IdPat pat, Core.Exp exp) {

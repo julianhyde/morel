@@ -51,7 +51,7 @@ abstract class EnvShuttle extends Shuttle {
   protected abstract EnvShuttle bind(List<Binding> bindingList);
 
   @Override protected Core.Fn visit(Core.Fn fn) {
-    final Core.IdPat idPat2 = (Core.IdPat) fn.idPat.accept(this);
+    final Core.IdPat idPat2 = fn.idPat.accept(this);
     final Binding binding = Binding.of(fn.idPat.name, fn.idPat.type);
     return fn.copy(idPat2, fn.exp.accept(bind(binding)));
   }
@@ -71,8 +71,8 @@ abstract class EnvShuttle extends Shuttle {
 
   @Override public Core.Exp visit(Core.Local local) {
     final List<Binding> bindings = new ArrayList<>();
-    local.decl.accept(Compiles.binding(typeSystem, bindings));
-    return local.copy(local.decl.accept(this), local.exp.accept(bind(bindings)));
+    local.accept(Compiles.binding(typeSystem, bindings));
+    return local.copy(local.dataType, local.exp.accept(bind(bindings)));
   }
 
   @Override public Core.Exp visit(Core.From from) {

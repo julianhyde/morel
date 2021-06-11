@@ -164,6 +164,11 @@ public abstract class Compiles {
           dataType.typeConstructors.keySet().forEach(name ->
               bindings.add(typeSystem.bindTyCon(dataType, name))));
     }
+
+    @Override protected void visit(Core.Local local) {
+      local.dataType.typeConstructors.keySet().forEach(name ->
+          bindings.add(typeSystem.bindTyCon(local.dataType, name)));
+    }
   }
 }
 

@@ -258,7 +258,6 @@ public class Visitor {
   }
 
   protected void visit(Core.Local local) {
-    local.decl.accept(this);
     local.exp.accept(this);
   }
 

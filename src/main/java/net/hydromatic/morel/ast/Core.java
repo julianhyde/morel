@@ -689,17 +689,17 @@ public class Core {
 
   /** "Local" expression. */
   public static class Local extends Exp {
-    public final DatatypeDecl decl;
+    public final DataType dataType;
     public final Exp exp;
 
-    Local(DatatypeDecl decl, Exp exp) {
+    Local(DataType dataType, Exp exp) {
       super(Op.LOCAL, exp.type);
-      this.decl = requireNonNull(decl);
+      this.dataType = requireNonNull(dataType);
       this.exp = requireNonNull(exp);
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("local ").append(decl, 0, 0)
+      return w.append("local datatype ").append(dataType.toString())
           .append(" in ").append(exp, 0, 0)
           .append(" end");
     }
@@ -712,9 +712,9 @@ public class Core {
       visitor.visit(this);
     }
 
-    public Exp copy(DatatypeDecl decl, Exp exp) {
-      return decl == this.decl && exp == this.exp ? this
-          : core.local(decl, exp);
+    public Exp copy(DataType dataType, Exp exp) {
+      return dataType == this.dataType && exp == this.exp ? this
+          : core.local(dataType, exp);
     }
   }
 

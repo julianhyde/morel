@@ -67,9 +67,8 @@ abstract class EnvVisitor extends Visitor {
   }
 
   @Override protected void visit(Core.Local local) {
-    local.decl.accept(this);
     final List<Binding> bindings = new ArrayList<>();
-    local.decl.accept(Compiles.binding(typeSystem, bindings));
+    local.accept(Compiles.binding(typeSystem, bindings));
     local.exp.accept(bind(bindings));
   }
 
