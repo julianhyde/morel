@@ -75,7 +75,7 @@ public class Inliner extends EnvShuttle {
         final Analyzer.Use use = analysis.map.get(id.idPat);
         switch (use) {
         case ONCE_SAFE:
-          return binding.exp;
+          return binding.exp.accept(this);
         }
       }
       Object v = binding.value;
@@ -123,6 +123,15 @@ public class Inliner extends EnvShuttle {
       final List list = (List) ((Core.Literal) apply2.arg).unwrap();
       final Object o = list.get(selector.slot);
       return core.valueLiteral(apply2, o);
+    }
+    if (apply2.fn.op == Op.FN) {
+      // Beta-reduction:
+      //   (fn x => E) A
+      // becomes
+      //   let x = A in E end
+      final Core.Fn fn = (Core.Fn) apply2.fn;
+      return core.let(
+          core.valDecl(false, fn.idPat, apply2.arg), fn.exp);
     }
     return apply2;
   }

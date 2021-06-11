@@ -76,12 +76,22 @@ public abstract class Compiles {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
+    final int inlinePassCount =
+        Math.max(Prop.INLINE_PASS_COUNT.intValue(session.map), 1);
     final Resolver resolver = Resolver.of(resolved.typeMap, env);
-    final Core.Decl coreDecl = resolver.toCore(resolved.node);
-    final Analyzer.Analysis analysis =
-        Analyzer.analyze(typeSystem, env, coreDecl);
-    final Inliner inliner = Inliner.of(typeSystem, env, analysis);
-    final Core.Decl coreDecl2 = coreDecl.accept(inliner);
+    Core.Decl coreDecl = resolver.toCore(resolved.node);
+
+    // Inline four times, or until we reach fixed point, whichever is sooner.
+    for (int i = 0; i < inlinePassCount; i++) {
+      final Analyzer.Analysis analysis =
+          Analyzer.analyze(typeSystem, env, coreDecl);
+      final Inliner inliner = Inliner.of(typeSystem, env, analysis);
+      final Core.Decl coreDecl0 = coreDecl;
+      coreDecl = coreDecl0.accept(inliner);
+      if (coreDecl == coreDecl0) {
+        break;
+      }
+    }
     final Compiler compiler;
     if (hybrid) {
       final Calcite calcite = Calcite.withDataSets(ImmutableMap.of());
@@ -89,7 +99,7 @@ public abstract class Compiles {
     } else {
       compiler = new Compiler(typeSystem);
     }
-    return compiler.compileStatement(env, coreDecl2);
+    return compiler.compileStatement(env, coreDecl);
   }
 
   /** Converts {@code e} to {@code val = e}. */

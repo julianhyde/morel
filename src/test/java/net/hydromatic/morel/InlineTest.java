@@ -20,6 +20,7 @@ package net.hydromatic.morel;
 
 import org.junit.jupiter.api.Test;
 
+import static net.hydromatic.morel.Matchers.whenAppliedTo;
 import static net.hydromatic.morel.Ml.ml;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -58,6 +59,82 @@ public class InlineTest {
         + "tuple(apply(fnValue +, argCode tuple(get(name x), constant(1))), "
         + "constant(2))))";
     ml(ml).assertPlan(is(plan));
+  }
+
+  @Test void testInlineFn() {
+    final String ml = "fun f x =\n"
+        + "  let\n"
+        + "    val succ = fn y => y + 1\n"
+        + "  in\n"
+        + "    succ x\n"
+        + "  end";
+    final String plan = "match(x, let1(matchCode match(x, get(name x)),"
+        + " resultCode apply(fnValue +,"
+        + " argCode tuple(get(name x), constant(1)))))";
+    ml(ml).assertPlan(is(plan))
+        .assertEval(whenAppliedTo(2, is(3)));
+  }
+
+  @Test void testInlineChained() {
+    // Generate code "fun f x0 = x0 + 1";
+    // calling "f 0" yields value 1.
+    checkInlineChained(1);
+
+    // Generate code "fun f x0 =
+    //   let val x1 = x0 + 1
+    //   in x1 + 2
+    //   end";
+    // calling "f 0" yields value 1 + 2 = 3.
+    checkInlineChained(2);
+
+    // Generate code "fun f x0 = ... in x2 + 3 ... end";
+    // calling "f 0" yields value 1 + 2 + 3 = 6.
+    checkInlineChained(3);
+
+    // If inlining algorithm is exponential, this one will be super-slow.
+    checkInlineChained(200);
+  }
+
+  /** Checks that a nested expression of depth {@code n} gives the right
+   * answer and completes in a reasonable time. */
+  private void checkInlineChained(int n) {
+    final String ml = "fun f x0 =\n"
+        + gen(1, n);
+    final int expected = n * (n + 1) / 2;
+    ml(ml).assertEval(Matchers.whenAppliedTo(0, is(expected)));
+  }
+
+  /** Generates a deeply nested expression,
+   * such as
+   *
+   * <pre>{@code
+   * fun f x0 =
+   *   let val x1 = x0 + 1 in
+   *      let val x2 = x1 + 2 in
+   *        ...
+   *           xN + (N + 1)
+   *        ...
+   *      end
+   *    end
+   * }</pre>
+   *
+   * <p>Such an expression is a challenge for the inliner, because x0 is
+   * inlined into x1, x1 is inlined into x2, and so forth. If done wrong, the
+   * algorithm is exponential.
+   */
+  private String gen(int i, int n) {
+    if (i == n) {
+      return v(i - 1) + " + " + i;
+    } else {
+      return " let val " + v(i) + " = " + v(i - 1) + " + " + i + " in\n"
+          + gen(i + 1, n) + "\n"
+          + "end\n";
+    }
+  }
+
+  /** Returns a variable name such as "x1". */
+  private String v(int i) {
+    return "x" + i;
   }
 }
 
