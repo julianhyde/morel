@@ -489,7 +489,7 @@ public class CalciteCompiler extends Compiler {
       final Binding binding = cx.env.getOpt(id.idPat.name);
       if (binding != null && binding.value != Unit.INSTANCE) {
         final Core.Literal coreLiteral =
-            core.literal((PrimitiveType) binding.type, binding.value);
+            core.literal((PrimitiveType) binding.id.type, binding.value);
         return translate(cx, coreLiteral);
       }
       record = toRecord(cx, id);
@@ -592,7 +592,7 @@ public class CalciteCompiler extends Compiler {
   }
 
   private Core.Tuple toRecord(RelContext cx, Core.Id id) {
-    final Type type = cx.env.get(id.idPat.name).type;
+    final Type type = cx.env.get(id.idPat.name).id.type;
     if (type instanceof RecordType) {
       final RecordType recordType = (RecordType) type;
       final List<Core.Exp> args = new ArrayList<>();
@@ -638,14 +638,14 @@ public class CalciteCompiler extends Compiler {
     final List<RexNode> nodes = new ArrayList<>();
     final List<String> names = new ArrayList<>();
     group.groupExps.forEach((name, exp) -> {
-      bindings.add(Binding.of(name, exp.type));
+      bindings.add(Binding.of(core.idPat(exp.type, name)));
       nodes.add(translate(cx, exp));
       names.add(name);
     });
     final RelBuilder.GroupKey groupKey = cx.relBuilder.groupKey(nodes);
     final List<RelBuilder.AggCall> aggregateCalls = new ArrayList<>();
     group.aggregates.forEach((name, aggregate) -> {
-      bindings.add(Binding.of(name, aggregate.type));
+      bindings.add(Binding.of(core.idPat(aggregate.type, name)));
       final SqlAggFunction op = aggOp(aggregate.aggregate);
       final ImmutableList.Builder<RexNode> args = ImmutableList.builder();
       if (aggregate.argument != null) {

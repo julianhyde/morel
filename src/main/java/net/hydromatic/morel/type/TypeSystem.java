@@ -40,6 +40,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
 
+import static net.hydromatic.morel.ast.CoreBuilder.core;
+
 /** A table that contains all types in use, indexed by their description (e.g.
  * "{@code int -> int}"). */
 public class TypeSystem {
@@ -58,10 +60,11 @@ public class TypeSystem {
   public Binding bindTyCon(DataType dataType, String tyConName) {
     final Type type = dataType.typeConstructors.get(tyConName);
     if (type == DummyType.INSTANCE) {
-      return Binding.of(tyConName, dataType,
+      return Binding.of(core.idPat(dataType, tyConName),
           Codes.constant(ComparableSingletonList.of(tyConName)));
     } else {
-      return Binding.of(tyConName, wrap(dataType, fnType(type, dataType)),
+      return Binding.of(
+          core.idPat(wrap(dataType, fnType(type, dataType)), tyConName),
           Codes.tyCon(dataType, tyConName));
     }
   }

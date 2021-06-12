@@ -52,7 +52,7 @@ abstract class EnvShuttle extends Shuttle {
 
   @Override protected Core.Fn visit(Core.Fn fn) {
     final Core.IdPat idPat2 = fn.idPat.accept(this);
-    final Binding binding = Binding.of(fn.idPat.name, fn.idPat.type);
+    final Binding binding = Binding.of(fn.idPat);
     return fn.copy(idPat2, fn.exp.accept(bind(binding)));
   }
 
@@ -89,7 +89,8 @@ abstract class EnvShuttle extends Shuttle {
       steps.add(step2);
       final List<Binding> previousBindings = ImmutableList.copyOf(bindings);
       bindings.clear();
-      step2.deriveOutBindings(previousBindings, Binding::of, bindings::add);
+      step2.deriveOutBindings(previousBindings,
+          (name, type) -> Binding.of(core.idPat(type, name)), bindings::add);
     }
 
     final Core.Exp yieldExp2 = from.yieldExp.accept(bind(bindings));

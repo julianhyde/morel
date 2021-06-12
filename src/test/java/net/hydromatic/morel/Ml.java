@@ -22,6 +22,8 @@ import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Ordering;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 import net.hydromatic.morel.ast.Ast;
@@ -53,6 +55,7 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
@@ -295,7 +298,9 @@ class Ml {
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
     final Analyzer.Analysis analysis =
         Analyzer.analyze(typeSystem, env, valDecl3);
-    assertThat(analysis.map.toString(), matcher);
+    final SortedMap<Core.IdPat, Analyzer.Use> sortedMap =
+        ImmutableSortedMap.copyOf(analysis.map, Ordering.usingToString());
+    assertThat(sortedMap.toString(), matcher);
     return this;
   }
 
@@ -356,7 +361,7 @@ class Ml {
 
   private Object bindingValue(List<Binding> bindings, String name) {
     for (Binding binding : bindings) {
-      if (binding.name.equals(name)) {
+      if (binding.id.name.equals(name)) {
         return binding.value;
       }
     }

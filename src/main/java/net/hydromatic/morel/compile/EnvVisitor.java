@@ -28,6 +28,8 @@ import net.hydromatic.morel.type.TypeSystem;
 import java.util.ArrayList;
 import java.util.List;
 
+import static net.hydromatic.morel.ast.CoreBuilder.core;
+
 /**
  * Shuttle that keeps an environment of what variables are in scope.
  */
@@ -49,7 +51,7 @@ abstract class EnvVisitor extends Visitor {
 
   @Override protected void visit(Core.Fn fn) {
     fn.idPat.accept(this);
-    fn.exp.accept(bind(Binding.of(fn.idPat.name, fn.idPat.type)));
+    fn.exp.accept(bind(Binding.of(fn.idPat)));
   }
 
   @Override protected void visit(Core.Match match) {
@@ -84,7 +86,8 @@ abstract class EnvVisitor extends Visitor {
       step.accept(bind(bindings));
       final List<Binding> previousBindings = ImmutableList.copyOf(bindings);
       bindings.clear();
-      step.deriveOutBindings(previousBindings, Binding::of, bindings::add);
+      step.deriveOutBindings(previousBindings,
+          (name, type) -> Binding.of(core.idPat(type, name)), bindings::add);
     }
 
     from.yieldExp.accept(bind(bindings));

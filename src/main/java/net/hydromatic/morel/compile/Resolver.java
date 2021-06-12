@@ -41,6 +41,7 @@ import net.hydromatic.morel.util.Pair;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,11 +66,27 @@ public class Resolver {
   private final Supplier<String> nameGenerator;
   private final Environment env;
 
+  /** Contains variable declarations whose type at the point they are used is
+   * different (more specific) than in their declaration.
+   *
+   * <p>For example, the infix operator "op +" has type
+   * "&alpha; * &alpha; &rarr;" in the base environment, but at point of use
+   * might instead be "int * int &rarr; int". This map will contain a new
+   * {@link Core.IdPat} for all points that use it with that second type.
+   * Effectively, it is a phantom declaration, in a {@code let} that doesn't
+   * exist. Without this shared declaration, all points have their own distinct
+   * {@link Core.IdPat}, which the {@link Analyzer} will think is used just
+   * once.
+   */
+  private final Map<Core.IdPat, IdentityHashMap<Type, Core.IdPat>> variantIdMap;
+
   private Resolver(TypeMap typeMap, Supplier<String> nameGenerator,
+      Map<Core.IdPat, IdentityHashMap<Type, Core.IdPat>> variantIdMap,
       Environment env) {
     this.typeMap = typeMap;
-    this.env = env;
     this.nameGenerator = nameGenerator;
+    this.variantIdMap = variantIdMap;
+    this.env = env;
   }
 
   /** Creates a root Resolver. */
@@ -82,13 +99,13 @@ public class Resolver {
             return "v" + id++;
           }
         };
-    return new Resolver(typeMap, nameGenerator, env);
+    return new Resolver(typeMap, nameGenerator, new IdentityHashMap<>(), env);
   }
 
   /** Binds a Resolver to a new environment. */
   public Resolver withEnv(Environment env) {
     return env == this.env ? this
-        : new Resolver(typeMap, nameGenerator, env);
+        : new Resolver(typeMap, nameGenerator, variantIdMap, env);
   }
 
   /** Binds a Resolver to an environment that consists of the current
@@ -244,13 +261,20 @@ public class Resolver {
   private Core.Id toCore(Ast.Id id) {
     final Binding binding = env.get(id.name);
     assert binding != null;
-    final Core.IdPat idPat;
-    if (binding.value instanceof Core.IdPat) {
-      idPat = (Core.IdPat) binding.value;
-    } else {
-      idPat = core.idPat(typeMap.getType(id), id.name);
-    }
+    final Core.IdPat idPat = getIdPat(id, binding);
     return core.id(idPat);
+  }
+
+  private Core.IdPat getIdPat(Ast.Id id, Binding binding) {
+    final Type type = typeMap.getType(id);
+    if (type == binding.id.type) {
+      return binding.id;
+    }
+    // The required type is different from the binding type, presumably more
+    // specific. Create a new IdPat, reusing an existing IdPat if there was
+    // one for the same type.
+    return variantIdMap.computeIfAbsent(binding.id, k -> new IdentityHashMap<>())
+        .computeIfAbsent(type, binding.id::withType);
   }
 
   private Core.Tuple toCore(Ast.Tuple tuple) {
@@ -519,7 +543,8 @@ public class Resolver {
       Core.FromStep coreStep, Ast.Exp yieldExp) {
     final List<Binding> prevBindings = ImmutableList.copyOf(bindings);
     bindings.clear();
-    coreStep.deriveOutBindings(prevBindings, Binding::of, bindings::add);
+    coreStep.deriveOutBindings(prevBindings,
+        (name, type) -> Binding.of(core.idPat(type, name)), bindings::add);
     return fromStepToCore(sources, bindings, Util.skip(steps),
         append(coreSteps, coreStep), yieldExp);
   }

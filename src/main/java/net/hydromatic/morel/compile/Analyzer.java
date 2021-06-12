@@ -29,7 +29,6 @@ import net.hydromatic.morel.type.TypeSystem;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,9 +48,7 @@ public class Analyzer extends EnvVisitor {
   /** Analyzes an expression. */
   public static Analysis analyze(TypeSystem typeSystem, Environment env,
       AstNode node) {
-    // Use a LinkedHashMap to ensure that the order of the map matches the
-    // tree traversal order. It's helpful for testing.
-    final Map<Core.IdPat, MutableUse> map = new LinkedHashMap<>();
+    final Map<Core.IdPat, MutableUse> map = new HashMap<>();
     final Analyzer analyzer = new Analyzer(typeSystem, env, map);
 
     // Mark all top-level bindings so that they will not be removed
@@ -136,7 +133,7 @@ public class Analyzer extends EnvVisitor {
   }
 
   /** How a binding (assignment of a value to a variable) is used. */
-  enum Use {
+  public enum Use {
     /** Indicates that the binding cannot be inlined because recursively
      * refers to itself (or more precisely, is part of a recursive cycle
      * and has been chosen as the link to remove to break the cycle). */

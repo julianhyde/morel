@@ -137,7 +137,7 @@ public abstract class Compiles {
    * we have the expression. */
   static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
       Core.ValDecl valDecl) {
-    bindings.add(Binding.of(valDecl.pat.name, valDecl.exp));
+    bindings.add(Binding.of(valDecl.pat, valDecl.exp));
   }
 
   static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
@@ -147,7 +147,7 @@ public abstract class Compiles {
 
   static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
       Core.IdPat idPat) {
-    bindings.add(Binding.of(idPat.name, idPat.type, idPat));
+    bindings.add(Binding.of(idPat));
   }
 
   public static void bindDataType(TypeSystem typeSystem, List<Binding> bindings,
@@ -172,7 +172,7 @@ public abstract class Compiles {
     switch (pat.op) {
     case ID_PAT:
       final Core.IdPat idPat = (Core.IdPat) pat;
-      bindings.add(Binding.of(idPat.name, idPat.type, exp));
+      bindings.add(Binding.of(idPat, exp));
       break;
 
     default:

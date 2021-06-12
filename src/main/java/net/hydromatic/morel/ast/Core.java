@@ -124,6 +124,10 @@ public class Core {
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
     }
+
+    public IdPat withType(Type type) {
+      return type == this.type ? this : new IdPat(type, name);
+    }
   }
 
   /** Literal pattern, the pattern analog of the {@link Literal} expression.

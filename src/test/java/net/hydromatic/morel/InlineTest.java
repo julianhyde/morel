@@ -31,24 +31,24 @@ import static org.hamcrest.CoreMatchers.is;
 public class InlineTest {
   @Test void testAnalyze() {
     final String ml = "let\n"
-        + "  val unused = 0\n"
-        + "  val once1 = 1\n"
-        + "  val once2 = 2\n"
-        + "  val once3 = 3\n"
-        + "  val twice = once1 + once2\n"
-        + "  val multiSafe = once3\n"
+        + "  val aUnused = 0\n"
+        + "  val bOnce = 1\n"
+        + "  val cOnce = 2\n"
+        + "  val dOnce = 3\n"
+        + "  val eTwice = bOnce + cOnce\n"
+        + "  val fMultiSafe = dOnce\n"
         + "  val x = [1, 2]\n"
         + "  val z = case x of\n"
-        + "     []            => multiSafe + 1\n"
+        + "     []            => fMultiSafe + 1\n"
         + "   | 1 :: x2 :: x3 => 2\n"
-        + "   | x0 :: xs      => multiSafe + x0\n"
+        + "   | x0 :: xs      => fMultiSafe + x0\n"
         + "in\n"
-        + "  twice + twice\n"
+        + "  eTwice + eTwice\n"
         + "end";
-    final String map = "{it=MULTI_UNSAFE, unused=DEAD, once1=ONCE_SAFE,"
-        + " once2=ONCE_SAFE, once3=ONCE_SAFE, twice=MULTI_UNSAFE,"
-        + " op +=MULTI_UNSAFE, multiSafe=MULTI_SAFE, x=ONCE_SAFE, z=DEAD,"
-        + " x0=ONCE_SAFE, x2=DEAD, x3=DEAD, xs=DEAD}";
+    final String map = "{aUnused=DEAD, bOnce=ONCE_SAFE, cOnce=ONCE_SAFE, "
+        + "dOnce=ONCE_SAFE, eTwice=MULTI_UNSAFE, fMultiSafe=MULTI_SAFE, "
+        + "it=MULTI_UNSAFE, op +=MULTI_UNSAFE, x=ONCE_SAFE, x0=ONCE_SAFE, "
+        + "x2=DEAD, x3=DEAD, xs=DEAD, z=DEAD}";
     ml(ml)
         .assertAnalyze(is(map));
   }
@@ -68,9 +68,8 @@ public class InlineTest {
         + "  in\n"
         + "    succ x\n"
         + "  end";
-    final String plan = "match(x, let1(matchCode match(x, get(name x)),"
-        + " resultCode apply(fnValue +,"
-        + " argCode tuple(get(name x), constant(1)))))";
+    final String plan =
+        "match(x, apply(fnValue +, argCode tuple(get(name x), constant(1))))";
     ml(ml).assertPlan(is(plan))
         .assertEval(whenAppliedTo(2, is(3)));
   }

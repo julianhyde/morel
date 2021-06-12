@@ -75,8 +75,8 @@ public abstract class Environment {
 
   /** Creates an environment that is the same as a given environment, plus one
    * more variable. */
-  public Environment bind(String name, Type type, Core.Exp exp, Object value) {
-    return bind(Binding.of(name, type, value));
+  public Environment bind(Core.IdPat id, Object value) {
+    return bind(Binding.of(id, value));
   }
 
   protected Environment bind(Binding binding) {
@@ -88,8 +88,8 @@ public abstract class Environment {
   public void forEachType(BiConsumer<String, Type> consumer) {
     final Set<String> names = new HashSet<>();
     visit(binding -> {
-      if (names.add(binding.name)) {
-        consumer.accept(binding.name, binding.type);
+      if (names.add(binding.id.name)) {
+        consumer.accept(binding.id.name, binding.id.type);
       }
     });
   }
@@ -99,8 +99,8 @@ public abstract class Environment {
   public void forEachValue(BiConsumer<String, Object> consumer) {
     final Set<String> names = new HashSet<>();
     visit(binding -> {
-      if (names.add(binding.name) && binding.value != Unit.INSTANCE) {
-        consumer.accept(binding.name, binding.value);
+      if (names.add(binding.id.name) && binding.value != Unit.INSTANCE) {
+        consumer.accept(binding.id.name, binding.value);
       }
     });
   }
@@ -108,7 +108,7 @@ public abstract class Environment {
   /** Returns a map of the values and bindings. */
   public final Map<String, Binding> getValueMap() {
     final Map<String, Binding> valueMap = new HashMap<>();
-    visit(binding -> valueMap.putIfAbsent(binding.name, binding));
+    visit(binding -> valueMap.putIfAbsent(binding.id.name, binding));
     return valueMap;
   }
 

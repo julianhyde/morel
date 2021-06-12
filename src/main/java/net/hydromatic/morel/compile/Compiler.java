@@ -299,7 +299,8 @@ public class Compiler {
     final Core.FromStep firstStep = steps.get(0);
     final ImmutableList.Builder<Binding> outBindingBuilder =
         ImmutableList.builder();
-    firstStep.deriveOutBindings(bindings, Binding::of,
+    firstStep.deriveOutBindings(bindings,
+        (name, type) -> Binding.of(core.idPat(type, name)),
         outBindingBuilder::add);
     final ImmutableList<Binding> outBindings = outBindingBuilder.build();
     final Supplier<Codes.RowSink> nextFactory =
@@ -333,7 +334,7 @@ public class Compiler {
         if (aggregate.argument == null) {
           final SortedMap<String, Type> argNameTypes =
               new TreeMap<>(RecordType.ORDERING);
-          bindings.forEach(b -> argNameTypes.put(b.name, b.type));
+          bindings.forEach(b -> argNameTypes.put(b.id.name, b.id.type));
           argumentType = typeSystem.recordOrScalarType(argNameTypes);
           argumentCode = null;
         } else {
@@ -366,7 +367,7 @@ public class Compiler {
 
   private ImmutableList<String> bindingNames(List<Binding> bindings) {
     //noinspection UnstableApiUsage
-    return bindings.stream().map(b -> b.name)
+    return bindings.stream().map(b -> b.id.name)
         .collect(ImmutableList.toImmutableList());
   }
 
@@ -551,7 +552,7 @@ public class Compiler {
             @Override protected void visit(Core.IdPat idPat) {
               final LinkCode linkCode = new LinkCode();
               linkCodes.put(idPat, linkCode);
-              bindings.add(Binding.of(idPat.name, idPat.type, linkCode));
+              bindings.add(Binding.of(idPat, linkCode));
             }
           });
     }
@@ -574,7 +575,7 @@ public class Compiler {
         final StringBuilder buf = new StringBuilder();
         try {
           final Object o = code.eval(evalEnv);
-          outBindings.add(Binding.of(name, type, o));
+          outBindings.add(Binding.of(valDecl.pat.withType(type), o));
           Pretty.pretty(buf, type, new Pretty.TypedVal(name, o, type0));
         } catch (Codes.MorelRuntimeException e) {
           e.describeTo(buf);
