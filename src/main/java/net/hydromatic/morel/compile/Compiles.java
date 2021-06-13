@@ -77,7 +77,7 @@ public abstract class Compiles {
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
     final int inlinePassCount =
-        Math.max(Prop.INLINE_PASS_COUNT.intValue(session.map), 1);
+        Math.max(Prop.INLINE_PASS_COUNT.intValue(session.map), 0);
     final Resolver resolver = Resolver.of(resolved.typeMap, env);
     Core.Decl coreDecl = resolver.toCore(resolved.node);
 

@@ -519,10 +519,10 @@ public class CalciteCompiler extends Compiler {
       }
       if (apply.fn instanceof Core.RecordSelector
           && apply.arg instanceof Core.Id
-          && cx.map.containsKey(((Core.Id) apply.arg).idPat)) {
+          && cx.map.containsKey(((Core.Id) apply.arg).idPat.name)) {
         // Something like '#deptno e',
         final RexNode range =
-            cx.map.get(((Core.Id) apply.arg).idPat).apply(cx.relBuilder);
+            cx.map.get(((Core.Id) apply.arg).idPat.name).apply(cx.relBuilder);
         final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
         return cx.relBuilder.field(range, selector.fieldName());
       }
