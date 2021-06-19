@@ -344,6 +344,49 @@ public enum CoreBuilder {
         : Iterables.getLast(steps).bindings;
   }
 
+  /** Creates a {@link Core.From} with a default yield expression. */
+  public Core.From from(TypeSystem typeSystem, ListType type,
+      Map<Core.Pat, Core.Exp> sources, List<Core.FromStep> steps) {
+    final Core.Exp yieldExp = defaultYieldExp(typeSystem, sources, steps);
+    return from(type, sources, steps, yieldExp);
+  }
+
+  /** Returns what would be the yield expression if we created a
+   * {@link net.hydromatic.morel.ast.Core.From} from the given sources and
+   * steps.
+   *
+   * <p>Examples:
+   * <li>{@code defaultYieldExp(sources=(a=E:t), steps=[])}
+   *     is {@code a} (a {@link Core.Id});
+   * <li>{@code defaultYieldExp(sources=(a=E:t, b=E2:t2), steps=[])}
+   *     is {@code {a = a, b = b}} (a record). */
+  public Core.Exp defaultYieldExp(TypeSystem typeSystem,
+      Map<Core.Pat, Core.Exp> sources, List<Core.FromStep> steps) {
+    final List<Binding> bindings = new ArrayList<>();
+    sources.keySet().forEach(pat ->
+        pat.accept(new Visitor() {
+          @Override protected void visit(Core.IdPat idPat) {
+            bindings.add(Binding.of(idPat));
+          }
+        }));
+    for (Core.FromStep step : steps) {
+      final List<Binding> previousBindings = ImmutableList.copyOf(bindings);
+      bindings.clear();
+      step.deriveOutBindings(previousBindings, Binding::of, bindings::add);
+    }
+    if (bindings.size() == 1) {
+      return core.id(Iterables.getOnlyElement(bindings).id);
+    } else {
+      final SortedMap<Core.IdPat, Core.Exp> map = new TreeMap<>();
+      final SortedMap<String, Type> argNameTypes = new TreeMap<>(ORDERING);
+      bindings.forEach(b -> {
+        map.put(b.id, core.id(b.id));
+        argNameTypes.put(b.id.name, b.id.type);
+      });
+      return core.tuple(typeSystem.recordType(argNameTypes), map.values());
+    }
+  }
+
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {
     return new Core.Fn(type, idPat, exp);
   }

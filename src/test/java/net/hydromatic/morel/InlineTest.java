@@ -222,6 +222,20 @@ public class InlineTest {
         .assertCoreString(is(core0), is(core1), is(core2));
   }
 
+  /** Tests that an expression involving 'map' and 'filter'
+   * is converted to a 'from' expression. */
+  @Test void testMapFilterToFrom() {
+    final String ml = "map (fn e => (#empno e))\n"
+        + "  (List.filter (fn e => (#deptno e) = 30) (#emp scott))";
+    final String core0 = "map (fn e#1 => #empno e#1) "
+        + "(#filter List (fn e => op = (#deptno e, 30)) "
+        + "(#emp scott))";
+    final String core1 = core0;
+    final String core2 = core1;
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertCoreString(is(core0), is(core1), is(core2));
+  }
 }
 
 // End InlineTest.java
