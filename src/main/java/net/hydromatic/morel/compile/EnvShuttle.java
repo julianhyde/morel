@@ -82,6 +82,7 @@ abstract class EnvShuttle extends Shuttle {
       sources.put(pat, source.accept(bind(bindings)));
       pat.accept(Compiles.binding(typeSystem, bindings));
     });
+    final List<Binding> initialBindings = ImmutableList.copyOf(bindings);
 
     final List<Core.FromStep> steps = new ArrayList<>();
     for (Core.FromStep step : from.steps) {
@@ -92,8 +93,7 @@ abstract class EnvShuttle extends Shuttle {
       step2.deriveOutBindings(previousBindings, Binding::of, bindings::add);
     }
 
-    final Core.Exp yieldExp2 = from.yieldExp.accept(bind(bindings));
-    return from.copy(typeSystem, sources, steps, yieldExp2);
+    return from.copy(typeSystem, sources, initialBindings, steps);
   }
 
 }

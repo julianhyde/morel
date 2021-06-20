@@ -86,8 +86,6 @@ abstract class EnvVisitor extends Visitor {
       bindings.clear();
       step.deriveOutBindings(previousBindings, Binding::of, bindings::add);
     }
-
-    from.yieldExp.accept(bind(bindings));
   }
 }
 
