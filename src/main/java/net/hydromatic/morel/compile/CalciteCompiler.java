@@ -418,12 +418,12 @@ public class CalciteCompiler extends Compiler {
           case GROUP:
             cx = group(cx, (Core.Group) fromStep);
             break;
+          case YIELD:
+            cx = yield_(cx, (Core.Yield) fromStep);
+            break;
           default:
             throw new AssertionError(fromStep);
           }
-        }
-        if (from.yieldExp != null) {
-          yield_(cx, from.yieldExp);
         }
         return true;
       }
@@ -439,7 +439,11 @@ public class CalciteCompiler extends Compiler {
     return ImmutableList.copyOf(list);
   }
 
-  private RelBuilder yield_(RelContext cx, Core.Exp exp) {
+  private RelContext yield_(RelContext cx, Core.Yield yield) {
+    return yield_(cx, yield.exp);
+  }
+
+  private RelContext yield_(RelContext cx, Core.Exp exp) {
     final Core.Tuple tuple;
     switch (exp.op) {
     case ID:
@@ -452,12 +456,14 @@ public class CalciteCompiler extends Compiler {
 
     case TUPLE:
       tuple = (Core.Tuple) exp;
-      return cx.relBuilder.project(
+      cx.relBuilder.project(
           Util.transform(tuple.args, e -> translate(cx, e)),
           ImmutableList.copyOf(tuple.type().argNameTypes().keySet()));
+      return cx;
     }
     RexNode rex = translate(cx, exp);
-    return cx.relBuilder.project(rex);
+    cx.relBuilder.project(rex);
+    return cx;
   }
 
   private RexNode translate(RelContext cx, Core.Exp exp) {

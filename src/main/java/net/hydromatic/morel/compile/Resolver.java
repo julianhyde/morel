@@ -343,13 +343,13 @@ public class Resolver {
           && ((Core.TuplePat) match.pat).args.isEmpty()) {
         // Simple function with unit arg, "fn () => exp";
         // needs a new variable, but doesn't need case, "fn (v0: unit) => exp"
-        final Core.IdPat idPat = core.idPat(type.paramType, "", nameGenerator);
+        final Core.IdPat idPat = core.idPat(type.paramType, nameGenerator);
         return core.fn(type, idPat, match.exp);
       }
     }
     // Complex function, "fn (x, y) => exp";
     // needs intermediate variable and case, "fn v => case v of (x, y) => exp"
-    final Core.IdPat idPat = core.idPat(type.paramType, "", nameGenerator);
+    final Core.IdPat idPat = core.idPat(type.paramType, nameGenerator);
     final Core.Id id = core.id(idPat);
     return core.fn(type, idPat, core.caseOf(type.resultType, id, matchList));
   }
@@ -514,20 +514,26 @@ public class Resolver {
     final Resolver r = withEnv(bindings);
     if (steps.isEmpty()) {
       final Core.Exp coreYieldExp = r.toCore(yieldExp);
-      final ListType listType = typeMap.typeSystem.listType(coreYieldExp.type);
-      return core.from(listType, sources, coreSteps, coreYieldExp);
+      final Core.Exp defaultYieldExp =
+          core.defaultYieldExp(typeMap.typeSystem, bindings, coreSteps);
+      if (!coreYieldExp.equals(defaultYieldExp)) {
+        coreSteps =
+            append(coreSteps, core.yield_(typeMap.typeSystem, coreYieldExp));
+      }
+      return core.from(typeMap.typeSystem, sources, bindings, coreSteps);
     }
     final Ast.FromStep step = steps.get(0);
     switch (step.op) {
     case WHERE:
       final Ast.Where where = (Ast.Where) step;
       return fromStep2(sources, bindings, steps, coreSteps,
-          core.where(r.toCore(where.exp)), yieldExp);
+          core.where(bindings, r.toCore(where.exp)), yieldExp);
 
     case ORDER:
       final Ast.Order order = (Ast.Order) step;
       return fromStep2(sources, bindings, steps, coreSteps,
-          core.order(transform(order.orderItems, r::toCore)), yieldExp);
+          core.order(bindings, transform(order.orderItems, r::toCore)),
+          yieldExp);
 
     case GROUP:
       final Ast.Group group = (Ast.Group) step;
