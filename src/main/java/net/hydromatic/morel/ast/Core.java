@@ -43,8 +43,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.ObjIntConsumer;
 import javax.annotation.Nullable;
 
@@ -912,16 +910,6 @@ public class Core {
       this.bindings = bindings;
     }
 
-    /** Returns the names of the fields produced by this step, given the names
-     * of the fields that are input to this step.
-     *
-     * <p>By default, a step outputs the same fields as it inputs.
-     */
-    public void deriveOutBindings(Iterable<Binding> inBindings,
-        Function<IdPat, Binding> binder, Consumer<Binding> outBindings) {
-      inBindings.forEach(outBindings);
-    }
-
     @Override public abstract FromStep accept(Shuttle shuttle);
   }
 
@@ -1044,18 +1032,6 @@ public class Core {
           w.append(i == 0 ? " compute " : ", ")
               .append(name, 0, 0).append(" = ").append(aggregate, 0, 0));
       return w;
-    }
-
-    @Override public void deriveOutBindings(Iterable<Binding> inBindings,
-        Function<Core.IdPat, Binding> binder, Consumer<Binding> outBindings) {
-      deriveOutBindingsStatic(groupExps, aggregates, binder, outBindings);
-    }
-
-    public static void deriveOutBindingsStatic(SortedMap<IdPat, Exp> groupExps,
-        SortedMap<IdPat, Aggregate> aggregates, Function<IdPat, Binding> binder,
-        Consumer<Binding> outBindings) {
-      groupExps.keySet().forEach(id -> outBindings.accept(binder.apply(id)));
-      aggregates.keySet().forEach(id -> outBindings.accept(binder.apply(id)));
     }
 
     public Group copy(SortedMap<Core.IdPat, Exp> groupExps,
