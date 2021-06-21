@@ -383,8 +383,8 @@ public enum CoreBuilder {
   public Core.Group group(SortedMap<Core.IdPat, Core.Exp> groupExps,
       SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
     final List<Binding> bindings = new ArrayList<>();
-    Core.Group.deriveOutBindingsStatic(groupExps, aggregates, Binding::of,
-        bindings::add);
+    groupExps.keySet().forEach(id -> bindings.add(Binding.of(id)));
+    aggregates.keySet().forEach(id -> bindings.add(Binding.of(id)));
     return new Core.Group(ImmutableList.copyOf(bindings),
         ImmutableSortedMap.copyOfSorted(groupExps),
         ImmutableSortedMap.copyOfSorted(aggregates));

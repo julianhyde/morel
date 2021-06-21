@@ -526,14 +526,16 @@ public class Resolver {
     switch (step.op) {
     case WHERE:
       final Ast.Where where = (Ast.Where) step;
-      return fromStep2(sources, bindings, steps, coreSteps,
-          core.where(bindings, r.toCore(where.exp)), yieldExp);
+      final Core.Where coreWhere = core.where(bindings, r.toCore(where.exp));
+      return fromStepToCore(sources, coreWhere.bindings, Util.skip(steps),
+          append(coreSteps, coreWhere), yieldExp);
 
     case ORDER:
       final Ast.Order order = (Ast.Order) step;
-      return fromStep2(sources, bindings, steps, coreSteps,
-          core.order(bindings, transform(order.orderItems, r::toCore)),
-          yieldExp);
+      final Core.Order coreOrder =
+          core.order(bindings, transform(order.orderItems, r::toCore));
+      return fromStepToCore(sources, coreOrder.bindings, Util.skip(steps),
+          append(coreSteps, coreOrder), yieldExp);
 
     case GROUP:
       final Ast.Group group = (Ast.Group) step;
@@ -545,23 +547,14 @@ public class Resolver {
           groupExps.put(toCorePat(id), r.toCore(exp)));
       group.aggregates.forEach(aggregate ->
           aggregates.put(toCorePat(aggregate.id), r.toCore(aggregate)));
-      return fromStep2(sources, bindings, steps, coreSteps,
-          core.group(groupExps.build(), aggregates.build()), yieldExp);
+      final Core.Group coreGroup =
+          core.group(groupExps.build(), aggregates.build());
+      return fromStepToCore(sources, coreGroup.bindings, Util.skip(steps),
+          append(coreSteps, coreGroup), yieldExp);
 
     default:
       throw new AssertionError("unknown step type " + step.op);
     }
-  }
-
-  private Core.From fromStep2(Map<Core.Pat, Core.Exp> sources,
-      List<Binding> bindings, List<Ast.FromStep> steps,
-      List<Core.FromStep> coreSteps,
-      Core.FromStep coreStep, Ast.Exp yieldExp) {
-    final List<Binding> prevBindings = ImmutableList.copyOf(bindings);
-    bindings.clear();
-    coreStep.deriveOutBindings(prevBindings, Binding::of, bindings::add);
-    return fromStepToCore(sources, bindings, Util.skip(steps),
-        append(coreSteps, coreStep), yieldExp);
   }
 
   private Core.Aggregate toCore(Ast.Aggregate aggregate) {

@@ -302,10 +302,6 @@ public class Compiler {
       return () -> Codes.collectRowSink(code);
     }
     final Core.FromStep firstStep = steps.get(0);
-    final ImmutableList.Builder<Binding> outBindingBuilder =
-        ImmutableList.builder();
-    firstStep.deriveOutBindings(bindings, Binding::of, outBindingBuilder::add);
-    final ImmutableList<Binding> outBindings = outBindingBuilder.build();
     final Supplier<Codes.RowSink> nextFactory =
         createRowSinkFactory(cx, firstStep.bindings, Util.skip(steps));
     switch (firstStep.op) {
@@ -369,7 +365,7 @@ public class Compiler {
       final ImmutableList<Code> groupCodes = groupCodesB.build();
       final Code keyCode = Codes.tuple(groupCodes);
       final ImmutableList<Applicable> aggregateCodes = aggregateCodesB.build();
-      final ImmutableList<String> outNames = bindingNames(outBindings);
+      final ImmutableList<String> outNames = bindingNames(firstStep.bindings);
       return () -> Codes.groupRowSink(keyCode, aggregateCodes, names,
           outNames, nextFactory.get());
 

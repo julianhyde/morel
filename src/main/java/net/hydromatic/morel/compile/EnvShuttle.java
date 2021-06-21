@@ -18,8 +18,6 @@
  */
 package net.hydromatic.morel.compile;
 
-import com.google.common.collect.ImmutableList;
-
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.Binding;
@@ -76,21 +74,19 @@ abstract class EnvShuttle extends Shuttle {
   }
 
   @Override public Core.Exp visit(Core.From from) {
-    final List<Binding> bindings = new ArrayList<>();
+    final List<Binding> initialBindings = new ArrayList<>();
     final Map<Core.Pat, Core.Exp> sources = new LinkedHashMap<>();
     from.sources.forEach((pat, source) -> {
-      sources.put(pat, source.accept(bind(bindings)));
-      pat.accept(Compiles.binding(typeSystem, bindings));
+      sources.put(pat, source.accept(bind(initialBindings)));
+      pat.accept(Compiles.binding(typeSystem, initialBindings));
     });
-    final List<Binding> initialBindings = ImmutableList.copyOf(bindings);
 
+    List<Binding> bindings = initialBindings;
     final List<Core.FromStep> steps = new ArrayList<>();
     for (Core.FromStep step : from.steps) {
       final Core.FromStep step2 = step.accept(bind(bindings));
       steps.add(step2);
-      final List<Binding> previousBindings = ImmutableList.copyOf(bindings);
-      bindings.clear();
-      step2.deriveOutBindings(previousBindings, Binding::of, bindings::add);
+      bindings = step2.bindings;
     }
 
     return from.copy(typeSystem, sources, initialBindings, steps);
