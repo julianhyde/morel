@@ -230,8 +230,11 @@ public class InlineTest {
     final String core0 = "map (fn e#1 => #empno e#1) "
         + "(#filter List (fn e => op = (#deptno e, 30)) "
         + "(#emp scott))";
-    final String core1 = core0;
-    final String core2 = core1;
+    final String core1 = "from v0 in "
+        + "#filter List (fn e => #deptno e = 30) (#emp scott) "
+        + "yield (fn e#1 => #empno e#1) v0";
+    final String core2 = "from v0 in "
+        + "from v2 in #emp scott where #deptno v2 = 30 yield #empno v0";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(is(core0), is(core1), is(core2));
