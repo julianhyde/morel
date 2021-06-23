@@ -81,7 +81,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_EQ */
   private static final Applicable OP_EQ =
-      new ApplicableImpl("=") {
+      new ApplicableImpl(BuiltIn.OP_EQ) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return list.get(0).equals(list.get(1));
@@ -90,7 +90,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_NE */
   private static final Applicable OP_NE =
-      new ApplicableImpl("<>") {
+      new ApplicableImpl(BuiltIn.OP_NE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return !list.get(0).equals(list.get(1));
@@ -99,7 +99,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_LT */
   private static final Applicable OP_LT =
-      new ApplicableImpl("<") {
+      new ApplicableImpl(BuiltIn.OP_LT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final Comparable v0 = (Comparable) list.get(0);
@@ -110,7 +110,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_GT */
   private static final Applicable OP_GT =
-      new ApplicableImpl(">") {
+      new ApplicableImpl(BuiltIn.OP_GT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final Comparable v0 = (Comparable) list.get(0);
@@ -121,7 +121,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_LE */
   private static final Applicable OP_LE =
-      new ApplicableImpl("<=") {
+      new ApplicableImpl(BuiltIn.OP_LE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final Comparable v0 = (Comparable) list.get(0);
@@ -132,7 +132,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_GE */
   private static final Applicable OP_GE =
-      new ApplicableImpl(">=") {
+      new ApplicableImpl(BuiltIn.OP_GE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final Comparable v0 = (Comparable) list.get(0);
@@ -143,7 +143,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_ELEM */
   private static final Applicable OP_ELEM =
-      new ApplicableImpl("elem") {
+      new ApplicableImpl(BuiltIn.OP_ELEM) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final Object v0 = list.get(0);
@@ -154,7 +154,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_NOT_ELEM */
   private static final Applicable OP_NOT_ELEM =
-      new ApplicableImpl("nonElem") {
+      new ApplicableImpl(BuiltIn.OP_NOT_ELEM) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final Object v0 = list.get(0);
@@ -175,7 +175,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_NEGATE} for type {@code int}. */
   private static final Applicable Z_NEGATE_INT =
-      new ApplicableImpl("~") {
+      new ApplicableImpl(BuiltIn.OP_NEGATE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return -((Integer) arg);
         }
@@ -183,7 +183,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_NEGATE} for type {@code real}. */
   private static final Applicable Z_NEGATE_REAL =
-      new ApplicableImpl("~") {
+      new ApplicableImpl(BuiltIn.OP_NEGATE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return -((Float) arg);
         }
@@ -191,7 +191,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_PLUS} for type {@code int}. */
   private static final Applicable Z_PLUS_INT =
-      new ApplicableImpl("+") {
+      new ApplicableImpl(BuiltIn.OP_PLUS) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return (int) list.get(0) + (int) list.get(1);
@@ -200,7 +200,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_PLUS} for type {@code real}. */
   private static final Applicable Z_PLUS_REAL =
-      new ApplicableImpl("+") {
+      new ApplicableImpl(BuiltIn.OP_PLUS) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return (float) list.get(0) + (float) list.get(1);
@@ -209,7 +209,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_MINUS} for type {@code int}. */
   private static final Applicable Z_MINUS_INT =
-      new ApplicableImpl("-") {
+      new ApplicableImpl(BuiltIn.OP_MINUS) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return (int) list.get(0) - (int) list.get(1);
@@ -218,7 +218,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_MINUS} for type {@code real}. */
   private static final Applicable Z_MINUS_REAL =
-      new ApplicableImpl("-") {
+      new ApplicableImpl(BuiltIn.OP_MINUS) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return (float) list.get(0) - (float) list.get(1);
@@ -227,7 +227,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_TIMES} for type {@code int}. */
   private static final Applicable Z_TIMES_INT =
-      new ApplicableImpl("*") {
+      new ApplicableImpl(BuiltIn.OP_TIMES) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return (int) list.get(0) * (int) list.get(1);
@@ -236,7 +236,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_TIMES} for type {@code real}. */
   private static final Applicable Z_TIMES_REAL =
-      new ApplicableImpl("*") {
+      new ApplicableImpl(BuiltIn.OP_TIMES) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return (float) list.get(0) * (float) list.get(1);
@@ -245,7 +245,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_DIVIDE} for type {@code int}. */
   private static final Applicable Z_DIVIDE_INT =
-      new ApplicableImpl("/") {
+      new ApplicableImpl(BuiltIn.OP_DIVIDE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return (int) list.get(0) / (int) list.get(1);
@@ -254,7 +254,7 @@ public abstract class Codes {
 
   /** Implements {@link #OP_DIVIDE} for type {@code real}. */
   private static final Applicable Z_DIVIDE_REAL =
-      new ApplicableImpl("/") {
+      new ApplicableImpl(BuiltIn.OP_DIVIDE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return (float) list.get(0) / (float) list.get(1);
@@ -288,7 +288,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_DIV */
   private static final Applicable OP_DIV =
-      new ApplicableImpl("div") {
+      new ApplicableImpl(BuiltIn.OP_DIV) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return Math.floorDiv((int) list.get(0), (int) list.get(1));
@@ -312,7 +312,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_CARET */
   private static final Applicable OP_CARET =
-      new ApplicableImpl("^") {
+      new ApplicableImpl(BuiltIn.OP_CARET) {
         @Override public String apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final String arg0 = (String) tuple.get(0);
@@ -323,7 +323,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_CONS */
   private static final Applicable OP_CONS =
-      new ApplicableImpl("::") {
+      new ApplicableImpl(BuiltIn.OP_CONS) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return ImmutableList.builder().add(list.get(0))
@@ -334,7 +334,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_EXCEPT */
   private static final Applicable OP_EXCEPT =
-      new ApplicableImpl("except") {
+      new ApplicableImpl(BuiltIn.OP_EXCEPT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final List list0 = (List) list.get(0);
@@ -349,7 +349,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_INTERSECT */
   private static final Applicable OP_INTERSECT =
-      new ApplicableImpl("intersect") {
+      new ApplicableImpl(BuiltIn.OP_INTERSECT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final List list0 = (List) list.get(0);
@@ -361,6 +361,9 @@ public abstract class Codes {
           return ImmutableList.copyOf(collection);
         }
       };
+
+  /** @see BuiltIn#OP_UNION */
+  private static final Applicable OP_UNION = union(BuiltIn.OP_UNION);
 
   /** Returns a Code that returns the value of variable "name" in the current
    * environment. */
@@ -502,7 +505,7 @@ public abstract class Codes {
 
   /** An applicable that negates a boolean value. */
   private static final Applicable NOT =
-      new ApplicableImpl("not") {
+      new ApplicableImpl(BuiltIn.NOT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return !(Boolean) arg;
         }
@@ -510,7 +513,7 @@ public abstract class Codes {
 
   /** An applicable that returns the absolute value of an int. */
   private static final Applicable ABS =
-      new ApplicableImpl("abs") {
+      new ApplicableImpl(BuiltIn.ABS) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Integer integer = (Integer) arg;
           return integer >= 0 ? integer : -integer;
@@ -519,7 +522,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#IGNORE */
   private static final Applicable IGNORE =
-      new ApplicableImpl("General.ignore") {
+      new ApplicableImpl(BuiltIn.IGNORE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return Unit.INSTANCE;
         }
@@ -540,7 +543,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OP_MOD */
   private static final Applicable OP_MOD =
-      new ApplicableImpl("mod") {
+      new ApplicableImpl(BuiltIn.OP_MOD) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return Math.floorMod((int) list.get(0), (int) list.get(1));
@@ -578,7 +581,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_SIZE */
   private static final Applicable STRING_SIZE =
-      new ApplicableImpl("String.size") {
+      new ApplicableImpl(BuiltIn.STRING_SIZE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return ((String) arg).length();
         }
@@ -586,7 +589,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_SUB */
   private static final Applicable STRING_SUB =
-      new ApplicableImpl("String.sub") {
+      new ApplicableImpl(BuiltIn.STRING_SUB) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final String s = (String) tuple.get(0);
@@ -600,7 +603,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_EXTRACT */
   private static final Applicable STRING_EXTRACT =
-      new ApplicableImpl("String.extract") {
+      new ApplicableImpl(BuiltIn.STRING_EXTRACT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final String s = (String) tuple.get(0);
@@ -626,7 +629,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_SUBSTRING */
   private static final Applicable STRING_SUBSTRING =
-      new ApplicableImpl("String.substring") {
+      new ApplicableImpl(BuiltIn.STRING_SUBSTRING) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final String s = (String) tuple.get(0);
@@ -641,7 +644,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_CONCAT */
   private static final Applicable STRING_CONCAT =
-      new ApplicableImpl("String.concat") {
+      new ApplicableImpl(BuiltIn.STRING_CONCAT) {
         @SuppressWarnings("unchecked")
         @Override public Object apply(EvalEnv env, Object arg) {
           return stringConcat("", (List<String>) arg);
@@ -650,7 +653,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_CONCAT_WITH */
   private static final Applicable STRING_CONCAT_WITH =
-      new ApplicableImpl("String.concatWith") {
+      new ApplicableImpl(BuiltIn.STRING_CONCAT_WITH) {
         @Override public Object apply(EvalEnv env, Object argValue) {
           final String separator = (String) argValue;
           return new ApplicableImpl("String.concatWith$separator") {
@@ -676,7 +679,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_STR */
   private static final Applicable STRING_STR =
-      new ApplicableImpl("String.str") {
+      new ApplicableImpl(BuiltIn.STRING_STR) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Character character = (Character) arg;
           return character + "";
@@ -685,7 +688,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_IMPLODE */
   private static final Applicable STRING_IMPLODE =
-      new ApplicableImpl("String.implode") {
+      new ApplicableImpl(BuiltIn.STRING_IMPLODE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           // Note: In theory this function should raise Size, but it is not
           // possible in practice because List.size() is never larger than
@@ -696,7 +699,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_EXPLODE */
   private static final Applicable STRING_EXPLODE =
-      new ApplicableImpl("String.explode") {
+      new ApplicableImpl(BuiltIn.STRING_EXPLODE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final String s = (String) arg;
           return MapList.of(s.length(), s::charAt);
@@ -705,7 +708,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_MAP */
   private static final Applicable STRING_MAP =
-      new ApplicableImpl("String.map") {
+      new ApplicableImpl(BuiltIn.STRING_MAP) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return stringMap((Applicable) arg);
         }
@@ -728,7 +731,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_TRANSLATE */
   private static final Applicable STRING_TRANSLATE =
-      new ApplicableImpl("String.translate") {
+      new ApplicableImpl(BuiltIn.STRING_TRANSLATE) {
         @Override public Applicable apply(EvalEnv env, Object arg) {
           final Applicable f = (Applicable) arg;
           return translate(f);
@@ -752,7 +755,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_IS_PREFIX */
   private static final Applicable STRING_IS_PREFIX =
-      new ApplicableImpl("String.isPrefix") {
+      new ApplicableImpl(BuiltIn.STRING_IS_PREFIX) {
         @Override public Applicable apply(EvalEnv env, Object arg) {
           final String s = (String) arg;
           return isPrefix(s);
@@ -770,7 +773,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_IS_SUBSTRING */
   private static final Applicable STRING_IS_SUBSTRING =
-      new ApplicableImpl("String.isSubstring") {
+      new ApplicableImpl(BuiltIn.STRING_IS_SUBSTRING) {
         @Override public Applicable apply(EvalEnv env, Object arg) {
           final String s = (String) arg;
           return isSubstring(s);
@@ -788,7 +791,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_IS_SUFFIX */
   private static final Applicable STRING_IS_SUFFIX =
-      new ApplicableImpl("String.isSuffix") {
+      new ApplicableImpl(BuiltIn.STRING_IS_SUFFIX) {
         @Override public Applicable apply(EvalEnv env, Object arg) {
           final String s = (String) arg;
           return isSuffix(s);
@@ -806,35 +809,40 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_NULL */
   private static final Applicable LIST_NULL =
-      new ApplicableImpl("List.null") {
+      new ApplicableImpl(BuiltIn.LIST_NULL) {
         @Override public Boolean apply(EvalEnv env, Object arg) {
           return ((List) arg).isEmpty();
         }
       };
 
   /** @see BuiltIn#LIST_LENGTH */
-  private static final Applicable LIST_LENGTH =
-      new ApplicableImpl("List.length") {
-        @Override public Object apply(EvalEnv env, Object arg) {
-          return ((List) arg).size();
-        }
-      };
+  private static final Applicable LIST_LENGTH = length(BuiltIn.LIST_LENGTH);
 
-  /** @see BuiltIn#LIST_AT
-   * @see BuiltIn#OP_UNION */
-  private static final Applicable LIST_AT =
-      new ApplicableImpl("List.at") {
-        @Override public List apply(EvalEnv env, Object arg) {
-          final List tuple = (List) arg;
-          final List list0 = (List) tuple.get(0);
-          final List list1 = (List) tuple.get(1);
-          return ImmutableList.builder().addAll(list0).addAll(list1).build();
-        }
-      };
+  private static ApplicableImpl length(BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Object apply(EvalEnv env, Object arg) {
+        return ((List) arg).size();
+      }
+    };
+  }
+
+  /** @see BuiltIn#LIST_AT */
+  private static final Applicable LIST_AT = union(BuiltIn.LIST_AT);
+
+  private static ApplicableImpl union(final BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public List apply(EvalEnv env, Object arg) {
+        final List tuple = (List) arg;
+        final List list0 = (List) tuple.get(0);
+        final List list1 = (List) tuple.get(1);
+        return ImmutableList.builder().addAll(list0).addAll(list1).build();
+      }
+    };
+  }
 
   /** @see BuiltIn#LIST_HD */
   private static final Applicable LIST_HD =
-      new ApplicableImpl("List.hd") {
+      new ApplicableImpl(BuiltIn.LIST_HD) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           if (list.isEmpty()) {
@@ -846,7 +854,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_TL */
   private static final Applicable LIST_TL =
-      new ApplicableImpl("List.tl") {
+      new ApplicableImpl(BuiltIn.LIST_TL) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final int size = list.size();
@@ -859,7 +867,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_LAST */
   private static final Applicable LIST_LAST =
-      new ApplicableImpl("List.last") {
+      new ApplicableImpl(BuiltIn.LIST_LAST) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final int size = list.size();
@@ -872,7 +880,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_GET_ITEM */
   private static final Applicable LIST_GET_ITEM =
-      new ApplicableImpl("List.getItem") {
+      new ApplicableImpl(BuiltIn.LIST_GET_ITEM) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           if (list.isEmpty()) {
@@ -885,22 +893,25 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#LIST_NTH */
-  private static final Applicable LIST_NTH =
-      new ApplicableImpl("List.nth") {
-        @Override public Object apply(EvalEnv env, Object arg) {
-          final List tuple = (List) arg;
-          final List list = (List) tuple.get(0);
-          final int i = (Integer) tuple.get(1);
-          if (i < 0 || i >= list.size()) {
-            throw new MorelRuntimeException(BuiltInExn.SUBSCRIPT);
-          }
-          return list.get(i);
+  private static final Applicable LIST_NTH = nth(BuiltIn.LIST_NTH);
+
+  private static ApplicableImpl nth(BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Object apply(EvalEnv env, Object arg) {
+        final List tuple = (List) arg;
+        final List list = (List) tuple.get(0);
+        final int i = (Integer) tuple.get(1);
+        if (i < 0 || i >= list.size()) {
+          throw new MorelRuntimeException(BuiltInExn.SUBSCRIPT);
         }
-      };
+        return list.get(i);
+      }
+    };
+  }
 
   /** @see BuiltIn#LIST_TAKE */
   private static final Applicable LIST_TAKE =
-      new ApplicableImpl("List.take") {
+      new ApplicableImpl(BuiltIn.LIST_TAKE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final List list = (List) tuple.get(0);
@@ -914,7 +925,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_DROP */
   private static final Applicable LIST_DROP =
-      new ApplicableImpl("List.drop") {
+      new ApplicableImpl(BuiltIn.LIST_DROP) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final List list = (List) tuple.get(0);
@@ -925,7 +936,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_REV */
   private static final Applicable LIST_REV =
-      new ApplicableImpl("List.rev") {
+      new ApplicableImpl(BuiltIn.LIST_REV) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           return Lists.reverse(list);
@@ -934,7 +945,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_CONCAT */
   private static final Applicable LIST_CONCAT =
-      new ApplicableImpl("List.concat") {
+      new ApplicableImpl(BuiltIn.LIST_CONCAT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
           final ImmutableList.Builder<Object> builder = ImmutableList.builder();
@@ -947,7 +958,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_REV_APPEND */
   private static final Applicable LIST_REV_APPEND =
-      new ApplicableImpl("List.revAppend") {
+      new ApplicableImpl(BuiltIn.LIST_REV_APPEND) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final List list0 = (List) tuple.get(0);
@@ -959,7 +970,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_APP */
   private static final Applicable LIST_APP =
-      new ApplicableImpl("List.app") {
+      new ApplicableImpl(BuiltIn.LIST_APP) {
         @Override public Applicable apply(EvalEnv env, Object arg) {
           return listApp((Applicable) arg);
         }
@@ -977,7 +988,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_MAP */
   private static final Applicable LIST_MAP =
-      new ApplicableImpl("List.map") {
+      new ApplicableImpl(BuiltIn.LIST_MAP) {
         @Override public Applicable apply(EvalEnv env, Object arg) {
           return listMap((Applicable) arg);
         }
@@ -998,7 +1009,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_MAP_PARTIAL */
   private static final Applicable LIST_MAP_PARTIAL =
-      new ApplicableImpl("List.mapPartial") {
+      new ApplicableImpl(BuiltIn.LIST_MAP_PARTIAL) {
         @Override public Applicable apply(EvalEnv env, Object arg) {
           return listMapPartial((Applicable) arg);
         }
@@ -1021,13 +1032,16 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#LIST_FIND */
-  private static final Applicable LIST_FIND =
-      new ApplicableImpl("List.find") {
-        @Override public Applicable apply(EvalEnv env, Object arg) {
-          final Applicable fn = (Applicable) arg;
-          return find(fn);
-        }
-      };
+  private static final Applicable LIST_FIND = find(BuiltIn.LIST_FIND);
+
+  private static ApplicableImpl find(BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Applicable apply(EvalEnv env, Object arg) {
+        final Applicable fn = (Applicable) arg;
+        return find(fn);
+      }
+    };
+  }
 
   private static Applicable find(Applicable f) {
     return new ApplicableImpl("List.find$f") {
@@ -1045,7 +1059,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_FILTER */
   private static final Applicable LIST_FILTER =
-      new ApplicableImpl("List.filter") {
+      new ApplicableImpl(BuiltIn.LIST_FILTER) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Applicable fn = (Applicable) arg;
           return listFilter(fn);
@@ -1069,7 +1083,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_PARTITION */
   private static final Applicable LIST_PARTITION =
-      new ApplicableImpl("List.partition") {
+      new ApplicableImpl(BuiltIn.LIST_PARTITION) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Applicable fn = (Applicable) arg;
           return listPartition(fn);
@@ -1092,7 +1106,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_FOLDL */
   private static final Applicable LIST_FOLDL =
-      new ApplicableImpl("List.foldl") {
+      new ApplicableImpl(BuiltIn.LIST_FOLDL) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return listFold(true, (Applicable) arg);
         }
@@ -1100,7 +1114,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_FOLDR */
   private static final Applicable LIST_FOLDR =
-      new ApplicableImpl("List.foldr") {
+      new ApplicableImpl(BuiltIn.LIST_FOLDR) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return listFold(false, (Applicable) arg);
         }
@@ -1129,12 +1143,15 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#LIST_EXISTS */
-  private static final Applicable LIST_EXISTS =
-      new ApplicableImpl("List.exists") {
-        @Override public Object apply(EvalEnv env, Object arg) {
-          return listExists((Applicable) arg);
-        }
-      };
+  private static final Applicable LIST_EXISTS = exists(BuiltIn.LIST_EXISTS);
+
+  private static ApplicableImpl exists(final BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Object apply(EvalEnv env, Object arg) {
+        return listExists((Applicable) arg);
+      }
+    };
+  }
 
   private static Applicable listExists(Applicable f) {
     return new ApplicableImpl("List.exists$f") {
@@ -1151,12 +1168,15 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#LIST_ALL */
-  private static final Applicable LIST_ALL =
-      new ApplicableImpl("List.all") {
-        @Override public Object apply(EvalEnv env, Object arg) {
-          return listAll((Applicable) arg);
-        }
-      };
+  private static final Applicable LIST_ALL = all(BuiltIn.LIST_ALL);
+
+  private static ApplicableImpl all(final BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Object apply(EvalEnv env, Object arg) {
+        return listAll((Applicable) arg);
+      }
+    };
+  }
 
   private static Applicable listAll(Applicable f) {
     return new ApplicableImpl("List.all$f") {
@@ -1174,29 +1194,36 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_TABULATE */
   private static final Applicable LIST_TABULATE =
-      new ApplicableImpl("List.tabulate") {
-        @Override public Object apply(EvalEnv env, Object arg) {
-          final List tuple = (List) arg;
-          final int count = (Integer) tuple.get(0);
-          if (count < 0) {
-            throw new MorelRuntimeException(BuiltInExn.SIZE);
-          }
-          final Applicable fn = (Applicable) tuple.get(1);
-          final ImmutableList.Builder<Object> builder = ImmutableList.builder();
-          for (int i = 0; i < count; i++) {
-            builder.add(fn.apply(env, i));
-          }
-          return builder.build();
+      tabulate(BuiltIn.LIST_TABULATE);
+
+  private static ApplicableImpl tabulate(final BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Object apply(EvalEnv env, Object arg) {
+        final List tuple = (List) arg;
+        final int count = (Integer) tuple.get(0);
+        if (count < 0) {
+          throw new MorelRuntimeException(BuiltInExn.SIZE);
         }
-      };
+        final Applicable fn = (Applicable) tuple.get(1);
+        final ImmutableList.Builder<Object> builder = ImmutableList.builder();
+        for (int i = 0; i < count; i++) {
+          builder.add(fn.apply(env, i));
+        }
+        return builder.build();
+      }
+    };
+  }
 
   /** @see BuiltIn#LIST_COLLATE */
-  private static final Applicable LIST_COLLATE =
-      new ApplicableImpl("List.collate") {
-        @Override public Object apply(EvalEnv env, Object arg) {
-          return collate((Applicable) arg);
-        }
-      };
+  private static final Applicable LIST_COLLATE = collate(BuiltIn.LIST_COLLATE);
+
+  private static ApplicableImpl collate(final BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Object apply(EvalEnv env, Object arg) {
+        return collate((Applicable) arg);
+      }
+    };
+  }
 
   private static Applicable collate(Applicable comparator) {
     return new ApplicableImpl("List.collate$comparator") {
@@ -1223,7 +1250,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_APP */
   private static final Applicable OPTION_APP =
-      new ApplicableImpl("Option.app") {
+      new ApplicableImpl(BuiltIn.OPTION_APP) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Applicable f = (Applicable) arg;
           return optionApp(f);
@@ -1245,7 +1272,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_GET_OPT */
   private static final Applicable OPTION_GET_OPT =
-      new ApplicableImpl("Option.getOpt") {
+      new ApplicableImpl(BuiltIn.OPTION_GET_OPT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final List opt = (List) tuple.get(0);
@@ -1259,7 +1286,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_IS_SOME */
   private static final Applicable OPTION_IS_SOME =
-      new ApplicableImpl("Option.isSome") {
+      new ApplicableImpl(BuiltIn.OPTION_IS_SOME) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List opt = (List) arg;
           return opt.size() == 2; // SOME has 2 elements, NONE has 1
@@ -1268,7 +1295,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_VAL_OF */
   private static final Applicable OPTION_VAL_OF =
-      new ApplicableImpl("Option.valOf") {
+      new ApplicableImpl(BuiltIn.OPTION_VAL_OF) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List opt = (List) arg;
           if (opt.size() == 2) { // SOME has 2 elements, NONE has 1
@@ -1281,7 +1308,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_FILTER */
   private static final Applicable OPTION_FILTER =
-      new ApplicableImpl("Option.filter") {
+      new ApplicableImpl(BuiltIn.OPTION_FILTER) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Applicable f = (Applicable) arg;
           return optionFilter(f);
@@ -1303,7 +1330,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_JOIN */
   private static final Applicable OPTION_JOIN =
-      new ApplicableImpl("Option.join") {
+      new ApplicableImpl(BuiltIn.OPTION_JOIN) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List opt = (List) arg;
           return opt.size() == 2
@@ -1314,7 +1341,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_MAP */
   private static final Applicable OPTION_MAP =
-      new ApplicableImpl("Option.map") {
+      new ApplicableImpl(BuiltIn.OPTION_MAP) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return optionMap((Applicable) arg);
         }
@@ -1322,7 +1349,7 @@ public abstract class Codes {
 
   /** Implements {@link #OPTION_MAP}. */
   private static Applicable optionMap(Applicable f) {
-    return new ApplicableImpl("Option.map") {
+    return new ApplicableImpl(BuiltIn.OPTION_MAP) {
       @Override public Object apply(EvalEnv env, Object arg) {
         final List a = (List) arg;
         if (a.size() == 2) { // SOME v
@@ -1342,7 +1369,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_MAP_PARTIAL */
   private static final Applicable OPTION_MAP_PARTIAL =
-      new ApplicableImpl("Option.mapPartial") {
+      new ApplicableImpl(BuiltIn.OPTION_MAP_PARTIAL) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return optionMapPartial((Applicable) arg);
         }
@@ -1363,7 +1390,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_COMPOSE */
   private static final Applicable OPTION_COMPOSE =
-      new ApplicableImpl("Option.compose") {
+      new ApplicableImpl(BuiltIn.OPTION_COMPOSE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final Applicable f = (Applicable) tuple.get(0);
@@ -1387,7 +1414,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_COMPOSE_PARTIAL */
   private static final Applicable OPTION_COMPOSE_PARTIAL =
-      new ApplicableImpl("Option.composePartial") {
+      new ApplicableImpl(BuiltIn.OPTION_COMPOSE_PARTIAL) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final Applicable f = (Applicable) tuple.get(0);
@@ -1411,11 +1438,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
-      new ApplicableImpl("Relational.count") {
-        @Override public Object apply(EvalEnv env, Object arg) {
-          return ((List) arg).size();
-        }
-      };
+      length(BuiltIn.RELATIONAL_COUNT);
 
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
   private static final Applicable Z_SUM_INT =
@@ -1461,7 +1484,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_MIN */
   private static final Applicable RELATIONAL_MIN =
-      new ApplicableImpl("Relational.min") {
+      new ApplicableImpl(BuiltIn.RELATIONAL_MIN) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return Ordering.natural().min((List) arg);
         }
@@ -1469,7 +1492,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_MAX */
   private static final Applicable RELATIONAL_MAX =
-      new ApplicableImpl("Relational.max") {
+      new ApplicableImpl(BuiltIn.RELATIONAL_MAX) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return Ordering.natural().max((List) arg);
         }
@@ -1497,7 +1520,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#SYS_PLAN */
   private static final Applicable SYS_PLAN =
-      new ApplicableImpl("Sys.plan") {
+      new ApplicableImpl(BuiltIn.SYS_PLAN) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Session session = (Session) env.getOpt(EvalEnv.SESSION);
           return Codes.describe(session.code);
@@ -1506,7 +1529,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#SYS_SET */
   private static final Applicable SYS_SET =
-      new ApplicableImpl("Sys.plan") {
+      new ApplicableImpl(BuiltIn.SYS_SET) {
         @Override public Unit apply(EvalEnv env, Object arg) {
           final Session session = (Session) env.getOpt(EvalEnv.SESSION);
           final List list = (List) arg;
@@ -1519,7 +1542,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#SYS_SHOW */
   private static final Applicable SYS_SHOW =
-      new ApplicableImpl("Sys.show") {
+      new ApplicableImpl(BuiltIn.SYS_SHOW) {
         @Override public List apply(EvalEnv env, Object arg) {
           final Session session = (Session) env.getOpt(EvalEnv.SESSION);
           final String propName = (String) arg;
@@ -1530,7 +1553,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#SYS_UNSET */
   private static final Applicable SYS_UNSET =
-      new ApplicableImpl("Sys.unset") {
+      new ApplicableImpl(BuiltIn.SYS_UNSET) {
         @Override public Unit apply(EvalEnv env, Object arg) {
           final Session session = (Session) env.getOpt(EvalEnv.SESSION);
           final String propName = (String) arg;
@@ -1550,24 +1573,25 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_FROM_LIST */
   private static final Applicable VECTOR_FROM_LIST =
-      new ApplicableImpl("Vector.fromList") {
+      new ApplicableImpl(BuiltIn.VECTOR_FROM_LIST) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return arg; // vector and list have the same implementation in Java
         }
       };
 
   /** @see BuiltIn#VECTOR_TABULATE */
-  private static final Applicable VECTOR_TABULATE = LIST_TABULATE;
+  private static final Applicable VECTOR_TABULATE =
+      tabulate(BuiltIn.VECTOR_TABULATE);
 
   /** @see BuiltIn#VECTOR_LENGTH */
-  private static final Applicable VECTOR_LENGTH = LIST_LENGTH;
+  private static final Applicable VECTOR_LENGTH = length(BuiltIn.VECTOR_LENGTH);
 
   /** @see BuiltIn#VECTOR_SUB */
-  private static final Applicable VECTOR_SUB = LIST_NTH;
+  private static final Applicable VECTOR_SUB = nth(BuiltIn.VECTOR_SUB);
 
   /** @see BuiltIn#VECTOR_UPDATE */
   private static final Applicable VECTOR_UPDATE =
-      new ApplicableImpl("Vector.update") {
+      new ApplicableImpl(BuiltIn.VECTOR_UPDATE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List tuple = (List) arg;
           final List vec = (List) tuple.get(0);
@@ -1584,7 +1608,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_CONCAT */
   private static final Applicable VECTOR_CONCAT =
-      new ApplicableImpl("Vector.concat") {
+      new ApplicableImpl(BuiltIn.VECTOR_CONCAT) {
         @Override public Object apply(EvalEnv env, Object arg) {
           @SuppressWarnings("unchecked") final List<List<Object>> lists =
               (List<List<Object>>) arg;
@@ -1598,7 +1622,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_APPI */
   private static final Applicable VECTOR_APPI =
-      new ApplicableImpl("Vector.appi") {
+      new ApplicableImpl(BuiltIn.VECTOR_APPI) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return vectorAppi((Applicable) arg);
         }
@@ -1618,7 +1642,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_APP */
   private static final Applicable VECTOR_APP =
-      new ApplicableImpl("Vector.app") {
+      new ApplicableImpl(BuiltIn.VECTOR_APP) {
         @Override public Applicable apply(EvalEnv env, Object arg) {
           return vectorApp((Applicable) arg);
         }
@@ -1638,7 +1662,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_MAPI */
   private static final Applicable VECTOR_MAPI =
-      new ApplicableImpl("Vector.mapi") {
+      new ApplicableImpl(BuiltIn.VECTOR_MAPI) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return vectorMapi((Applicable) arg);
         }
@@ -1659,7 +1683,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_MAP */
   private static final Applicable VECTOR_MAP =
-      new ApplicableImpl("Vector.map") {
+      new ApplicableImpl(BuiltIn.VECTOR_MAP) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return vectorMap((Applicable) arg);
         }
@@ -1680,7 +1704,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_FOLDLI */
   private static final Applicable VECTOR_FOLDLI =
-      new ApplicableImpl("Vector.foldli") {
+      new ApplicableImpl(BuiltIn.VECTOR_FOLDLI) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Applicable f = (Applicable) arg;
           return new ApplicableImpl("Vector.foldli$f") {
@@ -1703,7 +1727,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_FOLDRI */
   private static final Applicable VECTOR_FOLDRI =
-      new ApplicableImpl("Vector.foldri") {
+      new ApplicableImpl(BuiltIn.VECTOR_FOLDRI) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Applicable f = (Applicable) arg;
           return new ApplicableImpl("Vector.foldri$f") {
@@ -1726,7 +1750,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_FOLDL */
   private static final Applicable VECTOR_FOLDL =
-      new ApplicableImpl("Vector.foldl") {
+      new ApplicableImpl(BuiltIn.VECTOR_FOLDL) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Applicable f = (Applicable) arg;
           return new ApplicableImpl("Vector.foldl$f") {
@@ -1749,7 +1773,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_FOLDR */
   private static final Applicable VECTOR_FOLDR =
-      new ApplicableImpl("Vector.foldr") {
+      new ApplicableImpl(BuiltIn.VECTOR_FOLDR) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final Applicable f = (Applicable) arg;
           return new ApplicableImpl("Vector.foldlr$f") {
@@ -1772,7 +1796,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_FINDI */
   private static final Applicable VECTOR_FINDI =
-      new ApplicableImpl("Vector.findi") {
+      new ApplicableImpl(BuiltIn.VECTOR_FINDI) {
         @Override public Object apply(EvalEnv env, Object arg) {
           return vectorFindi((Applicable) arg);
         }
@@ -1796,16 +1820,17 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#VECTOR_FIND */
-  private static final Applicable VECTOR_FIND = LIST_FIND;
+  private static final Applicable VECTOR_FIND = find(BuiltIn.VECTOR_FIND);
 
   /** @see BuiltIn#VECTOR_EXISTS */
-  private static final Applicable VECTOR_EXISTS = LIST_EXISTS;
+  private static final Applicable VECTOR_EXISTS = exists(BuiltIn.VECTOR_EXISTS);
 
   /** @see BuiltIn#VECTOR_ALL */
-  private static final Applicable VECTOR_ALL = LIST_ALL;
+  private static final Applicable VECTOR_ALL = all(BuiltIn.VECTOR_ALL);
 
   /** @see BuiltIn#VECTOR_COLLATE */
-  private static final Applicable VECTOR_COLLATE = LIST_COLLATE;
+  private static final Applicable VECTOR_COLLATE =
+      collate(BuiltIn.VECTOR_COLLATE);
 
   /** @see BuiltIn#Z_LIST */
   private static final Applicable Z_LIST =
@@ -1942,7 +1967,7 @@ public abstract class Codes {
           .put(BuiltIn.OP_TIMES, OP_TIMES)
           .put(BuiltIn.OP_EXCEPT, OP_EXCEPT)
           .put(BuiltIn.OP_INTERSECT, OP_INTERSECT)
-          .put(BuiltIn.OP_UNION, LIST_AT) // union == @
+          .put(BuiltIn.OP_UNION, OP_UNION)
           .put(BuiltIn.STRING_MAX_SIZE, STRING_MAX_SIZE)
           .put(BuiltIn.STRING_SIZE, STRING_SIZE)
           .put(BuiltIn.STRING_SUB, STRING_SUB)
@@ -2418,7 +2443,6 @@ public abstract class Codes {
   }
 
   /** Code that implements a constant. */
-  @SuppressWarnings("rawtypes")
   private static class ConstantCode implements Code {
     private final Object value;
 

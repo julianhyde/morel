@@ -30,6 +30,7 @@ import net.hydromatic.morel.type.TypeSystem;
 import java.util.List;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.compile.Resolver.append;
 
 /**
  * Shuttle that converts calls to {@link BuiltIn#LIST_FILTER}
@@ -66,7 +67,7 @@ public class Relationalizer extends EnvShuttle {
     switch (apply.fn.op) {
     case APPLY:
       final Core.Apply apply2 = (Core.Apply) apply.fn;
-      switch (apply.fn.op) {
+      switch (apply2.fn.op) {
       case FN_LITERAL:
         final Core.Literal literal = (Core.Literal) apply2.fn;
         if (literal.value == BuiltIn.LIST_MAP) {
@@ -76,10 +77,30 @@ public class Relationalizer extends EnvShuttle {
           final Core.Exp f = apply2.arg;
           final FnType fnType = (FnType) f.type;
           final Core.From from = toFrom(apply.arg);
-          final ListType listType = (ListType) apply.type;
-          final ListType list2Type = (ListType) apply2.type;
-          return core.from(listType, from.sources,
-              from.steps, core.apply(fnType.resultType, f, from.yieldExp));
+          // TODO: if the last step is a non-record yield, there is no
+          // "defaultYieldExp", and therefore we cannot add another yield
+          // step. We will have to inline the yield expression as a let.
+          final Core.Yield yieldStep = core.yield_(typeSystem,
+              core.apply(fnType.resultType, f,
+                  core.defaultYieldExp(typeSystem,
+                      from.initialBindings, from.steps)));
+          return core.from(typeSystem, from.sources, from.initialBindings,
+              append(from.steps, yieldStep));
+        }
+        if (literal.value == BuiltIn.LIST_FILTER) {
+          // List.filter f list
+          //  =>
+          // from e in list where (f e)
+          final Core.Exp f = apply2.arg;
+          final FnType fnType = (FnType) f.type;
+          final Core.From from = toFrom(apply.arg);
+          final Core.Where whereStep =
+              core.where(core.lastBindings(from.initialBindings, from.steps),
+                  core.apply(fnType.resultType, f,
+                      core.defaultYieldExp(typeSystem,
+                          from.initialBindings, from.steps)));
+          return core.from(typeSystem, from.sources, from.initialBindings,
+              append(from.steps, whereStep));
         }
       }
     }
@@ -87,15 +108,14 @@ public class Relationalizer extends EnvShuttle {
   }
 
   private Core.From toFrom(Core.Exp exp) {
-    if (exp instanceof Core.From
-        && ((Core.From) exp).hasDefaultYieldExp(typeSystem)) {
+    if (exp instanceof Core.From) {
       return (Core.From) exp;
     } else {
       final ListType listType = (ListType) exp.type;
       final String name = typeSystem.nameGenerator.get();
       final Core.IdPat id =
           core.idPat(listType.elementType, name, typeSystem.nameGenerator);
-      return core.from(typeSystem, listType, ImmutableMap.of(id, exp),
+      return core.from(typeSystem, ImmutableMap.of(id, exp),
           ImmutableList.of());
     }
   }
