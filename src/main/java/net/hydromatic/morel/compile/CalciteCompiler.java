@@ -24,6 +24,7 @@ import org.apache.calcite.rel.externalize.RelJson;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -111,6 +112,7 @@ public class CalciteCompiler extends Compiler {
           .put(BuiltIn.OP_MOD, SqlStdOperatorTable.MOD)
           .put(BuiltIn.Z_ANDALSO, SqlStdOperatorTable.AND)
           .put(BuiltIn.Z_ORELSE, SqlStdOperatorTable.OR)
+          .put(BuiltIn.RELATIONAL_EXISTS, SqlStdOperatorTable.EXISTS)
           .build();
 
   final Calcite calcite;
@@ -524,6 +526,10 @@ public class CalciteCompiler extends Compiler {
         BuiltIn op = (BuiltIn) ((Core.Literal) apply.fn).value;
         final SqlOperator operator = INFIX_OPERATORS.get(op);
         if (operator != null) {
+          switch (operator.kind) {
+          case EXISTS:
+            return RexSubQuery.exists(toRel2(cx, apply.arg));
+          }
           assert apply.arg.op == Op.TUPLE;
           return cx.relBuilder.call(operator,
               translateList(cx, ((Core.Tuple) apply.arg).args));

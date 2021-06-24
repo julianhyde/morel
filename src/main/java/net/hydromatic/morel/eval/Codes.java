@@ -1446,6 +1446,14 @@ public abstract class Codes {
   private static final Applicable RELATIONAL_COUNT =
       length(BuiltIn.RELATIONAL_COUNT);
 
+  /** @see BuiltIn#RELATIONAL_EXISTS */
+  private static final Applicable RELATIONAL_EXISTS =
+      new ApplicableImpl(BuiltIn.RELATIONAL_EXISTS) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          return !((List) arg).isEmpty();
+        }
+      };
+
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
   private static final Applicable Z_SUM_INT =
       new ApplicableImpl("Relational.sum$int") {
@@ -2027,6 +2035,7 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL)
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
+          .put(BuiltIn.RELATIONAL_EXISTS, RELATIONAL_EXISTS)
           .put(BuiltIn.RELATIONAL_MAX, RELATIONAL_MAX)
           .put(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN)
           .put(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM)
