@@ -547,6 +547,40 @@ public class AlgebraTest {
     fn.apply(ml(ml0));
     fn.apply(ml(ml1));
   }
+
+  /** Tests that {@code exists} is pushed down to Calcite. */
+  @Test void testExists() {
+    final String ml = "from d in scott.dept\n"
+        + "where exists (\n"
+        + "  from e in scott.emp\n"
+        + "  where e.deptno = d.deptno\n"
+        + "  andalso e.job = \"CLERK\")";
+    String plan = "let(matchCode0 match(plus, match(v0, "
+        + "apply(fnCode match((x, y), apply(fnValue +, "
+        + "argCode tuple(get(name x), get(name y)))), "
+        + "argCode get(name v0)))), "
+        + "resultCode let(matchCode0 match(five, constant(5)), "
+        + "resultCode calcite(plan "
+        + "LogicalProject($f0=[morelScalar('int * int', "
+        + "morelScalar('plus', '{\n"
+        + "  \"type\": \"ANY\",\n"
+        + "  \"nullable\": false,\n"
+        + "  \"precision\": -1,\n"
+        + "  \"scale\": -1\n"
+        + "}'), ROW($0, morelScalar('five', '{\n"
+        + "  \"type\": \"INTEGER\",\n"
+        + "  \"nullable\": false\n"
+        + "}')))])\n"
+        + "  JdbcTableScan(table=[[scott, DEPT]])\n"
+        + ")))";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("{deptno:int, dname:string, loc:string} list")
+        .assertPlan(isFullyCalcite())
+        .assertPlan(isCode(plan))
+        .assertEvalIter(equalsOrdered(15, 25, 35, 45));
+  }
 }
 
 // End AlgebraTest.java

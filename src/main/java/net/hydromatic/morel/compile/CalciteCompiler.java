@@ -121,6 +121,7 @@ public class CalciteCompiler extends Compiler {
           .put(BuiltIn.OP_MOD, SqlStdOperatorTable.MOD)
           .put(BuiltIn.Z_ANDALSO, SqlStdOperatorTable.AND)
           .put(BuiltIn.Z_ORELSE, SqlStdOperatorTable.OR)
+          .put(BuiltIn.RELATIONAL_EXISTS, SqlStdOperatorTable.EXISTS)
           .build();
 
   final Calcite calcite;
@@ -536,6 +537,13 @@ public class CalciteCompiler extends Compiler {
         // Is it a unary operator with a Calcite equivalent? E.g. not => NOT
         final SqlOperator unaryOp = UNARY_OPERATORS.get(op);
         if (unaryOp != null) {
+          switch (unaryOp.kind) {
+          case EXISTS:
+            final RelNode r = toRel2(cx, apply.arg);
+            if (r != null) {
+              return RexSubQuery.exists(r);
+            }
+          }
           return cx.relBuilder.call(unaryOp, translate(cx, apply.arg));
         }
 
