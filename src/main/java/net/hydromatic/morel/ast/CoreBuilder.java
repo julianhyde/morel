@@ -80,6 +80,8 @@ public enum CoreBuilder {
           : BigDecimal.valueOf(((Number) value).doubleValue()));
     case STRING:
       return stringLiteral((String) value);
+    case UNIT:
+      return unitLiteral();
     default:
       throw new AssertionError("unexpected " + type);
     }
