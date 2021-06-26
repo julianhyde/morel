@@ -1199,7 +1199,7 @@ val it =
 Sys.plan();
 val it =
   "calcite(plan LogicalProject(j=[$1], s=[$2])
-  LogicalTableFunctionScan(invocation=[morelTable('#tabulate List (6, fn i => (i, i + 3, #substring String (\"morel\", 0, i)))', '{
+  LogicalTableFunctionScan(invocation=[morelTable('#tabulate List (6, fn i => {i = i, j = i + 3, s = #substring String (\"morel\", 0, i)})', '{
   \"fields\": [
     {
       \"type\": \"INTEGER\",
