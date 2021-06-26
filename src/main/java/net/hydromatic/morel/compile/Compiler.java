@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSortedMap;
 
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
@@ -36,6 +37,7 @@ import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -52,6 +54,7 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
@@ -292,8 +295,9 @@ public class Compiler {
       ImmutableList<Binding> bindings, List<Core.FromStep> steps) {
     final Context cx = cx0.bindAll(bindings);
     if (steps.isEmpty()) {
-      final ImmutableList<String> fieldNames =
-          bindings.stream().map(b -> b.id.name).collect(Util.toImmutableList());
+      final List<String> fieldNames =
+          bindings.stream().map(b -> b.id).sorted()
+              .map(id -> id.name).collect(Collectors.toList());
       final Code code;
       if (fieldNames.size() == 1) {
         code = Codes.get(fieldNames.get(0));
@@ -313,12 +317,20 @@ public class Compiler {
 
     case YIELD:
       final Core.Yield yield = (Core.Yield) firstStep;
-      final Code yieldCode = compile(cx, yield.exp);
       if (steps.size() == 1) {
         // Last step. Use a Collect row sink, and we're done.
+        // Note that we don't use nextFactory.
+        final Code yieldCode = compile(cx, yield.exp);
         return () -> Codes.collectRowSink(yieldCode);
       } else {
-        return () -> Codes.yieldRowSink(yieldCode, nextFactory.get());
+        final Core.Tuple tuple = (Core.Tuple) yield.exp;
+        final RecordLikeType recordType = tuple.type();
+        final ImmutableSortedMap.Builder<String, Code> mapCodes =
+            ImmutableSortedMap.orderedBy(RecordType.ORDERING);
+        Pair.forEach(tuple.args, recordType.argNameTypes().keySet(),
+            (exp, name) ->
+                mapCodes.put(name, compile(cx, exp)));
+        return () -> Codes.yieldRowSink(mapCodes.build(), nextFactory.get());
       }
 
     case ORDER:

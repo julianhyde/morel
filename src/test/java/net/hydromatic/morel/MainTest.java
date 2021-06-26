@@ -1382,6 +1382,21 @@ public class MainTest {
             equalsOrdered(list(list(10, "Sales"), list(10, 100, "Fred"))));
   }
 
+  @Test void testYieldYield() {
+    final String ml = "let\n"
+        + "  val emps =\n"
+        + "    [{id = 100, name = \"Fred\", deptno = 10},\n"
+        + "     {id = 101, name = \"Velma\", deptno = 20}]\n"
+        + "in\n"
+        + "  from e in emps\n"
+        + "  yield {x = e.id + e.deptno, y = e.id - e.deptno}\n"
+        + "  yield x + y\n"
+        + "end";
+    ml(ml)
+        .assertType("int list")
+        .assertEvalIter(equalsOrdered(200, 202));
+  }
+
   /** Analogous to SQL "CROSS APPLY" which calls a table-valued function
    * for each row in an outer loop. */
   @Test void testCrossApply() {
