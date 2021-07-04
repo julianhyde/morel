@@ -31,6 +31,7 @@ import net.hydromatic.morel.compile.Inliner;
 import net.hydromatic.morel.compile.Relationalizer;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
+import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
@@ -324,7 +325,7 @@ class Ml {
     return this;
   }
 
-  Ml assertPlan(Matcher<String> planMatcher) {
+  Ml assertPlan(Matcher<Code> planMatcher) {
     return assertEval(null, planMatcher);
   }
 
@@ -336,7 +337,7 @@ class Ml {
     return assertEval(resultMatcher, null);
   }
 
-  Ml assertEval(Matcher<Object> resultMatcher, Matcher<String> planMatcher) {
+  Ml assertEval(Matcher<Object> resultMatcher, Matcher<Code> planMatcher) {
     return withValidate(resolved -> {
       final Session session = new Session();
       session.map.putAll(propMap);
@@ -349,7 +350,7 @@ class Ml {
   private Object eval(Session session, Environment env,
       TypeSystem typeSystem, AstNode statement,
       @Nullable Matcher<Object> resultMatcher,
-      @Nullable Matcher<String> planMatcher) {
+      @Nullable Matcher<Code> planMatcher) {
     CompiledStatement compiledStatement =
         Compiles.prepareStatement(typeSystem, session, env, statement);
     final List<String> output = new ArrayList<>();
@@ -366,7 +367,7 @@ class Ml {
     }
     if (planMatcher != null) {
       final String plan = Codes.describe(session.code);
-      assertThat(plan, planMatcher);
+      assertThat(session.code, planMatcher);
     }
     return result;
   }

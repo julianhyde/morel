@@ -25,6 +25,9 @@ import org.junit.jupiter.api.Test;
 import java.util.stream.Stream;
 
 import static net.hydromatic.morel.Matchers.equalsOrdered;
+import static net.hydromatic.morel.Matchers.equalsUnordered;
+import static net.hydromatic.morel.Matchers.isCode;
+import static net.hydromatic.morel.Matchers.isFullyCalcite;
 import static net.hydromatic.morel.Matchers.list;
 import static net.hydromatic.morel.Ml.ml;
 
@@ -265,7 +268,7 @@ public class AlgebraTest {
         .with(Prop.HYBRID, true)
         .assertType("{d5:int, deptno:int, empno:int} list")
         .assertEvalIter(equalsOrdered(list(25, 20, 7369)))
-        .assertPlan(is(plan));
+        .assertPlan(isCode(plan));
   }
 
   /** Tests a query that can be fully executed in Calcite. */
@@ -315,7 +318,7 @@ public class AlgebraTest {
         .with(Prop.HYBRID, true)
         .assertType("{d5:int, deptno:int, empno:int} list")
         .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)))
-        .assertPlan(is(plan));
+        .assertPlan(isCode(plan));
   }
 
   /** Tests a query that is "from" over no variables. The result has one row
@@ -326,7 +329,7 @@ public class AlgebraTest {
     ml(ml)
         .with(Prop.HYBRID, true)
         .assertType("unit list")
-        .assertPlan(is(plan))
+        .assertPlan(isCode(plan))
         .assertEvalIter(equalsOrdered(list()));
   }
 
@@ -389,7 +392,7 @@ public class AlgebraTest {
         .with(Prop.HYBRID, true)
         .with(Prop.INLINE_PASS_COUNT, inlinePassCount)
         .assertType("{d5:int, deptno:int, empno:int} list")
-        .assertPlan(is(plan))
+        .assertPlan(isCode(plan))
         .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)));
   }
 
@@ -419,7 +422,7 @@ public class AlgebraTest {
         .with(Prop.HYBRID, true)
         .with(Prop.INLINE_PASS_COUNT, 0)
         .assertType("int list")
-        .assertPlan(is(plan))
+        .assertPlan(isCode(plan))
         .assertEvalIter(equalsOrdered(20, 40, 60, 80));
   }
 
@@ -457,8 +460,50 @@ public class AlgebraTest {
         .with(Prop.HYBRID, true)
         .with(Prop.INLINE_PASS_COUNT, 0)
         .assertType("int list")
-        .assertPlan(is(plan))
+        .assertPlan(isCode(plan))
         .assertEvalIter(equalsOrdered(15, 25, 35, 45));
+  }
+
+  /** Tests that we can send {@code union} to Calcite. */
+  @Test void testUnion() {
+    final String ml = "from x in (\n"
+        + "(from e in scott.emp where e.job = \"CLERK\" yield e.deptno)\n"
+        + "union\n"
+        + "(from d in scott.dept yield d.deptno))\n";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("int list")
+        .assertPlan(isFullyCalcite())
+        .assertEvalIter(equalsUnordered(20, 20, 20, 40, 10, 10, 30, 30));
+  }
+
+  /** Tests that we can send {@code except} to Calcite. */
+  @Test void testExcept() {
+    final String ml = "from x in (\n"
+        + "(from d in scott.dept yield d.deptno)"
+        + "except\n"
+        + "(from e in scott.emp where e.job = \"CLERK\" yield e.deptno))\n";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("int list")
+        .assertPlan(isFullyCalcite())
+        .assertEvalIter(equalsUnordered(40));
+  }
+
+  /** Tests that we can send {@code intersect} to Calcite. */
+  @Test void testIntersect() {
+    final String ml = "from x in (\n"
+        + "(from e in scott.emp where e.job = \"CLERK\" yield e.deptno)\n"
+        + "intersect\n"
+        + "(from d in scott.dept yield d.deptno))\n";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .with(Prop.HYBRID, true)
+        .assertType("int list")
+        .assertPlan(isFullyCalcite())
+        .assertEvalIter(equalsUnordered(10, 20, 30));
   }
 }
 
