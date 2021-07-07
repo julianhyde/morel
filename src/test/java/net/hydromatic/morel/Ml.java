@@ -53,6 +53,7 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
@@ -170,14 +171,14 @@ class Ml {
     return this;
   }
 
-  private Ml withValidate(Consumer<TypeResolver.Resolved> action) {
+  private Ml withValidate(BiConsumer<TypeResolver.Resolved, Calcite> action) {
     return withParser(parser -> {
       try {
         final AstNode statement = parser.statement();
         final Calcite calcite = Calcite.withDataSets(dataSetMap);
         final TypeResolver.Resolved resolved =
             Compiles.validateExpression(statement, calcite.foreignValues());
-        action.accept(resolved);
+        action.accept(resolved, calcite);
       } catch (ParseException e) {
         throw new RuntimeException(e);
       }
@@ -185,7 +186,7 @@ class Ml {
   }
 
   Ml assertType(Matcher<String> matcher) {
-    return withValidate(resolved ->
+    return withValidate((resolved, calcite) ->
         assertThat(resolved.typeMap.getType(resolved.exp()).moniker(),
             matcher));
   }
@@ -195,7 +196,9 @@ class Ml {
   }
 
   Ml assertTypeThrows(Matcher<Throwable> matcher) {
-    assertError(() -> withValidate(resolved -> fail("expected error")),
+    assertError(() ->
+            withValidate((resolved, calcite) ->
+                fail("expected error")),
         matcher);
     return this;
   }
@@ -208,7 +211,8 @@ class Ml {
         final Environment env = Environments.empty();
         final Session session = new Session();
         final CompiledStatement compiled =
-            Compiles.prepareStatement(typeSystem, session, env, statement);
+            Compiles.prepareStatement(typeSystem, session, env, statement,
+                null);
         action.accept(compiled);
       } catch (ParseException e) {
         throw new RuntimeException(e);
@@ -338,21 +342,21 @@ class Ml {
   }
 
   Ml assertEval(Matcher<Object> resultMatcher, Matcher<Code> planMatcher) {
-    return withValidate(resolved -> {
+    return withValidate((resolved, calcite) -> {
       final Session session = new Session();
       session.map.putAll(propMap);
       eval(session, resolved.env, resolved.typeMap.typeSystem, resolved.node,
-          resultMatcher, planMatcher);
+          calcite, resultMatcher, planMatcher);
     });
   }
 
   @CanIgnoreReturnValue
   private Object eval(Session session, Environment env,
-      TypeSystem typeSystem, AstNode statement,
+      TypeSystem typeSystem, AstNode statement, Calcite calcite,
       @Nullable Matcher<Object> resultMatcher,
       @Nullable Matcher<Code> planMatcher) {
     CompiledStatement compiledStatement =
-        Compiles.prepareStatement(typeSystem, session, env, statement);
+        Compiles.prepareStatement(typeSystem, session, env, statement, calcite);
     final List<String> output = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     compiledStatement.eval(session, env, output, bindings);
