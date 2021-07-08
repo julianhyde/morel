@@ -526,9 +526,6 @@ public class AlgebraTest {
   /** Tests that we can send (what in SQL would be) an uncorrelated {@code IN}
    * sub-query to Calcite. */
   @Test void testNotElem() {
-    if (true) {
-      return;
-    }
     final UnaryOperator<Ml> fn = ml ->
         ml.withBinding("scott", BuiltInDataSet.SCOTT)
             .with(Prop.HYBRID, true)
@@ -537,9 +534,10 @@ public class AlgebraTest {
             .assertEvalIter(equalsUnordered("SALES", "OPERATIONS"));
 
     final String ml0 = "from d in scott.dept\n"
-        + "where not (d.deptno elem (from e in scott.emp\n"
-        + "    where e.job elem [\"ANALYST\", \"PRESIDENT\"]\n"
-        + "    yield e.deptno))\n"
+        + "where not (d.deptno elem\n"
+        + "    (from e in scott.emp\n"
+        + "        where e.job elem [\"ANALYST\", \"PRESIDENT\"]\n"
+        + "        yield e.deptno))\n"
         + "yield d.dname";
     final String ml1 = "from d in scott.dept\n"
         + "where d.deptno notElem (from e in scott.emp\n"

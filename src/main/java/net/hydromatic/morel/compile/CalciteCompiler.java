@@ -546,9 +546,18 @@ public class CalciteCompiler extends Compiler {
           final List<Core.Exp> args = ((Core.Tuple) apply.arg).args;
           switch (op) {
           case OP_ELEM:
+          case OP_NOT_ELEM:
             final RelNode r = toRel2(cx, args.get(1));
-            final RexNode e = translate(cx, args.get(0));
-            return RexSubQuery.in(r, ImmutableList.of(e));
+            if (r != null) {
+              final RexNode e = translate(cx, args.get(0));
+              final RexSubQuery in = RexSubQuery.in(r, ImmutableList.of(e));
+              switch (op) {
+              case OP_NOT_ELEM:
+                return cx.relBuilder.not(in);
+              default:
+                return in;
+              }
+            }
           }
           return cx.relBuilder.call(binaryOp, translateList(cx, args));
         }
