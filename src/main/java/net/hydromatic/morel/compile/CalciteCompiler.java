@@ -89,6 +89,9 @@ public class CalciteCompiler extends Compiler {
   static final Map<BuiltIn, SqlOperator> UNARY_OPERATORS =
       ImmutableMap.<BuiltIn, SqlOperator>builder()
           .put(BuiltIn.NOT, SqlStdOperatorTable.NOT)
+          .put(BuiltIn.LIST_NULL, SqlStdOperatorTable.EXISTS)
+          .put(BuiltIn.RELATIONAL_EXISTS, SqlStdOperatorTable.EXISTS)
+          .put(BuiltIn.RELATIONAL_NOT_EXISTS, SqlStdOperatorTable.EXISTS)
           .build();
 
   /** Morel infix operators and their exact equivalents in Calcite. */
@@ -121,7 +124,6 @@ public class CalciteCompiler extends Compiler {
           .put(BuiltIn.OP_MOD, SqlStdOperatorTable.MOD)
           .put(BuiltIn.Z_ANDALSO, SqlStdOperatorTable.AND)
           .put(BuiltIn.Z_ORELSE, SqlStdOperatorTable.OR)
-          .put(BuiltIn.RELATIONAL_EXISTS, SqlStdOperatorTable.EXISTS)
           .build();
 
   final Calcite calcite;
@@ -537,11 +539,14 @@ public class CalciteCompiler extends Compiler {
         // Is it a unary operator with a Calcite equivalent? E.g. not => NOT
         final SqlOperator unaryOp = UNARY_OPERATORS.get(op);
         if (unaryOp != null) {
-          switch (unaryOp.kind) {
-          case EXISTS:
+          switch (op) {
+          case LIST_NULL:
+          case RELATIONAL_EXISTS:
+          case RELATIONAL_NOT_EXISTS:
             final RelNode r = toRel2(cx, apply.arg);
             if (r != null) {
-              return RexSubQuery.exists(r);
+              final RexSubQuery exists = RexSubQuery.exists(r);
+              return maybeNot(cx, exists, op != BuiltIn.RELATIONAL_EXISTS);
             }
           }
           return cx.relBuilder.call(unaryOp, translate(cx, apply.arg));
@@ -559,12 +564,7 @@ public class CalciteCompiler extends Compiler {
             if (r != null) {
               final RexNode e = translate(cx, args.get(0));
               final RexSubQuery in = RexSubQuery.in(r, ImmutableList.of(e));
-              switch (op) {
-              case OP_NOT_ELEM:
-                return cx.relBuilder.not(in);
-              default:
-                return in;
-              }
+              return maybeNot(cx, in, op == BuiltIn.OP_NOT_ELEM);
             }
           }
           return cx.relBuilder.call(binaryOp, translateList(cx, args));
@@ -602,6 +602,10 @@ public class CalciteCompiler extends Compiler {
 
     // Translate as a call to a scalar function
     return morelScalar(cx, exp);
+  }
+
+  private RexNode maybeNot(RelContext cx, RexNode e, boolean not) {
+    return not ? cx.relBuilder.not(e) : e;
   }
 
   private Set<String> getRelationalVariables(Environment env,

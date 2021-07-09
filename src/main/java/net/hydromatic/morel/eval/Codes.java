@@ -814,11 +814,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_NULL */
   private static final Applicable LIST_NULL =
-      new ApplicableImpl(BuiltIn.LIST_NULL) {
-        @Override public Boolean apply(EvalEnv env, Object arg) {
-          return ((List) arg).isEmpty();
-        }
-      };
+      isNotEmpty(BuiltIn.LIST_NULL);
 
   /** @see BuiltIn#LIST_LENGTH */
   private static final Applicable LIST_LENGTH = length(BuiltIn.LIST_LENGTH);
@@ -1447,11 +1443,27 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_EXISTS */
   private static final Applicable RELATIONAL_EXISTS =
-      new ApplicableImpl(BuiltIn.RELATIONAL_EXISTS) {
-        @Override public Object apply(EvalEnv env, Object arg) {
-          return !((List) arg).isEmpty();
-        }
-      };
+      isEmpty(BuiltIn.RELATIONAL_EXISTS);
+
+  private static ApplicableImpl isEmpty(final BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Object apply(EvalEnv env, Object arg) {
+        return !((List) arg).isEmpty();
+      }
+    };
+  }
+
+  /** @see BuiltIn#RELATIONAL_NOT_EXISTS */
+  private static final Applicable RELATIONAL_NOT_EXISTS =
+      isNotEmpty(BuiltIn.RELATIONAL_NOT_EXISTS);
+
+  private static ApplicableImpl isNotEmpty(BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override public Boolean apply(EvalEnv env, Object arg) {
+        return ((List) arg).isEmpty();
+      }
+    };
+  }
 
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
   private static final Applicable Z_SUM_INT =
@@ -2035,6 +2047,7 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EXISTS, RELATIONAL_EXISTS)
+          .put(BuiltIn.RELATIONAL_NOT_EXISTS, RELATIONAL_NOT_EXISTS)
           .put(BuiltIn.RELATIONAL_MAX, RELATIONAL_MAX)
           .put(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN)
           .put(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM)
