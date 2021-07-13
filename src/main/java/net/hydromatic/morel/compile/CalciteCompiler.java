@@ -34,6 +34,7 @@ import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
+import net.hydromatic.morel.parse.Span;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -50,18 +51,22 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.externalize.RelJson;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rex.RexCorrelVariable;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.tools.RelBuilder;
+import org.apache.calcite.util.Holder;
 import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Util;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,7 +82,6 @@ import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
@@ -135,7 +139,7 @@ public class CalciteCompiler extends Compiler {
 
   public @Nullable RelNode toRel(Environment env, Core.Exp expression) {
     return toRel2(
-        new RelContext(env, calcite.relBuilder(), ImmutableMap.of(), 0),
+        new RelContext(env, null, calcite.relBuilder(), ImmutableMap.of(), 0),
         expression);
   }
 
@@ -158,7 +162,7 @@ public class CalciteCompiler extends Compiler {
       return code;
     }
     RelContext rx =
-        new RelContext(env, calcite.relBuilder(), ImmutableMap.of(), 0);
+        new RelContext(env, null, calcite.relBuilder(), ImmutableMap.of(), 0);
     if (((RelCode) code).toRel(rx, false)) {
       return calcite.code(rx.env, rx.relBuilder.build(), type);
     }
@@ -177,7 +181,7 @@ public class CalciteCompiler extends Compiler {
     if (code instanceof RelCode && !(cx instanceof RelContext)) {
       final RelBuilder relBuilder = calcite.relBuilder();
       final RelContext rx =
-          new RelContext(cx.env, relBuilder, ImmutableMap.of(), 0);
+          new RelContext(cx.env, null, relBuilder, ImmutableMap.of(), 0);
       if (toRel3(rx, expression, false)) {
         return calcite.code(rx.env, rx.relBuilder.build(), expression.type);
       }
@@ -359,7 +363,7 @@ public class CalciteCompiler extends Compiler {
         final List<Binding> bindings = new ArrayList<>();
         for (Map.Entry<Core.Pat, Core.Exp> patExp : from.sources.entrySet()) {
           final RelContext cx2 =
-              new RelContext(env.bindAll(bindings), calcite.relBuilder(),
+              new RelContext(env.bindAll(bindings), cx, calcite.relBuilder(),
                   cx.map, 0);
           if (!toRel3(cx2, patExp.getValue(), true)) {
             return false;
@@ -419,7 +423,7 @@ public class CalciteCompiler extends Compiler {
           }
           relBuilder.project(relBuilder.fields(list(biMap)));
         }
-        cx = new RelContext(env.bindAll(bindings), relBuilder, map, 1);
+        cx = new RelContext(env.bindAll(bindings), cx, relBuilder, map, 1);
         for (Core.FromStep fromStep : from.steps) {
           switch (fromStep.op) {
           case WHERE:
@@ -571,13 +575,14 @@ public class CalciteCompiler extends Compiler {
         }
       }
       if (apply.fn instanceof Core.RecordSelector
-          && apply.arg instanceof Core.Id
-          && cx.map.containsKey(((Core.Id) apply.arg).idPat.name)) {
-        // Something like '#deptno e',
-        final RexNode range =
-            cx.map.get(((Core.Id) apply.arg).idPat.name).apply(cx.relBuilder);
-        final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
-        return cx.relBuilder.field(range, selector.fieldName());
+          && apply.arg instanceof Core.Id) {
+        // Something like '#deptno e'
+        final Core.IdPat idPat = ((Core.Id) apply.arg).idPat;
+        final @Nullable RexNode range = cx.var(idPat.name);
+        if (range != null) {
+          final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
+          return cx.relBuilder.field(range, selector.fieldName());
+        }
       }
       final Set<String> vars = getRelationalVariables(cx.env, cx.map, apply);
       if (vars.isEmpty()) {
@@ -672,7 +677,7 @@ public class CalciteCompiler extends Compiler {
   }
 
   private RelContext where(RelContext cx, Core.Where where) {
-    cx.relBuilder.filter(translate(cx, where.exp));
+    cx.relBuilder.filter(cx.varList, translate(cx, where.exp));
     return cx;
   }
 
@@ -727,7 +732,7 @@ public class CalciteCompiler extends Compiler {
     });
 
     // Return a context containing a variable for each output field.
-    return new RelContext(cx.env.bindAll(bindings), cx.relBuilder, map, 1);
+    return new RelContext(cx.env.bindAll(bindings), cx, cx.relBuilder, map, 1);
   }
 
   /** Returns the Calcite operator corresponding to a Morel built-in aggregate
@@ -764,13 +769,16 @@ public class CalciteCompiler extends Compiler {
 
   /** Translation context. */
   static class RelContext extends Context {
+    final @Nullable RelContext parent;
     final RelBuilder relBuilder;
     final Map<String, Function<RelBuilder, RexNode>> map;
     final int inputCount;
+    final List<CorrelationId> varList = new ArrayList<>();
 
-    RelContext(Environment env, RelBuilder relBuilder,
+    RelContext(Environment env, RelContext parent, RelBuilder relBuilder,
         Map<String, Function<RelBuilder, RexNode>> map, int inputCount) {
       super(env);
+      this.parent = parent;
       this.relBuilder = relBuilder;
       this.map = map;
       this.inputCount = inputCount;
@@ -779,7 +787,26 @@ public class CalciteCompiler extends Compiler {
     @Override RelContext bindAll(Iterable<Binding> bindings) {
       final Environment env2 = env.bindAll(bindings);
       return env2 == env ? this
-          : new RelContext(env2, relBuilder, map, inputCount);
+          : new RelContext(env2, this, relBuilder, map, inputCount);
+    }
+
+    /** Creates a correlation variable with which to reference the current row
+     * of a relation in an enclosing loop. */
+    public @Nullable RexNode var(String name) {
+      final Function<RelBuilder, RexNode> fn = map.get(name);
+      if (fn != null) {
+        return fn.apply(relBuilder);
+      }
+      for (RelContext p = parent; p != null; p = p.parent) {
+        if (p.map.containsKey(name)) {
+          final Holder<@Nullable RexCorrelVariable> v = Holder.empty();
+          relBuilder.variable(v);
+          RexCorrelVariable correlVariable = v.get();
+          p.varList.add(correlVariable.id);
+          return correlVariable;
+        }
+      }
+      return null; // TODO: throw; make this non-nullable
     }
   }
 

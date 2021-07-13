@@ -20,6 +20,7 @@ package net.hydromatic.morel;
 
 import net.hydromatic.morel.eval.Prop;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.function.UnaryOperator;
@@ -623,6 +624,7 @@ public class AlgebraTest {
   }
 
   /** Tests that {@code exists} is pushed down to Calcite. */
+//  @Disabled
   @Test void testExistsCorrelated() {
     final String ml = "from d in scott.dept\n"
         + "where exists (\n"
@@ -649,7 +651,7 @@ public class AlgebraTest {
         + ")))";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-//        .with(Prop.HYBRID, true)
+        .with(Prop.HYBRID, true)
         .assertType("{deptno:int, dname:string, loc:string} list")
 //        .assertPlan(isFullyCalcite())
 //        .assertPlan(isCode(plan))
