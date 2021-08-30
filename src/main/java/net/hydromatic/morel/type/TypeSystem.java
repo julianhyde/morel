@@ -41,6 +41,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
 
+import static java.text.MessageFormat.format;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** A table that contains all types in use, indexed by their description (e.g.
@@ -325,7 +326,8 @@ public class TypeSystem {
       // Create a copy of the datatype with type variables substituted with
       // actual types.
       final PolymorphicDataType dataType = (PolymorphicDataType) type;
-      assert types.size() == dataType.typeVars.size();
+      assert types.size() == dataType.typeVars.size()
+          : format("types {0} vs typeVars {1}", types, dataType.typeVars);
       final TypeVisitor<Type> typeVisitor = new TypeVisitor<Type>() {
         @Override public Type visit(TypeVar typeVar) {
           return types.get(typeVar.ordinal);
