@@ -16,6 +16,6 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
+datatype 'a liszt = Nil | Cons of ('a * 'a liszt);
 
 (*) End dummy.sml
