@@ -153,6 +153,39 @@ in
 end;
 val it = ("x",2) : string * int
 
+(*) A datatype whose constructor overwrites another datatype's constructor
+datatype foo = W | X | Y of int;
+datatype foo = W | X | Y of int
+
+X;
+val it = X : foo
+
+Y;
+val it = fn : int -> foo
+
+Y 0;
+val it = Y 0 : foo
+
+datatype bar = X of int | Y of int * bool | Z;
+datatype bar = X of int | Y of int * bool | Z
+
+X;
+val it = fn : int -> bar
+
+Y;
+val it = fn : int * bool -> bar
+
+Y (1, true);
+val it = Y (1,true) : bar
+
+Z;
+val it = Z : bar
+
+
+(*) The following is syntax error:
+(*
+datatype bar = X of int | Y of (int, bool) | Z;
+*)
 
 (*) A recursive type, without generics
 datatype inttree = Empty | Node of inttree * int * inttree;
@@ -234,14 +267,19 @@ val it = Node (Empty,true,"yes",Empty) : (string,bool) tree
 
 
 (*) Mutually recursive
-(*  disabled - need generics
-datatype 'a tree = Empty | Node of 'a * 'a forest
+datatype 'a tree = Emptyx | Node of 'a * 'a forest
 and      'a forest = Nil | Cons of 'a tree * 'a forest;
-Empty;
+datatype 'a tree = Emptyx | Node of 'a * 'a forest
+datatype 'a forest = Cons of 'a tree * 'a forest | Nil
+
+Emptyx;
+val it = Emptyx : 'a tree
+
 Nil;
+val it = Nil : 'a forest
+
 Node (1, Nil);
 Node (1, Cons (Empty, Nil));
-*)
 
 (*) Parentheses are required for 2 or more type parameters,
 (*) optional for 1 type parameter,

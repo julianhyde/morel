@@ -643,7 +643,8 @@ public class Compiler {
                 int printDepth = Prop.PRINT_DEPTH.intValue(session.map);
                 int printLength = Prop.PRINT_LENGTH.intValue(session.map);
                 final Pretty pretty =
-                    new Pretty(lineWidth, printLength, printDepth, stringDepth);
+                    new Pretty(typeSystem, lineWidth, printLength, printDepth,
+                        stringDepth);
                 pretty.pretty(buf, pat2.type,
                     new Pretty.TypedVal(pat2.name, o2, pat2.type));
                 final String out = buf.toString();

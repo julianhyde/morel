@@ -53,7 +53,7 @@ public interface Type {
   /** Returns a copy of this type, specialized by substituting type
    * parameters. */
   @Deprecated
-  default Type substitute(TypeSystem typeSystem, List<Type> types,
+  default Type substitute(TypeSystem typeSystem, List<? extends Type> types,
       TypeSystem.Transaction transaction) {
     if (!types.isEmpty()) {
       throw new IllegalArgumentException("too many type parameters, "

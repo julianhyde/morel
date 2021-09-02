@@ -22,15 +22,14 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
-import org.apache.calcite.util.Util;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.function.BiConsumer;
 
-import static java.util.Objects.requireNonNull;
-
 import static net.hydromatic.morel.util.Static.skip;
+
+import static java.util.Objects.requireNonNull;
 
 /** Value that is sufficient for a function to bind its argument
  * and evaluate its body. */

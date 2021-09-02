@@ -24,8 +24,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Ordering;
 
-import net.hydromatic.morel.ast.Op;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -96,8 +94,8 @@ public class DataType extends ParameterizedType {
         : new DataType(name, key, parameterTypes, typeConstructors);
   }
 
-  @Override public Type substitute(TypeSystem typeSystem, List<Type> types,
-      TypeSystem.Transaction transaction) {
+  @Override public Type substitute(TypeSystem typeSystem,
+      List<? extends Type> types, TypeSystem.Transaction transaction) {
     // Create a copy of this datatype with type variables substituted with
     // actual types.
     if (types.equals(parameterTypes)) {

@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.ApplyType;
@@ -28,6 +29,7 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
@@ -36,18 +38,20 @@ import com.google.common.collect.ImmutableList;
 import java.util.List;
 import javax.annotation.Nonnull;
 
+import static java.util.Objects.requireNonNull;
+
 /** Prints values. */
 class Pretty {
 
+  private final TypeSystem typeSystem;
   private final int lineWidth;
   private final int printLength;
   private final int printDepth;
   private final int stringDepth;
 
-  static final Pretty DEFAULT = new Pretty(78, 12, 5, 79);
-
-  Pretty(int lineWidth, int printLength, int printDepth,
+  Pretty(TypeSystem typeSystem, int lineWidth, int printLength, int printDepth,
       int stringDepth) {
+    this.typeSystem = requireNonNull(typeSystem);
     this.lineWidth = lineWidth;
     this.printLength = printLength;
     this.printDepth = printDepth;
@@ -110,7 +114,7 @@ class Pretty {
       final TypedVal typedVal = (TypedVal) value;
       pretty1(buf, indent, lineEnd, depth, PrimitiveType.BOOL,
           "val " + typedVal.name + " = ");
-      pretty1(buf, indent + 2, lineEnd, depth + 1, type, typedVal.o);
+      pretty1(buf, indent + 2, lineEnd, depth + 1, typedVal.type, typedVal.o);
       buf.append(' ');
       pretty1(buf, indent + 2, lineEnd, depth, PrimitiveType.BOOL,
           ": " + unqualified(typedVal.type).moniker());
@@ -228,12 +232,25 @@ class Pretty {
       }
       final String tyConName = (String) list.get(0);
       buf.append(tyConName);
-      final Type typeConArgType = dataType.typeConstructors.get(tyConName);
+      final Type typeConArgType0 = dataType.typeConstructors.get(tyConName);
+      final Type typeConArgType;
+      try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
+        typeConArgType =
+            typeConArgType0.substitute(typeSystem, argTypes, transaction);
+      }
       if (list.size() == 2) {
         final Object arg = list.get(1);
         buf.append(' ');
+        final boolean needParentheses = typeConArgType.op() == Op.APPLY_TYPE
+            && arg instanceof List;
+        if (needParentheses) {
+          buf.append('(');
+        }
         pretty2(buf, indent, lineEnd, depth + 1, typeConArgType,
             ImmutableList.of(), arg);
+        if (needParentheses) {
+          buf.append(')');
+        }
       }
       return buf;
 

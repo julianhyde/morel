@@ -21,8 +21,6 @@ package net.hydromatic.morel.util;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
 
-import org.apache.calcite.util.Util;
-
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;

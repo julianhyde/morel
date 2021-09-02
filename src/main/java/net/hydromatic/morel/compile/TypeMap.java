@@ -26,8 +26,6 @@ import net.hydromatic.morel.type.TypeVar;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.Unifier;
 
-import org.apache.calcite.util.Util;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;

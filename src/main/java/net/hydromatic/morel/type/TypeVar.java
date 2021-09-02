@@ -107,6 +107,11 @@ public class TypeVar implements Type {
     return this;
   }
 
+  @Override public Type substitute(TypeSystem typeSystem,
+      List<? extends Type> types, TypeSystem.Transaction transaction) {
+    return types.get(ordinal);
+  }
+
   /** Returns whether a list is the type variables [0, 1, 2, ..., n]. */
   // TODO remove
   public static boolean is123(List<Type> types) {
