@@ -609,7 +609,7 @@ public class Compiler {
         try {
           final Object o = code.eval(evalEnv);
           outBindings.accept(Binding.of(valDecl.pat.withType(type), o));
-          Pretty.pretty(buf, type, new Pretty.TypedVal(name, o, type0));
+          Pretty.pretty(buf, typeSystem, type, new Pretty.TypedVal(name, o, type0));
         } catch (Codes.MorelRuntimeException e) {
           session.handle(e, buf);
         }

@@ -18,9 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.ApplyType;
 import net.hydromatic.morel.type.DataType;
@@ -30,12 +28,16 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
+import com.google.common.collect.ImmutableList;
+
 import java.util.List;
-import java.util.Map;
 import javax.annotation.Nonnull;
+
+import static java.util.Objects.requireNonNull;
 
 /** Prints values. */
 class Pretty {
@@ -44,23 +46,30 @@ class Pretty {
   private static final int LIST_LENGTH = 12;
   private static final int DEPTH_LIMIT = 5;
 
-  private Pretty() {}
+  private final TypeSystem typeSystem;
+  private final StringBuilder buf;
+
+  private Pretty(TypeSystem typeSystem, StringBuilder buf) {
+    this.typeSystem = requireNonNull(typeSystem);
+    this.buf = requireNonNull(buf);
+  }
 
   /** Prints a value to a buffer. */
   static StringBuilder pretty(@Nonnull StringBuilder buf,
+      @Nonnull TypeSystem typeSystem,
       @Nonnull Type type, @Nonnull Object value) {
-    return pretty1(buf, 0, new int[] {buf.length() + LINE_LENGTH}, 0, type,
-        value);
+    return new Pretty(typeSystem, buf)
+        .pretty1(0, new int[] {buf.length() + LINE_LENGTH}, 0, type, value);
   }
 
   /** Prints a value to a buffer. If the first attempt goes beyond
    * {@code lineEnd}, back-tracks, adds a newline and indent, and
    * tries again one time. */
-  private static StringBuilder pretty1(@Nonnull StringBuilder buf, int indent,
+  private StringBuilder pretty1(int indent,
       int[] lineEnd, int depth, @Nonnull Type type, @Nonnull Object value) {
     final int start = buf.length();
     final int end = lineEnd[0];
-    pretty2(buf, indent, lineEnd, depth, type, ImmutableList.of(), value);
+    pretty2(indent, lineEnd, depth, type, ImmutableList.of(), value);
     if (buf.length() > end) {
       // Reset to start, remove trailing whitespace, add newline
       buf.setLength(start);
@@ -75,7 +84,7 @@ class Pretty {
 
       lineEnd[0] = buf.length() + LINE_LENGTH;
       indent(buf, indent);
-      pretty2(buf, indent, lineEnd, depth, type, ImmutableList.of(), value);
+      pretty2(indent, lineEnd, depth, type, ImmutableList.of(), value);
     }
     return buf;
   }
@@ -122,16 +131,16 @@ class Pretty {
     return buf.length() - 1 - i;
   }
 
-  private static StringBuilder pretty2(@Nonnull StringBuilder buf,
-      int indent, int[] lineEnd, int depth, @Nonnull Type type,
-      List<? extends Type> argTypes, @Nonnull Object value) {
+  private StringBuilder pretty2(int indent, int[] lineEnd, int depth,
+      @Nonnull Type type, List<? extends Type> argTypes,
+      @Nonnull Object value) {
     if (value instanceof TypedVal) {
       final TypedVal typedVal = (TypedVal) value;
-      pretty1(buf, indent, lineEnd, depth + 1, PrimitiveType.BOOL,
+      pretty1(indent, lineEnd, depth + 1, PrimitiveType.BOOL,
           "val " + typedVal.name + " = ");
-      pretty1(buf, indent + 2, lineEnd, depth + 1, type, typedVal.o);
+      pretty1(indent + 2, lineEnd, depth + 1, typedVal.type, typedVal.o);
       buf.append(' ');
-      pretty1(buf, indent + 2, lineEnd, depth + 1, PrimitiveType.BOOL,
+      pretty1(indent + 2, lineEnd, depth + 1, PrimitiveType.BOOL,
           ": " + unqualified(typedVal.type).moniker());
       return buf;
     }
@@ -139,7 +148,7 @@ class Pretty {
       final NamedVal namedVal = (NamedVal) value;
       buf.append(namedVal.name);
       buf.append('=');
-      pretty1(buf, indent, lineEnd, depth, type, namedVal.o);
+      pretty1(indent, lineEnd, depth, type, namedVal.o);
       return buf;
     }
     if (depth > DEPTH_LIMIT) {
@@ -191,7 +200,7 @@ class Pretty {
         // Do not attempt to print the elements of a foreign list. It might be huge.
         return buf.append("<relation>");
       }
-      return printList(buf, indent, lineEnd, depth, listType.elementType, list);
+      return printList(indent, lineEnd, depth, listType.elementType, list);
 
     case RECORD_TYPE:
       final RecordType recordType = (RecordType) type;
@@ -204,7 +213,7 @@ class Pretty {
             if (buf.length() > start) {
               buf.append(",");
             }
-            pretty1(buf, indent + 1, lineEnd, depth + 1, nameType.getValue(),
+            pretty1(indent + 1, lineEnd, depth + 1, nameType.getValue(),
                 new NamedVal(nameType.getKey(), o));
           });
       return buf.append("}");
@@ -220,17 +229,17 @@ class Pretty {
             if (buf.length() > start) {
               buf.append(",");
             }
-            pretty1(buf, indent, lineEnd, depth + 1, elementType, o);
+            pretty1(indent, lineEnd, depth + 1, elementType, o);
           });
       return buf.append(")");
 
     case FORALL_TYPE:
-      return pretty2(buf, indent, lineEnd, depth + 1, ((ForallType) type).type,
+      return pretty2(indent, lineEnd, depth + 1, ((ForallType) type).type,
           ImmutableList.of(), value);
 
     case APPLY_TYPE:
       final ApplyType applyType = (ApplyType) type;
-      return pretty2(buf, indent, lineEnd, depth + 1, applyType.type,
+      return pretty2(indent, lineEnd, depth + 1, applyType.type,
           applyType.types, value);
 
     case DATA_TYPE:
@@ -238,17 +247,31 @@ class Pretty {
       //noinspection unchecked
       list = (List) value;
       if (dataType.name.equals("vector")) {
-        return printList(buf.append('#'), indent, lineEnd, depth,
+        buf.append('#');
+        return printList(indent, lineEnd, depth,
             dataType.parameterTypes.get(0), list);
       }
       final String tyConName = (String) list.get(0);
       buf.append(tyConName);
-      final Type typeConArgType = dataType.typeConstructors.get(tyConName);
+      final Type typeConArgType0 = dataType.typeConstructors.get(tyConName);
+      final Type typeConArgType;
+      try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
+        typeConArgType =
+            typeConArgType0.substitute(typeSystem, argTypes, transaction);
+      }
       if (list.size() == 2) {
         final Object arg = list.get(1);
         buf.append(' ');
-        pretty2(buf, indent, lineEnd, depth + 1, typeConArgType,
+        final boolean needParentheses = typeConArgType.op() == Op.APPLY_TYPE
+            && arg instanceof List;
+        if (needParentheses) {
+          buf.append('(');
+        }
+        pretty2(indent, lineEnd, depth + 1, typeConArgType,
             ImmutableList.of(), arg);
+        if (needParentheses) {
+          buf.append(')');
+        }
       }
       return buf;
 
@@ -262,9 +285,8 @@ class Pretty {
         : type;
   }
 
-  private static StringBuilder printList(@Nonnull StringBuilder buf,
-      int indent, int[] lineEnd, int depth, @Nonnull Type elementType,
-      @Nonnull List<Object> list) {
+  private StringBuilder printList(int indent, int[] lineEnd, int depth,
+      @Nonnull Type elementType, @Nonnull List<Object> list) {
     buf.append("[");
     int start = buf.length();
     for (Ord<Object> o : Ord.zip(list)) {
@@ -272,11 +294,11 @@ class Pretty {
         buf.append(",");
       }
       if (o.i >= LIST_LENGTH) {
-        pretty1(buf, indent + 1, lineEnd, depth + 1, PrimitiveType.BOOL,
+        pretty1(indent + 1, lineEnd, depth + 1, PrimitiveType.BOOL,
             "...");
         break;
       } else {
-        pretty1(buf, indent + 1, lineEnd, depth + 1, elementType, o.e);
+        pretty1(indent + 1, lineEnd, depth + 1, elementType, o.e);
       }
     }
     return buf.append("]");
