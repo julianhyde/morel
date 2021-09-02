@@ -28,7 +28,7 @@ import java.util.Objects;
 
 /** Base class for types that accept type parameters.
  *
- * These types have not just names but also monikers. For example,
+ * <p>These types have not just names but also monikers. For example,
  * the datatype named {@code option} has instantiations whose monikers
  * include {@code int option}, {@code (string * bool) option}, and
  * {@code 'b option}.

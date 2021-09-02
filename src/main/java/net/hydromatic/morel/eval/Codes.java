@@ -57,10 +57,9 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.toImmutableList;
 
 import static java.util.Objects.requireNonNull;
-import static net.hydromatic.morel.ast.AstBuilder.ast;
-import static net.hydromatic.morel.util.Static.toImmutableList;
 
 /** Helpers for {@link Code}. */
 @SuppressWarnings({"rawtypes", "unchecked"})

@@ -18,12 +18,12 @@
  */
 package net.hydromatic.morel.type;
 
+import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.util.Ord;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
-
-import net.hydromatic.morel.ast.Op;
-import net.hydromatic.morel.util.Ord;
 
 import java.util.List;
 import java.util.Objects;

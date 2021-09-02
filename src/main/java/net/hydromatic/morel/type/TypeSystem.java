@@ -43,11 +43,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.Function;
-import java.util.stream.Collector;
-
-import static net.hydromatic.morel.util.Static.toImmutableList;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.toImmutableList;
 
 /** A table that contains all types in use, indexed by their description (e.g.
  * "{@code int -> int}"). */
@@ -177,7 +175,7 @@ public class TypeSystem {
     Pair.forEach(defs, dataTypeMap.values(), (def, dataType) -> {
       fixer.apply(dataType, dataTypeMap);
       if (def.scheme) {
-        if (!def.types.isEmpty() && false) {
+        if (!def.types.isEmpty() && "TODO".isEmpty()) {
           // We have just created an entry for the moniker (e.g. "'a option"),
           // so now create an entry for the name (e.g. "option").
           final ForallType forallType = forallType((List) def.types, dataType);
@@ -381,6 +379,14 @@ public class TypeSystem {
         return dataType.substitute(this, types, transaction);
       }
     }
+    if (type instanceof ApplyType
+        && ((ApplyType) type).type instanceof DataType) {
+      final ApplyType applyType = (ApplyType) type;
+      final DataType dataType = (DataType) applyType.type;
+      try (Transaction transaction = transaction()) {
+        return dataType.substitute(this, types, transaction);
+      }
+    }
     return new ApplyType((ParameterizedType) type, ImmutableList.copyOf(types));
   }
 
@@ -449,6 +455,10 @@ public class TypeSystem {
   /** Visitor that finds all {@link TypeVar} instances within a {@link Type}. */
   private static class VariableCollector extends TypeVisitor<Void> {
     final Set<TypeVar> vars = new LinkedHashSet<>();
+
+    @Override public Void visit(DataType dataType) {
+      return null; // ignore type variables in the datatype
+    }
 
     @Override public Void visit(TypeVar typeVar) {
       vars.add(typeVar);

@@ -68,8 +68,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
-import static net.hydromatic.morel.util.Static.toImmutableList;
 import static net.hydromatic.morel.util.Static.skip;
+import static net.hydromatic.morel.util.Static.toImmutableList;
 
 /** Resolves the type of an expression. */
 @SuppressWarnings("StaticPseudoFunctionalStyleMethod")

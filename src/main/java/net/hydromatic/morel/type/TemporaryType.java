@@ -53,8 +53,8 @@ public class TemporaryType extends ParameterizedType {
     return Keys.name(name);
   }
 
-  @Override public Type substitute(TypeSystem typeSystem, List<Type> types,
-      TypeSystem.Transaction transaction) {
+  @Override public Type substitute(TypeSystem typeSystem,
+      List<? extends Type> types, TypeSystem.Transaction transaction) {
     // Create a copy of this temporary type with type variables substituted
     // with actual types.
     if (types.equals(parameterTypes)) {
