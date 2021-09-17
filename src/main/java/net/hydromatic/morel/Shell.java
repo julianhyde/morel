@@ -43,6 +43,7 @@ import org.jline.reader.ParsedLine;
 import org.jline.reader.Parser;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
+import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
@@ -104,12 +105,16 @@ public class Shell {
     this.valueMap = valueMapBuilder.build();
 
     final TerminalBuilder builder = TerminalBuilder.builder();
+    final Attributes attributes = new Attributes();
     builder.streams(in, out);
     builder.system(system);
     builder.dumb(dumb);
     if (dumb) {
       builder.type("dumb");
+      attributes.setLocalFlag(Attributes.LocalFlag.ECHO, true);
+      attributes.setLocalFlag(Attributes.LocalFlag.ECHOE, true);
     }
+    builder.attributes(attributes);
     terminal = builder.build();
   }
 

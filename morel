@@ -51,6 +51,9 @@ if [ "$cygwin" ]; then
 fi
 
 export JAVA_OPTS=-Djavax.xml.parsers.DocumentBuilderFactory=com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl
+export VM_OPTS="$VM_OPTS -Dorg.jline.terminal.dumb=true"
+export JAVA_OPTS="$JAVA_OPTS -Dorg.jline.terminal.dumb=true"
+
 
 exec java $VM_OPTS -cp "${CP}" $JAVA_OPTS net.hydromatic.morel.Shell --foreign='net.hydromatic.morel.BuiltInDataSet$Dictionary' "$@"
 
