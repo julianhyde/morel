@@ -664,8 +664,8 @@ val it = ["Shaggy","Scooby"] : string list
 
 (*) WordCount in Standard ML
 (* Note: The blog post used Standard ML. Here, to accommodate missing
-   language features in Morel, we have changed "List.rev" to
-   "List.rev" (etc.) and "(op +)" to "(fn (x, y) => x + y)". *)
+   language features in Morel, we have changed "(op +)" to
+   "(fn (x, y) => x + y)". *)
 fun mapReduce mapper reducer list =
   let
     fun update (key, value, []) = [(key, [value])]
@@ -771,6 +771,44 @@ val it =
    {count=1,word="sat"},{count=1,word="and"},{count=2,word="stunk"},
    {count=3,word="stump"},{count=1,word="on"},{count=2,word="thunk"},
    {count=2,word="skunk"}] : {count:int, word:string} list
+
+
+(*) === Revisit wordCount for StrangeLoop 2021 talk =================
+fun wordCount lines =
+  from line in lines,
+      (word, count) in wc_mapper line
+    group word compute count = (fn counts => wc_reducer ("", counts)) of count;
+val wordCount = fn : string list -> {count:int, word:string} list
+
+wordCount lines;
+val it =
+  [{count=2,word="a"},{count=3,word="the"},{count=1,word="but"},
+   {count=1,word="sat"},{count=1,word="and"},{count=2,word="stunk"},
+   {count=3,word="stump"},{count=1,word="on"},{count=2,word="thunk"},
+   {count=2,word="skunk"}] : {count:int, word:string} list
+
+
+(*
+fun mapReduce mapper reducer list =
+  from e in list,
+      (k, v) in mapper e
+    group k compute (fn vs => reducer (k, vs)) of v;
+*)
+fun mapReduce2 mapper reducer list =
+  from e in list,
+      (k, v) in mapper e
+    group k compute c = (fn vs => reducer ("", vs)) of v;
+val mapReduce2 = fn
+  : ('a -> ('b * 'c) list) -> (string * 'c list -> 'd) -> 'a list -> {c:'d, k:'b} list
+
+fun wordCount2 lines = mapReduce2 wc_mapper wc_reducer lines;
+val wordCount2 = fn : string list -> {c:int, k:string} list
+
+wordCount2 lines;
+val it =
+  [{c=2,k="a"},{c=3,k="the"},{c=1,k="but"},{c=1,k="sat"},{c=1,k="and"},
+   {c=2,k="stunk"},{c=3,k="stump"},{c=1,k="on"},{c=2,k="thunk"},
+   {c=2,k="skunk"}] : {c:int, k:string} list
 
 
 (*) === Aggregate functions =========================================

@@ -420,8 +420,8 @@ end;
 
 (*) WordCount in Standard ML
 (* Note: The blog post used Standard ML. Here, to accommodate missing
-   language features in Morel, we have changed "List.rev" to
-   "List.rev" (etc.) and "(op +)" to "(fn (x, y) => x + y)". *)
+   language features in Morel, we have changed "(op +)" to
+   "(fn (x, y) => x + y)". *)
 fun mapReduce mapper reducer list =
   let
     fun update (key, value, []) = [(key, [value])]
@@ -490,6 +490,26 @@ fun wordCount lines =
     group word compute count
   end;
 wordCount lines;
+
+(*) === Revisit wordCount for StrangeLoop 2021 talk =================
+fun wordCount lines =
+  from line in lines,
+      (word, count) in wc_mapper line
+    group word compute count = (fn counts => wc_reducer ("", counts)) of count;
+wordCount lines;
+
+(*
+fun mapReduce mapper reducer list =
+  from e in list,
+      (k, v) in mapper e
+    group k compute (fn vs => reducer (k, vs)) of v;
+*)
+fun mapReduce2 mapper reducer list =
+  from e in list,
+      (k, v) in mapper e
+    group k compute c = (fn vs => reducer ("", vs)) of v;
+fun wordCount2 lines = mapReduce2 wc_mapper wc_reducer lines;
+wordCount2 lines;
 
 (*) === Aggregate functions =========================================
 
