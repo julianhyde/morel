@@ -907,7 +907,7 @@ public class Core {
       return sources.equals(this.sources)
           && steps.equals(this.steps)
           ? this
-          : core.from(typeSystem, type(), sources, initialBindings, steps);
+          : core.from(type(), sources, initialBindings, steps);
     }
   }
 
@@ -915,13 +915,10 @@ public class Core {
    * or {@code order}. */
   public abstract static class FromStep extends BaseNode {
     public final ImmutableList<Binding> bindings;
-    public final boolean array;
 
-    FromStep(Op op, ImmutableList<Binding> bindings, boolean array) {
+    FromStep(Op op, ImmutableList<Binding> bindings) {
       super(op);
       this.bindings = bindings;
-      this.array = bindings.size() != 1;
-//      checkArgument(array || bindings.size() == 1); // TODO
     }
 
     @Override public abstract FromStep accept(Shuttle shuttle);
@@ -931,8 +928,8 @@ public class Core {
   public static class Where extends FromStep {
     public final Exp exp;
 
-    Where(ImmutableList<Binding> bindings, boolean array, Exp exp) {
-      super(Op.WHERE, bindings, array);
+    Where(ImmutableList<Binding> bindings, Exp exp) {
+      super(Op.WHERE, bindings);
       this.exp = exp;
     }
 
@@ -952,7 +949,7 @@ public class Core {
       return exp == this.exp
           && bindings.equals(this.bindings)
           ? this
-          : core.where(bindings, array, exp);
+          : core.where(bindings, exp);
     }
   }
 
@@ -960,9 +957,9 @@ public class Core {
   public static class Order extends FromStep {
     public final ImmutableList<OrderItem> orderItems;
 
-    Order(ImmutableList<Binding> bindings, boolean array,
+    Order(ImmutableList<Binding> bindings,
         ImmutableList<OrderItem> orderItems) {
-      super(Op.ORDER, bindings, array);
+      super(Op.ORDER, bindings);
       this.orderItems = requireNonNull(orderItems);
     }
 
@@ -983,7 +980,7 @@ public class Core {
       return bindings.equals(this.bindings)
           && orderItems.equals(this.orderItems)
           ? this
-          : core.order(bindings, array, orderItems);
+          : core.order(bindings, orderItems);
     }
   }
 
@@ -1022,10 +1019,10 @@ public class Core {
     public final SortedMap<Core.IdPat, Exp> groupExps;
     public final SortedMap<Core.IdPat, Aggregate> aggregates;
 
-    Group(ImmutableList<Binding> bindings, boolean array,
+    Group(ImmutableList<Binding> bindings,
         ImmutableSortedMap<Core.IdPat, Exp> groupExps,
         ImmutableSortedMap<Core.IdPat, Aggregate> aggregates) {
-      super(Op.GROUP, bindings, array);
+      super(Op.GROUP, bindings);
       this.groupExps = groupExps;
       this.aggregates = aggregates;
     }
@@ -1062,8 +1059,8 @@ public class Core {
   public static class Yield extends FromStep {
     public final Exp exp;
 
-    Yield(ImmutableList<Binding> bindings, boolean array, Exp exp) {
-      super(Op.YIELD, bindings, array);
+    Yield(ImmutableList<Binding> bindings, Exp exp) {
+      super(Op.YIELD, bindings);
       this.exp = exp;
     }
 
@@ -1083,7 +1080,7 @@ public class Core {
       return bindings.equals(this.bindings)
           && exp == this.exp
           ? this
-          : core.yield_(bindings, array, exp);
+          : core.yield_(bindings, exp);
     }
   }
 

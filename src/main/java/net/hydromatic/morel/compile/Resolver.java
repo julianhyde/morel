@@ -496,9 +496,8 @@ public class Resolver {
       sources.put(corePat, coreExp);
     });
 
-    final boolean array = bindings.size() != 1;
     final ListType type = (ListType) typeMap.getType(from);
-    return fromStepToCore(sources, bindings, array, type, from.steps,
+    return fromStepToCore(sources, bindings, type, from.steps,
         ImmutableList.of());
   }
 
@@ -510,33 +509,33 @@ public class Resolver {
   }
 
   private Core.From fromStepToCore(Map<Core.Pat, Core.Exp> sources,
-      List<Binding> bindings, boolean array, ListType type, List<Ast.FromStep> steps,
+      List<Binding> bindings, ListType type, List<Ast.FromStep> steps,
       List<Core.FromStep> coreSteps) {
     final Resolver r = withEnv(bindings);
     if (steps.isEmpty()) {
-      return core.from(typeMap.typeSystem, type, sources, bindings, coreSteps);
+      return core.from(type, sources, bindings, coreSteps);
     }
     final Ast.FromStep step = steps.get(0);
     switch (step.op) {
     case WHERE:
       final Ast.Where where = (Ast.Where) step;
       final Core.Where coreWhere =
-          core.where(bindings, array, r.toCore(where.exp));
-      return fromStepToCore(sources, coreWhere.bindings, array, type,
+          core.where(bindings, r.toCore(where.exp));
+      return fromStepToCore(sources, coreWhere.bindings, type,
           Util.skip(steps), append(coreSteps, coreWhere));
 
     case YIELD:
       final Ast.Yield yield = (Ast.Yield) step;
       final Core.Yield coreYield =
           core.yield_(typeMap.typeSystem, r.toCore(yield.exp));
-      return fromStepToCore(sources, coreYield.bindings, array, type,
+      return fromStepToCore(sources, coreYield.bindings, type,
           Util.skip(steps), append(coreSteps, coreYield));
 
     case ORDER:
       final Ast.Order order = (Ast.Order) step;
       final Core.Order coreOrder =
-          core.order(bindings, array, transform(order.orderItems, r::toCore));
-      return fromStepToCore(sources, coreOrder.bindings, array, type,
+          core.order(bindings, transform(order.orderItems, r::toCore));
+      return fromStepToCore(sources, coreOrder.bindings, type,
           Util.skip(steps), append(coreSteps, coreOrder));
 
     case GROUP:
@@ -551,7 +550,7 @@ public class Resolver {
           aggregates.put(toCorePat(aggregate.id), r.toCore(aggregate)));
       final Core.Group coreGroup =
           core.group(groupExps.build(), aggregates.build());
-      return fromStepToCore(sources, coreGroup.bindings, array, type,
+      return fromStepToCore(sources, coreGroup.bindings, type,
           Util.skip(steps), append(coreSteps, coreGroup));
 
     default:

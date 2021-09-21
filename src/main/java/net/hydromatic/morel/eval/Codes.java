@@ -471,11 +471,11 @@ public abstract class Codes {
 
   /** Creates a {@link RowSink} for a {@code order} clause. */
   public static RowSink orderRowSink(ImmutableList<Pair<Code, Boolean>> codes,
-      ImmutableList<Binding> bindings, boolean array, RowSink rowSink) {
+      ImmutableList<Binding> bindings, RowSink rowSink) {
     @SuppressWarnings("UnstableApiUsage")
     final ImmutableList<String> labels = bindings.stream().map(b -> b.id.name)
         .collect(ImmutableList.toImmutableList());
-    return new OrderRowSink(codes, labels, array, rowSink);
+    return new OrderRowSink(codes, labels, rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code group} clause. */
@@ -2313,12 +2313,11 @@ public abstract class Codes {
     final Object[] values;
 
     OrderRowSink(List<Pair<Code, Boolean>> codes,
-        ImmutableList<String> names, boolean array, RowSink rowSink) {
+        ImmutableList<String> names, RowSink rowSink) {
       this.codes = codes;
       this.names = names;
       this.rowSink = rowSink;
-      this.values = names.size() != 1 ? new Object[names.size()] : null;
-      checkArgument(array || names.size() == 1);
+      this.values = names.size() == 1 ? null : new Object[names.size()];
     }
 
     @Override public Describer describe(Describer describer) {

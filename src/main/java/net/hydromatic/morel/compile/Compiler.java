@@ -42,8 +42,6 @@ import net.hydromatic.morel.util.ThreadLocals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Iterables;
-
 import org.apache.calcite.util.Util;
 
 import java.math.BigDecimal;
@@ -58,10 +56,11 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
-import static com.google.common.collect.Iterables.getOnlyElement;
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
+
+import static com.google.common.collect.Iterables.getOnlyElement;
 
 import static java.util.Objects.requireNonNull;
 
@@ -347,9 +346,7 @@ public class Compiler {
           order.orderItems.stream()
               .map(i -> Pair.of(compile(cx, i.exp), i.direction == DESC))
               .collect(toImmutableList());
-      boolean array = true;
-      return () ->
-          Codes.orderRowSink(codes, bindings, array, nextFactory.get());
+      return () -> Codes.orderRowSink(codes, bindings, nextFactory.get());
 
     case GROUP:
       final Core.Group group = (Core.Group) firstStep;

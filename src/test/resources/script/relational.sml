@@ -141,6 +141,19 @@ from e in emps
   order d desc
   yield {tens = d / 10, units = d mod 10};
 
+(*) record whose only field is a record with only one field
+from x in [{a = {a = 1}}, {a = {a = 2}}]
+  yield {b = x.a};
+
+from x in [{a = {a = 1}}, {a = {a = 2}}]
+  yield {b = x.a.a};
+
+from x in [{a = {a = 1}}, {a = {a = 2}}]
+  yield {x.a};
+
+from i in [1, 2, 3]
+  yield {i = {i = i}};
+
 from e in emps
   yield
     let
