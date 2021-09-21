@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.FnType;
@@ -93,7 +94,7 @@ public class Relationalizer extends EnvShuttle {
               core.apply(fnType.resultType, f,
                   core.implicitYieldExp(typeSystem,
                       from.initialBindings, from.steps)));
-          return core.from(typeSystem, from.sources, from.initialBindings,
+          return core.from(typeSystem, null, from.sources, from.initialBindings,
               append(from.steps, yieldStep));
         }
         if (literal.value == BuiltIn.LIST_FILTER) {
@@ -103,12 +104,14 @@ public class Relationalizer extends EnvShuttle {
           final Core.Exp f = apply2.arg;
           final FnType fnType = (FnType) f.type;
           final Core.From from = toFrom(apply.arg);
+          final CoreBuilder.StepType stepType =
+              core.lastBindings(from.initialBindings, from.steps);
           final Core.Where whereStep =
-              core.where(core.lastBindings(from.initialBindings, from.steps),
+              core.where(stepType.bindings, stepType.array,
                   core.apply(fnType.resultType, f,
                       core.implicitYieldExp(typeSystem,
                           from.initialBindings, from.steps)));
-          return core.from(typeSystem, from.sources, from.initialBindings,
+          return core.from(typeSystem, null, from.sources, from.initialBindings,
               append(from.steps, whereStep));
         }
       }

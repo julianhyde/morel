@@ -96,6 +96,52 @@ from e in emps
   yield x + y;
 
 from e in emps
+  yield {e.deptno, e.name}
+  order deptno desc;
+
+from e in emps
+  yield {e.deptno}
+  order deptno desc;
+
+(*) 'yield' followed by 'order'
+from e in emps
+  yield {e.deptno, x = e.deptno, e.name}
+  order deptno desc, name;
+
+(*) 'yield' followed by 'order', then 'yield', then 'order'
+from e in emps
+  yield {e.deptno, x = e.deptno, e.name}
+  order deptno, name desc
+  yield {name = x, x = name, z = x + 1}
+  order z desc;
+
+(*) singleton record 'yield' followed by 'where'
+from e in emps
+  yield {d = e.deptno}
+  where d > 10;
+
+(*) singleton record 'yield' followed by singleton 'group'
+from e in emps
+  yield {d = e.deptno}
+  group d;
+
+(*) singleton record 'yield' followed by 'group'
+from e in emps
+  yield {d = e.deptno}
+  group d compute c = count;
+
+(*) singleton record 'yield' followed by 'order'
+from e in emps
+  yield {d = e.deptno}
+  order d desc;
+
+(*) singleton record 'yield' followed by 'order' then 'yield'
+from e in emps
+  yield {d = e.deptno}
+  order d desc
+  yield {tens = d / 10, units = d mod 10};
+
+from e in emps
   yield
     let
       val x = e.id + e.deptno

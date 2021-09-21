@@ -48,6 +48,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 
 /** Builds parse tree nodes. */
@@ -292,34 +293,36 @@ public enum CoreBuilder {
 
   /** Derives the result type, then calls
    * {@link #from(ListType, Map, Iterable, List)}. */
-  public Core.From from(TypeSystem typeSystem, Map<Core.Pat, Core.Exp> sources,
+  public Core.From from(TypeSystem typeSystem, ListType type, Map<Core.Pat, Core.Exp> sources,
       Iterable<? extends Binding> bindings, List<Core.FromStep> steps) {
     final Type elementType;
     if (!steps.isEmpty() && Iterables.getLast(steps) instanceof Core.Yield) {
       elementType = ((Core.Yield) Iterables.getLast(steps)).exp.type;
     } else {
-      final List<Binding> lastBindings = core.lastBindings(bindings, steps);
-      if (lastBindings.size() == 1) {
-        elementType = lastBindings.get(0).id.type;
+      final StepType lastBindings = core.lastBindings(bindings, steps);
+      if (!lastBindings.array) {
+        elementType = getOnlyElement(lastBindings.bindings).id.type;
       } else {
         final SortedMap<String, Type> argNameTypes = new TreeMap<>(ORDERING);
-        lastBindings.forEach(b -> argNameTypes.put(b.id.name, b.id.type));
+        lastBindings.bindings.forEach(b -> argNameTypes.put(b.id.name, b.id.type));
         elementType = typeSystem.recordType(argNameTypes);
       }
     }
-    final ListType type = typeSystem.listType(elementType);
+    if (type == null) {
+      type = typeSystem.listType(elementType);
+    }
     return from(type, ImmutableMap.copyOf(sources),
         ImmutableList.copyOf(bindings), ImmutableList.copyOf(steps));
   }
 
   /** Derives the initial bindings, then calls
-   * {@link #from(TypeSystem, Map, Iterable, List)}. */
+   * {@link #from(TypeSystem, ListType, Map, Iterable, List)}. */
   public Core.From from(TypeSystem typeSystem, Map<Core.Pat, Core.Exp> sources,
       List<Core.FromStep> steps) {
     final List<Binding> bindings = new ArrayList<>();
     sources.keySet().forEach(pat ->
         Compiles.acceptBinding(typeSystem, pat, bindings));
-    return from(typeSystem, sources, bindings, steps);
+    return from(typeSystem, null, sources, bindings, steps);
   }
 
   /** Returns what would be the yield expression if we created a
@@ -334,13 +337,13 @@ public enum CoreBuilder {
    * </ul> */
   public Core.Exp implicitYieldExp(TypeSystem typeSystem,
       List<Binding> initialBindings, List<Core.FromStep> steps) {
-    final List<Binding> bindings = lastBindings(initialBindings, steps);
-    if (bindings.size() == 1) {
-      return core.id(Iterables.getOnlyElement(bindings).id);
+    final StepType stepType = lastBindings(initialBindings, steps);
+    if (stepType.bindings.size() == 1) { // TODO remove array
+      return core.id(getOnlyElement(stepType.bindings).id);
     } else {
       final SortedMap<Core.IdPat, Core.Exp> map = new TreeMap<>();
       final SortedMap<String, Type> argNameTypes = new TreeMap<>(ORDERING);
-      bindings.forEach(b -> {
+      stepType.bindings.forEach(b -> {
         map.put(b.id, core.id(b.id));
         argNameTypes.put(b.id.name, b.id.type);
       });
@@ -348,12 +351,25 @@ public enum CoreBuilder {
     }
   }
 
-  public ImmutableList<Binding> lastBindings(
-      Iterable<? extends Binding> initialBindings,
+  public StepType lastBindings(Iterable<? extends Binding> initialBindings,
       List<? extends Core.FromStep> steps) {
-    return steps.isEmpty()
-        ? ImmutableList.copyOf(initialBindings)
-        : Iterables.getLast(steps).bindings;
+    if (steps.isEmpty()) {
+      ImmutableList<Binding> list = ImmutableList.copyOf(initialBindings);
+      return new StepType(list, list.size() != 1);
+    } else {
+      Core.FromStep fromStep = Iterables.getLast(steps);
+      return new StepType(fromStep.bindings, fromStep.array);
+    }
+  }
+
+  public static class StepType {
+    public final ImmutableList<Binding> bindings;
+    public final boolean array;
+
+    StepType(ImmutableList<Binding> bindings, boolean array) {
+      this.bindings = bindings;
+      this.array = array;
+    }
   }
 
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {
@@ -382,9 +398,9 @@ public enum CoreBuilder {
     return new Core.Aggregate(type, aggregate, argument);
   }
 
-  public Core.Order order(List<Binding> bindings,
+  public Core.Order order(List<Binding> bindings, boolean array,
       Iterable<Core.OrderItem> orderItems) {
-    return new Core.Order(ImmutableList.copyOf(bindings),
+    return new Core.Order(ImmutableList.copyOf(bindings), array,
         ImmutableList.copyOf(orderItems));
   }
 
@@ -397,33 +413,36 @@ public enum CoreBuilder {
     final List<Binding> bindings = new ArrayList<>();
     groupExps.keySet().forEach(id -> bindings.add(Binding.of(id)));
     aggregates.keySet().forEach(id -> bindings.add(Binding.of(id)));
-    return new Core.Group(ImmutableList.copyOf(bindings),
+    return new Core.Group(ImmutableList.copyOf(bindings), true,
         ImmutableSortedMap.copyOfSorted(groupExps),
         ImmutableSortedMap.copyOfSorted(aggregates));
   }
 
-  public Core.Where where(List<Binding> bindings, Core.Exp exp) {
-    return new Core.Where(ImmutableList.copyOf(bindings), exp);
+  public Core.Where where(List<Binding> bindings, boolean array, Core.Exp exp) {
+    return new Core.Where(ImmutableList.copyOf(bindings), array, exp);
   }
 
-  public Core.Yield yield_(List<Binding> bindings, Core.Exp exp) {
-    return new Core.Yield(ImmutableList.copyOf(bindings), exp);
+  public Core.Yield yield_(List<Binding> bindings, boolean array, Core.Exp exp) {
+    return new Core.Yield(ImmutableList.copyOf(bindings), array, exp);
   }
 
-  /** Derives bindings, then calls {@link #yield_(List, Core.Exp)}. */
+  /** Derives bindings, then calls {@link #yield_(List, boolean, Core.Exp)}. */
   public Core.Yield yield_(TypeSystem typeSystem, Core.Exp exp) {
     final List<Binding> bindings = new ArrayList<>();
+    boolean array;
     switch (exp.type.op()) {
     case RECORD_TYPE:
     case TUPLE_TYPE:
+      array = true;
       ((RecordLikeType) exp.type).argNameTypes().forEach((name, type) ->
           bindings.add(
               Binding.of(core.idPat(type, name, typeSystem.nameGenerator))));
       break;
     default:
+      array = false;
       bindings.add(Binding.of(core.idPat(exp.type, typeSystem.nameGenerator)));
     }
-    return yield_(bindings, exp);
+    return yield_(bindings, array, exp);
   }
 
 }

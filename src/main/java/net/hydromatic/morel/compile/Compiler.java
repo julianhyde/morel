@@ -42,6 +42,8 @@ import net.hydromatic.morel.util.ThreadLocals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Iterables;
+
 import org.apache.calcite.util.Util;
 
 import java.math.BigDecimal;
@@ -56,6 +58,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
@@ -288,19 +291,22 @@ public class Compiler {
       Compiles.bindPattern(typeSystem, bindings, pat);
     });
     Supplier<Codes.RowSink> rowSinkFactory =
-        createRowSinkFactory(cx, ImmutableList.copyOf(bindings), from.steps);
+        createRowSinkFactory(cx, ImmutableList.copyOf(bindings), from.steps,
+            from.type().elementType);
     return Codes.from(sourceCodes, rowSinkFactory);
   }
 
   protected Supplier<Codes.RowSink> createRowSinkFactory(Context cx0,
-      ImmutableList<Binding> bindings, List<Core.FromStep> steps) {
+      ImmutableList<Binding> bindings, List<Core.FromStep> steps,
+      Type elementType) {
     final Context cx = cx0.bindAll(bindings);
     if (steps.isEmpty()) {
       final List<String> fieldNames =
           bindings.stream().map(b -> b.id).sorted()
               .map(id -> id.name).collect(Collectors.toList());
       final Code code;
-      if (fieldNames.size() == 1) {
+      if (fieldNames.size() == 1
+          && getOnlyElement(bindings).id.type.equals(elementType)) {
         code = Codes.get(fieldNames.get(0));
       } else {
         code = Codes.getTuple(fieldNames);
@@ -309,7 +315,8 @@ public class Compiler {
     }
     final Core.FromStep firstStep = steps.get(0);
     final Supplier<Codes.RowSink> nextFactory =
-        createRowSinkFactory(cx, firstStep.bindings, Util.skip(steps));
+        createRowSinkFactory(cx, firstStep.bindings, Util.skip(steps),
+            elementType);
     switch (firstStep.op) {
     case WHERE:
       final Core.Where where = (Core.Where) firstStep;
@@ -340,7 +347,9 @@ public class Compiler {
           order.orderItems.stream()
               .map(i -> Pair.of(compile(cx, i.exp), i.direction == DESC))
               .collect(toImmutableList());
-      return () -> Codes.orderRowSink(codes, bindings, nextFactory.get());
+      boolean array = true;
+      return () ->
+          Codes.orderRowSink(codes, bindings, array, nextFactory.get());
 
     case GROUP:
       final Core.Group group = (Core.Group) firstStep;

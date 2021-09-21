@@ -471,11 +471,11 @@ public abstract class Codes {
 
   /** Creates a {@link RowSink} for a {@code order} clause. */
   public static RowSink orderRowSink(ImmutableList<Pair<Code, Boolean>> codes,
-      ImmutableList<Binding> bindings, RowSink rowSink) {
+      ImmutableList<Binding> bindings, boolean array, RowSink rowSink) {
     @SuppressWarnings("UnstableApiUsage")
     final ImmutableList<String> labels = bindings.stream().map(b -> b.id.name)
         .collect(ImmutableList.toImmutableList());
-    return new OrderRowSink(codes, labels, rowSink);
+    return new OrderRowSink(codes, labels, array, rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code group} clause. */
@@ -2313,11 +2313,12 @@ public abstract class Codes {
     final Object[] values;
 
     OrderRowSink(List<Pair<Code, Boolean>> codes,
-        ImmutableList<String> names, RowSink rowSink) {
+        ImmutableList<String> names, boolean array, RowSink rowSink) {
       this.codes = codes;
       this.names = names;
       this.rowSink = rowSink;
-      this.values = names.size() == 1 ? null : new Object[names.size()];
+      this.values = names.size() != 1 ? new Object[names.size()] : null;
+      checkArgument(array || names.size() == 1);
     }
 
     @Override public Describer describe(Describer describer) {
@@ -2329,7 +2330,7 @@ public abstract class Codes {
     }
 
     public void accept(EvalEnv env) {
-      if (names.size() == 1) {
+      if (values == null) {
         rows.add(env.getOpt(names.get(0)));
       } else {
         for (int i = 0; i < names.size(); i++) {
@@ -2381,7 +2382,7 @@ public abstract class Codes {
       this.names = names;
       this.codes = codes;
       this.rowSink = rowSink;
-      this.values = new Object[names.size()];
+      this.values = names.size() == 1 ? null : new Object[names.size()];
     }
 
     @Override public Describer describe(Describer describer) {
@@ -2392,10 +2393,15 @@ public abstract class Codes {
 
     @Override public void accept(EvalEnv env) {
       final MutableEvalEnv env2 = env.bindMutableArray(names);
-      for (int i = 0; i < codes.size(); i++) {
-        values[i] = codes.get(i).eval(env);
+      if (values == null) {
+        final Object value = codes.get(0).eval(env);
+        env2.set(value);
+      } else {
+        for (int i = 0; i < codes.size(); i++) {
+          values[i] = codes.get(i).eval(env);
+        }
+        env2.set(values);
       }
-      env2.set(values);
       rowSink.accept(env2);
     }
 
