@@ -322,6 +322,14 @@ public class Converters {
                     .calciteType));
         return new C2m(typeBuilder.build(), type);
 
+      case TY_VAR:
+        // The reason that a type variable is present is because the type
+        // doesn't matter. For example, in 'map (fn x => 1) []' it doesn't
+        // matter what the element type of the empty list is, because the
+        // lambda doesn't look at the elements. So, pretend the type is 'bool'.
+        type = PrimitiveType.BOOL;
+        // fall through
+
       case ID:
         final PrimitiveType primitiveType = (PrimitiveType) type;
         switch (primitiveType) {
@@ -358,8 +366,10 @@ public class Converters {
         default:
           throw new AssertionError("unknown type " + type);
         }
+
+      default:
+        throw new UnsupportedOperationException("cannot convert type " + type);
       }
-      throw new UnsupportedOperationException("cannot convert type " + type);
     }
 
     public Object toCalciteObject(Object v) {

@@ -150,6 +150,7 @@ in
 end;
 val it = ("x",2) : string * int
 
+
 (*) A datatype whose constructor overwrites another datatype's constructor
 datatype foo = W | X | Y of int;
 datatype foo = W | X | Y of int

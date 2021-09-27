@@ -96,7 +96,20 @@ public class TypeSystem {
 
   /** Looks up a type by name, returning null if not found. */
   public Type lookupOpt(String name) {
+    // TODO: only use this for names, e.g. 'option',
+    // not monikers e.g. 'int option';
+    // assert !name.contains(" ") : name;
     return typeByName.get(name);
+  }
+
+  /** Gets a type that matches a key, creating if necessary. */
+  public Type typeFor(Key key) {
+    return typeByKey.computeIfAbsent(key, this::keyToType);
+  }
+
+  /** Creates a type from a key. */
+  private Type keyToType(Key key) {
+    return key.toType(this);
   }
 
   /** Creates a multi-step function type.
@@ -121,8 +134,7 @@ public class TypeSystem {
 
   /** Creates a function type. */
   public FnType fnType(Type paramType, Type resultType) {
-    final Key key = Keys.fn(paramType, resultType);
-    return (FnType) typeByKey.computeIfAbsent(key, Key::toType);
+    return (FnType) typeFor(Keys.fn(paramType, resultType));
   }
 
   /** Creates a tuple type from an array of types. */
@@ -132,14 +144,12 @@ public class TypeSystem {
 
   /** Creates a tuple type. */
   public RecordLikeType tupleType(List<? extends Type> argTypes) {
-    final Key key = Keys.tuple(argTypes);
-    return (RecordLikeType) typeByKey.computeIfAbsent(key, Key::toType);
+    return (RecordLikeType) typeFor(Keys.tuple(argTypes));
   }
 
   /** Creates a list type. */
   public ListType listType(Type elementType) {
-    final Key key = Keys.list(elementType);
-    return (ListType) typeByKey.computeIfAbsent(key, Key::toType);
+    return (ListType) typeFor(Keys.list(elementType));
   }
 
   /** Creates several data types simultaneously. */
@@ -166,8 +176,9 @@ public class TypeSystem {
         typeByName.put(def.name, type);
         typeByKey.put(key, type);
       } else {
-        key = Keys.apply((ParameterizedType) lookup(def.name), def.types);
-        type = typeByKey.computeIfAbsent(key, Key::toType);
+        final ForallType type1 = (ForallType) lookup(def.name);
+        key = Keys.forallTypeApply(type1, def.types);
+        type = typeFor(key);
       }
       dataTypeMap.put(key, type);
     });
@@ -175,7 +186,7 @@ public class TypeSystem {
     Pair.forEach(defs, dataTypeMap.values(), (def, dataType) -> {
       fixer.apply(dataType, dataTypeMap);
       if (def.scheme) {
-        if (!def.types.isEmpty() && "TODO".isEmpty()) {
+        if (!def.types.isEmpty() && !"TODO".isEmpty()) {
           // We have just created an entry for the moniker (e.g. "'a option"),
           // so now create an entry for the name (e.g. "option").
           final ForallType forallType = forallType((List) def.types, dataType);
@@ -242,8 +253,7 @@ public class TypeSystem {
         && argNameTypes2.size() != 1) {
       return tupleType(ImmutableList.copyOf(argNameTypes2.values()));
     }
-    final Key key = Keys.record(argNameTypes2);
-    return (RecordLikeType) this.typeByKey.computeIfAbsent(key, Key::toType);
+    return (RecordLikeType) typeFor(Keys.record(argNameTypes2));
   }
 
   /** Returns whether the collection is ["1", "2", ... n]. */
@@ -287,24 +297,20 @@ public class TypeSystem {
 
   /** Creates a "for all" type. */
   public ForallType forallType(List<TypeVar> typeVars, Type type) {
-    final Key key = Keys.forall(type, typeVars);
     assert typeVars.equals(typeVariables(typeVars.size()));
-    return (ForallType) typeByKey.computeIfAbsent(key, Key::toType);
+    final Key key = Keys.forall(type, typeVars);
+    return (ForallType) typeFor(key);
   }
 
   static StringBuilder unparseList(StringBuilder builder, Op op, int left,
       int right, Collection<? extends Type> argTypes) {
     Ord.forEach(argTypes, (type, i) -> {
-      if (i == 0) {
-        unparse(builder, type, left, op.left);
-      } else {
+      if (i > 0) {
         builder.append(op.padded);
-        if (i < argTypes.size() - 1) {
-          unparse(builder, type, op.right, op.left);
-        } else {
-          unparse(builder, type, op.right, right);
-        }
       }
+      unparse(builder, type,
+          i == 0 ? left : op.right,
+          i == argTypes.size() - 1 ? right : op.left);
     });
     return builder;
   }
@@ -392,8 +398,7 @@ public class TypeSystem {
 
   /** Creates a type variable. */
   public TypeVar typeVariable(int ordinal) {
-    final Key key = Keys.ordinal(ordinal);
-    return (TypeVar) typeByKey.computeIfAbsent(key, Key::toType);
+    return (TypeVar) typeFor(Keys.ordinal(ordinal));
   }
 
   /** Creates an "option" type.

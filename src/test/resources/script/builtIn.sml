@@ -41,6 +41,9 @@ Sys.plan ();
 (*) datatype option
 SOME 1;
 NONE;
+NONE = NONE;
+NONE = SOME 1;
+SOME "a" = NONE;
 SOME (SOME true);
 
 (* General ----------------------------------------------------- *)

@@ -89,46 +89,10 @@ class Pretty {
     return buf;
   }
 
-  private static boolean endsWithSpaces(StringBuilder buf, int n) {
-    if (buf.length() < n) {
-      return false;
-    }
-    for (int i = 0; i < n; i++) {
-      if (buf.charAt(buf.length() - 1 - i) != ' ') {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private static boolean hasIndent(StringBuilder buf, int n) {
-    int i = buf.length() - 1 - n;
-    if (i < 0) {
-      return false;
-    }
-    if (buf.charAt(i) != '\n') {
-      return false;
-    }
-    for (; i < buf.length(); i++) {
-      if (buf.charAt(i) != ' ') {
-        return false;
-      }
-    }
-    return true;
-  }
-
   private static void indent(@Nonnull StringBuilder buf, int indent) {
     for (int i = 0; i < indent; i++) {
       buf.append(' ');
     }
-  }
-
-  private static int currentIndent(StringBuilder buf) {
-    int i = buf.length() - 1;
-    while (i > 0 && buf.charAt(i) != '\n') {
-      --i;
-    }
-    return buf.length() - 1 - i;
   }
 
   private StringBuilder pretty2(int indent, int[] lineEnd, int depth,
@@ -248,8 +212,7 @@ class Pretty {
       list = (List) value;
       if (dataType.name.equals("vector")) {
         buf.append('#');
-        return printList(indent, lineEnd, depth,
-            dataType.parameterTypes.get(0), list);
+        return printList(indent, lineEnd, depth, argTypes.get(0), list);
       }
       final String tyConName = (String) list.get(0);
       buf.append(tyConName);
@@ -257,7 +220,7 @@ class Pretty {
       final Type typeConArgType;
       try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
         typeConArgType =
-            typeConArgType0.substitute(typeSystem, argTypes, transaction);
+            typeConArgType0.substitute1(typeSystem, argTypes, transaction);
       }
       if (list.size() == 2) {
         final Object arg = list.get(1);

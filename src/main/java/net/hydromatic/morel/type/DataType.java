@@ -109,36 +109,33 @@ public class DataType extends ParameterizedType {
     assert types.size() == parameterTypes.size();
     final List<Keys.DataTypeDef> defs = new ArrayList<>();
     final Map<String, TemporaryType> temporaryTypeMap = new HashMap<>();
-    try (TypeSystem.Transaction transaction2 = typeSystem.transaction()) {
-      final TypeShuttle typeVisitor = new TypeShuttle(typeSystem) {
-        @Override public Type visit(TypeVar typeVar) {
-          return types.get(typeVar.ordinal);
-        }
+    final TypeShuttle typeVisitor = new TypeShuttle(typeSystem) {
+      @Override public Type visit(TypeVar typeVar) {
+        return types.get(typeVar.ordinal);
+      }
 
-        @Override public Type visit(DataType dataType) {
-          final String moniker1 = computeMoniker(dataType.name, types);
-          final Type type = typeSystem.lookupOpt(moniker1);
-          if (type != null) {
-            return type;
-          }
-          final Type type2 = temporaryTypeMap.get(moniker1);
-          if (type2 != null) {
-            return type2;
-          }
-          final TemporaryType temporaryType =
-              typeSystem.temporaryType(dataType.name, types, transaction2,
-                  false);
-          temporaryTypeMap.put(moniker1, temporaryType);
-          final SortedMap<String, Type> typeConstructors = new TreeMap<>();
-          dataType.typeConstructors.forEach((tyConName, tyConType) ->
-              typeConstructors.put(tyConName, tyConType.accept(this)));
-          defs.add(
-              Keys.dataTypeDef(dataType.name, types, typeConstructors, false));
-          return temporaryType;
+      @Override public Type visit(DataType dataType) {
+        final String moniker1 = computeMoniker(dataType.name, types);
+        final Type type = typeSystem.lookupOpt(moniker1);
+        if (type != null) {
+          return type;
         }
-      };
-      accept(typeVisitor);
-    }
+        final Type type2 = temporaryTypeMap.get(moniker1);
+        if (type2 != null) {
+          return type2;
+        }
+        final TemporaryType temporaryType =
+            typeSystem.temporaryType(dataType.name, types, transaction, false);
+        temporaryTypeMap.put(moniker1, temporaryType);
+        final SortedMap<String, Type> typeConstructors = new TreeMap<>();
+        dataType.typeConstructors.forEach((tyConName, tyConType) ->
+            typeConstructors.put(tyConName, tyConType.accept(this)));
+        defs.add(
+            Keys.dataTypeDef(dataType.name, types, typeConstructors, false));
+        return temporaryType;
+      }
+    };
+    accept(typeVisitor);
     final List<Type> types1 = typeSystem.dataTypes(defs);
     return types1.get(0);
   }

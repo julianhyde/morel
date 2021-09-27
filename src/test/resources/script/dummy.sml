@@ -16,6 +16,10 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-
+(*
+datatype 'x tree = Empty | Node of 'x tree * 'x * 'x tree;
+Node(Empty, 1, Empty);
+*)
+(*) SOME (SOME true);
+let fun g [] = NONE | g (h :: t) = SOME (h, t) in {a=1, b=g} end;
 (*) End dummy.sml

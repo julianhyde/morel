@@ -57,6 +57,7 @@ public enum Op {
 
   // miscellaneous
   BAR(" | "),
+  COMMA(", "),
   FUN_BIND(" and "),
   FUN_MATCH,
   TY_CON,

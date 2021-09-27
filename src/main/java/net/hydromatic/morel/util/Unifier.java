@@ -189,12 +189,12 @@ public abstract class Unifier {
       return accept(new StringBuilder()).toString();
     }
 
-    public StringBuilder accept(StringBuilder b) {
-      b.append("[");
+    public StringBuilder accept(StringBuilder buf) {
+      buf.append("[");
       Pair.forEachIndexed(resultMap, (i, variable, term) ->
-          b.append(i > 0 ? ", " : "").append(term)
+          buf.append(i > 0 ? ", " : "").append(term)
               .append("/").append(variable));
-      return b.append("]");
+      return buf.append("]");
     }
 
     public Term resolve(Term term) {

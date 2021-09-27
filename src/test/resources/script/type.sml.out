@@ -72,6 +72,27 @@ end;
 val it = 1 : int
 
 
+(*) A function with a type that is tricky to unparse correctly:
+(*)   'a list -> ('a * 'a list) option
+fun g [] = NONE
+  | g (h :: t) = SOME (h, t);
+val g = fn : 'a list -> ('a * 'a list) option
+
+
+(*) Ditto:
+(*)   'a list -> ('a * 'a list option) option
+fun g [] = NONE
+  | g (h :: t) = SOME (h, SOME t);
+val g = fn : 'a list -> ('a * 'a list option) option
+
+
+(*) Ditto:
+(*)   'a list -> ('a option * 'a list option) option
+fun g [] = NONE
+  | g (h :: t) = SOME (SOME h, SOME t);
+val g = fn : 'a list -> ('a option * 'a list option) option
+
+
 (*) Pattern-match on record
 fun f {a = c, b} = b + c;
 val f = fn : {a:int, b:int} -> int
