@@ -48,6 +48,9 @@ val nan = Real.posInf / Real.negInf;
 (*) datatype option
 SOME 1;
 NONE;
+NONE = NONE;
+NONE = SOME 1;
+SOME "a" = NONE;
 SOME (SOME true);
 
 (* Top-level environment --------------------------------------- *)

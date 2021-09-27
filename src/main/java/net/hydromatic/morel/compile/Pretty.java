@@ -98,14 +98,6 @@ class Pretty {
     }
   }
 
-  private static int currentIndent(StringBuilder buf) {
-    int i = buf.length() - 1;
-    while (i > 0 && buf.charAt(i) != '\n') {
-      --i;
-    }
-    return buf.length() - 1 - i;
-  }
-
   private StringBuilder pretty2(@Nonnull StringBuilder buf,
       int indent, int[] lineEnd, int depth,
       @Nonnull Type type, List<? extends Type> argTypes,
@@ -228,7 +220,7 @@ class Pretty {
       list = (List) value;
       if (dataType.name.equals("vector")) {
         return printList(buf.append('#'), indent, lineEnd, depth,
-            dataType.parameterTypes.get(0), list);
+            argTypes.get(0), list);
       }
       final String tyConName = (String) list.get(0);
       buf.append(tyConName);
@@ -236,7 +228,7 @@ class Pretty {
       final Type typeConArgType;
       try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
         typeConArgType =
-            typeConArgType0.substitute(typeSystem, argTypes, transaction);
+            typeConArgType0.substitute1(typeSystem, argTypes, transaction);
       }
       if (list.size() == 2) {
         final Object arg = list.get(1);

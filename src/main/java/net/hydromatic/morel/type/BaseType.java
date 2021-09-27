@@ -30,12 +30,12 @@ abstract class BaseType implements Type {
     this.op = Objects.requireNonNull(op);
   }
 
-  @Override public String toString() {
-    return key().toString();
-  }
-
   public Op op() {
     return op;
+  }
+
+  @Override public String toString() {
+    return key().moniker();
   }
 }
 

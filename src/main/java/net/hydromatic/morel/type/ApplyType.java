@@ -36,6 +36,7 @@ public class ApplyType extends BaseType {
     super(Op.APPLY_TYPE);
     this.type = Objects.requireNonNull(type);
     this.types = Objects.requireNonNull(types);
+    assert !(type instanceof DataType);
   }
 
   public Key key() {
