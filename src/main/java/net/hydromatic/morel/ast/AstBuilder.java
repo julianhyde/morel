@@ -439,6 +439,11 @@ public enum AstBuilder {
     return apply(apply(ref(pos, BuiltIn.LIST_MAP), e1), e2);
   }
 
+  public Ast.Scan scan(Pos pos, Op op, Ast.Pat pat, Ast.Exp exp,
+      @Nullable Ast.Exp condition) {
+    return new Ast.Scan(pos, op, pat, exp, condition);
+  }
+
   public Ast.Order order(Pos pos, Iterable<Ast.OrderItem> orderItems) {
     return new Ast.Order(pos, ImmutableList.copyOf(orderItems));
   }

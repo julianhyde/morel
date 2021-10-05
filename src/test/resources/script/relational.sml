@@ -695,14 +695,14 @@ from
 
 (*) Patterns left of 'in'
 fun sumPairs pairs =
-  from (left, right) in pairs
-  yield left + right;
+  from (l, r) in pairs
+  yield l + r;
 sumPairs [];
 sumPairs [(1, 2), (3, 4)];
 
 (*) Skip rows that do not match the pattern
-from (left, 2) in [(1, 2), (3, 4), (5, 2)]
-  yield left;
+from (l, 2) in [(1, 2), (3, 4), (5, 2)]
+  yield l;
 
 (*) Record pattern
 from {b = b, a = a} in [{a=1,b=2}];

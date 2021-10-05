@@ -1362,6 +1362,26 @@ public class MainTest {
     ml(ml).assertEvalIter(equalsOrdered(10, 20, 30, 30));
   }
 
+  @Test void testParseFrom() {
+    ml("from").assertParseSame();
+    ml("from e in emps").assertParseSame();
+    ml("from e in emps where c").assertParseSame();
+    ml("from e in emps, d in depts").assertParseSame();
+    ml("from , d in depts").assertError("Xx");
+    ml("from join d in depts on c").assertError("Xx");
+    ml("from left join d in depts on c").assertError("Xx");
+    ml("from right join d in depts on c").assertError("Xx");
+    ml("from full join d in depts on c").assertError("Xx");
+    ml("from e in emps join d in depts").assertError("Xx");
+    ml("from e in emps join d in depts where c").assertError("Xx");
+    ml("from e in emps join d in depts on c").assertParseSame();
+    ml("from e in emps left join d in depts on c").assertParseSame();
+    ml("from e in emps right join d in depts on c").assertParseSame();
+    ml("from e in emps full join d in depts on c").assertParseSame();
+    ml("from e in (from z in emps) join d in (from y in depts) on c")
+        .assertParseSame();
+  }
+
   @Test void testFromYieldExpression() {
     final String ml = "let\n"
         + "  val emps = [\n"
@@ -1396,7 +1416,8 @@ public class MainTest {
         + "in\n"
         + "  from e in emps where #deptno e = 30\n"
         + "end";
-    ml(ml).assertEvalIter(equalsOrdered(list(30, 103, "Scooby")));
+    ml(ml).assertType("{deptno:int, id:int, name:string} list")
+        .assertEvalIter(equalsOrdered(list(30, 103, "Scooby")));
   }
 
   @Test void testFromJoinNoYield() {
