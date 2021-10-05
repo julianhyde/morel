@@ -428,14 +428,14 @@ Option.filter (fn x => x mod 2 = 0) 1;
 Option.filter (fn x => x mod 2 = 0) 2;
 Sys.plan ();
 
-(*) val join : 'a option option -> 'a option
-Option.join (SOME (SOME 1));
-Option.join (SOME noneInt);
+(*) val scan : 'a option option -> 'a option
+Option.joyn (SOME (SOME 1));
+Option.joyn (SOME noneInt);
 (* sml-nj gives
   stdIn:1.2-1.18 Warning: type vars not generalized because of
      value restriction are instantiated to dummy types (X1,X2,...)
 *)
-Option.join NONE;
+Option.joyn NONE;
 Sys.plan ();
 
 (*) val app : ('a -> unit) -> 'a option -> unit

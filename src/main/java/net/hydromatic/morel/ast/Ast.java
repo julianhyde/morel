@@ -24,6 +24,7 @@ import net.hydromatic.morel.util.Pair;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 
@@ -1458,17 +1459,29 @@ public class Ast {
         // No implicit yield is needed; the last step is an explicit yield
         return null;
       }
-      final Set<Id> firstFields = new HashSet<>();
-      sources.keySet().forEach(pat ->
-          pat.visit(p -> {
-            if (p instanceof IdPat) {
-              firstFields.add(ast.id(Pos.ZERO, ((IdPat) p).name));
-            }
-          }));
-      Set<Id> fields = firstFields;
-      boolean record = firstFields.size() != 1;
+      Set<Id> fields = ImmutableSet.of();
+      boolean record = true;
+      final Set<Id> nextFields = new HashSet<>();
       for (FromStep step : steps) {
         switch (step.op) {
+        case CROSS_JOIN:
+        case FULL_JOIN:
+        case INNER_JOIN:
+        case LEFT_JOIN:
+        case RIGHT_JOIN:
+        case SCAN:
+          final Scan scan = (Scan) step;
+          nextFields.clear();
+          nextFields.addAll(fields);
+          scan.pat.visit(p -> {
+            if (p instanceof IdPat) {
+              nextFields.add(ast.id(Pos.ZERO, ((IdPat) p).name));
+            }
+          });
+          fields = ImmutableSet.copyOf(nextFields);
+          record = nextFields.size() != 1;
+          break;
+
         case GROUP:
           final Group group = (Group) step;
           final ImmutableList<Pair<Id, Exp>> groupExps = group.groupExps;
@@ -1478,7 +1491,8 @@ public class Ast {
           //   from emps as e group by a = e1, b = e2 compute c = sum of e3
           // is the same as the type of
           //   {a = e1, b = e2, c = sum (map (fn e => e3) [])}
-          final Set<Id> nextFields = new HashSet<>(Pair.left(groupExps));
+          nextFields.clear();
+          nextFields.addAll(Pair.left(groupExps));
           groupExps.forEach(pair -> nextFields.add(pair.left));
           aggregates.forEach(aggregate -> nextFields.add(aggregate.id));
           fields = nextFields;
@@ -1534,7 +1548,6 @@ public class Ast {
               .append(exp, 0, 0);
         });
         for (FromStep step : steps) {
-          w.append(" ");
           step.unparse(w, 0, 0);
         }
         return w;
@@ -1570,7 +1583,7 @@ public class Ast {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("where ").append(exp, 0, 0);
+      return w.append(" where ").append(exp, 0, 0);
     }
 
     @Override public AstNode accept(Shuttle shuttle) {
@@ -1596,7 +1609,7 @@ public class Ast {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("yield ").append(exp, 0, 0);
+      return w.append(" yield ").append(exp, 0, 0);
     }
 
     @Override public AstNode accept(Shuttle shuttle) {
@@ -1622,7 +1635,7 @@ public class Ast {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("order ").appendAll(orderItems, ", ");
+      return w.append(" order ").appendAll(orderItems, ", ");
     }
 
     @Override public AstNode accept(Shuttle shuttle) {
@@ -1691,7 +1704,7 @@ public class Ast {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      w.append("group");
+      w.append(" group");
       Pair.forEachIndexed(groupExps, (i, id, exp) ->
           w.append(i == 0 ? " " : ", ")
               .append(id, 0, 0)
@@ -1791,6 +1804,60 @@ public class Ast {
           && this.id.equals(id)
           ? this
           : ast.aggregate(pos, aggregate, argument, id);
+    }
+  }
+
+  /** Join. */
+  public static class Scan extends FromStep {
+    public final Pat pat;
+    public final Exp exp;
+    public final @Nullable Exp condition;
+
+    Scan(Pos pos, Op op, Pat pat, Exp exp, @Nullable Exp condition) {
+      super(pos, op);
+      switch (op) {
+      case FULL_JOIN:
+      case INNER_JOIN:
+      case LEFT_JOIN:
+      case RIGHT_JOIN:
+        Preconditions.checkArgument(condition != null);
+        break;
+      case SCAN:
+      case CROSS_JOIN:
+        Preconditions.checkArgument(condition == null);
+        break;
+      default:
+        throw new AssertionError("not a join type " + op);
+      }
+      this.pat = pat;
+      this.exp = exp;
+      this.condition = condition;
+    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      String op = " in ";
+      Exp exp = this.exp;
+      if (exp.op == Op.FROM_EQ) {
+        op = " = ";
+        exp = ((PrefixCall) exp).a;
+      }
+      w.append(this.op.padded)
+          .append(pat, 0, 0)
+          .append(op)
+          .append(exp, Op.EQ.right, 0);
+      if (condition != null) {
+        w.append(" on ")
+            .append(condition, 0, 0);
+      }
+      return w;
+    }
+
+    @Override public Scan accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
     }
   }
 }

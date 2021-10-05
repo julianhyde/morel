@@ -221,6 +221,12 @@ public class Shuttle {
     return ast.orderItem(orderItem.pos, orderItem.exp, orderItem.direction);
   }
 
+  protected Ast.Scan visit(Ast.Scan scan) {
+    return ast.scan(scan.pos, scan.op, scan.pat.accept(this),
+        scan.exp.accept(this),
+        scan.condition == null ? null : scan.condition.accept(this));
+  }
+
   protected AstNode visit(Ast.Where where) {
     return ast.where(where.pos, where.exp.accept(this));
   }

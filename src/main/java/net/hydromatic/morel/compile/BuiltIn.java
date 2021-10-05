@@ -636,7 +636,7 @@ public enum BuiltIn {
    * "&alpha; option option &rarr; &alpha; option".
    *
    * <p>{@code join opt} maps NONE to NONE and SOME(v) to v.*/
-  OPTION_JOIN("Option", "join", ts ->
+  OPTION_JOIN("Option", "joyn", ts ->
       ts.forallType(1, h -> ts.fnType(ts.option(h.option(0)), h.option(0)))),
 
   /** Function "Option.app", of type

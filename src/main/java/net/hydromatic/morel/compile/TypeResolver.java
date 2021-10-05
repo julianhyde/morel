@@ -309,7 +309,7 @@ public class TypeResolver {
       final List<Ast.FromStep> fromSteps = new ArrayList<>();
       for (Ast.FromStep step : from.steps) {
         Pair<TypeEnv, Unifier.Variable> p =
-            deduceStepType(env, step, v3, env2, fieldVars, fromSteps);
+            deduceStepType(env, step, v3, env2, fieldVars, fromSources, fromSteps);
         env2 = p.left;
         v3 = p.right;
       }
@@ -414,8 +414,40 @@ public class TypeResolver {
 
   private Pair<TypeEnv, Unifier.Variable> deduceStepType(TypeEnv env,
       Ast.FromStep step, Unifier.Variable v, final TypeEnv env2,
-      Map<Ast.Id, Unifier.Variable> fieldVars, List<Ast.FromStep> fromSteps) {
+      Map<Ast.Id, Unifier.Variable> fieldVars, Map<Ast.Pat, Ast.Exp> fromSources, List<Ast.FromStep> fromSteps) {
     switch (step.op) {
+    case SCAN:
+    case FULL_JOIN:
+    case CROSS_JOIN:
+    case INNER_JOIN:
+    case LEFT_JOIN:
+    case RIGHT_JOIN:
+      final Ast.Scan scan = (Ast.Scan) step;
+      final Ast.Exp scanExp;
+      final boolean eq;
+      if (scan.exp.op == Op.FROM_EQ) {
+        eq = true;
+        scanExp = ((Ast.PrefixCall) scan.exp).a;
+      } else {
+        eq = false;
+        scanExp = scan.exp;
+      }
+      final Unifier.Variable v15 = unifier.variable();
+      final Unifier.Variable v16 = unifier.variable();
+      final Ast.Exp scanExp2 = deduceType(env2, scanExp, v15);
+      final Map<Ast.IdPat, Unifier.Term> termMap1 = new HashMap<>();
+      final Ast.Pat pat2 =
+          deducePatType(env2, scan.pat, termMap1, null, v16);
+      fromSources.put(pat2, eq ? ast.fromEq(scanExp2) : scanExp2);
+      reg(scanExp, v15, eq ? v16 : unifier.apply(LIST_TY_CON, v16));
+      TypeEnv env4 = env2;
+      for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
+        env4 = env4.bind(e.getKey().name, e.getValue());
+        fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
+            (Unifier.Variable) e.getValue());
+      }
+      return Pair.of(env4, v);
+
     case WHERE:
       final Ast.Where where = (Ast.Where) step;
       final Unifier.Variable v5 = unifier.variable();

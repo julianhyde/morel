@@ -138,8 +138,7 @@ In Standard ML but not in Morel:
                                 conditional
     | <b>case</b> <i>exp</i> <b>of</b> <i>match</i>         case analysis
     | <b>fn</b> <i>match</i>                  function
-    | <b>from</b> <i>fromSource<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>fromSource<sub>s</sub></i>
-      ( <i>fromWhere</i> | <i>fromGroup</i> | <i>fromOrder</i> | <i>fromYield</i> )*
+    | <b>from</b> [ <i>fromFirstStep</i> <i>fromNextStep</i>* ]
                                 relational expression (<i>s</i> &ge; 0)
 <i>exprow</i> &rarr; <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
                                 expression row
@@ -147,17 +146,22 @@ In Standard ML but not in Morel:
 <i>match</i> &rarr; <i>matchItem</i> [ '<b>|</b>' <i>matchItem</i> ]*
                                 match
 <i>matchItem</i> &rarr; <i>pat</i> <b>=&gt;</b> <i>exp</i>
+<i>fromFirstStep</i> &rarr; <i>fromSource</i>
+    | <i>fromStep</i>
+<i>fromNextStep</i> &rarr; <b>','</b> <i>fromSource</i>
+    | [ <b>left</b> | <b>right</b> | <b>full</b> ] <b>scan</b> <i>fromSource</i> <b>on</b> exp
+    | <i>fromStep</i>
 <i>fromSource</i> &rarr; <i>pat</i> [ <b>in</b> | <b>=</b> ] <i>exp</i>
-<i>fromFilter</i> &rarr; <b>where</b> <i>exp</i>          filter clause
-<i>fromGroup</i> &rarr; <b>group</b> <i>groupKey<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>groupKey<sub>g</sub></i>
+<i>fromStep</i> &rarr; <b>where</b> <i>exp</i>                 filter clause
+    | <b>group</b> <i>groupKey<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>groupKey<sub>g</sub></i>
       [ <b>compute</b> <i>agg<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>agg<sub>a</sub></i> ]
                                 group clause (<i>g</i> &ge; 0, <i>a</i> &ge; 1)
+    | <b>order</b> <i>orderItem<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>orderItem<sub>o</sub></i>
+                                order clause (<i>o</i> &ge; 1)
+    | <b>yield</b> <i>exp</i>
 <i>groupKey</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i>
 <i>agg</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i> [ <b>of</b> <i>exp</i> ]
-<i>fromOrder</i> &rarr; <b>order</b> <i>orderItem<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>orderItem<sub>o</sub></i>
-                                order clause (<i>o</i> &ge; 1)
 <i>orderItem</i> &rarr; <i>exp</i> [ <b>desc</b> ]
-<i>fromYield</i> &rarr; <b>yield</b> <i>exp</i>
 </pre>
 
 ### Patterns

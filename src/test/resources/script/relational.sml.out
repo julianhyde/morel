@@ -1081,8 +1081,8 @@ val it = [{c1=1,c5=5}] : {c1:int, c5:int} list
 
 (*) Patterns left of 'in'
 fun sumPairs pairs =
-  from (left, right) in pairs
-  yield left + right;
+  from (l, r) in pairs
+  yield l + r;
 val sumPairs = fn : (int * int) list -> int list
 
 sumPairs [];
@@ -1093,8 +1093,8 @@ val it = [3,7] : int list
 
 
 (*) Skip rows that do not match the pattern
-from (left, 2) in [(1, 2), (3, 4), (5, 2)]
-  yield left;
+from (l, 2) in [(1, 2), (3, 4), (5, 2)]
+  yield l;
 val it = [1,5] : int list
 
 
