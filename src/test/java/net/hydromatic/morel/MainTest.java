@@ -1380,6 +1380,14 @@ public class MainTest {
     ml("from e in emps full join d in depts on c").assertParseSame();
     ml("from e in (from z in emps) join d in (from y in depts) on c")
         .assertParseSame();
+    ml("from e in emps where e.id = 101, d in depts")
+        .assertParse("from e in emps where #id e = 101, d in depts");
+    ml("from e in emps group e.id compute count, d in depts")
+        .assertParse("from e in emps"
+            + " group id = #id e compute count = count, d = d");
+    ml("(from e in emps group e.id compute count, d in depts where false)")
+        .assertParse("from e in emps"
+            + " group id = #id e compute count = count, d = d xx");
   }
 
   @Test void testFromYieldExpression() {

@@ -324,9 +324,9 @@ void fromFirstStep(List<FromStep> steps) :
 }
 {
   patExp = fromSource() {
-  final Span span = Span.of(patExp.left, patExp.right);
-  steps.add(ast.scan(span.pos(), Op.SCAN, patExp.left, patExp.right, null));
-}
+    final Span span = Span.of(patExp.left, patExp.right);
+    steps.add(ast.scan(span.pos(), Op.SCAN, patExp.left, patExp.right, null));
+  }
 |
   fromStep(steps)
 }
@@ -341,10 +341,10 @@ void fromNextStep(List<FromStep> steps) :
 {
   <COMMA> { span = Span.of(getPos()); }
   patExp = fromSource() {
-  steps.add(
-      ast.scan(span.end(patExp.left), Op.CROSS_JOIN, patExp.left,
-          patExp.right, null));
-}
+    steps.add(
+        ast.scan(span.end(patExp.left), Op.CROSS_JOIN, patExp.left,
+            patExp.right, null));
+  }
 |
   (
     (
@@ -360,10 +360,10 @@ void fromNextStep(List<FromStep> steps) :
   )
   patExp = fromSource()
   <ON> condition = expression() {
-  steps.add(
-      ast.scan(span.end(condition), op, patExp.left, patExp.right,
-          condition));
-}
+    steps.add(
+        ast.scan(span.end(condition), op, patExp.left, patExp.right,
+            condition));
+  }
 |
   fromStep(steps)
 }
@@ -1349,7 +1349,7 @@ AstNode statementSemicolon() :
 | < COMPUTE: "compute" >
 | < DESC: "desc" >
 | < FROM: "from" >
-| < FULL: "FULL" >
+| < FULL: "full" >
 | < GROUP: "group" >
 | < JOIN: "join" >
 | < LEFT: "left" >
