@@ -235,6 +235,20 @@ from e in emps, d in depts
 from e in emps, d in depts
   group e.deptno compute count = sum of 1;
 
+(*) join with intervening 'where'
+from e in emps
+  where e.name elem ["Shaggy", "Fred"],
+  d in depts
+  where e.deptno = d.deptno;
+
+(*) join with intervening 'group'
+(* TODO: resolve ambiguity
+from e in emps
+  group e.deptno compute count,
+  d in depts
+  where deptno = d.deptno;
+*)
+
 (*) exists (defining the "exists" function ourselves)
 (*) and correlated sub-query
 let
@@ -459,6 +473,12 @@ group e.deptno
   compute sumId = sum of e.id,
           existsId = exists of e.id,
           existsStar = exists;
+
+(*) 'group' with record key
+(*) (useful if we want to refer to 'e' later in the pipeline)
+from e in emps
+group e = {e.deptno, odd = e.id mod 2 = 1} compute c = count
+yield {e.deptno, c1 = c + 1};
 
 (*) 'group' with join
 from e in emps, d in depts

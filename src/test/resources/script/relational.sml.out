@@ -416,6 +416,25 @@ val it = [{count=4,deptno=20},{count=4,deptno=10},{count=8,deptno=30}]
   : {count:int, deptno:int} list
 
 
+(*) join with intervening 'where'
+from e in emps
+  where e.name elem ["Shaggy", "Fred"],
+  d in depts
+  where e.deptno = d.deptno;
+val it =
+  [{d={deptno=10,name="Sales"},e={deptno=10,id=100,name="Fred"}},
+   {d={deptno=30,name="Engineering"},e={deptno=30,id=102,name="Shaggy"}}]
+  : {d:{deptno:int, name:string}, e:{deptno:int, id:int, name:string}} list
+
+
+(*) join with intervening 'group'
+(* TODO: resolve ambiguity
+from e in emps
+  group e.deptno compute count,
+  d in depts
+  where deptno = d.deptno;
+*)
+
 (*) exists (defining the "exists" function ourselves)
 (*) and correlated sub-query
 let
@@ -716,6 +735,15 @@ val it =
    {deptno=10,existsId=true,existsStar=true,sumId=100},
    {deptno=30,existsId=true,existsStar=true,sumId=205}]
   : {deptno:int, existsId:bool, existsStar:bool, sumId:int} list
+
+
+(*) 'group' with record key
+(*) (useful if we want to refer to 'e' later in the pipeline)
+from e in emps
+group e = {e.deptno, odd = e.id mod 2 = 1} compute c = count
+yield {e.deptno, c1 = c + 1};
+val it = [{c1=2,deptno=30},{c1=2,deptno=30},{c1=2,deptno=10},{c1=2,deptno=20}]
+  : {c1:int, deptno:int} list
 
 
 (*) 'group' with join
