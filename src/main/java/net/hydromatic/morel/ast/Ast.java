@@ -1807,7 +1807,8 @@ public class Ast {
     }
   }
 
-  /** Join. */
+  /** Scan (e.g. "e in emps") or scan-and-join (e.g.
+   * "left join d in depts on e.deptno = d.deptno"). */
   public static class Scan extends FromStep {
     public final Pat pat;
     public final Exp exp;
@@ -1820,7 +1821,6 @@ public class Ast {
       case INNER_JOIN:
       case LEFT_JOIN:
       case RIGHT_JOIN:
-        Preconditions.checkArgument(condition != null);
         break;
       case SCAN:
       case CROSS_JOIN:
@@ -1858,6 +1858,10 @@ public class Ast {
 
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
+    }
+
+    public Scan copy(Pat pat, Exp exp, Exp condition) {
+      return null; // TODO
     }
   }
 }

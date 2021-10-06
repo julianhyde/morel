@@ -359,9 +359,15 @@ void fromNextStep(List<FromStep> steps) :
     }
   )
   patExp = fromSource()
-  <ON> condition = expression() {
+  (
+    LOOKAHEAD(2)
+    <ON> condition = expression()
+  |
+    { condition = null; }
+  )
+  {
     steps.add(
-        ast.scan(span.end(condition), op, patExp.left, patExp.right,
+        ast.scan(span.end(this), op, patExp.left, patExp.right,
             condition));
   }
 |
