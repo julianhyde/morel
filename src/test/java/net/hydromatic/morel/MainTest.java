@@ -19,7 +19,6 @@
 package net.hydromatic.morel;
 
 import net.hydromatic.morel.ast.Ast;
-import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.TypeVar;
 
 import com.google.common.collect.ImmutableList;
@@ -266,13 +265,11 @@ public class MainTest {
     // keywords such as 'val' and 'in' are case sensitive
     ml("let val x = 1 in x + 1 end").assertParseSame();
     ml("let VAL x = 1 in x + 1 end")
-        .assertParseThrows(
-            throwsA(ParseException.class,
-                startsWith("Encountered \" <IDENTIFIER> \"VAL \"")));
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" <IDENTIFIER> \"VAL \""));
     ml("let val x = 1 IN x + 1 end")
-        .assertParseThrows(
-            throwsA(ParseException.class,
-                startsWith("Encountered \" \"end\" \"end \"")));
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"end\" \"end \""));
 
     // 'notElem' is an infix operator.
     ml("1 + f notElem g * 2")
@@ -314,13 +311,11 @@ public class MainTest {
     ml("(a.b) (c.d) (e.f)")
         .assertParse("#b a (#d c) (#f e)");
     ml("(a.(b (c.d) (e.f))")
-        .assertParseThrows(
-            throwsA(ParseException.class,
-                containsString("Encountered \" \"(\" \"( \"\" at line 1, column 4.")));
+        .assertParseThrowsParseException(
+            containsString("Encountered \" \"(\" \"( \"\" at line 1, column 4."));
     ml("(a.b c.(d (e.f)))")
-        .assertParseThrows(
-            throwsA(ParseException.class,
-                containsString("Encountered \" \"(\" \"( \"\" at line 1, column 8.")));
+        .assertParseThrowsParseException(
+            containsString("Encountered \" \"(\" \"( \"\" at line 1, column 8."));
   }
 
   /** Tests that the abbreviated record syntax "{a, e.b, #c e, d = e}"
@@ -333,13 +328,11 @@ public class MainTest {
     ml("{w = a = b + c, a = b + c}")
         .assertParse("{a = b + c, w = a = b + c}");
     ml("{1}")
-        .assertParseThrows(
-            throwsA(IllegalArgumentException.class,
-                is("cannot derive label for expression 1")));
+        .assertParseThrowsIllegalArgumentException(
+            is("cannot derive label for expression 1"));
     ml("{a, b + c}")
-        .assertParseThrows(
-            throwsA(IllegalArgumentException.class,
-                is("cannot derive label for expression b + c")));
+        .assertParseThrowsIllegalArgumentException(
+            is("cannot derive label for expression b + c"));
 
     ml("case x of {a = a, b} => a + b")
         .assertParse("case x of {a = a, b = b} => a + b");
@@ -1005,10 +998,9 @@ public class MainTest {
     ml(ml).assertEval(is(3));
     ml("fn {} => 0").assertParseSame();
     ml("fn {a=1, ..., c=2}")
-        .assertParseThrows(
-            throwsA(ParseException.class,
-                containsString("Encountered \" \",\" \", \"\" at line 1, "
-                    + "column 13.")));
+        .assertParseThrowsParseException(
+            containsString("Encountered \" \",\" \", \"\" at line 1, "
+                + "column 13."));
     ml("fn {...} => 0").assertParseSame();
     ml("fn {a = a, ...} => 0").assertParseSame();
     ml("fn {a, b = {c, d}, ...} => 0")
@@ -1380,14 +1372,48 @@ public class MainTest {
     ml("from e in emps full join d in depts on c").assertParseSame();
     ml("from e in (from z in emps) join d in (from y in depts) on c")
         .assertParseSame();
+    ml("from e in emps\n"
+        + " group e.deptno\n"
+        + " left join d in depts on deptno = d.deptno\n"
+        + " group d.location\n")
+        .assertParse("from e in emps"
+            + " group deptno = #deptno e"
+            + " left join d in depts on deptno = #deptno d"
+            + " group location = #location d");
+    // As previous, but use 'group e = {...}' so that we can write 'e.deptno'
+    // later in the query.
+    ml("from e in emps\n"
+        + " group e = {e.deptno}\n"
+        + " left join d in depts on e.deptno = d.deptno\n"
+        + " group d.location")
+        .assertParse("from e in emps"
+            + " group e = {deptno = #deptno e}"
+            + " left join d in depts on #deptno e = #deptno d"
+            + " group location = #location d");
     ml("from e in emps where e.id = 101, d in depts")
         .assertParse("from e in emps where #id e = 101, d in depts");
     ml("from e in emps group e.id compute count, d in depts")
         .assertParse("from e in emps"
             + " group id = #id e compute count = count, d = d");
-    ml("(from e in emps group e.id compute count, d in depts where false)")
+    // after 'group', you have to use 'join' not ','
+    ml("(from e in emps\n"
+        + " group e.id compute count,\n"
+        + " d in depts\n"
+        + " where false)")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"in\" \"in \"\" at line 3, column 4."));
+    ml("(from e in emps\n"
+        + " group e.id compute count\n"
+        + " join d in depts\n"
+        + " where false)")
         .assertParse("from e in emps"
-            + " group id = #id e compute count = count, d = d xx");
+            + " group id = #id e compute count = count"
+            + " join d in depts where false");
+    ml("fn f => from i in [1, 2, 3] where f i")
+        .assertParseSame()
+        .assertType("(int -> bool) -> int list");
+    ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
+        .assertParseSame();
   }
 
   @Test void testFromYieldExpression() {
@@ -1592,24 +1618,20 @@ public class MainTest {
 
   @Test void testGroupAs2() {
     ml("from e in emp group e.deptno, e.deptno + e.empid")
-        .assertParseThrows(
-            throwsA(IllegalArgumentException.class,
-                is("cannot derive label for expression #deptno e + #empid e")));
+        .assertParseThrowsIllegalArgumentException(
+            is("cannot derive label for expression #deptno e + #empid e"));
     ml("from e in emp group 1")
-        .assertParseThrows(
-            throwsA(IllegalArgumentException.class,
-                is("cannot derive label for expression 1")));
+        .assertParseThrowsIllegalArgumentException(
+            is("cannot derive label for expression 1"));
     ml("from e in emp group e.deptno compute (fn x => x) of e.job")
-        .assertParseThrows(
-            throwsA(IllegalArgumentException.class,
-                is("cannot derive label for expression fn x => x")));
+        .assertParseThrowsIllegalArgumentException(
+            is("cannot derive label for expression fn x => x"));
     // Require that we can derive a name for the expression even though there
     // is only one, and therefore we would not use the name.
     // (We could revisit this requirement.)
     ml("from e in emp group compute (fn x => x) of e.job")
-        .assertParseThrows(
-            throwsA(IllegalArgumentException.class,
-                is("cannot derive label for expression fn x => x")));
+        .assertParseThrowsIllegalArgumentException(
+            is("cannot derive label for expression fn x => x"));
     ml("from e in [{x = 1, y = 5}]\n"
         + "  group compute sum of e.x")
         .assertType(is("int list"));
