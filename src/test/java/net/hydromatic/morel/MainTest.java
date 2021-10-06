@@ -1413,7 +1413,8 @@ public class MainTest {
         .assertParseSame()
         .assertType("(int -> bool) -> int list");
     ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
-        .assertParseSame();
+        .assertParseSame()
+        .assertType("(int * int -> bool) -> int list");
   }
 
   @Test void testFromYieldExpression() {

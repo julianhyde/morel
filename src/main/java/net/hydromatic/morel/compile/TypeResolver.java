@@ -440,6 +440,15 @@ public class TypeResolver {
           deducePatType(env2, scan.pat, termMap1, null, v16);
       fromSources.put(pat2, eq ? ast.fromEq(scanExp2) : scanExp2);
       reg(scanExp, v15, eq ? v16 : unifier.apply(LIST_TY_CON, v16));
+      final Ast.Exp scanCondition2;
+      if (scan.condition != null) {
+        final Unifier.Variable v5 = unifier.variable();
+        scanCondition2 = deduceType(env2, scan.condition, v5);
+        equiv(v5, toTerm(PrimitiveType.BOOL));
+      } else {
+        scanCondition2 = null;
+      }
+      final Ast.Scan scan2 = scan.copy(pat2, scanExp2, scanCondition2);
       TypeEnv env4 = env2;
       for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
         env4 = env4.bind(e.getKey().name, e.getValue());
