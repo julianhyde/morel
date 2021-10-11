@@ -124,7 +124,6 @@ public enum Op {
   CASE,
   FROM,
   SCAN(" "),
-  CROSS_JOIN(", "),
   INNER_JOIN(" join "),
   LEFT_JOIN(" left join "),
   RIGHT_JOIN(" right join "),

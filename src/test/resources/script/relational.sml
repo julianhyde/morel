@@ -198,6 +198,16 @@ from e in emps, e2 in emps yield e.name ^ "-" ^ e2.name;
 (*) cartesian product, missing yield
 from d in depts, i in integers;
 
+(*) 3-way comma join
+from x in ["a", "b"],
+    y in ["c", "d"],
+    z in ["e", "f"];
+
+(*) same, using 'join'
+from x in ["a", "b"]
+  join y in ["c", "d"]
+  join z in ["e", "f"];
+
 (*) join
 from e in emps, d in depts
   where e.deptno = d.deptno

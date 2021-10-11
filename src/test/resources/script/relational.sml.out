@@ -337,6 +337,28 @@ val it =
   : {d:{deptno:int, name:string}, i:int} list
 
 
+(*) 3-way comma join
+from x in ["a", "b"],
+    y in ["c", "d"],
+    z in ["e", "f"];
+val it =
+  [{x="a",y="c",z="e"},{x="a",y="c",z="f"},{x="a",y="d",z="e"},
+   {x="a",y="d",z="f"},{x="b",y="c",z="e"},{x="b",y="c",z="f"},
+   {x="b",y="d",z="e"},{x="b",y="d",z="f"}]
+  : {x:string, y:string, z:string} list
+
+
+(*) same, using 'join'
+from x in ["a", "b"]
+  join y in ["c", "d"]
+  join z in ["e", "f"];
+val it =
+  [{x="a",y="c",z="e"},{x="a",y="c",z="f"},{x="a",y="d",z="e"},
+   {x="a",y="d",z="f"},{x="b",y="c",z="e"},{x="b",y="c",z="f"},
+   {x="b",y="d",z="e"},{x="b",y="d",z="f"}]
+  : {x:string, y:string, z:string} list
+
+
 (*) join
 from e in emps, d in depts
   where e.deptno = d.deptno

@@ -1390,11 +1390,11 @@ public class MainTest {
             + " group e = {deptno = #deptno e}"
             + " left join d in depts on #deptno e = #deptno d"
             + " group location = #location d");
-    ml("from e in emps where e.id = 101, d in depts")
-        .assertParse("from e in emps where #id e = 101, d in depts");
-    ml("from e in emps group e.id compute count, d in depts")
-        .assertParse("from e in emps"
-            + " group id = #id e compute count = count, d = d");
+    ml("(from e in emps where e.id = 101, d in depts)")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"in\" \"in \"\" at line 1, column 37."));
+    ml("from e in emps where e.id = 101 join d in depts")
+        .assertParse("from e in emps where #id e = 101 join d in depts");
     // after 'group', you have to use 'join' not ','
     ml("(from e in emps\n"
         + " group e.id compute count,\n"
