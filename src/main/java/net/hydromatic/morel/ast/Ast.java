@@ -1462,7 +1462,6 @@ public class Ast {
       final Set<Id> nextFields = new HashSet<>();
       for (FromStep step : steps) {
         switch (step.op) {
-        case CROSS_JOIN:
         case FULL_JOIN:
         case INNER_JOIN:
         case LEFT_JOIN:
@@ -1534,9 +1533,12 @@ public class Ast {
         return w.append("(").append(this, 0, 0).append(")");
       } else {
         w.append("from");
-        for (FromStep step : steps) {
+        Ord.forEach(steps, (step, i) -> {
+          if (step.op == Op.SCAN && i > 0 && steps.get(i - 1).op == Op.SCAN) {
+            w.append(",");
+          }
           step.unparse(w, 0, 0);
-        }
+        });
         return w;
       }
     }
@@ -1575,7 +1577,6 @@ public class Ast {
       case RIGHT_JOIN:
         break;
       case SCAN:
-      case CROSS_JOIN:
         checkArgument(condition == null);
         break;
       default:

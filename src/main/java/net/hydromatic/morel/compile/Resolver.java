@@ -520,7 +520,6 @@ public class Resolver {
     final Ast.FromStep step = steps.get(0);
     switch (step.op) {
     case SCAN:
-    case CROSS_JOIN:
     case INNER_JOIN:
     case LEFT_JOIN:
     case RIGHT_JOIN:
@@ -529,7 +528,7 @@ public class Resolver {
       final Core.Exp coreExp = r.toCore(scan.exp);
       final ListType listType = (ListType) coreExp.type;
       final Core.Pat corePat = r.toCore(scan.pat, listType.elementType);
-      final Op op = step.op == Op.SCAN || step.op == Op.CROSS_JOIN
+      final Op op = step.op == Op.SCAN
           ? Op.INNER_JOIN
           : step.op;
       final List<Binding> bindings2 = new ArrayList<>(bindings);

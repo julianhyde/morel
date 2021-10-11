@@ -309,13 +309,13 @@ public enum CoreBuilder {
   }
 
   /** Returns what would be the yield expression if we created a
-   * {@link Core.From} from the given sources and steps.
+   * {@link Core.From} from the given steps.
    *
    * <p>Examples:
    * <ul>
-   * <li>{@code implicitYieldExp(sources=(a=E:t), steps=[])}
+   * <li>{@code implicitYieldExp(steps=[scan(a=E:t)])}
    *     is {@code a} (a {@link Core.Id});
-   * <li>{@code implicitYieldExp(sources=(a=E:t, b=E2:t2), steps=[])}
+   * <li>{@code implicitYieldExp(steps=[scan(a=E:t), scan(b=E2:t2)])}
    *     is {@code {a = a, b = b}} (a record).
    * </ul> */
   public Core.Exp implicitYieldExp(TypeSystem typeSystem,

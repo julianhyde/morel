@@ -392,7 +392,6 @@ public class TypeResolver {
     switch (step.op) {
     case SCAN:
     case FULL_JOIN:
-    case CROSS_JOIN:
     case INNER_JOIN:
     case LEFT_JOIN:
     case RIGHT_JOIN:
