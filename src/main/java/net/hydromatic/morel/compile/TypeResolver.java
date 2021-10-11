@@ -280,36 +280,10 @@ public class TypeResolver {
       final Ast.From from = (Ast.From) node;
       env2 = env;
       final Map<Ast.Id, Unifier.Variable> fieldVars = new LinkedHashMap<>();
-      final Map<Ast.Pat, Ast.Exp> fromSources = new LinkedHashMap<>();
-      for (Map.Entry<Ast.Pat, Ast.Exp> source : from.sources.entrySet()) {
-        final Ast.Pat pat = source.getKey();
-        final boolean eq;
-        final Ast.Exp exp;
-        if (source.getValue().op == Op.FROM_EQ) {
-          eq = true;
-          exp = ((Ast.PrefixCall) source.getValue()).a;
-        } else {
-          eq = false;
-          exp = source.getValue();
-        }
-        final Unifier.Variable v5 = unifier.variable();
-        final Unifier.Variable v6 = unifier.variable();
-        final Ast.Exp exp2 = deduceType(env2, exp, v5);
-        final Map<Ast.IdPat, Unifier.Term> termMap1 = new HashMap<>();
-        final Ast.Pat pat2 =
-            deducePatType(env2, pat, termMap1, null, v6);
-        fromSources.put(pat2, eq ? ast.fromEq(exp2) : exp2);
-        reg(exp, v5, eq ? v6 : unifier.apply(LIST_TY_CON, v6));
-        for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
-          env2 = env2.bind(e.getKey().name, e.getValue());
-          fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
-              (Unifier.Variable) e.getValue());
-        }
-      }
       final List<Ast.FromStep> fromSteps = new ArrayList<>();
       for (Ast.FromStep step : from.steps) {
         Pair<TypeEnv, Unifier.Variable> p =
-            deduceStepType(env, step, v3, env2, fieldVars, fromSources, fromSteps);
+            deduceStepType(env, step, v3, env2, fieldVars, fromSteps);
         env2 = p.left;
         v3 = p.right;
       }
@@ -322,7 +296,7 @@ public class TypeResolver {
         yieldExp2 = null;
       }
       final Ast.From from2 =
-          from.copy(fromSources, fromSteps,
+          from.copy(fromSteps,
               from.implicitYieldExp != null ? yieldExp2 : null);
       return reg(from2, v, unifier.apply(LIST_TY_CON, v3));
 
@@ -414,7 +388,7 @@ public class TypeResolver {
 
   private Pair<TypeEnv, Unifier.Variable> deduceStepType(TypeEnv env,
       Ast.FromStep step, Unifier.Variable v, final TypeEnv env2,
-      Map<Ast.Id, Unifier.Variable> fieldVars, Map<Ast.Pat, Ast.Exp> fromSources, List<Ast.FromStep> fromSteps) {
+      Map<Ast.Id, Unifier.Variable> fieldVars, List<Ast.FromStep> fromSteps) {
     switch (step.op) {
     case SCAN:
     case FULL_JOIN:
@@ -435,26 +409,26 @@ public class TypeResolver {
       final Unifier.Variable v15 = unifier.variable();
       final Unifier.Variable v16 = unifier.variable();
       final Ast.Exp scanExp2 = deduceType(env2, scanExp, v15);
+      final Ast.Exp scanExp3 = eq ? ast.fromEq(scanExp2) : scanExp2;
       final Map<Ast.IdPat, Unifier.Term> termMap1 = new HashMap<>();
       final Ast.Pat pat2 =
           deducePatType(env2, scan.pat, termMap1, null, v16);
-      fromSources.put(pat2, eq ? ast.fromEq(scanExp2) : scanExp2);
       reg(scanExp, v15, eq ? v16 : unifier.apply(LIST_TY_CON, v16));
-      final Ast.Exp scanCondition2;
-      if (scan.condition != null) {
-        final Unifier.Variable v5 = unifier.variable();
-        scanCondition2 = deduceType(env2, scan.condition, v5);
-        equiv(v5, toTerm(PrimitiveType.BOOL));
-      } else {
-        scanCondition2 = null;
-      }
-      final Ast.Scan scan2 = scan.copy(pat2, scanExp2, scanCondition2);
       TypeEnv env4 = env2;
       for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
         env4 = env4.bind(e.getKey().name, e.getValue());
         fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
             (Unifier.Variable) e.getValue());
       }
+      final Ast.Exp scanCondition2;
+      if (scan.condition != null) {
+        final Unifier.Variable v5 = unifier.variable();
+        scanCondition2 = deduceType(env4, scan.condition, v5);
+        equiv(v5, toTerm(PrimitiveType.BOOL));
+      } else {
+        scanCondition2 = null;
+      }
+      fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
       return Pair.of(env4, v);
 
     case WHERE:

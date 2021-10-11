@@ -236,10 +236,16 @@ from e in emps, d in depts
   group e.deptno compute count = sum of 1;
 
 (*) join with intervening 'where'
+(*) we can't write ', d in depts' after 'where'
 from e in emps
-  where e.name elem ["Shaggy", "Fred"],
-  d in depts
+  where e.name elem ["Shaggy", "Fred"]
+  join d in depts
   where e.deptno = d.deptno;
+
+(*) 'where' then 'join on'
+from x in [0,3,6,9,12]
+where x > 1
+join y in [0,2,4,6,8,10,12] on x = y;
 
 (*) join with intervening 'group'
 (* TODO: resolve ambiguity
