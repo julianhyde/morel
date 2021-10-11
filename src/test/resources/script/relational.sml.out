@@ -438,9 +438,14 @@ val it = [{x=6,y=6},{x=12,y=12}] : {x:int, y:int} list
 (*) join with intervening 'group'
 (* TODO: resolve ambiguity
 from e in emps
-  group e.deptno compute count,
-  d in depts
+  group e.deptno compute count
+  join d in depts
   where deptno = d.deptno;
+
+(*) as previous, using 'on' rather than 'where'
+from e in emps
+  group e.deptno compute count
+  join d in depts on deptno = d.deptno;
 *)
 
 (*) exists (defining the "exists" function ourselves)

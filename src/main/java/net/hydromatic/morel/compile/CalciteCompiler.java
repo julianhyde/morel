@@ -44,8 +44,6 @@ import net.hydromatic.morel.type.TypeVar;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.ThreadLocals;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
@@ -71,16 +69,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import javax.annotation.Nonnull;
 
@@ -380,65 +375,14 @@ public class CalciteCompiler extends Compiler {
       }
 
       @Override public boolean toRel(RelContext cx, boolean aggressive) {
-        final Environment env = cx.env;
-        final RelBuilder relBuilder = cx.relBuilder;
-        final Map<Core.Pat, RelNode> sourceCodes = new LinkedHashMap<>();
-        final List<Binding> bindings = new ArrayList<>();
-        final Map<String, Function<RelBuilder, RexNode>> map = new HashMap<>();
         if (from.steps.isEmpty()
             || !(from.steps.get(0) instanceof Core.Scan)) {
           // One row, zero columns
-          relBuilder.values(ImmutableList.of(ImmutableList.of()),
-              relBuilder.getTypeFactory().builder().build());
-        } else  if (true) {
-          // nothing
-        } else {
-          final SortedMap<String, VarData> varOffsets = new TreeMap<>();
-          int i = 0;
-          int offset = 0;
-          for (Map.Entry<Core.Pat, RelNode> pair : sourceCodes.entrySet()) {
-            final Core.Pat pat = pair.getKey();
-            final RelNode r = pair.getValue();
-            relBuilder.push(r);
-            if (pat instanceof Core.IdPat) {
-              relBuilder.as(((Core.IdPat) pat).name);
-              final int finalOffset = offset;
-              map.put(((Core.IdPat) pat).name, b ->
-                  b.getRexBuilder().makeRangeReference(r.getRowType(),
-                      finalOffset, false));
-              varOffsets.put(((Core.IdPat) pat).name,
-                  new VarData(pat.type, offset, r.getRowType()));
-            }
-            offset += r.getRowType().getFieldCount();
-            if (++i == 2) {
-              relBuilder.join(JoinRelType.INNER);
-              --i;
-            }
-          }
-          final BiMap<Integer, Integer> biMap = HashBiMap.create();
-          int k = 0;
-          offset = 0;
-          map.clear();
-          for (Map.Entry<String, VarData> entry : varOffsets.entrySet()) {
-            final String var = entry.getKey();
-            final VarData data = entry.getValue();
-            for (int j = 0; j < data.rowType.getFieldCount(); j++) {
-              biMap.put(k++, data.offset + j);
-            }
-            final int finalOffset = offset;
-            if (data.type instanceof RecordType) {
-              map.put(var, b ->
-                  b.getRexBuilder().makeRangeReference(data.rowType,
-                      finalOffset, false));
-            } else {
-              map.put(var, b -> b.field(finalOffset));
-            }
-            offset += data.rowType.getFieldCount();
-          }
-          relBuilder.project(relBuilder.fields(list(biMap)));
+          cx.relBuilder.values(ImmutableList.of(ImmutableList.of()),
+              cx.relBuilder.getTypeFactory().builder().build());
         }
         cx =
-            new RelContext(env.bindAll(bindings), cx, relBuilder,
+            new RelContext(cx.env, cx, cx.relBuilder,
                 ImmutableSortedMap.of(), 1);
         for (Ord<Core.FromStep> fromStep : Ord.zip(from.steps)) {
           cx = step(cx, fromStep.i, fromStep.e);
@@ -472,15 +416,6 @@ public class CalciteCompiler extends Compiler {
         }
       }
     };
-  }
-
-  private ImmutableList<Integer> list(BiMap<Integer, Integer> biMap) {
-    // Assume that biMap has keys 0 .. size() - 1; each key occurs once.
-    final List<Integer> list =
-        new ArrayList<>(Collections.nCopies(biMap.size(), null));
-    biMap.forEach(list::set);
-    // Will throw if there are any nulls left.
-    return ImmutableList.copyOf(list);
   }
 
   private RelContext yield_(RelContext cx, Core.Yield yield) {
