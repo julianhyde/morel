@@ -1417,6 +1417,12 @@ public class MainTest {
         .assertType("(int * int -> bool) -> int list");
   }
 
+  @Test void testFoo() {
+    ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
+        .assertParseSame()
+        .assertType("(int * int -> bool) -> int list");
+  }
+
   @Test void testFromYieldExpression() {
     final String ml = "let\n"
         + "  val emps = [\n"
@@ -1710,12 +1716,13 @@ public class MainTest {
     final String expected = "from r in [{a = 2, b = 3}]"
         + " group a = #a r compute sb = sum of #b r"
         + " yield {a = a, a2 = a + a, sb = sb}";
-    final String plan = "from(r, tuple(tuple(constant(2), constant(3))), "
+    final String plan = "from("
+        + "sink join(op join, pat r, exp tuple(tuple(constant(2), constant(3))), "
         + "sink group(key tuple(apply(fnValue nth:0, argCode get(name r))), "
         + "agg aggregate, "
         + "sink collect(tuple(get(name a), "
         + "apply(fnValue +, argCode tuple(get(name a), get(name a))), "
-        + "get(name sb)))))";
+        + "get(name sb))))))";
     ml(ml).assertParse(expected)
         .assertEvalIter(equalsOrdered(list(2, 4, 3)))
         .assertPlan(isCode(plan));
@@ -1768,12 +1775,15 @@ public class MainTest {
   }
 
   @Test void testFromPattern() {
-    final String ml = "from (x, y) in [(1,2),(3,4),(3,0)] group sum = x + y";
-    final String expected = "from (x, y) in [(1, 2), (3, 4), (3, 0)] "
-        + "group sum = x + y";
-    ml(ml).assertParse(expected)
+    ml("from (x, y) in [(1,2),(3,4),(3,0)] group sum = x + y")
+        .assertParse("from (x, y) in [(1, 2), (3, 4), (3, 0)] "
+            + "group sum = x + y")
         .assertType(is("int list"))
         .assertEvalIter(equalsUnordered(3, 7));
+    ml("from {c, a, ...} in [{a=1.0,b=true,c=3},{a=1.5,b=true,c=4}];")
+        .assertParse("from {a = a, c = c, ...}"
+            + " in [{a = 1.0, b = true, c = 3}, {a = 1.5, b = true, c = 4}]")
+        .assertType("{a:real, c:int} list");
   }
 
   @Test void testFromEquals() {

@@ -21,7 +21,6 @@ package net.hydromatic.morel.ast;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -42,6 +41,8 @@ import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
@@ -103,7 +104,7 @@ public class Ast {
     LiteralPat(Pos pos, Op op, Comparable value) {
       super(pos, op);
       this.value = requireNonNull(value);
-      Preconditions.checkArgument(op == Op.BOOL_LITERAL_PAT
+      checkArgument(op == Op.BOOL_LITERAL_PAT
           || op == Op.CHAR_LITERAL_PAT
           || op == Op.INT_LITERAL_PAT
           || op == Op.REAL_LITERAL_PAT
@@ -365,7 +366,7 @@ public class Ast {
       super(pos, Op.RECORD_PAT);
       this.ellipsis = ellipsis;
       this.args = requireNonNull(args);
-      Preconditions.checkArgument(args.comparator() == ORDERING);
+      checkArgument(args.comparator() == ORDERING);
     }
 
     public Pat accept(Shuttle shuttle) {
@@ -811,7 +812,7 @@ public class Ast {
     DatatypeDecl(Pos pos, ImmutableList<DatatypeBind> binds) {
       super(pos, Op.DATATYPE_DECL);
       this.binds = requireNonNull(binds);
-      Preconditions.checkArgument(!this.binds.isEmpty());
+      checkArgument(!this.binds.isEmpty());
     }
 
     @Override public int hashCode() {
@@ -854,7 +855,7 @@ public class Ast {
       this.tyVars = requireNonNull(tyVars);
       this.name = requireNonNull(name);
       this.tyCons = requireNonNull(tyCons);
-      Preconditions.checkArgument(!this.tyCons.isEmpty());
+      checkArgument(!this.tyCons.isEmpty());
     }
 
     @Override public int hashCode() {
@@ -934,7 +935,7 @@ public class Ast {
     protected ValDecl(Pos pos, ImmutableList<ValBind> valBinds) {
       super(pos, Op.VAL_DECL);
       this.valBinds = requireNonNull(valBinds);
-      Preconditions.checkArgument(!valBinds.isEmpty());
+      checkArgument(!valBinds.isEmpty());
     }
 
     @Override public int hashCode() {
@@ -981,7 +982,7 @@ public class Ast {
     FunDecl(Pos pos, ImmutableList<FunBind> funBinds) {
       super(pos, Op.FUN_DECL);
       this.funBinds = requireNonNull(funBinds);
-      Preconditions.checkArgument(!funBinds.isEmpty());
+      checkArgument(!funBinds.isEmpty());
       // TODO: check that functions have the same name
     }
 
@@ -1016,7 +1017,7 @@ public class Ast {
 
     FunBind(Pos pos, ImmutableList<FunMatch> matchList) {
       super(pos, Op.FUN_BIND);
-      Preconditions.checkArgument(!matchList.isEmpty());
+      checkArgument(!matchList.isEmpty());
       this.matchList = matchList;
       // We assume that the function name is the same in all matches.
       // We will check during validation.
@@ -1138,7 +1139,7 @@ public class Ast {
     Record(Pos pos, ImmutableSortedMap<String, Exp> args) {
       super(pos, Op.RECORD);
       this.args = requireNonNull(args);
-      Preconditions.checkArgument(args.comparator() == ORDERING);
+      checkArgument(args.comparator() == ORDERING);
     }
 
     @Override public void forEachArg(ObjIntConsumer<Exp> action) {
@@ -1380,7 +1381,7 @@ public class Ast {
     Fn(Pos pos, ImmutableList<Match> matchList) {
       super(pos, Op.FN);
       this.matchList = requireNonNull(matchList);
-      Preconditions.checkArgument(!matchList.isEmpty());
+      checkArgument(!matchList.isEmpty());
     }
 
     public Fn accept(Shuttle shuttle) {
@@ -1438,22 +1439,19 @@ public class Ast {
 
   /** From expression. */
   public static class From extends Exp {
-    public final Map<Pat, Exp> sources;
     public final ImmutableList<FromStep> steps;
     /** An implicit yield expression, if the last step is not a {@link Yield};
      * null if the last step is a {@link Yield}. */
     public final @Nullable Exp implicitYieldExp;
 
-    From(Pos pos, ImmutableMap<Pat, Exp> sources, ImmutableList<FromStep> steps,
+    From(Pos pos, ImmutableList<FromStep> steps,
         @Nullable Exp implicitYieldExp) {
       super(pos, Op.FROM);
-      this.sources = requireNonNull(sources);
       this.steps = requireNonNull(steps);
       this.implicitYieldExp = implicitYieldExp;
     }
 
-    static @Nullable Exp implicitYieldExp(Pos pos, Map<Pat, Exp> sources,
-        List<FromStep> steps) {
+    static @Nullable Exp implicitYieldExp(Pos pos, List<FromStep> steps) {
       if (!steps.isEmpty()
           && Iterables.getLast(steps) instanceof Ast.Yield) {
         // No implicit yield is needed; the last step is an explicit yield
@@ -1536,17 +1534,6 @@ public class Ast {
         return w.append("(").append(this, 0, 0).append(")");
       } else {
         w.append("from");
-        Ord.forEach(sources, (i, id, exp) -> {
-          String op = " in ";
-          if (exp.op == Op.FROM_EQ) {
-            op = " = ";
-            exp = ((PrefixCall) exp).a;
-          }
-          w.append(i == 0 ? " " : ", ")
-              .append(id, 0, 0)
-              .append(op)
-              .append(exp, 0, 0);
-        });
         for (FromStep step : steps) {
           step.unparse(w, 0, 0);
         }
@@ -1556,12 +1543,10 @@ public class Ast {
 
     /** Creates a copy of this {@code From} with given contents,
      * or {@code this} if the contents are the same. */
-    public From copy(Map<Pat, Exp> sources, List<FromStep> steps,
-        @Nullable Exp implicitYieldExp) {
-      return this.sources.equals(sources)
-          && this.steps.equals(steps)
+    public From copy(List<FromStep> steps, @Nullable Exp implicitYieldExp) {
+      return this.steps.equals(steps)
           ? this
-          : ast.from(pos, sources, steps, implicitYieldExp);
+          : ast.from(pos, steps, implicitYieldExp);
     }
   }
 
@@ -1570,6 +1555,69 @@ public class Ast {
   public abstract static class FromStep extends AstNode {
     FromStep(Pos pos, Op op) {
       super(pos, op);
+    }
+  }
+
+  /** A scan (e.g. "e in emps")
+   * or scan-and-join (e.g. "left join d in depts on e.deptno = d.deptno")
+   * in a {@code from} expression. */
+  public static class Scan extends FromStep {
+    public final Pat pat;
+    public final Exp exp;
+    public final @Nullable Exp condition;
+
+    Scan(Pos pos, Op op, Pat pat, Exp exp, @Nullable Exp condition) {
+      super(pos, op);
+      switch (op) {
+      case FULL_JOIN:
+      case INNER_JOIN:
+      case LEFT_JOIN:
+      case RIGHT_JOIN:
+        break;
+      case SCAN:
+      case CROSS_JOIN:
+        checkArgument(condition == null);
+        break;
+      default:
+        throw new AssertionError("not a join type " + op);
+      }
+      this.pat = pat;
+      this.exp = exp;
+      this.condition = condition;
+    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      String op = " in ";
+      Exp exp = this.exp;
+      if (exp.op == Op.FROM_EQ) {
+        op = " = ";
+        exp = ((PrefixCall) exp).a;
+      }
+      w.append(this.op.padded)
+          .append(pat, 0, 0)
+          .append(op)
+          .append(exp, Op.EQ.right, 0);
+      if (condition != null) {
+        w.append(" on ")
+            .append(condition, 0, 0);
+      }
+      return w;
+    }
+
+    @Override public Scan accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Scan copy(Pat pat, Exp exp, Exp condition) {
+      return this.pat.equals(pat)
+          && this.exp.equals(exp)
+          && Objects.equals(this.condition, condition)
+          ? this
+          : new Scan(pos, op, pat, exp, condition);
     }
   }
 
@@ -1804,64 +1852,6 @@ public class Ast {
           && this.id.equals(id)
           ? this
           : ast.aggregate(pos, aggregate, argument, id);
-    }
-  }
-
-  /** Scan (e.g. "e in emps") or scan-and-join (e.g.
-   * "left join d in depts on e.deptno = d.deptno"). */
-  public static class Scan extends FromStep {
-    public final Pat pat;
-    public final Exp exp;
-    public final @Nullable Exp condition;
-
-    Scan(Pos pos, Op op, Pat pat, Exp exp, @Nullable Exp condition) {
-      super(pos, op);
-      switch (op) {
-      case FULL_JOIN:
-      case INNER_JOIN:
-      case LEFT_JOIN:
-      case RIGHT_JOIN:
-        break;
-      case SCAN:
-      case CROSS_JOIN:
-        Preconditions.checkArgument(condition == null);
-        break;
-      default:
-        throw new AssertionError("not a join type " + op);
-      }
-      this.pat = pat;
-      this.exp = exp;
-      this.condition = condition;
-    }
-
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
-      String op = " in ";
-      Exp exp = this.exp;
-      if (exp.op == Op.FROM_EQ) {
-        op = " = ";
-        exp = ((PrefixCall) exp).a;
-      }
-      w.append(this.op.padded)
-          .append(pat, 0, 0)
-          .append(op)
-          .append(exp, Op.EQ.right, 0);
-      if (condition != null) {
-        w.append(" on ")
-            .append(condition, 0, 0);
-      }
-      return w;
-    }
-
-    @Override public Scan accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
-
-    @Override public void accept(Visitor visitor) {
-      visitor.visit(this);
-    }
-
-    public Scan copy(Pat pat, Exp exp, Exp condition) {
-      return null; // TODO
     }
   }
 }

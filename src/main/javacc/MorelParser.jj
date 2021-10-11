@@ -304,7 +304,6 @@ Exp from() :
 {
   final Span span;
   Span stepSpan;
-  final Map<Pat, Exp> sources = new LinkedHashMap<>();
   final List<FromStep> steps = new ArrayList<>();
 }
 {
@@ -314,7 +313,7 @@ Exp from() :
     ( fromNextStep(steps) )*
   ]
   {
-    return ast.from(span.end(this), sources, steps);
+    return ast.from(span.end(this), steps);
   }
 }
 
