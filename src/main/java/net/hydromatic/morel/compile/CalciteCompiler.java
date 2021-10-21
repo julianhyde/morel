@@ -683,12 +683,6 @@ public class CalciteCompiler extends Compiler {
     switch (op) {
     case INNER_JOIN:
       return JoinRelType.INNER;
-    case LEFT_JOIN:
-      return JoinRelType.LEFT;
-    case RIGHT_JOIN:
-      return JoinRelType.RIGHT;
-    case FULL_JOIN:
-      return JoinRelType.FULL;
     default:
       throw new AssertionError(op);
     }

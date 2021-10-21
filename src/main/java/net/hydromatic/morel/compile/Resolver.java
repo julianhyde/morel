@@ -521,9 +521,6 @@ public class Resolver {
     switch (step.op) {
     case SCAN:
     case INNER_JOIN:
-    case LEFT_JOIN:
-    case RIGHT_JOIN:
-    case FULL_JOIN:
       final Ast.Scan scan = (Ast.Scan) step;
       final Core.Exp coreExp = r.toCore(scan.exp);
       final ListType listType = (ListType) coreExp.type;

@@ -2155,8 +2155,7 @@ public abstract class Codes {
 
     ScanRowSink(Op op, Core.Pat pat, Code code, Code conditionCode,
         RowSink rowSink) {
-      checkArgument(op == Op.INNER_JOIN || op == Op.LEFT_JOIN
-          || op == Op.RIGHT_JOIN || op == Op.FULL_JOIN);
+      checkArgument(op == Op.INNER_JOIN);
       this.op = op;
       this.pat = pat;
       this.code = code;

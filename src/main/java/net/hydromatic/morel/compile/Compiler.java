@@ -310,9 +310,6 @@ public class Compiler {
             elementType);
     switch (firstStep.op) {
     case INNER_JOIN:
-    case LEFT_JOIN:
-    case RIGHT_JOIN:
-    case FULL_JOIN:
       final Core.Scan scan = (Core.Scan) firstStep;
       final Code code = compile(cx, scan.exp);
       final Code conditionCode = compile(cx, scan.condition);

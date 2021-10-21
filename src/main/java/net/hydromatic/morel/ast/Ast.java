@@ -1462,10 +1462,7 @@ public class Ast {
       final Set<Id> nextFields = new HashSet<>();
       for (FromStep step : steps) {
         switch (step.op) {
-        case FULL_JOIN:
         case INNER_JOIN:
-        case LEFT_JOIN:
-        case RIGHT_JOIN:
         case SCAN:
           final Scan scan = (Scan) step;
           nextFields.clear();
@@ -1571,10 +1568,7 @@ public class Ast {
     Scan(Pos pos, Op op, Pat pat, Exp exp, @Nullable Exp condition) {
       super(pos, op);
       switch (op) {
-      case FULL_JOIN:
       case INNER_JOIN:
-      case LEFT_JOIN:
-      case RIGHT_JOIN:
         break;
       case SCAN:
         checkArgument(condition == null);

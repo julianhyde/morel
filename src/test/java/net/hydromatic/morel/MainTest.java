@@ -1374,21 +1374,21 @@ public class MainTest {
         .assertParseSame();
     ml("from e in emps\n"
         + " group e.deptno\n"
-        + " left join d in depts on deptno = d.deptno\n"
+        + " join d in depts on deptno = d.deptno\n"
         + " group d.location\n")
         .assertParse("from e in emps"
             + " group deptno = #deptno e"
-            + " left join d in depts on deptno = #deptno d"
+            + " join d in depts on deptno = #deptno d"
             + " group location = #location d");
     // As previous, but use 'group e = {...}' so that we can write 'e.deptno'
     // later in the query.
     ml("from e in emps\n"
         + " group e = {e.deptno}\n"
-        + " left join d in depts on e.deptno = d.deptno\n"
+        + " join d in depts on e.deptno = d.deptno\n"
         + " group d.location")
         .assertParse("from e in emps"
             + " group e = {deptno = #deptno e}"
-            + " left join d in depts on #deptno e = #deptno d"
+            + " join d in depts on #deptno e = #deptno d"
             + " group location = #location d");
     ml("(from e in emps where e.id = 101, d in depts)")
         .assertParseThrowsParseException(
