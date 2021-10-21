@@ -149,7 +149,7 @@ In Standard ML but not in Morel:
 <i>fromFirstStep</i> &rarr; <i>fromSource</i>
     | <i>fromStep</i>
 <i>fromNextStep</i> &rarr; <b>','</b> <i>fromSource</i>
-    | [ <b>left</b> | <b>right</b> | <b>full</b> ] <b>scan</b> <i>fromSource</i> <b>on</b> exp
+    | [ <b>left</b> | <b>right</b> | <b>full</b> ] <b>join</b> <i>fromSource</i> <b>on</b> exp
     | <i>fromStep</i>
 <i>fromSource</i> &rarr; <i>pat</i> [ <b>in</b> | <b>=</b> ] <i>exp</i>
 <i>fromStep</i> &rarr; <b>where</b> <i>exp</i>                 filter clause
