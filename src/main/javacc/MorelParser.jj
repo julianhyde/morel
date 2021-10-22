@@ -38,7 +38,7 @@ import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
-
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -331,7 +331,7 @@ Exp from() :
 {
   <FROM> { span = Span.of(pos()); }
   [ fromFirstScan(steps)
-    ( <COMMA> fromScan(steps) )*
+    ( <COMMA> fromScan(Op.SCAN, null, steps) )*
   ]
   ( fromStep(steps) )*
   {
@@ -349,21 +349,21 @@ void fromFirstScan(List<FromStep> steps) :
         patExp.right != null
           ? Span.of(patExp.left, patExp.right)
           : Span.of(patExp.left);
-    steps.add(ast.scan(span.pos(), patExp.left, patExp.right, null));
+    steps.add(ast.scan(span.pos(), Op.SCAN, patExp.left, patExp.right, null));
   }
 }
 
-void fromScan(List<FromStep> steps) :
+void fromScan(Op op, @Nullable Span span, List<FromStep> steps) :
 {
   final Pair<Pat, Exp> patExp;
   final Exp condition;
 }
 {
   patExp = fromSource() {
-    final Span span =
-        patExp.right != null
-          ? Span.of(patExp.left, patExp.right)
-          : Span.of(patExp.left);
+    if (span == null) {
+      span = Span.of(patExp.left);
+    }
+    span = span.addIf(patExp.right);
   }
   (
     LOOKAHEAD(2)
@@ -372,7 +372,8 @@ void fromScan(List<FromStep> steps) :
     { condition = null; }
   )
   {
-    steps.add(ast.scan(span.end(this), patExp.left, patExp.right, condition));
+    steps.add(
+        ast.scan(span.end(this), op, patExp.left, patExp.right, condition));
   }
 }
 
@@ -392,9 +393,14 @@ void fromStep(List<FromStep> steps) :
   final List<OrderItem> orderItems;
 }
 {
-  <JOIN>
-  fromScan(steps)
-  ( <COMMA> fromScan(steps) )*
+  (
+    <LEFT> { span = Span.of(pos()); op = Op.LEFT_JOIN; } <JOIN>
+  | <RIGHT> { span = Span.of(pos()); op = Op.RIGHT_JOIN; } <JOIN>
+  | <FULL> { span = Span.of(pos()); op = Op.FULL_JOIN; } <JOIN>
+  | <JOIN> { span = Span.of(pos()); op = Op.SCAN; }
+  )
+  fromScan(op, span, steps)
+  ( <COMMA> fromScan(Op.SCAN, null, steps) )*
 |
   <WHERE> { span = Span.of(pos()); } filterExp = expression() {
     steps.add(ast.where(span.end(this), filterExp));
@@ -1453,11 +1459,14 @@ AstNode statementEof() :
 | < COMPUTE: "compute" >
 | < DESC: "desc" >
 | < FROM: "from" >
+| < FULL: "full" >
 | < GROUP: "group" >
 | < INTO: "into" >
 | < JOIN: "join" >
+| < LEFT: "left" >
 | < ON: "on" >
 | < ORDER: "order" >
+| < RIGHT: "right" >
 | < SKIP_: "skip" >
 | < TAKE: "take" >
 | < THROUGH: "through" >

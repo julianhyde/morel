@@ -20,7 +20,7 @@ package net.hydromatic.morel.ast;
 
 import com.google.common.collect.ImmutableMap;
 
-/** Sub-types of {@link AstNode}. */
+/** Subtypes of {@link AstNode}. */
 public enum Op {
   // identifiers
   ID(true),
@@ -130,6 +130,9 @@ public enum Op {
   CASE,
   FROM,
   SCAN(" "),
+  LEFT_JOIN(" left join "),
+  RIGHT_JOIN(" right join "),
+  FULL_JOIN(" full join "),
   WHERE,
   GROUP,
   COMPUTE,
@@ -196,7 +199,7 @@ public enum Op {
     this.padded = padded;
     this.left = left;
     this.right = right;
-    this.opName = padded == null || padded.equals("")
+    this.opName = padded == null || padded.isEmpty()
         ? null
         : "op " + padded.trim();
   }

@@ -241,7 +241,7 @@ public class Extents {
                           followingSteps, ImmutablePairList.of());
                   for (Core.FromStep step2 : from.steps) {
                     if (step2 == scan) {
-                      fromBuilder.scan(scan.pat, analysis.extentExp,
+                      fromBuilder.scan(scan.op, scan.pat, analysis.extentExp,
                           scan.condition); // TODO
                     } else if (step2 instanceof Core.Where) {
                       fromBuilder.where(

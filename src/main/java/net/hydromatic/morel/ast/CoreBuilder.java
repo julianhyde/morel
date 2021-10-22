@@ -491,9 +491,10 @@ public enum CoreBuilder {
     return new Core.DatatypeDecl(ImmutableList.copyOf(dataTypes));
   }
 
-  public Core.Scan scan(List<Binding> bindings, Core.Pat pat,
+  public Core.Scan scan(Op op, List<Binding> bindings, Core.Pat pat,
       Core.Exp exp, Core.Exp condition) {
-    return new Core.Scan(ImmutableList.copyOf(bindings), pat, exp, condition);
+    return new Core.Scan(op, ImmutableList.copyOf(bindings), pat, exp,
+        condition);
   }
 
   public Core.Aggregate aggregate(Type type, Core.Exp aggregate,

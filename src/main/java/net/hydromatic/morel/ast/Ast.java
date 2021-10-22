@@ -38,13 +38,13 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
-import java.util.stream.Collectors;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
+import static net.hydromatic.morel.util.Static.toImmutableSet;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getLast;
@@ -774,6 +774,11 @@ public class Ast {
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.id(name);
     }
+
+    /** Creates a pattern equivalent to this identifier. */
+    public IdPat toPat() {
+      return new IdPat(pos, name);
+    }
   }
 
   /** Parse tree node of a record selector. */
@@ -949,7 +954,7 @@ public class Ast {
    */
   public static class TyCon extends AstNode {
     public final Id id;
-    public final @org.checkerframework.checker.nullness.qual.Nullable Type type;
+    public final @Nullable Type type;
 
     TyCon(Pos pos, Id id, Type type) {
       super(pos, Op.TY_CON);
@@ -1513,6 +1518,9 @@ public class Ast {
       for (FromStep step : steps) {
         switch (step.op) {
         case SCAN:
+        case LEFT_JOIN:
+        case RIGHT_JOIN:
+        case FULL_JOIN:
           final Scan scan = (Scan) step;
           nextFields.clear();
           nextFields.addAll(fields);
@@ -1549,7 +1557,7 @@ public class Ast {
           nextFields.addAll(Pair.left(groupExps));
           groupExps.forEach((id, exp) -> nextFields.add(id));
           aggregates.forEach(aggregate -> nextFields.add(aggregate.id));
-          fields = nextFields;
+          fields = ImmutableSet.copyOf(nextFields);
           break;
 
         case YIELD:
@@ -1559,7 +1567,7 @@ public class Ast {
                 ((Record) yield.exp).args.keySet()
                     .stream()
                     .map(label -> ast.id(Pos.ZERO, label))
-                    .collect(Collectors.toSet());
+                    .collect(toImmutableSet());
           }
           break;
         }
@@ -1644,8 +1652,11 @@ public class Ast {
     public final @Nullable Exp exp;
     public final @Nullable Exp condition;
 
-    Scan(Pos pos, Pat pat, @Nullable Exp exp, @Nullable Exp condition) {
-      super(pos, Op.SCAN);
+    Scan(Pos pos, Op op, Pat pat, @Nullable Exp exp, @Nullable Exp condition) {
+      super(pos, op);
+      checkArgument(op == Op.SCAN || op == Op.LEFT_JOIN
+              || op == Op.RIGHT_JOIN || op == Op.FULL_JOIN,
+          "not a join type: %s", op);
       this.pat = pat;
       this.exp = exp;
       this.condition = condition;
@@ -1683,7 +1694,7 @@ public class Ast {
           && Objects.equals(this.exp, exp)
           && Objects.equals(this.condition, condition)
           ? this
-          : new Scan(pos, pat, exp, condition);
+          : new Scan(pos, op, pat, exp, condition);
     }
   }
 

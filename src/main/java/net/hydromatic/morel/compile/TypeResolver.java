@@ -46,8 +46,10 @@ import net.hydromatic.morel.util.Unifier;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.util.Holder;
 import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -73,6 +75,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.ast.AstNodes.joinRelType;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -99,6 +102,7 @@ public class TypeResolver {
 
   static final String TUPLE_TY_CON = "tuple";
   static final String LIST_TY_CON = "list";
+  static final String OPTION_TY_CON = "option";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
 
@@ -255,7 +259,7 @@ public class TypeResolver {
   }
 
   private <E extends AstNode> E reg(E node,
-      Unifier.Variable variable, Unifier.Term term) {
+      Unifier.@Nullable Variable variable, Unifier.Term term) {
     requireNonNull(node);
     requireNonNull(term);
     map.put(node, term);
@@ -384,11 +388,11 @@ public class TypeResolver {
       final Ast.From from = (Ast.From) node;
       Unifier.Variable v3 = unifier.variable();
       TypeEnv env3 = env;
-      final Map<Ast.Id, Unifier.Variable> fieldVars = new LinkedHashMap<>();
+      final Map<String, StepVar> stepVars = new LinkedHashMap<>();
       final List<Ast.FromStep> fromSteps = new ArrayList<>();
       for (Ord<Ast.FromStep> step : Ord.zip(from.steps)) {
         Pair<TypeEnv, Unifier.Variable> p =
-            deduceStepType(env, step.e, v3, env3, fieldVars, fromSteps);
+            deduceStepType(env, step.e, v3, env3, stepVars, fromSteps);
         if (step.i != from.steps.size() - 1) {
           switch (step.e.op) {
           case COMPUTE:
@@ -505,14 +509,20 @@ public class TypeResolver {
 
   private Pair<TypeEnv, Unifier.Variable> deduceStepType(TypeEnv env,
       Ast.FromStep step, Unifier.Variable v, final TypeEnv env2,
-      Map<Ast.Id, Unifier.Variable> fieldVars, List<Ast.FromStep> fromSteps) {
+      Map<String, StepVar> stepVars, List<Ast.FromStep> fromSteps) {
     requireNonNull(v);
+    final ImmutableMap<String, StepVar> inStepVars =
+        ImmutableMap.copyOf(stepVars);
     switch (step.op) {
     case SCAN:
+    case LEFT_JOIN:
+    case RIGHT_JOIN:
+    case FULL_JOIN:
       final Ast.Scan scan = (Ast.Scan) step;
       final Ast.Exp scanExp;
       final boolean eq;
       final Ast.Exp scanExp3;
+      final JoinRelType joinRelType = joinRelType(scan.op);
       final Unifier.Variable v15 = unifier.variable();
       final Unifier.Variable v16 = unifier.variable();
       final Map<Ast.IdPat, Unifier.Term> termMap1 = new HashMap<>();
@@ -535,23 +545,50 @@ public class TypeResolver {
       if (scanExp != null) {
         reg(scanExp, v15, eq ? v16 : unifier.apply(LIST_TY_CON, v16));
       }
-      TypeEnv env4 = env2;
-      for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
-        env4 = env4.bind(e.getKey().name, e.getValue());
-        fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
-            (Unifier.Variable) e.getValue());
+
+      // If the join generates nulls (optionals) on the left, go through the
+      // existing variables, and if they are not optional, make them optional.
+      // (Careful not to make anything optional twice.)
+      TypeEnv onEnv = env;
+      TypeEnv outEnv = env;
+      stepVars.clear();
+      for (Map.Entry<String, StepVar> entry : inStepVars.entrySet()) {
+        final String name = entry.getKey();
+        final StepVar stepVar;
+        if (joinRelType.generatesNullsOnLeft()) {
+          stepVar = ensureOptional(entry.getValue());
+        } else {
+          stepVar = entry.getValue();
+        }
+        outEnv = outEnv.bind(stepVar.idPat.name, stepVar.outVariable());
+        onEnv = onEnv.bind(stepVar.idPat.name, stepVar.variable);
+        stepVars.put(name, stepVar);
       }
-      v = fieldVar(fieldVars);
+
+      // If the join generates nulls (optionals) on the right, the newly added
+      // variables will be optional.
+      for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
+        final Ast.IdPat idPat = e.getKey();
+        StepVar stepVar =
+            new StepVar((Unifier.Variable) e.getValue(), idPat);
+        if (joinRelType.generatesNullsOnRight()) {
+          stepVar = ensureOptional(stepVar);
+        }
+        outEnv = outEnv.bind(idPat.name, stepVar.outVariable());
+        onEnv = onEnv.bind(idPat.name, stepVar.variable);
+        stepVars.put(idPat.name, stepVar);
+      }
+      v = fieldVar(stepVars);
       final Ast.Exp scanCondition2;
       if (scan.condition != null) {
         final Unifier.Variable v5 = unifier.variable();
-        scanCondition2 = deduceType(env4, scan.condition, v5);
+        scanCondition2 = deduceType(onEnv, scan.condition, v5);
         equiv(v5, toTerm(PrimitiveType.BOOL));
       } else {
         scanCondition2 = null;
       }
       fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
-      return Pair.of(env4, v);
+      return Pair.of(outEnv, v);
 
     case WHERE:
       final Ast.Where where = (Ast.Where) step;
@@ -612,7 +649,7 @@ public class TypeResolver {
       final Ast.Group group = (Ast.Group) step;
       validateGroup(group);
       TypeEnv env3 = env;
-      fieldVars.clear();
+      stepVars.clear();
       final PairList<Ast.Id, Ast.Exp> groupExps = PairList.of();
       for (Map.Entry<Ast.Id, Ast.Exp> groupExp : group.groupExps) {
         final Ast.Id id = groupExp.getKey();
@@ -621,7 +658,7 @@ public class TypeResolver {
         final Ast.Exp exp2 = deduceType(env2, exp, v7);
         reg(id, null, v7);
         env3 = env3.bind(id.name, v7);
-        fieldVars.put(id, v7);
+        stepVars.put(id.name, new StepVar(v7, id.toPat()));
         groupExps.add(id, exp2);
       }
       final List<Ast.Aggregate> aggregates = new ArrayList<>();
@@ -635,8 +672,8 @@ public class TypeResolver {
         final Ast.Exp arg2;
         final Unifier.Variable v10;
         if (aggregate.argument == null) {
+          v10 = fieldVar(inStepVars);
           arg2 = null;
-          v10 = v;
         } else {
           v10 = unifier.variable();
           arg2 = deduceType(env2, aggregate.argument, v10);
@@ -645,7 +682,7 @@ public class TypeResolver {
         equiv(unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, v10), v8),
             v9);
         env3 = env3.bind(id.name, v8);
-        fieldVars.put(id, v8);
+        stepVars.put(id.name, new StepVar(v8, id.toPat()));
         final Ast.Aggregate aggregate2 =
             aggregate.copy(aggregateFn2, arg2, aggregate.id);
         aggregates.add(aggregate2);
@@ -693,17 +730,29 @@ public class TypeResolver {
       equiv(unifier.apply(FN_TY_CON, v20, v19), v17);
       fromSteps.add(through.copy(throughPat, throughExp));
       TypeEnv env5 = env;
-      fieldVars.clear();
+      stepVars.clear();
       for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap.entrySet()) {
         env5 = env5.bind(e.getKey().name, e.getValue());
-        fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
-            (Unifier.Variable) e.getValue());
+        stepVars.put(e.getKey().name,
+            new StepVar((Unifier.Variable) e.getValue(), e.getKey()));
       }
       return Pair.of(env5, v18);
 
     default:
       throw new AssertionError("unknown step type " + step.op);
     }
+  }
+
+  private OptionalStepVar ensureOptional(StepVar stepVar) {
+    if (stepVar instanceof OptionalStepVar) {
+      return (OptionalStepVar) stepVar;
+    }
+    final Ast.IdPat idPat2 =
+        (Ast.IdPat) ast.idPat(stepVar.idPat.pos, stepVar.idPat.name);
+    final Unifier.Term term = unifier.apply(OPTION_TY_CON, stepVar.variable);
+    final Unifier.Variable v2 = unifier.variable();
+    reg(idPat2, v2, term);
+    return new OptionalStepVar(stepVar.idPat, stepVar.variable, v2);
   }
 
   /** Validates a {@code Group}. Throws if there are duplicate names among
@@ -719,15 +768,15 @@ public class TypeResolver {
     }
   }
 
-  private Unifier.Variable fieldVar(Map<Ast.Id, Unifier.Variable> fieldVars) {
-    switch (fieldVars.size()) {
+  private Unifier.Variable fieldVar(Map<String, StepVar> stepVars) {
+    switch (stepVars.size()) {
     case 0:
       return equiv(toTerm(PrimitiveType.UNIT), unifier.variable());
     case 1:
-      return Iterables.getOnlyElement(fieldVars.values());
+      return Iterables.getOnlyElement(stepVars.values()).variable;
     default:
       final TreeMap<String, Unifier.Variable> map = new TreeMap<>();
-      fieldVars.forEach((k, v) -> map.put(k.name, v));
+      stepVars.forEach((k, v) -> map.put(k, v.variable));
       return equiv(record(map), unifier.variable());
     }
   }
@@ -1091,6 +1140,7 @@ public class TypeResolver {
     final List<Ast.Pat> list2 = new ArrayList<>();
     for (int i = 0; i < patList.size(); i++) {
       final Ast.Pat pat = patList.get(i);
+      //noinspection SwitchStatementWithTooFewBranches
       switch (pat.op) {
       case ID_PAT:
         final Ast.IdPat idPat = (Ast.IdPat) pat;
@@ -1677,6 +1727,38 @@ public class TypeResolver {
       default:
         return null;
       }
+    }
+  }
+
+  /** Variable that is set by a {@link Ast.FromStep}, including {@link Ast.Scan}
+   * and various types of join). It has an id so that the variable can be
+   * re-declared with different optionality if a later step is an outer join. */
+  private static class StepVar {
+    final Unifier.Variable variable;
+    final Ast.IdPat idPat;
+
+    StepVar(Unifier.Variable variable, Ast.IdPat idPat) {
+      this.variable = variable;
+      this.idPat = idPat;
+    }
+
+    Unifier.Variable outVariable() {
+      return variable;
+    }
+  }
+
+  /** Variable that is set on the null-generating side of a step. */
+  private static class OptionalStepVar extends StepVar {
+    final Unifier.Variable optVariable;
+
+    OptionalStepVar(Ast.IdPat idPat, Unifier.Variable variable,
+        Unifier.Variable optVariable) {
+      super(variable, idPat);
+      this.optVariable = optVariable;
+    }
+
+    @Override Unifier.Variable outVariable() {
+      return optVariable;
     }
   }
 }

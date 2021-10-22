@@ -231,8 +231,8 @@ public class Shuttle {
   }
 
   protected Ast.Scan visit(Ast.Scan scan) {
-    return ast.scan(scan.pos, scan.pat.accept(this),
-        scan.exp.accept(this),
+    return ast.scan(scan.pos, scan.op, scan.pat.accept(this),
+        scan.exp == null ? null : scan.exp.accept(this),
         scan.condition == null ? null : scan.condition.accept(this));
   }
 

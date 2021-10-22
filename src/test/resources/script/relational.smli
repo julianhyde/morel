@@ -494,17 +494,65 @@ join y in [0,2,4,6,8,10,12] on x = y;
 > val it = [{x=6,y=6},{x=12,y=12}] : {x:int, y:int} list
 
 (*) join with intervening 'group'
-(* TODO: resolve ambiguity
 from e in emps
   group e.deptno compute count
   join d in depts
-  where deptno = d.deptno;
+  where deptno = d.deptno
+  order deptno;
+> val it =
+>   [{count=1,d={deptno=10,name="Sales"},deptno=10},
+>    {count=1,d={deptno=20,name="HR"},deptno=20},
+>    {count=2,d={deptno=30,name="Engineering"},deptno=30}]
+>   : {count:int, d:{deptno:int, name:string}, deptno:int} list
 
 (*) as previous, using 'on' rather than 'where'
 from e in emps
   group e.deptno compute count
-  join d in depts on deptno = d.deptno;
-*)
+  join d in depts on deptno = d.deptno
+  order deptno;
+> val it =
+>   [{count=1,d={deptno=10,name="Sales"},deptno=10},
+>    {count=1,d={deptno=20,name="HR"},deptno=20},
+>    {count=2,d={deptno=30,name="Engineering"},deptno=30}]
+>   : {count:int, d:{deptno:int, name:string}, deptno:int} list
+
+(*) inner join
+from e in emps
+  join d in depts on e.deptno = d.deptno + 10;
+> val it =
+>   [{d={deptno=10,name="Sales"},e={deptno=20,id=101,name="Velma"}},
+>    {d={deptno=20,name="HR"},e={deptno=30,id=102,name="Shaggy"}},
+>    {d={deptno=20,name="HR"},e={deptno=30,id=103,name="Scooby"}}]
+>   : {d:{deptno:int, name:string}, e:{deptno:int, id:int, name:string}} list
+
+(*) left join
+from e in emps
+  left join d in depts on e.deptno = d.deptno + 10;
+> val it =
+>   [{d=NONE,e={deptno=10,id=100,name="Fred"}},
+>    {d=SOME {deptno=10,name="Sales"},e={deptno=20,id=101,name="Velma"}},
+>    {d=SOME {deptno=20,name="HR"},e={deptno=30,id=102,name="Shaggy"}},
+>    {d=SOME {deptno=20,name="HR"},e={deptno=30,id=103,name="Scooby"}}]
+>   : {d:{deptno:int, name:string} option, e:{deptno:int, id:int, name:string}} list
+
+(*) right join
+from e in emps
+  right join d in depts on e.deptno = d.deptno + 10;
+> val it =
+>   [{d={deptno=10,name="Sales"},e=SOME {deptno=20,id=101,name="Velma"}},
+>    {d={deptno=20,name="HR"},e=SOME {deptno=30,id=102,name="Shaggy"}},
+>    {d={deptno=20,name="HR"},e=SOME {deptno=30,id=103,name="Scooby"}}]
+>   : {d:{deptno:int, name:string}, e:{deptno:int, id:int, name:string} option} list
+
+(*) full join
+from e in emps
+  full join d in depts on e.deptno = d.deptno + 10;
+> val it =
+>   [{d=NONE,e=SOME {deptno=10,id=100,name="Fred"}},
+>    {d=SOME {deptno=10,name="Sales"},e=SOME {deptno=20,id=101,name="Velma"}},
+>    {d=SOME {deptno=20,name="HR"},e=SOME {deptno=30,id=102,name="Shaggy"}},
+>    {d=SOME {deptno=20,name="HR"},e=SOME {deptno=30,id=103,name="Scooby"}}]
+>   : {d:{deptno:int, name:string} option, e:{deptno:int, id:int, name:string} option} list
 
 (*) exists (defining the "exists" function ourselves)
 (*) and correlated sub-query

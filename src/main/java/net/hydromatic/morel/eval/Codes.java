@@ -39,14 +39,17 @@ import net.hydromatic.morel.util.MorelException;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimaps;
+import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
+import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.runtime.FlatLists;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -66,6 +69,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static net.hydromatic.morel.ast.AstNodes.joinRelType;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Static.SKIP;
@@ -102,7 +106,7 @@ public abstract class Codes {
   /** Value of {@code NONE}.
    *
    * @see #optionSome(Object) */
-  private static final List OPTION_NONE = ImmutableList.of("NONE");
+  static final List OPTION_NONE = ImmutableList.of("NONE");
 
   /** Returns a Code that evaluates to the same value in all environments. */
   public static Code constant(Object value) {
@@ -516,7 +520,7 @@ public abstract class Codes {
       @Override public Object eval(EvalEnv env) {
         final RowSink rowSink = rowSinkFactory.get();
         rowSink.start(env);
-        rowSink.accept(env);
+        rowSink.accept(env); // send a single row to get things going
         return rowSink.result(env);
       }
     };
@@ -524,8 +528,9 @@ public abstract class Codes {
 
   /** Creates a {@link RowSink} for a {@code join} clause. */
   public static RowSink scanRowSink(Op op, Core.Pat pat, Code code,
-      Code conditionCode, RowSink rowSink) {
-    return new ScanRowSink(op, pat, code, conditionCode, rowSink);
+      Code conditionCode, List<Binding> outerBindings, RowSink rowSink) {
+    return new ScanRowSink(op, pat, code, conditionCode,
+        ImmutableList.copyOf(outerBindings), rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code where} clause. */
@@ -1679,7 +1684,7 @@ public abstract class Codes {
   /** Creates a value of {@code SOME v}.
    *
    * @see #OPTION_NONE */
-  private static List optionSome(Object o) {
+  static List optionSome(Object o) {
     return ImmutableList.of("SOME", o);
   }
 
@@ -3094,18 +3099,33 @@ public abstract class Codes {
   /** Implementation of {@link RowSink} for a {@code join} clause. */
   static class ScanRowSink extends BaseRowSink {
     final Op op; // inner, left, right, full
+    private final JoinRelType joinRelType;
     private final Core.Pat pat;
     private final Code code;
     final Code conditionCode;
+    private final List<Binding> outerBindings;
+    private final Multiset<Object> maxRightMultiset;
+    private final Multiset<Object> rightMultiset;
+
 
     ScanRowSink(Op op, Core.Pat pat, Code code, Code conditionCode,
-        RowSink rowSink) {
+        List<Binding> outerBindings, RowSink rowSink) {
       super(rowSink);
-      checkArgument(op == Op.SCAN);
+      checkArgument(op == Op.SCAN || op == Op.LEFT_JOIN
+          || op == Op.RIGHT_JOIN || op == Op.FULL_JOIN);
       this.op = op;
+      this.joinRelType = joinRelType(op);
       this.pat = pat;
       this.code = code;
       this.conditionCode = conditionCode;
+      this.outerBindings = outerBindings;
+      if (joinRelType.generatesNullsOnLeft()) {
+        this.maxRightMultiset = HashMultiset.create();
+        this.rightMultiset = HashMultiset.create();
+      } else {
+        this.maxRightMultiset = null;
+        this.rightMultiset = null;
+      }
     }
 
     @Override public Describer describe(Describer describer) {
@@ -3122,16 +3142,110 @@ public abstract class Codes {
     }
 
     @Override public void accept(EvalEnv env) {
+      EvalEnv env2;
+      if (rightMultiset != null) {
+        env2 = env;
+        for (Binding outerBinding : outerBindings) {
+          env2 = env2.bind(outerBinding.id.name,
+              optionSome(env.getOpt(outerBinding.id.name)));
+        }
+      } else {
+        env2 = null;
+      }
       final MutableEvalEnv mutableEvalEnv = env.bindMutablePat(pat);
+      final MutableEvalEnv mutableEvalEnv2;
+      if (rightMultiset != null) {
+        mutableEvalEnv2 = env2.bindMutablePat(pat);
+      } else {
+        mutableEvalEnv2 = null;
+      }
       final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-      for (Object element : elements) {
-        if (mutableEvalEnv.setOpt(element)) {
-          Boolean b = (Boolean) conditionCode.eval(mutableEvalEnv);
-          if (b != null && b) {
+      if (!joinRelType.generatesNullsOnRight()) {
+        // inner or right join
+        for (Object element : elements) {
+          if (rightMultiset != null) {
+            rightMultiset.add(element);
+          }
+          if (mutableEvalEnv.setOpt(element)) {
+            Boolean b = (Boolean) conditionCode.eval(mutableEvalEnv);
+            if (b != null && b) {
+              if (rightMultiset != null) {
+                mutableEvalEnv2.setOpt(element);
+                rowSink.accept(mutableEvalEnv2);
+              } else {
+                rowSink.accept(mutableEvalEnv);
+              }
+            }
+          }
+        }
+      } else {
+        // left or full join
+        int c = 0;
+        for (Object element : elements) {
+          if (rightMultiset != null) {
+            rightMultiset.add(element);
+          }
+          if (mutableEvalEnv.setOpt(element)) {
+            Boolean b = (Boolean) conditionCode.eval(mutableEvalEnv);
+            if (b != null && b) {
+              if (rightMultiset != null) {
+                mutableEvalEnv2.setOpt(element);
+                mutableEvalEnv2.makeOptional(true);
+                rowSink.accept(mutableEvalEnv2);
+              } else {
+                mutableEvalEnv.makeOptional(true);
+                rowSink.accept(mutableEvalEnv);
+              }
+              ++c;
+            }
+          }
+        }
+        if (c == 0) {
+          // generate the 'null' row
+          if (rightMultiset != null) {
+            mutableEvalEnv2.makeOptional(false);
+            rowSink.accept(mutableEvalEnv2);
+          } else {
+            mutableEvalEnv.makeOptional(false);
             rowSink.accept(mutableEvalEnv);
           }
         }
       }
+      if (rightMultiset != null) {
+        // Set the count for each element in maxRightMultiset to be the max of
+        // the count in maxRightMultiset and rightMultiset. Suppose we have
+        //   maxRightMultiset = [a * 1, b * 4, c * 2, d * 1]
+        //   rightMultiset =    [a * 2,        c * 1, d * 1, e * 3]
+        // Then afterwards we will have
+        //   maxRightMultiset = [a * 2, b * 4, c * 2, d * 1, e * 3]
+        //noinspection UnstableApiUsage
+        rightMultiset.forEachEntry((e, c) -> {
+          // Set the count for 'e' to be the max of the two sets.
+          // We optimize for the case where both counts are the same;
+          // this will often be the case, especially if the join is not lateral.
+          if (maxRightMultiset.setCount(e, c, c)) {
+            maxRightMultiset.setCount(e, Math.max(c, maxRightMultiset.count(e)));
+          }
+        });
+        rightMultiset.clear(); // ready for next call to 'accept'
+      }
+    }
+
+    @Override public List<Object> result(EvalEnv env) {
+      if (rightMultiset != null) {
+        EvalEnv env2 = env;
+        for (Binding outerBinding : outerBindings) {
+          env2 = env2.bind(outerBinding.id.name, OPTION_NONE);
+        }
+        final MutableEvalEnv mutableEvalEnv = env2.bindMutablePat(pat);
+        for (Object element : maxRightMultiset) {
+          mutableEvalEnv.setOpt(element);
+          mutableEvalEnv.makeOptional(true);
+          rowSink.accept(env2);
+        }
+        maxRightMultiset.clear();
+      }
+      return rowSink.result(env);
     }
   }
 

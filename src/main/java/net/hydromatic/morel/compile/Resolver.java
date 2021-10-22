@@ -894,12 +894,15 @@ public class Resolver {
         final ListType listType = (ListType) coreExp.type;
         corePat = r.toCore(scan.pat, listType.elementType);
       }
-      final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
-      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
-      Core.Exp coreCondition = scan.condition == null
-          ? core.boolLiteral(true)
-          : r.withEnv(bindings2).toCore(scan.condition);
-      fromBuilder.scan(corePat, coreExp, coreCondition);
+      Core.Exp coreCondition;
+      if (scan.condition == null) {
+        coreCondition = core.boolLiteral(true);
+      } else {
+        final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
+        Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
+        coreCondition = r.withEnv(bindings2).toCore(scan.condition);
+      }
+      fromBuilder.scan(scan.op, corePat, coreExp, coreCondition);
     }
 
     @Override protected void visit(Ast.Where where) {

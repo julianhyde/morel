@@ -16,27 +16,27 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval;
+package net.hydromatic.morel.ast;
 
-/** An evaluation environment whose last entry is mutable. */
-public interface MutableEvalEnv extends EvalEnv {
-  /** Puts a value into this environment. */
-  void set(Object value);
+import org.apache.calcite.rel.core.JoinRelType;
 
-  /** Puts a value into this environment in a way that may not succeed.
-   *
-   * <p>For example, if this environment is based on the pattern (x, 2)
-   * then (1, 2) will succeed and will bind x to 1, but (3, 4) will fail.
-   *
-   * <p>The default implementation calls {@link #set} and always succeeds.
-   */
-  default boolean setOpt(Object value) {
-    set(value);
-    return true;
+/** Utilities for abstract syntax trees. */
+public abstract class AstNodes {
+  /** Converts an {@link Op} into a Calcite join type, otherwise throws. */
+  public static JoinRelType joinRelType(Op op) {
+    switch (op) {
+    case SCAN:
+      return JoinRelType.INNER;
+    case LEFT_JOIN:
+      return JoinRelType.LEFT;
+    case RIGHT_JOIN:
+      return JoinRelType.RIGHT;
+    case FULL_JOIN:
+      return JoinRelType.FULL;
+    default:
+      throw new AssertionError(op);
+    }
   }
-
-  /** Converts the value just added to "SOME value". */
-  void makeOptional(boolean present);
 }
 
-// End MutableEvalEnv.java
+// End AstNodes.java

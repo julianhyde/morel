@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
@@ -111,9 +112,10 @@ class SuchThatShuttle extends Shuttle {
         switch (step.op) {
         case SCAN:
           final Core.Scan scan = (Core.Scan) step;
+          final Core.Exp exp;
           if (Extents.isInfinite(scan.exp)) {
             final int idPatCount = idPats.size();
-            final Core.Exp rewritten = rewrite1(scan, skip(steps, i), idPats);
+            exp = rewrite1(scan, skip(steps, i), idPats);
 
             // Create a scan for any new variables introduced by rewrite.
             idPats.forEachIndexed((j, pat, extent) -> {
@@ -121,10 +123,10 @@ class SuchThatShuttle extends Shuttle {
                 fromBuilder.scan(pat, extent);
               }
             });
-            deferredScans.scan(env, scan.pat, rewritten, scan.condition);
           } else {
-            deferredScans.scan(env, scan.pat, scan.exp);
+            exp = scan.exp;
           }
+          deferredScans.scan(env, scan.op, scan.pat, exp, scan.condition);
           break;
 
         case YIELD:
@@ -236,18 +238,11 @@ class SuchThatShuttle extends Shuttle {
       return new DeferredStepList(freeFinder, refs);
     }
 
-    void scan(Environment env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+    void scan(Environment env, Op op, Core.Pat pat, Core.Exp exp,
+        Core.Exp condition) {
       final Set<Core.Pat> unresolvedRefs = unresolvedRefs(env, exp);
       steps.add(unresolvedRefs, fromBuilder -> {
-        fromBuilder.scan(pat, exp, condition);
-        resolve(pat);
-      });
-    }
-
-    void scan(Environment env, Core.Pat pat, Core.Exp exp) {
-      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(env, exp);
-      steps.add(unresolvedRefs, fromBuilder -> {
-        fromBuilder.scan(pat, exp);
+        fromBuilder.scan(op, pat, exp, condition);
         resolve(pat);
       });
     }

@@ -41,6 +41,7 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.append;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getLast;
 
 /** Builds a {@link Core.From}.
@@ -137,16 +138,20 @@ public class FromBuilder {
   public FromBuilder scan(Core.Pat pat) {
     final Core.Exp extent =
         core.extent(typeSystem, pat.type, ImmutableRangeSet.of(Range.all()));
-    return scan(pat, extent, core.boolLiteral(true));
+    return scan(Op.SCAN, pat, extent, core.boolLiteral(true));
   }
 
   /** Creates a bounded scan, "from pat in exp". */
   public FromBuilder scan(Core.Pat pat, Core.Exp exp) {
-    return scan(pat, exp, core.boolLiteral(true));
+    return scan(Op.SCAN, pat, exp, core.boolLiteral(true));
   }
 
-  public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+  public FromBuilder scan(Op op, Core.Pat pat, Core.Exp exp,
+      Core.Exp condition) {
+    checkArgument(op == Op.SCAN || op == Op.LEFT_JOIN
+        || op == Op.RIGHT_JOIN || op == Op.FULL_JOIN);
     if (exp.op == Op.FROM
+        && op == Op.SCAN
         && core.boolLiteral(true).equals(condition)
         && (pat instanceof Core.IdPat
             && !((Core.From) exp).steps.isEmpty()
@@ -208,7 +213,7 @@ public class FromBuilder {
       return yield_(uselessIfLast, bindings, core.record(typeSystem, nameExps));
     }
     Compiles.acceptBinding(typeSystem, pat, bindings);
-    return addStep(core.scan(bindings, pat, exp, condition));
+    return addStep(core.scan(op, bindings, pat, exp, condition));
   }
 
   public FromBuilder addAll(Iterable<? extends Core.FromStep> steps) {
@@ -403,7 +408,7 @@ public class FromBuilder {
     }
 
     @Override protected void visit(Core.Scan scan) {
-      scan(scan.pat, scan.exp, scan.condition);
+      scan(scan.op, scan.pat, scan.exp, scan.condition);
     }
 
     @Override protected void visit(Core.Where where) {

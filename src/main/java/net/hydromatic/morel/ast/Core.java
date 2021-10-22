@@ -1188,9 +1188,12 @@ public class Core {
     public final Exp exp;
     public final Exp condition;
 
-    Scan(ImmutableList<Binding> bindings, Pat pat, Exp exp,
+    Scan(Op op, ImmutableList<Binding> bindings, Pat pat, Exp exp,
         Exp condition) {
-      super(Op.SCAN, bindings);
+      super(op, bindings);
+      checkArgument(op == Op.SCAN || op == Op.LEFT_JOIN
+              || op == Op.RIGHT_JOIN || op == Op.FULL_JOIN,
+          "not a join type: %s", op);
       this.pat = requireNonNull(pat, "pat");
       this.exp = requireNonNull(exp, "exp");
       this.condition = requireNonNull(condition, "condition");
@@ -1233,7 +1236,7 @@ public class Core {
             .append(exp, Op.EQ.right, 0);
       }
       if (!isLiteralTrue()) {
-        w.append("on").append(condition, 0, 0);
+        w.append(" on ").append(condition, 0, 0);
       }
       return w;
     }
@@ -1249,7 +1252,7 @@ public class Core {
           && condition == this.condition
           && bindings.equals(this.bindings)
           ? this
-          : core.scan(bindings, pat, exp, condition);
+          : core.scan(op, bindings, pat, exp, condition);
     }
   }
 
