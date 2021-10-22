@@ -148,7 +148,8 @@ In Standard ML but not in Morel:
 <i>matchItem</i> &rarr; <i>pat</i> <b>=&gt;</b> <i>exp</i>
 <i>scan</i> &rarr; <i>pat</i> [ <b>in</b> | <b>=</b> ] <i>exp</i>
 <i>step</i> &rarr; <b>where</b> <i>exp</i>                filter clause
-    | <b>join</b> <i>scan</i> [ <b>on</b> <i>exp</i> ]      join clause
+    | [ <b>left</b> | <b>right</b> | <b>full</b> ] <b>join</b> <i>scan</i> [ <b>on</b> <i>exp</i> ]
+                                join clause
     | <b>group</b> <i>groupKey<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>groupKey<sub>g</sub></i>
       [ <b>compute</b> <i>agg<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>agg<sub>a</sub></i> ]
                                 group clause (<i>g</i> &ge; 0, <i>a</i> &ge; 1)

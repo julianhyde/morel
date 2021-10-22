@@ -924,7 +924,10 @@ public class Core {
         Exp condition) {
       super(op, bindings);
       switch (op) {
+      case FULL_JOIN:
       case INNER_JOIN:
+      case LEFT_JOIN:
+      case RIGHT_JOIN:
         break;
       default:
         // SCAN and CROSS_JOIN are valid in ast, not core.

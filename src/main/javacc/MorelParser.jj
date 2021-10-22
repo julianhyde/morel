@@ -341,10 +341,18 @@ void fromStep(List<FromStep> steps) :
   final List<OrderItem> orderItems;
 }
 {
-  <JOIN> {
-    span = Span.of(getPos());
-    op = Op.INNER_JOIN;
-  }
+  (
+    (
+      <LEFT> { op = Op.LEFT_JOIN; }
+    | <RIGHT> { op = Op.RIGHT_JOIN; }
+    | <FULL> { op = Op.FULL_JOIN; }
+    ) { span = Span.of(getPos()); }
+    <JOIN>
+  | <JOIN> {
+      span = Span.of(getPos());
+      op = Op.INNER_JOIN;
+    }
+  )
   patExp = fromSource()
   (
     LOOKAHEAD(2)
@@ -1329,10 +1337,13 @@ AstNode statementSemicolon() :
 | < COMPUTE: "compute" >
 | < DESC: "desc" >
 | < FROM: "from" >
+| < FULL: "full" >
 | < GROUP: "group" >
 | < JOIN: "join" >
+| < LEFT: "left" >
 | < ON: "on" >
 | < ORDER: "order" >
+| < RIGHT: "right" >
 | < WHERE: "where" >
 | < YIELD: "yield" >
 }
