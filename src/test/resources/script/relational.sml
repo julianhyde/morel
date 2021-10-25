@@ -270,7 +270,6 @@ where x > 1
 join y in [0,2,4,6,8,10,12] on x = y;
 
 (*) join with intervening 'group'
-(* TODO: resolve ambiguity
 from e in emps
   group e.deptno compute count
   join d in depts
@@ -280,7 +279,6 @@ from e in emps
 from e in emps
   group e.deptno compute count
   join d in depts on deptno = d.deptno;
-*)
 
 (*) exists (defining the "exists" function ourselves)
 (*) and correlated sub-query

@@ -36,11 +36,11 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
+import static net.hydromatic.morel.util.Static.toImmutableSet;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -726,6 +726,11 @@ public class Ast {
 
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.id(name);
+    }
+
+    /** Creates a pattern equivalent to this identifier. */
+    public IdPat toPat() {
+      return new IdPat(pos, name);
     }
   }
 
@@ -1492,7 +1497,7 @@ public class Ast {
           nextFields.addAll(Pair.left(groupExps));
           groupExps.forEach(pair -> nextFields.add(pair.left));
           aggregates.forEach(aggregate -> nextFields.add(aggregate.id));
-          fields = nextFields;
+          fields = ImmutableSet.copyOf(nextFields);
           record = fields.size() != 1;
           break;
 
@@ -1503,7 +1508,7 @@ public class Ast {
                 ((Record) yield.exp).args.keySet()
                     .stream()
                     .map(label -> ast.id(Pos.ZERO, label))
-                    .collect(Collectors.toSet());
+                    .collect(toImmutableSet());
             record = true;
           } else {
             record = false;

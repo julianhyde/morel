@@ -19,6 +19,7 @@
 package net.hydromatic.morel.util;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 
 import java.util.Collection;
 import java.util.Iterator;
@@ -46,11 +47,34 @@ public class Static {
   public static <T> Collector<T, ImmutableList.Builder<T>, ImmutableList<T>>
       toImmutableList() {
     return Collector.of(ImmutableList::builder, ImmutableList.Builder::add,
-        (t, u) -> {
-          t.addAll(u.build());
-          return t;
-        },
-        ImmutableList.Builder::build);
+        Static::combine, ImmutableList.Builder::build);
+  }
+
+  private static <T> ImmutableList.Builder<T> combine(ImmutableList.Builder<T> t,
+      ImmutableList.Builder<T> u) {
+    return t.addAll(u.build());
+  }
+
+  /**
+   * Returns a {@code Collector} that accumulates the input elements into a
+   * Guava {@link ImmutableSet} via a {@link ImmutableList.Builder}.
+   *
+   * <p>It will be obsolete when we move to Guava 21.0,
+   * which has {@code ImmutableSet.toImmutableSet()}.
+   *
+   * @param <E> Type of the input elements
+   *
+   * @return a {@code Collector} that collects all the input elements into an
+   * {@link ImmutableSet}
+   */
+  public static <E> Collector<E, ?, ImmutableSet<E>> toImmutableSet() {
+    return Collector.of(ImmutableSet::<E>builder, ImmutableSet.Builder::add,
+        Static::combine, ImmutableSet.Builder::build);
+  }
+
+  private static <E> ImmutableSet.Builder<E> combine(ImmutableSet.Builder<E> t,
+      ImmutableSet.Builder<E> u) {
+    return t.addAll(u.build());
   }
 
   /** Returns whether an {@link Iterable} has fewer than {@code n} elements.

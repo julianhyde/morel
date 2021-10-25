@@ -1417,6 +1417,43 @@ public class MainTest {
         .assertType("(int * int -> bool) -> int list");
   }
 
+  @Test void testFromType() {
+    ml("from d in [{deptno=10,dname=\"SALES\"}]\n"
+        + " join e in [{empno=100,deptno=10}] on e.deptno = d.deptno")
+        .assertType("{d:{deptno:int, dname:string},"
+            + " e:{deptno:int, empno:int}} list");
+    ml("from d in [{deptno=10,dname=\"SALES\"}]\n"
+        + " left join e in [{empno=100,deptno=10}] on e.deptno = d.deptno")
+        .assertType("{d:{deptno:int, dname:string},"
+            + " e:{deptno:int, empno:int} option} list");
+    ml("from d in [{deptno=10,dname=\"SALES\"}]\n"
+        + " left join e in [{empno=100,deptno=10}] on e.deptno = d.deptno\n"
+        + " left join s in [{empno=100,skill=\"Yoga\"}] on s.empno = e.empno\n")
+        .assertType("{d:{deptno:int, dname:string},"
+            + " e:{deptno:int, empno:int} option,"
+            + " s:{empno:int, skill:string} option} list");
+    ml("from d in [{deptno=10,dname=\"SALES\"}]\n"
+        + " right join e in [{empno=100,deptno=10}] on e.deptno = d.deptno")
+        .assertType("{d:{deptno:int, dname:string} option,"
+            + " e:{deptno:int, empno:int}} list");
+    ml("from d in [{deptno=10,dname=\"SALES\"}]\n"
+        + " full join e in [{empno=100,deptno=10}] on e.deptno = d.deptno")
+        .assertType("{d:{deptno:int, dname:string} option,"
+            + " e:{deptno:int, empno:int} option} list");
+
+    // join after group
+    ml("from e in [{empno=100,deptno=10}]\n"
+        + " group e.deptno compute count\n"
+        + " join d in [{deptno=10,dname=\"SALES\"}] on deptno = d.deptno")
+        .assertType("{count:int, d:{deptno:int, dname:string}, "
+            + "deptno:int} list");
+    ml("from e in [{empno=100,deptno=10}]\n"
+        + " group e.deptno compute count\n"
+        + " right join d in [{deptno=10,dname=\"SALES\"}] on deptno = d.deptno")
+        .assertType("{count:int option, d:{deptno:int, dname:string}, "
+            + "deptno:int option} list");
+  }
+
   @Test void testFoo() {
     ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
         .assertParseSame()

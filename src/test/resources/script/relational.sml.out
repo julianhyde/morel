@@ -476,17 +476,27 @@ val it = [{x=6,y=6},{x=12,y=12}] : {x:int, y:int} list
 
 
 (*) join with intervening 'group'
-(* TODO: resolve ambiguity
 from e in emps
   group e.deptno compute count
   join d in depts
   where deptno = d.deptno;
+val it =
+  [{count=1,d={deptno=20,name="HR"},deptno=20},
+   {count=1,d={deptno=10,name="Sales"},deptno=10},
+   {count=2,d={deptno=30,name="Engineering"},deptno=30}]
+  : {count:int, d:{deptno:int, name:string}, deptno:int} list
+
 
 (*) as previous, using 'on' rather than 'where'
 from e in emps
   group e.deptno compute count
   join d in depts on deptno = d.deptno;
-*)
+val it =
+  [{count=1,d={deptno=20,name="HR"},deptno=20},
+   {count=1,d={deptno=10,name="Sales"},deptno=10},
+   {count=2,d={deptno=30,name="Engineering"},deptno=30}]
+  : {count:int, d:{deptno:int, name:string}, deptno:int} list
+
 
 (*) exists (defining the "exists" function ourselves)
 (*) and correlated sub-query
