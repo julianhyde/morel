@@ -79,6 +79,7 @@ import java.util.TreeMap;
 import java.util.function.Predicate;
 import javax.annotation.Nonnull;
 
+import static net.hydromatic.morel.ast.AstNodes.joinRelType;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import static java.util.Objects.requireNonNull;
@@ -677,21 +678,6 @@ public class CalciteCompiler extends Compiler {
       cx.relBuilder.join(joinRelType, translate(cx, scan.condition));
     }
     return cx;
-  }
-
-  private static JoinRelType joinRelType(Op op) {
-    switch (op) {
-    case INNER_JOIN:
-      return JoinRelType.INNER;
-    case LEFT_JOIN:
-      return JoinRelType.LEFT;
-    case RIGHT_JOIN:
-      return JoinRelType.RIGHT;
-    case FULL_JOIN:
-      return JoinRelType.FULL;
-    default:
-      throw new AssertionError(op);
-    }
   }
 
   private RelContext where(RelContext cx, Core.Where where) {

@@ -48,6 +48,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.util.Util;
 
 import java.util.AbstractList;
@@ -68,6 +69,7 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.ast.AstNodes.joinRelType;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
 /** Resolves the type of an expression. */
@@ -410,10 +412,7 @@ public class TypeResolver {
         eq = false;
         scanExp = scan.exp;
       }
-      final boolean leftOptional =
-          scan.op == Op.RIGHT_JOIN || scan.op == Op.FULL_JOIN;
-      final boolean rightOptional =
-          scan.op == Op.LEFT_JOIN || scan.op == Op.FULL_JOIN;
+      final JoinRelType joinRelType = joinRelType(scan.op);
       final Unifier.Variable v15 = unifier.variable();
       final Unifier.Variable v16 = unifier.variable();
       final Ast.Exp scanExp2 = deduceType(env2, scanExp, v15);
@@ -432,7 +431,7 @@ public class TypeResolver {
       for (Map.Entry<String, StepVar> entry : inStepVars.entrySet()) {
         final String name = entry.getKey();
         final StepVar stepVar;
-        if (leftOptional) {
+        if (joinRelType.generatesNullsOnLeft()) {
           stepVar = ensureOptional(entry.getValue());
         } else {
           stepVar = entry.getValue();
@@ -448,7 +447,7 @@ public class TypeResolver {
         final Ast.IdPat idPat = e.getKey();
         StepVar stepVar =
             new StepVar((Unifier.Variable) e.getValue(), idPat);
-        if (rightOptional) {
+        if (joinRelType.generatesNullsOnRight()) {
           stepVar = ensureOptional(stepVar);
         }
         outEnv = outEnv.bind(idPat.name, stepVar.outVariable());
