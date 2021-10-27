@@ -34,6 +34,9 @@ public interface MutableEvalEnv extends EvalEnv {
     set(value);
     return true;
   }
+
+  /** Converts the value just added to "SOME value". */
+  void makeOptional(boolean present);
 }
 
 // End MutableEvalEnv.java

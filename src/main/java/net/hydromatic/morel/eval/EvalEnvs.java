@@ -79,8 +79,12 @@ public class EvalEnvs {
       super(parentEnv, name, null);
     }
 
-    public void set(Object value) {
+    @Override public void set(Object value) {
       this.value = value;
+    }
+
+    @Override public void makeOptional(boolean present) {
+      value = present ? Codes.optionSome(value) : Codes.OPTION_NONE;
     }
 
     @Override public EvalEnv fix() {
@@ -125,9 +129,15 @@ public class EvalEnvs {
       super(parentEnv, ImmutableList.copyOf(names), null);
     }
 
-    public void set(Object value) {
+    @Override public void set(Object value) {
       values = (Object[]) value;
       assert values.length == names.size();
+    }
+
+    @Override public void makeOptional(boolean present) {
+      for (int i = 0; i < values.length; i++) {
+        values[i] = present ? Codes.optionSome(values[i]) : Codes.OPTION_NONE;
+      }
     }
 
     @Override public ArraySubEvalEnv fix() {
@@ -256,6 +266,62 @@ public class EvalEnvs {
         final List conValue = (List) argValue;
         return conValue.get(0).equals(conPat.tyCon)
             && bindRecurse(conPat.pat, conValue.get(1));
+
+      default:
+        throw new AssertionError("cannot compile " + pat.op + ": " + pat);
+      }
+    }
+
+    @Override public void makeOptional(boolean present) {
+      slot = 0;
+      makeOptionalRecurse(pat, present);
+    }
+
+    void makeOptionalRecurse(Core.Pat pat, boolean present) {
+      switch (pat.op) {
+      case ID_PAT:
+        this.values[slot] =
+            present ? Codes.optionSome(values[slot]) : Codes.OPTION_NONE;
+        ++slot;
+        return;
+
+      case WILDCARD_PAT:
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+        return;
+
+      case TUPLE_PAT:
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        tuplePat.args.forEach(p -> makeOptionalRecurse(p, present));
+        return;
+
+      case RECORD_PAT:
+        final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        recordPat.args.forEach(p -> makeOptionalRecurse(p, present));
+        return;
+
+      case LIST_PAT:
+        final Core.ListPat listPat = (Core.ListPat) pat;
+        listPat.args.forEach(p -> makeOptionalRecurse(p, present));
+        return;
+
+      case CONS_PAT:
+        final Core.ConPat infixPat = (Core.ConPat) pat;
+        List<Core.Pat> patArgs = ((Core.TuplePat) infixPat.pat).args;
+        makeOptionalRecurse(patArgs.get(0), present);
+        makeOptionalRecurse(patArgs.get(1), present);
+        return;
+
+      case CON0_PAT:
+        return;
+
+      case CON_PAT:
+        final Core.ConPat conPat = (Core.ConPat) pat;
+        makeOptionalRecurse(conPat.pat, present);
+        return;
 
       default:
         throw new AssertionError("cannot compile " + pat.op + ": " + pat);

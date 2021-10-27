@@ -280,6 +280,22 @@ from e in emps
   group e.deptno compute count
   join d in depts on deptno = d.deptno;
 
+(*) inner join
+from e in emps
+  join d in depts on e.deptno = d.deptno + 10;
+
+(*) left join
+from e in emps
+  left join d in depts on e.deptno = d.deptno + 10;
+
+(*) right join
+from e in emps
+  right join d in depts on e.deptno = d.deptno + 10;
+
+(*) full join
+from e in emps
+  full join d in depts on e.deptno = d.deptno + 10;
+
 (*) exists (defining the "exists" function ourselves)
 (*) and correlated sub-query
 let
