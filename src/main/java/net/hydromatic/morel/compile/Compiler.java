@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
+import static net.hydromatic.morel.ast.AstNodes.joinRelType;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
@@ -316,8 +317,12 @@ public class Compiler {
       final Core.Scan scan = (Core.Scan) firstStep;
       final Code code = compile(cx, scan.exp);
       final Code conditionCode = compile(cx, scan.condition);
+      final ImmutableList<Binding> outerBindings =
+          joinRelType(firstStep.op).generatesNullsOnLeft()
+              ? bindings
+              : ImmutableList.of();
       return () -> Codes.scanRowSink(firstStep.op, scan.pat, code,
-          conditionCode, nextFactory.get());
+          conditionCode, outerBindings, nextFactory.get());
 
     case WHERE:
       final Core.Where where = (Core.Where) firstStep;

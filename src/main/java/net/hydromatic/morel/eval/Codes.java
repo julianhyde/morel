@@ -18,7 +18,6 @@
  */
 package net.hydromatic.morel.eval;
 
-import net.hydromatic.morel.ast.AstNodes;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -61,6 +60,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
+import static net.hydromatic.morel.ast.AstNodes.joinRelType;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -452,8 +452,9 @@ public abstract class Codes {
 
   /** Creates a {@link RowSink} for a {@code join} clause. */
   public static RowSink scanRowSink(Op op, Core.Pat pat, Code code,
-      Code conditionCode, RowSink rowSink) {
-    return new ScanRowSink(op, pat, code, conditionCode, rowSink);
+      Code conditionCode, List<Binding> outerBindings, RowSink rowSink) {
+    return new ScanRowSink(op, pat, code, conditionCode,
+        ImmutableList.copyOf(outerBindings), rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code where} clause. */
@@ -2157,18 +2158,20 @@ public abstract class Codes {
     private final Code code;
     final Code conditionCode;
     final RowSink rowSink;
+    private final List<Binding> outerBindings;
     private final Multiset<Object> maxRightMultiset;
     private final Multiset<Object> rightMultiset;
 
     ScanRowSink(Op op, Core.Pat pat, Code code, Code conditionCode,
-        RowSink rowSink) {
+        List<Binding> outerBindings, RowSink rowSink) {
       checkArgument(op == Op.INNER_JOIN || op == Op.LEFT_JOIN
           || op == Op.RIGHT_JOIN || op == Op.FULL_JOIN);
       this.op = op;
-      this.joinRelType = AstNodes.joinRelType(this.op);
+      this.joinRelType = joinRelType(op);
       this.pat = pat;
       this.code = code;
       this.conditionCode = conditionCode;
+      this.outerBindings = outerBindings;
       this.rowSink = rowSink;
       if (joinRelType.generatesNullsOnLeft()) {
         this.maxRightMultiset = HashMultiset.create();
@@ -2194,10 +2197,26 @@ public abstract class Codes {
     }
 
     public void accept(EvalEnv env) {
+      EvalEnv env2;
+      if (rightMultiset != null) {
+        env2 = env;
+        for (Binding outerBinding : outerBindings) {
+          env2 = env2.bind(outerBinding.id.name,
+              optionSome(env.getOpt(outerBinding.id.name)));
+        }
+      } else {
+        env2 = null;
+      }
       final MutableEvalEnv mutableEvalEnv = env.bindMutablePat(pat);
+      final MutableEvalEnv mutableEvalEnv2;
+      if (rightMultiset != null) {
+        mutableEvalEnv2 = env2.bindMutablePat(pat);
+      } else {
+        mutableEvalEnv2 = null;
+      }
       final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
       if (!joinRelType.generatesNullsOnRight()) {
-        // inner join
+        // inner or right join
         for (Object element : elements) {
           if (rightMultiset != null) {
             rightMultiset.add(element);
@@ -2205,12 +2224,17 @@ public abstract class Codes {
           if (mutableEvalEnv.setOpt(element)) {
             Boolean b = (Boolean) conditionCode.eval(mutableEvalEnv);
             if (b != null && b) {
-              rowSink.accept(mutableEvalEnv);
+              if (rightMultiset != null) {
+                mutableEvalEnv2.setOpt(element);
+                rowSink.accept(mutableEvalEnv2);
+              } else {
+                rowSink.accept(mutableEvalEnv);
+              }
             }
           }
         }
       } else {
-        // left join
+        // left or full join join
         int c = 0;
         for (Object element : elements) {
           if (rightMultiset != null) {
@@ -2219,8 +2243,14 @@ public abstract class Codes {
           if (mutableEvalEnv.setOpt(element)) {
             Boolean b = (Boolean) conditionCode.eval(mutableEvalEnv);
             if (b != null && b) {
-              mutableEvalEnv.makeOptional(true);
-              rowSink.accept(mutableEvalEnv);
+              if (rightMultiset != null) {
+                mutableEvalEnv2.setOpt(element);
+                mutableEvalEnv2.makeOptional(true);
+                rowSink.accept(mutableEvalEnv2);
+              } else {
+                mutableEvalEnv.makeOptional(true);
+                rowSink.accept(mutableEvalEnv);
+              }
               ++c;
             }
           }
@@ -2253,13 +2283,17 @@ public abstract class Codes {
 
     public List<Object> result(EvalEnv env) {
       if (rightMultiset != null) {
-        final MutableEvalEnv mutableEvalEnv = env.bindMutablePat(pat);
-        ((MutableEvalEnv) env).makeOptional(false);
+        EvalEnv env2 = env;
+        for (Binding outerBinding : outerBindings) {
+          env2 = env2.bind(outerBinding.id.name, OPTION_NONE);
+        }
+        final MutableEvalEnv mutableEvalEnv = env2.bindMutablePat(pat);
         for (Object element : maxRightMultiset) {
           mutableEvalEnv.setOpt(element);
           mutableEvalEnv.makeOptional(true);
-          rowSink.accept(env);
+          rowSink.accept(env2);
         }
+        maxRightMultiset.clear();
       }
       return rowSink.result(env);
     }
