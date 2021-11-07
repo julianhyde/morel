@@ -2234,7 +2234,7 @@ public abstract class Codes {
           }
         }
       } else {
-        // left or full join join
+        // left or full join
         int c = 0;
         for (Object element : elements) {
           if (rightMultiset != null) {
@@ -2257,8 +2257,13 @@ public abstract class Codes {
         }
         if (c == 0) {
           // generate the 'null' row
-          mutableEvalEnv.makeOptional(false);
-          rowSink.accept(mutableEvalEnv);
+          if (rightMultiset != null) {
+            mutableEvalEnv2.makeOptional(false);
+            rowSink.accept(mutableEvalEnv2);
+          } else {
+            mutableEvalEnv.makeOptional(false);
+            rowSink.accept(mutableEvalEnv);
+          }
         }
       }
       if (rightMultiset != null) {
