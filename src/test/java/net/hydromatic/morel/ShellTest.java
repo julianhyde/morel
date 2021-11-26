@@ -160,6 +160,13 @@ public class ShellTest {
     fixture().withInputString(in).assertOutput(is(expected));
   }
 
+  /** Tests the {@code use} function. */
+  @Test void testUse() {
+    final String in = "use \"/tmp/x.sml\";\n";
+    final String expected = "xxx";
+    fixture().withInputString(in).assertOutput(is(expected));
+  }
+
   /** Fixture for testing the shell.
    *
    * @see #fixture */

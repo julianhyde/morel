@@ -19,6 +19,7 @@
 
 (* Structures -------------------------------------------------- *)
 General;
+Interact;
 List;
 List.rev;
 List.rev [1,2,3];
@@ -58,6 +59,12 @@ Sys.plan ();
 ignore;
 ignore (1 + 2);
 Sys.plan ();
+
+(* Interact ---------------------------------------------------- *)
+
+(*) use - load source from a file
+Interact.use;
+use;
 
 (* String ------------------------------------------------------ *)
 
