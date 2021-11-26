@@ -20,6 +20,7 @@ package net.hydromatic.morel.eval;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /** Session environment.
  *
@@ -32,6 +33,8 @@ public class Session {
   public String out;
   /** Property values. */
   public final Map<Prop, Object> map = new LinkedHashMap<>();
+  /** Implementation of "use". */
+  public Consumer<String> useFn;
 }
 
 // End Session.java

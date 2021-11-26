@@ -32,6 +32,7 @@ import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -49,9 +50,13 @@ import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.io.StringReader;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -225,21 +230,20 @@ public class Shell {
     pause();
     final TypeSystem typeSystem = new TypeSystem();
     Environment env = Environments.env(typeSystem, config.valueMap);
-    final StringBuilder buf = new StringBuilder();
     final List<String> lines = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     final Session session = new Session();
-    while (true) {
-      String line = "";
+    final LineFn lineFn = buf -> {
+      final String line;
       try {
         final String prompt = buf.length() == 0 ? minusPrompt : equalsPrompt;
         final String rightPrompt = null;
         line = lineReader.readLine(prompt, rightPrompt, (MaskingCallback) null,
             null);
       } catch (UserInterruptException e) {
-        // Ignore
+        return Pair.of(LineType.INTERRUPT, "");
       } catch (EndOfFileException e) {
-        return;
+        return Pair.of(LineType.EOF, "");
       }
 
       // Ignore this line if it consists only of comments, spaces, and
@@ -250,46 +254,97 @@ public class Shell {
           .trim();
       if (buf.length() == 0
           && (trimmedLine.isEmpty() || trimmedLine.equals(";"))) {
-        continue;
+        return Pair.of(LineType.IGNORE, "");
       }
 
-      if (line.equalsIgnoreCase("quit") || line.equalsIgnoreCase("exit")) {
-        break;
+      if (line.equalsIgnoreCase("quit")
+          || line.equalsIgnoreCase("exit")) {
+        return Pair.of(LineType.QUIT, "");
       }
+
       final ParsedLine pl = lineReader.getParser().parse(line, 0);
-      try {
-        if ("help".equals(pl.word()) || "?".equals(pl.word())) {
-          help(lines::add);
-        }
-        buf.append(pl.line());
-        if (pl.line().endsWith(";")) {
-          final String code = buf.toString();
-          buf.setLength(0);
-          final MorelParserImpl smlParser =
-              new MorelParserImpl(new StringReader(code));
-          final AstNode statement;
-          try {
-            statement = smlParser.statementSemicolon();
-            final CompiledStatement compiled =
-                Compiles.prepareStatement(typeSystem, session, env, statement,
-                    null);
-            compiled.eval(session, env, lines::add, bindings::add);
-            lines.forEach(terminal.writer()::println);
-            terminal.writer().flush();
-            lines.clear();
-            env = env.bindAll(bindings);
-            bindings.clear();
-          } catch (ParseException | CompileException e) {
-            terminal.writer().println(e.getMessage());
+      if ("help".equals(pl.word()) || "?".equals(pl.word())) {
+        return Pair.of(LineType.HELP, "");
+      }
+      return Pair.of(LineType.REGULAR, pl.line());
+    };
+    extracted(lineFn, terminal.writer(), config.echo, typeSystem, env,
+        lines, bindings, session);
+  }
+
+  static void extracted(LineFn lineFn, PrintWriter writer, boolean echo,
+      TypeSystem typeSystem, Environment env, List<String> lines,
+      List<Binding> bindings, Session session) {
+    final StringBuilder buf = new StringBuilder();
+    while (true) {
+      final Pair<LineType, String> line = lineFn.read(buf);
+      switch (line.left) {
+      case EOF:
+      case QUIT:
+        return;
+
+      case IGNORE:
+        continue;
+
+      case HELP:
+        help(writer::println);
+        buf.append(line.right).append("\n");
+        break;
+
+      case REGULAR:
+        try {
+          buf.append(line.right);
+          if (line.right.endsWith(";")) {
+            final String code = buf.toString();
+            buf.setLength(0);
+            final MorelParserImpl smlParser =
+                new MorelParserImpl(new StringReader(code));
+            final AstNode statement;
+            try {
+              statement = smlParser.statementSemicolon();
+              final CompiledStatement compiled =
+                  Compiles.prepareStatement(typeSystem, session, env, statement,
+                      null);
+              final Environment env0 = env;
+              session.useFn = fileName -> {
+                final File file = new File(fileName);
+                try (FileReader fileReader = new FileReader(file);
+                     BufferedReader bufferedReader = new BufferedReader(fileReader)) {
+                  LineFn lineFn1 = buf1 -> {
+                    try {
+                      final String line1 = bufferedReader.readLine();
+                      if (line1 == null) {
+                        return Pair.of(LineType.EOF, "");
+                      }
+                      return Pair.of(LineType.REGULAR, line1);
+                    } catch (IOException e) {
+                      throw new RuntimeException(e);
+                    }
+                  };
+                  extracted(lineFn1, writer, false, typeSystem, env0, lines,
+                      bindings, session);
+                } catch (IOException e) {
+                  e.printStackTrace();
+                }
+              };
+              compiled.eval(session, env, lines::add, bindings::add);
+              lines.forEach(writer::println);
+              writer.flush();
+              lines.clear();
+              env = env.bindAll(bindings);
+              bindings.clear();
+            } catch (ParseException | CompileException e) {
+              writer.println(e.getMessage());
+            }
+            if (echo) {
+              writer.println(code);
+            }
+          } else {
+            buf.append("\n");
           }
-          if (config.echo) {
-            terminal.writer().println(code);
-          }
-        } else {
-          buf.append("\n");
+        } catch (IllegalArgumentException e) {
+          writer.println(e.getMessage());
         }
-      } catch (IllegalArgumentException e) {
-        terminal.writer().println(e.getMessage());
       }
     }
   }
@@ -406,6 +461,22 @@ public class Shell {
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
           pauseFn);
     }
+  }
+
+  /** Abstraction of a terminal's line reader. Can read lines from an input
+   * (terminal or file) and categorize the lines. */
+  interface LineFn {
+    Pair<LineType, String> read(StringBuilder buf);
+  }
+
+  /** Type of line from {@link LineFn}. */
+  enum LineType {
+    QUIT,
+    EOF,
+    INTERRUPT,
+    IGNORE,
+    HELP,
+    REGULAR
   }
 }
 
