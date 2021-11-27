@@ -24,6 +24,7 @@ import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.DataSet;
@@ -37,6 +38,7 @@ import net.hydromatic.morel.util.Pair;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Runnables;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -61,6 +63,7 @@ import java.io.StringReader;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -144,6 +147,10 @@ public class Shell {
             instantiate(className, Map.class);
         valueMapBuilder.putAll(Calcite.withDataSets(map).foreignValues());
       }
+      if (arg.startsWith("--directory=")) {
+        final String directoryPath = arg.substring("--directory=".length());
+        config = config.withDirectory(new File(directoryPath));
+      }
     }
 
     return c.withValueMap(valueMapBuilder.build());
@@ -173,6 +180,18 @@ public class Shell {
    * which gives classes time to load and makes test deterministic. */
   protected final void pause() {
     config.pauseFn.run();
+  }
+
+  /** Returns whether we can ignore a line. We can ignore a line if it consists
+   * only of comments, spaces, and optionally semicolon, and if we are not on a
+   * continuation line. */
+  private static boolean canIgnoreLine(StringBuilder buf, String line) {
+    final String trimmedLine = line
+        .replaceAll("\\(\\*.*\\*\\)", "")
+        .replaceAll("\\(\\*\\) .*$", "")
+        .trim();
+    return buf.length() == 0
+        && (trimmedLine.isEmpty() || trimmedLine.equals(";"));
   }
 
   /** Generates a banner to be shown on startup. */
@@ -231,122 +250,14 @@ public class Shell {
     final TypeSystem typeSystem = new TypeSystem();
     Environment env = Environments.env(typeSystem, config.valueMap);
     final List<String> lines = new ArrayList<>();
-    final List<Binding> bindings = new ArrayList<>();
     final Session session = new Session();
-    final LineFn lineFn = buf -> {
-      final String line;
-      try {
-        final String prompt = buf.length() == 0 ? minusPrompt : equalsPrompt;
-        final String rightPrompt = null;
-        line = lineReader.readLine(prompt, rightPrompt, (MaskingCallback) null,
-            null);
-      } catch (UserInterruptException e) {
-        return Pair.of(LineType.INTERRUPT, "");
-      } catch (EndOfFileException e) {
-        return Pair.of(LineType.EOF, "");
-      }
-
-      // Ignore this line if it consists only of comments, spaces, and
-      // optionally semicolon, and if we are not on a continuation line.
-      final String trimmedLine = line
-          .replaceAll("\\(\\*.*\\*\\)", "")
-          .replaceAll("\\(\\*\\) .*$", "")
-          .trim();
-      if (buf.length() == 0
-          && (trimmedLine.isEmpty() || trimmedLine.equals(";"))) {
-        return Pair.of(LineType.IGNORE, "");
-      }
-
-      if (line.equalsIgnoreCase("quit")
-          || line.equalsIgnoreCase("exit")) {
-        return Pair.of(LineType.QUIT, "");
-      }
-
-      final ParsedLine pl = lineReader.getParser().parse(line, 0);
-      if ("help".equals(pl.word()) || "?".equals(pl.word())) {
-        return Pair.of(LineType.HELP, "");
-      }
-      return Pair.of(LineType.REGULAR, pl.line());
-    };
-    extracted(lineFn, terminal.writer(), config.echo, typeSystem, env,
-        lines, bindings, session);
-  }
-
-  static void extracted(LineFn lineFn, PrintWriter writer, boolean echo,
-      TypeSystem typeSystem, Environment env, List<String> lines,
-      List<Binding> bindings, Session session) {
-    final StringBuilder buf = new StringBuilder();
-    while (true) {
-      final Pair<LineType, String> line = lineFn.read(buf);
-      switch (line.left) {
-      case EOF:
-      case QUIT:
-        return;
-
-      case IGNORE:
-        continue;
-
-      case HELP:
-        help(writer::println);
-        buf.append(line.right).append("\n");
-        break;
-
-      case REGULAR:
-        try {
-          buf.append(line.right);
-          if (line.right.endsWith(";")) {
-            final String code = buf.toString();
-            buf.setLength(0);
-            final MorelParserImpl smlParser =
-                new MorelParserImpl(new StringReader(code));
-            final AstNode statement;
-            try {
-              statement = smlParser.statementSemicolon();
-              final CompiledStatement compiled =
-                  Compiles.prepareStatement(typeSystem, session, env, statement,
-                      null);
-              final Environment env0 = env;
-              session.useFn = fileName -> {
-                final File file = new File(fileName);
-                try (FileReader fileReader = new FileReader(file);
-                     BufferedReader bufferedReader = new BufferedReader(fileReader)) {
-                  LineFn lineFn1 = buf1 -> {
-                    try {
-                      final String line1 = bufferedReader.readLine();
-                      if (line1 == null) {
-                        return Pair.of(LineType.EOF, "");
-                      }
-                      return Pair.of(LineType.REGULAR, line1);
-                    } catch (IOException e) {
-                      throw new RuntimeException(e);
-                    }
-                  };
-                  extracted(lineFn1, writer, false, typeSystem, env0, lines,
-                      bindings, session);
-                } catch (IOException e) {
-                  e.printStackTrace();
-                }
-              };
-              compiled.eval(session, env, lines::add, bindings::add);
-              lines.forEach(writer::println);
-              writer.flush();
-              lines.clear();
-              env = env.bindAll(bindings);
-              bindings.clear();
-            } catch (ParseException | CompileException e) {
-              writer.println(e.getMessage());
-            }
-            if (echo) {
-              writer.println(code);
-            }
-          } else {
-            buf.append("\n");
-          }
-        } catch (IllegalArgumentException e) {
-          writer.println(e.getMessage());
-        }
-      }
-    }
+    final LineFn lineFn =
+        new TerminalLineFn(minusPrompt, equalsPrompt, lineReader);
+    final SubShell subShell =
+        new SubShell(1, lineFn, terminal.writer(), config.echo, typeSystem, env,
+            lines, session, config.directory);
+    final Map<String, Binding> bindings = new LinkedHashMap<>();
+    subShell.extracted(bindings);
   }
 
   /** Instantiates a class.
@@ -370,7 +281,7 @@ public class Shell {
     @SuppressWarnings("UnstableApiUsage")
     Config DEFAULT =
         new ConfigImpl(true, false, true, false, false, ImmutableMap.of(),
-            Runnables.doNothing());
+            new File(""), Runnables.doNothing());
 
     Config withBanner(boolean banner);
     Config withDumb(boolean dumb);
@@ -378,6 +289,7 @@ public class Shell {
     Config withEcho(boolean echo);
     Config withHelp(boolean help);
     Config withValueMap(Map<String, ForeignValue> valueMap);
+    Config withDirectory(File directory);
     Config withPauseFn(Runnable runnable);
   }
 
@@ -389,17 +301,19 @@ public class Shell {
     private final boolean help;
     private final boolean system;
     private final ImmutableMap<String, ForeignValue> valueMap;
+    private final File directory;
     private final Runnable pauseFn;
 
     private ConfigImpl(boolean banner, boolean dumb, boolean system,
         boolean echo, boolean help, ImmutableMap<String, ForeignValue> valueMap,
-        Runnable pauseFn) {
+        File directory, Runnable pauseFn) {
       this.banner = banner;
       this.dumb = dumb;
       this.system = system;
       this.echo = echo;
       this.help = help;
       this.valueMap = requireNonNull(valueMap, "valueMap");
+      this.directory = requireNonNull(directory, "directory");
       this.pauseFn = requireNonNull(pauseFn, "pauseFn");
     }
 
@@ -408,7 +322,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          pauseFn);
+          directory, pauseFn);
     }
 
     @Override public ConfigImpl withDumb(boolean dumb) {
@@ -416,7 +330,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          pauseFn);
+          directory, pauseFn);
     }
 
     @Override public ConfigImpl withSystem(boolean system) {
@@ -424,7 +338,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          pauseFn);
+          directory, pauseFn);
     }
 
     @Override public ConfigImpl withEcho(boolean echo) {
@@ -432,7 +346,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          pauseFn);
+          directory, pauseFn);
     }
 
     @Override public ConfigImpl withHelp(boolean help) {
@@ -440,7 +354,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          pauseFn);
+          directory, pauseFn);
     }
 
     @Override public ConfigImpl withValueMap(
@@ -451,7 +365,15 @@ public class Shell {
       final ImmutableMap<String, ForeignValue> immutableValueMap =
           ImmutableMap.copyOf(valueMap);
       return new ConfigImpl(banner, dumb, system, echo, help, immutableValueMap,
-          pauseFn);
+          directory, pauseFn);
+    }
+
+    @Override public ConfigImpl withDirectory(File directory) {
+      if (this.directory.equals(directory)) {
+        return this;
+      }
+      return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
+          directory, pauseFn);
     }
 
     @Override public Config withPauseFn(Runnable pauseFn) {
@@ -459,7 +381,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          pauseFn);
+          directory, pauseFn);
     }
   }
 
@@ -477,6 +399,208 @@ public class Shell {
     IGNORE,
     HELP,
     REGULAR
+  }
+
+  /** Simplified shell that works in both interactive mode (where input and
+   * output is a terminal) and batch mode (where input is a file, and output
+   * is to an array of lines). */
+  static class SubShell {
+    private final int depth;
+    private final LineFn lineFn;
+    private final PrintWriter writer;
+    private final boolean echo;
+    private final TypeSystem typeSystem;
+    private final Environment env;
+    private final List<String> lines;
+    private final Session session;
+    private final File directory;
+
+    SubShell(int depth, LineFn lineFn, PrintWriter writer, boolean echo,
+        TypeSystem typeSystem, Environment env, List<String> lines,
+        Session session, File directory) {
+      this.depth = depth;
+      this.lineFn = lineFn;
+      this.writer = writer;
+      this.echo = echo;
+      this.typeSystem = typeSystem;
+      this.env = env;
+      this.lines = lines;
+      this.session = session;
+      this.directory = directory;
+    }
+
+    void extracted(@Nullable Map<String, Binding> outBindings) {
+      final StringBuilder buf = new StringBuilder();
+      final Map<String, Binding> bindingMap = new LinkedHashMap<>();
+      final List<Binding> bindings = new ArrayList<>();
+      Environment env1 = env;
+      while (true) {
+        final Pair<LineType, String> line = lineFn.read(buf);
+        switch (line.left) {
+        case EOF:
+        case QUIT:
+          return;
+
+        case IGNORE:
+          continue;
+
+        case HELP:
+          help(writer::println);
+          buf.append(line.right).append("\n");
+          break;
+
+        case REGULAR:
+          try {
+            buf.append(line.right);
+            if (line.right.endsWith(";")) {
+              final String code = buf.toString();
+              buf.setLength(0);
+              final MorelParserImpl smlParser =
+                  new MorelParserImpl(new StringReader(code));
+              final AstNode statement;
+              try {
+                statement = smlParser.statementSemicolon();
+                final Environment env0 = env1;
+                final CompiledStatement compiled =
+                    Compiles.prepareStatement(typeSystem, session, env0,
+                        statement, null);
+                session.useFn = new Use(env0, directory, bindingMap);
+                compiled.eval(session, env0, lines::add, bindings::add);
+                bindings.forEach(b -> bindingMap.put(b.id.name, b));
+                lines.forEach(writer::println);
+                writer.flush();
+                lines.clear();
+                env1 = env0.bindAll(bindingMap.values());
+                if (outBindings != null) {
+                  outBindings.putAll(bindingMap);
+                }
+                bindingMap.clear();
+                bindings.clear();
+              } catch (ParseException | CompileException e) {
+                writer.println(e.getMessage());
+              }
+              if (echo) {
+                writer.println(code);
+              }
+            } else {
+              buf.append("\n");
+            }
+          } catch (IllegalArgumentException e) {
+            writer.println(e.getMessage());
+          }
+        }
+      }
+    }
+
+    /** Implementation of the "use" function. */
+    private class Use implements Consumer<String> {
+      private final Environment env;
+      private final File directory;
+      private final Map<String, Binding> bindings;
+
+      Use(Environment env, File directory, Map<String, Binding> bindings) {
+        this.env = env;
+        this.directory = directory;
+        this.bindings = bindings;
+      }
+
+      @Override public void accept(String fileName) {
+        lines.add("[opening " + fileName + "]");
+        File file = new File(fileName);
+        if (!file.isAbsolute()) {
+          file = new File(directory, fileName);
+        }
+        if (!file.exists()) {
+          lines.add("[use failed: Io: openIn failed on "
+              + fileName
+              + ", No such file or directory]");
+          throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR);
+        }
+        if (depth > 200) {
+          lines.add("[use failed: Io: openIn failed on "
+              + fileName
+              + ", Too many open files]");
+          throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR);
+        }
+        try (FileReader fileReader = new FileReader(file);
+             BufferedReader bufferedReader = new BufferedReader(fileReader)) {
+          final SubShell subShell =
+              new SubShell(depth + 1, new ReaderLineFn(bufferedReader), writer,
+                  false, typeSystem, env, lines, session, directory);
+          subShell.extracted(bindings);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+    }
+  }
+
+  /** Implementation of {@link LineFn} that reads from a reader. */
+  static class ReaderLineFn implements LineFn {
+    private final BufferedReader reader;
+
+    ReaderLineFn(BufferedReader reader) {
+      this.reader = reader;
+    }
+
+    @Override public Pair<LineType, String> read(StringBuilder buf) {
+      try {
+        final String line = reader.readLine();
+        if (line == null) {
+          return Pair.of(LineType.EOF, "");
+        }
+        if (canIgnoreLine(buf, line)) {
+          return Pair.of(LineType.IGNORE, "");
+        }
+        return Pair.of(LineType.REGULAR, line);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  /** Implementation of {@link LineFn} that reads from JLine's terminal.
+   * It is used for interactive sessions. */
+  private static class TerminalLineFn implements LineFn {
+    private final String minusPrompt;
+    private final String equalsPrompt;
+    private final LineReader lineReader;
+
+    TerminalLineFn(String minusPrompt, String equalsPrompt,
+        LineReader lineReader) {
+      this.minusPrompt = minusPrompt;
+      this.equalsPrompt = equalsPrompt;
+      this.lineReader = lineReader;
+    }
+
+    @Override public Pair<LineType, String> read(StringBuilder buf) {
+      final String line;
+      try {
+        final String prompt = buf.length() == 0 ? minusPrompt : equalsPrompt;
+        final String rightPrompt = null;
+        line = lineReader.readLine(prompt, rightPrompt, (MaskingCallback) null,
+            null);
+      } catch (UserInterruptException e) {
+        return Pair.of(LineType.INTERRUPT, "");
+      } catch (EndOfFileException e) {
+        return Pair.of(LineType.EOF, "");
+      }
+
+      if (canIgnoreLine(buf, line)) {
+        return Pair.of(LineType.IGNORE, "");
+      }
+
+      if (line.equalsIgnoreCase("quit")
+          || line.equalsIgnoreCase("exit")) {
+        return Pair.of(LineType.QUIT, "");
+      }
+
+      final ParsedLine pl = lineReader.getParser().parse(line, 0);
+      if ("help".equals(pl.word()) || "?".equals(pl.word())) {
+        return Pair.of(LineType.HELP, "");
+      }
+      return Pair.of(LineType.REGULAR, pl.line());
+    }
   }
 }
 

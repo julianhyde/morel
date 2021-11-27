@@ -20,13 +20,17 @@ package net.hydromatic.morel;
 
 import com.google.common.collect.ImmutableList;
 import org.hamcrest.Matcher;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+
+import static net.hydromatic.morel.TestUtils.findDirectory;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -162,9 +166,116 @@ public class ShellTest {
 
   /** Tests the {@code use} function. */
   @Test void testUse() {
-    final String in = "use \"/tmp/x.sml\";\n";
-    final String expected = "xxx";
-    fixture().withInputString(in).assertOutput(is(expected));
+    // In SML-NJ, given x.sml as follows:
+    //   val x = 2;
+    //   val y = x + 3;
+    //   x + y;
+    //   use "z.sml";
+    //   x + y + z;
+    // and z.sml as follows:
+    //   val z = 7;
+    //   val x = 1;
+    //   x + z;
+    // running
+    //   use "x.sml";
+    //   x;
+    // gives
+    //   - use "x.sml";
+    //   [opening x.sml]
+    //   val x = 2 : int
+    //   val y = 5 : int
+    //   val it = 7 : int
+    //   [opening z.sml]
+    //   val z = 7 : int
+    //   val x = 1 : int
+    //   val it = 8 : int
+    //   val it = () : unit
+    //   val it = 13 : int
+    //   val it = () : unit
+    //   val it = 1;
+    // Note that x = 1 after /tmp/x.sml has finished;
+    // and that z has been assigned after /tmp/z.sml has finished.
+    final String in = "use \"x.sml\";\n";
+    final String expected = "use \"x.sml\";\r\n"
+        + "- use \"x.sml\";\r\r\n"
+        + "\u001B[?2004l[opening x.sml]\r\n"
+        + "val x = 2 : int\r\n"
+        + "val y = 5 : int\r\n"
+        + "val it = 7 : int\r\n"
+        + "[opening z.sml]\r\n"
+        + "val z = 7 : int\r\n"
+        + "val x = 1 : int\r\n"
+        + "val it = 8 : int\r\n"
+        + "val it = () : unit\r\n"
+        + "val it = 13 : int\r\n"
+        + "val it = () : unit\r\n"
+        + "- \r\r\n"
+        + "\u001B[?2004l";
+    fixture()
+        .withArgListPlusDirectory()
+        .withInputString(in)
+        .assertOutput(is(expected));
+  }
+
+  /** Tests the {@code use} function on an empty file. */
+  @Test void testUseEmpty() {
+    final String in = "use \"empty.sml\";\n";
+    final String expected = "use \"empty.sml\";\r\n"
+        + "- use \"empty.sml\";\r\r\n"
+        + "\u001B[?2004l[opening empty.sml]\r\n"
+        + "val it = () : unit\r\n"
+        + "- \r\r\n"
+        + "\u001B[?2004l";
+    fixture()
+        .withArgListPlusDirectory()
+        .withInputString(in)
+        .assertOutput(is(expected));
+  }
+
+  /** Tests the {@code use} function on a missing file. */
+  @Disabled
+  @Test void testUseMissing() {
+    // SML-NJ gives:
+    //   [opening missing.sml]
+    //   [use failed: Io: openIn failed on "missing.sml", No such file or
+    //   directory]
+    //   uncaught exception Error
+    //     raised at: ../compiler/TopLevel/interact/interact.sml:24.14-24.28
+
+    final String in = "use \"missing.sml\";\n";
+    final String expected = "use \"missing.sml\";\r\n"
+        + "- use \"empty.sml\";\r\r\n"
+        + "\u001B[?2004l[opening empty.sml]\r\n"
+        + "val it = () : unit\r\n"
+        + "- \r\r\n"
+        + "\u001B[?2004l";
+    fixture()
+        .withArgListPlusDirectory()
+        .withInputString(in)
+        .assertOutput(is(expected));
+  }
+
+  /** Tests the {@code use} function on a file that uses itself. */
+  @Disabled
+  @Test void testUseSelfReferential() {
+    // SML-NJ gives:
+    //   [opening self-referential.sml]
+    //   [use failed: Io: openIn failed on "self-referential.sml", Too many
+    //   open files]
+    //   uncaught exception Error
+    //     raised at: ../compiler/TopLevel/interact/interact.sml:24.14-24.28
+
+    final String in = "use \"self-referential.sml\";\n";
+    final String expected = "use \"self-referential.sml\";\r\n"
+        + "- use \"self-referential.sml\";\r\r\n"
+        + "\u001B[?2004l[opening self-referential.sml]\r\n"
+        + "val it = () : unit\r\n"
+        + "- \r\r\n"
+        + "\u001B[?2004l";
+    fixture()
+        .withArgListPlusDirectory()
+        .withInputString(in)
+        .assertOutput(is(expected));
   }
 
   /** Fixture for testing the shell.
@@ -199,6 +310,16 @@ public class ShellTest {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
+    }
+
+    default Fixture withArgListPlusDirectory() {
+      final File rootDirectory = findDirectory();
+      final File useDirectory = new File(rootDirectory, "use");
+      return withArgList(
+          ImmutableList.<String>builder()
+              .addAll(argList())
+              .add("--directory=" + useDirectory)
+              .build());
     }
   }
 
