@@ -2518,6 +2518,7 @@ public abstract class Codes {
   public enum BuiltInExn {
     EMPTY("List", "Empty"),
     OPTION("Option", "Option"),
+    ERROR("Interact", "Error"), // not in standard basis
     SIZE("General", "Size"),
     SUBSCRIPT("General", "Subscript [subscript out of bounds]");
 
