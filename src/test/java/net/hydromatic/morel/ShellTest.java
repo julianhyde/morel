@@ -29,8 +29,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.TestUtils.findDirectory;
+import static net.hydromatic.morel.TestUtils.plus;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -53,6 +55,12 @@ public class ShellTest {
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  static String directoryArg() {
+    final File rootDirectory = findDirectory();
+    final File useDirectory = new File(rootDirectory, "use");
+    return "--directory=" + useDirectory;
   }
 
   /** Tests {@link Shell} with empty input. */
@@ -290,6 +298,14 @@ public class ShellTest {
 
     Fixture withArgList(List<String> argList);
 
+    default Fixture withArgList(UnaryOperator<List<String>> transform) {
+      return withArgList(transform.apply(argList()));
+    }
+
+    default Fixture withArgListPlusDirectory() {
+      return withArgList(list -> plus(list, directoryArg()));
+    }
+
     String inputString();
 
     Fixture withInputString(String inputString);
@@ -310,16 +326,6 @@ public class ShellTest {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-    }
-
-    default Fixture withArgListPlusDirectory() {
-      final File rootDirectory = findDirectory();
-      final File useDirectory = new File(rootDirectory, "use");
-      return withArgList(
-          ImmutableList.<String>builder()
-              .addAll(argList())
-              .add("--directory=" + useDirectory)
-              .build());
     }
   }
 
