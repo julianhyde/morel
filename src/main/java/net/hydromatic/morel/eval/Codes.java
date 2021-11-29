@@ -320,7 +320,7 @@ public abstract class Codes {
         @Override public Object apply(EvalEnv env, Object arg) {
           final String f = (String) arg;
           final Session session = (Session) env.getOpt(EvalEnv.SESSION);
-          session.useFn.accept(f);
+          session.use(f);
           return Unit.INSTANCE;
         }
       };

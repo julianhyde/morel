@@ -264,7 +264,6 @@ public class ShellTest {
   }
 
   /** Tests the {@code use} function on a file that uses itself. */
-  @Disabled
   @Test void testUseSelfReferential() {
     // SML-NJ gives:
     //   [opening self-referential.sml]
@@ -277,11 +276,17 @@ public class ShellTest {
     final String expected = "use \"self-referential.sml\";\r\n"
         + "- use \"self-referential.sml\";\r\r\n"
         + "\u001B[?2004l[opening self-referential.sml]\r\n"
-        + "val it = () : unit\r\n"
+        + "[opening self-referential.sml]\r\n"
+        + "[opening self-referential.sml]\r\n"
+        + "[opening self-referential.sml]\r\n"
+        + "[use failed: Io: openIn failed on self-referential.sml,"
+        + " Too many open files]\r\n"
+        + "uncaught exception Error\r\n"
         + "- \r\r\n"
         + "\u001B[?2004l";
     fixture()
         .withArgListPlusDirectory()
+        .withArgList(list -> plus(list, "--maxUseDepth=3"))
         .withInputString(in)
         .assertOutput(is(expected));
   }

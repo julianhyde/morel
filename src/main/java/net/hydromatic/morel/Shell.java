@@ -151,6 +151,11 @@ public class Shell {
         final String directoryPath = arg.substring("--directory=".length());
         config = config.withDirectory(new File(directoryPath));
       }
+      if (arg.startsWith("--maxUseDepth=")) {
+        int maxUseDepth =
+            Integer.parseInt(arg.substring("--maxUseDepth=".length()));
+        config = config.withMaxUseDepth(maxUseDepth);
+      }
     }
 
     return c.withValueMap(valueMapBuilder.build());
@@ -254,8 +259,8 @@ public class Shell {
     final LineFn lineFn =
         new TerminalLineFn(minusPrompt, equalsPrompt, lineReader);
     final SubShell subShell =
-        new SubShell(1, lineFn, terminal.writer(), config.echo, typeSystem, env,
-            lines, session, config.directory);
+        new SubShell(1, config.maxUseDepth, lineFn, terminal.writer(),
+            config.echo, typeSystem, env, lines, session, config.directory);
     final Map<String, Binding> bindings = new LinkedHashMap<>();
     subShell.extracted(bindings);
   }
@@ -281,7 +286,7 @@ public class Shell {
     @SuppressWarnings("UnstableApiUsage")
     Config DEFAULT =
         new ConfigImpl(true, false, true, false, false, ImmutableMap.of(),
-            new File(""), Runnables.doNothing());
+            new File(""), Runnables.doNothing(), -1);
 
     Config withBanner(boolean banner);
     Config withDumb(boolean dumb);
@@ -291,6 +296,7 @@ public class Shell {
     Config withValueMap(Map<String, ForeignValue> valueMap);
     Config withDirectory(File directory);
     Config withPauseFn(Runnable runnable);
+    Config withMaxUseDepth(int maxUseDepth);
   }
 
   /** Implementation of {@link Config}. */
@@ -303,10 +309,11 @@ public class Shell {
     private final ImmutableMap<String, ForeignValue> valueMap;
     private final File directory;
     private final Runnable pauseFn;
+    private final int maxUseDepth;
 
     private ConfigImpl(boolean banner, boolean dumb, boolean system,
         boolean echo, boolean help, ImmutableMap<String, ForeignValue> valueMap,
-        File directory, Runnable pauseFn) {
+        File directory, Runnable pauseFn, int maxUseDepth) {
       this.banner = banner;
       this.dumb = dumb;
       this.system = system;
@@ -315,6 +322,7 @@ public class Shell {
       this.valueMap = requireNonNull(valueMap, "valueMap");
       this.directory = requireNonNull(directory, "directory");
       this.pauseFn = requireNonNull(pauseFn, "pauseFn");
+      this.maxUseDepth = maxUseDepth;
     }
 
     @Override public ConfigImpl withBanner(boolean banner) {
@@ -322,7 +330,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          directory, pauseFn);
+          directory, pauseFn, maxUseDepth);
     }
 
     @Override public ConfigImpl withDumb(boolean dumb) {
@@ -330,7 +338,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          directory, pauseFn);
+          directory, pauseFn, maxUseDepth);
     }
 
     @Override public ConfigImpl withSystem(boolean system) {
@@ -338,7 +346,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          directory, pauseFn);
+          directory, pauseFn, maxUseDepth);
     }
 
     @Override public ConfigImpl withEcho(boolean echo) {
@@ -346,7 +354,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          directory, pauseFn);
+          directory, pauseFn, maxUseDepth);
     }
 
     @Override public ConfigImpl withHelp(boolean help) {
@@ -354,7 +362,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          directory, pauseFn);
+          directory, pauseFn, maxUseDepth);
     }
 
     @Override public ConfigImpl withValueMap(
@@ -365,7 +373,7 @@ public class Shell {
       final ImmutableMap<String, ForeignValue> immutableValueMap =
           ImmutableMap.copyOf(valueMap);
       return new ConfigImpl(banner, dumb, system, echo, help, immutableValueMap,
-          directory, pauseFn);
+          directory, pauseFn, maxUseDepth);
     }
 
     @Override public ConfigImpl withDirectory(File directory) {
@@ -373,7 +381,7 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          directory, pauseFn);
+          directory, pauseFn, maxUseDepth);
     }
 
     @Override public Config withPauseFn(Runnable pauseFn) {
@@ -381,7 +389,15 @@ public class Shell {
         return this;
       }
       return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
-          directory, pauseFn);
+          directory, pauseFn, maxUseDepth);
+    }
+
+    @Override public ConfigImpl withMaxUseDepth(int maxUseDepth) {
+      if (this.maxUseDepth == maxUseDepth) {
+        return this;
+      }
+      return new ConfigImpl(banner, dumb, system, echo, help, valueMap,
+          directory, pauseFn, maxUseDepth);
     }
   }
 
@@ -406,6 +422,7 @@ public class Shell {
    * is to an array of lines). */
   static class SubShell {
     private final int depth;
+    private final int maxDepth;
     private final LineFn lineFn;
     private final PrintWriter writer;
     private final boolean echo;
@@ -415,10 +432,11 @@ public class Shell {
     private final Session session;
     private final File directory;
 
-    SubShell(int depth, LineFn lineFn, PrintWriter writer, boolean echo,
-        TypeSystem typeSystem, Environment env, List<String> lines,
-        Session session, File directory) {
+    SubShell(int depth, int maxDepth, LineFn lineFn, PrintWriter writer,
+        boolean echo, TypeSystem typeSystem, Environment env,
+        List<String> lines, Session session, File directory) {
       this.depth = depth;
+      this.maxDepth = maxDepth;
       this.lineFn = lineFn;
       this.writer = writer;
       this.echo = echo;
@@ -464,8 +482,8 @@ public class Shell {
                 final CompiledStatement compiled =
                     Compiles.prepareStatement(typeSystem, session, env0,
                         statement, null);
-                session.useFn = new Use(env0, directory, bindingMap);
-                compiled.eval(session, env0, lines::add, bindings::add);
+                session.using(new Use(env0, directory, bindingMap),
+                    session_ -> compiled.eval(session_, env0, lines::add, bindings::add));
                 bindings.forEach(b -> bindingMap.put(b.id.name, b));
                 lines.forEach(writer::println);
                 writer.flush();
@@ -493,7 +511,7 @@ public class Shell {
     }
 
     /** Implementation of the "use" function. */
-    private class Use implements Consumer<String> {
+    private class Use implements Session.UseHandler {
       private final Environment env;
       private final File directory;
       private final Map<String, Binding> bindings;
@@ -516,7 +534,7 @@ public class Shell {
               + ", No such file or directory]");
           throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR);
         }
-        if (depth > 200) {
+        if (depth > maxDepth && maxDepth >= 0) {
           lines.add("[use failed: Io: openIn failed on "
               + fileName
               + ", Too many open files]");
@@ -525,11 +543,20 @@ public class Shell {
         try (FileReader fileReader = new FileReader(file);
              BufferedReader bufferedReader = new BufferedReader(fileReader)) {
           final SubShell subShell =
-              new SubShell(depth + 1, new ReaderLineFn(bufferedReader), writer,
-                  false, typeSystem, env, lines, session, directory);
+              new SubShell(depth + 1, maxDepth, new ReaderLineFn(bufferedReader),
+                  writer, false, typeSystem, env, lines, session, directory);
           subShell.extracted(bindings);
         } catch (IOException e) {
           e.printStackTrace();
+        }
+      }
+
+      @Override public void handle(Codes.MorelRuntimeException e,
+          StringBuilder buf) {
+        if (depth == 1) {
+          e.describeTo(buf);
+        } else {
+          throw e;
         }
       }
     }
