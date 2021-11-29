@@ -82,7 +82,8 @@ public class Shell {
   public static void main(String[] args) {
     try {
       final Config config =
-          parse(ConfigImpl.DEFAULT,
+          parse(ConfigImpl.DEFAULT
+              .withDirectory(new File(System.getProperty("user.dir"))),
               ImmutableList.copyOf(args));
       final Shell main = create(config, System.in, System.out);
       main.run();
@@ -149,12 +150,12 @@ public class Shell {
       }
       if (arg.startsWith("--directory=")) {
         final String directoryPath = arg.substring("--directory=".length());
-        config = config.withDirectory(new File(directoryPath));
+        c = c.withDirectory(new File(directoryPath));
       }
       if (arg.startsWith("--maxUseDepth=")) {
         int maxUseDepth =
             Integer.parseInt(arg.substring("--maxUseDepth=".length()));
-        config = config.withMaxUseDepth(maxUseDepth);
+        c = c.withMaxUseDepth(maxUseDepth);
       }
     }
 
