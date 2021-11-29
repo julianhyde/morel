@@ -22,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import static java.util.Objects.requireNonNull;
+
 /** Session environment.
  *
  * <p>Accessible from {@link EvalEnv#getOpt(String)} via the hidden "$session"
@@ -33,8 +35,48 @@ public class Session {
   public String out;
   /** Property values. */
   public final Map<Prop, Object> map = new LinkedHashMap<>();
+
   /** Implementation of "use". */
-  public Consumer<String> useFn;
+  private UseHandler useHandler = DefaultUseHandler.INSTANCE;
+
+  /** Calls some code with a new value of {@link UseHandler}. */
+  public void using(UseHandler useHandler, Consumer<Session> consumer) {
+    final UseHandler prevUseHandler = this.useHandler;
+    try {
+      this.useHandler = requireNonNull(useHandler, "useHandler");
+      consumer.accept(this);
+    } finally {
+      this.useHandler = prevUseHandler;
+    }
+  }
+
+  public void use(String fileName) {
+    useHandler.accept(fileName);
+  }
+
+  public void handle(Codes.MorelRuntimeException e, StringBuilder buf) {
+    useHandler.handle(e, buf);
+  }
+
+  /** Callback to implement "use" command. */
+  public interface UseHandler {
+    void accept(String fileName);
+    void handle(Codes.MorelRuntimeException e, StringBuilder buf);
+  }
+
+  /** Default implementation of {@link UseHandler}. */
+  private enum DefaultUseHandler implements UseHandler {
+    INSTANCE;
+
+    @Override public void accept(String fileName) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override public void handle(Codes.MorelRuntimeException e,
+        StringBuilder buf) {
+      e.describeTo(buf);
+    }
+  }
 }
 
 // End Session.java
