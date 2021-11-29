@@ -20,7 +20,6 @@ package net.hydromatic.morel;
 
 import com.google.common.collect.ImmutableList;
 import org.hamcrest.Matcher;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -241,7 +240,6 @@ public class ShellTest {
   }
 
   /** Tests the {@code use} function on a missing file. */
-  @Disabled
   @Test void testUseMissing() {
     // SML-NJ gives:
     //   [opening missing.sml]
@@ -252,9 +250,11 @@ public class ShellTest {
 
     final String in = "use \"missing.sml\";\n";
     final String expected = "use \"missing.sml\";\r\n"
-        + "- use \"empty.sml\";\r\r\n"
-        + "\u001B[?2004l[opening empty.sml]\r\n"
-        + "val it = () : unit\r\n"
+        + "- use \"missing.sml\";\r\r\n"
+        + "\u001B[?2004l[opening missing.sml]\r\n"
+        + "[use failed: Io: openIn failed on missing.sml,"
+        + " No such file or directory]\r\n"
+        + "uncaught exception Error\r\n"
         + "- \r\r\n"
         + "\u001B[?2004l";
     fixture()
