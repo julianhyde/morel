@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import com.google.common.collect.ImmutableList;
 import org.incava.diff.Diff;
 import org.incava.diff.Difference;
 
@@ -250,6 +251,14 @@ class TestUtils {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  /** Returns a list plus one element. */
+  public static <E> ImmutableList<E> plus(List<E> elements, E element) {
+    return ImmutableList.<E>builder()
+        .addAll(elements)
+        .add(element)
+        .build();
   }
 }
 
