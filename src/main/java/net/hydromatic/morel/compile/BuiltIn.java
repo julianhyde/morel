@@ -605,9 +605,9 @@ public enum BuiltIn {
 
   /** Function "Math.ln", of type "real &rarr; real".
    *
-   * <p>"ln x" returns the natural logarithm (base e) of x. If x < 0, returns
-   * NaN; if x = 0, returns -infinity; if x is infinity, returns infinity.
-   */
+   * <p>"ln x" returns the natural logarithm (base e) of x. If {@code x < 0},
+   * returns NaN; if {@code x = 0}, returns -infinity; if {@code x} is infinity,
+   * returns infinity. */
   MATH_LN("Math", "ln", ts -> ts.fnType(REAL, REAL)),
 
   /** Function "Option.getOpt", of type
