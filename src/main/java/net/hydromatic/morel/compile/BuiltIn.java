@@ -603,6 +603,13 @@ public enum BuiltIn {
             ts.tupleType(h.list(0), h.list(0)),
             ts.lookup("order")))),
 
+  /** Function "Math.ln", of type "real &rarr; real".
+   *
+   * <p>"ln x" returns the natural logarithm (base e) of x. If x < 0, returns
+   * NaN; if x = 0, returns -infinity; if x is infinity, returns infinity.
+   */
+  MATH_LN("Math", "ln", ts -> ts.fnType(REAL, REAL)),
+
   /** Function "Option.getOpt", of type
    * "&alpha; option * &alpha; &rarr; &alpha;".
    *

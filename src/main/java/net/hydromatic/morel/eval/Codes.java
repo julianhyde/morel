@@ -1251,6 +1251,14 @@ public abstract class Codes {
     };
   }
 
+  /** @see BuiltIn#MATH_LN */
+  private static final Applicable MATH_LN =
+      new ApplicableImpl(BuiltIn.MATH_LN) {
+    @Override public Object apply(EvalEnv env, Object arg) {
+      return (float) Math.log((Float) arg);
+    }
+  };
+
   /** @see BuiltIn#OPTION_APP */
   private static final Applicable OPTION_APP =
       new ApplicableImpl(BuiltIn.OPTION_APP) {
@@ -2091,6 +2099,7 @@ public abstract class Codes {
           .put(BuiltIn.LIST_ALL, LIST_ALL)
           .put(BuiltIn.LIST_TABULATE, LIST_TABULATE)
           .put(BuiltIn.LIST_COLLATE, LIST_COLLATE)
+          .put(BuiltIn.MATH_LN, MATH_LN)
           .put(BuiltIn.OPTION_APP, OPTION_APP)
           .put(BuiltIn.OPTION_COMPOSE, OPTION_COMPOSE)
           .put(BuiltIn.OPTION_COMPOSE_PARTIAL, OPTION_COMPOSE_PARTIAL)

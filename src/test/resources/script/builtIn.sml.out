@@ -1478,16 +1478,13 @@ val it =
    ("Interact","{use:string -> unit}"),("LESS","order"),
    ("List",
    "{all:forall 'a. ('a -> bool) -> 'a list -> bool, app:forall 'a. ('a -> unit) -> 'a list -> unit, at:forall 'a. 'a list * 'a list -> 'a list, collate:forall 'a. ('a * 'a -> order) -> 'a list * 'a list -> order, concat:forall 'a. 'a list list -> 'a list, drop:forall 'a. 'a list * int -> 'a list, exists:forall 'a. ('a -> bool) -> 'a list -> bool, filter:forall 'a. ('a -> bool) -> 'a list -> 'a list, find:forall 'a. ('a -> bool) -> 'a list -> 'a option, foldl:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b, foldr:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b, getItem:forall 'a. 'a list -> ('a * 'a list) option, hd:forall 'a. 'a list -> 'a, last:forall 'a. 'a list -> 'a, length:forall 'a. 'a list -> int, map:forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a list -> 'b list, nil:forall 'a. 'a list, nth:forall 'a. 'a list * int -> 'a, null:forall 'a. 'a list -> bool, op @:forall 'a. 'a list * 'a list -> 'a list, partition:forall 'a. ('a -> bool) -> 'a list -> 'a list * 'a list, rev:forall 'a. 'a list -> 'a list, revAppend:forall 'a. 'a list * 'a list -> 'a list, tabulate:forall 'a. int * (int -> 'a) -> 'a list, take:forall 'a. 'a list * int -> 'a list, tl:forall 'a. 'a list -> 'a list}"),
-   ("NONE","'a option"),
+   ("Math","{ln:real -> real}"),("NONE","'a option"),
    ("Option",
    "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, flatten:forall 'a. 'a option option -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
    ("Real","{negInf:real, posInf:real}"),
    ("Relational",
    "{count:forall 'a. 'a list -> int, exists:forall 'a. 'a list -> bool, iterate:forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list, max:forall 'a. 'a list -> 'a, min:forall 'a. 'a list -> 'a, notExists:forall 'a. 'a list -> bool, only:forall 'a. 'a list -> 'a, sum:forall 'a. 'a list -> 'a}"),
-   ("SOME","forall 'a. 'a -> 'a option"),
-   ("String",
-   "{concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
-   ...] : (string * string) list
+   ("SOME","forall 'a. 'a -> 'a option"),...] : (string * string) list
 
 
 env;
@@ -1501,16 +1498,13 @@ val it =
    ("Interact","{use:string -> unit}"),("LESS","order"),
    ("List",
    "{all:forall 'a. ('a -> bool) -> 'a list -> bool, app:forall 'a. ('a -> unit) -> 'a list -> unit, at:forall 'a. 'a list * 'a list -> 'a list, collate:forall 'a. ('a * 'a -> order) -> 'a list * 'a list -> order, concat:forall 'a. 'a list list -> 'a list, drop:forall 'a. 'a list * int -> 'a list, exists:forall 'a. ('a -> bool) -> 'a list -> bool, filter:forall 'a. ('a -> bool) -> 'a list -> 'a list, find:forall 'a. ('a -> bool) -> 'a list -> 'a option, foldl:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b, foldr:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b, getItem:forall 'a. 'a list -> ('a * 'a list) option, hd:forall 'a. 'a list -> 'a, last:forall 'a. 'a list -> 'a, length:forall 'a. 'a list -> int, map:forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a list -> 'b list, nil:forall 'a. 'a list, nth:forall 'a. 'a list * int -> 'a, null:forall 'a. 'a list -> bool, op @:forall 'a. 'a list * 'a list -> 'a list, partition:forall 'a. ('a -> bool) -> 'a list -> 'a list * 'a list, rev:forall 'a. 'a list -> 'a list, revAppend:forall 'a. 'a list * 'a list -> 'a list, tabulate:forall 'a. int * (int -> 'a) -> 'a list, take:forall 'a. 'a list * int -> 'a list, tl:forall 'a. 'a list -> 'a list}"),
-   ("NONE","'a option"),
+   ("Math","{ln:real -> real}"),("NONE","'a option"),
    ("Option",
    "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, flatten:forall 'a. 'a option option -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
    ("Real","{negInf:real, posInf:real}"),
    ("Relational",
    "{count:forall 'a. 'a list -> int, exists:forall 'a. 'a list -> bool, iterate:forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list, max:forall 'a. 'a list -> 'a, min:forall 'a. 'a list -> 'a, notExists:forall 'a. 'a list -> bool, only:forall 'a. 'a list -> 'a, sum:forall 'a. 'a list -> 'a}"),
-   ("SOME","forall 'a. 'a -> 'a option"),
-   ("String",
-   "{concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
-   ...] : (string * string) list
+   ("SOME","forall 'a. 'a -> 'a option"),...] : (string * string) list
 
 
 (*) val plan : unit -> string
