@@ -1251,6 +1251,14 @@ public abstract class Codes {
     };
   }
 
+  /** @see BuiltIn#MATH_LN */
+  private static final Applicable MATH_LN =
+      new ApplicableImpl(BuiltIn.MATH_LN) {
+    @Override public Object apply(EvalEnv env, Object arg) {
+      return (float) Math.log((Float) arg);
+    }
+  };
+
   /** @see BuiltIn#OPTION_APP */
   private static final Applicable OPTION_APP =
       new ApplicableImpl(BuiltIn.OPTION_APP) {
@@ -1438,6 +1446,14 @@ public abstract class Codes {
       }
     };
   }
+
+  /** @see BuiltIn#REAL_FROM_INT */
+  private static final Applicable REAL_FROM_INT =
+      new ApplicableImpl(BuiltIn.REAL_FROM_INT) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          return (float) ((Integer) arg);
+        }
+      };
 
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
@@ -2085,6 +2101,7 @@ public abstract class Codes {
           .put(BuiltIn.LIST_ALL, LIST_ALL)
           .put(BuiltIn.LIST_TABULATE, LIST_TABULATE)
           .put(BuiltIn.LIST_COLLATE, LIST_COLLATE)
+          .put(BuiltIn.MATH_LN, MATH_LN)
           .put(BuiltIn.OPTION_APP, OPTION_APP)
           .put(BuiltIn.OPTION_COMPOSE, OPTION_COMPOSE)
           .put(BuiltIn.OPTION_COMPOSE_PARTIAL, OPTION_COMPOSE_PARTIAL)
@@ -2095,6 +2112,7 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_MAP, OPTION_MAP)
           .put(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL)
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
+          .put(BuiltIn.REAL_FROM_INT, REAL_FROM_INT)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EXISTS, RELATIONAL_EXISTS)
           .put(BuiltIn.RELATIONAL_NOT_EXISTS, RELATIONAL_NOT_EXISTS)

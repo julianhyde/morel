@@ -603,6 +603,13 @@ public enum BuiltIn {
             ts.tupleType(h.list(0), h.list(0)),
             ts.lookup("order")))),
 
+  /** Function "Math.ln", of type "real &rarr; real".
+   *
+   * <p>"ln x" returns the natural logarithm (base e) of x. If x < 0, returns
+   * NaN; if x = 0, returns -infinity; if x is infinity, returns infinity.
+   */
+  MATH_LN("Math", "ln", ts -> ts.fnType(REAL, REAL)),
+
   /** Function "Option.getOpt", of type
    * "&alpha; option * &alpha; &rarr; &alpha;".
    *
@@ -711,6 +718,14 @@ public enum BuiltIn {
               ts.tupleType(ts.fnType(h.get(0), h.option(1)),
                   ts.fnType(h.get(2), h.option(0))),
               h.get(2), h.option(1)))),
+
+  /** Function "Real.fromInt", of type "int &rarr; real". Converts the integer
+   * {@code i} to a {@code real} value. If the absolute value of {@code i} is
+   * larger than {@code maxFinite}, then the appropriate infinity is returned.
+   * If {@code i} cannot be exactly represented as a {@code real} value, then
+   * the current rounding mode is used to determine the resulting value. The
+   * top-level function {@code real} is an alias for {@code Real.fromInt}. */
+  REAL_FROM_INT("Real", "fromInt", "real", ts -> ts.fnType(INT, REAL)),
 
   /** Function "Relational.count", aka "count", of type "int list &rarr; int".
    *

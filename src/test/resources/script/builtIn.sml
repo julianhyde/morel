@@ -408,6 +408,13 @@ List.collate (fn (x, y) => if x < y then LESS else if x = y then EQUAL else GREA
 List.collate (fn (x, y) => if x < y then LESS else if x = y then EQUAL else GREATER) ([], []);
 Sys.plan ();
 
+(* Math -------------------------------------------------------- *)
+
+(*) val ln : real -> real
+Math.ln;
+Math.ln 1.0;
+Sys.plan ();
+
 (* Option ------------------------------------------------------ *)
 (*) val getOpt : 'a option * 'a -> 'a
 Option.getOpt (SOME 1, 2);
@@ -486,6 +493,16 @@ Option.composePartial (fn i => if i = 0 then NONE else (SOME i),
                        fn s => if s = "" then NONE else SOME (String.size s))
                       "";
 Sys.plan ();
+
+(* Real -------------------------------------------------------- *)
+
+(*) val fromInt : int -> real
+Real.fromInt;
+Real.fromInt 1;
+Real.fromInt ~2;
+Sys.plan ();
+
+real ~2;
 
 (* Relational -------------------------------------------------- *)
 
