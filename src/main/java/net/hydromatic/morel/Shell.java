@@ -58,7 +58,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.io.StringReader;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -255,13 +254,12 @@ public class Shell {
     pause();
     final TypeSystem typeSystem = new TypeSystem();
     Environment env = Environments.env(typeSystem, config.valueMap);
-    final List<String> lines = new ArrayList<>();
     final Session session = new Session();
     final LineFn lineFn =
         new TerminalLineFn(minusPrompt, equalsPrompt, lineReader);
     final SubShell subShell =
-        new SubShell(1, config.maxUseDepth, lineFn, terminal.writer(),
-            config.echo, typeSystem, env, lines, session, config.directory);
+        new SubShell(1, config.maxUseDepth, lineFn, config.echo, typeSystem,
+            env, terminal.writer()::println, session, config.directory);
     final Map<String, Binding> bindings = new LinkedHashMap<>();
     subShell.extracted(bindings);
   }
@@ -425,25 +423,23 @@ public class Shell {
     private final int depth;
     private final int maxDepth;
     private final LineFn lineFn;
-    private final PrintWriter writer;
     private final boolean echo;
     private final TypeSystem typeSystem;
     private final Environment env;
-    private final List<String> lines;
+    private final Consumer<String> outLines;
     private final Session session;
     private final File directory;
 
-    SubShell(int depth, int maxDepth, LineFn lineFn, PrintWriter writer,
+    SubShell(int depth, int maxDepth, LineFn lineFn,
         boolean echo, TypeSystem typeSystem, Environment env,
-        List<String> lines, Session session, File directory) {
+        Consumer<String> outLines, Session session, File directory) {
       this.depth = depth;
       this.maxDepth = maxDepth;
       this.lineFn = lineFn;
-      this.writer = writer;
       this.echo = echo;
       this.typeSystem = typeSystem;
       this.env = env;
-      this.lines = lines;
+      this.outLines = outLines;
       this.session = session;
       this.directory = directory;
     }
@@ -453,7 +449,7 @@ public class Shell {
       final Map<String, Binding> bindingMap = new LinkedHashMap<>();
       final List<Binding> bindings = new ArrayList<>();
       Environment env1 = env;
-      while (true) {
+      for (;;) {
         final Pair<LineType, String> line = lineFn.read(buf);
         switch (line.left) {
         case EOF:
@@ -464,7 +460,7 @@ public class Shell {
           continue;
 
         case HELP:
-          help(writer::println);
+          help(outLines);
           buf.append(line.right).append("\n");
           break;
 
@@ -483,12 +479,10 @@ public class Shell {
                 final CompiledStatement compiled =
                     Compiles.prepareStatement(typeSystem, session, env0,
                         statement, null);
-                session.using(new Use(env0, directory, bindingMap),
-                    session_ -> compiled.eval(session_, env0, lines::add, bindings::add));
+                final Use shell = new Use(env0, bindingMap);
+                session.withShell(shell, outLines, session1 ->
+                    compiled.eval(session1, env0, outLines, bindings::add));
                 bindings.forEach(b -> bindingMap.put(b.id.name, b));
-                lines.forEach(writer::println);
-                writer.flush();
-                lines.clear();
                 env1 = env0.bindAll(bindingMap.values());
                 if (outBindings != null) {
                   outBindings.putAll(bindingMap);
@@ -496,47 +490,45 @@ public class Shell {
                 bindingMap.clear();
                 bindings.clear();
               } catch (ParseException | CompileException e) {
-                writer.println(e.getMessage());
+                outLines.accept(e.getMessage());
               }
               if (echo) {
-                writer.println(code);
+                outLines.accept(code);
               }
             } else {
               buf.append("\n");
             }
           } catch (IllegalArgumentException e) {
-            writer.println(e.getMessage());
+            outLines.accept(e.getMessage());
           }
         }
       }
     }
 
     /** Implementation of the "use" function. */
-    private class Use implements Session.UseHandler {
+    private class Use implements Session.Shell {
       private final Environment env;
-      private final File directory;
       private final Map<String, Binding> bindings;
 
-      Use(Environment env, File directory, Map<String, Binding> bindings) {
+      Use(Environment env, Map<String, Binding> bindings) {
         this.env = env;
-        this.directory = directory;
         this.bindings = bindings;
       }
 
-      @Override public void accept(String fileName) {
-        lines.add("[opening " + fileName + "]");
+      @Override public void use(String fileName) {
+        outLines.accept("[opening " + fileName + "]");
         File file = new File(fileName);
         if (!file.isAbsolute()) {
           file = new File(directory, fileName);
         }
         if (!file.exists()) {
-          lines.add("[use failed: Io: openIn failed on "
+          outLines.accept("[use failed: Io: openIn failed on "
               + fileName
               + ", No such file or directory]");
           throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR);
         }
         if (depth > maxDepth && maxDepth >= 0) {
-          lines.add("[use failed: Io: openIn failed on "
+          outLines.accept("[use failed: Io: openIn failed on "
               + fileName
               + ", Too many open files]");
           throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR);
@@ -545,19 +537,24 @@ public class Shell {
              BufferedReader bufferedReader = new BufferedReader(fileReader)) {
           final SubShell subShell =
               new SubShell(depth + 1, maxDepth, new ReaderLineFn(bufferedReader),
-                  writer, false, typeSystem, env, lines, session, directory);
+                  false, typeSystem, env, outLines, session, directory);
           subShell.extracted(bindings);
         } catch (IOException e) {
           e.printStackTrace();
         }
       }
 
-      @Override public void handle(Codes.MorelRuntimeException e,
+      @Override public void handle(RuntimeException e,
           StringBuilder buf) {
-        if (depth == 1) {
-          e.describeTo(buf);
-        } else {
+        if (depth != 1) {
           throw e;
+        }
+        if (e instanceof Codes.MorelRuntimeException) {
+          ((Codes.MorelRuntimeException) e).describeTo(buf);
+        } else if (e instanceof CompileException) {
+          buf.append(e.getMessage());
+        } else {
+          buf.append(e);
         }
       }
     }
