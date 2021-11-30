@@ -282,6 +282,7 @@ public class ShellTest {
         + "[use failed: Io: openIn failed on self-referential.sml,"
         + " Too many open files]\r\n"
         + "uncaught exception Error\r\n"
+        + "val it = () : unit\r\n"
         + "- \r\r\n"
         + "\u001B[?2004l";
     fixture()

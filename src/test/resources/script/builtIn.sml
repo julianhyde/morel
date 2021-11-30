@@ -427,6 +427,7 @@ Option.valOf (SOME 1);
  *)
 Option.valOf NONE;
 val noneInt = if true then NONE else SOME 0;
+Sys.plan ();
 Option.valOf noneInt;
 Sys.plan ();
 

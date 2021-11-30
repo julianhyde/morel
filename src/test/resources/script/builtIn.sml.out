@@ -1053,6 +1053,11 @@ uncaught exception Option
 val noneInt = if true then NONE else SOME 0;
 val noneInt = NONE : int option
 
+Sys.plan ();
+val it =
+  "apply(fnCode match(true, constant([NONE]), _, apply(fnValue tyCon, argCode constant(0))), argCode constant(true))"
+  : string
+
 Option.valOf noneInt;
 uncaught exception Option
 
