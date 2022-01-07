@@ -1638,8 +1638,10 @@ public abstract class Codes {
   /** @see BuiltIn#REAL_RADIX */
   private static final int REAL_RADIX = 2;
 
-  /** @see BuiltIn#REAL_PRECISION
-   * @see jdk.internal.math.FloatConsts#SIGNIFICAND_WIDTH */
+  /** @see BuiltIn#REAL_PRECISION */
+  // value is from jdk.internal.math.FloatConsts#SIGNIFICAND_WIDTH
+  // (32 bit IEEE floating point is 1 sign bit, 8 bit exponent,
+  // 23 bit mantissa)
   private static final int REAL_PRECISION = 24;
 
   /** @see BuiltIn#REAL_MIN */
