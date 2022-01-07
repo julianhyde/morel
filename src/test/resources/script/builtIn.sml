@@ -726,12 +726,6 @@ Sys.plan ();
 
 (* Real -------------------------------------------------------- *)
 
-(*) val posInf : real
-Real.posInf;
-
-(*) val negInf : real
-Real.negInf;
-
 (*) val radix : int
 Real.radix;
 (*) TODO 2
@@ -826,6 +820,7 @@ Real.posInf / Real.negInf;
     result has the same sign as x and has absolute value less than the absolute
     value of y. If x is an infinity or y is 0, rem returns NaN. If y is an
     infinity, rem returns x. *)
+Real.rem;
 Real.rem (13.0, 5.0);
 (*) TODO val it = 3.0 : real
 Real.rem (~13.0, 5.0);
@@ -840,10 +835,11 @@ Real.rem (13.0, ~0.0);
 (*) TODO val it = nan : real
 Real.rem (13.0, Real.negInf);
 (*) TODO val it = nan : real
+(*) In the following, Morel returns 13.0 per the spec; sml-nj returns nan.
 Real.rem (13.0, Real.negInf);
-(*) TODO val it = nan : real (per SMLNJ, but spec says 13.0)
+(*) In the following, Morel returns 13.0 per the spec; sml-nj returns nan.
 Real.rem (13.0, Real.posInf);
-(*) TODO val it = nan : real (per SMLNJ, but spec says 13.0)
+Sys.plan ();
 
 (* "*+ (a, b, c)" and "*- (a, b, c)" return a * b + c and a * b - c,
    respectively. Their behaviors on infinities follow from the behaviors derived
@@ -866,17 +862,20 @@ Real.rem (13.0, Real.posInf);
     abs (+-0.0) = +0.0;
     abs (+-infinity) = +infinity;
     abs (+-NaN) = +NaN *)
+Real.abs;
 Real.abs ~5.5;
 Real.abs Real.posInf;
 Real.abs Real.negInf;
 Real.abs nan;
 (*) TODO val it = nan : real
+Sys.plan ();
 
 (* val min : real * real -> real
    val max : real * real -> real
    These return the smaller (respectively, larger) of the arguments. If exactly
    one argument is NaN, they return the other argument. If both arguments are
    NaN, they return NaN. *)
+Real.min;
 Real.min (3.5, 4.5);
 (*) TODO val it = 3.5 : real
 Real.min (3.5, ~4.5);
@@ -887,7 +886,9 @@ Real.min (Real.posInf, 4.5);
 (*) TODO val it = 4.5 : real
 Real.min (Real.negInf, 4.5);
 (*) TODO val it = ~inf : real
+Sys.plan ();
 
+Real.max;
 Real.max (3.5, 4.5);
 (*) TODO val it = 4.5 : real
 Real.max (3.5, ~4.5);
@@ -898,10 +899,12 @@ Real.max (Real.posInf, 4.5);
 (*) TODO val it = inf : real
 Real.max (Real.negInf, 4.5);
 (*) TODO val it = 4.5 : real
+Sys.plan ();
 
 (* "sign r" returns ~1 if r is negative, 0 if r is zero, or 1 if r is positive.
     An infinity returns its sign; a zero returns 0 regardless of its sign.
-    It raises Domain on NaN.
+    It raises Domain on NaN. *)
+Real.sign;
 Real.sign 2.0;
 (*) TODO val it = 1 : int
 Real.sign ~3.0;
@@ -916,9 +919,11 @@ Real.sign Real.negInf;
 (*) TODO val it = ~1 : int
 Real.sign nan;
 (*) TODO uncaught exception Domain [domain error]
+Sys.plan ();
 
 (* "signBit r" returns true if and only if the sign of r (infinities, zeros,
    and NaN, included) is negative. *)
+Real.signBit;
 Real.signBit 2.0;
 (*) TODO val it = false : bool
 Real.signBit ~3.5;
@@ -935,9 +940,11 @@ Real.signBit nan;
 (*) TODO val it = true : bool; SMLNJ returns true but spec would suggest false
 Real.signBit (~nan);
 (*) TODO val it = false : bool; SMLNJ returns false but spec would suggest true
+Sys.plan ();
 
 (* "sameSign (r1, r2)" returns true if and only if signBit r1 equals
    signBit r2. *)
+Real.sameSign;
 Real.sameSign (2.0, 3.5);
 (*) TODO val it = true : bool
 Real.sameSign (~2.0, Real.negInf);
@@ -948,8 +955,10 @@ Real.sameSign (~2.0, nan);
 (*) TODO val it = true : bool
 Real.sameSign (nan, nan);
 (*) TODO val it = true : bool
+Sys.plan ();
 
 (* "copySign (x, y)" returns x with the sign of y, even if y is NaN. *)
+Real.copySign;
 Real.copySign (2.0, Real.posInf);
 (*) TODO val it = 2.0 : real
 Real.copySign (2.0, Real.negInf);
@@ -962,11 +971,13 @@ Real.copySign (~3.5, nan);
 (*) TODO val it = ~3.5 : real
 Real.copySign (2.0, ~0.0);
 (*) TODO val it = ~2.0 : real
+Sys.plan ();
 
 (* "val compare : real * real -> order" returns LESS, EQUAL, or GREATER
    according to whether its first argument is less than, equal to, or
    greater than the second. It raises IEEEReal.Unordered on unordered
    arguments. *)
+Real.compare;
 Real.compare (2.0, 2.0);
 (*) TODO val it = EQUAL : order
 Real.compare (~0.0, 0.0);
@@ -981,28 +992,29 @@ Real.compare (Real.negInf, nan);
 (*) TODO uncaught exception Unordered
 Real.compare (nan, nan);
 (*) TODO uncaught exception Unordered
+Sys.plan ();
 
 (* "val compareReal : real * real -> IEEEReal.real_order" behaves similarly to
    "Real.compare" except that the values it returns have the extended type
    IEEEReal.real_order and it returns IEEEReal.UNORDERED on unordered
    arguments. *)
-Real.compareReal (2.0, 2.0);
+(*) TODO Real.compareReal (2.0, 2.0);
 (*) TODO val it = EQUAL : IEEEReal.real_order
-Real.compareReal (~0.0, 0.0);
+(*) TODO Real.compareReal (~0.0, 0.0);
 (*) TODO val it = EQUAL : IEEEReal.real_order
-Real.compareReal (~5.0, Real.posInf);
+(*) TODO Real.compareReal (~5.0, Real.posInf);
 (*) TODO val it = LESS : IEEEReal.real_order
-Real.compareReal (~5.0, Real.negInf);
+(*) TODO Real.compareReal (~5.0, Real.negInf);
 (*) TODO val it = GREATER : IEEEReal.real_order
-Real.compareReal (Real.negInf, Real.negInf);
+(*) TODO Real.compareReal (Real.negInf, Real.negInf);
 (*) TODO val it = EQUAL : IEEEReal.real_order
-Real.compareReal (Real.negInf, nan);
+(*) TODO Real.compareReal (Real.negInf, nan);
 (*) TODO val it = UNORDERED : IEEEReal.real_order
-Real.compareReal (nan, nan);
+(*) TODO Real.compareReal (nan, nan);
 (*) TODO val it = UNORDERED : IEEEReal.real_order
-Real.compareReal (~nan, nan);
+(*) TODO Real.compareReal (~nan, nan);
 (*) TODO val it = UNORDERED : IEEEReal.real_order
-Real.compareReal (0.0, ~nan);
+(*) TODO Real.compareReal (0.0, ~nan);
 (*) TODO val it = UNORDERED : IEEEReal.real_order
 
 (* val < : real * real -> bool
@@ -1104,14 +1116,31 @@ Real.posInf >= Real.posInf;
    This function is comparable to modf in the C library. If r is +-infinity,
    whole is +-infinity and frac is +-0. If r is NaN, both whole and frac are
    NaN. *)
-(*) TODO
-(*) Real.split ~12.25;
+Real.split;
+Real.split 2.0;
+Real.split 0.0;
+Real.split ~0.0;
+Real.split 2.75;
+Real.split ~12.25;
 (*) TODO val it = {frac=~0.25,whole=~12.0} : {frac:real, whole:real}
+Real.split Real.posInf;
+Real.split Real.negInf;
+Real.split nan;
+Sys.plan ();
 
 (* "realMod r" returns the fractional part of r. "realMod" is equivalent to
    "#frac o split". *)
+Real.realMod;
+Real.realMod 2.0;
+Real.realMod 0.0;
+Real.realMod ~0.0;
+Real.realMod 2.75;
 Real.realMod ~12.25;
 (*) TODO val it = ~0.25 : real
+Real.realMod Real.posInf;
+Real.realMod Real.negInf;
+Real.realMod nan;
+Sys.plan ();
 
 (* "nextAfter (r, t)" returns the next representable real after r in the
    direction of t. Thus, if t is less than r, nextAfter returns the largest
@@ -1131,10 +1160,23 @@ Real.realMod ~12.25;
 (* "realFloor r", "realCeil r", "realTrunc r", "realRound r" convert real values
    to integer-valued reals. realFloor produces floor(r), the largest integer not
    larger than r. realCeil produces ceil(r), the smallest integer not less than r.
-   realTrunc rounds r towards zero, and realRound rounds to the integer-values
+   realTrunc rounds r towards zero, and realRound rounds to the integer-valued
    real value that is nearest to r. If r is NaN or an infinity, these functions
    return r. *)
-(*) TODO
+Real.realFloor;
+Real.realCeil;
+Real.realTrunc;
+Real.realRound;
+fun f x = (Real.realFloor x, Real.realCeil x, Real.realTrunc x, Real.realRound x);
+f 0.0;
+f ~2.0;
+f ~1.75;
+f ~2.25;
+f ~2.5;
+f ~3.5;
+f Real.negInf;
+f Real.posInf;
+f nan;
 
 (* "floor r", "ceil r", "trunc r", "round r" convert reals to integers.
    floor produces floor(r), the largest int not larger than r.
@@ -1151,7 +1193,20 @@ Real.realMod ~12.25;
      toInt IEEEReal.TO_POSINF r
      toInt IEEEReal.TO_ZERO r
      toInt IEEEReal.TO_NEAREST r *)
-(*) TODO
+Real.floor;
+Real.ceil;
+Real.trunc;
+Real.round;
+fun f x = (Real.floor x, Real.ceil x, Real.trunc x, Real.round x);
+f 0.0;
+f ~2.0;
+f ~1.75;
+f ~2.25;
+f ~2.5;
+f ~3.5;
+f Real.negInf;
+f Real.posInf;
+f nan;
 
 (* "toInt mode x", "toLargeInt mode x" convert the argument x to an integral
    type using the specified rounding mode. They raise Overflow if the result
@@ -1167,6 +1222,11 @@ Real.realMod ~12.25;
 Real.fromInt;
 Real.fromInt 1;
 Real.fromInt ~2;
+Sys.plan ();
+
+(*) real is a synonym for Real.fromInt
+real;
+real ~2;
 Sys.plan ();
 
 (* "toLarge r", "fromLarge r" convert between values of type real and type

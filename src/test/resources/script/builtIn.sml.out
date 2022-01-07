@@ -72,9 +72,12 @@ val it =
 
 Real;
 val it =
-  {maxFinite=3.4028235E38,minNormalPos=1.17549435E-38,minPos=1.4E-45,
-   negInf=~inf,posInf=inf,precision=53,radix=2}
-  : {maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}
+  {abs=fn,ceil=fn,compare=fn,copySign=fn,floor=fn,fromInt=fn,max=fn,
+   maxFinite=3.4028235E38,min=fn,minNormalPos=1.17549435E-38,minPos=1.4E-45,
+   negInf=~inf,posInf=inf,precision=24,radix=2,realCeil=fn,realFloor=fn,
+   realMod=fn,realRound=fn,realTrunc=fn,rem=fn,round=fn,sameSign=fn,sign=fn,
+   signBit=fn,split=fn,trunc=fn}
+  : {abs:real -> real, ceil:real -> int, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int}
 
 Relational;
 val it =
@@ -1628,16 +1631,6 @@ val it =
 
 (* Real -------------------------------------------------------- *)
 
-(*) val posInf : real
-Real.posInf;
-val it = inf : real
-
-
-(*) val negInf : real
-Real.negInf;
-val it = ~inf : real
-
-
 (*) val radix : int
 Real.radix;
 val it = 2 : int
@@ -1646,7 +1639,7 @@ val it = 2 : int
 
 (*) val precision : int
 Real.precision;
-val it = 53 : int
+val it = 24 : int
 
 (*) TODO 53
 
@@ -1784,42 +1777,50 @@ val it = 0.0 : real
     result has the same sign as x and has absolute value less than the absolute
     value of y. If x is an infinity or y is 0, rem returns NaN. If y is an
     infinity, rem returns x. *)
+Real.rem;
+val it = fn : real * real -> real
+
 Real.rem (13.0, 5.0);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 3.0 : real
 
 (*) TODO val it = 3.0 : real
 Real.rem (~13.0, 5.0);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~3.0 : real
 
 (*) TODO val it = ~3.0 : real
 Real.rem (13.0, ~5.0);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 3.0 : real
 
 (*) TODO val it = 3.0 : real
 Real.rem (~13.0, ~5.0);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~3.0 : real
 
 (*) TODO val it = ~3.0 : real
 Real.rem (13.0, 0.0);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = nan : real
 
 (*) TODO val it = nan : real
 Real.rem (13.0, ~0.0);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = nan : real
 
 (*) TODO val it = nan : real
 Real.rem (13.0, Real.negInf);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 13.0 : real
 
 (*) TODO val it = nan : real
+(*) In the following, Morel returns 13.0 per the spec; sml-nj returns nan.
 Real.rem (13.0, Real.negInf);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 13.0 : real
 
-(*) TODO val it = nan : real (per SMLNJ, but spec says 13.0)
+(*) In the following, Morel returns 13.0 per the spec; sml-nj returns nan.
 Real.rem (13.0, Real.posInf);
-java.lang.IllegalArgumentException: no field 'rem' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 13.0 : real
 
-(*) TODO val it = nan : real (per SMLNJ, but spec says 13.0)
+Sys.plan ();
+val it =
+  "apply(fnValue Real.rem, argCode tuple(constant(13.0), constant(Infinity)))"
+  : string
+
 
 (* "*+ (a, b, c)" and "*- (a, b, c)" return a * b + c and a * b - c,
    respectively. Their behaviors on infinities follow from the behaviors derived
@@ -1852,241 +1853,297 @@ val it = nan : real
     abs (+-0.0) = +0.0;
     abs (+-infinity) = +infinity;
     abs (+-NaN) = +NaN *)
+Real.abs;
+val it = fn : real -> real
+
 Real.abs ~5.5;
-java.lang.IllegalArgumentException: no field 'abs' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 5.5 : real
 
 Real.abs Real.posInf;
-java.lang.IllegalArgumentException: no field 'abs' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = inf : real
 
 Real.abs Real.negInf;
-java.lang.IllegalArgumentException: no field 'abs' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = inf : real
 
 Real.abs nan;
-java.lang.IllegalArgumentException: no field 'abs' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = nan : real
 
 (*) TODO val it = nan : real
+Sys.plan ();
+val it = "apply(fnValue Real.abs, argCode constant(NaN))" : string
+
 
 (* val min : real * real -> real
    val max : real * real -> real
    These return the smaller (respectively, larger) of the arguments. If exactly
    one argument is NaN, they return the other argument. If both arguments are
    NaN, they return NaN. *)
+Real.min;
+val it = fn : real * real -> real
+
 Real.min (3.5, 4.5);
-java.lang.IllegalArgumentException: no field 'min' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 3.5 : real
 
 (*) TODO val it = 3.5 : real
 Real.min (3.5, ~4.5);
-java.lang.IllegalArgumentException: no field 'min' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~4.5 : real
 
 (*) TODO val it = ~4.5 : real
 Real.min (nan, 4.5);
-java.lang.IllegalArgumentException: no field 'min' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = nan : real
 
 (*) TODO val it = 4.5 : real
 Real.min (Real.posInf, 4.5);
-java.lang.IllegalArgumentException: no field 'min' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 4.5 : real
 
 (*) TODO val it = 4.5 : real
 Real.min (Real.negInf, 4.5);
-java.lang.IllegalArgumentException: no field 'min' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~inf : real
 
 (*) TODO val it = ~inf : real
+Sys.plan ();
+val it =
+  "apply(fnValue Real.min, argCode tuple(constant(-Infinity), constant(4.5)))"
+  : string
+
+
+Real.max;
+val it = fn : real * real -> real
 
 Real.max (3.5, 4.5);
-java.lang.IllegalArgumentException: no field 'max' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 3.5 : real
 
 (*) TODO val it = 4.5 : real
 Real.max (3.5, ~4.5);
-java.lang.IllegalArgumentException: no field 'max' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~4.5 : real
 
 (*) TODO val it = 3.5 : real
 Real.max (nan, 4.5);
-java.lang.IllegalArgumentException: no field 'max' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = nan : real
 
 (*) TODO val it = 4.5 : real
 Real.max (Real.posInf, 4.5);
-java.lang.IllegalArgumentException: no field 'max' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 4.5 : real
 
 (*) TODO val it = inf : real
 Real.max (Real.negInf, 4.5);
-java.lang.IllegalArgumentException: no field 'max' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~inf : real
 
 (*) TODO val it = 4.5 : real
+Sys.plan ();
+val it =
+  "apply(fnValue Real.max, argCode tuple(constant(-Infinity), constant(4.5)))"
+  : string
+
 
 (* "sign r" returns ~1 if r is negative, 0 if r is zero, or 1 if r is positive.
     An infinity returns its sign; a zero returns 0 regardless of its sign.
-    It raises Domain on NaN.
+    It raises Domain on NaN. *)
+Real.sign;
+val it = fn : real -> int
+
 Real.sign 2.0;
+val it = 1 : int
+
 (*) TODO val it = 1 : int
 Real.sign ~3.0;
+val it = ~1 : int
+
 (*) TODO val it = ~1 : int
 Real.sign 0.0;
+val it = 0 : int
+
 (*) TODO val it = 0 : int
 Real.sign ~0.0;
+val it = 0 : int
+
 (*) TODO val it = 0 : int
 Real.sign Real.posInf;
+val it = 1 : int
+
 (*) TODO val it = 1 : int
 Real.sign Real.negInf;
+val it = ~1 : int
+
 (*) TODO val it = ~1 : int
 Real.sign nan;
+uncaught exception Domain
+
 (*) TODO uncaught exception Domain [domain error]
+Sys.plan ();
+val it = "apply(fnValue Real.sign, argCode constant(NaN))" : string
+
 
 (* "signBit r" returns true if and only if the sign of r (infinities, zeros,
    and NaN, included) is negative. *)
+Real.signBit;
+val it = fn : real -> bool
+
 Real.signBit 2.0;
-java.lang.IllegalArgumentException: no field 'signBit' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = false : bool
 
 (*) TODO val it = false : bool
 Real.signBit ~3.5;
-java.lang.IllegalArgumentException: no field 'signBit' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = true : bool
 
 (*) TODO val it = true : bool
 Real.signBit 0.0;
-java.lang.IllegalArgumentException: no field 'signBit' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = false : bool
 
 (*) TODO val it = false : bool
 Real.signBit ~0.0;
-java.lang.IllegalArgumentException: no field 'signBit' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = true : bool
 
 (*) TODO val it = true : bool
 Real.signBit Real.posInf;
-java.lang.IllegalArgumentException: no field 'signBit' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = false : bool
 
 (*) TODO val it = false : bool
 Real.signBit Real.negInf;
-java.lang.IllegalArgumentException: no field 'signBit' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = true : bool
 
 (*) TODO val it = true : bool
 Real.signBit nan;
-java.lang.IllegalArgumentException: no field 'signBit' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = true : bool
 
 (*) TODO val it = true : bool; SMLNJ returns true but spec would suggest false
 Real.signBit (~nan);
-java.lang.IllegalArgumentException: no field 'signBit' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = false : bool
 
 (*) TODO val it = false : bool; SMLNJ returns false but spec would suggest true
+Sys.plan ();
+val it =
+  "apply(fnValue Real.signBit, argCode apply(fnValue ~, argCode constant(NaN)))"
+  : string
+
 
 (* "sameSign (r1, r2)" returns true if and only if signBit r1 equals
    signBit r2. *)
+Real.sameSign;
+val it = fn : real * real -> bool
+
 Real.sameSign (2.0, 3.5);
-java.lang.IllegalArgumentException: no field 'sameSign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = true : bool
 
 (*) TODO val it = true : bool
 Real.sameSign (~2.0, Real.negInf);
-java.lang.IllegalArgumentException: no field 'sameSign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = true : bool
 
 (*) TODO val it = true : bool
 Real.sameSign (2.0, nan);
-java.lang.IllegalArgumentException: no field 'sameSign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = false : bool
 
 (*) TODO val it = false : bool
 Real.sameSign (~2.0, nan);
-java.lang.IllegalArgumentException: no field 'sameSign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = true : bool
 
 (*) TODO val it = true : bool
 Real.sameSign (nan, nan);
-java.lang.IllegalArgumentException: no field 'sameSign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = true : bool
 
 (*) TODO val it = true : bool
+Sys.plan ();
+val it =
+  "apply(fnValue Real.sameSign, argCode tuple(constant(NaN), constant(NaN)))"
+  : string
+
 
 (* "copySign (x, y)" returns x with the sign of y, even if y is NaN. *)
+Real.copySign;
+val it = fn : real * real -> real
+
 Real.copySign (2.0, Real.posInf);
-java.lang.IllegalArgumentException: no field 'copySign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 2.0 : real
 
 (*) TODO val it = 2.0 : real
 Real.copySign (2.0, Real.negInf);
-java.lang.IllegalArgumentException: no field 'copySign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~2.0 : real
 
 (*) TODO val it = ~2.0 : real
 Real.copySign (2.0, nan);
-java.lang.IllegalArgumentException: no field 'copySign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~2.0 : real
 
 (*) TODO val it = ~2.0 : real
 Real.copySign (~3.5, ~nan);
-java.lang.IllegalArgumentException: no field 'copySign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 3.5 : real
 
 (*) TODO val it = 3.5 : real
 Real.copySign (~3.5, nan);
-java.lang.IllegalArgumentException: no field 'copySign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~3.5 : real
 
 (*) TODO val it = ~3.5 : real
 Real.copySign (2.0, ~0.0);
-java.lang.IllegalArgumentException: no field 'copySign' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~2.0 : real
 
 (*) TODO val it = ~2.0 : real
+Sys.plan ();
+val it =
+  "apply(fnValue Real.copySign, argCode tuple(constant(2.0), constant(-0.0)))"
+  : string
+
 
 (* "val compare : real * real -> order" returns LESS, EQUAL, or GREATER
    according to whether its first argument is less than, equal to, or
    greater than the second. It raises IEEEReal.Unordered on unordered
    arguments. *)
+Real.compare;
+val it = fn : real * real -> order
+
 Real.compare (2.0, 2.0);
-java.lang.IllegalArgumentException: no field 'compare' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = EQUAL : order
 
 (*) TODO val it = EQUAL : order
 Real.compare (~0.0, 0.0);
-java.lang.IllegalArgumentException: no field 'compare' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = LESS : order
 
 (*) TODO val it = EQUAL : order
 Real.compare (~5.0, Real.posInf);
-java.lang.IllegalArgumentException: no field 'compare' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = LESS : order
 
 (*) TODO val it = LESS : order
 Real.compare (~5.0, Real.negInf);
-java.lang.IllegalArgumentException: no field 'compare' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = GREATER : order
 
 (*) TODO val it = GREATER : order
 Real.compare (Real.negInf, Real.negInf);
-java.lang.IllegalArgumentException: no field 'compare' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = EQUAL : order
 
 (*) TODO val it = EQUAL : order
 Real.compare (Real.negInf, nan);
-java.lang.IllegalArgumentException: no field 'compare' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = LESS : order
 
 (*) TODO uncaught exception Unordered
 Real.compare (nan, nan);
-java.lang.IllegalArgumentException: no field 'compare' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = EQUAL : order
 
 (*) TODO uncaught exception Unordered
+Sys.plan ();
+val it =
+  "apply(fnValue Real.compare, argCode tuple(constant(NaN), constant(NaN)))"
+  : string
+
 
 (* "val compareReal : real * real -> IEEEReal.real_order" behaves similarly to
    "Real.compare" except that the values it returns have the extended type
    IEEEReal.real_order and it returns IEEEReal.UNORDERED on unordered
    arguments. *)
-Real.compareReal (2.0, 2.0);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (2.0, 2.0);
 (*) TODO val it = EQUAL : IEEEReal.real_order
-Real.compareReal (~0.0, 0.0);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (~0.0, 0.0);
 (*) TODO val it = EQUAL : IEEEReal.real_order
-Real.compareReal (~5.0, Real.posInf);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (~5.0, Real.posInf);
 (*) TODO val it = LESS : IEEEReal.real_order
-Real.compareReal (~5.0, Real.negInf);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (~5.0, Real.negInf);
 (*) TODO val it = GREATER : IEEEReal.real_order
-Real.compareReal (Real.negInf, Real.negInf);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (Real.negInf, Real.negInf);
 (*) TODO val it = EQUAL : IEEEReal.real_order
-Real.compareReal (Real.negInf, nan);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (Real.negInf, nan);
 (*) TODO val it = UNORDERED : IEEEReal.real_order
-Real.compareReal (nan, nan);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (nan, nan);
 (*) TODO val it = UNORDERED : IEEEReal.real_order
-Real.compareReal (~nan, nan);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (~nan, nan);
 (*) TODO val it = UNORDERED : IEEEReal.real_order
-Real.compareReal (0.0, ~nan);
-java.lang.IllegalArgumentException: no field 'compareReal' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
-
+(*) TODO Real.compareReal (0.0, ~nan);
 (*) TODO val it = UNORDERED : IEEEReal.real_order
 
 (* val < : real * real -> bool
@@ -2244,16 +2301,71 @@ val it = true : bool
    This function is comparable to modf in the C library. If r is +-infinity,
    whole is +-infinity and frac is +-0. If r is NaN, both whole and frac are
    NaN. *)
-(*) TODO
-(*) Real.split ~12.25;
+Real.split;
+val it = fn : real -> {frac:real, whole:real}
+
+Real.split 2.0;
+val it = {frac=0.0,whole=2.0} : {frac:real, whole:real}
+
+Real.split 0.0;
+val it = {frac=0.0,whole=0.0} : {frac:real, whole:real}
+
+Real.split ~0.0;
+val it = {frac=~0.0,whole=0.0} : {frac:real, whole:real}
+
+Real.split 2.75;
+val it = {frac=0.75,whole=2.0} : {frac:real, whole:real}
+
+Real.split ~12.25;
+val it = {frac=~0.25,whole=~12.0} : {frac:real, whole:real}
+
 (*) TODO val it = {frac=~0.25,whole=~12.0} : {frac:real, whole:real}
+Real.split Real.posInf;
+val it = {frac=0.0,whole=inf} : {frac:real, whole:real}
+
+Real.split Real.negInf;
+val it = {frac=~0.0,whole=~inf} : {frac:real, whole:real}
+
+Real.split nan;
+val it = {frac=nan,whole=nan} : {frac:real, whole:real}
+
+Sys.plan ();
+val it = "apply(fnValue Real.split, argCode constant(NaN))" : string
+
 
 (* "realMod r" returns the fractional part of r. "realMod" is equivalent to
    "#frac o split". *)
+Real.realMod;
+val it = fn : real -> real
+
+Real.realMod 2.0;
+val it = 0.0 : real
+
+Real.realMod 0.0;
+val it = 0.0 : real
+
+Real.realMod ~0.0;
+val it = ~0.0 : real
+
+Real.realMod 2.75;
+val it = 0.75 : real
+
 Real.realMod ~12.25;
-java.lang.IllegalArgumentException: no field 'realMod' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~0.25 : real
 
 (*) TODO val it = ~0.25 : real
+Real.realMod Real.posInf;
+val it = 0.0 : real
+
+Real.realMod Real.negInf;
+val it = ~0.0 : real
+
+Real.realMod nan;
+val it = nan : real
+
+Sys.plan ();
+val it = "apply(fnValue Real.realMod, argCode constant(NaN))" : string
+
 
 (* "nextAfter (r, t)" returns the next representable real after r in the
    direction of t. Thus, if t is less than r, nextAfter returns the largest
@@ -2273,10 +2385,51 @@ java.lang.IllegalArgumentException: no field 'realMod' in type '{maxFinite:real,
 (* "realFloor r", "realCeil r", "realTrunc r", "realRound r" convert real values
    to integer-valued reals. realFloor produces floor(r), the largest integer not
    larger than r. realCeil produces ceil(r), the smallest integer not less than r.
-   realTrunc rounds r towards zero, and realRound rounds to the integer-values
+   realTrunc rounds r towards zero, and realRound rounds to the integer-valued
    real value that is nearest to r. If r is NaN or an infinity, these functions
    return r. *)
-(*) TODO
+Real.realFloor;
+val it = fn : real -> real
+
+Real.realCeil;
+val it = fn : real -> real
+
+Real.realTrunc;
+val it = fn : real -> real
+
+Real.realRound;
+val it = fn : real -> real
+
+fun f x = (Real.realFloor x, Real.realCeil x, Real.realTrunc x, Real.realRound x);
+val f = fn : real -> real * real * real * real
+
+f 0.0;
+val it = (0.0,0.0,0.0,0.0) : real * real * real * real
+
+f ~2.0;
+val it = (~2.0,~2.0,~2.0,~2.0) : real * real * real * real
+
+f ~1.75;
+val it = (~2.0,~1.0,~1.0,~2.0) : real * real * real * real
+
+f ~2.25;
+val it = (~3.0,~2.0,~2.0,~2.0) : real * real * real * real
+
+f ~2.5;
+val it = (~3.0,~2.0,~2.0,~2.0) : real * real * real * real
+
+f ~3.5;
+val it = (~4.0,~3.0,~3.0,~4.0) : real * real * real * real
+
+f Real.negInf;
+val it = (~inf,~inf,nan,~inf) : real * real * real * real
+
+f Real.posInf;
+val it = (inf,inf,nan,inf) : real * real * real * real
+
+f nan;
+val it = (nan,nan,nan,nan) : real * real * real * real
+
 
 (* "floor r", "ceil r", "trunc r", "round r" convert reals to integers.
    floor produces floor(r), the largest int not larger than r.
@@ -2293,7 +2446,50 @@ java.lang.IllegalArgumentException: no field 'realMod' in type '{maxFinite:real,
      toInt IEEEReal.TO_POSINF r
      toInt IEEEReal.TO_ZERO r
      toInt IEEEReal.TO_NEAREST r *)
-(*) TODO
+Real.floor;
+val it = fn : real -> int
+
+Real.ceil;
+val it = fn : real -> int
+
+Real.trunc;
+val it = fn : real -> int
+
+Real.round;
+val it = fn : real -> int
+
+fun f x = (Real.floor x, Real.ceil x, Real.trunc x, Real.round x);
+val f = fn : real -> int * int * int * int
+
+f 0.0;
+val it = (0,0,0,0) : int * int * int * int
+
+f ~2.0;
+val it = (~2,~2,~2,~2) : int * int * int * int
+
+f ~1.75;
+val it = (~2,~2,~1,~2) : int * int * int * int
+
+f ~2.25;
+val it = (~2,~2,~2,~2) : int * int * int * int
+
+f ~2.5;
+val it = (~2,~3,~2,~2) : int * int * int * int
+
+f ~3.5;
+val it = (~3,~4,~3,~3) : int * int * int * int
+
+f Real.negInf;
+val it = (~2147483648,~2147483647,~2147483648,~2147483648)
+  : int * int * int * int
+
+f Real.posInf;
+val it = (~2147483648,2147483647,2147483647,2147483647)
+  : int * int * int * int
+
+f nan;
+val it = (0,0,0,0) : int * int * int * int
+
 
 (* "toInt mode x", "toLargeInt mode x" convert the argument x to an integral
    type using the specified rounding mode. They raise Overflow if the result
@@ -2307,18 +2503,27 @@ java.lang.IllegalArgumentException: no field 'realMod' in type '{maxFinite:real,
    current rounding mode is used to determine the resulting value. The top-level
    function real is an alias for Real.fromInt. *)
 Real.fromInt;
-java.lang.IllegalArgumentException: no field 'fromInt' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = fn : int -> real
 
 Real.fromInt 1;
-java.lang.IllegalArgumentException: no field 'fromInt' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = 1.0 : real
 
 Real.fromInt ~2;
-java.lang.IllegalArgumentException: no field 'fromInt' in type '{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}'
+val it = ~2.0 : real
 
 Sys.plan ();
-val it =
-  "apply(fnValue >=, argCode tuple(constant(Infinity), constant(Infinity)))"
-  : string
+val it = "apply(fnValue Real.fromInt, argCode constant(-2))" : string
+
+
+(*) real is a synonym for Real.fromInt
+real;
+val it = fn : int -> real
+
+real ~2;
+val it = ~2.0 : real
+
+Sys.plan ();
+val it = "apply(fnValue Real.fromInt, argCode constant(-2))" : string
 
 
 (* "toLarge r", "fromLarge r" convert between values of type real and type
@@ -2718,7 +2923,7 @@ val it =
    ("Option",
    "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, flatten:forall 'a. 'a option option -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
    ("Real",
-   "{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}"),
+   "{abs:real -> real, ceil:real -> int, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int}"),
    ("Relational",
    "{count:forall 'a. 'a list -> int, exists:forall 'a. 'a list -> bool, iterate:forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list, max:forall 'a. 'a list -> 'a, min:forall 'a. 'a list -> 'a, notExists:forall 'a. 'a list -> bool, only:forall 'a. 'a list -> 'a, sum:forall 'a. 'a list -> 'a}"),
    ("SOME","forall 'a. 'a -> 'a option"),
@@ -2782,7 +2987,7 @@ val it =
    ("Option",
    "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, flatten:forall 'a. 'a option option -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
    ("Real",
-   "{maxFinite:real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int}"),
+   "{abs:real -> real, ceil:real -> int, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int}"),
    ("Relational",
    "{count:forall 'a. 'a list -> int, exists:forall 'a. 'a list -> bool, iterate:forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list, max:forall 'a. 'a list -> 'a, min:forall 'a. 'a list -> 'a, notExists:forall 'a. 'a list -> bool, only:forall 'a. 'a list -> 'a, sum:forall 'a. 'a list -> 'a}"),
    ("SOME","forall 'a. 'a -> 'a option"),
