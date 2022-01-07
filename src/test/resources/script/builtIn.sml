@@ -744,6 +744,7 @@ Real.radix;
 (*) TODO 2
 
 (*) val precision : int
+Real.precision;
 (*) TODO 53
 
 (*) val maxFinite : real
