@@ -1314,10 +1314,10 @@ public abstract class Codes {
   /** @see BuiltIn#MATH_LN */
   private static final Applicable MATH_LN =
       new ApplicableImpl(BuiltIn.MATH_LN) {
-    @Override public Object apply(EvalEnv env, Object arg) {
-      return (float) Math.log((Float) arg);
-    }
-  };
+        @Override public Object apply(EvalEnv env, Object arg) {
+          return (float) Math.log((Float) arg);
+        }
+      };
 
   /** @see BuiltIn#MATH_LOG10 */
   private static final Applicable MATH_LOG10 =
@@ -1568,6 +1568,59 @@ public abstract class Codes {
     };
   }
 
+  /** @see BuiltIn#REAL_ABS */
+  private static final Applicable REAL_ABS =
+      new ApplicableImpl(BuiltIn.REAL_ABS) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          return Math.abs((float) arg);
+        }
+      };
+
+  /** @see BuiltIn#REAL_CEIL */
+  private static final Applicable REAL_CEIL =
+      new ApplicableImpl(BuiltIn.REAL_CEIL) {
+        @Override public Integer apply(EvalEnv env, Object arg) {
+          float f = (float) arg;
+          if (f >= 0) {
+            return Math.round(f);
+          } else {
+            return -Math.round(-f);
+          }
+        }
+      };
+
+  /** @see BuiltIn#REAL_COMPARE */
+  private static final Applicable REAL_COMPARE =
+      new ApplicableImpl(BuiltIn.REAL_COMPARE) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final List list = (List) arg;
+          final int c = Float.compare((Float) list.get(0), (Float) list.get(1));
+          return c < 0 ? ORDER_LESS : c == 0 ? ORDER_EQUAL : ORDER_GREATER;
+        }
+      };
+
+  /** @see BuiltIn#REAL_COPY_SIGN */
+  private static final Applicable REAL_COPY_SIGN =
+      new ApplicableImpl(BuiltIn.REAL_COPY_SIGN) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final List list = (List) arg;
+          return Math.copySign((Float) list.get(0), (Float) list.get(1));
+        }
+      };
+
+  /** @see BuiltIn#REAL_FLOOR */
+  private static final Applicable REAL_FLOOR =
+      new ApplicableImpl(BuiltIn.REAL_FLOOR) {
+        @Override public Integer apply(EvalEnv env, Object arg) {
+          float f = (float) arg;
+          if (f >= 0) {
+            return -Math.round(-f);
+          } else {
+            return Math.round(f);
+          }
+        }
+      };
+
   /** @see BuiltIn#REAL_FROM_INT */
   private static final Applicable REAL_FROM_INT =
       new ApplicableImpl(BuiltIn.REAL_FROM_INT) {
@@ -1585,8 +1638,27 @@ public abstract class Codes {
   /** @see BuiltIn#REAL_RADIX */
   private static final int REAL_RADIX = 2;
 
-  /** @see BuiltIn#REAL_PRECISION */
-  private static final int REAL_PRECISION = 53;
+  /** @see BuiltIn#REAL_PRECISION
+   * @see jdk.internal.math.FloatConsts#SIGNIFICAND_WIDTH */
+  private static final int REAL_PRECISION = 24;
+
+  /** @see BuiltIn#REAL_MIN */
+  private static final Applicable REAL_MIN =
+      new ApplicableImpl(BuiltIn.REAL_MIN) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final List list = (List) arg;
+          return Math.min((float) list.get(0), (float) list.get(1));
+        }
+      };
+
+  /** @see BuiltIn#REAL_MAX */
+  private static final Applicable REAL_MAX =
+      new ApplicableImpl(BuiltIn.REAL_MAX) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final List list = (List) arg;
+          return Math.min((float) list.get(0), (float) list.get(1));
+        }
+      };
 
   /** @see BuiltIn#REAL_MAX_FINITE */
   private static final float REAL_MAX_FINITE = Float.MAX_VALUE;
@@ -1596,6 +1668,136 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_MIN_NORMAL_POS */
   private static final float REAL_MIN_NORMAL_POS = Float.MIN_NORMAL;
+
+  /** @see BuiltIn#REAL_REAL_MOD */
+  private static final Applicable REAL_REAL_MOD =
+      new ApplicableImpl(BuiltIn.REAL_REAL_MOD) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final float f = (Float) arg;
+          if (Float.isInfinite(f)) {
+            // realMod posInf  => 0.0
+            // realMod negInf  => ~0.0
+            return f > 0f ? 0f : -0f;
+          }
+          return f % 1;
+        }
+      };
+
+  /** @see BuiltIn#REAL_REAL_CEIL */
+  private static final Applicable REAL_REAL_CEIL =
+      new ApplicableImpl(BuiltIn.REAL_REAL_CEIL) {
+        @Override public Float apply(EvalEnv env, Object arg) {
+          return (float) Math.ceil((float) arg);
+        }
+      };
+
+  /** @see BuiltIn#REAL_REAL_FLOOR */
+  private static final Applicable REAL_REAL_FLOOR =
+      new ApplicableImpl(BuiltIn.REAL_REAL_FLOOR) {
+        @Override public Float apply(EvalEnv env, Object arg) {
+          return (float) Math.floor((float) arg);
+        }
+      };
+
+  /** @see BuiltIn#REAL_REAL_ROUND */
+  private static final Applicable REAL_REAL_ROUND =
+      new ApplicableImpl(BuiltIn.REAL_REAL_ROUND) {
+        @Override public Float apply(EvalEnv env, Object arg) {
+          return (float) Math.rint((float) arg);
+        }
+      };
+
+  /** @see BuiltIn#REAL_REAL_TRUNC */
+  private static final Applicable REAL_REAL_TRUNC =
+      new ApplicableImpl(BuiltIn.REAL_REAL_TRUNC) {
+        @Override public Float apply(EvalEnv env, Object arg) {
+          final float f = (float) arg;
+          final float frac = f % 1;
+          return f - frac;
+        }
+      };
+
+  /** @see BuiltIn#REAL_REM */
+  private static final Applicable REAL_REM =
+      new ApplicableImpl(BuiltIn.REAL_REM) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final List list = (List) arg;
+          final float x = (float) list.get(0);
+          final float y = (float) list.get(1);
+          return x % y;
+        }
+      };
+
+  /** @see BuiltIn#REAL_ROUND */
+  private static final Applicable REAL_ROUND =
+      new ApplicableImpl(BuiltIn.REAL_ROUND) {
+        @Override public Integer apply(EvalEnv env, Object arg) {
+          return Math.round((float) arg);
+        }
+      };
+
+  /** @see BuiltIn#REAL_SAME_SIGN */
+  private static final Applicable REAL_SAME_SIGN =
+      new ApplicableImpl(BuiltIn.REAL_SAME_SIGN) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final List list = (List) arg;
+          final float x = (float) list.get(0);
+          final float y = (float) list.get(1);
+          return (Float.floatToRawIntBits(x) & 0x8000_0000)
+              == (Float.floatToRawIntBits(y) & 0x8000_0000);
+        }
+      };
+
+  /** @see BuiltIn#REAL_SIGN */
+  private static final Applicable REAL_SIGN =
+      new ApplicableImpl(BuiltIn.REAL_SIGN) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final float f = (Float) arg;
+          if (Float.isNaN(f)) {
+            throw new MorelRuntimeException(BuiltInExn.DOMAIN);
+          }
+          return f == 0f ? 0 // positive or negative zero
+              : (f > 0f) ? 1 // positive number or positive infinity
+                  : -1; // negative number or negative infinity
+        }
+      };
+
+  /** @see BuiltIn#REAL_SIGN_BIT */
+  private static final Applicable REAL_SIGN_BIT =
+      new ApplicableImpl(BuiltIn.REAL_SIGN_BIT) {
+        @Override public Boolean apply(EvalEnv env, Object arg) {
+          return (Float.floatToRawIntBits((float) arg) & 0x8000_0000) != 0;
+        }
+      };
+
+  /** @see BuiltIn#REAL_SPLIT */
+  private static final Applicable REAL_SPLIT =
+      new ApplicableImpl(BuiltIn.REAL_SPLIT) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          final float f = (Float) arg;
+          final float frac;
+          final float whole;
+          if (Float.isInfinite(f)) {
+            // realMod posInf  => 0.0
+            // realMod negInf  => ~0.0
+            frac = f > 0f ? 0f : -0f;
+            whole = f;
+          } else {
+            frac = f % 1;
+            whole = f - frac;
+          }
+          return ImmutableList.of(frac, whole);
+        }
+      };
+
+  /** @see BuiltIn#REAL_TRUNC */
+  private static final Applicable REAL_TRUNC =
+      new ApplicableImpl(BuiltIn.REAL_TRUNC) {
+        @Override public Integer apply(EvalEnv env, Object arg) {
+          float f = (float) arg;
+          return (int) f;
+        }
+      };
 
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
@@ -2270,14 +2472,33 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_MAP, OPTION_MAP)
           .put(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL)
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
+          .put(BuiltIn.REAL_ABS, REAL_ABS)
+          .put(BuiltIn.REAL_CEIL, REAL_CEIL)
+          .put(BuiltIn.REAL_COMPARE, REAL_COMPARE)
+          .put(BuiltIn.REAL_COPY_SIGN, REAL_COPY_SIGN)
+          .put(BuiltIn.REAL_FLOOR, REAL_FLOOR)
           .put(BuiltIn.REAL_FROM_INT, REAL_FROM_INT)
-          .put(BuiltIn.REAL_NEG_INF, REAL_NEG_INF)
-          .put(BuiltIn.REAL_POS_INF, REAL_POS_INF)
+          .put(BuiltIn.REAL_MAX, REAL_MAX)
           .put(BuiltIn.REAL_MAX_FINITE, REAL_MAX_FINITE)
+          .put(BuiltIn.REAL_MIN, REAL_MIN)
           .put(BuiltIn.REAL_MIN_POS, REAL_MIN_POS)
           .put(BuiltIn.REAL_MIN_NORMAL_POS, REAL_MIN_NORMAL_POS)
+          .put(BuiltIn.REAL_NEG_INF, REAL_NEG_INF)
+          .put(BuiltIn.REAL_POS_INF, REAL_POS_INF)
           .put(BuiltIn.REAL_PRECISION, REAL_PRECISION)
           .put(BuiltIn.REAL_RADIX, REAL_RADIX)
+          .put(BuiltIn.REAL_REAL_MOD, REAL_REAL_MOD)
+          .put(BuiltIn.REAL_REAL_CEIL, REAL_REAL_CEIL)
+          .put(BuiltIn.REAL_REAL_FLOOR, REAL_REAL_FLOOR)
+          .put(BuiltIn.REAL_REAL_ROUND, REAL_REAL_ROUND)
+          .put(BuiltIn.REAL_REAL_TRUNC, REAL_REAL_TRUNC)
+          .put(BuiltIn.REAL_REM, REAL_REM)
+          .put(BuiltIn.REAL_ROUND, REAL_ROUND)
+          .put(BuiltIn.REAL_SAME_SIGN, REAL_SAME_SIGN)
+          .put(BuiltIn.REAL_SIGN, REAL_SIGN)
+          .put(BuiltIn.REAL_SIGN_BIT, REAL_SIGN_BIT)
+          .put(BuiltIn.REAL_SPLIT, REAL_SPLIT)
+          .put(BuiltIn.REAL_TRUNC, REAL_TRUNC)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EXISTS, RELATIONAL_EXISTS)
           .put(BuiltIn.RELATIONAL_NOT_EXISTS, RELATIONAL_NOT_EXISTS)
@@ -2733,6 +2954,7 @@ public abstract class Codes {
   /** Definitions of Morel built-in exceptions. */
   public enum BuiltInExn {
     EMPTY("List", "Empty"),
+    DOMAIN("General", "Domain"),
     OPTION("Option", "Option"),
     ERROR("Interact", "Error"), // not in standard basis
     SIZE("General", "Size"),
