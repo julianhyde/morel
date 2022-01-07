@@ -1574,6 +1574,21 @@ public abstract class Codes {
   /** @see BuiltIn#REAL_POS_INF */
   private static final float REAL_POS_INF = Float.POSITIVE_INFINITY;
 
+  /** @see BuiltIn#REAL_RADIX */
+  private static final int REAL_RADIX = 2;
+
+  /** @see BuiltIn#REAL_PRECISION */
+  private static final int REAL_PRECISION = 53;
+
+  /** @see BuiltIn#REAL_MAX_FINITE */
+  private static final float REAL_MAX_FINITE = Float.MAX_VALUE;
+
+  /** @see BuiltIn#REAL_MIN_POS */
+  private static final float REAL_MIN_POS = Float.MIN_VALUE;
+
+  /** @see BuiltIn#REAL_MIN_NORMAL_POS */
+  private static final float REAL_MIN_NORMAL_POS = Float.MIN_NORMAL;
+
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
       length(BuiltIn.RELATIONAL_COUNT);
@@ -2249,6 +2264,11 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
           .put(BuiltIn.REAL_NEG_INF, REAL_NEG_INF)
           .put(BuiltIn.REAL_POS_INF, REAL_POS_INF)
+          .put(BuiltIn.REAL_MAX_FINITE, REAL_MAX_FINITE)
+          .put(BuiltIn.REAL_MIN_POS, REAL_MIN_POS)
+          .put(BuiltIn.REAL_MIN_NORMAL_POS, REAL_MIN_NORMAL_POS)
+          .put(BuiltIn.REAL_PRECISION, REAL_PRECISION)
+          .put(BuiltIn.REAL_RADIX, REAL_RADIX)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EXISTS, RELATIONAL_EXISTS)
           .put(BuiltIn.RELATIONAL_NOT_EXISTS, RELATIONAL_NOT_EXISTS)

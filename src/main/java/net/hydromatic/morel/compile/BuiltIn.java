@@ -890,6 +890,35 @@ public enum BuiltIn {
    * <p>The positive infinity value. */
   REAL_POS_INF("Real", "posInf", ts -> REAL),
 
+  /** Constant "Real.radix", of type "int".
+   *
+   * <p>The base of the representation, e.g., 2 or 10 for IEEE floating
+   * point. */
+  REAL_RADIX("Real", "radix", ts -> INT),
+
+  /** Constant "Real.precision", of type "int".
+   *
+   * <p>The number of digits, each between 0 and {@code radix - 1}, in the
+   * mantissa. Note that the precision includes the implicit (or hidden) bit
+   * used in the IEEE representation (e.g., the value of Real64.precision is
+   * 53). */
+  REAL_PRECISION("Real", "precision", ts -> INT),
+
+  /** Constant "Real.maxFinite", of type "real".
+   *
+   * <p>The maximum finite number. */
+  REAL_MAX_FINITE("Real", "maxFinite", ts -> REAL),
+
+  /** Constant "Real.minPos", of type "real".
+   *
+   * <p>The minimum non-zero positive number. */
+  REAL_MIN_POS("Real", "minPos", ts -> REAL),
+
+  /** Constant "Real.minNormalPos", of type "real".
+   *
+   * <p>The minimum non-zero normalized number. */
+  REAL_MIN_NORMAL_POS("Real", "minNormalPos", ts -> REAL),
+
   /** Function "Relational.count", aka "count", of type "int list &rarr; int".
    *
    * <p>Often used with {@code group}:
