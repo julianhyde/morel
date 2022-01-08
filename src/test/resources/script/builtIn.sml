@@ -431,7 +431,7 @@ List.map (fn x => (x, Math.acos x))
   [1.0, 0.0, ~1.0, 0.5, Math.sqrt 0.5, 2.0, Real.posInf, Real.negInf, nan];
 Sys.plan ();
 
-(* "asin x" return the arc sine of x. asin is the inverse of sin. Its
+(* "asin x" returns the arc sine of x. asin is the inverse of sin. Its
    result is guaranteed to be in the closed interval [-pi / 2, pi /
    2]. If the magnitude of x exceeds 1.0, returns NaN. *)
 (*) TODO val asin : real -> real
@@ -542,7 +542,7 @@ List.map (fn x => (x, Math.ln x))
   [1.0, 2.718, Math.e, 0.0, ~0.0, ~3.0, Real.posInf, Real.negInf, nan];
 Sys.plan ();
 
-(* "log10 r" returns the decimal logarithm (base 10) of x. If x < 0,
+(* "log10 x" returns the decimal logarithm (base 10) of x. If x < 0,
    returns NaN; if x = 0, returns -infinity; if x is infinity, returns
    infinity. *)
 Math.log10;
@@ -633,9 +633,8 @@ List.map (fn x => (x, Math.sqrt x))
   [4.0, 0.0, ~0.0, ~9.0, Real.posInf, Real.negInf, nan];
 
 (* "tan x" returns the tangent of x, measured in radians. If x is an
-   infinity, these returns NaN. Produces infinities at various finite
-   values, roughly corresponding to the singularities of the tangent
-   function. *)
+   infinity, returns NaN. Produces infinities at various finite values,
+   roughly corresponding to the singularities of the tangent function. *)
 (*) TODO val tan : real -> real
 Math.tan;
 Math.tan 0.0;

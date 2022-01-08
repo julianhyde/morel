@@ -1314,10 +1314,10 @@ public abstract class Codes {
   /** @see BuiltIn#MATH_LN */
   private static final Applicable MATH_LN =
       new ApplicableImpl(BuiltIn.MATH_LN) {
-    @Override public Object apply(EvalEnv env, Object arg) {
-      return (float) Math.log((Float) arg);
-    }
-  };
+        @Override public Object apply(EvalEnv env, Object arg) {
+          return (float) Math.log((Float) arg);
+        }
+      };
 
   /** @see BuiltIn#MATH_LOG10 */
   private static final Applicable MATH_LOG10 =

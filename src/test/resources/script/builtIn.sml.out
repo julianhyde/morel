@@ -1058,7 +1058,7 @@ val it =
   : string
 
 
-(* "asin x" return the arc sine of x. asin is the inverse of sin. Its
+(* "asin x" returns the arc sine of x. asin is the inverse of sin. Its
    result is guaranteed to be in the closed interval [-pi / 2, pi /
    2]. If the magnitude of x exceeds 1.0, returns NaN. *)
 (*) TODO val asin : real -> real
@@ -1257,7 +1257,7 @@ val it =
   : string
 
 
-(* "log10 r" returns the decimal logarithm (base 10) of x. If x < 0,
+(* "log10 x" returns the decimal logarithm (base 10) of x. If x < 0,
    returns NaN; if x = 0, returns -infinity; if x is infinity, returns
    infinity. *)
 Math.log10;
@@ -1407,9 +1407,8 @@ val it =
 
 
 (* "tan x" returns the tangent of x, measured in radians. If x is an
-   infinity, these returns NaN. Produces infinities at various finite
-   values, roughly corresponding to the singularities of the tangent
-   function. *)
+   infinity, returns NaN. Produces infinities at various finite values,
+   roughly corresponding to the singularities of the tangent function. *)
 (*) TODO val tan : real -> real
 Math.tan;
 val it = fn : real -> real
