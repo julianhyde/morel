@@ -433,18 +433,14 @@ Exception:
 | Vector.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; vector | "tabulate (n, f)" returns a vector of length `n` equal to `[f(0), f(1), ..., f(n-1)]`, created from left to right. Raises `Size` if `n` &lt; 0 or `maxLen` &lt; `n`. |
 | Vector.update | &alpha; vector * int * &alpha; &rarr; &alpha; vector | "update (vec, i, x)" returns  a new vector, identical to `vec`, except the `i`<sup>th</sup> element of `vec` is set to `x`. Raises `Subscript` if `i` &lt; 0 or `size vec` &le; `i`. |
 
-Not yet implemented |
+Not yet implemented
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | Real op != | real * real &rarr; bool | "x != y" is equivalent to `not o op ==` and the IEEE `?<>` operator. |
 | Real op *+ | real * real * real &rarr; real | "*+ (a, b, c)" returns `a * b + c`. Its behavior on infinities follows from the behaviors derived from addition and multiplication. |
 | Real op *- | real * real * real &rarr; real | "*- (a, b, c)" returns `a * b - c`. Its behavior on infinities follows from the behaviors derived from subtraction and multiplication. |
-| Real op < | real * real &rarr; bool | "x < y" returns true if x is less than y. Return false on unordered arguments, i.e., if either argument is NaN, so that the usual reversal of comparison under negation does not hold, e.g., `a < b` is not the same as `not (a >= b)`. |
-| Real op <= | real * real &rarr; bool | As "<" |
 | Real op == | real * real &rarr; bool | "x == y" returns true if and only if neither y nor x is NaN, and y and x are equal, ignoring signs on zeros. This is equivalent to the IEEE `=` operator. |
-| Real op > | real * real &rarr; bool | As "<" |
-| Real op >= | real * real &rarr; bool | As "<" |
 | Real op ?= | real * real &rarr; bool | "?= (x, y)" returns true if either argument is NaN or if the arguments are bitwise equal, ignoring signs on zeros. It is equivalent to the IEEE `?=` operator. |
 | Real op ~ | real &rarr; real | "~ r" returns the negation of `r`. |
 | Real.abs | real &rarr; real | "abs r" returns the absolute value of `r`. |
