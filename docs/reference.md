@@ -322,7 +322,23 @@ Exception:
 | List.all | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; bool | "all f l" applies `f` to each element `x` of the list `l`, from left to right, `f(x)` evaluates to `false`; it returns `false` if such an `x` exists and `true` otherwise. It is equivalent to `not(exists (not o f) l))`. |
 | List.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; list | "tabulate (n, f)" returns a list of length `n` equal to `[f(0), f(1), ..., f(n-1)]`, created from left to right. Raises `Size` if `n` &lt; 0. |
 | List.collate | (&alpha; * &alpha; &rarr; order) &rarr; &alpha; list * &alpha; list &rarr; order | "collate f (l1, l2)" performs lexicographic comparison of the two lists using the given ordering `f` on the list elements. |
-| Math.ln | real &rarr; real | "ln x" returns the natural logarithm (base e) of `x`. If `x` &lt; 0, returns NaN; if `x` = 0, returns -infinity; if `x` is infinity, returns infinity |
+| Math.acos | real &rarr; real | "acos x" returns the arc cosine of `x`. `acos` is the inverse of `cos`. Its result is guaranteed to be in the closed interval [0, pi]. If the magnitude of `x` exceeds 1.0, returns NaN. |
+| Math.asin | real &rarr; real | "asin x" returns the arc sine of `x`. `asin` is the inverse of `sin`. Its result is guaranteed to be in the closed interval [-pi / 2, pi / 2]. If the magnitude of `x` exceeds 1.0, returns NaN. |
+| Math.atan | real &rarr; real | "atan x" returns the arc tangent of `x`. `atan` is the inverse of `tan`. For finite arguments, the result is guaranteed to be in the open interval (-pi / 2, pi / 2). If `x` is +infinity, it returns pi / 2; if `x` is -infinity, it returns -pi / 2. |
+| Math.atan2 | real * real &rarr; real | "atan2 (y, x)" returns the arc tangent of `(y / x)` in the closed interval [-pi, pi], corresponding to angles within +-180 degrees. The quadrant of the resulting angle is determined using the signs of both `x` and `y`, and is the same as the quadrant of the point `(x, y)`. When `x` = 0, this corresponds to an angle of 90 degrees, and the result is `(real (sign y)) * pi / 2.0`. |
+| Math.cos | real &rarr; real | "cos x" returns the cosine of `x`, measured in radians. If `x` is an infinity, returns NaN. |
+| Math.cosh | real &rarr; real | "cosh x" returns the hyperbolic cosine of `x`, that is, `(e(x) + e(-x)) / 2`. Among its properties, cosh +-0 = 1, cosh +-infinity = +-infinity. |
+| Math.e | real | "e" is base e (2.718281828...) of the natural logarithm. |
+| Math.exp | real &rarr; real | "exp x" returns `e(x)`, i.e., `e` raised to the `x`<sup>th</sup> power. If `x` is +infinity, returns +infinity; if `x` is -infinity, returns 0. |
+| Math.ln | real &rarr; real | "ln x" returns the natural logarithm (base e) of `x`. If `x` &lt; 0, returns NaN; if `x` = 0, returns -infinity; if `x` is infinity, returns infinity. |
+| Math.log10 | real &rarr; real | "log10 x" returns the decimal logarithm (base 10) of `x`. If `x` &lt; 0, returns NaN; if `x` = 0, returns -infinity; if `x` is infinity, returns infinity. |
+| Math.pi | real | "pi" is the constant pi (3.141592653...). |
+| Math.pow | real * real &rarr; real | "pow (x, y)" returns `x(y)`, i.e., `x` raised to the `y`<sup>th</sup> power. For finite `x` and `y`, this is well-defined when `x` &gt; 0, or when `x` &lt; 0 and `y` is integral. |
+| Math.sin | real &rarr; real | "sin x" returns the sine of `x`, measured in radians. If `x` is an infinity, returns NaN. |
+| Math.sinh | real &rarr; real | "sinh x" returns the hyperbolic sine of `x`, that is, `(e(x) - e(-x)) / 2`. Among its properties, sinh +-0 = +-0, sinh +-infinity = +-infinity. |
+| Math.sqrt | real &rarr; real | "sqrt x" returns the square root of `x`. sqrt (~0.0) = ~0.0. If `x` &lt; 0, returns NaN. |
+| Math.tan | real &rarr; real | "tan x" returns the tangent of `x`, measured in radians. If `x` is an infinity, returns NaN. Produces infinities at various finite values, roughly corresponding to the singularities of the tangent function. |
+| Math.tanh | real &rarr; real | "tanh x" returns the hyperbolic tangent of `x`, that is, `(sinh x) / (cosh x)`. Among its properties, tanh +-0 = +-0, tanh +-infinity = +-1. |
 | Option.app | (&alpha; &rarr; unit) &rarr; &alpha; option &rarr; unit | "app f opt" applies the function `f` to the value `v` if `opt` is `SOME v`, and otherwise does nothing |
 | Option.compose | (&alpha; &rarr; &beta;) * (&gamma; &rarr; &alpha; option) &rarr; &gamma; &rarr; &beta; option | "compose (f, g) a" returns `NONE` if `g(a)` is `NONE`; otherwise, if `g(a)` is `SOME v`, it returns `SOME (f v)`. |
 | Option.composePartial | (&alpha; &rarr; &beta; option) * (&gamma; &rarr; &alpha; option) &rarr; &gamma; &rarr; &beta; option | "composePartial (f, g) a" returns `NONE` if `g(a)` is `NONE`; otherwise, if `g(a)` is `SOME v`, returns `f(v)`. |
@@ -334,6 +350,27 @@ Exception:
 | Option.flatten | &alpha; option option &rarr; &alpha; option | "flatten opt" maps `NONE` to `NONE` and `SOME v` to `v`. |
 | Option.valOf | &alpha; option &rarr; &alpha; | "valOf opt" returns `v` if `opt` is `SOME v`, otherwise raises `Option`. |
 | Real.fromInt, real | int &rarr; real | "fromInt i" converts the integer `i` to a `real` value. If the absolute value of `i` is larger than `maxFinite`, then the appropriate infinity is returned. If `i` cannot be exactly represented as a `real` value, uses current rounding mode to determine the resulting value. |
+| Real.max | real * real &rarr; real | "max (x, y)" returns the larger of the arguments. If exactly one argument is NaN, returns the other argument. If both arguments are NaN, returns NaN. |
+| Real.maxFinite | real | "maxFinite" is the maximum finite number. |
+| Real.min | real * real &rarr; real | "min (x, y)" returns the smaller of the arguments. If exactly one argument is NaN, returns the other argument. If both arguments are NaN, returns NaN. |
+| Real.minNormalPos | real | "minNormalPos" is the minimum non-zero normalized number. |
+| Real.minPos | real | "minPos" is the minimum non-zero positive number. |
+| Real.negInf | real | "negInf" is the negative infinity value. |
+| Real.posInf | real | "posInf" is the positive infinity value. |
+| Real.precision | int | "precision" is the number of digits, each between 0 and `radix` - 1, in the mantissa. Note that the precision includes the implicit (or hidden) bit used in the IEEE representation (e.g., the value of Real64.precision is 53). |
+| Real.radix | int | "radix" is the base of the representation, e.g., 2 or 10 for IEEE floating point. |
+| Real.realCeil | real &rarr; real | "realCeil r" produces `ceil(r)`, the smallest integer not less than `r`. |
+| Real.realFloor | real &rarr; real | "realFloor r" produces `floor(r)`, the largest integer not larger than `r`. |
+| Real.realMod | real &rarr; real | "realMod r" returns the fractional parts of `r`; `realMod` is equivalent to `#frac o split`. |
+| Real.realRound | real &rarr; real | "realRound r" rounds to the integer-valued real value that is nearest to `r`. In the case of a tie, it rounds to the nearest even integer. |
+| Real.realTrunc | real &rarr; real | "realTrunc r" rounds `r` towards zero. |
+| Real.rem | real * real &rarr; real | "rem (x, y)" returns the remainder `x - n * y`, where `n` = `trunc (x / y)`. The result has the same sign as `x` and has absolute value less than the absolute value of `y`. If `x` is an infinity or `y` is 0, `rem` returns NaN. If `y` is an infinity, rem returns `x`. |
+| Real.round | real &rarr; int | "round r" yields the integer nearest to `r`. In the case of a tie, it rounds to the nearest even integer. |
+| Real.sameSign | real * real &rarr; bool | "sameSign (r1, r2)" returns true if and only if `signBit r1` equals `signBit r2`. |
+| Real.sign | real &rarr; int | "sign r" returns ~1 if r is negative, 0 if r is zero, or 1 if r is positive. An infinity returns its sign; a zero returns 0 regardless of its sign. It raises Domain on NaN. |
+| Real.signBit | real &rarr; bool | "signBit r" returns true if and only if the sign of `r` (infinities, zeros, and NaN, included) is negative. |
+| Real.split | real &rarr; {frac:real, whole:real} | "split r" returns `{frac, whole}`, where `frac` and `whole` are the fractional and integral parts of `r`, respectively. Specifically, `whole` is integral, and `abs frac` &lt; 1.0. |
+| Real.trunc | real &rarr; int | "trunc r" rounds r towards zero. |
 | Relational.count, count | int list &rarr; int | "count list" returns the number of elements in `list`. Often used with `group`, for example `from e in emps group e.deptno compute countId = count`. |
 | Relational.exists | &alpha; list &rarr; bool | "exists list" returns whether the list has at least one element, for example `from d in depts where exists (from e where e.deptno = d.deptno)`. |
 | Relational.notExists | &alpha; list &rarr; bool | "notExists list" returns whether the list is empty, for example `from d in depts where notExists (from e where e.deptno = d.deptno)`. |
