@@ -162,7 +162,16 @@ public class Main {
           if (message.startsWith("Encountered \"<EOF>\" ")) {
             break;
           }
+          String code = in2.flush();
+          if (main.echo) {
+            outLines.accept(code);
+          }
           outLines.accept(message);
+          if (code.length() == 0) {
+            // If we consumed no input, we're not making progress, so we'll
+            // never finish. Abort.
+            break;
+          }
         }
       }
     }
