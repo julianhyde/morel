@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.ForeignValue;
 
@@ -141,7 +142,13 @@ public class ScriptTest {
             : ImmutableMap.of();
     try (Reader reader = TestUtils.reader(inFile);
          Writer writer = TestUtils.printWriter(outFile)) {
-      new Main(argList, reader, writer, dictionary, directory).run();
+      Main main = new Main(argList, reader, writer, dictionary, directory);
+      main.session.map.putAll(
+          ImmutableMap.of(Prop.PRINT_LENGTH, 12,
+              Prop.STRING_DEPTH, -1,
+              Prop.PRINT_DEPTH, 5,
+              Prop.LINE_WIDTH, 78));
+      main.run();
     }
     final File refFile =
         new File(inFile.getParentFile(), inFile.getName() + ".out");

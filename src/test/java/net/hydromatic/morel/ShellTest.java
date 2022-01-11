@@ -18,7 +18,10 @@
  */
 package net.hydromatic.morel;
 
+import net.hydromatic.morel.foreign.ForeignValue;
+
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.Test;
 
@@ -26,8 +29,12 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.TestUtils.findDirectory;
@@ -45,7 +52,7 @@ public class ShellTest {
 
   /** Creates a Fixture. */
   static Fixture fixture() {
-    return new FixtureImpl(Fixture.DEFAULT_ARG_LIST, "?");
+    return new FixtureImpl(Fixture.DEFAULT_ARG_LIST, "?", false);
   }
 
   static void pauseForTenMilliseconds() {
@@ -307,6 +314,54 @@ public class ShellTest {
         .assertOutput(is(expected));
   }
 
+  /** Tests a script running in raw mode.
+   * It uses {@link Main} rather than {@link Shell}. */
+  @Test void testRaw() {
+    String inputString = "val x = 2;\n"
+        + "x + 3;\n";
+    String expected = "val x = 2 : int\n"
+        + "val it = 5 : int\n";
+    fixture()
+        .withRaw(true)
+        .withInputString(inputString)
+        .assertOutput(is(expected));
+  }
+
+  @Test void testStringDepth() {
+    String inputString = "val s = \"a string that is 35 characters long\";\n"
+        + "val c = #\"a\";\n"
+        + "Sys.set (\"stringDepth\", 20);\n"
+        + "s;\n"
+        + "c;\n"
+        + "\"abc\";\n"
+        + "Sys.set (\"stringDepth\", 1);\n"
+        + "s;\n"
+        + "c;\n"
+        + "Sys.set (\"stringDepth\", 0);\n"
+        + "s;\n"
+        + "c;\n"
+        + "Sys.set (\"stringDepth\", 5);\n"
+        + "\"a\\\\b\\\"cdef\";";
+    String expected = "val s = \"a string that is 35 characters long\" : string\n"
+        + "val c = #\"a\" : char\n"
+        + "val it = () : unit\n"
+        + "val it = \"a string that is 35 #\" : string\n"
+        + "val it = #\"a\" : char\n"
+        + "val it = \"abc\" : string\n"
+        + "val it = () : unit\n"
+        + "val it = \"a#\" : string\n"
+        + "val it = #\"a\" : char\n"
+        + "val it = () : unit\n"
+        + "val it = \"#\" : string\n"
+        + "val it = #\"a\" : char\n"
+        + "val it = () : unit\n"
+        + "val it = \"a\\\\b\\\"c#\" : string\n";
+    fixture()
+        .withRaw(true)
+        .withInputString(inputString)
+        .assertOutput(is(expected));
+  }
+
   /** Fixture for testing the shell.
    *
    * @see #fixture */
@@ -331,9 +386,24 @@ public class ShellTest {
 
     Fixture withInputString(String inputString);
 
+    Fixture withRaw(boolean raw);
+
+    boolean isRaw();
+
     @SuppressWarnings("UnusedReturnValue")
     default Fixture assertOutput(Matcher<String> matcher) {
       try {
+        if (isRaw()) {
+          try (Reader reader = new StringReader(inputString());
+               StringWriter writer = new StringWriter()) {
+            final List<String> argList = ImmutableList.of();
+            final Map<String, ForeignValue> dictionary = ImmutableMap.of();
+            final File directory = new File("");
+            new Main(argList, reader, writer, dictionary, directory).run();
+            assertThat(writer.toString(), matcher);
+            return this;
+          }
+        }
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         final ByteArrayInputStream bais =
             new ByteArrayInputStream(inputString().getBytes(UTF_8));
@@ -354,10 +424,13 @@ public class ShellTest {
   private static class FixtureImpl implements Fixture {
     final ImmutableList<String> argList;
     final String inputString;
+    final boolean raw;
 
-    FixtureImpl(ImmutableList<String> argList, String inputString) {
+    FixtureImpl(ImmutableList<String> argList, String inputString,
+        boolean raw) {
       this.argList = requireNonNull(argList, "argList");
       this.inputString = requireNonNull(inputString, "inputString");
+      this.raw = raw;
     }
 
     @Override public List<String> argList() {
@@ -365,8 +438,11 @@ public class ShellTest {
     }
 
     @Override public Fixture withArgList(List<String> argList) {
-      return this.argList.equals(argList) ? this
-          : new FixtureImpl(ImmutableList.copyOf(argList), inputString);
+      if (this.argList.equals(argList)) {
+        return this;
+      }
+      ImmutableList<String> argList1 = ImmutableList.copyOf(argList);
+      return new FixtureImpl(argList1, inputString, raw);
     }
 
     @Override public String inputString() {
@@ -374,8 +450,21 @@ public class ShellTest {
     }
 
     @Override public Fixture withInputString(String inputString) {
-      return this.inputString.equals(inputString) ? this
-          : new FixtureImpl(ImmutableList.copyOf(argList), inputString);
+      if (this.inputString.equals(inputString)) {
+        return this;
+      }
+      return new FixtureImpl(argList, inputString, raw);
+    }
+
+    @Override public boolean isRaw() {
+      return raw;
+    }
+
+    @Override public Fixture withRaw(boolean raw) {
+      if (raw == this.raw) {
+        return this;
+      }
+      return new FixtureImpl(argList, inputString, raw);
     }
   }
 }
