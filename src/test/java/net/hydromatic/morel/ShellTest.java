@@ -52,7 +52,7 @@ public class ShellTest {
 
   /** Creates a Fixture. */
   static Fixture fixture() {
-    return new FixtureImpl(Fixture.DEFAULT_ARG_LIST, "?", false);
+    return new FixtureImpl(Fixture.DEFAULT_ARG_LIST, "?", false, new File(""));
   }
 
   static void pauseForTenMilliseconds() {
@@ -63,10 +63,9 @@ public class ShellTest {
     }
   }
 
-  static String directoryArg() {
+  static File getUseDirectory() {
     final File rootDirectory = findDirectory();
-    final File useDirectory = new File(rootDirectory, "use");
-    return "--directory=" + useDirectory;
+    return new File(rootDirectory, "use");
   }
 
   /** Tests {@link Shell} with empty input. */
@@ -113,15 +112,9 @@ public class ShellTest {
   @Test void testReal() {
     final String in = "val nan = Real.posInf / Real.negInf;\n"
         + "(nan, Real.posInf, Real.negInf, 0.0, ~0.0);\n";
-    final String expected = "val nan = Real.posInf / Real.negInf;\r\n"
-        + "(nan, Real.posInf, Real.negInf, 0.0, ~0.0);\r\n"
-        + "- val nan = Real.posInf / Real.negInf;\r\r\n"
-        + "\u001B[?2004lval nan = nan : real\r\n"
-        + "- (nan, Real.posInf, Real.negInf, 0.0, ~0.0);\r\r\n"
-        + "\u001B[?2004lval it = (nan,inf,~inf,0.0,~0.0) : real * real * real * real * real\r\n"
-        + "- \r\r\n"
-        + "\u001B[?2004l";
-    fixture().withInputString(in).assertOutput(is(expected));
+    final String expected = "val nan = nan : real\n"
+        + "val it = (nan,inf,~inf,0.0,~0.0) : real * real * real * real * real\n";
+    fixture().withRaw(true).withInputString(in).assertOutput(is(expected));
   }
 
   /** Tests {@link Shell} with a line that is a comment, another that is empty,
@@ -244,6 +237,23 @@ public class ShellTest {
         .withArgListPlusDirectory()
         .withInputString(in)
         .assertOutput(is(expected));
+
+    final String expectedRaw = "[opening x.sml]\n"
+        + "val x = 2 : int\n"
+        + "val y = 5 : int\n"
+        + "val it = 7 : int\n"
+        + "[opening z.sml]\n"
+        + "val z = 7 : int\n"
+        + "val x = 1 : int\n"
+        + "val it = 8 : int\n"
+        + "val it = () : unit\n"
+        + "val it = 13 : int\n"
+        + "val it = () : unit\n";
+    fixture()
+        .withRaw(true)
+        .withArgListPlusDirectory()
+        .withInputString(in)
+        .assertOutput(is(expectedRaw));
   }
 
   /** Tests the {@code use} function on an empty file. */
@@ -533,8 +543,14 @@ public class ShellTest {
     }
 
     default Fixture withArgListPlusDirectory() {
-      return withArgList(list -> plus(list, directoryArg()));
+      File useDirectory = getUseDirectory();
+      return withArgList(list -> plus(list, "--directory=" + useDirectory))
+          .withFile(useDirectory);
     }
+
+    Fixture withFile(File file);
+
+    File getFile();
 
     String inputString();
 
@@ -552,7 +568,7 @@ public class ShellTest {
                StringWriter writer = new StringWriter()) {
             final List<String> argList = ImmutableList.of();
             final Map<String, ForeignValue> dictionary = ImmutableMap.of();
-            final File directory = new File("");
+            final File directory = getFile();
             new Main(argList, reader, writer, dictionary, directory).run();
             assertThat(writer.toString(), matcher);
             return this;
@@ -579,12 +595,14 @@ public class ShellTest {
     final ImmutableList<String> argList;
     final String inputString;
     final boolean raw;
+    final File file;
 
     FixtureImpl(ImmutableList<String> argList, String inputString,
-        boolean raw) {
+        boolean raw, File file) {
       this.argList = requireNonNull(argList, "argList");
       this.inputString = requireNonNull(inputString, "inputString");
       this.raw = raw;
+      this.file = requireNonNull(file, "file");
     }
 
     @Override public List<String> argList() {
@@ -596,7 +614,18 @@ public class ShellTest {
         return this;
       }
       ImmutableList<String> argList1 = ImmutableList.copyOf(argList);
-      return new FixtureImpl(argList1, inputString, raw);
+      return new FixtureImpl(argList1, inputString, raw, file);
+    }
+
+    @Override public File getFile() {
+      return file;
+    }
+
+    @Override public Fixture withFile(File file) {
+      if (file.equals(this.file)) {
+        return this;
+      }
+      return new FixtureImpl(argList, inputString, raw, file);
     }
 
     @Override public String inputString() {
@@ -607,7 +636,7 @@ public class ShellTest {
       if (this.inputString.equals(inputString)) {
         return this;
       }
-      return new FixtureImpl(argList, inputString, raw);
+      return new FixtureImpl(argList, inputString, raw, file);
     }
 
     @Override public boolean isRaw() {
@@ -618,7 +647,7 @@ public class ShellTest {
       if (raw == this.raw) {
         return this;
       }
-      return new FixtureImpl(argList, inputString, raw);
+      return new FixtureImpl(argList, inputString, raw, file);
     }
   }
 }
