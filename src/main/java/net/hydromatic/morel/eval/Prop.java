@@ -69,7 +69,7 @@ public enum Prop {
   STRING_DEPTH("stringDepth", Integer.class, 70),
 
   /** Integer property "lineWidth" controls printing.
-   * The depth of nesting of recursive data structure at which ellipsis begins.
+   * The length at which lines are wrapped.
    *
    * <p>It is based upon the "linewidth" property in the
    * <a href="https://www.smlnj.org/doc/Compiler/pages/printcontrol.html">PRINTCONTROL signature</a>

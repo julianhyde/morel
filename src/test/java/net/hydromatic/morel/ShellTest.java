@@ -362,6 +362,160 @@ public class ShellTest {
         .assertOutput(is(expected));
   }
 
+  @Test void testPrintDepth() {
+    String inputString = "Sys.set (\"lineWidth\", 70);\n"
+        + "val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[8],i={j=[9]}}]}]};\n"
+        + "Sys.set (\"printDepth\", 6);\n"
+        + "x;"
+        + "Sys.set (\"printDepth\", 5);\n"
+        + "x;"
+        + "Sys.set (\"printDepth\", 4);\n"
+        + "x;"
+        + "Sys.set (\"printDepth\", 3);\n"
+        + "x;"
+        + "Sys.set (\"printDepth\", 2);\n"
+        + "x;"
+        + "Sys.set (\"printDepth\", 1);\n"
+        + "x;"
+        + "Sys.set (\"printDepth\", 0);\n"
+        + "x;"
+        + "Sys.set (\"printDepth\", ~1);\n"
+        + "x;";
+    // TODO: wrap types linke this:
+    // val it = ...
+    //  : {a:int, b:int list,
+    //     c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
+    String expected = "val it = () : unit\n"
+        + "val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=#,h=#,i=#}]}]}\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n"
+        + "val it = () : unit\n"
+        + "val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[#],i={j=#}}]}]}\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n"
+        + "val it = () : unit\n"
+        + "val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=#,h=#,i=#}]}]}\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n"
+        + "val it = () : unit\n"
+        + "val it = {a=1,b=[2,3],c=[{d=4,e=[#,#],f=[#]}]}\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n"
+        + "val it = () : unit\n"
+        + "val it = {a=1,b=[2,3],c=[{d=#,e=#,f=#}]}\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n"
+        + "val it = () : unit\n"
+        + "val it = {a=1,b=[#,#],c=[#]}\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n"
+        + "val it = () : unit\n"
+        + "val it = {a=#,b=#,c=#}\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n"
+        + "val it = # : unit\n"
+        + "val it = #\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n"
+        + "val it = () : unit\n"
+        + "val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[8],i={j=[9]}}]}]}\n"
+        + "  : {a:int, b:int list, c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}\n";
+    fixture()
+        .withRaw(true)
+        .withInputString(inputString)
+        .assertOutput(is(expected));
+  }
+
+  @Test void testPrintLength() {
+    String inputString = "Sys.set (\"printLength\", 10);\n"
+        + "val x = [[1,2,3], [4,5], [6], []];\n"
+        + "Sys.set (\"printLength\", 4);\n"
+        + "x;"
+        + "Sys.set (\"printLength\", 3);\n"
+        + "x;"
+        + "Sys.set (\"printLength\", 2);\n"
+        + "x;"
+        + "Sys.set (\"printLength\", 1);\n"
+        + "x;"
+        + "Sys.set (\"printLength\", 0);\n"
+        + "x;"
+        + "Sys.set (\"printLength\", ~1);\n"
+        + "x;\n";
+    String expected = "val it = () : unit\n"
+        + "val x = [[1,2,3],[4,5],[6],[]] : int list list\n"
+        + "val it = () : unit\n"
+        + "val it = [[1,2,3],[4,5],[6],[]] : int list list\n"
+        + "val it = () : unit\n"
+        + "val it = [[1,2,3],[4,5],[6],...] : int list list\n"
+        + "val it = () : unit\n"
+        + "val it = [[1,2,...],[4,5],...] : int list list\n"
+        + "val it = () : unit\n"
+        + "val it = [[1,...],...] : int list list\n"
+        + "val it = () : unit\n"
+        + "val it = [...] : int list list\n"
+        + "val it = () : unit\n"
+        + "val it = [[1,2,3],[4,5],[6],[]] : int list list\n";
+    fixture()
+        .withRaw(true)
+        .withInputString(inputString)
+        .assertOutput(is(expected));
+  }
+
+  @Test void testLineWidth() {
+    String inputString = "Sys.set (\"lineWidth\", 100);\n"
+        + "val x = [[1,2,3], [4,5], [6], []];\n"
+        + "Sys.set (\"lineWidth\", 40);\n"
+        + "x;"
+        + "Sys.set (\"lineWidth\", 20);\n"
+        + "x;"
+        + "Sys.set (\"lineWidth\", 1);\n"
+        + "x;"
+        + "Sys.set (\"lineWidth\", 0);\n"
+        + "x;"
+        + "Sys.set (\"lineWidth\", ~1);\n"
+        + "x;\n";
+    String expected = "val it = () : unit\n"
+        + "val x = [[1,2,3],[4,5],[6],[]] : int list list\n"
+        + "val it = () : unit\n"
+        + "val it = [[1,2,3],[4,5],[6],[]]\n"
+        + "  : int list list\n"
+        + "val it = () : unit\n"
+        + "val it =\n"
+        + "  [[1,2,3],[4,5],[6],\n"
+        + "   []]\n"
+        + "  : int list list\n"
+        + "val it =\n"
+        + "  ()\n"
+        + "  : unit\n"
+        + "val it =\n"
+        + "  [\n"
+        + "   [\n"
+        + "    1,\n"
+        + "    2,\n"
+        + "    3],\n"
+        + "   [\n"
+        + "    4,\n"
+        + "    5],\n"
+        + "   [\n"
+        + "    6],\n"
+        + "   []]\n"
+        + "  : int list list\n"
+        + "val it =\n"
+        + "  ()\n"
+        + "  : unit\n"
+        + "val it =\n"
+        + "  [\n"
+        + "   [\n"
+        + "    1,\n"
+        + "    2,\n"
+        + "    3],\n"
+        + "   [\n"
+        + "    4,\n"
+        + "    5],\n"
+        + "   [\n"
+        + "    6],\n"
+        + "   []]\n"
+        + "  : int list list\n"
+        + "val it = () : unit\n"
+        + "val it = [[1,2,3],[4,5],[6],[]] : int list list\n";
+    fixture()
+        .withRaw(true)
+        .withInputString(inputString)
+        .assertOutput(is(expected));
+  }
+
   /** Fixture for testing the shell.
    *
    * @see #fixture */

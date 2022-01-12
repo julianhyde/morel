@@ -16,11 +16,13 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Recursive queries and fixed-point algorithms.
- *
- * State adjacency data is based upon
- * https://writeonly.wordpress.com/2009/03/20/adjacency-list-of-states-of-the-united-states-us/
+ * Solves the Wordle word puzzle. It includes the corpus of words and
+ * solutions used by the actual web site, and has a mechanism for
+ * choosing the optimal guess given the information from previous
+ * guesses.
  *)
+Sys.set ("lineWidth", 78);
+Sys.set ("printLength", 64);
 
 (*) Set this to false in tests, true if you want to do some slow/clever stuff.
 val slow = false;

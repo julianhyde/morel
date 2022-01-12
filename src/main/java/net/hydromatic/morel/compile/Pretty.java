@@ -56,8 +56,8 @@ class Pretty {
   /** Prints a value to a buffer. */
   StringBuilder pretty(@Nonnull StringBuilder buf,
       @Nonnull Type type, @Nonnull Object value) {
-    return pretty1(buf, 0, new int[] {buf.length() + lineWidth}, 0, type,
-        value);
+    int lineEnd = lineWidth < 0 ? -1 : (buf.length() + lineWidth);
+    return pretty1(buf, 0, new int[] {lineEnd}, 0, type, value);
   }
 
   /** Prints a value to a buffer. If the first attempt goes beyond
@@ -68,7 +68,7 @@ class Pretty {
     final int start = buf.length();
     final int end = lineEnd[0];
     pretty2(buf, indent, lineEnd, depth, type, value);
-    if (buf.length() > end) {
+    if (end >= 0 && buf.length() > end) {
       // Reset to start, remove trailing whitespace, add newline
       buf.setLength(start);
       while (buf.length() > 0
@@ -80,7 +80,7 @@ class Pretty {
         buf.append("\n");
       }
 
-      lineEnd[0] = buf.length() + lineWidth;
+      lineEnd[0] = lineWidth < 0 ? -1 : (buf.length() + lineWidth);
       indent(buf, indent);
       pretty2(buf, indent, lineEnd, depth, type, value);
     }
@@ -102,11 +102,11 @@ class Pretty {
       @Nonnull Type type, @Nonnull Object value) {
     if (value instanceof TypedVal) {
       final TypedVal typedVal = (TypedVal) value;
-      pretty1(buf, indent, lineEnd, depth + 1, PrimitiveType.BOOL,
+      pretty1(buf, indent, lineEnd, depth, PrimitiveType.BOOL,
           "val " + typedVal.name + " = ");
       pretty1(buf, indent + 2, lineEnd, depth + 1, type, typedVal.o);
       buf.append(' ');
-      pretty1(buf, indent + 2, lineEnd, depth + 1, PrimitiveType.BOOL,
+      pretty1(buf, indent + 2, lineEnd, depth, PrimitiveType.BOOL,
           ": " + unqualified(typedVal.type).moniker());
       return buf;
     }
@@ -117,7 +117,7 @@ class Pretty {
       pretty1(buf, indent, lineEnd, depth, type, namedVal.o);
       return buf;
     }
-    if (depth > printDepth) {
+    if (printDepth >= 0 && depth > printDepth) {
       buf.append('#');
       return buf;
     }
@@ -262,7 +262,7 @@ class Pretty {
       if (buf.length() > start) {
         buf.append(",");
       }
-      if (o.i >= printLength) {
+      if (printLength >= 0 && o.i >= printLength) {
         pretty1(buf, indent + 1, lineEnd, depth + 1, PrimitiveType.BOOL,
             "...");
         break;
