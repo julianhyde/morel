@@ -108,6 +108,10 @@ public abstract class Codes {
           final List list = (List) arg;
           final Comparable v0 = (Comparable) list.get(0);
           final Comparable v1 = (Comparable) list.get(1);
+          if (v0 instanceof Float && Float.isNaN((Float) v0)
+              || v1 instanceof Float && Float.isNaN((Float) v1)) {
+            return false;
+          }
           return v0.compareTo(v1) < 0;
         }
       };
@@ -119,6 +123,10 @@ public abstract class Codes {
           final List list = (List) arg;
           final Comparable v0 = (Comparable) list.get(0);
           final Comparable v1 = (Comparable) list.get(1);
+          if (v0 instanceof Float && Float.isNaN((Float) v0)
+              || v1 instanceof Float && Float.isNaN((Float) v1)) {
+            return false;
+          }
           return v0.compareTo(v1) > 0;
         }
       };
@@ -130,6 +138,10 @@ public abstract class Codes {
           final List list = (List) arg;
           final Comparable v0 = (Comparable) list.get(0);
           final Comparable v1 = (Comparable) list.get(1);
+          if (v0 instanceof Float && Float.isNaN((Float) v0)
+              || v1 instanceof Float && Float.isNaN((Float) v1)) {
+            return false;
+          }
           return v0.compareTo(v1) <= 0;
         }
       };
@@ -141,6 +153,10 @@ public abstract class Codes {
           final List list = (List) arg;
           final Comparable v0 = (Comparable) list.get(0);
           final Comparable v1 = (Comparable) list.get(1);
+          if (v0 instanceof Float && Float.isNaN((Float) v0)
+              || v1 instanceof Float && Float.isNaN((Float) v1)) {
+            return false;
+          }
           return v0.compareTo(v1) >= 0;
         }
       };
@@ -1589,13 +1605,40 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#REAL_CHECK_FLOAT */
+  private static final Applicable REAL_CHECK_FLOAT =
+      new ApplicableImpl(BuiltIn.REAL_CHECK_FLOAT) {
+        @Override public Float apply(EvalEnv env, Object arg) {
+          final Float f = (Float) arg;
+          if (Float.isFinite(f)) {
+            return f;
+          }
+          if (Float.isNaN(f)) {
+            throw new MorelRuntimeException(BuiltInExn.DIV);
+          } else {
+            throw new MorelRuntimeException(BuiltInExn.OVERFLOW);
+          }
+        }
+      };
+
   /** @see BuiltIn#REAL_COMPARE */
   private static final Applicable REAL_COMPARE =
       new ApplicableImpl(BuiltIn.REAL_COMPARE) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
-          final int c = Float.compare((Float) list.get(0), (Float) list.get(1));
-          return c < 0 ? ORDER_LESS : c == 0 ? ORDER_EQUAL : ORDER_GREATER;
+          final float f0 = (float) list.get(0);
+          final float f1 = (float) list.get(1);
+          if (Float.isNaN(f0) || Float.isNaN(f1)) {
+            throw new MorelRuntimeException(BuiltInExn.UNORDERED);
+          }
+          if (f0 < f1) {
+            return ORDER_LESS;
+          }
+          if (f0 > f1) {
+            return ORDER_GREATER;
+          }
+          // In particular, compare (~0.0, 0) returns ORDER_EQUAL
+          return ORDER_EQUAL;
         }
       };
 
@@ -1624,8 +1667,34 @@ public abstract class Codes {
   /** @see BuiltIn#REAL_FROM_INT */
   private static final Applicable REAL_FROM_INT =
       new ApplicableImpl(BuiltIn.REAL_FROM_INT) {
-        @Override public Object apply(EvalEnv env, Object arg) {
+        @Override public Float apply(EvalEnv env, Object arg) {
           return (float) ((Integer) arg);
+        }
+      };
+
+  /** @see BuiltIn#REAL_IS_FINITE */
+  private static final Applicable REAL_IS_FINITE =
+      new ApplicableImpl(BuiltIn.REAL_IS_FINITE) {
+        @Override public Boolean apply(EvalEnv env, Object arg) {
+          return Float.isFinite((Float) arg);
+        }
+      };
+
+  /** @see BuiltIn#REAL_IS_NAN */
+  private static final Applicable REAL_IS_NAN =
+      new ApplicableImpl(BuiltIn.REAL_IS_NAN) {
+        @Override public Boolean apply(EvalEnv env, Object arg) {
+          return Float.isNaN((Float) arg);
+        }
+      };
+
+  /** @see BuiltIn#REAL_IS_NORMAL */
+  private static final Applicable REAL_IS_NORMAL =
+      new ApplicableImpl(BuiltIn.REAL_IS_NORMAL) {
+        @Override public Boolean apply(EvalEnv env, Object arg) {
+          final Float f = (Float) arg;
+          return Float.isFinite(f)
+              && (f >= Float.MIN_NORMAL || f <= -Float.MIN_NORMAL);
         }
       };
 
@@ -1649,7 +1718,11 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.REAL_MIN) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
-          return Math.min((float) list.get(0), (float) list.get(1));
+          final float f0 = (float) list.get(0);
+          final float f1 = (float) list.get(1);
+          return Float.isNaN(f0) ? f1
+              : Float.isNaN(f1) ? f0
+              : Math.min(f0, f1);
         }
       };
 
@@ -1658,7 +1731,11 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.REAL_MAX) {
         @Override public Object apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
-          return Math.min((float) list.get(0), (float) list.get(1));
+          final float f0 = (float) list.get(0);
+          final float f1 = (float) list.get(1);
+          return Float.isNaN(f0) ? f1
+              : Float.isNaN(f1) ? f0
+              : Math.max(f0, f1);
         }
       };
 
@@ -1798,6 +1875,16 @@ public abstract class Codes {
         @Override public Integer apply(EvalEnv env, Object arg) {
           float f = (float) arg;
           return (int) f;
+        }
+      };
+
+  /** @see BuiltIn#REAL_UNORDERED */
+  private static final Applicable REAL_UNORDERED =
+      new ApplicableImpl(BuiltIn.REAL_UNORDERED) {
+        @Override public Boolean apply(EvalEnv env, Object arg) {
+          List list = (List) arg;
+          return Float.isNaN((float) list.get(0))
+              ||  Float.isNaN((float) list.get(1));
         }
       };
 
@@ -2476,10 +2563,14 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
           .put(BuiltIn.REAL_ABS, REAL_ABS)
           .put(BuiltIn.REAL_CEIL, REAL_CEIL)
+          .put(BuiltIn.REAL_CHECK_FLOAT, REAL_CHECK_FLOAT)
           .put(BuiltIn.REAL_COMPARE, REAL_COMPARE)
           .put(BuiltIn.REAL_COPY_SIGN, REAL_COPY_SIGN)
           .put(BuiltIn.REAL_FLOOR, REAL_FLOOR)
           .put(BuiltIn.REAL_FROM_INT, REAL_FROM_INT)
+          .put(BuiltIn.REAL_IS_FINITE, REAL_IS_FINITE)
+          .put(BuiltIn.REAL_IS_NAN, REAL_IS_NAN)
+          .put(BuiltIn.REAL_IS_NORMAL, REAL_IS_NORMAL)
           .put(BuiltIn.REAL_MAX, REAL_MAX)
           .put(BuiltIn.REAL_MAX_FINITE, REAL_MAX_FINITE)
           .put(BuiltIn.REAL_MIN, REAL_MIN)
@@ -2501,6 +2592,7 @@ public abstract class Codes {
           .put(BuiltIn.REAL_SIGN_BIT, REAL_SIGN_BIT)
           .put(BuiltIn.REAL_SPLIT, REAL_SPLIT)
           .put(BuiltIn.REAL_TRUNC, REAL_TRUNC)
+          .put(BuiltIn.REAL_UNORDERED, REAL_UNORDERED)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EXISTS, RELATIONAL_EXISTS)
           .put(BuiltIn.RELATIONAL_NOT_EXISTS, RELATIONAL_NOT_EXISTS)
@@ -2956,11 +3048,14 @@ public abstract class Codes {
   /** Definitions of Morel built-in exceptions. */
   public enum BuiltInExn {
     EMPTY("List", "Empty"),
+    DIV("General", "Div"),
     DOMAIN("General", "Domain"),
     OPTION("Option", "Option"),
+    OVERFLOW("General", "Overflow"),
     ERROR("Interact", "Error"), // not in standard basis
     SIZE("General", "Size"),
-    SUBSCRIPT("General", "Subscript [subscript out of bounds]");
+    SUBSCRIPT("General", "Subscript [subscript out of bounds]"),
+    UNORDERED("IEEEReal", "Unordered");
 
     public final String structure;
     public final String mlName;

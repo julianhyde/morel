@@ -72,12 +72,13 @@ val it =
 
 Real;
 val it =
-  {abs=fn,ceil=fn,compare=fn,copySign=fn,floor=fn,fromInt=fn,max=fn,
-   maxFinite=3.4028235E38,min=fn,minNormalPos=1.17549435E-38,minPos=1.4E-45,
-   negInf=~inf,posInf=inf,precision=24,radix=2,realCeil=fn,realFloor=fn,
-   realMod=fn,realRound=fn,realTrunc=fn,rem=fn,round=fn,sameSign=fn,sign=fn,
-   signBit=fn,split=fn,trunc=fn}
-  : {abs:real -> real, ceil:real -> int, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int}
+  {abs=fn,ceil=fn,checkFloat=fn,compare=fn,copySign=fn,floor=fn,fromInt=fn,
+   isFinite=fn,isNan=fn,isNormal=fn,max=fn,maxFinite=3.4028235E38,min=fn,
+   minNormalPos=1.17549435E-38,minPos=1.4E-45,negInf=~inf,posInf=inf,
+   precision=24,radix=2,realCeil=fn,realFloor=fn,realMod=fn,realRound=fn,
+   realTrunc=fn,rem=fn,round=fn,sameSign=fn,sign=fn,signBit=fn,split=fn,
+   trunc=fn,unordered=fn}
+  : {abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int, unordered:real * real -> bool}
 
 Relational;
 val it =
@@ -1635,43 +1636,36 @@ val it =
 Real.radix;
 val it = 2 : int
 
-(*) TODO 2
 
 (*) val precision : int
 Real.precision;
 val it = 24 : int
 
-(*) TODO 53
 
 (*) val maxFinite : real
 Real.maxFinite;
 val it = 3.4028235E38 : real
 
-(*) TODO val it = 1.79769313486E308 : real
 
 (*) val minPos : real
 Real.minPos;
 val it = 1.4E-45 : real
 
-(*) TODO val it = 4.94065645841E~324 : real
 
 (*) val minNormalPos : real
 Real.minNormalPos;
 val it = 1.17549435E-38 : real
 
-(*) TODO val it = 2.22507385851E~308 : real
 
 (*) val posInf : real
 Real.posInf;
 val it = inf : real
 
-(*) TODO val it = inf : real
 
 (*) val negInf : real
 Real.negInf;
 val it = ~inf : real
 
-(*) TODO val it = ~inf : real
 
 (* "r1 + r2" and "r1 - r2" are the sum and difference of r1 and r2. If one
    argument is finite and the other infinite, the result is infinite with the
@@ -1685,19 +1679,24 @@ val it = ~2.5 : real
 1.0 + Real.posInf;
 val it = inf : real
 
-(*) TODO val it = inf : real
 Real.posInf + 2.5;
 val it = inf : real
 
-(*) TODO val it = inf : real
 Real.posInf - Real.posInf;
 val it = nan : real
 
-(*) TODO val it = nan : real
+Real.posInf + Real.posInf;
+val it = inf : real
+
 Real.posInf + Real.negInf;
 val it = nan : real
 
-(*) TODO val it = nan : real
+Real.negInf + Real.negInf;
+val it = ~inf : real
+
+5.0 - Real.negInf;
+val it = inf : real
+
 
 (* "r1 * r2" is the product of r1 and r2. The product of zero and an infinity
    produces NaN. Otherwise, if one argument is infinite, the result is infinite
@@ -1706,27 +1705,24 @@ val it = nan : real
 0.0 * Real.posInf;
 val it = nan : real
 
-(*) TODO val it = nan : real
 0.0 * Real.negInf;
 val it = nan : real
 
-(*) TODO val it = nan : real
 ~0.0 * Real.negInf;
 val it = nan : real
 
-(*) TODO val it = nan : real
 0.5 * 34.6;
 val it = 17.3 : real
 
-(*) TODO val it = 17.3 : real
 Real.posInf * 2.0;
 val it = inf : real
 
-(*) TODO val it = inf : real
 Real.posInf * Real.negInf;
 val it = ~inf : real
 
-(*) TODO val it = ~inf : real
+Real.negInf * Real.negInf;
+val it = inf : real
+
 
 (* "r1 / r2" denotes the quotient of r1 and r2. We have 0 / 0 = NaN and
    +-infinity / +-infinity = NaN. Dividing a finite, non-zero number by a zero,
@@ -1736,42 +1732,27 @@ val it = ~inf : real
 0.0 / 0.0;
 val it = nan : real
 
-(*) TODO val it = nan : real
-
 Real.posInf / Real.negInf;
 val it = nan : real
-
-(*) TODO val it = nan : real
 
 1.5 / Real.posInf;
 val it = 0.0 : real
 
-(*) TODO val it = 0.0 : real
-
 1.5 / Real.negInf;
 val it = ~0.0 : real
-
-(*) TODO val it = ~0.0 : real
 
 ~1.5 / Real.negInf;
 val it = 0.0 : real
 
-(*) TODO val it = 0.0 : real
-
 ~0.0 + ~0.0;
 val it = ~0.0 : real
-
-(*) TODO val it = ~0.0 : real
 
 ~0.0 + 0.0;
 val it = 0.0 : real
 
-(*) TODO val it = 0.0 : real
-
 0.0 + ~0.0;
 val it = 0.0 : real
 
-(*) TODO val it = 0.0 : real
 
 (* "rem (x, y)" returns the remainder x - n * y, where n = trunc (x / y). The
     result has the same sign as x and has absolute value less than the absolute
@@ -1783,31 +1764,21 @@ val it = fn : real * real -> real
 Real.rem (13.0, 5.0);
 val it = 3.0 : real
 
-(*) TODO val it = 3.0 : real
 Real.rem (~13.0, 5.0);
 val it = ~3.0 : real
 
-(*) TODO val it = ~3.0 : real
 Real.rem (13.0, ~5.0);
 val it = 3.0 : real
 
-(*) TODO val it = 3.0 : real
 Real.rem (~13.0, ~5.0);
 val it = ~3.0 : real
 
-(*) TODO val it = ~3.0 : real
 Real.rem (13.0, 0.0);
 val it = nan : real
 
-(*) TODO val it = nan : real
 Real.rem (13.0, ~0.0);
 val it = nan : real
 
-(*) TODO val it = nan : real
-Real.rem (13.0, Real.negInf);
-val it = 13.0 : real
-
-(*) TODO val it = nan : real
 (*) In the following, Morel returns 13.0 per the spec; sml-nj returns nan.
 Real.rem (13.0, Real.negInf);
 val it = 13.0 : real
@@ -1847,7 +1818,6 @@ val it = inf : real
 ~ nan;
 val it = nan : real
 
-(*) TODO val it = nan : real
 
 (* "abs r" returns the absolute value |r| of r.
     abs (+-0.0) = +0.0;
@@ -1868,7 +1838,6 @@ val it = inf : real
 Real.abs nan;
 val it = nan : real
 
-(*) TODO val it = nan : real
 Sys.plan ();
 val it = "apply(fnValue Real.abs, argCode constant(NaN))" : string
 
@@ -1884,23 +1853,21 @@ val it = fn : real * real -> real
 Real.min (3.5, 4.5);
 val it = 3.5 : real
 
-(*) TODO val it = 3.5 : real
 Real.min (3.5, ~4.5);
 val it = ~4.5 : real
 
-(*) TODO val it = ~4.5 : real
 Real.min (nan, 4.5);
-val it = nan : real
+val it = 4.5 : real
 
-(*) TODO val it = 4.5 : real
+Real.min (~5.5, nan);
+val it = ~5.5 : real
+
 Real.min (Real.posInf, 4.5);
 val it = 4.5 : real
 
-(*) TODO val it = 4.5 : real
 Real.min (Real.negInf, 4.5);
 val it = ~inf : real
 
-(*) TODO val it = ~inf : real
 Sys.plan ();
 val it =
   "apply(fnValue Real.min, argCode tuple(constant(-Infinity), constant(4.5)))"
@@ -1911,25 +1878,20 @@ Real.max;
 val it = fn : real * real -> real
 
 Real.max (3.5, 4.5);
-val it = 3.5 : real
-
-(*) TODO val it = 4.5 : real
-Real.max (3.5, ~4.5);
-val it = ~4.5 : real
-
-(*) TODO val it = 3.5 : real
-Real.max (nan, 4.5);
-val it = nan : real
-
-(*) TODO val it = 4.5 : real
-Real.max (Real.posInf, 4.5);
 val it = 4.5 : real
 
-(*) TODO val it = inf : real
-Real.max (Real.negInf, 4.5);
-val it = ~inf : real
+Real.max (3.5, ~4.5);
+val it = 3.5 : real
 
-(*) TODO val it = 4.5 : real
+Real.max (nan, 4.5);
+val it = 4.5 : real
+
+Real.max (Real.posInf, 4.5);
+val it = inf : real
+
+Real.max (Real.negInf, 4.5);
+val it = 4.5 : real
+
 Sys.plan ();
 val it =
   "apply(fnValue Real.max, argCode tuple(constant(-Infinity), constant(4.5)))"
@@ -1945,31 +1907,24 @@ val it = fn : real -> int
 Real.sign 2.0;
 val it = 1 : int
 
-(*) TODO val it = 1 : int
 Real.sign ~3.0;
 val it = ~1 : int
 
-(*) TODO val it = ~1 : int
 Real.sign 0.0;
 val it = 0 : int
 
-(*) TODO val it = 0 : int
 Real.sign ~0.0;
 val it = 0 : int
 
-(*) TODO val it = 0 : int
 Real.sign Real.posInf;
 val it = 1 : int
 
-(*) TODO val it = 1 : int
 Real.sign Real.negInf;
 val it = ~1 : int
 
-(*) TODO val it = ~1 : int
 Real.sign nan;
 uncaught exception Domain
 
-(*) TODO uncaught exception Domain [domain error]
 Sys.plan ();
 val it = "apply(fnValue Real.sign, argCode constant(NaN))" : string
 
@@ -1982,35 +1937,29 @@ val it = fn : real -> bool
 Real.signBit 2.0;
 val it = false : bool
 
-(*) TODO val it = false : bool
 Real.signBit ~3.5;
 val it = true : bool
 
-(*) TODO val it = true : bool
 Real.signBit 0.0;
 val it = false : bool
 
-(*) TODO val it = false : bool
 Real.signBit ~0.0;
 val it = true : bool
 
-(*) TODO val it = true : bool
 Real.signBit Real.posInf;
 val it = false : bool
 
-(*) TODO val it = false : bool
 Real.signBit Real.negInf;
 val it = true : bool
 
-(*) TODO val it = true : bool
+(*) Morel and SMLNJ return true, but spec would suggest false
 Real.signBit nan;
 val it = true : bool
 
-(*) TODO val it = true : bool; SMLNJ returns true but spec would suggest false
+(*) Morel and SMLNJ return false, but spec would suggest true
 Real.signBit (~nan);
 val it = false : bool
 
-(*) TODO val it = false : bool; SMLNJ returns false but spec would suggest true
 Sys.plan ();
 val it =
   "apply(fnValue Real.signBit, argCode apply(fnValue ~, argCode constant(NaN)))"
@@ -2025,23 +1974,18 @@ val it = fn : real * real -> bool
 Real.sameSign (2.0, 3.5);
 val it = true : bool
 
-(*) TODO val it = true : bool
 Real.sameSign (~2.0, Real.negInf);
 val it = true : bool
 
-(*) TODO val it = true : bool
 Real.sameSign (2.0, nan);
 val it = false : bool
 
-(*) TODO val it = false : bool
 Real.sameSign (~2.0, nan);
 val it = true : bool
 
-(*) TODO val it = true : bool
 Real.sameSign (nan, nan);
 val it = true : bool
 
-(*) TODO val it = true : bool
 Sys.plan ();
 val it =
   "apply(fnValue Real.sameSign, argCode tuple(constant(NaN), constant(NaN)))"
@@ -2055,27 +1999,21 @@ val it = fn : real * real -> real
 Real.copySign (2.0, Real.posInf);
 val it = 2.0 : real
 
-(*) TODO val it = 2.0 : real
 Real.copySign (2.0, Real.negInf);
 val it = ~2.0 : real
 
-(*) TODO val it = ~2.0 : real
 Real.copySign (2.0, nan);
 val it = ~2.0 : real
 
-(*) TODO val it = ~2.0 : real
 Real.copySign (~3.5, ~nan);
 val it = 3.5 : real
 
-(*) TODO val it = 3.5 : real
 Real.copySign (~3.5, nan);
 val it = ~3.5 : real
 
-(*) TODO val it = ~3.5 : real
 Real.copySign (2.0, ~0.0);
 val it = ~2.0 : real
 
-(*) TODO val it = ~2.0 : real
 Sys.plan ();
 val it =
   "apply(fnValue Real.copySign, argCode tuple(constant(2.0), constant(-0.0)))"
@@ -2092,31 +2030,24 @@ val it = fn : real * real -> order
 Real.compare (2.0, 2.0);
 val it = EQUAL : order
 
-(*) TODO val it = EQUAL : order
 Real.compare (~0.0, 0.0);
-val it = LESS : order
+val it = EQUAL : order
 
-(*) TODO val it = EQUAL : order
 Real.compare (~5.0, Real.posInf);
 val it = LESS : order
 
-(*) TODO val it = LESS : order
 Real.compare (~5.0, Real.negInf);
 val it = GREATER : order
 
-(*) TODO val it = GREATER : order
 Real.compare (Real.negInf, Real.negInf);
 val it = EQUAL : order
 
-(*) TODO val it = EQUAL : order
 Real.compare (Real.negInf, nan);
-val it = LESS : order
+uncaught exception Unordered
 
-(*) TODO uncaught exception Unordered
 Real.compare (nan, nan);
-val it = EQUAL : order
+uncaught exception Unordered
 
-(*) TODO uncaught exception Unordered
 Sys.plan ();
 val it =
   "apply(fnValue Real.compare, argCode tuple(constant(NaN), constant(NaN)))"
@@ -2160,9 +2091,8 @@ val it = false : bool
 3.0 < 5.0;
 val it = true : bool
 
-(*) TODO val it = true : bool
 3.0 < nan;
-val it = true : bool
+val it = false : bool
 
 (*) TODO val it = false : bool
 nan < 5.0;
@@ -2172,15 +2102,12 @@ val it = false : bool
 3.0 < Real.posInf;
 val it = true : bool
 
-(*) TODO val it = true : bool
 3.0 < Real.negInf;
 val it = false : bool
 
-(*) TODO val it = false : bool
 Real.posInf < Real.posInf;
 val it = false : bool
 
-(*) TODO val it = false : bool
 
 3.0 <= 3.0;
 val it = true : bool
@@ -2189,7 +2116,7 @@ val it = true : bool
 val it = true : bool
 
 3.0 <= nan;
-val it = true : bool
+val it = false : bool
 
 nan <= 5.0;
 val it = false : bool
@@ -2203,7 +2130,6 @@ val it = false : bool
 Real.posInf <= Real.posInf;
 val it = true : bool
 
-(*) TODO val it = true : bool
 
 3.0 > 3.0;
 val it = false : bool
@@ -2215,7 +2141,7 @@ val it = false : bool
 val it = false : bool
 
 nan > 5.0;
-val it = true : bool
+val it = false : bool
 
 3.0 > Real.posInf;
 val it = false : bool
@@ -2237,7 +2163,7 @@ val it = false : bool
 val it = false : bool
 
 nan >= 5.0;
-val it = true : bool
+val it = false : bool
 
 3.0 >= Real.posInf;
 val it = false : bool
@@ -2264,17 +2190,109 @@ val it = true : bool
 
 (* "unordered (x, y)" returns true if x and y are unordered, i.e., at least one
    of x and y is NaN. *)
-(*) TODO
+Real.unordered;
+val it = fn : real * real -> bool
+
+Real.unordered (1.0, 1.0);
+val it = false : bool
+
+Real.unordered (~1.0, 1.0);
+val it = false : bool
+
+Real.unordered (Real.negInf, Real.posInf);
+val it = false : bool
+
+Real.unordered (nan, 1.0);
+val it = true : bool
+
+Real.unordered (0.0, nan);
+val it = true : bool
+
 
 (* "isFinite x" returns true if x is neither NaN nor an infinity. *)
-(*) TODO
+Real.isFinite;
+val it = fn : real -> bool
+
+Real.isFinite 0.0;
+val it = true : bool
+
+Real.isFinite ~0.0;
+val it = true : bool
+
+Real.isFinite 1.5;
+val it = true : bool
+
+Real.isFinite Real.posInf;
+val it = false : bool
+
+Real.isFinite Real.negInf;
+val it = false : bool
+
+Real.isFinite nan;
+val it = false : bool
+
 
 (* "isNan x" returns true if x is NaN. *)
-(*) TODO
+Real.isNan;
+val it = fn : real -> bool
+
+Real.isNan 0.0;
+val it = false : bool
+
+Real.isNan ~0.0;
+val it = false : bool
+
+Real.isNan 1.5;
+val it = false : bool
+
+Real.isNan Real.posInf;
+val it = false : bool
+
+Real.isNan Real.negInf;
+val it = false : bool
+
+Real.isNan Real.minNormalPos;
+val it = false : bool
+
+Real.isNan Real.minPos;
+val it = false : bool
+
+Real.isNan nan;
+val it = true : bool
+
 
 (* "isNormal x" returns true if x is normal, i.e., neither zero, subnormal,
    infinite nor NaN. *)
-(*) TODO
+Real.isNormal;
+val it = fn : real -> bool
+
+Real.isNormal 0.0;
+val it = false : bool
+
+Real.isNormal ~0.0;
+val it = false : bool
+
+Real.isNormal 1.5;
+val it = true : bool
+
+Real.isNormal ~0.1;
+val it = true : bool
+
+Real.isNormal Real.posInf;
+val it = false : bool
+
+Real.isNormal Real.negInf;
+val it = false : bool
+
+Real.isNormal Real.minNormalPos;
+val it = true : bool
+
+Real.isNormal Real.minPos;
+val it = false : bool
+
+Real.isNormal nan;
+val it = false : bool
+
 
 (* "class x" returns the IEEEReal.float_class to which x belongs. *)
 (*) TODO
@@ -2380,7 +2398,33 @@ val it = "apply(fnValue Real.realMod, argCode constant(NaN))" : string
    however, that infinities can be converted to NaNs by some operations, so
    that if accurate exceptions are required, checks must be done after each
    operation. *)
-(*) TODO
+Real.checkFloat;
+val it = fn : real -> real
+
+Real.checkFloat 0.0;
+val it = 0.0 : real
+
+Real.checkFloat ~0.0;
+val it = ~0.0 : real
+
+Real.checkFloat 1.5;
+val it = 1.5 : real
+
+Real.checkFloat Real.posInf;
+uncaught exception Overflow
+
+Real.checkFloat Real.negInf;
+uncaught exception Overflow
+
+Real.checkFloat Real.minNormalPos;
+val it = 1.17549435E-38 : real
+
+Real.checkFloat Real.minPos;
+val it = 1.4E-45 : real
+
+Real.checkFloat nan;
+uncaught exception Div
+
 
 (* "realFloor r", "realCeil r", "realTrunc r", "realRound r" convert real values
    to integer-valued reals. realFloor produces floor(r), the largest integer not
@@ -2923,7 +2967,7 @@ val it =
    ("Option",
    "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, flatten:forall 'a. 'a option option -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
    ("Real",
-   "{abs:real -> real, ceil:real -> int, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int}"),
+   "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int, unordered:real * real -> bool}"),
    ("Relational",
    "{count:forall 'a. 'a list -> int, exists:forall 'a. 'a list -> bool, iterate:forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list, max:forall 'a. 'a list -> 'a, min:forall 'a. 'a list -> 'a, notExists:forall 'a. 'a list -> bool, only:forall 'a. 'a list -> 'a, sum:forall 'a. 'a list -> 'a}"),
    ("SOME","forall 'a. 'a -> 'a option"),
@@ -2936,7 +2980,8 @@ val it =
    ("abs","int -> int"),("count","forall 'a. 'a list -> int"),
    ("emp","{empno:int, ename:string, mgr:int} list"),
    ("env","unit -> (string * string) list"),
-   ("exists","forall 'a. 'a list -> bool"),("false","bool"),
+   ("exists","forall 'a. 'a list -> bool"),
+   ("f","real -> int * int * int * int"),("false","bool"),
    ("ignore","forall 'a. 'a -> unit"),("it","unit -> (string * string) list"),
    ("iterate",
    "forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list"),
@@ -2963,11 +3008,10 @@ val it =
    ("op o","forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c"),
    ("op union","forall 'a. 'a list * 'a list -> 'a list"),
    ("op ~","forall 'a. 'a -> 'a"),("plan","unit -> string"),
-   ("plusOne","int -> int"),("plusThree","int -> int"),
+   ("plusOne","int -> int"),("plusThree","int -> int"),("real","int -> real"),
    ("set","forall 'a. string * 'a -> unit"),("show","string -> string option"),
    ("sum","forall 'a. 'a list -> 'a"),("timesTwo","int -> int"),
-   ("true","bool"),("unset","string -> unit"),("use","string -> unit")]
-  : (string * string) list
+   ("true","bool"),...] : (string * string) list
 
 
 env;
@@ -2987,7 +3031,7 @@ val it =
    ("Option",
    "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, flatten:forall 'a. 'a option option -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
    ("Real",
-   "{abs:real -> real, ceil:real -> int, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int}"),
+   "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, trunc:real -> int, unordered:real * real -> bool}"),
    ("Relational",
    "{count:forall 'a. 'a list -> int, exists:forall 'a. 'a list -> bool, iterate:forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list, max:forall 'a. 'a list -> 'a, min:forall 'a. 'a list -> 'a, notExists:forall 'a. 'a list -> bool, only:forall 'a. 'a list -> 'a, sum:forall 'a. 'a list -> 'a}"),
    ("SOME","forall 'a. 'a -> 'a option"),
@@ -3000,7 +3044,8 @@ val it =
    ("abs","int -> int"),("count","forall 'a. 'a list -> int"),
    ("emp","{empno:int, ename:string, mgr:int} list"),
    ("env","unit -> (string * string) list"),
-   ("exists","forall 'a. 'a list -> bool"),("false","bool"),
+   ("exists","forall 'a. 'a list -> bool"),
+   ("f","real -> int * int * int * int"),("false","bool"),
    ("ignore","forall 'a. 'a -> unit"),("it","unit -> (string * string) list"),
    ("iterate",
    "forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list"),
@@ -3027,11 +3072,10 @@ val it =
    ("op o","forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c"),
    ("op union","forall 'a. 'a list * 'a list -> 'a list"),
    ("op ~","forall 'a. 'a -> 'a"),("plan","unit -> string"),
-   ("plusOne","int -> int"),("plusThree","int -> int"),
+   ("plusOne","int -> int"),("plusThree","int -> int"),("real","int -> real"),
    ("set","forall 'a. string * 'a -> unit"),("show","string -> string option"),
    ("sum","forall 'a. 'a list -> 'a"),("timesTwo","int -> int"),
-   ("true","bool"),("unset","string -> unit"),("use","string -> unit")]
-  : (string * string) list
+   ("true","bool"),...] : (string * string) list
 
 
 (*) val plan : unit -> string

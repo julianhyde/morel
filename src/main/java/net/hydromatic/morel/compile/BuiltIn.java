@@ -890,6 +890,15 @@ public enum BuiltIn {
    * <p>Returns largest int not larger than {@code r}. */
   REAL_CEIL("Real", "ceil", ts -> ts.fnType(REAL, INT)),
 
+  /** Function "Real.checkFloat", of type "real &rarr; real".
+   *
+   * <p>"checkFloat x" raises
+   * {@link net.hydromatic.morel.eval.Codes.BuiltInExn#OVERFLOW Overflow}
+   * if {@code x} is an infinity, and raises
+   * {@link net.hydromatic.morel.eval.Codes.BuiltInExn#DIV Div}
+   * if {@code x} is NaN. Otherwise, it returns its argument. */
+  REAL_CHECK_FLOAT("Real", "checkFloat", ts -> ts.fnType(REAL, REAL)),
+
   /** Function "Real.compare", of type "real * real &rarr; real".
    *
    * <p>Returns {@code x} with the sign of {@code y}, even if y is NaN. */
@@ -914,6 +923,23 @@ public enum BuiltIn {
    * the current rounding mode is used to determine the resulting value. The
    * top-level function {@code real} is an alias for {@code Real.fromInt}. */
   REAL_FROM_INT("Real", "fromInt", "real", ts -> ts.fnType(INT, REAL)),
+
+  /** Function "Real.isFinite", of type "real &rarr; bool".
+   *
+   * <p>"isFinite x" returns true if {@code x} is neither NaN nor an
+   * infinity. */
+  REAL_IS_FINITE("Real", "isFinite", ts -> ts.fnType(REAL, BOOL)),
+
+  /** Function "Real.isNan", of type "real &rarr; bool".
+   *
+   * <p>"isNan x" returns true if {@code x} is NaN. */
+  REAL_IS_NAN("Real", "isNan", ts -> ts.fnType(REAL, BOOL)),
+
+  /** Function "Real.isNormal", of type "real &rarr; bool".
+   *
+   * <p>"isNormal x" returns true if {@code x} is normal, i.e., neither zero,
+   * subnormal, infinite nor NaN. */
+  REAL_IS_NORMAL("Real", "isNormal", ts -> ts.fnType(REAL, BOOL)),
 
   /** Constant "Real.negInf", of type "real".
    *
@@ -1054,6 +1080,13 @@ public enum BuiltIn {
    *
    * <p>Returns {@code r} rounded towards zero. */
   REAL_TRUNC("Real", "trunc", ts -> ts.fnType(REAL, INT)),
+
+  /** Function "Real.unordered", of type "real * real &rarr; bool".
+   *
+   * <p>"unordered (x, y) returns true if {@code x} and {@code y} are unordered,
+   * i.e., at least one of {@code x} and {@code y} is NaN. */
+  REAL_UNORDERED("Real", "unordered", ts ->
+      ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
 
   /** Function "Relational.count", aka "count", of type "int list &rarr; int".
    *

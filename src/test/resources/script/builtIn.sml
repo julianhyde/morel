@@ -728,31 +728,24 @@ Sys.plan ();
 
 (*) val radix : int
 Real.radix;
-(*) TODO 2
 
 (*) val precision : int
 Real.precision;
-(*) TODO 53
 
 (*) val maxFinite : real
 Real.maxFinite;
-(*) TODO val it = 1.79769313486E308 : real
 
 (*) val minPos : real
 Real.minPos;
-(*) TODO val it = 4.94065645841E~324 : real
 
 (*) val minNormalPos : real
 Real.minNormalPos;
-(*) TODO val it = 2.22507385851E~308 : real
 
 (*) val posInf : real
 Real.posInf;
-(*) TODO val it = inf : real
 
 (*) val negInf : real
 Real.negInf;
-(*) TODO val it = ~inf : real
 
 (* "r1 + r2" and "r1 - r2" are the sum and difference of r1 and r2. If one
    argument is finite and the other infinite, the result is infinite with the
@@ -762,30 +755,24 @@ Real.negInf;
 1.0 + ~3.5;
 
 1.0 + Real.posInf;
-(*) TODO val it = inf : real
 Real.posInf + 2.5;
-(*) TODO val it = inf : real
 Real.posInf - Real.posInf;
-(*) TODO val it = nan : real
+Real.posInf + Real.posInf;
 Real.posInf + Real.negInf;
-(*) TODO val it = nan : real
+Real.negInf + Real.negInf;
+5.0 - Real.negInf;
 
 (* "r1 * r2" is the product of r1 and r2. The product of zero and an infinity
    produces NaN. Otherwise, if one argument is infinite, the result is infinite
    with the correct sign, e.g., -5 * (-infinity) = infinity, infinity *
    (-infinity) = -infinity. *)
 0.0 * Real.posInf;
-(*) TODO val it = nan : real
 0.0 * Real.negInf;
-(*) TODO val it = nan : real
 ~0.0 * Real.negInf;
-(*) TODO val it = nan : real
 0.5 * 34.6;
-(*) TODO val it = 17.3 : real
 Real.posInf * 2.0;
-(*) TODO val it = inf : real
 Real.posInf * Real.negInf;
-(*) TODO val it = ~inf : real
+Real.negInf * Real.negInf;
 
 (* "r1 / r2" denotes the quotient of r1 and r2. We have 0 / 0 = NaN and
    +-infinity / +-infinity = NaN. Dividing a finite, non-zero number by a zero,
@@ -793,28 +780,13 @@ Real.posInf * Real.negInf;
    (Note that zeros are signed.) A finite number divided by an infinity is 0
    with the correct sign. *)
 0.0 / 0.0;
-(*) TODO val it = nan : real
-
 Real.posInf / Real.negInf;
-(*) TODO val it = nan : real
-
 1.5 / Real.posInf;
-(*) TODO val it = 0.0 : real
-
 1.5 / Real.negInf;
-(*) TODO val it = ~0.0 : real
-
 ~1.5 / Real.negInf;
-(*) TODO val it = 0.0 : real
-
 ~0.0 + ~0.0;
-(*) TODO val it = ~0.0 : real
-
 ~0.0 + 0.0;
-(*) TODO val it = 0.0 : real
-
 0.0 + ~0.0;
-(*) TODO val it = 0.0 : real
 
 (* "rem (x, y)" returns the remainder x - n * y, where n = trunc (x / y). The
     result has the same sign as x and has absolute value less than the absolute
@@ -822,19 +794,11 @@ Real.posInf / Real.negInf;
     infinity, rem returns x. *)
 Real.rem;
 Real.rem (13.0, 5.0);
-(*) TODO val it = 3.0 : real
 Real.rem (~13.0, 5.0);
-(*) TODO val it = ~3.0 : real
 Real.rem (13.0, ~5.0);
-(*) TODO val it = 3.0 : real
 Real.rem (~13.0, ~5.0);
-(*) TODO val it = ~3.0 : real
 Real.rem (13.0, 0.0);
-(*) TODO val it = nan : real
 Real.rem (13.0, ~0.0);
-(*) TODO val it = nan : real
-Real.rem (13.0, Real.negInf);
-(*) TODO val it = nan : real
 (*) In the following, Morel returns 13.0 per the spec; sml-nj returns nan.
 Real.rem (13.0, Real.negInf);
 (*) In the following, Morel returns 13.0 per the spec; sml-nj returns nan.
@@ -856,7 +820,6 @@ Sys.plan ();
 ~ Real.posInf;
 ~ Real.negInf;
 ~ nan;
-(*) TODO val it = nan : real
 
 (* "abs r" returns the absolute value |r| of r.
     abs (+-0.0) = +0.0;
@@ -867,7 +830,6 @@ Real.abs ~5.5;
 Real.abs Real.posInf;
 Real.abs Real.negInf;
 Real.abs nan;
-(*) TODO val it = nan : real
 Sys.plan ();
 
 (* val min : real * real -> real
@@ -877,28 +839,19 @@ Sys.plan ();
    NaN, they return NaN. *)
 Real.min;
 Real.min (3.5, 4.5);
-(*) TODO val it = 3.5 : real
 Real.min (3.5, ~4.5);
-(*) TODO val it = ~4.5 : real
 Real.min (nan, 4.5);
-(*) TODO val it = 4.5 : real
+Real.min (~5.5, nan);
 Real.min (Real.posInf, 4.5);
-(*) TODO val it = 4.5 : real
 Real.min (Real.negInf, 4.5);
-(*) TODO val it = ~inf : real
 Sys.plan ();
 
 Real.max;
 Real.max (3.5, 4.5);
-(*) TODO val it = 4.5 : real
 Real.max (3.5, ~4.5);
-(*) TODO val it = 3.5 : real
 Real.max (nan, 4.5);
-(*) TODO val it = 4.5 : real
 Real.max (Real.posInf, 4.5);
-(*) TODO val it = inf : real
 Real.max (Real.negInf, 4.5);
-(*) TODO val it = 4.5 : real
 Sys.plan ();
 
 (* "sign r" returns ~1 if r is negative, 0 if r is zero, or 1 if r is positive.
@@ -906,71 +859,47 @@ Sys.plan ();
     It raises Domain on NaN. *)
 Real.sign;
 Real.sign 2.0;
-(*) TODO val it = 1 : int
 Real.sign ~3.0;
-(*) TODO val it = ~1 : int
 Real.sign 0.0;
-(*) TODO val it = 0 : int
 Real.sign ~0.0;
-(*) TODO val it = 0 : int
 Real.sign Real.posInf;
-(*) TODO val it = 1 : int
 Real.sign Real.negInf;
-(*) TODO val it = ~1 : int
 Real.sign nan;
-(*) TODO uncaught exception Domain [domain error]
 Sys.plan ();
 
 (* "signBit r" returns true if and only if the sign of r (infinities, zeros,
    and NaN, included) is negative. *)
 Real.signBit;
 Real.signBit 2.0;
-(*) TODO val it = false : bool
 Real.signBit ~3.5;
-(*) TODO val it = true : bool
 Real.signBit 0.0;
-(*) TODO val it = false : bool
 Real.signBit ~0.0;
-(*) TODO val it = true : bool
 Real.signBit Real.posInf;
-(*) TODO val it = false : bool
 Real.signBit Real.negInf;
-(*) TODO val it = true : bool
+(*) Morel and SMLNJ return true, but spec would suggest false
 Real.signBit nan;
-(*) TODO val it = true : bool; SMLNJ returns true but spec would suggest false
+(*) Morel and SMLNJ return false, but spec would suggest true
 Real.signBit (~nan);
-(*) TODO val it = false : bool; SMLNJ returns false but spec would suggest true
 Sys.plan ();
 
 (* "sameSign (r1, r2)" returns true if and only if signBit r1 equals
    signBit r2. *)
 Real.sameSign;
 Real.sameSign (2.0, 3.5);
-(*) TODO val it = true : bool
 Real.sameSign (~2.0, Real.negInf);
-(*) TODO val it = true : bool
 Real.sameSign (2.0, nan);
-(*) TODO val it = false : bool
 Real.sameSign (~2.0, nan);
-(*) TODO val it = true : bool
 Real.sameSign (nan, nan);
-(*) TODO val it = true : bool
 Sys.plan ();
 
 (* "copySign (x, y)" returns x with the sign of y, even if y is NaN. *)
 Real.copySign;
 Real.copySign (2.0, Real.posInf);
-(*) TODO val it = 2.0 : real
 Real.copySign (2.0, Real.negInf);
-(*) TODO val it = ~2.0 : real
 Real.copySign (2.0, nan);
-(*) TODO val it = ~2.0 : real
 Real.copySign (~3.5, ~nan);
-(*) TODO val it = 3.5 : real
 Real.copySign (~3.5, nan);
-(*) TODO val it = ~3.5 : real
 Real.copySign (2.0, ~0.0);
-(*) TODO val it = ~2.0 : real
 Sys.plan ();
 
 (* "val compare : real * real -> order" returns LESS, EQUAL, or GREATER
@@ -979,19 +908,12 @@ Sys.plan ();
    arguments. *)
 Real.compare;
 Real.compare (2.0, 2.0);
-(*) TODO val it = EQUAL : order
 Real.compare (~0.0, 0.0);
-(*) TODO val it = EQUAL : order
 Real.compare (~5.0, Real.posInf);
-(*) TODO val it = LESS : order
 Real.compare (~5.0, Real.negInf);
-(*) TODO val it = GREATER : order
 Real.compare (Real.negInf, Real.negInf);
-(*) TODO val it = EQUAL : order
 Real.compare (Real.negInf, nan);
-(*) TODO uncaught exception Unordered
 Real.compare (nan, nan);
-(*) TODO uncaught exception Unordered
 Sys.plan ();
 
 (* "val compareReal : real * real -> IEEEReal.real_order" behaves similarly to
@@ -1027,17 +949,13 @@ Sys.plan ();
   negation does not hold, e.g., a < b is not the same as not (a >= b). *)
 3.0 < 3.0;
 3.0 < 5.0;
-(*) TODO val it = true : bool
 3.0 < nan;
 (*) TODO val it = false : bool
 nan < 5.0;
 (*) TODO val it = false : bool
 3.0 < Real.posInf;
-(*) TODO val it = true : bool
 3.0 < Real.negInf;
-(*) TODO val it = false : bool
 Real.posInf < Real.posInf;
-(*) TODO val it = false : bool
 
 3.0 <= 3.0;
 3.0 <= 5.0;
@@ -1046,7 +964,6 @@ nan <= 5.0;
 3.0 <= Real.posInf;
 3.0 <= Real.negInf;
 Real.posInf <= Real.posInf;
-(*) TODO val it = true : bool
 
 3.0 > 3.0;
 3.0 > 5.0;
@@ -1079,17 +996,45 @@ Real.posInf >= Real.posInf;
 
 (* "unordered (x, y)" returns true if x and y are unordered, i.e., at least one
    of x and y is NaN. *)
-(*) TODO
+Real.unordered;
+Real.unordered (1.0, 1.0);
+Real.unordered (~1.0, 1.0);
+Real.unordered (Real.negInf, Real.posInf);
+Real.unordered (nan, 1.0);
+Real.unordered (0.0, nan);
 
 (* "isFinite x" returns true if x is neither NaN nor an infinity. *)
-(*) TODO
+Real.isFinite;
+Real.isFinite 0.0;
+Real.isFinite ~0.0;
+Real.isFinite 1.5;
+Real.isFinite Real.posInf;
+Real.isFinite Real.negInf;
+Real.isFinite nan;
 
 (* "isNan x" returns true if x is NaN. *)
-(*) TODO
+Real.isNan;
+Real.isNan 0.0;
+Real.isNan ~0.0;
+Real.isNan 1.5;
+Real.isNan Real.posInf;
+Real.isNan Real.negInf;
+Real.isNan Real.minNormalPos;
+Real.isNan Real.minPos;
+Real.isNan nan;
 
 (* "isNormal x" returns true if x is normal, i.e., neither zero, subnormal,
    infinite nor NaN. *)
-(*) TODO
+Real.isNormal;
+Real.isNormal 0.0;
+Real.isNormal ~0.0;
+Real.isNormal 1.5;
+Real.isNormal ~0.1;
+Real.isNormal Real.posInf;
+Real.isNormal Real.negInf;
+Real.isNormal Real.minNormalPos;
+Real.isNormal Real.minPos;
+Real.isNormal nan;
 
 (* "class x" returns the IEEEReal.float_class to which x belongs. *)
 (*) TODO
@@ -1155,7 +1100,15 @@ Sys.plan ();
    however, that infinities can be converted to NaNs by some operations, so
    that if accurate exceptions are required, checks must be done after each
    operation. *)
-(*) TODO
+Real.checkFloat;
+Real.checkFloat 0.0;
+Real.checkFloat ~0.0;
+Real.checkFloat 1.5;
+Real.checkFloat Real.posInf;
+Real.checkFloat Real.negInf;
+Real.checkFloat Real.minNormalPos;
+Real.checkFloat Real.minPos;
+Real.checkFloat nan;
 
 (* "realFloor r", "realCeil r", "realTrunc r", "realRound r" convert real values
    to integer-valued reals. realFloor produces floor(r), the largest integer not

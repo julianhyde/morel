@@ -360,10 +360,14 @@ Exception:
 | Real op ~ | real &rarr; real | "~ r" returns the negation of `r`. |
 | Real.abs | real &rarr; real | "abs r" returns the absolute value of `r`. |
 | Real.ceil | real &rarr; int | "floor r" produces `ceil(r)`, the smallest int not less than `r`. |
+| Real.checkFloat | real &rarr; real | "checkFloat x" raises `Overflow` if x is an infinity, and raises `Div` if x is NaN. Otherwise, it returns its argument. |
 | Real.compare | real * real &rarr; order | "compare (x, y)" returns `LESS`, `EQUAL`, or `GREATER` according to whether its first argument is less than, equal to, or greater than the second. It raises `IEEEReal.Unordered` on unordered arguments. |
-| Real.copySign | real * real &rarr; real | "copySign (x, y)" returns x with the sign of y, even if y is NaN. |
+| Real.copySign | real * real &rarr; real | "copySign (x, y)" returns `x` with the sign of `y`, even if `y` is NaN. |
 | Real.floor | real &rarr; int | "floor r" produces `floor(r)`, the largest int not larger than `r`. |
 | Real.fromInt, real | int &rarr; real | "fromInt i" converts the integer `i` to a `real` value. If the absolute value of `i` is larger than `maxFinite`, then the appropriate infinity is returned. If `i` cannot be exactly represented as a `real` value, uses current rounding mode to determine the resulting value. |
+| Real.isFinite | real &rarr; bool | "isFinite x" returns true if x is neither NaN nor an infinity. |
+| Real.isNan | real &rarr; bool | "isNan x" returns true if x NaN. |
+| Real.isNormal | real &rarr; bool | "isNormal x" returns true if x is normal, i.e., neither zero, subnormal, infinite nor NaN. |
 | Real.max | real * real &rarr; real | "max (x, y)" returns the larger of the arguments. If exactly one argument is NaN, returns the other argument. If both arguments are NaN, returns NaN. |
 | Real.maxFinite | real | "maxFinite" is the maximum finite number. |
 | Real.min | real * real &rarr; real | "min (x, y)" returns the smaller of the arguments. If exactly one argument is NaN, returns the other argument. If both arguments are NaN, returns NaN. |
@@ -385,6 +389,7 @@ Exception:
 | Real.signBit | real &rarr; bool | "signBit r" returns true if and only if the sign of `r` (infinities, zeros, and NaN, included) is negative. |
 | Real.split | real &rarr; {frac:real, whole:real} | "split r" returns `{frac, whole}`, where `frac` and `whole` are the fractional and integral parts of `r`, respectively. Specifically, `whole` is integral, and `abs frac` &lt; 1.0. |
 | Real.trunc | real &rarr; int | "trunc r" rounds r towards zero. |
+| Real.unordered | real * real &rarr; bool | "unordered (x, y)" returns true if x and y are unordered, i.e., at least one of x and y is NaN. |
 | Relational.count, count | int list &rarr; int | "count list" returns the number of elements in `list`. Often used with `group`, for example `from e in emps group e.deptno compute countId = count`. |
 | Relational.exists | &alpha; list &rarr; bool | "exists list" returns whether the list has at least one element, for example `from d in depts where exists (from e where e.deptno = d.deptno)`. |
 | Relational.notExists | &alpha; list &rarr; bool | "notExists list" returns whether the list is empty, for example `from d in depts where notExists (from e where e.deptno = d.deptno)`. |
@@ -442,34 +447,22 @@ Not yet implemented
 | Real op *- | real * real * real &rarr; real | "*- (a, b, c)" returns `a * b - c`. Its behavior on infinities follows from the behaviors derived from subtraction and multiplication. |
 | Real op == | real * real &rarr; bool | "x == y" returns true if and only if neither y nor x is NaN, and y and x are equal, ignoring signs on zeros. This is equivalent to the IEEE `=` operator. |
 | Real op ?= | real * real &rarr; bool | "?= (x, y)" returns true if either argument is NaN or if the arguments are bitwise equal, ignoring signs on zeros. It is equivalent to the IEEE `?=` operator. |
-| Real.checkFloat | real &rarr; real | "checkFloat x" raises `Overflow` if x is an infinity, and raises `Div` if x is NaN. Otherwise, it returns its argument. |
 | Real.class | real &rarr; IEEEReal.float_class | "class x" returns the `IEEEReal.float_class` to which x belongs. |
 | Real.compareReal | real * real &rarr; IEEEReal.real_order | "compareReal (x, y)" behaves similarly to `Real.compare` except that the values it returns have the extended type `IEEEReal.real_order` and it returns `IEEEReal.UNORDERED` on unordered arguments. |
-| Real.copySign | real * real &rarr; real | "copySign (x, y)" returns x with the sign of y, even if y is NaN. |
-| Real.floor | real &rarr; int | "floor r" produces `floor(r)`, the largest int not larger than `r`. |
 | Real.fmt | StringCvt.realfmt &rarr; real &rarr; string | "fmt spec r" converts a `real` into a `string` according to by `spec`; raises `Size` when `fmt spec` is evaluated if `spec` is an invalid precision |
 | Real.fromDecimal | IEEEReal.decimal_approx &rarr; real | "fromDecimal d" converts decimal approximation to a `real` |
-| Real.fromInt, real | int &rarr; real | "fromInt i" converts the integer `i` to a `real` value. If the absolute value of `i` is larger than `maxFinite`, then the appropriate infinity is returned. If `i` cannot be exactly represented as a `real` value, uses current rounding mode to determine the resulting value. |
 | Real.fromLarge | IEEEReal.rounding_mode &rarr; real &rarr; real | "toLarge r" converts a value of type `real` to type `LargeReal.real`. If `r` is too small or too large to be represented as a real, converts it to a zero or an infinity. |
 | Real.fromLargeInt | IntInf.int &rarr; real | See "fromInt" |
 | Real.fromManExp | {exp:int, man:real} &rarr; real | "fromManExp r" returns `{man, exp}`, where `man` and `exp` are the mantissa and exponent of r, respectively. |
 | Real.fromString | string &rarr; real option | "fromString s" scans a `real` value from a string. Returns `SOME(r)` if a `real` value can be scanned from a prefix of `s`, ignoring any initial whitespace; otherwise, it returns `NONE`. This function is equivalent to `StringCvt.scanString scan`. |
-| Real.isFinite | real &rarr; bool | "isFinite x" returns true if x is neither NaN nor an infinity. |
-| Real.isNan | real &rarr; bool | "isNan x" returns true if x NaN. |
-| Real.isNormal | real &rarr; bool | "isNormal x" returns true if x is normal, i.e., neither zero, subnormal, infinite nor NaN. |
 | Real.nextAfter | real * real &rarr; real | "nextAfter (r, t)" returns the next representable real after `r` in the direction of `t`. Thus, if `t` is less than `r`, `nextAfter` returns the largest representable floating-point number less than `r`. |
 | Real.scan | (char,'a) StringCvt.reader &rarr; (real,'a) StringCvt.reader | "scan getc strm" scans a `real` value from character source. Reads from ARG/strm/ using reader `getc`, ignoring initial whitespace. It returns `SOME(r, rest)` if successful, where `r` is the scanned `real` value and `rest` is the unused portion of the character stream `strm`. Values of too large a magnitude are represented as infinities; values of too small a magnitude are represented as zeros. |
-| Real.sign | real &rarr; int | "sign r" returns ~1 if r is negative, 0 if r is zero, or 1 if r is positive. An infinity returns its sign; a zero returns 0 regardless of its sign. It raises Domain on NaN. |
-| Real.signBit | real &rarr; bool | "signBit r" returns true if and only if the sign of `r` (infinities, zeros, and NaN, included) is negative. |
-| Real.split | real &rarr {frac:real, whole:real} | "split r" returns `{frac, whole}`, where `frac` and `whole` are the fractional and integral parts of `r`, respectively. Specifically, `whole` is integral, and `abs frac` < 1.0. |
 | Real.toDecimal | real &rarr; IEEEReal.decimal_approx | "toDecimal r" converts a `real` to a decimal approximation |
 | Real.toInt | real &rarr; IEEEReal.rounding_mode &rarr; int | "toInt mode x" converts the argument `x` to an integral type using the specified rounding mode. It raises `Overflow` if the result is not representable, in particular, if `x` is an infinity. It raises `Domain` if the input real is NaN. |
 | Real.toLarge | real &rarr; real | "toLarge r" convert a value of type `real` to type `LargeReal.real`. |
 | Real.toLargeInt | real &rarr; IEEEReal.rounding_mode &rarr; IntInf.int | See "toInt" |
 | Real.toManExp | real &rarr; {man:real, exp:int} | "toManExp r" returns `{man, exp}`, where `man` and `exp` are the mantissa and exponent of r, respectively. |
 | Real.toString | real &rarr; string | "toString r" converts a `real` into a `string`; equivalent to `(fmt (StringCvt.GEN NONE) r)` |
-| Real.trunc | real &rarr; int | "trunc r" rounds r towards zero. |
-| Real.unordered | real * real &rarr; bool | "unordered (x, y)" returns true if x and y are unordered, i.e., at least one of x and y is NaN. |
 
 ## Properties
 
