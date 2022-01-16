@@ -1869,6 +1869,17 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#REAL_TO_STRING */
+  private static final Applicable REAL_TO_STRING =
+      new ApplicableImpl(BuiltIn.REAL_TO_STRING) {
+        @Override public String apply(EvalEnv env, Object arg) {
+          // Java's formatting is reasonably close to ML's formatting,
+          // if we replace minus signs.
+          Float f = (Float) arg;
+          return floatToString(f);
+        }
+      };
+
   /** @see BuiltIn#REAL_TRUNC */
   private static final Applicable REAL_TRUNC =
       new ApplicableImpl(BuiltIn.REAL_TRUNC) {
@@ -2591,6 +2602,7 @@ public abstract class Codes {
           .put(BuiltIn.REAL_SIGN, REAL_SIGN)
           .put(BuiltIn.REAL_SIGN_BIT, REAL_SIGN_BIT)
           .put(BuiltIn.REAL_SPLIT, REAL_SPLIT)
+          .put(BuiltIn.REAL_TO_STRING, REAL_TO_STRING)
           .put(BuiltIn.REAL_TRUNC, REAL_TRUNC)
           .put(BuiltIn.REAL_UNORDERED, REAL_UNORDERED)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
@@ -2654,6 +2666,26 @@ public abstract class Codes {
       }
     });
     return ImmutableMap.copyOf(b);
+  }
+
+  public static StringBuilder appendFloat(StringBuilder buf, float f) {
+    return buf.append(floatToString(f));
+  }
+
+  /** Converts a Java {@code float} to the format expected of Standard ML
+   * {@code real} values. */
+  static String floatToString(float f) {
+    if (Float.isFinite(f)) {
+      return Float.toString(f).replace('-', '~');
+    } else if (f == Float.POSITIVE_INFINITY) {
+      return "inf";
+    } else if (f == Float.NEGATIVE_INFINITY) {
+      return "~inf";
+    } else if (Float.isNaN(f)) {
+      return "nan";
+    } else {
+      throw new AssertionError("unknown float " + f);
+    }
   }
 
   /** A code that evaluates expressions and creates a tuple with the results.

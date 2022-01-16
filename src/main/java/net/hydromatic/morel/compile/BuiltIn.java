@@ -1076,6 +1076,17 @@ public enum BuiltIn {
                   .put("whole", REAL)
                   .build()))),
 
+  /** Function "Real.toString", of type "real &rarr; string".
+   *
+   * <p>"toString r" converts reals into strings. The value returned by
+   * toString is equivalent to:
+   *
+   * <pre>{@code
+   *     (fmt (StringCvt.GEN NONE) r)
+   * }</pre>
+   */
+  REAL_TO_STRING("Real", "toString", ts -> ts.fnType(REAL, STRING)),
+
   /** Function "Real.trunc", of type "real &rarr; int".
    *
    * <p>Returns {@code r} rounded towards zero. */

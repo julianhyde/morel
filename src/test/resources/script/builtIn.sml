@@ -1237,7 +1237,28 @@ Sys.plan ();
   The value returned by toString is equivalent to:
     (fmt (StringCvt.GEN NONE) r)
  *)
-(*) TODO
+(*) TODO Real.fmt
+
+Real.toString 0.0;
+Real.toString ~0.0;
+Real.toString 0.01;
+Real.toString Real.minPos;
+Real.toString Real.minNormalPos;
+Real.toString 1234567890123.45;
+Real.toString 123456789012.3;
+Real.toString 12345678901.23;
+Real.toString 123456789.0123;
+(*) We return '1.23456E~6' but sml-nj returns '1.23456E~06'.
+Real.toString 0.00000123456;
+Real.toString 0.0000123456;
+Real.toString 0.000123456;
+Real.toString 0.0001234567;
+Real.toString 0.00012345678;
+Real.toString 0.0000123;
+Real.toString ~0.000065432;
+Real.toString nan;
+Real.toString Real.negInf;
+Real.toString Real.posInf;
 
 (* "scan getc strm", "fromString s" scan a real value from character source. The
    first version reads from ARG/strm/ using reader getc, ignoring initial
