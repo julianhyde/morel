@@ -54,6 +54,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -66,6 +68,7 @@ import static java.util.Objects.requireNonNull;
 /** Helpers for {@link Code}. */
 @SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class Codes {
+
   private Codes() {}
 
   /** Describes a {@link Code}. */
@@ -1672,6 +1675,47 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#REAL_FROM_MAN_EXP */
+  private static final Applicable REAL_FROM_MAN_EXP =
+      new ApplicableImpl(BuiltIn.REAL_FROM_MAN_EXP) {
+        @Override public Float apply(EvalEnv env, Object arg) {
+          final List list = (List) arg;
+          final int exp = (Integer) list.get(0);
+          final float mantissa = (Float) list.get(1);
+          final int exp2 = (exp - Float.MIN_EXPONENT + 1) & 0xFF;
+          final float exp3 = Float.intBitsToFloat(exp2 << 23); // 2 ^ exp
+          return mantissa * exp3;
+        }
+      };
+
+  /** Pattern for floating point numbers (after '~' has been converted to '-').
+   * ".", ".e", ".e-", ".e5", "e7" are invalid;
+   * "2.", ".5", "2.e5", "2.e" are valid. */
+  static final Pattern FLOAT_PATTERN =
+      Pattern.compile("^ *-?([0-9]*\\.)?[0-9]+([Ee]-?[0-9]+)?");
+
+  /** @see BuiltIn#REAL_FROM_STRING */
+  private static final Applicable REAL_FROM_STRING =
+      new ApplicableImpl(BuiltIn.REAL_FROM_STRING) {
+        @Override public List apply(EvalEnv env, Object arg) {
+          final String s = (String) arg;
+          final String s2 = s.replace('~', '-');
+          final Matcher matcher = FLOAT_PATTERN.matcher(s2);
+          if (!matcher.find(0)) {
+            return OPTION_NONE;
+          }
+          final String s3 = s2.substring(0, matcher.end());
+          try {
+            final float f = Float.parseFloat(s3);
+            return optionSome(f);
+          } catch (NumberFormatException e) {
+            // We should not have reached this point. The pattern
+            // should not have matched the input.
+            throw new AssertionError(e);
+          }
+        }
+      };
+
   /** @see BuiltIn#REAL_IS_FINITE */
   private static final Applicable REAL_IS_FINITE =
       new ApplicableImpl(BuiltIn.REAL_IS_FINITE) {
@@ -1866,6 +1910,19 @@ public abstract class Codes {
             whole = f - frac;
           }
           return ImmutableList.of(frac, whole);
+        }
+      };
+
+  /** @see BuiltIn#REAL_TO_MAN_EXP */
+  private static final Applicable REAL_TO_MAN_EXP =
+      new ApplicableImpl(BuiltIn.REAL_TO_MAN_EXP) {
+        @Override public List apply(EvalEnv env, Object arg) {
+          float f = (Float) arg;
+          final int bits = Float.floatToRawIntBits(f);
+          final int exp = (bits >> 23) & 0xFF;
+          final int bits2 = (bits & ~(0xFF << 23)) | (0x7E << 23);
+          final float mantissa = Float.intBitsToFloat(bits2);
+          return ImmutableList.of(exp + Float.MIN_EXPONENT, mantissa);
         }
       };
 
@@ -2579,6 +2636,8 @@ public abstract class Codes {
           .put(BuiltIn.REAL_COPY_SIGN, REAL_COPY_SIGN)
           .put(BuiltIn.REAL_FLOOR, REAL_FLOOR)
           .put(BuiltIn.REAL_FROM_INT, REAL_FROM_INT)
+          .put(BuiltIn.REAL_FROM_MAN_EXP, REAL_FROM_MAN_EXP)
+          .put(BuiltIn.REAL_FROM_STRING, REAL_FROM_STRING)
           .put(BuiltIn.REAL_IS_FINITE, REAL_IS_FINITE)
           .put(BuiltIn.REAL_IS_NAN, REAL_IS_NAN)
           .put(BuiltIn.REAL_IS_NORMAL, REAL_IS_NORMAL)
@@ -2602,6 +2661,7 @@ public abstract class Codes {
           .put(BuiltIn.REAL_SIGN, REAL_SIGN)
           .put(BuiltIn.REAL_SIGN_BIT, REAL_SIGN_BIT)
           .put(BuiltIn.REAL_SPLIT, REAL_SPLIT)
+          .put(BuiltIn.REAL_TO_MAN_EXP, REAL_TO_MAN_EXP)
           .put(BuiltIn.REAL_TO_STRING, REAL_TO_STRING)
           .put(BuiltIn.REAL_TRUNC, REAL_TRUNC)
           .put(BuiltIn.REAL_UNORDERED, REAL_UNORDERED)

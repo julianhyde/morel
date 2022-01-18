@@ -73,12 +73,12 @@ val it =
 Real;
 val it =
   {abs=fn,ceil=fn,checkFloat=fn,compare=fn,copySign=fn,floor=fn,fromInt=fn,
-   isFinite=fn,isNan=fn,isNormal=fn,max=fn,maxFinite=3.4028235E38,min=fn,
-   minNormalPos=1.17549435E~38,minPos=1.4E~45,negInf=~inf,posInf=inf,
-   precision=24,radix=2,realCeil=fn,realFloor=fn,realMod=fn,realRound=fn,
-   realTrunc=fn,rem=fn,round=fn,sameSign=fn,sign=fn,signBit=fn,split=fn,
-   toString=fn,trunc=fn,unordered=fn}
-  : {abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}
+   fromManExp=fn,fromString=fn,isFinite=fn,isNan=fn,isNormal=fn,max=fn,
+   maxFinite=3.4028235E38,min=fn,minNormalPos=1.17549435E~38,minPos=1.4E~45,
+   negInf=~inf,posInf=inf,precision=24,radix=2,realCeil=fn,realFloor=fn,
+   realMod=fn,realRound=fn,realTrunc=fn,rem=fn,round=fn,sameSign=fn,sign=fn,
+   signBit=fn,split=fn,toManExp=fn,toString=fn,trunc=fn,unordered=fn}
+  : {abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}
 
 Relational;
 val it =
@@ -530,10 +530,8 @@ val it =
 (*) val >  : string * string -> bool
 (*) val >= : string * string -> bool
 
-(*) val toString : string -> String.string
 (*) val scan       : (char, 'a) StringCvt.reader
 (*)                    -> (string, 'a) StringCvt.reader
-(*) val fromString : String.string -> string option
 (*) val toCString : string -> String.string
 (*) val fromCString : String.string -> string option
 
@@ -2304,7 +2302,80 @@ val it = false : bool
    the C library. If r is +-0, man is +-0 and exp is +0. If r is +-infinity,
    man is +-infinity and exp is unspecified. If r is NaN, man is NaN and exp
    is unspecified. *)
-(*) TODO
+Real.toManExp;
+val it = fn : real -> {exp:int, man:real}
+
+Real.toManExp 0.0;
+val it = {exp=~126,man=0.5} : {exp:int, man:real}
+
+(*) TODO {exp=~1022,man=0.0} : {exp:int, man:real}
+Sys.plan ();
+val it = "apply(fnValue Real.toManExp, argCode constant(0.0))" : string
+
+Real.toManExp 1.0;
+val it = {exp=1,man=0.5} : {exp:int, man:real}
+
+(*) TODO {exp=1,man=0.5} : {exp:int, man:real}
+Real.toManExp 2.0;
+val it = {exp=2,man=0.5} : {exp:int, man:real}
+
+(*) TODO {exp=2,man=0.5} : {exp:int, man:real}
+Real.toManExp 1.25;
+val it = {exp=1,man=0.625} : {exp:int, man:real}
+
+(*) TODO {exp=1,man=0.625} : {exp:int, man:real}
+Real.toManExp 2.5;
+val it = {exp=2,man=0.625} : {exp:int, man:real}
+
+(*) TODO {exp=2,man=0.625} : {exp:int, man:real}
+Real.toManExp ~2.5;
+val it = {exp=2,man=~0.625} : {exp:int, man:real}
+
+(*) TODO {exp=2,man=~0.625} : {exp:int, man:real}
+Real.toManExp (Real.posInf + Real.negInf);
+val it = {exp=129,man=~0.75} : {exp:int, man:real}
+
+(*) TODO {exp=1025,man=nan} : {exp:int, man:real}
+Real.toManExp Real.posInf;
+val it = {exp=129,man=0.5} : {exp:int, man:real}
+
+(*) TODO {exp=1025,man=inf} : {exp:int, man:real}
+Real.toManExp Real.negInf;
+val it = {exp=129,man=~0.5} : {exp:int, man:real}
+
+(*) TODO {exp=1025,man=~inf} : {exp:int, man:real}
+Real.toManExp Real.maxFinite;
+val it = {exp=128,man=0.99999994} : {exp:int, man:real}
+
+(*) TODO {exp=0,man=1.79769313486E308} : {exp:int, man:real}
+Real.toManExp Real.minPos;
+val it = {exp=~126,man=0.50000006} : {exp:int, man:real}
+
+(*) TODO {exp=~1022,man=2.22044604925E~16} : {exp:int, man:real}
+Real.toManExp Real.minNormalPos;
+val it = {exp=~125,man=0.5} : {exp:int, man:real}
+
+(*) TODO {exp=~1021,man=0.5} : {exp:int, man:real}
+List.map (fn x => (x, Real.toManExp x, Real.fromManExp (Real.toManExp x)))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
+val it =
+  [(1.0,{exp=1,man=0.5},1.0),(0.0,{exp=~126,man=0.5},5.877472E~39),
+   (~0.0,{exp=~126,man=~0.5},~5.877472E~39),(~1.0,{exp=1,man=~0.5},~1.0),
+   (0.5,{exp=0,man=0.5},0.5),(2.0,{exp=2,man=0.5},2.0),
+   (1.23456E~5,{exp=~16,man=0.80908126},1.23456E~5),
+   (1.23456E~6,{exp=~19,man=0.647265},1.23456E~6),
+   (1.23456E~7,{exp=~22,man=0.517812},1.23456E~7),
+   (~1.23456E~6,{exp=~19,man=~0.647265},~1.23456E~6),
+   (1.4E~45,{exp=~126,man=0.50000006},5.877472E~39),
+   (1.17549435E~38,{exp=~125,man=0.5},1.17549435E~38),
+   (3.4028235E38,{exp=128,man=0.99999994},inf),
+   (~3.4028235E38,{exp=128,man=~0.99999994},~inf),(inf,{exp=129,man=0.5},0.0),
+   (~inf,{exp=129,man=~0.5},~0.0),(nan,{exp=129,man=~0.75},~0.0)]
+  : (real * {exp:int, man:real} * real) list
+
 
 (* "fromManExp {man, exp}" returns man * radix(exp). This function is comparable
    to ldexp in the C library. Note that, even if man is a non-zero, finite real
@@ -2570,6 +2641,164 @@ Sys.plan ();
 val it = "apply(fnValue Real.fromInt, argCode constant(-2))" : string
 
 
+(* "fromManExp r" returns `{man, exp}`, where `man` and `exp` are the mantissa
+   and exponent of r, respectively. *)
+Real.fromManExp;
+val it = fn : {exp:int, man:real} -> real
+
+Real.fromManExp {man = 1.0, exp = 0};
+val it = 1.0 : real
+
+Sys.plan ();
+val it =
+  "apply(fnValue Real.fromManExp, argCode tuple(constant(0), constant(1.0)))"
+  : string
+
+Real.fromManExp {man = ~1.0, exp = 0};
+val it = ~1.0 : real
+
+Real.fromManExp {man = 1.0, exp = 2};
+val it = 4.0 : real
+
+Real.fromManExp {man = 1.0, exp = ~3};
+val it = 0.125 : real
+
+List.map (fn x => (x, Real.fromManExp (Real.toManExp x)))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
+val it =
+  [(1.0,1.0),(0.0,5.877472E~39),(~0.0,~5.877472E~39),(~1.0,~1.0),(0.5,0.5),
+   (2.0,2.0),(1.23456E~5,1.23456E~5),(1.23456E~6,1.23456E~6),
+   (1.23456E~7,1.23456E~7),(~1.23456E~6,~1.23456E~6),(1.4E~45,5.877472E~39),
+   (1.17549435E~38,1.17549435E~38),(3.4028235E38,inf),(~3.4028235E38,~inf),
+   (inf,0.0),(~inf,~0.0),(nan,~0.0)] : (real * real) list
+
+
+(*  "fromString s" scans a `real` value from a string. Returns `SOME(r)` if a
+    `real` value can be scanned from a prefix of `s`, ignoring any initial
+    whitespace; otherwise, it returns `NONE`. This function is equivalent to
+    `StringCvt.scanString scan`. *)
+Real.fromString;
+val it = fn : string -> real option
+
+Real.fromString "~0.0";
+val it = SOME ~0.0 : real option
+
+Sys.plan ();
+val it = "apply(fnValue Real.fromString, argCode constant(~0.0))" : string
+
+Real.fromString "~23.45e~06";
+val it = SOME ~2.345E~5 : real option
+
+(*) sml-nj allows both '-' and '~', both 'E' and 'e', and 0s after 'E'.
+Real.fromString "-1.5";
+val it = SOME ~1.5 : real option
+
+Real.fromString "~1.5";
+val it = SOME ~1.5 : real option
+
+Real.fromString "-1.5e-9";
+val it = SOME ~1.5E~9 : real option
+
+Real.fromString "-1.5e-09";
+val it = SOME ~1.5E~9 : real option
+
+Real.fromString "-1.5E-9";
+val it = SOME ~1.5E~9 : real option
+
+Real.fromString "-1.5E~9";
+val it = SOME ~1.5E~9 : real option
+
+Real.fromString "-1.5E~09";
+val it = SOME ~1.5E~9 : real option
+
+Real.fromString "-1.5e~09";
+val it = SOME ~1.5E~9 : real option
+
+(*) In sml-nj, ".", ".e", ".e-", "e5", ".e7" are invalid
+Real.fromString ".";
+val it = NONE : real option
+
+Real.fromString ".x";
+val it = NONE : real option
+
+Real.fromString ".e";
+val it = NONE : real option
+
+Real.fromString ".e~";
+val it = NONE : real option
+
+Real.fromString "e5";
+val it = NONE : real option
+
+Real.fromString ".e7";
+val it = NONE : real option
+
+(*) Letters and whitespace at the end, and whitespace at the start, are ignored
+Real.fromString "1.5x";
+val it = SOME 1.5 : real option
+
+Real.fromString " 1.5 x ";
+val it = SOME 1.5 : real option
+
+Real.fromString "1.5e";
+val it = SOME 1.5 : real option
+
+Real.fromString "1.5e~";
+val it = SOME 1.5 : real option
+
+Real.fromString "1.5e~0";
+val it = SOME 1.5 : real option
+
+Real.fromString "1.5e2";
+val it = SOME 150.0 : real option
+
+Real.fromString "1.5e2e";
+val it = SOME 150.0 : real option
+
+Real.fromString "1.5e2e3";
+val it = SOME 150.0 : real option
+
+Real.fromString "2e3.4";
+val it = SOME 2000.0 : real option
+
+Real.fromString "  2e3.4";
+val it = SOME 2000.0 : real option
+
+Real.fromString "2.x";
+val it = SOME 2.0 : real option
+
+(*) fromString cannot parse "inf", "nan" etc.
+Real.fromString "inf";
+val it = NONE : real option
+
+Real.fromString "~inf";
+val it = NONE : real option
+
+Real.fromString "-inf";
+val it = NONE : real option
+
+Real.fromString "nan";
+val it = NONE : real option
+
+
+List.map (fn x => (x, Real.fromString (Real.toString x)))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
+val it =
+  [(1.0,SOME 1.0),(0.0,SOME 0.0),(~0.0,SOME ~0.0),(~1.0,SOME ~1.0),
+   (0.5,SOME 0.5),(2.0,SOME 2.0),(1.23456E~5,SOME 1.23456E~5),
+   (1.23456E~6,SOME 1.23456E~6),(1.23456E~7,SOME 1.23456E~7),
+   (~1.23456E~6,SOME ~1.23456E~6),(1.4E~45,SOME 1.4E~45),
+   (1.17549435E~38,SOME 1.17549435E~38),(3.4028235E38,SOME 3.4028235E38),
+   (~3.4028235E38,SOME ~3.4028235E38),(inf,NONE),(~inf,NONE),(nan,NONE)]
+  : (real * real option) list
+
+
 (* "toLarge r", "fromLarge r" convert between values of type real and type
    LargeReal.real. If r is too small or too large to be represented as a real,
    fromLarge will convert it to a zero or an infinity.
@@ -2627,8 +2856,14 @@ val it = "apply(fnValue Real.fromInt, argCode constant(-2))" : string
  *)
 (*) TODO Real.fmt
 
+Real.toString;
+val it = fn : real -> string
+
 Real.toString 0.0;
 val it = "0.0" : string
+
+Sys.plan ();
+val it = "apply(fnValue Real.toString, argCode constant(0.0))" : string
 
 Real.toString ~0.0;
 val it = "~0.0" : string
@@ -2684,6 +2919,19 @@ val it = "~inf" : string
 
 Real.toString Real.posInf;
 val it = "inf" : string
+
+List.map (fn x => (x, Real.toString x))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
+val it =
+  [(1.0,"1.0"),(0.0,"0.0"),(~0.0,"~0.0"),(~1.0,"~1.0"),(0.5,"0.5"),(2.0,"2.0"),
+   (1.23456E~5,"1.23456E~5"),(1.23456E~6,"1.23456E~6"),
+   (1.23456E~7,"1.23456E~7"),(~1.23456E~6,"~1.23456E~6"),(1.4E~45,"1.4E~45"),
+   (1.17549435E~38,"1.17549435E~38"),(3.4028235E38,"3.4028235E38"),
+   (~3.4028235E38,"~3.4028235E38"),(inf,"inf"),(~inf,"~inf"),(nan,"nan")]
+  : (real * string) list
 
 
 (* "scan getc strm", "fromString s" scan a real value from character source. The
@@ -3026,7 +3274,7 @@ val it =
    ("Option",
    "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, flatten:forall 'a. 'a option option -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
    ("Real",
-   "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
+   "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
    ("Relational",
    "{count:forall 'a. 'a list -> int, exists:forall 'a. 'a list -> bool, iterate:forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list, max:forall 'a. 'a list -> 'a, min:forall 'a. 'a list -> 'a, notExists:forall 'a. 'a list -> bool, only:forall 'a. 'a list -> 'a, sum:forall 'a. 'a list -> 'a}"),
    ("SOME","forall 'a. 'a -> 'a option"),
@@ -3090,7 +3338,7 @@ val it =
    ("Option",
    "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, flatten:forall 'a. 'a option option -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
    ("Real",
-   "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
+   "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
    ("Relational",
    "{count:forall 'a. 'a list -> int, exists:forall 'a. 'a list -> bool, iterate:forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list, max:forall 'a. 'a list -> 'a, min:forall 'a. 'a list -> 'a, notExists:forall 'a. 'a list -> bool, only:forall 'a. 'a list -> 'a, sum:forall 'a. 'a list -> 'a}"),
    ("SOME","forall 'a. 'a -> 'a option"),

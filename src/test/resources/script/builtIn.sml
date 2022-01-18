@@ -212,10 +212,8 @@ Sys.plan ();
 (*) val >  : string * string -> bool
 (*) val >= : string * string -> bool
 
-(*) val toString : string -> String.string
 (*) val scan       : (char, 'a) StringCvt.reader
 (*)                    -> (string, 'a) StringCvt.reader
-(*) val fromString : String.string -> string option
 (*) val toCString : string -> String.string
 (*) val fromCString : String.string -> string option
 
@@ -1046,7 +1044,37 @@ Real.isNormal nan;
    the C library. If r is +-0, man is +-0 and exp is +0. If r is +-infinity,
    man is +-infinity and exp is unspecified. If r is NaN, man is NaN and exp
    is unspecified. *)
-(*) TODO
+Real.toManExp;
+Real.toManExp 0.0;
+(*) TODO {exp=~1022,man=0.0} : {exp:int, man:real}
+Sys.plan ();
+Real.toManExp 1.0;
+(*) TODO {exp=1,man=0.5} : {exp:int, man:real}
+Real.toManExp 2.0;
+(*) TODO {exp=2,man=0.5} : {exp:int, man:real}
+Real.toManExp 1.25;
+(*) TODO {exp=1,man=0.625} : {exp:int, man:real}
+Real.toManExp 2.5;
+(*) TODO {exp=2,man=0.625} : {exp:int, man:real}
+Real.toManExp ~2.5;
+(*) TODO {exp=2,man=~0.625} : {exp:int, man:real}
+Real.toManExp (Real.posInf + Real.negInf);
+(*) TODO {exp=1025,man=nan} : {exp:int, man:real}
+Real.toManExp Real.posInf;
+(*) TODO {exp=1025,man=inf} : {exp:int, man:real}
+Real.toManExp Real.negInf;
+(*) TODO {exp=1025,man=~inf} : {exp:int, man:real}
+Real.toManExp Real.maxFinite;
+(*) TODO {exp=0,man=1.79769313486E308} : {exp:int, man:real}
+Real.toManExp Real.minPos;
+(*) TODO {exp=~1022,man=2.22044604925E~16} : {exp:int, man:real}
+Real.toManExp Real.minNormalPos;
+(*) TODO {exp=~1021,man=0.5} : {exp:int, man:real}
+List.map (fn x => (x, Real.toManExp x, Real.fromManExp (Real.toManExp x)))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
 
 (* "fromManExp {man, exp}" returns man * radix(exp). This function is comparable
    to ldexp in the C library. Note that, even if man is a non-zero, finite real
@@ -1182,6 +1210,68 @@ real;
 real ~2;
 Sys.plan ();
 
+(* "fromManExp r" returns `{man, exp}`, where `man` and `exp` are the mantissa
+   and exponent of r, respectively. *)
+Real.fromManExp;
+Real.fromManExp {man = 1.0, exp = 0};
+Sys.plan ();
+Real.fromManExp {man = ~1.0, exp = 0};
+Real.fromManExp {man = 1.0, exp = 2};
+Real.fromManExp {man = 1.0, exp = ~3};
+List.map (fn x => (x, Real.fromManExp (Real.toManExp x)))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
+
+(*  "fromString s" scans a `real` value from a string. Returns `SOME(r)` if a
+    `real` value can be scanned from a prefix of `s`, ignoring any initial
+    whitespace; otherwise, it returns `NONE`. This function is equivalent to
+    `StringCvt.scanString scan`. *)
+Real.fromString;
+Real.fromString "~0.0";
+Sys.plan ();
+Real.fromString "~23.45e~06";
+(*) sml-nj allows both '-' and '~', both 'E' and 'e', and 0s after 'E'.
+Real.fromString "-1.5";
+Real.fromString "~1.5";
+Real.fromString "-1.5e-9";
+Real.fromString "-1.5e-09";
+Real.fromString "-1.5E-9";
+Real.fromString "-1.5E~9";
+Real.fromString "-1.5E~09";
+Real.fromString "-1.5e~09";
+(*) In sml-nj, ".", ".e", ".e-", "e5", ".e7" are invalid
+Real.fromString ".";
+Real.fromString ".x";
+Real.fromString ".e";
+Real.fromString ".e~";
+Real.fromString "e5";
+Real.fromString ".e7";
+(*) Letters and whitespace at the end, and whitespace at the start, are ignored
+Real.fromString "1.5x";
+Real.fromString " 1.5 x ";
+Real.fromString "1.5e";
+Real.fromString "1.5e~";
+Real.fromString "1.5e~0";
+Real.fromString "1.5e2";
+Real.fromString "1.5e2e";
+Real.fromString "1.5e2e3";
+Real.fromString "2e3.4";
+Real.fromString "  2e3.4";
+Real.fromString "2.x";
+(*) fromString cannot parse "inf", "nan" etc.
+Real.fromString "inf";
+Real.fromString "~inf";
+Real.fromString "-inf";
+Real.fromString "nan";
+
+List.map (fn x => (x, Real.fromString (Real.toString x)))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
+
 (* "toLarge r", "fromLarge r" convert between values of type real and type
    LargeReal.real. If r is too small or too large to be represented as a real,
    fromLarge will convert it to a zero or an infinity.
@@ -1239,7 +1329,9 @@ Sys.plan ();
  *)
 (*) TODO Real.fmt
 
+Real.toString;
 Real.toString 0.0;
+Sys.plan ();
 Real.toString ~0.0;
 Real.toString 0.01;
 Real.toString Real.minPos;
@@ -1259,6 +1351,11 @@ Real.toString ~0.000065432;
 Real.toString nan;
 Real.toString Real.negInf;
 Real.toString Real.posInf;
+List.map (fn x => (x, Real.toString x))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
 
 (* "scan getc strm", "fromString s" scan a real value from character source. The
    first version reads from ARG/strm/ using reader getc, ignoring initial

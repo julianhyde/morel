@@ -924,6 +924,25 @@ public enum BuiltIn {
    * top-level function {@code real} is an alias for {@code Real.fromInt}. */
   REAL_FROM_INT("Real", "fromInt", "real", ts -> ts.fnType(INT, REAL)),
 
+  /** Function "Real.fromManExp r", of type "{exp:int, man:real} &rarr; real"
+   * returns <code>{man, exp}</code>, where {@code man} and {@code exp} are the
+   * mantissa and exponent of r, respectively. */
+  REAL_FROM_MAN_EXP("Real", "fromManExp", ts ->
+      ts.fnType(
+          ts.recordType(
+              ImmutableSortedMap.<String, Type>orderedBy(RecordType.ORDERING)
+                  .put("exp", INT)
+                  .put("man", REAL)
+                  .build()), REAL)),
+
+  /** Function "Real.fromString s", of type "string &rarr; real option",
+   * scans a {@code real} value from a {@code string}. Returns {@code SOME(r)}
+   * if a {@code real} value can be scanned from a prefix of {@code s}, ignoring
+   * any initial whitespace; otherwise, it returns {@code NONE}. This function
+   * is equivalent to {@code StringCvt.scanString scan}. */
+  REAL_FROM_STRING("Real", "fromString", ts ->
+      ts.fnType(STRING, ts.option(REAL))),
+
   /** Function "Real.isFinite", of type "real &rarr; bool".
    *
    * <p>"isFinite x" returns true if {@code x} is neither NaN nor an
@@ -1059,7 +1078,7 @@ public enum BuiltIn {
 
   /** Function "Real.split", of type "real &rarr; {frac:real, whole:real}".
    *
-   * <p>Returns <code>{frac, whole}</code>, where [@code frac} and {@code whole}
+   * <p>Returns <code>{frac, whole}</code>, where {@code frac} and {@code whole}
    * are the fractional and integral parts of {@code r}, respectively.
    * Specifically, {@code whole} is integral, {@code |frac| < 1.0},
    * {@code whole} and {@code frac} have the same sign as {@code r}, and
@@ -1076,13 +1095,24 @@ public enum BuiltIn {
                   .put("whole", REAL)
                   .build()))),
 
+  /** Function "Real.fromManExp r", of type "{exp:int, man:real} &rarr; real"
+   * returns <code>{man, exp}</code>, where {@code man} and {@code exp} are the
+   * mantissa and exponent of r, respectively. */
+  REAL_TO_MAN_EXP("Real", "toManExp", ts ->
+      ts.fnType(REAL,
+          ts.recordType(
+              ImmutableSortedMap.<String, Type>orderedBy(RecordType.ORDERING)
+                  .put("exp", INT)
+                  .put("man", REAL)
+                  .build()))),
+
   /** Function "Real.toString", of type "real &rarr; string".
    *
    * <p>"toString r" converts reals into strings. The value returned by
-   * toString is equivalent to:
+   * {@code toString t} is equivalent to:
    *
    * <pre>{@code
-   *     (fmt (StringCvt.GEN NONE) r)
+   * (fmt (StringCvt.GEN NONE) r)
    * }</pre>
    */
   REAL_TO_STRING("Real", "toString", ts -> ts.fnType(REAL, STRING)),
