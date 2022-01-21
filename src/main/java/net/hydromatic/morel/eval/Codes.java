@@ -1680,8 +1680,17 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.REAL_FROM_MAN_EXP) {
         @Override public Float apply(EvalEnv env, Object arg) {
           final List list = (List) arg;
+          float mantissa = (Float) list.get(1);
+          if (!Float.isFinite(mantissa)) {
+            return mantissa;
+          }
           final int exp = (Integer) list.get(0);
-          final float mantissa = (Float) list.get(1);
+          if (exp >= Float.MAX_EXPONENT) {
+            final int exp2 = (exp - Float.MIN_EXPONENT) & 0xFF;
+            final int bits = Float.floatToRawIntBits(mantissa);
+            final int bits2 = (bits & ~(0xFF << 23)) | (exp2 << 23);
+            return Float.intBitsToFloat(bits2);
+          }
           final int exp2 = (exp - Float.MIN_EXPONENT + 1) & 0xFF;
           final float exp3 = Float.intBitsToFloat(exp2 << 23); // 2 ^ exp
           return mantissa * exp3;
@@ -1917,11 +1926,27 @@ public abstract class Codes {
   private static final Applicable REAL_TO_MAN_EXP =
       new ApplicableImpl(BuiltIn.REAL_TO_MAN_EXP) {
         @Override public List apply(EvalEnv env, Object arg) {
+          // In IEEE 32 bit floating point,
+          // bit 31 is the sign (1 bit);
+          // bits 30 - 23 are the exponent (8 bits);
+          // bits 22 - 0 are the mantissa (23 bits).
           float f = (Float) arg;
           final int bits = Float.floatToRawIntBits(f);
           final int exp = (bits >> 23) & 0xFF;
-          final int bits2 = (bits & ~(0xFF << 23)) | (0x7E << 23);
-          final float mantissa = Float.intBitsToFloat(bits2);
+          final float mantissa;
+          if (exp == 0) {
+            // Exponent = 0 indicates that f is a very small number (0 < abs(f)
+            // <= MIN_NORMAL). The mantissa has leading zeros, so we have to use
+            // a different algorithm to get shift it into range.
+            mantissa = f / Float.MIN_NORMAL;
+          } else if (Float.isFinite(f)) {
+            // Set the exponent to 126 (which is the exponent for 1.0). First
+            // remove all set bits, then OR in the value 126.
+            final int bits2 = (bits & ~(0xFF << 23)) | (0x7E << 23);
+            mantissa = Float.intBitsToFloat(bits2);
+          } else {
+            mantissa = f;
+          }
           return ImmutableList.of(exp + Float.MIN_EXPONENT, mantissa);
         }
       };

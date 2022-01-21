@@ -2092,11 +2092,9 @@ val it = true : bool
 3.0 < nan;
 val it = false : bool
 
-(*) TODO val it = false : bool
 nan < 5.0;
 val it = false : bool
 
-(*) TODO val it = false : bool
 3.0 < Real.posInf;
 val it = true : bool
 
@@ -2306,75 +2304,84 @@ Real.toManExp;
 val it = fn : real -> {exp:int, man:real}
 
 Real.toManExp 0.0;
-val it = {exp=~126,man=0.5} : {exp:int, man:real}
+val it = {exp=~126,man=0.0} : {exp:int, man:real}
 
-(*) TODO {exp=~1022,man=0.0} : {exp:int, man:real}
 Sys.plan ();
 val it = "apply(fnValue Real.toManExp, argCode constant(0.0))" : string
+
+Real.toManExp ~0.0;
+val it = {exp=~126,man=~0.0} : {exp:int, man:real}
+
+Real.toManExp 0.5;
+val it = {exp=0,man=0.5} : {exp:int, man:real}
 
 Real.toManExp 1.0;
 val it = {exp=1,man=0.5} : {exp:int, man:real}
 
-(*) TODO {exp=1,man=0.5} : {exp:int, man:real}
 Real.toManExp 2.0;
 val it = {exp=2,man=0.5} : {exp:int, man:real}
 
-(*) TODO {exp=2,man=0.5} : {exp:int, man:real}
 Real.toManExp 1.25;
 val it = {exp=1,man=0.625} : {exp:int, man:real}
 
-(*) TODO {exp=1,man=0.625} : {exp:int, man:real}
 Real.toManExp 2.5;
 val it = {exp=2,man=0.625} : {exp:int, man:real}
 
-(*) TODO {exp=2,man=0.625} : {exp:int, man:real}
 Real.toManExp ~2.5;
 val it = {exp=2,man=~0.625} : {exp:int, man:real}
 
-(*) TODO {exp=2,man=~0.625} : {exp:int, man:real}
-Real.toManExp (Real.posInf + Real.negInf);
-val it = {exp=129,man=~0.75} : {exp:int, man:real}
+Real.toManExp nan;
+val it = {exp=129,man=nan} : {exp:int, man:real}
 
-(*) TODO {exp=1025,man=nan} : {exp:int, man:real}
 Real.toManExp Real.posInf;
-val it = {exp=129,man=0.5} : {exp:int, man:real}
+val it = {exp=129,man=inf} : {exp:int, man:real}
 
-(*) TODO {exp=1025,man=inf} : {exp:int, man:real}
 Real.toManExp Real.negInf;
-val it = {exp=129,man=~0.5} : {exp:int, man:real}
+val it = {exp=129,man=~inf} : {exp:int, man:real}
 
-(*) TODO {exp=1025,man=~inf} : {exp:int, man:real}
 Real.toManExp Real.maxFinite;
 val it = {exp=128,man=0.99999994} : {exp:int, man:real}
 
-(*) TODO {exp=0,man=1.79769313486E308} : {exp:int, man:real}
-Real.toManExp Real.minPos;
-val it = {exp=~126,man=0.50000006} : {exp:int, man:real}
+Real.toManExp (~Real.maxFinite);
+val it = {exp=128,man=~0.99999994} : {exp:int, man:real}
 
-(*) TODO {exp=~1022,man=2.22044604925E~16} : {exp:int, man:real}
 Real.toManExp Real.minNormalPos;
 val it = {exp=~125,man=0.5} : {exp:int, man:real}
 
-(*) TODO {exp=~1021,man=0.5} : {exp:int, man:real}
+Real.toManExp (~Real.minNormalPos);
+val it = {exp=~125,man=~0.5} : {exp:int, man:real}
+
+Real.toManExp (Real.minNormalPos / 2.0);
+val it = {exp=~126,man=0.5} : {exp:int, man:real}
+
+Real.toManExp (Real.minNormalPos / 4.0);
+val it = {exp=~126,man=0.25} : {exp:int, man:real}
+
+Real.toManExp Real.minPos;
+val it = {exp=~126,man=1.1920929E~7} : {exp:int, man:real}
+
+Real.minNormalPos / Real.minPos;
+val it = 8388608.0 : real
+
 List.map (fn x => (x, Real.toManExp x, Real.fromManExp (Real.toManExp x)))
   [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
    0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
    Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
    Real.posInf, Real.negInf, nan];
 val it =
-  [(1.0,{exp=1,man=0.5},1.0),(0.0,{exp=~126,man=0.5},5.877472E~39),
-   (~0.0,{exp=~126,man=~0.5},~5.877472E~39),(~1.0,{exp=1,man=~0.5},~1.0),
+  [(1.0,{exp=1,man=0.5},1.0),(0.0,{exp=~126,man=0.0},0.0),
+   (~0.0,{exp=~126,man=~0.0},~0.0),(~1.0,{exp=1,man=~0.5},~1.0),
    (0.5,{exp=0,man=0.5},0.5),(2.0,{exp=2,man=0.5},2.0),
    (1.23456E~5,{exp=~16,man=0.80908126},1.23456E~5),
    (1.23456E~6,{exp=~19,man=0.647265},1.23456E~6),
    (1.23456E~7,{exp=~22,man=0.517812},1.23456E~7),
    (~1.23456E~6,{exp=~19,man=~0.647265},~1.23456E~6),
-   (1.4E~45,{exp=~126,man=0.50000006},5.877472E~39),
+   (1.4E~45,{exp=~126,man=1.1920929E~7},1.4E~45),
    (1.17549435E~38,{exp=~125,man=0.5},1.17549435E~38),
-   (3.4028235E38,{exp=128,man=0.99999994},inf),
-   (~3.4028235E38,{exp=128,man=~0.99999994},~inf),(inf,{exp=129,man=0.5},0.0),
-   (~inf,{exp=129,man=~0.5},~0.0),(nan,{exp=129,man=~0.75},~0.0)]
-  : (real * {exp:int, man:real} * real) list
+   (3.4028235E38,{exp=128,man=0.99999994},3.4028235E38),
+   (~3.4028235E38,{exp=128,man=~0.99999994},~3.4028235E38),
+   (inf,{exp=129,man=inf},inf),(~inf,{exp=129,man=~inf},~inf),
+   (nan,{exp=129,man=nan},nan)] : (real * {exp:int, man:real} * real) list
 
 
 (* "fromManExp {man, exp}" returns man * radix(exp). This function is comparable
@@ -2382,7 +2389,38 @@ val it =
    value, the result of fromManExp can be zero or infinity because of underflows
    and overflows. If man is +-0, the result is +-0. If man is +-infinity, the
    result is +-infinity. If man is NaN, the result is NaN. *)
-(*) TODO
+Real.fromManExp;
+val it = fn : {exp:int, man:real} -> real
+
+Real.fromManExp {man = 1.0, exp = 0};
+val it = 1.0 : real
+
+Sys.plan ();
+val it =
+  "apply(fnValue Real.fromManExp, argCode tuple(constant(0), constant(1.0)))"
+  : string
+
+Real.fromManExp {man = ~1.0, exp = 0};
+val it = ~1.0 : real
+
+Real.fromManExp {man = 1.0, exp = 2};
+val it = 4.0 : real
+
+Real.fromManExp {man = 1.0, exp = ~3};
+val it = 0.125 : real
+
+List.map (fn x => (x, Real.fromManExp (Real.toManExp x)))
+  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+   Real.posInf, Real.negInf, nan];
+val it =
+  [(1.0,1.0),(0.0,0.0),(~0.0,~0.0),(~1.0,~1.0),(0.5,0.5),(2.0,2.0),
+   (1.23456E~5,1.23456E~5),(1.23456E~6,1.23456E~6),(1.23456E~7,1.23456E~7),
+   (~1.23456E~6,~1.23456E~6),(1.4E~45,1.4E~45),(1.17549435E~38,1.17549435E~38),
+   (3.4028235E38,3.4028235E38),(~3.4028235E38,~3.4028235E38),(inf,inf),
+   (~inf,~inf),(nan,nan)] : (real * real) list
+
 
 (* "split r" returns {whole, frac}, where frac and whole are the fractional and
    integral parts of r, respectively. Specifically, whole is integral,
@@ -2408,7 +2446,6 @@ val it = {frac=0.75,whole=2.0} : {frac:real, whole:real}
 Real.split ~12.25;
 val it = {frac=~0.25,whole=~12.0} : {frac:real, whole:real}
 
-(*) TODO val it = {frac=~0.25,whole=~12.0} : {frac:real, whole:real}
 Real.split Real.posInf;
 val it = {frac=0.0,whole=inf} : {frac:real, whole:real}
 
@@ -2442,7 +2479,6 @@ val it = 0.75 : real
 Real.realMod ~12.25;
 val it = ~0.25 : real
 
-(*) TODO val it = ~0.25 : real
 Real.realMod Real.posInf;
 val it = 0.0 : real
 
@@ -2639,41 +2675,6 @@ val it = ~2.0 : real
 
 Sys.plan ();
 val it = "apply(fnValue Real.fromInt, argCode constant(-2))" : string
-
-
-(* "fromManExp r" returns `{man, exp}`, where `man` and `exp` are the mantissa
-   and exponent of r, respectively. *)
-Real.fromManExp;
-val it = fn : {exp:int, man:real} -> real
-
-Real.fromManExp {man = 1.0, exp = 0};
-val it = 1.0 : real
-
-Sys.plan ();
-val it =
-  "apply(fnValue Real.fromManExp, argCode tuple(constant(0), constant(1.0)))"
-  : string
-
-Real.fromManExp {man = ~1.0, exp = 0};
-val it = ~1.0 : real
-
-Real.fromManExp {man = 1.0, exp = 2};
-val it = 4.0 : real
-
-Real.fromManExp {man = 1.0, exp = ~3};
-val it = 0.125 : real
-
-List.map (fn x => (x, Real.fromManExp (Real.toManExp x)))
-  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
-   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
-   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
-   Real.posInf, Real.negInf, nan];
-val it =
-  [(1.0,1.0),(0.0,5.877472E~39),(~0.0,~5.877472E~39),(~1.0,~1.0),(0.5,0.5),
-   (2.0,2.0),(1.23456E~5,1.23456E~5),(1.23456E~6,1.23456E~6),
-   (1.23456E~7,1.23456E~7),(~1.23456E~6,~1.23456E~6),(1.4E~45,5.877472E~39),
-   (1.17549435E~38,1.17549435E~38),(3.4028235E38,inf),(~3.4028235E38,~inf),
-   (inf,0.0),(~inf,~0.0),(nan,~0.0)] : (real * real) list
 
 
 (*  "fromString s" scans a `real` value from a string. Returns `SOME(r)` if a
