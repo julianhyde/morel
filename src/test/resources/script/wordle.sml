@@ -1849,7 +1849,7 @@ fun mask (guess, answer) =
   let
     fun mask2 (m, i, [], answer) = m
       | mask2 (m, i, letter :: rest, answer) =
-          mask2 ((m * 3
+          mask2 ((m * 4
             + (if String.sub (answer, i) = letter then 2
              else if String.isSubstring (String.str letter) answer then 1
              else 0)), i + 1, rest, answer)
@@ -1865,15 +1865,15 @@ mask ("abcde", "sprue");
 mask ("abcde", "sprew");
 (*) should be 2 (last letter is correct and exists elsewhere)
 mask ("abcde", "spree");
-(*) should be 6 (second to last letter is correct)
+(*) should be 8 (second to last letter is correct)
 mask ("abcde", "spuds");
 
 fun maskToString m =
   let
     fun maskToString2 (m, s, 0) = s
       | maskToString2 (m, s, k) =
-        maskToString2 (m div 3,
-          (case (m mod 3) of
+        maskToString2 (m div 4,
+          (case (m mod 4) of
               0 => "b"
             | 1 => "y"
             | 2 => "g") ^ s,
@@ -1884,7 +1884,7 @@ fun maskToString m =
 
 maskToString 0;
 maskToString 1;
-maskToString 5;
+maskToString 6;
 maskToString (mask ("abcde", "spuds"));
 
 (* For a guess, returns the number of mask groups.
