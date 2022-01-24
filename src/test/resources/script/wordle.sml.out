@@ -1872,7 +1872,7 @@ fun mask (guess, answer) =
   let
     fun mask2 (m, i, [], answer) = m
       | mask2 (m, i, letter :: rest, answer) =
-          mask2 ((m * 3
+          mask2 ((m * 4
             + (if String.sub (answer, i) = letter then 2
              else if String.isSubstring (str letter) answer then 1
              else 0)), i + 1, rest, answer)
@@ -1898,9 +1898,9 @@ val it = 1 : int
 mask ("abcde", "spree");
 val it = 2 : int
 
-(*) should be 6 (second to last letter is correct)
+(*) should be 8 (second to last letter is correct)
 mask ("abcde", "spuds");
-val it = 6 : int
+val it = 8 : int
 
 
 Sys.set ("matchCoverageEnabled", false);
@@ -1910,8 +1910,8 @@ fun maskToString m =
   let
     fun maskToString2 (m, s, 0) = s
       | maskToString2 (m, s, k) =
-        maskToString2 (m div 3,
-          (case (m mod 3) of
+        maskToString2 (m div 4,
+          (case (m mod 4) of
               0 => "b"
             | 1 => "y"
             | 2 => "g") ^ s,
@@ -1931,7 +1931,7 @@ val it = "bbbbb" : string
 maskToString 1;
 val it = "bbbby" : string
 
-maskToString 5;
+maskToString 6;
 val it = "bbbyg" : string
 
 maskToString (mask ("abcde", "spuds"));
