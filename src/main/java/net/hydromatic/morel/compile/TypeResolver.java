@@ -929,6 +929,12 @@ public class TypeResolver {
     case WILDCARD_PAT:
       return reg(pat, null, v);
 
+    case AS_PAT:
+      final Ast.AsPat asPat = (Ast.AsPat) pat;
+      termMap.put(asPat.id, v);
+      deducePatType(env, asPat.pat, termMap, null, v);
+      return reg(pat, null, v);
+
     case TUPLE_PAT:
       final List<Unifier.Term> typeTerms = new ArrayList<>();
       final Ast.TuplePat tuple = (Ast.TuplePat) pat;

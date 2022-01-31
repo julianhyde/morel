@@ -128,6 +128,15 @@ public class Closure implements Comparable<Closure>, Applicable {
     case WILDCARD_PAT:
       return true;
 
+    case AS_PAT:
+      final Core.AsPat asPat = (Core.AsPat) pat;
+      if (bindRecurse(asPat.pat, envRef, argValue)) {
+        envRef[0] = envRef[0].bind(asPat.name, argValue);
+        return true;
+      } else {
+        return false;
+      }
+
     case BOOL_LITERAL_PAT:
     case CHAR_LITERAL_PAT:
     case STRING_LITERAL_PAT:
