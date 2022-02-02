@@ -43,6 +43,7 @@ import static net.hydromatic.morel.Matchers.isCode;
 import static net.hydromatic.morel.Matchers.isLiteral;
 import static net.hydromatic.morel.Matchers.isUnordered;
 import static net.hydromatic.morel.Matchers.list;
+import static net.hydromatic.morel.Matchers.map;
 import static net.hydromatic.morel.Matchers.throwsA;
 import static net.hydromatic.morel.Matchers.whenAppliedTo;
 import static net.hydromatic.morel.Ml.assertError;
@@ -61,7 +62,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class MainTest {
 
   @Test void testDummy() {
-    // TODO
   }
 
   @Test void testEmptyRepl() {
@@ -673,9 +673,10 @@ public class MainTest {
         .assertEval(is(6));
 
     // composite val
-    ml("val x = 1 and y = 2").assertEval(is(list(1, 2)));
-    ml("val (x, y) = (1, true)").assertEval(is(list(1, true)));
-    ml("val w as (x, y) = (2, false)").assertEval(is(list(2, false)));
+    ml("val x = 1 and y = 2").assertEval(is(map("x", 1, "y", 2)));
+    ml("val (x, y) = (1, true)").assertEval(is(map("x", 1, "y", true)));
+    ml("val w as (x, y) = (2, false)")
+        .assertEval(is(map("x", 2, "y", false, "w", list(2, false))));
 
     // let with multiple variables
     ml("let val x = 1 and y = 2 in x + y end").assertEval(is(3));

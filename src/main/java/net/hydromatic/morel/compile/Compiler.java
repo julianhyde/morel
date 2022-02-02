@@ -50,6 +50,7 @@ import org.apache.calcite.util.Util;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
@@ -622,7 +623,6 @@ public class Compiler {
       matchCodes.add(new MatchCode(ImmutableList.of(Pair.of(pat, code))));
 
       if (actions != null) {
-        final String name = pat.name;
         final Type type0 = exp.type;
         final Type type = typeSystem.ensureClosed(type0);
         actions.add((outLines, outBindings, evalEnv) -> {
@@ -631,8 +631,11 @@ public class Compiler {
           final List<String> outs = new ArrayList<>();
           try {
             final Object o = code.eval(evalEnv);
-            shredValue(pat.withType(type), o, (pat2, o2) -> {
-              Core.ValDecl v = valDecl;
+            final Map<Core.NamedPat, Object> pairs = new LinkedHashMap<>();
+            if (!Closure.bindRecurse(pat.withType(type), o, pairs::put)) {
+              throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND);
+            }
+            pairs.forEach((pat2, o2) -> {
               outBindings.accept(Binding.of(pat2, o2));
               if (!isDecl || !pat2.name.equals("it")) {
                 int stringDepth = Prop.STRING_DEPTH.intValue(session.map);

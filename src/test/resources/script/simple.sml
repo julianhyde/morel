@@ -259,7 +259,11 @@ val SOME i = NONE;
 
 val (i, true) = (1, true);
 val (i, false) = (1, true);
-(*) TODO uncaught Bind
+let
+  val (i, false) = (1, true)
+in
+  i + 1
+end;
 
 (*) Patterns
 
