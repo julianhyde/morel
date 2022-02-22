@@ -115,6 +115,34 @@ public class AlgebraTest {
                 list("ACCOUNTING", 7934)));
   }
 
+  /** As {@link #testScottJoin2()} but using the {@code join} operator. */
+  @Test void testScottJoinInner() {
+    final String ml = "from e in scott.emp\n"
+        + "  join d in scott.dept\n"
+        + "    on e.deptno = d.deptno\n"
+        + "    andalso e.empno >= 7900\n"
+        + "  yield {empno = e.empno, dname = d.dname}\n";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{dname:string, empno:int} list")
+        .assertEvalIter(
+            equalsOrdered(list("SALES", 7900), list("RESEARCH", 7902),
+                list("ACCOUNTING", 7934)));
+  }
+
+  /** Left join. */
+  @Test void testLeftJoin() {
+    final String ml = "from e in scott.emp\n"
+        + "  left join d in scott.dept\n"
+        + "    on e.deptno = d.deptno + 10\n";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{d:{deptno:int, dname:string, loc:string} option,"
+            + " e:{comm:real, deptno:int, empno:int, ename:string, "
+            + "hiredate:string, job:string, mgr:int, sal:real}} list")
+        .assertEvalSame();
+  }
+
   /** Tests that Morel gives the same answer with and without Calcite. */
   @Test void testQueryList() {
     final String[] queries = {
@@ -168,6 +196,21 @@ public class AlgebraTest {
             + "  d in scott.dept\n"
             + "where e.deptno = d.deptno\n"
             + "andalso e.job = \"CLERK\"\n"
+            + "yield d",
+        "from e in scott.emp\n"
+            + "  join d in scott.dept\n"
+            + "  on e.deptno = d.deptno\n"
+            + "  andalso e.job = \"CLERK\"\n"
+            + "yield d",
+        "from e in scott.emp\n"
+            + "  left join d in scott.dept\n"
+            + "  on e.deptno = d.deptno\n"
+            + "  andalso e.job = \"CLERK\"\n"
+            + "yield d",
+        "from e in scott.emp\n"
+            + "  right join d in scott.dept\n"
+            + "  on e.deptno = d.deptno\n"
+            + "  andalso e.job = \"CLERK\"\n"
             + "yield d",
         "from e in scott.emp,\n"
             + "  d in scott.dept\n"

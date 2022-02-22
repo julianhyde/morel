@@ -402,7 +402,10 @@ public class CalciteCompiler extends Compiler {
 
       private RelContext step(RelContext cx, int i, Core.FromStep fromStep) {
         switch (fromStep.op) {
+        case FULL_JOIN:
         case INNER_JOIN:
+        case LEFT_JOIN:
+        case RIGHT_JOIN:
           return join(cx, i, (Core.Scan) fromStep);
         case WHERE:
           return where(cx, (Core.Where) fromStep);
