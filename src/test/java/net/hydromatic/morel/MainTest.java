@@ -20,6 +20,7 @@ package net.hydromatic.morel;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.parse.ParseException;
+import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.TypeVar;
 
 import com.google.common.collect.ImmutableList;
@@ -39,6 +40,9 @@ import java.util.List;
 
 import static net.hydromatic.morel.Matchers.equalsOrdered;
 import static net.hydromatic.morel.Matchers.equalsUnordered;
+import static net.hydromatic.morel.Matchers.hasMoniker;
+import static net.hydromatic.morel.Matchers.hasTypeConstructors;
+import static net.hydromatic.morel.Matchers.instanceOfAnd;
 import static net.hydromatic.morel.Matchers.isCode;
 import static net.hydromatic.morel.Matchers.isLiteral;
 import static net.hydromatic.morel.Matchers.isUnordered;
@@ -1304,7 +1308,11 @@ public class MainTest {
         + "  NODE (LEAF 1, NODE (LEAF 2, LEAF 3))\n"
         + "end";
     ml(ml).assertParseSame()
-        .assertType("(INTEGER of int | RATIONAL of int * int | ZERO)")
+        .assertType(hasMoniker("'a tree"))
+        .assertType(
+            instanceOfAnd(DataType.class,
+                hasTypeConstructors("(INTEGER of int | RATIONAL of int * int "
+                    + "| " + "ZERO)")))
         .assertEval(is(ImmutableList.of("RATIONAL", ImmutableList.of(2, 3))));
   }
 
@@ -1712,21 +1720,21 @@ public class MainTest {
             is("cannot derive label for expression fn x => x"));
     ml("from e in [{x = 1, y = 5}]\n"
         + "  group compute sum of e.x")
-        .assertType(is("int list"));
+        .assertType(hasMoniker("int list"));
     ml("from e in [1, 2, 3]\n"
         + "  group compute sum of e")
-        .assertType(is("int list"));
+        .assertType(hasMoniker("int list"));
   }
 
   @Test void testGroupSansOf() {
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
         + "  group compute c = count")
-        .assertType(is("int list"))
+        .assertType(hasMoniker("int list"))
         .assertEvalIter(equalsUnordered(3));
 
     ml("from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]\n"
         + "  group e.a compute rows = (fn x => x)")
-        .assertType(is("{a:int, rows:{a:int, b:int} list} list"))
+        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} list} list"))
         .assertEvalIter(
             equalsUnordered(
                 list(1, list(list(1, 5), list(1, 1))),
@@ -1815,7 +1823,7 @@ public class MainTest {
                 is("'compute' step must be last in 'from'")));
     // similar, but valid
     ml("(from i in [1, 2, 3] compute s = sum of i) + 2")
-        .assertType(is("int"))
+        .assertType(hasMoniker("int"))
         .assertEval(is(8));
   }
 
@@ -1859,7 +1867,7 @@ public class MainTest {
         + " group a1 = #a r, b1 = #b r"
         + " group c2 = a1 + b1 compute s2 = sum of a1";
     ml(ml).assertParse(expected)
-        .assertType(is("{c2:int, s2:int} list"))
+        .assertType(hasMoniker("{c2:int, s2:int} list"))
         .assertEvalIter(equalsOrdered(list(5, 2)));
   }
 
@@ -1872,7 +1880,7 @@ public class MainTest {
         + " order #a r desc, #b r"
         + " yield {a = #a r, b10 = #b r * 10}";
     ml(ml).assertParse(expected)
-        .assertType(is("{a:int, b10:int} list"))
+        .assertType(hasMoniker("{a:int, b10:int} list"))
         .assertEvalIter(equalsOrdered(list(2, 10), list(1, 0), list(1, 20)));
   }
 
@@ -1880,7 +1888,7 @@ public class MainTest {
     final String ml = "from";
     final String expected = "from";
     ml(ml).assertParse(expected)
-        .assertType(is("unit list"))
+        .assertType(hasMoniker("unit list"))
         .assertEvalIter(equalsOrdered(list()));
   }
 
@@ -1888,7 +1896,7 @@ public class MainTest {
     ml("from (x, y) in [(1,2),(3,4),(3,0)] group sum = x + y")
         .assertParse("from (x, y) in [(1, 2), (3, 4), (3, 0)] "
             + "group sum = x + y")
-        .assertType(is("int list"))
+        .assertType(hasMoniker("int list"))
         .assertEvalIter(equalsUnordered(3, 7));
     ml("from {c, a, ...} in [{a=1.0,b=true,c=3},{a=1.5,b=true,c=4}]")
         .assertParse("from {a = a, c = c, ...}"
@@ -1902,7 +1910,7 @@ public class MainTest {
     final String expected = "from x in [\"a\", \"b\"], y = \"c\", z in [\"d\"]"
         + " yield x ^ y ^ z";
     ml(ml).assertParse(expected)
-        .assertType(is("string list"))
+        .assertType(hasMoniker("string list"))
         .assertEvalIter(equalsUnordered("acd", "bcd"));
   }
 
