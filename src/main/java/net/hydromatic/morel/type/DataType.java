@@ -32,7 +32,6 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.UnaryOperator;
-import javax.annotation.Nonnull;
 
 /** Algebraic type. */
 public class DataType extends ParameterizedType {
@@ -61,18 +60,6 @@ public class DataType extends ParameterizedType {
         || typeConstructors.comparator() == Ordering.natural());
   }
 
-  // TODO: move to TS
-  static ImmutableSortedMap<String, Type> copyTypeConstructors(
-      @Nonnull TypeSystem typeSystem,
-      @Nonnull SortedMap<String, Type> typeConstructors,
-      @Nonnull UnaryOperator<Type> transform) {
-    final ImmutableSortedMap.Builder<String, Type> builder =
-        ImmutableSortedMap.naturalOrder();
-    typeConstructors.forEach((k, v) ->
-        builder.put(k, v.copy(typeSystem, transform)));
-    return builder.build();
-  }
-
   public Key key() {
     return key;
   }
@@ -88,7 +75,7 @@ public class DataType extends ParameterizedType {
   @Override public DataType copy(TypeSystem typeSystem,
       UnaryOperator<Type> transform) {
     final ImmutableSortedMap<String, Type> typeConstructors =
-        copyTypeConstructors(typeSystem, this.typeConstructors, transform);
+        typeSystem.copyTypeConstructors(this.typeConstructors, transform);
     return typeConstructors.equals(this.typeConstructors)
         ? this
         : new DataType(name, key, parameterTypes, typeConstructors);

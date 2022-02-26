@@ -43,6 +43,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
+import javax.annotation.Nonnull;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
@@ -62,6 +64,16 @@ public class TypeSystem {
     for (PrimitiveType primitiveType : PrimitiveType.values()) {
       typeByName.put(primitiveType.moniker, primitiveType);
     }
+  }
+
+  ImmutableSortedMap<String, Type> copyTypeConstructors(
+      @Nonnull SortedMap<String, Type> typeConstructors,
+      @Nonnull UnaryOperator<Type> transform) {
+    final ImmutableSortedMap.Builder<String, Type> builder =
+        ImmutableSortedMap.naturalOrder();
+    typeConstructors.forEach((k, v) ->
+        builder.put(k, v.copy(this, transform)));
+    return builder.build();
   }
 
   /** Creates a binding of a type constructor value. */
@@ -158,8 +170,7 @@ public class TypeSystem {
       if (type instanceof DataType) {
         final DataType dataType = (DataType) type;
         dataType.typeConstructors =
-            DataType.copyTypeConstructors(this,
-                dataType.typeConstructors,
+            copyTypeConstructors(dataType.typeConstructors,
                 t -> t instanceof TemporaryType ? typeMap.get(t.key()) : t);
       }
     });
