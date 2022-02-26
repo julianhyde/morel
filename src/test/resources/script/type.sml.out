@@ -213,4 +213,33 @@ in
 end;
 *)
 
+(*) Record containing polymorphic functions:
+(*)  val it = {a=fn,b=fn}
+(*) : {a:'a list -> ('a * 'a list) option, b:'b list -> ('b * 'b list) option}
+{a = fn x => case x of [] => NONE | (h :: t) => SOME (h, t),
+ b = fn x => case x of [] => NONE | (h :: t) => SOME (h, t)};
+val it = {a=fn,b=fn}
+  : {a:'a list -> ('a * 'a list) option, b:'b list -> ('b * 'b list) option}
+
+
+(*) Similar, expressed via 'fun'.
+(* sml/nj gives:
+stdIn:1.2-1.66 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+val it = {a=1,b=fn} : {a:int, b:?.X1 list -> (?.X1 * ?.X1 list) option}
+*)
+let
+  fun g [] = NONE
+    | g (h :: t) = SOME (h, t)
+in
+  {a=1, b=g}
+end;
+val it = {a=1,b=fn} : {a:int, b:'a list -> ('a * 'a list) option}
+
+
+(*) as above
+{a = 1, b = let fun g [] = NONE | g (h :: t) = SOME (h, t) in g end};
+val it = {a=1,b=fn} : {a:int, b:'a list -> ('a * 'a list) option}
+
+
 (*) End type.sml

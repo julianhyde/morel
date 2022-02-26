@@ -173,7 +173,7 @@ public class TypeSystem {
       if (def.scheme) {
         key = Keys.name(def.name);
         type = def.toType(this);
-        typeByName.put(def.name, type);
+//        typeByName.put(def.name, type);
         typeByKey.put(key, type);
       } else {
         final ForallType type1 = (ForallType) lookup(def.name);
@@ -186,14 +186,18 @@ public class TypeSystem {
     Pair.forEach(defs, dataTypeMap.values(), (def, dataType) -> {
       fixer.apply(dataType, dataTypeMap);
       if (def.scheme) {
-        if (!def.types.isEmpty() && !"TODO".isEmpty()) {
+        if (!def.types.isEmpty()
+            && def.types.equals(typeVariables(def.types.size()))) {
           // We have just created an entry for the moniker (e.g. "'a option"),
           // so now create an entry for the name (e.g. "option").
+          //noinspection unchecked
           final ForallType forallType = forallType((List) def.types, dataType);
           typeByName.put(def.name, forallType);
           types.add(forallType);
         } else {
-          typeByName.put(def.name, dataType);
+          if (def.types.isEmpty()) {
+            typeByName.put(def.name, dataType);
+          }
           types.add(dataType);
         }
       } else {

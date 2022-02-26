@@ -131,7 +131,7 @@ public class DataType extends ParameterizedType {
         dataType.typeConstructors.forEach((tyConName, tyConType) ->
             typeConstructors.put(tyConName, tyConType.accept(this)));
         defs.add(
-            Keys.dataTypeDef(dataType.name, types, typeConstructors, false));
+            Keys.dataTypeDef(dataType.name, types, typeConstructors, true));
         return temporaryType;
       }
     };

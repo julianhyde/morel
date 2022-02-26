@@ -34,6 +34,7 @@ import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -219,22 +220,25 @@ class Pretty {
       //noinspection unchecked,rawtypes
       list = (List) value;
       if (dataType.name.equals("vector")) {
-        return printList(buf.append('#'), indent, lineEnd, depth,
-            argTypes.get(0), list);
+        final Type argType = Iterables.getOnlyElement(dataType.parameterTypes);
+        return printList(buf.append('#'), indent, lineEnd, depth, argType,
+            list);
       }
       final String tyConName = (String) list.get(0);
       buf.append(tyConName);
-      final Type typeConArgType0 = dataType.typeConstructors.get(tyConName);
-      final Type typeConArgType;
-      try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
-        typeConArgType =
-            typeConArgType0.substitute1(typeSystem, argTypes, transaction);
-      }
+      final Type typeConArgType = dataType.typeConstructors.get(tyConName);
+//      final Type typeConArgType;
+//      try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
+//        typeConArgType =
+//            typeConArgType0.substitute1(typeSystem, argTypes, transaction);
+//      }
       if (list.size() == 2) {
         final Object arg = list.get(1);
         buf.append(' ');
-        final boolean needParentheses = typeConArgType.op() == Op.APPLY_TYPE
-            && arg instanceof List;
+        final boolean needParentheses =
+            (typeConArgType.op() == Op.APPLY_TYPE
+                || typeConArgType.op() == Op.DATA_TYPE)
+                && arg instanceof List;
         if (needParentheses) {
           buf.append('(');
         }

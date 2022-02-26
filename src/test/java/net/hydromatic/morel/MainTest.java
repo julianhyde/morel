@@ -411,6 +411,13 @@ public class MainTest {
         + "  end\n"
         + "end";
     ml(ml).assertType("int");
+    ml("NONE").assertType("'a option");
+    ml("SOME 4").assertType("int option");
+    ml("SOME (SOME true)").assertType("bool option option");
+    ml("SOME (SOME [1, 2])")
+        .assertType("int list option option");
+    ml("SOME (SOME {a=1, b=true})")
+        .assertType("{a:int, b:bool} option option");
   }
 
   @Test void testTypeFn() {
@@ -1300,7 +1307,6 @@ public class MainTest {
     ml(ml2).assertEval(is(6));
   }
 
-  @Disabled("not working yet")
   @Test void testDatatype() {
     final String ml = "let\n"
         + "  datatype 'a tree = NODE of 'a tree * 'a tree | LEAF of 'a\n"
@@ -1311,9 +1317,16 @@ public class MainTest {
         .assertType(hasMoniker("'a tree"))
         .assertType(
             instanceOfAnd(DataType.class,
-                hasTypeConstructors("(INTEGER of int | RATIONAL of int * int "
-                    + "| " + "ZERO)")))
-        .assertEval(is(ImmutableList.of("RATIONAL", ImmutableList.of(2, 3))));
+                hasTypeConstructors("{LEAF='a, NODE='a tree * 'a tree}")))
+        .assertEval(is(node(leaf(1), node(leaf(2), leaf(3)))));
+  }
+
+  private static List<Object> leaf(Object arg) {
+    return list("LEAF", arg);
+  }
+
+  private static List<Object> node(Object... args) {
+    return list("NODE", list(args));
   }
 
   @Test void testDatatype2() {

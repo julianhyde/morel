@@ -248,7 +248,7 @@ height it;
 val it = 1 : int
 
 Node(Empty, 2, Node(Node(Empty, 3, Empty), 4, Empty));
-val it = Node (Empty,2,Node (Node #,4,Empty)) : int tree
+val it = Node (Empty,2,Node (Node (Empty,3,Empty),4,Empty)) : int tree
 
 height it;
 val it = 3 : int
@@ -268,19 +268,21 @@ val it = Node (Empty,true,"yes",Empty) : (string,bool) tree
 
 
 (*) Mutually recursive
-datatype 'a tree = Emptyx | Node of 'a * 'a forest
+datatype 'a tree = Empty | Node of 'a * 'a forest
 and      'a forest = Nil | Cons of 'a tree * 'a forest;
-datatype 'a tree = Emptyx | Node of 'a * 'a forest
+datatype 'a tree = Empty | Node of 'a * 'a forest
 datatype 'a forest = Cons of 'a tree * 'a forest | Nil
 
-Emptyx;
-val it = Emptyx : 'a tree
+Empty;
+val it = Empty : 'a tree
 
 Nil;
 val it = Nil : 'a forest
 
+(* TODO
 Node (1, Nil);
 Node (1, Cons (Empty, Nil));
+*)
 
 (*) Parentheses are required for 2 or more type parameters,
 (*) optional for 1 type parameter,

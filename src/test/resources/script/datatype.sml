@@ -128,12 +128,14 @@ Empty;
 Node (Empty, true, "yes", Empty);
 
 (*) Mutually recursive
-datatype 'a tree = Emptyx | Node of 'a * 'a forest
+datatype 'a tree = Empty | Node of 'a * 'a forest
 and      'a forest = Nil | Cons of 'a tree * 'a forest;
-Emptyx;
+Empty;
 Nil;
+(* TODO
 Node (1, Nil);
-Node (1, Cons (Emptyx, Nil));
+Node (1, Cons (Empty, Nil));
+*)
 
 (*) Parentheses are required for 2 or more type parameters,
 (*) optional for 1 type parameter,
