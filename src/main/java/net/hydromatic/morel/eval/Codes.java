@@ -2407,13 +2407,13 @@ public abstract class Codes {
 
   /** Creates an empty evaluation environment. */
   public static EvalEnv emptyEnv() {
-    return EvalEnvs.copyOf(BUILT_IN_MAP2);
+    return EMPTY_ENV;
   }
 
   /** Creates an evaluation environment that contains the bound values from a
    * compilation environment. */
   public static EvalEnv emptyEnvWith(Session session, Environment env) {
-    final Map<String, Object> map = new HashMap<>(BUILT_IN_MAP2);
+    final Map<String, Object> map = EMPTY_ENV.valueMap();
     env.forEachValue(map::put);
     map.put(EvalEnv.SESSION, session);
     return EvalEnvs.copyOf(map);
@@ -2664,8 +2664,8 @@ public abstract class Codes {
   public static final Map<Applicable, BuiltIn> BUILT_IN_MAP =
       ((Supplier<Map<Applicable, BuiltIn>>) Codes::get).get();
 
-  private static final Map<String, Object> BUILT_IN_MAP2 = // TODO: needed?
-      ((Supplier<Map<String, Object>>) Codes::get2).get();
+  private static final EvalEnv EMPTY_ENV =
+      ((Supplier<EvalEnv>) Codes::makeEmptyEnv).get();
 
   private static Map<Applicable, BuiltIn> get() {
     final IdentityHashMap<Applicable, BuiltIn> b = new IdentityHashMap<>();
@@ -2675,6 +2675,12 @@ public abstract class Codes {
       }
     });
     return ImmutableMap.copyOf(b);
+  }
+
+  private static EvalEnv makeEmptyEnv() {
+    final Map<String, Object> map = new HashMap<>();
+    populateBuiltIns(map);
+    return EvalEnvs.copyOf(map);
   }
 
   public static StringBuilder appendFloat(StringBuilder buf, float f) {
@@ -2695,12 +2701,6 @@ public abstract class Codes {
     } else {
       throw new AssertionError("unknown float " + f);
     }
-  }
-
-  private static Map<String, Object> get2() {
-    final Map<String, Object> map = new HashMap<>();
-    populateBuiltIns(map);
-    return ImmutableMap.copyOf(map);
   }
 
   /** A code that evaluates expressions and creates a tuple with the results.
