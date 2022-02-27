@@ -23,7 +23,6 @@ import net.hydromatic.morel.ast.Op;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Ordering;
-
 import org.apache.calcite.util.Util;
 
 import java.util.ArrayList;
@@ -80,10 +79,11 @@ public class DataType extends ParameterizedType {
         Util.transform(this.parameterTypes, transform);
     final ImmutableSortedMap<String, Type> typeConstructors =
         typeSystem.copyTypeConstructors(this.typeConstructors, transform);
-    return parameterTypes.equals(this.parameterTypes)
-        && typeConstructors.equals(this.typeConstructors)
-        ? this
-        : new DataType(name, key, parameterTypes, typeConstructors);
+    if (parameterTypes.equals(this.parameterTypes)
+        && typeConstructors.equals(this.typeConstructors)) {
+      return this;
+    }
+    return new DataType(name, key, parameterTypes, typeConstructors);
   }
 
   @Override public Type substitute(TypeSystem typeSystem,

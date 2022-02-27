@@ -392,13 +392,13 @@ public class TypeSystem {
     if (type instanceof ForallType) {
       final ForallType forallType = (ForallType) type;
       try (Transaction transaction = transaction()) {
-        return forallType.type.substitute1(this, types, transaction);
+        return forallType.type.substitute(this, types, transaction);
       }
     }
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
       try (Transaction transaction = transaction()) {
-        return dataType.substitute1(this, types, transaction);
+        return dataType.substitute(this, types, transaction);
       }
     }
     if (type instanceof ApplyType
@@ -406,7 +406,7 @@ public class TypeSystem {
       final ApplyType applyType = (ApplyType) type;
       final DataType dataType = (DataType) applyType.type;
       try (Transaction transaction = transaction()) {
-        return dataType.substitute1(this, types, transaction);
+        return dataType.substitute(this, types, transaction);
       }
     }
     return new ApplyType((ParameterizedType) type, ImmutableList.copyOf(types));

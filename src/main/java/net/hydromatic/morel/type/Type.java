@@ -20,12 +20,7 @@ package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.function.UnaryOperator;
 
 /** Type. */
@@ -57,7 +52,6 @@ public interface Type {
 
   /** Returns a copy of this type, specialized by substituting type
    * parameters. */
-  @Deprecated
   default Type substitute(TypeSystem typeSystem, List<? extends Type> types,
       TypeSystem.Transaction transaction) {
     if (!types.isEmpty()) {
@@ -65,13 +59,6 @@ public interface Type {
           + types + " (expected 0)");
     }
     return this;
-  }
-
-  /** Returns a copy of this type, specialized by substituting type
-   * parameters. */
-  default Type substitute1(TypeSystem typeSystem, List<? extends Type> types,
-      TypeSystem.Transaction transaction) {
-    return copy(typeSystem, new TypeCopier(types, typeSystem, transaction));
   }
 
   /** Structural identifier of a type. */
@@ -83,14 +70,6 @@ public interface Type {
     }
 
     StringBuilder describe(StringBuilder buf, int left, int right);
-
-    // TODO: either get rid of this method or get rid of Keys.apply
-    default Key substitute(List<? extends Type> types) {
-      if (!types.isEmpty()) {
-        throw new IllegalArgumentException();
-      }
-      return this;
-    }
   }
 
   /** Definition of a type. */
@@ -98,97 +77,6 @@ public interface Type {
     StringBuilder describe(StringBuilder buf);
 
     DataType toType(TypeSystem typeSystem);
-  }
-
-  /** Copies a type, substituting types for type variables.
-   *
-   * <p>TODO: move somewhere else; make private; remove the duplicate code in
-   * {@link DataType#substitute(TypeSystem, List, TypeSystem.Transaction)}. */
-  class TypeCopier implements UnaryOperator<Type> {
-    private final List<? extends Type> types;
-    private final TypeSystem typeSystem;
-    private final TypeSystem.Transaction transaction;
-
-    TypeCopier(List<? extends Type> types, TypeSystem typeSystem,
-        TypeSystem.Transaction transaction) {
-      this.types = types;
-      this.typeSystem = typeSystem;
-      this.transaction = transaction;
-    }
-
-    @Override public Type apply(Type type) {
-      if (type instanceof TypeVar) {
-        return types.get(((TypeVar) type).ordinal);
-      }
-      if (type instanceof DataType) {
-        // Create a copy of this datatype with type variables substituted with
-        // actual types.
-        final DataType dataType = (DataType) type;
-        if (types.equals(dataType.parameterTypes)) {
-          return dataType;
-        }
-        final String moniker =
-            ParameterizedType.computeMoniker(dataType.name, types);
-        final Type lookup = typeSystem.lookupOpt(moniker);
-        if (lookup != null) {
-          return lookup;
-        }
-        assert types.size() == dataType.parameterTypes.size();
-        final List<Keys.DataTypeDef> defs = new ArrayList<>();
-        final Map<String, TemporaryType> temporaryTypeMap = new HashMap<>();
-        try (TypeSystem.Transaction transaction2 = typeSystem.transaction()) {
-          final TypeShuttle typeVisitor = new TypeShuttle(typeSystem) {
-            @Override public Type visit(TypeVar typeVar) {
-              return types.get(typeVar.ordinal);
-            }
-
-            @Override public Type visit(DataType dataType) {
-              final String moniker1 =
-                  ParameterizedType.computeMoniker(dataType.name, types);
-              final Type type = typeSystem.lookupOpt(moniker1);
-              if (type != null) {
-                return type;
-              }
-              final Type type2 = temporaryTypeMap.get(moniker1);
-              if (type2 != null) {
-                return type2;
-              }
-              final TemporaryType temporaryType =
-                  typeSystem.temporaryType(dataType.name, types, transaction2,
-                      false);
-              temporaryTypeMap.put(moniker1, temporaryType);
-              final SortedMap<String, Type> typeConstructors = new TreeMap<>();
-              dataType.typeConstructors.forEach((tyConName, tyConType) ->
-                  typeConstructors.put(tyConName, tyConType.accept(this)));
-              defs.add(
-                  Keys.dataTypeDef(dataType.name, types, typeConstructors, false));
-              return temporaryType;
-            }
-          };
-          type.accept(typeVisitor);
-        }
-        final List<Type> types1 = typeSystem.dataTypes(defs);
-        return types1.get(0);
-      }
-      if (type instanceof TemporaryType) {
-        final TemporaryType temporaryType = (TemporaryType) type;
-        // Create a copy of this temporary type with type variables substituted
-        // with actual types.
-        if (types.equals(temporaryType.parameterTypes)) {
-          return type;
-        }
-        final String moniker =
-            ParameterizedType.computeMoniker(temporaryType.name, types);
-        final Type lookup = typeSystem.lookupOpt(moniker);
-        if (lookup != null) {
-          return lookup;
-        }
-        assert types.size() == temporaryType.parameterTypes.size();
-        return typeSystem.temporaryType(temporaryType.name, types,
-            transaction, false);
-      }
-      return type;
-    }
   }
 }
 

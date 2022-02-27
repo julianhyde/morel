@@ -90,13 +90,6 @@ public class Keys {
     return new DataTypeKey(name);
   }
 
-  /** Returns a key that identifies a {@link DataType} with monomorphic types
-   * substituted for its type parameters. */
-  public static Type.Key datatypeApply(DataType dataType,
-      List<? extends Type> argTypes) {
-    return new DataTypeApplyKey(dataType, ImmutableList.copyOf(argTypes));
-  }
-
   /** Returns a key that identifies a {@link ForallType} with monomorphic types
    * substituted for its type parameters. */
   public static Type.Key forallTypeApply(ForallType forallType,
@@ -283,25 +276,6 @@ public class Keys {
       return TypeSystem.unparse(buf, type, 0, 0);
     }
 
-    @Override public Type.Key substitute(List<? extends Type> types) {
-      if (types.size() != parameterTypes.size()) {
-        throw new IllegalArgumentException();
-      }
-      if (type instanceof DataType
-          && types.isEmpty()) {
-        return type.key();
-      }
-      if (type instanceof DataType
-          && types.stream().noneMatch(t -> t instanceof TypeVar)) {
-        return Keys.datatypeApply((DataType) type, types);
-      }
-      if (type instanceof ForallType
-          && types.stream().noneMatch(t -> t instanceof TypeVar)) {
-        return Keys.forallTypeApply((ForallType) type, types);
-      }
-      return apply((ParameterizedType) type, types);
-    }
-
     public Type toType(TypeSystem typeSystem) {
       return new ForallType(parameterTypes, type);
     }
@@ -398,46 +372,6 @@ public class Keys {
 
   /** Key that applies several type arguments to a {@code datatype} scheme.
    *
-   * <p>For example, given {@code dataType} = "option" and
-   * {@code parameterTypes} = "[int]", returns "int option". */
-  private static class DataTypeApplyKey implements Type.Key {
-    final DataType dataType;
-    final ImmutableList<Type> argTypes;
-
-    DataTypeApplyKey(DataType dataType, ImmutableList<Type> argTypes) {
-      this.dataType = dataType;
-      this.argTypes = argTypes;
-      assert !argTypes.isEmpty(); // otherwise could have used DataType
-    }
-
-    @Override public int hashCode() {
-      return Objects.hash(dataType, argTypes);
-    }
-
-    @Override public boolean equals(Object obj) {
-      return obj == this
-          || obj instanceof DataTypeApplyKey
-          && ((DataTypeApplyKey) obj).dataType.equals(dataType)
-          && ((DataTypeApplyKey) obj).argTypes.equals(argTypes);
-    }
-
-    @Override public StringBuilder describe(StringBuilder buf, int left,
-        int right) {
-      return TypeSystem.unparseList(buf, Op.COMMA, left, Op.APPLY.left,
-          argTypes)
-          .append(Op.APPLY.padded)
-          .append(dataType.name);
-    }
-
-    public Type toType(TypeSystem typeSystem) {
-      try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
-        return dataType.substitute1(typeSystem, argTypes, transaction);
-      }
-    }
-  }
-
-  /** Key that applies several type arguments to a {@code datatype} scheme.
-   *
    * <p>For example, given {@code forallType} = "option" and
    * {@code argTypes} = "[int]", returns "int option". */
   private static class ForallTypeApplyKey implements Type.Key {
@@ -471,7 +405,7 @@ public class Keys {
 
     public Type toType(TypeSystem typeSystem) {
       try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
-        return forallType.substitute1(typeSystem, argTypes, transaction);
+        return forallType.substitute(typeSystem, argTypes, transaction);
       }
     }
   }
