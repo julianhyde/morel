@@ -201,8 +201,9 @@ public class TypeSystem {
             && def.types.equals(typeVariables(def.types.size()))) {
           // We have just created an entry for the moniker (e.g. "'a option"),
           // so now create an entry for the name (e.g. "option").
-          //noinspection unchecked
-          final ForallType forallType = forallType((List) def.types, dataType);
+          @SuppressWarnings({"rawtypes", "unchecked"})
+          final List<TypeVar> typeVars = (List) def.types;
+          final ForallType forallType = forallType(typeVars, dataType);
           typeByName.put(def.name, forallType);
           types.add(forallType);
         } else {
@@ -391,13 +392,13 @@ public class TypeSystem {
     if (type instanceof ForallType) {
       final ForallType forallType = (ForallType) type;
       try (Transaction transaction = transaction()) {
-        return forallType.type.substitute(this, types, transaction);
+        return forallType.type.substitute1(this, types, transaction);
       }
     }
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
       try (Transaction transaction = transaction()) {
-        return dataType.substitute(this, types, transaction);
+        return dataType.substitute1(this, types, transaction);
       }
     }
     if (type instanceof ApplyType
@@ -405,7 +406,7 @@ public class TypeSystem {
       final ApplyType applyType = (ApplyType) type;
       final DataType dataType = (DataType) applyType.type;
       try (Transaction transaction = transaction()) {
-        return dataType.substitute(this, types, transaction);
+        return dataType.substitute1(this, types, transaction);
       }
     }
     return new ApplyType((ParameterizedType) type, ImmutableList.copyOf(types));

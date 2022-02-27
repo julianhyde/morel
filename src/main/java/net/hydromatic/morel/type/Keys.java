@@ -431,7 +431,7 @@ public class Keys {
 
     public Type toType(TypeSystem typeSystem) {
       try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
-        return dataType.substitute(typeSystem, argTypes, transaction);
+        return dataType.substitute1(typeSystem, argTypes, transaction);
       }
     }
   }

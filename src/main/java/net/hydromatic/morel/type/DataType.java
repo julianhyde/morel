@@ -24,6 +24,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Ordering;
 
+import org.apache.calcite.util.Util;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -74,9 +76,12 @@ public class DataType extends ParameterizedType {
 
   @Override public DataType copy(TypeSystem typeSystem,
       UnaryOperator<Type> transform) {
+    final List<Type> parameterTypes =
+        Util.transform(this.parameterTypes, transform);
     final ImmutableSortedMap<String, Type> typeConstructors =
         typeSystem.copyTypeConstructors(this.typeConstructors, transform);
-    return typeConstructors.equals(this.typeConstructors)
+    return parameterTypes.equals(this.parameterTypes)
+        && typeConstructors.equals(this.typeConstructors)
         ? this
         : new DataType(name, key, parameterTypes, typeConstructors);
   }
