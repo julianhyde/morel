@@ -153,6 +153,12 @@ datatype () void = Void; (*) not valid
 datatype void = Void;
 datatype unitVoid = Void of unit;
 
+(*) Recursive datatype with 2 type parameters
+datatype ('a, 'b) tree = EMPTY | NODE of 'a * 'b * ('a, 'b) tree;
+EMPTY;
+NODE (1, true, EMPTY);
+NODE (1, true, NODE (2, false, EMPTY));
+
 (*
 - fun f x none = x | x some y = y;
 stdIn:2.5-2.32 Error: clauses don't all have same function name

@@ -310,6 +310,20 @@ datatype unitVoid = Void of unit;
 datatype unitVoid = Void of unit
 
 
+(*) Recursive datatype with 2 type parameters
+datatype ('a, 'b) tree = EMPTY | NODE of 'a * 'b * ('a, 'b) tree;
+datatype ('a,'b) tree = EMPTY | NODE of 'a * 'b * ('a,'b) tree
+
+EMPTY;
+val it = EMPTY : ('a,'b) tree
+
+NODE (1, true, EMPTY);
+val it = NODE (1,true,EMPTY) : (int,bool) tree
+
+NODE (1, true, NODE (2, false, EMPTY));
+val it = NODE (1,true,NODE (2,false,EMPTY)) : (int,bool) tree
+
+
 (*
 - fun f x none = x | x some y = y;
 stdIn:2.5-2.32 Error: clauses don't all have same function name
