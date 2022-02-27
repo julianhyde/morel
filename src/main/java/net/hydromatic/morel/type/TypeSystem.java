@@ -31,6 +31,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
+import java.lang.reflect.Field;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -169,11 +170,36 @@ public class TypeSystem {
     return dataTypes(defs, (type, typeMap) -> {
       if (type instanceof DataType) {
         final DataType dataType = (DataType) type;
-        dataType.typeConstructors =
+        setTypeConstructors(dataType,
             copyTypeConstructors(dataType.typeConstructors,
-                t -> t instanceof TemporaryType ? typeMap.get(t.key()) : t);
+                t -> t instanceof TemporaryType ? typeMap.get(t.key()) : t));
       }
     });
+  }
+
+  /** Sets the {@link DataType#typeConstructors} field of a newly constructed
+   * {@link DataType}.
+   *
+   * <p>The field is {@code public final}, which is for the greater good; the
+   * assignment occurs immediately after construction, before anyone sees the
+   * {@link DataType} instance, so is safe. We would have assigned the field
+   * in the constructor if we did not have to deal with datatypes that refer
+   * to each other, like this:
+   *
+   * <pre>{@code
+   * datatype 'a tree = Empty | Node of 'a * 'a forest
+   * and      'a forest = Nil | Cons of 'a tree * 'a forest;
+   * }</pre> */
+  private static void setTypeConstructors(DataType dataType,
+      ImmutableSortedMap<String, Type> typeConstructors) {
+    try {
+      final Field field = DataType.class.getDeclaredField("typeConstructors");
+      field.setAccessible(true);
+      field.set(dataType, typeConstructors);
+      field.setAccessible(false);
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new AssertionError(e);
+    }
   }
 
   private List<Type> dataTypes(List<Keys.DataTypeDef> defs, DataTypeFixer fixer) {

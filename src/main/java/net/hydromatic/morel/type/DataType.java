@@ -37,7 +37,7 @@ import java.util.function.UnaryOperator;
 /** Algebraic type. */
 public class DataType extends ParameterizedType {
   private final Key key;
-  public SortedMap<String, Type> typeConstructors; // TODO make final
+  public final SortedMap<String, Type> typeConstructors;
 
   /** Creates a DataType.
    *
