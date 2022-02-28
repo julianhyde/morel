@@ -53,7 +53,14 @@ public class DataType extends ParameterizedType {
   DataType(String name, Key key,
       List<? extends Type> parameterTypes,
       SortedMap<String, Type> typeConstructors) {
-    super(Op.DATA_TYPE, name, computeMoniker(name, parameterTypes),
+    this(Op.DATA_TYPE, name, key, parameterTypes, typeConstructors);
+  }
+
+  /** Called only from DataType and TemporaryType constructor. */
+  protected DataType(Op op, String name, Key key,
+      List<? extends Type> parameterTypes,
+      SortedMap<String, Type> typeConstructors) {
+    super(op, name, computeMoniker(name, parameterTypes),
         parameterTypes);
     this.key = key;
     this.typeConstructors = Objects.requireNonNull(typeConstructors);
@@ -61,7 +68,7 @@ public class DataType extends ParameterizedType {
         || typeConstructors.comparator() == Ordering.natural());
   }
 
-  public Key key() {
+  @Override public Key key() {
     return key;
   }
 
@@ -90,6 +97,7 @@ public class DataType extends ParameterizedType {
       List<? extends Type> types, TypeSystem.Transaction transaction) {
     // Create a copy of this datatype with type variables substituted with
     // actual types.
+    assert types.size() == parameterTypes.size();
     if (types.equals(parameterTypes)) {
       return this;
     }
@@ -98,7 +106,14 @@ public class DataType extends ParameterizedType {
     if (lookup != null) {
       return lookup;
     }
-    assert types.size() == parameterTypes.size();
+    return substitute2(typeSystem, types, transaction);
+  }
+
+  /** Second part of the implementation of
+   * {@link #substitute(TypeSystem, List, TypeSystem.Transaction)}, called
+   * if there is not already a type of the given description. */
+  protected Type substitute2(TypeSystem typeSystem,
+      List<? extends Type> types, TypeSystem.Transaction transaction) {
     final List<Keys.DataTypeDef> defs = new ArrayList<>();
     final Map<String, TemporaryType> temporaryTypeMap = new HashMap<>();
     final TypeShuttle typeVisitor = new TypeShuttle(typeSystem) {

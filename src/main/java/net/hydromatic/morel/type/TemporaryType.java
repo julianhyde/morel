@@ -20,6 +20,8 @@ package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
 
+import com.google.common.collect.ImmutableSortedMap;
+
 import java.util.List;
 import java.util.function.UnaryOperator;
 
@@ -34,13 +36,13 @@ import java.util.function.UnaryOperator;
  * <p>we define a temporary type "list", it is used in {@code CONS}, and
  * later we convert it to the real data type "list".
  */
-public class TemporaryType extends ParameterizedType {
-  TemporaryType(String name, String moniker,
-      List<? extends Type> parameterTypes) {
-    super(Op.TEMPORARY_DATA_TYPE, name, moniker, parameterTypes);
+public class TemporaryType extends DataType {
+  TemporaryType(String name, List<? extends Type> parameterTypes) {
+    super(Op.TEMPORARY_DATA_TYPE, name, Keys.name(name), parameterTypes,
+        ImmutableSortedMap.of());
   }
 
-  public TemporaryType copy(TypeSystem typeSystem,
+  @Override public TemporaryType copy(TypeSystem typeSystem,
       UnaryOperator<Type> transform) {
     return (TemporaryType) transform.apply(this);
   }
@@ -49,23 +51,8 @@ public class TemporaryType extends ParameterizedType {
     throw new UnsupportedOperationException();
   }
 
-  public Key key() {
-    return Keys.name(name);
-  }
-
-  @Override public Type substitute(TypeSystem typeSystem,
+  @Override protected Type substitute2(TypeSystem typeSystem,
       List<? extends Type> types, TypeSystem.Transaction transaction) {
-    // Create a copy of this temporary type with type variables substituted
-    // with actual types.
-    if (types.equals(parameterTypes)) {
-      return this;
-    }
-    final String moniker = computeMoniker(name, types);
-    final Type lookup = typeSystem.lookupOpt(moniker);
-    if (lookup != null) {
-      return lookup;
-    }
-    assert types.size() == parameterTypes.size();
     return typeSystem.temporaryType(name, types, transaction, false);
   }
 }

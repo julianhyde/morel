@@ -374,11 +374,10 @@ public class TypeSystem {
   public TemporaryType temporaryType(String name,
       List<? extends Type> parameterTypes, Transaction transaction_,
       boolean withScheme) {
-    final String moniker = DataType.computeMoniker(name, parameterTypes);
     final TemporaryType temporaryType =
-        new TemporaryType(name, moniker, parameterTypes);
+        new TemporaryType(name, parameterTypes);
     final TransactionImpl transaction = (TransactionImpl) transaction_;
-    transaction.put(moniker, temporaryType);
+    transaction.put(temporaryType.moniker, temporaryType);
     if (withScheme && !parameterTypes.isEmpty()) {
       final List<TypeVar> typeVars = typeVariables(parameterTypes.size());
       transaction.put(name,
