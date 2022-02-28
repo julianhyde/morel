@@ -23,7 +23,6 @@ import net.hydromatic.morel.ast.Op;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import org.apache.calcite.util.Util;
 
@@ -146,8 +145,10 @@ public class DataType extends ParameterizedType {
     };
     accept(typeVisitor);
     final List<Type> types1 = typeSystem.dataTypes(defs);
-    final int i = Iterables.indexOf(defs, def ->
-        def.name.equals(name) && def.types.equals(types));
+    final int i = defs.size() == 1
+        ? 0
+        : Iterables.indexOf(defs, def ->
+            def.name.equals(name) && def.types.equals(types));
     return types1.get(i);
   }
 }

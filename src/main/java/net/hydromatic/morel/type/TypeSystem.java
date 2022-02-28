@@ -210,7 +210,6 @@ public class TypeSystem {
       if (def.scheme) {
         key = Keys.name(def.name);
         type = def.toType(this);
-//        typeByName.put(def.name, type);
         typeByKey.put(key, type);
       } else {
         final ForallType type1 = (ForallType) lookup(def.name);

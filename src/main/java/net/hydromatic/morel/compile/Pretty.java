@@ -227,11 +227,6 @@ class Pretty {
       final String tyConName = (String) list.get(0);
       buf.append(tyConName);
       final Type typeConArgType = dataType.typeConstructors.get(tyConName);
-//      final Type typeConArgType;
-//      try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
-//        typeConArgType =
-//            typeConArgType0.substitute1(typeSystem, argTypes, transaction);
-//      }
       if (list.size() == 2) {
         final Object arg = list.get(1);
         buf.append(' ');

@@ -1140,9 +1140,6 @@ public class TypeResolver {
     case APPLY_TYPE:
       final ApplyType applyType = (ApplyType) type;
       final Unifier.Term term = toTerm(applyType.type, subst);
-//      if (TypeVar.is123(applyType.types)) {
-//        return term;
-//      }
       final List<Unifier.Term> terms = toTerms(applyType.types, subst);
       return unifier.apply(APPLY_TY_CON, ConsList.of(term, terms));
     case TUPLE_TYPE:
