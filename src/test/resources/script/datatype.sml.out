@@ -279,10 +279,18 @@ val it = Empty : 'a tree
 Nil;
 val it = Nil : 'a forest
 
-(* TODO
 Node (1, Nil);
+val it = Node (1,Nil) : int tree
+
 Node (1, Cons (Empty, Nil));
-*)
+val it = Node (1,Cons (Empty,Nil)) : int tree
+
+Cons (Empty, Nil);
+val it = Cons (Empty,Nil) : 'a forest
+
+Cons (Empty, Cons (Node (true, Nil), Nil));
+val it = Cons (Empty,Cons (Node (true,Nil),Nil)) : bool forest
+
 
 (*) Parentheses are required for 2 or more type parameters,
 (*) optional for 1 type parameter,

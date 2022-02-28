@@ -132,10 +132,10 @@ datatype 'a tree = Empty | Node of 'a * 'a forest
 and      'a forest = Nil | Cons of 'a tree * 'a forest;
 Empty;
 Nil;
-(* TODO
 Node (1, Nil);
 Node (1, Cons (Empty, Nil));
-*)
+Cons (Empty, Nil);
+Cons (Empty, Cons (Node (true, Nil), Nil));
 
 (*) Parentheses are required for 2 or more type parameters,
 (*) optional for 1 type parameter,
