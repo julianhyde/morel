@@ -21,9 +21,7 @@ package net.hydromatic.morel;
 import net.hydromatic.morel.util.Sat;
 import net.hydromatic.morel.util.Sat.Term;
 import net.hydromatic.morel.util.Sat.Variable;
-import net.hydromatic.morel.util.TailList;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -34,7 +32,8 @@ import static org.hamcrest.core.Is.is;
 
 /** Tests satisfiability. */
 public class SatTest {
-  /** Tests {@link TailList}. */
+  /** Tests a formula with three clauses, three terms each.
+   * It is in "3SAT" form, and has a solution (i.e. is satisfiable). */
   @Test void testBuild() {
     final Sat sat = new Sat();
     final Variable x = sat.term("x");

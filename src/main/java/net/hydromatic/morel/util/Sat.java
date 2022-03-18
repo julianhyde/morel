@@ -21,17 +21,16 @@ package net.hydromatic.morel.util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import com.google.errorprone.annotations.Var;
-
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * Boolean satisfiability.
@@ -87,23 +86,24 @@ public class Sat {
     return variable;
   }
 
-    public Term not(Term term) {
-      return new Not(term);
-    }
+  public Term not(Term term) {
+    return new Not(term);
+  }
 
-    public Term and(Term... terms) {
-      return new And(ImmutableList.copyOf(terms));
-    }
+  public Term and(Term... terms) {
+    return new And(ImmutableList.copyOf(terms));
+  }
 
-    public Term or(Term... terms) {
-      return new Or(ImmutableList.copyOf(terms));
-    }
+  public Term or(Term... terms) {
+    return new Or(ImmutableList.copyOf(terms));
+  }
 
+  /** Base class for all terms (variables, and, or, not). */
   public abstract static class Term {
     final Op op;
 
     Term(Op op) {
-      this.op = op;
+      this.op = requireNonNull(op, "op");
     }
 
     @Override public String toString() {
@@ -116,12 +116,15 @@ public class Sat {
     public abstract boolean evaluate(Map<Variable, Boolean> env);
   }
 
+  /** Variable. Its value can be true or false. */
   public static class Variable extends Term {
+    public final int id;
     public final String name;
 
     Variable(int id, String name) {
       super(Op.VARIABLE);
-      this.name = name;
+      this.id = id;
+      this.name = requireNonNull(name, "name");
     }
 
     @Override protected StringBuilder unparse(StringBuilder buf, int left,
@@ -134,12 +137,13 @@ public class Sat {
     }
   }
 
-  static abstract class Node extends Term {
+  /** Term that has a variable number of arguments ("and" or "or"). */
+  abstract static class Node extends Term {
     public final ImmutableList<Term> terms;
 
     Node(Op op, ImmutableList<Term> terms) {
       super(op);
-      this.terms = terms;
+      this.terms = requireNonNull(terms);
     }
 
     @Override protected StringBuilder unparse(StringBuilder buf, int left,
@@ -160,6 +164,7 @@ public class Sat {
     }
   }
 
+  /** "And" term. */
   static class And extends Node {
     And(ImmutableList<Term> terms) {
       super(Op.AND, terms);
@@ -175,6 +180,7 @@ public class Sat {
     }
   }
 
+  /** "Or" term. */
   static class Or extends Node {
     Or(ImmutableList<Term> terms) {
       super(Op.OR, terms);
@@ -190,12 +196,13 @@ public class Sat {
     }
   }
 
+  /** "Not" term. */
   static class Not extends Term {
     public final Term term;
 
     Not(Term term) {
       super(Op.NOT);
-      this.term = term;
+      this.term = requireNonNull(term, "term");
     }
 
     @Override protected StringBuilder unparse(StringBuilder buf, int left,
@@ -208,6 +215,8 @@ public class Sat {
     }
   }
 
+  /** Operator (or type of term), with its left and right precedence and print
+   * name. */
   private enum Op {
     AND(3, 4, " ∧ "),
     OR(1, 2, " ∨ "),
@@ -225,12 +234,13 @@ public class Sat {
     }
   }
 
+  /** Assignment of a variable to a value. */
   private static class Assignment {
     final Variable variable;
     final boolean value;
 
     Assignment(Variable variable, boolean value) {
-      this.variable = variable;
+      this.variable = requireNonNull(variable, "variable");
       this.value = value;
     }
   }
