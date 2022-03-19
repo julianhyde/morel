@@ -51,6 +51,7 @@ import static net.hydromatic.morel.Matchers.list;
 import static net.hydromatic.morel.Matchers.map;
 import static net.hydromatic.morel.Matchers.throwsA;
 import static net.hydromatic.morel.Matchers.whenAppliedTo;
+import static net.hydromatic.morel.Ml.MatchCoverage.REDUNDANT;
 import static net.hydromatic.morel.Ml.assertError;
 import static net.hydromatic.morel.Ml.ml;
 
@@ -1213,6 +1214,69 @@ public class MainTest {
         + "  sumIf [(true, 2), (false, 3), (true, 5)]\n"
         + "end";
     ml(ml).assertEval(is(7));
+  }
+
+  /**
+   * <p>The algorithm is described in <a href="https://stackoverflow.com/questions/7883023/algorithm-for-type-checking-ml-like-pattern-matching">
+   *  Stack overflow</a> and in Lennart Augustsson's 1985 paper "Compiling
+   *  Pattern Matching".
+   */
+  @Test void testMatchRedundant() {
+    final String ml = "fun f x = case x > 0 of\n"
+        + "   true => \"positive\"\n"
+        + " | false => \"non-positive\"\n"
+        + " | $true => \"oops\"$";
+    ml(ml, '$')
+        .assertEvalThrows(pos -> throwsA("match redundant", pos));
+  }
+
+  @Test void testMatchRedundancy() {
+    final String ml = "fun f x = case x > 0 of\n"
+        + "   true => \"positive\"\n"
+        + " | false => \"non-positive\"\n"
+        + " | true => \"oops\"";
+    ml(ml).assertMatchCoverage(is(REDUNDANT));
+
+    final String ml2 = "fun f (x, y) = x + y + 1";
+    ml(ml2).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+
+    final String ml2b = ""
+        + "fun f (1, y) = y\n"
+        + "  | f (x, 2) = x\n"
+        + "  | f (x, y) = x + y + 1";
+    ml(ml2b).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+
+    final String ml3 = "fun f 1 = 2 | f x = x + 3";
+    ml(ml3).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+
+    final String ml4 = "fun f 1 = 2 | f _ = 1";
+    ml(ml4).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+
+    final String ml5 = "fun f [] = 0 | f (h :: t) = 1 + (f t)";
+    ml(ml5).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+
+    final String ml6 = "fun f (0, y) = y | f (x, y) = x + y + 1";
+    ml(ml6).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+
+    final String ml7 = "fun f (x, y, 0) = y | f (x, y, z) = x + z";
+    ml(ml7).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+
+    final String ml8 = "fun maskToString m =\n"
+        + "  let\n"
+        + "    fun maskToString2 (m, s, 0) = s\n"
+        + "      | maskToString2 (m, s, k) =\n"
+        + "        maskToString2 (m div 3,\n"
+        + "          (case (m mod 3) of\n"
+        + "              0 => \"b\"\n"
+        + "            | 1 => \"y\"\n"
+        + "            | 2 => \"g\") ^ s,\n"
+        + "          k - 1)\n"
+        + "  in\n"
+        + "    maskToString2 (m, \"\", 5)\n"
+        + "  end";
+    if (false) {
+      ml(ml8).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+    }
   }
 
   /** Function declaration. */

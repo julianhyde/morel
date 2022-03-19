@@ -37,6 +37,7 @@ import static java.util.Objects.requireNonNull;
  */
 public class Sat {
   private final Map<Integer, Variable> variablesById = new HashMap<>();
+  private final Map<String, Variable> variablesByName = new HashMap<>();
   private int nextVariable = 0;
 
   /** Finds an assignment of variables such that a term evaluates to true,
@@ -79,10 +80,15 @@ public class Sat {
     }
   }
 
-  public Variable term(String name) {
+  public Variable variable(String name) {
+    Variable variable = variablesByName.get(name);
+    if (variable != null) {
+      return variable;
+    }
     int id = nextVariable++;
-    final Variable variable = new Variable(id, name);
+    variable = new Variable(id, name);
     variablesById.put(id, variable);
+    variablesByName.put(name, variable);
     return variable;
   }
 
@@ -94,7 +100,15 @@ public class Sat {
     return new And(ImmutableList.copyOf(terms));
   }
 
+  public Term and(Iterable<?extends Term> terms) {
+    return new And(ImmutableList.copyOf(terms));
+  }
+
   public Term or(Term... terms) {
+    return new Or(ImmutableList.copyOf(terms));
+  }
+
+  public Term or(Iterable<?extends Term> terms) {
     return new Or(ImmutableList.copyOf(terms));
   }
 
@@ -148,6 +162,15 @@ public class Sat {
 
     @Override protected StringBuilder unparse(StringBuilder buf, int left,
         int right) {
+      switch (terms.size()) {
+      case 0:
+        // empty "and" prints as "true";
+        // empty "or" prints as "false"
+        return buf.append(op.emptyName);
+      case 1:
+        // singleton "and" and "or" print as the sole term
+        return terms.get(0).unparse(buf, left, right);
+      }
       if (left > op.left || right > op.right) {
         return unparse(buf.append('('), 0, 0).append(')');
       }
@@ -218,19 +241,21 @@ public class Sat {
   /** Operator (or type of term), with its left and right precedence and print
    * name. */
   private enum Op {
-    AND(3, 4, " ∧ "),
-    OR(1, 2, " ∨ "),
-    NOT(5, 5, "¬"),
-    VARIABLE(0, 0, "");
+    AND(3, 4, " ∧ ", "true"),
+    OR(1, 2, " ∨ ", "false"),
+    NOT(5, 5, "¬", ""),
+    VARIABLE(0, 0, "", "");
 
-    public final int left;
-    public final int right;
-    public final String str;
+    final int left;
+    final int right;
+    final String str;
+    final String emptyName;
 
-    Op(int left, int right, String str) {
+    Op(int left, int right, String str, String emptyName) {
       this.left = left;
       this.right = right;
       this.str = str;
+      this.emptyName = emptyName;
     }
   }
 

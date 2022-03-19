@@ -24,6 +24,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.Analyzer;
 import net.hydromatic.morel.compile.CalciteCompiler;
+import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
@@ -225,6 +226,10 @@ class Ml {
     return assertType(hasMoniker(expected));
   }
 
+  Ml assertTypeThrows(Function<Pos, Matcher<Throwable>> matcherSupplier) {
+    return assertTypeThrows(matcherSupplier.apply(pos));
+  }
+
   Ml assertTypeThrows(Matcher<Throwable> matcher) {
     assertError(() ->
             withValidate((resolved, calcite) ->
@@ -363,8 +368,30 @@ class Ml {
     return this;
   }
 
+  Ml assertMatchCoverage(Matcher<MatchCoverage> matcher) {
+    try {
+      ml(ml).assertEval(notNullValue());
+      assertThat(MatchCoverage.OK, matcher);
+      return this;
+    } catch (CompileException e) {
+      switch (e.getMessage()) {
+      case "match redundant":
+        assertThat(MatchCoverage.REDUNDANT, matcher);
+        return this;
+      case "redundant and exhaustive":
+        assertThat(MatchCoverage.NON_EXHAUSTIVE_AND_REDUNDANT, matcher);
+        return this;
+      case "match nonexhaustive":
+        assertThat(MatchCoverage.NON_EXHAUSTIVE, matcher);
+        return this;
+      default:
+        throw e;
+      }
+    }
+  }
+
   Ml assertPlan(Matcher<Code> planMatcher) {
-    return assertEval(null, planMatcher);
+    return assertEval(null, planMatcher, null);
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -373,28 +400,51 @@ class Ml {
   }
 
   Ml assertEval(Matcher<Object> resultMatcher) {
-    return assertEval(resultMatcher, null);
+    return assertEval(resultMatcher, null, null);
   }
 
-  Ml assertEval(Matcher<Object> resultMatcher, Matcher<Code> planMatcher) {
+  Ml assertEval(@Nullable Matcher<Object> resultMatcher,
+      @Nullable Matcher<Code> planMatcher,
+      @Nullable Function<Pos, Matcher<Throwable>> exceptionMatcherFactory) {
+    final Matcher<Throwable> exceptionMatcher =
+        exceptionMatcherFactory == null
+            ? null
+            : exceptionMatcherFactory.apply(pos);
     return withValidate((resolved, calcite) -> {
       final Session session = new Session();
       session.map.putAll(propMap);
       eval(session, resolved.env, resolved.typeMap.typeSystem, resolved.node,
-          calcite, resultMatcher, planMatcher);
+          calcite, resultMatcher, planMatcher, exceptionMatcher);
     });
+  }
+
+  Ml assertEvalThrows(
+      Function<Pos, Matcher<Throwable>> exceptionMatcherFactory) {
+    return assertEval(null, null, exceptionMatcherFactory);
   }
 
   @CanIgnoreReturnValue
   private Object eval(Session session, Environment env,
       TypeSystem typeSystem, AstNode statement, Calcite calcite,
       @Nullable Matcher<Object> resultMatcher,
-      @Nullable Matcher<Code> planMatcher) {
-    CompiledStatement compiledStatement =
-        Compiles.prepareStatement(typeSystem, session, env, statement, calcite);
+      @Nullable Matcher<Code> planMatcher,
+      @Nullable Matcher<Throwable> exceptionMatcher) {
     final List<Binding> bindings = new ArrayList<>();
-    session.withoutHandlingExceptions(session1 ->
-        compiledStatement.eval(session1, env, line -> {}, bindings::add));
+    try {
+      CompiledStatement compiledStatement =
+          Compiles.prepareStatement(typeSystem, session, env, statement,
+              calcite);
+      session.withoutHandlingExceptions(session1 ->
+          compiledStatement.eval(session1, env, line -> {}, bindings::add));
+      if (exceptionMatcher != null) {
+        fail("expected exception, but none was thrown");
+      }
+    } catch (Throwable e) {
+      if (exceptionMatcher == null) {
+        throw e;
+      }
+      assertThat(e, exceptionMatcher);
+    }
     final Object result;
     if (statement instanceof Ast.Exp) {
       result = bindingValue(bindings, "it");
@@ -480,6 +530,16 @@ class Ml {
     }
     builder.put(k, v);
     return builder.build();
+  }
+
+  /** Whether a list of patterns is exhaustive (covers all possible input
+   * values), redundant (covers some input values more than once), both or
+   * neither. */
+  enum MatchCoverage {
+    NON_EXHAUSTIVE,
+    REDUNDANT,
+    NON_EXHAUSTIVE_AND_REDUNDANT,
+    OK
   }
 }
 

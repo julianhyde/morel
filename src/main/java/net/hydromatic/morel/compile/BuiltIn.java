@@ -1666,6 +1666,10 @@ public enum BuiltIn {
         h.tyCon("LESS").tyCon("EQUAL").tyCon("GREATER"));
     defineDataType(typeSystem, bindings, "option", 1, h ->
         h.tyCon("NONE").tyCon("SOME", h.get(0)));
+    defineDataType(typeSystem, bindings, "$list", 1, h ->
+        h.tyCon("NIL").tyCon("CONS", h.get(0)));
+    defineDataType(typeSystem, bindings, "$bool", 0, h ->
+        h.tyCon("FALSE").tyCon("TRUE"));
     defineEqType(typeSystem, "vector", 1);
   }
 

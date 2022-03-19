@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Prop;
@@ -34,11 +35,14 @@ import net.hydromatic.morel.type.TypeSystem;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Helpers for {@link Compiler} and {@link TypeResolver}. */
 public abstract class Compiles {
@@ -85,6 +89,10 @@ public abstract class Compiles {
     final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.Decl coreDecl0 = resolver.toCore(resolved.node);
 
+    // Check for exhaustive and redundant patterns, and throw errors or
+    // warnings.
+    checkPatternCoverage(typeSystem, coreDecl0);
+
     Core.Decl coreDecl;
     if (inlinePassCount == 0) {
       // Inlining is disabled. Use the Inliner in a limited mode.
@@ -114,6 +122,60 @@ public abstract class Compiles {
       compiler = new Compiler(typeSystem);
     }
     return compiler.compileStatement(env, coreDecl, isDecl);
+  }
+
+  /** Checks for exhaustive and redundant patterns, and throws if there are
+   * errors/warnings. */
+  private static void checkPatternCoverage(TypeSystem typeSystem,
+      Core.Decl decl) {
+    final List<CompileException> errorList = new ArrayList<>();
+    final List<CompileException> warningList = new ArrayList<>();
+    decl.accept(new Visitor() {
+      @Override protected void visit(Core.Case kase) {
+        super.visit(kase);
+        checkPatternCoverage(typeSystem, kase, errorList::add,
+            warningList::add);
+      }
+    });
+    if (!errorList.isEmpty()) {
+      throw errorList.get(0);
+    }
+    if (!warningList.isEmpty()) {
+      throw warningList.get(0);
+    }
+  }
+
+  private static void checkPatternCoverage(TypeSystem typeSystem,
+      Core.Case kase, Consumer<CompileException> errorConsumer,
+      Consumer<CompileException> warningConsumer) {
+    final List<Core.Pat> prevPatList = new ArrayList<>();
+    final List<Core.Match> redundantMatchList = new ArrayList<>();
+    for (Core.Match match : kase.matchList) {
+      Core.Pat pat = match.pat;
+      if (pat.op == Op.AS_PAT) {
+        pat = ((Core.AsPat) pat).pat;
+      }
+      if (pat.isCoveredBy(typeSystem, prevPatList)) {
+        redundantMatchList.add(match);
+      }
+      prevPatList.add(pat);
+    }
+    final boolean exhaustive =
+        !prevPatList.isEmpty()
+            && core.wildcardPat(prevPatList.get(0).type)
+            .isCoveredBy(typeSystem, prevPatList);
+    if (!redundantMatchList.isEmpty()) {
+      errorConsumer.accept(
+          new CompileException(
+              exhaustive
+                  ? "match redundant and nonexhaustive"
+                  : "match redundant",
+              redundantMatchList.get(0).pos));
+    } else if (!exhaustive) {
+      warningConsumer.accept(
+          new CompileException("match nonexhaustive",
+              kase.pos));
+    }
   }
 
   /** Converts {@code e} to {@code val = e}. */

@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
@@ -36,8 +37,8 @@ public class SatTest {
    * It is in "3SAT" form, and has a solution (i.e. is satisfiable). */
   @Test void testBuild() {
     final Sat sat = new Sat();
-    final Variable x = sat.term("x");
-    final Variable y = sat.term("y");
+    final Variable x = sat.variable("x");
+    final Variable y = sat.variable("y");
 
     // (x ∨ x ∨ y) ∧ (¬x ∨ ¬y ∨ ¬y) ∧ (¬x ∨ y ∨ y)
     final Term clause0 = sat.or(x, x, y);
@@ -50,6 +51,27 @@ public class SatTest {
     final Map<Variable, Boolean> solution = sat.solve(formula);
     assertThat(solution, notNullValue());
     assertThat(solution.toString(), is("{x=false, y=true}"));
+  }
+
+  /** Tests true ("and" with zero arguments). */
+  @Test void testTrue() {
+    final Sat sat = new Sat();
+    final Term trueTerm = sat.and();
+    assertThat(trueTerm.toString(), is("true"));
+
+    final Map<Variable, Boolean> solve = sat.solve(trueTerm);
+    assertThat("satisfiable", solve, notNullValue());
+    assertThat(solve.isEmpty(), is(true));
+  }
+
+  /** Tests false ("or" with zero arguments). */
+  @Test void testFalse() {
+    final Sat sat = new Sat();
+    final Term falseTerm = sat.or();
+    assertThat(falseTerm.toString(), is("false"));
+
+    final Map<Variable, Boolean> solve = sat.solve(falseTerm);
+    assertThat("not satisfiable", solve, nullValue());
   }
 
 }
