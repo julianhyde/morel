@@ -20,7 +20,9 @@ package net.hydromatic.morel.ast;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.mapping.IntPair;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.AbstractList;
 import java.util.List;
@@ -52,6 +54,24 @@ public class Pos {
     IntPair start = lineCol(ml, startOffset);
     IntPair end = lineCol(ml, endOffset);
     return new Pos(file, start.source, start.target, end.source, end.target);
+  }
+
+  /** Creates a Pos from a filename and a string with a delimiter character.
+   * The delimiter must occur exactly twice in the string. */
+  public static Pair<@NonNull String, @NonNull Pos> split(String s,
+      char delimiter, String file) {
+    final int i = s.indexOf(delimiter);
+    final int j = s.indexOf(delimiter, i + 1);
+    final int k = s.indexOf(delimiter, j + 1);
+    if (i < 0 || j <= i || k >= 0) {
+      throw new IllegalArgumentException("expected exactly two occurrences "
+          + "of delimiter, '" + delimiter + "'");
+    }
+    final String s2 = s.substring(0, i)
+        + s.substring(i + 1, j)
+        + s.substring(j + 1);
+    final Pos pos = of(s2, file, i, j - 1);
+    return Pair.of(s2, pos);
   }
 
   @Override public int hashCode() {
@@ -208,16 +228,19 @@ public class Pos {
   private static IntPair lineCol(String s, int offset) {
     int line = 1;
     int lineStart = 0;
-    for (int i = 0; i < s.length(); i++) {
+    int i;
+    final int n = Math.min(s.length(), offset);
+    for (i = 0; i < n; i++) {
       if (s.charAt(i) == '\n') {
         ++line;
         lineStart = i + 1;
       }
-      if (i == offset) {
-        return IntPair.of(line, offset - lineStart + 1);
-      }
     }
-    throw new IllegalArgumentException("not found");
+    if (i == offset) {
+      return IntPair.of(line, offset - lineStart + 1);
+    } else {
+      throw new IllegalArgumentException("not found");
+    }
   }
 }
 

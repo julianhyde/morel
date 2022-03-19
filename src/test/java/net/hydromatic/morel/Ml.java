@@ -49,6 +49,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.util.Pair;
 import org.hamcrest.Matcher;
 
 import java.io.StringReader;
@@ -95,16 +96,8 @@ class Ml {
 
   /** Creates an {@code Ml} with an error position in it. */
   static Ml ml(String ml, char delimiter) {
-    final int i = ml.indexOf(delimiter);
-    final int j = ml.indexOf(delimiter, i + 1);
-    final int k = ml.indexOf(delimiter, j + 1);
-    assertThat("expected exactly two occurrences of " + delimiter,
-        i >= 0 && j > i && k < 0, is(true));
-    final String ml2 = ml.substring(0, i)
-        + ml.substring(i + 1, j)
-        + ml.substring(j + 1);
-    final Pos pos = Pos.of(ml2, "stdIn", i, j - 1);
-    return new Ml(ml2, pos, ImmutableMap.of(), ImmutableMap.of());
+    Pair<String, Pos> pair = Pos.split(ml, delimiter, "stdIn");
+    return new Ml(pair.left, pair.right, ImmutableMap.of(), ImmutableMap.of());
   }
 
   /** Runs a task and checks that it throws an exception.
