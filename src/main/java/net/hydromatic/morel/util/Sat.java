@@ -25,10 +25,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static java.util.Objects.requireNonNull;
 
@@ -43,41 +41,25 @@ public class Sat {
   /** Finds an assignment of variables such that a term evaluates to true,
    * or null if there is no solution. */
   public @Nullable Map<Variable, Boolean> solve(Term term) {
-    List<List<Assignment>> allAssignments = new ArrayList<>();
+    final List<List<Assignment>> allAssignments = new ArrayList<>();
     for (Variable variable : variablesById.values()) {
       allAssignments.add(
           ImmutableList.of(new Assignment(variable, false),
               new Assignment(variable, true)));
     }
 
-    final Map<Variable, Boolean> env = new LinkedHashMap<>();
-    for (List<Assignment> assignments : Lists.cartesianProduct(allAssignments)) {
-      assignments.forEach(a -> env.put(a.variable, a.value));
-      boolean b = term.evaluate(env);
-      if (b) {
-        return ImmutableMap.copyOf(env);
+    final boolean[] env = new boolean[nextVariable];
+    for (List<Assignment> assignments
+        : Lists.cartesianProduct(allAssignments)) {
+      assignments.forEach(a -> env[a.variable.id] = a.value);
+      if (term.evaluate(env)) {
+        final ImmutableMap.Builder<Variable, Boolean> builder =
+            ImmutableMap.builder();
+        assignments.forEach(a -> builder.put(a.variable, a.value));
+        return builder.build();
       }
     }
     return null;
-  }
-
-  private static void gatherVariables(Term term, Set<Variable> variables) {
-    switch (term.op) {
-    case VARIABLE:
-      variables.add((Variable) term);
-      return;
-    case AND:
-    case OR:
-      for (Term term1 : ((Node) term).terms) {
-        gatherVariables(term1, variables);
-      }
-      return;
-    case NOT:
-      gatherVariables(((Not) term).term, variables);
-      return;
-    default:
-      throw new AssertionError(term);
-    }
   }
 
   public Variable variable(String name) {
@@ -127,7 +109,7 @@ public class Sat {
     protected abstract StringBuilder unparse(StringBuilder buf, int left,
         int right);
 
-    public abstract boolean evaluate(Map<Variable, Boolean> env);
+    public abstract boolean evaluate(boolean[] env);
   }
 
   /** Variable. Its value can be true or false. */
@@ -146,8 +128,8 @@ public class Sat {
       return buf.append(name);
     }
 
-    @Override public boolean evaluate(Map<Variable, Boolean> env) {
-      return env.get(this);
+    @Override public boolean evaluate(boolean[] env) {
+      return env[id];
     }
   }
 
@@ -193,7 +175,7 @@ public class Sat {
       super(Op.AND, terms);
     }
 
-    @Override public boolean evaluate(Map<Variable, Boolean> env) {
+    @Override public boolean evaluate(boolean[] env) {
       for (Term term : terms) {
         if (!term.evaluate(env)) {
           return false;
@@ -209,7 +191,7 @@ public class Sat {
       super(Op.OR, terms);
     }
 
-    @Override public boolean evaluate(Map<Variable, Boolean> env) {
+    @Override public boolean evaluate(boolean[] env) {
       for (Term term : terms) {
         if (term.evaluate(env)) {
           return true;
@@ -233,7 +215,7 @@ public class Sat {
       return term.unparse(buf.append(op.str), op.right, right);
     }
 
-    @Override public boolean evaluate(Map<Variable, Boolean> env) {
+    @Override public boolean evaluate(boolean[] env) {
       return !term.evaluate(env);
     }
   }
