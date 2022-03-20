@@ -1305,6 +1305,12 @@ public class MainTest {
     ml(ml10, '$')
         .assertMatchCoverage(is(Ml.MatchCoverage.NON_EXHAUSTIVE))
         .assertEvalError(pos -> throwsA("match nonexhaustive", pos));
+
+    final String ml11 = ""
+        + "fun f ((SOME i), true) = i\n"
+        + "  | f ((SOME i), false) = ~i";
+    ml(ml11)
+        .assertMatchCoverage(is(Ml.MatchCoverage.NON_EXHAUSTIVE));
   }
 
   /** Function declaration. */
