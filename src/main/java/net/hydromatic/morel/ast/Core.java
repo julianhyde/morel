@@ -989,8 +989,8 @@ public class Core {
     public final Exp exp;
     public final List<Match> matchList;
 
-    Case(Type type, Exp exp, ImmutableList<Match> matchList) {
-      super(Pos.ZERO, Op.CASE, type);
+    Case(Pos pos, Type type, Exp exp, ImmutableList<Match> matchList) {
+      super(pos, Op.CASE, type);
       this.exp = exp;
       this.matchList = matchList;
     }
@@ -1010,7 +1010,7 @@ public class Core {
 
     public Case copy(Exp exp, List<Match> matchList) {
       return exp == this.exp && matchList.equals(this.matchList) ? this
-          : core.caseOf(type, exp, matchList);
+          : core.caseOf(type, exp, matchList, pos);
     }
   }
 

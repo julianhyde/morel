@@ -91,7 +91,11 @@ public abstract class Compiles {
 
     // Check for exhaustive and redundant patterns, and throw errors or
     // warnings.
-    checkPatternCoverage(typeSystem, coreDecl0);
+    final boolean matchCoverageEnabled =
+        Prop.MATCH_COVERAGE_ENABLED.booleanValue(session.map);
+    if (matchCoverageEnabled) {
+      checkPatternCoverage(typeSystem, coreDecl0);
+    }
 
     Core.Decl coreDecl;
     if (inlinePassCount == 0) {
@@ -168,8 +172,8 @@ public abstract class Compiles {
       errorConsumer.accept(
           new CompileException(
               exhaustive
-                  ? "match redundant and nonexhaustive"
-                  : "match redundant",
+                  ? "match redundant"
+                  : "match redundant and nonexhaustive",
               redundantMatchList.get(0).pos));
     } else if (!exhaustive) {
       warningConsumer.accept(

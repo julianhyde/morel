@@ -74,11 +74,23 @@ class PatToSat {
       return;
 
     case BOOL_LITERAL_PAT:
+      // Transform false to FALSE and true to TRUE, constructor of the
+      // internal $bool datatype:
+      //   datatype $bool = FALSE | TRUE
+      // Knowing there are only two values allows us to
+      final DataType boolDataType =
+          (DataType) typeSystem.lookupInternal("$bool");
+      final Core.LiteralPat literalPat0 = (Core.LiteralPat) pat;
+      final Boolean value = (Boolean) literalPat0.value;
+      toTerm(core.con0Pat(boolDataType, value ? "TRUE" : "FALSE"), path, terms);
+      return;
+
     case CHAR_LITERAL_PAT:
     case INT_LITERAL_PAT:
     case REAL_LITERAL_PAT:
     case STRING_LITERAL_PAT:
-      final Path path2 = path.plus(((Core.LiteralPat) pat).value);
+      final Core.LiteralPat literalPat = (Core.LiteralPat) pat;
+      final Path path2 = path.plus(literalPat.value);
       terms.add(sat.variable(path2.toString()));
       return;
 
@@ -141,7 +153,7 @@ class PatToSat {
    * "[x, y]" to "CONS (x, CONS (y, NIL))",
    * etc. */
   private Core.Pat listToCons(Core.ListPat listPat) {
-    final Type listType = typeSystem.lookup("$list");
+    final Type listType = typeSystem.lookupInternal("$list");
     final DataType listDataType = (DataType) ((ForallType) listType).type;
     return listToConsRecurse(listDataType, listPat.args);
   }

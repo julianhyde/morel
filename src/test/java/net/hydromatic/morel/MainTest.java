@@ -20,6 +20,7 @@ package net.hydromatic.morel;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.TypeVar;
@@ -810,7 +811,9 @@ public class MainTest {
         + "in\n"
         + "  y + x1 + x2 + 3\n"
         + "end";
-    ml(ml).assertEval(is(11));
+    ml(ml)
+        .with(Prop.MATCH_COVERAGE_ENABLED, false)
+        .assertEval(is(11));
   }
 
   /** Tests that 'and' assignments occur simultaneously. */
@@ -1234,8 +1237,10 @@ public class MainTest {
     final String ml = "fun f x = case x > 0 of\n"
         + "   true => \"positive\"\n"
         + " | false => \"non-positive\"\n"
-        + " | true => \"oops\"";
-    ml(ml).assertMatchCoverage(is(REDUNDANT));
+        + " | $true => \"oops\"$";
+    ml(ml, '$')
+        .assertMatchCoverage(is(REDUNDANT))
+        .assertEvalError(pos -> throwsA("match redundant", pos));
 
     final String ml2 = "fun f (x, y) = x + y + 1";
     ml(ml2).assertMatchCoverage(is(Ml.MatchCoverage.OK));
@@ -1249,34 +1254,57 @@ public class MainTest {
     final String ml3 = "fun f 1 = 2 | f x = x + 3";
     ml(ml3).assertMatchCoverage(is(Ml.MatchCoverage.OK));
 
-    final String ml4 = "fun f 1 = 2 | f _ = 1";
+    final String ml4 = ""
+        + "fun f 1 = 2\n"
+        + "  | f _ = 1";
     ml(ml4).assertMatchCoverage(is(Ml.MatchCoverage.OK));
 
-    final String ml5 = "fun f [] = 0 | f (h :: t) = 1 + (f t)";
+    final String ml5 = ""
+        + "fun f [] = 0\n"
+        + "  | f (h :: t) = 1 + (f t)";
     ml(ml5).assertMatchCoverage(is(Ml.MatchCoverage.OK));
 
-    final String ml6 = "fun f (0, y) = y | f (x, y) = x + y + 1";
+    final String ml6 = ""
+        + "fun f (0, y) = y\n"
+        + "  | f (x, y) = x + y + 1";
     ml(ml6).assertMatchCoverage(is(Ml.MatchCoverage.OK));
 
-    final String ml7 = "fun f (x, y, 0) = y | f (x, y, z) = x + z";
+    final String ml7 = ""
+        + "fun f (x, y, 0) = y\n"
+        + "  | f (x, y, z) = x + z";
     ml(ml7).assertMatchCoverage(is(Ml.MatchCoverage.OK));
 
-    final String ml8 = "fun maskToString m =\n"
+    // The last case is redundant because we know that bool has two values.
+    final String ml8 = ""
+        + "fun f (true, y, z) = y\n"
+        + "  | f (false, y, z) = z\n"
+        + "  | $f _ = 0$";
+    ml(ml8, '$')
+        .assertMatchCoverage(is(Ml.MatchCoverage.REDUNDANT))
+        .assertEvalError(pos -> throwsA("match redundant", pos));
+
+    // The last case is redundant because we know that unit has only one value.
+    final String ml9 = ""
+        + "fun f () = 1\n"
+        + "  | f _ = 0";
+    ml(ml9).assertMatchCoverage(is(Ml.MatchCoverage.REDUNDANT));
+
+    final String ml10 = "fun maskToString m =\n"
         + "  let\n"
         + "    fun maskToString2 (m, s, 0) = s\n"
         + "      | maskToString2 (m, s, k) =\n"
         + "        maskToString2 (m div 3,\n"
-        + "          (case (m mod 3) of\n"
+        + "          ($case (m mod 3) of\n"
         + "              0 => \"b\"\n"
         + "            | 1 => \"y\"\n"
-        + "            | 2 => \"g\") ^ s,\n"
+        + "            | 2 => \"g\"$) ^ s,\n"
         + "          k - 1)\n"
         + "  in\n"
         + "    maskToString2 (m, \"\", 5)\n"
         + "  end";
-    if (false) {
-      ml(ml8).assertMatchCoverage(is(Ml.MatchCoverage.OK));
-    }
+    ml(ml10, '$')
+        .assertMatchCoverage(is(Ml.MatchCoverage.NON_EXHAUSTIVE))
+        .assertEvalError(pos -> throwsA("match nonexhaustive", pos));
   }
 
   /** Function declaration. */
