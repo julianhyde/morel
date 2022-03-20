@@ -61,7 +61,7 @@ public abstract class Compiles {
    */
   public static CompiledStatement prepareStatement(TypeSystem typeSystem,
       Session session, Environment env, AstNode statement,
-      @Nullable Calcite calcite) {
+      @Nullable Calcite calcite, Consumer<CompileException> warningConsumer) {
     Ast.Decl decl;
     if (statement instanceof Ast.Exp) {
       decl = toValDecl((Ast.Exp) statement);
@@ -69,7 +69,7 @@ public abstract class Compiles {
       decl = (Ast.Decl) statement;
     }
     return prepareDecl(typeSystem, session, env, calcite, decl,
-        decl == statement);
+        decl == statement, warningConsumer);
   }
 
   /**
@@ -78,7 +78,8 @@ public abstract class Compiles {
    */
   private static CompiledStatement prepareDecl(TypeSystem typeSystem,
       Session session, Environment env, @Nullable Calcite calcite,
-      Ast.Decl decl, boolean isDecl) {
+      Ast.Decl decl, boolean isDecl,
+      Consumer<CompileException> warningConsumer) {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
@@ -92,7 +93,7 @@ public abstract class Compiles {
     final boolean matchCoverageEnabled =
         Prop.MATCH_COVERAGE_ENABLED.booleanValue(session.map);
     if (matchCoverageEnabled) {
-      checkPatternCoverage(typeSystem, coreDecl0);
+      checkPatternCoverage(typeSystem, coreDecl0, warningConsumer);
     }
 
     Core.Decl coreDecl;
@@ -129,21 +130,17 @@ public abstract class Compiles {
   /** Checks for exhaustive and redundant patterns, and throws if there are
    * errors/warnings. */
   private static void checkPatternCoverage(TypeSystem typeSystem,
-      Core.Decl decl) {
+      Core.Decl decl, final Consumer<CompileException> warningConsumer) {
     final List<CompileException> errorList = new ArrayList<>();
-    final List<CompileException> warningList = new ArrayList<>();
     decl.accept(new Visitor() {
       @Override protected void visit(Core.Case kase) {
         super.visit(kase);
         checkPatternCoverage(typeSystem, kase, errorList::add,
-            warningList::add);
+            warningConsumer);
       }
     });
     if (!errorList.isEmpty()) {
       throw errorList.get(0);
-    }
-    if (!warningList.isEmpty()) {
-      throw warningList.get(0);
     }
   }
 
@@ -166,11 +163,11 @@ public abstract class Compiles {
           ? "match redundant"
           : "match redundant and nonexhaustive";
       errorConsumer.accept(
-          new CompileException(message,
+          new CompileException(message, false,
               redundantMatchList.get(0).pos));
     } else if (!exhaustive) {
       warningConsumer.accept(
-          new CompileException("match nonexhaustive", kase.pos));
+          new CompileException("match nonexhaustive", true, kase.pos));
     }
   }
 

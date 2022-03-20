@@ -51,6 +51,8 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.util.Pair;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.hamcrest.CustomTypeSafeMatcher;
 import org.hamcrest.Matcher;
 
 import java.io.StringReader;
@@ -61,7 +63,6 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.Matchers.hasMoniker;
 import static net.hydromatic.morel.Matchers.isAst;
@@ -245,9 +246,10 @@ class Ml {
         final AstNode statement = parser.statementEof();
         final Environment env = Environments.empty();
         final Session session = new Session();
+        final List<CompileException> warningList = new ArrayList<>();
         final CompiledStatement compiled =
             Compiles.prepareStatement(typeSystem, session, env, statement,
-                null);
+                null, warningList::add);
         action.accept(compiled);
       } catch (ParseException e) {
         throw new RuntimeException(e);
@@ -368,30 +370,54 @@ class Ml {
     return this;
   }
 
-  Ml assertMatchCoverage(Matcher<MatchCoverage> matcher) {
-    try {
-      ml(ml).assertEval(notNullValue());
-      assertThat(MatchCoverage.OK, matcher);
-      return this;
-    } catch (CompileException e) {
-      switch (e.getMessage()) {
-      case "match redundant":
-        assertThat(MatchCoverage.REDUNDANT, matcher);
-        return this;
-      case "redundant and exhaustive":
-        assertThat(MatchCoverage.NON_EXHAUSTIVE_AND_REDUNDANT, matcher);
-        return this;
-      case "match nonexhaustive":
-        assertThat(MatchCoverage.NON_EXHAUSTIVE, matcher);
-        return this;
-      default:
-        throw e;
-      }
+  Ml assertMatchCoverage(MatchCoverage expectedCoverage) {
+    final Function<Pos, Matcher<Throwable>> exceptionMatcherFactory;
+    final Matcher<List<Throwable>> warningsMatcher;
+    switch (expectedCoverage) {
+    case OK:
+      // Expect no errors or warnings
+      exceptionMatcherFactory = null;
+      warningsMatcher = isEmptyList();
+      break;
+    case REDUNDANT:
+      exceptionMatcherFactory = pos -> throwsA("match redundant", pos);
+      warningsMatcher = isEmptyList();
+      break;
+    case NON_EXHAUSTIVE_AND_REDUNDANT:
+      exceptionMatcherFactory = pos ->
+          throwsA("match nonexhaustive and redundant", pos);
+      warningsMatcher = isEmptyList();
+      break;
+    case NON_EXHAUSTIVE:
+      exceptionMatcherFactory = null;
+      warningsMatcher =
+          new CustomTypeSafeMatcher<List<Throwable>>("non-empty list") {
+        @Override protected boolean matchesSafely(List<Throwable> list) {
+          return list.stream()
+              .anyMatch(e ->
+                  e instanceof CompileException
+                      && e.getMessage().equals("match nonexhaustive"));
+        }
+      };
+      break;
+    default:
+      // Java doesn't know the switch is exhaustive; how ironic
+      throw new AssertionError(expectedCoverage);
     }
+    return assertEval(notNullValue(), null, exceptionMatcherFactory,
+        warningsMatcher);
+  }
+
+  private static <E> Matcher<List<E>> isEmptyList() {
+    return new CustomTypeSafeMatcher<List<E>>("empty list") {
+      @Override protected boolean matchesSafely(List<E> list) {
+        return list.isEmpty();
+      }
+    };
   }
 
   Ml assertPlan(Matcher<Code> planMatcher) {
-    return assertEval(null, planMatcher, null);
+    return assertEval(null, planMatcher, null, null);
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -400,12 +426,13 @@ class Ml {
   }
 
   Ml assertEval(Matcher<Object> resultMatcher) {
-    return assertEval(resultMatcher, null, null);
+    return assertEval(resultMatcher, null, null, null);
   }
 
   Ml assertEval(@Nullable Matcher<Object> resultMatcher,
       @Nullable Matcher<Code> planMatcher,
-      @Nullable Function<Pos, Matcher<Throwable>> exceptionMatcherFactory) {
+      @Nullable Function<Pos, Matcher<Throwable>> exceptionMatcherFactory,
+      @Nullable Matcher<List<Throwable>> warningsMatcher) {
     final Matcher<Throwable> exceptionMatcher =
         exceptionMatcherFactory == null
             ? null
@@ -414,26 +441,29 @@ class Ml {
       final Session session = new Session();
       session.map.putAll(propMap);
       eval(session, resolved.env, resolved.typeMap.typeSystem, resolved.node,
-          calcite, resultMatcher, planMatcher, exceptionMatcher);
+          calcite, resultMatcher, planMatcher, exceptionMatcher,
+          warningsMatcher);
     });
   }
 
   Ml assertEvalThrows(
       Function<Pos, Matcher<Throwable>> exceptionMatcherFactory) {
-    return assertEval(null, null, exceptionMatcherFactory);
+    return assertEval(null, null, exceptionMatcherFactory, null);
   }
 
   @CanIgnoreReturnValue
-  private Object eval(Session session, Environment env,
+  private <E extends Throwable> Object eval(Session session, Environment env,
       TypeSystem typeSystem, AstNode statement, Calcite calcite,
       @Nullable Matcher<Object> resultMatcher,
       @Nullable Matcher<Code> planMatcher,
-      @Nullable Matcher<Throwable> exceptionMatcher) {
+      @Nullable Matcher<Throwable> exceptionMatcher,
+      @Nullable Matcher<List<Throwable>> warningsMatcher) {
     final List<Binding> bindings = new ArrayList<>();
+    final List<Throwable> warningList = new ArrayList<>();
     try {
       CompiledStatement compiledStatement =
           Compiles.prepareStatement(typeSystem, session, env, statement,
-              calcite);
+              calcite, warningList::add);
       session.withoutHandlingExceptions(session1 ->
           compiledStatement.eval(session1, env, line -> {}, bindings::add));
       if (exceptionMatcher != null) {
@@ -444,6 +474,9 @@ class Ml {
         throw e;
       }
       assertThat(e, exceptionMatcher);
+    }
+    if (warningsMatcher != null) {
+      assertThat(warningList, warningsMatcher);
     }
     final Object result;
     if (statement instanceof Ast.Exp) {
@@ -488,6 +521,10 @@ class Ml {
       assertThat(e, matcher);
     }
     return this;
+  }
+
+  Ml assertEvalWarnings(Matcher<List<Throwable>> warningsMatcher) {
+    return assertEval(notNullValue(), null, null, warningsMatcher);
   }
 
   Ml assertEvalSame() {

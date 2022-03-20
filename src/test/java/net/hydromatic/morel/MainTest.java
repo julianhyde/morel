@@ -19,6 +19,7 @@
 package net.hydromatic.morel;
 
 import net.hydromatic.morel.ast.Ast;
+import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.parse.ParseException;
@@ -28,6 +29,7 @@ import net.hydromatic.morel.type.TypeVar;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.apache.calcite.util.Util;
+import org.hamcrest.CustomTypeSafeMatcher;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -52,6 +54,8 @@ import static net.hydromatic.morel.Matchers.list;
 import static net.hydromatic.morel.Matchers.map;
 import static net.hydromatic.morel.Matchers.throwsA;
 import static net.hydromatic.morel.Matchers.whenAppliedTo;
+import static net.hydromatic.morel.Ml.MatchCoverage.NON_EXHAUSTIVE;
+import static net.hydromatic.morel.Ml.MatchCoverage.OK;
 import static net.hydromatic.morel.Ml.MatchCoverage.REDUNDANT;
 import static net.hydromatic.morel.Ml.assertError;
 import static net.hydromatic.morel.Ml.ml;
@@ -1230,66 +1234,86 @@ public class MainTest {
         + " | false => \"non-positive\"\n"
         + " | $true => \"oops\"$";
     ml(ml, '$')
+        .assertMatchCoverage(REDUNDANT)
+        .assertEvalThrows(pos -> throwsA("match redundant", pos));
+
+    // similar, but 'fun' rather than 'case'
+    final String ml2 = ""
+        + "fun f true = \"positive\"\n"
+        + "  | f false = \"non-positive\"\n"
+        + "  | $f true = \"oops\"$";
+    ml(ml2, '$')
+        .assertMatchCoverage(REDUNDANT)
         .assertEvalThrows(pos -> throwsA("match redundant", pos));
   }
 
-  @Test void testMatchRedundancy() {
-    final String ml = "fun f x = case x > 0 of\n"
-        + "   true => \"positive\"\n"
-        + " | false => \"non-positive\"\n"
-        + " | $true => \"oops\"$";
-    ml(ml, '$')
-        .assertMatchCoverage(is(REDUNDANT))
-        .assertEvalError(pos -> throwsA("match redundant", pos));
+  @Test void testMatchCoverage1() {
+    final String ml = "fun f (x, y) = x + y + 1";
+    ml(ml).assertMatchCoverage(OK);
+  }
 
-    final String ml2 = "fun f (x, y) = x + y + 1";
-    ml(ml2).assertMatchCoverage(is(Ml.MatchCoverage.OK));
-
-    final String ml2b = ""
+  @Test void testMatchCoverage2() {
+    final String ml = ""
         + "fun f (1, y) = y\n"
         + "  | f (x, 2) = x\n"
         + "  | f (x, y) = x + y + 1";
-    ml(ml2b).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+    ml(ml).assertMatchCoverage(OK);
+  }
 
-    final String ml3 = "fun f 1 = 2 | f x = x + 3";
-    ml(ml3).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+  @Test void testMatchCoverage3() {
+    final String ml = "fun f 1 = 2 | f x = x + 3";
+    ml(ml).assertMatchCoverage(OK);
+  }
 
-    final String ml4 = ""
+  @Test void testMatchCoverage4() {
+    final String ml = ""
         + "fun f 1 = 2\n"
         + "  | f _ = 1";
-    ml(ml4).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+    ml(ml).assertMatchCoverage(OK);
+  }
 
-    final String ml5 = ""
+  @Test void testMatchCoverage5() {
+    final String ml = ""
         + "fun f [] = 0\n"
         + "  | f (h :: t) = 1 + (f t)";
-    ml(ml5).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+    ml(ml).assertMatchCoverage(OK);
+  }
 
-    final String ml6 = ""
+  @Test void testMatchCoverage6() {
+    final String ml = ""
         + "fun f (0, y) = y\n"
         + "  | f (x, y) = x + y + 1";
-    ml(ml6).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+    ml(ml).assertMatchCoverage(OK);
+  }
 
-    final String ml7 = ""
+  @Test void testMatchCoverage7() {
+    final String ml = ""
         + "fun f (x, y, 0) = y\n"
         + "  | f (x, y, z) = x + z";
-    ml(ml7).assertMatchCoverage(is(Ml.MatchCoverage.OK));
+    ml(ml).assertMatchCoverage(OK);
+  }
 
+  @Test void testMatchCoverage8() {
     // The last case is redundant because we know that bool has two values.
-    final String ml8 = ""
+    final String ml = ""
         + "fun f (true, y, z) = y\n"
         + "  | f (false, y, z) = z\n"
         + "  | $f _ = 0$";
-    ml(ml8, '$')
-        .assertMatchCoverage(is(Ml.MatchCoverage.REDUNDANT))
+    ml(ml, '$')
+        .assertMatchCoverage(REDUNDANT)
         .assertEvalError(pos -> throwsA("match redundant", pos));
+  }
 
+  @Test void testMatchCoverage9() {
     // The last case is redundant because we know that unit has only one value.
-    final String ml9 = ""
+    final String ml = ""
         + "fun f () = 1\n"
-        + "  | f _ = 0";
-    ml(ml9).assertMatchCoverage(is(Ml.MatchCoverage.REDUNDANT));
+        + "  | $f _ = 0$";
+    ml(ml, '$').assertMatchCoverage(REDUNDANT);
+  }
 
-    final String ml10 = "fun maskToString m =\n"
+  @Test void testMatchCoverage10() {
+    final String ml = "fun maskToString m =\n"
         + "  let\n"
         + "    fun maskToString2 (m, s, 0) = s\n"
         + "      | maskToString2 (m, s, k) =\n"
@@ -1302,15 +1326,32 @@ public class MainTest {
         + "  in\n"
         + "    maskToString2 (m, \"\", 5)\n"
         + "  end";
-    ml(ml10, '$')
-        .assertMatchCoverage(is(Ml.MatchCoverage.NON_EXHAUSTIVE))
-        .assertEvalError(pos -> throwsA("match nonexhaustive", pos));
+    ml(ml, '$')
+        .assertMatchCoverage(NON_EXHAUSTIVE);
+  }
 
-    final String ml11 = ""
-        + "fun f ((SOME i), true) = i\n"
-        + "  | f ((SOME i), false) = ~i";
-    ml(ml11)
-        .assertMatchCoverage(is(Ml.MatchCoverage.NON_EXHAUSTIVE));
+  @Test void testMatchCoverage12() {
+    // two "match nonexhaustive" warnings
+    final String ml = "fun f x =\n"
+        + "  let\n"
+        + "    fun g 1 = 1\n"
+        + "    and h 2 = 2\n"
+        + "  in\n"
+        + "    (g x) + (h 2)\n"
+        + "  end";
+    ml(ml)
+        .assertMatchCoverage(NON_EXHAUSTIVE)
+        .assertEvalWarnings(
+            new CustomTypeSafeMatcher<List<Throwable>>(
+                "two warnings") {
+              @Override protected boolean matchesSafely(List<Throwable> list) {
+                return list.size() == 2
+                    && list.get(0) instanceof CompileException
+                    && list.get(0).getMessage().equals("match nonexhaustive")
+                    && list.get(1) instanceof CompileException
+                    && list.get(1).getMessage().equals("match nonexhaustive");
+              }
+            });
   }
 
   /** Function declaration. */
