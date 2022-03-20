@@ -21,7 +21,6 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Prop;
@@ -42,7 +41,6 @@ import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
-import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Helpers for {@link Compiler} and {@link TypeResolver}. */
 public abstract class Compiles {
@@ -155,30 +153,24 @@ public abstract class Compiles {
     final List<Core.Pat> prevPatList = new ArrayList<>();
     final List<Core.Match> redundantMatchList = new ArrayList<>();
     for (Core.Match match : kase.matchList) {
-      Core.Pat pat = match.pat;
-      if (pat.op == Op.AS_PAT) {
-        pat = ((Core.AsPat) pat).pat;
-      }
-      if (pat.isCoveredBy(typeSystem, prevPatList)) {
+      if (PatternCoverageChecker.isCoveredBy(typeSystem, prevPatList,
+          match.pat)) {
         redundantMatchList.add(match);
       }
-      prevPatList.add(pat);
+      prevPatList.add(match.pat);
     }
     final boolean exhaustive =
-        !prevPatList.isEmpty()
-            && core.wildcardPat(prevPatList.get(0).type)
-            .isCoveredBy(typeSystem, prevPatList);
+        PatternCoverageChecker.isExhaustive(typeSystem, prevPatList);
     if (!redundantMatchList.isEmpty()) {
+      final String message = exhaustive
+          ? "match redundant"
+          : "match redundant and nonexhaustive";
       errorConsumer.accept(
-          new CompileException(
-              exhaustive
-                  ? "match redundant"
-                  : "match redundant and nonexhaustive",
+          new CompileException(message,
               redundantMatchList.get(0).pos));
     } else if (!exhaustive) {
       warningConsumer.accept(
-          new CompileException("match nonexhaustive",
-              kase.pos));
+          new CompileException("match nonexhaustive", kase.pos));
     }
   }
 

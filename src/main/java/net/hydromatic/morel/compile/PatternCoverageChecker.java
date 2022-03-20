@@ -16,8 +16,10 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.ast;
+package net.hydromatic.morel.compile;
 
+import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Type;
@@ -28,6 +30,7 @@ import net.hydromatic.morel.util.Sat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import org.apache.calcite.util.Util;
 
 import java.util.AbstractList;
@@ -46,14 +49,49 @@ import static java.util.Objects.requireNonNull;
  * with several variables, then checks whether the formula is satisfiable
  * (that is, whether there is a combination of assignments of boolean values
  * to the variables such that the formula evaluates to true). */
-class PatToSat {
+class PatternCoverageChecker {
   final TypeSystem typeSystem;
   final Sat sat = new Sat();
-  final Map<Path, Slot> pathSlots = new HashMap<>();
+  final Map<Path, DataTypeSlot> pathSlots = new HashMap<>();
 
-  /** Creates a PatToSat. */
-  PatToSat(TypeSystem typeSystem) {
+  /** Creates a PatternCoverageChecker. */
+  private PatternCoverageChecker(TypeSystem typeSystem) {
     this.typeSystem = requireNonNull(typeSystem, "typeSystem");
+  }
+
+  /** Returns whether every possible value that could be matched by
+   * pattern {@code pat} would already have been matched by one or more of
+   * {@code prevPatList}.
+   *
+   * <p>For example, the pattern "(1, b: bool)" is covered by "[(1, true),
+   * (_, false)]" but not by "[(1, true)]" or "[(_, false)]". */
+  static boolean isCoveredBy(TypeSystem typeSystem, List<Core.Pat> prevPatList,
+      Core.Pat pat) {
+    if (prevPatList.isEmpty()) {
+      return false; // shortcut
+    }
+    // p isCoveredBy [p0 ... pN ]
+    //   iff
+    // (f ^ ~f0 ^ ... ^ ~fN) is not satisfiable
+    //   where f is the formula for p
+    //   and f0 is the formula for p0, etc.
+    return new PatternCoverageChecker(typeSystem).isCoveredBy(pat, prevPatList);
+  }
+
+  /** Returns whether a list of patterns covers every possible value.
+   * If so, any pattern added to this list would be redundant. */
+  @SuppressWarnings("StaticPseudoFunctionalStyleMethod")
+  static boolean isExhaustive(TypeSystem typeSystem, List<Core.Pat> patList) {
+    if (patList.isEmpty()) {
+      return false; // shortcut
+    }
+    if (Iterables.any(patList, p ->
+        p.op == Op.WILDCARD_PAT || p.op == Op.ID_PAT)) {
+      return true; // shortcut
+    }
+    final Core.WildcardPat wildcardPat =
+        core.wildcardPat(patList.get(0).type);
+    return isCoveredBy(typeSystem, patList, wildcardPat);
   }
 
   /** Converts a pattern to a logical term. */
@@ -111,16 +149,14 @@ class PatToSat {
 
     case TUPLE_PAT:
       final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-      Ord.forEach(tuplePat.args, (pat2, i) -> {
-        toTerm(pat2, path.sub(i), terms);
-      });
+      Ord.forEach(tuplePat.args, (pat2, i) ->
+          toTerm(pat2, path.sub(i), terms));
       return;
 
     case RECORD_PAT:
       final Core.RecordPat recordPat = (Core.RecordPat) pat;
-      Ord.forEach(recordPat.args, (pat2, i) -> {
-        toTerm(pat2, path.sub(i), terms);
-      });
+      Ord.forEach(recordPat.args, (pat2, i) ->
+          toTerm(pat2, path.sub(i), terms));
       return;
 
     case LIST_PAT:
@@ -177,7 +213,7 @@ class PatToSat {
     final Pair<DataType, Type> pair = typeSystem.lookupTyCon(con);
     final DataType dataType = pair.left;
     DataTypeSlot slot =
-        (DataTypeSlot) pathSlots.computeIfAbsent(path,
+        pathSlots.computeIfAbsent(path,
             p -> new DataTypeSlot(dataType, p, sat));
     return slot.constructorMap.get(con);
   }
@@ -207,17 +243,15 @@ class PatToSat {
     //   or not (tag=C or tag=A))
     // because at most one tag must be present.
     pathSlots.values().forEach(slot -> {
-      if (slot instanceof DataTypeSlot) {
-        final List<Sat.Term> terms2 =
-            new ArrayList<>(((DataTypeSlot) slot).constructorMap.values());
-        terms1.add(sat.or(terms2));
+      final List<Sat.Term> terms2 =
+          new ArrayList<>(slot.constructorMap.values());
+      terms1.add(sat.or(terms2));
 
-        final List<Sat.Term> terms3 = new ArrayList<>();
-        for (int i = 0; i < terms2.size(); i++) {
-          terms3.add(sat.not(sat.or(new ElideList<>(terms2, i))));
-        }
-        terms1.add(sat.or(terms3));
+      final List<Sat.Term> terms3 = new ArrayList<>();
+      for (int i = 0; i < terms2.size(); i++) {
+        terms3.add(sat.not(sat.or(new ElideList<>(terms2, i))));
       }
+      terms1.add(sat.or(terms3));
     });
     final Sat.Term formula = sat.and(terms1);
     final Map<Sat.Variable, Boolean> solve = sat.solve(formula);
@@ -282,7 +316,6 @@ class PatToSat {
   /** Path that is a child of a given parent path.
    * The {@code ordinal} makes it unique within its parent.
    * For tuple and record patterns, {@code ordinal} is the field ordinal. */
-  @SuppressWarnings("rawtypes")
   private static class SubPath extends Path {
     final Path parent;
     final int ordinal;
@@ -298,14 +331,10 @@ class PatToSat {
     }
   }
 
-  /** Payload of a {@code Sat.Variable}. */
-  private static class Slot {
-  }
-
   /** Payload of a {@code Sat.Variable} that is an algebraic type.
    * There are sub-variables representing whether the tag holds
    * each of its allowed values (each of which is a constructor). */
-  private static class DataTypeSlot extends Slot {
+  private static class DataTypeSlot {
     final DataType dataType;
     final ImmutableMap<String, Sat.Variable> constructorMap;
 
@@ -320,4 +349,4 @@ class PatToSat {
   }
 }
 
-// End PatToSat.java
+// End PatternCoverageChecker.java

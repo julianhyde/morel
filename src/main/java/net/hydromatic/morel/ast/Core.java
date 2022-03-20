@@ -96,33 +96,6 @@ public class Core {
     }
 
     @Override public abstract Pat accept(Shuttle shuttle);
-
-    /** Returns whether every possible value that could be matched by this
-     * pattern would already have been matched by one or more of
-     * {@code patternList}.
-     *
-     * <p>For example, the pattern "(1, b: bool)" is covered by "[(1, true),
-     * (_, false)]" but not by "[(1, true)]" or "[(_, false)]". */
-    public boolean isCoveredBy(TypeSystem typeSystem, List<Pat> patList) {
-      if (false) {
-        return patList.contains(this)
-            || Iterables.any(patList, Pat::matchesAnything);
-      }
-      // p isCoveredBy [p0 ... pN ]
-      //   iff
-      // (f ^ ~f0 ^ ... ^ ~fN) is not satisfiable
-      //   where f is the formula for p
-      //   and f0 is the formula for p0, etc.
-      final PatToSat patToSat = new PatToSat(typeSystem);
-      return patToSat.isCoveredBy(this, patList);
-    }
-
-    /** Returns whether this pattern matches any value (of its shape).
-     * Examples that match anything are wildcards ("_"), variables,
-     * and tuple and record patterns that contain only wildcards/variables. */
-    boolean matchesAnything() {
-      return false;
-    }
   }
 
   /** Base class for named patterns ({@link IdPat} and {@link AsPat}).
@@ -192,11 +165,6 @@ public class Core {
     @Override public IdPat withType(Type type) {
       return type == this.type ? this : new IdPat(type, name, i);
     }
-
-    @Override boolean matchesAnything() {
-      // An id pattern "v" matches anything, assigning it to a variable.
-      return true;
-    }
   }
 
   /** Literal pattern, the pattern analog of the {@link Literal} expression.
@@ -265,10 +233,6 @@ public class Core {
 
     @Override public void accept(Visitor visitor) {
       visitor.visit(this);
-    }
-
-    @Override boolean matchesAnything() {
-      return true;
     }
   }
 
@@ -419,10 +383,6 @@ public class Core {
       return args.equals(this.args) ? this
           : core.tuplePat(typeSystem, args);
     }
-
-    @Override boolean matchesAnything() {
-      return Iterables.all(args, Pat::matchesAnything);
-    }
   }
 
   /** List pattern.
@@ -491,12 +451,6 @@ public class Core {
         List<Pat> args) {
       return args.equals(this.args) ? this
           : core.recordPat(typeSystem, argNames, args);
-    }
-
-    @Override boolean matchesAnything() {
-      // A record pattern "{f1: v1, f2: v2, ... fn: vn}" matches anything.
-      // Similarly, if vi are wildcards.
-      return Iterables.all(args, Pat::matchesAnything);
     }
   }
 
@@ -1432,7 +1386,6 @@ public class Core {
           && this.o.equals(((Wrapper) obj).o);
     }
   }
-
 }
 
 // End Core.java
