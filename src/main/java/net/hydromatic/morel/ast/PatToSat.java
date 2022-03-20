@@ -59,7 +59,7 @@ class PatToSat {
   /** Converts a pattern to a logical term. */
   private Sat.Term toTerm(Core.Pat pat) {
     final List<Sat.Term> terms = new ArrayList<>();
-    toTerm(pat, EmptyPath.INSTANCE, terms);
+    toTerm(pat, Path.ROOT, terms);
     return terms.size() == 1 ? terms.get(0) : sat.and(terms);
   }
 
@@ -90,8 +90,7 @@ class PatToSat {
     case REAL_LITERAL_PAT:
     case STRING_LITERAL_PAT:
       final Core.LiteralPat literalPat = (Core.LiteralPat) pat;
-      final Path path2 = path.plus(literalPat.value);
-      terms.add(sat.variable(path2.toString()));
+      terms.add(sat.variable(path.toVar(literalPat.value.toString())));
       return;
 
     case CON0_PAT:
@@ -113,16 +112,14 @@ class PatToSat {
     case TUPLE_PAT:
       final Core.TuplePat tuplePat = (Core.TuplePat) pat;
       Ord.forEach(tuplePat.args, (pat2, i) -> {
-        Path path3 = path.sub(i);
-        toTerm(pat2, path3, terms);
+        toTerm(pat2, path.sub(i), terms);
       });
       return;
 
     case RECORD_PAT:
       final Core.RecordPat recordPat = (Core.RecordPat) pat;
       Ord.forEach(recordPat.args, (pat2, i) -> {
-        Path path3 = path.sub(i);
-        toTerm(pat2, path3, terms);
+        toTerm(pat2, path.sub(i), terms);
       });
       return;
 
@@ -248,42 +245,56 @@ class PatToSat {
     }
   }
 
-  /** Identifies a point in a nested pattern. */
-  interface Path {
-    @SuppressWarnings("rawtypes")
-    default Path plus(Comparable value) {
-      return new SubPath(this, value);
+  /** Identifies a point in a nested pattern.
+   *
+   * <p>Paths are basically immutable lists of integers, built by appending
+   * one element at a time. */
+  private abstract static class Path {
+    /** Root path. */
+    static final Path ROOT = new Path() {
+      @Override protected void path(StringBuilder b) {
+      }
+    };
+
+    @Override public String toString() {
+      return toVar("");
     }
 
-    default Path sub(int i) {
+    /** Creates a sub-path. */
+    Path sub(int i) {
       return new SubPath(this, i);
     }
-  }
 
-  /** Root path. */
-  enum EmptyPath implements Path {
-    INSTANCE {
-      @Override public String toString() {
-        return "/";
-      }
+    /** Converts this to a variable.
+     *
+     * <p>{@code ROOT.sub(2).sub(1).toVar("x")}
+     * will return "2.1.x". */
+    String toVar(String name) {
+      final StringBuilder builder = new StringBuilder();
+      path(builder);
+      builder.append(name);
+      return builder.toString();
     }
+
+    protected abstract void path(StringBuilder b);
   }
 
   /** Path that is a child of a given parent path.
-   * The {@code value} makes it unique within its parent.
-   * For tuple and record patterns, {@code value} is the field ordinal. */
+   * The {@code ordinal} makes it unique within its parent.
+   * For tuple and record patterns, {@code ordinal} is the field ordinal. */
   @SuppressWarnings("rawtypes")
-  private static class SubPath implements Path {
-    private final Path parent;
-    private final Comparable value;
+  private static class SubPath extends Path {
+    final Path parent;
+    final int ordinal;
 
-    SubPath(Path parent, Comparable value) {
+    SubPath(Path parent, int ordinal) {
       this.parent = parent;
-      this.value = value;
+      this.ordinal = ordinal;
     }
 
-    @Override public String toString() {
-      return parent.toString() + '.' + value;
+    @Override protected void path(StringBuilder b) {
+      parent.path(b);
+      b.append(ordinal).append('.');
     }
   }
 
@@ -303,7 +314,7 @@ class PatToSat {
       final ImmutableMap.Builder<String, Sat.Variable> b =
           ImmutableMap.builder();
       dataType.typeConstructors.forEach((name, type) ->
-          b.put(name, sat.variable(path.toString() + "tag=" + name)));
+          b.put(name, sat.variable(path.toVar(name))));
       this.constructorMap = b.build();
     }
   }
