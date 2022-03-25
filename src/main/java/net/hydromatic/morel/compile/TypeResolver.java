@@ -431,12 +431,23 @@ public class TypeResolver {
       final Ast.Scan scan = (Ast.Scan) step;
       final Ast.Exp scanExp;
       final boolean eq;
-      if (scan.exp.op == Op.FROM_EQ) {
-        eq = true;
-        scanExp = ((Ast.PrefixCall) scan.exp).a;
-      } else {
+      final boolean suchThat;
+      switch (scan.exp.op) {
+      case SUCH_THAT:
         eq = false;
+        suchThat = true;
+        scanExp = ((Ast.PrefixCall) scan.exp).a;
+        break;
+      case FROM_EQ:
+        eq = true;
+        suchThat = false;
+        scanExp = ((Ast.PrefixCall) scan.exp).a;
+        break;
+      default:
+        eq = false;
+        suchThat = false;
         scanExp = scan.exp;
+        break;
       }
       final Unifier.Variable v15 = unifier.variable();
       final Unifier.Variable v16 = unifier.variable();
