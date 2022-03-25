@@ -106,6 +106,12 @@ public class FromBuilder {
     return this;
   }
 
+  public FromBuilder suchThat(Core.Pat pat, Core.Exp exp) {
+    Compiles.acceptBinding(typeSystem, pat, bindings);
+    return addStep(
+        core.scan(Op.SUCH_THAT, bindings, pat, exp, core.boolLiteral(true)));
+  }
+
   public FromBuilder scan(Core.Pat pat, Core.Exp exp) {
     return scan(pat, exp, core.boolLiteral(true));
   }
@@ -304,7 +310,11 @@ public class FromBuilder {
     }
 
     @Override protected void visit(Core.Scan scan) {
-      scan(scan.pat, scan.exp, scan.condition);
+      if (scan.op == Op.SUCH_THAT) {
+        suchThat(scan.pat, scan.exp);
+      } else {
+        scan(scan.pat, scan.exp, scan.condition);
+      }
     }
 
     @Override protected void visit(Core.Where where) {
