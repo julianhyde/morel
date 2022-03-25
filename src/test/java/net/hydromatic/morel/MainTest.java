@@ -1628,6 +1628,9 @@ public class MainTest {
     ml("from e in emps").assertParseSame();
     ml("from e in emps where c").assertParseSame();
     ml("from e in emps, d in depts").assertParseSame();
+    ml("from e in emps, d suchThat hasEmp e").assertParseSame();
+    ml("from e in emps, (job, d) suchThat hasEmp (e, d, job)")
+        .assertParseSame();
     ml("from , d in depts").assertError("Xx");
     ml("from join d in depts on c").assertError("Xx");
     ml("from left join d in depts on c").assertError("Xx");
@@ -1714,6 +1717,24 @@ public class MainTest {
         + "    {id = 103, name = \"Scooby\", deptno = 30}]\n"
         + "in\n"
         + "  from e in emps where #deptno e = 30 yield #id e\n"
+        + "end";
+    ml(ml).assertEvalIter(equalsOrdered(102, 103));
+  }
+
+  @Disabled // TODO
+  @Test void testFromSuchThat() {
+    final String ml = "let\n"
+        + "  val emps = [\n"
+        + "    {id = 100, name = \"Fred\", deptno = 10},\n"
+        + "    {id = 101, name = \"Velma\", deptno = 20},\n"
+        + "    {id = 102, name = \"Shaggy\", deptno = 30},\n"
+        + "    {id = 103, name = \"Scooby\", deptno = 30}]\n"
+        + "  fun hasEmpNameInDept (n, d) =\n"
+        + "    (n, d) elem (from e in emps yield (e.name, e.deptno))\n"
+        + "in\n"
+        + "  from (n, d) suchThat hasEmpNameInDept (n, d)\n"
+        + "    where d = 30\n"
+        + "    yield {d, n}\n"
         + "end";
     ml(ml).assertEvalIter(equalsOrdered(102, 103));
   }
