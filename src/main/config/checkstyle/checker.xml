@@ -63,6 +63,7 @@ License.
        or strings (possibly preceded by '+' or '*' and followed by
        say '),'. We allow leeway up to 85 chars.-->
   <module name="LineLength">
+    <property name="fileExtensions" value="java"/>
     <property name="max" value="85"/>
     <property name="ignorePattern" value="^import|@see|@link|@BaseMessage|href|^[ +*]*&quot;.*&quot;[);,]*$"/>
   </module>
