@@ -414,29 +414,46 @@ public class TypeResolver {
       final Ast.Scan scan = (Ast.Scan) step;
       final Ast.Exp scanExp;
       final boolean eq;
-      final boolean suchThat;
+      final Unifier.Variable v15 = unifier.variable();
+      final Unifier.Variable v16 = unifier.variable();
+      final Map<Ast.IdPat, Unifier.Term> termMap1 = new HashMap<>();
       switch (scan.exp.op) {
       case SUCH_THAT:
-        eq = false;
-        suchThat = true;
         scanExp = ((Ast.PrefixCall) scan.exp).a;
-        break;
+        final Ast.Pat pat2 =
+            deducePatType(env2, scan.pat, termMap1, null, v16);
+        TypeEnv env4 = env2;
+        for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
+          env4 = env4.bind(e.getKey().name, e.getValue());
+          fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
+              (Unifier.Variable) e.getValue());
+        }
+        final Ast.Exp scanExp2 = deduceType(env4, scanExp, v15);
+        final Ast.Exp scanExp3 = ast.fromSuchThat(scanExp2);
+        reg(scanExp, v15, toTerm(PrimitiveType.BOOL));
+        final Ast.Exp scanCondition2;
+        if (scan.condition != null) {
+          final Unifier.Variable v5 = unifier.variable();
+          scanCondition2 = deduceType(env4, scan.condition, v5);
+          equiv(v5, toTerm(PrimitiveType.BOOL));
+        } else {
+          scanCondition2 = null;
+        }
+        fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
+        return Pair.of(env4, v);
+
       case FROM_EQ:
         eq = true;
-        suchThat = false;
         scanExp = ((Ast.PrefixCall) scan.exp).a;
         break;
+
       default:
         eq = false;
-        suchThat = false;
         scanExp = scan.exp;
         break;
       }
-      final Unifier.Variable v15 = unifier.variable();
-      final Unifier.Variable v16 = unifier.variable();
       final Ast.Exp scanExp2 = deduceType(env2, scanExp, v15);
       final Ast.Exp scanExp3 = eq ? ast.fromEq(scanExp2) : scanExp2;
-      final Map<Ast.IdPat, Unifier.Term> termMap1 = new HashMap<>();
       final Ast.Pat pat2 =
           deducePatType(env2, scan.pat, termMap1, null, v16);
       reg(scanExp, v15, eq ? v16 : unifier.apply(LIST_TY_CON, v16));
