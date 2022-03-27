@@ -1749,7 +1749,7 @@ public class MainTest {
         + "    where d = 30\n"
         + "    yield {d, n}\n"
         + "end";
-    ml(ml).assertEvalIter(equalsOrdered(102, 103));
+    ml(ml).assertType("{d:int, n:string} list");
   }
 
   @Test void testFromNoYield() {
