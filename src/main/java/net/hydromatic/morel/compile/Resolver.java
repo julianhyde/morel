@@ -28,6 +28,7 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -52,6 +53,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Converts AST expressions to Core expressions. */
@@ -438,6 +440,10 @@ public class Resolver {
     final FnType type = (FnType) typeMap.getType(fn);
     final ImmutableList<Core.Match> matchList =
         transform(fn.matchList, this::toCore);
+    return toCore(fn.pos, type, matchList);
+  }
+
+  private Core.Fn toCore(Pos pos, FnType type, List<Core.Match> matchList) {
     if (matchList.size() == 1) {
       final Core.Match match = matchList.get(0);
       if (match.pat instanceof Core.IdPat) {
@@ -457,7 +463,7 @@ public class Resolver {
     final Core.IdPat idPat = core.idPat(type.paramType, nameGenerator);
     final Core.Id id = core.id(idPat);
     return core.fn(type, idPat,
-        core.caseOf(type.resultType, id, matchList, fn.pos));
+        core.caseOf(type.resultType, id, matchList, pos));
   }
 
   private Core.Case toCore(Ast.If if_) {
@@ -629,7 +635,45 @@ public class Resolver {
     case SCAN:
     case INNER_JOIN:
       final Ast.Scan scan = (Ast.Scan) step;
-      final Core.Exp coreExp = r.toCore(scan.exp);
+      final Core.Exp coreExp;
+      switch (scan.exp.op) {
+      case SUCH_THAT:
+        // Given
+        //   (n, d) suchThat hasNameInDept (n, d)
+        // that is,
+        //   pat = (n, d),
+        //   exp = hasNameInDept (n, d),
+        // generate
+        //   (n, d) in List.filter
+        //       (fn x => case x of (n, d) => hasNameInDept (n, d))
+        //       (extent: (string * int) list)
+        final Core.Pat corePat = r.toCore(scan.pat);
+        final ListType listType = typeMap.typeSystem.listType(corePat.type);
+        final FnType fnType =
+            typeMap.typeSystem.fnType(corePat.type, PrimitiveType.BOOL);
+
+        final List<Binding> bindings2 = new ArrayList<>(bindings);
+        Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
+        final Resolver r2 = withEnv(bindings2);
+
+        final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
+        final Core.Exp coreExp0 = r2.toCore(scanExp);
+        final Pos pos = Pos.ZERO;
+        final Core.Match match = core.match(corePat, coreExp0, pos);
+        final Core.Exp lambda = toCore(pos, fnType, ImmutableList.of(match));
+        final Core.Exp filterCall =
+            core.apply(pos, listType,
+                core.functionLiteral(typeMap.typeSystem, BuiltIn.LIST_FILTER),
+                lambda);
+        coreExp = core.apply(pos, listType, filterCall,
+            core.apply(pos, listType,
+                core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_EXTENT),
+                core.unitLiteral()));
+        break;
+
+      default:
+        coreExp = r.toCore(scan.exp);
+      }
       final ListType listType = (ListType) coreExp.type;
       final Core.Pat corePat = r.toCore(scan.pat, listType.elementType);
       final Op op = step.op == Op.SCAN
@@ -684,6 +728,59 @@ public class Resolver {
 
     default:
       throw new AssertionError("unknown step type " + step.op);
+    }
+  }
+
+  /** Expands "from pat suchThat exp" to an expression that can be used in
+   * "from pat in expandedExp". Note that "exp" is boolean, and "expandedExp"
+   * returns a list of values or tuples.
+   *
+   * <p>For example, we translate
+   * <pre>
+   * {@code from (x, y) suchThat foo (x, y)}
+   * </pre>
+   * as if the user had written
+   * <pre> {@code from (x, y) in (
+   *        from x in extent(typeOf(x)),
+   *            y in extent(typeOf(y))
+   *          where foo (x, y))}</pre>
+   *
+   * <p>{@code extent(bool)} returns {false, true}, but for all other types the
+   * list is infinite for all practical purposes. We will need to remove the
+   * {@code extent} call using further rewrite rules before the expression can
+   * be implemented.
+   */
+  private Ast.Exp expandSuchThat(Ast.Pat pat, Ast.Exp exp) {
+    final List<Ast.IdPat> patList = new ArrayList<>();
+    final List<Ast.FromStep> fromSteps = new ArrayList<>();
+    patList.forEach(p ->
+        fromSteps.add(
+            ast.scan(p.pos, Op.SCAN, p,
+                ast.apply(ast.id(p.pos, "$extent"), ast.id(p.pos, p.name)),
+                null)));
+    fromSteps.add(ast.where(exp.pos, exp));
+    return ast.from(Pos.ZERO, fromSteps);
+  }
+
+  /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
+   * to a list of id patterns. */
+  private static List<Core.IdPat> flatten(Core.Pat pat) {
+    switch (pat.op) {
+    case ID_PAT:
+      return ImmutableList.of((Core.IdPat) pat);
+
+    case TUPLE_PAT:
+      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+      for (Core.Pat arg : tuplePat.args) {
+        if (arg.op != Op.ID_PAT) {
+          throw new CompileException("must be id", false, arg.pos);
+        }
+      }
+      //noinspection unchecked,rawtypes
+      return (List) tuplePat.args;
+
+    default:
+      throw new CompileException("must be id", false, pat.pos);
     }
   }
 
