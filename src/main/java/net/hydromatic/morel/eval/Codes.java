@@ -2599,9 +2599,17 @@ public abstract class Codes {
   private static final Applicable VECTOR_COLLATE =
       collate(BuiltIn.VECTOR_COLLATE);
 
+  /** @see BuiltIn#Z_EXTENT */
+  private static final Applicable Z_EXTENT =
+      new ApplicableImpl(BuiltIn.Z_EXTENT) {
+        @Override public List apply(EvalEnv env, Object arg) {
+          return ImmutableList.of();
+        }
+      };
+
   /** @see BuiltIn#Z_LIST */
   private static final Applicable Z_LIST =
-      new ApplicableImpl("$.list") {
+      new ApplicableImpl(BuiltIn.Z_LIST) {
         @Override public Object apply(EvalEnv env, Object arg) {
           assert arg instanceof List;
           return arg;
@@ -2887,6 +2895,7 @@ public abstract class Codes {
           .put(BuiltIn.Z_TIMES_REAL, Z_TIMES_REAL)
           .put(BuiltIn.Z_SUM_INT, Z_SUM_INT)
           .put(BuiltIn.Z_SUM_REAL, Z_SUM_REAL)
+          .put(BuiltIn.Z_EXTENT, Z_EXTENT)
           .put(BuiltIn.Z_LIST, Z_LIST)
           .build();
 

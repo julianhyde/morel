@@ -441,6 +441,10 @@ public class Resolver {
     final FnType type = (FnType) typeMap.getType(fn);
     final ImmutableList<Core.Match> matchList =
         transform(fn.matchList, this::toCore);
+    return toCore(fn.pos, type, matchList);
+  }
+
+  private Core.Fn toCore(Pos pos, FnType type, List<Core.Match> matchList) {
     if (matchList.size() == 1) {
       final Core.Match match = matchList.get(0);
       if (match.pat instanceof Core.IdPat) {
@@ -460,7 +464,7 @@ public class Resolver {
     final Core.IdPat idPat = core.idPat(type.paramType, nameGenerator);
     final Core.Id id = core.id(idPat);
     return core.fn(type, idPat,
-        core.caseOf(type.resultType, id, matchList, fn.pos));
+        core.caseOf(type.resultType, id, matchList, pos));
   }
 
   private Core.Case toCore(Ast.If if_) {
@@ -857,6 +861,17 @@ public class Resolver {
       final Core.Exp coreExp;
       final Core.Pat corePat;
       switch (scan.exp.op) {
+      case SUCH_THAT:
+        corePat = r.toCore(scan.pat);
+
+        final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
+        Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
+        final Resolver r2 = withEnv(bindings2);
+
+        final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
+        coreExp = r2.toCore(scanExp);
+        break;
+
       default:
         coreExp = r.toCore(scan.exp);
         final ListType listType = (ListType) coreExp.type;
