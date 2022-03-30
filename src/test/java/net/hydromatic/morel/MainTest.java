@@ -48,6 +48,7 @@ import static net.hydromatic.morel.Matchers.hasMoniker;
 import static net.hydromatic.morel.Matchers.hasTypeConstructors;
 import static net.hydromatic.morel.Matchers.instanceOfAnd;
 import static net.hydromatic.morel.Matchers.isCode;
+import static net.hydromatic.morel.Matchers.isCode2;
 import static net.hydromatic.morel.Matchers.isLiteral;
 import static net.hydromatic.morel.Matchers.isUnordered;
 import static net.hydromatic.morel.Matchers.list;
@@ -1721,7 +1722,6 @@ public class MainTest {
     ml(ml).assertEvalIter(equalsOrdered(102, 103));
   }
 
-  @Disabled // TODO
   @Test void testFromSuchThat() {
     final String ml = "let\n"
         + "  val emps = [\n"
@@ -1736,7 +1736,31 @@ public class MainTest {
         + "    where d = 30\n"
         + "    yield {d, n}\n"
         + "end";
-    ml(ml).assertType("{d:int, n:string} list");
+    final String code = "from(sink\n"
+        + "  join(op join, pat (n_2, d_2),\n"
+        + "  exp apply(\n"
+        + "    fnCode apply(fnValue List.filter,\n"
+        + "      argCode match(v1,\n"
+        + "        apply(fnCode match((n_1, d_1),\n"
+        + "            apply(fnCode match((n, d),\n"
+        + "                apply2(fnValue elem,\n"
+        + "                  tuple(get(name n), get(name d)),\n"
+        + "                  from(sink\n"
+        + "                    join(op join, pat e, exp tuple(\n"
+        + "  tuple(constant(10), constant(100), constant(Fred)),\n"
+        + "  tuple(constant(20), constant(101), constant(Velma)),\n"
+        + "  tuple(constant(30), constant(102), constant(Shaggy)),\n"
+        + "  tuple(constant(30), constant(103), constant(Scooby))),\n"
+        + "      sink collect(tuple(apply(fnValue nth:2, argCode get(name e)),\n"
+        + "        apply(fnValue nth:0, argCode get(name e)))))))),\n"
+        + "               argCode tuple(get(name n), get(name d)))),\n"
+        + "            argCode get(name v1)))),\n"
+        + "          argCode apply(fnValue $.extent, argCode constant(()))),\n"
+        + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
+        + "          sink collect(tuple(get(name d), get(name n))))))";
+    ml(ml).assertType("{d:int, n:string} list")
+        .assertPlan(isCode2(code))
+        .assertEval(is(list()));
   }
 
   @Test void testFromNoYield() {
