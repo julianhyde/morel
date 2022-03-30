@@ -48,6 +48,7 @@ import static net.hydromatic.morel.Matchers.hasMoniker;
 import static net.hydromatic.morel.Matchers.hasTypeConstructors;
 import static net.hydromatic.morel.Matchers.instanceOfAnd;
 import static net.hydromatic.morel.Matchers.isCode;
+import static net.hydromatic.morel.Matchers.isCode2;
 import static net.hydromatic.morel.Matchers.isLiteral;
 import static net.hydromatic.morel.Matchers.isUnordered;
 import static net.hydromatic.morel.Matchers.list;
@@ -1734,7 +1735,6 @@ public class MainTest {
     ml(ml).assertEvalIter(equalsOrdered(102, 103));
   }
 
-  @Disabled // TODO
   @Test void testFromSuchThat() {
     final String ml = "let\n"
         + "  val emps = [\n"
@@ -1749,7 +1749,77 @@ public class MainTest {
         + "    where d = 30\n"
         + "    yield {d, n}\n"
         + "end";
-    ml(ml).assertType("{d:int, n:string} list");
+    final String code = "from(sink\n"
+        + "  join(op join, pat (n_2, d_2),\n"
+        + "  exp apply(\n"
+        + "    fnCode apply(fnValue List.filter,\n"
+        + "      argCode match(v1,\n"
+        + "        apply(fnCode match((n_1, d_1),\n"
+        + "            apply(fnCode match((n, d),\n"
+        + "                apply2(fnValue elem,\n"
+        + "                  tuple(get(name n), get(name d)),\n"
+        + "                  from(sink\n"
+        + "                    join(op join, pat e, exp tuple(\n"
+        + "  tuple(constant(10), constant(100), constant(Fred)),\n"
+        + "  tuple(constant(20), constant(101), constant(Velma)),\n"
+        + "  tuple(constant(30), constant(102), constant(Shaggy)),\n"
+        + "  tuple(constant(30), constant(103), constant(Scooby))),\n"
+        + "      sink collect(tuple(apply(fnValue nth:2, argCode get(name e)),\n"
+        + "        apply(fnValue nth:0, argCode get(name e)))))))),\n"
+        + "               argCode tuple(get(name n), get(name d)))),\n"
+        + "            argCode get(name v1)))),\n"
+        + "          argCode apply(fnValue $.extent, argCode constant(()))),\n"
+        + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
+        + "          sink collect(tuple(get(name d), get(name n))))))";
+    ml(ml).assertType("{d:int, n:string} list")
+        .assertPlan(isCode2(code))
+        .assertEval(is(list()));
+  }
+
+  @Test void testFromSuchThat2() {
+    final String ml = "let\n"
+        + "  fun hasJob (d, job) =\n"
+        + "    (d div 2, job)\n"
+        + "      elem (from e in scott.emp yield (e.deptno, e.job))\n"
+        + "in\n"
+        + "  from d in scott.dept,"
+        + "      j suchThat hasJob (d.deptno, j)\n"
+        + "    yield j\n"
+        + "end";
+    final String core = "from d_1 in #dept scott "
+        + "join j_1 in ("
+        + "from v1 in extent () where (fn j =>"
+        + " let val v0 = (#deptno d_1, j) in"
+        + " case v0 of (d, job) => op elem ((op div (d, 2), job),"
+        + " from e in #emp scott"
+        + " yield (#deptno e, #job e)) end) v1) yield j_1";
+    final String code = "from(sink join(op join, pat d_1,\n"
+        + "    exp apply(fnValue nth:1, argCode get(name scott)),\n"
+        + "  sink join(op join, pat j_1,\n"
+        + "      exp apply(\n"
+        + "        fnCode apply(fnValue List.filter,\n"
+        + "          argCode match(j,\n"
+        + "            apply(fnCode match((d, job),\n"
+        + "              apply2(fnValue elem,\n"
+        + "                tuple(apply2(fnValue div, get(name d), constant(2)),\n"
+        + "                get(name job)),\n"
+        + "              from(\n"
+        + "              sink join(op join, pat e,\n"
+        + "                exp apply(fnValue nth:2, argCode get(name scott)),\n"
+        + "                sink collect(\n"
+        + "                  tuple(apply(fnValue nth:1, argCode get(name e)),\n"
+        + "                    apply(fnValue nth:5, argCode get(name e)))))))),\n"
+        + "              argCode tuple(\n"
+        + "                apply(fnValue nth:0, argCode get(name d)),\n"
+        + "                get(name j))))),\n"
+        + "        argCode apply(fnValue $.extent, argCode constant(()))),\n"
+        + "    sink collect(get(name j)))))";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("string list")
+        .assertCore(2, is(core))
+        .assertPlan(isCode2(code))
+        .assertEval(is(list()));
   }
 
   @Test void testFromNoYield() {
