@@ -1,0 +1,335 @@
+statementEof ::=
+	 statement  EOF
+
+statementSemicolonOrEof ::=
+	 EOF
+	|  statement  (  SEMICOLON
+	|  EOF  )
+
+statementSemicolon ::=
+	 statement  SEMICOLON
+
+statement ::=
+	 expression
+	|  decl
+
+namedType ::=
+	 IDENTIFIER
+
+type ::=
+	 type6  (  RTHINARROW  type6  )*
+
+type6 ::=
+	 type7  (  STAR  type7  )*
+
+type7 ::=
+	 atomicType  (  IDENTIFIER  )*
+
+atomicType ::=
+	 tyVar
+	|  namedType
+	|  recordType
+	|  LPAREN  type  (  RPAREN
+	|  (  COMMA  type  )+  RPAREN  )
+
+recordPat ::=
+	 (  NON_NEGATIVE_INTEGER_LITERAL
+	|  IDENTIFIER  ) (  EQ  pat
+	|  )
+
+atomPat ::=
+	 identifier
+	|  literal
+	|  "_"
+	|  LPAREN  (  pat  (  COMMA  pat  )*  )?  RPAREN
+	|  LBRACKET  (  pat  (  COMMA  pat  )*  )?  RBRACKET
+	|  LBRACE  (  ELLIPSIS
+	|  recordPat  (  LOOKAHEAD  COMMA  recordPat  )*  (  COMMA  ELLIPSIS  )?  )?  RBRACE
+
+pat4 ::=
+	 identifier  (  AS  pat
+	|  pat
+	|  )
+	|  atomPat
+
+pat5 ::=
+	 pat4  (  CONS  pat4  )*
+
+pat ::=
+	 pat5  (  COLON  type  )*
+
+funMatch ::=
+	 identifier  (  atomPat  )+  EQ  expression
+
+funBind ::=
+	 funMatch  (  BAR  funMatch  )*
+
+funDecl ::=
+	 FUN  funBind  (  AND  funBind  )*
+
+typeConstructor ::=
+	 identifier  (  OF  type
+	|  )
+
+datatypeBind ::=
+	 (  tyVar
+	|  LPAREN  tyVar  (  COMMA  tyVar  )*  RPAREN  )?  identifier  EQ  typeConstructor  (  BAR  typeConstructor  )*
+
+datatypeDecl ::=
+	 DATATYPE  datatypeBind  (  AND  datatypeBind  )*
+
+declEof ::=
+	 decl  EOF
+
+decl ::=
+	 datatypeDecl
+	|  valDecl
+	|  funDecl
+
+valBind ::=
+	 pat  EQ  expression
+
+valDecl ::=
+	 VAL  (  REC  )?  valBind  (  AND  valBind  )*
+
+addValDecl ::=
+	 valDecl
+
+recordExp ::=
+	 LOOKAHEAD  NON_NEGATIVE_INTEGER_LITERAL  EQ  expression
+	|  LOOKAHEAD  IDENTIFIER  EQ  expression
+	|  expression
+
+atom ::=
+	 identifier
+	|  recordSelector
+	|  literal
+	|  let
+	|  fn
+	|  ifThenElse
+	|  caseOf
+	|  from
+	|  LPAREN  (  RPAREN
+	|  expression  (  RPAREN
+	|  (  COMMA  expression  )+  RPAREN  ) )
+	|  LBRACKET  (  expression  (  COMMA  expression  )*  )?  RBRACKET
+	|  LBRACE  (  recordExp  (  COMMA  recordExp  )*  )?  RBRACE
+
+namedExpression ::=
+	 LOOKAHEAD  identifier  EQ  expression
+	|  expression
+
+namedExpressionCommaList ::=
+	 namedExpression  (  COMMA  namedExpression  )*
+
+expression ::=
+	 expression1
+
+expression1 ::=
+	 expression2  (  ORELSE  expression2  )*
+
+expression2 ::=
+	 expression3  (  ANDALSO  expression3  )*
+
+expression3 ::=
+	 expression4  (  O  expression4  )*
+
+expression4 ::=
+	 expression5  (  EQ  expression5
+	|  NE  expression5
+	|  LT  expression5
+	|  GT  expression5
+	|  LE  expression5
+	|  GE  expression5
+	|  ELEM  expression5
+	|  NOT_ELEM  expression5  )*
+
+expression5 ::=
+	 expression6  (  AT  expression6
+	|  CONS  expression6  )*
+
+expression6 ::=
+	 expression7  (  PLUS  expression7
+	|  MINUS  expression7
+	|  CARET  expression7
+	|  EXCEPT  expression7
+	|  UNION  expression7  )*
+
+expression7 ::=
+	 TILDE  expression7
+	|  expression8  (  STAR  expression8
+	|  SLASH  expression8
+	|  DIV  expression8
+	|  INTERSECT  expression8
+	|  MOD  expression8  )*
+
+expression8 ::=
+	 expression9  (  expression9  )*
+
+expression9 ::=
+	 atom  (  DOT  identifier  )*
+
+match ::=
+	 pat  RARROW  expression
+
+matchList ::=
+	 match  (  BAR  match  )*
+
+fn ::=
+	 FN  match
+
+orderItem ::=
+	 expression  (  DESC
+	|  )
+
+orderItemCommaList ::=
+	 orderItem  (  COMMA  orderItem  )*
+
+aggregate ::=
+	 namedExpression  (  OF  expression
+	|  )
+
+aggregateCommaList ::=
+	 aggregate  (  COMMA  aggregate  )*
+
+fromSource ::=
+	 pat  (  IN  expression
+	|  EQ  expression  )
+
+fromStep ::=
+	 JOIN  fromSource  (  LOOKAHEAD  ON  expression
+	|  )
+	|  WHERE  expression
+	|  GROUP  (  namedExpressionCommaList
+	|  ) (  COMPUTE  aggregateCommaList
+	|  )
+	|  COMPUTE  aggregateCommaList
+	|  ORDER  orderItemCommaList
+	|  YIELD  expression
+
+fromFirstStep ::=
+	 fromSource
+
+from ::=
+	 FROM  (  fromFirstStep  (  COMMA  fromFirstStep  )*  )?  (  fromStep  )*
+
+caseOf ::=
+	 CASE  expression  OF  matchList
+
+let ::=
+	 LET  (  decl  (  SEMICOLON  )?  )+  IN  expression  END
+
+ifThenElse ::=
+	 IF  expression  THEN  expression  ELSE  expression
+
+fieldType ::=
+	 identifier  COLON  type
+
+recordType ::=
+	 LBRACE  (  fieldType  (  COMMA  fieldType  )*  )?  RBRACE
+
+tyVarOptionalList ::=
+	 tyVar
+	|  LPAREN  tyVar  (  COMMA  tyVar  )*
+	|
+
+tyVar ::=
+	 TY_VAR
+
+recordSelector ::=
+	 LABEL
+
+identifier ::=
+	 IDENTIFIER
+
+charLiteral ::=
+	 CHAR_LITERAL
+
+stringLiteral ::=
+	 QUOTED_STRING
+
+numericLiteral ::=
+	 (  NON_NEGATIVE_INTEGER_LITERAL
+	|  NEGATIVE_INTEGER_LITERAL  )
+	|  REAL_LITERAL
+	|  SCIENTIFIC_LITERAL
+
+literalEof ::=
+	 literal  EOF
+
+literal ::=
+	 numericLiteral
+	|  stringLiteral
+	|  charLiteral
+
+//Tokens
+//< \(\S+\):\s*\("[^"]+"\).+
+
+AND ::= "and"
+ANDALSO ::= "andalso"
+AS ::= "as"
+CASE ::= "case"
+DATATYPE ::= "datatype"
+DIV ::= "div"
+ELEM ::= "elem"
+ELSE ::= "else"
+EXCEPT ::= "except"
+END ::= "end"
+FN ::= "fn"
+FUN ::= "fun"
+IF ::= "if"
+IN ::= "in"
+INTERSECT ::= "intersect"
+LET ::= "let"
+MOD ::= "mod"
+NOT_ELEM ::= "notElem"
+O ::= "o"
+OF ::= "of"
+ORELSE ::= "orelse"
+REC ::= "rec"
+THEN ::= "then"
+UNION ::= "union"
+VAL ::= "val"
+
+// The following are relational extensions:
+COMPUTE ::= "compute"
+DESC ::= "desc"
+FROM ::= "from"
+GROUP ::= "group"
+JOIN ::= "join"
+ON ::= "on"
+ORDER ::= "order"
+WHERE ::= "where"
+YIELD ::= "yield"
+
+LPAREN ::= "("
+RPAREN ::= ")"
+LBRACE ::= "{"
+RBRACE ::= "}"
+LBRACKET ::= "["
+RBRACKET ::= "]"
+SEMICOLON ::= ";"
+BAR ::= "|"
+DOT ::= "."
+COMMA ::= ","
+RARROW ::= "=>"
+RTHINARROW ::= "->"
+
+EQ ::= "="
+GT ::= ">"
+LT ::= "<"
+COLON ::= ":"
+LE ::= "<="
+GE ::= ">="
+NE ::= "<>"
+PLUS ::= "+"
+MINUS ::= "-"
+CARET ::= "^"
+STAR ::= "*"
+SLASH ::= "/"
+TILDE ::= "~"
+CONS ::= "::"
+AT ::= "@"
+ELLIPSIS ::= "..."
+QUOTE ::= "'"
+DOUBLE_QUOTE ::= '"'
