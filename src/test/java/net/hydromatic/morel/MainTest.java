@@ -1776,6 +1776,52 @@ public class MainTest {
         .assertEval(is(list()));
   }
 
+  @Test void testFromSuchThat2() {
+    final String ml = "let\n"
+        + "  fun hasJob (d, job) =\n"
+        + "    (d div 2, job)\n"
+        + "      elem (from e in scott.emp yield (e.deptno, e.job))\n"
+        + "in\n"
+        + "  from d in scott.dept,"
+        + "      j suchThat hasJob (d.deptno, j)\n"
+        + "    yield j\n"
+        + "end";
+    final String core = "from d_1 in #dept scott "
+        + "join j_1 in ("
+        + "from v1 in extent () where (fn j =>"
+        + " let val v0 = (#deptno d_1, j) in"
+        + " case v0 of (d, job) => op elem ((op div (d, 2), job),"
+        + " from e in #emp scott"
+        + " yield (#deptno e, #job e)) end) v1) yield j_1";
+    final String code = "from(sink join(op join, pat d_1,\n"
+        + "    exp apply(fnValue nth:1, argCode get(name scott)),\n"
+        + "  sink join(op join, pat j_1,\n"
+        + "      exp apply(\n"
+        + "        fnCode apply(fnValue List.filter,\n"
+        + "          argCode match(j,\n"
+        + "            apply(fnCode match((d, job),\n"
+        + "              apply2(fnValue elem,\n"
+        + "                tuple(apply2(fnValue div, get(name d), constant(2)),\n"
+        + "                get(name job)),\n"
+        + "              from(\n"
+        + "              sink join(op join, pat e,\n"
+        + "                exp apply(fnValue nth:2, argCode get(name scott)),\n"
+        + "                sink collect(\n"
+        + "                  tuple(apply(fnValue nth:1, argCode get(name e)),\n"
+        + "                    apply(fnValue nth:5, argCode get(name e)))))))),\n"
+        + "              argCode tuple(\n"
+        + "                apply(fnValue nth:0, argCode get(name d)),\n"
+        + "                get(name j))))),\n"
+        + "        argCode apply(fnValue $.extent, argCode constant(()))),\n"
+        + "    sink collect(get(name j)))))";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("string list")
+        .assertCore(2, is(core))
+        .assertPlan(isCode2(code))
+        .assertEval(is(list()));
+  }
+
   @Test void testFromNoYield() {
     final String ml = "let\n"
         + "  val emps =\n"
