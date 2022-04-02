@@ -1888,6 +1888,12 @@ maskToString 0;
 maskToString 1;
 maskToString 6;
 maskToString (mask ("abcde", "spuds"));
+(*) Mask should be "ygbbb" ("t" and e" occur twice in guess, once in solution)
+(*) Based on wordle #279
+maskToString (mask ("teeth", "depot"));
+(*) Mask should be "bgygg" ("l" occurs twice in guess and solution)
+(*) Based on wordle #285
+maskToString (mask ("jolly", "lowly"));
 
 (* For a guess, returns the number of mask groups.
    The expected size of a mask group is the number of remaining

@@ -1937,6 +1937,16 @@ val it = "bbbyg" : string
 maskToString (mask ("abcde", "spuds"));
 val it = "bbbgb" : string
 
+(*) Mask should be "ygbbb" ("t" and e" occur twice in guess, once in solution)
+(*) Based on wordle #279
+maskToString (mask ("teeth", "depot"));
+val it = "ygbbb" : string
+
+(*) Mask should be "bgygg" ("l" occurs twice in guess and solution)
+(*) Based on wordle #285
+maskToString (mask ("jolly", "lowly"));
+val it = "bgygg" : string
+
 
 (* For a guess, returns the number of mask groups.
    The expected size of a mask group is the number of remaining
