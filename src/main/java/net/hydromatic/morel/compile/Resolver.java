@@ -28,7 +28,6 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -440,30 +439,7 @@ public class Resolver {
     final FnType type = (FnType) typeMap.getType(fn);
     final ImmutableList<Core.Match> matchList =
         transform(fn.matchList, this::toCore);
-    return toCore(fn.pos, type, matchList);
-  }
-
-  private Core.Fn toCore(Pos pos, FnType type, List<Core.Match> matchList) {
-    if (matchList.size() == 1) {
-      final Core.Match match = matchList.get(0);
-      if (match.pat instanceof Core.IdPat) {
-        // Simple function, "fn x => exp". Does not need 'case'.
-        return core.fn(type, (Core.IdPat) match.pat, match.exp);
-      }
-      if (match.pat instanceof Core.TuplePat
-          && ((Core.TuplePat) match.pat).args.isEmpty()) {
-        // Simple function with unit arg, "fn () => exp";
-        // needs a new variable, but doesn't need case, "fn (v0: unit) => exp"
-        final Core.IdPat idPat = core.idPat(type.paramType, nameGenerator);
-        return core.fn(type, idPat, match.exp);
-      }
-    }
-    // Complex function, "fn (x, y) => exp";
-    // needs intermediate variable and case, "fn v => case v of (x, y) => exp"
-    final Core.IdPat idPat = core.idPat(type.paramType, nameGenerator);
-    final Core.Id id = core.id(idPat);
-    return core.fn(type, idPat,
-        core.caseOf(type.resultType, id, matchList, pos));
+    return core.fn(fn.pos, type, matchList, nameGenerator);
   }
 
   private Core.Case toCore(Ast.If if_) {
@@ -634,48 +610,27 @@ public class Resolver {
     case INNER_JOIN:
       final Ast.Scan scan = (Ast.Scan) step;
       final Core.Exp coreExp;
+      final ListType listType;
       switch (scan.exp.op) {
       case SUCH_THAT:
-        // Given
-        //   (n, d) suchThat hasNameInDept (n, d)
-        // that is,
-        //   pat = (n, d),
-        //   exp = hasNameInDept (n, d),
-        // generate
-        //   (n, d) in List.filter
-        //       (fn x => case x of (n, d) => hasNameInDept (n, d))
-        //       (extent: (string * int) list)
         final Core.Pat corePat = r.toCore(scan.pat);
-        final ListType listType = typeMap.typeSystem.listType(corePat.type);
-        final FnType fnType =
-            typeMap.typeSystem.fnType(corePat.type, PrimitiveType.BOOL);
+        listType = typeMap.typeSystem.listType(corePat.type);
 
         final List<Binding> bindings2 = new ArrayList<>(bindings);
         Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
         final Resolver r2 = withEnv(bindings2);
 
         final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
-        final Core.Exp coreExp0 = r2.toCore(scanExp);
-        final Pos pos = Pos.ZERO;
-        final Core.Match match = core.match(corePat, coreExp0, pos);
-        final Core.Exp lambda = toCore(pos, fnType, ImmutableList.of(match));
-        final Core.Exp filterCall =
-            core.apply(pos, listType,
-                core.functionLiteral(typeMap.typeSystem, BuiltIn.LIST_FILTER),
-                lambda);
-        coreExp = core.apply(pos, listType, filterCall,
-            core.apply(pos, listType,
-                core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_EXTENT),
-                core.unitLiteral()));
+        coreExp = r2.toCore(scanExp);
         break;
 
       default:
         coreExp = r.toCore(scan.exp);
+        listType = (ListType) coreExp.type;
       }
-      final ListType listType = (ListType) coreExp.type;
       final Core.Pat corePat = r.toCore(scan.pat, listType.elementType);
-      final Op op = step.op == Op.SCAN
-          ? Op.INNER_JOIN
+      final Op op = scan.exp.op == Op.SUCH_THAT ? Op.SUCH_THAT
+          : step.op == Op.SCAN ? Op.INNER_JOIN
           : step.op;
       final List<Binding> bindings2 = new ArrayList<>(bindings);
       Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);

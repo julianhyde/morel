@@ -340,7 +340,7 @@ public enum CoreBuilder {
     if (!steps.isEmpty() && Iterables.getLast(steps) instanceof Core.Yield) {
       elementType = ((Core.Yield) Iterables.getLast(steps)).exp.type;
     } else {
-      final List<Binding> lastBindings = core.lastBindings(steps);
+      final List<Binding> lastBindings = lastBindings(steps);
       if (lastBindings.size() == 1) {
         elementType = getOnlyElement(lastBindings).id.type;
       } else {
@@ -367,15 +367,15 @@ public enum CoreBuilder {
       List<Core.FromStep> steps) {
     final List<Binding> bindings = lastBindings(steps);
     if (bindings.size() == 1) {
-      return core.id(getOnlyElement(bindings).id);
+      return id(getOnlyElement(bindings).id);
     } else {
       final SortedMap<Core.NamedPat, Core.Exp> map = new TreeMap<>();
       final SortedMap<String, Type> argNameTypes = new TreeMap<>(ORDERING);
       bindings.forEach(b -> {
-        map.put(b.id, core.id(b.id));
+        map.put(b.id, id(b.id));
         argNameTypes.put(b.id.name, b.id.type);
       });
-      return core.tuple(typeSystem.recordType(argNameTypes), map.values());
+      return tuple(typeSystem.recordType(argNameTypes), map.values());
     }
   }
 
@@ -392,6 +392,29 @@ public enum CoreBuilder {
 
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {
     return new Core.Fn(type, idPat, exp);
+  }
+
+  public Core.Fn fn(Pos pos, FnType type, List<Core.Match> matchList,
+      NameGenerator nameGenerator) {
+    if (matchList.size() == 1) {
+      final Core.Match match = matchList.get(0);
+      if (match.pat instanceof Core.IdPat) {
+        // Simple function, "fn x => exp". Does not need 'case'.
+        return fn(type, (Core.IdPat) match.pat, match.exp);
+      }
+      if (match.pat instanceof Core.TuplePat
+          && ((Core.TuplePat) match.pat).args.isEmpty()) {
+        // Simple function with unit arg, "fn () => exp";
+        // needs a new variable, but doesn't need case, "fn (v0: unit) => exp"
+        final Core.IdPat idPat = idPat(type.paramType, nameGenerator);
+        return fn(type, idPat, match.exp);
+      }
+    }
+    // Complex function, "fn (x, y) => exp";
+    // needs intermediate variable and case, "fn v => case v of (x, y) => exp"
+    final Core.IdPat idPat = idPat(type.paramType, nameGenerator);
+    final Core.Id id = id(idPat);
+    return fn(type, idPat, caseOf(type.resultType, id, matchList, pos));
   }
 
   public Core.Apply apply(Pos pos, Type type, Core.Exp fn, Core.Exp arg) {
@@ -460,10 +483,10 @@ public enum CoreBuilder {
     case TUPLE_TYPE:
       ((RecordLikeType) exp.type).argNameTypes().forEach((name, type) ->
           bindings.add(
-              Binding.of(core.idPat(type, name, typeSystem.nameGenerator))));
+              Binding.of(idPat(type, name, typeSystem.nameGenerator))));
       break;
     default:
-      bindings.add(Binding.of(core.idPat(exp.type, typeSystem.nameGenerator)));
+      bindings.add(Binding.of(idPat(exp.type, typeSystem.nameGenerator)));
     }
     return yield_(bindings, exp);
   }
