@@ -1066,6 +1066,7 @@ public class Core {
       super(op, bindings);
       switch (op) {
       case INNER_JOIN:
+      case SUCH_THAT:
         break;
       default:
         // SCAN and CROSS_JOIN are valid in ast, not core.
