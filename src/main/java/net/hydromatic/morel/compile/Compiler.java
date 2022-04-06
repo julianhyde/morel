@@ -35,6 +35,8 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
@@ -325,6 +327,39 @@ public class Compiler {
       final Code conditionCode = compile(cx, scan.condition);
       return () -> Codes.scanRowSink(firstStep.op, scan.pat, code,
           conditionCode, nextFactory.get());
+
+    case SUCH_THAT:
+      // Given
+      //   (n, d) suchThat hasNameInDept (n, d)
+      // that is,
+      //   pat = (n, d),
+      //   exp = hasNameInDept (n, d),
+      // generate
+      //   (n, d) in List.filter
+      //       (fn x => case x of (n, d) => hasNameInDept (n, d))
+      //       (extent: (string * int) list)
+      final Core.Scan scan2 = (Core.Scan) firstStep;
+      final FnType fnType =
+          typeSystem.fnType(scan2.pat.type, PrimitiveType.BOOL);
+      final Pos pos = Pos.ZERO;
+      final Core.Match match = core.match(scan2.pat, scan2.exp, pos);
+      final Core.Exp lambda =
+          core.fn(pos, fnType, ImmutableList.of(match),
+              typeSystem.nameGenerator);
+      final ListType listType = typeSystem.listType(scan2.pat.type);
+      final Core.Exp filterCall =
+          core.apply(pos, listType,
+              core.functionLiteral(typeSystem, BuiltIn.LIST_FILTER),
+              lambda);
+      final Core.Exp exp2 =
+          core.apply(pos, listType, filterCall,
+              core.apply(pos, listType,
+                  core.functionLiteral(typeSystem, BuiltIn.Z_EXTENT),
+                  core.unitLiteral()));
+      final Code code2 = compile(cx, exp2);
+      final Code conditionCode2 = compile(cx, scan2.condition);
+      return () -> Codes.scanRowSink(Op.INNER_JOIN, scan2.pat, code2,
+          conditionCode2, nextFactory.get());
 
     case WHERE:
       final Core.Where where = (Core.Where) firstStep;
