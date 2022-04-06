@@ -54,6 +54,23 @@ val it = true : bool
 val it = true : bool
 
 
+(*) Type annotation
+val x: int = 1;
+val x = 1 : int
+
+val y: bool = true;
+val y = true : bool
+
+val p: int * bool = (1, true);
+val p = (1,true) : int * bool
+
+fun f (x: int, y) = x + y;
+val f = fn : int * int -> int
+
+fun f2 (e: {name: string, deptno:int}) = e.deptno;
+val f2 = fn : {deptno:int, name:string} -> int
+
+
 (*) Function with unit arg
 fun one () = 1;
 val one = fn : unit -> int

@@ -48,6 +48,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import org.apache.calcite.util.Holder;
@@ -71,6 +72,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
@@ -795,6 +797,14 @@ public class TypeResolver {
       final Ast.TupleType tupleType = (Ast.TupleType) type;
       return typeSystem.tupleType(toTypes(tupleType.types));
 
+    case RECORD_TYPE:
+      final Ast.RecordType recordType = (Ast.RecordType) type;
+      final ImmutableSortedMap.Builder<String, Type> argNameTypes =
+          ImmutableSortedMap.orderedBy(ORDERING);
+      recordType.fieldTypes.forEach((name, t) ->
+          argNameTypes.put(name, toType(t)));
+      return typeSystem.recordType(argNameTypes.build());
+
     case NAMED_TYPE:
       final Ast.NamedType namedType = (Ast.NamedType) type;
       final Type genericType = typeSystem.lookup(namedType.name);
@@ -811,7 +821,7 @@ public class TypeResolver {
           name -> typeSystem.typeVariable(tyVarMap.size()));
 
     default:
-      throw new AssertionError("cannot convert type " + type);
+      throw new AssertionError("cannot convert type " + type + " " + type.op);
     }
   }
 

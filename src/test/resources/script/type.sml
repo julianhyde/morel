@@ -37,7 +37,7 @@ val x: int = 1;
 val y: bool = true;
 val p: int * bool = (1, true);
 fun f (x: int, y) = x + y;
-fun f2 e: {name: string, deptno:int} = e.deptno;
+fun f2 (e: {name: string, deptno:int}) = e.deptno;
 
 (*) Function with unit arg
 fun one () = 1;
