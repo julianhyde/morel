@@ -1077,13 +1077,16 @@ void funMatch(List<FunMatch> list) :
   Ast.Pat pat;
   final List<Ast.Pat> patList = new ArrayList<>();
   final Ast.Exp expression;
+  Ast.Type returnType = null;
 }
 {
   id = identifier()
   ( pat = atomPat() { patList.add(pat); } )+
+  [ <COLON> returnType = type() ]
   <EQ> expression = expression() {
     list.add(
-      ast.funMatch(id.pos.plus(expression.pos), id.name, patList, expression));
+        ast.funMatch(id.pos.plus(expression.pos), id.name, patList, returnType,
+            expression));
   }
 }
 

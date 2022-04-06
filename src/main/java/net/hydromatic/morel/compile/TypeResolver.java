@@ -805,14 +805,23 @@ public class TypeResolver {
           argNameTypes.put(name, toType(t)));
       return typeSystem.recordType(argNameTypes.build());
 
+    case FUNCTION_TYPE:
+      final Ast.FunctionType functionType = (Ast.FunctionType) type;
+      final Type paramType = toType(functionType.paramType, typeSystem);
+      final Type resultType = toType(functionType.resultType, typeSystem);
+      return typeSystem.fnType(paramType, resultType);
+
     case NAMED_TYPE:
       final Ast.NamedType namedType = (Ast.NamedType) type;
+      final List<Type> typeList = toTypes(namedType.types);
+      if (namedType.name.equals(LIST_TY_CON) && typeList.size() == 1) {
+        // TODO: make 'list' a regular generic type
+        return typeSystem.listType(typeList.get(0));
+      }
       final Type genericType = typeSystem.lookup(namedType.name);
       if (namedType.types.isEmpty()) {
         return genericType;
       }
-      final List<Type> typeList = namedType.types.stream().map(this::toType)
-          .collect(toImmutableList());
       return typeSystem.apply(genericType, typeList);
 
     case TY_VAR:
@@ -860,9 +869,14 @@ public class TypeResolver {
   private Ast.ValBind toValBind(TypeEnv env, Ast.FunBind funBind) {
     final List<Ast.Pat> vars;
     Ast.Exp exp;
+    final List<Ast.Type> returnTypes = new ArrayList<>();
     if (funBind.matchList.size() == 1) {
-      exp = funBind.matchList.get(0).exp;
-      vars = funBind.matchList.get(0).patList;
+      final Ast.FunMatch funMatch = funBind.matchList.get(0);
+      exp = funMatch.exp;
+      vars = funMatch.patList;
+      if (funMatch.returnType != null) {
+        returnTypes.add(funMatch.returnType);
+      }
     } else {
       final List<String> varNames =
           MapList.of(funBind.matchList.get(0).patList.size(),
@@ -873,6 +887,9 @@ public class TypeResolver {
         matchList.add(
             ast.match(funMatch.pos, patTuple(env, funMatch.patList),
                 funMatch.exp));
+        if (funMatch.returnType != null) {
+          returnTypes.add(funMatch.returnType);
+        }
       }
       exp = ast.caseOf(Pos.ZERO, idTuple(varNames), matchList);
     }
