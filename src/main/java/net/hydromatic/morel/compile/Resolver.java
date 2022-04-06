@@ -430,30 +430,7 @@ public class Resolver {
     final FnType type = (FnType) typeMap.getType(fn);
     final ImmutableList<Core.Match> matchList =
         transform(fn.matchList, this::toCore);
-    return toCore(fn.pos, type, matchList);
-  }
-
-  private Core.Fn toCore(Pos pos, FnType type, List<Core.Match> matchList) {
-    if (matchList.size() == 1) {
-      final Core.Match match = matchList.get(0);
-      if (match.pat instanceof Core.IdPat) {
-        // Simple function, "fn x => exp". Does not need 'case'.
-        return core.fn(type, (Core.IdPat) match.pat, match.exp);
-      }
-      if (match.pat instanceof Core.TuplePat
-          && ((Core.TuplePat) match.pat).args.isEmpty()) {
-        // Simple function with unit arg, "fn () => exp";
-        // needs a new variable, but doesn't need case, "fn (v0: unit) => exp"
-        final Core.IdPat idPat = core.idPat(type.paramType, nameGenerator);
-        return core.fn(type, idPat, match.exp);
-      }
-    }
-    // Complex function, "fn (x, y) => exp";
-    // needs intermediate variable and case, "fn v => case v of (x, y) => exp"
-    final Core.IdPat idPat = core.idPat(type.paramType, nameGenerator);
-    final Core.Id id = core.id(idPat);
-    return core.fn(type, idPat,
-        core.caseOf(pos, type.resultType, id, matchList));
+    return core.fn(fn.pos, type, matchList, nameGenerator);
   }
 
   private Core.Case toCore(Ast.If if_) {
