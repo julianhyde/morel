@@ -535,6 +535,11 @@ public class Resolver {
       final Ast.AsPat asPat = (Ast.AsPat) pat;
       return core.asPat(type, asPat.id.name, nameGenerator, toCore(asPat.pat));
 
+    case ANNOTATED_PAT:
+      // There is no annotated pat in core, because all patterns have types.
+      final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) pat;
+      return toCore(annotatedPat.pat);
+
     case CON_PAT:
       final Ast.ConPat conPat = (Ast.ConPat) pat;
       return core.conPat(type, conPat.tyCon.name, toCore(conPat.pat));

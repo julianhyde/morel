@@ -456,6 +456,10 @@ public class MainTest {
     ml("fn x => case x of 0 => 1 | _ => 2").assertType("int -> int");
     ml("fn x => case x of 0 => \"zero\" | _ => \"nonzero\"")
         .assertType("int -> string");
+    ml("fn x: int => true").assertType("int -> bool");
+    ml("fn x: int * int => true").assertType("int * int -> bool");
+    ml("fn x: int * string => (false, #2 x)")
+        .assertType("int * string -> bool * string");
   }
 
   @Test void testTypeFnTuple() {

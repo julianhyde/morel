@@ -963,6 +963,12 @@ public class TypeResolver {
       deducePatType(env, asPat.pat, termMap, null, v);
       return reg(pat, null, v);
 
+    case ANNOTATED_PAT:
+      final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) pat;
+      final Type type = toType(annotatedPat.type, typeSystem);
+      deducePatType(env, annotatedPat.pat, termMap, null, v);
+      return reg(pat, v, toTerm(type, Subst.EMPTY));
+
     case TUPLE_PAT:
       final List<Unifier.Term> typeTerms = new ArrayList<>();
       final Ast.TuplePat tuple = (Ast.TuplePat) pat;
