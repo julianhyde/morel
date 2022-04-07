@@ -196,6 +196,12 @@ public class TypeResolver {
     case UNIT_LITERAL:
       return reg(node, v, toTerm(PrimitiveType.UNIT));
 
+    case ANNOTATED_EXP:
+      final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) node;
+      final Type type = toType(annotatedExp.type, typeSystem);
+      deduceType(env, annotatedExp.exp, v);
+      return reg(node, v, toTerm(type, Subst.EMPTY));
+
     case ANDALSO:
     case ORELSE:
       return infix(env, (Ast.InfixCall) node, v, PrimitiveType.BOOL);
@@ -869,29 +875,38 @@ public class TypeResolver {
   private Ast.ValBind toValBind(TypeEnv env, Ast.FunBind funBind) {
     final List<Ast.Pat> vars;
     Ast.Exp exp;
-    final List<Ast.Type> returnTypes = new ArrayList<>();
+    Ast.Type returnType = null;
     if (funBind.matchList.size() == 1) {
       final Ast.FunMatch funMatch = funBind.matchList.get(0);
       exp = funMatch.exp;
       vars = funMatch.patList;
-      if (funMatch.returnType != null) {
-        returnTypes.add(funMatch.returnType);
-      }
+      returnType = funMatch.returnType;
     } else {
       final List<String> varNames =
           MapList.of(funBind.matchList.get(0).patList.size(),
               index -> "v" + index);
       vars = Lists.transform(varNames, v -> ast.idPat(Pos.ZERO, v));
       final List<Ast.Match> matchList = new ArrayList<>();
+      Pos prevReturnTypePos = null;
       for (Ast.FunMatch funMatch : funBind.matchList) {
         matchList.add(
             ast.match(funMatch.pos, patTuple(env, funMatch.patList),
                 funMatch.exp));
         if (funMatch.returnType != null) {
-          returnTypes.add(funMatch.returnType);
+          if (returnType != null
+              && !returnType.equals(funMatch.returnType)) {
+            throw new CompileException("parameter or result constraints of "
+                + "clauses don't agree [tycon mismatch]", false,
+                prevReturnTypePos.plus(funMatch.pos));
+          }
+          returnType = funMatch.returnType;
+          prevReturnTypePos = funMatch.pos;
         }
       }
       exp = ast.caseOf(Pos.ZERO, idTuple(varNames), matchList);
+    }
+    if (returnType != null) {
+      exp = ast.annotatedExp(exp.pos, exp, returnType);
     }
     final Pos pos = funBind.pos;
     for (Ast.Pat var : Lists.reverse(vars)) {

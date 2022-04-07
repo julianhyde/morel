@@ -32,6 +32,17 @@
 {} = ();
 () = {};
 
+(*) Expressions with type annotations
+1: int;
+(2, true): int * bool;
+[]: int list;
+(1: int) + (2: int);
+1 + (2: int);
+(1: int) + 2;
+String.size "abc": int;
+String.size ("abc": string);
+String.size ("abc": string): int;
+
 (*) Patterns with type annotations
 val x: int = 1;
 val y: bool = true;
@@ -56,8 +67,7 @@ fun firstOrSecond (e1 :: e2 :: rest): int = e2
   | firstOrSecond (e1 :: rest) = e1;
 
 (*
-fun f NONE:int list = []
-  | f (SOME x):string list = [];
+sml-nj gives the following error:
 stdIn:1.6-2.32 Error: parameter or result constraints of clauses don't agree [tycon mismatch]
   this clause:      'Z option -> string list
   previous clauses:      'Z option -> int list
@@ -65,6 +75,8 @@ stdIn:1.6-2.32 Error: parameter or result constraints of clauses don't agree [ty
     f = (fn NONE => nil: int list
           | SOME x => nil: string list)
 *)
+fun f NONE:int list = []
+  | f (SOME x):string list = [];
 
 (*) Function with unit arg
 fun one () = 1;

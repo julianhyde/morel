@@ -312,6 +312,8 @@ public class Resolver {
       return core.stringLiteral((String) ((Ast.Literal) exp).value);
     case UNIT_LITERAL:
       return core.unitLiteral();
+    case ANNOTATED_EXP:
+      return toCore(((Ast.AnnotatedExp) exp).exp);
     case ID:
       return toCore((Ast.Id) exp);
     case ANDALSO:

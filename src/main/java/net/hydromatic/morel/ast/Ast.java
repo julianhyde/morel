@@ -496,7 +496,7 @@ public class Ast {
     public final Exp exp;
 
     /** Creates a type annotation. */
-    AnnotatedExp(Pos pos, Type type, Exp exp) {
+    AnnotatedExp(Pos pos, Exp exp, Type type) {
       super(pos, Op.ANNOTATED_EXP);
       this.type = requireNonNull(type);
       this.exp = requireNonNull(exp);

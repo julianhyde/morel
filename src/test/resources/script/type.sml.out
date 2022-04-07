@@ -54,6 +54,35 @@ val it = true : bool
 val it = true : bool
 
 
+(*) Expressions with type annotations
+1: int;
+val it = 1 : int
+
+(2, true): int * bool;
+val it = (2,true) : int * bool
+
+[]: int list;
+val it = [] : int list
+
+(1: int) + (2: int);
+val it = 3 : int
+
+1 + (2: int);
+val it = 3 : int
+
+(1: int) + 2;
+val it = 3 : int
+
+String.size "abc": int;
+val it = 3 : int
+
+String.size ("abc": string);
+val it = 3 : int
+
+String.size ("abc": string): int;
+val it = 3 : int
+
+
 (*) Patterns with type annotations
 val x: int = 1;
 val x = 1 : int
@@ -106,12 +135,11 @@ fun firstOrSecond (e1 :: e2 :: rest): int = e2
   | firstOrSecond (e1 :: rest) = e1;
 0.0-0.0 Warning: match nonexhaustive
   raised at: 0.0-0.0
-val firstOrSecond = fn : 'a list -> 'a
+val firstOrSecond = fn : int list -> int
 
 
 (*
-fun f NONE:int list = []
-  | f (SOME x):string list = [];
+sml-nj gives the following error:
 stdIn:1.6-2.32 Error: parameter or result constraints of clauses don't agree [tycon mismatch]
   this clause:      'Z option -> string list
   previous clauses:      'Z option -> int list
@@ -119,6 +147,11 @@ stdIn:1.6-2.32 Error: parameter or result constraints of clauses don't agree [ty
     f = (fn NONE => nil: int list
           | SOME x => nil: string list)
 *)
+fun f NONE:int list = []
+  | f (SOME x):string list = [];
+stdIn:11.5-12.32 Error: parameter or result constraints of clauses don't agree [tycon mismatch]
+  raised at: stdIn:11.5-12.32
+
 
 (*) Function with unit arg
 fun one () = 1;

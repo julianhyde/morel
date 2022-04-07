@@ -761,9 +761,16 @@ Exp expression1() :
 Exp expression() :
 {
   Exp e;
+  Type t;
 }
 {
-  e = expression1() { return e; }
+  e = expression1()
+  (
+    <COLON> t = type() {
+      e = ast.annotatedExp(e.pos.plus(t.pos), e, t);
+    }
+  )*
+  { return e; }
 }
 
 /** List of expressions "e1 as id1, e2 as id2, e3 as id3". */

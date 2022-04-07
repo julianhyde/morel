@@ -73,9 +73,8 @@ public class Shuttle {
   }
 
   protected Ast.Exp visit(Ast.AnnotatedExp annotatedExp) {
-    return ast.annotatedExp(annotatedExp.pos,
-        annotatedExp.type.accept(this),
-        annotatedExp.exp.accept(this));
+    return ast.annotatedExp(annotatedExp.pos, annotatedExp.exp.accept(this),
+        annotatedExp.type.accept(this));
   }
 
   protected Ast.Exp visit(Ast.If ifThenElse) {
