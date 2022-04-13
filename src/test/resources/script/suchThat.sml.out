@@ -23,6 +23,8 @@
 from e suchThat (e elem scott.emp)
   where e.deptno = 20
   yield e.ename;
+val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
+
 
 (*) A function that finds its data internally.
 let
@@ -33,6 +35,8 @@ in
     where e.deptno = 20
     yield e.ename
 end;
+val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
+
 let
   fun isEmp e =
     e elem scott.emp
@@ -40,6 +44,8 @@ in
   from e suchThat isEmp e andalso e.deptno = 20
     yield e.ename
 end;
+val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
+
 
 (*) TODO: as previous, but 'fun' followed by 'from' without using 'let'
 
@@ -51,6 +57,8 @@ in
   from e suchThat isClerk e andalso e.deptno = 20
     yield e.ename
 end;
+val it = ["SMITH","ADAMS"] : string list
+
 
 (*) A disjunctive condition prevents the extent.
 (*) TODO: throw an error, rather than returning an empty list
@@ -61,10 +69,14 @@ in
   from e suchThat isEmp50 e
     yield e.ename
 end;
+val it = [] : string list
+
 
 (*) A function with external extent.
 fun hasJob (e, job) =
   e.job = job;
+java.lang.ClassCastException: class net.hydromatic.morel.type.TypeVar cannot be cast to class net.hydromatic.morel.type.RecordLikeType (net.hydromatic.morel.type.TypeVar and net.hydromatic.morel.type.RecordLikeType are in unnamed module of loader 'app')
+
 (*) Valid, because the argument has an extent.
 let
   fun hasJob (e, job) =
@@ -74,20 +86,31 @@ in
     j suchThat hasJob (e, j)
     yield j
 end;
+val it = [] : string list
+
 (*) Invalid, because the argument has no extent.
 from e suchThat hasJob (e, "CLERK");
+stdIn:2.17-2.23 Error: unbound variable or constructor: hasJob
+  raised at: stdIn:2.17-2.23
+
 
 (*) A string function with external extent.
 (*) Given s2, we could generate finite s1.
 fun isPrefix (s1, s2) =
   String.isPrefix s1 s2;
+val isPrefix = fn : string * string -> bool
+
 (*) This is invalid, but it could be valid, and would return
 (*) ["", "a", "ab", "abc", "abcd"];
 from s suchThat isPrefix (s, "abcd");
+val it = [] : string list
+
 
 (*) An integer function with external extent.
 (*) Given j, k we could generate finite i.
 fun isBetween (i, j, k) =
   i <= j andalso j <= k;
+val isBetween = fn : 'a * 'a * 'a -> bool
+
 
 (*) End suchThat.sml
