@@ -1084,14 +1084,16 @@ public class Core {
 
     @Override protected AstWriter unparse(AstWriter w, From from, int ordinal,
         int left, int right) {
-      if (ordinal == 0) {
-        w.append(" ");
-      } else {
-        w.append(op.padded);
-      }
-      // for these purposes 'in' has same precedence as '='
-      w.append(pat, 0, Op.EQ.left)
-          .append(" in ").append(exp, Op.EQ.right, 0);
+      final String prefix = ordinal == 0 ? " "
+          : op == Op.SUCH_THAT ? " join "
+          : op.padded;
+      final String infix = op == Op.SUCH_THAT ? " suchThat "
+          : " in ";
+      w.append(prefix)
+          // for these purposes 'in' and 'suchThat' have same precedence as '='
+          .append(pat, 0, Op.EQ.left)
+          .append(infix)
+          .append(exp, Op.EQ.right, 0);
       if (!isLiteralTrue()) {
         w.append("on").append(condition, 0, 0);
       }

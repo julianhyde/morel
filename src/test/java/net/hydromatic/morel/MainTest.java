@@ -1750,10 +1750,10 @@ public class MainTest {
         + "    yield {d, n}\n"
         + "end";
     final String code = "from(sink\n"
-        + "  join(op join, pat (n_2, d_2),\n"
+        + "  join(op join, pat (n_1, d_1),\n"
         + "  exp apply(\n"
         + "    fnCode apply(fnValue List.filter,\n"
-        + "      argCode match(v1,\n"
+        + "      argCode match(v0,\n"
         + "        apply(fnCode match((n_1, d_1),\n"
         + "            apply(fnCode match((n, d),\n"
         + "                apply2(fnValue elem,\n"
@@ -1767,7 +1767,7 @@ public class MainTest {
         + "      sink collect(tuple(apply(fnValue nth:2, argCode get(name e)),\n"
         + "        apply(fnValue nth:0, argCode get(name e)))))))),\n"
         + "               argCode tuple(get(name n), get(name d)))),\n"
-        + "            argCode get(name v1)))),\n"
+        + "            argCode get(name v0)))),\n"
         + "          argCode apply(fnValue $.extent, argCode constant(()))),\n"
         + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
         + "          sink collect(tuple(get(name d), get(name n))))))";
@@ -1787,15 +1787,14 @@ public class MainTest {
         + "    yield j\n"
         + "end";
     final String core = "from d_1 in #dept scott "
-        + "join j_1 in ("
-        + "from v1 in extent () where (fn j =>"
-        + " let val v0 = (#deptno d_1, j) in"
+        + "join j suchThat ("
+        + "let val v0 = (#deptno d_1, j) in"
         + " case v0 of (d, job) => op elem ((op div (d, 2), job),"
         + " from e in #emp scott"
-        + " yield (#deptno e, #job e)) end) v1) yield j_1";
+        + " yield (#deptno e, #job e)) end) yield j";
     final String code = "from(sink join(op join, pat d_1,\n"
         + "    exp apply(fnValue nth:1, argCode get(name scott)),\n"
-        + "  sink join(op join, pat j_1,\n"
+        + "  sink join(op join, pat j,\n"
         + "      exp apply(\n"
         + "        fnCode apply(fnValue List.filter,\n"
         + "          argCode match(j,\n"
