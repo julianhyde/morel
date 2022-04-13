@@ -25,47 +25,69 @@ from e suchThat (e elem scott.emp)
   yield e.ename;
 
 (*) A function that finds its data internally.
-fun isEmp e =
-  e elem scott.emp;
-from e suchThat isEmp e
-  where e.deptno = 20
-  yield e.ename;
-from e suchThat isEmp e andalso e.deptno = 20
-  yield e.ename;
+let
+  fun isEmp e =
+    e elem scott.emp
+in
+  from e suchThat isEmp e
+    where e.deptno = 20
+    yield e.ename
+end;
+let
+  fun isEmp e =
+    e elem scott.emp
+in
+  from e suchThat isEmp e andalso e.deptno = 20
+    yield e.ename
+end;
+
+(*) TODO: as previous, but 'fun' followed by 'from' without using 'let'
 
 (*) Similar to 'isEmp' but with a conjunctive condition.
-fun isClerk e =
-  e elem scott.emp andalso e.job = "CLERK";
-from e suchThat isClerk e andalso e.deptno = 20
-  yield e.ename;
+let
+  fun isClerk e =
+    e elem scott.emp andalso e.job = "CLERK"
+in
+  from e suchThat isClerk e andalso e.deptno = 20
+    yield e.ename
+end;
 
 (*) A disjunctive condition prevents the extent.
-fun isEmp50 e =
-  e elem scott.emp orelse e.deptno = 50;
-from e suchThat isEmp50 e
-  yield e.ename;
+(*) TODO: throw an error, rather than returning an empty list
+let
+  fun isEmp50 e =
+    e elem scott.emp orelse e.deptno = 50
+in
+  from e suchThat isEmp50 e
+    yield e.ename
+end;
 
 (*) A function with external extent.
-fun hasJob e job =
+fun hasJob (e, job) =
   e.job = job;
 (*) Valid, because the argument has an extent.
-from e in scott.emp,
-  j suchThat hasJob e j
-  yield job;
+let
+  fun hasJob (e, job) =
+    e.job = job
+in
+  from e in scott.emp,
+    j suchThat hasJob (e, j)
+    yield j
+end;
 (*) Invalid, because the argument has no extent.
-from e suchThat hasJob e "CLERK";
+from e suchThat hasJob (e, "CLERK");
 
 (*) A string function with external extent.
 (*) Given s2, we could generate finite s1.
-fun isPrefix s1 s2 =
+fun isPrefix (s1, s2) =
   String.isPrefix s1 s2;
 (*) This is invalid, but it could be valid, and would return
 (*) ["", "a", "ab", "abc", "abcd"];
-from s suchThat isPrefix s "abcd";
+from s suchThat isPrefix (s, "abcd");
 
 (*) An integer function with external extent.
 (*) Given j, k we could generate finite i.
-fun isBetween i j k =
+fun isBetween (i, j, k) =
   i <= j andalso j <= k;
 
 (*) End suchThat.sml
