@@ -68,6 +68,7 @@ import java.util.function.Supplier;
 
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 import static net.hydromatic.morel.util.Static.transform;
@@ -353,7 +354,14 @@ public class Compiler {
       //   (n, d) in List.filter
       //       (fn x => case x of (n, d) => hasNameInDept (n, d))
       //       (extent: (string * int) list)
+      //
+      // but we'd prefer to find the extent internally, e.g. given
+      //   (n, d) suchThat (n, d) elem nameDeptPairs
+      // we generate
+      //   (n, d) in nameDeptPairs
+      //
       final Core.Scan scan2 = (Core.Scan) firstStep;
+      final ExtentFilter extentFilter = extent(scan2);
       final FnType fnType =
           typeSystem.fnType(scan2.pat.type, PrimitiveType.BOOL);
       final Pos pos = Pos.ZERO;
@@ -361,16 +369,13 @@ public class Compiler {
       final Core.Exp lambda =
           core.fn(pos, fnType, ImmutableList.of(match),
               typeSystem.nameGenerator);
-      final ListType listType = typeSystem.listType(scan2.pat.type);
       final Core.Exp filterCall =
-          core.apply(pos, listType,
+          core.apply(pos, extentFilter.extent.type,
               core.functionLiteral(typeSystem, BuiltIn.LIST_FILTER),
               lambda);
       final Core.Exp exp2 =
-          core.apply(pos, listType, filterCall,
-              core.apply(pos, listType,
-                  core.functionLiteral(typeSystem, BuiltIn.Z_EXTENT),
-                  core.unitLiteral()));
+          core.apply(pos, extentFilter.extent.type, filterCall,
+              extentFilter.extent);
       final Code code2 = compile(cx, exp2);
       final Code conditionCode2 = compile(cx, scan2.condition);
       return () -> Codes.scanRowSink(Op.INNER_JOIN, scan2.pat, code2,
@@ -457,6 +462,68 @@ public class Compiler {
     default:
       throw new AssertionError("unknown step type " + firstStep.op);
     }
+  }
+
+  private ExtentFilter extent(Core.Scan scan) {
+    final List<Core.Exp> extents = new ArrayList<>();
+    final List<Core.Exp> filters = new ArrayList<>();
+    extent(scan.pat, scan.exp, extents, filters);
+    final Core.Exp extent;
+    if (extents.isEmpty()) {
+      final ListType listType = typeSystem.listType(scan.pat.type);
+      extent =
+          core.apply(Pos.ZERO, listType,
+              core.functionLiteral(typeSystem, BuiltIn.Z_EXTENT),
+              core.unitLiteral());
+    } else {
+      extent = extents.get(0);
+      filters.addAll(Util.skip(extents));
+    }
+    return new ExtentFilter(extent, ImmutableList.copyOf(filters));
+  }
+
+  private void extent(Core.Pat pat, Core.Exp exp, List<Core.Exp> extents,
+      List<Core.Exp> filters) {
+    switch (exp.op) {
+    case APPLY:
+      final Core.Apply apply = (Core.Apply) exp;
+      switch (apply.fn.op) {
+      case FN_LITERAL:
+        final Core.Literal literal = (Core.Literal) apply.fn;
+        final BuiltIn builtIn = (BuiltIn) literal.value;
+        switch (builtIn) {
+        case OP_ELEM:
+          final List<Core.Exp> args = ((Core.Tuple) apply.arg).args;
+          if (matches(args.get(0), pat)) {
+            extents.add(args.get(1));
+          }
+          break;
+        case Z_ANDALSO:
+          for (Core.Exp e : ((Core.Tuple) apply.arg).args) {
+            extent(pat, e, extents, filters);
+            return;
+          }
+        }
+      }
+    }
+    filters.add(exp);
+  }
+
+  /** Returns whether an expression corresponds exactly to a pattern.
+   * For example "x" matches the pattern "x",
+   * and "(z, y)" matches the pattern "(x, y)". */
+  private static boolean matches(Core.Exp exp, Core.Pat pat) {
+    if (exp.op == Op.ID && pat.op == Op.ID_PAT) {
+      return ((Core.Id) exp).idPat.equals(pat);
+    }
+    if (exp.op == Op.TUPLE && pat.op == Op.TUPLE_PAT) {
+      final Core.Tuple tuple = (Core.Tuple) exp;
+      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+      if (tuple.args.size() == tuplePat.args.size()) {
+        return allMatch(tuple.args, tuplePat.args, Compiler::matches);
+      }
+    }
+    return false;
   }
 
   private ImmutableSortedMap<String, Binding> sortedBindingMap(
@@ -838,6 +905,17 @@ public class Compiler {
 
     @Override public Object eval(EvalEnv evalEnv) {
       return new Closure(evalEnv, patCodes, pos);
+    }
+  }
+
+  /** A "suchThat" expression split into an extent and filters. */
+  private static class ExtentFilter {
+    final Core.Exp extent;
+    final ImmutableList<Core.Exp> filters;
+
+    ExtentFilter(Core.Exp extent, ImmutableList<Core.Exp> filters) {
+      this.extent = extent;
+      this.filters = filters;
     }
   }
 }
