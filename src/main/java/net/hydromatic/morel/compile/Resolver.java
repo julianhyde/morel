@@ -610,11 +610,10 @@ public class Resolver {
     case INNER_JOIN:
       final Ast.Scan scan = (Ast.Scan) step;
       final Core.Exp coreExp;
-      final ListType listType;
+      final Core.Pat corePat;
       switch (scan.exp.op) {
       case SUCH_THAT:
-        final Core.Pat corePat = r.toCore(scan.pat);
-        listType = typeMap.typeSystem.listType(corePat.type);
+        corePat = r.toCore(scan.pat);
 
         final List<Binding> bindings2 = new ArrayList<>(bindings);
         Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
@@ -626,9 +625,9 @@ public class Resolver {
 
       default:
         coreExp = r.toCore(scan.exp);
-        listType = (ListType) coreExp.type;
+        final ListType listType = (ListType) coreExp.type;
+        corePat = r.toCore(scan.pat, listType.elementType);
       }
-      final Core.Pat corePat = r.toCore(scan.pat, listType.elementType);
       final Op op = scan.exp.op == Op.SUCH_THAT ? Op.SUCH_THAT
           : step.op == Op.SCAN ? Op.INNER_JOIN
           : step.op;
