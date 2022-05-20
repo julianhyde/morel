@@ -25,7 +25,7 @@
  * Returns true iff the queens at the given positions threaten each other
  *)
 fun threat (x, y) (x', y') =
-  x = x' orelse y = y' orelse abs(x - x') = abs(y - y');
+  x = x' orelse y = y' orelse abs (x - x') = abs (y - y');
 
 (*
  * val conflict : (int * int) -> (int * int) list -> bool
@@ -34,16 +34,19 @@ fun threat (x, y) (x', y') =
 fun conflict pos = List.exists (threat pos);
 
 (*
- * val addQueen : (int * int * (int * int) list * (unit -> (int * int) list option)) -> (int * int) list option
- * Returns either NONE in the case that no solution exists or SOME(l) where l is a list of positions making up the solution.
+ * val addQueen : (int * int * (int * int) list
+ *                 * (unit -> (int * int) list option))
+ *                -> (int * int) list option
+ * Returns either NONE in the case that no solution exists
+ * or SOME(l) where l is a list of positions making up the solution.
  *)
 fun addQueen (i, n, qs, fc) =
   let
     fun try j =
       if j > n then fc ()
       else if (conflict (i, j) qs) then try (j + 1)
-      else if i = n then SOME ((i, j)::qs)
-      else addQueen (i + 1, n, (i,j)::qs, fn() => try (j + 1))
+      else if i = n then SOME ((i, j) :: qs)
+      else addQueen (i + 1, n, (i, j) :: qs, fn () => try (j + 1))
   in
     try 1
   end;
@@ -61,7 +64,7 @@ fun queens n = addQueen (1, n, [], fn () => NONE);
 (* NONE *)
 queens 2;
 
-(* SOME [(7,6),(6,4),(5,2),(4,7),(3,5),(2,3),(1,1)] *)
+(* SOME [(6,5),(5,3),(4,1),(3,6),(2,4),(1,2)] *)
 queens 6;
 
 (*) End queens.sml
