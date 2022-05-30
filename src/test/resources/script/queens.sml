@@ -33,6 +33,16 @@ fun threat (x, y) (x', y') =
  *)
 fun conflict pos = List.exists (threat pos);
 
+let
+  fun resum (m, n) =
+    if m = 0
+      then n
+    else
+      resum (m - 1, n + 1)
+in
+  resum (1000, 0)
+end;
+
 (*
  * val addQueen : (int * int * (int * int) list
  *                 * (unit -> (int * int) list option))
