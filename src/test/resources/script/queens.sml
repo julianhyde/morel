@@ -33,6 +33,7 @@ fun threat (x, y) (x', y') =
  *)
 fun conflict pos = List.exists (threat pos);
 
+(* A simple function that cannot be evaluated without tail call optimization. *)
 let
   fun resum (m, n) =
     if m = 0
@@ -40,7 +41,8 @@ let
     else
       resum (m - 1, n + 1)
 in
-  resum (1000, 0)
+  (*) Fails if m > 1,000
+  resum (100, 0)
 end;
 
 (*
@@ -76,5 +78,25 @@ queens 2;
 
 (* SOME [(6,5),(5,3),(4,1),(3,6),(2,4),(1,2)] *)
 queens 6;
+
+(*) Tests whether two numbers are coprime.
+(*) a and b are coprime if their greatest common divisor (gcd) is 1.
+fun coprime (a, b) =
+  if a < 1 orelse b < 1 then false
+  else if a = 1 orelse b = 1 then true
+  else if a < b then coprime (a, b mod a)
+  else if a > b then coprime (a mod b, b)
+  else false;
+
+coprime (3, 2);
+coprime (6, 1);
+coprime (1, 8);
+coprime (~6, 2);
+coprime (~6, ~2);
+coprime (6, ~2);
+coprime (15, 3);
+coprime (15, 6);
+coprime (6, 15);
+coprime (21, 10);
 
 (*) End queens.sml
