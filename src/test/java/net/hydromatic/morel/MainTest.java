@@ -1723,6 +1723,8 @@ public class MainTest {
     ml(ml).assertEvalIter(equalsOrdered(102, 103));
   }
 
+  /** Applies {@code suchThat} to a function that tests membership of a set,
+   * and therefore the effect is to iterate over that set. */
   @Test void testFromSuchThat() {
     final String ml = "let\n"
         + "  val emps = [\n"
@@ -1759,9 +1761,10 @@ public class MainTest {
         + "          argCode apply(fnValue $.extent, argCode constant(()))),\n"
         + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
         + "          sink collect(tuple(get(name d), get(name n))))))";
+    final List<Object> expected = list(); // TODO
     ml(ml).assertType("{d:int, n:string} list")
         .assertPlan(isCode2(code))
-        .assertEval(is(list()));
+        .assertEval(is(expected));
   }
 
   @Test void testFromSuchThat2() {
@@ -1801,10 +1804,59 @@ public class MainTest {
         + "                get(name j))))),\n"
         + "        argCode apply(fnValue $.extent, argCode constant(()))),\n"
         + "    sink collect(get(name j)))))";
+    final List<Object> expected = list(); // TODO
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("string list")
         .assertCoreString(is(core))
+        .assertPlan(isCode2(code))
+        .assertEval(is(expected));
+  }
+
+  /** A {@code suchThat} expression. */
+  @Test void testFromSuchThat3() {
+    final String ml = "let\n"
+        + "  val emps = [\n"
+        + "    {id = 102, name = \"Shaggy\", deptno = 30},\n"
+        + "    {id = 103, name = \"Scooby\", deptno = 30}]\n"
+        + "  fun hasEmpNameInDept (n, d) =\n"
+        + "    (n, d) elem (from e in emps yield (e.name, e.deptno))\n"
+        + "in\n"
+        + "  from (n, d) suchThat hasEmpNameInDept (n, d)\n"
+        + "    where d = 30\n"
+        + "    yield {d, n}\n"
+        + "end";
+    final String core = "val it = "
+        + "from (n_1, d_1) suchThat"
+        + " (case (n_1, d_1) of (n, d) => op elem ((n, d), "
+        + "from e in ["
+        + "{deptno = 30, id = 102, name = \"Shaggy\"}, "
+        + "{deptno = 30, id = 103, name = \"Scooby\"}]"
+        + " yield (#name e, #deptno e)))"
+        + " where d_1 = 30"
+        + " yield {d = d_1, n = n_1}";
+    final String code = "from(sink\n"
+        + "  join(op join, pat (n_1, d_1),\n"
+        + "  exp apply(\n"
+        + "    fnCode apply(fnValue List.filter,\n"
+        + "      argCode match(v0,\n"
+        + "        apply(fnCode match((n_1, d_1),\n"
+        + "            apply(fnCode match((n, d),\n"
+        + "                apply2(fnValue elem,\n"
+        + "                  tuple(get(name n), get(name d)),\n"
+        + "                  from(sink\n"
+        + "                    join(op join, pat e, exp tuple(\n"
+        + "  tuple(constant(30), constant(102), constant(Shaggy)),\n"
+        + "  tuple(constant(30), constant(103), constant(Scooby))),\n"
+        + "      sink collect(tuple(apply(fnValue nth:2, argCode get(name e)),\n"
+        + "        apply(fnValue nth:0, argCode get(name e)))))))),\n"
+        + "               argCode tuple(get(name n), get(name d)))),\n"
+        + "            argCode get(name v0)))),\n"
+        + "          argCode apply(fnValue $.extent, argCode constant(()))),\n"
+        + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
+        + "          sink collect(tuple(get(name d), get(name n))))))";
+    ml(ml).assertType("{d:int, n:string} list")
+        .assertCore(is(core))
         .assertPlan(isCode2(code))
         .assertEval(is(list()));
   }
