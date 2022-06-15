@@ -389,8 +389,9 @@ public class MainTest {
 
   @Test void testParseErrorPosition() {
     ml("let val x = 1 and y = $x$ + 2 in x + y end", '$')
-        .assertEvalError(pos ->
-            throwsA("unbound variable or constructor: x", pos));
+        .assertCompileException(pos ->
+            throwsA(CompileException.class,
+                "unbound variable or constructor: x", pos));
   }
 
   @Test void testRuntimeErrorPosition() {
@@ -776,7 +777,9 @@ public class MainTest {
     ml("let val x = 1; val x = 3 and y = x + 1 in x + y end").assertEval(is(5));
 
     ml("let val x = 1 and y = $x$ + 2 in x + y end", '$')
-        .assertEvalError(pos -> throwsA("unbound variable or constructor: x"));
+        .assertCompileException(pos ->
+            throwsA(CompileException.class,
+                "unbound variable or constructor: x"));
 
     // let with val and fun
     ml("let fun f x = 1 + x; val x = 2 in f x end").assertEval(is(3));
@@ -1843,6 +1846,7 @@ public class MainTest {
         + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
         + "          sink collect(tuple(get(name d), get(name n))))))";
     ml(ml).assertType("{d:int, n:string} list")
+        .assertCore(is("Xxx"))
         .assertPlan(isCode2(code))
         .assertEval(is(list()));
   }

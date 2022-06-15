@@ -32,9 +32,10 @@ import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.Inliner;
 import net.hydromatic.morel.compile.Relationalizer;
 import net.hydromatic.morel.compile.Resolver;
+import net.hydromatic.morel.compile.Tracer;
+import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Code;
-import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
@@ -82,24 +83,28 @@ class Ml {
   @Nullable private final Pos pos;
   private final Map<String, DataSet> dataSetMap;
   private final Map<Prop, Object> propMap;
+  private final Tracer tracer;
 
   Ml(String ml, @Nullable Pos pos, Map<String, DataSet> dataSetMap,
-      Map<Prop, Object> propMap) {
+      Map<Prop, Object> propMap, Tracer tracer) {
     this.ml = ml;
     this.pos = pos;
     this.dataSetMap = ImmutableMap.copyOf(dataSetMap);
     this.propMap = ImmutableMap.copyOf(propMap);
+    this.tracer = tracer;
   }
 
   /** Creates an {@code Ml}. */
   static Ml ml(String ml) {
-    return new Ml(ml, null, ImmutableMap.of(), ImmutableMap.of());
+    return new Ml(ml, null, ImmutableMap.of(), ImmutableMap.of(),
+        Tracers.empty());
   }
 
   /** Creates an {@code Ml} with an error position in it. */
   static Ml ml(String ml, char delimiter) {
     Pair<String, Pos> pair = Pos.split(ml, delimiter, "stdIn");
-    return new Ml(pair.left, pair.right, ImmutableMap.of(), ImmutableMap.of());
+    return new Ml(pair.left, pair.right, ImmutableMap.of(), ImmutableMap.of(),
+        Tracers.empty());
   }
 
   /** Runs a task and checks that it throws an exception.
@@ -205,15 +210,23 @@ class Ml {
 
   private Ml withValidate(BiConsumer<TypeResolver.Resolved, Calcite> action) {
     return withParser(parser -> {
+      final AstNode statement;
       try {
         parser.zero("stdIn");
-        final AstNode statement = parser.statementEof();
-        final Calcite calcite = Calcite.withDataSets(dataSetMap);
-        final TypeResolver.Resolved resolved =
-            Compiles.validateExpression(statement, calcite.foreignValues());
-        action.accept(resolved, calcite);
+        statement = parser.statementEof();
       } catch (ParseException e) {
         throw new RuntimeException(e);
+      }
+      final Calcite calcite = Calcite.withDataSets(dataSetMap);
+      try {
+        final TypeResolver.Resolved resolved =
+            Compiles.validateExpression(statement, calcite.foreignValues());
+        tracer.handleCompileException(null);
+        action.accept(resolved, calcite);
+      } catch (CompileException e) {
+        if (!tracer.handleCompileException(e)) {
+          throw e;
+        }
       }
     });
   }
@@ -249,7 +262,7 @@ class Ml {
         final List<CompileException> warningList = new ArrayList<>();
         final CompiledStatement compiled =
             Compiles.prepareStatement(typeSystem, session, env, statement,
-                null, warningList::add);
+                null, warningList::add, tracer);
         action.accept(compiled);
       } catch (ParseException e) {
         throw new RuntimeException(e);
@@ -404,8 +417,10 @@ class Ml {
       // Java doesn't know the switch is exhaustive; how ironic
       throw new AssertionError(expectedCoverage);
     }
-    return assertEval(notNullValue(), null, exceptionMatcherFactory,
-        warningsMatcher);
+    return withResultMatcher(notNullValue())
+        .withWarningsMatcher(warningsMatcher)
+        .withExceptionMatcher(exceptionMatcherFactory)
+        .assertEval();
   }
 
   private static <E> Matcher<List<E>> isEmptyList() {
@@ -417,7 +432,17 @@ class Ml {
   }
 
   Ml assertPlan(Matcher<Code> planMatcher) {
-    return assertEval(null, planMatcher, null, null);
+    final Consumer<Code> consumer = code ->
+        assertThat(code, planMatcher);
+    final Tracer tracer = Tracers.withOnPlan(this.tracer, consumer);
+    return withTracer(tracer).assertEval();
+  }
+
+  Ml assertCore(Matcher<String> expected) {
+    final Consumer<Core.Exp> consumer = e ->
+        assertThat(e.toString(), expected);
+    final Tracer tracer = Tracers.withOnCore(this.tracer, consumer);
+    return withTracer(tracer).assertEval();
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -426,58 +451,39 @@ class Ml {
   }
 
   Ml assertEval(Matcher<Object> resultMatcher) {
-    return assertEval(resultMatcher, null, null, null);
+    return withResultMatcher(resultMatcher).assertEval();
   }
 
-  Ml assertEval(@Nullable Matcher<Object> resultMatcher,
-      @Nullable Matcher<Code> planMatcher,
-      @Nullable Function<Pos, Matcher<Throwable>> exceptionMatcherFactory,
-      @Nullable Matcher<List<Throwable>> warningsMatcher) {
-    final Matcher<Throwable> exceptionMatcher =
-        exceptionMatcherFactory == null
-            ? null
-            : exceptionMatcherFactory.apply(pos);
+  Ml assertEval() {
     return withValidate((resolved, calcite) -> {
       final Session session = new Session();
       session.map.putAll(propMap);
       eval(session, resolved.env, resolved.typeMap.typeSystem, resolved.node,
-          calcite, resultMatcher, planMatcher, exceptionMatcher,
-          warningsMatcher);
+          calcite);
     });
   }
 
   Ml assertEvalThrows(
       Function<Pos, Matcher<Throwable>> exceptionMatcherFactory) {
-    return assertEval(null, null, exceptionMatcherFactory, null);
+    return withExceptionMatcher(exceptionMatcherFactory).assertEval();
   }
 
   @CanIgnoreReturnValue
   private <E extends Throwable> Object eval(Session session, Environment env,
-      TypeSystem typeSystem, AstNode statement, Calcite calcite,
-      @Nullable Matcher<Object> resultMatcher,
-      @Nullable Matcher<Code> planMatcher,
-      @Nullable Matcher<Throwable> exceptionMatcher,
-      @Nullable Matcher<List<Throwable>> warningsMatcher) {
+      TypeSystem typeSystem, AstNode statement, Calcite calcite) {
     final List<Binding> bindings = new ArrayList<>();
     final List<Throwable> warningList = new ArrayList<>();
     try {
       CompiledStatement compiledStatement =
           Compiles.prepareStatement(typeSystem, session, env, statement,
-              calcite, warningList::add);
+              calcite, warningList::add, tracer);
       session.withoutHandlingExceptions(session1 ->
           compiledStatement.eval(session1, env, line -> {}, bindings::add));
-      if (exceptionMatcher != null) {
-        fail("expected exception, but none was thrown");
-      }
+      tracer.onException(null);
     } catch (Throwable e) {
-      if (exceptionMatcher == null) {
-        throw e;
-      }
-      assertThat(e, exceptionMatcher);
+      tracer.onException(e);
     }
-    if (warningsMatcher != null) {
-      assertThat(warningList, warningsMatcher);
-    }
+    tracer.onWarnings(warningList);
     final Object result;
     if (statement instanceof Ast.Exp) {
       result = bindingValue(bindings, "it");
@@ -492,13 +498,8 @@ class Ml {
       });
       result = map;
     }
-    if (resultMatcher != null) {
-      assertThat(result, resultMatcher);
-    }
-    if (planMatcher != null) {
-      final String plan = Codes.describe(session.code);
-      assertThat(session.code, planMatcher);
-    }
+    tracer.onResult(result);
+    tracer.onPlan(session.code);
     return result;
   }
 
@@ -511,20 +512,25 @@ class Ml {
     return null;
   }
 
+  Ml assertCompileException(
+      Function<Pos, Matcher<CompileException>> matcherSupplier) {
+    assertThat(pos, notNullValue());
+    return withResultMatcher(notNullValue())
+        .withCompileExceptionMatcher(matcherSupplier)
+        .assertEval();
+  }
+
   Ml assertEvalError(Function<Pos, Matcher<Throwable>> matcherSupplier) {
     assertThat(pos, notNullValue());
-    final Matcher<Throwable> matcher = matcherSupplier.apply(pos);
-    try {
-      assertEval(notNullValue());
-      fail("expected error");
-    } catch (Throwable e) {
-      assertThat(e, matcher);
-    }
-    return this;
+    return withResultMatcher(notNullValue())
+        .withExceptionMatcher(matcherSupplier)
+        .assertEval();
   }
 
   Ml assertEvalWarnings(Matcher<List<Throwable>> warningsMatcher) {
-    return assertEval(notNullValue(), null, null, warningsMatcher);
+    return withResultMatcher(notNullValue())
+        .withWarningsMatcher(warningsMatcher)
+        .assertEval();
   }
 
   Ml assertEvalSame() {
@@ -546,11 +552,67 @@ class Ml {
   }
 
   Ml withBinding(String name, DataSet dataSet) {
-    return new Ml(ml, pos, plus(dataSetMap, name, dataSet), propMap);
+    return new Ml(ml, pos, plus(dataSetMap, name, dataSet), propMap, tracer);
   }
 
   Ml with(Prop prop, Object value) {
-    return new Ml(ml, pos, dataSetMap, plus(propMap, prop, value));
+    return new Ml(ml, pos, dataSetMap, plus(propMap, prop, value), tracer);
+  }
+
+  Ml withTracer(Tracer tracer) {
+    return new Ml(ml, pos, dataSetMap, propMap, tracer);
+  }
+
+  Ml withResultMatcher(Matcher<Object> matcher) {
+    final Consumer<Object> consumer = o -> assertThat(o, matcher);
+    return withTracer(Tracers.withOnResult(this.tracer, consumer));
+  }
+
+  Ml withWarningsMatcher(Matcher<List<Throwable>> matcher) {
+    final Consumer<List<Throwable>> consumer = warningList ->
+        assertThat(warningList, matcher);
+    return withTracer(Tracers.withOnWarnings(this.tracer, consumer));
+  }
+
+  Ml withExceptionMatcher(
+      @Nullable Function<Pos, Matcher<Throwable>> matcherFactory) {
+    return withTracer(
+        Tracers.withOnException(this.tracer,
+            exceptionConsumer(matcherFactory)));
+  }
+
+  Ml withCompileExceptionMatcher(
+      @Nullable Function<Pos, Matcher<CompileException>> matcherFactory) {
+    return withTracer(
+        Tracers.withOnCompileException(this.tracer,
+            exceptionConsumer(matcherFactory)));
+  }
+
+  private <T extends Throwable> Consumer<T> exceptionConsumer(
+      Function<Pos, Matcher<T>> exceptionMatcherFactory) {
+    @Nullable Matcher<T> matcher =
+        exceptionMatcherFactory == null
+            ? null
+            : exceptionMatcherFactory.apply(pos);
+    return e -> {
+      if (e != null) {
+        if (matcher != null) {
+          assertThat(e, matcher);
+        } else {
+          if (e instanceof RuntimeException) {
+            throw (RuntimeException) e;
+          }
+          if (e instanceof Error) {
+            throw (Error) e;
+          }
+          throw new RuntimeException(e);
+        }
+      } else {
+        if (matcher != null) {
+          fail("expected exception, but none was thrown");
+        }
+      }
+    };
   }
 
   /** Returns a map plus (adding or overwriting) one (key, value) entry. */

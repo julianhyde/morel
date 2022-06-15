@@ -61,7 +61,8 @@ public abstract class Compiles {
    */
   public static CompiledStatement prepareStatement(TypeSystem typeSystem,
       Session session, Environment env, AstNode statement,
-      @Nullable Calcite calcite, Consumer<CompileException> warningConsumer) {
+      @Nullable Calcite calcite, Consumer<CompileException> warningConsumer,
+      Tracer tracer) {
     Ast.Decl decl;
     if (statement instanceof Ast.Exp) {
       decl = toValDecl((Ast.Exp) statement);
