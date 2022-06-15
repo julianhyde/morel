@@ -61,7 +61,8 @@ public abstract class Compiles {
    */
   public static CompiledStatement prepareStatement(TypeSystem typeSystem,
       Session session, Environment env, AstNode statement,
-      @Nullable Calcite calcite, Consumer<CompileException> warningConsumer) {
+      @Nullable Calcite calcite, Consumer<CompileException> warningConsumer,
+      Tracer tracer) {
     Ast.Decl decl;
     if (statement instanceof Ast.Exp) {
       decl = toValDecl((Ast.Exp) statement);
@@ -69,7 +70,7 @@ public abstract class Compiles {
       decl = (Ast.Decl) statement;
     }
     return prepareDecl(typeSystem, session, env, calcite, decl,
-        decl == statement, warningConsumer);
+        decl == statement, warningConsumer, tracer);
   }
 
   /**
@@ -79,7 +80,7 @@ public abstract class Compiles {
   private static CompiledStatement prepareDecl(TypeSystem typeSystem,
       Session session, Environment env, @Nullable Calcite calcite,
       Ast.Decl decl, boolean isDecl,
-      Consumer<CompileException> warningConsumer) {
+      Consumer<CompileException> warningConsumer, Tracer tracer) {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
@@ -115,6 +116,7 @@ public abstract class Compiles {
         }
       }
     }
+    tracer.onCore(coreDecl);
     final Compiler compiler;
     if (hybrid) {
       if (calcite == null) {
