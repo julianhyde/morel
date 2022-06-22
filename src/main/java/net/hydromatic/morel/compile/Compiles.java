@@ -86,8 +86,11 @@ public abstract class Compiles {
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
     final int inlinePassCount =
         Math.max(Prop.INLINE_PASS_COUNT.intValue(session.map), 0);
+    final boolean relationalize =
+        Prop.RELATIONALIZE.booleanValue(session.map);
     final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.Decl coreDecl0 = resolver.toCore(resolved.node);
+    tracer.onCore(0, coreDecl0);
 
     // Check for exhaustive and redundant patterns, and throw errors or
     // warnings.
@@ -97,11 +100,15 @@ public abstract class Compiles {
       checkPatternCoverage(typeSystem, coreDecl0, warningConsumer);
     }
 
+    final Core.Decl coreDecl1 = coreDecl0;
+
     Core.Decl coreDecl;
+    final Relationalizer relationalizer = Relationalizer.of(typeSystem, env);
+    tracer.onCore(1, coreDecl1);
     if (inlinePassCount == 0) {
       // Inlining is disabled. Use the Inliner in a limited mode.
       final Inliner inliner = Inliner.of(typeSystem, env, null);
-      coreDecl = coreDecl0.accept(inliner);
+      coreDecl = coreDecl1.accept(inliner);
     } else {
       // Inline few times, or until we reach fixed point, whichever is sooner.
       coreDecl = coreDecl0;
@@ -109,14 +116,18 @@ public abstract class Compiles {
         final Analyzer.Analysis analysis =
             Analyzer.analyze(typeSystem, env, coreDecl);
         final Inliner inliner = Inliner.of(typeSystem, env, analysis);
-        final Core.Decl coreDecl1 = coreDecl;
-        coreDecl = coreDecl1.accept(inliner);
+        final Core.Decl coreDecl2 = coreDecl;
+        coreDecl = coreDecl2.accept(inliner);
+        if (relationalize) {
+          coreDecl = coreDecl.accept(relationalizer);
+        }
         if (coreDecl == coreDecl1) {
           break;
         }
+        tracer.onCore(i + 2, coreDecl);
       }
     }
-    tracer.onCore(coreDecl);
+    tracer.onCore(-1, coreDecl);
     final Compiler compiler;
     if (hybrid) {
       if (calcite == null) {

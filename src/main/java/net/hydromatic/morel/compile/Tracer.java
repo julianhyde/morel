@@ -28,7 +28,7 @@ import java.util.List;
 /** Called on various events during compilation. */
 public interface Tracer {
   /** Called when the expression is converted to core. */
-  void onCore(Core.Decl e);
+  void onCore(int pass, Core.Decl e);
 
   /** Called when code is generated. */
   void onPlan(Code code);

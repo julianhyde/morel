@@ -36,11 +36,15 @@ public abstract class Tracers {
 
   /** Returns a tracer that performs the given action on a declaration,
    * then calls the underlying tracer. */
-  public static Tracer withOnCore(Tracer tracer, Consumer<Core.Decl> consumer) {
+  public static Tracer withOnCore(Tracer tracer, int pass,
+      Consumer<Core.Decl> consumer) {
+    final int expectedPass = pass;
     return new DelegatingTracer(tracer) {
-      @Override public void onCore(Core.Decl e) {
-        consumer.accept(e);
-        super.onCore(e);
+      @Override public void onCore(int pass, Core.Decl e) {
+        if (pass == expectedPass) {
+          consumer.accept(e);
+        }
+        super.onCore(pass, e);
       }
     };
   }
@@ -103,7 +107,7 @@ public abstract class Tracers {
   private static class EmptyTracer implements Tracer {
     static final Tracer INSTANCE = new EmptyTracer();
 
-    @Override public void onCore(Core.Decl e) {
+    @Override public void onCore(int pass, Core.Decl e) {
     }
 
     @Override public void onPlan(Code code) {
@@ -132,8 +136,8 @@ public abstract class Tracers {
       this.tracer = tracer;
     }
 
-    @Override public void onCore(Core.Decl e) {
-      tracer.onCore(e);
+    @Override public void onCore(int pass, Core.Decl e) {
+      tracer.onCore(pass, e);
     }
 
     @Override public void onPlan(Code code) {

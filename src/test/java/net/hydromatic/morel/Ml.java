@@ -29,8 +29,6 @@ import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
-import net.hydromatic.morel.compile.Inliner;
-import net.hydromatic.morel.compile.Relationalizer;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
@@ -296,67 +294,28 @@ class Ml {
     }
   }
 
-  /** Asserts that after parsing the current expression and converting it to
-   * Core, the Core string converts to the expected value. Which is usually
-   * the original string. */
-  public Ml assertCoreString(Matcher<String> matcher) {
-    return assertCoreString(null, matcher, null);
+  /** Asserts that the Core string converts to the expected value.
+   *
+   * <p>For pass = 2, the Core string is generated after parsing the current
+   * expression and converting it to Core. Which is usually the original
+   * string. */
+  Ml assertCore(int pass, Matcher<String> expected) {
+    final Consumer<Core.Decl> consumer = e ->
+        assertThat(e.toString(), expected);
+    final Tracer tracer = Tracers.withOnCore(this.tracer, pass, consumer);
+    return withTracer(tracer).assertEval();
   }
 
-  /** As {@link #assertCoreString(Matcher)} but also checks how the Core
+  /** As {@link #assertCore(int, Matcher)} but also checks how the Core
    * string has changed after inlining. */
   public Ml assertCoreString(@Nullable Matcher<String> beforeMatcher,
       Matcher<String> matcher,
       @Nullable Matcher<String> inlinedMatcher) {
-    final AstNode statement;
-    try {
-      final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
-      statement = parser.statementEof();
-    } catch (ParseException parseException) {
-      throw new RuntimeException(parseException);
-    }
-
-    final Calcite calcite = Calcite.withDataSets(dataSetMap);
-    final TypeResolver.Resolved resolved =
-        Compiles.validateExpression(statement, calcite.foreignValues());
-    final TypeSystem typeSystem = resolved.typeMap.typeSystem;
-    final Environment env = resolved.env;
-    final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-    final Resolver resolver = Resolver.of(resolved.typeMap, env);
-    final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
-
-    if (beforeMatcher != null) {
-      // "beforeMatcher", if present, checks the expression before any inlining
-      assertThat(valDecl3, instanceOf(Core.NonRecValDecl.class));
-      assertThat(((Core.NonRecValDecl) valDecl3).exp.toString(), beforeMatcher);
-    }
-
-    final int inlineCount = inlinedMatcher == null ? 1 : 10;
-    final Relationalizer relationalizer = Relationalizer.of(typeSystem, env);
-    Core.ValDecl valDecl4 = valDecl3;
-    for (int i = 0; i < inlineCount; i++) {
-      final Analyzer.Analysis analysis =
-          Analyzer.analyze(typeSystem, env, valDecl4);
-      final Inliner inliner = Inliner.of(typeSystem, env, analysis);
-      final Core.ValDecl valDecl5 = valDecl4;
-      valDecl4 = valDecl5.accept(inliner);
-      valDecl4 = valDecl4.accept(relationalizer);
-      if (i == 0) {
-        // "matcher" checks the expression after one inlining pass
-        assertThat(valDecl4, instanceOf(Core.NonRecValDecl.class));
-        assertThat(((Core.NonRecValDecl) valDecl4).exp.toString(), matcher);
-      }
-      if (valDecl4 == valDecl5) {
-        break;
-      }
-    }
-    if (inlinedMatcher != null) {
-      // "inlinedMatcher", if present, checks the expression after all inlining
-      // passes
-      assertThat(valDecl4, instanceOf(Core.NonRecValDecl.class));
-      assertThat(((Core.NonRecValDecl) valDecl4).exp.toString(), inlinedMatcher);
-    }
-    return this;
+    return with(Prop.INLINE_PASS_COUNT, 10)
+        .with(Prop.RELATIONALIZE, true)
+        .assertCore(0, beforeMatcher)
+        .assertCore(2, matcher)
+        .assertCore(-1, inlinedMatcher);
   }
 
   Ml assertAnalyze(Matcher<Object> matcher) {
@@ -435,13 +394,6 @@ class Ml {
     final Consumer<Code> consumer = code ->
         assertThat(code, planMatcher);
     final Tracer tracer = Tracers.withOnPlan(this.tracer, consumer);
-    return withTracer(tracer).assertEval();
-  }
-
-  Ml assertCore(Matcher<String> expected) {
-    final Consumer<Core.Decl> consumer = e ->
-        assertThat(e.toString(), expected);
-    final Tracer tracer = Tracers.withOnCore(this.tracer, consumer);
     return withTracer(tracer).assertEval();
   }
 
