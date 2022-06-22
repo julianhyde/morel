@@ -33,12 +33,12 @@ import net.hydromatic.morel.type.TypeSystem;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 
@@ -88,6 +88,7 @@ public abstract class Compiles {
         Math.max(Prop.INLINE_PASS_COUNT.intValue(session.map), 0);
     final boolean relationalize =
         Prop.RELATIONALIZE.booleanValue(session.map);
+
     final Resolver resolver = Resolver.of(resolved.typeMap, env);
     final Core.Decl coreDecl0 = resolver.toCore(resolved.node);
     tracer.onCore(0, coreDecl0);
@@ -103,22 +104,25 @@ public abstract class Compiles {
     final Core.Decl coreDecl1 = coreDecl0;
 
     Core.Decl coreDecl;
-    final Relationalizer relationalizer = Relationalizer.of(typeSystem, env);
     tracer.onCore(1, coreDecl1);
     if (inlinePassCount == 0) {
       // Inlining is disabled. Use the Inliner in a limited mode.
       final Inliner inliner = Inliner.of(typeSystem, env, null);
       coreDecl = coreDecl1.accept(inliner);
     } else {
+      final @Nullable Relationalizer relationalizer =
+          relationalize ? Relationalizer.of(typeSystem, env)
+              : null;
+
       // Inline few times, or until we reach fixed point, whichever is sooner.
-      coreDecl = coreDecl0;
+      coreDecl = coreDecl1;
       for (int i = 0; i < inlinePassCount; i++) {
         final Analyzer.Analysis analysis =
             Analyzer.analyze(typeSystem, env, coreDecl);
         final Inliner inliner = Inliner.of(typeSystem, env, analysis);
         final Core.Decl coreDecl2 = coreDecl;
         coreDecl = coreDecl2.accept(inliner);
-        if (relationalize) {
+        if (relationalizer != null) {
           coreDecl = coreDecl.accept(relationalizer);
         }
         if (coreDecl == coreDecl1) {
