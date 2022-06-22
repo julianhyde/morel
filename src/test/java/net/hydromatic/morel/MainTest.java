@@ -1789,12 +1789,13 @@ public class MainTest {
         + "      j suchThat hasJob (d.deptno, j)\n"
         + "    yield j\n"
         + "end";
-    final String core = "from d_1 in #dept scott "
+    final String core = "val it = "
+        + "from d_1 in #dept scott "
         + "join j suchThat ("
-        + "let val v0 = (#deptno d_1, j) in"
-        + " case v0 of (d, job) => op elem ((op div (d, 2), job),"
+        + "case (#deptno d_1, j) of"
+        + " (d, job) => op elem ((op div (d, 2), job),"
         + " from e in #emp scott"
-        + " yield (#deptno e, #job e)) end) yield j";
+        + " yield (#deptno e, #job e))) yield j";
     final String code = "from(sink join(op join, pat d_1,\n"
         + "    exp apply(fnValue nth:1, argCode get(name scott)),\n"
         + "  sink join(op join, pat j,\n"
@@ -1820,9 +1821,21 @@ public class MainTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("string list")
-        .assertCoreString(is(core))
+        .assertCore(-1, is(core))
         .assertPlan(isCode2(code))
         .assertEval(is(expected));
+  }
+
+  /** A {@code suchThat} expression. */
+  @Test void testFromSuchThat2b() {
+    final String ml = "from d suchThat d elem scott.dept";
+    final String core0 = "val it = from d suchThat (d elem #dept scott)";
+    final String core1 = "val it = from d suchThat op elem (d, #dept scott)";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{deptno:int, dname:string, loc:string} list")
+        .assertCore(0, is(core0))
+        .assertCore(-1, is(core1));
   }
 
   /** A {@code suchThat} expression. */
@@ -1868,7 +1881,7 @@ public class MainTest {
         + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
         + "          sink collect(tuple(get(name d), get(name n))))))";
     ml(ml).assertType("{d:int, n:string} list")
-        .assertCore(is(core))
+        .assertCore(-1, is(core))
         .assertPlan(isCode2(code))
         .assertEval(is(list()));
   }
