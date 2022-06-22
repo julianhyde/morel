@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Prop;
@@ -100,7 +101,12 @@ public abstract class Compiles {
       checkPatternCoverage(typeSystem, coreDecl0, warningConsumer);
     }
 
-    final Core.Decl coreDecl1 = coreDecl0;
+    final Core.Decl coreDecl1;
+    if (containsSuchThat(coreDecl0)) {
+      coreDecl1 = coreDecl0;
+    } else {
+      coreDecl1 = coreDecl0;
+    }
 
     Core.Decl coreDecl;
     final Relationalizer relationalizer = Relationalizer.of(typeSystem, env);
@@ -138,6 +144,22 @@ public abstract class Compiles {
       compiler = new Compiler(typeSystem);
     }
     return compiler.compileStatement(env, coreDecl, isDecl);
+  }
+
+  private static boolean containsSuchThat(Core.Decl decl) {
+    class MyVisitor extends Visitor {
+      int suchThatCount = 0;
+
+      @Override protected void visit(Core.Scan scan) {
+        super.visit(scan);
+        if (scan.op == Op.SUCH_THAT) {
+          ++suchThatCount;
+        }
+      }
+    }
+    final MyVisitor visitor = new MyVisitor();
+    decl.accept(visitor);
+    return visitor.suchThatCount > 0;
   }
 
   /** Checks for exhaustive and redundant patterns, and throws if there are
