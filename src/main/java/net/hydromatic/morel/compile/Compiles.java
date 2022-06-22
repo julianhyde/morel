@@ -103,7 +103,12 @@ public abstract class Compiles {
       checkPatternCoverage(typeSystem, coreDecl0, warningConsumer);
     }
 
-    final Core.Decl coreDecl1 = coreDecl0;
+    final Core.Decl coreDecl1;
+    if (containsSuchThat(coreDecl0)) {
+      coreDecl1 = coreDecl0;
+    } else {
+      coreDecl1 = coreDecl0;
+    }
 
     Core.Decl coreDecl;
     tracer.onCore(1, coreDecl1);
@@ -162,6 +167,22 @@ public abstract class Compiles {
 
     return compiler.compileStatement(env, coreDecl, isDecl,
         queriesToWrap.build());
+  }
+
+  private static boolean containsSuchThat(Core.Decl decl) {
+    class MyVisitor extends Visitor {
+      int suchThatCount = 0;
+
+      @Override protected void visit(Core.Scan scan) {
+        super.visit(scan);
+        if (scan.op == Op.SUCH_THAT) {
+          ++suchThatCount;
+        }
+      }
+    }
+    final MyVisitor visitor = new MyVisitor();
+    decl.accept(visitor);
+    return visitor.suchThatCount > 0;
   }
 
   /** Checks for exhaustive and redundant patterns, and throws if there are
