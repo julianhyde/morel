@@ -59,6 +59,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -71,6 +72,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.number.OrderingComparison.greaterThan;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import static java.util.Objects.requireNonNull;
@@ -300,10 +302,19 @@ class Ml {
    * expression and converting it to Core. Which is usually the original
    * string. */
   Ml assertCore(int pass, Matcher<String> expected) {
-    final Consumer<Core.Decl> consumer = e ->
-        assertThat(e.toString(), expected);
+    final AtomicInteger callCount = new AtomicInteger(0);
+    final Consumer<Core.Decl> consumer = e -> {
+      callCount.incrementAndGet();
+      assertThat(e.toString(), expected);
+    };
     final Tracer tracer = Tracers.withOnCore(this.tracer, pass, consumer);
-    return withTracer(tracer).assertEval();
+
+    final Consumer<Object> consumer2 = o ->
+        assertThat("core(" + pass + ") was never called",
+            callCount.get(), greaterThan(0));
+    final Tracer tracer2 = Tracers.withOnResult(tracer, consumer2);
+
+    return withTracer(tracer).withTracer(tracer2).assertEval();
   }
 
   /** As {@link #assertCore(int, Matcher)} but also checks how the Core
