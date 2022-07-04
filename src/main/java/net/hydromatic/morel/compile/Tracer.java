@@ -40,8 +40,8 @@ public interface Tracer {
   void onWarnings(List<Throwable> warningList);
 
   /** Called with the exception thrown during evaluation, or null if no
-   * exception was thrown. */
-  void onException(@Nullable Throwable e);
+   * exception was thrown. Returns whether a handler was found. */
+  boolean onException(@Nullable Throwable e);
 
   /** Called with the exception thrown during validation, or null if no
    * exception was thrown. Returns whether a handler was found. */

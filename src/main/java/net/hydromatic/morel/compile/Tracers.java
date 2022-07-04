@@ -84,9 +84,10 @@ public abstract class Tracers {
   public static Tracer withOnException(Tracer tracer,
       Consumer<@Nullable Throwable> consumer) {
     return new DelegatingTracer(tracer) {
-      @Override public void onException(@Nullable Throwable e) {
+      @Override public boolean onException(@Nullable Throwable e) {
         consumer.accept(e);
         super.onException(e);
+        return true;
       }
     };
   }
@@ -119,7 +120,8 @@ public abstract class Tracers {
     @Override public void onWarnings(List<Throwable> warningList) {
     }
 
-    @Override public void onException(@Nullable Throwable e) {
+    @Override public boolean onException(@Nullable Throwable e) {
+      return false;
     }
 
     @Override public boolean handleCompileException(
@@ -152,8 +154,8 @@ public abstract class Tracers {
       tracer.onWarnings(warningList);
     }
 
-    @Override public void onException(@Nullable Throwable e) {
-      tracer.onException(e);
+    @Override public boolean onException(@Nullable Throwable e) {
+      return tracer.onException(e);
     }
 
     @Override public boolean handleCompileException(
