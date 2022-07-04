@@ -314,7 +314,7 @@ class Ml {
             callCount.get(), greaterThan(0));
     final Tracer tracer2 = Tracers.withOnResult(tracer, consumer2);
 
-    return withTracer(tracer).withTracer(tracer2).assertEval();
+    return withTracer(tracer2).assertEval();
   }
 
   /** As {@link #assertCore(int, Matcher)} but also checks how the Core
@@ -444,7 +444,9 @@ class Ml {
           compiledStatement.eval(session1, env, line -> {}, bindings::add));
       tracer.onException(null);
     } catch (RuntimeException e) {
-      tracer.onException(e);
+      if (!tracer.onException(e)) {
+        throw e;
+      }
     }
     tracer.onWarnings(warningList);
     final Object result;
