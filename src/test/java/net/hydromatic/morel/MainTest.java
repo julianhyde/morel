@@ -2141,7 +2141,7 @@ public class MainTest {
     for (int i = 0; i < expressions.length / 2; i++) {
       String ml = expressions[i * 2];
       String expected = "val it = " + Util.first(expressions[i  * 2 + 1], ml);
-      ml(ml).assertCore(2, is(expected));
+      ml(ml).assertCore(-1, is(expected));
     }
   }
 
