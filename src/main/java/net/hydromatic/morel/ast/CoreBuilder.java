@@ -385,6 +385,11 @@ public enum CoreBuilder {
         : Iterables.getLast(steps).bindings;
   }
 
+  /** Creates a builder that will create a {@link Core.From}. */
+  public FromBuilder fromBuilder(TypeSystem typeSystem) {
+    return new FromBuilder(typeSystem);
+  }
+
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {
     return new Core.Fn(type, idPat, exp);
   }
