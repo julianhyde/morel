@@ -36,6 +36,7 @@ import net.hydromatic.morel.util.Pair;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Ordering;
 
 import java.util.List;
 import java.util.Objects;
@@ -108,6 +109,11 @@ public class Core {
    * <p>A {@link Core.ValDecl} must be one of these. */
   public abstract static class NamedPat extends Pat
       implements Comparable<NamedPat> {
+    /** Ordering that compares named patterns by their names, then by their
+     * ordinal. */
+    public static final Ordering<NamedPat> ORDERING =
+        Ordering.from(NamedPat::compare);
+
     public final String name;
     public final int i;
 
@@ -122,11 +128,16 @@ public class Core {
      *
      * <p>Collate first on name, then on ordinal. */
     @Override public int compareTo(NamedPat o) {
-      final int c = RecordType.compareNames(name, o.name);
+      return compare(this, o);
+    }
+
+    /** Helper for {@link #ORDERING}. */
+    static int compare(NamedPat o1, NamedPat o2) {
+      int c = RecordType.compareNames(o1.name, o2.name);
       if (c != 0) {
         return c;
       }
-      return Integer.compare(i, o.i);
+      return Integer.compare(o1.i, o2.i);
     }
 
     public abstract NamedPat withType(Type type);

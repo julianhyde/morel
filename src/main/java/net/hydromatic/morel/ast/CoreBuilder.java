@@ -345,7 +345,7 @@ public enum CoreBuilder {
   }
 
   /** Returns the element type of a {@link Core.From} with the given steps. */
-  static Type fromElementType(TypeSystem typeSystem,
+  private Type fromElementType(TypeSystem typeSystem,
       List<Core.FromStep> steps) {
     if (!steps.isEmpty()
         && Iterables.getLast(steps) instanceof Core.Yield) {
