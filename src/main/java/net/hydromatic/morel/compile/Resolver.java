@@ -50,6 +50,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.function.Function;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
@@ -598,6 +599,64 @@ public class Resolver {
     return ImmutableList.<E>builder().addAll(list).add(e).build();
   }
 
+  /** Adds an element to a map. */
+  static <K, V> Map<K, V> plus(Map<K, V> map, K k, V v) {
+    return ImmutableMap.<K, V>builder()
+        .putAll(map)
+        .put(k, v)
+        .build();
+  }
+
+  /** Adds an element to a sorted map. */
+  static <K extends Comparable<K>, V> SortedMap<K, V> plus(SortedMap<K, V> map,
+      K k, V v) {
+    return new ImmutableSortedMap.Builder<K, V>(map.comparator())
+        .putAll(map)
+        .put(k, v)
+        .build();
+  }
+
+  /** Removes all occurrences of an element from a list. */
+  static <E> List<E> minus(List<E> list, E e) {
+    final ImmutableList.Builder<E> builder = ImmutableList.builder();
+    list.forEach(e2 -> {
+      if (!e2.equals(e)) {
+        builder.add(e2);
+      }
+    });
+    return builder.build();
+  }
+
+  /** Prepends an element to a list. */
+  static <E> List<E> plus(E e, List<E> list) {
+    return ConsList.of(e, list);
+  }
+
+  // TODO remove (unused)
+  boolean matches(Core.Pat pat, Core.Exp exp) {
+    switch (pat.op) {
+    case ID_PAT:
+      return exp.op == Op.ID
+          && ((Core.Id) exp).idPat == pat;
+    case TUPLE_PAT:
+      if (exp.op == Op.TUPLE) {
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        if (tuplePat.args.size() == tuple.args.size()) {
+          for (int i = 0; i < tuplePat.args.size(); i++) {
+            if (!matches(tuplePat.args.get(i), tuple.args.get(i))) {
+              return false;
+            }
+          }
+          return true;
+        }
+      }
+      return false;
+    default:
+      return false;
+    }
+  }
+
   private Core.From fromStepToCore(List<Binding> bindings, ListType type,
       List<Ast.FromStep> steps, List<Core.FromStep> coreSteps) {
     final Resolver r = withEnv(bindings);
@@ -716,7 +775,7 @@ public class Resolver {
 
   /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
    * to a list of id patterns. */
-  private static List<Core.IdPat> flatten(Core.Pat pat) {
+  static List<Core.IdPat> flatten(Core.Pat pat) {
     switch (pat.op) {
     case ID_PAT:
       return ImmutableList.of((Core.IdPat) pat);
