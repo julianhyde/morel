@@ -21,8 +21,10 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
@@ -30,19 +32,34 @@ import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Ord;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Iterables;
+import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.function.Consumer;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.append;
+import static net.hydromatic.morel.util.Static.minus;
+import static net.hydromatic.morel.util.Static.plus;
+
+import static org.apache.calcite.util.Util.skip;
 
 /** Helpers for {@link Compiler} and {@link TypeResolver}. */
 public abstract class Compiles {
@@ -103,26 +120,23 @@ public abstract class Compiles {
       checkPatternCoverage(typeSystem, coreDecl0, warningConsumer);
     }
 
-    final Core.Decl coreDecl1;
-    if (containsSuchThat(coreDecl0)) {
-      coreDecl1 = coreDecl0;
-    } else {
-      coreDecl1 = coreDecl0;
-    }
+    // Ensures that once we discover that there is no suchThat, we stop looking;
+    // makes things a bit more efficient.
+    boolean mayContainSuchThat = true;
 
     Core.Decl coreDecl;
-    tracer.onCore(1, coreDecl1);
+    tracer.onCore(1, coreDecl0);
     if (inlinePassCount == 0) {
       // Inlining is disabled. Use the Inliner in a limited mode.
       final Inliner inliner = Inliner.of(typeSystem, env, null);
-      coreDecl = coreDecl1.accept(inliner);
+      coreDecl = coreDecl0.accept(inliner);
     } else {
       final @Nullable Relationalizer relationalizer =
           relationalize ? Relationalizer.of(typeSystem, env)
               : null;
 
       // Inline few times, or until we reach fixed point, whichever is sooner.
-      coreDecl = coreDecl1;
+      coreDecl = coreDecl0;
       for (int i = 0; i < inlinePassCount; i++) {
         final Analyzer.Analysis analysis =
             Analyzer.analyze(typeSystem, env, coreDecl);
@@ -132,7 +146,14 @@ public abstract class Compiles {
         if (relationalizer != null) {
           coreDecl = coreDecl.accept(relationalizer);
         }
-        if (coreDecl == coreDecl1) {
+        if (mayContainSuchThat) {
+          if (containsSuchThat(coreDecl0)) {
+            coreDecl = coreDecl.accept(new SuchThatShuttle(typeSystem));
+          } else {
+            mayContainSuchThat = false;
+          }
+        }
+        if (coreDecl == coreDecl0) {
           break;
         }
         tracer.onCore(i + 2, coreDecl);
@@ -170,19 +191,16 @@ public abstract class Compiles {
   }
 
   private static boolean containsSuchThat(Core.Decl decl) {
-    class MyVisitor extends Visitor {
-      int suchThatCount = 0;
-
+    final Holder<Boolean> found = Holder.of(false);
+    decl.accept(new Visitor() {
       @Override protected void visit(Core.Scan scan) {
         super.visit(scan);
         if (scan.op == Op.SUCH_THAT) {
-          ++suchThatCount;
+          found.set(true);
         }
       }
-    }
-    final MyVisitor visitor = new MyVisitor();
-    decl.accept(visitor);
-    return visitor.suchThatCount > 0;
+    });
+    return found.get();
   }
 
   /** Checks for exhaustive and redundant patterns, and throws if there are
@@ -331,6 +349,185 @@ public abstract class Compiles {
 
     @Override protected void visit(Core.Local local) {
       bindDataType(typeSystem, bindings, local.dataType);
+    }
+  }
+
+  /** Converts {@code suchThat} to {@code in} wherever possible. */
+  private static class SuchThatShuttle extends Shuttle {
+    SuchThatShuttle(TypeSystem typeSystem) {
+      super(typeSystem);
+    }
+
+    @Override protected Core.Scan visit(Core.Scan scan) {
+      if (scan.op == Op.SUCH_THAT) {
+        final ImmutableList.Builder<Core.NamedPat> unboundPats =
+            ImmutableList.builder();
+        flatten(scan.pat).forEach(unboundPats::add);
+        final ImmutableSortedMap.Builder<Core.NamedPat, Core.Exp> mapBuilder =
+            ImmutableSortedMap.orderedBy(Core.NamedPat.ORDERING);
+        final Core.@Nullable Exp rewritten =
+            rewrite(unboundPats.build(),
+                mapBuilder.build(),
+                ImmutableMap.of(),
+                ImmutableList.of(), conjunctions(scan.exp));
+        return core.scan(Op.INNER_JOIN, scan.bindings,
+            scan.pat, rewritten, scan.condition);
+      }
+      return super.visit(scan);
+    }
+
+    /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
+     * to a list of id patterns. */
+    private static List<Core.IdPat> flatten(Core.Pat pat) {
+      switch (pat.op) {
+      case ID_PAT:
+        return ImmutableList.of((Core.IdPat) pat);
+
+      case TUPLE_PAT:
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        for (Core.Pat arg : tuplePat.args) {
+          if (arg.op != Op.ID_PAT) {
+            throw new CompileException("must be id", false, arg.pos);
+          }
+        }
+        //noinspection unchecked,rawtypes
+        return (List) tuplePat.args;
+
+      default:
+        throw new CompileException("must be id", false, pat.pos);
+      }
+    }
+
+    private Core.Exp rewrite(List<Core.NamedPat> unboundPats,
+        SortedMap<Core.NamedPat, Core.Exp> boundPats,
+        Map<Core.IdPat, Core.Exp> scans, List<Core.Exp> filters,
+        List<Core.Exp> exps) {
+      if (exps.isEmpty()) {
+        if (!unboundPats.isEmpty()) {
+          throw new CompileException("Cannot implement 'suchthat'; variables "
+              + unboundPats + " are not grounded", false, Pos.ZERO);
+        }
+        final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+        scans.forEach(fromBuilder::scan);
+        Core.Exp exp;
+        if (boundPats.size() == 1) {
+          exp = Iterables.getOnlyElement(boundPats.values());
+        } else {
+          final SortedMap<String, Type> argNameTypes =
+              new TreeMap<>(RecordType.ORDERING);
+          boundPats.keySet().forEach(p -> argNameTypes.put(p.name, p.type));
+          exp =
+              core.tuple(typeSystem.recordType(argNameTypes),
+                  boundPats.values());
+        }
+        fromBuilder.yield_(exp);
+        return fromBuilder.build();
+      }
+      final Core.Exp exp = exps.get(0);
+      final List<Core.Exp> exps2 = skip(exps);
+      if (exp.op == Op.APPLY) {
+        Core.Apply apply = (Core.Apply) exp;
+        if (apply.fn.op == Op.FN_LITERAL) {
+          final Core.Literal literal = (Core.Literal) apply.fn;
+          if (literal.value == BuiltIn.OP_ELEM) {
+            Core.Exp a0 = apply.args().get(0);
+            Core.Exp a1 = apply.args().get(1);
+            return rewriteElem(typeSystem, unboundPats, boundPats, scans,
+                filters, a0, a1, exps2);
+          } else if (literal.value == BuiltIn.OP_EQ) {
+            Core.Exp a0 = apply.args().get(0);
+            Core.Exp a1 = apply.args().get(1);
+            Core.Exp a1List =
+                core.list(typeSystem, a1.type, ImmutableList.of(a1));
+            return rewriteElem(typeSystem, unboundPats, boundPats, scans,
+                filters, a0, a1List, exps2);
+          }
+        }
+      }
+      throw new AssertionError(exp);
+    }
+
+    private Core.Exp rewriteElem(TypeSystem typeSystem,
+        List<Core.NamedPat> unboundPats,
+        SortedMap<Core.NamedPat, Core.Exp> boundPats,
+        Map<Core.IdPat, Core.Exp> scans,
+        List<Core.Exp> filters, Core.Exp a0,
+        Core.Exp a1, List<Core.Exp> exps2) {
+      if (a0.op == Op.ID) {
+        // from ... v suchthat (v elem list)
+        final Core.IdPat idPat = (Core.IdPat) ((Core.Id) a0).idPat;
+        if (unboundPats.contains(idPat)) {
+          // "from a, b, c suchthat (b in list-valued-expression)"
+          //  --> remove b from unbound
+          //     add (b, scans.size) to bound
+          //     add list to scans
+          // from ... v in list
+          final List<Core.NamedPat> unboundPats2 =
+              minus(unboundPats, idPat);
+          final SortedMap<Core.NamedPat, Core.Exp> boundPats2 =
+              plus(boundPats, idPat, core.id(idPat));
+          final Map<Core.IdPat, Core.Exp> scans2 =
+              plus(scans, idPat, a1);
+          return rewrite(unboundPats2, boundPats2, scans2, filters, exps2);
+        }
+        throw new AssertionError(unboundPats + ", " + idPat); // TODO
+      } else if (a0.op == Op.TUPLE) {
+        // from v, w, x suchthat ((v, w, x) elem list)
+        //  -->
+        //  from e suchthat (e elem list)
+        //    yield (e.v, e.w, e.x)
+        final Core.Tuple tuple = (Core.Tuple) a0;
+        final Core.IdPat idPat =
+            core.idPat(((ListType) a1.type).elementType,
+                typeSystem.nameGenerator);
+        final Core.Id id = core.id(idPat);
+        SortedMap<Core.NamedPat, Core.Exp> boundPats2 = boundPats;
+        List<Core.NamedPat> unboundPats2 = unboundPats;
+        List<Core.Exp> filters2 = filters;
+        for (Ord<Core.Exp> arg : Ord.zip(tuple.args)) {
+          if (arg.e instanceof Core.Id) {
+            final Core.NamedPat idPat2 = ((Core.Id) arg.e).idPat;
+            final Core.Exp e = core.field(typeSystem, id, arg.i);
+            if (unboundPats2.contains(idPat2)) {
+              // This variable was not previously bound; bind it.
+              unboundPats2 = minus(unboundPats2, idPat2);
+              boundPats2 = plus(boundPats2, idPat2, e);
+            } else {
+              // This variable is already bound; now add a filter.
+              filters2 =
+                  append(filters, core.equal(typeSystem, e, arg.e));
+            }
+          }
+        }
+        final Map<Core.IdPat, Core.Exp> scans2 = plus(scans, idPat, a1);
+        return rewrite(unboundPats2, boundPats2, scans2, filters2, exps2);
+      } else {
+        // from ... (v, w) suchThat ((v, w) elem list)
+        throw new AssertionError();
+      }
+    }
+
+    /** Returns an expression as a list of conjunctions.
+     *
+     * <p>For example {@code conjunctions(a andalso b)}
+     * returns [{@code a}, {@code b}] (two elements);
+     * {@code conjunctions(a orelse b)}
+     * returns [{@code a orelse b}] (one element);
+     * {@code conjunctions(true)}
+     * returns [] (no elements);
+     * {@code conjunctions(false)}
+     * returns [{@code false}] (one element). */
+    static List<Core.Exp> conjunctions(Core.Exp e) {
+      if (e.op == Op.BOOL_LITERAL
+          && (boolean) ((Core.Literal) e).value) {
+        return ImmutableList.of();
+      } else if (e.op == Op.APPLY
+          && ((Core.Apply) e).fn.op == Op.FN_LITERAL
+          && ((Core.Literal) ((Core.Apply) e).fn).value == BuiltIn.Z_ANDALSO) {
+        return ((Core.Apply) e).args();
+      } else {
+        return ImmutableList.of(e);
+      }
     }
   }
 }

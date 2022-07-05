@@ -471,7 +471,7 @@ public class Resolver {
     return resolvedDecl.toExp(e2);
   }
 
-  private void flatten(Map<Ast.Pat, Ast.Exp> matches, boolean flatten,
+  static void flatten(Map<Ast.Pat, Ast.Exp> matches, boolean flatten,
       Ast.Pat pat, Ast.Exp exp) {
     if (flatten && pat.op == Op.TUPLE_PAT && exp.op == Op.TUPLE) {
       Pair.forEach(((Ast.TuplePat) pat).args, ((Ast.Tuple) exp).args,
