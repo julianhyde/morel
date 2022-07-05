@@ -28,6 +28,7 @@ import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
@@ -155,6 +156,13 @@ public enum CoreBuilder {
     }
     throw new IllegalArgumentException("no field '" + fieldName + "' in type '"
         + recordType + "'");
+  }
+
+  public Core.RecordSelector recordSelector(TypeSystem typeSystem,
+      RecordLikeType recordType, int slot) {
+    final Type fieldType = recordType.argType(slot);
+    final FnType fnType = typeSystem.fnType(recordType, fieldType);
+    return recordSelector(fnType, slot);
   }
 
   public Core.RecordSelector recordSelector(FnType fnType, int slot) {
@@ -444,6 +452,50 @@ public enum CoreBuilder {
       bindings.add(Binding.of(core.idPat(exp.type, typeSystem.nameGenerator)));
     }
     return yield_(bindings, exp);
+  }
+
+  // Short-hands
+
+  /** Creates a reference to the {@code slot}th field of an expression,
+   * "{@code #slot exp}". The expression's type must be record or tuple. */
+  public Core.Exp field(TypeSystem typeSystem, Core.Exp exp, int slot) {
+    final Core.RecordSelector selector =
+        recordSelector(typeSystem, (RecordLikeType) exp.type, slot);
+    return apply(exp.pos, selector.type().resultType, selector, exp);
+  }
+
+  /** Creates a list. */
+  public Core.Exp list(TypeSystem typeSystem, Type elementType,
+      List<Core.Exp> args) {
+    final Core.Literal literal = functionLiteral(typeSystem, BuiltIn.Z_LIST);
+    final ListType listType = typeSystem.listType(elementType);
+    return apply(Pos.ZERO, listType, literal,
+        core.tuple(typeSystem, null, args));
+  }
+
+  /** Calls a built-in function with two arguments. */
+  private Core.Apply call(TypeSystem typeSystem, BuiltIn builtIn,
+      Core.Exp a0, Core.Exp a1) {
+    final Core.Literal literal = functionLiteral(typeSystem, builtIn);
+    final FnType fnType = (FnType) literal.type;
+    return apply(Pos.ZERO, fnType.resultType, literal,
+        tuple((TupleType) fnType.paramType, a0, a1));
+  }
+
+  public Core.Exp equal(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_EQ, a0, a1);
+  }
+
+  public Core.Exp notEqual(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_NE, a0, a1);
+  }
+
+  public Core.Exp andAlso(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.Z_ANDALSO, a0, a1);
+  }
+
+  public Core.Exp orElse(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.Z_ORELSE, a0, a1);
   }
 
 }
