@@ -1814,6 +1814,33 @@ public class MainTest {
         .assertEval(is(expected));
   }
 
+  /** Translates a simple {@code suchthat} expression, "d elem list". */
+  @Test void testFromSuchThat2b() {
+    final String ml = "from d suchthat d elem scott.dept";
+    final String core0 = "val it = from d suchthat (d elem #dept scott)";
+    final String core1 = "val it = from d in (from d in #dept scott yield d)";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{deptno:int, dname:string, loc:string} list")
+        .assertCore(0, is(core0))
+        .assertCore(-1, is(core1));
+  }
+
+  /** Translates a simple {@code suchthat} expression, "{x, y} elem list".
+   * Fields are renamed, to disrupt alphabetical ordering. */
+  @Test void testFromSuchThat2c() {
+    final String ml = "from (loc, deptno, name) "
+        + "suchthat {deptno, loc, dname = name} elem scott.dept";
+    final String core = "val it = "
+        + "from (loc, deptno, name) in"
+        + " (from v0 in #dept scott "
+        + "yield {deptno = #deptno v0, loc = #loc v0, name = #dname v0})";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{deptno:int, loc:string, name:string} list")
+        .assertCore(-1, is(core));
+  }
+
   /** A {@code suchthat} expression. */
   @Test void testFromSuchThat3() {
     final String ml = "let\n"

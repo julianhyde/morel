@@ -656,6 +656,31 @@ public class Resolver {
     }
   }
 
+  // TODO remove (unused)
+  boolean matches(Core.Pat pat, Core.Exp exp) {
+    switch (pat.op) {
+    case ID_PAT:
+      return exp.op == Op.ID
+          && ((Core.Id) exp).idPat == pat;
+    case TUPLE_PAT:
+      if (exp.op == Op.TUPLE) {
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        if (tuplePat.args.size() == tuple.args.size()) {
+          for (int i = 0; i < tuplePat.args.size(); i++) {
+            if (!matches(tuplePat.args.get(i), tuple.args.get(i))) {
+              return false;
+            }
+          }
+          return true;
+        }
+      }
+      return false;
+    default:
+      return false;
+    }
+  }
+
   private Core.Aggregate toCore(Ast.Aggregate aggregate) {
     return core.aggregate(typeMap.getType(aggregate),
         toCore(aggregate.aggregate),
