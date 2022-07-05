@@ -1813,17 +1813,55 @@ public class MainTest {
         .assertEval(is(expected));
   }
 
-  /** A {@code suchThat} expression. */
+  /** Translates a simple {@code suchThat} expression, "d elem list". */
   @Test void testFromSuchThat2b() {
     final String ml = "from d suchThat d elem scott.dept";
     final String core0 = "val it = from d suchThat (d elem #dept scott)";
-    final String core1 = "val it = from d suchThat op elem (d, #dept scott)";
+    final String core1 = "val it = from d in (from d in #dept scott yield d)";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{deptno:int, dname:string, loc:string} list")
         .assertCore(0, is(core0))
         .assertCore(-1, is(core1));
   }
+
+  /** Translates a simple {@code suchThat} expression, "{x, y} elem list".
+   * Fields are renamed, to disrupt alphabetical ordering. */
+  @Test void testFromSuchThat2c() {
+    final String ml = "from (loc, deptno, name) "
+        + "suchThat {deptno, loc, dname = name} elem scott.dept";
+    final String core = "val it = "
+        + "from (loc, deptno, name) in"
+        + " (from v0 in #dept scott "
+        + "yield {deptno = #deptno v0, loc = #loc v0, name = #dname v0})";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{deptno:int, loc:string, name:string} list")
+        .assertCore(-1, is(core));
+  }
+
+  /** As {@link #testFromSuchThat2c()} but with a literal. */
+  @Test void testFromSuchThat2d() {
+    final String ml = "from (dno, name)\n"
+        + "  suchThat {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
+        + "      elem scott.dept\n"
+        + "    andalso dno = 20";
+    final String core0 = "val it = "
+        + "from (dno, name) "
+        + "suchThat ({deptno = dno, dname = name, loc = \"CHICAGO\"} "
+        + "elem #dept scott "
+        + "andalso dno = 20)";
+    final String core1 = "val it = "
+        + "from (loc, dno, dname) in ("
+        + "from v0 in #dept scott "
+        + "yield {dname = #dname v0, dno = #deptno v0, loc = #loc v0})";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{dno:int, name:string} list")
+        .assertCore(0, is(core0))
+        .assertCore(-1, is(core1));
+  }
+
 
   /** A {@code suchThat} expression. */
   @Test void testFromSuchThat3() {
