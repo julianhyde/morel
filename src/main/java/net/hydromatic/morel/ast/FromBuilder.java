@@ -202,11 +202,7 @@ public class FromBuilder {
     }
 
     @Override protected void visit(Core.Scan scan) {
-      if (scan.op == Op.SUCH_THAT) {
-        suchThat(scan.pat, scan.exp);
-      } else {
-        scan(scan.pat, scan.exp, scan.condition);
-      }
+      scan(scan.pat, scan.exp, scan.condition);
     }
 
     @Override protected void visit(Core.Where where) {
