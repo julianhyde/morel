@@ -561,10 +561,6 @@ public enum CoreBuilder {
     return call(typeSystem, BuiltIn.OP_GT, a0.type, Pos.ZERO, a0, a1);
   }
 
-  public Core.Exp greaterThan(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
-    return call(typeSystem, BuiltIn.OP_GT, a0.type, a0, a1);
-  }
-
   public Core.Exp elem(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     if (a1.op == Op.APPLY
         && ((Core.Apply) a1).fn.op == Op.FN_LITERAL
