@@ -24,6 +24,7 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -501,21 +502,48 @@ public enum CoreBuilder {
         core.tuple(typeSystem, null, args));
   }
 
-  /** Calls a built-in function with two arguments. */
+  /** Calls a built-in function. */
   private Core.Apply call(TypeSystem typeSystem, BuiltIn builtIn,
-      Core.Exp a0, Core.Exp a1) {
+      Core.Exp... args) {
     final Core.Literal literal = functionLiteral(typeSystem, builtIn);
     final FnType fnType = (FnType) literal.type;
     return apply(Pos.ZERO, fnType.resultType, literal,
-        tuple((TupleType) fnType.paramType, a0, a1));
+        args(fnType.paramType, args));
+  }
+
+  /** Calls a built-in function with one type parameter. */
+  private Core.Apply call(TypeSystem typeSystem, BuiltIn builtIn, Type type,
+      Core.Exp... args) {
+    final Core.Literal literal = functionLiteral(typeSystem, builtIn);
+    final ForallType forallType = (ForallType) literal.type;
+    final FnType fnType = (FnType) typeSystem.apply(forallType, type);
+    return apply(Pos.ZERO, fnType.resultType, literal,
+        args(fnType.paramType, args));
+  }
+
+  private Core.Exp args(Type paramType, Core.Exp[] args) {
+    return args.length == 1
+        ? args[0]
+        : tuple((TupleType) paramType, args);
   }
 
   public Core.Exp equal(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
-    return call(typeSystem, BuiltIn.OP_EQ, a0, a1);
+    return call(typeSystem, BuiltIn.OP_EQ, a0.type, a0, a1);
   }
 
   public Core.Exp notEqual(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
-    return call(typeSystem, BuiltIn.OP_NE, a0, a1);
+    return call(typeSystem, BuiltIn.OP_NE, a0.type, a0, a1);
+  }
+
+  public Core.Exp elem(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    if (a1.op == Op.APPLY
+        && ((Core.Apply) a1).fn.op == Op.FN_LITERAL
+        && ((Core.Literal) ((Core.Apply) a1).fn).value == BuiltIn.Z_LIST
+        && ((Core.Apply) a1).args().size() == 1) {
+      // If "a1 = [x]", rather than "a0 elem [x]", generate "a0 = x"
+      return equal(typeSystem, a0, ((Core.Apply) a1).args().get(0));
+    }
+    return call(typeSystem, BuiltIn.OP_ELEM, a0.type, a0, a1);
   }
 
   public Core.Exp andAlso(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {

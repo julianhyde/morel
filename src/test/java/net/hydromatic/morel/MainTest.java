@@ -1852,9 +1852,11 @@ public class MainTest {
         + "elem #dept scott "
         + "andalso dno = 20)";
     final String core1 = "val it = "
-        + "from (loc, dno, dname) in ("
+        + "from (dno, name) in ("
         + "from v0 in #dept scott "
-        + "yield {dname = #dname v0, dno = #deptno v0, loc = #loc v0})";
+        + "where #loc v0 = \"CHICAGO\" "
+        + "where #deptno v0 = 20 "
+        + "yield {dno = #deptno v0, name = #dname v0})";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{dno:int, name:string} list")
