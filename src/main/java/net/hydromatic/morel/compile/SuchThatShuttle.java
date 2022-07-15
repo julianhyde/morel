@@ -121,6 +121,7 @@ class SuchThatShuttle extends Shuttle {
       }
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
       scans.forEach(fromBuilder::scan);
+      filters.forEach(fromBuilder::where);
       Core.Exp exp;
       if (boundPats.size() == 1) {
         exp = Iterables.getOnlyElement(boundPats.values());
@@ -181,8 +182,12 @@ class SuchThatShuttle extends Shuttle {
         final Map<Core.IdPat, Core.Exp> scans2 =
             plus(scans, idPat, a1);
         return rewrite(unboundPats2, boundPats2, scans2, filters, exps2);
+      } else {
+        final Core.Exp e = boundPats.get(idPat);
+        final List<Core.Exp> filters2 =
+            append(filters, core.elem(typeSystem, e, a1));
+        return rewrite(unboundPats, boundPats, scans, filters2, exps2);
       }
-      throw new AssertionError(unboundPats + ", " + idPat); // TODO
     } else if (a0.op == Op.TUPLE) {
       // from v, w, x suchthat ((v, w, x) elem list)
       //  -->
@@ -197,9 +202,9 @@ class SuchThatShuttle extends Shuttle {
       List<Core.NamedPat> unboundPats2 = unboundPats;
       List<Core.Exp> filters2 = filters;
       for (Ord<Core.Exp> arg : Ord.zip(tuple.args)) {
+        final Core.Exp e = core.field(typeSystem, id, arg.i);
         if (arg.e instanceof Core.Id) {
           final Core.NamedPat idPat2 = ((Core.Id) arg.e).idPat;
-          final Core.Exp e = core.field(typeSystem, id, arg.i);
           if (unboundPats2.contains(idPat2)) {
             // This variable was not previously bound; bind it.
             unboundPats2 = minus(unboundPats2, idPat2);
@@ -209,6 +214,9 @@ class SuchThatShuttle extends Shuttle {
             filters2 =
                 append(filters, core.equal(typeSystem, e, arg.e));
           }
+        } else {
+          filters2 =
+              append(filters, core.equal(typeSystem, e, arg.e));
         }
       }
       final Map<Core.IdPat, Core.Exp> scans2 = plus(scans, idPat, a1);
