@@ -1402,7 +1402,7 @@ AstNode statementEof() :
 | < OF: "of" >
 | < ORELSE: "orelse" >
 | < REC: "rec" >
-| < SUCH_THAT: "suchThat" >
+| < SUCH_THAT: "suchthat" >
 | < THEN: "then" >
 | < UNION: "union" >
 | < VAL: "val" >
