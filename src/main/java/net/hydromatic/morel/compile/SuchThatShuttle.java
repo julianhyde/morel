@@ -145,22 +145,32 @@ class SuchThatShuttle extends Shuttle {
         if (literal.value == BuiltIn.OP_ELEM) {
           Core.Exp a0 = apply.args().get(0);
           Core.Exp a1 = apply.args().get(1);
-          return rewriteElem(typeSystem, unboundPats, boundPats, scans,
-              filters, a0, a1, exps2);
+          Core.@Nullable Exp e =
+              rewriteElem(typeSystem, unboundPats, boundPats, scans,
+                  filters, a0, a1, exps2);
+          if (e != null) {
+            return e;
+          }
         } else if (literal.value == BuiltIn.OP_EQ) {
           Core.Exp a0 = apply.args().get(0);
           Core.Exp a1 = apply.args().get(1);
           Core.Exp a1List =
               core.list(typeSystem, a1.type, ImmutableList.of(a1));
-          return rewriteElem(typeSystem, unboundPats, boundPats, scans,
-              filters, a0, a1List, exps2);
+          Core.@Nullable Exp e =
+              rewriteElem(typeSystem, unboundPats, boundPats, scans,
+                  filters, a0, a1List, exps2);
+          if (e != null) {
+            return e;
+          }
         }
+        final List<Core.Exp> filters2 = append(filters, exp);
+        return rewrite(unboundPats, boundPats, scans, filters2, exps2);
       }
     }
     throw new AssertionError(exp);
   }
 
-  private Core.Exp rewriteElem(TypeSystem typeSystem,
+  private Core.@Nullable Exp rewriteElem(TypeSystem typeSystem,
       List<Core.NamedPat> unboundPats,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Map<Core.IdPat, Core.Exp> scans,
@@ -222,8 +232,7 @@ class SuchThatShuttle extends Shuttle {
       final Map<Core.IdPat, Core.Exp> scans2 = plus(scans, idPat, a1);
       return rewrite(unboundPats2, boundPats2, scans2, filters2, exps2);
     } else {
-      // from ... (v, w) suchThat ((v, w) elem list)
-      throw new AssertionError();
+      return null;
     }
   }
 
