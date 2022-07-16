@@ -16,11 +16,11 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Tests for 'suchThat'.
+ * Tests for 'suchthat'.
  *)
 
 (*) If the expression is 'elem set' we can deduce the extent.
-from e suchThat (e elem scott.emp)
+from e suchthat (e elem scott.emp)
   where e.deptno = 20
   yield e.ename;
 val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
@@ -31,7 +31,7 @@ let
   fun isEmp e =
     e elem scott.emp
 in
-  from e suchThat isEmp e
+  from e suchthat isEmp e
     where e.deptno = 20
     yield e.ename
 end;
@@ -41,7 +41,7 @@ let
   fun isEmp e =
     e elem scott.emp
 in
-  from e suchThat isEmp e andalso e.deptno = 20
+  from e suchthat isEmp e andalso e.deptno = 20
     yield e.ename
 end;
 val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
@@ -54,7 +54,7 @@ let
   fun isClerk e =
     e elem scott.emp andalso e.job = "CLERK"
 in
-  from e suchThat isClerk e andalso e.deptno = 20
+  from e suchthat isClerk e andalso e.deptno = 20
     yield e.ename
 end;
 val it = ["SMITH","ADAMS"] : string list
@@ -66,7 +66,7 @@ let
   fun isEmp50 e =
     e elem scott.emp orelse e.deptno = 50
 in
-  from e suchThat isEmp50 e
+  from e suchthat isEmp50 e
     yield e.ename
 end;
 val it = [] : string list
@@ -83,13 +83,13 @@ let
     e.job = job
 in
   from e in scott.emp,
-    j suchThat hasJob (e, j)
+    j suchthat hasJob (e, j)
     yield j
 end;
 val it = [] : string list
 
 (*) Invalid, because the argument has no extent.
-from e suchThat hasJob (e, "CLERK");
+from e suchthat hasJob (e, "CLERK");
 stdIn:2.17-2.23 Error: unbound variable or constructor: hasJob
   raised at: stdIn:2.17-2.23
 
@@ -102,7 +102,7 @@ val isPrefix = fn : string * string -> bool
 
 (*) This is invalid, but it could be valid, and would return
 (*) ["", "a", "ab", "abc", "abcd"];
-from s suchThat isPrefix (s, "abcd");
+from s suchthat isPrefix (s, "abcd");
 val it = [] : string list
 
 
@@ -116,7 +116,7 @@ val isBetween = fn : 'a * 'a * 'a -> bool
 (* ------------------------------------------------------ *)
 (*) Convenience function that converts a predicate to a relation
 fun enumerate predicate =
-  from r suchThat predicate r;
+  from r suchthat predicate r;
 val enumerate = fn : ('a -> bool) -> 'a list
 
 (*) TODO should return non-empty list
@@ -174,11 +174,11 @@ val edge = fn : int * int -> bool
 fun path (x, y) =
   edge (x, y)
   orelse exists (
-    from z suchThat path (x, z) andalso edge (z, y));
+    from z suchthat path (x, z) andalso edge (z, y));
 val path = fn : int * int -> bool
 
 (*) TODO should return [(1,2),(2,3),(1,3)]
-from p suchThat path p;
+from p suchthat path p;
 val it = [] : (int * int) list
 
 
@@ -241,7 +241,7 @@ val sells = fn : string * string * int -> bool
  *)
 fun happy patron =
   exists (
-    from (bar, beer, price) suchThat frequents (patron, bar)
+    from (bar, beer, price) suchthat frequents (patron, bar)
       andalso likes (patron, beer)
       andalso sells (bar, beer, price));
 val happy = fn : string -> bool
@@ -251,7 +251,7 @@ val happy = fn : string -> bool
    Amber; Velma is happy because Cask sells Stout. Fred and Scooby are not
    happy. *)
 (*) TODO should return ["shaggy", "velma"]
-from p suchThat happy p;
+from p suchthat happy p;
 val it = [] : string list
 
 
@@ -265,7 +265,7 @@ val it = [] : string list
 fun cheap beer =
   exists (
     from (bar1, price1, bar2, price2)
-      suchThat sells (bar1, beer, price1)
+      suchthat sells (bar1, beer, price1)
         andalso sells (bar2, beer, price2)
         andalso price1 < 3
         andalso price2 < 3
@@ -275,7 +275,7 @@ val cheap = fn : string -> bool
 
 (*) Pale is cheap
 (*) TODO should return ["pale"]
-from b suchThat cheap b;
+from b suchthat cheap b;
 val it = [] : string list
 
 
@@ -303,25 +303,25 @@ val it = [] : string list
 fun isR y = true;
 val isR = fn : 'a -> bool
 
-fun isS1 x = exists (from y suchThat isR y);
+fun isS1 x = exists (from y suchthat isR y);
 val isS1 = fn : 'a -> bool
 
 (*) TODO: should say that isS1 is unsafe
-from x suchThat isS1 x;
+from x suchthat isS1 x;
 val it = [] : 'a list
 
-fun isS2 x = exists (from y suchThat isR y andalso not (isR x));
+fun isS2 x = exists (from y suchthat isR y andalso not (isR x));
 val isS2 = fn : 'a -> bool
 
 (*) TODO: should say that isS2 is unsafe
-from x suchThat isS2 x;
+from x suchthat isS2 x;
 val it = [] : 'a list
 
-fun isS3 x = exists (from y suchThat isR y andalso x < y);
+fun isS3 x = exists (from y suchthat isR y andalso x < y);
 val isS3 = fn : 'a -> bool
 
 (*) TODO: should say that isS3 is unsafe
-from x suchThat isS3 x;
+from x suchthat isS3 x;
 val it = [] : 'a list
 
 
@@ -334,11 +334,11 @@ val it = [] : 'a list
  *     AND NOT JoeSells(b)
  *)
 fun caskSells b =
-  exists (from (beer, price) suchThat sells ("cask", beer, price));
+  exists (from (beer, price) suchthat sells ("cask", beer, price));
 val caskSells = fn : 'a -> bool
 
-from p suchThat exists (
-  from b suchThat likes (p, b) andalso not (caskSells b));
+from p suchthat exists (
+  from b suchthat likes (p, b) andalso not (caskSells b));
 val it = [] : string list
 
 
@@ -365,12 +365,12 @@ fun par (x, p) =
 val par = fn : string * string -> bool
 
 fun sib (x, y) = exists (
-  from p suchThat par (x, p) andalso par (y, p) andalso x <> y);
+  from p suchthat par (x, p) andalso par (y, p) andalso x <> y);
 val sib = fn : string * string -> bool
 
 fun cousin (x, y) = sib (x, y)
   orelse exists (
-    from (xp, yp) suchThat par (x, xp)
+    from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin (xp, yp));
 val cousin = fn : string * string -> bool
@@ -397,7 +397,7 @@ val it = [] : (string * string) list
  * where s2 is the expression 'notExists (...)'. *)
 fun cousin2 (x, y) = sib (x, y)
   andalso notExists (
-    from (xp, yp) suchThat par (x, xp)
+    from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin2 (xp, yp));
 val cousin2 = fn : string * string -> bool
