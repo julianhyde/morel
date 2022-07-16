@@ -129,14 +129,21 @@ public abstract class Compiles {
         if (relationalizer != null) {
           coreDecl = coreDecl.accept(relationalizer);
         }
+        if (coreDecl == coreDecl2) {
+          break;
+        }
+        tracer.onCore(i + 2, coreDecl);
+      }
+      for (int i = 0; i < inlinePassCount; i++) {
+        final Core.Decl coreDecl2 = coreDecl;
         if (mayContainSuchThat) {
-          if (SuchThatShuttle.containsSuchThat(coreDecl0)) {
+          if (SuchThatShuttle.containsSuchThat(coreDecl)) {
             coreDecl = coreDecl.accept(new SuchThatShuttle(typeSystem));
           } else {
             mayContainSuchThat = false;
           }
         }
-        if (coreDecl == coreDecl0) {
+        if (coreDecl == coreDecl2) {
           break;
         }
         tracer.onCore(i + 2, coreDecl);
