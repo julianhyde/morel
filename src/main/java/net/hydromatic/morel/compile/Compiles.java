@@ -101,8 +101,8 @@ public abstract class Compiles {
       checkPatternCoverage(typeSystem, coreDecl0, warningConsumer);
     }
 
-    // Ensures that once we discover that there is no suchThat, we stop looking;
-    // makes things a bit more efficient.
+    // Ensures that once we discover that there is no "suchthat", we stop
+    // looking; makes things a bit more efficient.
     boolean mayContainSuchThat = true;
 
     Core.Decl coreDecl;

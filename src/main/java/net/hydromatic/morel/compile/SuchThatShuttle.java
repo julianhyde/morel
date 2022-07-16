@@ -50,7 +50,7 @@ import static net.hydromatic.morel.compile.Resolver.plus;
 import static org.apache.calcite.util.Util.skip;
 
 /**
- * Converts {@code suchThat} to {@code in} wherever possible.
+ * Converts {@code suchthat} to {@code in} wherever possible.
  */
 class SuchThatShuttle extends Shuttle {
   SuchThatShuttle(TypeSystem typeSystem) {
@@ -200,7 +200,7 @@ class SuchThatShuttle extends Shuttle {
       final Map<Core.IdPat, Core.Exp> scans2 = plus(scans, idPat, a1);
       return rewrite(unboundPats2, boundPats2, scans2, filters2, exps2);
     } else {
-      // from ... (v, w) suchThat ((v, w) elem list)
+      // from ... (v, w) suchthat ((v, w) elem list)
       throw new AssertionError();
     }
   }

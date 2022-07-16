@@ -1397,12 +1397,12 @@ AstNode statementEof() :
 | < INTERSECT: "intersect" >
 | < LET: "let" >
 | < MOD: "mod" >
-| < NOT_ELEM: "notElem" >
+| < NOT_ELEM: "notelem" >
 | < O: "o" >
 | < OF: "of" >
 | < ORELSE: "orelse" >
 | < REC: "rec" >
-| < SUCH_THAT: "suchThat" >
+| < SUCH_THAT: "suchthat" >
 | < THEN: "then" >
 | < UNION: "union" >
 | < VAL: "val" >

@@ -1073,10 +1073,10 @@ public class Core {
       final String prefix = ordinal == 0 ? " "
           : op == Op.SUCH_THAT ? " join "
           : op.padded;
-      final String infix = op == Op.SUCH_THAT ? " suchThat "
+      final String infix = op == Op.SUCH_THAT ? " suchthat "
           : " in ";
       w.append(prefix)
-          // for these purposes 'in' and 'suchThat' have same precedence as '='
+          // for these purposes 'in' and 'suchthat' have same precedence as '='
           .append(pat, 0, Op.EQ.left)
           .append(infix)
           .append(exp, Op.EQ.right, 0);

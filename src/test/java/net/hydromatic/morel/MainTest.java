@@ -316,11 +316,12 @@ public class MainTest {
         .assertParseThrowsParseException(
             startsWith("Encountered \" \"end\" \"end \""));
 
-    // 'notElem' is an infix operator.
-    ml("1 + f notElem g * 2")
-        .assertParse(true, "((((1) + (f))) notElem (((g) * (2))))");
+    // 'notelem' is an infix operator;
+    // 'notElem' and 'NOTELEM' are ordinary identifiers
     ml("1 + f notelem g * 2")
-        .assertParse(true, "((1) + (((((((f) (notelem))) (g))) * (2))))");
+        .assertParse(true, "((((1) + (f))) notelem (((g) * (2))))");
+    ml("1 + f notElem g * 2")
+        .assertParse(true, "((1) + (((((((f) (notElem))) (g))) * (2))))");
     ml("1 + f NOTELEM g * 2")
         .assertParse(true, "((1) + (((((((f) (NOTELEM))) (g))) * (2))))");
 
@@ -1629,8 +1630,8 @@ public class MainTest {
     ml("from e in emps").assertParseSame();
     ml("from e in emps where c").assertParseSame();
     ml("from e in emps, d in depts").assertParseSame();
-    ml("from e in emps, d suchThat hasEmp e").assertParseSame();
-    ml("from e in emps, (job, d) suchThat hasEmp (e, d, job)")
+    ml("from e in emps, d suchthat hasEmp e").assertParseSame();
+    ml("from e in emps, (job, d) suchthat hasEmp (e, d, job)")
         .assertParseSame();
     ml("from , d in depts").assertError("Xx");
     ml("from join d in depts on c").assertError("Xx");
@@ -1722,7 +1723,7 @@ public class MainTest {
     ml(ml).assertEvalIter(equalsOrdered(102, 103));
   }
 
-  /** Applies {@code suchThat} to a function that tests membership of a set,
+  /** Applies {@code suchthat} to a function that tests membership of a set,
    * and therefore the effect is to iterate over that set. */
   @Test void testFromSuchThat() {
     final String ml = "let\n"
@@ -1734,7 +1735,7 @@ public class MainTest {
         + "  fun hasEmpNameInDept (n, d) =\n"
         + "    (n, d) elem (from e in emps yield (e.name, e.deptno))\n"
         + "in\n"
-        + "  from (n, d) suchThat hasEmpNameInDept (n, d)\n"
+        + "  from (n, d) suchthat hasEmpNameInDept (n, d)\n"
         + "    where d = 30\n"
         + "    yield {d, n}\n"
         + "end";
@@ -1773,12 +1774,12 @@ public class MainTest {
         + "      elem (from e in scott.emp yield (e.deptno, e.job))\n"
         + "in\n"
         + "  from d in scott.dept,"
-        + "      j suchThat hasJob (d.deptno, j)\n"
+        + "      j suchthat hasJob (d.deptno, j)\n"
         + "    yield j\n"
         + "end";
     final String core = "val it = "
         + "from d_1 in #dept scott "
-        + "join j suchThat ("
+        + "join j suchthat ("
         + "case (#deptno d_1, j) of"
         + " (d, job) => op elem ((op div (d, 2), job),"
         + " from e in #emp scott"
@@ -1813,10 +1814,10 @@ public class MainTest {
         .assertEval(is(expected));
   }
 
-  /** Translates a simple {@code suchThat} expression, "d elem list". */
+  /** Translates a simple {@code suchthat} expression, "d elem list". */
   @Test void testFromSuchThat2b() {
-    final String ml = "from d suchThat d elem scott.dept";
-    final String core0 = "val it = from d suchThat (d elem #dept scott)";
+    final String ml = "from d suchthat d elem scott.dept";
+    final String core0 = "val it = from d suchthat (d elem #dept scott)";
     final String core1 = "val it = from d in (from d in #dept scott yield d)";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
@@ -1825,11 +1826,11 @@ public class MainTest {
         .assertCore(-1, is(core1));
   }
 
-  /** Translates a simple {@code suchThat} expression, "{x, y} elem list".
+  /** Translates a simple {@code suchthat} expression, "{x, y} elem list".
    * Fields are renamed, to disrupt alphabetical ordering. */
   @Test void testFromSuchThat2c() {
     final String ml = "from (loc, deptno, name) "
-        + "suchThat {deptno, loc, dname = name} elem scott.dept";
+        + "suchthat {deptno, loc, dname = name} elem scott.dept";
     final String core = "val it = "
         + "from (loc, deptno, name) in"
         + " (from v0 in #dept scott "
@@ -1843,12 +1844,12 @@ public class MainTest {
   /** As {@link #testFromSuchThat2c()} but with a literal. */
   @Test void testFromSuchThat2d() {
     final String ml = "from (dno, name)\n"
-        + "  suchThat {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
+        + "  suchthat {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
         + "      elem scott.dept\n"
         + "    andalso dno = 20";
     final String core0 = "val it = "
         + "from (dno, name) "
-        + "suchThat ({deptno = dno, dname = name, loc = \"CHICAGO\"} "
+        + "suchthat ({deptno = dno, dname = name, loc = \"CHICAGO\"} "
         + "elem #dept scott "
         + "andalso dno = 20)";
     final String core1 = "val it = "
@@ -1865,7 +1866,7 @@ public class MainTest {
   }
 
 
-  /** A {@code suchThat} expression. */
+  /** A {@code suchthat} expression. */
   @Test void testFromSuchThat3() {
     final String ml = "let\n"
         + "  val emps = [\n"
@@ -1874,12 +1875,12 @@ public class MainTest {
         + "  fun hasEmpNameInDept (n, d) =\n"
         + "    (n, d) elem (from e in emps yield (e.name, e.deptno))\n"
         + "in\n"
-        + "  from (n, d) suchThat hasEmpNameInDept (n, d)\n"
+        + "  from (n, d) suchthat hasEmpNameInDept (n, d)\n"
         + "    where d = 30\n"
         + "    yield {d, n}\n"
         + "end";
     final String core = "val it = "
-        + "from (n_1, d_1) suchThat"
+        + "from (n_1, d_1) suchthat"
         + " (case (n_1, d_1) of (n, d) => op elem ((n, d), "
         + "from e in ["
         + "{deptno = 30, id = 102, name = \"Shaggy\"}, "

@@ -744,13 +744,13 @@ public class Resolver {
     }
   }
 
-  /** Expands "from pat suchThat exp" to an expression that can be used in
+  /** Expands "from pat suchthat exp" to an expression that can be used in
    * "from pat in expandedExp". Note that "exp" is boolean, and "expandedExp"
    * returns a list of values or tuples.
    *
    * <p>For example, we translate
    * <pre>
-   * {@code from (x, y) suchThat foo (x, y)}
+   * {@code from (x, y) suchthat foo (x, y)}
    * </pre>
    * as if the user had written
    * <pre> {@code from (x, y) in (
