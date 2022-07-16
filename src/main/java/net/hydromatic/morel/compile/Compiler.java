@@ -345,7 +345,7 @@ public class Compiler {
 
     case SUCH_THAT:
       // Given
-      //   (n, d) suchThat hasNameInDept (n, d)
+      //   (n, d) suchthat hasNameInDept (n, d)
       // that is,
       //   pat = (n, d),
       //   exp = hasNameInDept (n, d),
@@ -355,7 +355,7 @@ public class Compiler {
       //       (extent: (string * int) list)
       //
       // but we'd prefer to find the extent internally, e.g. given
-      //   (n, d) suchThat (n, d) elem nameDeptPairs
+      //   (n, d) suchthat (n, d) elem nameDeptPairs
       // we generate
       //   (n, d) in nameDeptPairs
       //
@@ -914,7 +914,7 @@ public class Compiler {
     }
   }
 
-  /** A "suchThat" expression split into an extent and filters. */
+  /** A "suchthat" expression split into an extent and filters. */
   private static class ExtentFilter {
     final Core.Exp extent;
     final ImmutableList<Core.Exp> filters;
