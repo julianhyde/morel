@@ -1641,7 +1641,7 @@ public class Ast {
         exp = ((PrefixCall) this.exp).a;
         break;
       case SUCH_THAT:
-        op = " suchThat ";
+        op = " suchthat ";
         exp = ((PrefixCall) this.exp).a;
         break;
       default:
