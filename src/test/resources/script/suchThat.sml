@@ -16,11 +16,11 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Tests for 'suchThat'.
+ * Tests for 'suchthat'.
  *)
 
 (*) If the expression is 'elem set' we can deduce the extent.
-from e suchThat (e elem scott.emp)
+from e suchthat (e elem scott.emp)
   where e.deptno = 20
   yield e.ename;
 
@@ -29,7 +29,7 @@ let
   fun isEmp e =
     e elem scott.emp
 in
-  from e suchThat isEmp e
+  from e suchthat isEmp e
     where e.deptno = 20
     yield e.ename
 end;
@@ -37,7 +37,7 @@ let
   fun isEmp e =
     e elem scott.emp
 in
-  from e suchThat isEmp e andalso e.deptno = 20
+  from e suchthat isEmp e andalso e.deptno = 20
     yield e.ename
 end;
 
@@ -48,7 +48,7 @@ let
   fun isClerk e =
     e elem scott.emp andalso e.job = "CLERK"
 in
-  from e suchThat isClerk e andalso e.deptno = 20
+  from e suchthat isClerk e andalso e.deptno = 20
     yield e.ename
 end;
 
@@ -58,7 +58,7 @@ let
   fun isEmp50 e =
     e elem scott.emp orelse e.deptno = 50
 in
-  from e suchThat isEmp50 e
+  from e suchthat isEmp50 e
     yield e.ename
 end;
 
@@ -71,11 +71,11 @@ let
     e.job = job
 in
   from e in scott.emp,
-    j suchThat hasJob (e, j)
+    j suchthat hasJob (e, j)
     yield j
 end;
 (*) Invalid, because the argument has no extent.
-from e suchThat hasJob (e, "CLERK");
+from e suchthat hasJob (e, "CLERK");
 
 (*) A string function with external extent.
 (*) Given s2, we could generate finite s1.
@@ -83,7 +83,7 @@ fun isPrefix (s1, s2) =
   String.isPrefix s1 s2;
 (*) This is invalid, but it could be valid, and would return
 (*) ["", "a", "ab", "abc", "abcd"];
-from s suchThat isPrefix (s, "abcd");
+from s suchthat isPrefix (s, "abcd");
 
 (*) An integer function with external extent.
 (*) Given j, k we could generate finite i.
@@ -93,7 +93,7 @@ fun isBetween (i, j, k) =
 (* ------------------------------------------------------ *)
 (*) Convenience function that converts a predicate to a relation
 fun enumerate predicate =
-  from r suchThat predicate r;
+  from r suchthat predicate r;
 (*) TODO should return non-empty list
 enumerate isEmp;
 
@@ -142,9 +142,9 @@ fun edge (x, y) = {x, y} elem edges;
 fun path (x, y) =
   edge (x, y)
   orelse exists (
-    from z suchThat path (x, z) andalso edge (z, y));
+    from z suchthat path (x, z) andalso edge (z, y));
 (*) TODO should return [(1,2),(2,3),(1,3)]
-from p suchThat path p;
+from p suchthat path p;
 
 (* ------------------------------------------------------ *)
 (* Joe's bar.
@@ -185,7 +185,7 @@ fun sells (bar, beer, price) =
  *)
 fun happy patron =
   exists (
-    from (bar, beer, price) suchThat frequents (patron, bar)
+    from (bar, beer, price) suchthat frequents (patron, bar)
       andalso likes (patron, beer)
       andalso sells (bar, beer, price));
 
@@ -193,7 +193,7 @@ fun happy patron =
    Amber; Velma is happy because Cask sells Stout. Fred and Scooby are not
    happy. *)
 (*) TODO should return ["shaggy", "velma"]
-from p suchThat happy p;
+from p suchthat happy p;
 
 (* A beer is considered cheap if there are at least two bars that sell it for
  * under $3.
@@ -205,7 +205,7 @@ from p suchThat happy p;
 fun cheap beer =
   exists (
     from (bar1, price1, bar2, price2)
-      suchThat sells (bar1, beer, price1)
+      suchthat sells (bar1, beer, price1)
         andalso sells (bar2, beer, price2)
         andalso price1 < 3
         andalso price2 < 3
@@ -213,7 +213,7 @@ fun cheap beer =
 
 (*) Pale is cheap
 (*) TODO should return ["pale"]
-from b suchThat cheap b;
+from b suchthat cheap b;
 
 (* A rule is safe if:
  * 1. Each distinguished variable,
@@ -237,15 +237,15 @@ from b suchThat cheap b;
  * Leads to finite search for P(x) <- Q(x), but P(x) <- Q(y) is problematic.
  *)
 fun isR y = true;
-fun isS1 x = exists (from y suchThat isR y);
+fun isS1 x = exists (from y suchthat isR y);
 (*) TODO: should say that isS1 is unsafe
-from x suchThat isS1 x;
-fun isS2 x = exists (from y suchThat isR y andalso not (isR x));
+from x suchthat isS1 x;
+fun isS2 x = exists (from y suchthat isR y andalso not (isR x));
 (*) TODO: should say that isS2 is unsafe
-from x suchThat isS2 x;
-fun isS3 x = exists (from y suchThat isR y andalso x < y);
+from x suchthat isS2 x;
+fun isS3 x = exists (from y suchthat isR y andalso x < y);
 (*) TODO: should say that isS3 is unsafe
-from x suchThat isS3 x;
+from x suchthat isS3 x;
 
 (* Example Datalog Program. Using EDB Sells (bar, beer, price) and
  * Likes (patron, beer), find the patrons who like beers Joe doesn't sell.
@@ -256,9 +256,9 @@ from x suchThat isS3 x;
  *     AND NOT JoeSells(b)
  *)
 fun caskSells b =
-  exists (from (beer, price) suchThat sells ("cask", beer, price));
-from p suchThat exists (
-  from b suchThat likes (p, b) andalso not (caskSells b));
+  exists (from (beer, price) suchthat sells ("cask", beer, price));
+from p suchthat exists (
+  from b suchthat likes (p, b) andalso not (caskSells b));
 
 (* Cousin
  *
@@ -281,10 +281,10 @@ fun par (x, p) =
     ("g", "k"),
     ("h", "i")];
 fun sib (x, y) = exists (
-  from p suchThat par (x, p) andalso par (y, p) andalso x <> y);
+  from p suchthat par (x, p) andalso par (y, p) andalso x <> y);
 fun cousin (x, y) = sib (x, y)
   orelse exists (
-    from (xp, yp) suchThat par (x, xp)
+    from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin (xp, yp));
 
@@ -305,7 +305,7 @@ enumerate cousin;
  * where s2 is the expression 'notExists (...)'. *)
 fun cousin2 (x, y) = sib (x, y)
   andalso notExists (
-    from (xp, yp) suchThat par (x, xp)
+    from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin2 (xp, yp));
 (*) TODO: maybe give error: non-stratified
