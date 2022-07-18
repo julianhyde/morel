@@ -531,8 +531,8 @@ public enum CoreBuilder {
     return call(typeSystem, BuiltIn.OP_EQ, a0.type, a0, a1);
   }
 
-  public Core.Exp notEqual(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
-    return call(typeSystem, BuiltIn.OP_NE, a0.type, a0, a1);
+  public Core.Exp lessThan(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_LT, a0.type, a0, a1);
   }
 
   public Core.Exp elem(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
