@@ -64,6 +64,8 @@ from e in emps yield {deptno = e.deptno, one = 1};
 
 from e in emps yield {e.deptno, one = 1};
 
+from e in emps yield {x = e.deptno} where x > 10 yield {y = x} where y < 30;
+
 from e in emps yield ((#id e) + (#deptno e));
 
 from e in emps yield (e.id + e.deptno);

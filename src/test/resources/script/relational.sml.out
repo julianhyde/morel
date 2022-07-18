@@ -126,6 +126,10 @@ val it =
   : {deptno:int, one:int} list
 
 
+from e in emps yield {x = e.deptno} where x > 10 yield {y = x} where y < 30;
+val it = [{y=20}] : {y:int} list
+
+
 from e in emps yield ((#id e) + (#deptno e));
 val it = [110,121,132,133] : int list
 
