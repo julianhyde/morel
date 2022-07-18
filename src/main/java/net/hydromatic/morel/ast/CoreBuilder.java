@@ -502,6 +502,20 @@ public enum CoreBuilder {
         core.tuple(typeSystem, null, args));
   }
 
+  /** Creates a record. */
+  public Core.Exp record(TypeSystem typeSystem,
+      Map<String, ? extends Core.Exp> nameExps) {
+    final ImmutableSortedMap<String, Core.Exp> sortedNameExps =
+        ImmutableSortedMap.<String, Core.Exp>orderedBy(RecordType.ORDERING)
+            .putAll(nameExps)
+            .build();
+    final SortedMap<String, Type> argNameTypes =
+        new TreeMap<>(RecordType.ORDERING);
+    sortedNameExps.forEach((name, exp) -> argNameTypes.put(name, exp.type));
+    return tuple(typeSystem, typeSystem.recordType(argNameTypes),
+        sortedNameExps.values());
+  }
+
   /** Calls a built-in function. */
   private Core.Apply call(TypeSystem typeSystem, BuiltIn builtIn,
       Core.Exp... args) {
@@ -533,6 +547,10 @@ public enum CoreBuilder {
 
   public Core.Exp lessThan(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(typeSystem, BuiltIn.OP_LT, a0.type, a0, a1);
+  }
+
+  public Core.Exp greaterThan(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_GT, a0.type, a0, a1);
   }
 
   public Core.Exp elem(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {

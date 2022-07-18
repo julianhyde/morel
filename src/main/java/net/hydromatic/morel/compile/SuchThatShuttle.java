@@ -111,7 +111,7 @@ class SuchThatShuttle extends Shuttle {
             core.tuple(typeSystem.recordType(argNameTypes),
                 boundPats.values());
       }
-      fromBuilder.yield(exp);
+      fromBuilder.yield_(exp);
       return fromBuilder.build();
     }
     final Core.Exp exp = exps.get(0);
