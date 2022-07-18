@@ -487,13 +487,13 @@ public enum CoreBuilder {
         core.tuple(typeSystem, null, args));
   }
 
-  /** Calls a built-in function with two arguments. */
+  /** Calls a built-in function. */
   private Core.Apply call(TypeSystem typeSystem, BuiltIn builtIn,
-      Core.Exp a0, Core.Exp a1) {
+      Core.Exp... args) {
     final Core.Literal literal = functionLiteral(typeSystem, builtIn);
     final FnType fnType = (FnType) literal.type;
     return apply(Pos.ZERO, fnType.resultType, literal,
-        tuple((TupleType) fnType.paramType, a0, a1));
+        args(fnType.paramType, args));
   }
 
   /** Calls a built-in function with one type parameter. */

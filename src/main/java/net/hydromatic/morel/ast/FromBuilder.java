@@ -18,16 +18,31 @@
  */
 package net.hydromatic.morel.ast;
 
+import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
-/** Builds a {@link Core.From}. */
+/** Builds a {@link Core.From}.
+ *
+ * <p>Simplifies:
+ * <ul>
+ *   <li>Converts "from v in list" to "list";
+ *   <li>Removes "where true" steps;
+ *   <li>Removes trivial yield, e.g. "from v in list where condition yield v"
+ *   becomes "from v in list where condition"
+ * </ul>
+ */
 public class FromBuilder {
   private final TypeSystem typeSystem;
   private final List<Core.FromStep> steps = new ArrayList<>();
@@ -39,9 +54,18 @@ public class FromBuilder {
     this.typeSystem = typeSystem;
   }
 
-  public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    steps.add(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
+  private FromBuilder addStep(Core.FromStep step) {
+    steps.add(step);
+    if (!bindings.equals(step.bindings)) {
+      bindings.clear();
+      bindings.addAll(step.bindings);
+    }
     return this;
+  }
+
+  public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+    Compiles.acceptBinding(typeSystem, pat, bindings);
+    return addStep(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
   }
 
   public FromBuilder scan(Core.Pat pat, Core.Exp exp) {
@@ -49,30 +73,58 @@ public class FromBuilder {
   }
 
   public FromBuilder where(Core.Exp condition) {
-    steps.add(core.where(bindings, condition));
-    return this;
+    if (condition.op == Op.BOOL_LITERAL
+        && (Boolean) ((Core.Literal) condition).value) {
+      // skip "where true"
+      return this;
+    }
+    return addStep(core.where(bindings, condition));
   }
 
   public FromBuilder group(SortedMap<Core.IdPat, Core.Exp> groupExps,
       SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
-    steps.add(core.group(groupExps, aggregates));
-    return this;
+    return addStep(core.group(groupExps, aggregates));
   }
 
   public FromBuilder order(Iterable<Core.OrderItem> orderItems) {
-    steps.add(core.order(bindings, orderItems));
-    return this;
+    return addStep(core.order(bindings, orderItems));
   }
 
   public FromBuilder yield(Core.Exp exp) {
-    steps.add(core.yield_(typeSystem, exp));
-    return this;
+    if (exp.op == (bindings.size() == 1 ? Op.ID : Op.TUPLE)
+        && exp.equals(defaultYield())) {
+      return this;
+    }
+    return addStep(core.yield_(typeSystem, exp));
+  }
+
+  private Core.Exp defaultYield() {
+    if (bindings.size() == 1) {
+      return core.id(bindings.get(0).id);
+    } else {
+      final SortedSet<Core.Id> list = new TreeSet<>();
+      final SortedMap<String, Type> argNameTypes =
+          new TreeMap<>(RecordType.ORDERING);
+      bindings.forEach(b -> list.add(core.id(b.id)));
+      bindings.forEach(b -> argNameTypes.put(b.id.name, b.id.type));
+      return core.tuple(typeSystem, typeSystem.recordType(argNameTypes), list);
+    }
   }
 
   public Core.From build() {
-    // TODO: simplify 'from e in list' to 'e'
-    // TODO: remove 'where true' steps
     // TODO: remove trivial yield, e.g. 'from e in list yield e'
+    return core.from(typeSystem, steps);
+  }
+
+  /** As {@link #build}, but also simplifies "from x in list" to "list". */
+  public Core.Exp buildSimplify() {
+    if (steps.size() == 1
+        && steps.get(0).op == Op.INNER_JOIN) {
+      final Core.Scan scan = (Core.Scan) steps.get(0);
+      if (scan.pat.op == Op.ID_PAT) {
+        return scan.exp;
+      }
+    }
     return core.from(typeSystem, steps);
   }
 }
