@@ -20,16 +20,14 @@ package net.hydromatic.morel.ast;
 
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.RecordType;
-import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Pair;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.SortedMap;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
@@ -64,6 +62,28 @@ public class FromBuilder {
   }
 
   public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+    if (exp.op == Op.FROM
+        && steps.isEmpty()
+        && core.boolLiteral(true).equals(condition)
+        && (pat instanceof Core.IdPat
+            || pat instanceof Core.RecordPat
+                && ((Core.RecordPat) pat).args.stream()
+                    .allMatch(a -> a instanceof Core.IdPat))) {
+      final Core.From from = (Core.From) exp;
+      final StepHandler stepHandler = new StepHandler();
+      from.steps.forEach(stepHandler::accept);
+      final Map<String, Core.Exp> nameExps = new LinkedHashMap<>();
+      if (pat instanceof Core.RecordPat) {
+        final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        Pair.forEach(recordPat.type().argNameTypes.keySet(), recordPat.args,
+            (name, arg) -> nameExps.put(name, core.id((Core.IdPat) arg)));
+      } else {
+        final Core.IdPat idPat = (Core.IdPat) pat;
+        assert bindings.size() == 1;
+        nameExps.put(idPat.name, core.id(bindings.get(0).id));
+      }
+      return this.yield_(core.record(typeSystem, nameExps));
+    }
     Compiles.acceptBinding(typeSystem, pat, bindings);
     return addStep(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
   }
@@ -90,7 +110,7 @@ public class FromBuilder {
     return addStep(core.order(bindings, orderItems));
   }
 
-  public FromBuilder yield(Core.Exp exp) {
+  public FromBuilder yield_(Core.Exp exp) {
     if (exp.op == (bindings.size() == 1 ? Op.ID : Op.TUPLE)
         && exp.equals(defaultYield())) {
       return this;
@@ -102,12 +122,9 @@ public class FromBuilder {
     if (bindings.size() == 1) {
       return core.id(bindings.get(0).id);
     } else {
-      final SortedSet<Core.Id> list = new TreeSet<>();
-      final SortedMap<String, Type> argNameTypes =
-          new TreeMap<>(RecordType.ORDERING);
-      bindings.forEach(b -> list.add(core.id(b.id)));
-      bindings.forEach(b -> argNameTypes.put(b.id.name, b.id.type));
-      return core.tuple(typeSystem, typeSystem.recordType(argNameTypes), list);
+      final Map<String, Core.Exp> argExps = new LinkedHashMap<>();
+      bindings.forEach(b -> argExps.put(b.id.name, core.id(b.id)));
+      return core.record(typeSystem, argExps);
     }
   }
 
@@ -126,6 +143,29 @@ public class FromBuilder {
       }
     }
     return core.from(typeSystem, steps);
+  }
+
+  /** Calls the method to re-register a step. */
+  private class StepHandler extends Visitor {
+    @Override protected void visit(Core.Group group) {
+      group(group.groupExps, group.aggregates);
+    }
+
+    @Override protected void visit(Core.Order order) {
+      order(order.orderItems);
+    }
+
+    @Override protected void visit(Core.Scan scan) {
+      scan(scan.pat, scan.exp, scan.condition);
+    }
+
+    @Override protected void visit(Core.Where where) {
+      where(where.exp);
+    }
+
+    @Override protected void visit(Core.Yield yield) {
+      yield_(yield.exp);
+    }
   }
 }
 
