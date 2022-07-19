@@ -23,6 +23,8 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 
+import com.google.common.collect.ImmutableList;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,12 +35,18 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** Builds a {@link Core.From}.
  *
- * <p>Simplifies:
+ * <p>Simplifies the following patterns:
  * <ul>
- *   <li>Converts "from v in list" to "list";
+ *   <li>Converts "from v in list" to "list"
+ *   (only works in {@link #buildSimplify()}, not {@link #build()});
  *   <li>Removes "where true" steps;
- *   <li>Removes trivial yield, e.g. "from v in list where condition yield v"
- *   becomes "from v in list where condition"
+ *   <li>Removes empty "order" steps;
+ *   <li>Removes trivial {@code yield},
+ *   e.g. "from v in list where condition yield v"
+ *   becomes "from v in list where condition";
+ *   <li>Inlines {@code from} expressions,
+ *   e.g. "from v in (from w in list)"
+ *   becomes "from w in list yield {v = w}".
  * </ul>
  */
 public class FromBuilder {
@@ -107,6 +115,11 @@ public class FromBuilder {
   }
 
   public FromBuilder order(Iterable<Core.OrderItem> orderItems) {
+    final List<Core.OrderItem> orderItemList = ImmutableList.copyOf(orderItems);
+    if (orderItemList.isEmpty()) {
+      // skip empty "order"
+      return this;
+    }
     return addStep(core.order(bindings, orderItems));
   }
 
@@ -129,7 +142,6 @@ public class FromBuilder {
   }
 
   public Core.From build() {
-    // TODO: remove trivial yield, e.g. 'from e in list yield e'
     return core.from(typeSystem, steps);
   }
 
