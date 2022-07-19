@@ -172,6 +172,32 @@ public class FromBuilderTest {
     assertThat(e, is(from));
   }
 
+  /** As {@link #testNested()} but inner and outer variables have the same
+   * name, and therefore no yield is required. */
+  @Test void testNestedSameName() {
+    // from i in (from i in [1, 2] where i < 2) where i > 1
+    //   ==>
+    // from i in [1, 2] where i < 2 where i > 1
+    final Fixture f = new Fixture();
+    final Core.From innerFrom =
+        core.fromBuilder(f.typeSystem)
+            .scan(f.iPat, f.list12)
+            .where(core.lessThan(f.typeSystem, f.iId, f.intLiteral(2)))
+            .build();
+
+    final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
+    fromBuilder.scan(f.iPat, innerFrom)
+        .where(core.greaterThan(f.typeSystem, f.iId, f.intLiteral(1)));
+
+    final Core.From from = fromBuilder.build();
+    final String expected = "from i in [1, 2] "
+        + "where i < 2 "
+        + "where i > 1";
+    assertThat(from.toString(), is(expected));
+    final Core.Exp e = fromBuilder.buildSimplify();
+    assertThat(e, is(from));
+  }
+
   @Test void testNested0() {
     // from i in (from)
     //   ==>
