@@ -172,6 +172,25 @@ public class FromBuilderTest {
     assertThat(e, is(from));
   }
 
+  @Test void testNested0() {
+    // from i in (from)
+    //   ==>
+    // from
+    // TODO: should retain binding of i?
+    final Fixture f = new Fixture();
+    final Core.From innerFrom =
+        core.fromBuilder(f.typeSystem)
+            .build();
+
+    final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
+    fromBuilder.scan(f.iPat, innerFrom);
+
+    final Core.From from = fromBuilder.build();
+    assertThat(from.toString(), is("from i in (from)"));
+    final Core.Exp e = fromBuilder.buildSimplify();
+    assertThat(e.toString(), is("from"));
+  }
+
   @Test void testNested2() {
     // from {i = a, j = b} in (from a in [1, 2], b in [3, 4] where a < 2)
     //   where i < j

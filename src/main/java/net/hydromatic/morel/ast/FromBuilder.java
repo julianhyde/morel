@@ -24,6 +24,8 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import org.apache.calcite.util.Util;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -74,12 +76,13 @@ public class FromBuilder {
         && steps.isEmpty()
         && core.boolLiteral(true).equals(condition)
         && (pat instanceof Core.IdPat
+            && !((Core.From) exp).steps.isEmpty()
+            && Util.last(((Core.From) exp).steps).bindings.size() == 1
             || pat instanceof Core.RecordPat
                 && ((Core.RecordPat) pat).args.stream()
                     .allMatch(a -> a instanceof Core.IdPat))) {
       final Core.From from = (Core.From) exp;
-      final StepHandler stepHandler = new StepHandler();
-      from.steps.forEach(stepHandler::accept);
+      addAll(from.steps);
       final Map<String, Core.Exp> nameExps = new LinkedHashMap<>();
       if (pat instanceof Core.RecordPat) {
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
@@ -87,13 +90,20 @@ public class FromBuilder {
             (name, arg) -> nameExps.put(name, core.id((Core.IdPat) arg)));
       } else {
         final Core.IdPat idPat = (Core.IdPat) pat;
-        assert bindings.size() == 1;
-        nameExps.put(idPat.name, core.id(bindings.get(0).id));
+        final Core.FromStep fromStep = Util.last(((Core.From) exp).steps);
+        final Binding binding = Iterables.getOnlyElement(fromStep.bindings);
+        nameExps.put(idPat.name, core.id(binding.id));
       }
       return this.yield_(core.record(typeSystem, nameExps));
     }
     Compiles.acceptBinding(typeSystem, pat, bindings);
     return addStep(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
+  }
+
+  public FromBuilder addAll(Iterable<? extends Core.FromStep> steps) {
+    final StepHandler stepHandler = new StepHandler();
+    steps.forEach(stepHandler::accept);
+    return this;
   }
 
   public FromBuilder scan(Core.Pat pat, Core.Exp exp) {
