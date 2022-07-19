@@ -71,6 +71,12 @@ public class FromBuilder {
     return this;
   }
 
+  public FromBuilder suchThat(Core.Pat pat, Core.Exp exp) {
+    Compiles.acceptBinding(typeSystem, pat, bindings);
+    return addStep(
+        core.scan(Op.SUCH_THAT, bindings, pat, exp, core.boolLiteral(true)));
+  }
+
   public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
     if (exp.op == Op.FROM
         && steps.isEmpty()
@@ -138,7 +144,25 @@ public class FromBuilder {
         && exp.equals(defaultYield())) {
       return this;
     }
+    if (exp.op == Op.TUPLE
+        && isTrivial((Core.Tuple) exp)) {
+      return this;
+    }
     return addStep(core.yield_(typeSystem, exp));
+  }
+
+  /** Returns whether tuple is something like "{i = i, j = j}". */
+  private boolean isTrivial(Core.Tuple tuple) {
+    final ImmutableList<String> argNames =
+        ImmutableList.copyOf(tuple.type().argNameTypes().keySet());
+    for (int i = 0; i < tuple.args.size(); i++) {
+      Core.Exp exp = tuple.args.get(i);
+      if (exp.op != Op.ID
+          || !((Core.Id) exp).idPat.name.equals(argNames.get(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private Core.Exp defaultYield() {
@@ -178,7 +202,11 @@ public class FromBuilder {
     }
 
     @Override protected void visit(Core.Scan scan) {
-      scan(scan.pat, scan.exp, scan.condition);
+      if (scan.op == Op.SUCH_THAT) {
+        suchThat(scan.pat, scan.exp);
+      } else {
+        scan(scan.pat, scan.exp, scan.condition);
+      }
     }
 
     @Override protected void visit(Core.Where where) {
