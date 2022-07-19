@@ -239,8 +239,11 @@ class SuchThatShuttle extends Shuttle {
   /**
    * Returns an expression as a list of conjunctions.
    *
-   * <p>For example {@code conjunctions(a andalso b)}
+   * <p>For example
+   * {@code conjunctions(a andalso b)}
    * returns [{@code a}, {@code b}] (two elements);
+   * {@code conjunctions(a andalso b andalso c)}
+   * returns [{@code a}, {@code b}, {@code c}] (three elements);
    * {@code conjunctions(a orelse b)}
    * returns [{@code a orelse b}] (one element);
    * {@code conjunctions(true)}
@@ -249,15 +252,21 @@ class SuchThatShuttle extends Shuttle {
    * returns [{@code false}] (one element).
    */
   static List<Core.Exp> conjunctions(Core.Exp e) {
-    if (e.op == Op.BOOL_LITERAL
-        && (boolean) ((Core.Literal) e).value) {
-      return ImmutableList.of();
-    } else if (e.op == Op.APPLY
+    final ImmutableList.Builder<Core.Exp> b = ImmutableList.builder();
+    addConjunctions(b, e);
+    return b.build();
+  }
+
+  private static void addConjunctions(ImmutableList.Builder<Core.Exp> b,
+      Core.Exp e) {
+    if (e.op == Op.APPLY
         && ((Core.Apply) e).fn.op == Op.FN_LITERAL
         && ((Core.Literal) ((Core.Apply) e).fn).value == BuiltIn.Z_ANDALSO) {
-      return ((Core.Apply) e).args();
-    } else {
-      return ImmutableList.of(e);
+      ((Core.Apply) e).args().forEach(a -> addConjunctions(b, a));
+    } else if (e.op != Op.BOOL_LITERAL
+        || !((boolean) ((Core.Literal) e).value)) {
+      // skip true
+      b.add(e);
     }
   }
 }

@@ -1944,6 +1944,47 @@ public class MainTest {
         .assertCore(-1, is(core1));
   }
 
+  /** Tests a join expressed via {@code suchthat}. */
+  @Test void testFromSuchThat2f() {
+    final String ml = "let\n"
+        + "  fun isDept d =\n"
+        + "    d elem scott.dept\n"
+        + "  fun isEmp e =\n"
+        + "    e elem scott.emp\n"
+        + "in\n"
+        + "  from (d, e) suchthat isDept d\n"
+        + "    andalso isEmp e\n"
+        + "    andalso d.deptno = e.deptno\n"
+        + "    andalso d.deptno = 20\n"
+        + "    yield d.dname\n"
+        + "end";
+    final String core0 = "val it = "
+        + "let"
+        + " val isDept = fn d => d elem #dept scott "
+        + "in"
+        + " let"
+        + " val isEmp = fn e => e elem #emp scott "
+        + "in"
+        + " from (d_1, e_1) suchthat (isDept d_1 "
+        + "andalso isEmp e_1 "
+        + "andalso #deptno d_1 = #deptno e_1 "
+        + "andalso #deptno d_1 = 20)"
+        + " yield #dname d_1"
+        + " end "
+        + "end";
+    final String core1 = "val it = "
+        + "from (d_1, e_1) in (from d_1 in #dept scott"
+        + " join e_1 in #emp scott"
+        + " where #deptno d_1 = #deptno e_1"
+        + " where #deptno d_1 = 20) "
+        + "yield #dname d_1";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("string list")
+        .assertCore(0, is(core0))
+        .assertCore(-1, is(core1));
+  }
+
   /** A {@code suchthat} expression. */
   @Test void testFromSuchThat3() {
     final String ml = "let\n"
