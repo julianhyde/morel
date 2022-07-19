@@ -138,7 +138,25 @@ public class FromBuilder {
         && exp.equals(defaultYield())) {
       return this;
     }
+    if (exp.op == Op.TUPLE
+        && isTrivial((Core.Tuple) exp)) {
+      return this;
+    }
     return addStep(core.yield_(typeSystem, exp));
+  }
+
+  /** Returns whether tuple is something like "{i = i, j = j}". */
+  private boolean isTrivial(Core.Tuple tuple) {
+    final ImmutableList<String> argNames =
+        ImmutableList.copyOf(tuple.type().argNameTypes().keySet());
+    for (int i = 0; i < tuple.args.size(); i++) {
+      Core.Exp exp = tuple.args.get(i);
+      if (exp.op != Op.ID
+          || !((Core.Id) exp).idPat.name.equals(argNames.get(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private Core.Exp defaultYield() {
