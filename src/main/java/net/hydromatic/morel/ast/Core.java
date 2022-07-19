@@ -1027,6 +1027,7 @@ public class Core {
     public Exp copy(TypeSystem typeSystem, List<FromStep> steps) {
       return steps.equals(this.steps)
           ? this
+          // TODO: core.fromBuilder(typeSystem).addAll(steps).build()
           : core.from(type(), steps);
     }
   }
