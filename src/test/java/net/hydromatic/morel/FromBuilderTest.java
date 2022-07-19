@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -85,24 +86,31 @@ public class FromBuilderTest {
     assertThat(e2, is(e));
   }
 
-  @Test void testWhere() {
-    // from i in [1, 2] where i < 2
+  @Test void testWhereOrder() {
+    // from i in [1, 2] where i < 2 order i desc
+    //  ==>
+    // from i in [1, 2]
     final Fixture f = new Fixture();
     final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
     fromBuilder.scan(f.iPat, f.list12)
-        .where(core.lessThan(f.typeSystem, f.iId, f.intLiteral(2)));
+        .where(core.lessThan(f.typeSystem, f.iId, f.intLiteral(2)))
+        .order(ImmutableList.of(core.orderItem(f.iId, Ast.Direction.DESC)));
 
     final Core.From from = fromBuilder.build();
-    assertThat(from.toString(), is("from i in [1, 2] where i < 2"));
+    assertThat(from.toString(),
+        is("from i in [1, 2] where i < 2 order i desc"));
     final Core.Exp e = fromBuilder.buildSimplify();
     assertThat(e, is(from));
 
-    // "where true" is ignored
-    fromBuilder.where(core.boolLiteral(true));
+    // "where true" and "order {}" are ignored
+    fromBuilder.where(core.boolLiteral(true))
+        .order(ImmutableList.of())
+        .where(core.greaterThan(f.typeSystem, f.iId, f.intLiteral(1)));
     final Core.From from2 = fromBuilder.build();
-    assertThat(from2, is(from));
+    assertThat(from2.toString(),
+        is("from i in [1, 2] where i < 2 order i desc where i > 1"));
     final Core.Exp e2 = fromBuilder.buildSimplify();
-    assertThat(e2, is(e));
+    assertThat(e2, is(from2));
   }
 
   @Test void testTrivialYield() {

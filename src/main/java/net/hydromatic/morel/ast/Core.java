@@ -1176,7 +1176,7 @@ public class Core {
 
     @Override protected AstWriter unparse(AstWriter w, From from, int ordinal,
         int left, int right) {
-      return w.append("order ").appendAll(orderItems, ", ");
+      return w.append(" order ").appendAll(orderItems, ", ");
     }
 
     public Order copy(List<Binding> bindings,
