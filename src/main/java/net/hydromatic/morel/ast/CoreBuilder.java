@@ -340,14 +340,9 @@ public enum CoreBuilder {
     if (!steps.isEmpty() && Iterables.getLast(steps) instanceof Core.Yield) {
       elementType = ((Core.Yield) Iterables.getLast(steps)).exp.type;
     } else {
-      final List<Binding> lastBindings = lastBindings(steps);
-      if (lastBindings.size() == 1) {
-        elementType = getOnlyElement(lastBindings).id.type;
-      } else {
-        final SortedMap<String, Type> argNameTypes = new TreeMap<>(ORDERING);
-        lastBindings.forEach(b -> argNameTypes.put(b.id.name, b.id.type));
-        elementType = typeSystem.recordType(argNameTypes);
-      }
+      final SortedMap<String, Type> argNameTypes = new TreeMap<>(ORDERING);
+      lastBindings(steps).forEach(b -> argNameTypes.put(b.id.name, b.id.type));
+      elementType = typeSystem.recordType(argNameTypes);
     }
     final ListType type = typeSystem.listType(elementType);
     return from(type, ImmutableList.copyOf(steps));
