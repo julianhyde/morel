@@ -20,6 +20,7 @@ package net.hydromatic.morel.ast;
 
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 
@@ -55,6 +56,7 @@ public class FromBuilder {
   private final TypeSystem typeSystem;
   private final List<Core.FromStep> steps = new ArrayList<>();
   private final List<Binding> bindings = new ArrayList<>();
+  private boolean record = true;
 
   /** Use
    * {@link net.hydromatic.morel.ast.CoreBuilder#fromBuilder(TypeSystem)}. */
@@ -62,7 +64,8 @@ public class FromBuilder {
     this.typeSystem = typeSystem;
   }
 
-  private FromBuilder addStep(Core.FromStep step) {
+  private FromBuilder addStep(boolean record, Core.FromStep step) {
+    this.record = record;
     steps.add(step);
     if (!bindings.equals(step.bindings)) {
       bindings.clear();
@@ -73,7 +76,7 @@ public class FromBuilder {
 
   public FromBuilder suchThat(Core.Pat pat, Core.Exp exp) {
     Compiles.acceptBinding(typeSystem, pat, bindings);
-    return addStep(
+    return addStep(true,
         core.scan(Op.SUCH_THAT, bindings, pat, exp, core.boolLiteral(true)));
   }
 
@@ -88,7 +91,6 @@ public class FromBuilder {
                 && ((Core.RecordPat) pat).args.stream()
                     .allMatch(a -> a instanceof Core.IdPat))) {
       final Core.From from = (Core.From) exp;
-      addAll(from.steps);
       final Map<String, Core.Exp> nameExps = new LinkedHashMap<>();
       if (pat instanceof Core.RecordPat) {
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
@@ -96,14 +98,24 @@ public class FromBuilder {
             (name, arg) -> nameExps.put(name, core.id((Core.IdPat) arg)));
       } else {
         final Core.IdPat idPat = (Core.IdPat) pat;
-        final Core.FromStep fromStep = Util.last(((Core.From) exp).steps);
-        final Binding binding = Iterables.getOnlyElement(fromStep.bindings);
+        final Core.FromStep lastStep = Util.last(from.steps);
+        if (lastStep instanceof Core.Yield
+            && ((Core.Yield) lastStep).exp.op != Op.RECORD) {
+          // The last step is a yield scalar, say 'yield x + 1'.
+          // Translate it to a yield singleton record, say 'yield {y = x + 1}'
+          addAll(Util.skipLast(from.steps));
+          nameExps.put(idPat.name, ((Core.Yield) lastStep).exp);
+          return yield_(core.record(typeSystem, nameExps));
+        }
+        final Binding binding = Iterables.getOnlyElement(lastStep.bindings);
         nameExps.put(idPat.name, core.id(binding.id));
       }
-      return this.yield_(core.record(typeSystem, nameExps));
+      addAll(from.steps);
+      return yield_(core.record(typeSystem, nameExps));
     }
     Compiles.acceptBinding(typeSystem, pat, bindings);
-    return addStep(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
+    return addStep(true,
+        core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
   }
 
   public FromBuilder addAll(Iterable<? extends Core.FromStep> steps) {
@@ -122,12 +134,12 @@ public class FromBuilder {
       // skip "where true"
       return this;
     }
-    return addStep(core.where(bindings, condition));
+    return addStep(record, core.where(bindings, condition));
   }
 
   public FromBuilder group(SortedMap<Core.IdPat, Core.Exp> groupExps,
       SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
-    return addStep(core.group(groupExps, aggregates));
+    return addStep(true, core.group(groupExps, aggregates));
   }
 
   public FromBuilder order(Iterable<Core.OrderItem> orderItems) {
@@ -136,7 +148,7 @@ public class FromBuilder {
       // skip empty "order"
       return this;
     }
-    return addStep(core.order(bindings, orderItems));
+    return addStep(record, core.order(bindings, orderItems));
   }
 
   public FromBuilder yield_(Core.Exp exp) {
@@ -148,7 +160,8 @@ public class FromBuilder {
         && isTrivial((Core.Tuple) exp)) {
       return this;
     }
-    return addStep(core.yield_(typeSystem, exp));
+    return addStep(exp.type instanceof RecordType,
+        core.yield_(typeSystem, exp));
   }
 
   /** Returns whether tuple is something like "{i = i, j = j}". */
