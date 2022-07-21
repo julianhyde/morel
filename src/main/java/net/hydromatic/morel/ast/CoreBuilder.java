@@ -378,8 +378,7 @@ public enum CoreBuilder {
     }
   }
 
-  public ImmutableList<Binding> lastBindings(
-      List<? extends Core.FromStep> steps) {
+  public List<Binding> lastBindings(List<? extends Core.FromStep> steps) {
     return steps.isEmpty()
         ? ImmutableList.of()
         : Iterables.getLast(steps).bindings;
