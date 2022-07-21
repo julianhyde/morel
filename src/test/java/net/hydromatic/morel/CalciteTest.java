@@ -88,11 +88,8 @@ class CalciteTest {
         + "users:{age:int, name:string} list}\n"
         + "val it = {tasks=<relation>} : {tasks:{completed:bool, name:string} list}\n"
         + "val it = {tasks=<relation>} : {tasks:{completed:bool, name:string} list}\n"
-        + "val it = [{age=20,name=\"John\"},{age=21,name=\"Jane\"},{age=22,name=\"Jack\"}]\n"
-        + "  : {age:int, name:string} list\n"
-        + "val it =\n"
-        + "  [{completed=false,name=\"Buy milk\"},{completed=false,name=\"Buy eggs\"},\n"
-        + "   {completed=false,name=\"Buy bread\"}] : {completed:bool, name:string} list\n";
+        + "val it = <relation> : {age:int, name:string} list\n"
+        + "val it = <relation> : {completed:bool, name:string} list\n";
     assertThat(toLinux(out.toString()), is(expected));
   }
 

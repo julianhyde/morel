@@ -336,16 +336,26 @@ public enum CoreBuilder {
   /** Derives the result type, then calls
    * {@link #from(ListType, List)}. */
   public Core.From from(TypeSystem typeSystem, List<Core.FromStep> steps) {
-    final Type elementType;
-    if (!steps.isEmpty() && Iterables.getLast(steps) instanceof Core.Yield) {
-      elementType = ((Core.Yield) Iterables.getLast(steps)).exp.type;
+    final Type elementType = fromElementType(typeSystem, steps);
+    return from(typeSystem.listType(elementType), steps);
+  }
+
+  /** Returns the element type of a {@link Core.From} with the given steps. */
+  static Type fromElementType(TypeSystem typeSystem,
+      List<Core.FromStep> steps) {
+    if (!steps.isEmpty()
+        && Iterables.getLast(steps) instanceof Core.Yield) {
+      return ((Core.Yield) Iterables.getLast(steps)).exp.type;
     } else {
+      final List<Binding> lastBindings = core.lastBindings(steps);
+      if (lastBindings.size() == 1) {
+        return lastBindings.get(0).id.type;
+      }
       final SortedMap<String, Type> argNameTypes = new TreeMap<>(ORDERING);
-      lastBindings(steps).forEach(b -> argNameTypes.put(b.id.name, b.id.type));
-      elementType = typeSystem.recordType(argNameTypes);
+      lastBindings
+          .forEach(b -> argNameTypes.put(b.id.name, b.id.type));
+      return typeSystem.recordType(argNameTypes);
     }
-    final ListType type = typeSystem.listType(elementType);
-    return from(type, ImmutableList.copyOf(steps));
   }
 
   /** Returns what would be the yield expression if we created a

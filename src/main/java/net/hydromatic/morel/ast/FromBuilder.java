@@ -64,6 +64,11 @@ public class FromBuilder {
     this.typeSystem = typeSystem;
   }
 
+  /** Returns the bindings available after the most recent step. */
+  public List<Binding> bindings() {
+    return ImmutableList.copyOf(bindings);
+  }
+
   private FromBuilder addStep(boolean record, Core.FromStep step) {
     this.record = record;
     steps.add(step);
@@ -78,6 +83,10 @@ public class FromBuilder {
     Compiles.acceptBinding(typeSystem, pat, bindings);
     return addStep(true,
         core.scan(Op.SUCH_THAT, bindings, pat, exp, core.boolLiteral(true)));
+  }
+
+  public FromBuilder scan(Core.Pat pat, Core.Exp exp) {
+    return scan(pat, exp, core.boolLiteral(true));
   }
 
   public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
@@ -104,6 +113,10 @@ public class FromBuilder {
           // The last step is a yield scalar, say 'yield x + 1'.
           // Translate it to a yield singleton record, say 'yield {y = x + 1}'
           addAll(Util.skipLast(from.steps));
+          if (((Core.Yield) lastStep).exp.op == Op.ID) {
+            // The last step is 'yield e'. Skip it.
+            return this;
+          }
           nameExps.put(idPat.name, ((Core.Yield) lastStep).exp);
           return yield_(core.record(typeSystem, nameExps));
         }
@@ -122,10 +135,6 @@ public class FromBuilder {
     final StepHandler stepHandler = new StepHandler();
     steps.forEach(stepHandler::accept);
     return this;
-  }
-
-  public FromBuilder scan(Core.Pat pat, Core.Exp exp) {
-    return scan(pat, exp, core.boolLiteral(true));
   }
 
   public FromBuilder where(Core.Exp condition) {
@@ -152,12 +161,18 @@ public class FromBuilder {
   }
 
   public FromBuilder yield_(Core.Exp exp) {
-    if (exp.op == (bindings.size() == 1 ? Op.ID : Op.TUPLE)
-        && exp.equals(defaultYield())) {
+    if (bindings.size() != 1
+        && exp.equals(trivialRecord())) {
       return this;
     }
     if (exp.op == Op.TUPLE
         && isTrivial((Core.Tuple) exp)) {
+      // TODO: maybe merge this 'if' with previous
+      return this;
+    }
+    if (bindings.size() == 1
+        && exp.op == Op.ID
+        && ((Core.Id) exp).idPat.equals(bindings.get(0).id)) {
       return this;
     }
     return addStep(exp.type instanceof RecordType,
@@ -178,14 +193,10 @@ public class FromBuilder {
     return true;
   }
 
-  private Core.Exp defaultYield() {
-    if (bindings.size() == 1) {
-      return core.id(bindings.get(0).id);
-    } else {
-      final Map<String, Core.Exp> argExps = new LinkedHashMap<>();
-      bindings.forEach(b -> argExps.put(b.id.name, core.id(b.id)));
-      return core.record(typeSystem, argExps);
-    }
+  private Core.Exp trivialRecord() {
+    final Map<String, Core.Exp> argExps = new LinkedHashMap<>();
+    bindings.forEach(b -> argExps.put(b.id.name, core.id(b.id)));
+    return core.record(typeSystem, argExps);
   }
 
   public Core.From build() {
@@ -215,7 +226,11 @@ public class FromBuilder {
     }
 
     @Override protected void visit(Core.Scan scan) {
-      scan(scan.pat, scan.exp, scan.condition);
+      if (scan.op == Op.SUCH_THAT) {
+        suchThat(scan.pat, scan.exp);
+      } else {
+        scan(scan.pat, scan.exp, scan.condition);
+      }
     }
 
     @Override protected void visit(Core.Where where) {

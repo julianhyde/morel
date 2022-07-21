@@ -1036,13 +1036,9 @@ public class Core {
     }
 
     public Exp copy(TypeSystem typeSystem, List<FromStep> steps) {
-      final From e = steps.equals(this.steps)
+      return steps.equals(this.steps)
           ? this
-          : true
-          ? core.fromBuilder(typeSystem).addAll(steps).build()
-          : core.from(type(), steps);
-      assert e.type.equals(this.type);
-      return e;
+          : core.fromBuilder(typeSystem).addAll(steps).build();
     }
   }
 

@@ -298,9 +298,8 @@ public class InlineTest {
         + "where i > 10\n"
         + "yield i / 10";
     final String core0 = "val it = "
-        + "from i in"
-        + " (from e in #emp scott"
-        + " yield #deptno e) "
+        + "from e in #emp scott "
+        + "yield {i = #deptno e} "
         + "where i > 10 "
         + "yield i / 10";
     final String core1 = "val it = "
