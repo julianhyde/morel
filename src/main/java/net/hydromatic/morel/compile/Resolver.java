@@ -37,7 +37,6 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ConsList;
 import net.hydromatic.morel.util.Pair;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
@@ -56,6 +55,8 @@ import java.util.SortedMap;
 import java.util.function.Function;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 /** Converts AST expressions to Core expressions. */
 public class Resolver {
@@ -580,8 +581,8 @@ public class Resolver {
 
   Core.Exp toCore(Ast.From from) {
     final Type type = typeMap.getType(from);
-    Core.Exp coreFrom = new FromResolver().run(from);
-    Preconditions.checkArgument(coreFrom.type.equals(type),
+    final Core.Exp coreFrom = new FromResolver().run(from);
+    checkArgument(coreFrom.type.equals(type),
         "Conversion to core did not preserve type: expected [%s] "
             + "actual [%s] from [%s]", type, coreFrom.type, coreFrom);
     return coreFrom;
@@ -900,6 +901,10 @@ public class Resolver {
     @Override protected void visit(Ast.Order order) {
       final Resolver r = withEnv(fromBuilder.bindings());
       fromBuilder.order(transform(order.orderItems, r::toCore));
+    }
+
+    @Override protected void visit(Ast.Compute compute) {
+      visit((Ast.Group) compute);
     }
 
     @Override protected void visit(Ast.Group group) {

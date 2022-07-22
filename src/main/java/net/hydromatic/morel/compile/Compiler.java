@@ -47,6 +47,7 @@ import net.hydromatic.morel.util.TailList;
 import net.hydromatic.morel.util.ThreadLocals;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Util;
 
@@ -56,6 +57,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.BiConsumer;
@@ -68,6 +70,7 @@ import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
+import static com.google.common.collect.Iterables.getLast;
 import static com.google.common.collect.Iterables.getOnlyElement;
 
 import static java.util.Objects.requireNonNull;
@@ -83,12 +86,12 @@ public class Compiler {
   }
 
   CompiledStatement compileStatement(Environment env, Core.Decl decl,
-      boolean isDecl) {
+      boolean isDecl, Set<Core.Exp> queriesToWrap) {
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     final List<Action> actions = new ArrayList<>();
     final Context cx = Context.of(env);
-    compileDecl(cx, decl, isDecl, matchCodes, bindings, actions);
+    compileDecl(cx, decl, isDecl, queriesToWrap, matchCodes, bindings, actions);
     final Type type = decl instanceof Core.NonRecValDecl
         ? ((Core.NonRecValDecl) decl).pat.type
         : PrimitiveType.UNIT;
@@ -589,7 +592,8 @@ public class Compiler {
   private Code compileLet(Context cx, Core.Let let) {
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
-    compileValDecl(cx, let.decl, true, matchCodes, bindings, null);
+    compileValDecl(cx, let.decl, true, ImmutableSet.of(), matchCodes, bindings,
+        null);
     Context cx2 = cx.bindAll(bindings);
     final Code resultCode = compile(cx2, let.exp);
     return finishCompileLet(cx2, matchCodes, resultCode, let.type);
@@ -608,12 +612,14 @@ public class Compiler {
   }
 
   void compileDecl(Context cx, Core.Decl decl, boolean isDecl,
-      List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
+      Set<Core.Exp> queriesToWrap, List<Code> matchCodes,
+      List<Binding> bindings, List<Action> actions) {
     switch (decl.op) {
     case VAL_DECL:
     case REC_VAL_DECL:
       final Core.ValDecl valDecl = (Core.ValDecl) decl;
-      compileValDecl(cx, valDecl, isDecl, matchCodes, bindings, actions);
+      compileValDecl(cx, valDecl, isDecl, queriesToWrap, matchCodes, bindings,
+          actions);
       break;
 
     case DATATYPE_DECL:
@@ -708,7 +714,7 @@ public class Compiler {
         matchList.stream()
             .map(match -> compileMatch(cx, match))
             .collect(toImmutableList());
-    return new MatchCode(patCodes, Util.last(matchList).pos);
+    return new MatchCode(patCodes, getLast(matchList).pos);
   }
 
   private Pair<Core.Pat, Code> compileMatch(Context cx, Core.Match match) {
@@ -719,7 +725,8 @@ public class Compiler {
   }
 
   private void compileValDecl(Context cx, Core.ValDecl valDecl, boolean isDecl,
-      List<Code> matchCodes, List<Binding> bindings, List<Action> actions) {
+      Set<Core.Exp> queriesToWrap, List<Code> matchCodes,
+      List<Binding> bindings, List<Action> actions) {
     Compiles.bindPattern(typeSystem, bindings, valDecl);
     final List<Binding> newBindings = new TailList<>(bindings);
     final Map<Core.NamedPat, LinkCode> linkCodes = new HashMap<>();
@@ -736,7 +743,8 @@ public class Compiler {
       // Using 'compileArg' rather than 'compile' encourages CalciteCompiler
       // to use a pure Calcite implementation if possible, and has no effect
       // in the basic Compiler.
-      final Code code = compileArg(cx1, exp);
+      final Code code0 = compileArg(cx1, exp);
+      final Code code = queriesToWrap.contains(exp) ? wrap(code0) : code0;
       if (!linkCodes.isEmpty()) {
         link(linkCodes, pat, code);
       }
@@ -787,6 +795,10 @@ public class Compiler {
     });
 
     newBindings.clear();
+  }
+
+  protected Code wrap(Code code) {
+    return Codes.wrapRelList(code);
   }
 
   private void shredValue(Core.Pat pat, Object o,

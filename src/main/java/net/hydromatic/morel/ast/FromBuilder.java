@@ -20,7 +20,6 @@ package net.hydromatic.morel.ast;
 
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 
@@ -35,6 +34,8 @@ import java.util.Map;
 import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+
+import static com.google.common.collect.Iterables.getLast;
 
 /** Builds a {@link Core.From}.
  *
@@ -56,7 +57,12 @@ public class FromBuilder {
   private final TypeSystem typeSystem;
   private final List<Core.FromStep> steps = new ArrayList<>();
   private final List<Binding> bindings = new ArrayList<>();
-  private boolean record = true;
+
+  /** If non-negative, flags that a particular step was added only for the
+   * purposes of renaming fields. If that step is the last step when we
+   * build, we remove it, so that the result is a scalar rather than a
+   * record with a single field. */
+  private int renameIndex = -2;
 
   /** Use
    * {@link net.hydromatic.morel.ast.CoreBuilder#fromBuilder(TypeSystem)}. */
@@ -69,8 +75,23 @@ public class FromBuilder {
     return ImmutableList.copyOf(bindings);
   }
 
-  private FromBuilder addStep(boolean record, Core.FromStep step) {
-    this.record = record;
+  private FromBuilder addStep(Core.FromStep step) {
+    if (!steps.isEmpty()) {
+      // A trivial record yield with a single yield, e.g. 'yield {i = i}', has
+      // a purpose only if it is the last step. (It forces the return to be a
+      // record, e.g. '{i: int}' rather than a scalar 'int'.)
+      // We've just about to add a new step, so this is no longer necessary.
+      final Core.FromStep lastStep = getLast(steps);
+      if (lastStep.op == Op.YIELD) {
+        final Core.Yield yield = (Core.Yield) lastStep;
+        if (yield.exp.op == Op.TUPLE) {
+          final Core.Tuple tuple = (Core.Tuple) yield.exp;
+          if (tuple.args.size() == 1 && isTrivial(tuple)) {
+            steps.remove(steps.size() - 1);
+          }
+        }
+      }
+    }
     steps.add(step);
     if (!bindings.equals(step.bindings)) {
       bindings.clear();
@@ -81,7 +102,7 @@ public class FromBuilder {
 
   public FromBuilder suchThat(Core.Pat pat, Core.Exp exp) {
     Compiles.acceptBinding(typeSystem, pat, bindings);
-    return addStep(true,
+    return addStep(
         core.scan(Op.SUCH_THAT, bindings, pat, exp, core.boolLiteral(true)));
   }
 
@@ -95,7 +116,7 @@ public class FromBuilder {
         && core.boolLiteral(true).equals(condition)
         && (pat instanceof Core.IdPat
             && !((Core.From) exp).steps.isEmpty()
-            && Util.last(((Core.From) exp).steps).bindings.size() == 1
+            && getLast(((Core.From) exp).steps).bindings.size() == 1
             || pat instanceof Core.RecordPat
                 && ((Core.RecordPat) pat).args.stream()
                     .allMatch(a -> a instanceof Core.IdPat))) {
@@ -107,7 +128,7 @@ public class FromBuilder {
             (name, arg) -> nameExps.put(name, core.id((Core.IdPat) arg)));
       } else {
         final Core.IdPat idPat = (Core.IdPat) pat;
-        final Core.FromStep lastStep = Util.last(from.steps);
+        final Core.FromStep lastStep = getLast(from.steps);
         if (lastStep instanceof Core.Yield
             && ((Core.Yield) lastStep).exp.op != Op.RECORD) {
           // The last step is a yield scalar, say 'yield x + 1'.
@@ -118,17 +139,16 @@ public class FromBuilder {
             return this;
           }
           nameExps.put(idPat.name, ((Core.Yield) lastStep).exp);
-          return yield_(core.record(typeSystem, nameExps));
+          return yield_(true, core.record(typeSystem, nameExps));
         }
         final Binding binding = Iterables.getOnlyElement(lastStep.bindings);
         nameExps.put(idPat.name, core.id(binding.id));
       }
       addAll(from.steps);
-      return yield_(core.record(typeSystem, nameExps));
+      return yield_(true, core.record(typeSystem, nameExps));
     }
     Compiles.acceptBinding(typeSystem, pat, bindings);
-    return addStep(true,
-        core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
+    return addStep(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
   }
 
   public FromBuilder addAll(Iterable<? extends Core.FromStep> steps) {
@@ -143,12 +163,12 @@ public class FromBuilder {
       // skip "where true"
       return this;
     }
-    return addStep(record, core.where(bindings, condition));
+    return addStep(core.where(bindings, condition));
   }
 
   public FromBuilder group(SortedMap<Core.IdPat, Core.Exp> groupExps,
       SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
-    return addStep(true, core.group(groupExps, aggregates));
+    return addStep(core.group(groupExps, aggregates));
   }
 
   public FromBuilder order(Iterable<Core.OrderItem> orderItems) {
@@ -157,26 +177,37 @@ public class FromBuilder {
       // skip empty "order"
       return this;
     }
-    return addStep(record, core.order(bindings, orderItems));
+    return addStep(core.order(bindings, orderItems));
   }
 
   public FromBuilder yield_(Core.Exp exp) {
-    if (bindings.size() != 1
-        && exp.equals(trivialRecord())) {
-      return this;
-    }
+    return yield_(false, exp);
+  }
+
+  public FromBuilder yield_(boolean rename, Core.Exp exp) {
+    renameIndex = -1;
     if (exp.op == Op.TUPLE
         && isTrivial((Core.Tuple) exp)) {
-      // TODO: maybe merge this 'if' with previous
-      return this;
+      if (bindings.size() == 1) {
+        // Keep the "yield {i}" in "from i in [1,2] yield {i}".
+        // If rename, caller just wanted to change field names, and wants us
+        // to remove the yield if possible later.
+        // If not rename, they explicitly asked for a record.
+        if (rename) {
+          renameIndex = steps.size();
+        }
+      } else {
+        // Remove the "yield {d, e}"
+        // in "from e in emps, d in depts yield {d, e}".
+        return this;
+      }
     }
     if (bindings.size() == 1
         && exp.op == Op.ID
         && ((Core.Id) exp).idPat.equals(bindings.get(0).id)) {
       return this;
     }
-    return addStep(exp.type instanceof RecordType,
-        core.yield_(typeSystem, exp));
+    return addStep(core.yield_(typeSystem, exp));
   }
 
   /** Returns whether tuple is something like "{i = i, j = j}". */
@@ -193,19 +224,22 @@ public class FromBuilder {
     return true;
   }
 
-  private Core.Exp trivialRecord() {
-    final Map<String, Core.Exp> argExps = new LinkedHashMap<>();
-    bindings.forEach(b -> argExps.put(b.id.name, core.id(b.id)));
-    return core.record(typeSystem, argExps);
-  }
-
-  public Core.From build() {
-    return core.from(typeSystem, steps);
-  }
-
-  /** As {@link #build}, but also simplifies "from x in list" to "list". */
-  public Core.Exp buildSimplify() {
-    if (steps.size() == 1
+  private Core.Exp build(boolean simplify) {
+    if (renameIndex == steps.size() - 1) {
+      // A yield of a record with a single field, e.g. 'yield {i = i}' or
+      // 'yield {i = j}' has one of two purposes: to force a record to be
+      // returned, or to rename a field for subsequent expressions.
+      // If the yield is for renaming purposes, they don't want a record, so
+      // we remove the step.
+      final Core.Yield yield = (Core.Yield) getLast(steps);
+      assert yield.exp.op == Op.TUPLE
+          && ((Core.Tuple) yield.exp).args.size() == 1
+          && isTrivial((Core.Tuple) yield.exp);
+      steps.remove(steps.size() - 1);
+      renameIndex = -2;
+    }
+    if (simplify
+        && steps.size() == 1
         && steps.get(0).op == Op.INNER_JOIN) {
       final Core.Scan scan = (Core.Scan) steps.get(0);
       if (scan.pat.op == Op.ID_PAT) {
@@ -213,6 +247,15 @@ public class FromBuilder {
       }
     }
     return core.from(typeSystem, steps);
+  }
+
+  public Core.From build() {
+    return (Core.From) build(false);
+  }
+
+  /** As {@link #build}, but also simplifies "from x in list" to "list". */
+  public Core.Exp buildSimplify() {
+    return build(true);
   }
 
   /** Calls the method to re-register a step. */

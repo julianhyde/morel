@@ -99,7 +99,17 @@ public class Calcite {
     final RelNode rel2 = program.run(planner, rel, traitSet,
         ImmutableList.of(), ImmutableList.of());
 
-    return new CalciteCode(dataContext, rel2, type, env);
+    final Function<Enumerable<Object[]>, List<Object>> converter =
+        Converters.fromEnumerable(rel, type);
+    return new CalciteCode(dataContext, rel2, env, converter, false);
+  }
+
+  public Code wrapRelList(Code code) {
+    if (code instanceof CalciteCode) {
+      return ((CalciteCode) code).withWrap(true);
+    } else {
+      return Codes.wrapRelList(code);
+    }
   }
 
   /** Copied from {@link Programs}. */
@@ -172,15 +182,21 @@ public class Calcite {
     final RelNode rel;
     final Environment env;
     final Function<Enumerable<Object[]>, List<Object>> converter;
+    final boolean wrap;
 
-    CalciteCode(DataContext dataContext, RelNode rel, Type type,
-        Environment env) {
+    CalciteCode(DataContext dataContext, RelNode rel, Environment env,
+        Function<Enumerable<Object[]>, List<Object>> converter, boolean wrap) {
       this.dataContext = dataContext;
       this.rel = rel;
       this.env = env;
-      converter = Converters.fromEnumerable(rel, type);
+      this.converter = converter;
+      this.wrap = wrap;
     }
 
+    CalciteCode withWrap(boolean wrap) {
+      return wrap == this.wrap ? this
+          : new CalciteCode(dataContext, rel, env, converter, wrap);
+    }
     // to help with debugging
     @Override public String toString() {
       return Codes.describe(this);

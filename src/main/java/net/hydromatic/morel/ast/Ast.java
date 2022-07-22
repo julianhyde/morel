@@ -43,6 +43,7 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.Iterables.getLast;
 
 import static java.util.Objects.requireNonNull;
 
@@ -1496,12 +1497,11 @@ public class Ast {
 
     static @Nullable Exp implicitYieldExp(Pos pos, List<FromStep> steps) {
       if (!steps.isEmpty()
-          && Iterables.getLast(steps) instanceof Ast.Yield) {
+          && getLast(steps) instanceof Ast.Yield) {
         // No implicit yield is needed; the last step is an explicit yield
         return null;
       }
       Set<Id> fields = ImmutableSet.of();
-      boolean record = true;
       final Set<Id> nextFields = new HashSet<>();
       for (FromStep step : steps) {
         switch (step.op) {
@@ -1516,7 +1516,6 @@ public class Ast {
             }
           });
           fields = ImmutableSet.copyOf(nextFields);
-          record = nextFields.size() != 1;
           break;
 
         case COMPUTE:
@@ -1534,7 +1533,6 @@ public class Ast {
           groupExps.forEach(pair -> nextFields.add(pair.left));
           aggregates.forEach(aggregate -> nextFields.add(aggregate.id));
           fields = nextFields;
-          record = fields.size() != 1;
           break;
 
         case YIELD:
@@ -1545,14 +1543,15 @@ public class Ast {
                     .stream()
                     .map(label -> ast.id(Pos.ZERO, label))
                     .collect(Collectors.toSet());
-            record = true;
-          } else {
-            record = false;
           }
           break;
         }
       }
-      if (!record) {
+
+      if (fields.size() == 1
+          && (steps.isEmpty()
+          || getLast(steps).op != Op.YIELD
+          || ((Yield) getLast(steps)).exp.op != Op.RECORD)) {
         return Iterables.getOnlyElement(fields);
       } else {
         final SortedMap<String, Exp> map = new TreeMap<>(ORDERING);
