@@ -784,14 +784,19 @@ public class Resolver {
         final ListType listType = (ListType) coreExp.type;
         corePat = r.toCore(scan.pat, listType.elementType);
       }
-      final Op op = scan.op == Op.SCAN ? Op.INNER_JOIN
+      final Op op = scan.exp.op == Op.SUCH_THAT ? Op.SUCH_THAT
+          : scan.op == Op.SCAN ? Op.INNER_JOIN
           : scan.op;
       final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
       Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
       Core.Exp coreCondition = scan.condition == null
           ? core.boolLiteral(true)
           : r.withEnv(bindings2).toCore(scan.condition);
-      fromBuilder.scan(corePat, coreExp, coreCondition);
+      if (op == Op.SUCH_THAT) {
+        fromBuilder.suchThat(corePat, coreExp);
+      } else {
+        fromBuilder.scan(corePat, coreExp, coreCondition);
+      }
     }
 
     @Override protected void visit(Ast.Where where) {
