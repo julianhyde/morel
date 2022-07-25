@@ -1829,7 +1829,7 @@ public class MainTest {
   @Test void testFromSuchThat2b() {
     final String ml = "from d suchthat d elem scott.dept";
     final String core0 = "val it = from d suchthat (d elem #dept scott)";
-    final String core1 = "val it = from d in (from d in #dept scott)";
+    final String core1 = "val it = from d in #dept scott";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{deptno:int, dname:string, loc:string} list")
@@ -1894,8 +1894,8 @@ public class MainTest {
         + " yield #dname d_1 "
         + "end";
     final String core1 = "val it = "
-        + "from d_1 in (from d_1 in #dept scott"
-        + " where #deptno d_1 = 20) "
+        + "from d_1 in #dept scott "
+        + "where #deptno d_1 = 20 "
         + "yield #dname d_1";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
