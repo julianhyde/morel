@@ -43,9 +43,9 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.compile.Resolver.append;
-import static net.hydromatic.morel.compile.Resolver.minus;
-import static net.hydromatic.morel.compile.Resolver.plus;
+import static net.hydromatic.morel.util.Static.append;
+import static net.hydromatic.morel.util.Static.minus;
+import static net.hydromatic.morel.util.Static.plus;
 
 import static org.apache.calcite.util.Util.skip;
 
@@ -74,7 +74,7 @@ class SuchThatShuttle extends Shuttle {
     if (scan.op == Op.SUCH_THAT) {
       final ImmutableList.Builder<Core.NamedPat> unboundPats =
           ImmutableList.builder();
-      Resolver.flatten(scan.pat).forEach(unboundPats::add);
+      flatten(scan.pat).forEach(unboundPats::add);
       final ImmutableSortedMap.Builder<Core.NamedPat, Core.Exp> mapBuilder =
           ImmutableSortedMap.orderedBy(Core.NamedPat.ORDERING);
       final Core.@Nullable Exp rewritten =
@@ -86,6 +86,28 @@ class SuchThatShuttle extends Shuttle {
           scan.pat, rewritten, scan.condition);
     }
     return super.visit(scan);
+  }
+
+  /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
+   * to a list of id patterns. */
+  private static List<Core.IdPat> flatten(Core.Pat pat) {
+    switch (pat.op) {
+    case ID_PAT:
+      return ImmutableList.of((Core.IdPat) pat);
+
+    case TUPLE_PAT:
+      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+      for (Core.Pat arg : tuplePat.args) {
+        if (arg.op != Op.ID_PAT) {
+          throw new CompileException("must be id", false, arg.pos);
+        }
+      }
+      //noinspection unchecked,rawtypes
+      return (List) tuplePat.args;
+
+    default:
+      throw new CompileException("must be id", false, pat.pos);
+    }
   }
 
   private Core.Exp rewrite(List<Core.NamedPat> unboundPats,

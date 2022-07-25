@@ -53,7 +53,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Static.append;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -587,100 +586,6 @@ public class Resolver {
     return coreFrom;
   }
 
-  private Core.From fromStepToCore(List<Binding> bindings, ListType type,
-      List<Ast.FromStep> steps, List<Core.FromStep> coreSteps) {
-    final Resolver r = withEnv(bindings);
-    if (steps.isEmpty()) {
-      return core.from(type, coreSteps);
-    }
-    final Ast.FromStep step = steps.get(0);
-    switch (step.op) {
-    case SCAN:
-    case INNER_JOIN:
-      final Ast.Scan scan = (Ast.Scan) step;
-      final Core.Exp coreExp = r.toCore(scan.exp);
-      final ListType listType = (ListType) coreExp.type;
-      final Core.Pat corePat = r.toCore(scan.pat, listType.elementType);
-      final Op op = step.op == Op.SCAN
-          ? Op.INNER_JOIN
-          : step.op;
-      final List<Binding> bindings2 = new ArrayList<>(bindings);
-      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
-      Core.Exp coreCondition = scan.condition == null
-          ? core.boolLiteral(true)
-          : r.withEnv(bindings2).toCore(scan.condition);
-      final Core.Scan coreScan =
-          core.scan(op, bindings2, corePat, coreExp, coreCondition);
-      return fromStepToCore(coreScan.bindings, type,
-          Util.skip(steps), append(coreSteps, coreScan));
-
-    case WHERE:
-      final Ast.Where where = (Ast.Where) step;
-      final Core.Where coreWhere =
-          core.where(bindings, r.toCore(where.exp));
-      return fromStepToCore(coreWhere.bindings, type,
-          Util.skip(steps), append(coreSteps, coreWhere));
-
-    case YIELD:
-      final Ast.Yield yield = (Ast.Yield) step;
-      final Core.Yield coreYield =
-          core.yield_(typeMap.typeSystem, r.toCore(yield.exp));
-      return fromStepToCore(coreYield.bindings, type,
-          Util.skip(steps), append(coreSteps, coreYield));
-
-    case ORDER:
-      final Ast.Order order = (Ast.Order) step;
-      final Core.Order coreOrder =
-          core.order(bindings, transform(order.orderItems, r::toCore));
-      return fromStepToCore(coreOrder.bindings, type,
-          Util.skip(steps), append(coreSteps, coreOrder));
-
-    case GROUP:
-    case COMPUTE:
-      final Ast.Group group = (Ast.Group) step;
-      final ImmutableSortedMap.Builder<Core.IdPat, Core.Exp> groupExps =
-          ImmutableSortedMap.naturalOrder();
-      final ImmutableSortedMap.Builder<Core.IdPat, Core.Aggregate> aggregates =
-          ImmutableSortedMap.naturalOrder();
-      Pair.forEach(group.groupExps, (id, exp) ->
-          groupExps.put(toCorePat(id), r.toCore(exp)));
-      group.aggregates.forEach(aggregate ->
-          aggregates.put(toCorePat(aggregate.id), r.toCore(aggregate)));
-      final Core.Group coreGroup =
-          core.group(groupExps.build(), aggregates.build());
-      return fromStepToCore(coreGroup.bindings, type,
-          Util.skip(steps), append(coreSteps, coreGroup));
-
-    default:
-      throw new AssertionError("unknown step type " + step.op);
-    }
-  }
-
-  // TODO remove (unused)
-  boolean matches(Core.Pat pat, Core.Exp exp) {
-    switch (pat.op) {
-    case ID_PAT:
-      return exp.op == Op.ID
-          && ((Core.Id) exp).idPat == pat;
-    case TUPLE_PAT:
-      if (exp.op == Op.TUPLE) {
-        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-        final Core.Tuple tuple = (Core.Tuple) exp;
-        if (tuplePat.args.size() == tuple.args.size()) {
-          for (int i = 0; i < tuplePat.args.size(); i++) {
-            if (!matches(tuplePat.args.get(i), tuple.args.get(i))) {
-              return false;
-            }
-          }
-          return true;
-        }
-      }
-      return false;
-    default:
-      return false;
-    }
-  }
-
   private Core.Aggregate toCore(Ast.Aggregate aggregate) {
     return core.aggregate(typeMap.getType(aggregate),
         toCore(aggregate.aggregate),
@@ -879,14 +784,19 @@ public class Resolver {
         final ListType listType = (ListType) coreExp.type;
         corePat = r.toCore(scan.pat, listType.elementType);
       }
-      final Op op = scan.op == Op.SCAN ? Op.INNER_JOIN
+      final Op op = scan.exp.op == Op.SUCH_THAT ? Op.SUCH_THAT
+          : scan.op == Op.SCAN ? Op.INNER_JOIN
           : scan.op;
       final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
       Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
       Core.Exp coreCondition = scan.condition == null
           ? core.boolLiteral(true)
           : r.withEnv(bindings2).toCore(scan.condition);
-      fromBuilder.scan(corePat, coreExp, coreCondition);
+      if (op == Op.SUCH_THAT) {
+        fromBuilder.suchThat(corePat, coreExp);
+      } else {
+        fromBuilder.scan(corePat, coreExp, coreCondition);
+      }
     }
 
     @Override protected void visit(Ast.Where where) {
