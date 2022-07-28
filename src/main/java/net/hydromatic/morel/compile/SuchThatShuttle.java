@@ -77,7 +77,7 @@ class SuchThatShuttle extends Shuttle {
       flatten(scan.pat).forEach(unboundPats::add);
       final ImmutableSortedMap.Builder<Core.NamedPat, Core.Exp> mapBuilder =
           ImmutableSortedMap.orderedBy(Core.NamedPat.ORDERING);
-      final Core.@Nullable Exp rewritten =
+      final Core.Exp rewritten =
           rewrite(unboundPats.build(),
               mapBuilder.build(),
               ImmutableMap.of(),
