@@ -143,7 +143,7 @@ public abstract class Compiles {
         final Core.Decl coreDecl2 = coreDecl;
         if (mayContainSuchThat) {
           if (SuchThatShuttle.containsSuchThat(coreDecl)) {
-            coreDecl = coreDecl.accept(new SuchThatShuttle(typeSystem));
+            coreDecl = coreDecl.accept(new SuchThatShuttle(typeSystem, env));
           } else {
             mayContainSuchThat = false;
           }
@@ -154,6 +154,7 @@ public abstract class Compiles {
         tracer.onCore(i + 2, coreDecl);
       }
     }
+    System.out.println(coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
     if (hybrid) {

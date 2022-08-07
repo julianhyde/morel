@@ -63,8 +63,11 @@ in
 end;
 
 (*) A function with external extent.
+(* TODO enable when we have types
 fun hasJob (e, job) =
   e.job = job;
+ *)
+
 (*) Valid, because the argument has an extent.
 let
   fun hasJob (e, job) =
@@ -74,6 +77,7 @@ in
     j suchthat hasJob (e, j)
     yield j
 end;
+
 (*) Invalid, because the argument has no extent.
 from e suchthat hasJob (e, "CLERK");
 
