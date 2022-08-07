@@ -74,6 +74,10 @@ public class FromBuilder {
     this.typeSystem = typeSystem;
   }
 
+  @Override public String toString() {
+    return steps.toString();
+  }
+
   /** Returns the bindings available after the most recent step. */
   public List<Binding> bindings() {
     return ImmutableList.copyOf(bindings);
@@ -276,7 +280,8 @@ public class FromBuilder {
       final Core.Yield yield = (Core.Yield) getLast(steps);
       assert yield.exp.op == Op.TUPLE
           && ((Core.Tuple) yield.exp).args.size() == 1
-          && isTrivial((Core.Tuple) yield.exp);
+          && isTrivial((Core.Tuple) yield.exp)
+          : yield.exp;
       steps.remove(steps.size() - 1);
     }
     if (simplify

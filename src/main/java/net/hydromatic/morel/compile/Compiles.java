@@ -149,6 +149,7 @@ public abstract class Compiles {
         tracer.onCore(i + 2, coreDecl);
       }
     }
+    System.out.println(coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
     if (hybrid) {

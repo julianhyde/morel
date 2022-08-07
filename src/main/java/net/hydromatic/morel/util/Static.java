@@ -21,12 +21,15 @@ package net.hydromatic.morel.util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
+import net.hydromatic.morel.ast.Core;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.stream.Collector;
 
@@ -153,6 +156,18 @@ public class Static {
         .putAll(map)
         .put(k, v)
         .build();
+  }
+
+  public static <E> List<E> intersect(List<E> list0,
+      Iterable<? extends E> list1) {
+    final ImmutableList.Builder<E> list2 = ImmutableList.builder();
+    final Set<E> set = new HashSet<>(list0);
+    for (E e : list1) {
+      if (set.contains(e)) {
+        list2.add(e);
+      }
+    }
+    return list2.build();
   }
 }
 

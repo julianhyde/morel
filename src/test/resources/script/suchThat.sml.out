@@ -69,13 +69,15 @@ in
   from e suchthat isEmp50 e
     yield e.ename
 end;
-val it = [] : string list
+0.0-0.0 Error: Cannot implement 'suchthat'; variables [e_1] are not grounded
+  raised at: 0.0-0.0
 
 
 (*) A function with external extent.
+(* TODO enable when we have types
 fun hasJob (e, job) =
   e.job = job;
-java.lang.ClassCastException: class net.hydromatic.morel.type.TypeVar cannot be cast to class net.hydromatic.morel.type.RecordLikeType (net.hydromatic.morel.type.TypeVar and net.hydromatic.morel.type.RecordLikeType are in unnamed module of loader 'app')
+ *)
 
 (*) Valid, because the argument has an extent.
 let
@@ -86,7 +88,10 @@ in
     j suchthat hasJob (e, j)
     yield j
 end;
-val it = [] : string list
+val it =
+  ["CLERK","SALESMAN","SALESMAN","MANAGER","SALESMAN","MANAGER","MANAGER",
+   "ANALYST","PRESIDENT","SALESMAN","CLERK","CLERK",...] : string list
+
 
 (*) Invalid, because the argument has no extent.
 from e suchthat hasJob (e, "CLERK");
