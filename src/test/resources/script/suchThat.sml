@@ -33,6 +33,8 @@ in
     where e.deptno = 20
     yield e.ename
 end;
+
+(*) As above, using 'andalso' rather than 'where'
 let
   fun isEmp e =
     e elem scott.emp
@@ -41,7 +43,12 @@ in
     yield e.ename
 end;
 
-(*) TODO: as previous, but 'fun' followed by 'from' without using 'let'
+(*) As previous, but 'fun' followed by 'from' without using 'let'
+(*) TODO should return same as previous, currently can't inline fun declared separately
+fun isEmp e =
+  e elem scott.emp;
+from e suchthat isEmp e andalso e.deptno = 20
+  yield e.ename;
 
 (*) Similar to 'isEmp' but with a conjunctive condition.
 let
@@ -63,8 +70,11 @@ in
 end;
 
 (*) A function with external extent.
+(* TODO enable when we have types
 fun hasJob (e, job) =
   e.job = job;
+ *)
+
 (*) Valid, because the argument has an extent.
 let
   fun hasJob (e, job) =
@@ -74,8 +84,15 @@ in
     j suchthat hasJob (e, j)
     yield j
 end;
+
 (*) Invalid, because the argument has no extent.
-from e suchthat hasJob (e, "CLERK");
+(*) TODO should give error 'e not grounded'
+let
+  fun hasJob (e, job) =
+    e.job = job
+in
+  from e suchthat hasJob (e, "CLERK")
+end;
 
 (*) A string function with external extent.
 (*) Given s2, we could generate finite s1.
@@ -94,6 +111,9 @@ fun isBetween (i, j, k) =
 (*) Convenience function that converts a predicate to a relation
 fun enumerate predicate =
   from r suchthat predicate r;
+(* TODO should print
+val enumerate = fn : ('a -> bool) -> 'a list
+*)
 (*) TODO should return non-empty list
 enumerate isEmp;
 
@@ -143,8 +163,13 @@ fun path (x, y) =
   edge (x, y)
   orelse exists (
     from z suchthat path (x, z) andalso edge (z, y));
-(*) TODO should return [(1,2),(2,3),(1,3)]
+(* TODO should return
+val path = fn : int * int -> bool
+ *)
 from p suchthat path p;
+(* TODO should return
+val it = [(1,2),(2,3),(1,3)] : (int * int) list
+ *)
 
 (* ------------------------------------------------------ *)
 (* Joe's bar.
@@ -188,12 +213,17 @@ fun happy patron =
     from (bar, beer, price) suchthat frequents (patron, bar)
       andalso likes (patron, beer)
       andalso sells (bar, beer, price));
+(* TODO should return
+val happy = fn : string -> bool
+ *)
 
 (* Find happy patrons. Shaggy is happy because the Squirrel and Cask sell
    Amber; Velma is happy because Cask sells Stout. Fred and Scooby are not
    happy. *)
-(*) TODO should return ["shaggy", "velma"]
 from p suchthat happy p;
+(* TODO should return
+val it = ["shaggy", "velma"] : string list
+ *)
 
 (* A beer is considered cheap if there are at least two bars that sell it for
  * under $3.
@@ -210,10 +240,15 @@ fun cheap beer =
         andalso price1 < 3
         andalso price2 < 3
         andalso bar1 <> bar2);
+(* TODO should return
+val cheap = fn : string -> bool
+ *)
 
 (*) Pale is cheap
-(*) TODO should return ["pale"]
 from b suchthat cheap b;
+(* TODO should return
+val it = ["pale"] : string list
+ *)
 
 (* A rule is safe if:
  * 1. Each distinguished variable,
@@ -238,14 +273,25 @@ from b suchthat cheap b;
  *)
 fun isR y = true;
 fun isS1 x = exists (from y suchthat isR y);
-(*) TODO: should say that isS1 is unsafe
+(* TODO should return
+val isS1 = fn : 'a -> bool
+ *)
+
+(*) isS1 is unsafe
 from x suchthat isS1 x;
+(*) TODO should throw unsafe
+
 fun isS2 x = exists (from y suchthat isR y andalso not (isR x));
-(*) TODO: should say that isS2 is unsafe
+
+(*) isS2 is unsafe
 from x suchthat isS2 x;
+(*) TODO should throw unsafe
+
 fun isS3 x = exists (from y suchthat isR y andalso x < y);
-(*) TODO: should say that isS3 is unsafe
+
+(*) isS3 is unsafe
 from x suchthat isS3 x;
+(*) TODO should throw unsafe
 
 (* Example Datalog Program. Using EDB Sells (bar, beer, price) and
  * Likes (patron, beer), find the patrons who like beers Joe doesn't sell.
@@ -257,8 +303,14 @@ from x suchthat isS3 x;
  *)
 fun caskSells b =
   exists (from (beer, price) suchthat sells ("cask", beer, price));
+(* TODO should return
+val caskSells = fn : 'a -> bool
+ *)
 from p suchthat exists (
   from b suchthat likes (p, b) andalso not (caskSells b));
+(* TODO should return something like
+val it = ["foo"] : string list
+ *)
 
 (* Cousin
  *
@@ -282,11 +334,18 @@ fun par (x, p) =
     ("h", "i")];
 fun sib (x, y) = exists (
   from p suchthat par (x, p) andalso par (y, p) andalso x <> y);
+(* TODO should return
+val sib = fn : string * string -> bool
+ *)
+
 fun cousin (x, y) = sib (x, y)
   orelse exists (
     from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin (xp, yp));
+(* TODO should return
+val cousin = fn : string * string -> bool
+ *)
 
 (*
  Round 1: (b, c), (c, e), (g, h), (j, k)
@@ -294,9 +353,14 @@ fun cousin (x, y) = sib (x, y)
  Round 3: add (f, g), (f, h), (g, i), (i, k)
  Round 4: add (i, j), (k, k)
  *)
-(*) TODO: return non-empty list
 enumerate sib;
+(* TODO return something like
+val it = [("b","c")] : (string * string) list
+ *)
 enumerate cousin;
+(* TODO return something like
+val it = [("b","c"), ("c","e"),("g","h"),("j","k"),("f","g"),("f","h"),("g","i"),("i","k"),("i","j"),("k","k")] : (string * string) list
+ *)
 
 (* Nonmonotone relation.
  * 'cousin2' is as 'cousin', but 'orelse' has become 'and not'.
@@ -308,7 +372,10 @@ fun cousin2 (x, y) = sib (x, y)
     from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin2 (xp, yp));
-(*) TODO: maybe give error: non-stratified
+(* TODO should return
+val cousin2 = fn : string * string -> bool
+ *)
 enumerate cousin2;
+(*) TODO: maybe give error: non-stratified
 
 (*) End suchThat.sml
