@@ -21,7 +21,6 @@ package net.hydromatic.morel.util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
-import net.hydromatic.morel.ast.Core;
 
 import java.util.Collection;
 import java.util.HashSet;

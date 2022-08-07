@@ -32,6 +32,7 @@ import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -39,8 +40,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,13 +48,13 @@ import java.util.TreeMap;
 import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Pair.zip;
 import static net.hydromatic.morel.util.Static.append;
-import static net.hydromatic.morel.util.Static.intersect;
 import static net.hydromatic.morel.util.Static.plus;
-import static net.hydromatic.morel.util.Static.toImmutableList;
 
 import static com.google.common.collect.Iterables.getLast;
 import static com.google.common.collect.Iterables.getOnlyElement;
+import static org.apache.calcite.util.Util.minus;
 import static org.apache.calcite.util.Util.skip;
 
 /**
@@ -98,23 +97,18 @@ class SuchThatShuttle extends Shuttle {
     if (scan.op != Op.SUCH_THAT) {
       return super.visit(scan);
     }
-    final Set<Core.NamedPat> goalPatSet =
-        new LinkedHashSet<>(flatten(scan.pat));
     final ImmutableSortedMap.Builder<Core.NamedPat, Core.Exp> boundPatBuilder =
         ImmutableSortedMap.orderedBy(Core.NamedPat.ORDERING);
     if (!fromStates.element().steps.isEmpty()) {
-      getLast(fromStates.element().steps).bindings.forEach(b -> {
-        goalPatSet.add(b.id);
-        boundPatBuilder.put(b.id, core.id(b.id));
-      });
+      getLast(fromStates.element().steps).bindings.forEach(b ->
+          boundPatBuilder.put(b.id, core.id(b.id)));
     }
     final SortedMap<Core.NamedPat, Core.Exp> boundPats = boundPatBuilder.build();
     final Map<Core.IdPat, Core.Exp> scans = ImmutableMap.of();
     final List<Core.Exp> filters = ImmutableList.of();
-    final List<Core.NamedPat> goalPats = ImmutableList.copyOf(goalPatSet);
     final UnaryOperator<Core.NamedPat> originalPats = UnaryOperator.identity();
     final Core.Exp rewritten =
-        rewrite(originalPats, goalPats, boundPats, scans, filters,
+        rewrite(originalPats, boundPats, scans, filters,
             conjunctions(scan.exp));
     return core.scan(Op.INNER_JOIN, scan.bindings,
         scan.pat, rewritten, scan.condition);
@@ -143,13 +137,19 @@ class SuchThatShuttle extends Shuttle {
   }
 
   private Core.Exp rewrite(UnaryOperator<Core.NamedPat> mapper,
-      List<Core.NamedPat> goalPats,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Map<Core.IdPat, Core.Exp> scans, List<Core.Exp> filters,
       List<Core.Exp> exps) {
     if (exps.isEmpty()) {
-      final Set<Core.NamedPat> unboundPats = new HashSet<>(goalPats);
-      boundPats.keySet().forEach(unboundPats::remove);
+      final Set<Core.NamedPat> goalPats =
+          ImmutableSet.copyOf(
+              flatten(((Core.Scan) fromStates.element().currentStep()).pat));
+      final ImmutableSortedMap.Builder<Core.NamedPat, Core.Exp> b =
+          ImmutableSortedMap.naturalOrder();
+      boundPats.forEach((p, e) -> b.put(mapper.apply(p), e));
+      final SortedMap<Core.NamedPat, Core.Exp> boundPats2 = b.build();
+      final Set<Core.NamedPat> unboundPats =
+          minus(goalPats, boundPats2.keySet());
       if (!unboundPats.isEmpty()) {
         throw new CompileException("Cannot implement 'suchthat'; variables "
             + unboundPats + " are not grounded", false, Pos.ZERO);
@@ -159,16 +159,11 @@ class SuchThatShuttle extends Shuttle {
       filters.forEach(fromBuilder::where);
       final SortedMap<String, Core.Exp> nameExps =
           new TreeMap<>(RecordType.ORDERING);
-      Core.FromStep step = fromStates.element().currentStep();
-      final Set<Core.NamedPat> goalPatSet =
-          new LinkedHashSet<>(flatten(((Core.Scan) step).pat));
-      boundPats.forEach((p, e) -> {
-        Core.NamedPat p2 = mapper.apply(p);
-        if (goalPatSet.contains(p2)) {
-          nameExps.put(p2.name, e);
+      boundPats2.forEach((p, e) -> {
+        if (goalPats.contains(p)) {
+          nameExps.put(p.name, e);
         }
       });
-//      originalPats.forEach(p -> nameExps.remove(p.name)); // TODO
       fromBuilder.yield_(nameExps.size() == 1
           ? getOnlyElement(nameExps.values())
           : core.record(typeSystem, nameExps));
@@ -185,8 +180,8 @@ class SuchThatShuttle extends Shuttle {
           Core.Exp a0 = apply.args().get(0);
           Core.Exp a1 = apply.args().get(1);
           Core.@Nullable Exp e =
-              rewriteElem(typeSystem, mapper, goalPats, boundPats, scans,
-                  filters, a0, a1, exps2);
+              rewriteElem(typeSystem, mapper, boundPats, scans, filters, a0, a1,
+                  exps2);
           if (e != null) {
             return e;
           }
@@ -202,17 +197,17 @@ class SuchThatShuttle extends Shuttle {
           Core.Exp a1List =
               core.list(typeSystem, a1.type, ImmutableList.of(a1));
           Core.@Nullable Exp e =
-              rewriteElem(typeSystem, mapper, goalPats, boundPats, scans,
+              rewriteElem(typeSystem, mapper, boundPats, scans,
                   filters, a0, a1List, exps2);
           if (e != null) {
             return e;
           }
         }
         final List<Core.Exp> filters2 = append(filters, exp);
-        return rewrite(mapper, goalPats, boundPats, scans, filters2,
+        return rewrite(mapper, boundPats, scans, filters2,
             exps2);
       }
-      throw new AssertionError(exp);
+      break;
 
     case CASE:
       final Core.Case case_ = (Core.Case) exp;
@@ -221,47 +216,22 @@ class SuchThatShuttle extends Shuttle {
         // boundPats is "{e}" translate as if the expression were "#job e = j",
         // boundPats = "{a}".
         final Core.Match match = case_.matchList.get(0);
-        final List<Pair<Core.NamedPat, Core.NamedPat>> names = new ArrayList<>();
-        foo(names, match.pat, case_.exp);
-        UnaryOperator<Core.NamedPat> mapper2 =
-            namedPat -> {
-              for (Pair<Core.NamedPat, Core.NamedPat> pair : names) {
-                if (pair.right.equals(namedPat)) {
-                  namedPat = pair.left;
-                }
-              }
-              return namedPat;
-            };
-        final List<Core.NamedPat> goalPats2 =
-            goalPats.stream().map(mapper).collect(toImmutableList());
         final SortedMap<Core.NamedPat, Core.Exp> boundPats2 =
             new TreeMap<>(boundPats.comparator());
         boundPats.forEach((p, e) -> boundPats2.put(mapper.apply(p), e));
-        return rewrite(mapper.andThen(mapper2)::apply, goalPats2, boundPats2,
+        final PatMap patMap = PatMap.of(match.pat, case_.exp);
+        return rewrite(mapper.andThen(patMap::apply)::apply, boundPats2,
             scans, filters, plus(match.exp, exps2));
       }
-      throw new AssertionError(exp);
-
-    default:
-      throw new AssertionError(exp);
+      break;
     }
-  }
 
-  private void foo(List<Pair<Core.NamedPat, Core.NamedPat>> names, Core.Pat pat,
-      Core.Exp exp) {
-    if (pat.op == Op.ID_PAT) {
-      names.add(Pair.of(((Core.Id) exp).idPat, (Core.IdPat) pat));
-    } else if (pat.op == Op.TUPLE_PAT) {
-      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-      final Core.Tuple tuple = (Core.Tuple) exp;
-      for (Pair<Core.Pat, Core.Exp> pair : Pair.zip(tuplePat.args, tuple.args)) {
-        foo(names, pair.left, pair.right);
-      }
-    }
+    throw new CompileException("not implemented: suchthat " + exp.op
+        + " [" + exp + "]", false, Pos.ZERO);
   }
 
   private Core.@Nullable Exp rewriteElem(TypeSystem typeSystem,
-      UnaryOperator<Core.NamedPat> mapper, List<Core.NamedPat> goalPats,
+      UnaryOperator<Core.NamedPat> mapper,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Map<Core.IdPat, Core.Exp> scans,
       List<Core.Exp> filters, Core.Exp a0,
@@ -277,18 +247,13 @@ class SuchThatShuttle extends Shuttle {
         // from ... v in list
         final SortedMap<Core.NamedPat, Core.Exp> boundPats2 =
             plus(boundPats, idPat, core.id(idPat));
-        final List<Core.NamedPat> goalPats2 =
-            intersect(ImmutableList.of(idPat), goalPats); // fails 2f // TODO
-//         goalPats; // passes 2f // TODO
         final Map<Core.IdPat, Core.Exp> scans2 = plus(scans, idPat, a1);
-        return rewrite(mapper, goalPats2, boundPats2, scans2, filters,
-            exps2);
+        return rewrite(mapper, boundPats2, scans2, filters, exps2);
       } else {
         final Core.Exp e = boundPats.get(idPat);
         final List<Core.Exp> filters2 =
             append(filters, core.elem(typeSystem, e, a1));
-        return rewrite(mapper, goalPats, boundPats, scans, filters2,
-            exps2);
+        return rewrite(mapper, boundPats, scans, filters2, exps2);
       }
     } else if (a0.op == Op.TUPLE) {
       // from v, w, x suchthat ((v, w, x) elem list)
@@ -320,8 +285,7 @@ class SuchThatShuttle extends Shuttle {
         }
       }
       final Map<Core.IdPat, Core.Exp> scans2 = plus(scans, idPat, a1);
-      return rewrite(mapper, goalPats, boundPats2, scans2, filters2,
-          exps2);
+      return rewrite(mapper, boundPats2, scans2, filters2, exps2);
     } else {
       return null;
     }
@@ -361,6 +325,8 @@ class SuchThatShuttle extends Shuttle {
     }
   }
 
+  /** Workspace for converting a particular {@link Core.From} from "suchthat"
+   * to "in" form. */
   static class FromState {
     final Core.From from;
     final List<Core.FromStep> steps = new ArrayList<>();
@@ -377,42 +343,49 @@ class SuchThatShuttle extends Shuttle {
     }
   }
 
-  private static class NamedPatUnaryOperator
-      implements UnaryOperator<Core.NamedPat> {
-    final Core.Pat pat;
-    final Core.Exp exp;
+  /** Maps patterns from their name in the "from" to their name after a sequence
+   * of renames.
+   *
+   * <p>For example, in "case (x, y) of (a, b) => a + b", "x" is renamed to "a"
+   * and "y" is renamed to "b". */
+  private static class PatMap {
+    private final ImmutableMap<Core.NamedPat, Core.NamedPat> map;
 
-    NamedPatUnaryOperator(Core.Pat pat, Core.Exp exp) {
-      this.pat = pat;
-      this.exp = exp;
+    PatMap(ImmutableMap<Core.NamedPat, Core.NamedPat> map) {
+      this.map = map;
     }
 
-    @Override public Core.NamedPat apply(Core.NamedPat p) {
-      return foo(pat, exp, p);
+    static PatMap of(Core.Pat pat, Core.Exp exp) {
+      final ImmutableMap.Builder<Core.NamedPat, Core.NamedPat> builder =
+          ImmutableMap.builder();
+      populate(pat, exp, builder);
+      return new PatMap(builder.build());
     }
 
-    private Core.@Nullable NamedPat foo(Core.Pat pat, Core.Exp exp,
-        Core.NamedPat p) {
-      if (pat.op == Op.ID_PAT) {
-        if (((Core.Id) exp).idPat.name.equals(p.name)) {
-          return (Core.IdPat) pat;
-        }
-        return null;
-      } else if (pat.op == Op.TUPLE_PAT) {
+    private static void populate(Core.Pat pat, Core.Exp exp,
+        ImmutableMap.Builder<Core.NamedPat, Core.NamedPat> nameBuilder) {
+      switch (pat.op) {
+      case ID_PAT:
+        nameBuilder.put(Pair.of(((Core.Id) exp).idPat, (Core.IdPat) pat));
+        break;
+      case TUPLE_PAT:
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
         final Core.Tuple tuple = (Core.Tuple) exp;
-        for (Pair<Core.Pat, Core.Exp> pair : Pair.zip(tuplePat.args, tuple.args)) {
-          final Core.@Nullable NamedPat p2 = foo(pair.left, pair.right, p);
-          if (p2 != null) {
-            return p2;
-          }
+        for (Pair<Core.Pat, Core.Exp> pair : zip(tuplePat.args, tuple.args)) {
+          populate(pair.left, pair.right, nameBuilder);
         }
-        return null;
-      } else {
-        return null;
+        break;
       }
     }
 
+    Core.NamedPat apply(Core.NamedPat p) {
+      for (Map.Entry<Core.NamedPat, Core.NamedPat> pair : map.entrySet()) {
+        if (pair.getValue().equals(p)) {
+          p = pair.getKey();
+        }
+      }
+      return p;
+    }
   }
 }
 
