@@ -37,7 +37,7 @@ import static java.util.Objects.requireNonNull;
 public class Closure implements Comparable<Closure>, Applicable {
   /** Environment for evaluation. Contains the variables "captured" from the
    * environment when the closure was created. */
-  private final EvalEnv evalEnv;
+  private final Stack stack;
 
   /** A list of (pattern, code) pairs. During bind, the value being bound is
    * matched against each pattern. When a match is found, the code for that
@@ -52,15 +52,15 @@ public class Closure implements Comparable<Closure>, Applicable {
   private final Pos pos;
 
   /** Not a public API. */
-  public Closure(EvalEnv evalEnv,
+  public Closure(Stack stack,
       ImmutableList<Pair<Core.Pat, Code>> patCodes, Pos pos) {
-    this.evalEnv = requireNonNull(evalEnv).fix();
+    this.stack = requireNonNull(stack).fix();
     this.patCodes = requireNonNull(patCodes);
     this.pos = pos;
   }
 
   @Override public String toString() {
-    return "Closure(evalEnv = " + evalEnv + ", patCodes = " + patCodes + ")";
+    return "Closure(evalEnv = " + stack + ", patCodes = " + patCodes + ")";
   }
 
   public int compareTo(Closure o) {
@@ -76,7 +76,7 @@ public class Closure implements Comparable<Closure>, Applicable {
    * when you invoke {@code (fn (x, y) => x + y) (3, 4)}, the binder
    * sets {@code x} to 3 and {@code y} to 4. */
   EvalEnv bind(Object argValue) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(evalEnv);
+    final EvalEnvHolder envRef = new EvalEnvHolder(stack.env);
     for (Pair<Core.Pat, Code> patCode : patCodes) {
       final Core.Pat pat = patCode.left;
       if (bindRecurse(pat, argValue, envRef)) {
@@ -90,7 +90,7 @@ public class Closure implements Comparable<Closure>, Applicable {
   EvalEnv evalBind(EvalEnv env) {
     final EvalEnvHolder envRef = new EvalEnvHolder(env);
     for (Pair<Core.Pat, Code> patCode : patCodes) {
-      final Object argValue = patCode.right.eval(env);
+      final Object argValue = patCode.right.eval0(env);
       final Core.Pat pat = patCode.left;
       if (bindRecurse(pat, argValue, envRef)) {
         return envRef.env;
@@ -99,21 +99,58 @@ public class Closure implements Comparable<Closure>, Applicable {
     throw new AssertionError("no match");
   }
 
+  /** Similar to
+   * {@link #evalBind(EvalEnv)} but reads the values it needs from
+   * the stack, and writes the result to the stack. */
+  public int execBind(Stack stack) {
+    final int top = stack.save();
+    for (Pair<Core.Pat, Code> patCode : patCodes) {
+      final Object argValue = patCode.right.eval(stack);
+      final Core.Pat pat = patCode.left;
+      if (bindRecurse(pat, argValue, (p, o) -> stack.push(o))) {
+        return 0;
+      }
+      stack.restore(top);
+    }
+    throw new AssertionError("no match");
+  }
+
   /** Similar to {@link #bind}, but also evaluates. */
   Object bindEval(Object argValue) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(evalEnv);
+    final EvalEnvHolder envRef = new EvalEnvHolder(this.stack.env);
     for (Pair<Core.Pat, Code> patCode : patCodes) {
       final Core.Pat pat = patCode.left;
       if (bindRecurse(pat, argValue, envRef)) {
         final Code code = patCode.right;
-        return code.eval(envRef.env);
+        return code.eval0(envRef.env);
       }
     }
     throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
   }
 
-  @Override public Object apply(EvalEnv env, Object argValue) {
-    return bindEval(argValue);
+  /** Similar to {@link #bindEval(Object)}, but uses a stack. */
+  @Override public int exec(Stack stack) {
+    final Object argValue = stack.pop();
+    final Stack s = this.stack; // use the internal environment
+    final int top = s.save();
+    for (Pair<Core.Pat, Code> patCode : patCodes) {
+      final Core.Pat pat = patCode.left;
+      if (bindRecurse(pat, argValue, (p, o) -> s.push(o))) {
+        final Code code = patCode.right;
+        final Object o = code.eval(s);
+        s.restore(top);
+        stack.push(o);
+        return 0;
+      }
+      s.restore(top);
+    }
+    throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
+  }
+
+  @Override public Object apply(Stack stack, Object argValue) {
+    stack.push(argValue);
+    exec(stack); // TODO: inline exec method here
+    return stack.pop();
   }
 
   @Override public Describer describe(Describer describer) {

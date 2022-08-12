@@ -30,6 +30,7 @@ import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.EvalEnvs;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.CalciteFunctions;
@@ -203,8 +204,8 @@ public class CalciteCompiler extends Compiler {
         return false;
       }
 
-      @Override public Object eval(EvalEnv evalEnv) {
-        return code.eval(evalEnv);
+      @Override public Object eval(Stack stack) {
+        return code.eval(stack);
       }
 
       @Override public Describer describe(Describer describer) {
@@ -224,7 +225,7 @@ public class CalciteCompiler extends Compiler {
         return code.describe(describer);
       }
 
-      @Override public Object eval(EvalEnv env) {
+      @Override public Object eval(Stack env) {
         return code.eval(env);
       }
 
@@ -236,7 +237,7 @@ public class CalciteCompiler extends Compiler {
         case RECORD_SELECTOR:
           if (apply.arg instanceof Core.Id) {
             // Something like '#emp scott', 'scott' is a foreign value
-            final Object o = code.eval(evalEnvOf(cx.env));
+            final Object o = code.eval0(evalEnvOf(cx.env));
             if (o instanceof RelList) {
               cx.relBuilder.push(((RelList) o).rel);
               return true;
@@ -374,7 +375,7 @@ public class CalciteCompiler extends Compiler {
         return code.describe(describer);
       }
 
-      @Override public Object eval(EvalEnv env) {
+      @Override public Object eval(Stack env) {
         return code.eval(env);
       }
 
@@ -848,7 +849,7 @@ public class CalciteCompiler extends Compiler {
           return code.describe(describer);
         }
 
-        @Override public Object eval(EvalEnv env) {
+        @Override public Object eval(Stack env) {
           return code.eval(env);
         }
 
