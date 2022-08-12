@@ -178,6 +178,14 @@ public abstract class Environments {
           ? parent.nearestAncestorNotObscuredBy(names)
           : this;
     }
+
+    @Override int distance(int soFar, String name) {
+      if (name.equals(this.binding.id.name)) {
+        return soFar;
+      } else {
+        return parent.distance(soFar + 1, name);
+      }
+    }
   }
 
   /** Empty environment. */
@@ -197,6 +205,10 @@ public abstract class Environments {
 
     @Override Environment nearestAncestorNotObscuredBy(Set<String> names) {
       return this;
+    }
+
+    @Override int distance(int soFar, String name) {
+      return -1;
     }
   }
 
@@ -230,6 +242,26 @@ public abstract class Environments {
       return names.containsAll(map.keySet())
           ? parent.nearestAncestorNotObscuredBy(names)
           : this;
+    }
+
+    @Override int distance(int soFar, String name) {
+      final int i = find(map.keySet(), name);
+      if (i >= 0) {
+        return soFar + map.size() - 1 - i;
+      } else {
+        return parent.distance(soFar + map.size(), name);
+      }
+    }
+
+    private <E> int find(Iterable<E> iterable, E e) {
+      int i = 0;
+      for (E e1 : iterable) {
+        if (e1.equals(e)) {
+          return i;
+        }
+        ++i;
+      }
+      return -1;
     }
   }
 }

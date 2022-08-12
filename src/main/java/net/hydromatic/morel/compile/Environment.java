@@ -133,6 +133,8 @@ public abstract class Environment {
   /** If this environment only defines bindings in the given set, returns
    * its parent. Never returns null. The empty environment returns itself. */
   abstract Environment nearestAncestorNotObscuredBy(Set<String> names);
+
+  abstract int distance(int soFar, String name);
 }
 
 // End Environment.java
