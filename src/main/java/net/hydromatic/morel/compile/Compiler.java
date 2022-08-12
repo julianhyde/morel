@@ -31,6 +31,7 @@ import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
@@ -267,6 +268,10 @@ public class Compiler {
     if (binding != null && binding.value instanceof Code) {
       return (Code) binding.value;
     }
+    final int distance = cx.env.distance(0, idPat);
+    if (distance >= 0) {
+      return Codes.getStack(distance + 1, idPat.name);
+    }
     return Codes.get(idPat.name);
   }
 
@@ -492,8 +497,8 @@ public class Compiler {
           return code.describe(describer);
         }
 
-        @Override public Object apply(EvalEnv evalEnv, Object arg) {
-          return code.eval(evalEnv);
+        @Override public Object apply(Stack stack, Object arg) {
+          return code.eval(stack);
         }
       };
     }
@@ -669,7 +674,8 @@ public class Compiler {
           final StringBuilder buf = new StringBuilder();
           final List<String> outs = new ArrayList<>();
           try {
-            final Object o = code.eval(evalEnv);
+            final Stack stack = Stack.of(evalEnv);
+            final Object o = code.eval(stack);
             final Map<Core.NamedPat, Object> pairs = new LinkedHashMap<>();
             if (!Closure.bindRecurse(pat.withType(type), o, pairs::put)) {
               throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
@@ -778,7 +784,7 @@ public class Compiler {
       });
     }
 
-    public Object eval(EvalEnv env) {
+    public Object eval(Stack env) {
       assert refCode != null; // link should have completed by now
       return refCode.eval(env);
     }
@@ -800,8 +806,8 @@ public class Compiler {
               d.arg("", pat.toString()).arg("", code)));
     }
 
-    @Override public Object eval(EvalEnv evalEnv) {
-      return new Closure(evalEnv, patCodes, pos);
+    @Override public Object eval(Stack stack) {
+      return new Closure(stack, patCodes, pos);
     }
   }
 }
