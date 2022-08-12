@@ -24,7 +24,15 @@ package net.hydromatic.morel.eval;
  * creating a new runtime environment.
  */
 public interface Applicable extends Describable {
-  Object apply(EvalEnv env, Object argValue);
+  Object apply(Stack stack, Object argValue);
+
+  /** Executes this instruction, reading values from the stack and writing to
+   * the stack.
+   *
+   * <p>Returns 0 as a placeholder. */
+  default int exec(Stack stack) {
+    throw new UnsupportedOperationException(this + "");
+  }
 
   /** Converts this Applicable to a Code that has similar effect
    * (but is less efficient). */
@@ -35,7 +43,7 @@ public interface Applicable extends Describable {
             d.arg("applicable", Applicable.this));
       }
 
-      @Override public Object eval(EvalEnv env) {
+      @Override public Object eval(Stack env) {
         return Applicable.this;
       }
 

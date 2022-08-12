@@ -612,6 +612,46 @@ public class MainTest {
     ml(ml).assertType("xx");
   }
 
+  @SuppressWarnings("ConstantConditions")
+  @Test void testDummy() {
+    switch (0) {
+    case 0:
+      ml("1").assertEval(is(1));
+      // fall through
+    case 1:
+      ml("1 + 2").assertEval(is(3));
+      // fall through
+    case 2:
+      ml("1 + 2 + 3").assertEval(is(6));
+      // fall through
+    case 3:
+      ml("1 * 2 + 3 * 4").assertEval(is(14));
+      // fall through
+    case 4:
+      ml("let val x = 1 in x + 2 end")
+          .with(Prop.INLINE_PASS_COUNT, 0)
+          .assertEval(is(3));
+      // fall through
+    case 5:
+      ml("let val x = 1 and y = 2 in 7 end")
+          .with(Prop.INLINE_PASS_COUNT, 0)
+          .assertEval(is(7));
+      // fall through
+    case 6:
+      ml("let val x = 1 and y = 2 in x + y + 4 end")
+          .with(Prop.INLINE_PASS_COUNT, 0)
+          .assertEval(is(7));
+      // fall through
+    case 7:
+      ml("(not (true andalso false))").assertEval(is(true));
+      // fall through
+    case 8:
+      ml("let val x = 1 and y = 2 and z = true and a = \"foo\" in\n"
+          + "  if z then x else y\n"
+          + "end").assertEval(is(1));
+    }
+  }
+
   @Test void testEval() {
     // literals
     ml("1").assertEval(is(1));
@@ -883,8 +923,8 @@ public class MainTest {
         + "end";
     // With inlining, we want the plan to simplify to "fn i => false"
     final String plan = "match(i, andalso(apply2("
-        + "fnValue =, get(name i), constant(10)), "
-        + "apply2(fnValue =, get(name i), constant(0))))";
+        + "fnValue =, stack(offset 1, name i), constant(10)), "
+        + "apply2(fnValue =, stack(offset 1, name i), constant(0))))";
     ml(ml)
         .assertEval(whenAppliedTo(0, is(false)))
         .assertEval(whenAppliedTo(10, is(false)))
@@ -906,8 +946,10 @@ public class MainTest {
     // "fn (a, b, c) => (a + b) * 3 - c"
     final String plan = "match(v0, apply(fnCode match((a, b, c), "
         + "apply2(fnValue -, apply2(fnValue *, "
-        + "apply2(fnValue +, get(name a), get(name b)), "
-        + "constant(3)), get(name c))), argCode get(name v0)))";
+        + "apply2(fnValue +, stack(offset 3, name a), "
+        + "stack(offset 2, name b)), "
+        + "constant(3)), stack(offset 1, name c))), "
+        + "argCode stack(offset 1, name v0)))";
     ml(ml)
         // g (4, 3, 2) = (4 + 3) * 3 - 2 = 19
         .assertEval(whenAppliedTo(list(4, 3, 2), is(19)))
@@ -948,6 +990,19 @@ public class MainTest {
         // result should be x + a = (1 + 2) + 7 = 10
         // if 'a' were wrongly captured, result would be (7 + 2) + 7 = 16
         .assertEval(whenAppliedTo(list(1, 2), is(10)));
+  }
+
+  @Test void testDeepRecursion() {
+    final String ml = "let\n"
+        + "  fun resum (m, n) =\n"
+        + "    if m = 0 then\n"
+        + "      n\n"
+        + "    else\n"
+        + "      resum (m - 1, n + 1)\n"
+        + "in\n"
+        + "  resum (1000, 0)\n"
+        + "end";
+    ml(ml).assertEval(is(1000));
   }
 
   @Test void testMutualRecursion() {
