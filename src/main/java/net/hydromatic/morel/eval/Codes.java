@@ -68,6 +68,8 @@ import java.util.stream.Collectors;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+import static net.hydromatic.morel.util.Pair.zip;
+import static net.hydromatic.morel.util.Static.toImmutableList;
 import static net.hydromatic.morel.util.Static.transform;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -334,6 +336,31 @@ public abstract class Codes {
     }
   }
 
+  /** Returns the list of constituent codes from a {@code code}
+   * created from {@link #tuple(Iterable)}
+   * or {@link #getStackTuple(List, List)}
+   * or {@link #getTuple(Iterable)}. */
+  public static @Nullable List<Code> tupleCodes(Code code) {
+    if (code instanceof TupleCode) {
+      return ((TupleCode) code).codes;
+    } else if (code instanceof StackTupleCode) {
+      StackTupleCode stackTupleCode = (StackTupleCode) code;
+      final ImmutableList.Builder<Code> builder = ImmutableList.builder();
+      return zip(stackTupleCode.offsets, stackTupleCode.names)
+          .stream()
+          .map(pair -> getStack(pair.left, pair.right))
+          .collect(toImmutableList());
+    } else if (code instanceof GetTupleCode) {
+      GetTupleCode getTupleCode = (GetTupleCode) code;
+      return getTupleCode.names
+          .stream()
+          .map(Codes::get)
+          .collect(toImmutableList());
+    } else {
+      return null;
+    }
+  }
+
   /** Implements {@link BuiltIn#INTERACT_USE}. */
   private static class InteractUse extends ApplicableImpl
       implements Positioned {
@@ -421,6 +448,14 @@ public abstract class Codes {
     return new GetTupleCode(ImmutableList.copyOf(names));
   }
 
+  /** Returns a Code that returns the tuple whose elements are at
+   * {@code offsets} from the top of the stack.
+   * {@code names} are for debugging purposes. */
+  public static Code getStackTuple(List<Integer> offsets, List<String> names) {
+    return new StackTupleCode(ImmutableList.copyOf(offsets),
+        ImmutableList.copyOf(names));
+  }
+
   public static Code let(List<Code> matchCodes, Code resultCode) {
     switch (matchCodes.size()) {
     case 0:
@@ -464,6 +499,28 @@ public abstract class Codes {
   }
 
   public static Code tuple(Iterable<? extends Code> codes) {
+    final List<Code> codeList = ImmutableList.copyOf(codes);
+    if (codeList.isEmpty()) {
+      return constant(Unit.INSTANCE);
+    }
+    if (codeList.stream().allMatch(c -> c instanceof StackCode)) {
+      final List<Integer> offsets = new ArrayList<>();
+      final List<String> names = new ArrayList<>();
+      codeList.forEach(c -> {
+        StackCode stackCode = (StackCode) c;
+        offsets.add(stackCode.offset);
+        names.add(stackCode.name);
+      });
+      return getStackTuple(offsets, names);
+    }
+    if (codeList.stream().allMatch(c -> c instanceof GetCode)) {
+      final List<String> names = new ArrayList<>();
+      codeList.forEach(c -> {
+        GetCode stackCode = (GetCode) c;
+        names.add(stackCode.name);
+      });
+      return getTuple(names);
+    }
     return new TupleCode(ImmutableList.copyOf(codes));
   }
 
@@ -2457,11 +2514,7 @@ public abstract class Codes {
         @SuppressWarnings("unchecked") final List<Object> vec =
             (List<Object>) arg;
         ImmutableList.Builder<Object> b = ImmutableList.builder();
-<<<<<<< HEAD
-        forEachIndexed(vec, (e, i) -> b.add(f.apply(env, FlatLists.of(i, e))));
-=======
-        Ord.forEach(vec, (e, i) -> b.add(f.apply(stack, FlatLists.of(i, e))));
->>>>>>> dd9b48d (start [MOREL-151] Stack-based execution and tail-call elimination)
+        forEachIndexed(vec, (e, i) -> b.add(f.apply(stack, FlatLists.of(i, e))));
         return b.build();
       }
     };
@@ -2703,12 +2756,13 @@ public abstract class Codes {
             (List<Object>) arg;
         final List<Object> argRows;
         if (argumentCode != null) {
-          final MutableEvalEnv env2 = stack.env.bindMutableArray(names);
+          final Stack.Mutator mutator = stack.bindMutableArray(names);
           argRows = new ArrayList<>(rows.size());
           for (Object row : rows) {
-            env2.set(row);
-            argRows.add(argumentCode.eval0(env2));
+            mutator.set(row);
+            argRows.add(argumentCode.eval(stack));
           }
+          mutator.close();
         } else if (names.size() != 1) {
           // Reconcile the fact that we internally represent rows as arrays when
           // we're buffering for "group", lists at other times.
@@ -2979,10 +3033,10 @@ public abstract class Codes {
    * <p>An inner class so that we can pick apart the results of multiply
    * defined functions: {@code fun f = ... and g = ...}.
    */
-  public static class TupleCode implements Code {
-    public final List<Code> codes;
+  private static class TupleCode implements Code {
+    final List<Code> codes;
 
-    private TupleCode(ImmutableList<Code> codes) {
+    TupleCode(ImmutableList<Code> codes) {
       this.codes = codes;
     }
 
@@ -3039,16 +3093,17 @@ public abstract class Codes {
     }
 
     public void accept(Stack stack) {
-      final MutableEvalEnv mutableEvalEnv = stack.env.bindMutablePat(pat);
       final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+      final Stack.Mutator mutator = stack.bindMutablePat(pat);
       for (Object element : elements) {
-        if (mutableEvalEnv.setOpt(element)) {
-          Boolean b = (Boolean) conditionCode.eval0(mutableEvalEnv);
+        if (mutator.setOpt(element)) {
+          Boolean b = (Boolean) conditionCode.eval(stack);
           if (b != null && b) {
-            rowSink.accept(stack); // TODO: was accept(mutableEvalEnv)
+            rowSink.accept(stack);
           }
         }
       }
+      mutator.close();
     }
 
     public List<Object> result(Stack stack) {
@@ -3093,7 +3148,6 @@ public abstract class Codes {
     final ImmutableList<Applicable> aggregateCodes;
     final RowSink rowSink;
     final ListMultimap<Object, Object> map = ArrayListMultimap.create();
-    final Object[] values;
 
     GroupRowSink(Code keyCode, ImmutableList<Applicable> aggregateCodes,
         ImmutableList<String> inNames, ImmutableList<String> keyNames,
@@ -3104,7 +3158,6 @@ public abstract class Codes {
       this.keyNames = requireNonNull(keyNames);
       this.outNames = requireNonNull(outNames);
       this.rowSink = requireNonNull(rowSink);
-      this.values = inNames.size() == 1 ? null : new Object[inNames.size()];
       checkArgument(isPrefix(keyNames, outNames));
     }
 
@@ -3123,30 +3176,28 @@ public abstract class Codes {
 
     public void accept(Stack stack) {
       if (inNames.size() == 1) {
-        map.put(keyCode.eval(stack), stack.env.getOpt(inNames.get(0)));
+        map.put(keyCode.eval(stack), stack.slots[stack.top - 1]);
       } else {
-        for (int i = 0; i < inNames.size(); i++) {
-          values[i] = stack.env.getOpt(inNames.get(i));
-        }
-        map.put(keyCode.eval(stack), values.clone());
+        map.put(keyCode.eval(stack),
+            Arrays.copyOfRange(stack.slots, stack.top - inNames.size(),
+                stack.top));
       }
     }
 
     public List<Object> result(final Stack stack) {
       // Derive env2, the environment for our consumer. It consists of our input
       // environment plus output names.
-      EvalEnv env2 = stack.env;
-      final MutableEvalEnv[] groupEnvs = new MutableEvalEnv[outNames.size()];
-      int i = 0;
-      for (String name : outNames) {
-        env2 = groupEnvs[i++] = env2.bindMutable(name);
+      final int save = stack.save();
+      final int[] groupEnvs = new int[outNames.size()];
+      for (int i = 0; i < outNames.size(); i++) {
+        groupEnvs[i] = stack.top++;
       }
+      final int env2 = stack.top;
 
       // Also derive env3, the environment wherein the aggregate functions are
       // evaluated.
-      final EvalEnv env3 =
-          keyNames.isEmpty() ? stack.env : groupEnvs[keyNames.size() - 1];
-      final Stack stack3 = Stack.of(env3);
+      final int env3 = save + keyNames.size();
+      stack.top = env3;
 
       final Map<Object, List<Object>> map2;
       if (map.isEmpty()
@@ -3160,16 +3211,23 @@ public abstract class Codes {
       }
       for (Map.Entry<Object, List<Object>> entry : map2.entrySet()) {
         final List list = (List) entry.getKey();
+        int i;
         for (i = 0; i < list.size(); i++) {
-          groupEnvs[i].set(list.get(i));
+          stack.slots[groupEnvs[i]] = list.get(i);
         }
         final List<Object> rows = entry.getValue(); // rows in this bucket
         for (Applicable aggregateCode : aggregateCodes) {
-          groupEnvs[i++].set(aggregateCode.apply(stack3, rows));
+          final int j = groupEnvs[i++];
+          stack.top = j + 1;
+          stack.slots[j] = aggregateCode.apply(stack, rows);
         }
-        rowSink.accept(stack); // TODO: was accept(env2)
+        stack.top = env2;
+        rowSink.accept(stack);
       }
-      return rowSink.result(stack);
+      stack.top = env3;
+      final List<Object> list = rowSink.result(stack);
+      stack.restore(save);
+      return list;
     }
   }
 
@@ -3179,14 +3237,12 @@ public abstract class Codes {
     final ImmutableList<String> names;
     final RowSink rowSink;
     final List<Object> rows = new ArrayList<>();
-    final Object[] values;
 
     OrderRowSink(ImmutablePairList<Code, Boolean> codes,
         ImmutableList<String> names, RowSink rowSink) {
       this.codes = codes;
       this.names = names;
       this.rowSink = rowSink;
-      this.values = names.size() == 1 ? null : new Object[names.size()];
     }
 
     @Override public Describer describe(Describer describer) {
@@ -3197,25 +3253,24 @@ public abstract class Codes {
     }
 
     public void accept(Stack stack) {
-      if (values == null) {
-        rows.add(stack.env.getOpt(names.get(0)));
+      if (names.size() == 1) {
+        rows.add(stack.slots[stack.top - 1]);
       } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = stack.env.getOpt(names.get(i));
-        }
-        rows.add(values.clone());
+        rows.add(
+            Arrays.copyOfRange(stack.slots, stack.top - names.size(),
+                stack.top));
       }
     }
 
     public List<Object> result(final Stack stack) {
-      final MutableEvalEnv leftEnv = stack.env.bindMutableArray(names);
-      final MutableEvalEnv rightEnv = stack.env.bindMutableArray(names);
+      final int save = stack.save();
+      stack.top++;
       rows.sort((left, right) -> {
-        leftEnv.set(left);
-        rightEnv.set(right);
         for (Map.Entry<Code, Boolean> code : codes) {
-          final Comparable leftVal = (Comparable) code.getKey().eval0(leftEnv);
-          final Comparable rightVal = (Comparable) code.getKey().eval0(rightEnv);
+          stack.slots[save] = left;
+          final Comparable leftVal = (Comparable) code.getKey().eval(stack);
+          stack.slots[save] = right;
+          final Comparable rightVal = (Comparable) code.getKey().eval(stack);
           int c = leftVal.compareTo(rightVal);
           if (c != 0) {
             return code.getValue() ? -c : c;
@@ -3224,10 +3279,12 @@ public abstract class Codes {
         return 0;
       });
       for (Object row : rows) {
-        leftEnv.set(row);
-        rowSink.accept(stack); // TODO: was accept(leftEnv)
+        stack.slots[save] = row;
+        rowSink.accept(stack);
       }
-      return rowSink.result(stack);
+      final List<Object> list = rowSink.result(stack);
+      stack.restore(save);
+      return list;
     }
   }
 
@@ -3239,14 +3296,12 @@ public abstract class Codes {
    * expressions (e.g. {@code int} expressions) do not have a name, and
    * therefore the value cannot be passed via the {@link EvalEnv}. */
   private static class YieldRowSink implements RowSink {
-    private final ImmutableList<String> names;
     private final ImmutableList<Code> codes;
     private final RowSink rowSink;
     private final Object[] values;
 
     YieldRowSink(ImmutableList<String> names, ImmutableList<Code> codes,
         RowSink rowSink) {
-      this.names = names;
       this.codes = codes;
       this.rowSink = rowSink;
       this.values = names.size() == 1 ? null : new Object[names.size()];
@@ -3259,17 +3314,19 @@ public abstract class Codes {
     }
 
     @Override public void accept(Stack stack) {
-      final MutableEvalEnv env2 = stack.env.bindMutableArray(names);
+      final int save = stack.save();
       if (values == null) {
         final Object value = codes.get(0).eval(stack);
-        env2.set(value);
+        stack.slots[save] = value;
       } else {
         for (int i = 0; i < codes.size(); i++) {
           values[i] = codes.get(i).eval(stack);
         }
-        env2.set(values);
+        stack.slots[save] = values.clone();
       }
-      rowSink.accept(stack); // TODO was accept(env2)
+      stack.top++;
+      rowSink.accept(stack);
+      stack.restore(save);
     }
 
     @Override public List<Object> result(Stack stack) {
@@ -3343,6 +3400,35 @@ public abstract class Codes {
 
     @Override public Object eval(Stack stack) {
       return stack.slots[stack.top - offset];
+    }
+  }
+
+  /** Code that retrieves the values of several variables from the stack. */
+  private static class StackTupleCode implements Code {
+    private final List<Integer> offsets;
+    private final List<String> names;
+
+    StackTupleCode(ImmutableList<Integer> offsets,
+        ImmutableList<String> names) {
+      this.offsets = requireNonNull(offsets);
+      this.names = requireNonNull(names);
+    }
+
+    @Override public Describer describe(Describer describer) {
+      return describer.start("stack", d ->
+          d.arg("offsets", offsets).arg("names", names));
+    }
+
+    @Override public String toString() {
+      return "stack(" + offsets + ", " + names + ")";
+    }
+
+    @Override public Object eval(Stack stack) {
+      ImmutableList.Builder<Object> b = ImmutableList.builder();
+      for (int offset : offsets) {
+        b.add(stack.slots[stack.top - offset]);
+      }
+      return b.build();
     }
   }
 

@@ -18,6 +18,10 @@
  */
 package net.hydromatic.morel.eval;
 
+import net.hydromatic.morel.ast.Core;
+
+import java.util.List;
+
 /** Where all the data lives at runtime.
  *
  * <p>It should be called a stack, or an environment, or something.
@@ -71,6 +75,62 @@ public final class Stack {
     stack.top = top;
     return stack;
   }
+
+  public Mutator bindMutablePat(Core.Pat pat) {
+    return new SingletonMutator();
+  }
+
+  public Mutator bindMutableArray(List<String> names) {
+    if (names.size() == 1) {
+      return new SingletonMutator();
+    } else {
+      return new ArrayMutator(names);
+    }
+  }
+
+  /** Assigns elements to a region of this Stack. */
+  public abstract class Mutator {
+    public abstract boolean setOpt(Object element);
+    public abstract void close();
+
+    public void set(Object row) {
+      setOpt(row);
+    }
+  }
+
+  /** Assigns elements to a region of this Stack. */
+  public class SingletonMutator extends Mutator {
+    final int i = top++;
+
+    @Override public boolean setOpt(Object element) {
+      slots[i] = element;
+      return true;
+    }
+
+    @Override public void close() {
+      --top;
+    }
+  }
+
+  public class ArrayMutator extends Mutator {
+    final int save;
+    final List<String> names;
+
+    public ArrayMutator(List<String> names) {
+      this.names = names;
+      save = top;
+      top += names.size();
+    }
+
+    @Override public boolean setOpt(Object element) {
+      System.arraycopy(element, 0, slots, save, names.size());
+      return true;
+    }
+
+    @Override public void close() {
+      top = save;
+    }
+  }
 }
 
-// End Heap.java
+// End Stack.java
