@@ -3704,10 +3704,7 @@ public abstract class Codes {
     @Override public Object eval(Stack stack) {
       final Object arg0 = argCode0.eval(stack);
       final Object arg1 = argCode1.eval(stack);
-      stack.push(arg0);
-      stack.push(arg1);
-      fnValue.exec(stack);
-      return stack.pop();
+      return fnValue.apply(arg0, arg1);
     }
 
     @Override public Describer describe(Describer describer) {
