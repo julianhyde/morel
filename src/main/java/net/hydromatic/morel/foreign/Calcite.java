@@ -194,8 +194,8 @@ public class Calcite {
     }
 
     @Override public Object eval(Stack stack) {
-      return ThreadLocals.let(CalciteFunctions.THREAD_EVAL_ENV,
-          stack.env, () ->
+      return ThreadLocals.let(CalciteFunctions.THREAD_STACK,
+          stack, () ->
               ThreadLocals.mutate(CalciteFunctions.THREAD_ENV,
                   c -> c.withEnv(env),
                   () -> {
