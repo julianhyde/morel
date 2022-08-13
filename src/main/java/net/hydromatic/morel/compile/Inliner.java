@@ -23,6 +23,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.FnType;
@@ -39,6 +40,7 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
  * Shuttle that inlines constant values.
  */
 public class Inliner extends EnvShuttle {
+  private final Stack emptyStack = Stack.of(Compiler.EMPTY_ENV);
   private final @Nullable Analyzer.Analysis analysis;
 
   /** Private constructor. */
@@ -101,7 +103,7 @@ public class Inliner extends EnvShuttle {
 
         default:
           if (v instanceof Code) {
-            v = ((Code) v).eval0(Compiler.EMPTY_ENV);
+            v = ((Code) v).eval(emptyStack);
           }
           return core.valueLiteral(id, v);
         }

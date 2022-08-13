@@ -3634,12 +3634,6 @@ public abstract class Codes {
           d.arg("matchCode", matchCode).arg("resultCode", resultCode));
     }
 
-    @Override public Object eval0(EvalEnv env) {
-      final Closure fnValue = (Closure) matchCode.eval0(env);
-      EvalEnv env2 = fnValue.evalBind(env);
-      return resultCode.eval0(env2);
-    }
-
     @Override public Object eval(Stack stack) {
       final Closure fnValue = (Closure) matchCode.eval(stack);
       int unused = fnValue.execBind(stack);
@@ -3665,15 +3659,6 @@ public abstract class Codes {
       });
     }
 
-    @Override public Object eval0(EvalEnv evalEnv) {
-      EvalEnv evalEnv2 = evalEnv;
-      for (Code matchCode : matchCodes) {
-        final Closure fnValue = (Closure) matchCode.eval0(evalEnv);
-        evalEnv2 = fnValue.evalBind(evalEnv2);
-      }
-      return resultCode.eval0(evalEnv2);
-    }
-
     @Override public Object eval(Stack stack) {
       for (Code matchCode : matchCodes) {
         final Closure fnValue = (Closure) matchCode.eval(stack);
@@ -3691,11 +3676,6 @@ public abstract class Codes {
     ApplyCode(Applicable fnValue, Code argCode) {
       this.fnValue = fnValue;
       this.argCode = argCode;
-    }
-
-    @Override public Object eval0(EvalEnv env) {
-      final Object arg = argCode.eval0(env);
-      return fnValue.apply(Stack.of(env), arg);
     }
 
     @Override public Object eval(Stack stack) {
@@ -3719,12 +3699,6 @@ public abstract class Codes {
       this.fnValue = fnValue;
       this.argCode0 = argCode0;
       this.argCode1 = argCode1;
-    }
-
-    @Override public Object eval0(EvalEnv env) {
-      final Object arg0 = argCode0.eval0(env);
-      final Object arg1 = argCode1.eval0(env);
-      return fnValue.apply(arg0, arg1);
     }
 
     @Override public Object eval(Stack stack) {
@@ -3791,12 +3765,6 @@ public abstract class Codes {
     @Override public Describer describe(Describer describer) {
       return describer.start("apply",
           d -> d.arg("fnCode", fnCode).arg("argCode", argCode));
-    }
-
-    @Override public Object eval0(EvalEnv env) {
-      final Applicable fnValue = (Applicable) fnCode.eval0(env);
-      final Object arg = argCode.eval0(env);
-      return fnValue.apply(Stack.of(env), arg);
     }
 
     @Override public Object eval(Stack stack) {
