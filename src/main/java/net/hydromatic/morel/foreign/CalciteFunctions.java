@@ -28,7 +28,6 @@ import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
-import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.parse.MorelParserImpl;
@@ -87,7 +86,7 @@ public class CalciteFunctions {
    * Calcite-to-Morel (see {@link Calcite#code}) and
    * Morel-to-Calcite (see {@link #TABLE_OPERATOR} and {@link #SCALAR_OPERATOR})
    * boundaries. */
-  public static final ThreadLocal<EvalEnv> THREAD_EVAL_ENV =
+  public static final ThreadLocal<Stack> THREAD_STACK =
       new ThreadLocal<>();
 
   private CalciteFunctions() {
@@ -177,7 +176,7 @@ public class CalciteFunctions {
         }
 
         @Override public Enumerable<Object[]> scan(DataContext root) {
-          Object v = compiled.code.eval0(compiled.evalEnv);
+          Object v = compiled.code.eval(compiled.stack);
           return compiled.f.apply(v);
         }
 
@@ -203,13 +202,13 @@ public class CalciteFunctions {
     /** Compiled state. */
     private static class Compiled {
       final Code code;
-      final EvalEnv evalEnv;
+      final Stack stack;
       final Function<Object, Enumerable<Object[]>> f;
 
-      Compiled(String ml, Code code, EvalEnv evalEnv,
+      Compiled(String ml, Code code, Stack stack,
           Function<Object, Enumerable<Object[]>> f) {
         this.code = code;
-        this.evalEnv = evalEnv;
+        this.stack = stack;
         this.f = f;
       }
 
@@ -232,7 +231,7 @@ public class CalciteFunctions {
         final Core.Exp e3 = Compiles.toExp(valDecl3);
         final Compiler compiler = new Compiler(typeSystem);
         return new Compiled(ml, compiler.compile(env, e3),
-            Codes.emptyEnvWith(session, env),
+            Stack.of(Codes.emptyEnvWith(session, env)),
             Converters.toCalciteEnumerable(e3.type, typeFactory));
       }
     }
@@ -265,8 +264,8 @@ public class CalciteFunctions {
           this.compiled != null ? this.compiled
               : new Compiled(cx.env, cx.typeSystem, cx.typeFactory, ml,
                   typeJson);
-      final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
-      Object v = compiled.code.eval0(evalEnv);
+      final Stack stack = THREAD_STACK.get();
+      Object v = compiled.code.eval(stack);
       return compiled.f.apply(v);
     }
 
@@ -323,9 +322,9 @@ public class CalciteFunctions {
           this.compiled != null ? this.compiled
               : new Compiled(morelArgTypeJson, cx.typeFactory, cx.typeSystem);
       final Closure fn = (Closure) closure;
-      final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
+      final Stack stack = THREAD_STACK.get();
       final Object o = compiled.converter.apply(arg);
-      return fn.apply(Stack.of(evalEnv), o);
+      return fn.apply(stack, o);
     }
 
     /** Compiled state. */
