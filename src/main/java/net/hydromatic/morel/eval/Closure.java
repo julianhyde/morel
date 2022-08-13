@@ -86,21 +86,8 @@ public class Closure implements Comparable<Closure>, Applicable {
     throw new AssertionError("no match");
   }
 
-  /** Similar to {@link #bind}, but evaluates an expression first. */
-  EvalEnv evalBind(EvalEnv env) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(env);
-    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Object argValue = patCode.getValue().eval0(env);
-      final Core.Pat pat = patCode.getKey();
-      if (bindRecurse(pat, argValue, envRef)) {
-        return envRef.env;
-      }
-    }
-    throw new AssertionError("no match");
-  }
-
-  /** Similar to
-   * {@link #evalBind(EvalEnv)} but reads the values it needs from
+  /** Similar to {@link #bind(Object)} but evaluates an expression first.
+   * Reads the values it needs from
    * the stack, and writes the result to the stack. */
   public int execBind(Stack stack) {
     final int top = stack.save();
@@ -116,19 +103,6 @@ public class Closure implements Comparable<Closure>, Applicable {
   }
 
   /** Similar to {@link #bind}, but also evaluates. */
-  Object bindEval(Object argValue) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(this.stack.env);
-    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Core.Pat pat = patCode.getKey();
-      if (bindRecurse(pat, argValue, envRef)) {
-        final Code code = patCode.getValue();
-        return code.eval0(envRef.env);
-      }
-    }
-    throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
-  }
-
-  /** Similar to {@link #bindEval(Object)}, but uses a stack. */
   @Override public int exec(Stack stack) {
     final Object argValue = stack.pop();
     final Stack s = this.stack; // use the internal environment
