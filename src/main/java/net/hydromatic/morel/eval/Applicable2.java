@@ -77,17 +77,6 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl {
     return apply((A0) list.get(0), (A1) list.get(1));
   }
 
-  @Override public int exec(Stack stack) {
-    final int i1 = --stack.top;
-    final int i0 = i1 - 1;
-    final A1 a1 = (A1) stack.slots[i1];
-    final A0 a0 = (A0) stack.slots[i0];
-    final R result = apply(a0, a1);
-    stack.slots[i1] = null; // enable gc
-    stack.slots[i0] = result;
-    return 0;
-  }
-
   public abstract R apply(A0 a0, A1 a1);
 }
 

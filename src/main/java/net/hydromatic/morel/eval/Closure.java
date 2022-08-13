@@ -101,9 +101,7 @@ public class Closure implements Comparable<Closure>, Applicable {
     throw new AssertionError("no match");
   }
 
-  /** Similar to {@link #bind}, but also evaluates. */
-  @Override public int exec(Stack stack) {
-    final Object argValue = stack.pop();
+  @Override public Object apply(Stack stack, Object argValue) {
     final Stack s = this.stack; // use the internal environment
     final int top = s.save();
     for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
@@ -112,18 +110,11 @@ public class Closure implements Comparable<Closure>, Applicable {
         final Code code = patCode.getValue();
         final Object o = code.eval(s);
         s.restore(top);
-        stack.push(o);
-        return 0;
+        return o;
       }
       s.restore(top);
     }
     throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
-  }
-
-  @Override public Object apply(Stack stack, Object argValue) {
-    stack.push(argValue);
-    exec(stack); // TODO: inline exec method here
-    return stack.pop();
   }
 
   @Override public Describer describe(Describer describer) {
