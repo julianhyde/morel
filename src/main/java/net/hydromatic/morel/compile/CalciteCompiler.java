@@ -237,7 +237,8 @@ public class CalciteCompiler extends Compiler {
         case RECORD_SELECTOR:
           if (apply.arg instanceof Core.Id) {
             // Something like '#emp scott', 'scott' is a foreign value
-            final Object o = code.eval0(evalEnvOf(cx.env));
+            Stack stack = Stack.of(evalEnvOf(cx.env));
+            final Object o = code.eval(stack);
             if (o instanceof RelList) {
               cx.relBuilder.push(((RelList) o).rel);
               return true;
