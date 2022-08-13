@@ -776,9 +776,9 @@ public class Compiler {
       });
     }
 
-    public Object eval(Stack env) {
+    public Object eval(Stack stack) {
       assert refCode != null; // link should have completed by now
-      return refCode.eval(env);
+      return refCode.eval(stack);
     }
   }
 
