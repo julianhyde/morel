@@ -615,7 +615,7 @@ public class MainTest {
 
   @SuppressWarnings("ConstantConditions")
   @Test void testDummy() {
-    switch (0) {
+    switch (9) {
     case 0:
       ml("1").assertEval(is(1));
       // fall through
@@ -650,6 +650,12 @@ public class MainTest {
       ml("let val x = 1 and y = 2 and z = true and a = \"foo\" in\n"
           + "  if z then x else y\n"
           + "end").assertEval(is(1));
+      // fall through
+    case 9:
+      ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
+          + "group a = e.x\n"
+          + "compute b = sum of e.y, c = sum of e.x")
+          .assertEvalIter(equalsUnordered(list(0, 1, 0), list(1, 6, 2)));
     }
   }
 
@@ -2359,11 +2365,11 @@ public class MainTest {
         + " yield {a = a, a2 = a + a, sb = sb}";
     final String plan = "from("
         + "sink join(op join, pat r, exp tuple(tuple(constant(2), constant(3))), "
-        + "sink group(key tuple(apply(fnValue nth:0, argCode get(name r))), "
+        + "sink group(key tuple(apply(fnValue nth:0, argCode stack(offset 1, name r))), "
         + "agg aggregate, "
-        + "sink collect(tuple(get(name a), "
-        + "apply2(fnValue +, get(name a), get(name a)), "
-        + "get(name sb))))))";
+        + "sink collect(tuple(stack(offset 2, name a), "
+        + "apply2(fnValue +, stack(offset 2, name a), stack(offset 2, name a)), "
+        + "stack(offset 1, name sb))))))";
     ml(ml).assertParse(expected)
         .assertEvalIter(equalsOrdered(list(2, 4, 3)))
         .assertPlan(isCode(plan));
