@@ -246,15 +246,7 @@ public class Compiler {
 
     case ID:
       final Core.Id id = (Core.Id) expression;
-      final Binding binding = cx.env.getOpt(id.idPat.name);
-      if (binding != null && binding.value instanceof Code) {
-        return (Code) binding.value;
-      }
-      final int distance = cx.env.distance(0, id.idPat.name);
-      if (distance >= 0) {
-        return Codes.getStack(distance + 1, id.idPat.name);
-      }
-      return Codes.get(id.idPat.name);
+      return compileFieldName(cx, id.idPat.name);
 
     case TUPLE:
       final Core.Tuple tuple = (Core.Tuple) expression;
@@ -267,6 +259,24 @@ public class Compiler {
     default:
       throw new AssertionError("op not handled: " + expression.op);
     }
+  }
+
+  private Code compileFieldName(Context cx, String name) {
+    final Binding binding = cx.env.getOpt(name);
+    if (binding != null && binding.value instanceof Code) {
+      return (Code) binding.value;
+    }
+    final int distance = cx.env.distance(0, name);
+    if (distance >= 0) {
+      return Codes.getStack(distance + 1, name);
+    }
+    return Codes.get(name);
+  }
+
+  private Code compileFieldNames(Context cx, List<String> fieldNames) {
+    return Codes.tuple(fieldNames.stream()
+        .map(fieldName -> compileFieldName(cx, fieldName))
+        .collect(Collectors.toList()));
   }
 
   protected Code compileApply(Context cx, Core.Apply apply) {
@@ -316,9 +326,9 @@ public class Compiler {
       final Code code;
       if (fieldNames.size() == 1
           && getOnlyElement(bindings).id.type.equals(elementType)) {
-        code = Codes.get(fieldNames.get(0));
+        code = compileFieldName(cx, fieldNames.get(0));
       } else {
-        code = Codes.getTuple(fieldNames);
+        code = compileFieldNames(cx, fieldNames);
       }
       return () -> Codes.collectRowSink(code);
     }
@@ -575,22 +585,22 @@ public class Compiler {
       }
       if (o instanceof Applicable) {
         final Code argCode = compile(cx, arg);
-        if (argCode instanceof Codes.TupleCode) {
-          final Codes.TupleCode tupleCode = (Codes.TupleCode) argCode;
-          if (tupleCode.codes.size() == 2
+        final List<Code> codes = Codes.tupleCodes(argCode);
+        if (codes != null) {
+          if (codes.size() == 2
               && o instanceof Applicable2) {
             //noinspection rawtypes
             return Codes.apply2((Applicable2) o,
-                tupleCode.codes.get(0),
-                tupleCode.codes.get(1));
+                codes.get(0),
+                codes.get(1));
           }
-          if (tupleCode.codes.size() == 3
+          if (codes.size() == 3
               && o instanceof Applicable3) {
             //noinspection rawtypes
             return Codes.apply3((Applicable3) o,
-                tupleCode.codes.get(0),
-                tupleCode.codes.get(1),
-                tupleCode.codes.get(2));
+                codes.get(0),
+                codes.get(1),
+                codes.get(2));
           }
         }
         return Codes.apply((Applicable) o, argCode);
@@ -739,9 +749,9 @@ public class Compiler {
         linkCode.refCode = code; // link the reference to the definition
       }
     } else if (pat instanceof Core.TuplePat) {
-      if (code instanceof Codes.TupleCode) {
+      final List<Code> codes = Codes.tupleCodes(code);
+      if (codes != null) {
         // Recurse into the tuple, binding names to code in parallel
-        final List<Code> codes = ((Codes.TupleCode) code).codes;
         final List<Core.Pat> pats = ((Core.TuplePat) pat).args;
         Pair.forEach(codes, pats, (code1, pat1) ->
             link(linkCodes, pat1, code1));
