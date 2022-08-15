@@ -203,8 +203,8 @@ public class CalciteCompiler extends Compiler {
         return false;
       }
 
-      @Override public Object eval(Stack stack) {
-        return code.eval(stack);
+      @Override public int exec(Stack stack) {
+        return code.exec(stack);
       }
 
       @Override public Describer describe(Describer describer) {
@@ -224,8 +224,8 @@ public class CalciteCompiler extends Compiler {
         return code.describe(describer);
       }
 
-      @Override public Object eval(Stack stack) {
-        return code.eval(stack);
+      @Override public int exec(Stack stack) {
+        return code.exec(stack);
       }
 
       @Override public boolean toRel(RelContext cx, boolean aggressive) {
@@ -375,8 +375,8 @@ public class CalciteCompiler extends Compiler {
         return code.describe(describer);
       }
 
-      @Override public Object eval(Stack stack) {
-        return code.eval(stack);
+      @Override public int exec(Stack stack) {
+        return code.exec(stack);
       }
 
       @Override public boolean toRel(RelContext cx, boolean aggressive) {
@@ -847,8 +847,8 @@ public class CalciteCompiler extends Compiler {
           return code.describe(describer);
         }
 
-        @Override public Object eval(Stack stack) {
-          return code.eval(stack);
+        @Override public int exec(Stack stack) {
+          return code.exec(stack);
         }
 
         @Override public boolean toRel(RelContext cx, boolean aggressive) {
