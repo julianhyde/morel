@@ -234,6 +234,10 @@ public class Compiler {
           ImmutableList.of(core.match(fn.pos, fn.idPat, fn.exp)));
 
     case CASE:
+      // TODO: compile 'case b of true => e1 | _ => e2'
+      //   to something more like 'if'
+      // TODO: compile 'case v of (m, n) => e'
+      //   to push variables onto stack
       final Core.Case case_ = (Core.Case) expression;
       final Code matchCode = compileMatchList(cx, case_.matchList);
       argCode = compile(cx, case_.exp);
@@ -716,7 +720,8 @@ public class Compiler {
           final List<String> outs = new ArrayList<>();
           try {
             final Stack stack = Stack.of(evalEnv);
-            final Object o = code.eval(stack);
+            final int status = code.exec(stack);
+            final Object o = stack.pop();
             final Map<Core.NamedPat, Object> pairs = new LinkedHashMap<>();
             if (!Closure.bindRecurse(pat.withType(type), o, pairs::put)) {
               throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
@@ -825,9 +830,9 @@ public class Compiler {
       });
     }
 
-    public Object eval(Stack stack) {
+    @Override public int exec(Stack stack) {
       assert refCode != null; // link should have completed by now
-      return refCode.eval(stack);
+      return refCode.exec(stack);
     }
   }
 
