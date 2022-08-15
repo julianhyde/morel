@@ -22,7 +22,18 @@ package net.hydromatic.morel.eval;
 public interface Code extends Describable {
   /** Executes this expression, reading the values it needs from the stack, and
    * returns the result. Does not push the result onto the stack. */
-  Object eval(Stack stack);
+  default Object eval(Stack stack) {
+    int status = exec(stack);
+    return stack.pop();
+  }
+
+  /** Executes this expression, reading the values it needs from the stack,
+   * leaving the result on the stack. */
+  default int exec(Stack stack) {
+    Object o = eval(stack);
+    stack.push(o);
+    return 0;
+  }
 
   default boolean isConstant() {
     return false;

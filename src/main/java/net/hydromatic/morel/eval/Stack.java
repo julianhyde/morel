@@ -19,8 +19,14 @@
 package net.hydromatic.morel.eval;
 
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.util.Pair;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+
+import static net.hydromatic.morel.util.Static.skip;
 
 /** Where all the data lives at runtime.
  *
@@ -77,58 +83,204 @@ public final class Stack {
   }
 
   public Mutator bindMutablePat(Core.Pat pat) {
-    return new SingletonMutator();
+    if (pat instanceof Core.IdPat) {
+      // Pattern is simple; use a simple implementation.
+      return new SingletonMutator(((Core.IdPat) pat).name);
+    }
+
+    // TODO: add a simple mutator for simple, unconditional patterns such as
+    // (x, y)
+
+    // TODO: compute the name list at compile time
+    final List<String> names = new ArrayList<>();
+    pat.accept(new Visitor() {
+      @Override protected void visit(Core.IdPat idPat) {
+        names.add(idPat.name);
+      }
+      @Override protected void visit(Core.AsPat asPat) {
+        names.add(asPat.name);
+        super.visit(asPat);
+      }
+    });
+    return new PatternMutator(pat, names);
   }
 
   public Mutator bindMutableArray(List<String> names) {
     if (names.size() == 1) {
-      return new SingletonMutator();
+      return new SingletonMutator(names.get(0));
     } else {
       return new ArrayMutator(names);
     }
   }
 
   /** Assigns elements to a region of this Stack. */
-  public abstract class Mutator {
-    public abstract boolean setOpt(Object element);
-    public abstract void close();
+  public abstract static class Mutator {
+    abstract boolean setOpt(Object element);
+    abstract void close();
 
-    public void set(Object row) {
-      setOpt(row);
+    void set(Object value) {
+      if (!setOpt(value)) {
+        // If this error happens, perhaps your code should be calling "setOpt"
+        // and handling a false result appropriately.
+        throw new AssertionError("bind failed");
+      }
     }
   }
 
   /** Assigns elements to a region of this Stack. */
-  public class SingletonMutator extends Mutator {
+  class SingletonMutator extends Mutator {
     final int i = top++;
 
-    @Override public boolean setOpt(Object element) {
+    SingletonMutator(String name) {
+      // TODO: we don't need 'name'
+    }
+
+    @Override boolean setOpt(Object element) {
       slots[i] = element;
       return true;
     }
 
-    @Override public void close() {
+    @Override void close() {
       --top;
     }
   }
 
-  public class ArrayMutator extends Mutator {
+  class ArrayMutator extends Mutator {
     final int save;
     final List<String> names;
 
-    public ArrayMutator(List<String> names) {
+    ArrayMutator(List<String> names) {
       this.names = names;
       save = top;
       top += names.size();
     }
 
-    @Override public boolean setOpt(Object element) {
+    @Override boolean setOpt(Object element) {
       System.arraycopy(element, 0, slots, save, names.size());
       return true;
     }
 
-    @Override public void close() {
+    @Override void close() {
       top = save;
+    }
+  }
+
+  class PatternMutator extends Mutator {
+    private final Core.Pat pat;
+    private final int base;
+    private int i;
+
+    PatternMutator(Core.Pat pat, List<String> names) {
+      this.pat = pat;
+      this.base = top;
+      top += names.size();
+    }
+
+    @Override void close() {
+      top = base;
+    }
+
+    @Override boolean setOpt(Object value) {
+      i = 0;
+      return bindRecurse(pat, value);
+    }
+
+    private boolean bindRecurse(Core.Pat pat, Object argValue) {
+      final List<Object> listValue;
+      final Core.LiteralPat literalPat;
+      switch (pat.op) {
+      case ID_PAT:
+        slots[i++] = argValue;
+        return true;
+
+      case AS_PAT:
+        final Core.AsPat asPat = (Core.AsPat) pat;
+        final int oldSlot = i++;
+        if (bindRecurse(asPat.pat, argValue)) {
+          slots[oldSlot] = argValue;
+          return true;
+        } else {
+          return false;
+        }
+
+      case WILDCARD_PAT:
+        return true;
+
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+        literalPat = (Core.LiteralPat) pat;
+        return literalPat.value.equals(argValue);
+
+      case INT_LITERAL_PAT:
+        literalPat = (Core.LiteralPat) pat;
+        return ((BigDecimal) literalPat.value).intValue() == (Integer) argValue;
+
+      case REAL_LITERAL_PAT:
+        literalPat = (Core.LiteralPat) pat;
+        return ((BigDecimal) literalPat.value).doubleValue() == (Double) argValue;
+
+      case TUPLE_PAT:
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        listValue = (List) argValue;
+        for (Pair<Core.Pat, Object> pair : Pair.zip(tuplePat.args, listValue)) {
+          if (!bindRecurse(pair.left, pair.right)) {
+            return false;
+          }
+        }
+        return true;
+
+      case RECORD_PAT:
+        final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        listValue = (List) argValue;
+        for (Pair<Core.Pat, Object> pair
+            : Pair.zip(recordPat.args, listValue)) {
+          if (!bindRecurse(pair.left, pair.right)) {
+            return false;
+          }
+        }
+        return true;
+
+      case LIST_PAT:
+        final Core.ListPat listPat = (Core.ListPat) pat;
+        listValue = (List) argValue;
+        if (listValue.size() != listPat.args.size()) {
+          return false;
+        }
+        for (Pair<Core.Pat, Object> pair : Pair.zip(listPat.args, listValue)) {
+          if (!bindRecurse(pair.left, pair.right)) {
+            return false;
+          }
+        }
+        return true;
+
+      case CONS_PAT:
+        final Core.ConPat infixPat = (Core.ConPat) pat;
+        @SuppressWarnings("unchecked") final List<Object> consValue =
+            (List) argValue;
+        if (consValue.isEmpty()) {
+          return false;
+        }
+        final Object head = consValue.get(0);
+        final List<Object> tail = skip(consValue);
+        List<Core.Pat> patArgs = ((Core.TuplePat) infixPat.pat).args;
+        return bindRecurse(patArgs.get(0), head)
+            && bindRecurse(patArgs.get(1), tail);
+
+      case CON0_PAT:
+        final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;
+        final List con0Value = (List) argValue;
+        return con0Value.get(0).equals(con0Pat.tyCon);
+
+      case CON_PAT:
+        final Core.ConPat conPat = (Core.ConPat) pat;
+        final List conValue = (List) argValue;
+        return conValue.get(0).equals(conPat.tyCon)
+            && bindRecurse(conPat.pat, conValue.get(1));
+
+      default:
+        throw new AssertionError("cannot compile " + pat.op + ": " + pat);
+      }
     }
   }
 }
