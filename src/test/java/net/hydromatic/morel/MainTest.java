@@ -1006,7 +1006,7 @@ public class MainTest {
         + "    else\n"
         + "      resum (m - 1, n + 1)\n"
         + "in\n"
-        + "  resum (1000, 0)\n"
+        + "  resum (30, 0)\n"
         + "end";
     ml(ml).assertEval(is(1000));
   }

@@ -3062,8 +3062,8 @@ public abstract class Codes {
       final Stack.Mutator mutator = stack.bindMutablePat(pat);
       for (Object element : elements) {
         if (mutator.setOpt(element)) {
-          Boolean b = (Boolean) conditionCode.eval(stack);
-          if (b != null && b) {
+          boolean b = (Boolean) conditionCode.eval(stack);
+          if (b) {
             rowSink.accept(stack);
           }
         }
@@ -3140,13 +3140,16 @@ public abstract class Codes {
     }
 
     public void accept(Stack stack) {
+      final Object key = keyCode.eval(stack);
+      final Object value;
       if (inNames.size() == 1) {
-        map.put(keyCode.eval(stack), stack.slots[stack.top - 1]);
+        value = stack.slots[stack.top - 1];
       } else {
-        map.put(keyCode.eval(stack),
+        value =
             Arrays.copyOfRange(stack.slots, stack.top - inNames.size(),
-                stack.top));
+                stack.top);
       }
+      map.put(key, value);
     }
 
     public List<Object> result(final Stack stack) {
@@ -3508,9 +3511,13 @@ public abstract class Codes {
       return describer.start("andalso", d -> d.arg("", code0).arg("", code1));
     }
 
-    @Override public Object eval(Stack stack) {
+    @Override public int exec(Stack stack) {
       // Lazy evaluation. If code0 returns false, code1 is never evaluated.
-      return (boolean) code0.eval(stack) && (boolean) code1.eval(stack);
+      int status = code0.exec(stack);
+      if ((boolean) stack.peek()) {
+        code1.exec(stack);
+      }
+      return 0;
     }
   }
 
@@ -3528,9 +3535,13 @@ public abstract class Codes {
       return describer.start("orelse", d -> d.arg("", code0).arg("", code1));
     }
 
-    @Override public Object eval(Stack stack) {
+    @Override public int exec(Stack stack) {
       // Lazy evaluation. If code0 returns true, code1 is never evaluated.
-      return (boolean) code0.eval(stack) || (boolean) code1.eval(stack);
+      int status = code0.exec(stack);
+      if (!(boolean) stack.peek()) {
+        code1.exec(stack);
+      }
+      return 0;
     }
   }
 
@@ -3549,10 +3560,10 @@ public abstract class Codes {
           d.arg("matchCode", matchCode).arg("resultCode", resultCode));
     }
 
-    @Override public Object eval(Stack stack) {
+    @Override public int exec(Stack stack) {
       final Closure fnValue = (Closure) matchCode.eval(stack);
       int unused = fnValue.execBind(stack);
-      return resultCode.eval(stack);
+      return resultCode.exec(stack);
     }
   }
 
