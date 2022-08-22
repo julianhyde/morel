@@ -18,33 +18,15 @@
  */
 package net.hydromatic.morel.eval;
 
-import java.util.AbstractList;
-
-/** A placeholder value for the "unit" type.
+/** Base implementation of {@link Code}.
  *
- * <p>We sometimes use it as a dummy value when we need to add a variable (and
- * its type) to the compilation environment but we don't have a value (because
- * it's not a runtime environment). */
-public class Unit extends AbstractList<Object> implements Comparable<Unit> {
-  public static final Unit INSTANCE = new Unit();
-
-  private Unit() {}
-
+ * <p>If you are implementing {@code Code}, extending this class is
+ * recommended (you get {@link #toString()}, which will be helpful when
+ * debugging) but not required. */
+abstract class CodeImpl implements Code {
   @Override public String toString() {
-    return "()";
-  }
-
-  public Object get(int index) {
-    throw new IndexOutOfBoundsException();
-  }
-
-  public int size() {
-    return 0;
-  }
-
-  public int compareTo(Unit o) {
-    return 0;
+    return describe(new DescriberImpl()).toString();
   }
 }
 
-// End Unit.java
+// End Code.java

@@ -52,7 +52,6 @@ import org.apache.calcite.util.Util;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -90,7 +89,7 @@ public class Compiler {
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     final List<Action> actions = new ArrayList<>();
-    final Context cx = Context.of(env);
+    final Context cx = Context.of(env, Environments.empty());
     compileDecl(cx, decl, isDecl, queriesToWrap, matchCodes, bindings, actions);
     final Type type = decl instanceof Core.NonRecValDecl
         ? ((Core.NonRecValDecl) decl).pat.type
@@ -146,23 +145,25 @@ public class Compiler {
 
   /** Compilation context. */
   static class Context {
+    final Environment globalEnv;
     final Environment env;
 
-    Context(Environment env) {
+    Context(Environment globalEnv, Environment env) {
+      this.globalEnv = globalEnv;
       this.env = env;
     }
 
-    static Context of(Environment env) {
-      return new Context(env);
+    static Context of(Environment globalEnv, Environment env) {
+      return new Context(globalEnv, env);
     }
 
     Context bindAll(Iterable<Binding> bindings) {
-      return of(env.bindAll(bindings));
+      return of(globalEnv, env.bindAll(bindings));
     }
   }
 
   public final Code compile(Environment env, Core.Exp expression) {
-    return compile(Context.of(env), expression);
+    return compile(Context.of(env, Environments.empty()), expression);
   }
 
   /** Compiles the argument to "apply". */
@@ -272,8 +273,7 @@ public class Compiler {
       return (Code) binding.value;
     }
     final int distance = cx.env.distance(0, name);
-    if (distance >= 0
-        && !Arrays.asList("scott", "user").contains(name)) { // TODO
+    if (distance >= 0) {
       return Codes.getStack(distance + 1, name);
     }
     return Codes.get(name);

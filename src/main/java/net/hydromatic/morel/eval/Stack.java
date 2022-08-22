@@ -21,10 +21,13 @@ package net.hydromatic.morel.eval;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.Static;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static net.hydromatic.morel.util.Static.skip;
 
@@ -48,8 +51,13 @@ public final class Stack {
   public static Stack of(EvalEnv env) {
     Stack stack = new Stack();
     stack.env = env;
-    stack.slots = new Object[100];
-    stack.top = 0;
+    final Map<String, Object> valueMap = new LinkedHashMap<>();
+    if (false) {
+      env.visit(valueMap::putIfAbsent);
+    }
+    int size = Static.nextPowerOfTwo(Math.max(valueMap.size(), 64));
+    stack.slots = valueMap.values().toArray(new Object[size]);
+    stack.top = valueMap.size();
     return stack;
   }
 
