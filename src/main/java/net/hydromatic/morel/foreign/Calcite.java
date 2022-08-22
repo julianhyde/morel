@@ -22,6 +22,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Describer;
+import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ThreadLocals;
@@ -50,6 +51,7 @@ import org.apache.calcite.tools.Program;
 import org.apache.calcite.tools.Programs;
 import org.apache.calcite.tools.RelBuilder;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -194,6 +196,16 @@ public class Calcite {
     }
 
     @Override public Object eval(Stack stack) {
+      final EvalEnv env0 = stack.env;
+      if (stack.top > 0) {
+        // Copy the entries of the stack into the evaluation environment. Only
+        // the environment makes it through to
+        final List<String> names = new ArrayList<>();
+        env.forEachType((name, type) -> names.add(name));
+        for (int i = 0; i < stack.top; i++) {
+          stack.env = stack.env.bind(names.get(stack.top - 1 - i), stack.slots[i]);
+        }
+      }
       return ThreadLocals.let(CalciteFunctions.THREAD_STACK,
           stack, () ->
               ThreadLocals.mutate(CalciteFunctions.THREAD_ENV,

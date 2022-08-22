@@ -27,6 +27,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Static;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -114,6 +115,12 @@ public abstract class Environments {
     }
   }
 
+  /** Creates an environment that looks first in one environment, then
+   * another. */
+  public static Environment concat(Environment... list) {
+    return new ConcatEnvironment(ImmutableList.copyOf(list));
+  }
+
   /** Environment that inherits from a parent environment and adds one
    * binding. */
   static class SubEnvironment extends Environment {
@@ -145,7 +152,8 @@ public abstract class Environments {
 
     @Override protected Environment bind(Binding binding) {
       Environment env;
-      if (this.binding.id.equals(binding.id)) {
+      if (this.binding.id.equals(binding.id)
+          && !this.binding.id.name.isEmpty()) {
         // The new binding will obscure the current environment's binding,
         // because it binds a variable of the same name. Bind the parent
         // environment instead. This strategy is worthwhile because it tends to
@@ -261,6 +269,50 @@ public abstract class Environments {
         ++i;
       }
       return -1;
+    }
+  }
+
+  /** Environment that looks in a chain of environments, returning the first
+   * match that it finds. */
+  static class ConcatEnvironment extends Environment {
+    private final List<Environment> list;
+
+    ConcatEnvironment(ImmutableList<Environment> list) {
+      this.list = list;
+    }
+
+    @Override public @Nullable Binding getOpt(String name) {
+      for (Environment env : list) {
+        Binding binding = env.getOpt(name);
+        if (binding != null) {
+          return binding;
+        }
+      }
+      return null;
+    }
+
+    @Override public @Nullable Binding getOpt(Core.NamedPat id) {
+      for (Environment env : list) {
+        Binding binding = env.getOpt(id);
+        if (binding != null) {
+          return binding;
+        }
+      }
+      return null;
+    }
+
+    @Override void visit(Consumer<Binding> consumer) {
+      list.forEach(env -> env.visit(consumer));
+    }
+
+    @Override Environment nearestAncestorNotObscuredBy(Set<Core.NamedPat> names) {
+      // REVIEW
+      return list.get(0).nearestAncestorNotObscuredBy(names);
+    }
+
+    @Override int distance(int soFar, Core.NamedPat id) {
+      // REVIEW Is this right? We can only look in the first environment.
+      return list.get(0).distance(soFar, id);
     }
   }
 }
