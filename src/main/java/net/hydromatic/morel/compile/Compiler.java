@@ -91,7 +91,7 @@ public class Compiler {
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     final List<Action> actions = new ArrayList<>();
-    final Context cx = Context.of(env);
+    final Context cx = Context.of(env, Environments.empty());
     compileDecl(cx, decl, skipPat, queriesToWrap, matchCodes, bindings,
         actions);
     final Type type = decl instanceof Core.NonRecValDecl
@@ -148,23 +148,25 @@ public class Compiler {
 
   /** Compilation context. */
   static class Context {
+    final Environment globalEnv;
     final Environment env;
 
-    Context(Environment env) {
+    Context(Environment globalEnv, Environment env) {
+      this.globalEnv = globalEnv;
       this.env = env;
     }
 
-    static Context of(Environment env) {
-      return new Context(env);
+    static Context of(Environment globalEnv, Environment env) {
+      return new Context(globalEnv, env);
     }
 
     Context bindAll(Iterable<Binding> bindings) {
-      return of(env.bindAll(bindings));
+      return of(globalEnv, env.bindAll(bindings));
     }
   }
 
   public final Code compile(Environment env, Core.Exp expression) {
-    return compile(Context.of(env), expression);
+    return compile(Context.of(env, Environments.empty()), expression);
   }
 
   /** Compiles the argument to "apply". */
