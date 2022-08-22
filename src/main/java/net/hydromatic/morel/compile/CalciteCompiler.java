@@ -167,7 +167,7 @@ public class CalciteCompiler extends Compiler {
         new RelContext(globalEnv, Environments.empty(), null,
             calcite.relBuilder(), ImmutableSortedMap.of(), 0);
     if (((RelCode) code).toRel(rx, false)) {
-      return calcite.code(rx.env, rx.relBuilder.build(), type);
+      return calcite.code(rx.globalEnv, rx.relBuilder.build(), type);
     }
     return code;
   }
@@ -195,7 +195,8 @@ public class CalciteCompiler extends Compiler {
 
   @Override protected Code finishCompileLet(Context cx, List<Code> matchCodes_,
       Code resultCode_, Type resultType) {
-    final Code resultCode = toRel4(cx.env, resultCode_, resultType);
+    final Environment env1 = cx.globalEnv.plus(cx.env);
+    final Code resultCode = toRel4(env1, resultCode_, resultType);
     final List<Code> matchCodes = ImmutableList.copyOf(matchCodes_);
     final Code code =
         super.finishCompileLet(cx, matchCodes, resultCode, resultType);
@@ -237,7 +238,7 @@ public class CalciteCompiler extends Compiler {
         case RECORD_SELECTOR:
           if (apply.arg instanceof Core.Id) {
             // Something like '#emp scott', 'scott' is a foreign value
-            Stack stack = Stack.of(evalEnvOf(cx.env));
+            Stack stack = Stack.of(evalEnvOf(cx.globalEnv));
             final Object o = code.eval(stack);
             if (o instanceof RelList) {
               cx.relBuilder.push(((RelList) o).rel);
@@ -634,7 +635,7 @@ public class CalciteCompiler extends Compiler {
   }
 
   private Core.Tuple toRecord(RelContext cx, Core.Id id) {
-    final Type type = cx.env.get(id.idPat.name).id.type;
+    final Type type = cx.combinedEnv().get(id.idPat.name).id.type;
     if (type instanceof RecordType) {
       final RecordType recordType = (RecordType) type;
       final List<Core.Exp> args = new ArrayList<>();

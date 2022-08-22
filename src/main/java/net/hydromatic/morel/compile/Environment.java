@@ -24,8 +24,10 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -135,6 +137,13 @@ public abstract class Environment {
   abstract Environment nearestAncestorNotObscuredBy(Set<String> names);
 
   abstract int distance(int soFar, String name);
+
+  /** Returns this environment plus the bindings in the given environment. */
+  public Environment plus(Environment env) {
+    final List<Binding> bindingList = new ArrayList<>();
+    env.visit(bindingList::add);
+    return bindAll(bindingList);
+  }
 }
 
 // End Environment.java

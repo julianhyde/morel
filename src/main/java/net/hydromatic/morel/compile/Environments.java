@@ -27,6 +27,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Static;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
@@ -109,6 +110,12 @@ public abstract class Environments {
       env = env.nearestAncestorNotObscuredBy(names);
       return new MapEnvironment(env, map);
     }
+  }
+
+  /** Creates an environment that looks first in one environment, then
+   * another. */
+  public static Environment concat(Environment... list) {
+    return new ConcatEnvironment(ImmutableList.copyOf(list));
   }
 
   /** Environment that inherits from a parent environment and adds one
@@ -249,6 +256,48 @@ public abstract class Environments {
         ++i;
       }
       return -1;
+    }
+  }
+
+  static class ConcatEnvironment extends Environment {
+    private final List<Environment> list;
+
+    ConcatEnvironment(ImmutableList<Environment> list) {
+      this.list = list;
+    }
+
+    @Override public Binding getOpt(String name) {
+      for (Environment env : list) {
+        Binding binding = env.getOpt(name);
+        if (binding != null) {
+          return binding;
+        }
+      }
+      return null;
+    }
+
+    @Override public Binding getOpt(Core.NamedPat id) {
+      for (Environment env : list) {
+        Binding binding = env.getOpt(id);
+        if (binding != null) {
+          return binding;
+        }
+      }
+      return null;
+    }
+
+    @Override void visit(Consumer<Binding> consumer) {
+      list.forEach(env -> env.visit(consumer));
+    }
+
+    @Override Environment nearestAncestorNotObscuredBy(Set<String> names) {
+      // REVIEW
+      return list.get(0).nearestAncestorNotObscuredBy(names);
+    }
+
+    @Override int distance(int soFar, String name) {
+      // REVIEW Is this right? We can only look in the first environment.
+      return list.get(0).distance(soFar, name);
     }
   }
 }
