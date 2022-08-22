@@ -466,7 +466,7 @@ public class Compiler {
       return toApplicable(cx, literal.unwrap(), argType, pos);
 
     case ID:
-      final Binding binding = cx.env.getOpt(((Core.Id) fn).idPat);
+      final Binding binding = cx.combinedEnv().getOpt(((Core.Id) fn).idPat);
       if (binding == null
           || binding.value instanceof LinkCode
           || binding.value == Unit.INSTANCE) {
@@ -494,7 +494,7 @@ public class Compiler {
     }
     if (o instanceof Macro) {
       final Macro value = (Macro) o;
-      final Core.Exp exp = value.expand(typeSystem, cx.env, argType);
+      final Core.Exp exp = value.expand(typeSystem, cx.combinedEnv(), argType);
       switch (exp.op) {
       case FN_LITERAL:
         final Core.Literal literal = (Core.Literal) exp;
