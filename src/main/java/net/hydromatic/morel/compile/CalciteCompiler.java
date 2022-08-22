@@ -142,7 +142,7 @@ public class CalciteCompiler extends Compiler {
 
   public @Nullable RelNode toRel(Environment env, Core.Exp expression) {
     return toRel2(
-        new RelContext(env, null, calcite.relBuilder(),
+        new RelContext(env, Environments.empty(), null, calcite.relBuilder(),
             ImmutableSortedMap.of(), 0),
         expression);
   }
@@ -161,13 +161,13 @@ public class CalciteCompiler extends Compiler {
         && ((RelCode) code).toRel(cx, aggressive);
   }
 
-  Code toRel4(Environment env, Code code, Type type) {
+  Code toRel4(Environment globalEnv, Code code, Type type) {
     if (!(code instanceof RelCode)) {
       return code;
     }
     RelContext rx =
-        new RelContext(env, null, calcite.relBuilder(),
-            ImmutableSortedMap.of(), 0);
+        new RelContext(globalEnv, Environments.empty(), null,
+            calcite.relBuilder(), ImmutableSortedMap.of(), 0);
     if (((RelCode) code).toRel(rx, false)) {
       return calcite.code(rx.env, rx.relBuilder.build(), type);
     }
@@ -186,7 +186,8 @@ public class CalciteCompiler extends Compiler {
     if (code instanceof RelCode && !(cx instanceof RelContext)) {
       final RelBuilder relBuilder = calcite.relBuilder();
       final RelContext rx =
-          new RelContext(cx.env, null, relBuilder, ImmutableSortedMap.of(), 0);
+          new RelContext(cx.globalEnv, cx.env, null, relBuilder,
+              ImmutableSortedMap.of(), 0);
       if (toRel3(rx, expression, false)) {
         return calcite.code(rx.env, rx.relBuilder.build(), expression.type);
       }
@@ -388,7 +389,7 @@ public class CalciteCompiler extends Compiler {
               cx.relBuilder.getTypeFactory().builder().build());
         }
         cx =
-            new RelContext(cx.env, cx, cx.relBuilder,
+            new RelContext(cx.globalEnv, cx.env, cx, cx.relBuilder,
                 ImmutableSortedMap.of(), 1);
         for (Ord<Core.FromStep> fromStep : Ord.zip(from.steps)) {
           cx = step(cx, fromStep.i, fromStep.e);
@@ -676,8 +677,9 @@ public class CalciteCompiler extends Compiler {
       varOffsets.put(idPat.name, new VarData(pat.type, offset, r.getRowType()));
     }
     cx =
-        new RelContext(cx.env.bindAll(scan.bindings), cx, cx.relBuilder,
-            ImmutableSortedMap.copyOfSorted(varOffsets), cx.inputCount + 1);
+        new RelContext(cx.globalEnv, cx.env.bindAll(scan.bindings), cx,
+            cx.relBuilder, ImmutableSortedMap.copyOfSorted(varOffsets),
+            cx.inputCount + 1);
 
     if (i > 0) {
       final JoinRelType joinRelType = joinRelType(scan.op);
@@ -752,8 +754,8 @@ public class CalciteCompiler extends Compiler {
     });
 
     // Return a context containing a variable for each output field.
-    return new RelContext(cx.env.bindAll(bindings), cx, cx.relBuilder,
-        ImmutableSortedMap.copyOfSorted(map), 1);
+    return new RelContext(cx.globalEnv, cx.env.bindAll(bindings), cx,
+        cx.relBuilder, ImmutableSortedMap.copyOfSorted(map), 1);
   }
 
   /** Returns the Calcite operator corresponding to a Morel built-in aggregate
@@ -796,9 +798,10 @@ public class CalciteCompiler extends Compiler {
     final List<CorrelationId> varList = new ArrayList<>();
     private final RelNode top;
 
-    RelContext(Environment env, RelContext parent, RelBuilder relBuilder,
+    RelContext(Environment globalEnv, Environment env, RelContext parent,
+        RelBuilder relBuilder,
         ImmutableSortedMap<String, VarData> map, int inputCount) {
-      super(env);
+      super(globalEnv, env);
       this.parent = parent;
       this.relBuilder = relBuilder;
       this.map = map;
@@ -814,7 +817,7 @@ public class CalciteCompiler extends Compiler {
     @Override RelContext bindAll(Iterable<Binding> bindings) {
       final Environment env2 = env.bindAll(bindings);
       return env2 == env ? this
-          : new RelContext(env2, this, relBuilder, map, inputCount);
+          : new RelContext(globalEnv, env2, this, relBuilder, map, inputCount);
     }
 
     /** Creates a correlation variable with which to reference the current row
