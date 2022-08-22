@@ -115,6 +115,12 @@ public abstract class Environments {
     }
   }
 
+  /** Creates an environment that looks first in one environment, then
+   * another. */
+  public static Environment concat(Environment... list) {
+    return new ConcatEnvironment(ImmutableList.copyOf(list));
+  }
+
   /** Environment that inherits from a parent environment and adds one
    * binding. */
   static class SubEnvironment extends Environment {
