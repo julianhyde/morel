@@ -3577,6 +3577,7 @@ public abstract class Codes {
       // Lazy evaluation. If code0 returns false, code1 is never evaluated.
       int status = code0.exec(stack);
       if ((boolean) stack.peek()) {
+        stack.pop();
         code1.exec(stack);
       }
       return 0;
@@ -3601,6 +3602,7 @@ public abstract class Codes {
       // Lazy evaluation. If code0 returns true, code1 is never evaluated.
       int status = code0.exec(stack);
       if (!(boolean) stack.peek()) {
+        stack.pop();
         code1.exec(stack);
       }
       return 0;
