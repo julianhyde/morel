@@ -163,6 +163,11 @@ public class Compiler {
     Context bindAll(Iterable<Binding> bindings) {
       return of(globalEnv, env.bindAll(bindings));
     }
+
+    /** Returns an environment that looks first in local, then in global. */
+    Environment combinedEnv() {
+      return Environments.concat(env, globalEnv);
+    }
   }
 
   public final Code compile(Environment env, Core.Exp expression) {
