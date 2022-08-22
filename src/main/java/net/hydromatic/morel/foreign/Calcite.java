@@ -196,7 +196,7 @@ public class Calcite {
     }
 
     @Override public Object eval(Stack stack) {
-      final EvalEnv env0 = stack.env;
+      final EvalEnv env0 = stack.env; // TODO pop stack
       if (stack.top > 0) {
         // Copy the entries of the stack into the evaluation environment. Only
         // the environment makes it through to
