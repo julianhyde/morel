@@ -44,7 +44,9 @@ public class EnvironmentTest {
     final Environment e0 = Environments.empty()
         .bind(core.idPat(PrimitiveType.INT, "a", 0), 0)
         .bind(core.idPat(PrimitiveType.INT, "b", 0), 1)
-        .bind(core.idPat(PrimitiveType.INT, "c", 0), 2);
+        .bind(core.idPat(PrimitiveType.INT, "c", 0), 2)
+        .bind(core.idPat(PrimitiveType.INT, "d", 0), 3)
+        .bind(core.idPat(PrimitiveType.INT, "e", 0), 4);
     assertThat(e0, instanceOf(Environments.SubEnvironment.class));
     checkOptimizeSubEnvironment(e0);
 
@@ -54,22 +56,22 @@ public class EnvironmentTest {
   }
 
   private void checkOptimizeSubEnvironment(Environment e0) {
-    final Set<String> nameSet = ImmutableSet.of("false", "true", "a", "b", "c");
+    final Set<String> nameSet = ImmutableSet.of("a", "b", "c", "d", "e");
     final Set<String> namePlusFooSet =
         ImmutableSet.<String>builder().addAll(nameSet).add("foo").build();
 
     assertThat(e0.getValueMap().keySet(), is(nameSet));
     assertThat(e0, hasEnvLength(5));
 
-    // Overwrite "true"; there are still 5 values, but 6 bindings.
+    // Overwrite "b"; there are still 5 values, but 6 bindings.
     final Environment e1 =
-        e0.bind(core.idPat(PrimitiveType.STRING, "true", 0), "yes");
+        e0.bind(core.idPat(PrimitiveType.STRING, "b", 0), "yes");
     assertThat(e1.getValueMap().keySet(), is(nameSet));
     assertThat(e1, hasEnvLength(6));
 
-    // Overwrite "true" again; still 5 values, and still 6 bindings.
+    // Overwrite "b" again; still 5 values, and still 6 bindings.
     final Environment e2 =
-        e1.bind(core.idPat(PrimitiveType.STRING, "true", 0), "no");
+        e1.bind(core.idPat(PrimitiveType.STRING, "b", 0), "no");
     assertThat(e2.getValueMap().keySet(), is(nameSet));
     assertThat(e2, hasEnvLength(6));
 
@@ -79,11 +81,11 @@ public class EnvironmentTest {
     assertThat(e3.getValueMap().keySet(), is(namePlusFooSet));
     assertThat(e3, hasEnvLength(7));
 
-    // Add "true". Value count stays at 7, binding count increases.
-    // (We do not look beyond the "foo" for the "true"; such optimization would
+    // Add "b". Value count stays at 7, binding count increases.
+    // (We do not look beyond the "foo" for the "b"; such optimization would
     // be nice, but is expensive, so we do not do it.)
     final Environment e4 =
-        e3.bind(core.idPat(PrimitiveType.STRING, "true", 0), "yes");
+        e3.bind(core.idPat(PrimitiveType.STRING, "b", 0), "yes");
     assertThat(e4.getValueMap().keySet(), is(namePlusFooSet));
     assertThat(e4, hasEnvLength(8));
   }
