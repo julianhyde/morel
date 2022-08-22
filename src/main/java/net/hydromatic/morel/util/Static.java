@@ -154,6 +154,12 @@ public class Static {
         .put(k, v)
         .build();
   }
+
+  /** Next power of two. */
+  public static int nextPowerOfTwo(int n) {
+    final int p = Integer.numberOfLeadingZeros(n);
+    return 1 << (Integer.SIZE - p);
+  }
 }
 
 // End Static.java

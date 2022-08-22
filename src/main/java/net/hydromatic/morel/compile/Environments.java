@@ -23,7 +23,6 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Static;
@@ -46,30 +45,18 @@ import static java.util.Objects.requireNonNull;
 /** Helpers for {@link Environment}. */
 public abstract class Environments {
 
-  /** An environment with only "true" and "false". */
-  private static final Environment BASIC_ENVIRONMENT =
-      EmptyEnvironment.INSTANCE
-          .bind(core.idPat(PrimitiveType.BOOL, "true", 0), true)
-          .bind(core.idPat(PrimitiveType.BOOL, "false", 0), false);
-
   private Environments() {}
 
   /** Creates an empty environment. */
   public static Environment empty() {
-    return BASIC_ENVIRONMENT;
+    return EmptyEnvironment.INSTANCE;
   }
 
   /** Creates an environment containing built-ins and the given foreign
    * values. */
   public static Environment env(TypeSystem typeSystem,
       Map<String, ForeignValue> valueMap) {
-    return env(EmptyEnvironment.INSTANCE, typeSystem, valueMap);
-  }
-
-  /** Creates a compilation environment, including built-ins and foreign
-   * values. */
-  private static Environment env(Environment environment, TypeSystem typeSystem,
-      Map<String, ForeignValue> valueMap) {
+    final Environment environment = EmptyEnvironment.INSTANCE;
     if (Static.SKIP) {
       return environment;
     }

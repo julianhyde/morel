@@ -530,7 +530,7 @@ public abstract class Codes {
   }
 
   public static Code from(Supplier<RowSink> rowSinkFactory) {
-    return new Code() {
+    return new CodeImpl() {
       @Override public Describer describe(Describer describer) {
         return describer.start("from", d ->
             d.arg("sink", rowSinkFactory.get()));
@@ -2998,7 +2998,7 @@ public abstract class Codes {
    * <p>An inner class so that we can pick apart the results of multiply
    * defined functions: {@code fun f = ... and g = ...}.
    */
-  private static class TupleCode implements Code {
+  private static class TupleCode extends CodeImpl {
     final List<Code> codes;
 
     TupleCode(ImmutableList<Code> codes) {
@@ -3267,13 +3267,11 @@ public abstract class Codes {
   private static class YieldRowSink implements RowSink {
     private final ImmutableList<Code> codes;
     private final RowSink rowSink;
-    private final Object[] values;
 
     YieldRowSink(ImmutableList<String> names, ImmutableList<Code> codes,
         RowSink rowSink) {
       this.codes = codes;
       this.rowSink = rowSink;
-      this.values = names.size() == 1 ? null : new Object[names.size()];
     }
 
     @Override public Describer describe(Describer describer) {
@@ -3284,16 +3282,11 @@ public abstract class Codes {
 
     @Override public void accept(Stack stack) {
       final int save = stack.save();
-      if (values == null) {
-        final Object value = codes.get(0).eval(stack);
-        stack.slots[save] = value;
-      } else {
-        for (int i = 0; i < codes.size(); i++) {
-          values[i] = codes.get(i).eval(stack);
-        }
-        stack.slots[save] = values.clone();
+      int i = save;
+      for (Code code : codes) {
+        stack.slots[i++] = code.eval(stack);
       }
-      stack.top++;
+      stack.top = i;
       rowSink.accept(stack);
       stack.restore(save);
     }
@@ -3327,7 +3320,7 @@ public abstract class Codes {
   }
 
   /** Code that retrieves the value of a variable from the environment. */
-  private static class GetCode implements Code {
+  private static class GetCode extends CodeImpl {
     private final String name;
 
     GetCode(String name) {
@@ -3338,17 +3331,13 @@ public abstract class Codes {
       return describer.start("get", d -> d.arg("name", name));
     }
 
-    @Override public String toString() {
-      return "get(" + name + ")";
-    }
-
     public Object eval(Stack stack) {
       return stack.env.getOpt(name);
     }
   }
 
   /** Code that retrieves the value of a variable from the stack. */
-  private static class StackCode implements Code {
+  private static class StackCode extends CodeImpl {
     private final int offset;
     private final String name;
 
@@ -3363,17 +3352,13 @@ public abstract class Codes {
           d.arg("offset", offset).arg("name", name));
     }
 
-    @Override public String toString() {
-      return "stack(" + offset + ", " + name + ")";
-    }
-
     @Override public Object eval(Stack stack) {
       return stack.slots[stack.top - offset];
     }
   }
 
   /** Code that retrieves the values of several variables from the stack. */
-  private static class StackTupleCode implements Code {
+  private static class StackTupleCode extends CodeImpl {
     private final List<Integer> offsets;
     private final List<String> names;
 
@@ -3388,10 +3373,6 @@ public abstract class Codes {
           d.arg("offsets", offsets).arg("names", names));
     }
 
-    @Override public String toString() {
-      return "stack(" + offsets + ", " + names + ")";
-    }
-
     @Override public Object eval(Stack stack) {
       ImmutableList.Builder<Object> b = ImmutableList.builder();
       for (int offset : offsets) {
@@ -3403,7 +3384,7 @@ public abstract class Codes {
 
   /** Code that retrieves, as a tuple, the value of several variables from the
    * environment. */
-  private static class GetTupleCode implements Code {
+  private static class GetTupleCode extends CodeImpl {
     private final ImmutableList<String> names;
     private final Object[] values; // work space
 
@@ -3414,10 +3395,6 @@ public abstract class Codes {
 
     @Override public Describer describe(Describer describer) {
       return describer.start("getTuple", d -> d.arg("names", names));
-    }
-
-    @Override public String toString() {
-      return "getTuple(" + names + ")";
     }
 
     @Override public Object eval(Stack stack) {
@@ -3477,7 +3454,7 @@ public abstract class Codes {
   }
 
   /** Code that implements a constant. */
-  private static class ConstantCode implements Code {
+  private static class ConstantCode extends CodeImpl {
     private final Object value;
 
     ConstantCode(Object value) {
@@ -3498,7 +3475,7 @@ public abstract class Codes {
   }
 
   /** Code that implements {@link #andAlso(Code, Code)}. */
-  private static class AndAlsoCode implements Code {
+  private static class AndAlsoCode extends CodeImpl {
     private final Code code0;
     private final Code code1;
 
@@ -3522,7 +3499,7 @@ public abstract class Codes {
   }
 
   /** Code that implements {@link #orElse(Code, Code)}. */
-  private static class OrElseCode implements Code {
+  private static class OrElseCode extends CodeImpl {
     private final Code code0;
     private final Code code1;
 
@@ -3546,7 +3523,7 @@ public abstract class Codes {
   }
 
   /** Code that implements {@link #let(List, Code)} with one argument. */
-  private static class Let1Code implements Code {
+  private static class Let1Code extends CodeImpl {
     private final Code matchCode;
     private final Code resultCode;
 
@@ -3568,7 +3545,7 @@ public abstract class Codes {
   }
 
   /** Code that implements {@link #let(List, Code)} with multiple arguments. */
-  private static class LetCode implements Code {
+  private static class LetCode extends CodeImpl {
     private final ImmutableList<Code> matchCodes;
     private final Code resultCode;
 
@@ -3595,7 +3572,7 @@ public abstract class Codes {
   }
 
   /** Applies an {@link Applicable} to a {@link Code}. */
-  private static class ApplyCode implements Code {
+  private static class ApplyCode extends CodeImpl {
     private final Applicable fnValue;
     private final Code argCode;
 
@@ -3616,7 +3593,7 @@ public abstract class Codes {
   }
 
   /** Applies an {@link Applicable2} to two {@link Code} arguments. */
-  private static class ApplyCode2 implements Code {
+  private static class ApplyCode2 extends CodeImpl {
     private final Applicable2 fnValue;
     private final Code argCode0;
     private final Code argCode1;
@@ -3642,7 +3619,7 @@ public abstract class Codes {
   }
 
   /** Applies an {@link Applicable3} to three {@link Code} arguments. */
-  private static class ApplyCode3 implements Code {
+  private static class ApplyCode3 extends CodeImpl {
     private final Applicable3 fnValue;
     private final Code argCode0;
     private final Code argCode1;
@@ -3676,7 +3653,7 @@ public abstract class Codes {
    *
    * <p>If {@link #fnCode} is constant, you should use {@link ApplyCode}
    * instead. */
-  static class ApplyCodeCode implements Code {
+  static class ApplyCodeCode extends CodeImpl {
     public final Code fnCode;
     public final Code argCode;
 
@@ -3700,7 +3677,7 @@ public abstract class Codes {
   /** A {@code Code} that evaluates a {@code Code} and if the result is a
    * {@link net.hydromatic.morel.foreign.RelList}, wraps it in a different
    * kind of list. */
-  static class WrapRelList implements Code {
+  static class WrapRelList extends CodeImpl {
     public final Code code;
 
     WrapRelList(Code code) {
