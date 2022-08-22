@@ -33,6 +33,8 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import static com.google.common.collect.Lists.reverse;
+
 /** Environment for validation/compilation.
  *
  * <p>Every environment is immutable; when you call {@link #bind}, a new
@@ -142,7 +144,7 @@ public abstract class Environment {
   public Environment plus(Environment env) {
     final List<Binding> bindingList = new ArrayList<>();
     env.visit(bindingList::add);
-    return bindAll(bindingList);
+    return bindAll(reverse(bindingList));
   }
 }
 

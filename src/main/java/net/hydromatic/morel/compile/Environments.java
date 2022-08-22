@@ -129,6 +129,10 @@ public abstract class Environments {
       this.binding = Objects.requireNonNull(binding);
     }
 
+    @Override public String toString() {
+      return binding.id + ", ...";
+    }
+
     @Override public Binding getOpt(String name) {
       if (name.equals(binding.id.name)) {
         return binding;
