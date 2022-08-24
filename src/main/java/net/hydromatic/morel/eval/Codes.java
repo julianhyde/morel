@@ -53,6 +53,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -3204,8 +3205,7 @@ public abstract class Codes {
 
       final Map<Object, List<Object>> map2;
       if (map.isEmpty()
-          && keyCode instanceof TupleCode
-          && ((TupleCode) keyCode).codes.isEmpty()) {
+          && keyNames.isEmpty()) {
         // There are no keys, and there were no input rows.
         map2 = ImmutableMap.of(ImmutableList.of(), ImmutableList.of());
       } else {
@@ -3267,23 +3267,51 @@ public abstract class Codes {
 
     public List<Object> result(final Stack stack) {
       final int save = stack.save();
-      stack.top++;
-      rows.sort((left, right) -> {
-        for (Map.Entry<Code, Boolean> code : codes) {
-          stack.slots[save] = left;
-          final Comparable leftVal = (Comparable) code.getKey().eval(stack);
-          stack.slots[save] = right;
-          final Comparable rightVal = (Comparable) code.getKey().eval(stack);
-          int c = leftVal.compareTo(rightVal);
-          if (c != 0) {
-            return code.getValue() ? -c : c;
+      final Comparator<Object> comparator;
+      final int n = names.size();
+      if (n == 1) {
+        stack.top++;
+        comparator = (left, right) -> {
+          for (Map.Entry<Code, Boolean> code : codes) {
+            stack.slots[save] = left;
+            final Comparable leftVal = (Comparable) code.getKey().eval(stack);
+            stack.slots[save] = right;
+            final Comparable rightVal = (Comparable) code.getKey().eval(stack);
+            int c = leftVal.compareTo(rightVal);
+            if (c != 0) {
+              return code.getValue() ? -c : c;
+            }
           }
+          return 0;
+        };
+      } else {
+        stack.top += n;
+        final Comparator<Object[]> comparator0 = (left, right) -> {
+          for (Map.Entry<Code, Boolean> code : codes) {
+            System.arraycopy(left, 0, stack.slots, save, n);
+            final Comparable leftVal = (Comparable) code.getKey().eval(stack);
+            System.arraycopy(right, 0, stack.slots, save, n);
+            final Comparable rightVal = (Comparable) code.getKey().eval(stack);
+            int c = leftVal.compareTo(rightVal);
+            if (c != 0) {
+              return code.getValue() ? -c : c;
+            }
+          }
+          return 0;
+        };
+        comparator = (Comparator) comparator0;
+      }
+      rows.sort(comparator);
+      if (n == 1) {
+        for (Object row : rows) {
+          stack.slots[save] = row;
+          rowSink.accept(stack);
         }
-        return 0;
-      });
-      for (Object row : rows) {
-        stack.slots[save] = row;
-        rowSink.accept(stack);
+      } else {
+        for (Object row : rows) {
+          System.arraycopy(row, 0, stack.slots, save, n);
+          rowSink.accept(stack);
+        }
       }
       final List<Object> list = rowSink.result(stack);
       stack.restore(save);
@@ -3326,7 +3354,12 @@ public abstract class Codes {
     }
 
     @Override public List<Object> result(Stack stack) {
-      return rowSink.result(stack);
+      final int save = stack.save();
+      try {
+        return rowSink.result(stack);
+      } finally {
+        stack.restore(save);
+      }
     }
   }
 

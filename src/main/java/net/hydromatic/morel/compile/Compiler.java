@@ -80,6 +80,11 @@ import static java.util.Objects.requireNonNull;
 public class Compiler {
   protected static final EvalEnv EMPTY_ENV = Codes.emptyEnv();
 
+  /** A list with a single Binding. Useful for padding environments to the
+   * desired depth. */
+  public static final ImmutableList<Binding> ONE_BINDING =
+      ImmutableList.of(Binding.of(core.idPat(PrimitiveType.BOOL, "", 0)));
+
   protected final TypeSystem typeSystem;
 
   public Compiler(TypeSystem typeSystem) {
@@ -353,7 +358,8 @@ public class Compiler {
     case INNER_JOIN:
       final Core.Scan scan = (Core.Scan) firstStep;
       final Code code = compile(cx, scan.exp);
-      final Code conditionCode = compile(cx, scan.condition);
+      final Context cx2 = cx.bindAll(scan.bindings);
+      final Code conditionCode = compile(cx2, scan.condition);
       return () -> Codes.scanRowSink(firstStep.op, scan.pat, code,
           conditionCode, nextFactory.get());
 
@@ -389,8 +395,10 @@ public class Compiler {
     case GROUP:
       final Core.Group group = (Core.Group) firstStep;
       final ImmutableList.Builder<Code> groupCodesB = ImmutableList.builder();
+      Context cx3 = cx0;
       for (Core.Exp exp : group.groupExps.values()) {
         groupCodesB.add(compile(cx, exp));
+        cx3 = cx3.bindAll(ONE_BINDING);
       }
       final ImmutableList.Builder<Code> valueCodesB = ImmutableList.builder();
       final SortedMap<String, Binding> bindingMap = sortedBindingMap(bindings);
@@ -418,8 +426,9 @@ public class Compiler {
             compileApplicable(cx, aggregate.aggregate,
                 typeSystem.listType(argumentType), aggregate.pos);
         final Code aggregateCode;
+        cx3 = cx3.bindAll(ONE_BINDING); // TODO
         if (aggregateApplicable == null) {
-          aggregateCode = compile(cx, aggregate.aggregate);
+          aggregateCode = compile(cx3, aggregate.aggregate);
         } else {
           aggregateCode = aggregateApplicable.asCode();
         }

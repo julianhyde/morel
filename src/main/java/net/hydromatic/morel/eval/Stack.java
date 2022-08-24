@@ -21,14 +21,13 @@ package net.hydromatic.morel.eval;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.util.Pair;
-import net.hydromatic.morel.util.Static;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
+import static net.hydromatic.morel.util.Static.nextPowerOfTwo;
 import static net.hydromatic.morel.util.Static.skip;
 
 /** Where all the data lives at runtime.
@@ -41,6 +40,9 @@ import static net.hydromatic.morel.util.Static.skip;
  * as efficiently as possible. We hope that the JVM will cache data members in
  * registers. */
 public final class Stack {
+  /** Initial number of slots. Must be a power of two, and greater than 1. */
+  private static final int INITIAL_SLOT_COUNT = 16;
+
   public EvalEnv env;
   public Object[] slots;
   public int top;
@@ -51,17 +53,13 @@ public final class Stack {
   public static Stack of(EvalEnv env) {
     Stack stack = new Stack();
     stack.env = env;
-    final Map<String, Object> valueMap = new LinkedHashMap<>();
-    if (false) {
-      env.visit(valueMap::putIfAbsent);
-    }
-    int size = Static.nextPowerOfTwo(Math.max(valueMap.size(), 64));
-    stack.slots = valueMap.values().toArray(new Object[size]);
-    stack.top = valueMap.size();
+    stack.slots = new Object[INITIAL_SLOT_COUNT];
+    stack.top = 0;
     return stack;
   }
 
   public void push(Object o) {
+    ensureCapacity(top);
     slots[top++] = o;
   }
 
@@ -161,6 +159,7 @@ public final class Stack {
       this.names = names;
       save = top;
       top += names.size();
+      ensureCapacity(top);
     }
 
     @Override boolean setOpt(Object element) {
@@ -173,6 +172,14 @@ public final class Stack {
     }
   }
 
+  /** Ensures that the slot array is long enough. Call after moving top up. */
+  private void ensureCapacity(int capacity) {
+    if (capacity >= slots.length) {
+      final int newLength = nextPowerOfTwo(Math.max(slots.length * 2, capacity));
+      slots = Arrays.copyOf(slots, newLength);
+    }
+  }
+
   class PatternMutator extends Mutator {
     private final Core.Pat pat;
     private final int base;
@@ -182,6 +189,7 @@ public final class Stack {
       this.pat = pat;
       this.base = top;
       top += names.size();
+      ensureCapacity(top);
     }
 
     @Override void close() {
@@ -189,7 +197,7 @@ public final class Stack {
     }
 
     @Override boolean setOpt(Object value) {
-      i = 0;
+      i = base;
       return bindRecurse(pat, value);
     }
 
