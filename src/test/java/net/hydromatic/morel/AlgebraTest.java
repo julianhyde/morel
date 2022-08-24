@@ -233,7 +233,6 @@ public class AlgebraTest {
 
   /** Translates a hybrid expression. The leaf cannot be translated to Calcite
    * and therefore becomes a Morel table function; the root can. */
-  @Disabled // TODO
   @Test void testNative() {
     String query = ""
         + "from r in\n"

@@ -1094,7 +1094,7 @@ public class Core {
       w.append(pat, 0, Op.EQ.left)
           .append(" in ").append(exp, Op.EQ.right, 0);
       if (!isLiteralTrue()) {
-        w.append("on").append(condition, 0, 0);
+        w.append(" on ").append(condition, 0, 0);
       }
       return w;
     }
