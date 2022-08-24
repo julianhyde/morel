@@ -117,8 +117,28 @@ public abstract class Environments {
 
   /** Creates an environment that looks first in one environment, then
    * another. */
-  public static Environment concat(Environment... list) {
-    return new ConcatEnvironment(ImmutableList.copyOf(list));
+  public static Environment concat(Environment... environments) {
+    final List<Environment> list = new ArrayList<>();
+    for (Environment environment : environments) {
+      addEnv(list, environment);
+    }
+    switch (list.size()) {
+    case 0:
+      return empty();
+    case 1:
+      return list.get(0);
+    default:
+      return new ConcatEnvironment(ImmutableList.copyOf(list));
+    }
+  }
+
+  /** Adds an environment to a list, flattening as it goes. */
+  private static void addEnv(List<Environment> list, Environment e) {
+    if (e instanceof ConcatEnvironment) {
+      ((ConcatEnvironment) e).list.forEach(e2 -> addEnv(list, e2));
+    } else if (!(e instanceof EmptyEnvironment)) {
+      list.add(e);
+    }
   }
 
   /** Environment that inherits from a parent environment and adds one
