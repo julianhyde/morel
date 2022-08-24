@@ -1008,7 +1008,7 @@ public class MainTest {
         + "in\n"
         + "  resum (30, 0)\n"
         + "end";
-    ml(ml).assertEval(is(1000));
+    ml(ml).assertEval(is(30));
   }
 
   @Test void testMutualRecursion() {
