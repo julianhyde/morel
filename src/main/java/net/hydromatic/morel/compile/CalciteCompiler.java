@@ -189,7 +189,8 @@ public class CalciteCompiler extends Compiler {
           new RelContext(cx.globalEnv, cx.env, null, relBuilder,
               ImmutableSortedMap.of(), 0);
       if (toRel3(rx, expression, false)) {
-        return calcite.code(rx.env, rx.relBuilder.build(), expression.type);
+        return calcite.code(rx.combinedEnv(), rx.relBuilder.build(),
+            expression.type);
       }
     }
     return code;
@@ -310,11 +311,12 @@ public class CalciteCompiler extends Compiler {
                 new RelJson(jsonBuilder).toJson(rowType));
         final String morelCode = apply.toString();
         ThreadLocals.let(CalciteFunctions.THREAD_ENV,
-            new CalciteFunctions.Context(new Session(), cx.env,
-                typeSystem, cx.relBuilder.getTypeFactory()), () ->
-            cx.relBuilder.functionScan(CalciteFunctions.TABLE_OPERATOR, 0,
-                cx.relBuilder.literal(morelCode),
-                cx.relBuilder.literal(jsonRowType)));
+            new CalciteFunctions.Context(new Session(), cx.combinedEnv(),
+                typeSystem, cx.relBuilder.getTypeFactory()),
+            () ->
+                cx.relBuilder.functionScan(CalciteFunctions.TABLE_OPERATOR, 0,
+                    cx.relBuilder.literal(morelCode),
+                    cx.relBuilder.literal(jsonRowType)));
         return true;
       }
     };
