@@ -69,8 +69,11 @@ import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.getLast;
 import static com.google.common.collect.Iterables.getOnlyElement;
+import static org.apache.calcite.util.Util.first;
 
 import static java.util.Objects.requireNonNull;
 
@@ -262,7 +265,7 @@ public class Compiler {
 
     case ID:
       final Core.Id id = (Core.Id) expression;
-      return compileFieldName(cx, id.idPat.name);
+      return compileFieldName(cx, id.idPat);
 
     case TUPLE:
       final Core.Tuple tuple = (Core.Tuple) expression;
@@ -277,19 +280,22 @@ public class Compiler {
     }
   }
 
-  private Code compileFieldName(Context cx, String name) {
-    final Binding binding = cx.env.getOpt(name);
-    if (binding != null && binding.value instanceof Code) {
-      return (Code) binding.value;
+  private Code compileFieldName(Context cx, Core.NamedPat idPat) {
+    final Binding binding = cx.env.getOpt(idPat);
+    if (binding != null) {
+      if (binding.value instanceof Code) {
+        return (Code) binding.value;
+      }
+      final int distance = cx.env.distance(0, idPat);
+      checkArgument(distance >= 0, "not found", idPat);
+      return Codes.getStack(distance + 1, idPat.name);
     }
-    final int distance = cx.env.distance(0, name);
-    if (distance >= 0) {
-      return Codes.getStack(distance + 1, name);
-    }
-    return Codes.get(name);
+    final Binding globalBinding = cx.globalEnv.getOpt(idPat);
+    checkNotNull(globalBinding, "not found", idPat);
+    return Codes.get(idPat.name);
   }
 
-  private Code compileFieldNames(Context cx, List<String> fieldNames) {
+  private Code compileFieldNames(Context cx, List<Core.IdPat> fieldNames) {
     return Codes.tuple(fieldNames.stream()
         .map(fieldName -> compileFieldName(cx, fieldName))
         .collect(Collectors.toList()));
@@ -336,9 +342,9 @@ public class Compiler {
       Type elementType) {
     final Context cx = cx0.bindAll(bindings);
     if (steps.isEmpty()) {
-      final List<String> fieldNames =
-          bindings.stream().map(b -> b.id).sorted()
-              .map(id -> id.name).collect(Collectors.toList());
+      final List<Core.IdPat> fieldNames =
+          bindings.stream().map(b -> (Core.IdPat) b.id).sorted()
+              .collect(Collectors.toList());
       final Code code;
       if (fieldNames.size() == 1
           && getOnlyElement(bindings).id.type.equals(elementType)) {
@@ -395,12 +401,18 @@ public class Compiler {
     case GROUP:
       final Core.Group group = (Core.Group) firstStep;
       final ImmutableList.Builder<Code> groupCodesB = ImmutableList.builder();
-      Context cx3 = cx0;
       for (Core.Exp exp : group.groupExps.values()) {
         groupCodesB.add(compile(cx, exp));
-        cx3 = cx3.bindAll(ONE_BINDING);
       }
-      final ImmutableList<String> names = bindingNamesSorted(bindings);
+      final ImmutableList.Builder<Code> valueCodesB = ImmutableList.builder();
+      final SortedMap<String, Binding> bindingMap = sortedBindingMap(bindings);
+      for (Binding binding : bindingMap.values()) {
+        valueCodesB.add(compile(cx, core.id(binding.id)));
+      }
+      Context cx3 = cx0.bindAll(first(group.bindings, group.groupExps.size()));
+      final Context cx4 = cx3.bindAll(bindingMap.values());
+      final ImmutableList<String> names =
+          ImmutableList.copyOf(bindingMap.keySet());
       final ImmutableList.Builder<Applicable> aggregateCodesB =
           ImmutableList.builder();
       for (Core.Aggregate aggregate : group.aggregates.values()) {
@@ -414,7 +426,7 @@ public class Compiler {
           argumentCode = null;
         } else {
           argumentType = aggregate.argument.type;
-          argumentCode = compile(cx, aggregate.argument);
+          argumentCode = compile(cx4, aggregate.argument);
         }
         final Applicable aggregateApplicable =
             compileApplicable(cx, aggregate.aggregate,
@@ -431,20 +443,26 @@ public class Compiler {
       }
       final ImmutableList<Code> groupCodes = groupCodesB.build();
       final Code keyCode = Codes.tuple(groupCodes);
+      final ImmutableList<Code> valueCodes = valueCodesB.build();
+      final Code valueCode = Codes.arrayOrScalar(valueCodes);
       final ImmutableList<Applicable> aggregateCodes = aggregateCodesB.build();
       final ImmutableList<String> outNames = bindingNames(firstStep.bindings);
       final ImmutableList<String> keyNames =
           outNames.subList(0, group.groupExps.size());
-      return () -> Codes.groupRowSink(keyCode, aggregateCodes, names, keyNames,
-          outNames, nextFactory.get());
+      return () -> Codes.groupRowSink(keyCode, valueCode, aggregateCodes, names,
+          keyNames, outNames, nextFactory.get());
 
     default:
       throw new AssertionError("unknown step type " + firstStep.op);
     }
   }
 
-  private ImmutableList<String> bindingNamesSorted(List<Binding> bindings) {
-    return RecordType.ORDERING.immutableSortedCopy(bindingNames(bindings));
+  private ImmutableSortedMap<String, Binding> sortedBindingMap(
+      Iterable<Binding> bindings) {
+    final ImmutableSortedMap.Builder<String, Binding> b =
+        ImmutableSortedMap.orderedBy(RecordType.ORDERING);
+    bindings.forEach(binding -> b.put(binding.id.name, binding));
+    return b.build();
   }
 
   private ImmutableList<String> bindingNames(List<Binding> bindings) {
@@ -468,7 +486,7 @@ public class Compiler {
 
     case ID:
       final Binding binding =
-          cx.combinedEnv().getOpt(((Core.Id) fn).idPat.name);
+          cx.combinedEnv().getOpt(((Core.Id) fn).idPat);
       if (binding == null
           || binding.value instanceof LinkCode
           || binding.value == Unit.INSTANCE) {

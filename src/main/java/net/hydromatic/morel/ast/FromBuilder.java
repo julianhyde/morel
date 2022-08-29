@@ -19,6 +19,8 @@
 package net.hydromatic.morel.ast;
 
 import net.hydromatic.morel.compile.Compiles;
+import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.compile.RefChecker;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
@@ -56,6 +58,7 @@ import static com.google.common.collect.Iterables.getLast;
  */
 public class FromBuilder {
   private final TypeSystem typeSystem;
+  private final @Nullable Environment env;
   private final List<Core.FromStep> steps = new ArrayList<>();
   private final List<Binding> bindings = new ArrayList<>();
 
@@ -69,10 +72,10 @@ public class FromBuilder {
    * if it turns out to be the last step.) */
   private int removeIfLastIndex = Integer.MIN_VALUE;
 
-  /** Use
-   * {@link net.hydromatic.morel.ast.CoreBuilder#fromBuilder(TypeSystem)}. */
-  FromBuilder(TypeSystem typeSystem) {
+  /** Use {@link net.hydromatic.morel.ast.CoreBuilder#fromBuilder}. */
+  FromBuilder(TypeSystem typeSystem, @Nullable Environment env) {
     this.typeSystem = typeSystem;
+    this.env = env;
   }
 
   /** Returns the bindings available after the most recent step. */
@@ -81,6 +84,10 @@ public class FromBuilder {
   }
 
   private FromBuilder addStep(Core.FromStep step) {
+    if (env != null) {
+      // Validate the step. (Not necessary, but helps find bugs.)
+      step.accept(RefChecker.of(typeSystem, env.bindAll(bindings)));
+    }
     if (removeIfNotLastIndex == steps.size() - 1) {
       // A trivial record yield with a single yield, e.g. 'yield {i = i}', has
       // a purpose only if it is the last step. (It forces the return to be a

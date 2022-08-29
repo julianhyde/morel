@@ -59,6 +59,7 @@ import java.util.stream.Collectors;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /** Converts AST expressions to Core expressions. */
 public class Resolver {
@@ -353,8 +354,8 @@ public class Resolver {
   }
 
   private Core.Id toCore(Ast.Id id) {
-    final Binding binding = env.get(id.name);
-    assert binding != null;
+    final Binding binding = env.getOpt(id.name);
+    checkNotNull(binding, "not found", id);
     final Core.NamedPat idPat = getIdPat(id, binding);
     return core.id(idPat);
   }
@@ -779,7 +780,7 @@ public class Resolver {
    * handling each subtype of {@link Ast.FromStep} calling
    * {@link FromBuilder} appropriately. */
   private class FromResolver extends Visitor {
-    final FromBuilder fromBuilder = core.fromBuilder(typeMap.typeSystem);
+    final FromBuilder fromBuilder = core.fromBuilder(typeMap.typeSystem, env);
 
     Core.Exp run(Ast.From from) {
       from.steps.forEach(this::accept);

@@ -60,11 +60,11 @@ public class Binding {
 
   @Override public String toString() {
     if (exp != null) {
-      return id.name + " = " + exp;
+      return id + " = " + exp;
     } else if (value == Unit.INSTANCE) {
-      return id.name + " : " + id.type.moniker();
+      return id + " : " + id.type.moniker();
     } else {
-      return id.name + " = " + value + " : " + id.type.moniker();
+      return id + " = " + value + " : " + id.type.moniker();
     }
   }
 }
