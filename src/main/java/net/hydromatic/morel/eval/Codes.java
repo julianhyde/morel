@@ -449,11 +449,28 @@ public abstract class Codes {
     return new GetTupleCode(ImmutableList.copyOf(names));
   }
 
+  /** Returns a Code that returns an array consisting of the values of variables
+   * "name0", ... "nameN" in the current environment. */
+  public static Code getArray(Iterable<String> names) {
+    if (Iterables.isEmpty(names)) {
+      return new ConstantCode(Unit.INSTANCE);
+    }
+    return new GetArrayCode(ImmutableList.copyOf(names));
+  }
+
   /** Returns a Code that returns the tuple whose elements are at
    * {@code offsets} from the top of the stack.
    * {@code names} are for debugging purposes. */
   public static Code getStackTuple(List<Integer> offsets, List<String> names) {
     return new StackTupleCode(ImmutableList.copyOf(offsets),
+        ImmutableList.copyOf(names));
+  }
+
+  /** Returns a Code that returns the array whose elements are at
+   * {@code offsets} from the top of the stack.
+   * {@code names} are for debugging purposes. */
+  public static Code getStackArray(List<Integer> offsets, List<String> names) {
+    return new StackArrayCode(ImmutableList.copyOf(offsets),
         ImmutableList.copyOf(names));
   }
 
@@ -500,9 +517,22 @@ public abstract class Codes {
   }
 
   public static Code tuple(Iterable<? extends Code> codes) {
+    return tupleOrArray(codes, true);
+  }
+
+  public static Code array(Iterable<? extends Code> codes) {
+    return tupleOrArray(codes, false);
+  }
+
+  public static Code arrayOrScalar(List<? extends Code> valueCodes) {
+    return valueCodes.size() == 1 ? valueCodes.get(0) : array(valueCodes);
+  }
+
+  private static Code tupleOrArray(Iterable<? extends Code> codes,
+      boolean tuple) {
     final List<Code> codeList = ImmutableList.copyOf(codes);
     if (codeList.isEmpty()) {
-      return constant(Unit.INSTANCE);
+      return constant(tuple ? Unit.INSTANCE : new Object[0]);
     }
     if (codeList.stream().allMatch(c -> c instanceof StackCode)) {
       final List<Integer> offsets = new ArrayList<>();
@@ -512,7 +542,9 @@ public abstract class Codes {
         offsets.add(stackCode.offset);
         names.add(stackCode.name);
       });
-      return getStackTuple(offsets, names);
+      return tuple
+          ? getStackTuple(offsets, names)
+          : getStackArray(offsets, names);
     }
     if (codeList.stream().allMatch(c -> c instanceof GetCode)) {
       final List<String> names = new ArrayList<>();
@@ -520,9 +552,10 @@ public abstract class Codes {
         GetCode stackCode = (GetCode) c;
         names.add(stackCode.name);
       });
-      return getTuple(names);
+      return tuple ? getTuple(names) : getArray(names);
     }
-    return new TupleCode(ImmutableList.copyOf(codes));
+    return tuple ? new TupleCode(ImmutableList.copyOf(codes))
+        : new ArrayCode(ImmutableList.copyOf(codes));
   }
 
   public static Code wrapRelList(Code code) {
@@ -577,12 +610,12 @@ public abstract class Codes {
   }
 
   /** Creates a {@link RowSink} for a {@code group} clause. */
-  public static RowSink groupRowSink(Code keyCode,
+  public static RowSink groupRowSink(Code keyCode, Code valueCode,
       ImmutableList<Applicable> aggregateCodes, ImmutableList<String> inNames,
       ImmutableList<String> keyNames,
       ImmutableList<String> outNames, RowSink rowSink) {
-    return new GroupRowSink(keyCode, aggregateCodes, inNames, keyNames,
-        outNames, rowSink);
+    return new GroupRowSink(keyCode, valueCode, aggregateCodes, inNames,
+        keyNames, outNames, rowSink);
   }
 
   /** Creates a {@link RowSink} for a non-terminal {@code yield} step. */
@@ -3029,16 +3062,18 @@ public abstract class Codes {
     return s;
   }
 
-  /** A code that evaluates expressions and creates a tuple with the results.
+  /** A code that evaluates expressions and creates an array with the results.
    *
    * <p>An inner class so that we can pick apart the results of multiply
    * defined functions: {@code fun f = ... and g = ...}.
    */
-  private static class TupleCode extends CodeImpl {
+  private static class ArrayCode extends CodeImpl {
     final List<Code> codes;
+    final Object[] values; // work space
 
-    TupleCode(ImmutableList<Code> codes) {
+    ArrayCode(ImmutableList<Code> codes) {
       this.codes = codes;
+      this.values = new Object[codes.size()];
     }
 
     @Override public Describer describe(Describer describer) {
@@ -3046,12 +3081,22 @@ public abstract class Codes {
           codes.forEach(code -> d.arg("", code)));
     }
 
-    public Object eval(Stack stack) {
-      final Object[] values = new Object[codes.size()];
+    @Override public Object eval(Stack stack) {
       for (int i = 0; i < values.length; i++) {
         values[i] = codes.get(i).eval(stack);
       }
-      return Arrays.asList(values);
+      return values.clone();
+    }
+  }
+
+  /** A code that evaluates expressions and creates a tuple with the results. */
+  private static class TupleCode extends ArrayCode {
+    TupleCode(ImmutableList<Code> codes) {
+      super(codes);
+    }
+
+    @Override public Object eval(Stack stack) {
+      return Arrays.asList((Object []) super.eval(stack));
     }
   }
 
@@ -3142,6 +3187,7 @@ public abstract class Codes {
   /** Implementation of {@link RowSink} for a {@code group} clause. */
   private static class GroupRowSink implements RowSink {
     final Code keyCode;
+    final Code valueCode;
     final ImmutableList<String> inNames;
     final ImmutableList<String> keyNames;
     /** group names followed by aggregate names */
@@ -3150,10 +3196,12 @@ public abstract class Codes {
     final RowSink rowSink;
     final ListMultimap<Object, Object> map = ArrayListMultimap.create();
 
-    GroupRowSink(Code keyCode, ImmutableList<Applicable> aggregateCodes,
+    GroupRowSink(Code keyCode, Code valueCode,
+        ImmutableList<Applicable> aggregateCodes,
         ImmutableList<String> inNames, ImmutableList<String> keyNames,
         ImmutableList<String> outNames, RowSink rowSink) {
       this.keyCode = requireNonNull(keyCode);
+      this.valueCode = requireNonNull(valueCode);
       this.aggregateCodes = requireNonNull(aggregateCodes);
       this.inNames = requireNonNull(inNames);
       this.keyNames = requireNonNull(keyNames);
@@ -3177,14 +3225,7 @@ public abstract class Codes {
 
     public void accept(Stack stack) {
       final Object key = keyCode.eval(stack);
-      final Object value;
-      if (inNames.size() == 1) {
-        value = stack.slots[stack.top - 1];
-      } else {
-        value =
-            Arrays.copyOfRange(stack.slots, stack.top - inNames.size(),
-                stack.top);
-      }
+      final Object value = valueCode.eval(stack);
       map.put(key, value);
     }
 
@@ -3426,8 +3467,8 @@ public abstract class Codes {
 
   /** Code that retrieves the values of several variables from the stack. */
   private static class StackTupleCode extends CodeImpl {
-    private final List<Integer> offsets;
-    private final List<String> names;
+    final List<Integer> offsets;
+    final List<String> names;
 
     StackTupleCode(ImmutableList<Integer> offsets,
         ImmutableList<String> names) {
@@ -3449,13 +3490,33 @@ public abstract class Codes {
     }
   }
 
-  /** Code that retrieves, as a tuple, the value of several variables from the
-   * environment. */
-  private static class GetTupleCode extends CodeImpl {
-    private final ImmutableList<String> names;
+  /** Code that retrieves the values of several variables from the stack
+   * as an array. */
+  private static class StackArrayCode extends StackTupleCode {
     private final Object[] values; // work space
 
-    GetTupleCode(ImmutableList<String> names) {
+    StackArrayCode(ImmutableList<Integer> offsets,
+        ImmutableList<String> names) {
+      super(offsets, names);
+      this.values = new Object[names.size()];
+    }
+
+    @Override public Object eval(Stack stack) {
+      int i = 0;
+      for (int offset : offsets) {
+        values[i++] = stack.slots[stack.top - offset];
+      }
+      return values.clone();
+    }
+  }
+
+  /** Code that retrieves, as an array, the value of several variables from the
+   * environment. */
+  private static class GetArrayCode extends CodeImpl {
+    final ImmutableList<String> names;
+    private final Object[] values; // work space
+
+    GetArrayCode(ImmutableList<String> names) {
       this.names = requireNonNull(names);
       this.values = new Object[names.size()];
     }
@@ -3468,7 +3529,19 @@ public abstract class Codes {
       for (int i = 0; i < names.size(); i++) {
         values[i] = stack.env.getOpt(names.get(i));
       }
-      return Arrays.asList(values.clone());
+      return values.clone();
+    }
+  }
+
+  /** Code that retrieves, as a tuple, the value of several variables from the
+   * environment. */
+  private static class GetTupleCode extends GetArrayCode {
+    GetTupleCode(ImmutableList<String> names) {
+      super(names);
+    }
+
+    @Override public Object eval(Stack stack) {
+      return Arrays.asList((Object []) super.eval(stack));
     }
   }
 
