@@ -24,6 +24,7 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -43,6 +44,7 @@ import org.apache.calcite.util.Util;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -50,7 +52,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
@@ -605,9 +609,14 @@ public class Resolver {
     return coreFrom;
   }
 
-  private Core.Aggregate toCore(Ast.Aggregate aggregate) {
+  private Core.Aggregate toCore(Ast.Aggregate aggregate,
+      Collection<? extends Core.IdPat> groupKeys) {
+    final List<Binding> bindings =
+        groupKeys.stream()
+            .map(groupKey -> Binding.of(groupKey, Unit.INSTANCE))
+            .collect(Collectors.toList());
     return core.aggregate(typeMap.getType(aggregate),
-        toCore(aggregate.aggregate),
+        withEnv(bindings).toCore(aggregate.aggregate),
         aggregate.argument == null ? null : toCore(aggregate.argument));
   }
 
@@ -823,15 +832,17 @@ public class Resolver {
 
     @Override protected void visit(Ast.Group group) {
       final Resolver r = withEnv(fromBuilder.bindings());
-      final ImmutableSortedMap.Builder<Core.IdPat, Core.Exp> groupExps =
+      final ImmutableSortedMap.Builder<Core.IdPat, Core.Exp> groupExpsB =
           ImmutableSortedMap.naturalOrder();
       final ImmutableSortedMap.Builder<Core.IdPat, Core.Aggregate> aggregates =
           ImmutableSortedMap.naturalOrder();
       Pair.forEach(group.groupExps, (id, exp) ->
-          groupExps.put(toCorePat(id), r.toCore(exp)));
+          groupExpsB.put(toCorePat(id), r.toCore(exp)));
+      final SortedMap<Core.IdPat, Core.Exp> groupExps = groupExpsB.build();
       group.aggregates.forEach(aggregate ->
-          aggregates.put(toCorePat(aggregate.id), r.toCore(aggregate)));
-      fromBuilder.group(groupExps.build(), aggregates.build());
+          aggregates.put(toCorePat(aggregate.id),
+              r.toCore(aggregate, groupExps.keySet())));
+      fromBuilder.group(groupExps, aggregates.build());
     }
   }
 

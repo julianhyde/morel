@@ -26,6 +26,7 @@ import net.hydromatic.morel.util.Pair;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import org.apache.calcite.util.Util;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -122,10 +123,12 @@ public class FromBuilder {
                     .allMatch(a -> a instanceof Core.IdPat))) {
       final Core.From from = (Core.From) exp;
       final Map<String, Core.Exp> nameExps = new LinkedHashMap<>();
+      final List<Binding> bindings;
       if (pat instanceof Core.RecordPat) {
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
         Pair.forEach(recordPat.type().argNameTypes.keySet(), recordPat.args,
             (name, arg) -> nameExps.put(name, core.id((Core.IdPat) arg)));
+        bindings = null;
       } else {
         final Core.IdPat idPat = (Core.IdPat) pat;
         final Core.FromStep lastStep = getLast(from.steps);
@@ -139,13 +142,15 @@ public class FromBuilder {
             return this;
           }
           nameExps.put(idPat.name, ((Core.Yield) lastStep).exp);
-          return yield_(true, core.record(typeSystem, nameExps));
+          bindings = ImmutableList.of(Binding.of(idPat));
+          return yield_(true, bindings, core.record(typeSystem, nameExps));
         }
         final Binding binding = Iterables.getOnlyElement(lastStep.bindings);
         nameExps.put(idPat.name, core.id(binding.id));
+        bindings = ImmutableList.of(Binding.of(idPat));
       }
       addAll(from.steps);
-      return yield_(true, core.record(typeSystem, nameExps));
+      return yield_(true, bindings, core.record(typeSystem, nameExps));
     }
     Compiles.acceptBinding(typeSystem, pat, bindings);
     return addStep(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
@@ -185,6 +190,34 @@ public class FromBuilder {
   }
 
   public FromBuilder yield_(boolean uselessIfLast, Core.Exp exp) {
+    return yield_(false, null, exp);
+  }
+
+  /** Creates a "yield" step.
+   *
+   * <p>When copying, the {@code bindings2} parameter is the
+   * {@link net.hydromatic.morel.ast.Core.Yield#bindings} value of the current
+   * Yield, so that we don't generate new variables (with different ordinals).
+   * Later steps are relying on the variables remaining the same. For example,
+   * in
+   *
+   * <blockquote>{@code
+   * from ... yield {a = b} where a > 5
+   * }</blockquote>
+   *
+   * <p>the {@code a} in {@code a > 5} references {@code IdPat('a', 0)} and we
+   * don't want yield to generate an {@code IdPat('a', 1)}.
+   *
+   * @param uselessIfLast Whether this Yield will be useless if it is the last
+   *                      step. The expression {@code {x = y} } is an example of
+   *                      this
+   * @param bindings2     Desired bindings, or null
+   * @param exp           Expression to yield
+   *
+   * @return This FromBuilder, with a Yield added to the list of steps
+   */
+  public FromBuilder yield_(boolean uselessIfLast,
+      @Nullable List<Binding> bindings2, Core.Exp exp) {
     boolean uselessIfNotLast = false;
     switch (exp.op) {
     case TUPLE:
@@ -222,7 +255,9 @@ public class FromBuilder {
         return this;
       }
     }
-    addStep(core.yield_(typeSystem, exp));
+    addStep(bindings2 != null
+        ? core.yield_(bindings2, exp)
+        : core.yield_(typeSystem, exp));
     removeIfNotLastIndex = uselessIfNotLast ? steps.size() - 1 : Integer.MIN_VALUE;
     removeIfLastIndex = uselessIfLast ? steps.size() - 1 : Integer.MIN_VALUE;
     return this;
@@ -312,7 +347,7 @@ public class FromBuilder {
     }
 
     @Override protected void visit(Core.Yield yield) {
-      yield_(yield.exp);
+      yield_(false, yield.bindings, yield.exp);
     }
   }
 
