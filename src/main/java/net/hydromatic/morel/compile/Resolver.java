@@ -24,7 +24,6 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
-import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -43,8 +42,10 @@ import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Util;
 
 import java.math.BigDecimal;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -250,7 +251,8 @@ public class Resolver {
   private boolean references(List<PatExp> patExps) {
     final Set<Core.NamedPat> refSet = new HashSet<>();
     final ReferenceFinder finder =
-        new ReferenceFinder(typeMap.typeSystem, Environments.empty(), refSet);
+        new ReferenceFinder(typeMap.typeSystem, Environments.empty(), refSet,
+            new ArrayDeque<>());
     patExps.forEach(x -> x.exp.accept(finder));
 
     final Set<Core.NamedPat> defSet = new HashSet<>();
@@ -276,23 +278,23 @@ public class Resolver {
     final Set<Core.NamedPat> set;
 
     protected ReferenceFinder(TypeSystem typeSystem, Environment env,
-        Set<Core.NamedPat> set) {
-      super(typeSystem, env);
+        Set<Core.NamedPat> set, Deque<FromContext> fromStack) {
+      super(typeSystem, env, fromStack);
       this.set = set;
     }
 
     @Override protected ReferenceFinder bind(Binding binding) {
-      return new ReferenceFinder(typeSystem, env.bind(binding), set);
+      return new ReferenceFinder(typeSystem, env.bind(binding), set, fromStack);
     }
 
     @Override protected ReferenceFinder bind(List<Binding> bindingList) {
-      // The "env2 != env" check is an optimization.
+      // The "env2 == env" check is an optimization.
       // If you remove it, this method will have the same effect, just slower.
       final Environment env2 = env.bindAll(bindingList);
-      if (env2 != env) {
-        return new ReferenceFinder(typeSystem, env2, set);
+      if (env2 == env) {
+        return this;
       }
-      return this;
+      return new ReferenceFinder(typeSystem, env2, set, fromStack);
     }
 
     @Override protected void visit(Core.Id id) {
@@ -613,9 +615,7 @@ public class Resolver {
   private Core.Aggregate toCore(Ast.Aggregate aggregate,
       Collection<? extends Core.IdPat> groupKeys) {
     final List<Binding> bindings =
-        groupKeys.stream()
-            .map(groupKey -> Binding.of(groupKey, Unit.INSTANCE))
-            .collect(Collectors.toList());
+        groupKeys.stream().map(Binding::of).collect(Collectors.toList());
     return core.aggregate(typeMap.getType(aggregate),
         withEnv(bindings).toCore(aggregate.aggregate),
         aggregate.argument == null ? null : toCore(aggregate.argument));
