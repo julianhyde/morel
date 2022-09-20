@@ -222,6 +222,7 @@ public class InlineTest {
     final String core2 = "val it = "
         + "from e in #emp scott "
         + "where op mod (#empno e, 2) = 0 "
+        + "yield {e = e} "
         + "where #deptno e_1 = 10 "
         + "yield #ename e_1";
     ml(ml)
