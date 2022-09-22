@@ -477,7 +477,8 @@ public class Compiler {
       return toApplicable(cx, literal.unwrap(), argType, pos);
 
     case ID:
-      final Binding binding = cx.combinedEnv().getOpt(((Core.Id) fn).idPat);
+      final Binding binding =
+          cx.combinedEnv().getOpt(((Core.Id) fn).idPat);
       if (binding == null
           || binding.value instanceof LinkCode
           || binding.value == Unit.INSTANCE) {
