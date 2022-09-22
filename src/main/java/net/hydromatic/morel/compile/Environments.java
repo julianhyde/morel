@@ -18,7 +18,6 @@
  */
 package net.hydromatic.morel.compile;
 
-import com.google.common.collect.ImmutableList;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
@@ -29,6 +28,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Static;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.checkerframework.checker.nullness.qual.Nullable;
