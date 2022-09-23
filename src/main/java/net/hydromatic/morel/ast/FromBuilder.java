@@ -237,6 +237,9 @@ public class FromBuilder {
         if (bindings.size() == 1) {
           // Singleton record that does not rename, e.g. 'yield {x=x}'
           // It only has meaning as the last step.
+          if (bindings2 == null) {
+            bindings2 = ImmutableList.copyOf(bindings);
+          }
           uselessIfNotLast = true;
           break;
         } else {
