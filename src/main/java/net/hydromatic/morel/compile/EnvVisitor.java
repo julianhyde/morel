@@ -77,6 +77,14 @@ abstract class EnvVisitor extends Visitor {
     local.exp.accept(bind(bindings));
   }
 
+  @Override protected void visit(Core.RecValDecl recValDecl) {
+    final List<Binding> bindings = new ArrayList<>();
+    recValDecl.list.forEach(decl ->
+        Compiles.bindPattern(typeSystem, bindings, decl.pat));
+    final EnvVisitor v2 = bind(bindings);
+    recValDecl.list.forEach(v2::accept);
+  }
+
   @Override protected void visit(Core.From from) {
     List<Binding> bindings = ImmutableList.of();
     for (Core.FromStep step : from.steps) {

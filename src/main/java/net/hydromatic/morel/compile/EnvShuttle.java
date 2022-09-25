@@ -73,6 +73,13 @@ abstract class EnvShuttle extends Shuttle {
     return local.copy(local.dataType, local.exp.accept(bind(bindings)));
   }
 
+  @Override public Core.RecValDecl visit(Core.RecValDecl recValDecl) {
+    final List<Binding> bindings = new ArrayList<>();
+    recValDecl.list.forEach(decl ->
+        Compiles.bindPattern(typeSystem, bindings, decl.pat));
+    return recValDecl.copy(bind(bindings).visitList(recValDecl.list));
+  }
+
   @Override public Core.Exp visit(Core.From from) {
     List<Binding> bindings = ImmutableList.of();
     final List<Core.FromStep> steps = new ArrayList<>();
