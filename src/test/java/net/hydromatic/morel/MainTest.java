@@ -612,6 +612,46 @@ public class MainTest {
     ml(ml).assertType("xx");
   }
 
+  @SuppressWarnings("ConstantConditions")
+  @Test void testDummy() {
+    switch (0) {
+    case 0:
+      ml("1").assertEval(is(1));
+      // fall through
+    case 1:
+      ml("1 + 2").assertEval(is(3));
+      // fall through
+    case 2:
+      ml("1 + 2 + 3").assertEval(is(6));
+      // fall through
+    case 3:
+      ml("1 * 2 + 3 * 4").assertEval(is(14));
+      // fall through
+    case 4:
+      ml("let val x = 1 in x + 2 end")
+          .with(Prop.INLINE_PASS_COUNT, 0)
+          .assertEval(is(3));
+      // fall through
+    case 5:
+      ml("let val x = 1 and y = 2 in 7 end")
+          .with(Prop.INLINE_PASS_COUNT, 0)
+          .assertEval(is(7));
+      // fall through
+    case 6:
+      ml("let val x = 1 and y = 2 in x + y + 4 end")
+          .with(Prop.INLINE_PASS_COUNT, 0)
+          .assertEval(is(7));
+      // fall through
+    case 7:
+      ml("(not (true andalso false))").assertEval(is(true));
+      // fall through
+    case 8:
+      ml("let val x = 1 and y = 2 and z = true and a = \"foo\" in\n"
+          + "  if z then x else y\n"
+          + "end").assertEval(is(1));
+    }
+  }
+
   @Test void testEval() {
     // literals
     ml("1").assertEval(is(1));
