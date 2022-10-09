@@ -47,6 +47,7 @@ import com.google.common.collect.Multimaps;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
 import org.apache.calcite.runtime.FlatLists;
+import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.AbstractList;
@@ -66,7 +67,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Pair.zip;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 import static net.hydromatic.morel.util.Static.transform;
 
@@ -331,17 +331,16 @@ public abstract class Codes {
 
   /** Returns the list of constituent codes from a {@code code}
    * created from {@link #tuple(Iterable)}
-   * or {@link #getStackTuple(List, List)}
+   * or {@link #getStackTuple(Environment.StackLayout, List)}
    * or {@link #getTuple(Iterable)}. */
   public static @Nullable List<Code> tupleCodes(Code code) {
     if (code instanceof TupleCode) {
       return ((TupleCode) code).codes;
     } else if (code instanceof StackTupleCode) {
       StackTupleCode stackTupleCode = (StackTupleCode) code;
-      final ImmutableList.Builder<Code> builder = ImmutableList.builder();
-      return zip(stackTupleCode.offsets, stackTupleCode.names)
+      return stackTupleCode.pats
           .stream()
-          .map(pair -> getStack(pair.left, pair.right))
+          .map(namedPat -> getStack(stackTupleCode.layout, namedPat))
           .collect(toImmutableList());
     } else if (code instanceof GetTupleCode) {
       GetTupleCode getTupleCode = (GetTupleCode) code;
@@ -428,8 +427,11 @@ public abstract class Codes {
 
   /** Returns a Code that returns the value that is at {@code offset} from the
    * top of the stack. {@code name} is for debugging purposes. */
-  public static Code getStack(int offset, String name) {
-    return new StackCode(offset, name);
+  public static Code getStack(Environment.StackLayout layout,
+      Core.NamedPat namedPat) {
+    final int distance = layout.distance(namedPat);
+    checkArgument(distance >= 0, "not found", namedPat);
+    return new StackCode(layout, distance + 1, namedPat);
   }
 
   /** Returns a Code that returns a tuple consisting of the values of variables
@@ -450,20 +452,25 @@ public abstract class Codes {
     return new GetArrayCode(ImmutableList.copyOf(names));
   }
 
-  /** Returns a Code that returns the tuple whose elements are at
-   * {@code offsets} from the top of the stack.
-   * {@code names} are for debugging purposes. */
-  public static Code getStackTuple(List<Integer> offsets, List<String> names) {
-    return new StackTupleCode(ImmutableList.copyOf(offsets),
-        ImmutableList.copyOf(names));
+  /** Returns a Code that returns the tuple whose elements are the given
+   * variables from the stack. */
+  public static Code getStackTuple(Environment.StackLayout layout,
+      List<Core.NamedPat> pats) {
+    final ImmutableList<Integer> offsets =
+        pats.stream()
+            .map(pat -> layout.distance(pat) + 1)
+            .collect(Util.toImmutableList());
+    return new StackTupleCode(layout, offsets, ImmutableList.copyOf(pats));
   }
 
-  /** Returns a Code that returns the array whose elements are at
-   * {@code offsets} from the top of the stack.
-   * {@code names} are for debugging purposes. */
-  public static Code getStackArray(List<Integer> offsets, List<String> names) {
-    return new StackArrayCode(ImmutableList.copyOf(offsets),
-        ImmutableList.copyOf(names));
+  /** Returns a Code that returns the array whose elements are the given
+   * variables from the stack. */
+  public static Code getStackArray(Environment.StackLayout layout,
+      List<Core.NamedPat> pats) {
+    final ImmutableList.Builder<Integer> offsets = ImmutableList.builder();
+    pats.forEach(pat -> offsets.add(layout.distance(pat) + 1));
+    return new StackArrayCode(layout, offsets.build(),
+        ImmutableList.copyOf(pats));
   }
 
   public static Code let(List<Code> matchCodes, Code resultCode) {
@@ -527,16 +534,15 @@ public abstract class Codes {
       return constant(tuple ? Unit.INSTANCE : new Object[0]);
     }
     if (codeList.stream().allMatch(c -> c instanceof StackCode)) {
-      final List<Integer> offsets = new ArrayList<>();
-      final List<String> names = new ArrayList<>();
+      final StackCode c0 = (StackCode) codeList.get(0);
+      final List<Core.NamedPat> pats = new ArrayList<>();
       codeList.forEach(c -> {
         StackCode stackCode = (StackCode) c;
-        offsets.add(stackCode.offset);
-        names.add(stackCode.name);
+        pats.add(stackCode.pat);
       });
       return tuple
-          ? getStackTuple(offsets, names)
-          : getStackArray(offsets, names);
+          ? getStackTuple(c0.layout, pats)
+          : getStackArray(c0.layout, pats);
     }
     if (codeList.stream().allMatch(c -> c instanceof GetCode)) {
       final List<String> names = new ArrayList<>();
@@ -3412,18 +3418,20 @@ public abstract class Codes {
 
   /** Code that retrieves the value of a variable from the stack. */
   private static class StackCode extends CodeImpl {
+    private final Environment.StackLayout layout;
     private final int offset;
-    private final String name;
+    private final Core.NamedPat pat;
 
-    StackCode(int offset, String name) {
+    StackCode(Environment.StackLayout layout, int offset, Core.NamedPat pat) {
+      this.layout = layout;
       checkArgument(offset > 0, "offset > 0");
       this.offset = offset;
-      this.name = requireNonNull(name);
+      this.pat = requireNonNull(pat);
     }
 
     @Override public Describer describe(Describer describer) {
       return describer.start("stack", d ->
-          d.arg("offset", offset).arg("name", name));
+          d.arg("offset", offset).arg("name", pat.name));
     }
 
     @Override public Object eval(Stack stack) {
@@ -3433,18 +3441,21 @@ public abstract class Codes {
 
   /** Code that retrieves the values of several variables from the stack. */
   private static class StackTupleCode extends CodeImpl {
+    final Environment.StackLayout layout;
     final List<Integer> offsets;
-    final List<String> names;
+    final List<Core.NamedPat> pats;
 
-    StackTupleCode(ImmutableList<Integer> offsets,
-        ImmutableList<String> names) {
+    StackTupleCode(Environment.StackLayout layout,
+        ImmutableList<Integer> offsets,
+        ImmutableList<Core.NamedPat> pats) {
+      this.layout = requireNonNull(layout);
       this.offsets = requireNonNull(offsets);
-      this.names = requireNonNull(names);
+      this.pats = requireNonNull(pats);
     }
 
     @Override public Describer describe(Describer describer) {
       return describer.start("stack", d ->
-          d.arg("offsets", offsets).arg("names", names));
+          d.arg("offsets", offsets).arg("names", pats));
     }
 
     @Override public Object eval(Stack stack) {
@@ -3461,10 +3472,10 @@ public abstract class Codes {
   private static class StackArrayCode extends StackTupleCode {
     private final Object[] values; // work space
 
-    StackArrayCode(ImmutableList<Integer> offsets,
-        ImmutableList<String> names) {
-      super(offsets, names);
-      this.values = new Object[names.size()];
+    StackArrayCode(Environment.StackLayout layout,
+        ImmutableList<Integer> offsets, ImmutableList<Core.NamedPat> pats) {
+      super(layout, offsets, pats);
+      this.values = new Object[pats.size()];
     }
 
     @Override public Object eval(Stack stack) {
@@ -3645,11 +3656,20 @@ public abstract class Codes {
           d.arg("matchCode", matchCode).arg("resultCode", resultCode));
     }
 
-    @Override public int exec(Stack stack) {
+    @Override public Object eval(Stack stack) {
       final Closure fnValue = (Closure) matchCode.eval(stack);
+      final int top = stack.save();
       int unused = fnValue.execBind(stack);
-      return resultCode.exec(stack);
+      Object o = resultCode.eval(stack);
+      stack.restore(top);
+      return o;
     }
+
+//    @Override public int exec(Stack stack) {
+//      final Closure fnValue = (Closure) matchCode.eval(stack);
+//      int unused = fnValue.execBind(stack);
+//      return resultCode.exec(stack);
+//    }
   }
 
   /** Code that implements {@link #let(List, Code)} with multiple arguments. */
@@ -3671,11 +3691,14 @@ public abstract class Codes {
     }
 
     @Override public Object eval(Stack stack) {
+      final int top = stack.save();
       for (Code matchCode : matchCodes) {
         final Closure fnValue = (Closure) matchCode.eval(stack);
         int unused = fnValue.execBind(stack);
       }
-      return resultCode.eval(stack);
+      Object o = resultCode.eval(stack);
+      stack.restore(top);
+      return o;
     }
   }
 
