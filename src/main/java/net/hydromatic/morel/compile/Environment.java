@@ -24,6 +24,7 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
 
+import com.google.common.collect.ImmutableList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -124,11 +125,39 @@ public abstract class Environment {
 
   abstract int distance(int soFar, Core.NamedPat id);
 
+  protected abstract void populateLayout(List<Core.NamedPat> list);
+
+  StackLayout layout() {
+    final List<Core.NamedPat> list = new ArrayList<>();
+    populateLayout(list);
+    return new StackLayout(ImmutableList.copyOf(list));
+  }
+
   /** Returns this environment plus the bindings in the given environment. */
   public Environment plus(Environment env) {
     final List<Binding> bindingList = new ArrayList<>();
     env.visit(bindingList::add);
     return bindAll(reverse(bindingList));
+  }
+
+  /** Layout of the stack, describing the name and type of the variable in each
+   * slot of the stack. */
+  public static class StackLayout {
+    final ImmutableList<Core.NamedPat> list;
+
+    StackLayout(ImmutableList<Core.NamedPat> list) {
+      this.list = list;
+    }
+
+    @Override public String toString() {
+      return list.toString();
+    }
+
+    /** Returns the distance of a given variable from the top of the stack, or
+     * -1 if it is not on the stack. */
+    public int distance(Core.NamedPat idPat) {
+      return list.indexOf(idPat);
+    }
   }
 }
 

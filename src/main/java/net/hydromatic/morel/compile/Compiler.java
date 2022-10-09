@@ -69,7 +69,6 @@ import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.getLast;
 import static com.google.common.collect.Iterables.getOnlyElement;
@@ -286,9 +285,8 @@ public class Compiler {
       if (binding.value instanceof Code) {
         return (Code) binding.value;
       }
-      final int distance = cx.env.distance(0, idPat);
-      checkArgument(distance >= 0, "not found", idPat);
-      return Codes.getStack(distance + 1, idPat.name);
+      final Environment.StackLayout layout = cx.env.layout();
+      return Codes.getStack(layout, idPat);
     }
     final Binding globalBinding = cx.globalEnv.getOpt(idPat);
     checkNotNull(globalBinding, "not found", idPat);
@@ -356,7 +354,7 @@ public class Compiler {
     }
     final Core.FromStep firstStep = steps.get(0);
     final Supplier<Codes.RowSink> nextFactory =
-        createRowSinkFactory(cx, firstStep.bindings, Util.skip(steps),
+        createRowSinkFactory(cx0, firstStep.bindings, Util.skip(steps),
             elementType);
     switch (firstStep.op) {
     case INNER_JOIN:
