@@ -90,7 +90,7 @@ public class FromBuilder {
   private FromBuilder addStep(Core.FromStep step) {
     if (env != null) {
       // Validate the step. (Not necessary, but helps find bugs.)
-      RefChecker.of(typeSystem, env.bindAll(bindings))
+      RefChecker.of(typeSystem, env)
           .visitStep(step, bindings);
     }
     if (removeIfNotLastIndex == steps.size() - 1) {
