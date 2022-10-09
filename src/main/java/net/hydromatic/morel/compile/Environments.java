@@ -40,6 +40,8 @@ import java.util.function.Consumer;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
+import static com.google.common.collect.ImmutableList.copyOf;
+
 import static java.util.Objects.requireNonNull;
 
 /** Helpers for {@link Environment}. */
@@ -128,7 +130,7 @@ public abstract class Environments {
     case 1:
       return list.get(0);
     default:
-      return new ConcatEnvironment(ImmutableList.copyOf(list));
+      return new ConcatEnvironment(copyOf(list));
     }
   }
 
@@ -208,6 +210,11 @@ public abstract class Environments {
         return parent.distance(soFar + 1, id);
       }
     }
+
+    @Override protected void populateLayout(List<Core.NamedPat> list) {
+      list.add(binding.id);
+      parent.populateLayout(list);
+    }
   }
 
   /** Empty environment. */
@@ -231,6 +238,9 @@ public abstract class Environments {
 
     @Override int distance(int soFar, Core.NamedPat id) {
       return -1;
+    }
+
+    @Override protected void populateLayout(List<Core.NamedPat> list) {
     }
   }
 
@@ -278,6 +288,11 @@ public abstract class Environments {
       } else {
         return parent.distance(soFar + map.size(), id);
       }
+    }
+
+    @Override protected void populateLayout(List<Core.NamedPat> list) {
+      list.addAll(copyOf(map.keySet()).reverse());
+      parent.populateLayout(list);
     }
 
     private <E> int find(Iterable<E> iterable, E e) {
@@ -333,6 +348,10 @@ public abstract class Environments {
     @Override int distance(int soFar, Core.NamedPat id) {
       // REVIEW Is this right? We can only look in the first environment.
       return list.get(0).distance(soFar, id);
+    }
+
+    @Override protected void populateLayout(List<Core.NamedPat> list) {
+      this.list.forEach(e -> e.populateLayout(list));
     }
   }
 }
