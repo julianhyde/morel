@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -361,7 +362,7 @@ public class Compiler {
     case INNER_JOIN:
       final Core.Scan scan = (Core.Scan) firstStep;
       final Code code = compile(cx, scan.exp);
-      final Context cx2 = cx.bindAll(scan.bindings);
+      final Context cx2 = cx0.bindAll(scan.bindings);
       final Code conditionCode = compile(cx2, scan.condition);
       return () -> Codes.scanRowSink(firstStep.op, scan.pat, code,
           conditionCode, nextFactory.get());
@@ -386,7 +387,11 @@ public class Compiler {
         Pair.forEach(tuple.args, recordType.argNameTypes().keySet(),
             (exp, name) ->
                 mapCodes.put(name, compile(cx, exp)));
-        return () -> Codes.yieldRowSink(mapCodes.build(), nextFactory.get());
+        final AtomicInteger size = new AtomicInteger();
+        cx.env.visit(b -> size.incrementAndGet());
+        cx0.env.visit(b -> size.decrementAndGet());
+        return () ->
+            Codes.yieldRowSink(mapCodes.build(), size.get(), nextFactory.get());
       }
 
     case ORDER:
