@@ -645,10 +645,10 @@ public abstract class Codes {
   }
 
   /** Creates a {@link RowSink} for a non-terminal {@code yield} step. */
-  public static RowSink yieldRowSink(Map<String, Code> yieldCodes,
+  public static RowSink yieldRowSink(Map<String, Code> yieldCodes, int loss,
       RowSink rowSink) {
     return new YieldRowSink(ImmutableList.copyOf(yieldCodes.keySet()),
-        ImmutableList.copyOf(yieldCodes.values()), rowSink);
+        ImmutableList.copyOf(yieldCodes.values()), loss, rowSink);
   }
 
   /** Creates a {@link RowSink} to collect the results of a {@code from}
@@ -3426,11 +3426,13 @@ public abstract class Codes {
    * therefore the value cannot be passed via the {@link EvalEnv}. */
   private static class YieldRowSink implements RowSink {
     private final ImmutableList<Code> codes;
+    private final int loss;
     private final RowSink rowSink;
 
     YieldRowSink(ImmutableList<String> names, ImmutableList<Code> codes,
-        RowSink rowSink) {
+        int loss, RowSink rowSink) {
       this.codes = codes;
+      this.loss = loss;
       this.rowSink = rowSink;
     }
 
@@ -3446,7 +3448,10 @@ public abstract class Codes {
       for (Code code : codes) {
         stack.slots[i++] = code.eval(stack);
       }
-      stack.top = i;
+      if (loss > 0) {
+        System.arraycopy(stack.slots, save, stack.slots, save - loss, codes.size());
+      }
+      stack.top = i - loss;
       rowSink.accept(stack);
       stack.restore(save);
     }
