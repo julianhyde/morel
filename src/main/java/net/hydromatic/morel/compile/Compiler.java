@@ -69,6 +69,7 @@ import java.util.function.Supplier;
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Pair.zip;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 import static net.hydromatic.morel.util.Static.transform;
 
@@ -519,14 +520,12 @@ public class Compiler {
       final Core.Tuple tuple = (Core.Tuple) exp;
       final Core.TuplePat tuplePat = (Core.TuplePat) pat;
       if (tuple.args.size() == tuplePat.args.size()) {
-        for (int i = 0; i < tuple.args.size(); i++) {
-          Core.Exp arg = tuple.args.get(i);
-          Core.Pat patArg = tuplePat.args.get(i);
-          if (!matches(arg, patArg)) {
+        for (Pair<Core.Exp, Core.Pat> pair : zip(tuple.args, tuplePat.args)) {
+          if (!matches(pair.left, pair.right)) {
             return false;
           }
-          return true;
         }
+        return true;
       }
     }
     return false;
