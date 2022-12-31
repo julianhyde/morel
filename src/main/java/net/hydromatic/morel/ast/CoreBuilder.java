@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.ast;
 
+import com.google.common.collect.Lists;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.NameGenerator;
@@ -43,6 +44,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -539,6 +541,11 @@ public enum CoreBuilder {
     final ListType listType = typeSystem.listType(elementType);
     return apply(Pos.ZERO, listType, literal,
         core.tuple(typeSystem, null, args));
+  }
+
+  /** Creates a list with one or more elements. */
+  public Core.Exp list(TypeSystem typeSystem, Core.Exp arg0, Core.Exp... args) {
+    return list(typeSystem, arg0.type, Lists.asList(arg0, args));
   }
 
   /** Creates a record. */
