@@ -194,8 +194,7 @@ class SuchThatShuttle extends Shuttle {
             a0 = a1;
             a1 = tmp;
           }
-          Core.Exp a1List =
-              core.list(typeSystem, a1.type, ImmutableList.of(a1));
+          Core.Exp a1List = core.list(typeSystem, a1);
           Core.@Nullable Exp e =
               rewriteElem(typeSystem, mapper, boundPats, scans,
                   filters, a0, a1List, exps2);
