@@ -478,12 +478,27 @@ public class Core {
       // no args
     }
 
+    /** Returns the {@code i}<sup>th</sup> argument. */
+    public Exp arg(int i) {
+      throw new UnsupportedOperationException();
+    }
+
     /** Returns the type. */
     public Type type() {
       return type;
     }
 
     @Override public abstract Exp accept(Shuttle shuttle);
+
+    /** Returns whether this expression is a constant.
+     *
+     * <p>Examples include literals {@code 1}, {@code true},
+     * constructors applied to constants,
+     * records and tuples whose arguments are constant.
+     */
+    public boolean isConstant() {
+      return false;
+    }
   }
 
   /** Reference to a variable.
@@ -612,11 +627,19 @@ public class Core {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      if (value instanceof Wrapper) {
+      switch (op) {
+      case VALUE_LITERAL:
         // Generate the original expression from which this value was derived.
         return ((Wrapper) value).exp.unparse(w, left, right);
+      case INTERNAL_LITERAL:
+        // Print the value as if it were a string.
+        return w.appendLiteral(((Wrapper) value).o.toString());
       }
       return w.appendLiteral(value);
+    }
+
+    @Override public boolean isConstant() {
+      return true;
     }
   }
 
@@ -802,6 +825,10 @@ public class Core {
       Ord.forEach(args, action);
     }
 
+    @Override public Exp arg(int i) {
+      return args.get(i);
+    }
+
     @Override public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
@@ -828,6 +855,10 @@ public class Core {
     public Tuple copy(TypeSystem typeSystem, List<Exp> args) {
       return args.equals(this.args) ? this
           : core.tuple(typeSystem, type(), args);
+    }
+
+    @Override public boolean isConstant() {
+      return args.stream().allMatch(Exp::isConstant);
     }
   }
 
@@ -1309,6 +1340,11 @@ public class Core {
       return ((Tuple) arg).args;
     }
 
+    @Override public Exp arg(int i) {
+      // Throws if the argument is not a tuple.
+      return arg.arg(i);
+    }
+
     @Override public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
@@ -1344,6 +1380,18 @@ public class Core {
     public Apply copy(Exp fn, Exp arg) {
       return fn == this.fn && arg == this.arg ? this
           : core.apply(pos, type, fn, arg);
+    }
+
+    @Override public boolean isConstant() {
+      switch (fn.op) {
+      case FN_LITERAL:
+        switch ((BuiltIn) ((Literal) fn).value) {
+        case Z_LIST:
+          // A list of constants is constant
+          return args().stream().allMatch(Exp::isConstant);
+        }
+      }
+      return super.isConstant();
     }
   }
 
@@ -1430,6 +1478,11 @@ public class Core {
       return this == obj
           || obj instanceof Wrapper
           && this.o.equals(((Wrapper) obj).o);
+    }
+
+    /** Returns the value. */
+    <T> T unwrap(Class<T> valueClass) {
+      return valueClass.cast(o);
     }
   }
 }

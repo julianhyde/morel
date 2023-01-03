@@ -104,14 +104,30 @@ class SuchThatShuttle extends Shuttle {
           boundPatBuilder.put(b.id, core.id(b.id)));
     }
     final SortedMap<Core.NamedPat, Core.Exp> boundPats = boundPatBuilder.build();
-    final Map<Core.IdPat, Core.Exp> scans = ImmutableMap.of();
-    final List<Core.Exp> filters = ImmutableList.of();
-    final UnaryOperator<Core.NamedPat> originalPats = UnaryOperator.identity();
-    final Core.Exp rewritten =
-        rewrite(originalPats, boundPats, scans, filters,
-            conjunctions(scan.exp));
+    final Core.Exp rewritten = rewrite0(boundPats, scan.pat, scan.exp);
     return core.scan(Op.INNER_JOIN, scan.bindings,
         scan.pat, rewritten, scan.condition);
+  }
+
+  private Core.Exp rewrite0(SortedMap<Core.NamedPat, Core.Exp> boundPats,
+      Core.Pat pat, Core.Exp exp) {
+    try {
+      final Map<Core.IdPat, Core.Exp> scans = ImmutableMap.of();
+      final List<Core.Exp> filters = ImmutableList.of();
+      final UnaryOperator<Core.NamedPat> originalPats = UnaryOperator.identity();
+      return rewrite(originalPats, boundPats, scans, filters,
+          conjunctions(exp));
+    } catch (RewriteFailedException e) {
+      // We could not rewrite.
+      // Try a different approach.
+      // Generate an iterator over all values of all variables,
+      // then filter.
+      final Core.Exp generator = Extents.generator(typeSystem, pat, exp);
+      final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+      return fromBuilder.scan(pat, generator)
+          .where(exp)
+          .build();
+    }
   }
 
   /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
@@ -136,6 +152,28 @@ class SuchThatShuttle extends Shuttle {
     }
   }
 
+  /** Rewrites a "from vars suchthat condition" expression to a
+   * "from vars in list" expression; returns null if no rewrite is possible.
+   *
+   * <p>The "filters" argument contains a list of conditions to be applied
+   * after generating rows. For example,
+   * "from x suchthat x % 2 = 1 and x elem list"
+   * becomes "from x in list where x % 2 = 1" with the filter "x % 2 = 1".
+   *
+   * <p>The "scans" argument contains scans to be added. For example,
+   * "from x suchthat x elem list" adds the scan "(x, list)".
+   *
+   * <p>The "boundPats" argument contains expressions that are bound to
+   * variables. For example, "from (x, y) suchthat (x, y) elem list"
+   * will add the scan "(e, list)" and boundPats [(x, #1 e), (y, #2 e)].
+   *
+   * @param mapper Renames variables
+   * @param boundPats Variables that have been bound to a list
+   * @param scans Scans (joins) to be appended to the resulting "from"
+   * @param filters Filters to be appended as "where" in the resulting "from"
+   * @param exps The condition, decomposed into conjunctions
+   * @return Rewritten expression
+   */
   private Core.Exp rewrite(UnaryOperator<Core.NamedPat> mapper,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Map<Core.IdPat, Core.Exp> scans, List<Core.Exp> filters,
@@ -225,8 +263,7 @@ class SuchThatShuttle extends Shuttle {
       break;
     }
 
-    throw new CompileException("not implemented: suchthat " + exp.op
-        + " [" + exp + "]", false, Pos.ZERO);
+    throw new RewriteFailedException(exp);
   }
 
   private Core.@Nullable Exp rewriteElem(TypeSystem typeSystem,
@@ -384,6 +421,13 @@ class SuchThatShuttle extends Shuttle {
         }
       }
       return p;
+    }
+  }
+
+  /** Signals that we could not rewrite. */
+  private static class RewriteFailedException extends RuntimeException {
+    RewriteFailedException(Core.Exp exp) {
+      super("not implemented: suchthat " + exp.op + " [" + exp + "]");
     }
   }
 }
