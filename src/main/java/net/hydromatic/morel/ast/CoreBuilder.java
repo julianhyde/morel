@@ -18,7 +18,6 @@
  */
 package net.hydromatic.morel.ast;
 
-import com.google.common.collect.Lists;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.NameGenerator;
@@ -36,15 +35,17 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Range;
+import com.google.common.collect.RangeSet;
 import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -149,6 +150,13 @@ public enum CoreBuilder {
   /** Creates a value literal. */
   public Core.Literal valueLiteral(Core.Exp exp, Object value) {
     return new Core.Literal(Op.VALUE_LITERAL, exp.type,
+        Core.Literal.wrap(exp, value));
+  }
+
+  /** Creates an internal literal. */
+  public Core.Literal internalLiteral(Object value) {
+    final Core.Literal exp = unitLiteral();
+    return new Core.Literal(Op.INTERNAL_LITERAL, exp.type,
         Core.Literal.wrap(exp, value));
   }
 
@@ -548,6 +556,61 @@ public enum CoreBuilder {
     return list(typeSystem, arg0.type, Lists.asList(arg0, args));
   }
 
+  /** Creates an extent. It returns a list of all values of a given type that
+   * fall into a given range-set. The range-set might consist of just
+   * {@link Range#all()}, in which case, the list returns all values of the
+   * type. */
+  @SuppressWarnings({"UnstableApiUsage", "rawtypes"})
+  public Core.Exp extent(TypeSystem typeSystem, Type type,
+      RangeSet<Comparable> rangeSet) {
+    final ListType listType = typeSystem.listType(type);
+    // Store an ImmutableRangeSet value inside a literal of type 'unit'.
+    // The value of such literals is usually Unit.INSTANCE, but we cheat.
+    return core.apply(Pos.ZERO, listType,
+        core.functionLiteral(typeSystem, BuiltIn.Z_EXTENT),
+        core.internalLiteral(ImmutableRangeSet.copyOf(rangeSet)));
+  }
+
+  @SuppressWarnings({"UnstableApiUsage", "rawtypes", "unchecked"})
+  public Core.Exp mergeExtents(TypeSystem typeSystem,
+      List<? extends Core.Exp> exps) {
+    switch (exps.size()) {
+    case 0:
+      throw new AssertionError();
+
+    case 1:
+      return exps.get(0);
+
+    default:
+      ImmutableRangeSet rangeSet =
+          ImmutableRangeSet.of(Range.all());
+      final List<Core.Exp> remainingExps = new ArrayList<>();
+      for (Core.Exp exp : exps) {
+        switch (exp.op) {
+        case APPLY:
+          final Core.Apply apply = (Core.Apply) exp;
+          switch (apply.fn.op) {
+          case FN_LITERAL:
+            switch ((BuiltIn) ((Core.Literal) apply.fn).value) {
+            case Z_EXTENT:
+              final Core.Literal argLiteral = (Core.Literal) apply.arg;
+              final Core.Wrapper wrapper = (Core.Wrapper) argLiteral.value;
+              rangeSet = rangeSet.intersection(wrapper.unwrap(RangeSet.class));
+              continue;
+            }
+          }
+        }
+        remainingExps.add(exp);
+      }
+      Core.Exp exp =
+          core.extent(typeSystem, exps.get(0).type, rangeSet);
+      for (Core.Exp remainingExp : remainingExps) {
+        exp = core.andAlso(typeSystem, exp, remainingExp);
+      }
+      return exp;
+    }
+  }
+
   /** Creates a record. */
   public Core.Exp record(TypeSystem typeSystem,
       Map<String, ? extends Core.Exp> nameExps) {
@@ -591,12 +654,21 @@ public enum CoreBuilder {
     return call(typeSystem, BuiltIn.OP_EQ, a0.type, Pos.ZERO, a0, a1);
   }
 
+  public Core.Exp notEqual(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_NE, a0.type, Pos.ZERO, a0, a1);
+  }
+
   public Core.Exp lessThan(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(typeSystem, BuiltIn.OP_LT, a0.type, Pos.ZERO, a0, a1);
   }
 
   public Core.Exp greaterThan(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(typeSystem, BuiltIn.OP_GT, a0.type, Pos.ZERO, a0, a1);
+  }
+
+  public Core.Exp greaterThanOrEqualTo(TypeSystem typeSystem, Core.Exp a0,
+      Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_GE, a0.type, Pos.ZERO, a0, a1);
   }
 
   public Core.Exp elem(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {

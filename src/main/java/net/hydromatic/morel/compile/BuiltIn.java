@@ -1731,6 +1731,26 @@ public enum BuiltIn {
     }
   }
 
+  /** Returns the reverse comparison operator, R,
+   *  such that "x this y" if and only if "y R x". */
+  public BuiltIn reverse() {
+    switch (this) {
+    case OP_EQ:
+    case OP_NE:
+      return this;
+    case OP_GE:
+      return OP_LE;
+    case OP_GT:
+      return OP_LT;
+    case OP_LE:
+      return OP_GE;
+    case OP_LT:
+      return OP_GT;
+    default:
+      throw new AssertionError("unexpected: " + this);
+    }
+  }
+
   /** Callback used when defining a datatype. */
   private interface DataTypeHelper {
     DataTypeHelper tyCon(String name);

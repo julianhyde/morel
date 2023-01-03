@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.compile.Extents.ExtentFilter;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.Applicable3;
@@ -43,6 +44,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
+import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
 import net.hydromatic.morel.util.TailList;
 import net.hydromatic.morel.util.ThreadLocals;
@@ -218,6 +220,7 @@ public class Compiler {
       final BuiltIn builtIn = (BuiltIn) literal.value;
       return Codes.constant(Codes.BUILT_IN_VALUES.get(builtIn));
 
+    case INTERNAL_LITERAL:
     case VALUE_LITERAL:
       literal = (Core.Literal) expression;
       return Codes.constant(literal.unwrap());
@@ -283,8 +286,7 @@ public class Compiler {
     // Is this is a call to a built-in operator?
     switch (apply.fn.op) {
     case FN_LITERAL:
-      final Core.Literal literal = (Core.Literal) apply.fn;
-      final BuiltIn builtIn = (BuiltIn) literal.value;
+      final BuiltIn builtIn = (BuiltIn) ((Core.Literal) apply.fn).value;
       return compileCall(cx, builtIn, apply.arg, apply.pos);
     }
     final Code argCode = compileArg(cx, apply.arg);
@@ -361,11 +363,12 @@ public class Compiler {
       //   (n, d) in nameDeptPairs
       //
       final Core.Scan scan2 = (Core.Scan) firstStep;
-      final ExtentFilter extentFilter = extent(scan2);
+      final ExtentFilter extentFilter =
+          new Extents.Extent(typeSystem).extent(scan2);
       final FnType fnType =
           typeSystem.fnType(scan2.pat.type, PrimitiveType.BOOL);
       final Pos pos = Pos.ZERO;
-      final Core.Match match = core.match(scan2.pat, scan2.exp, pos);
+      final Core.Match match = core.match(pos, scan2.pat, scan2.exp);
       final Core.Exp lambda =
           core.fn(pos, fnType, ImmutableList.of(match),
               typeSystem.nameGenerator);
@@ -910,17 +913,6 @@ public class Compiler {
 
     @Override public Object eval(EvalEnv evalEnv) {
       return new Closure(evalEnv, patCodes, pos);
-    }
-  }
-
-  /** A "suchthat" expression split into an extent and filters. */
-  private static class ExtentFilter {
-    final Core.Exp extent;
-    final ImmutableList<Core.Exp> filters;
-
-    ExtentFilter(Core.Exp extent, ImmutableList<Core.Exp> filters) {
-      this.extent = extent;
-      this.filters = filters;
     }
   }
 }

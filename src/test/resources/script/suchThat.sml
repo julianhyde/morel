@@ -171,6 +171,35 @@ from p suchthat path p;
 val it = [(1,2),(2,3),(1,3)] : (int * int) list
  *)
 
+(* More edges *)
+(*
+   1 --> 4 ----+
+   |     |     |
+   |     v     v
+   +---> 2 --> 3
+*)
+val edges = [(1, 2), (2, 3), (1, 4), (4, 2), (4, 3)];
+fun edge (x, y) = (x, y) elem edges;
+
+(*) Return points that are 2 hops apart.
+from (x, y, z) suchthat edge (x, y) andalso edge (y, z) andalso x <> z
+  group x, z;
+
+(* Previous is equivalent to following. (Which implies a theorem connecting
+   'exists' with 'group' and variable elimination.) *)
+from (x, z) suchthat
+  exists (from y suchthat edge (x, y) andalso edge (y, z))
+  andalso x <> z;
+
+(*) Also equivalent.
+from (x, z) suchthat exists (
+   from y suchthat edge (x, y) andalso edge (y, z) andalso x <> z);
+
+(*) Also equivalent.
+from (x, y) suchthat edge (x, y),
+    (y2, z) suchthat y2 = y andalso edge (y, z) and x <> z
+  group x, y;
+
 (* ------------------------------------------------------ *)
 (* Joe's bar.
  * See http://infolab.stanford.edu/~ullman/fcdb/aut07/slides/dlog.pdf.
