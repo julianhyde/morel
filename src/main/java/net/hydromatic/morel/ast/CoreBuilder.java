@@ -27,6 +27,7 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -50,6 +51,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.function.BiFunction;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.type.RecordType.ORDERING;
@@ -543,47 +545,101 @@ public enum CoreBuilder {
     // The value of such literals is usually Unit.INSTANCE, but we cheat.
     return core.apply(Pos.ZERO, listType,
         core.functionLiteral(typeSystem, BuiltIn.Z_EXTENT),
-        core.internalLiteral(ImmutableRangeSet.copyOf(rangeSet)));
+        core.internalLiteral(new RangeExtent(rangeSet, type)));
   }
 
   @SuppressWarnings({"UnstableApiUsage", "rawtypes", "unchecked"})
-  public Core.Exp mergeExtents(TypeSystem typeSystem,
-      List<? extends Core.Exp> exps) {
+  public Pair<Core.Exp, List<Core.Exp>> mergeExtents(TypeSystem typeSystem,
+      List<? extends Core.Exp> exps, boolean intersect) {
     switch (exps.size()) {
     case 0:
       throw new AssertionError();
 
     case 1:
-      return exps.get(0);
+      return Pair.of(simplify(typeSystem, exps.get(0)), ImmutableList.of());
 
     default:
-      ImmutableRangeSet rangeSet =
-          ImmutableRangeSet.of(Range.all());
+      ImmutableRangeSet rangeSet = intersect
+          ? ImmutableRangeSet.of(Range.all())
+          : ImmutableRangeSet.of();
       final List<Core.Exp> remainingExps = new ArrayList<>();
       for (Core.Exp exp : exps) {
-        switch (exp.op) {
-        case APPLY:
-          final Core.Apply apply = (Core.Apply) exp;
-          switch (apply.fn.op) {
-          case FN_LITERAL:
-            switch ((BuiltIn) ((Core.Literal) apply.fn).value) {
-            case Z_EXTENT:
-              final Core.Literal argLiteral = (Core.Literal) apply.arg;
-              final Core.Wrapper wrapper = (Core.Wrapper) argLiteral.value;
-              rangeSet = rangeSet.intersection(wrapper.unwrap(RangeSet.class));
-              continue;
-            }
-          }
+        if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
+          final Core.Literal argLiteral = (Core.Literal) ((Core.Apply) exp).arg;
+          final Core.Wrapper wrapper = (Core.Wrapper) argLiteral.value;
+          final RangeExtent list = wrapper.unwrap(RangeExtent.class);
+          rangeSet = intersect
+              ? rangeSet.intersection(list.rangeSet)
+              : rangeSet.union(list.rangeSet);
+          continue;
         }
         remainingExps.add(exp);
       }
+      final ListType listType = (ListType) exps.get(0).type;
       Core.Exp exp =
-          core.extent(typeSystem, exps.get(0).type, rangeSet);
+          core.extent(typeSystem, listType.elementType, rangeSet);
       for (Core.Exp remainingExp : remainingExps) {
-        exp = core.andAlso(typeSystem, exp, remainingExp);
+        exp = intersect
+            ? core.intersect(typeSystem, exp, remainingExp)
+            : core.union(typeSystem, exp, remainingExp);
       }
-      return exp;
+      return Pair.of(exp, remainingExps);
     }
+  }
+
+  List<Core.Exp> simplifyList(TypeSystem typeSystem,
+      List<Core.Exp> list) {
+    final List<Core.Exp> list2 = new ArrayList<>();
+    list.forEach(e -> list2.add(simplify(typeSystem, e)));
+    return list2;
+  }
+
+  /** Simplifies an expression.
+   *
+   * <p>In particular, it merges extents. For example,
+   * <blockquote><pre>{@code
+   * extent "[10, 20]" orelse (extent "[-inf,5]" andalso "[1,int]")
+   * }</pre></blockquote>
+   * becomes
+   * <blockquote><pre>{@code
+   * extent "[[1, 5], [10, 20]]"
+   * }</pre></blockquote>
+   * */
+  Core.Exp simplify(TypeSystem typeSystem, Core.Exp exp) {
+    switch (exp.op) {
+    case TUPLE:
+      final Core.Tuple tuple = (Core.Tuple) exp;
+      final List<Core.Exp> args = simplifyList(typeSystem, tuple.args);
+      return tuple.copy(typeSystem, args);
+
+    case APPLY:
+      Core.Apply apply = (Core.Apply) exp;
+      final Core.Exp simplifiedArgs = simplify(typeSystem, apply.arg);
+      if (!simplifiedArgs.equals(apply.arg)) {
+        apply = apply.copy(apply.fn, simplifiedArgs);
+      }
+      if (apply.isCallTo(BuiltIn.OP_UNION)) {
+        if (apply.args().stream()
+            .allMatch(exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
+          Pair<Core.Exp, List<Core.Exp>> pair =
+              mergeExtents(typeSystem, apply.args(), false);
+          if (pair.right.isEmpty()) {
+            return pair.left;
+          }
+        }
+      }
+      if (apply.isCallTo(BuiltIn.OP_INTERSECT)) {
+        if (apply.args().stream()
+            .allMatch(exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
+          Pair<Core.Exp, List<Core.Exp>> pair =
+              mergeExtents(typeSystem, apply.args(), true);
+          if (pair.right.isEmpty()) {
+            return pair.left;
+          }
+        }
+      }
+    }
+    return exp;
   }
 
   /** Creates a record. */
@@ -647,9 +703,7 @@ public enum CoreBuilder {
   }
 
   public Core.Exp elem(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
-    if (a1.op == Op.APPLY
-        && ((Core.Apply) a1).fn.op == Op.FN_LITERAL
-        && ((Core.Literal) ((Core.Apply) a1).fn).value == BuiltIn.Z_LIST
+    if (a1.isCallTo(BuiltIn.Z_LIST)
         && ((Core.Apply) a1).args().size() == 1) {
       // If "a1 = [x]", rather than "a0 elem [x]", generate "a0 = x"
       return equal(typeSystem, a0, ((Core.Apply) a1).args().get(0));
@@ -661,8 +715,26 @@ public enum CoreBuilder {
     return call(typeSystem, BuiltIn.Z_ANDALSO, a0, a1);
   }
 
+  public Core.Exp andAlso(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
+    return foldRight(ImmutableList.copyOf(exps),
+        (e1, e2) -> andAlso(typeSystem, e1, e2));
+  }
+
   public Core.Exp orElse(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(typeSystem, BuiltIn.Z_ORELSE, a0, a1);
+  }
+
+  public Core.Exp orElse(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
+    return foldRight(ImmutableList.copyOf(exps),
+        (e1, e2) -> orElse(typeSystem, e1, e2));
+  }
+
+  private <E> E foldRight(List<E> list, BiFunction<E, E, E> fold) {
+    E e = list.get(list.size() - 1);
+    for (int i = list.size() - 2; i >= 0; i--) {
+      e = fold.apply(list.get(i), e);
+    }
+    return e;
   }
 
   public Core.Exp only(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
@@ -670,6 +742,25 @@ public enum CoreBuilder {
         ((ListType) a0.type).elementType, pos, a0);
   }
 
+  public Core.Exp union(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_UNION,
+        ((ListType) a0.type).elementType, Pos.ZERO, a0, a1);
+  }
+
+  public Core.Exp union(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
+    return foldRight(ImmutableList.copyOf(exps),
+        (e1, e2) -> union(typeSystem, e1, e2));
+  }
+
+  public Core.Exp intersect(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_INTERSECT,
+        ((ListType) a0.type).elementType, Pos.ZERO, a0, a1);
+  }
+
+  public Core.Exp intersect(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
+    return foldRight(ImmutableList.copyOf(exps),
+        (e1, e2) -> intersect(typeSystem, e1, e2));
+  }
 }
 
 // End CoreBuilder.java

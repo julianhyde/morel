@@ -20,12 +20,13 @@ package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
-import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimap;
@@ -34,9 +35,13 @@ import org.apache.calcite.util.Util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.zip;
+
+import static org.apache.calcite.util.Util.minus;
 
 /** Generates an expression for the set of values that a variable can take in
  * a program.
@@ -117,31 +122,76 @@ public class Extents {
    */
   public static Core.Exp generator(TypeSystem typeSystem, Core.Pat pat,
       Core.Exp exp) {
-    // Extract the atomic patterns. E.g. (x, (y, z)) --> [x, y, z].
-    final List<Core.IdPat> idList = new ArrayList<>();
-    pat.accept(
-        new Visitor() {
-          @Override protected void visit(Core.IdPat id) {
-            idList.add(id);
-          }
-        });
-
-    final ListMultimap<Core.Pat, Core.Exp> map = LinkedListMultimap.create();
-    final Extent extent = new Extent(typeSystem);
-    extent.g3(map, exp);
-    final List<Core.Exp> exps = map.get(pat);
-    if (!exps.isEmpty()) {
-      return core.mergeExtents(typeSystem, exps);
-    }
-
-    throw new AssertionError();
+    return create(typeSystem, pat, ImmutableSortedMap.of(), exp).extentExp;
   }
 
-  static class Extent {
-    private final TypeSystem typeSystem;
+  public static Analysis create(TypeSystem typeSystem, Core.Pat pat,
+      SortedMap<Core.NamedPat, Core.Exp> boundPats, Core.Exp exp) {
+    final Extent extent = new Extent(typeSystem, pat, boundPats);
 
-    Extent(TypeSystem typeSystem) {
+    final ListMultimap<Core.Pat, Core.Exp> map = LinkedListMultimap.create();
+    extent.g3(map, exp);
+    final List<Core.Exp> exps = map.get(pat);
+    if (exps.isEmpty()) {
+      throw new AssertionError();
+    }
+    final Pair<Core.Exp, List<Core.Exp>> pair =
+        core.mergeExtents(typeSystem, exps, true);
+    return new Analysis(boundPats, extent.goalPats, pair.left, pair.right);
+  }
+
+  /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
+   * to a list of id patterns. */
+  private static List<Core.IdPat> flatten(Core.Pat pat) {
+    switch (pat.op) {
+    case ID_PAT:
+      return ImmutableList.of((Core.IdPat) pat);
+
+    case TUPLE_PAT:
+      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+      for (Core.Pat arg : tuplePat.args) {
+        if (arg.op != Op.ID_PAT) {
+          throw new CompileException("must be id", false, arg.pos);
+        }
+      }
+      //noinspection unchecked,rawtypes
+      return (List) tuplePat.args;
+
+    default:
+      throw new CompileException("must be id", false, pat.pos);
+    }
+  }
+
+  public static class Analysis {
+    final SortedMap<Core.NamedPat, Core.Exp> boundPats;
+    final Set<Core.NamedPat> goalPats;
+    final Core.Exp extentExp;
+    final List<Core.Exp> remainingFilters;
+
+    Analysis(SortedMap<Core.NamedPat, Core.Exp> boundPats,
+        Set<Core.NamedPat> goalPats, Core.Exp extentExp,
+        List<Core.Exp> remainingFilters) {
+      this.boundPats = boundPats;
+      this.goalPats = goalPats;
+      this.extentExp = extentExp;
+      this.remainingFilters = remainingFilters;
+    }
+
+    Set<Core.NamedPat> unboundPats() {
+      return minus(goalPats, boundPats.keySet());
+    }
+  }
+
+  private static class Extent {
+    private final TypeSystem typeSystem;
+    final Set<Core.NamedPat> goalPats;
+    final SortedMap<Core.NamedPat, Core.Exp> boundPats;
+
+    Extent(TypeSystem typeSystem, Core.Pat pat,
+        SortedMap<Core.NamedPat, Core.Exp> boundPats) {
       this.typeSystem = typeSystem;
+      this.goalPats = ImmutableSet.copyOf(flatten(pat));
+      this.boundPats = ImmutableSortedMap.copyOf(boundPats);
     }
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
@@ -155,10 +205,25 @@ public class Extents {
           BuiltIn builtIn = (BuiltIn) ((Core.Literal) apply.fn).value;
           switch (builtIn) {
           case Z_ANDALSO:
-            // Expression is 'andalso'. For each pattern, if multiple branches have
-            // an extent, pick the first one. (We could intersect, but first is
-            // simpler.)
+            // Expression is 'andalso'. Visit each pattern, and union the
+            // constraints (intersect the generators).
             apply.arg.forEachArg((arg, i) -> g3(map, arg));
+            break;
+
+          case Z_ORELSE:
+            // Expression is 'orelse'. Visit each pattern, and intersect the
+            // constraints (union the generators).
+            final Multimap<Core.Pat, Core.Exp> map2 =
+                LinkedListMultimap.create();
+            apply.arg.forEachArg((arg, i) -> {
+              final Multimap<Core.Pat, Core.Exp> map3 =
+                  LinkedListMultimap.create();
+              g3(map3, arg);
+              map3.asMap().forEach((k, vs) ->
+                  map2.put(k, core.intersect(typeSystem, vs)));
+            });
+            map2.asMap().forEach((k, vs) ->
+                map.put(k, core.union(typeSystem, vs)));
             break;
 
           case OP_EQ:

@@ -21,7 +21,6 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
-import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.ListType;
@@ -32,7 +31,6 @@ import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -54,7 +52,6 @@ import static net.hydromatic.morel.util.Static.plus;
 
 import static com.google.common.collect.Iterables.getLast;
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static org.apache.calcite.util.Util.minus;
 import static org.apache.calcite.util.Util.skip;
 
 /**
@@ -130,28 +127,6 @@ class SuchThatShuttle extends Shuttle {
     }
   }
 
-  /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
-   * to a list of id patterns. */
-  private static List<Core.IdPat> flatten(Core.Pat pat) {
-    switch (pat.op) {
-    case ID_PAT:
-      return ImmutableList.of((Core.IdPat) pat);
-
-    case TUPLE_PAT:
-      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-      for (Core.Pat arg : tuplePat.args) {
-        if (arg.op != Op.ID_PAT) {
-          throw new CompileException("must be id", false, arg.pos);
-        }
-      }
-      //noinspection unchecked,rawtypes
-      return (List) tuplePat.args;
-
-    default:
-      throw new CompileException("must be id", false, pat.pos);
-    }
-  }
-
   /** Rewrites a "from vars suchthat condition" expression to a
    * "from vars in list" expression; returns null if no rewrite is possible.
    *
@@ -179,29 +154,34 @@ class SuchThatShuttle extends Shuttle {
       Map<Core.IdPat, Core.Exp> scans, List<Core.Exp> filters,
       List<Core.Exp> exps) {
     if (exps.isEmpty()) {
-      final Set<Core.NamedPat> goalPats =
-          ImmutableSet.copyOf(
-              flatten(((Core.Scan) fromStates.element().currentStep()).pat));
       final ImmutableSortedMap.Builder<Core.NamedPat, Core.Exp> b =
           ImmutableSortedMap.naturalOrder();
       boundPats.forEach((p, e) -> b.put(mapper.apply(p), e));
       final SortedMap<Core.NamedPat, Core.Exp> boundPats2 = b.build();
-      final Set<Core.NamedPat> unboundPats =
-          minus(goalPats, boundPats2.keySet());
-      if (!unboundPats.isEmpty()) {
-        throw new CompileException("Cannot implement 'suchthat'; variables "
-            + unboundPats + " are not grounded", false, Pos.ZERO);
+
+      final SortedMap<String, Core.Exp> nameExps =
+          new TreeMap<>(RecordType.ORDERING);
+      if (scans.isEmpty()) {
+        final Core.Scan scan = (Core.Scan) fromStates.element().currentStep();
+        final Extents.Analysis extent =
+            Extents.create(typeSystem, scan.pat, boundPats2, scan.exp);
+        final Set<Core.NamedPat> unboundPats = extent.unboundPats();
+        if (!unboundPats.isEmpty()) {
+          throw new RewriteFailedException("Cannot implement 'suchthat'; "
+              + "variables " + unboundPats + " are not grounded" + "]");
+        }
+        boundPats2.forEach((p, e) -> {
+          if (extent.goalPats.contains(p)) {
+            nameExps.put(p.name, e);
+          }
+        });
+      } else {
+        boundPats2.forEach((p, e) -> nameExps.put(p.name, e));
       }
+
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
       scans.forEach(fromBuilder::scan);
       filters.forEach(fromBuilder::where);
-      final SortedMap<String, Core.Exp> nameExps =
-          new TreeMap<>(RecordType.ORDERING);
-      boundPats2.forEach((p, e) -> {
-        if (goalPats.contains(p)) {
-          nameExps.put(p.name, e);
-        }
-      });
       fromBuilder.yield_(nameExps.size() == 1
           ? getOnlyElement(nameExps.values())
           : core.record(typeSystem, nameExps));
@@ -212,39 +192,36 @@ class SuchThatShuttle extends Shuttle {
     switch (exp.op) {
     case APPLY:
       final Core.Apply apply = (Core.Apply) exp;
-      if (apply.fn.op == Op.FN_LITERAL) {
-        final Core.Literal literal = (Core.Literal) apply.fn;
-        if (literal.value == BuiltIn.OP_ELEM) {
-          Core.Exp a0 = apply.args().get(0);
-          Core.Exp a1 = apply.args().get(1);
-          Core.@Nullable Exp e =
-              rewriteElem(typeSystem, mapper, boundPats, scans, filters, a0, a1,
-                  exps2);
-          if (e != null) {
-            return e;
-          }
-          throw new AssertionError(exp);
-        } else if (literal.value == BuiltIn.OP_EQ) {
-          Core.Exp a0 = apply.args().get(0);
-          Core.Exp a1 = apply.args().get(1);
-          if (a1.op == Op.ID && a0.op != Op.ID) {
-            final Core.Exp tmp = a0;
-            a0 = a1;
-            a1 = tmp;
-          }
-          Core.Exp a1List = core.list(typeSystem, a1);
-          Core.@Nullable Exp e =
-              rewriteElem(typeSystem, mapper, boundPats, scans,
-                  filters, a0, a1List, exps2);
-          if (e != null) {
-            return e;
-          }
+      if (exp.isCallTo(BuiltIn.OP_ELEM)) {
+        Core.Exp a0 = apply.args().get(0);
+        Core.Exp a1 = apply.args().get(1);
+        Core.@Nullable Exp e =
+            rewriteElem(typeSystem, mapper, boundPats, scans, filters, a0, a1,
+                exps2);
+        if (e != null) {
+          return e;
         }
-        final List<Core.Exp> filters2 = append(filters, exp);
-        return rewrite(mapper, boundPats, scans, filters2,
-            exps2);
+        throw new AssertionError(exp);
       }
-      break;
+      if (exp.isCallTo(BuiltIn.OP_EQ)) {
+        Core.Exp a0 = apply.args().get(0);
+        Core.Exp a1 = apply.args().get(1);
+        if (a1.op == Op.ID && a0.op != Op.ID) {
+          final Core.Exp tmp = a0;
+          a0 = a1;
+          a1 = tmp;
+        }
+        Core.Exp a1List = core.list(typeSystem, a1);
+        Core.@Nullable Exp e =
+            rewriteElem(typeSystem, mapper, boundPats, scans,
+                filters, a0, a1List, exps2);
+        if (e != null) {
+          return e;
+        }
+      }
+      final List<Core.Exp> filters2 = append(filters, exp);
+      return rewrite(mapper, boundPats, scans, filters2,
+          exps2);
 
     case CASE:
       final Core.Case case_ = (Core.Case) exp;
@@ -263,7 +240,8 @@ class SuchThatShuttle extends Shuttle {
       break;
     }
 
-    throw new RewriteFailedException(exp);
+    throw new RewriteFailedException("not implemented: suchthat " + exp.op
+        + " [" + exp + "]");
   }
 
   private Core.@Nullable Exp rewriteElem(TypeSystem typeSystem,
@@ -426,8 +404,8 @@ class SuchThatShuttle extends Shuttle {
 
   /** Signals that we could not rewrite. */
   private static class RewriteFailedException extends RuntimeException {
-    RewriteFailedException(Core.Exp exp) {
-      super("not implemented: suchthat " + exp.op + " [" + exp + "]");
+    RewriteFailedException(String message) {
+      super(message);
     }
   }
 }

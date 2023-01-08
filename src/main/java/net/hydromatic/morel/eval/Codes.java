@@ -28,6 +28,7 @@ import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -2603,7 +2604,8 @@ public abstract class Codes {
   private static final Applicable Z_EXTENT =
       new ApplicableImpl(BuiltIn.Z_EXTENT) {
         @Override public List apply(EvalEnv env, Object arg) {
-          return ImmutableList.of();
+          final RangeExtent rangeExtent = (RangeExtent) arg;
+          return Lists.newArrayList(rangeExtent.toIterable());
         }
       };
 

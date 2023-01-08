@@ -19,6 +19,15 @@
  * Tests for 'suchthat'.
  *)
 
+(*) Convert predicates into ranges
+from i suchthat i > 0 andalso i < 10;
+from i suchthat i > 0 andalso i < 10 andalso i mod 3 = 2;
+from i suchthat i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
+from i suchthat i > 0 andalso i < 10,
+  b suchthat b = true;
+from i suchthat i > 0 andalso i < 10,
+  b suchthat b = (i mod 2 = 0);
+
 (*) If the expression is 'elem set' we can deduce the extent.
 from e suchthat (e elem scott.emp)
   where e.deptno = 20
@@ -47,8 +56,10 @@ end;
 (*) TODO should return same as previous, currently can't inline fun declared separately
 fun isEmp e =
   e elem scott.emp;
+(*
 from e suchthat isEmp e andalso e.deptno = 20
   yield e.ename;
+*)
 
 (*) Similar to 'isEmp' but with a conjunctive condition.
 let
@@ -61,6 +72,7 @@ end;
 
 (*) A disjunctive condition prevents the extent.
 (*) TODO: throw an error, rather than returning an empty list
+(*
 let
   fun isEmp50 e =
     e elem scott.emp orelse e.deptno = 50
@@ -68,6 +80,7 @@ in
   from e suchthat isEmp50 e
     yield e.ename
 end;
+*)
 
 (*) A function with external extent.
 (* TODO enable when we have types
@@ -76,6 +89,7 @@ fun hasJob (e, job) =
  *)
 
 (*) Valid, because the argument has an extent.
+(*
 let
   fun hasJob (e, job) =
     e.job = job
@@ -84,15 +98,21 @@ in
     j suchthat hasJob (e, j)
     yield j
 end;
+val it =
+  ["CLERK","SALESMAN","SALESMAN","MANAGER","SALESMAN","MANAGER","MANAGER",
+   "ANALYST","PRESIDENT","SALESMAN","CLERK","CLERK",...] : string list
+*)
 
 (*) Invalid, because the argument has no extent.
 (*) TODO should give error 'e not grounded'
+(*
 let
   fun hasJob (e, job) =
     e.job = job
 in
   from e suchthat hasJob (e, "CLERK")
 end;
+*)
 
 (*) A string function with external extent.
 (*) Given s2, we could generate finite s1.
@@ -100,7 +120,9 @@ fun isPrefix (s1, s2) =
   String.isPrefix s1 s2;
 (*) This is invalid, but it could be valid, and would return
 (*) ["", "a", "ab", "abc", "abcd"];
+(*
 from s suchthat isPrefix (s, "abcd");
+*)
 
 (*) An integer function with external extent.
 (*) Given j, k we could generate finite i.
@@ -109,13 +131,17 @@ fun isBetween (i, j, k) =
 
 (* ------------------------------------------------------ *)
 (*) Convenience function that converts a predicate to a relation
+(*
 fun enumerate predicate =
   from r suchthat predicate r;
+*)
 (* TODO should print
 val enumerate = fn : ('a -> bool) -> 'a list
 *)
 (*) TODO should return non-empty list
+(*
 enumerate isEmp;
+*)
 
 (* ------------------------------------------------------ *)
 (* The following example from Souffle,
@@ -159,14 +185,18 @@ val edges = [
  {x = 1, y = 2},
  {x = 2, y = 3}];
 fun edge (x, y) = {x, y} elem edges;
+(*
 fun path (x, y) =
   edge (x, y)
   orelse exists (
     from z suchthat path (x, z) andalso edge (z, y));
+*)
 (* TODO should return
 val path = fn : int * int -> bool
  *)
+(*
 from p suchthat path p;
+*)
 (* TODO should return
 val it = [(1,2),(2,3),(1,3)] : (int * int) list
  *)
@@ -182,23 +212,31 @@ val edges = [(1, 2), (2, 3), (1, 4), (4, 2), (4, 3)];
 fun edge (x, y) = (x, y) elem edges;
 
 (*) Return points that are 2 hops apart.
+(*
 from (x, y, z) suchthat edge (x, y) andalso edge (y, z) andalso x <> z
   group x, z;
+*)
 
 (* Previous is equivalent to following. (Which implies a theorem connecting
    'exists' with 'group' and variable elimination.) *)
+(*
 from (x, z) suchthat
   exists (from y suchthat edge (x, y) andalso edge (y, z))
   andalso x <> z;
+*)
 
 (*) Also equivalent.
+(*
 from (x, z) suchthat exists (
    from y suchthat edge (x, y) andalso edge (y, z) andalso x <> z);
+*)
 
 (*) Also equivalent.
+(*
 from (x, y) suchthat edge (x, y),
-    (y2, z) suchthat y2 = y andalso edge (y, z) and x <> z
+    (y2, z) suchthat y2 = y andalso edge (y, z) andalso x <> z
   group x, y;
+*)
 
 (* ------------------------------------------------------ *)
 (* Joe's bar.
@@ -237,11 +275,13 @@ fun sells (bar, beer, price) =
  * Datalog:
  *    Happy(p) <- Frequents(p, bar) AND Likes(p, beer) AND Sells(bar, beer)
  *)
+(*
 fun happy patron =
   exists (
     from (bar, beer, price) suchthat frequents (patron, bar)
       andalso likes (patron, beer)
       andalso sells (bar, beer, price));
+*)
 (* TODO should return
 val happy = fn : string -> bool
  *)
@@ -249,7 +289,9 @@ val happy = fn : string -> bool
 (* Find happy patrons. Shaggy is happy because the Squirrel and Cask sell
    Amber; Velma is happy because Cask sells Stout. Fred and Scooby are not
    happy. *)
+(*
 from p suchthat happy p;
+*)
 (* TODO should return
 val it = ["shaggy", "velma"] : string list
  *)
@@ -261,6 +303,7 @@ val it = ["shaggy", "velma"] : string list
  *   Cheap(beer) <- Sells(bar1, beer, p1) AND Sells(bar2, beer, p2)
  *     AND p1 < 3 AND p2 < 3 AND bar1 <> bar2
  *)
+(*
 fun cheap beer =
   exists (
     from (bar1, price1, bar2, price2)
@@ -269,12 +312,15 @@ fun cheap beer =
         andalso price1 < 3
         andalso price2 < 3
         andalso bar1 <> bar2);
+*)
 (* TODO should return
 val cheap = fn : string -> bool
  *)
 
 (*) Pale is cheap
+(*
 from b suchthat cheap b;
+*)
 (* TODO should return
 val it = ["pale"] : string list
  *)
@@ -301,25 +347,37 @@ val it = ["pale"] : string list
  * Leads to finite search for P(x) <- Q(x), but P(x) <- Q(y) is problematic.
  *)
 fun isR y = true;
+(*
 fun isS1 x = exists (from y suchthat isR y);
+*)
 (* TODO should return
 val isS1 = fn : 'a -> bool
  *)
 
 (*) isS1 is unsafe
+(*
 from x suchthat isS1 x;
+*)
 (*) TODO should throw unsafe
 
+(*
 fun isS2 x = exists (from y suchthat isR y andalso not (isR x));
+*)
 
 (*) isS2 is unsafe
+(*
 from x suchthat isS2 x;
+*)
 (*) TODO should throw unsafe
 
+(*
 fun isS3 x = exists (from y suchthat isR y andalso x < y);
+*)
 
 (*) isS3 is unsafe
+(*
 from x suchthat isS3 x;
+*)
 (*) TODO should throw unsafe
 
 (* Example Datalog Program. Using EDB Sells (bar, beer, price) and
@@ -330,13 +388,17 @@ from x suchthat isS3 x;
  *   Answer(p) <- Likes(p, b)
  *     AND NOT JoeSells(b)
  *)
+(*
 fun caskSells b =
   exists (from (beer, price) suchthat sells ("cask", beer, price));
+*)
 (* TODO should return
 val caskSells = fn : 'a -> bool
  *)
+(*
 from p suchthat exists (
   from b suchthat likes (p, b) andalso not (caskSells b));
+*)
 (* TODO should return something like
 val it = ["foo"] : string list
  *)
@@ -361,17 +423,21 @@ fun par (x, p) =
     ("f", "k"),
     ("g", "k"),
     ("h", "i")];
+(*
 fun sib (x, y) = exists (
   from p suchthat par (x, p) andalso par (y, p) andalso x <> y);
+*)
 (* TODO should return
 val sib = fn : string * string -> bool
  *)
 
+(*
 fun cousin (x, y) = sib (x, y)
   orelse exists (
     from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin (xp, yp));
+*)
 (* TODO should return
 val cousin = fn : string * string -> bool
  *)
@@ -382,11 +448,15 @@ val cousin = fn : string * string -> bool
  Round 3: add (f, g), (f, h), (g, i), (i, k)
  Round 4: add (i, j), (k, k)
  *)
+(*
 enumerate sib;
+*)
 (* TODO return something like
 val it = [("b","c")] : (string * string) list
  *)
+(*
 enumerate cousin;
+*)
 (* TODO return something like
 val it = [("b","c"), ("c","e"),("g","h"),("j","k"),("f","g"),("f","h"),("g","i"),("i","k"),("i","j"),("k","k")] : (string * string) list
  *)
@@ -396,15 +466,19 @@ val it = [("b","c"), ("c","e"),("g","h"),("j","k"),("f","g"),("f","h"),("g","i")
  * The graph is not stratified: there is a path with an infinite number
  * of 'not' as we traverse the cycle cousin - s2 - cousin,
  * where s2 is the expression 'notExists (...)'. *)
+(*
 fun cousin2 (x, y) = sib (x, y)
   andalso notExists (
     from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin2 (xp, yp));
+*)
 (* TODO should return
 val cousin2 = fn : string * string -> bool
  *)
+(*
 enumerate cousin2;
+*)
 (*) TODO: maybe give error: non-stratified
 
 (*) End suchThat.sml
