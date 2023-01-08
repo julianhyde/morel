@@ -363,8 +363,9 @@ public class Compiler {
       //   (n, d) in nameDeptPairs
       //
       final Core.Scan scan2 = (Core.Scan) firstStep;
-      final ExtentFilter extentFilter =
-          new Extents.Extent(typeSystem).extent(scan2);
+      final Extents.Analysis extentFilter =
+          Extents.create(typeSystem, scan2.pat, ImmutableSortedMap.of(),
+                  scan2.exp);
       final FnType fnType =
           typeSystem.fnType(scan2.pat.type, PrimitiveType.BOOL);
       final Pos pos = Pos.ZERO;
@@ -373,12 +374,12 @@ public class Compiler {
           core.fn(pos, fnType, ImmutableList.of(match),
               typeSystem.nameGenerator);
       final Core.Exp filterCall =
-          core.apply(pos, extentFilter.extent.type,
+          core.apply(pos, extentFilter.extentExp.type,
               core.functionLiteral(typeSystem, BuiltIn.LIST_FILTER),
               lambda);
       final Core.Exp exp2 =
-          core.apply(pos, extentFilter.extent.type, filterCall,
-              extentFilter.extent);
+          core.apply(pos, extentFilter.extentExp.type, filterCall,
+              extentFilter.extentExp);
       final Code code2 = compile(cx, exp2);
       final Code conditionCode2 = compile(cx, scan2.condition);
       return () -> Codes.scanRowSink(Op.INNER_JOIN, scan2.pat, code2,

@@ -501,6 +501,11 @@ public class Core {
     public boolean isConstant() {
       return false;
     }
+
+    /** Returns whether this expression is a call to the given built-in. */
+    public boolean isCallTo(BuiltIn builtIn) {
+      return false;
+    }
   }
 
   /** Reference to a variable.
@@ -1386,15 +1391,13 @@ public class Core {
     }
 
     @Override public boolean isConstant() {
-      switch (fn.op) {
-      case FN_LITERAL:
-        switch ((BuiltIn) ((Literal) fn).value) {
-        case Z_LIST:
-          // A list of constants is constant
-          return args().stream().allMatch(Exp::isConstant);
-        }
-      }
-      return super.isConstant();
+      // A list of constants is constant
+      return isCallTo(BuiltIn.Z_LIST)
+          && args().stream().allMatch(Exp::isConstant);
+    }
+
+    @Override public boolean isCallTo(BuiltIn builtIn) {
+      return fn.op == Op.FN_LITERAL && ((Literal) fn).value == builtIn;
     }
   }
 

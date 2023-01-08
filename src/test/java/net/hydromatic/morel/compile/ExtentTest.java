@@ -138,7 +138,7 @@ public class ExtentTest {
     assertThat(x, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) x).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) x).fn).value, is(BuiltIn.Z_EXTENT));
-    assertThat(x.toString(), is("extent \"[[3..5), (5..10)]\""));
+    assertThat(x.toString(), is("extent \"int [[3..5), (5..10)]\""));
 
     Core.Exp y = generator(f.typeSystem, yPat, exp);
     assertThat(y, instanceOf(Core.Apply.class));
