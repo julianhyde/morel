@@ -256,6 +256,21 @@ public class PairList<T, U> extends AbstractList<Map.Entry<T, U>> {
     });
   }
 
+  /** Applies a mapping function to each element of this list. */
+  @SuppressWarnings("unchecked")
+  public <R> ImmutableList<R> transform2(BiFunction<T, U, R> function) {
+    if (list.isEmpty()) {
+      return ImmutableList.of();
+    }
+    final ImmutableList.Builder<R> builder = ImmutableList.builder();
+    for (int i = 0, n = list.size(); i < n;) {
+      final T t = (T) list.get(i++);
+      final U u = (U) list.get(i++);
+      builder.add(function.apply(t, u));
+    }
+    return builder.build();
+  }
+
   /** Returns whether the predicate is true for at least one pair
    * in this list. */
   @SuppressWarnings("unchecked")
