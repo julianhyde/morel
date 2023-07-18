@@ -461,6 +461,15 @@ public abstract class Codes {
     return new StackCode(layout, distance + 1, namedPat);
   }
 
+  /** Returns a Code that returns the value of a given variable in the
+   * current {@link Closure}. */
+  public static Code getClosure(Environment.StackLayout layout,
+      Core.NamedPat namedPat) {
+    final int contains = layout.unbounds.asList().indexOf(namedPat);
+    checkArgument(contains >= 0, "not found", namedPat);
+    return new ClosureCode(layout, contains, namedPat);
+  }
+
   /** Returns a Code that returns a tuple consisting of the values of variables
    * "name0", ... "nameN" in the current environment. */
   public static Code getTuple(Iterable<String> names) {
@@ -560,12 +569,12 @@ public abstract class Codes {
     if (codeList.isEmpty()) {
       return constant(tuple ? Unit.INSTANCE : new Object[0]);
     }
-    if (codeList.stream().allMatch(c -> c instanceof StackCode)) {
-      final StackCode c0 = (StackCode) codeList.get(0);
+    if (codeList.stream().allMatch(c -> c instanceof ClosureCode)) {
+      final ClosureCode c0 = (ClosureCode) codeList.get(0);
       final List<Core.NamedPat> pats = new ArrayList<>();
       codeList.forEach(c -> {
-        StackCode stackCode = (StackCode) c;
-        pats.add(stackCode.pat);
+        ClosureCode closureCode = (ClosureCode) c;
+        pats.add(closureCode.pat);
       });
       return tuple
           ? getStackTuple(c0.layout, pats)
@@ -3510,6 +3519,29 @@ public abstract class Codes {
 
     @Override public Describer describe(Describer describer) {
       return describer.start("stack", d ->
+          d.arg("offset", offset).arg("name", pat.name));
+    }
+
+    @Override public Object eval(Stack stack) {
+      return stack.slots[stack.top - offset];
+    }
+  }
+
+  /** Code that retrieves the value of a variable from a closure. */
+  private static class ClosureCode extends CodeImpl {
+    private final Environment.StackLayout layout;
+    private final int offset;
+    private final Core.NamedPat pat;
+
+    ClosureCode(Environment.StackLayout layout, int offset, Core.NamedPat pat) {
+      this.layout = layout;
+      checkArgument(offset >= 0, "offset >= 0");
+      this.offset = offset;
+      this.pat = requireNonNull(pat);
+    }
+
+    @Override public Describer describe(Describer describer) {
+      return describer.start("closure", d ->
           d.arg("offset", offset).arg("name", pat.name));
     }
 
