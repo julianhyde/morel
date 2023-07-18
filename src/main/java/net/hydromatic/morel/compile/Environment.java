@@ -23,8 +23,10 @@ import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSortedSet;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -72,7 +74,13 @@ public abstract class Environment {
   public abstract @Nullable Binding getOpt(String name);
 
   /** Returns the binding of {@code id} if bound, null if not. */
-  public abstract @Nullable Binding getOpt(Core.NamedPat id);
+  public final @Nullable Binding getOpt(Core.NamedPat id) {
+    Pair<Binding, Environment> p = getOpt2(id);
+    return p == null ? null : p.left;
+  }
+
+  /** Returns the binding of {@code id} if bound, null if not. */
+  public abstract @Nullable Pair<Binding, Environment> getOpt2(Core.NamedPat id);
 
   /** Creates an environment that is the same as a given environment, plus one
    * more variable. */
@@ -127,10 +135,10 @@ public abstract class Environment {
 
   protected abstract void populateLayout(List<Core.NamedPat> list);
 
-  StackLayout layout() {
+  StackLayout layout(ImmutableSortedSet<Core.NamedPat> unbounds) {
     final List<Core.NamedPat> list = new ArrayList<>();
     populateLayout(list);
-    return new StackLayout(ImmutableList.copyOf(list));
+    return new StackLayout(ImmutableList.copyOf(list), unbounds);
   }
 
   /** Returns this environment plus the bindings in the given environment. */
@@ -144,9 +152,12 @@ public abstract class Environment {
    * slot of the stack. */
   public static class StackLayout {
     final ImmutableList<Core.NamedPat> list;
+    public final ImmutableSortedSet<Core.NamedPat> unbounds;
 
-    StackLayout(ImmutableList<Core.NamedPat> list) {
+    StackLayout(ImmutableList<Core.NamedPat> list,
+        ImmutableSortedSet<Core.NamedPat> unbounds) {
       this.list = list;
+      this.unbounds = unbounds;
     }
 
     @Override public String toString() {

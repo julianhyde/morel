@@ -23,6 +23,8 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Pair;
 
+import com.google.common.collect.ImmutableList;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +42,10 @@ public class Closure implements Comparable<Closure>, Applicable {
    * environment when the closure was created. */
   private final Stack stack;
 
+  /** The values of the unbound variables that are "closed over" by this
+   * closure. (May make the stack obsolete one day.) */
+  private final ImmutableList<Object> values;
+
   /** A list of (pattern, code) pairs. During bind, the value being bound is
    * matched against each pattern. When a match is found, the code for that
    * pattern is used to evaluate.
@@ -53,10 +59,11 @@ public class Closure implements Comparable<Closure>, Applicable {
   private final Pos pos;
 
   /** Not a public API. */
-  public Closure(Stack stack,
-      ImmutablePairList<Core.Pat, Code> patCodes, Pos pos) {
+  public Closure(Stack stack, ImmutablePairList<Core.Pat, Code> patCodes,
+      ImmutableList<Object> values, Pos pos) {
     this.stack = requireNonNull(stack).fix();
     this.patCodes = requireNonNull(patCodes);
+    this.values = requireNonNull(values);
     this.pos = pos;
   }
 

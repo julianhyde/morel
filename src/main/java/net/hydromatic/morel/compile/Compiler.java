@@ -49,6 +49,7 @@ import net.hydromatic.morel.util.ThreadLocals;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.ImmutableSortedSet;
 import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -60,7 +61,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -99,7 +102,8 @@ public class Compiler {
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     final List<Action> actions = new ArrayList<>();
-    final Context cx = Context.of(env, Environments.empty());
+    final Context cx =
+        Context.of(env, Environments.empty(), ImmutableSortedSet.of());
     compileDecl(cx, decl, skipPat, queriesToWrap, matchCodes, bindings,
         actions);
     final Type type = decl instanceof Core.NonRecValDecl
@@ -158,28 +162,39 @@ public class Compiler {
   static class Context {
     final Environment globalEnv;
     final Environment env;
+    final ImmutableSortedSet<Core.NamedPat> unbounds;
 
-    Context(Environment globalEnv, Environment env) {
+    Context(Environment globalEnv, Environment env,
+        ImmutableSortedSet<Core.NamedPat> unbounds) {
       this.globalEnv = globalEnv;
       this.env = env;
+      this.unbounds = unbounds;
     }
 
-    static Context of(Environment globalEnv, Environment env) {
-      return new Context(globalEnv, env);
+    static Context of(Environment globalEnv, Environment env,
+        ImmutableSortedSet<Core.NamedPat> unboundList) {
+      return new Context(globalEnv, env, unboundList);
     }
 
     Context bindAll(Iterable<Binding> bindings) {
-      return of(globalEnv, env.bindAll(bindings));
+      return of(globalEnv, env.bindAll(bindings), unbounds);
     }
 
     /** Returns an environment that looks first in local, then in global. */
     Environment combinedEnv() {
       return Environments.concat(env, globalEnv);
     }
+
+    public Context withUnbound(SortedSet<Core.NamedPat> unbounds) {
+      return this.unbounds.equals(unbounds) ? this
+          : of(globalEnv, env, ImmutableSortedSet.copyOf(unbounds));
+    }
   }
 
   public final Code compile(Environment env, Core.Exp expression) {
-    return compile(Context.of(env, Environments.empty()), expression);
+    final Context context =
+        Context.of(env, Environments.empty(), ImmutableSortedSet.of());
+    return compile(context, expression);
   }
 
   /** Compiles the argument to "apply". */
@@ -284,12 +299,16 @@ public class Compiler {
   }
 
   private Code compileFieldName(Context cx, Core.NamedPat idPat) {
+    if (cx.unbounds.contains(idPat)) {
+      final Environment.StackLayout layout = cx.env.layout(cx.unbounds);
+      return Codes.getClosure(layout, idPat);
+    }
     final Binding binding = cx.env.getOpt(idPat);
     if (binding != null) {
       if (binding.value instanceof Code) {
         return (Code) binding.value;
       }
-      final Environment.StackLayout layout = cx.env.layout();
+      final Environment.StackLayout layout = cx.env.layout(cx.unbounds);
       return Codes.getStack(layout, idPat);
     }
     final Binding globalBinding = cx.globalEnv.getOpt(idPat);
@@ -660,7 +679,8 @@ public class Compiler {
       List<Core.Match> matchList) {
     final PairList<Core.Pat, Code> patCodes = PairList.of();
     matchList.forEach(match -> compileMatch(cx, match, patCodes::add));
-    return new MatchCode(patCodes.immutable(), getLast(matchList).pos);
+    return new MatchCode(patCodes.immutable(), ImmutablePairList.of(),
+        getLast(matchList).pos);
   }
 
   private void compileMatch(Context cx, Core.Match match,
@@ -686,7 +706,15 @@ public class Compiler {
       });
     }
 
-    final Context cx1 = cx.bindAll(newBindings);
+    // Find unbound variables. (Used in one or more declarations,
+    // but defined in an enclosing scope.)
+    final SortedSet<Core.NamedPat> unbounds = new TreeSet<>();
+    final VariableCollector shuttle =
+        VariableCollector.create(typeSystem, cx.env,
+            id -> unbounds.add(id.idPat));
+    valDecl.forEachBinding((pat, exp, pos) -> exp.accept(shuttle));
+
+    final Context cx1 = cx.bindAll(newBindings).withUnbound(unbounds);
     valDecl.forEachBinding((pat, exp, pos) -> {
       // Using 'compileArg' rather than 'compile' encourages CalciteCompiler
       // to use a pure Calcite implementation if possible, and has no effect
@@ -697,7 +725,11 @@ public class Compiler {
       if (!linkCodes.isEmpty()) {
         link(linkCodes, pat, code);
       }
-      matchCodes.add(new MatchCode(ImmutablePairList.of(pat, code), pos));
+      final ImmutablePairList<Core.Pat, Code> patCodes =
+          ImmutablePairList.of(pat, code);
+      final PairList<Core.NamedPat, Code> unboundCodes = PairList.of();
+      cx1.unbounds.forEach(p -> unboundCodes.add(p, compile(cx, core.id(p))));
+      matchCodes.add(new MatchCode(patCodes, unboundCodes.immutable(), pos));
 
       if (actions != null) {
         final Type type0 = exp.type;
@@ -827,10 +859,13 @@ public class Compiler {
   /** Code that implements {@link Compiler#compileMatchList(Context, List)}. */
   private static class MatchCode implements Code {
     private final ImmutablePairList<Core.Pat, Code> patCodes;
+    private final ImmutablePairList<Core.NamedPat, Code> unbounds;
     private final Pos pos;
 
-    MatchCode(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos) {
+    MatchCode(ImmutablePairList<Core.Pat, Code> patCodes,
+        ImmutablePairList<Core.NamedPat, Code> unbounds, Pos pos) {
       this.patCodes = patCodes;
+      this.unbounds = unbounds;
       this.pos = pos;
     }
 
@@ -841,7 +876,9 @@ public class Compiler {
     }
 
     @Override public Object eval(Stack stack) {
-      return new Closure(stack, patCodes, pos);
+      ImmutableList<Object> values =
+          unbounds.transform2((p, c) -> c.eval(stack));
+      return new Closure(stack, patCodes, values, pos);
     }
   }
 }
