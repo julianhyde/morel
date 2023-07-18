@@ -25,6 +25,7 @@ import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.Static;
 
 import com.google.common.collect.ImmutableList;
@@ -165,11 +166,12 @@ public abstract class Environments {
       return parent.getOpt(name);
     }
 
-    @Override public @Nullable Binding getOpt(Core.NamedPat id) {
+    @Override public @Nullable Pair<Binding, Environment> getOpt2(
+        Core.NamedPat id) {
       if (id.equals(binding.id)) {
-        return binding;
+        return Pair.of(binding, this);
       }
-      return parent.getOpt(id);
+      return parent.getOpt2(id);
     }
 
     @Override protected Environment bind(Binding binding) {
@@ -228,7 +230,8 @@ public abstract class Environments {
       return null;
     }
 
-    @Override public @Nullable Binding getOpt(Core.NamedPat id) {
+    @Override public @Nullable Pair<Binding, Environment> getOpt2(
+        Core.NamedPat id) {
       return null;
     }
 
@@ -269,10 +272,12 @@ public abstract class Environments {
       return parent.getOpt(name);
     }
 
-    public @Nullable Binding getOpt(Core.NamedPat id) {
+    @Override public @Nullable Pair<Binding, Environment> getOpt2(
+        Core.NamedPat id) {
       final Binding binding = map.get(id);
-      return binding != null && binding.id.i == id.i ? binding
-          : parent.getOpt(id);
+      return binding != null && binding.id.i == id.i
+          ? Pair.of(binding, this)
+          : parent.getOpt2(id);
     }
 
     @Override Environment nearestAncestorNotObscuredBy(Set<Core.NamedPat> names) {
@@ -326,11 +331,12 @@ public abstract class Environments {
       return null;
     }
 
-    @Override public @Nullable Binding getOpt(Core.NamedPat id) {
+    @Override public @Nullable Pair<Binding, Environment> getOpt2(
+        Core.NamedPat id) {
       for (Environment env : list) {
         Binding binding = env.getOpt(id);
         if (binding != null) {
-          return binding;
+          return Pair.of(binding, env);
         }
       }
       return null;
