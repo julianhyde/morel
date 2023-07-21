@@ -171,8 +171,9 @@ public class Compiler {
     }
 
     static Context of(Environment globalEnv, Environment env,
-        ImmutableSortedSet<Core.NamedPat> unboundList) {
-      return new Context(globalEnv, env, unboundList);
+        SortedSet<Core.NamedPat> unboundList) {
+      return new Context(globalEnv, env,
+          ImmutableSortedSet.copyOf(unboundList));
     }
 
     Context bindAll(Iterable<Binding> bindings) {
@@ -678,8 +679,7 @@ public class Compiler {
       List<Core.Match> matchList) {
     final PairList<Core.Pat, Code> patCodes = PairList.of();
     matchList.forEach(match -> compileMatch(cx, match, patCodes::add));
-    return new MatchCode(patCodes.immutable(), ImmutablePairList.of(),
-        getLast(matchList).pos);
+    return new MatchCode0(patCodes.immutable(), getLast(matchList).pos);
   }
 
   private void compileMatch(Context cx, Core.Match match,
@@ -712,7 +712,8 @@ public class Compiler {
             id -> unbounds.add(id.idPat));
     valDecl.forEachBinding((pat, exp, pos) -> exp.accept(shuttle));
 
-    final Context cx1 = cx.bindAll(newBindings).withUnbound(unbounds);
+    final Environment env1 = Environments.empty().bindAll(newBindings);
+    final Context cx1 = Context.of(cx.globalEnv, env1, unbounds);
     valDecl.forEachBinding((pat, exp, pos) -> {
       // Using 'compileArg' rather than 'compile' encourages CalciteCompiler
       // to use a pure Calcite implementation if possible, and has no effect
@@ -725,9 +726,13 @@ public class Compiler {
       }
       final ImmutablePairList<Core.Pat, Code> patCodes =
           ImmutablePairList.of(pat, code);
-      final PairList<Core.NamedPat, Code> unboundCodes = PairList.of();
-      cx1.unbounds.forEach(p -> unboundCodes.add(p, compile(cx, core.id(p))));
-      matchCodes.add(new MatchCode(patCodes, unboundCodes.immutable(), pos));
+      if (cx1.unbounds.isEmpty()) {
+        matchCodes.add(new MatchCode0(patCodes, pos));
+      } else {
+        final PairList<Core.NamedPat, Code> unboundCodes = PairList.of();
+        cx1.unbounds.forEach(p -> unboundCodes.add(p, compile(cx, core.id(p))));
+        matchCodes.add(new MatchCodeN(patCodes, unboundCodes.immutable(), pos));
+      }
 
       if (actions != null) {
         final Type type0 = exp.type;
@@ -855,15 +860,12 @@ public class Compiler {
   }
 
   /** Code that implements {@link Compiler#compileMatchList(Context, List)}. */
-  private static class MatchCode implements Code {
-    private final ImmutablePairList<Core.Pat, Code> patCodes;
-    private final ImmutablePairList<Core.NamedPat, Code> unbounds;
-    private final Pos pos;
+  private abstract static class MatchCode implements Code {
+    protected final ImmutablePairList<Core.Pat, Code> patCodes;
+    protected final Pos pos;
 
-    MatchCode(ImmutablePairList<Core.Pat, Code> patCodes,
-        ImmutablePairList<Core.NamedPat, Code> unbounds, Pos pos) {
+    MatchCode(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos) {
       this.patCodes = patCodes;
-      this.unbounds = unbounds;
       this.pos = pos;
     }
 
@@ -871,6 +873,29 @@ public class Compiler {
       return describer.start("match", d ->
           patCodes.forEach((pat, code) ->
               d.arg("", pat.toString()).arg("", code)));
+    }
+  }
+
+  /** MatchCode that captures no variables. */
+  private static class MatchCode0 extends MatchCode {
+    MatchCode0(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos) {
+      super(patCodes, pos);
+    }
+
+    @Override public Object eval(Stack stack) {
+      // TODO: make this a field, when "stack" is no longer needed
+      return new Closure(stack, patCodes, ImmutableList.of(), pos);
+    }
+  }
+
+  /** MatchCode that captures one or more variables. */
+  private static class MatchCodeN extends MatchCode {
+    private final ImmutablePairList<Core.NamedPat, Code> unbounds;
+
+    MatchCodeN(ImmutablePairList<Core.Pat, Code> patCodes,
+        ImmutablePairList<Core.NamedPat, Code> unbounds, Pos pos) {
+      super(patCodes, pos);
+      this.unbounds = unbounds;
     }
 
     @Override public Object eval(Stack stack) {
