@@ -34,9 +34,12 @@ import java.util.function.Consumer;
  * scope that created the shuttle.
  */
 abstract class VariableCollector extends EnvVisitor {
+  protected final Deque<Environment> lambdaEnvStack;
+
   private VariableCollector(TypeSystem typeSystem, Environment env,
-      Deque<FromContext> fromStack) {
+      Deque<FromContext> fromStack, Deque<Environment> lambdaEnvStack) {
     super(typeSystem, env, fromStack);
+    this.lambdaEnvStack = lambdaEnvStack;
   }
 
   /** Creates a variable collector. */
@@ -46,7 +49,41 @@ abstract class VariableCollector extends EnvVisitor {
   }
 
   @Override protected SubVariableCollector push(Environment env) {
-    return new SubVariableCollector(typeSystem, env, fromStack, this);
+    return new SubVariableCollector(env, this);
+  }
+
+  /** {@inheritDoc}
+   *
+   * <p>For the purposes of finding free variables, it is important to
+   * know when we pass through a lambda. Consider these pieces of code:
+   *
+   * <blockquote><pre>{@code
+   * let
+   *   val x = 1
+   * in
+   *   fn n => x + n
+   * end;
+   *
+   * let
+   *   val x = 1
+   * in
+   *   x + 2
+   * end
+   * }</pre>
+   * </blockquote>
+   *
+   * <p>{@code x} is free inside both {@code fn n => x + n} and
+   * {@code x + 2}, but for the second we do not need to create a closure,
+   * because we have not crossed a {@code fn} boundary.
+   */
+  @Override protected void visit(Core.Fn fn) {
+    fn.idPat.accept(this);
+    try {
+      lambdaEnvStack.push(env);
+      fn.exp.accept(bind(Binding.of(fn.idPat)));
+    } finally {
+      lambdaEnvStack.pop();
+    }
   }
 
   @Override protected void visit(Core.Id id) {
@@ -61,14 +98,16 @@ abstract class VariableCollector extends EnvVisitor {
 
     RootVariableCollector(TypeSystem typeSystem, Environment env,
         Consumer<Core.Id> unboundConsumer) {
-      super(typeSystem, env, new ArrayDeque<>());
+      super(typeSystem, env, new ArrayDeque<>(), new ArrayDeque<>());
       this.unboundConsumer = unboundConsumer;
     }
 
     @Override void visitX(Core.Id id) {
       final @Nullable Pair<Binding, Environment> binding =
           env.getOpt2(id.idPat);
-      if (binding != null) {
+      if (binding != null
+          && !lambdaEnvStack.isEmpty()
+          && lambdaEnvStack.peek().isAncestorOf(binding.right)) {
         unboundConsumer.accept(id);
       }
     }
@@ -78,9 +117,8 @@ abstract class VariableCollector extends EnvVisitor {
   private static class SubVariableCollector extends VariableCollector {
     final VariableCollector parent;
 
-    SubVariableCollector(TypeSystem typeSystem, Environment env,
-        Deque<FromContext> fromStack, VariableCollector parent) {
-      super(typeSystem, env, fromStack);
+    SubVariableCollector(Environment env, VariableCollector parent) {
+      super(parent.typeSystem, env, parent.fromStack, parent.lambdaEnvStack);
       this.parent = parent;
     }
 

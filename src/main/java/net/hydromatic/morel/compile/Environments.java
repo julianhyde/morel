@@ -194,9 +194,14 @@ public abstract class Environments {
       return new Environments.SubEnvironment(env, binding);
     }
 
-    void visit(Consumer<Binding> consumer) {
+    @Override void forEachAncestor(Consumer<Environment> consumer) {
+      consumer.accept(this);
+      parent.forEachAncestor(consumer);
+    }
+
+    @Override void forEachBinding(Consumer<Binding> consumer) {
       consumer.accept(binding);
-      parent.visit(consumer);
+      parent.forEachBinding(consumer);
     }
 
     @Override Environment nearestAncestorNotObscuredBy(Set<Core.NamedPat> names) {
@@ -223,7 +228,11 @@ public abstract class Environments {
   private static class EmptyEnvironment extends Environment {
     static final EmptyEnvironment INSTANCE = new EmptyEnvironment();
 
-    void visit(Consumer<Binding> consumer) {
+    @Override void forEachAncestor(Consumer<Environment> consumer) {
+      consumer.accept(this);
+    }
+
+    @Override void forEachBinding(Consumer<Binding> consumer) {
     }
 
     @Override public @Nullable Binding getOpt(String name) {
@@ -258,9 +267,14 @@ public abstract class Environments {
       this.map = requireNonNull(map);
     }
 
-    void visit(Consumer<Binding> consumer) {
+    @Override void forEachAncestor(Consumer<Environment> consumer) {
+      consumer.accept(this);
+      parent.forEachAncestor(consumer);
+    }
+
+    @Override void forEachBinding(Consumer<Binding> consumer) {
       map.values().forEach(consumer);
-      parent.visit(consumer);
+      parent.forEachBinding(consumer);
     }
 
     public @Nullable Binding getOpt(String name) {
@@ -342,8 +356,13 @@ public abstract class Environments {
       return null;
     }
 
-    @Override void visit(Consumer<Binding> consumer) {
-      list.forEach(env -> env.visit(consumer));
+    @Override void forEachAncestor(Consumer<Environment> consumer) {
+      consumer.accept(this);
+      list.forEach(consumer);
+    }
+
+    @Override void forEachBinding(Consumer<Binding> consumer) {
+      list.forEach(env -> env.forEachBinding(consumer));
     }
 
     @Override Environment nearestAncestorNotObscuredBy(Set<Core.NamedPat> names) {

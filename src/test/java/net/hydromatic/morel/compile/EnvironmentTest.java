@@ -98,7 +98,7 @@ public class EnvironmentTest {
 
       private int depth(Environment env) {
         final AtomicInteger c = new AtomicInteger();
-        env.visit(b -> c.incrementAndGet());
+        env.forEachBinding(b -> c.incrementAndGet());
         return c.get();
       }
     };
