@@ -448,8 +448,8 @@ public class Compiler {
         forEach(tuple.args, recordType.argNameTypes().keySet(), (exp, name) ->
             mapCodes.put(name, compile(cx, exp)));
         final AtomicInteger size = new AtomicInteger();
-        cx.env.visit(b -> size.incrementAndGet());
-        cx0.env.visit(b -> size.decrementAndGet());
+        cx.env.forEachBinding(b -> size.incrementAndGet());
+        cx0.env.forEachBinding(b -> size.decrementAndGet());
         return () ->
             Codes.yieldRowSink(mapCodes.build(), size.get(), nextFactory.get());
       }
