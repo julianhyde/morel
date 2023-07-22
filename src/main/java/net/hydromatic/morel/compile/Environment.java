@@ -53,11 +53,15 @@ import static com.google.common.collect.Lists.reverse;
  * @see EvalEnv
  */
 public abstract class Environment {
-  /** Visits every variable binding in this environment.
+  /** Visits this environment and its ancestors. */
+  abstract void forEachAncestor(Consumer<Environment> consumer);
+
+  /** Visits every variable binding in this environment (including those
+   * inherited from its ancestor environments).
    *
    * <p>Bindings that are obscured by more recent bindings of the same name
    * are visited, but after the more obscuring bindings. */
-  abstract void visit(Consumer<Binding> consumer);
+  abstract void forEachBinding(Consumer<Binding> consumer);
 
   /** Converts this environment to a string.
    *
@@ -79,7 +83,8 @@ public abstract class Environment {
     return p == null ? null : p.left;
   }
 
-  /** Returns the binding of {@code id} if bound, null if not. */
+  /** Returns the binding and environment of {@code id} if bound,
+   * null if not. */
   public abstract @Nullable Pair<Binding, Environment> getOpt2(Core.NamedPat id);
 
   /** Creates an environment that is the same as a given environment, plus one
@@ -96,7 +101,7 @@ public abstract class Environment {
    * Does not visit obscured bindings. */
   public void forEachType(BiConsumer<String, Type> consumer) {
     final Set<String> names = new HashSet<>();
-    visit(binding -> {
+    forEachBinding(binding -> {
       if (names.add(binding.id.name)) {
         consumer.accept(binding.id.name, binding.id.type);
       }
@@ -107,7 +112,7 @@ public abstract class Environment {
    * Does not visit obscured bindings, or bindings to {@link Unit#INSTANCE}. */
   public void forEachValue(BiConsumer<String, Object> consumer) {
     final Set<String> names = new HashSet<>();
-    visit(binding -> {
+    forEachBinding(binding -> {
       if (names.add(binding.id.name) && binding.value != Unit.INSTANCE) {
         consumer.accept(binding.id.name, binding.value);
       }
@@ -117,7 +122,7 @@ public abstract class Environment {
   /** Returns a map of the values and bindings. */
   public final Map<String, Binding> getValueMap() {
     final Map<String, Binding> valueMap = new HashMap<>();
-    visit(binding -> valueMap.putIfAbsent(binding.id.name, binding));
+    forEachBinding(binding -> valueMap.putIfAbsent(binding.id.name, binding));
     return valueMap;
   }
 
@@ -144,8 +149,14 @@ public abstract class Environment {
   /** Returns this environment plus the bindings in the given environment. */
   public Environment plus(Environment env) {
     final List<Binding> bindingList = new ArrayList<>();
-    env.visit(bindingList::add);
+    env.forEachBinding(bindingList::add);
     return bindAll(reverse(bindingList));
+  }
+
+  public boolean isAncestorOf(Environment env) {
+    final List<Environment> ancestors = new ArrayList<>();
+    env.forEachAncestor(ancestors::add);
+    return ancestors.contains(this);
   }
 
   /** Layout of the stack, describing the name and type of the variable in each

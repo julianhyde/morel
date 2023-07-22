@@ -37,6 +37,9 @@ import static net.hydromatic.morel.type.PrimitiveType.INT;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.hasToString;
 
 /**
  * Tests that {@link VariableCollector} correctly deduces which variables are
@@ -92,7 +95,16 @@ public class CaptureTest {
                     core.apply(ZERO, INT, f.plus,
                         core.tuple(f.typeSystem, core.id(f.x),
                             core.apply(ZERO, INT, core.id(f.f), f.two)))));
-    f.check(e, (e2, idList) -> assertThat(idList, empty()));
+    f.check(e, (e2, idList) -> {
+      final String s = e2.toString();
+      if (s.equals("let val f = fn n => op + (x, n) in op + (x, f 2) end")
+          || s.equals("fn n => op + (x, n)")) {
+        assertThat(idList, hasSize(1));
+        assertThat(idList, hasItem(hasToString("x")));
+      } else {
+        assertThat(idList, empty());
+      }
+    });
   }
 
   /** Visitor that walks over an expression tree and applies an action on every
