@@ -26,7 +26,6 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSortedSet;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -140,10 +139,11 @@ public abstract class Environment {
 
   protected abstract void populateLayout(List<Core.NamedPat> list);
 
-  StackLayout layout(ImmutableSortedSet<Core.NamedPat> unbounds) {
+  StackLayout layout(List<Core.NamedPat> unbounds) {
     final List<Core.NamedPat> list = new ArrayList<>();
     populateLayout(list);
-    return new StackLayout(ImmutableList.copyOf(list), unbounds);
+    return new StackLayout(ImmutableList.copyOf(list),
+        ImmutableList.copyOf(unbounds));
   }
 
   /** Returns this environment plus the bindings in the given environment. */
@@ -163,10 +163,10 @@ public abstract class Environment {
    * slot of the stack. */
   public static class StackLayout {
     final ImmutableList<Core.NamedPat> list;
-    public final ImmutableSortedSet<Core.NamedPat> unbounds;
+    public final ImmutableList<Core.NamedPat> unbounds;
 
     StackLayout(ImmutableList<Core.NamedPat> list,
-        ImmutableSortedSet<Core.NamedPat> unbounds) {
+        ImmutableList<Core.NamedPat> unbounds) {
       this.list = list;
       this.unbounds = unbounds;
     }
@@ -178,7 +178,15 @@ public abstract class Environment {
     /** Returns the distance of a given variable from the top of the stack, or
      * -1 if it is not on the stack. */
     public int distance(Core.NamedPat idPat) {
-      return list.indexOf(idPat);
+      final int i = list.indexOf(idPat);
+      if (i >= 0) {
+        return i;
+      }
+      final int j = unbounds.indexOf(idPat);
+      if (j >= 0) {
+        return list.size() + j;
+      }
+      return -1;
     }
   }
 }

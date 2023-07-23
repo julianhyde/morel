@@ -49,7 +49,6 @@ import net.hydromatic.morel.util.ThreadLocals;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import org.apache.calcite.plan.RelOptCluster;
@@ -807,7 +806,7 @@ public class CalciteCompiler extends Compiler {
     RelContext(Environment globalEnv, Environment env, RelContext parent,
         RelBuilder relBuilder,
         ImmutableSortedMap<String, VarData> map, int inputCount) {
-      super(globalEnv, env, ImmutableSortedSet.of());
+      super(globalEnv, env, ImmutableList.of());
       this.parent = parent;
       this.relBuilder = relBuilder;
       this.map = map;

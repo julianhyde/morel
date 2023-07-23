@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 
 import org.junit.jupiter.api.Test;
@@ -59,13 +60,12 @@ public class CaptureTest {
     Fixture f = new Fixture();
     Core.Let e =
         core.let(
-            core.nonRecValDecl(f.x, f.one, ZERO),
+            core.nonRecValDecl(ZERO, f.x, f.one),
             core.let(
-                core.nonRecValDecl(f.y,
+                core.nonRecValDecl(ZERO, f.y,
                     core.apply(ZERO, INT, f.plus,
                         core.tuple(f.typeSystem, core.id(f.x),
-                            core.intLiteral(BigDecimal.valueOf(2)))),
-                    ZERO),
+                            core.intLiteral(BigDecimal.valueOf(2))))),
                 core.apply(ZERO, INT, f.plus,
                     core.tuple(f.typeSystem, core.id(f.x), core.id(f.y)))));
     f.check(e, (e2, idList) -> assertThat(idList, empty()));
@@ -84,6 +84,53 @@ public class CaptureTest {
     Fixture f = new Fixture();
     Core.Let e =
         core.let(
+            core.nonRecValDecl(ZERO, f.x, f.one),
+            core.let(
+                core.nonRecValDecl(ZERO, f.f,
+                    core.fn((FnType) f.f.type, f.n,
+                        core.apply(ZERO, INT, f.plus,
+                            core.tuple(f.typeSystem, core.id(f.x),
+                                core.id(f.n))))),
+                    core.apply(ZERO, INT, f.plus,
+                        core.tuple(f.typeSystem, core.id(f.x),
+                            core.apply(ZERO, INT, core.id(f.f), f.two)))));
+    f.check(e, (e2, idList) -> {
+      final String s = e2.toString();
+      if (s.equals("let val f = fn n => op + (x, n) in op + (x, f 2) end")
+          || s.equals("fn n => op + (x, n)")) {
+        assertThat(idList, hasSize(1));
+        assertThat(idList, hasItem(hasToString("x")));
+      } else {
+        assertThat(idList, empty());
+      }
+    });
+  }
+
+  @Test void testVariableCapture2() {
+    // fun baz f =
+    //   let
+    //     fun foo 0 = 0
+    //       | foo n = f n + foo (n - 1)
+    //   in
+    //     foo 5
+    //   end;
+    //
+    // fn f =>
+    //   let
+    //     val foo = fn v0 =>
+    //       case v0 of
+    //           0 => 0
+    //         | n => f n + foo (n - 1)
+    //   in
+    //     foo 5
+    //   end
+    Fixture f = new Fixture();
+    final Type intToIntToInt =
+        f.typeSystem.fnType(INT, INT, INT); // int -> int -> int
+    Core.Exp e = null /*
+        core.fn(INT_INT_INT, f.ffnType()f.x, f.one, ZERO),
+        core.
+        core.let(
             core.nonRecValDecl(f.x, f.one, ZERO),
             core.let(
                 core.nonRecValDecl(f.f,
@@ -92,9 +139,9 @@ public class CaptureTest {
                             core.tuple(f.typeSystem, core.id(f.x),
                                 core.id(f.n)))),
                     ZERO),
-                    core.apply(ZERO, INT, f.plus,
-                        core.tuple(f.typeSystem, core.id(f.x),
-                            core.apply(ZERO, INT, core.id(f.f), f.two)))));
+                core.apply(ZERO, INT, f.plus,
+                    core.tuple(f.typeSystem, core.id(f.x),
+                        core.apply(ZERO, INT, core.id(f.f), f.two))))) */;
     f.check(e, (e2, idList) -> {
       final String s = e2.toString();
       if (s.equals("let val f = fn n => op + (x, n) in op + (x, f 2) end")
