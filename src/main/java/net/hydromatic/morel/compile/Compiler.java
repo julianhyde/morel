@@ -163,19 +163,18 @@ public class Compiler {
   static class Context {
     final Environment globalEnv;
     final Environment env;
-    final ImmutableSortedSet<Core.NamedPat> unbounds;
+    final ImmutableList<Core.NamedPat> unbounds;
 
     Context(Environment globalEnv, Environment env,
-        ImmutableSortedSet<Core.NamedPat> unbounds) {
+        ImmutableList<Core.NamedPat> unbounds) {
       this.globalEnv = globalEnv;
       this.env = env;
       this.unbounds = unbounds;
     }
 
     static Context of(Environment globalEnv, Environment env,
-        SortedSet<Core.NamedPat> unboundList) {
-      return new Context(globalEnv, env,
-          ImmutableSortedSet.copyOf(unboundList));
+        Iterable<? extends Core.NamedPat> unboundList) {
+      return new Context(globalEnv, env, ImmutableList.copyOf(unboundList));
     }
 
     Context bindAll(Iterable<Binding> bindings) {
@@ -185,11 +184,6 @@ public class Compiler {
     /** Returns an environment that looks first in local, then in global. */
     Environment combinedEnv() {
       return Environments.concat(env, globalEnv);
-    }
-
-    public Context withUnbound(SortedSet<Core.NamedPat> unbounds) {
-      return this.unbounds.equals(unbounds) ? this
-          : of(globalEnv, env, ImmutableSortedSet.copyOf(unbounds));
     }
   }
 
@@ -304,7 +298,7 @@ public class Compiler {
   private Code compileFieldName(Context cx, Core.NamedPat idPat) {
     if (cx.unbounds.contains(idPat)) {
       final Environment.StackLayout layout = cx.env.layout(cx.unbounds);
-      return Codes.getClosure(layout, idPat);
+      return Codes.getStack(layout, idPat);
     }
     final Binding binding = cx.env.getOpt(idPat);
     if (binding != null) {

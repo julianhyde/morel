@@ -74,28 +74,13 @@ public class Closure implements Comparable<Closure>, Applicable {
     return 0;
   }
 
-  /** Binds an argument value to create a new environment for a closure.
+  /** Evaluates expressions and binds them to the stack, to create a new
+   * environment for a closure.
    *
-   * <p>When calling a simple function such as {@code (fn x => x + 1) 2},
-   * the binder sets just contains one variable, {@code x}, and the
-   * new environment contains {@code x = 1}.  If the function's
-   * parameter is a match, more variables might be bound. For example,
-   * when you invoke {@code (fn (x, y) => x + y) (3, 4)}, the binder
-   * sets {@code x} to 3 and {@code y} to 4. */
-  EvalEnv bind(Object argValue) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(stack.env);
-    for (Core.Pat pat : patCodes.leftList()) {
-      if (bindRecurse(pat, argValue, envRef)) {
-        return envRef.env;
-      }
-    }
-    throw new AssertionError("no match");
-  }
-
-  /** Similar to {@link #bind(Object)} but evaluates an expression first.
-   * Reads the values it needs from
+   * <p>Reads the values it needs from
    * the stack, and writes the result to the stack. */
   public int execBind(Stack stack) {
+    this.values.forEach(stack::push);
     final int top = stack.save();
     for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
       final Object argValue = patCode.getValue().eval(stack);
@@ -109,8 +94,10 @@ public class Closure implements Comparable<Closure>, Applicable {
   }
 
   @Override public Object apply(Stack stack, Object argValue) {
-    final Stack s = this.stack; // use the internal environment
+    final Stack s = /*this.*/stack; // use the internal environment
     final int top = s.save();
+    this.values.forEach(s::push);
+    final int top2 = s.save();
     for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
       final Core.Pat pat = patCode.getKey();
       if (bindRecurse(pat, argValue, (p, o) -> s.push(o))) {
@@ -119,7 +106,7 @@ public class Closure implements Comparable<Closure>, Applicable {
         s.restore(top);
         return o;
       }
-      s.restore(top);
+      s.restore(top2);
     }
     throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
   }
