@@ -804,7 +804,7 @@ public class CalciteCompiler extends Compiler {
     RelContext(Environment globalEnv, Environment env, RelContext parent,
         RelBuilder relBuilder,
         ImmutableSortedMap<String, VarData> map, int inputCount) {
-      super(globalEnv, env, ImmutableList.of());
+      super(globalEnv, env, ImmutableMap.of());
       this.parent = parent;
       this.relBuilder = relBuilder;
       this.map = map;

@@ -66,6 +66,12 @@ abstract class EnvVisitor extends Visitor {
     return this;
   }
 
+  /** Creates a visitor the same as this bud with overriding bindings
+   * that were created in a recursive declaration. */
+  protected EnvVisitor bindRec(List<Binding> bindingList) {
+    return push(Environments.rec(env, bindingList));
+  }
+
   @Override protected void visit(Core.Fn fn) {
     fn.idPat.accept(this);
     fn.exp.accept(bind(Binding.of(fn.idPat)));
@@ -95,7 +101,7 @@ abstract class EnvVisitor extends Visitor {
     final List<Binding> bindings = new ArrayList<>();
     recValDecl.list.forEach(decl ->
         Compiles.bindPattern(typeSystem, bindings, decl.pat));
-    final EnvVisitor v2 = bind(bindings);
+    final EnvVisitor v2 = bindRec(bindings);
     recValDecl.list.forEach(v2::accept);
   }
 

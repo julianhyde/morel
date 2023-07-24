@@ -59,11 +59,22 @@ public class Closure implements Comparable<Closure>, Applicable {
 
   /** Not a public API. */
   public Closure(Stack stack, ImmutablePairList<Core.Pat, Code> patCodes,
-      ImmutableList<Object> values, Pos pos) {
+      Pos pos) {
     this.stack = requireNonNull(stack).fix();
     this.patCodes = requireNonNull(patCodes);
-    this.values = requireNonNull(values);
+    this.values = ImmutableList.of();
     this.pos = pos;
+  }
+
+  /** Not a public API. */
+  public Closure(Stack stack, ImmutablePairList<Core.Pat, Code> patCodes,
+      ImmutablePairList<Core.NamedPat, Code> captureCodes, Pos pos) {
+    this.stack = requireNonNull(stack).fix();
+    this.patCodes = requireNonNull(patCodes);
+    this.pos = pos;
+    this.values =
+        captureCodes.transform2((p, c) ->
+          c == Codes.CLOSURE ? Closure.this : c.eval(stack));
   }
 
   @Override public String toString() {

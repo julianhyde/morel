@@ -144,6 +144,13 @@ public abstract class Environments {
     }
   }
 
+  public static Environment rec(Environment env, List<Binding> bindings) {
+    final ImmutableMap.Builder<Core.NamedPat, Binding> b =
+        ImmutableMap.builder();
+    bindings.forEach(binding -> b.put(binding.id, binding));
+    return new MapRecEnvironment(env, b.build());
+  }
+
   /** Environment that inherits from a parent environment and adds one
    * binding. */
   static class SubEnvironment extends Environment {
@@ -258,7 +265,7 @@ public abstract class Environments {
 
   /** Environment that keeps bindings in a map. */
   static class MapEnvironment extends Environment {
-    private final Environment parent;
+    protected final Environment parent;
     private final Map<Core.NamedPat, Binding> map;
 
     MapEnvironment(Environment parent,
@@ -323,6 +330,18 @@ public abstract class Environments {
         ++i;
       }
       return -1;
+    }
+  }
+
+  static class MapRecEnvironment extends MapEnvironment {
+    MapRecEnvironment(Environment parent,
+        ImmutableMap<Core.NamedPat, Binding> map) {
+      super(parent, map);
+    }
+
+    @Override protected void populateLayout(List<Core.NamedPat> list) {
+      // Skip the bindings in this environment
+      parent.populateLayout(list);
     }
   }
 

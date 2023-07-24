@@ -22,6 +22,8 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.util.Pair;
 
+import com.google.common.collect.Lists;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,6 +58,11 @@ public final class Stack {
     stack.slots = new Object[INITIAL_SLOT_COUNT];
     stack.top = 0;
     return stack;
+  }
+
+  @Override public String toString() {
+    return "[top: " + top + ", "
+        + Lists.reverse(Arrays.asList(slots).subList(0, top)) + "]";
   }
 
   public void push(Object o) {
