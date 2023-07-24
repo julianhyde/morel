@@ -20,7 +20,20 @@ package net.hydromatic.morel.eval;
 
 /** A compiled expression, that can be evaluated. */
 public interface Code extends Describable {
-  Object eval(EvalEnv evalEnv);
+  /** Evaluates this expression in an environment and returns the result.
+   *
+   * <p>As we transition to the new stack-based evaluation model, which calls
+   * tail-call optimizations, the default implementation of this method calls
+   * {@link #eval(Stack)}. Eventually {@link #eval(Stack)} will be removed
+   * and there will be no default implementation. */
+  default Object eval0(EvalEnv evalEnv) {
+    Stack stack = Stack.of(evalEnv);
+    return eval(stack);
+  }
+
+  /** Executes this expression, reading the values it needs from the stack, and
+   * returns the result. Does not push the result onto the stack. */
+  Object eval(Stack stack);
 
   default boolean isConstant() {
     return false;
