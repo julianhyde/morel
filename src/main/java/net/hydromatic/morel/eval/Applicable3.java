@@ -57,7 +57,7 @@ public abstract class Applicable3<R, A0, A1, A2>
     this(builtIn, Pos.ZERO);
   }
 
-  @Override public Object apply(EvalEnv env, Object argValue) {
+  @Override public Object apply(Stack stack, Object argValue) {
     final List list = (List) argValue;
     return apply((A0) list.get(0), (A1) list.get(1), (A2) list.get(2));
   }

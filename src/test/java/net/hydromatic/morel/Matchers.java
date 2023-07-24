@@ -25,6 +25,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.MorelException;
@@ -411,7 +412,7 @@ public abstract class Matchers {
         return false;
       }
       final Applicable applicable = (Applicable) o;
-      final Object result = applicable.apply(Codes.emptyEnv(), arg);
+      final Object result = applicable.apply(Stack.of(Codes.emptyEnv()), arg);
       return resultMatcher.matches(result);
     }
   }

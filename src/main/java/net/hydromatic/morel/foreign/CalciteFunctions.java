@@ -30,6 +30,7 @@ import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.Type;
@@ -177,7 +178,7 @@ public class CalciteFunctions {
         }
 
         @Override public Enumerable<Object[]> scan(DataContext root) {
-          Object v = compiled.code.eval(compiled.evalEnv);
+          Object v = compiled.code.eval0(compiled.evalEnv);
           return compiled.f.apply(v);
         }
 
@@ -266,7 +267,7 @@ public class CalciteFunctions {
               : new Compiled(cx.env, cx.typeSystem, cx.typeFactory, ml,
                   typeJson);
       final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
-      Object v = compiled.code.eval(evalEnv);
+      Object v = compiled.code.eval0(evalEnv);
       return compiled.f.apply(v);
     }
 
@@ -325,7 +326,7 @@ public class CalciteFunctions {
       final Closure fn = (Closure) closure;
       final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
       final Object o = compiled.converter.apply(arg);
-      return fn.apply(evalEnv, o);
+      return fn.apply(Stack.of(evalEnv), o);
     }
 
     /** Compiled state. */

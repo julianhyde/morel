@@ -101,7 +101,7 @@ public class Inliner extends EnvShuttle {
 
         default:
           if (v instanceof Code) {
-            v = ((Code) v).eval(Compiler.EMPTY_ENV);
+            v = ((Code) v).eval0(Compiler.EMPTY_ENV);
           }
           return core.valueLiteral(id, v);
         }
