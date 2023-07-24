@@ -104,6 +104,15 @@ public abstract class Codes {
     return new ConstantCode(value);
   }
 
+  /** Code that indicates that a closure should evaluate to itself.
+   * Used only when setting up a closure for recursive functions. */
+  public static final Code CLOSURE =
+      new CodeImpl() {
+        @Override public Describer describe(Describer describer) {
+          return describer.start("closure", d -> {});
+        }
+      };
+
   /** @see BuiltIn#OP_EQ */
   private static final Applicable OP_EQ =
       new Applicable2<Boolean, Object, Object>(BuiltIn.OP_EQ) {
@@ -3752,6 +3761,7 @@ public abstract class Codes {
     }
 
     @Override public Object eval(Stack stack) {
+      int save = stack.save(); // TODO only for debug
       final Object arg = argCode.eval(stack);
       return fnValue.apply(stack, arg);
     }
@@ -3775,6 +3785,7 @@ public abstract class Codes {
     }
 
     @Override public Object eval(Stack stack) {
+      int save = stack.save(); // TODO only for debug
       final Object arg0 = argCode0.eval(stack);
       final Object arg1 = argCode1.eval(stack);
       return fnValue.apply(arg0, arg1);
