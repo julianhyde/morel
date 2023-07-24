@@ -26,6 +26,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -139,11 +140,11 @@ public abstract class Environment {
 
   protected abstract void populateLayout(List<Core.NamedPat> list);
 
-  StackLayout layout(List<Core.NamedPat> unbounds) {
+  StackLayout layout(Map<Core.NamedPat, VariableCollector.Scope> scopeMap) {
     final List<Core.NamedPat> list = new ArrayList<>();
     populateLayout(list);
     return new StackLayout(ImmutableList.copyOf(list),
-        ImmutableList.copyOf(unbounds));
+        ImmutableMap.copyOf(scopeMap));
   }
 
   /** Returns this environment plus the bindings in the given environment. */
@@ -163,16 +164,16 @@ public abstract class Environment {
    * slot of the stack. */
   public static class StackLayout {
     final ImmutableList<Core.NamedPat> list;
-    public final ImmutableList<Core.NamedPat> unbounds;
+    public final ImmutableMap<Core.NamedPat, VariableCollector.Scope> scopeMap;
 
     StackLayout(ImmutableList<Core.NamedPat> list,
-        ImmutableList<Core.NamedPat> unbounds) {
+        ImmutableMap<Core.NamedPat, VariableCollector.Scope> scopeMap) {
       this.list = list;
-      this.unbounds = unbounds;
+      this.scopeMap = scopeMap;
     }
 
     @Override public String toString() {
-      return list.toString();
+      return list + "; unbound " + scopeMap;
     }
 
     /** Returns the distance of a given variable from the top of the stack, or
@@ -182,7 +183,7 @@ public abstract class Environment {
       if (i >= 0) {
         return i;
       }
-      final int j = unbounds.indexOf(idPat);
+      final int j = scopeMap.keySet().asList().indexOf(idPat);
       if (j >= 0) {
         return list.size() + j;
       }
