@@ -26,8 +26,10 @@ import net.hydromatic.morel.util.Pair;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
-import java.util.function.Consumer;
+import java.util.List;
+import java.util.function.BiConsumer;
 
 /**
  * Shuttle that builds a list of variables that are defined outside the
@@ -44,7 +46,7 @@ abstract class VariableCollector extends EnvVisitor {
 
   /** Creates a variable collector. */
   public static VariableCollector create(TypeSystem typeSystem, Environment env,
-      Consumer<Core.Id> consumer) {
+      BiConsumer<Core.Id, Scope> consumer) {
     return new RootVariableCollector(typeSystem, env, consumer);
   }
 
@@ -86,6 +88,25 @@ abstract class VariableCollector extends EnvVisitor {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Pushes onto the stack the special environment that contains the
+   * still-being-resolved recursive variable.
+   */
+  @Override protected void visit(Core.RecValDecl recValDecl) {
+    final List<Binding> bindings = new ArrayList<>();
+    recValDecl.list.forEach(decl ->
+        Compiles.bindPattern(typeSystem, bindings, decl.pat));
+    final VariableCollector v2 = (VariableCollector) bindRec(bindings);
+    try {
+      lambdaEnvStack.push(v2.env);
+      recValDecl.list.forEach(v2::accept);
+    } finally {
+      lambdaEnvStack.pop();
+    }
+  }
+
   @Override protected void visit(Core.Id id) {
     visitX(id);
   }
@@ -94,21 +115,28 @@ abstract class VariableCollector extends EnvVisitor {
 
   /** Variable collector at the initial level. */
   private static class RootVariableCollector extends VariableCollector {
-    final Consumer<Core.Id> unboundConsumer;
+    final BiConsumer<Core.Id, Scope> consumer;
 
     RootVariableCollector(TypeSystem typeSystem, Environment env,
-        Consumer<Core.Id> unboundConsumer) {
+        BiConsumer<Core.Id, Scope> consumer) {
       super(typeSystem, env, new ArrayDeque<>(), new ArrayDeque<>());
-      this.unboundConsumer = unboundConsumer;
+      this.consumer = consumer;
     }
 
     @Override void visitX(Core.Id id) {
       final @Nullable Pair<Binding, Environment> binding =
           env.getOpt2(id.idPat);
       if (binding != null
-          && !lambdaEnvStack.isEmpty()
-          && lambdaEnvStack.peek().isAncestorOf(binding.right)) {
-        unboundConsumer.accept(id);
+          && !lambdaEnvStack.isEmpty()) {
+        Environment env = lambdaEnvStack.peek();
+        if (env.isAncestorOf(binding.right)) {
+          Scope scope = Scope.FREE;
+          if (env == binding.right
+              && env instanceof Environments.MapRecEnvironment) {
+            scope = Scope.REC;
+          }
+          consumer.accept(id, scope);
+        }
       }
     }
   }
@@ -125,5 +153,16 @@ abstract class VariableCollector extends EnvVisitor {
     @Override void visitX(Core.Id id) {
       parent.visitX(id);
     }
+  }
+
+  /** Whether a variable is in scope. */
+  enum Scope {
+    /** Variable is free.
+     * For example, in "fn x => x + y", "y" is free. */
+    FREE,
+    /** Variable is recursive.
+     * For example, in "val rec f = fn i => case i of 0 => 0 | f (i - 1)",
+     * "f" is recursive. */
+    REC
   }
 }

@@ -419,13 +419,11 @@ public enum CoreBuilder {
 
   /** Creates a {@link Core.Apply} with two or more arguments, packing the
    * arguments into a tuple. */
-  public Core.Apply apply(Pos pos, TypeSystem typeSystem, BuiltIn builtIn,
-      Core.Exp arg0, Core.Exp arg1, Core.Exp... args) {
+  public Core.Apply apply(Pos pos, Type type, TypeSystem typeSystem,
+      BuiltIn builtIn, Core.Exp arg0, Core.Exp arg1, Core.Exp... args) {
     final Core.Literal fn = functionLiteral(typeSystem, builtIn);
-    FnType fnType = (FnType) fn.type;
-    TupleType tupleType = (TupleType) fnType.paramType;
-    return apply(pos, fnType.resultType, fn,
-        tuple(tupleType, Lists.asList(arg0, arg1, args)));
+    return apply(pos, type, fn,
+        tuple(typeSystem, null, Lists.asList(arg0, arg1, args)));
   }
 
   public Core.Case ifThenElse(Core.Exp condition, Core.Exp ifTrue,
