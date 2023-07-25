@@ -23,12 +23,14 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.util.ImmutablePairList;
 
 import com.google.common.collect.ImmutableList;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
+import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Static.skip;
 
@@ -37,10 +39,6 @@ import static java.util.Objects.requireNonNull;
 /** Value that is sufficient for a function to bind its argument
  * and evaluate its body. */
 public class Closure implements Comparable<Closure>, Applicable {
-  /** Environment for evaluation. Contains the variables "captured" from the
-   * environment when the closure was created. */
-  private final Stack stack;
-
   /** The values of the unbound variables that are "closed over" by this
    * closure. (May make the stack obsolete one day.) */
   private final ImmutableList<Object> values;
@@ -58,18 +56,31 @@ public class Closure implements Comparable<Closure>, Applicable {
   private final Pos pos;
 
   /** Not a public API. */
-  public Closure(Stack stack, ImmutablePairList<Core.Pat, Code> patCodes,
-      Pos pos) {
-    this.stack = requireNonNull(stack).fix();
+  public Closure(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos) {
     this.patCodes = requireNonNull(patCodes);
     this.values = ImmutableList.of();
     this.pos = pos;
   }
 
-  /** Not a public API. */
-  public Closure(Stack stack, ImmutablePairList<Core.Pat, Code> patCodes,
-      ImmutablePairList<Core.NamedPat, Code> captureCodes, Pos pos) {
-    this.stack = requireNonNull(stack).fix();
+  /** Not a public API. Special constructor that populates the environment of
+   * captured variables by evaluating expressions using the stack; can even
+   * store a reference this Closure, so that the bodies of recursive functions
+   * can use the name of the function to reference the function value.
+   *
+   * <p>Recursive functions capture variables, and then become closures. For
+   * example, in the following, {@code factorial} is a closure whose captured
+   * variables are itself ({@code factorial}) and {@code z}.
+   *
+   * <blockquote><pre>{@code
+   * val z = 3;
+   * fun factorial n =
+   *   if n = z then n else n * factorial (n - 1);
+   * factorial 5;
+   * > 60;
+   * }</pre></blockquote>
+   */
+  public Closure(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos,
+      ImmutablePairList<Core.NamedPat, Code> captureCodes, Stack stack) {
     this.patCodes = requireNonNull(patCodes);
     this.pos = pos;
     this.values =
@@ -78,10 +89,22 @@ public class Closure implements Comparable<Closure>, Applicable {
   }
 
   @Override public String toString() {
-    return "Closure(evalEnv = " + stack + ", patCodes = " + patCodes + ")";
+    StringBuilder b = new StringBuilder();
+    b.append("Closure(");
+    forEachIndexed(values, (value, i) -> {
+      if (i > 0) {
+        b.append(", ");
+      }
+      if (value == this) {
+        b.append("this");
+      } else {
+        b.append(value);
+      }
+    });
+    return b.append("; ").append(patCodes).append(")").toString();
   }
 
-  public int compareTo(Closure o) {
+  public int compareTo(@NonNull Closure o) {
     return 0;
   }
 
@@ -94,7 +117,8 @@ public class Closure implements Comparable<Closure>, Applicable {
     this.values.forEach(stack::push);
     final int top = stack.save();
     for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Object argValue = patCode.getValue().eval(stack);
+      final Code code = patCode.getValue();
+      final Object argValue = code == Codes.CLOSURE ? this : code.eval(stack);
       final Core.Pat pat = patCode.getKey();
       if (bindRecurse(pat, argValue, (p, o) -> stack.push(o))) {
         return 0;
@@ -105,19 +129,18 @@ public class Closure implements Comparable<Closure>, Applicable {
   }
 
   @Override public Object apply(Stack stack, Object argValue) {
-    final Stack s = /*this.*/stack; // use the internal environment
-    final int top = s.save();
-    this.values.forEach(s::push);
-    final int top2 = s.save();
+    final int top = stack.save();
+    this.values.forEach(stack::push);
+    final int top2 = stack.save();
     for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
       final Core.Pat pat = patCode.getKey();
-      if (bindRecurse(pat, argValue, (p, o) -> s.push(o))) {
+      if (bindRecurse(pat, argValue, (p, o) -> stack.push(o))) {
         final Code code = patCode.getValue();
-        final Object o = code.eval(s);
-        s.restore(top);
+        final Object o = code == Codes.CLOSURE ? this : code.eval(stack);
+        stack.restore(top);
         return o;
       }
-      s.restore(top2);
+      stack.restore(top2);
     }
     throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
   }
@@ -132,6 +155,7 @@ public class Closure implements Comparable<Closure>, Applicable {
    * <p>Each time it matches a name, calls a consumer. It's possible that the
    * consumer is called a few times even if the whole pattern ultimately fails
    * to match. */
+  @SuppressWarnings({"unchecked", "rawtypes"})
   public static boolean bindRecurse(Core.Pat pat, Object argValue,
       BiConsumer<Core.NamedPat, Object> envRef) {
     final List<Object> listValue;
@@ -211,21 +235,6 @@ public class Closure implements Comparable<Closure>, Applicable {
 
     default:
       throw new AssertionError("cannot compile " + pat.op + ": " + pat);
-    }
-  }
-
-  /** Callback for {@link #bindRecurse(Core.Pat, Object, BiConsumer)} that
-   * modifies an environment. */
-  private static class EvalEnvHolder
-      implements BiConsumer<Core.NamedPat, Object> {
-    EvalEnv env;
-
-    EvalEnvHolder(EvalEnv env) {
-      this.env = env;
-    }
-
-    @Override public void accept(Core.NamedPat namedPat, Object o) {
-      env = env.bind(namedPat.name, o);
     }
   }
 }
