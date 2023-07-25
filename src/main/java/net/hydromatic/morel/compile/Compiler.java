@@ -42,6 +42,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
+import net.hydromatic.morel.util.MapEntry;
 import net.hydromatic.morel.util.PairList;
 import net.hydromatic.morel.util.TailList;
 import net.hydromatic.morel.util.ThreadLocals;
@@ -724,10 +725,9 @@ public class Compiler {
       if (!linkCodes.isEmpty()) {
         link(linkCodes, pat, code);
       }
-      final ImmutablePairList<Core.Pat, Code> patCodes =
-          ImmutablePairList.of(pat, code);
+      final PairList<Core.Pat, Code> patCodes = PairList.of(pat, code);
       if (cx1.scopeMap.isEmpty()) {
-        matchCodes.add(new MatchCode0(patCodes, pos));
+        matchCodes.add(new MatchCode0(patCodes.immutable(), pos));
       } else {
         final PairList<Core.NamedPat, Code> captureCodes = PairList.of();
         cx1.scopeMap.forEach((p, scope) -> {
@@ -735,9 +735,20 @@ public class Compiler {
               scope == VariableCollector.Scope.REC
                   ? Codes.CLOSURE
                   : compile(cx, core.id(p));
-          captureCodes.add(p, captureCode);
+          if (patCodes.leftList().contains(p)) {
+            // When defining a recursive function that is a closure, e.g.
+            //   val k = 3
+            //   fun perm n = if n = k then n else n * perm (n - 1)
+            // then "perm" will appear in both patCodes and captureCodes. Keep
+            // the one in captureCodes.
+            patCodes.set(patCodes.leftList().indexOf(p),
+                new MapEntry<>(p, captureCode));
+          } else {
+            captureCodes.add(p, captureCode);
+          }
         });
-        matchCodes.add(new MatchCodeN(patCodes, captureCodes.immutable(), pos));
+        matchCodes.add(
+            new MatchCodeN(patCodes.immutable(), captureCodes.immutable(), pos));
       }
 
       if (actions != null) {
@@ -884,13 +895,17 @@ public class Compiler {
 
   /** MatchCode that captures no variables. */
   private static class MatchCode0 extends MatchCode {
+    /** Because there are no captured fields, the same closure is returned
+     * every time we evaluate this code, and therefore we store it. */
+    private final Closure closure;
+
     MatchCode0(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos) {
       super(patCodes, pos);
+      closure = new Closure(patCodes, pos);
     }
 
     @Override public Object eval(Stack stack) {
-      // TODO: make this a field, when "stack" is no longer needed
-      return new Closure(stack, patCodes, pos);
+      return closure;
     }
   }
 
@@ -905,7 +920,7 @@ public class Compiler {
     }
 
     @Override public Object eval(Stack stack) {
-      return new Closure(stack, patCodes, captureCodes, pos);
+      return new Closure(patCodes, pos, captureCodes, stack);
     }
   }
 }

@@ -117,6 +117,12 @@ public abstract class Codes {
         @Override public Describer describe(Describer describer) {
           return describer.start("closure", d -> {});
         }
+
+        @Override public Object eval(Stack stack) {
+          // This kind of Code is a marker, and should never be executed.
+          // The Closure should intercept it first.
+          throw new UnsupportedOperationException();
+        }
       };
 
   /** @see BuiltIn#OP_EQ */
