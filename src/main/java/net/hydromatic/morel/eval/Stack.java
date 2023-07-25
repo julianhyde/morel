@@ -22,8 +22,6 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.util.Pair;
 
-import com.google.common.collect.Lists;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,8 +59,20 @@ public final class Stack {
   }
 
   @Override public String toString() {
-    return "[top: " + top + ", "
-        + Lists.reverse(Arrays.asList(slots).subList(0, top)) + "]";
+    StringBuilder b = new StringBuilder();
+    b.append("[top: ").append(top).append(", [");
+    for (int i = top - 1; i >= 0; i--) {
+      if (slots[i] instanceof Closure) {
+        // Closure.toString
+        b.append("closure");
+      } else {
+        b.append(slots[i]);
+      }
+      if (i > 0) {
+        b.append(", ");
+      }
+    }
+    return b.append("]]").toString();
   }
 
   public void push(Object o) {

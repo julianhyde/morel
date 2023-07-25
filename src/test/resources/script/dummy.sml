@@ -16,6 +16,13 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
+fun baz f =
+let
+  fun foo 0 = 0
+    | foo n = f n + foo (n - 1)
+in
+  foo 5
+end;
+baz (fn i => i - 1);
 
 (*) End dummy.sml
