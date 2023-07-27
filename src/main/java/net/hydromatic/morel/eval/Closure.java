@@ -42,7 +42,7 @@ import static java.util.Objects.requireNonNull;
 public class Closure implements Comparable<Closure>, Applicable {
   /** The values of the unbound variables that are "closed over" by this
    * closure. (May make the stack obsolete one day.) */
-  private final ImmutableList<Object> values;
+  protected final ImmutableList<Object> values;
 
   /** A list of (pattern, code) pairs. During bind, the value being bound is
    * matched against each pattern. When a match is found, the code for that
@@ -248,6 +248,37 @@ public class Closure implements Comparable<Closure>, Applicable {
 
     default:
       throw new AssertionError("cannot compile " + pat.op + ": " + pat);
+    }
+  }
+
+  public static class ClosureX extends Closure {
+    private final Code code;
+    private final Core.Pat pat;
+    private final ImmutableList<Object> values2;
+
+    public ClosureX(Core.IdPat pat, Code code, Pos pos,
+        ImmutablePairList<Core.NamedPat, Code> captureCodes, Stack stack) {
+      super(ImmutablePairList.of(pat, code), pos);
+      this.pat = pat;
+      this.code = code;
+      this.values2 =
+          captureCodes.transform2((p, c) ->
+              c == Codes.CLOSURE ? ClosureX.this : c.eval(stack));
+    }
+
+    @Override public int execBind(Stack stack) {
+      this.values2.forEach(stack::push);
+      return 0;
+    }
+
+    @Override public Object apply(Stack stack, Object argValue) {
+      final int top = stack.save();
+      try {
+        this.values2.forEach(stack::push);
+        return super.apply(stack, argValue);
+      } finally {
+        stack.restore(top);
+      }
     }
   }
 }

@@ -51,6 +51,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Iterables;
+
 import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -732,8 +734,7 @@ public class Compiler {
           Code captureCode =
               scope == VariableCollector.Scope.REC
                   ? Codes.CLOSURE
-                  : compile(cx, core.id(p));
-          if (patCodes.leftList().contains(p)) {
+                  : compile(cx, core.id(p))if (patCodes.leftList().contains(p) && false) {
             // When defining a recursive function that is a closure, e.g.
             //   val k = 3
             //   fun perm n = if n = k then n else n * perm (n - 1)
@@ -745,8 +746,10 @@ public class Compiler {
             captureCodes.add(p, captureCode);
           }
         });
+        final Map.Entry<Core.Pat, Code> patCode = getOnlyElement(patCodes);
         matchCodes.add(
-            new MatchCodeN(patCodes.immutable(), captureCodes.immutable(), pos));
+            new MatchCodeX((Core.IdPat) patCode.getKey(), patCode.getValue(),
+                captureCodes.immutable(), pos));
       }
 
       if (actions != null) {
@@ -921,6 +924,26 @@ public class Compiler {
       return new Closure(patCodes, pos, captureCodes, stack);
     }
   }
+
+  /** MatchCode that captures one or more variables. */
+  private static class MatchCodeX extends MatchCode {
+    private final ImmutablePairList<Core.NamedPat, Code> captureCodes;
+    private final Core.IdPat pat;
+    private final Code code;
+
+    MatchCodeX(Core.IdPat pat, Code code,
+        ImmutablePairList<Core.NamedPat, Code> captureCodes, Pos pos) {
+      super(ImmutablePairList.of(pat, code), pos);
+      this.pat = pat;
+      this.code = code;
+      this.captureCodes = captureCodes;
+    }
+
+    @Override public Object eval(Stack stack) {
+      return new Closure.ClosureX(pat, code, pos, captureCodes, stack);
+    }
+  }
+
 }
 
 // End Compiler.java
