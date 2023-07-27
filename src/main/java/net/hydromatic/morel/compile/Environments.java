@@ -333,6 +333,7 @@ public abstract class Environments {
     }
   }
 
+  /** TODO comment */
   static class MapRecEnvironment extends MapEnvironment {
     MapRecEnvironment(Environment parent,
         ImmutableMap<Core.NamedPat, Binding> map) {
