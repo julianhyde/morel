@@ -361,4 +361,5 @@ end;
 
 "end";
 > val it = "end" : string
-(*) End hybrid.sml
+
+(*) End hybrid.smli

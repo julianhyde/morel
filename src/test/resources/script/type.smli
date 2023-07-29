@@ -278,4 +278,4 @@ end;
 {a = 1, b = let fun g [] = NONE | g (h :: t) = SOME (h, t) in g end};
 > val it = {a=1,b=fn} : {a:int, b:'a list -> ('a * 'a list) option}
 
-(*) End type.sml
+(*) End type.smli

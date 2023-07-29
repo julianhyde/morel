@@ -306,4 +306,4 @@ stdIn:4.1-4.11 Error: operator and operand don't agree [tycon mismatch]
 val it = 3 : int
 *)
 
-(*) End datatype.sml
+(*) End datatype.smli

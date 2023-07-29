@@ -191,9 +191,7 @@ public class Main {
           parser.zero("stdIn");
           final AstNode statement = parser.statementSemicolonOrEof();
           String code = in2.flush();
-          if (main.idempotent && false) {
-            final List<String> strings = parser.outputLines();
-            code = code.replaceAll("\n> [^\n]*", "");
+          if (main.idempotent) {
             if (code.startsWith("\n")) {
               code = code.substring(1);
             }

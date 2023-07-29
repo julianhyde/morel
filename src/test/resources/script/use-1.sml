@@ -16,11 +16,16 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Miscellaneous stuff - often test cases for bugs
+ * Called by use.sml (which we assume has defined 'x');
+ * also called standalone. Some commands fail if 'x' is not
+ * defined, but the script continues to the end.
  *)
 
-(*) Bug gave 'AssertionError: op not handled: EQ'
-from p in (from p in [{a=1,b=2}] where p.a = 1);
-> val it = [{a=1,b=2}] : {a:int, b:int} list
+"entering use-1.sml";
+val y = x ^ ", ";
+val x = y ^ "step 2";
+fun plus3 n = n + 3;
+plus3 ~1;
+"leaving use-1.sml";
 
-(*) End misc.smli
+(*) End use-1.sml

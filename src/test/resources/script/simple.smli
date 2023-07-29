@@ -506,4 +506,4 @@ f ~1;
 > uncaught exception Subscript [subscript out of bounds]
 >   raised at: stdIn:2.11-2.43
 
-(*) End simple.sml
+(*) End simple.smli

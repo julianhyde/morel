@@ -91,4 +91,4 @@ ack 2 3;
 ack 3 3;
 > val it = 61 : int
 
-(*) End match.sml
+(*) End match.smli

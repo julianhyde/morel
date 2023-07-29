@@ -2077,4 +2077,4 @@ if slow then solve ("paseo", "unify", words) else [];
 if slow then solve ("xenon", "unify", words) else [];
 > val it = [] : string list
 
-(*) End wordle.sml
+(*) End wordle.smli

@@ -1079,4 +1079,4 @@ from line in lines,
 from message in ["the end"];
 > val it = ["the end"] : string list
 
-(*) End blog.sml
+(*) End blog.smli

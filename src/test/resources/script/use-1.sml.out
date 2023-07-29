@@ -22,18 +22,24 @@
  *)
 
 "entering use-1.sml";
-> val it = "entering use-1.sml" : string
+val it = "entering use-1.sml" : string
+
 val y = x ^ ", ";
-> stdIn:1.9 Error: unbound variable or constructor: x
->   raised at: stdIn:1.9
+stdIn:1.9 Error: unbound variable or constructor: x
+  raised at: stdIn:1.9
+
 val x = y ^ "step 2";
-> stdIn:1.9 Error: unbound variable or constructor: y
->   raised at: stdIn:1.9
+stdIn:1.9 Error: unbound variable or constructor: y
+  raised at: stdIn:1.9
+
 fun plus3 n = n + 3;
-> val plus3 = fn : int -> int
+val plus3 = fn : int -> int
+
 plus3 ~1;
-> val it = 2 : int
+val it = 2 : int
+
 "leaving use-1.sml";
-> val it = "leaving use-1.sml" : string
+val it = "leaving use-1.sml" : string
+
 
 (*) End use-1.sml

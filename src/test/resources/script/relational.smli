@@ -1492,4 +1492,4 @@ Sys.plan();
 from message in ["the end"];
 > val it = ["the end"] : string list
 
-(*) End relational.sml
+(*) End relational.smli
