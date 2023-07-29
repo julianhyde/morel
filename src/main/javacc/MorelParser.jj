@@ -1376,6 +1376,22 @@ AstNode statementEof() :
   n = statement() <EOF> { return n; }
 }
 
+/** Parses zero or more output lines. */
+List<String> outputLines() :
+{
+    List<String> lines = null;
+}
+{
+  ( <OUT_LINE> {
+    if (lines == null) {
+      lines = new ArrayList<>();
+    }
+    lines.add(token.image);
+  }
+  )*
+  { return lines == null ? ImmutableList.of() : lines; }
+}
+
 <DEFAULT> TOKEN :
 {
   < AND: "and" >
@@ -1551,6 +1567,11 @@ MORE :
     < ~[] >
 }
 
+
+<DEFAULT> TOKEN :
+{
+    < OUT_LINE: ("\r" | "\n" | "\r\n") "> " (~["\n", "\r"])* >
+}
 
 /* IDENTIFIERS */
 

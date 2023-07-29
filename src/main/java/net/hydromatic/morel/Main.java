@@ -67,6 +67,7 @@ public class Main {
   private final Map<String, ForeignValue> valueMap;
   final TypeSystem typeSystem = new TypeSystem();
   final File directory;
+  final boolean idempotent;
   final Session session = new Session();
 
   /** Command-line entry point.
@@ -75,7 +76,7 @@ public class Main {
   public static void main(String[] args) {
     final Main main =
         new Main(ImmutableList.copyOf(args), System.in, System.out,
-            ImmutableMap.of(), new File(System.getProperty("user.dir")));
+            ImmutableMap.of(), new File(System.getProperty("user.dir")), false);
     try {
       main.run();
     } catch (Throwable e) {
@@ -86,19 +87,20 @@ public class Main {
 
   /** Creates a Main. */
   public Main(List<String> args, InputStream in, PrintStream out,
-      Map<String, ForeignValue> valueMap, File directory) {
+      Map<String, ForeignValue> valueMap, File directory, boolean idempotent) {
     this(args, new InputStreamReader(in), new OutputStreamWriter(out),
-        valueMap, directory);
+        valueMap, directory, idempotent);
   }
 
   /** Creates a Main. */
   public Main(List<String> argList, Reader in, Writer out,
-      Map<String, ForeignValue> valueMap, File directory) {
+      Map<String, ForeignValue> valueMap, File directory, boolean idempotent) {
     this.in = buffer(in);
     this.out = buffer(out);
     this.echo = argList.contains("--echo");
     this.valueMap = ImmutableMap.copyOf(valueMap);
     this.directory = requireNonNull(directory, "directory");
+    this.idempotent = idempotent;
   }
 
   private static PrintWriter buffer(Writer out) {
@@ -122,9 +124,14 @@ public class Main {
 
   public void run() {
     Environment env = Environments.env(typeSystem, valueMap);
-    final Consumer<String> outLines = out::println;
+    final Consumer<String> echoLines =
+        x1 -> out.println(x1);
+    final Consumer<String> outLines =
+        idempotent
+            ? x -> out.println("> " + x.replace("\n", "\n> "))
+            : echoLines;
     final Map<String, Binding> outBindings = new LinkedHashMap<>();
-    final Shell shell = new Shell(this, env, outLines, outBindings);
+    final Shell shell = new Shell(this, env, echoLines, outLines, outBindings);
     session.withShell(shell, outLines, session1 ->
         shell.run(session1, new BufferingReader(in)));
     out.flush();
@@ -136,13 +143,15 @@ public class Main {
   static class Shell implements Session.Shell {
     protected final Main main;
     protected final Environment env0;
+    protected final Consumer<String> echoLines;
     protected final Consumer<String> outLines;
     protected final Map<String, Binding> bindingMap;
 
-    Shell(Main main, Environment env0, Consumer<String> outLines,
-        Map<String, Binding> bindingMap) {
+    Shell(Main main, Environment env0, Consumer<String> echoLines,
+        Consumer<String> outLines, Map<String, Binding> bindingMap) {
       this.main = main;
       this.env0 = env0;
+      this.echoLines = echoLines;
       this.outLines = outLines;
       this.bindingMap = bindingMap;
     }
@@ -150,17 +159,24 @@ public class Main {
     void run(Session session, BufferingReader in2) {
       final MorelParserImpl parser = new MorelParserImpl(in2);
       final SubShell subShell =
-          new SubShell(main, outLines, bindingMap, env0);
+          new SubShell(main, echoLines, outLines, bindingMap, env0);
       for (;;) {
         try {
           parser.zero("stdIn");
           final AstNode statement = parser.statementSemicolonOrEof();
           String code = in2.flush();
+          if (main.idempotent) {
+            final List<String> strings = parser.outputLines();
+            code = code.replaceAll("\n> [^\n]*", "");
+            if (code.startsWith("\n")) {
+              code = code.substring(1);
+            }
+          }
           if (statement == null && code.endsWith("\n")) {
             code = code.substring(0, code.length() - 1);
           }
           if (main.echo) {
-            outLines.accept(code);
+            echoLines.accept(code);
           }
           if (statement == null) {
             break;
@@ -210,9 +226,10 @@ public class Main {
    * shell. */
   static class SubShell extends Shell {
 
-    SubShell(Main main, Consumer<String> outLines,
+    SubShell(Main main, Consumer<String> echoLines,
+        Consumer<String> outLines,
         Map<String, Binding> outBindings, Environment env0) {
-      super(main, env0, outLines, outBindings);
+      super(main, env0, echoLines, outLines, outBindings);
     }
 
     @Override public void use(String fileName, Pos pos) {
