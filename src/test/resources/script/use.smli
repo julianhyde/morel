@@ -19,37 +19,67 @@
  * Script that calls other scripts; tests the "use" command.
  *)
 Sys.set ("stringDepth", ~1);
+> val it = () : unit
 
 (*) First, let's check that plans are assigned, but variables
 (*) are not assigned, when there are exceptions.
 
 val a = 2 + 3;
+> val a = 5 : int
 Sys.plan();
+> val it = "apply2(fnValue +, constant(2), constant(3))" : string
 val b = 20;
+> val b = 20 : int
 (*) throws Subscript:
 val a = String.sub("abc", b);
+> uncaught exception Subscript [subscript out of bounds]
+>   raised at: stdIn:2.9-2.29
 (*) plan is for the unsuccessful statement:
 Sys.plan();
+> val it = "apply2(fnValue String.sub, constant(abc), constant(20))" : string
 String.sub("xyz", b - 1);
+> uncaught exception Subscript [subscript out of bounds]
+>   raised at: stdIn:1.1-1.25
 (*) plan is for the unsuccessful expression:
 Sys.plan();
+> val it =
+>   "apply2(fnValue String.sub, constant(xyz), apply2(fnValue -, constant(20), constant(1)))"
+>   : string
 (*) a is still an int:
 a;
+> val it = 5 : int
 
 "entering use.sml";
+> val it = "entering use.sml" : string
 val x = "step 1";
+> val x = "step 1" : string
 
 (*) Include a script that uses x, and then defines x and plus3.
 use "use-1.sml";
+> [opening use-1.sml]
+> [use failed: Io: openIn failed on use-1.sml, No such file or directory]
+> uncaught exception Error
+>   raised at: stdIn:3.1-3.16
 "x is now " ^ x;
+> val it = "x is now step 1" : string
 plus3 7;
+> stdIn:1.1-1.6 Error: unbound variable or constructor: plus3
+>   raised at: stdIn:1.1-1.6
 
 (*) Now, define x as an integer, which will cause failures in the invoked
 (*) script, but the script won't bail out.
 val x = 10;
+> val x = 10 : int
 use "use-1.sml";
+> [opening use-1.sml]
+> [use failed: Io: openIn failed on use-1.sml, No such file or directory]
+> uncaught exception Error
+>   raised at: stdIn:1.1-1.16
 "x is now " ^ x;
+> 0.0-0.0 Error: Cannot deduce type: conflict: int vs string
+>   raised at: 0.0-0.0
 
 "leaving use.sml";
+> val it = "leaving use.sml" : string
 
 (*) End use.sml
