@@ -74,7 +74,7 @@ public class ScriptTest {
   static Stream<Arguments> data() {
     // Start with a test file we know exists, then find the directory and list
     // its files.
-    final String first = "script/simple.sml";
+    final String first = "script/simple.smli";
     return data_(first);
   }
 

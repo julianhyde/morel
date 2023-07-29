@@ -50,6 +50,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.Reader;
+import java.io.StringReader;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -95,12 +96,37 @@ public class Main {
   /** Creates a Main. */
   public Main(List<String> argList, Reader in, Writer out,
       Map<String, ForeignValue> valueMap, File directory, boolean idempotent) {
-    this.in = buffer(in);
+    this.in = buffer(idempotent ? stripOutLines(in) : in);
     this.out = buffer(out);
     this.echo = argList.contains("--echo");
     this.valueMap = ImmutableMap.copyOf(valueMap);
     this.directory = requireNonNull(directory, "directory");
     this.idempotent = idempotent;
+  }
+
+  private static void readerToString(Reader r, StringBuilder b) {
+    final char[] chars = new char[1024];
+    try {
+      for (;;) {
+        final int read = r.read(chars);
+        if (read < 0) {
+          return;
+        }
+        b.append(chars, 0, read);
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static Reader stripOutLines(Reader in) {
+    final StringBuilder b = new StringBuilder();
+    readerToString(in, b);
+    String s2 =
+        b.toString()
+            .replaceAll("^> [^\n]*\n", "")
+            .replaceAll("\n> [^\n]*", "");
+    return new StringReader(s2);
   }
 
   private static PrintWriter buffer(Writer out) {
@@ -165,7 +191,7 @@ public class Main {
           parser.zero("stdIn");
           final AstNode statement = parser.statementSemicolonOrEof();
           String code = in2.flush();
-          if (main.idempotent) {
+          if (main.idempotent && false) {
             final List<String> strings = parser.outputLines();
             code = code.replaceAll("\n> [^\n]*", "");
             if (code.startsWith("\n")) {
