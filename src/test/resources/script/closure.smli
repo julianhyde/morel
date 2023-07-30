@@ -123,4 +123,31 @@ end;
 baz6 (fn i => i - 1, 5);
 > val it = 120 : int
 
+(*) Permutations. Captured variable 'k', is at the top level to prevent inlining.
+val k = 3;
+> val k = 3 : int
+val rec perm = fn n => if n = k then k else n * perm (n - 1);
+> val perm = fn : int -> int
+perm 5;
+> val it = 60 : int
+
+(*) As previous, but captured variable is local and is probably inlined.
+let
+  val k = 3
+  val rec perm = fn n => if n = k then k else n * perm (n - 1)
+in
+  perm 5
+end;
+> val it = 60 : int
+
+(*) As previous, replacing captured variable with constant.
+(*) The implementation may still use a closure, so that the recursive function
+(*) can reference itself by name.
+let
+  val rec perm3 = fn n => if n = 3 then n else n * perm3 (n - 1)
+in
+  perm3 5
+end;
+> val it = 60 : int
+
 (*) End closure.smli
