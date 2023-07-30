@@ -16,7 +16,11 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
+let
+  val rec perm3 = fn n => if n = 3 then n else n * perm3 (n - 1)
+in
+  perm3 5
+end;
+> val it = 60 : int
 
 (*) End dummy.smli

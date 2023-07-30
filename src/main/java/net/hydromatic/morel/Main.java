@@ -122,11 +122,62 @@ public class Main {
   private static Reader stripOutLines(Reader in) {
     final StringBuilder b = new StringBuilder();
     readerToString(in, b);
-    String s2 =
-        b.toString()
-            .replaceAll("^> [^\n]*\n", "")
-            .replaceAll("\n> [^\n]*", "");
-    return new StringReader(s2);
+    final String s = b.toString();
+    b.setLength(0);
+    for (int i = 0, n = s.length();;) {
+      int j0 = i == 0 && s.startsWith("> ") ? 0 : -1;
+      int j1 = s.indexOf("\n> ", i);
+      int j2 = s.indexOf("(*)", i);
+      int j3 = s.indexOf("(*", i);
+      int j = min(j0, j1, j2, j3);
+      if (j < 0) {
+        b.append(s, i, n);
+        break;
+      }
+      if (j == j0 || j == j1) {
+        // Skip line beginning "> "
+        b.append(s, i, j);
+        int k = s.indexOf("\n", j + 2);
+        if (k < 0) {
+          k = n;
+        }
+        i = k;
+      } else if (j == j2) {
+        // If a line contains "(*)", next search begins at the start of the
+        // next line.
+        int k = s.indexOf("\n", j + "(*)".length());
+        if (k < 0) {
+          k = n;
+        }
+        b.append(s, i, k);
+        i = k;
+      } else if (j == j3) {
+        // If a line contains "(*", next search begins at the next "*)".
+        int k = s.indexOf("*)", j + "(*".length());
+        if (k < 0) {
+          k = n;
+        }
+        b.append(s, i, k);
+        i = k;
+      }
+    }
+    return new StringReader(b.toString());
+  }
+
+  /** Returns the minimum non-negative value of the list, or -1 if all are
+   * negative. */
+  private static int min(int... ints) {
+    int count = 0;
+    int min = Integer.MAX_VALUE;
+    for (int i : ints) {
+      if (i >= 0) {
+        ++count;
+        if (i < min) {
+          min = i;
+        }
+      }
+    }
+    return count == 0 ? -1 : min;
   }
 
   private static PrintWriter buffer(Writer out) {
@@ -150,8 +201,7 @@ public class Main {
 
   public void run() {
     Environment env = Environments.env(typeSystem, valueMap);
-    final Consumer<String> echoLines =
-        x1 -> out.println(x1);
+    final Consumer<String> echoLines = out::println;
     final Consumer<String> outLines =
         idempotent
             ? x -> out.println("> " + x.replace("\n", "\n> "))
