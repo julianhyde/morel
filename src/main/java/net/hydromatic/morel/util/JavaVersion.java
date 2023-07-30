@@ -18,8 +18,8 @@
  */
 package net.hydromatic.morel.util;
 
-import com.google.common.collect.Comparators;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Ordering;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -37,9 +37,6 @@ public class JavaVersion implements Comparable<JavaVersion> {
   /** Version of the current JVM. */
   public static final JavaVersion CURRENT;
 
-  /** JDK 19. */
-  public static final JavaVersion JAVA_19 = of(19);
-
   static {
     String versionString = System.getProperty("java.version");
     String[] versions = versionString.split("[._]");
@@ -51,7 +48,7 @@ public class JavaVersion implements Comparable<JavaVersion> {
   }
 
   private static final Comparator<Iterable<Integer>> COMPARATOR =
-      Comparators.lexicographical(Comparator.<Integer>naturalOrder());
+      Ordering.<Integer>natural().lexicographical();
 
   /** Private constructor. */
   private JavaVersion(List<Integer> components) {
