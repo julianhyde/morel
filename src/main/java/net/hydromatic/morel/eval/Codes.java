@@ -2941,14 +2941,11 @@ public abstract class Codes {
   }
 
   private static String floatToString0(float f) {
-    String s = Float.toString(f);
-    int lastDigit = s.indexOf("E");
-    if (lastDigit < 0) {
-      lastDigit = s.length();
-    }
+    final String s = Float.toString(f);
     if (s.equals("1.17549435E-38")) {
       return "1.1754944E-38";
     }
+/*
     if (s.equals("1.23456795E12")) {
       return "1.234568E12";
     }
@@ -2961,7 +2958,33 @@ public abstract class Codes {
     if (s.equals("1.23456792E8")) {
       return "1.2345679E8";
     }
-    return s;
+*/
+    int lastDigit = s.indexOf("E");
+    if (lastDigit < 0) {
+      lastDigit = s.length();
+    }
+    String s1 = s;
+    while (lastDigit > 0) {
+      String s2 = s.substring(0, lastDigit - 1) + s.substring(lastDigit);
+      float f2 = Float.parseFloat(s2);
+      if (f2 == f) {
+        s1 = s2;
+        --lastDigit;
+        continue;
+      }
+      char c = s.charAt(lastDigit - 2);
+      if (c != '9') {
+        String s3 = s.substring(0, lastDigit - 2) + (char) (c + 1) + s.substring(lastDigit);
+        float f3 = Float.parseFloat(s3);
+        if (f3 == f) {
+          s1 = s3;
+          --lastDigit;
+          continue;
+        }
+      }
+      break;
+    }
+    return s1;
   }
 
   /** A code that evaluates expressions and creates a tuple with the results.
