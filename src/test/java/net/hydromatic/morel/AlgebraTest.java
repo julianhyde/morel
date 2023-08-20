@@ -20,6 +20,7 @@ package net.hydromatic.morel;
 
 import net.hydromatic.morel.eval.Prop;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.function.UnaryOperator;
@@ -525,6 +526,7 @@ public class AlgebraTest {
 
   /** Tests that we can send (what in SQL would be) an uncorrelated {@code IN}
    * sub-query to Calcite. */
+  @Disabled // broken in Calcite 1.35; interpreter cannot handle LITERAL_AGG
   @Test void testNotElem() {
     final UnaryOperator<Ml> fn = ml ->
         ml.withBinding("scott", BuiltInDataSet.SCOTT)
