@@ -39,30 +39,19 @@ public class LintTest {
   @SuppressWarnings("Convert2MethodRef") // JDK 8 requires lambdas
   private Puffin.Program<GlobalState> makeProgram() {
     return Puffin.builder(GlobalState::new, global -> new FileState(global))
-        .afterSource(c -> {
-          if (!c.state().prevLine.equals(c.state().endMarker)) {
-            c.state().message("File must end with '" + c.state().endMarker
-                    + "'",
-                c.state().lineOne);
-          }
-        })
-        .add(line -> true,
+        .add(line -> line.isLast(),
             line -> {
-              if (!line.line().isEmpty()) {
-                line.state().prevLine = line.line();
+              String f = line.filename();
+              final int slash = f.lastIndexOf('/');
+              final String endMarker =
+                  "// End " + (slash < 0 ? f : f.substring(slash + 1));
+              if (!line.line().equals(endMarker)) {
+                line.state().message("File must end with '" + endMarker + "'",
+                    line);
               }
             })
         .add(line -> line.fnr() == 1,
-            line -> {
-              line.globalState().fileCount++;
-              String f = line.filename();
-              final int slash = f.lastIndexOf('/');
-              if (slash >= 0) {
-                f = f.substring(slash + 1);
-              }
-              line.state().endMarker = "// End " + f;
-              line.state().lineOne = line;
-            })
+            line -> line.globalState().fileCount++)
 
         // Comment without space
         .add(line -> line.matches(".* //[^ ].*")
@@ -192,9 +181,6 @@ public class LintTest {
   /** Internal state of the lint rules, per file. */
   private static class FileState {
     final GlobalState global;
-    public String prevLine;
-    public String endMarker;
-    public Puffin.Line<GlobalState, FileState> lineOne;
     int starLine;
     int atLine;
     int javadocStartLine;
