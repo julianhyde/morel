@@ -149,19 +149,18 @@ public abstract class TestUnsafe {
     return true;
   }
 
-  /** Returns a list of Java files in git under a given directory. */
+  /** Returns a list of Java files in git. */
   public static List<File> getJavaFiles() {
     return getGitFiles("*.java");
   }
 
-  /** Returns a list of text files in git under a given directory. */
+  /** Returns a list of text files in git. */
   public static List<File> getTextFiles() {
     return getGitFiles("*.java", "*.jj", "*.md", "*.properties",
         "*.sh", "*.sml", "*.smli", "*.txt", "*.xml", "*.yml");
   }
 
-  /** Returns a list of files in git under a given directory matching a given
-   * pattern.
+  /** Returns a list of files in git matching a given pattern or patterns.
    *
    * <p>Assumes running Linux or macOS, and that git is available. */
   public static List<File> getGitFiles(String... patterns) {
