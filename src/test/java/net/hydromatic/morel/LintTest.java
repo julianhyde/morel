@@ -45,13 +45,22 @@ public class LintTest {
               final int slash = f.lastIndexOf('/');
               final String endMarker =
                   "// End " + (slash < 0 ? f : f.substring(slash + 1));
-              if (!line.line().equals(endMarker)) {
+              if (!line.line().equals(endMarker)
+                  && line.filename().endsWith(".java")) {
                 line.state().message("File must end with '" + endMarker + "'",
                     line);
               }
             })
         .add(line -> line.fnr() == 1,
             line -> line.globalState().fileCount++)
+
+        // Trailing space
+        .add(line -> line.endsWith(" "),
+            line -> line.state().message("Trailing space", line))
+
+        // Tab
+        .add(line -> line.contains("\t"),
+            line -> line.state().message("Tab", line))
 
         // Comment without space
         .add(line -> line.matches(".* //[^ ].*")
@@ -69,7 +78,7 @@ public class LintTest {
             line -> line.state().message("no '</p>'", line))
 
         // No "**/"
-        .add(line -> line.contains("**/")
+        .add(line -> line.contains(" **/")
                 && line.state().inJavadoc(),
             line ->
                 line.state().message("no '**/'; use '*/'",
@@ -144,7 +153,7 @@ public class LintTest {
     assumeTrue(TestUnsafe.haveGit(), "Invalid git environment");
 
     final Puffin.Program<GlobalState> program = makeProgram();
-    final List<File> javaFiles = TestUnsafe.getJavaFiles();
+    final List<File> javaFiles = TestUnsafe.getTextFiles();
 
     final GlobalState g;
     StringWriter b = new StringWriter();
