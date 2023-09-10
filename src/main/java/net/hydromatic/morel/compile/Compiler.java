@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.Applicable3;
@@ -712,7 +713,9 @@ public class Compiler {
       List<Core.Match> matchList) {
     final PairList<Core.Pat, Code> patCodes = PairList.of();
     matchList.forEach(match -> compileMatch(cx, match, patCodes::add));
-    return new MatchCode0(patCodes.immutable(), getLast(matchList).pos);
+    final PairList<Core.NamedPat, Code> captureCodes =
+        getCaptureCodes(cx, patCodes, cx);
+    return matchCode(patCodes, captureCodes, getLast(matchList).pos);
   }
 
   private void compileMatch(Context cx, Core.Match match,
@@ -721,6 +724,46 @@ public class Compiler {
     Compiles.bindPattern(typeSystem, bindings, match.pat);
     final Code code = compile(cx.bindAll(bindings), match.exp);
     consumer.accept(match.pat, code);
+  }
+
+  private MatchCode compileFunctionBody(Context cx,
+      PairList<Core.Pat, Code> patCodes, Context cx0, Pos pos) {
+    final PairList<Core.NamedPat, Code> captureCodes =
+        getCaptureCodes(cx, patCodes, cx0);
+    return matchCode(patCodes, captureCodes, pos);
+  }
+
+  private PairList<Core.NamedPat, Code> getCaptureCodes(Context cx,
+      PairList<Core.Pat, Code> patCodes, Context cx0) {
+    final PairList<Core.NamedPat, Code> captureCodes = PairList.of();
+    cx.scopeMap.forEach((p, scope) -> {
+      Code captureCode =
+          scope == VariableCollector.Scope.REC
+              ? Codes.CLOSURE
+              : compile(cx0, core.id(p));
+      if (patCodes.leftList().contains(p) && "TODO".isEmpty()) {
+        // When defining a recursive function that is a closure, e.g.
+        //   val k = 3
+        //   fun perm n = if n = k then n else n * perm (n - 1)
+        // then "perm" will appear in both patCodes and captureCodes. Keep
+        // the one in captureCodes.
+        patCodes.set(patCodes.leftList().indexOf(p),
+            new MapEntry<>(p, captureCode));
+      } else {
+        captureCodes.add(p, captureCode);
+      }
+    });
+    return captureCodes;
+  }
+
+  private static MatchCode matchCode(PairList<Core.Pat, Code> patCodes,
+      PairList<Core.NamedPat, Code> captureCodes, Pos pos) {
+    if (captureCodes.isEmpty()) {
+      return new MatchCode0(patCodes.immutable(), pos);
+    } else {
+      return new MatchCodeX(patCodes.immutable(), captureCodes.immutable(),
+          pos);
+    }
   }
 
   private void compileValDecl(Context cx, Core.ValDecl valDecl,
@@ -749,10 +792,16 @@ public class Compiler {
     // but defined in an enclosing scope.)
     final Map<Core.NamedPat, VariableCollector.Scope> scopeMap =
         new LinkedHashMap<>();
-    final VariableCollector shuttle =
+    final Visitor collector =
         VariableCollector.create(typeSystem, env0,
             (id, scope) -> scopeMap.put(id.idPat, scope));
-    valDecl.forEachBinding((pat, exp, pos) -> exp.accept(shuttle));
+    valDecl.forEachBinding((pat, exp, pos) -> {
+      if (valDecl instanceof Core.RecValDecl) {
+        // Pretend that a recursive function references itself
+        scopeMap.put(pat, VariableCollector.Scope.REC);
+      }
+      exp.accept(collector);
+    });
 
     final Context cx1 = Context.of(cx.globalEnv, env0, scopeMap);
     valDecl.forEachBinding((pat, exp, pos) -> {
@@ -765,33 +814,8 @@ public class Compiler {
       if (!linkCodes.isEmpty()) {
         link(linkCodes, pat, code);
       }
-      final PairList<Core.Pat, Code> patCodes = PairList.of(pat, code);
-      if (cx1.scopeMap.isEmpty()) {
-        matchCodes.add(new MatchCode0(patCodes.immutable(), pos));
-      } else {
-        final PairList<Core.NamedPat, Code> captureCodes = PairList.of();
-        cx1.scopeMap.forEach((p, scope) -> {
-          Code captureCode =
-              scope == VariableCollector.Scope.REC
-                  ? Codes.CLOSURE
-                  : compile(cx, core.id(p));
-          if (patCodes.leftList().contains(p) && false) {
-            // When defining a recursive function that is a closure, e.g.
-            //   val k = 3
-            //   fun perm n = if n = k then n else n * perm (n - 1)
-            // then "perm" will appear in both patCodes and captureCodes. Keep
-            // the one in captureCodes.
-            patCodes.set(patCodes.leftList().indexOf(p),
-                new MapEntry<>(p, captureCode));
-          } else {
-            captureCodes.add(p, captureCode);
-          }
-        });
-        final Map.Entry<Core.Pat, Code> patCode = getOnlyElement(patCodes);
-        matchCodes.add(
-            new MatchCodeX((Core.IdPat) patCode.getKey(), patCode.getValue(),
-                captureCodes.immutable(), pos));
-      }
+      matchCodes.add(
+          compileFunctionBody(cx1, ImmutablePairList.of(pat, code), cx, pos));
 
       if (actions != null) {
         final Type type0 = exp.type;
@@ -920,10 +944,10 @@ public class Compiler {
 
   /** Code that implements {@link Compiler#compileMatchList(Context, List)}. */
   private abstract static class MatchCode implements Code {
-    protected final ImmutablePairList<Core.Pat, Code> patCodes;
+    protected final ImmutablePairList<? extends Core.Pat, Code> patCodes;
     protected final Pos pos;
 
-    MatchCode(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos) {
+    MatchCode(ImmutablePairList<? extends Core.Pat, Code> patCodes, Pos pos) {
       this.patCodes = patCodes;
       this.pos = pos;
     }
@@ -969,19 +993,16 @@ public class Compiler {
   /** MatchCode that captures one or more variables. */
   private static class MatchCodeX extends MatchCode {
     private final ImmutablePairList<Core.NamedPat, Code> captureCodes;
-    private final Core.IdPat pat;
-    private final Code code;
 
-    MatchCodeX(Core.IdPat pat, Code code,
+    MatchCodeX(ImmutablePairList<? extends Core.Pat, Code> patCodes,
         ImmutablePairList<Core.NamedPat, Code> captureCodes, Pos pos) {
-      super(ImmutablePairList.of(pat, code), pos);
-      this.pat = pat;
-      this.code = code;
+      super(patCodes, pos);
       this.captureCodes = captureCodes;
     }
 
     @Override public Object eval(Stack stack) {
-      return new Closure.ClosureX(pat, code, pos, captureCodes, stack);
+      return new Closure.ClosureX(patCodes, captureCodes, pos, stack);
+//      return new Closure(patCodes, pos, captureCodes, stack);
     }
   }
 

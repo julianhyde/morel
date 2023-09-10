@@ -27,7 +27,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BiConsumer;
 
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
@@ -52,11 +51,12 @@ public class Closure implements Comparable<Closure>, Applicable {
    * to the value {@code 1}, the first pattern ({@code 0} fails) but the second
    * pattern ({@code _}) succeeds, and therefore we evaluate the second
    * code {@code "no"}. */
-  private final ImmutablePairList<Core.Pat, Code> patCodes;
+  private final ImmutablePairList<? extends Core.Pat, Code> patCodes;
   private final Pos pos;
 
   /** Not a public API. */
-  public Closure(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos) {
+  public Closure(ImmutablePairList<? extends Core.Pat, Code> patCodes,
+      Pos pos) {
     this.patCodes = requireNonNull(patCodes);
     this.values = ImmutableList.of();
     this.pos = pos;
@@ -79,7 +79,7 @@ public class Closure implements Comparable<Closure>, Applicable {
    * > 60;
    * }</pre></blockquote>
    */
-  public Closure(ImmutablePairList<Core.Pat, Code> patCodes, Pos pos,
+  public Closure(ImmutablePairList<? extends Core.Pat, Code> patCodes, Pos pos,
       ImmutablePairList<Core.NamedPat, Code> captureCodes, Stack stack) {
     this.patCodes = requireNonNull(patCodes);
     this.pos = pos;
@@ -116,10 +116,10 @@ public class Closure implements Comparable<Closure>, Applicable {
   public int execBind(Stack stack) {
     this.values.forEach(stack::push);
     final int top = stack.save();
-    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Code code = patCode.getValue();
+    for (int i = 0, n = patCodes.size(); i < n; i++) {
+      final Code code = patCodes.right(i);
       final Object argValue = code == Codes.CLOSURE ? this : code.eval(stack);
-      final Core.Pat pat = patCode.getKey();
+      final Core.Pat pat = patCodes.left(i);
       if (bindRecurse(pat, argValue, (p, o) -> stack.push(o))) {
         return 0;
       }
@@ -132,10 +132,10 @@ public class Closure implements Comparable<Closure>, Applicable {
     final int top = stack.save();
     this.values.forEach(stack::push);
     final int top2 = stack.save();
-    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Core.Pat pat = patCode.getKey();
+    for (int i = 0, n = patCodes.size(); i < n; i++) {
+      final Core.Pat pat = patCodes.left(i);
       if (bindRecurse(pat, argValue, (p, o) -> stack.push(o))) {
-        final Code code = patCode.getValue();
+        final Code code = patCodes.right(i);
         final Object o = code == Codes.CLOSURE ? this : code.eval(stack);
         stack.restore(top);
         return o;
@@ -239,15 +239,12 @@ public class Closure implements Comparable<Closure>, Applicable {
   }
 
   public static class ClosureX extends Closure {
-    private final Code code;
-    private final Core.Pat pat;
     private final ImmutableList<Object> values2;
 
-    public ClosureX(Core.IdPat pat, Code code, Pos pos,
-        ImmutablePairList<Core.NamedPat, Code> captureCodes, Stack stack) {
-      super(ImmutablePairList.of(pat, code), pos);
-      this.pat = pat;
-      this.code = code;
+    public ClosureX(ImmutablePairList<? extends Core.Pat, Code> patCodes,
+        ImmutablePairList<Core.NamedPat, Code> captureCodes, Pos pos,
+        Stack stack) {
+      super(patCodes, pos);
       this.values2 =
           captureCodes.transform2((p, c) ->
               c == Codes.CLOSURE ? ClosureX.this : c.eval(stack));
