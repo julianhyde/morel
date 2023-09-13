@@ -2076,8 +2076,7 @@ public abstract class Codes {
   private static final Applicable REAL_SIGN_BIT =
       new ApplicableImpl(BuiltIn.REAL_SIGN_BIT) {
         @Override public Boolean apply(EvalEnv env, Object arg) {
-          final float f = (Float) arg;
-          return isNegative(f);
+          return isNegative((Float) arg);
         }
       };
 
