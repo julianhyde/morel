@@ -1857,6 +1857,12 @@ Real.isNan Real.minPos;
 > val it = false : bool
 Real.isNan nan;
 > val it = true : bool
+Real.isNan (~nan);
+> val it = true : bool
+Real.isNan (~(~nan));
+> val it = true : bool
+Real.isNan (nan + 3.0);
+> val it = true : bool
 
 (* "isNormal x" returns true if x is normal, i.e., neither zero, subnormal,
    infinite nor NaN. *)
