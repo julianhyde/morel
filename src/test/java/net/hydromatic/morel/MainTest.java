@@ -1909,7 +1909,7 @@ public class MainTest {
         + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
         + "          sink collect(tuple(get(name d), get(name n))))))";
     ml(ml).assertType("{d:int, n:string} list")
-        .assertCore(is(core))
+        .assertCore(2, is(core))
         .assertPlan(isCode2(code))
         .assertEval(is(list()));
   }

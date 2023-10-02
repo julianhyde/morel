@@ -365,7 +365,7 @@ public class Compiler {
       final FnType fnType =
           typeSystem.fnType(scan2.pat.type, PrimitiveType.BOOL);
       final Pos pos = Pos.ZERO;
-      final Core.Match match = core.match(scan2.pat, scan2.exp, pos);
+      final Core.Match match = core.match(pos, scan2.pat, scan2.exp);
       final Core.Exp lambda =
           core.fn(pos, fnType, ImmutableList.of(match),
               typeSystem.nameGenerator);
