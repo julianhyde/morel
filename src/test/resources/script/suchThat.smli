@@ -21,17 +21,29 @@
 
 (*) Convert predicates into ranges
 from i suchthat i > 0 andalso i < 10;
+> val it = [1,2,3,4,5,6,7,8,9] : int list
 from i suchthat i > 0 andalso i < 10 andalso i mod 3 = 2;
+> val it = [2,5,8] : int list
 from i suchthat i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
+> val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int list
 from i suchthat i > 0 andalso i < 10,
   b suchthat b = true;
+> val it =
+>   [{b=[true, 1],i=1},{b=[true, 2],i=2},{b=[true, 3],i=3},{b=[true, 4],i=4},
+>    {b=[true, 5],i=5},{b=[true, 6],i=6},{b=[true, 7],i=7},{b=[true, 8],i=8},
+>    {b=[true, 9],i=9}] : {b:bool, i:int} list
 from i suchthat i > 0 andalso i < 10,
   b suchthat b = (i mod 2 = 0);
+> val it =
+>   [{b=[false, 1],i=1},{b=[true, 2],i=2},{b=[false, 3],i=3},{b=[true, 4],i=4},
+>    {b=[false, 5],i=5},{b=[true, 6],i=6},{b=[false, 7],i=7},{b=[true, 8],i=8},
+>    {b=[false, 9],i=9}] : {b:bool, i:int} list
 
 (*) If the expression is 'elem set' we can deduce the extent.
 from e suchthat (e elem scott.emp)
   where e.deptno = 20
   yield e.ename;
+> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
 
 (*) A function that finds its data internally.
 let
@@ -42,6 +54,7 @@ in
     where e.deptno = 20
     yield e.ename
 end;
+> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
 
 (*) As above, using 'andalso' rather than 'where'
 let
@@ -51,11 +64,14 @@ in
   from e suchthat isEmp e andalso e.deptno = 20
     yield e.ename
 end;
+> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
 
 (*) As previous, but 'fun' followed by 'from' without using 'let'
 (*) TODO should return same as previous, currently can't inline fun declared separately
 fun isEmp e =
   e elem scott.emp;
+> val isEmp = fn
+>   : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} -> bool
 (*
 from e suchthat isEmp e andalso e.deptno = 20
   yield e.ename;
@@ -69,6 +85,7 @@ in
   from e suchthat isClerk e andalso e.deptno = 20
     yield e.ename
 end;
+> val it = ["SMITH","ADAMS"] : string list
 
 (*) A disjunctive condition prevents the extent.
 (*) TODO: throw an error, rather than returning an empty list
@@ -118,16 +135,22 @@ end;
 (*) Given s2, we could generate finite s1.
 fun isPrefix (s1, s2) =
   String.isPrefix s1 s2;
-(*) This is invalid, but it could be valid, and would return
-(*) ["", "a", "ab", "abc", "abcd"];
+> val isPrefix = fn : string * string -> bool
+(*) This is invalid, but it could be valid
 (*
 from s suchthat isPrefix (s, "abcd");
+> val it = ["", "a", "ab", "abc", "abcd"] : string list
 *)
 
 (*) An integer function with external extent.
 (*) Given j, k we could generate finite i.
 fun isBetween (i, j, k) =
   i <= j andalso j <= k;
+> val isBetween = fn : 'a * 'a * 'a -> bool
+(*
+from i suchthat isBetween (i, 5, 8);
+> val it = [5, 6, 7, 8] : int list
+*)
 
 (* ------------------------------------------------------ *)
 (*) Convenience function that converts a predicate to a relation
@@ -184,7 +207,9 @@ enumerate isEmp;
 val edges = [
  {x = 1, y = 2},
  {x = 2, y = 3}];
+> val edges = [{x=1,y=2},{x=2,y=3}] : {x:int, y:int} list
 fun edge (x, y) = {x, y} elem edges;
+> val edge = fn : int * int -> bool
 (*
 fun path (x, y) =
   edge (x, y)
@@ -209,7 +234,9 @@ val it = [(1,2),(2,3),(1,3)] : (int * int) list
    +---> 2 --> 3
 *)
 val edges = [(1, 2), (2, 3), (1, 4), (4, 2), (4, 3)];
+> val edges = [(1,2),(2,3),(1,4),(4,2),(4,3)] : (int * int) list
 fun edge (x, y) = (x, y) elem edges;
+> val edge = fn : int * int -> bool
 
 (*) Return points that are 2 hops apart.
 (*
@@ -249,6 +276,10 @@ val barPatrons = [
   {bar = "cask", patron = "scooby"},
   {bar = "cask", patron = "shaggy"},
   {bar = "cask", patron = "velma"}];
+> val barPatrons =
+>   [{bar="squirrel",patron="shaggy"},{bar="cask",patron="fred"},
+>    {bar="cask",patron="scooby"},{bar="cask",patron="shaggy"},
+>    {bar="cask",patron="velma"}] : {bar:string, patron:string} list
 
 val barBeers = [
   {bar =  "squirrel", beer =  "ipa", price =  2},
@@ -256,18 +287,28 @@ val barBeers = [
   {bar =  "squirrel", beer =  "amber", price =  3},
   {bar =  "cask", beer =  "stout", price =  4},
   {bar =  "cask", beer =  "ipa", price =  5}];
+> val barBeers =
+>   [{bar="squirrel",beer="ipa",price=2},{bar="squirrel",beer="pale",price=2},
+>    {bar="squirrel",beer="amber",price=3},{bar="cask",beer="stout",price=4},
+>    {bar="cask",beer="ipa",price=5}] : {bar:string, beer:string, price:int} list
 
 val patronBeers = [
   {patron =  "shaggy", beer = "amber"},
   {patron =  "fred", beer = "amber"},
   {patron =  "velma", beer = "stout"}];
+> val patronBeers =
+>   [{beer="amber",patron="shaggy"},{beer="amber",patron="fred"},
+>    {beer="stout",patron="velma"}] : {beer:string, patron:string} list
 
 fun frequents (patron, bar) =
   {patron, bar} elem barPatrons;
+> val frequents = fn : string * string -> bool
 fun likes (patron, beer) =
   {patron, beer} elem patronBeers;
+> val likes = fn : string * string -> bool
 fun sells (bar, beer, price) =
   {bar, beer, price} elem barBeers;
+> val sells = fn : string * string * int -> bool
 
 (* Patron p is happy if there exists a bar, a beer, and a price such that p
  * frequents the bar, likes the beer, and the bar sells the beer at price p.
@@ -347,6 +388,7 @@ val it = ["pale"] : string list
  * Leads to finite search for P(x) <- Q(x), but P(x) <- Q(y) is problematic.
  *)
 fun isR y = true;
+> val isR = fn : 'a -> bool
 (*
 fun isS1 x = exists (from y suchthat isR y);
 *)
@@ -423,6 +465,7 @@ fun par (x, p) =
     ("f", "k"),
     ("g", "k"),
     ("h", "i")];
+> val par = fn : string * string -> bool
 (*
 fun sib (x, y) = exists (
   from p suchthat par (x, p) andalso par (y, p) andalso x <> y);
@@ -481,4 +524,4 @@ enumerate cousin2;
 *)
 (*) TODO: maybe give error: non-stratified
 
-(*) End suchThat.sml
+(*) End suchThat.smli
