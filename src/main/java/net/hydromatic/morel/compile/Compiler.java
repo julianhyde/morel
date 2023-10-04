@@ -21,7 +21,6 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
-import net.hydromatic.morel.compile.Extents.ExtentFilter;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.Applicable3;
@@ -37,7 +36,6 @@ import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
-import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
@@ -69,7 +67,6 @@ import java.util.function.Supplier;
 
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 import static net.hydromatic.morel.util.Static.transform;
@@ -465,68 +462,6 @@ public class Compiler {
     default:
       throw new AssertionError("unknown step type " + firstStep.op);
     }
-  }
-
-  private ExtentFilter extent(Core.Scan scan) {
-    final List<Core.Exp> extents = new ArrayList<>();
-    final List<Core.Exp> filters = new ArrayList<>();
-    extent(scan.pat, scan.exp, extents, filters);
-    final Core.Exp extent;
-    if (extents.isEmpty()) {
-      final ListType listType = typeSystem.listType(scan.pat.type);
-      extent =
-          core.apply(Pos.ZERO, listType,
-              core.functionLiteral(typeSystem, BuiltIn.Z_EXTENT),
-              core.unitLiteral());
-    } else {
-      extent = extents.get(0);
-      filters.addAll(Util.skip(extents));
-    }
-    return new ExtentFilter(extent, ImmutableList.copyOf(filters));
-  }
-
-  private void extent(Core.Pat pat, Core.Exp exp, List<Core.Exp> extents,
-      List<Core.Exp> filters) {
-    switch (exp.op) {
-    case APPLY:
-      final Core.Apply apply = (Core.Apply) exp;
-      switch (apply.fn.op) {
-      case FN_LITERAL:
-        final Core.Literal literal = (Core.Literal) apply.fn;
-        final BuiltIn builtIn = (BuiltIn) literal.value;
-        switch (builtIn) {
-        case OP_ELEM:
-          final List<Core.Exp> args = ((Core.Tuple) apply.arg).args;
-          if (matches(args.get(0), pat)) {
-            extents.add(args.get(1));
-          }
-          break;
-        case Z_ANDALSO:
-          for (Core.Exp e : ((Core.Tuple) apply.arg).args) {
-            extent(pat, e, extents, filters);
-            return;
-          }
-        }
-      }
-    }
-    filters.add(exp);
-  }
-
-  /** Returns whether an expression corresponds exactly to a pattern.
-   * For example "x" matches the pattern "x",
-   * and "(z, y)" matches the pattern "(x, y)". */
-  private static boolean matches(Core.Exp exp, Core.Pat pat) {
-    if (exp.op == Op.ID && pat.op == Op.ID_PAT) {
-      return ((Core.Id) exp).idPat.equals(pat);
-    }
-    if (exp.op == Op.TUPLE && pat.op == Op.TUPLE_PAT) {
-      final Core.Tuple tuple = (Core.Tuple) exp;
-      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-      if (tuple.args.size() == tuplePat.args.size()) {
-        return allMatch(tuple.args, tuplePat.args, Compiler::matches);
-      }
-    }
-    return false;
   }
 
   private ImmutableSortedMap<String, Binding> sortedBindingMap(
