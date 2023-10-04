@@ -1792,7 +1792,7 @@ public class MainTest {
         + "    yield {d, n}\n"
         + "end";
     final String code = "from(sink\n"
-        + "  join(op join, pat (n_1, d_1),\n"
+        + "  join(op join, pat (d_1, n_1),\n"
         + "  exp from(\n"
         + "    sink join(op join, pat v0, exp from(sink\n"
         + "                    join(op join, pat e, exp tuple(\n"
@@ -1806,7 +1806,7 @@ public class MainTest {
         + "        apply(fnValue nth:0, argCode get(name v0)))))),\n"
         + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
         + "          sink collect(getTuple(names [d, n])))))";
-    final List<Object> expected = list(); // TODO
+    final List<Object> expected = list(list(30, "Shaggy"), list(30, "Scooby"));
     ml(ml).assertType("{d:int, n:string} list")
         .assertPlan(isCode2(code))
         .assertEval(is(expected));
@@ -1877,7 +1877,7 @@ public class MainTest {
     final String ml = "from (loc, deptno, name) "
         + "suchthat {deptno, loc, dname = name} elem scott.dept";
     final String core = "val it = "
-        + "from (loc, deptno, name) in"
+        + "from (deptno, loc, name) in"
         + " (from v0 in #dept scott "
         + "yield {deptno = #deptno v0, loc = #loc v0, name = #dname v0})";
     ml(ml)

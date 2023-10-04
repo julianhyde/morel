@@ -23,6 +23,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -45,6 +46,7 @@ import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -761,7 +763,24 @@ public class Resolver {
       final Core.Pat corePat;
       switch (scan.exp.op) {
       case SUCH_THAT:
-        corePat = r.toCore(scan.pat);
+        corePat =
+            r.toCore(scan.pat).accept(
+                // Converts tuple patterns into copies sorted by field names.
+                // For example, (b, c, a) becomes (a, b, c).
+                // Sorting is necessary because "from (b, c, a) suchthat p" will
+                // add variables a, b, c to the environment (in that order).
+                new Shuttle(typeMap.typeSystem) {
+                  @Override protected Core.Pat visit(Core.TuplePat tuplePat) {
+                    final Comparator<Core.Pat> comparator =
+                        Comparator.comparing(pat ->
+                            pat instanceof Core.NamedPat
+                                ? ((Core.NamedPat) pat).name
+                                : "");
+                    return tuplePat.copy(typeSystem,
+                        ImmutableList.sortedCopyOf(comparator,
+                            visitList(tuplePat.args)));
+                  }
+                });
 
         final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
         Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
