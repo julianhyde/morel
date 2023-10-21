@@ -94,7 +94,7 @@ public class Keys {
    * substituted for its type parameters. */
   public static Type.Key forallTypeApply(ForallType forallType,
       List<? extends Type> argTypes) {
-    return new ForallTypeApplyKey(forallType, ImmutableList.copyOf(argTypes));
+    return new ForallTypeApplyKey(forallType, argTypes);
   }
 
   /** Returns a definition of a {@link DataType}. */
@@ -106,7 +106,7 @@ public class Keys {
   }
 
   /** Key that identifies a type by name. */
-  private static class NameKey implements Type.Key {
+  static class NameKey implements Type.Key {
     private final String name;
 
     NameKey(String name) {
@@ -343,8 +343,8 @@ public class Keys {
    *
    * <p>See also {@link DataTypeDef}, which has enough information to actually
    * create it. */
-  private static class DataTypeKey implements Type.Key {
-    final String name;
+  static class DataTypeKey implements Type.Key {
+    private final String name;
 
     DataTypeKey(String name) {
       this.name = name;
@@ -374,14 +374,14 @@ public class Keys {
    *
    * <p>For example, given {@code forallType} = "option" and
    * {@code argTypes} = "[int]", returns "int option". */
-  private static class ForallTypeApplyKey implements Type.Key {
-    final ForallType forallType;
-    final ImmutableList<Type> argTypes;
+  static class ForallTypeApplyKey implements Type.Key {
+    private final ForallType forallType;
+    private final ImmutableList<Type> argTypes;
 
-    ForallTypeApplyKey(ForallType forallType, ImmutableList<Type> argTypes) {
-      this.forallType = forallType;
-      this.argTypes = argTypes;
-      assert !argTypes.isEmpty(); // otherwise could have used DataType
+    ForallTypeApplyKey(ForallType forallType, List<? extends Type> argTypes) {
+      this.forallType = requireNonNull(forallType, "forallType");
+      this.argTypes = ImmutableList.copyOf(argTypes);
+      assert !argTypes.isEmpty(); // otherwise could have used DataTypeKey
     }
 
     @Override public int hashCode() {
@@ -441,8 +441,30 @@ public class Keys {
     }
 
     public DataType toType(TypeSystem typeSystem) {
-      return typeSystem.dataType(name, datatype(name), types, tyCons);
+      final Type.Key key;
+      if (types.isEmpty() || scheme) {
+        key = datatype(name);
+      } else {
+        final ForallType forallType =
+            (ForallType) typeSystem.lookup(name);
+        key = forallTypeApply(forallType, types);
+      }
+      return typeSystem.dataType(name, key, types, tyCons);
     }
+  }
+
+  /** Returns whether a list of types is {@code ['a, 'b, ..., 'n]},
+   * the type variables 0, 1, ..., n,
+   * with {@code n} greater than or equal to zero. */
+  static boolean areContiguous(List<? extends Type> types) {
+    int i = 0;
+    for (Type type : types) {
+      if (!(type instanceof TypeVar
+          && ((TypeVar) type).ordinal == i++)) {
+        return false;
+      }
+    }
+    return true;
   }
 }
 

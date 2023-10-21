@@ -615,7 +615,8 @@ public class MainTest {
 
   @SuppressWarnings("ConstantConditions")
   @Test void testDummy() {
-    switch (0) {
+    ml("SOME 4").assertType("int option");
+    switch (-1) {
     case 0:
       ml("1").assertEval(is(1));
       // fall through
@@ -1747,6 +1748,13 @@ public class MainTest {
     ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
         .assertParseSame()
         .assertType("(int * int -> bool) -> int list");
+  }
+
+  @Test void testFromBoolOption() {
+    final String ml = "from b in [SOME true, NONE]";
+    final String core = "val it = [SOME true, NONE]";
+    ml(ml)./*assertType("bool option list")
+        .*/assertCore(0, is(core));
   }
 
   @Test void testFromYieldExpression() {

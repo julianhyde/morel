@@ -32,7 +32,6 @@ import com.google.common.collect.Lists;
 
 import java.lang.reflect.Field;
 import java.util.AbstractList;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -43,6 +42,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import javax.annotation.Nonnull;
 
@@ -122,7 +122,9 @@ public class TypeSystem {
   public Type lookupOpt(String name) {
     // TODO: only use this for names, e.g. 'option',
     // not monikers e.g. 'int option';
-    // assert !name.contains(" ") : name;
+    if (name.contains(" ")) {
+      throw new AssertionError(name);
+    }
     return typeByName.get(name);
   }
 
@@ -496,21 +498,32 @@ public class TypeSystem {
   /** Holds temporary changes to the type system. */
   public interface Transaction extends AutoCloseable {
     void close();
+
+    void replace(String moniker, Supplier<Type> typeSupplier);
   }
 
   /** Implementation of {@link Transaction}. */
   private class TransactionImpl implements Transaction {
-    final List<String> names = new ArrayList<>();
+    final Map<String, Supplier<Type>> names = new LinkedHashMap<>();
 
     void put(String moniker, Type type) {
       typeByName.put(moniker, Objects.requireNonNull(type));
-      names.add(moniker);
+      names.put(moniker, null);
+    }
+
+    @Override public void replace(String moniker,
+        Supplier<Type> typeSupplier) {
+      names.put(moniker, typeSupplier);
     }
 
     public void close() {
-      for (String name : names) {
-        typeByName.remove(name);
-      }
+      names.forEach((name, typeSupplier) -> {
+        if (typeSupplier == null) {
+          typeByName.remove(name);
+        } else {
+          typeByName.put(name, typeSupplier.get());
+        }
+      });
       names.clear();
     }
   }

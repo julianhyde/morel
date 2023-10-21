@@ -29,6 +29,10 @@ public interface Type {
    * "{@code NONE | SOME of 'a}". */
   Key key();
 
+  default Key key(TypeSystem typeSystem) {
+    return key();
+  }
+
   /** Key of the type.
    *
    * <p>Often the same as {@link #key()}, but an exception is datatype.
