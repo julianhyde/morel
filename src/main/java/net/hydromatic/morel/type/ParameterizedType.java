@@ -18,10 +18,14 @@
  */
 package net.hydromatic.morel.type;
 
+import org.apache.calcite.runtime.FlatLists;
+
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.util.MapList;
 
 import com.google.common.collect.ImmutableList;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
@@ -40,12 +44,11 @@ public abstract class ParameterizedType extends BaseType implements NamedType {
   public final List<Type> parameterTypes;
 
   /** Creates a ParameterizedType. */
-  ParameterizedType(Op op, String name, String moniker,
-      List<? extends Type> parameterTypes) {
+  ParameterizedType(Op op, String name, String moniker, int parameterCount) {
     super(op);
     this.name = Objects.requireNonNull(name);
     this.moniker = Objects.requireNonNull(moniker);
-    this.parameterTypes = ImmutableList.copyOf(parameterTypes);
+    this.parameterTypes = MapList.of(parameterCount, TypeVar::new);
   }
 
   public String name() {

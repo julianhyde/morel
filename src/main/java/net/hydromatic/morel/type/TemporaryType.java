@@ -20,6 +20,7 @@ package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 
 import java.util.List;
@@ -38,8 +39,8 @@ import java.util.function.UnaryOperator;
  */
 public class TemporaryType extends DataType {
   TemporaryType(String name, List<? extends Type> parameterTypes) {
-    super(Op.TEMPORARY_DATA_TYPE, name, Keys.name(name), parameterTypes,
-        ImmutableSortedMap.of());
+    super(Op.TEMPORARY_DATA_TYPE, name, name, parameterTypes.size(),
+        ImmutableList.of(), ImmutableSortedMap.of());
   }
 
   @Override public TemporaryType copy(TypeSystem typeSystem,

@@ -457,6 +457,9 @@ public class MainTest {
 
     ml("NONE").assertType("'a option");
     ml("SOME 4").assertType("int option");
+  }
+
+  @Test void testDummy() {
     ml("SOME (SOME true)").assertType("bool option option");
     ml("SOME (SOME [1, 2])")
         .assertType("int list option option");
@@ -614,7 +617,7 @@ public class MainTest {
   }
 
   @SuppressWarnings("ConstantConditions")
-  @Test void testDummy() {
+  @Test void testDummy2() {
     switch (0) {
     case 0:
       ml("1").assertEval(is(1));

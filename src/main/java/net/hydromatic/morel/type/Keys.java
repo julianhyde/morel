@@ -19,8 +19,8 @@
 package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.util.Pair;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 
@@ -28,7 +28,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.SortedMap;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.util.Ord.forEachIndexed;
 
 /** Type keys. */
 public class Keys {
@@ -39,6 +41,11 @@ public class Keys {
     return new NameKey(name);
   }
 
+  /** Returns a key to the dummy type. */
+  public static Type.Key dummy() {
+    return name("");
+  }
+
   /** Returns a key that identifies types (especially
    * {@link TypeVar type variables}) by ordinal. */
   public static Type.Key ordinal(int ordinal) {
@@ -47,36 +54,44 @@ public class Keys {
 
   /** Returns a key that identifies an {@link ApplyType}, with an array of
    * types. */
-  public static Type.Key apply(ParameterizedType type, Type... argTypes) {
+  public static Type.Key apply(ParameterizedType type, Type.Key... args) {
     assert !(type instanceof DataType);
-    return apply(type, ImmutableList.copyOf(argTypes));
+    return apply(type, ImmutableList.copyOf(args));
   }
 
   /** Returns a key that identifies an {@link ApplyType}. */
   public static Type.Key apply(ParameterizedType type,
-      Iterable<? extends Type> argTypes) {
-    return new ApplyKey(type, ImmutableList.copyOf(argTypes));
+      Iterable<? extends Type.Key> args) {
+    return new ApplyKey(type, ImmutableList.copyOf(args));
   }
+
+  /** Returns a key that identifies a parameterized {@link DataType} applied
+   * to a list of type arguments.
+  public static Type.Key apply(DataType type,
+      Iterable<? extends Type.Key> args) {
+    return new AppliedDataTypeKey(type.key(), ImmutableList.copyOf(args));
+  }
+   * */
 
   /** Returns a key that identifies a {@link RecordType}
    * (or a {@link TupleType} if the field names are ascending integers,
    * or {@link PrimitiveType#UNIT unit} if the fields are empty). */
-  public static Type.Key record(SortedMap<String, Type> argNameTypes) {
+  public static Type.Key record(SortedMap<String, ? extends Type.Key> argNameTypes) {
     return new RecordKey(ImmutableSortedMap.copyOfSorted(argNameTypes));
   }
 
   /** Returns a key that identifies a {@link TupleType}. */
-  public static Type.Key tuple(List<? extends Type> argTypes) {
-    return new RecordKey(TupleType.toArgNameTypes(argTypes));
+  public static Type.Key tuple(List<? extends Type.Key> args) {
+    return new RecordKey(TupleType.recordMap(args));
   }
 
   /** Returns a key that identifies a {@link FnType}. */
-  public static Type.Key fn(Type paramType, Type resultType) {
+  public static Type.Key fn(Type.Key paramType, Type.Key resultType) {
     return new OpKey(Op.FN, ImmutableList.of(paramType, resultType));
   }
 
   /** Returns a key that identifies a {@link ListType}. */
-  public static Type.Key list(Type elementType) {
+  public static Type.Key list(Type.Key elementType) {
     return new OpKey(Op.LIST, ImmutableList.of(elementType));
   }
 
@@ -86,31 +101,74 @@ public class Keys {
   }
 
   /** Returns a key that identifies a {@link DataType}. */
-  public static Type.Key datatype(String name) {
-    return new DataTypeKey(name);
+  public static Type.Key datatype(String name, int parameterCount,
+      List<? extends Type.Key> arguments,
+      SortedMap<String, Type.Key> typeConstructors) {
+    return new DataTypeKey(name, parameterCount, arguments, typeConstructors);
   }
 
   /** Returns a key that identifies a {@link ForallType} with monomorphic types
-   * substituted for its type parameters. */
-  public static Type.Key forallTypeApply(ForallType forallType,
-      List<? extends Type> argTypes) {
-    return new ForallTypeApplyKey(forallType, ImmutableList.copyOf(argTypes));
+   * substituted for its type parameters.
+  public static Type.Key forallTypeApply(Type.Key key,
+      List<? extends Type.Key> args) {
+    return new ForallTypeApplyKey(key, args);
   }
+*/
 
   /** Returns a definition of a {@link DataType}. */
   public static DataTypeDef dataTypeDef(String name,
-      List<? extends Type> parameterTypes, SortedMap<String, Type> tyCons,
-      boolean scheme) {
+      List<? extends Type.Key> parameterTypes,
+      List<? extends Type.Key> argumentTypes,
+      SortedMap<String, Type.Key> tyCons, boolean scheme) {
     return new DataTypeDef(name, ImmutableList.copyOf(parameterTypes),
-        ImmutableSortedMap.copyOf(tyCons), scheme);
+        ImmutableList.copyOf(argumentTypes), ImmutableSortedMap.copyOf(tyCons),
+        scheme);
+  }
+
+  /** Converts a map of types to a map of keys. */
+  public static SortedMap<String, Type.Key> toKeys(
+      SortedMap<String, ? extends Type> nameTypes) {
+    final ImmutableSortedMap.Builder<String, Type.Key> keys =
+        ImmutableSortedMap.orderedBy(RecordType.ORDERING);
+    nameTypes.forEach((name, t) -> keys.put(name, t.key()));
+    return keys.build();
+  }
+
+  /** Converts a list of types to a list of keys. */
+  public static List<Type.Key> toKeys(List<? extends Type> types) {
+    final ImmutableList.Builder<Type.Key> keys = ImmutableList.builder();
+    types.forEach(t -> keys.add(t.key()));
+    return keys.build();
+  }
+
+  /** Base class for Key. */
+  private abstract static class AbstractKey implements Type.Key {
+    protected final Op op;
+
+    AbstractKey(Op op) {
+      this.op = requireNonNull(op);
+    }
+
+    @Override public Op op() {
+      return op;
+    }
+
+    @Override public String toString() {
+      return moniker();
+    }
   }
 
   /** Key that identifies a type by name. */
-  private static class NameKey implements Type.Key {
+  private static class NameKey extends AbstractKey {
     private final String name;
 
     NameKey(String name) {
+      super(name.isEmpty() ? Op.DUMMY_TYPE : Op.DATA_TYPE);
       this.name = requireNonNull(name);
+    }
+
+    @Override public String toString() {
+      return name;
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
@@ -129,16 +187,24 @@ public class Keys {
     }
 
     public Type toType(TypeSystem typeSystem) {
-      throw new UnsupportedOperationException();
+      if (name.isEmpty()) {
+        return DummyType.INSTANCE;
+      }
+      return typeSystem.lookup(name);
     }
   }
 
   /** Key that identifies a type by ordinal. */
-  private static class OrdinalKey implements Type.Key {
+  private static class OrdinalKey extends AbstractKey {
     final int ordinal;
 
     OrdinalKey(int ordinal) {
+      super(Op.TY_VAR);
       this.ordinal = ordinal;
+    }
+
+    @Override public String toString() {
+      return TypeVar.name(ordinal);
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
@@ -156,6 +222,10 @@ public class Keys {
           && ((OrdinalKey) obj).ordinal == ordinal;
     }
 
+    @Override public Type.Key substitute(List<? extends Type> types) {
+      return types.get(ordinal).key();
+    }
+
     public Type toType(TypeSystem typeSystem) {
       return new TypeVar(ordinal);
     }
@@ -163,82 +233,83 @@ public class Keys {
 
   /** Key of a type that applies a parameterized type to specific type
    * arguments. */
-  private static class ApplyKey implements Type.Key {
+  private static class ApplyKey extends AbstractKey {
     final ParameterizedType type;
-    final ImmutableList<Type> argTypes;
+    final ImmutableList<Type.Key> args;
 
-    ApplyKey(ParameterizedType type, ImmutableList<Type> argTypes) {
+    ApplyKey(ParameterizedType type, ImmutableList<Type.Key> args) {
+      super(Op.APPLY_TYPE);
       this.type = requireNonNull(type);
-      this.argTypes = requireNonNull(argTypes);
-      assert !(type instanceof DataType);
+      this.args = ImmutableList.copyOf(args);
+//      assert !(type instanceof DataType);
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
         int right) {
-      if (!argTypes.isEmpty()) {
-        TypeSystem.unparseList(buf, Op.COMMA, left, Op.APPLY.left, argTypes);
+      if (!args.isEmpty()) {
+        TypeSystem.unparseList(buf, Op.COMMA, left, Op.APPLY.left, args);
         buf.append(Op.APPLY.padded);
       }
       return buf.append(type.name);
     }
 
     @Override public int hashCode() {
-      return Objects.hash(type, argTypes);
+      return Objects.hash(type, args);
     }
 
     @Override public boolean equals(Object obj) {
       return obj == this
           || obj instanceof ApplyKey
           && ((ApplyKey) obj).type.equals(type)
-          && ((ApplyKey) obj).argTypes.equals(argTypes);
+          && ((ApplyKey) obj).args.equals(args);
     }
 
     public Type toType(TypeSystem typeSystem) {
-      return new ApplyType(type, argTypes);
+      return new ApplyType(type, typeSystem.typesFor(args));
     }
   }
 
   /** Key of a type that applies a built-in type constructor to specific type
    * arguments. */
-  private static class OpKey implements Type.Key {
-    final Op op;
-    final ImmutableList<Type> argTypes;
+  private static class OpKey extends AbstractKey {
+    final ImmutableList<Type.Key> args;
 
-    OpKey(Op op, ImmutableList<Type> argTypes) {
-      this.op = requireNonNull(op);
-      this.argTypes = requireNonNull(argTypes);
+    OpKey(Op op, List<Type.Key> args) {
+      super(op);
+      this.args = ImmutableList.copyOf(args);
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
         int right) {
       switch (op) {
       case LIST:
-        return TypeSystem.unparse(buf, argTypes.get(0), 0, Op.LIST.right)
+        return TypeSystem.unparse(buf, args.get(0), 0, Op.LIST.right)
             .append(" list");
       default:
-        return TypeSystem.unparseList(buf, op, left, right, argTypes);
+        return TypeSystem.unparseList(buf, op, left, right, args);
       }
     }
 
     @Override public int hashCode() {
-      return Objects.hash(op, argTypes);
+      return Objects.hash(op, args);
     }
 
     @Override public boolean equals(Object obj) {
       return obj == this
           || obj instanceof OpKey
           && ((OpKey) obj).op.equals(op)
-          && ((OpKey) obj).argTypes.equals(argTypes);
+          && ((OpKey) obj).args.equals(args);
     }
 
     public Type toType(TypeSystem typeSystem) {
       switch (op) {
       case FN:
-        assert argTypes.size() == 2;
-        return new FnType(argTypes.get(0), argTypes.get(1));
+        assert args.size() == 2;
+        return new FnType(typeSystem.typeFor(args.get(0)),
+            typeSystem.typeFor(args.get(1)));
       case LIST:
-        assert argTypes.size() == 1;
-        return new ListType(argTypes.get(0));
+        assert args.size() == 1;
+        return new ListType(typeSystem.typeFor(args.get(0)));
       default:
         throw new AssertionError(op);
       }
@@ -246,11 +317,12 @@ public class Keys {
   }
 
   /** Key of a forall type. */
-  private static class ForallKey implements Type.Key {
+  private static class ForallKey extends AbstractKey {
     final Type type;
     final ImmutableList<TypeVar> parameterTypes;
 
     ForallKey(Type type, ImmutableList<TypeVar> parameterTypes) {
+      super(Op.FORALL_TYPE);
       this.type = requireNonNull(type);
       this.parameterTypes = requireNonNull(parameterTypes);
     }
@@ -273,7 +345,7 @@ public class Keys {
         buf.append(' ').append(type.moniker());
       }
       buf.append(". ");
-      return TypeSystem.unparse(buf, type, 0, 0);
+      return TypeSystem.unparse(buf, type.key(), 0, 0);
     }
 
     public Type toType(TypeSystem typeSystem) {
@@ -282,12 +354,15 @@ public class Keys {
   }
 
   /** Key of a record type. */
-  private static class RecordKey implements Type.Key {
-    final ImmutableSortedMap<String, Type> argNameTypes;
+  private static class RecordKey extends AbstractKey {
+    final ImmutableSortedMap<String, Type.Key> argNameTypes;
 
-    RecordKey(ImmutableSortedMap<String, Type> argNameTypes) {
+    RecordKey(ImmutableSortedMap<String, Type.Key> argNameTypes) {
+      super(TypeSystem.areContiguousIntegers(argNameTypes.keySet())
+          ? Op.TUPLE_TYPE
+          : Op.RECORD_TYPE);
       this.argNameTypes = requireNonNull(argNameTypes);
-      Preconditions.checkArgument(argNameTypes.comparator()
+      checkArgument(argNameTypes.comparator()
           == RecordType.ORDERING);
     }
 
@@ -297,15 +372,15 @@ public class Keys {
       case 0:
         return buf.append("()");
       default:
-        if (TypeSystem.areContiguousIntegers(argNameTypes.keySet())) {
+        if (op == Op.TUPLE_TYPE) {
           return TypeSystem.unparseList(buf, Op.TIMES, 0, 0,
               argNameTypes.values());
         }
         // fall through
       case 1:
         buf.append('{');
-        argNameTypes.forEach((name, type) -> {
-          if (buf.length() > 1) {
+        Pair.forEachIndexed(argNameTypes, (i, name, type) -> {
+          if (i > 0) {
             buf.append(", ");
           }
           buf.append(name).append(':').append(type.moniker());
@@ -329,12 +404,12 @@ public class Keys {
       case 0:
         return PrimitiveType.UNIT;
       default:
-        if (TypeSystem.areContiguousIntegers(argNameTypes.keySet())) {
-          return new TupleType(ImmutableList.copyOf(argNameTypes.values()));
+        if (op == Op.TUPLE_TYPE) {
+          return new TupleType(typeSystem.typesFor(argNameTypes.values()));
         }
         // fall through
       case 1:
-        return new RecordType(argNameTypes);
+        return new RecordType(typeSystem.typesFor(argNameTypes));
       }
     }
   }
@@ -343,30 +418,118 @@ public class Keys {
    *
    * <p>See also {@link DataTypeDef}, which has enough information to actually
    * create it. */
-  private static class DataTypeKey implements Type.Key {
-    final String name;
+  private static class DataTypeKey extends AbstractKey {
+    /** Ideally, a datatype would not have a name, just a list of named type
+     * constructors, and the name would be associated later. When that happens,
+     * we can remove the {@code name} field from this key. */
+    private final String name;
+    private final int parameterCount;
+    private final List<? extends Type.Key> arguments;
+    private final SortedMap<String, Type.Key> typeConstructors;
 
-    DataTypeKey(String name) {
-      this.name = name;
+    DataTypeKey(String name, int parameterCount,
+        List<? extends Type.Key> arguments,
+        SortedMap<String, Type.Key> typeConstructors) {
+      super(Op.DATA_TYPE);
+      this.name = requireNonNull(name);
+      this.parameterCount = parameterCount;
+      this.arguments = ImmutableList.copyOf(arguments);
+      this.typeConstructors = ImmutableSortedMap.copyOfSorted(typeConstructors);
     }
 
     @Override public int hashCode() {
-      return name.hashCode();
+      return Objects.hash(name, parameterCount, arguments, typeConstructors);
     }
 
     @Override public boolean equals(Object obj) {
       return obj == this
           || obj instanceof DataTypeKey
-          && ((DataTypeKey) obj).name.equals(name);
+          && ((DataTypeKey) obj).name.equals(name)
+          && ((DataTypeKey) obj).parameterCount == parameterCount
+          && ((DataTypeKey) obj).arguments.equals(arguments)
+          && ((DataTypeKey) obj).typeConstructors.equals(typeConstructors);
+    }
+
+    @Override public String toString() {
+      return moniker();
+    }
+
+    /** {@inheritDoc}
+     *
+     * <p>Prints the name of this datatype along with any type arguments.
+     * Examples:
+     *
+     * <ul>
+     *   <li>{@code order}
+     *   <li>{@code 'a option}
+     *   <li>{@code (int * int) option}
+     *   <li>{@code bool option option}
+     *   <li>{@code ('a,'b) tree}
+     * </ul>
+     *
+     * @see ParameterizedType#computeMoniker(String, List)
+     */
+    @Override public StringBuilder describe(StringBuilder buf, int left,
+        int right) {
+      if (arguments.isEmpty()) {
+        return buf.append(name);
+      }
+      if (arguments.size() > 1) {
+        buf.append('(');
+      }
+      forEachIndexed(arguments, (t, i) -> {
+        if (i > 0) {
+          buf.append(",");
+        }
+        if (t.op() == Op.TUPLE_TYPE) {
+          buf.append('(').append(t.moniker()).append(')');
+        } else {
+          buf.append(t.moniker());
+        }
+      });
+      if (arguments.size() > 1) {
+        buf.append(')');
+      }
+      return buf.append(' ').append(name);
+    }
+
+    @Override public Type toType(TypeSystem typeSystem) {
+      return typeSystem.dataType(name, parameterCount,
+          typeSystem.typesFor(arguments), typeConstructors);
+    }
+  }
+
+  /** Key that identifies {@code datatype} applied to type arguments. */
+  private static class AppliedDataTypeKey extends AbstractKey {
+    final Type.Key key;
+    final List<? extends Type.Key> arguments;
+
+    AppliedDataTypeKey(Type.Key key, Iterable<? extends Type.Key> arguments) {
+      super(Op.DATA_TYPE);
+      this.key = requireNonNull(key);
+      this.arguments = ImmutableList.copyOf(arguments);
+    }
+
+    @Override public int hashCode() {
+      return Objects.hash(key, arguments);
+    }
+
+    @Override public boolean equals(Object obj) {
+      return obj == this
+          || obj instanceof AppliedDataTypeKey
+          && ((AppliedDataTypeKey) obj).key.equals(key)
+          && ((AppliedDataTypeKey) obj).arguments.equals(arguments);
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
         int right) {
-      return buf.append(name);
+      return buf.append(key + ":" + arguments); // TODO
     }
 
-    public Type toType(TypeSystem typeSystem) {
-      throw new UnsupportedOperationException();
+    @Override public Type toType(TypeSystem typeSystem) {
+      final DataType dataType = (DataType) key.toType(typeSystem);
+      final List<Type> argumentTypes = typeSystem.typesFor(arguments);
+      return dataType.substitute(typeSystem, argumentTypes, null);
     }
   }
 
@@ -374,38 +537,42 @@ public class Keys {
    *
    * <p>For example, given {@code forallType} = "option" and
    * {@code argTypes} = "[int]", returns "int option". */
-  private static class ForallTypeApplyKey implements Type.Key {
-    final ForallType forallType;
-    final ImmutableList<Type> argTypes;
+  private static class ForallTypeApplyKey extends AbstractKey {
+    final Type.Key key;
+    final ImmutableList<Type.Key> args;
 
-    ForallTypeApplyKey(ForallType forallType, ImmutableList<Type> argTypes) {
-      this.forallType = forallType;
-      this.argTypes = argTypes;
-      assert !argTypes.isEmpty(); // otherwise could have used DataType
+    ForallTypeApplyKey(Type.Key key, List<? extends Type.Key> args) {
+      super(Op.FORALL_TYPE);
+      this.key = key;
+      this.args = ImmutableList.copyOf(args);
+      checkArgument(!args.isEmpty()); // otherwise could have used DataType
     }
 
     @Override public int hashCode() {
-      return Objects.hash(forallType, argTypes);
+      return Objects.hash(key, args);
     }
 
     @Override public boolean equals(Object obj) {
       return obj == this
           || obj instanceof ForallTypeApplyKey
-          && ((ForallTypeApplyKey) obj).forallType.equals(forallType)
-          && ((ForallTypeApplyKey) obj).argTypes.equals(argTypes);
+          && ((ForallTypeApplyKey) obj).key.equals(key)
+          && ((ForallTypeApplyKey) obj).args.equals(args);
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
         int right) {
-      return TypeSystem.unparseList(buf, Op.COMMA, left, Op.APPLY.left,
-          argTypes)
-          .append(Op.APPLY.padded)
-          .append(forallType.type);
+      TypeSystem.unparseList(buf, Op.COMMA, left, Op.APPLY.left,
+              args)
+          .append(Op.APPLY.padded);
+      return key.describe(buf, left, right);
     }
 
+    // TODO: key.substitute.toType instead?
     public Type toType(TypeSystem typeSystem) {
       try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
-        return forallType.substitute(typeSystem, argTypes, transaction);
+        final Type forallType = key.toType(typeSystem);
+        return forallType.substitute(typeSystem, typeSystem.typesFor(args),
+            transaction);
       }
     }
   }
@@ -413,15 +580,18 @@ public class Keys {
   /** Information from which a data type can be created. */
   public static class DataTypeDef implements Type.Def {
     final String name;
-    final List<Type> types;
-    final SortedMap<String, Type> tyCons;
+    final ImmutableList<Type.Key> parameters;
+    final ImmutableList<Type.Key> args;
+    final SortedMap<String, Type.Key> tyCons;
     final boolean scheme;
 
-    private DataTypeDef(String name, ImmutableList<Type> types,
-        ImmutableSortedMap<String, Type> tyCons, boolean scheme) {
+    private DataTypeDef(String name, List<Type.Key> parameters,
+        List<Type.Key> args, SortedMap<String, Type.Key> tyCons,
+        boolean scheme) {
       this.name = requireNonNull(name);
-      this.types = requireNonNull(types);
-      this.tyCons = requireNonNull(tyCons);
+      this.parameters = ImmutableList.copyOf(parameters);
+      this.args = ImmutableList.copyOf(args);
+      this.tyCons = ImmutableSortedMap.copyOfSorted(tyCons);
       this.scheme = scheme;
     }
 
@@ -432,7 +602,7 @@ public class Keys {
           buf.append(" | ");
         }
         buf.append(tyConName);
-        if (tyConType != DummyType.INSTANCE) {
+        if (tyConType.op() != Op.DUMMY_TYPE) {
           buf.append(" of ");
           buf.append(tyConType.moniker());
         }
@@ -441,7 +611,13 @@ public class Keys {
     }
 
     public DataType toType(TypeSystem typeSystem) {
-      return typeSystem.dataType(name, datatype(name), types, tyCons);
+      final Type.Key key = name(name);
+      final Type.Key key2 =
+          /* parameters.equals(args) && !parameters.isEmpty()
+              ? forallTypeApply(key, args)
+              : */ key;
+      return typeSystem.dataType(name, parameters.size(),
+          typeSystem.typesFor(args), tyCons);
     }
   }
 }

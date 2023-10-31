@@ -252,6 +252,10 @@ in
 end;
 *)
 
+(*) Lambda with record argument
+fn {a, b} => if b then a else ~a;
+> val it = fn : {a:int, b:bool} -> int
+
 (*) Record containing polymorphic functions:
 (*)  val it = {a=fn,b=fn}
 (*) : {a:'a list -> ('a * 'a list) option, b:'b list -> ('b * 'b list) option}

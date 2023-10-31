@@ -85,6 +85,9 @@ public enum Op {
   DATA_TYPE(" ", 8),
   /** Used internally, while resolving a self-referential DATA_TYPE. */
   TEMPORARY_DATA_TYPE(true),
+  /** Used internally, as the 'type' of a type constructor that does not contain
+   * data. */
+  DUMMY_TYPE(true),
   APPLY_TYPE(" ", 8),
   TUPLE_TYPE(" * ", 7),
   COMPOSITE_TYPE,

@@ -214,7 +214,7 @@ class Pretty {
     case APPLY_TYPE:
       final ApplyType applyType = (ApplyType) type;
       return pretty2(buf, indent, lineEnd, depth + 1, applyType.type,
-          applyType.types, value);
+          applyType.args, value);
 
     case DATA_TYPE:
       final DataType dataType = (DataType) type;
@@ -227,7 +227,8 @@ class Pretty {
       }
       final String tyConName = (String) list.get(0);
       buf.append(tyConName);
-      final Type typeConArgType = dataType.typeConstructors.get(tyConName);
+      final Type typeConArgType =
+          dataType.typeConstructors(typeSystem).get(tyConName);
       if (list.size() == 2) {
         final Object arg = list.get(1);
         buf.append(' ');

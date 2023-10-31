@@ -73,7 +73,7 @@ public class TypeVisitor<R> {
   /** Visits an {@link ApplyType}. */
   public R visit(ApplyType applyType) {
     R r = applyType.type.accept(this);
-    for (Type type : applyType.types) {
+    for (Type type : applyType.args) {
       r = type.accept(this);
     }
     return r;

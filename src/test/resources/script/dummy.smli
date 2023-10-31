@@ -16,7 +16,24 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
-
+datatype foo = W | X | Y of int;
+> datatype foo = W | X | Y of int
+X;
+> val it = X : foo
+Y;
+> val it = fn : int -> foo
+SOME (SOME true);
+> val it = SOME (SOME true) : bool option option
+fun wordCount lines =
+  let
+    fun split0 [] word words = word :: words
+      | split0 (#" " :: s) word words = split0 s "" (word :: words)
+      | split0 (c :: s) word words = split0 s (word ^ (String.str c)) words
+    fun split s = List.rev (split0 (String.explode s) "" [])
+  in
+    from line in lines,
+        word in split line
+    group word compute count
+  end;
+> val wordCount = fn : string list -> {count:int, word:string} list
 (*) End dummy.smli

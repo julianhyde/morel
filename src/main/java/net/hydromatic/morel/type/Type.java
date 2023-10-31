@@ -67,13 +67,24 @@ public interface Type {
 
   /** Structural identifier of a type. */
   interface Key {
+    /** Converts this key to a type, and ensures that it is registered in the
+     * type system. */
     Type toType(TypeSystem typeSystem);
 
+    // TODO: obsolete, and use toString()
     default String moniker() {
       return describe(new StringBuilder(), 0, 0).toString();
     }
 
     StringBuilder describe(StringBuilder buf, int left, int right);
+
+    /** If this is a type variable {@code ordinal}, returns the
+     * {@code ordinal}th type in the list, otherwise this. */
+    default Key substitute(List<? extends Type> types) {
+      return this;
+    }
+
+    Op op();
   }
 
   /** Definition of a type. */

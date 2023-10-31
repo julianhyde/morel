@@ -25,7 +25,6 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.ApplyType;
 import net.hydromatic.morel.type.DataType;
-import net.hydromatic.morel.type.DummyType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
@@ -772,8 +771,9 @@ public class TypeResolver {
     forEach(datatypeDecl.binds, workspaces, (datatypeBind, workspace) ->
         defs.add(
             Keys.dataTypeDef(datatypeBind.name.name,
-                workspace.temporaryType.parameterTypes, workspace.tyCons,
-                true)));
+                Keys.toKeys(workspace.temporaryType.parameterTypes),
+                Keys.toKeys(workspace.temporaryType.parameterTypes),
+                workspace.tyCons, true)));
     final List<Type> types = typeSystem.dataTypes(defs);
 
     forEach(datatypeDecl.binds, types, (datatypeBind, type) -> {
@@ -828,8 +828,7 @@ public class TypeResolver {
   /** Workspace used while handling several datatype binds simultaneously. */
   private static class DatatypeBindWorkspace {
     final TemporaryType temporaryType;
-    final SortedMap<String, Type> tyCons = new TreeMap<>();
-    public Type type;
+    final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
 
     private DatatypeBindWorkspace(TemporaryType temporaryType) {
       this.temporaryType = temporaryType;
@@ -841,7 +840,7 @@ public class TypeResolver {
       DatatypeBindWorkspace w) {
     for (Ast.TyCon tyCon : datatypeBind.tyCons) {
       w.tyCons.put(tyCon.id.name,
-          tyCon.type == null ? DummyType.INSTANCE : toType(tyCon.type));
+          tyCon.type == null ? Keys.dummy() : toType(tyCon.type).key());
     }
   }
 
@@ -1128,13 +1127,13 @@ public class TypeResolver {
     case CON_PAT:
       final Ast.ConPat conPat = (Ast.ConPat) pat;
       // e.g. "SOME x" has type "int option", "x" has type "int"
-      final Pair<DataType, Type> pair =
+      final Pair<DataType, Type.Key> pair =
           typeSystem.lookupTyCon(conPat.tyCon.name);
       if (pair == null) {
         throw new AssertionError("not found: " + conPat.tyCon.name);
       }
       final DataType dataType = pair.left;
-      final Type argType = pair.right;
+      final Type argType = pair.right.toType(typeSystem);
       final Unifier.Variable vArg = unifier.variable();
       deducePatType(env, conPat.pat, termMap, null, vArg);
       equiv(vArg, toTerm(argType, Subst.EMPTY));
@@ -1142,7 +1141,7 @@ public class TypeResolver {
 
     case CON0_PAT:
       final Ast.Con0Pat con0Pat = (Ast.Con0Pat) pat;
-      final Pair<DataType, Type> pair0 =
+      final Pair<DataType, Type.Key> pair0 =
           typeSystem.lookupTyCon(con0Pat.tyCon.name);
       if (pair0 == null) {
         throw new AssertionError();
@@ -1240,7 +1239,7 @@ public class TypeResolver {
     case APPLY_TYPE:
       final ApplyType applyType = (ApplyType) type;
       final Unifier.Term term = toTerm(applyType.type, subst);
-      final List<Unifier.Term> terms = toTerms(applyType.types, subst);
+      final List<Unifier.Term> terms = toTerms(applyType.args, subst);
       return unifier.apply(APPLY_TY_CON, ConsList.of(term, terms));
     case TUPLE_TYPE:
       final TupleType tupleType = (TupleType) type;

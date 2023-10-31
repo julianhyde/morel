@@ -25,11 +25,12 @@ import com.google.common.collect.ImmutableSortedMap;
 
 import java.util.AbstractList;
 import java.util.List;
-import java.util.Objects;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+import static org.apache.calcite.util.Util.transform;
 
 /** The type of a tuple value. */
 public class TupleType extends BaseType implements RecordLikeType {
@@ -38,9 +39,9 @@ public class TupleType extends BaseType implements RecordLikeType {
 
   public final List<Type> argTypes;
 
-  TupleType(ImmutableList<Type> argTypes) {
+  TupleType(List<? extends Type> argTypes) {
     super(Op.TUPLE_TYPE);
-    this.argTypes = Objects.requireNonNull(argTypes);
+    this.argTypes = ImmutableList.copyOf(argTypes);
   }
 
   @Override public SortedMap<String, Type> argNameTypes() {
@@ -59,7 +60,7 @@ public class TupleType extends BaseType implements RecordLikeType {
   }
 
   public Key key() {
-    return Keys.record(toArgNameTypes(argTypes));
+    return Keys.record(toArgNameTypeKeys(argTypes));
   }
 
   @Override public TupleType copy(TypeSystem typeSystem,
@@ -100,13 +101,20 @@ public class TupleType extends BaseType implements RecordLikeType {
 
   /** Given a list of types [t1, t2, ..., tn] returns a sorted map ["1" : t1,
    * "2" : t2, ... "n" : tn]. */
-  static ImmutableSortedMap<String, Type> toArgNameTypes(
-      List<? extends Type> argTypes) {
-    final ImmutableSortedMap.Builder<String, Type> b =
+  static <E> ImmutableSortedMap<String, E> recordMap(
+      List<? extends E> argTypes) {
+    final ImmutableSortedMap.Builder<String, E> b =
         ImmutableSortedMap.orderedBy(RecordType.ORDERING);
     forEachIndexed(argTypes, (t, i) ->
         b.put(Integer.toString(i + 1), t));
     return b.build();
+  }
+
+  /** Given a list of types [t1, t2, ..., tn] returns a sorted map
+   * ["1" : t1.key, "2" : t2.key, ... "n" : tn.key]. */
+  static ImmutableSortedMap<String, Type.Key> toArgNameTypeKeys(
+      List<? extends Type> argTypes) {
+    return recordMap(transform(argTypes, Type::key));
   }
 }
 

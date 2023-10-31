@@ -20,27 +20,30 @@ package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-import java.util.Objects;
+import java.util.List;
 import java.util.function.UnaryOperator;
 
+import static com.google.common.base.Preconditions.*;
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.transform;
 
 /** Type that is a polymorphic type applied to a set of types. */
 public class ApplyType extends BaseType {
   public final ParameterizedType type;
-  public final ImmutableList<Type> types;
+  public final ImmutableList<Type> args;
 
-  protected ApplyType(ParameterizedType type, ImmutableList<Type> types) {
+  protected ApplyType(ParameterizedType type, List<Type> args) {
     super(Op.APPLY_TYPE);
-    this.type = Objects.requireNonNull(type);
-    this.types = Objects.requireNonNull(types);
-    assert !(type instanceof DataType);
+    this.type = requireNonNull(type);
+    this.args = ImmutableList.copyOf(args);
+    checkArgument(!(type instanceof DataType));
   }
 
   public Key key() {
-    return Keys.apply(type, types);
+    return Keys.apply(type, Keys.toKeys(args));
   }
 
   public <R> R accept(TypeVisitor<R> typeVisitor) {
@@ -51,8 +54,8 @@ public class ApplyType extends BaseType {
       UnaryOperator<Type> transform) {
     final Type type2 = type.copy(typeSystem, transform);
     final ImmutableList<Type> types2 =
-        transform(types, t -> t.copy(typeSystem, transform));
-    return type == type2 && types.equals(types2) ? this
+        transform(args, t -> t.copy(typeSystem, transform));
+    return type == type2 && args.equals(types2) ? this
         : typeSystem.apply(type2, types2);
   }
 }

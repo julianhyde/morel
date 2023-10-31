@@ -21,6 +21,7 @@ package net.hydromatic.morel.type;
 import net.hydromatic.morel.ast.Op;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
 
 import java.util.List;
 import java.util.Objects;
@@ -29,6 +30,7 @@ import java.util.function.UnaryOperator;
 /** Universally quantified type. */
 public class ForallType extends BaseType {
   public final List<TypeVar> typeVars;
+  // TODO replace with a type key that is (for a datatype) a tycon map
   public final Type type;
 
   ForallType(ImmutableList<TypeVar> typeVars, Type type) {
@@ -51,6 +53,27 @@ public class ForallType extends BaseType {
     return type2 == type
         ? this
         : typeSystem.forallType(typeVars, type2);
+  }
+
+  @Override public Type substitute(TypeSystem typeSystem,
+      List<? extends Type> types, TypeSystem.Transaction transaction) {
+    switch (type.op()) {
+    case DATA_TYPE:
+    case TEMPORARY_DATA_TYPE:
+      final DataType dataType = (DataType) type;
+      Key key =
+          Keys.datatype(dataType.name,
+              dataType.parameterTypes.size(),
+              Keys.toKeys(types),
+              Maps.transformValues(dataType.typeConstructors,
+                  k -> k.substitute(types)));
+      return key.toType(typeSystem);
+
+    case FUNCTION_TYPE:
+      return type.substitute(typeSystem, types, transaction);
+    default:
+      throw new AssertionError(type.op() + ": " + type);
+    }
   }
 }
 
