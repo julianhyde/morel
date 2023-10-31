@@ -25,7 +25,6 @@ import net.hydromatic.morel.type.Type.Key;
 import net.hydromatic.morel.util.ComparableSingletonList;
 import net.hydromatic.morel.util.Pair;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
@@ -428,7 +427,7 @@ public class TypeSystem {
     return temporaryType;
   }
 
-  private List<TypeVar> typeVariables(int size) {
+  public List<TypeVar> typeVariables(int size) {
     return new AbstractList<TypeVar>() {
       public int size() {
         return size;

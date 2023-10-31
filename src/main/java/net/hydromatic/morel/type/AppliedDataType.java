@@ -18,24 +18,15 @@
  */
 package net.hydromatic.morel.type;
 
-import org.apache.calcite.util.Util;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Ordering;
-
 import net.hydromatic.morel.ast.Op;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
+import org.apache.calcite.util.Util;
+
 import java.util.List;
-import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
-
-import static com.google.common.base.Preconditions.checkArgument;
 
 /** Algebraic type applied to type arguments.
  *
@@ -52,7 +43,8 @@ public class AppliedDataType extends DataType {
   AppliedDataType(String name, List<? extends Type> parameterTypes,
       List<? extends Type> argumentTypes,
       SortedMap<String, Key> typeConstructors) {
-    super(Op.DATA_TYPE, name, name, parameterTypes.size(), argumentTypes, typeConstructors);
+    super(Op.DATA_TYPE, name, name, parameterTypes.size(), argumentTypes,
+        typeConstructors);
     this.argumentTypes = ImmutableList.copyOf(argumentTypes);
   }
 

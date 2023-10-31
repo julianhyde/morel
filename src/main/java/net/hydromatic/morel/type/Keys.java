@@ -28,9 +28,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.SortedMap;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+import static java.util.Objects.requireNonNull;
 
 /** Type keys. */
 public class Keys {
@@ -63,6 +65,12 @@ public class Keys {
   public static Type.Key apply(ParameterizedType type,
       Iterable<? extends Type.Key> args) {
     return new ApplyKey(type, ImmutableList.copyOf(args));
+  }
+
+  /** Returns a key that identifies an {@link ApplyType}. */
+  public static Type.Key apply2(Type.Key type,
+      Iterable<? extends Type.Key> args) {
+    return new Apply2Key(type, ImmutableList.copyOf(args));
   }
 
   /** Returns a key that identifies a parameterized {@link DataType} applied
@@ -266,6 +274,49 @@ public class Keys {
 
     public Type toType(TypeSystem typeSystem) {
       return new ApplyType(type, typeSystem.typesFor(args));
+    }
+  }
+
+  /** Key of a type that applies a parameterized type to specific type
+   * arguments. */
+  private static class Apply2Key extends AbstractKey {
+    final Type.Key key;
+    final ImmutableList<Type.Key> args;
+
+    Apply2Key(Type.Key key, ImmutableList<Type.Key> args) {
+      super(Op.APPLY_TYPE);
+      this.key = requireNonNull(key);
+      this.args = ImmutableList.copyOf(args);
+//      assert !(type instanceof DataType);
+    }
+
+    @Override public StringBuilder describe(StringBuilder buf, int left,
+        int right) {
+      if (!args.isEmpty()) {
+        TypeSystem.unparseList(buf, Op.COMMA, left, Op.APPLY.left, args);
+        buf.append(Op.APPLY.padded);
+      }
+      return buf.append(key);
+    }
+
+    @Override public int hashCode() {
+      return Objects.hash(key, args);
+    }
+
+    @Override public boolean equals(Object obj) {
+      return obj == this
+          || obj instanceof Apply2Key
+          && ((Apply2Key) obj).key.equals(key)
+          && ((Apply2Key) obj).args.equals(args);
+    }
+
+    public Type toType(TypeSystem typeSystem) {
+      final Type type = key.toType(typeSystem);
+      if (type instanceof ForallType) {
+        return type.substitute(typeSystem, typeSystem.typesFor(args), null);
+      }
+      return new ApplyType((ParameterizedType) type,
+          typeSystem.typesFor(args));
     }
   }
 

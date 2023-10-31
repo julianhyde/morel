@@ -28,8 +28,8 @@ import java.util.List;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 
-import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+
 import static org.apache.calcite.util.Util.transform;
 
 /** The type of a tuple value. */

@@ -20,7 +20,6 @@ package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
-import net.hydromatic.morel.type.DummyType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;

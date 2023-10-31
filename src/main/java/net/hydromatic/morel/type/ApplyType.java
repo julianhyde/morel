@@ -20,15 +20,16 @@ package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 import java.util.function.UnaryOperator;
 
-import static com.google.common.base.Preconditions.*;
-import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.transform;
+
+import static com.google.common.base.Preconditions.*;
+
+import static java.util.Objects.requireNonNull;
 
 /** Type that is a polymorphic type applied to a set of types. */
 public class ApplyType extends BaseType {

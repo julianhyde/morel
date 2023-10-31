@@ -111,7 +111,12 @@ public class TypeResolver {
 
   /** Converts a type AST to a type. */
   public static Type toType(Ast.Type type, TypeSystem typeSystem) {
-    return new TypeResolver(typeSystem).toType(type);
+    return typeSystem.typeFor(toTypeKey(type));
+  }
+
+  /** Converts a type AST to a type key. */
+  public static Type.Key toTypeKey(Ast.Type type) {
+    return new Foo().toTypeKey(type);
   }
 
   private Resolved deduceType_(Environment env, Ast.Decl decl) {
@@ -753,12 +758,11 @@ public class TypeResolver {
     final List<DatatypeBindWorkspace> workspaces = new ArrayList<>();
     try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
       for (Ast.DatatypeBind datatypeBind : datatypeDecl.binds) {
-        final List<TypeVar> typeVars = new ArrayList<>();
-        for (Ast.TyVar tyVar : datatypeBind.tyVars) {
-          typeVars.add((TypeVar) toType(tyVar));
-        }
+        final Foo foo = new Foo();
+        datatypeBind.tyVars.forEach(foo::toTypeKey);
         final TemporaryType temporaryType =
-            typeSystem.temporaryType(datatypeBind.name.name, typeVars,
+            typeSystem.temporaryType(datatypeBind.name.name,
+                typeSystem.typeVariables(foo.tyVarMap.size()),
                 transaction, true);
         workspaces.add(new DatatypeBindWorkspace(temporaryType));
       }
@@ -783,7 +787,8 @@ public class TypeResolver {
       for (Ast.TyCon tyCon : datatypeBind.tyCons) {
         final Type tyConType;
         if (tyCon.type != null) {
-          tyConType = typeSystem.fnType(toType(tyCon.type), dataType);
+          final Type.Key conKey = toTypeKey(tyCon.type);
+          tyConType = typeSystem.fnType(conKey.toType(typeSystem), dataType);
         } else {
           tyConType = dataType;
         }
@@ -838,57 +843,65 @@ public class TypeResolver {
   private void deduceDatatypeBindType(TypeEnv env,
       Ast.DatatypeBind datatypeBind, Map<Ast.IdPat, Unifier.Term> termMap,
       DatatypeBindWorkspace w) {
+    Foo foo = new Foo();
     for (Ast.TyCon tyCon : datatypeBind.tyCons) {
       w.tyCons.put(tyCon.id.name,
-          tyCon.type == null ? Keys.dummy() : toType(tyCon.type).key());
+          tyCon.type == null ? Keys.dummy() : foo.toTypeKey(tyCon.type));
     }
   }
 
-  private Type toType(Ast.Type type) {
-    switch (type.op) {
-    case TUPLE_TYPE:
-      final Ast.TupleType tupleType = (Ast.TupleType) type;
-      return typeSystem.tupleType(toTypes(tupleType.types));
+  /** Workspace for converting types to keys. */
+  private static class Foo {
+    final Map<String, Integer> tyVarMap = new HashMap<>();
 
-    case RECORD_TYPE:
-      final Ast.RecordType recordType = (Ast.RecordType) type;
-      final ImmutableSortedMap.Builder<String, Type> argNameTypes =
-          ImmutableSortedMap.orderedBy(ORDERING);
-      recordType.fieldTypes.forEach((name, t) ->
-          argNameTypes.put(name, toType(t)));
-      return typeSystem.recordType(argNameTypes.build());
+    /** Converts an AST type into a type key. */
+    Type.Key toTypeKey(Ast.Type type) {
+      switch (type.op) {
+      case TUPLE_TYPE:
+        final Ast.TupleType tupleType = (Ast.TupleType) type;
+        return Keys.tuple(toTypeKeys(tupleType.types));
 
-    case FUNCTION_TYPE:
-      final Ast.FunctionType functionType = (Ast.FunctionType) type;
-      final Type paramType = toType(functionType.paramType, typeSystem);
-      final Type resultType = toType(functionType.resultType, typeSystem);
-      return typeSystem.fnType(paramType, resultType);
+      case RECORD_TYPE:
+        final Ast.RecordType recordType = (Ast.RecordType) type;
+        final ImmutableSortedMap.Builder<String, Type.Key> argNameTypes =
+            ImmutableSortedMap.orderedBy(ORDERING);
+        recordType.fieldTypes.forEach((name, t) ->
+            argNameTypes.put(name, toTypeKey(t)));
+        return Keys.record(argNameTypes.build());
 
-    case NAMED_TYPE:
-      final Ast.NamedType namedType = (Ast.NamedType) type;
-      final List<Type> typeList = toTypes(namedType.types);
-      if (namedType.name.equals(LIST_TY_CON) && typeList.size() == 1) {
-        // TODO: make 'list' a regular generic type
-        return typeSystem.listType(typeList.get(0));
+      case FUNCTION_TYPE:
+        final Ast.FunctionType functionType = (Ast.FunctionType) type;
+        final Type.Key paramType = toTypeKey(functionType.paramType);
+        final Type.Key resultType = toTypeKey(functionType.resultType);
+        return Keys.fn(paramType, resultType);
+
+      case NAMED_TYPE:
+        final Ast.NamedType namedType = (Ast.NamedType) type;
+        final List<Type.Key> typeList = toTypeKeys(namedType.types);
+        if (namedType.name.equals(LIST_TY_CON) && typeList.size() == 1) {
+          // TODO: make 'list' a regular generic type
+          return Keys.list(typeList.get(0));
+        }
+        if (typeList.isEmpty()) {
+          return Keys.name(namedType.name);
+        } else {
+          return Keys.apply2(Keys.name(namedType.name), typeList);
+        }
+
+      case TY_VAR:
+        final Ast.TyVar tyVar = (Ast.TyVar) type;
+        return Keys.ordinal(
+            tyVarMap.computeIfAbsent(tyVar.name,
+                name -> tyVarMap.size()));
+
+      default:
+        throw new AssertionError("cannot convert type " + type + " " + type.op);
       }
-      final Type genericType = typeSystem.lookup(namedType.name);
-      if (namedType.types.isEmpty()) {
-        return genericType;
-      }
-      return typeSystem.apply(genericType, typeList);
-
-    case TY_VAR:
-      final Ast.TyVar tyVar = (Ast.TyVar) type;
-      return tyVarMap.computeIfAbsent(tyVar.name,
-          name -> typeSystem.typeVariable(tyVarMap.size()));
-
-    default:
-      throw new AssertionError("cannot convert type " + type + " " + type.op);
     }
-  }
 
-  private List<Type> toTypes(List<Ast.Type> typeList) {
-    return transform(typeList, this::toType);
+    List<Type.Key> toTypeKeys(Iterable<? extends Ast.Type> types) {
+      return transform(types, this::toTypeKey);
+    }
   }
 
   /** Converts a function declaration to a value declaration.

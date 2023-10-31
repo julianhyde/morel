@@ -18,14 +18,9 @@
  */
 package net.hydromatic.morel.type;
 
-import org.apache.calcite.runtime.FlatLists;
-
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.util.MapList;
 
-import com.google.common.collect.ImmutableList;
-
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 

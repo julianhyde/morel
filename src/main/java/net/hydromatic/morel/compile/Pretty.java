@@ -229,6 +229,7 @@ class Pretty {
       buf.append(tyConName);
       final Type typeConArgType =
           dataType.typeConstructors(typeSystem).get(tyConName);
+      requireNonNull(typeConArgType);
       if (list.size() == 2) {
         final Object arg = list.get(1);
         buf.append(' ');

@@ -16,6 +16,10 @@
  * language governing permissions and limitations under the
  * License.
  *)
+SOME (1,[2,3]);
+> val it = SOME (1,[2,3]) : (int * int list) option
+datatype 'x tree = Empty | Node of 'x tree * 'x * 'x tree;
+> datatype 'a tree = Empty | Node of 'a tree * 'a * 'a tree
 datatype foo = W | X | Y of int;
 > datatype foo = W | X | Y of int
 X;
