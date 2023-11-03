@@ -57,10 +57,10 @@ public class Keys {
     return new OrdinalKey(ordinal);
   }
 
-  /** Returns a key that identifies an {@link ApplyType}. */
-  public static Type.Key apply2(Type.Key type,
+  /** Returns a key that applies a polymorphic type to arguments. */
+  public static Type.Key apply(Type.Key type,
       Iterable<? extends Type.Key> args) {
-    return new Apply2Key(type, ImmutableList.copyOf(args));
+    return new ApplyKey(type, ImmutableList.copyOf(args));
   }
 
   /** Returns a key that identifies a {@link RecordType}
@@ -220,48 +220,10 @@ public class Keys {
   /** Key of a type that applies a parameterized type to specific type
    * arguments. */
   private static class ApplyKey extends AbstractKey {
-    final ParameterizedType type;
-    final ImmutableList<Type.Key> args;
-
-    ApplyKey(ParameterizedType type, ImmutableList<Type.Key> args) {
-      super(Op.APPLY_TYPE);
-      this.type = requireNonNull(type);
-      this.args = ImmutableList.copyOf(args);
-//      assert !(type instanceof DataType);
-    }
-
-    @Override public StringBuilder describe(StringBuilder buf, int left,
-        int right) {
-      if (!args.isEmpty()) {
-        TypeSystem.unparseList(buf, Op.COMMA, left, Op.APPLY.left, args);
-        buf.append(Op.APPLY.padded);
-      }
-      return buf.append(type.name);
-    }
-
-    @Override public int hashCode() {
-      return Objects.hash(type, args);
-    }
-
-    @Override public boolean equals(Object obj) {
-      return obj == this
-          || obj instanceof ApplyKey
-          && ((ApplyKey) obj).type.equals(type)
-          && ((ApplyKey) obj).args.equals(args);
-    }
-
-    public Type toType(TypeSystem typeSystem) {
-      return new ApplyType(type, typeSystem.typesFor(args));
-    }
-  }
-
-  /** Key of a type that applies a parameterized type to specific type
-   * arguments. */
-  private static class Apply2Key extends AbstractKey {
     final Type.Key key;
     final ImmutableList<Type.Key> args;
 
-    Apply2Key(Type.Key key, ImmutableList<Type.Key> args) {
+    ApplyKey(Type.Key key, ImmutableList<Type.Key> args) {
       super(Op.APPLY_TYPE);
       this.key = requireNonNull(key);
       this.args = ImmutableList.copyOf(args);
@@ -282,9 +244,9 @@ public class Keys {
 
     @Override public boolean equals(Object obj) {
       return obj == this
-          || obj instanceof Apply2Key
-          && ((Apply2Key) obj).key.equals(key)
-          && ((Apply2Key) obj).args.equals(args);
+          || obj instanceof ApplyKey
+          && ((ApplyKey) obj).key.equals(key)
+          && ((ApplyKey) obj).args.equals(args);
     }
 
     @Override public Type toType(TypeSystem typeSystem) {
@@ -292,12 +254,11 @@ public class Keys {
       if (type instanceof ForallType) {
         return type.substitute(typeSystem, typeSystem.typesFor(args), null);
       }
-      return new ApplyType((ParameterizedType) type,
-          typeSystem.typesFor(args));
+      throw new AssertionError();
     }
 
     @Override public Type.Key copy(UnaryOperator<Type.Key> transform) {
-      return new Apply2Key(key.copy(transform),
+      return new ApplyKey(key.copy(transform),
           transform(args, arg -> arg.copy(transform)));
     }
   }

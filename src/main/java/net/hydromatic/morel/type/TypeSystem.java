@@ -466,15 +466,7 @@ public class TypeSystem {
         return dataType.substitute(this, types, transaction);
       }
     }
-    if (type instanceof ApplyType
-        && ((ApplyType) type).type instanceof DataType) {
-      final ApplyType applyType = (ApplyType) type;
-      final DataType dataType = (DataType) applyType.type;
-      try (Transaction transaction = transaction()) {
-        return dataType.substitute(this, types, transaction);
-      }
-    }
-    return new ApplyType((ParameterizedType) type, ImmutableList.copyOf(types));
+    throw new AssertionError();
   }
 
   /** Creates a type variable. */

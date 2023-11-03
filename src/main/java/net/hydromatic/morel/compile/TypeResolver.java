@@ -23,7 +23,6 @@ import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
-import net.hydromatic.morel.type.ApplyType;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
@@ -36,7 +35,6 @@ import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
-import net.hydromatic.morel.util.ConsList;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MartelliUnifier;
 import net.hydromatic.morel.util.Ord;
@@ -97,7 +95,6 @@ public class TypeResolver {
   static final String LIST_TY_CON = "list";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
-  static final String APPLY_TY_CON = "apply";
 
   private TypeResolver(TypeSystem typeSystem) {
     this.typeSystem = Objects.requireNonNull(typeSystem);
@@ -885,7 +882,7 @@ public class TypeResolver {
         if (typeList.isEmpty()) {
           return Keys.name(namedType.name);
         } else {
-          return Keys.apply2(Keys.name(namedType.name), typeList);
+          return Keys.apply(Keys.name(namedType.name), typeList);
         }
 
       case TY_VAR:
@@ -1263,11 +1260,6 @@ public class TypeResolver {
       final FnType fnType = (FnType) type;
       return unifier.apply(FN_TY_CON, toTerm(fnType.paramType, subst),
           toTerm(fnType.resultType, subst));
-    case APPLY_TYPE:
-      final ApplyType applyType = (ApplyType) type;
-      final Unifier.Term term = toTerm(applyType.type, subst);
-      final List<Unifier.Term> terms = toTerms(applyType.args, subst);
-      return unifier.apply(APPLY_TY_CON, ConsList.of(term, terms));
     case TUPLE_TYPE:
       final TupleType tupleType = (TupleType) type;
       return unifier.apply(TUPLE_TY_CON,

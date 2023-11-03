@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 
-/** The type of a record value. */
+/** Record type. */
 public class RecordType extends BaseType implements RecordLikeType {
   public final SortedMap<String, Type> argNameTypes;
 
@@ -105,7 +105,7 @@ public class RecordType extends BaseType implements RecordLikeType {
     final int length = s.length();
     if (length > 9) {
       // We treat values that are 1 billion (1,000,000,000) or higher as if they
-      // are Integer.MAX_VALUE (2,147,483,648). Therefore we do not need to
+      // are Integer.MAX_VALUE (2,147,483,648). Therefore, we do not need to
       // check for overflow in the loop below.
       return Integer.MAX_VALUE;
     }

@@ -21,7 +21,6 @@ package net.hydromatic.morel.compile;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.foreign.RelList;
-import net.hydromatic.morel.type.ApplyType;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
@@ -211,11 +210,6 @@ class Pretty {
       return pretty2(buf, indent, lineEnd, depth + 1, ((ForallType) type).type,
           ImmutableList.of(), value);
 
-    case APPLY_TYPE:
-      final ApplyType applyType = (ApplyType) type;
-      return pretty2(buf, indent, lineEnd, depth + 1, applyType.type,
-          applyType.args, value);
-
     case DATA_TYPE:
       final DataType dataType = (DataType) type;
       //noinspection unchecked,rawtypes
@@ -234,9 +228,7 @@ class Pretty {
         final Object arg = list.get(1);
         buf.append(' ');
         final boolean needParentheses =
-            (typeConArgType.op() == Op.APPLY_TYPE
-                || typeConArgType.op() == Op.DATA_TYPE)
-                && arg instanceof List;
+            typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;
         if (needParentheses) {
           buf.append('(');
         }
