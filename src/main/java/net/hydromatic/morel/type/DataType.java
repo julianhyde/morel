@@ -22,15 +22,11 @@ import net.hydromatic.morel.ast.Op;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import org.apache.calcite.util.Util;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 
@@ -96,54 +92,6 @@ public class DataType extends ParameterizedType {
     }
     return new DataType(name, moniker, parameterTypes.size(), arguments,
         typeConstructors);
-  }
-
-  /** Second part of the implementation of
-   * {@link #substitute(TypeSystem, List, TypeSystem.Transaction)}, called
-   * if there is not already a type of the given description. */
-  protected Type substitute2(TypeSystem typeSystem,
-      List<? extends Type> types, TypeSystem.Transaction transaction) {
-    final List<Keys.DataTypeDef> defs = new ArrayList<>();
-    final Map<String, TemporaryType> temporaryTypeMap = new HashMap<>();
-    final TypeShuttle typeVisitor = new TypeShuttle(typeSystem) {
-      @Override public Type visit(TypeVar typeVar) {
-        return types.get(typeVar.ordinal);
-      }
-
-      @Override public Type visit(DataType dataType) {
-        final String moniker1 = computeMoniker(dataType.name, types);
-        final Type type = typeSystem.lookupOpt(moniker1);
-        if (type != null) {
-          return type;
-        }
-        final Type type2 = temporaryTypeMap.get(moniker1);
-        if (type2 != null) {
-          return type2;
-        }
-        final TemporaryType temporaryType =
-            typeSystem.temporaryType(dataType.name, types, transaction, false);
-        temporaryTypeMap.put(moniker1, temporaryType);
-        defs.add(
-            Keys.dataTypeDef(dataType.name, Keys.toKeys(types),
-                ImmutableList.of(), typeConstructors));
-        return temporaryType;
-      }
-    };
-    accept(typeVisitor);
-    final List<Type> types1 = typeSystem.dataTypes(defs);
-    final int i = defs.size() == 1
-        ? 0
-        : Iterables.indexOf(defs, def ->
-            def.name.equals(name) && def.parameters.equals(types));
-    return types1.get(i);
-  }
-
-  Type substitute3(TypeSystem typeSystem,
-      List<? extends Type> types, TypeSystem.Transaction transaction) {
-    Keys.DataTypeDef def =
-        Keys.dataTypeDef(name, ImmutableList.of(), Keys.toKeys(types),
-            Maps.transformValues(typeConstructors, t -> t.substitute(types)));
-    return def.toType(typeSystem);
   }
 
   /** Writes out the definition of the datatype. For example,

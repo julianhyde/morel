@@ -87,7 +87,6 @@ public class TypeResolver {
   private final Map<AstNode, Unifier.Term> map = new HashMap<>();
   private final Map<Unifier.Variable, Unifier.Action> actionMap =
       new HashMap<>();
-  private final Map<String, TypeVar> tyVarMap = new HashMap<>();
   private final PairList<Unifier.Variable, PrimitiveType> preferredTypes =
       PairList.of();
 
@@ -311,23 +310,23 @@ public class TypeResolver {
       // "(from exp: v50 as id: v60 [, exp: v51 as id: v61]...
       //  [where filterExp: v5] [yield yieldExp: v4]): v"
       final Ast.From from = (Ast.From) node;
-      env2 = env;
+      TypeEnv env3 = env;
       final Map<Ast.Id, Unifier.Variable> fieldVars = new LinkedHashMap<>();
       final List<Ast.FromStep> fromSteps = new ArrayList<>();
       for (Ord<Ast.FromStep> step : Ord.zip(from.steps)) {
         Pair<TypeEnv, Unifier.Variable> p =
-            deduceStepType(env, step.e, v3, env2, fieldVars, fromSteps);
+            deduceStepType(env, step.e, v3, env3, fieldVars, fromSteps);
         if (step.e.op == Op.COMPUTE
             && step.i != from.steps.size() - 1) {
           throw new AssertionError("'compute' step must be last in 'from'");
         }
-        env2 = p.left;
+        env3 = p.left;
         v3 = p.right;
       }
       final Ast.Exp yieldExp2;
       if (from.implicitYieldExp != null) {
         v3 = unifier.variable();
-        yieldExp2 = deduceType(env2, from.implicitYieldExp, v3);
+        yieldExp2 = deduceType(env3, from.implicitYieldExp, v3);
       } else {
         Objects.requireNonNull(v3);
         yieldExp2 = null;

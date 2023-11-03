@@ -51,11 +51,6 @@ public class TemporaryType extends DataType {
   public <R> R accept(TypeVisitor<R> typeVisitor) {
     throw new UnsupportedOperationException();
   }
-
-  @Override protected Type substitute2(TypeSystem typeSystem,
-      List<? extends Type> types, TypeSystem.Transaction transaction) {
-    return typeSystem.temporaryType(name, types, transaction, false);
-  }
 }
 
 // End TemporaryType.java
