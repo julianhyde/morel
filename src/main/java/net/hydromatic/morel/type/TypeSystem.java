@@ -281,10 +281,6 @@ public class TypeSystem {
     return dataType;
   }
 
-  DataType dataType(String name, SortedMap<String, Type.Key> tyCons) {
-    return dataType(name, 0, ImmutableList.of(), tyCons);
-  }
-
   /** Converts a regular type to an internal type. Throws if the type is not
    * known. */
   public void setInternal(String name) {

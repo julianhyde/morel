@@ -44,7 +44,7 @@ public class ApplyType extends BaseType {
   }
 
   public Key key() {
-    return Keys.apply(type, Keys.toKeys(args));
+    throw new AssertionError();
   }
 
   public <R> R accept(TypeVisitor<R> typeVisitor) {

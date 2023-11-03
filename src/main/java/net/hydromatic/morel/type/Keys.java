@@ -57,32 +57,11 @@ public class Keys {
     return new OrdinalKey(ordinal);
   }
 
-  /** Returns a key that identifies an {@link ApplyType}, with an array of
-   * types. */
-  public static Type.Key apply(ParameterizedType type, Type.Key... args) {
-    assert !(type instanceof DataType);
-    return apply(type, ImmutableList.copyOf(args));
-  }
-
-  /** Returns a key that identifies an {@link ApplyType}. */
-  public static Type.Key apply(ParameterizedType type,
-      Iterable<? extends Type.Key> args) {
-    return new ApplyKey(type, ImmutableList.copyOf(args));
-  }
-
   /** Returns a key that identifies an {@link ApplyType}. */
   public static Type.Key apply2(Type.Key type,
       Iterable<? extends Type.Key> args) {
     return new Apply2Key(type, ImmutableList.copyOf(args));
   }
-
-  /** Returns a key that identifies a parameterized {@link DataType} applied
-   * to a list of type arguments.
-  public static Type.Key apply(DataType type,
-      Iterable<? extends Type.Key> args) {
-    return new AppliedDataTypeKey(type.key(), ImmutableList.copyOf(args));
-  }
-   * */
 
   /** Returns a key that identifies a {@link RecordType}
    * (or a {@link TupleType} if the field names are ascending integers,
@@ -117,14 +96,6 @@ public class Keys {
       SortedMap<String, Type.Key> typeConstructors) {
     return new DataTypeKey(name, parameterCount, arguments, typeConstructors);
   }
-
-  /** Returns a key that identifies a {@link ForallType} with monomorphic types
-   * substituted for its type parameters.
-  public static Type.Key forallTypeApply(Type.Key key,
-      List<? extends Type.Key> args) {
-    return new ForallTypeApplyKey(key, args);
-  }
-*/
 
   /** Returns a definition of a {@link DataType}. */
   public static DataTypeDef dataTypeDef(String name,
@@ -294,7 +265,6 @@ public class Keys {
       super(Op.APPLY_TYPE);
       this.key = requireNonNull(key);
       this.args = ImmutableList.copyOf(args);
-//      assert !(type instanceof DataType);
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
@@ -521,10 +491,6 @@ public class Keys {
           && ((DataTypeKey) obj).typeConstructors.equals(typeConstructors);
     }
 
-    @Override public String toString() {
-      return moniker();
-    }
-
     /** {@inheritDoc}
      *
      * <p>Prints the name of this datatype along with any type arguments.
@@ -570,84 +536,6 @@ public class Keys {
     }
   }
 
-  /** Key that identifies {@code datatype} applied to type arguments. */
-  private static class AppliedDataTypeKey extends AbstractKey {
-    final Type.Key key;
-    final List<? extends Type.Key> arguments;
-
-    AppliedDataTypeKey(Type.Key key, Iterable<? extends Type.Key> arguments) {
-      super(Op.DATA_TYPE);
-      this.key = requireNonNull(key);
-      this.arguments = ImmutableList.copyOf(arguments);
-    }
-
-    @Override public int hashCode() {
-      return Objects.hash(key, arguments);
-    }
-
-    @Override public boolean equals(Object obj) {
-      return obj == this
-          || obj instanceof AppliedDataTypeKey
-          && ((AppliedDataTypeKey) obj).key.equals(key)
-          && ((AppliedDataTypeKey) obj).arguments.equals(arguments);
-    }
-
-    @Override public StringBuilder describe(StringBuilder buf, int left,
-        int right) {
-      return buf.append(key + ":" + arguments); // TODO
-    }
-
-    @Override public Type toType(TypeSystem typeSystem) {
-      final DataType dataType = (DataType) key.toType(typeSystem);
-      final List<Type> argumentTypes = typeSystem.typesFor(arguments);
-      return dataType.substitute(typeSystem, argumentTypes, null);
-    }
-  }
-
-  /** Key that applies several type arguments to a {@code datatype} scheme.
-   *
-   * <p>For example, given {@code forallType} = "option" and
-   * {@code argTypes} = "[int]", returns "int option". */
-  private static class ForallTypeApplyKey extends AbstractKey {
-    final Type.Key key;
-    final ImmutableList<Type.Key> args;
-
-    ForallTypeApplyKey(Type.Key key, List<? extends Type.Key> args) {
-      super(Op.FORALL_TYPE);
-      this.key = key;
-      this.args = ImmutableList.copyOf(args);
-      checkArgument(!args.isEmpty()); // otherwise could have used DataType
-    }
-
-    @Override public int hashCode() {
-      return Objects.hash(key, args);
-    }
-
-    @Override public boolean equals(Object obj) {
-      return obj == this
-          || obj instanceof ForallTypeApplyKey
-          && ((ForallTypeApplyKey) obj).key.equals(key)
-          && ((ForallTypeApplyKey) obj).args.equals(args);
-    }
-
-    @Override public StringBuilder describe(StringBuilder buf, int left,
-        int right) {
-      TypeSystem.unparseList(buf, Op.COMMA, left, Op.APPLY.left,
-              args)
-          .append(Op.APPLY.padded);
-      return key.describe(buf, left, right);
-    }
-
-    // TODO: key.substitute.toType instead?
-    public Type toType(TypeSystem typeSystem) {
-      try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
-        final Type forallType = key.toType(typeSystem);
-        return forallType.substitute(typeSystem, typeSystem.typesFor(args),
-            transaction);
-      }
-    }
-  }
-
   /** Information from which a data type can be created. */
   public static class DataTypeDef implements Type.Def {
     final String name;
@@ -682,11 +570,6 @@ public class Keys {
     }
 
     public DataType toType(TypeSystem typeSystem) {
-      final Type.Key key = name(name);
-      final Type.Key key2 =
-          /* parameters.equals(args) && !parameters.isEmpty()
-              ? forallTypeApply(key, args)
-              : */ key;
       return typeSystem.dataType(name, parameters.size(),
           typeSystem.typesFor(args), tyCons);
     }
