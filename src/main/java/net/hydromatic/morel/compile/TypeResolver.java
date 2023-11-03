@@ -752,20 +752,15 @@ public class TypeResolver {
       Ast.DatatypeDecl datatypeDecl,
       Map<Ast.IdPat, Unifier.Term> termMap) {
     final List<DatatypeBindWorkspace> workspaces = new ArrayList<>();
-    try (TypeSystem.Transaction transaction = typeSystem.transaction()) {
-      for (Ast.DatatypeBind datatypeBind : datatypeDecl.binds) {
-        final Foo foo = new Foo();
-        datatypeBind.tyVars.forEach(foo::toTypeKey);
-        final TemporaryType temporaryType =
-            typeSystem.temporaryType(datatypeBind.name.name,
-                typeSystem.typeVariables(foo.tyVarMap.size()),
-                transaction, true);
-        workspaces.add(new DatatypeBindWorkspace(temporaryType));
-      }
-      forEach(datatypeDecl.binds, workspaces, (datatypeBind, workspace) ->
-          deduceDatatypeBindType(env, datatypeBind, termMap,
-              workspace));
+    for (Ast.DatatypeBind datatypeBind : datatypeDecl.binds) {
+      final Foo foo = new Foo();
+      datatypeBind.tyVars.forEach(foo::toTypeKey);
+      final TemporaryType temporaryType =
+          typeSystem.temporaryType(datatypeBind.name.name,
+              typeSystem.typeVariables(foo.tyVarMap.size()));
+      workspaces.add(new DatatypeBindWorkspace(temporaryType));
     }
+    forEach(datatypeDecl.binds, workspaces, this::deduceDatatypeBindType);
 
     final List<Keys.DataTypeDef> defs = new ArrayList<>();
     forEach(datatypeDecl.binds, workspaces, (datatypeBind, workspace) ->
@@ -836,8 +831,7 @@ public class TypeResolver {
     }
   }
 
-  private void deduceDatatypeBindType(TypeEnv env,
-      Ast.DatatypeBind datatypeBind, Map<Ast.IdPat, Unifier.Term> termMap,
+  private void deduceDatatypeBindType(Ast.DatatypeBind datatypeBind,
       DatatypeBindWorkspace w) {
     Foo foo = new Foo();
     for (Ast.TyCon tyCon : datatypeBind.tyCons) {

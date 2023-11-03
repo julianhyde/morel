@@ -108,7 +108,7 @@ public class TypeVar implements Type {
   }
 
   @Override public Type substitute(TypeSystem typeSystem,
-      List<? extends Type> types, TypeSystem.Transaction transaction) {
+      List<? extends Type> types) {
     return types.get(ordinal);
   }
 }

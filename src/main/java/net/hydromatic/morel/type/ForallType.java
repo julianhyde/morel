@@ -55,7 +55,7 @@ public class ForallType extends BaseType {
   }
 
   @Override public Type substitute(TypeSystem typeSystem,
-      List<? extends Type> types, TypeSystem.Transaction transaction) {
+      List<? extends Type> types) {
     switch (type.op()) {
     case DATA_TYPE:
       final DataType dataType = (DataType) type;
@@ -68,7 +68,7 @@ public class ForallType extends BaseType {
       return key.toType(typeSystem);
 
     case FUNCTION_TYPE:
-      return type.substitute(typeSystem, types, transaction);
+      return type.substitute(typeSystem, types);
 
     default:
       throw new AssertionError(type.op() + ": " + type);

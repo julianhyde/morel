@@ -31,7 +31,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 import java.util.AbstractList;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -370,17 +369,8 @@ public class TypeSystem {
    * <p>(Temporary types exist for a brief period while defining a recursive
    * {@code datatype}.) */
   public TemporaryType temporaryType(String name,
-      List<? extends Type> parameterTypes, Transaction transaction_,
-      boolean withScheme) {
-    final TemporaryType temporaryType =
-        new TemporaryType(name, parameterTypes);
-    final TransactionImpl transaction = (TransactionImpl) transaction_;
-    transaction.put(temporaryType.moniker, temporaryType);
-    if (withScheme && !parameterTypes.isEmpty()) {
-      transaction.put(name,
-          new ForallType(parameterTypes.size(), temporaryType));
-    }
-    return temporaryType;
+      List<? extends Type> parameterTypes) {
+    return new TemporaryType(name, parameterTypes);
   }
 
   public List<TypeVar> typeVariables(int size) {
@@ -413,15 +403,11 @@ public class TypeSystem {
     }
     if (type instanceof ForallType) {
       final ForallType forallType = (ForallType) type;
-      try (Transaction transaction = transaction()) {
-        return forallType.substitute(this, types, transaction);
-      }
+      return forallType.substitute(this, types);
     }
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
-      try (Transaction transaction = transaction()) {
-        return dataType.substitute(this, types, transaction);
-      }
+      return dataType.substitute(this, types);
     }
     throw new AssertionError();
   }
@@ -459,32 +445,6 @@ public class TypeSystem {
     return forallType(collector.vars.size(), h ->
         type.copy(ts, t ->
             t instanceof TypeVar ? h.get(((TypeVar) t).ordinal) : t));
-  }
-
-  public TypeSystem.Transaction transaction() {
-    return new TransactionImpl();
-  }
-
-  /** Holds temporary changes to the type system. */
-  public interface Transaction extends AutoCloseable {
-    void close();
-  }
-
-  /** Implementation of {@link Transaction}. */
-  private class TransactionImpl implements Transaction {
-    final List<String> names = new ArrayList<>();
-
-    void put(String moniker, Type type) {
-      typeByName.put(moniker, Objects.requireNonNull(type));
-      names.add(moniker);
-    }
-
-    public void close() {
-      for (String name : names) {
-        typeByName.remove(name);
-      }
-      names.clear();
-    }
   }
 
   /** Visitor that finds all {@link TypeVar} instances within a {@link Type}. */

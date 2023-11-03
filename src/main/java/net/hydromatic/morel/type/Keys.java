@@ -252,7 +252,7 @@ public class Keys {
     @Override public Type toType(TypeSystem typeSystem) {
       final Type type = key.toType(typeSystem);
       if (type instanceof ForallType) {
-        return type.substitute(typeSystem, typeSystem.typesFor(args), null);
+        return type.substitute(typeSystem, typeSystem.typesFor(args));
       }
       throw new AssertionError();
     }

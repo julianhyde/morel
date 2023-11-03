@@ -53,8 +53,7 @@ public interface Type {
 
   /** Returns a copy of this type, specialized by substituting type
    * parameters. */
-  default Type substitute(TypeSystem typeSystem, List<? extends Type> types,
-      TypeSystem.Transaction transaction) {
+  default Type substitute(TypeSystem typeSystem, List<? extends Type> types) {
     if (types.isEmpty()) {
       return this;
     }
