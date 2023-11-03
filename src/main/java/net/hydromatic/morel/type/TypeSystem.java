@@ -180,65 +180,30 @@ public class TypeSystem {
 
   /** Creates several data types simultaneously. */
   public List<Type> dataTypes(List<Keys.DataTypeDef> defs) {
-    return dataTypes(defs, (type, typeMap) -> {
-      if (type instanceof DataType) {
-        final DataType dataType = (DataType) type;
-/*
-        setTypeConstructors(dataType,
-            copyTypeConstructors(dataType.typeConstructors,
-                t -> t instanceof TemporaryType ? typeMap.get(t.key()) : t));
-*/
-      }
-    });
-  }
-
-  private List<Type> dataTypes(List<Keys.DataTypeDef> defs, DataTypeFixer fixer) {
     final Map<Type.Key, Type> dataTypeMap = new LinkedHashMap<>();
     defs.forEach(def -> {
-      final Key key;
-      final Type type;
-      if (def.scheme) {
-        key = Keys.name(def.name);
-        final DataType dataType = def.toType(this);
-        type = dataType;
-        typeByKey.put(key, type);
+      final Key key = Keys.name(def.name);
+      final DataType dataType = def.toType(this);
+      typeByKey.put(key, dataType);
 
-//        final List<TypeVar> typeVars = (List) typesFor(def.parameters);
-        final ForallType forallType = forallType(def.parameters.size(), type);
-        typeByName.put(def.name, forallType);
-        dataType.typeConstructors.forEach((name3, typeKey) ->
-            typeConstructorByName.put(name3, Pair.of(dataType, typeKey)));
-//        typeByName.put(def.name, type); // TODO obsolete typeByName
-      } else {
-        throw new AssertionError();
-//        Key forallKey = Keys.name(def.name);
-//        key = Keys.forallTypeApply(forallKey, def.parameters);
-//        type = typeFor(key);
-      }
-      dataTypeMap.put(key, type);
+      final ForallType forallType = forallType(def.parameters.size(), dataType);
+      typeByName.put(def.name, forallType);
+      dataType.typeConstructors.forEach((name3, typeKey) ->
+          typeConstructorByName.put(name3, Pair.of(dataType, typeKey)));
+      dataTypeMap.put(key, dataType);
     });
     final ImmutableList.Builder<Type> types = ImmutableList.builder();
     forEach(defs, dataTypeMap.values(), (def, dataType) -> {
-      fixer.apply(dataType, dataTypeMap);
-      if (def.scheme) {
-        if (!def.parameters.isEmpty()
-            && def.parameters.equals(typeVariables(def.parameters.size()))) {
-          // We have just created an entry for the moniker (e.g. "'a option"),
-          // so now create an entry for the name (e.g. "option").
-//          @SuppressWarnings({"rawtypes", "unchecked"})
-//          final List<TypeVar> typeVars = (List) def.parameters;
-          final ForallType forallType =
-              forallType(def.parameters.size(), dataType);
-          typeByName.put(def.name, forallType);
-          types.add(forallType);
-        } else {
-          if (def.parameters.isEmpty()) {
-            typeByName.put(def.name, dataType);
-          }
-          types.add(dataType);
-        }
-      } else {
+      if (def.parameters.isEmpty()) {
+        typeByName.put(def.name, dataType);
         types.add(dataType);
+      } else {
+        // We have just created an entry for the moniker (e.g. "'a option"),
+        // so now create an entry for the name (e.g. "option").
+        final ForallType forallType =
+            forallType(def.parameters.size(), dataType);
+        typeByName.put(def.name, forallType);
+        types.add(forallType);
       }
     });
     return types.build();
@@ -288,21 +253,13 @@ public class TypeSystem {
     internalTypeByName.put(name, type);
   }
 
-  /** Replaces temporary data types with real data types, using the supplied
-   * map. */
-  @FunctionalInterface
-  private interface DataTypeFixer {
-    void apply(Type type, Map<Key, Type> typeMap);
-  }
-
   /** Creates a data type scheme: a datatype if there are no type arguments
    * (e.g. "{@code ordering}"), or a forall type if there are type arguments
    * (e.g. "{@code forall 'a . 'a option}"). */
   public Type dataTypeScheme(String name, List<TypeVar> parameters,
       SortedMap<String, Type.Key> tyCons) {
     final List<Key> keys = Keys.toKeys(parameters);
-    final Keys.DataTypeDef def =
-        Keys.dataTypeDef(name, keys, keys, tyCons, true);
+    final Keys.DataTypeDef def = Keys.dataTypeDef(name, keys, keys, tyCons);
     return dataTypes(ImmutableList.of(def)).get(0);
   }
 

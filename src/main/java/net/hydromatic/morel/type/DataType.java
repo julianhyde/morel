@@ -75,8 +75,7 @@ public class DataType extends ParameterizedType {
 
   public Keys.DataTypeDef def() {
     final List<Type.Key> parameters = Keys.toKeys(parameterTypes);
-    return Keys.dataTypeDef(name, parameters, parameters, typeConstructors,
-        true);
+    return Keys.dataTypeDef(name, parameters, parameters, typeConstructors);
   }
 
   public <R> R accept(TypeVisitor<R> typeVisitor) {
@@ -126,7 +125,7 @@ public class DataType extends ParameterizedType {
         temporaryTypeMap.put(moniker1, temporaryType);
         defs.add(
             Keys.dataTypeDef(dataType.name, Keys.toKeys(types),
-                ImmutableList.of(), typeConstructors, true));
+                ImmutableList.of(), typeConstructors));
         return temporaryType;
       }
     };
@@ -143,8 +142,7 @@ public class DataType extends ParameterizedType {
       List<? extends Type> types, TypeSystem.Transaction transaction) {
     Keys.DataTypeDef def =
         Keys.dataTypeDef(name, ImmutableList.of(), Keys.toKeys(types),
-            Maps.transformValues(typeConstructors,
-                t -> t.substitute(types)), true);
+            Maps.transformValues(typeConstructors, t -> t.substitute(types)));
     return def.toType(typeSystem);
   }
 

@@ -101,10 +101,10 @@ public class Keys {
   public static DataTypeDef dataTypeDef(String name,
       List<? extends Type.Key> parameterTypes,
       List<? extends Type.Key> argumentTypes,
-      SortedMap<String, Type.Key> tyCons, boolean scheme) {
+      SortedMap<String, Type.Key> tyCons) {
     return new DataTypeDef(name, ImmutableList.copyOf(parameterTypes),
-        ImmutableList.copyOf(argumentTypes), ImmutableSortedMap.copyOf(tyCons),
-        scheme);
+        ImmutableList.copyOf(argumentTypes), ImmutableSortedMap.copyOf(tyCons)
+    );
   }
 
   /** Converts a map of types to a map of keys. */
@@ -503,16 +503,13 @@ public class Keys {
     final ImmutableList<Type.Key> parameters;
     final ImmutableList<Type.Key> args;
     final SortedMap<String, Type.Key> tyCons;
-    final boolean scheme;
 
     private DataTypeDef(String name, List<Type.Key> parameters,
-        List<Type.Key> args, SortedMap<String, Type.Key> tyCons,
-        boolean scheme) {
+        List<Type.Key> args, SortedMap<String, Type.Key> tyCons) {
       this.name = requireNonNull(name);
       this.parameters = ImmutableList.copyOf(parameters);
       this.args = ImmutableList.copyOf(args);
       this.tyCons = ImmutableSortedMap.copyOfSorted(tyCons);
-      this.scheme = scheme;
     }
 
     public StringBuilder describe(StringBuilder buf) {

@@ -774,7 +774,7 @@ public class TypeResolver {
             Keys.dataTypeDef(datatypeBind.name.name,
                 Keys.toKeys(workspace.temporaryType.parameterTypes),
                 Keys.toKeys(workspace.temporaryType.parameterTypes),
-                workspace.tyCons, true)));
+                workspace.tyCons)));
     final List<Type> types = typeSystem.dataTypes(defs);
 
     forEach(datatypeDecl.binds, types, (datatypeBind, type) -> {
