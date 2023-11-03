@@ -38,7 +38,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 /** Algebraic type. */
 public class DataType extends ParameterizedType {
-  private final List<Type> arguments;
+  public final List<Type> arguments;
   public final SortedMap<String, Key> typeConstructors;
 
   /** Creates a DataType.
@@ -84,7 +84,8 @@ public class DataType extends ParameterizedType {
   }
 
   public SortedMap<String, Type> typeConstructors(TypeSystem typeSystem) {
-    return Maps.transformValues(typeConstructors, k -> k.toType(typeSystem));
+    return Maps.transformValues(typeConstructors,
+        k -> k.copy(t -> t.substitute(arguments)).toType(typeSystem));
   }
 
   @Override public DataType copy(TypeSystem typeSystem,
@@ -145,6 +146,32 @@ public class DataType extends ParameterizedType {
             Maps.transformValues(typeConstructors,
                 t -> t.substitute(types)), true);
     return def.toType(typeSystem);
+  }
+
+  /** Writes out the definition of the datatype. For example,
+   *
+   * <blockquote>{@code
+   * datatype ('a,'b) tree =
+   *     Empty
+   *   | Node of ('a,'b) tree * 'b * 'a * ('a,'b) tree
+   * }</blockquote>
+   */
+  public StringBuilder describe(StringBuilder buf) {
+    buf.append("datatype ")
+        .append(moniker)
+        .append(" = ");
+    final int initialSize = buf.length();
+    typeConstructors.forEach((name, typeKey) -> {
+      if (buf.length() > initialSize) {
+        buf.append(" | ");
+      }
+      buf.append(name);
+      if (typeKey.op() != Op.DUMMY_TYPE) {
+        buf.append(" of ");
+        typeKey.describe(buf, 0, 0);
+      }
+    });
+    return buf;
   }
 }
 

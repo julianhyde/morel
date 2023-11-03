@@ -46,6 +46,7 @@ public interface Type {
 
   /** Copies this type, applying a given transform to component types,
    * and returning the original type if the component types are unchanged. */
+  // TODO: still needed?
   Type copy(TypeSystem typeSystem, UnaryOperator<Type> transform);
 
   <R> R accept(TypeVisitor<R> typeVisitor);
@@ -85,9 +86,12 @@ public interface Type {
     }
 
     Op op();
+
+    Key copy(UnaryOperator<Key> transform);
   }
 
   /** Definition of a type. */
+  // TODO: obsolete
   interface Def {
     StringBuilder describe(StringBuilder buf);
 

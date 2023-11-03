@@ -1149,8 +1149,22 @@ public class TypeResolver {
       final Type argType = pair.right.toType(typeSystem);
       final Unifier.Variable vArg = unifier.variable();
       deducePatType(env, conPat.pat, termMap, null, vArg);
-      equiv(vArg, toTerm(argType, Subst.EMPTY));
-      return reg(pat, v, toTerm(dataType, Subst.EMPTY));
+      final Unifier.Term argTerm = toTerm(argType, Subst.EMPTY);
+      equiv(vArg, argTerm);
+      final Unifier.Term term = toTerm(dataType, Subst.EMPTY);
+      if (argType instanceof TypeVar) {
+        // E.g. Suppose arg is "NODE 'b"
+        // (therefore argType is "'b", argTerm is "T7"),
+        // datatype is "('a,'b) tree"
+        // (therefore term is "tree(T8,T9)").
+        // We can say that argTerm (T7) is equivalent to
+        // the second type parameter (T9).
+        //
+        // TODO: handle more complex types, e.g. "NODE (int * 'b)"
+        equiv(argTerm,
+            ((Unifier.Sequence) term).terms.get(((TypeVar) argType).ordinal));
+      }
+      return reg(pat, v, term);
 
     case CON0_PAT:
       final Ast.Con0Pat con0Pat = (Ast.Con0Pat) pat;
@@ -1241,10 +1255,10 @@ public class TypeResolver {
       return variable != null ? variable : unifier.variable();
     case DATA_TYPE:
       final DataType dataType = (DataType) type;
-      return unifier.apply(dataType.name(), toTerms(dataType.parameterTypes, subst));
+      return unifier.apply(dataType.name(), toTerms(dataType.arguments, subst));
     case TEMPORARY_DATA_TYPE:
       final TemporaryType tempType = (TemporaryType) type;
-      return unifier.apply(tempType.name(), toTerms(tempType.parameterTypes, subst));
+      return unifier.apply(tempType.name(), toTerms(tempType.arguments, subst));
     case FUNCTION_TYPE:
       final FnType fnType = (FnType) type;
       return unifier.apply(FN_TY_CON, toTerm(fnType.paramType, subst),
@@ -1285,8 +1299,8 @@ public class TypeResolver {
     case FORALL_TYPE:
       final ForallType forallType = (ForallType) type;
       Subst subst2 = subst;
-      for (TypeVar typeVar : forallType.typeVars) {
-        subst2 = subst2.plus(typeVar, unifier.variable());
+      for (int i = 0; i < forallType.parameterCount; i++) {
+        subst2 = subst2.plus(typeSystem.typeVariable(i), unifier.variable());
       }
       return toTerm(forallType.type, subst2);
     default:

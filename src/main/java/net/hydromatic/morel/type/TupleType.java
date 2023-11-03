@@ -29,8 +29,7 @@ import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
-
-import static org.apache.calcite.util.Util.transform;
+import static net.hydromatic.morel.util.Static.transform;
 
 /** The type of a tuple value. */
 public class TupleType extends BaseType implements RecordLikeType {

@@ -156,8 +156,7 @@ public class TypeMap {
           }
           final List<Type> types =
               transform(sequence.terms, t -> t.accept(this));
-          final Type apply = typeMap.typeSystem.apply(type, types); //TODO inline
-          return apply;
+          return typeMap.typeSystem.apply(type, types);
         }
         if (sequence.operator.startsWith(TypeResolver.RECORD_TY_CON)) {
           // E.g. "record:a:b" becomes record type "{a:t0, b:t1}".

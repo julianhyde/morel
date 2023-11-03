@@ -82,9 +82,9 @@ public class TypeVisitor<R> {
   /** Visits a {@link ForallType}. */
   public R visit(ForallType forallType) {
     R r = forallType.type.accept(this);
-    for (TypeVar typeVar : forallType.typeVars) {
-      r = typeVar.accept(this);
-    }
+//    for (TypeVar typeVar : forallType.typeVars) {
+//      r = typeVar.accept(this);
+//    }
     return r;
   }
 

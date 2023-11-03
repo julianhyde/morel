@@ -221,7 +221,7 @@ class Pretty {
       //noinspection unchecked,rawtypes
       list = (List) value;
       if (dataType.name.equals("vector")) {
-        final Type argType = Iterables.getOnlyElement(dataType.parameterTypes);
+        final Type argType = Iterables.getOnlyElement(dataType.arguments);
         return printList(buf.append('#'), indent, lineEnd, depth, argType,
             list);
       }

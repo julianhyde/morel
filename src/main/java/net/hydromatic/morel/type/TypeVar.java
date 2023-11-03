@@ -39,7 +39,7 @@ public class TypeVar implements Type {
   private static final LoadingCache<Integer, String> NAME_CACHE =
       CacheBuilder.newBuilder().build(CacheLoader.from(TypeVar::name));
 
-  final int ordinal;
+  public final int ordinal;
   private final String name;
 
   /** Creates a type variable with a given ordinal.

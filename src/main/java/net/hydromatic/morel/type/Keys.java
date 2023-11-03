@@ -23,12 +23,15 @@ import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Maps;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.SortedMap;
+import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+import static net.hydromatic.morel.util.Static.transform;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -104,8 +107,8 @@ public class Keys {
   }
 
   /** Returns a key that identifies a {@link ForallType}. */
-  public static Type.Key forall(Type type, List<TypeVar> parameterTypes) {
-    return new ForallKey(type, ImmutableList.copyOf(parameterTypes));
+  public static Type.Key forall(Type type, int parameterCount) {
+    return new ForallKey(type, parameterCount);
   }
 
   /** Returns a key that identifies a {@link DataType}. */
@@ -163,6 +166,10 @@ public class Keys {
 
     @Override public String toString() {
       return moniker();
+    }
+
+    @Override public Type.Key copy(UnaryOperator<Type.Key> transform) {
+      return this;
     }
   }
 
@@ -310,13 +317,18 @@ public class Keys {
           && ((Apply2Key) obj).args.equals(args);
     }
 
-    public Type toType(TypeSystem typeSystem) {
+    @Override public Type toType(TypeSystem typeSystem) {
       final Type type = key.toType(typeSystem);
       if (type instanceof ForallType) {
         return type.substitute(typeSystem, typeSystem.typesFor(args), null);
       }
       return new ApplyType((ParameterizedType) type,
           typeSystem.typesFor(args));
+    }
+
+    @Override public Type.Key copy(UnaryOperator<Type.Key> transform) {
+      return new Apply2Key(key.copy(transform),
+          transform(args, arg -> arg.copy(transform)));
     }
   }
 
@@ -365,42 +377,47 @@ public class Keys {
         throw new AssertionError(op);
       }
     }
+
+    @Override public Type.Key copy(UnaryOperator<Type.Key> transform) {
+      return new OpKey(op, transform(args, arg -> arg.copy(transform)));
+    }
   }
 
   /** Key of a forall type. */
   private static class ForallKey extends AbstractKey {
     final Type type;
-    final ImmutableList<TypeVar> parameterTypes;
+    final int parameterCount;
 
-    ForallKey(Type type, ImmutableList<TypeVar> parameterTypes) {
+    ForallKey(Type type, int parameterCount) {
       super(Op.FORALL_TYPE);
       this.type = requireNonNull(type);
-      this.parameterTypes = requireNonNull(parameterTypes);
+      this.parameterCount = parameterCount;
+      checkArgument(parameterCount >= 0);
     }
 
     @Override public int hashCode() {
-      return Objects.hash(type, parameterTypes);
+      return Objects.hash(type, parameterCount);
     }
 
     @Override public boolean equals(Object obj) {
       return obj == this
           || obj instanceof ForallKey
           && ((ForallKey) obj).type.equals(type)
-          && ((ForallKey) obj).parameterTypes.equals(parameterTypes);
+          && ((ForallKey) obj).parameterCount == parameterCount;
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
         int right) {
       buf.append("forall");
-      for (TypeVar type : parameterTypes) {
-        buf.append(' ').append(type.moniker());
+      for (int i = 0; i < parameterCount; i++) {
+        buf.append(' ').append(TypeVar.name(i));
       }
       buf.append(". ");
       return TypeSystem.unparse(buf, type.key(), 0, 0);
     }
 
     public Type toType(TypeSystem typeSystem) {
-      return new ForallType(parameterTypes, type);
+      return new ForallType(parameterCount, type);
     }
   }
 
@@ -413,8 +430,11 @@ public class Keys {
           ? Op.TUPLE_TYPE
           : Op.RECORD_TYPE);
       this.argNameTypes = requireNonNull(argNameTypes);
-      checkArgument(argNameTypes.comparator()
-          == RecordType.ORDERING);
+      checkArgument(argNameTypes.comparator() == RecordType.ORDERING);
+    }
+
+    @Override public Type.Key copy(UnaryOperator<Type.Key> transform) {
+      return record(Maps.transformValues(argNameTypes, transform::apply));
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,
@@ -424,7 +444,7 @@ public class Keys {
         return buf.append("()");
       default:
         if (op == Op.TUPLE_TYPE) {
-          return TypeSystem.unparseList(buf, Op.TIMES, 0, 0,
+          return TypeSystem.unparseList(buf, Op.TIMES, left, right,
               argNameTypes.values());
         }
         // fall through

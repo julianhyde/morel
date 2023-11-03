@@ -84,7 +84,7 @@ public class TypeSystem {
         dataType.parameterTypes.stream().filter(t -> t instanceof TypeVar)
             .map(t -> (TypeVar) t)
             .collect(toImmutableList());
-    return typeVars.isEmpty() ? type : forallType(typeVars, type);
+    return typeVars.isEmpty() ? type : forallType(typeVars.size(), type);
   }
 
   /** Looks up an internal type by name. */
@@ -203,8 +203,8 @@ public class TypeSystem {
         type = dataType;
         typeByKey.put(key, type);
 
-        final List<TypeVar> typeVars = (List) typesFor(def.parameters);
-        final ForallType forallType = forallType(typeVars, type);
+//        final List<TypeVar> typeVars = (List) typesFor(def.parameters);
+        final ForallType forallType = forallType(def.parameters.size(), type);
         typeByName.put(def.name, forallType);
         dataType.typeConstructors.forEach((name3, typeKey) ->
             typeConstructorByName.put(name3, Pair.of(dataType, typeKey)));
@@ -225,9 +225,10 @@ public class TypeSystem {
             && def.parameters.equals(typeVariables(def.parameters.size()))) {
           // We have just created an entry for the moniker (e.g. "'a option"),
           // so now create an entry for the name (e.g. "option").
-          @SuppressWarnings({"rawtypes", "unchecked"})
-          final List<TypeVar> typeVars = (List) def.parameters;
-          final ForallType forallType = forallType(typeVars, dataType);
+//          @SuppressWarnings({"rawtypes", "unchecked"})
+//          final List<TypeVar> typeVars = (List) def.parameters;
+          final ForallType forallType =
+              forallType(def.parameters.size(), dataType);
           typeByName.put(def.name, forallType);
           types.add(forallType);
         } else {
@@ -261,7 +262,6 @@ public class TypeSystem {
    * </ul>
    *
    * @param name Name (e.g. "option")
-   * @param key Key (e.g. {@link Keys#name}("option"))
    * @param parameterCount Number of type parameters
    * @param argumentTypes Argument types
    * @param tyCons Type constructors
@@ -350,10 +350,9 @@ public class TypeSystem {
 
   /** Creates a "forall" type. */
   public Type forallType(int typeCount, Function<ForallHelper, Type> builder) {
-    final List<TypeVar> typeVars = typeVariables(typeCount);
     final ForallHelper helper = new ForallHelper() {
       public TypeVar get(int i) {
-        return typeVars.get(i);
+        return typeVariable(i);
       }
 
       public ListType list(int i) {
@@ -373,26 +372,31 @@ public class TypeSystem {
       }
     };
     final Type type = builder.apply(helper);
-    return forallType(typeVars, type);
+    return forallType(typeCount, type);
   }
 
   /** Creates a "for all" type. */
-  public ForallType forallType(List<TypeVar> typeVars, Type type) {
-    assert typeVars.equals(typeVariables(typeVars.size()));
-    final Key key = Keys.forall(type, typeVars);
+  public ForallType forallType(int typeCount, Type type) {
+    final Key key = Keys.forall(type, typeCount);
     return (ForallType) typeFor(key);
   }
 
   static StringBuilder unparseList(StringBuilder builder, Op op, int left,
       int right, Collection<? extends Type.Key> argTypes) {
-    forEachIndexed(argTypes, (type, i) -> {
-      if (i > 0) {
-        builder.append(op.padded);
-      }
-      unparse(builder, type,
-          i == 0 ? left : op.right,
-          i == argTypes.size() - 1 ? right : op.left);
-    });
+    if (op == Op.COMMA && argTypes.size() != 1 && !(left == 0 && right == 0)) {
+      builder.append('(');
+      unparseList(builder, op, 0, 0, argTypes);
+      builder.append(')');
+    } else {
+      forEachIndexed(argTypes, (type, i) -> {
+        if (i > 0) {
+          builder.append(op.padded);
+        }
+        unparse(builder, type,
+            i == 0 ? left : op.right,
+            i == argTypes.size() - 1 ? right : op.left);
+      });
+    }
     return builder;
   }
 
@@ -420,9 +424,8 @@ public class TypeSystem {
     final TransactionImpl transaction = (TransactionImpl) transaction_;
     transaction.put(temporaryType.moniker, temporaryType);
     if (withScheme && !parameterTypes.isEmpty()) {
-      final List<TypeVar> typeVars = typeVariables(parameterTypes.size());
       transaction.put(name,
-          new ForallType(ImmutableList.copyOf(typeVars), temporaryType));
+          new ForallType(parameterTypes.size(), temporaryType));
     }
     return temporaryType;
   }

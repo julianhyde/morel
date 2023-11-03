@@ -56,9 +56,9 @@ import java.util.function.BiFunction;
 
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Static.transform;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static org.apache.calcite.util.Util.transform;
 
 /** Builds parse tree nodes. */
 public enum CoreBuilder {
