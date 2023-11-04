@@ -533,7 +533,7 @@ public enum CoreBuilder {
     return yield_(bindings, exp);
   }
 
-  // Short-hands
+  // Shorthands
 
   /** Creates a reference to the {@code slot}th field of an expression,
    * "{@code #slot exp}". The expression's type must be record or tuple. */
