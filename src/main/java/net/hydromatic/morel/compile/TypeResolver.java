@@ -750,7 +750,7 @@ public class TypeResolver {
   private Ast.Decl deduceDataTypeDeclType(TypeEnv env,
       Ast.DatatypeDecl datatypeDecl,
       Map<Ast.IdPat, Unifier.Term> termMap) {
-    final List<Keys.DataTypeDef> defs = new ArrayList<>();
+    final List<Keys.DataTypeKey> keys = new ArrayList<>();
     for (Ast.DatatypeBind bind : datatypeDecl.binds) {
       final Foo foo = new Foo();
       bind.tyVars.forEach(foo::toTypeKey);
@@ -758,11 +758,11 @@ public class TypeResolver {
       final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
       deduceDatatypeBindType(bind, tyCons);
 
-      defs.add(
-          Keys.dataTypeDef(bind.name.name, Keys.ordinals(foo.tyVarMap.size()),
+      keys.add(
+          Keys.datatype(bind.name.name, Keys.ordinals(foo.tyVarMap.size()),
               tyCons));
     }
-    final List<Type> types = typeSystem.dataTypes(defs);
+    final List<Type> types = typeSystem.dataTypes(keys);
 
     forEach(datatypeDecl.binds, types, (datatypeBind, type) -> {
       final DataType dataType =

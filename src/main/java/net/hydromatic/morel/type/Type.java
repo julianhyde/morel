@@ -88,14 +88,6 @@ public interface Type {
 
     Key copy(UnaryOperator<Key> transform);
   }
-
-  /** Definition of a type. */
-  // TODO: obsolete
-  interface Def {
-    StringBuilder describe(StringBuilder buf);
-
-    DataType toType(TypeSystem typeSystem);
-  }
 }
 
 // End Type.java

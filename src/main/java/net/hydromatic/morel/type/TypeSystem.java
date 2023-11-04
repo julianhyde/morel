@@ -44,7 +44,6 @@ import java.util.function.Function;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
-import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 
 /** A table that contains all types in use, indexed by their description (e.g.
@@ -178,26 +177,26 @@ public class TypeSystem {
   }
 
   /** Creates several data types simultaneously. */
-  public List<Type> dataTypes(List<Keys.DataTypeDef> defs) {
-    final Map<Type.Key, Type> dataTypeMap = new LinkedHashMap<>();
-    defs.forEach(def -> {
-      final Key key = Keys.name(def.name);
-      final DataType dataType = def.toType(this);
-      typeByKey.put(key, dataType);
+  public List<Type> dataTypes(List<Keys.DataTypeKey> keys) {
+    final Map<Type.Key, DataType> dataTypeMap = new LinkedHashMap<>();
+    keys.forEach(key -> {
+      final DataType dataType = key.toType(this);
+      final Key nameKey = Keys.name(dataType.name);
+      typeByKey.put(nameKey, dataType);
 
       dataType.typeConstructors.forEach((name, typeKey) ->
           typeConstructorByName.put(name, Pair.of(dataType, typeKey)));
-      dataTypeMap.put(key, dataType);
+      dataTypeMap.put(nameKey, dataType);
     });
 
     final ImmutableList.Builder<Type> types = ImmutableList.builder();
-    forEach(defs, dataTypeMap.values(), (def, dataType) -> {
+    dataTypeMap.values().forEach(dataType -> {
       // We have just created an entry for the moniker (e.g. "'a option"),
       // so now create an entry for the name (e.g. "option").
       Type t =
-          def.args.isEmpty() ? dataType
-              : forallType(def.args.size(), dataType);
-      typeByName.put(def.name, t);
+          dataType.arguments.isEmpty() ? dataType
+              : forallType(dataType.arguments.size(), dataType);
+      typeByName.put(dataType.name, t);
       types.add(t);
     });
     return types.build();
@@ -251,8 +250,8 @@ public class TypeSystem {
   public Type dataTypeScheme(String name, List<TypeVar> parameters,
       SortedMap<String, Type.Key> tyCons) {
     final List<Key> keys = Keys.toKeys(parameters);
-    final Keys.DataTypeDef def = Keys.dataTypeDef(name, keys, tyCons);
-    return dataTypes(ImmutableList.of(def)).get(0);
+    final Keys.DataTypeKey key = Keys.datatype(name, keys, tyCons);
+    return dataTypes(ImmutableList.of(key)).get(0);
   }
 
   /** Creates a record type, or returns a scalar type if {@code argNameTypes}

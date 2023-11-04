@@ -67,11 +67,6 @@ public class DataType extends ParameterizedType {
     return Keys.datatype(name, Keys.toKeys(arguments), typeConstructors);
   }
 
-  public Keys.DataTypeDef def() {
-    final List<Type.Key> parameters = Keys.toKeys(parameterTypes);
-    return Keys.dataTypeDef(name, parameters, typeConstructors);
-  }
-
   public <R> R accept(TypeVisitor<R> typeVisitor) {
     return typeVisitor.visit(this);
   }

@@ -107,19 +107,10 @@ public class Keys {
   }
 
   /** Returns a key that identifies a {@link DataType}. */
-  public static Type.Key datatype(String name,
+  public static DataTypeKey datatype(String name,
       List<? extends Type.Key> arguments,
       SortedMap<String, Type.Key> typeConstructors) {
     return new DataTypeKey(name, arguments, typeConstructors);
-  }
-
-  /** Returns a definition of a {@link DataType}. */
-  public static DataTypeDef dataTypeDef(String name,
-      List<? extends Type.Key> argumentTypes,
-      SortedMap<String, Type.Key> tyCons) {
-    return new DataTypeDef(name, ImmutableList.copyOf(argumentTypes),
-        ImmutableSortedMap.copyOf(tyCons)
-    );
   }
 
   /** Converts a map of types to a map of keys. */
@@ -431,11 +422,8 @@ public class Keys {
     }
   }
 
-  /** Key that identifies a {@code datatype} scheme.
-   *
-   * <p>See also {@link DataTypeDef}, which has enough information to actually
-   * create it. */
-  private static class DataTypeKey extends AbstractKey {
+  /** Key that identifies a {@code datatype} scheme. */
+  public static class DataTypeKey extends AbstractKey {
     /** Ideally, a datatype would not have a name, just a list of named type
      * constructors, and the name would be associated later. When that happens,
      * we can remove the {@code name} field from this key. */
@@ -502,43 +490,9 @@ public class Keys {
       return buf.append(' ').append(name);
     }
 
-    @Override public Type toType(TypeSystem typeSystem) {
+    @Override public DataType toType(TypeSystem typeSystem) {
       return typeSystem.dataType(name,
           typeSystem.typesFor(arguments), typeConstructors);
-    }
-  }
-
-  /** Information from which a data type can be created. */
-  public static class DataTypeDef implements Type.Def {
-    final String name;
-    final ImmutableList<Type.Key> args;
-    final SortedMap<String, Type.Key> tyCons;
-
-    private DataTypeDef(String name, List<Type.Key> args,
-        SortedMap<String, Type.Key> tyCons) {
-      this.name = requireNonNull(name);
-      this.args = ImmutableList.copyOf(args);
-      this.tyCons = ImmutableSortedMap.copyOfSorted(tyCons);
-    }
-
-    public StringBuilder describe(StringBuilder buf) {
-      final int initialSize = buf.length();
-      tyCons.forEach((tyConName, tyConType) -> {
-        if (buf.length() > initialSize) {
-          buf.append(" | ");
-        }
-        buf.append(tyConName);
-        if (tyConType.op() != Op.DUMMY_TYPE) {
-          buf.append(" of ");
-          buf.append(tyConType.moniker());
-        }
-      });
-      return buf;
-    }
-
-    public DataType toType(TypeSystem typeSystem) {
-      return typeSystem.dataType(name,
-          typeSystem.typesFor(args), tyCons);
     }
   }
 }

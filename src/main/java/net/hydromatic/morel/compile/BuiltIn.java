@@ -1721,8 +1721,8 @@ public enum BuiltIn {
       }
     });
     final Type type = ts.dataTypeScheme(name, tyVars, tyCons);
-    final DataType dataType = (DataType) (type instanceof DataType ? type
-        : ((ForallType) type).type);
+    final DataType dataType =
+        (DataType) (type instanceof DataType ? type : ((ForallType) type).type);
     if (internal) {
       ts.setInternal(name);
     } else {
