@@ -1612,15 +1612,15 @@ public class Ast {
     }
   }
 
-  /** A scan (e.g. "e in emps")
+  /** A scan (e.g. "e in emps", "e")
    * or scan-and-join (e.g. "left join d in depts on e.deptno = d.deptno")
    * in a {@code from} expression. */
   public static class Scan extends FromStep {
     public final Pat pat;
-    public final Exp exp;
+    public final @Nullable Exp exp;
     public final @Nullable Exp condition;
 
-    Scan(Pos pos, Op op, Pat pat, Exp exp, @Nullable Exp condition) {
+    Scan(Pos pos, Op op, Pat pat, @Nullable Exp exp, @Nullable Exp condition) {
       super(pos, op);
       switch (op) {
       case INNER_JOIN:
@@ -1637,26 +1637,28 @@ public class Ast {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      final String op;
-      final Exp exp;
-      switch (this.exp.op) {
-      case FROM_EQ:
-        op = " = ";
-        exp = ((PrefixCall) this.exp).a;
-        break;
-      case SUCH_THAT:
-        op = " suchthat ";
-        exp = ((PrefixCall) this.exp).a;
-        break;
-      default:
-        op = " in ";
-        exp = this.exp;
-        break;
-      }
       w.append(this.op.padded)
-          .append(pat, 0, 0)
-          .append(op)
-          .append(exp, Op.EQ.right, 0);
+          .append(pat, 0, 0);
+      if (this.exp != null) {
+        final String op;
+        final Exp exp;
+        switch (this.exp.op) {
+        case FROM_EQ:
+          op = " = ";
+          exp = ((PrefixCall) this.exp).a;
+          break;
+        case SUCH_THAT:
+          op = " suchthat ";
+          exp = ((PrefixCall) this.exp).a;
+          break;
+        default:
+          op = " in ";
+          exp = this.exp;
+          break;
+        }
+        w.append(op)
+            .append(exp, Op.EQ.right, 0);
+      }
       if (condition != null) {
         w.append(" on ")
             .append(condition, 0, 0);
@@ -1672,9 +1674,9 @@ public class Ast {
       visitor.visit(this);
     }
 
-    public Scan copy(Pat pat, Exp exp, Exp condition) {
+    public Scan copy(Pat pat, @Nullable Exp exp, @Nullable Exp condition) {
       return this.pat.equals(pat)
-          && this.exp.equals(exp)
+          && Objects.equals(this.exp, exp)
           && Objects.equals(this.condition, condition)
           ? this
           : new Scan(pos, op, pat, exp, condition);

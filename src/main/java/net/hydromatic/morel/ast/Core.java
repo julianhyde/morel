@@ -20,6 +20,7 @@ package net.hydromatic.morel.ast;
 
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.compile.Extents;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
@@ -402,6 +403,17 @@ public class Core {
       return args.equals(this.args) ? this
           : core.tuplePat(typeSystem, args);
     }
+
+    /** Returns the names of all components that are named. */
+    public List<String> fieldNames() {
+      final ImmutableList.Builder<String> names = ImmutableList.builder();
+      for (Pat arg : args) {
+        if (arg instanceof NamedPat) {
+          names.add(((NamedPat) arg).name);
+        }
+      }
+      return names.build();
+    }
   }
 
   /** List pattern.
@@ -617,8 +629,8 @@ public class Core {
       return new Wrapper(exp, value);
     }
 
-    public Object unwrap() {
-      return ((Wrapper) value).o;
+    public <C> C unwrap(Class<C> clazz) {
+      return clazz.cast(((Wrapper) value).o);
     }
 
     @Override public int hashCode() {
@@ -1119,8 +1131,9 @@ public class Core {
       super(op, bindings);
       switch (op) {
       case INNER_JOIN:
-      case SUCH_THAT:
         break;
+      case SUCH_THAT:
+        throw new AssertionError("deprecated");
       default:
         // SCAN and CROSS_JOIN are valid in ast, not core.
         throw new AssertionError("not a join type " + op);
@@ -1143,13 +1156,20 @@ public class Core {
       final String prefix = ordinal == 0 ? " "
           : op == Op.SUCH_THAT ? " join "
           : op.padded;
-      final String infix = op == Op.SUCH_THAT ? " suchthat "
-          : " in ";
       w.append(prefix)
           // for these purposes 'in' and 'suchthat' have same precedence as '='
-          .append(pat, 0, Op.EQ.left)
-          .append(infix)
-          .append(exp, Op.EQ.right, 0);
+          .append(pat, 0, Op.EQ.left);
+      if (op == Op.SUCH_THAT) {
+        w.append(" suchthat ")
+            .append(exp, Op.EQ.right, 0);
+      } else if (Extents.isInfinite(exp)) {
+        // Print "from x : int" rather "from x in extent 'int'"
+        w.append(" : ")
+            .append(((ListType) exp.type).elementType.moniker());
+      } else {
+        w.append(" in ")
+            .append(exp, Op.EQ.right, 0);
+      }
       if (!isLiteralTrue()) {
         w.append("on").append(condition, 0, 0);
       }

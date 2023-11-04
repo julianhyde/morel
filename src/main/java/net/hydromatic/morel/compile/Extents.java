@@ -19,29 +19,38 @@
 package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.Ord;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.LinkedListMultimap;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
-import org.apache.calcite.util.Util;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.allMatch;
+import static net.hydromatic.morel.util.Static.transform;
 
 import static org.apache.calcite.util.Util.minus;
+import static org.apache.calcite.util.Util.skip;
+
+import static java.util.Objects.requireNonNull;
 
 /** Generates an expression for the set of values that a variable can take in
  * a program.
@@ -95,7 +104,7 @@ public class Extents {
    * <blockquote><pre>{@code
    *   let
    *     val edges = [(1, 2), (2, 3), (1, 4), (4, 2), (4, 3)]
-  *      fun edge (i, j) = (i, j) elem edges
+   *     fun edge (i, j) = (i, j) elem edges
    *   in
    *     from (x, y, z) suchthat edge (x, y) andalso edge (y, z) andalso x <> z
    *   end
@@ -121,23 +130,37 @@ public class Extents {
    * }</pre></blockquote>
    */
   public static Core.Exp generator(TypeSystem typeSystem, Core.Pat pat,
-      Core.Exp exp) {
-    return create(typeSystem, pat, ImmutableSortedMap.of(), exp).extentExp;
+      Core.@Nullable Exp extentExp, Core.@Nullable Exp filterExp,
+      List<Core.FromStep> followingSteps) {
+    final Analysis analysis =
+        create(typeSystem, pat, ImmutableSortedMap.of(), extentExp, filterExp,
+            followingSteps);
+    return analysis.extentExp;
   }
 
   public static Analysis create(TypeSystem typeSystem, Core.Pat pat,
-      SortedMap<Core.NamedPat, Core.Exp> boundPats, Core.Exp exp) {
+      SortedMap<Core.NamedPat, Core.Exp> boundPats,
+      Core.@Nullable Exp extentExp, Core.@Nullable Exp filterExp,
+      List<Core.FromStep> followingSteps) {
     final Extent extent = new Extent(typeSystem, pat, boundPats);
 
-    final ListMultimap<Core.Pat, Core.Exp> map = LinkedListMultimap.create();
-    extent.g3(map, exp);
-    final List<Core.Exp> exps = map.get(pat);
-    if (exps.isEmpty()) {
-      throw new AssertionError();
+    final ExtentMap map = new ExtentMap();
+    if (filterExp != null) {
+      extent.g3(map.map, filterExp);
     }
-    final Pair<Core.Exp, List<Core.Exp>> pair =
-        core.mergeExtents(typeSystem, exps, true);
-    return new Analysis(boundPats, extent.goalPats, pair.left, pair.right);
+    for (Core.FromStep step : followingSteps) {
+      if (step instanceof Core.Where) {
+        extent.g3(map.map, ((Core.Where) step).exp);
+      }
+    }
+    final Foo foo = map.get(typeSystem, pat);
+    if (foo == null) {
+      throw new AssertionError("unknown pattern " + pat);
+    }
+    final List<Core.Exp> remainingFilters = new ArrayList<>();
+    final Foo mergedFoo = foo.mergeExtents(typeSystem, true);
+    return new Analysis(boundPats, extent.goalPats, mergedFoo.extents.get(0),
+        foo.filters, remainingFilters);
   }
 
   /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
@@ -162,18 +185,71 @@ public class Extents {
     }
   }
 
+  /** Returns whether an expression is an infinite extent. */
+  public static boolean isInfinite(Core.Exp exp) {
+    if (!exp.isCallTo(BuiltIn.Z_EXTENT)) {
+      return false;
+    }
+    final Core.Apply apply = (Core.Apply) exp;
+    final Core.Literal literal = (Core.Literal) apply.arg;
+    final RangeExtent rangeExtent = literal.unwrap(RangeExtent.class);
+    return rangeExtent.isUnbounded();
+  }
+
+  public static Core.Decl infinitePats(TypeSystem typeSystem,
+      Core.Decl node) {
+    return node.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.From visit(Core.From from) {
+            for (Ord<Core.FromStep> step : Ord.zip(from.steps)) {
+              if (step.e instanceof Core.Scan) {
+                final Core.Scan scan = (Core.Scan) step.e;
+                if (isInfinite(scan.exp)) {
+                  final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+                  assert scan.op != Op.SUCH_THAT; // SUCH_THAT is deprecated in core
+                  List<Core.FromStep> followingSteps =
+                      skip(from.steps, step.i + 1);
+                  final Analysis analysis =
+                      create(typeSystem, scan.pat, ImmutableSortedMap.of(),
+                          scan.exp, null, followingSteps);
+                  for (Core.FromStep step2 : from.steps) {
+                    if (step2 == scan) {
+                      fromBuilder.scan(scan.pat, analysis.extentExp,
+                          scan.condition); // TODO
+                    } else if (step2 instanceof Core.Where) {
+                      fromBuilder.where(
+                          core.subTrue(typeSystem,
+                              ((Core.Where) step2).exp,
+                              analysis.satisfiedFilters));
+                    } else {
+                      fromBuilder.addAll(ImmutableList.of(step2));
+                    }
+                  }
+                  return fromBuilder.build();
+                }
+              }
+            }
+            return from; // unchanged
+          }
+        });
+  }
+
   public static class Analysis {
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
     final Set<Core.NamedPat> goalPats;
     final Core.Exp extentExp;
+    final List<Core.Exp> satisfiedFilters; // filters satisfied by extentExp
     final List<Core.Exp> remainingFilters;
 
     Analysis(SortedMap<Core.NamedPat, Core.Exp> boundPats,
         Set<Core.NamedPat> goalPats, Core.Exp extentExp,
+        List<Core.Exp> satifiedFilters,
         List<Core.Exp> remainingFilters) {
       this.boundPats = boundPats;
       this.goalPats = goalPats;
       this.extentExp = extentExp;
+      this.satisfiedFilters = satifiedFilters;
       this.remainingFilters = remainingFilters;
     }
 
@@ -195,35 +271,40 @@ public class Extents {
     }
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
-    void g3(Multimap<Core.Pat, Core.Exp> map, Core.Exp exp) {
+    void g3(Map<Core.Pat, Foo> map, Core.Exp filter) {
       final Core.Apply apply;
-      switch (exp.op) {
+      switch (filter.op) {
       case APPLY:
-        apply = (Core.Apply) exp;
+        apply = (Core.Apply) filter;
         switch (apply.fn.op) {
         case FN_LITERAL:
           BuiltIn builtIn = (BuiltIn) ((Core.Literal) apply.fn).value;
+          final Map<Core.Pat, Foo> map2;
           switch (builtIn) {
           case Z_ANDALSO:
-            // Expression is 'andalso'. Visit each pattern, and union the
-            // constraints (intersect the generators).
-            apply.arg.forEachArg((arg, i) -> g3(map, arg));
+            // Expression is 'andalso'. Visit each pattern, and 'and' the
+            // filters (intersect the extents).
+            map2 = new LinkedHashMap<>();
+            apply.arg.forEachArg((arg, i) -> g3(map2, arg));
+            map2.forEach((pat, foo) -> {
+              map.putIfAbsent(pat, new Foo());
+              final Foo foo1 = map.get(pat);
+              foo1.filters.add(core.andAlso(typeSystem, foo.filters));
+              foo1.extents.add(core.intersect(typeSystem, foo.extents));
+            });
             break;
 
           case Z_ORELSE:
             // Expression is 'orelse'. Visit each pattern, and intersect the
             // constraints (union the generators).
-            final Multimap<Core.Pat, Core.Exp> map2 =
-                LinkedListMultimap.create();
-            apply.arg.forEachArg((arg, i) -> {
-              final Multimap<Core.Pat, Core.Exp> map3 =
-                  LinkedListMultimap.create();
-              g3(map3, arg);
-              map3.asMap().forEach((k, vs) ->
-                  map2.put(k, core.intersect(typeSystem, vs)));
+            map2 = new LinkedHashMap<>();
+            apply.arg.forEachArg((arg, i) -> g3(map2, arg));
+            map2.forEach((k, foo) -> {
+              map.putIfAbsent(k, new Foo());
+              final Foo foo2 = map.get(k);
+              foo2.filters.add(core.orElse(typeSystem, foo.filters));
+              foo2.extents.add(core.union(typeSystem, foo.extents));
             });
-            map2.asMap().forEach((k, vs) ->
-                map.put(k, core.union(typeSystem, vs)));
             break;
 
           case OP_EQ:
@@ -232,7 +313,36 @@ public class Extents {
           case OP_GT:
           case OP_LT:
           case OP_LE:
-            g4(map, builtIn, apply.arg(0), apply.arg(1));
+            g4(builtIn, apply.arg(0), apply.arg(1), (pat, filter2, extent) -> {
+              map.putIfAbsent(pat, new Foo());
+              final Foo foo = map.get(pat);
+              foo.filters.add(filter2);
+              foo.extents.add(extent);
+            });
+            break;
+
+          case OP_ELEM:
+            final Foo foo;
+            switch (apply.arg(0).op) {
+            case ID:
+              final Core.NamedPat pat = ((Core.Id) apply.arg(0)).idPat;
+              map.putIfAbsent(pat, new Foo());
+              foo = map.get(pat);
+              foo.filters.add(apply);
+              foo.extents.add(apply.arg(1));
+              break;
+
+            case TUPLE:
+              final Core.Tuple tuple = (Core.Tuple) apply.arg(0);
+              final Core.TuplePat tuplePat =
+                  core.tuplePat(typeSystem,
+                      transform(tuple.args, arg -> ((Core.Id) arg).idPat));
+              map.putIfAbsent(tuplePat, new Foo());
+              foo = map.get(tuplePat);
+              foo.filters.add(apply);
+              foo.extents.add(apply.arg(1));
+              break;
+            }
             break;
           }
         }
@@ -244,8 +354,8 @@ public class Extents {
     }
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
-    private void g4(Multimap<Core.Pat, Core.Exp> map, BuiltIn builtIn,
-        Core.Exp arg0, Core.Exp arg1) {
+    private void g4(BuiltIn builtIn, Core.Exp arg0, Core.Exp arg1,
+        TriConsumer<Core.Pat, Core.Exp, Core.Exp> consumer) {
       switch (builtIn) {
       case OP_EQ:
       case OP_NE:
@@ -259,13 +369,15 @@ public class Extents {
           if (arg1.isConstant()) {
             // If exp is "id = literal", add extent "id: [literal]";
             // if exp is "id > literal", add extent "id: (literal, inf)", etc.
-            map.put(id.idPat, baz(builtIn, arg1));
+            consumer.accept(id.idPat,
+                core.call(typeSystem, builtIn, arg0.type, Pos.ZERO, arg0, arg1),
+                baz(builtIn, arg1));
           }
           break;
         default:
           if (arg0.isConstant() && arg1.op == Op.ID) {
             // Try switched, "literal = id".
-            g4(map, builtIn.reverse(), arg1, arg0);
+            g4(builtIn.reverse(), arg1, arg0, consumer);
           }
         }
         break;
@@ -312,7 +424,7 @@ public class Extents {
             ImmutableRangeSet.of(Range.all()));
       } else {
         extent = extents.get(0);
-        filters.addAll(Util.skip(extents));
+        filters.addAll(skip(extents));
       }
       return new ExtentFilter(extent, ImmutableList.copyOf(filters));
     }
@@ -368,6 +480,148 @@ public class Extents {
     ExtentFilter(Core.Exp extent, ImmutableList<Core.Exp> filters) {
       this.extent = extent;
       this.filters = filters;
+    }
+  }
+
+  static class Foo {
+    final List<Core.Exp> extents = new ArrayList<>();
+    final List<Core.Exp> filters = new ArrayList<>();
+
+    @SuppressWarnings({"UnstableApiUsage", "rawtypes", "unchecked"})
+    public Foo mergeExtents(TypeSystem typeSystem, boolean intersect) {
+      switch (extents.size()) {
+      case 0:
+        throw new AssertionError();
+
+      case 1:
+        extents.set(0, core.simplify(typeSystem, extents.get(0)));
+        return this;
+
+      default:
+        ImmutableRangeSet rangeSet = intersect
+            ? ImmutableRangeSet.of(Range.all())
+            : ImmutableRangeSet.of();
+        List<Core.Exp> satisfiedFilters = new ArrayList<>();
+        List<Core.Exp> remainingFilters = new ArrayList<>();
+        for (Core.Exp exp : extents) {
+          if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
+            final Core.Apply apply = (Core.Apply) exp;
+            final Core.Literal argLiteral = (Core.Literal) apply.arg;
+            final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
+            rangeSet = intersect
+                ? rangeSet.intersection(list.rangeSet)
+                : rangeSet.union(list.rangeSet);
+            satisfiedFilters.add(exp);
+          } else {
+            remainingFilters.add(exp);
+          }
+        }
+        final ListType listType = (ListType) extents.get(0).type;
+        Core.Exp exp =
+            core.extent(typeSystem, listType.elementType, rangeSet);
+        for (Core.Exp remainingExp : remainingFilters) {
+          exp = intersect
+              ? core.intersect(typeSystem, exp, remainingExp)
+              : core.union(typeSystem, exp, remainingExp);
+        }
+        final Foo foo = new Foo();
+        foo.extents.add(exp);
+        return foo;
+      }
+    }
+  }
+
+  @FunctionalInterface
+  interface TriConsumer<R, S, T> {
+    void accept(R r, S s, T t);
+  }
+
+  static class ExtentMap {
+    final Map<Core.Pat, Foo> map = new LinkedHashMap<>();
+
+    public @Nullable Foo get(TypeSystem typeSystem, Core.Pat pat) {
+      Foo foo = map.get(pat);
+      if (foo != null) {
+        return foo;
+      }
+      if (canGet(pat)) {
+        return get_(typeSystem, pat);
+      }
+      return null;
+    }
+
+    /**
+     * Constructs an expression for the extent of a pattern.
+     * You must have called {@link #canGet} first.
+     */
+    private @NonNull Foo get_(TypeSystem typeSystem, Core.Pat pat) {
+      Foo foo = map.get(pat);
+      if (foo != null) {
+        return foo;
+      }
+      switch (pat.op) {
+      case TUPLE_PAT:
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        final Foo foo1 = new Foo();
+        if (tuplePat.args.stream().allMatch(this::canGet)) {
+          final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+          for (Core.Pat p : tuplePat.args) {
+            Foo f = requireNonNull(get(typeSystem, p), "contradicts canGet");
+            foo1.filters.addAll(f.filters);
+            fromBuilder.scan(p, f.extents.get(0));
+          }
+          foo1.extents.add(fromBuilder.build());
+        } else {
+          map.forEach((pat1, foo2) -> {
+            if (pat1.op == Op.TUPLE_PAT) {
+              final Core.TuplePat tuplePat1 = (Core.TuplePat) pat1;
+              final List<String> fieldNames = tuplePat1.fieldNames();
+              if (tuplePat.args.stream().allMatch(arg ->
+                  arg instanceof Core.NamedPat
+                      && fieldNames.contains(((Core.NamedPat) arg).name))) {
+                foo1.extents.add(foo2.extents.get(0));
+              }
+            }
+          });
+        }
+        return foo1;
+      default:
+        throw new AssertionError("contradicts canGet");
+      }
+    }
+
+    boolean canGet(Core.Pat pat) {
+      Foo foo = map.get(pat);
+      if (foo != null) {
+        return true;
+      }
+      if (pat.type.isFinite()) {
+        return true;
+      }
+      switch (pat.op) {
+      case TUPLE_PAT:
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        if (tuplePat.args.stream().allMatch(this::canGet)) {
+          return true;
+        }
+        // If the map contains a tuple with a field for every one of this
+        // tuple's fields (not necessarily in the saem order) then we can use
+        // it.
+        for (Core.Pat pat1 : map.keySet()) {
+          if (pat1.op == Op.TUPLE_PAT) {
+            final Core.TuplePat tuplePat1 = (Core.TuplePat) pat1;
+            final List<String> fieldNames = tuplePat1.fieldNames();
+            if (tuplePat.args.stream().allMatch(arg ->
+                arg instanceof Core.NamedPat
+                    && fieldNames.contains(((Core.NamedPat) arg).name))) {
+              return true;
+            }
+          }
+        }
+        return false;
+      default:
+        return false;
+      }
     }
   }
 }

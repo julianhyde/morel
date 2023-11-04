@@ -352,7 +352,8 @@ public class UtilTest {
         Range.openClosed(BigDecimal.valueOf(4), BigDecimal.valueOf(7));
     final RangeExtent rangeExtent =
         new RangeExtent(ImmutableRangeSet.of(range), PrimitiveType.INT);
-    assertThat(Lists.newArrayList(rangeExtent.toIterable()),
+    assertThat(rangeExtent.iterable, notNullValue());
+    assertThat(Lists.newArrayList(rangeExtent.iterable),
         is(Arrays.asList(5, 6, 7)));
 
     // Integer range set [(4, 7], [10, 12]]
@@ -362,7 +363,8 @@ public class UtilTest {
         new RangeExtent(
             ImmutableRangeSet.unionOf(ImmutableList.of(range, range2)),
             PrimitiveType.INT);
-    assertThat(Lists.newArrayList(rangeExtent2.toIterable()),
+    assertThat(rangeExtent2.iterable, notNullValue());
+    assertThat(Lists.newArrayList(rangeExtent2.iterable),
         is(Arrays.asList(5, 6, 7, 10, 11, 12)));
 
     // Boolean range set
@@ -370,7 +372,8 @@ public class UtilTest {
     final RangeExtent rangeExtent3 =
         new RangeExtent(ImmutableRangeSet.of(range3),
             PrimitiveType.BOOL);
-    assertThat(Lists.newArrayList(rangeExtent3.toIterable()),
+    assertThat(rangeExtent3.iterable, notNullValue());
+    assertThat(Lists.newArrayList(rangeExtent3.iterable),
         is(Arrays.asList(false, true)));
 
     // Range set of (Boolean, Boolean) tuples
@@ -381,7 +384,8 @@ public class UtilTest {
     final RangeExtent rangeExtent4 =
         new RangeExtent(ImmutableRangeSet.of(range4),
             typeSystem.tupleType(PrimitiveType.BOOL, PrimitiveType.BOOL));
-    assertThat(Lists.newArrayList(rangeExtent4.toIterable()),
+    assertThat(rangeExtent4.iterable, notNullValue());
+    assertThat(Lists.newArrayList(rangeExtent4.iterable),
         is(Arrays.asList(
             FlatLists.of(false, true), FlatLists.of(true, true))));
   }

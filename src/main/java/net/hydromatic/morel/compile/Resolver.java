@@ -39,7 +39,9 @@ import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Range;
 import org.apache.calcite.util.Util;
 
 import java.math.BigDecimal;
@@ -759,10 +761,16 @@ public class Resolver {
 
     @Override protected void visit(Ast.Scan scan) {
       final Resolver r = withEnv(fromBuilder.bindings());
+      final Op op;
       final Core.Exp coreExp;
       final Core.Pat corePat;
-      switch (scan.exp.op) {
-      case SUCH_THAT:
+      if (scan.exp == null) {
+        corePat = r.toCore(scan.pat);
+        coreExp =
+            core.extent(typeMap.typeSystem, corePat.type,
+                ImmutableRangeSet.of(Range.all()));
+        op = scan.op == Op.SCAN ? Op.INNER_JOIN : scan.op;
+      } else if (scan.exp.op == Op.SUCH_THAT) {
         corePat =
             r.toCore(scan.pat).accept(
                 // Converts tuple patterns into copies sorted by field names.
@@ -782,29 +790,31 @@ public class Resolver {
                   }
                 });
 
-        final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
+        final List<Binding> bindings2 =
+            new ArrayList<>(fromBuilder.bindings());
         Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
         final Resolver r2 = withEnv(bindings2);
 
         final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
         coreExp = r2.toCore(scanExp);
-        break;
-
-      default:
+        op = Op.SUCH_THAT;
+      } else {
         coreExp = r.toCore(scan.exp);
         final ListType listType = (ListType) coreExp.type;
         corePat = r.toCore(scan.pat, listType.elementType);
+        op = scan.op == Op.SCAN ? Op.INNER_JOIN : scan.op;
       }
-      final Op op = scan.exp.op == Op.SUCH_THAT ? Op.SUCH_THAT
-          : scan.op == Op.SCAN ? Op.INNER_JOIN
-          : scan.op;
       final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
       Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
       Core.Exp coreCondition = scan.condition == null
           ? core.boolLiteral(true)
           : r.withEnv(bindings2).toCore(scan.condition);
       if (op == Op.SUCH_THAT) {
-        fromBuilder.suchThat(corePat, coreExp);
+        final Core.Exp extent =
+            core.extent(typeMap.typeSystem, corePat.type,
+                ImmutableRangeSet.of(Range.all()));
+        fromBuilder.scan(corePat, extent, coreCondition)
+            .where(coreExp);
       } else {
         fromBuilder.scan(corePat, coreExp, coreCondition);
       }
