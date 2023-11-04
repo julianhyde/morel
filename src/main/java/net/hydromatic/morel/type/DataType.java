@@ -19,6 +19,8 @@
 package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.util.ImmutablePairList;
+import net.hydromatic.morel.util.Pair;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSortedMap;
@@ -81,6 +83,10 @@ public class DataType extends ParameterizedType {
     return typeVisitor.visit(this);
   }
 
+  @Override public boolean isFinite() {
+    return typeConstructors.values().stream().allMatch(Type::isFinite);
+  }
+
   @Override public DataType copy(TypeSystem typeSystem,
       UnaryOperator<Type> transform) {
     final List<Type> parameterTypes =
@@ -107,6 +113,8 @@ public class DataType extends ParameterizedType {
     if (lookup != null) {
       return lookup;
     }
+//    final Key key = Keys.forallTypeApply(, types)
+
     return substitute2(typeSystem, types, transaction);
   }
 
@@ -138,13 +146,17 @@ public class DataType extends ParameterizedType {
         final SortedMap<String, Type> typeConstructors = new TreeMap<>();
         dataType.typeConstructors.forEach((tyConName, tyConType) ->
             typeConstructors.put(tyConName, tyConType.accept(this)));
+        final boolean scheme = true;
         defs.add(
-            Keys.dataTypeDef(dataType.name, types, typeConstructors, true));
+            Keys.dataTypeDef(dataType.name, types, typeConstructors, scheme));
         return temporaryType;
       }
     };
     accept(typeVisitor);
     final List<Type> types1 = typeSystem.dataTypes(defs);
+    Pair.forEach(defs, types1, (def, type) -> {
+//      typeSystem.typeByKey.putIfAbsent(def, type);
+    });
     final int i = defs.size() == 1
         ? 0
         : Iterables.indexOf(defs, def ->

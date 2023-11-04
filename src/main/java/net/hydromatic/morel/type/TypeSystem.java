@@ -250,6 +250,10 @@ public class TypeSystem {
         }
       } else {
         types.add(dataType);
+
+        final ForallType forallType = (ForallType) lookup(def.name);
+        Key key = Keys.forallTypeApply(forallType, def.types);
+        dataTypeMap.put(key, dataType);
       }
     });
     return types.build();

@@ -52,6 +52,14 @@ public class ForallType extends BaseType {
         ? this
         : typeSystem.forallType(typeVars, type2);
   }
+
+//  @Override TODO
+  public Type substitute_(TypeSystem typeSystem,
+      List<? extends Type> types, TypeSystem.Transaction transaction) {
+    return typeSystem.typeByKey.computeIfAbsent(
+        Keys.apply((ParameterizedType) type, types),
+        k -> type.substitute(typeSystem, types, transaction));
+  }
 }
 
 // End ForallType.java

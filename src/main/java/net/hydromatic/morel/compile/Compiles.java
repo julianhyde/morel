@@ -110,7 +110,7 @@ public abstract class Compiles {
 
     // Ensures that once we discover that there is no suchThat, we stop looking;
     // makes things a bit more efficient.
-    boolean mayContainSuchThat = true;
+    boolean mayContainSuchThat = false;
 
     Core.Decl coreDecl;
     tracer.onCore(1, coreDecl0);
@@ -148,6 +148,7 @@ public abstract class Compiles {
             mayContainSuchThat = false;
           }
         }
+        coreDecl = Extents.infinitePats(typeSystem, coreDecl);
         if (coreDecl == coreDecl2) {
           break;
         }

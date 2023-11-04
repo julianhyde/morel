@@ -72,6 +72,7 @@ public enum Op {
   // internal
   FROM_EQ("$FROM_EQ "),
   SUCH_THAT("$SUCH_THAT "),
+  FROM_UNBOUNDED("FROM_UNBOUNDED "),
 
   // value constructors
   TUPLE(true),

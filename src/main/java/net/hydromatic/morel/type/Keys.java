@@ -170,7 +170,7 @@ public class Keys {
     ApplyKey(ParameterizedType type, ImmutableList<Type> argTypes) {
       this.type = requireNonNull(type);
       this.argTypes = requireNonNull(argTypes);
-      assert !(type instanceof DataType);
+//      assert !(type instanceof DataType);
     }
 
     @Override public StringBuilder describe(StringBuilder buf, int left,

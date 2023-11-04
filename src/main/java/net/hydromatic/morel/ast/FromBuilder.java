@@ -119,6 +119,7 @@ public class FromBuilder {
     return this;
   }
 
+  @Deprecated // TODO remove
   public FromBuilder suchThat(Core.Pat pat, Core.Exp exp) {
     Compiles.acceptBinding(typeSystem, pat, bindings);
     return addStep(

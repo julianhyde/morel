@@ -121,7 +121,8 @@ class SuchThatShuttle extends Shuttle {
       // Try a different approach.
       // Generate an iterator over all values of all variables,
       // then filter.
-      final Core.Exp generator = Extents.generator(typeSystem, pat, exp);
+      final Core.Exp generator =
+          Extents.generator(typeSystem, pat, exp, null, ImmutableList.of());
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
       return fromBuilder.scan(pat, generator)
           .where(exp)
@@ -166,7 +167,8 @@ class SuchThatShuttle extends Shuttle {
       if (scans.isEmpty()) {
         final Core.Scan scan = (Core.Scan) fromStates.element().currentStep();
         final Extents.Analysis extent =
-            Extents.create(typeSystem, scan.pat, boundPats2, scan.exp);
+            Extents.create(typeSystem, scan.pat, boundPats2, null, scan.exp,
+                ImmutableList.of());
         final Set<Core.NamedPat> unboundPats = extent.unboundPats();
         if (!unboundPats.isEmpty()) {
           throw new RewriteFailedException("Cannot implement 'suchthat'; "

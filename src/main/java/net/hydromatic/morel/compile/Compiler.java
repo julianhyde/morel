@@ -219,7 +219,7 @@ public class Compiler {
     case INTERNAL_LITERAL:
     case VALUE_LITERAL:
       literal = (Core.Literal) expression;
-      return Codes.constant(literal.unwrap());
+      return Codes.constant(literal.unwrap(Object.class));
 
     case LET:
       return compileLet(cx, (Core.Let) expression);
@@ -360,8 +360,8 @@ public class Compiler {
       //
       final Core.Scan scan2 = (Core.Scan) firstStep;
       final Extents.Analysis extentFilter =
-          Extents.create(typeSystem, scan2.pat, ImmutableSortedMap.of(),
-                  scan2.exp);
+          Extents.create(typeSystem, scan2.pat, ImmutableSortedMap.of(), null,
+              scan2.exp, ImmutableList.of());
       final FnType fnType =
           typeSystem.fnType(scan2.pat.type, PrimitiveType.BOOL);
       final Pos pos = Pos.ZERO;
@@ -488,7 +488,7 @@ public class Compiler {
 
     case VALUE_LITERAL:
       final Core.Literal literal = (Core.Literal) fn;
-      return toApplicable(cx, literal.unwrap(), argType, pos);
+      return toApplicable(cx, literal.unwrap(Object.class), argType, pos);
 
     case ID:
       final Binding binding = cx.env.getOpt(((Core.Id) fn).idPat);
