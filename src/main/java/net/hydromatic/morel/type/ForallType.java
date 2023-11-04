@@ -29,7 +29,6 @@ import java.util.function.UnaryOperator;
 /** Universally quantified type. */
 public class ForallType extends BaseType {
   public final int parameterCount;
-  // TODO replace with a type key that is (for a datatype) a tycon map
   public final Type type;
 
   ForallType(int parameterCount, Type type) {

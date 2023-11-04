@@ -31,7 +31,6 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 
-import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Static.transform;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -129,29 +128,8 @@ public class Keys {
     return keys.build();
   }
 
-  /** Base class for Key. */
-  private abstract static class AbstractKey implements Type.Key {
-    protected final Op op;
-
-    AbstractKey(Op op) {
-      this.op = requireNonNull(op);
-    }
-
-    @Override public Op op() {
-      return op;
-    }
-
-    @Override public String toString() {
-      return moniker();
-    }
-
-    @Override public Type.Key copy(UnaryOperator<Type.Key> transform) {
-      return this;
-    }
-  }
-
   /** Key that identifies a type by name. */
-  private static class NameKey extends AbstractKey {
+  private static class NameKey extends Type.Key {
     private final String name;
 
     NameKey(String name) {
@@ -187,7 +165,7 @@ public class Keys {
   }
 
   /** Key that identifies a type by ordinal. */
-  private static class OrdinalKey extends AbstractKey {
+  private static class OrdinalKey extends Type.Key {
     final int ordinal;
 
     OrdinalKey(int ordinal) {
@@ -225,7 +203,7 @@ public class Keys {
 
   /** Key of a type that applies a parameterized type to specific type
    * arguments. */
-  private static class ApplyKey extends AbstractKey {
+  private static class ApplyKey extends Type.Key {
     final Type.Key key;
     final ImmutableList<Type.Key> args;
 
@@ -271,7 +249,7 @@ public class Keys {
 
   /** Key of a type that applies a built-in type constructor to specific type
    * arguments. */
-  private static class OpKey extends AbstractKey {
+  private static class OpKey extends Type.Key {
     final ImmutableList<Type.Key> args;
 
     OpKey(Op op, List<Type.Key> args) {
@@ -321,7 +299,7 @@ public class Keys {
   }
 
   /** Key of a forall type. */
-  private static class ForallKey extends AbstractKey {
+  private static class ForallKey extends Type.Key {
     final Type type;
     final int parameterCount;
 
@@ -359,7 +337,7 @@ public class Keys {
   }
 
   /** Key of a record type. */
-  private static class RecordKey extends AbstractKey {
+  private static class RecordKey extends Type.Key {
     final ImmutableSortedMap<String, Type.Key> argNameTypes;
 
     RecordKey(ImmutableSortedMap<String, Type.Key> argNameTypes) {
@@ -387,11 +365,11 @@ public class Keys {
         // fall through
       case 1:
         buf.append('{');
-        Pair.forEachIndexed(argNameTypes, (i, name, type) -> {
+        Pair.forEachIndexed(argNameTypes, (i, name, key) -> {
           if (i > 0) {
             buf.append(", ");
           }
-          buf.append(name).append(':').append(type.moniker());
+          buf.append(name).append(':').append(key);
         });
         return buf.append('}');
       }
@@ -423,7 +401,7 @@ public class Keys {
   }
 
   /** Key that identifies a {@code datatype} scheme. */
-  public static class DataTypeKey extends AbstractKey {
+  public static class DataTypeKey extends Type.Key {
     /** Ideally, a datatype would not have a name, just a list of named type
      * constructors, and the name would be associated later. When that happens,
      * we can remove the {@code name} field from this key. */
@@ -474,16 +452,19 @@ public class Keys {
       if (arguments.size() > 1) {
         buf.append('(');
       }
-      forEachIndexed(arguments, (t, i) -> {
-        if (i > 0) {
+      final int length = buf.length();
+      for (Type.Key key : arguments) {
+        if (buf.length() > length) {
           buf.append(",");
         }
-        if (t.op() == Op.TUPLE_TYPE) {
-          buf.append('(').append(t.moniker()).append(')');
-        } else {
-          buf.append(t.moniker());
+        if (key.op == Op.TUPLE_TYPE) {
+          buf.append('(');
         }
-      });
+        key.describe(buf, 0, 0);
+        if (key.op == Op.TUPLE_TYPE) {
+          buf.append(')');
+        }
+      }
       if (arguments.size() > 1) {
         buf.append(')');
       }

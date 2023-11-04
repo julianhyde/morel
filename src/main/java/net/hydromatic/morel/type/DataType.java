@@ -104,7 +104,7 @@ public class DataType extends ParameterizedType {
         buf.append(" | ");
       }
       buf.append(name);
-      if (typeKey.op() != Op.DUMMY_TYPE) {
+      if (typeKey.op != Op.DUMMY_TYPE) {
         buf.append(" of ");
         typeKey.describe(buf, 0, 0);
       }

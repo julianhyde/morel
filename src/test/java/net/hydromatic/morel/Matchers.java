@@ -31,7 +31,6 @@ import net.hydromatic.morel.util.MorelException;
 
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Sets;
 import org.hamcrest.BaseMatcher;
@@ -297,9 +296,7 @@ public abstract class Matchers {
     return new CustomTypeSafeMatcher<DataType>("datatype with constructors "
         + expected) {
       @Override protected boolean matchesSafely(DataType type) {
-        final String actual =
-            Maps.transformValues(type.typeConstructors, Type.Key::moniker)
-                .toString();
+        final String actual = type.typeConstructors.toString();
         return actual.equals(expected);
       }
     };

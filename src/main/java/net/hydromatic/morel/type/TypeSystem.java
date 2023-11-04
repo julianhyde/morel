@@ -346,8 +346,7 @@ public class TypeSystem {
 
   static StringBuilder unparse(StringBuilder builder, Type.Key type, int left,
       int right) {
-    final Op op = type.op();
-    if (left > op.left || op.right < right) {
+    if (left > type.op.left || type.op.right < right) {
       builder.append("(");
       unparse(builder, type, 0, 0);
       return builder.append(")");
