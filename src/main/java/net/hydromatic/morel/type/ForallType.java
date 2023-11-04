@@ -60,9 +60,7 @@ public class ForallType extends BaseType {
     case DATA_TYPE:
       final DataType dataType = (DataType) type;
       Key key =
-          Keys.datatype(dataType.name,
-              dataType.parameterTypes.size(),
-              Keys.toKeys(types),
+          Keys.datatype(dataType.name, Keys.toKeys(types),
               Maps.transformValues(dataType.typeConstructors,
                   k -> k.substitute(types)));
       return key.toType(typeSystem);

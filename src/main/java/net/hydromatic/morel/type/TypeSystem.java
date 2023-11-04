@@ -185,24 +185,20 @@ public class TypeSystem {
       final DataType dataType = def.toType(this);
       typeByKey.put(key, dataType);
 
-      final ForallType forallType = forallType(def.args.size(), dataType);
-      typeByName.put(def.name, forallType);
-      dataType.typeConstructors.forEach((name3, typeKey) ->
-          typeConstructorByName.put(name3, Pair.of(dataType, typeKey)));
+      dataType.typeConstructors.forEach((name, typeKey) ->
+          typeConstructorByName.put(name, Pair.of(dataType, typeKey)));
       dataTypeMap.put(key, dataType);
     });
+
     final ImmutableList.Builder<Type> types = ImmutableList.builder();
     forEach(defs, dataTypeMap.values(), (def, dataType) -> {
-      if (def.args.isEmpty()) {
-        typeByName.put(def.name, dataType);
-        types.add(dataType);
-      } else {
-        // We have just created an entry for the moniker (e.g. "'a option"),
-        // so now create an entry for the name (e.g. "option").
-        final ForallType forallType = forallType(def.args.size(), dataType);
-        typeByName.put(def.name, forallType);
-        types.add(forallType);
-      }
+      // We have just created an entry for the moniker (e.g. "'a option"),
+      // so now create an entry for the name (e.g. "option").
+      Type t =
+          def.args.isEmpty() ? dataType
+              : forallType(def.args.size(), dataType);
+      typeByName.put(def.name, t);
+      types.add(t);
     });
     return types.build();
   }
@@ -225,19 +221,17 @@ public class TypeSystem {
    * </ul>
    *
    * @param name Name (e.g. "option")
-   * @param parameterCount Number of type parameters
    * @param argumentTypes Argument types
    * @param tyCons Type constructors
    */
-  DataType dataType(String name, int parameterCount,
-      List<? extends Type> argumentTypes, SortedMap<String, Type.Key> tyCons) {
+  DataType dataType(String name, List<? extends Type> argumentTypes,
+      SortedMap<String, Key> tyCons) {
     final String moniker = DataType.computeMoniker(name, argumentTypes);
     final DataType dataType =
-        new DataType(Op.DATA_TYPE, name, moniker, parameterCount, argumentTypes,
-            tyCons);
-    if (parameterCount == 0) {
+        new DataType(Op.DATA_TYPE, name, moniker, argumentTypes, tyCons);
+    if (argumentTypes.isEmpty()) {
       // There are no type parameters, therefore there will be no ForallType to
-      // register.
+      // register its type constructors, so this DataType needs to register.
       tyCons.forEach((name3, typeKey) ->
           typeConstructorByName.put(name3, Pair.of(dataType, typeKey)));
     }

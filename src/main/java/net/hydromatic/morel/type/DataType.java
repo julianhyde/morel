@@ -48,16 +48,15 @@ public class DataType extends ParameterizedType {
    *
    * <p>During replacement, if a type matches {@code placeholderType} it is
    * replaced with {@code this}. This allows cyclic graphs to be copied. */
-  DataType(String name, String moniker, int parameterCount,
-      List<? extends Type> arguments, SortedMap<String, Key> typeConstructors) {
-    this(Op.DATA_TYPE, name, moniker, parameterCount, arguments,
-        typeConstructors);
+  DataType(String name, String moniker, List<? extends Type> arguments,
+      SortedMap<String, Key> typeConstructors) {
+    this(Op.DATA_TYPE, name, moniker, arguments, typeConstructors);
   }
 
-  /** Called only from DataType and TemporaryType constructor. */
-  protected DataType(Op op, String name, String moniker, int parameterCount,
+  /** Called only from DataType constructor. */
+  protected DataType(Op op, String name, String moniker,
       List<? extends Type> arguments, SortedMap<String, Key> typeConstructors) {
-    super(op, name, moniker, parameterCount);
+    super(op, name, moniker, arguments.size());
     this.arguments = ImmutableList.copyOf(arguments);
     this.typeConstructors = ImmutableSortedMap.copyOf(typeConstructors);
     checkArgument(typeConstructors.comparator() == null
@@ -65,8 +64,7 @@ public class DataType extends ParameterizedType {
   }
 
   @Override public Key key() {
-    return Keys.datatype(name, parameterTypes.size(), Keys.toKeys(arguments),
-        typeConstructors);
+    return Keys.datatype(name, Keys.toKeys(arguments), typeConstructors);
   }
 
   public Keys.DataTypeDef def() {
@@ -85,13 +83,12 @@ public class DataType extends ParameterizedType {
 
   @Override public DataType copy(TypeSystem typeSystem,
       UnaryOperator<Type> transform) {
-    final List<Type> parameterTypes =
-        Util.transform(this.parameterTypes, transform);
-    if (parameterTypes.equals(this.parameterTypes)) {
+    final List<Type> arguments =
+        Util.transform(this.arguments, transform);
+    if (arguments.equals(this.arguments)) {
       return this;
     }
-    return new DataType(name, moniker, parameterTypes.size(), arguments,
-        typeConstructors);
+    return new DataType(name, moniker, arguments, typeConstructors);
   }
 
   /** Writes out the definition of the datatype. For example,

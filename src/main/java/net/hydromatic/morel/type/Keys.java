@@ -107,10 +107,10 @@ public class Keys {
   }
 
   /** Returns a key that identifies a {@link DataType}. */
-  public static Type.Key datatype(String name, int parameterCount,
+  public static Type.Key datatype(String name,
       List<? extends Type.Key> arguments,
       SortedMap<String, Type.Key> typeConstructors) {
-    return new DataTypeKey(name, parameterCount, arguments, typeConstructors);
+    return new DataTypeKey(name, arguments, typeConstructors);
   }
 
   /** Returns a definition of a {@link DataType}. */
@@ -440,29 +440,25 @@ public class Keys {
      * constructors, and the name would be associated later. When that happens,
      * we can remove the {@code name} field from this key. */
     private final String name;
-    private final int parameterCount;
     private final List<? extends Type.Key> arguments;
     private final SortedMap<String, Type.Key> typeConstructors;
 
-    DataTypeKey(String name, int parameterCount,
-        List<? extends Type.Key> arguments,
+    DataTypeKey(String name, List<? extends Type.Key> arguments,
         SortedMap<String, Type.Key> typeConstructors) {
       super(Op.DATA_TYPE);
       this.name = requireNonNull(name);
-      this.parameterCount = parameterCount;
       this.arguments = ImmutableList.copyOf(arguments);
       this.typeConstructors = ImmutableSortedMap.copyOfSorted(typeConstructors);
     }
 
     @Override public int hashCode() {
-      return Objects.hash(name, parameterCount, arguments, typeConstructors);
+      return Objects.hash(name, arguments, typeConstructors);
     }
 
     @Override public boolean equals(Object obj) {
       return obj == this
           || obj instanceof DataTypeKey
           && ((DataTypeKey) obj).name.equals(name)
-          && ((DataTypeKey) obj).parameterCount == parameterCount
           && ((DataTypeKey) obj).arguments.equals(arguments)
           && ((DataTypeKey) obj).typeConstructors.equals(typeConstructors);
     }
@@ -507,7 +503,7 @@ public class Keys {
     }
 
     @Override public Type toType(TypeSystem typeSystem) {
-      return typeSystem.dataType(name, parameterCount,
+      return typeSystem.dataType(name,
           typeSystem.typesFor(arguments), typeConstructors);
     }
   }
@@ -541,7 +537,7 @@ public class Keys {
     }
 
     public DataType toType(TypeSystem typeSystem) {
-      return typeSystem.dataType(name, args.size(),
+      return typeSystem.dataType(name,
           typeSystem.typesFor(args), tyCons);
     }
   }
