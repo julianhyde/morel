@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Maps;
 
+import java.util.AbstractList;
 import java.util.List;
 import java.util.Objects;
 import java.util.SortedMap;
@@ -55,6 +56,21 @@ public class Keys {
    * {@link TypeVar type variables}) by ordinal. */
   public static Type.Key ordinal(int ordinal) {
     return new OrdinalKey(ordinal);
+  }
+
+  /** Returns a list of keys for type variables 0 through size - 1.
+   *
+   * @see TypeSystem#typeVariables(int) */
+  public static List<Type.Key> ordinals(int size) {
+    return new AbstractList<Type.Key>() {
+      public int size() {
+        return size;
+      }
+
+      public Type.Key get(int index) {
+        return new OrdinalKey(index);
+      }
+    };
   }
 
   /** Returns a key that applies a polymorphic type to arguments. */
@@ -99,11 +115,10 @@ public class Keys {
 
   /** Returns a definition of a {@link DataType}. */
   public static DataTypeDef dataTypeDef(String name,
-      List<? extends Type.Key> parameterTypes,
       List<? extends Type.Key> argumentTypes,
       SortedMap<String, Type.Key> tyCons) {
-    return new DataTypeDef(name, ImmutableList.copyOf(parameterTypes),
-        ImmutableList.copyOf(argumentTypes), ImmutableSortedMap.copyOf(tyCons)
+    return new DataTypeDef(name, ImmutableList.copyOf(argumentTypes),
+        ImmutableSortedMap.copyOf(tyCons)
     );
   }
 
@@ -500,14 +515,12 @@ public class Keys {
   /** Information from which a data type can be created. */
   public static class DataTypeDef implements Type.Def {
     final String name;
-    final ImmutableList<Type.Key> parameters;
     final ImmutableList<Type.Key> args;
     final SortedMap<String, Type.Key> tyCons;
 
-    private DataTypeDef(String name, List<Type.Key> parameters,
-        List<Type.Key> args, SortedMap<String, Type.Key> tyCons) {
+    private DataTypeDef(String name, List<Type.Key> args,
+        SortedMap<String, Type.Key> tyCons) {
       this.name = requireNonNull(name);
-      this.parameters = ImmutableList.copyOf(parameters);
       this.args = ImmutableList.copyOf(args);
       this.tyCons = ImmutableSortedMap.copyOfSorted(tyCons);
     }
@@ -528,7 +541,7 @@ public class Keys {
     }
 
     public DataType toType(TypeSystem typeSystem) {
-      return typeSystem.dataType(name, parameters.size(),
+      return typeSystem.dataType(name, args.size(),
           typeSystem.typesFor(args), tyCons);
     }
   }

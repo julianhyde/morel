@@ -30,7 +30,6 @@ import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
-import net.hydromatic.morel.type.TemporaryType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -751,24 +750,18 @@ public class TypeResolver {
   private Ast.Decl deduceDataTypeDeclType(TypeEnv env,
       Ast.DatatypeDecl datatypeDecl,
       Map<Ast.IdPat, Unifier.Term> termMap) {
-    final List<DatatypeBindWorkspace> workspaces = new ArrayList<>();
-    for (Ast.DatatypeBind datatypeBind : datatypeDecl.binds) {
-      final Foo foo = new Foo();
-      datatypeBind.tyVars.forEach(foo::toTypeKey);
-      final TemporaryType temporaryType =
-          typeSystem.temporaryType(datatypeBind.name.name,
-              typeSystem.typeVariables(foo.tyVarMap.size()));
-      workspaces.add(new DatatypeBindWorkspace(temporaryType));
-    }
-    forEach(datatypeDecl.binds, workspaces, this::deduceDatatypeBindType);
-
     final List<Keys.DataTypeDef> defs = new ArrayList<>();
-    forEach(datatypeDecl.binds, workspaces, (datatypeBind, workspace) ->
-        defs.add(
-            Keys.dataTypeDef(datatypeBind.name.name,
-                Keys.toKeys(workspace.temporaryType.parameterTypes),
-                Keys.toKeys(workspace.temporaryType.parameterTypes),
-                workspace.tyCons)));
+    for (Ast.DatatypeBind bind : datatypeDecl.binds) {
+      final Foo foo = new Foo();
+      bind.tyVars.forEach(foo::toTypeKey);
+
+      final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
+      deduceDatatypeBindType(bind, tyCons);
+
+      defs.add(
+          Keys.dataTypeDef(bind.name.name, Keys.ordinals(foo.tyVarMap.size()),
+              tyCons));
+    }
     final List<Type> types = typeSystem.dataTypes(defs);
 
     forEach(datatypeDecl.binds, types, (datatypeBind, type) -> {
@@ -821,21 +814,11 @@ public class TypeResolver {
     return node2;
   }
 
-  /** Workspace used while handling several datatype binds simultaneously. */
-  private static class DatatypeBindWorkspace {
-    final TemporaryType temporaryType;
-    final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
-
-    private DatatypeBindWorkspace(TemporaryType temporaryType) {
-      this.temporaryType = temporaryType;
-    }
-  }
-
   private void deduceDatatypeBindType(Ast.DatatypeBind datatypeBind,
-      DatatypeBindWorkspace w) {
+      SortedMap<String, Type.Key> tyCons) {
     Foo foo = new Foo();
     for (Ast.TyCon tyCon : datatypeBind.tyCons) {
-      w.tyCons.put(tyCon.id.name,
+      tyCons.put(tyCon.id.name,
           tyCon.type == null ? Keys.dummy() : foo.toTypeKey(tyCon.type));
     }
   }
@@ -1246,9 +1229,6 @@ public class TypeResolver {
     case DATA_TYPE:
       final DataType dataType = (DataType) type;
       return unifier.apply(dataType.name(), toTerms(dataType.arguments, subst));
-    case TEMPORARY_DATA_TYPE:
-      final TemporaryType tempType = (TemporaryType) type;
-      return unifier.apply(tempType.name(), toTerms(tempType.arguments, subst));
     case FUNCTION_TYPE:
       final FnType fnType = (FnType) type;
       return unifier.apply(FN_TY_CON, toTerm(fnType.paramType, subst),

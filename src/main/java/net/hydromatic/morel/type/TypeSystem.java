@@ -185,7 +185,7 @@ public class TypeSystem {
       final DataType dataType = def.toType(this);
       typeByKey.put(key, dataType);
 
-      final ForallType forallType = forallType(def.parameters.size(), dataType);
+      final ForallType forallType = forallType(def.args.size(), dataType);
       typeByName.put(def.name, forallType);
       dataType.typeConstructors.forEach((name3, typeKey) ->
           typeConstructorByName.put(name3, Pair.of(dataType, typeKey)));
@@ -193,14 +193,13 @@ public class TypeSystem {
     });
     final ImmutableList.Builder<Type> types = ImmutableList.builder();
     forEach(defs, dataTypeMap.values(), (def, dataType) -> {
-      if (def.parameters.isEmpty()) {
+      if (def.args.isEmpty()) {
         typeByName.put(def.name, dataType);
         types.add(dataType);
       } else {
         // We have just created an entry for the moniker (e.g. "'a option"),
         // so now create an entry for the name (e.g. "option").
-        final ForallType forallType =
-            forallType(def.parameters.size(), dataType);
+        final ForallType forallType = forallType(def.args.size(), dataType);
         typeByName.put(def.name, forallType);
         types.add(forallType);
       }
@@ -258,7 +257,7 @@ public class TypeSystem {
   public Type dataTypeScheme(String name, List<TypeVar> parameters,
       SortedMap<String, Type.Key> tyCons) {
     final List<Key> keys = Keys.toKeys(parameters);
-    final Keys.DataTypeDef def = Keys.dataTypeDef(name, keys, keys, tyCons);
+    final Keys.DataTypeDef def = Keys.dataTypeDef(name, keys, tyCons);
     return dataTypes(ImmutableList.of(def)).get(0);
   }
 
@@ -364,15 +363,6 @@ public class TypeSystem {
     }
   }
 
-  /** Creates a temporary type.
-   *
-   * <p>(Temporary types exist for a brief period while defining a recursive
-   * {@code datatype}.) */
-  public TemporaryType temporaryType(String name,
-      List<? extends Type> parameterTypes) {
-    return new TemporaryType(name, parameterTypes);
-  }
-
   public List<TypeVar> typeVariables(int size) {
     return new AbstractList<TypeVar>() {
       public int size() {
@@ -394,13 +384,6 @@ public class TypeSystem {
   }
 
   public Type apply(Type type, List<Type> types) {
-    if (type instanceof TemporaryType) {
-      final TemporaryType temporaryType = (TemporaryType) type;
-      if (types.equals(temporaryType.parameterTypes)) {
-        return type;
-      }
-      throw new AssertionError();
-    }
     if (type instanceof ForallType) {
       final ForallType forallType = (ForallType) type;
       return forallType.substitute(this, types);

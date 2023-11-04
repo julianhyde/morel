@@ -83,8 +83,6 @@ public enum Op {
   TY_VAR(true),
   RECORD_TYPE(true),
   DATA_TYPE(" ", 8),
-  /** Used internally, while resolving a self-referential DATA_TYPE. */
-  TEMPORARY_DATA_TYPE(true),
   /** Used internally, as the 'type' of a type constructor that does not contain
    * data. */
   DUMMY_TYPE(true),
