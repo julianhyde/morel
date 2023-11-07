@@ -20,50 +20,64 @@ package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
 
-import com.google.common.collect.ContiguousSet;
-import com.google.common.collect.DiscreteDomain;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.BoundType;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import org.apache.calcite.runtime.FlatLists;
 import org.apache.calcite.runtime.Unit;
-import org.apache.calcite.util.RangeSets;
-import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import javax.annotation.CheckForNull;
-
-import static java.util.Objects.requireNonNull;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /** A type and a range set. */
-@SuppressWarnings({"UnstableApiUsage", "rawtypes"})
+@SuppressWarnings("rawtypes")
 public class RangeExtent {
-  public final RangeSet rangeSet;
+  /** Map from path to range set.
+   *
+   * <p>The path designates the item within the type.
+   *
+   * <p>For example, consider the type {@code int option list}.
+   *
+   * <ul>
+   * <li>"/" relates to the {@code int option list}
+   * <li>"/0/" relates to each {@code int option} within the list
+   * <li>"/0/SOME/" relates to each {@code int} within a "SOME" element of the
+   *       list
+   * <li>"/0/NONE/" relates to each "NONE" element of the list
+   * </ul>
+   *
+   * <p>Using a map {@code ["/O/SOME/" "[0, 3], [6]"]} we can generate
+   * {@code SOME 0, SOME 1, SOME 2, SOME 3, SOME 6, NONE}
+   */
+  public final Map<String, ImmutableRangeSet> rangeSetMap;
   public final Type type;
   public final @Nullable Iterable iterable;
 
-  private static final List<Boolean> BOOLEANS = ImmutableList.of(false, true);
-
   /** Creates a RangeExtent. */
   @SuppressWarnings("unchecked")
-  public RangeExtent(RangeSet rangeSet, Type type) {
-    this.rangeSet = ImmutableRangeSet.copyOf(rangeSet);
+  public RangeExtent(TypeSystem typeSystem, Type type,
+      Map<String, ImmutableRangeSet> rangeSetMap) {
+    this.rangeSetMap =
+        ImmutableMap.copyOf(
+            Maps.transformValues(rangeSetMap,
+                r -> ImmutableRangeSet.copyOf(r)));
     this.type = type;
-    this.iterable = toList(type, rangeSet);
+    this.iterable = toList(type, typeSystem);
   }
 
   @Override public String toString() {
     if (isUnbounded()) {
       return type.toString(); // range set is unconstrained; don't print it
     }
-    return type + " " + rangeSet;
+    return type + " " + rangeSetMap;
   }
 
   /** Whether this extent returns all, or an unbounded number of, the values of
@@ -77,269 +91,123 @@ public class RangeExtent {
    * "{3, 10}" (x in [3, 10]),
    * "(3, 10)" (x >= 3 andalso x <= 10) are bounded. */
   public boolean isUnbounded() {
-    return rangeSet.complement().isEmpty();
-  }
-
-  /** Whether this extent returns all, or an unbounded number of, the values of
-   * its type.
-   *
-   * <p>Examples:
-   * "(-inf,+inf)" (true),
-   * "(-inf,0]" (x <= 0),
-   * "{(-inf,3),(10,+inf)}" (x < 3 or x > 10) are unbounded;
-   * "{}" (false),
-   * "{3, 10}" (x in [3, 10]),
-   * "(3, 10)" (x >= 3 andalso x <= 10) are bounded. */
-  @SuppressWarnings("unchecked")
-  public boolean isSomewhatUnbounded() {
-    return ((RangeSet<Comparable>) rangeSet).asRanges().stream()
-        .anyMatch(r -> !r.hasLowerBound() || !r.hasUpperBound());
+    return rangeSetMap.isEmpty();
   }
 
   /** Derives the collection of values in the range, or returns empty if
    * the range is infinite. */
   private <E extends Comparable<E>> Iterable<E> toList(Type type,
-      RangeSet<E> rangeSet) {
+      TypeSystem typeSystem) {
     final List<E> list = new ArrayList<>();
-    if (type.populate(rangeSet, list::add)) {
+    final Consumer<E> consumer = list::add;
+    if (populate(typeSystem, type, "/", rangeSetMap, consumer)) {
       return list;
     }
     return null;
   }
 
-  /** Derives the collection of values in the range, or returns empty if
-   * the range is infinite. */
-  private <E extends Comparable<E>> Optional<Iterable<E>> toIterable(Type type,
-      TypeSystem typeSystem, RangeSet<E> rangeSet) {
-    final List<Iterable<E>> setList = new ArrayList<>();
-    for (Range<E> range : rangeSet.asRanges()) {
-      final Optional<Iterable<E>> optionalIterable =
-          toIterable(type, typeSystem, range);
-      if (!optionalIterable.isPresent()) {
-        return Optional.empty();
-      }
-      setList.add(optionalIterable.get());
-    }
-    return Optional.of(concat(setList));
-  }
-
-  /** Returns the collection of values in the range. */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  private <E extends Comparable<E>> Optional<Iterable<E>> toIterable(Type type,
-      TypeSystem typeSystem, Range<E> range) {
-    switch (type.op()) {
-    case ID:
-      final PrimitiveType primitiveType = (PrimitiveType) type;
-      switch (primitiveType) {
-      case INT:
-        final Range<BigDecimal> bigDecimalRange = (Range) range;
-        return Optional.of(
-            (Iterable<E>) ContiguousSet.create(
-                RangeSets.copy(bigDecimalRange, BigDecimal::intValue),
-                DiscreteDomain.integers()));
-
-      case BOOL:
-        final Range<Boolean> booleanRange = (Range) range;
-        return Optional.of(
-            (Iterable<E>) Iterables.filter(BOOLEANS, booleanRange::contains));
-      }
-      break;
-
-    case TUPLE_TYPE:
-      final TupleType tupleType = (TupleType) type;
-      // TODO: copy rangeSet, to convert embedded BigDecimal to Integer
-      final DiscreteDomain<E> domain = discreteDomain(tupleType, typeSystem);
-      if (domain instanceof UnenumeratedDiscreteDomain) {
-        break;
-      }
-      return Optional.of(ContiguousSet.create(range, domain));
-    }
-    // Cannot convert type to iterable. Perhaps it is infinite.
-    return Optional.empty();
-  }
-
+  /** Populates a list (or other consumer) with all values of this type. Returns
+   * false if this type is not finite and the range is open above or below. */
   @SuppressWarnings("unchecked")
-  private <E extends Comparable<E>> DiscreteDomain<E> discreteDomain(Type type,
-      TypeSystem typeSystem) {
+  private <E extends Comparable<E>> boolean populate(TypeSystem typeSystem,
+      Type type, String path, Map<String, ImmutableRangeSet> rangeSetMap,
+      Consumer<E> consumer) {
+    final RangeSet<E> rangeSet = rangeSetMap.get(path);
+    final Consumer<E> filteredConsumer;
+    if (rangeSet != null) {
+      filteredConsumer = e -> {
+        if (rangeSet.contains(e)) {
+          consumer.accept(e);
+        }
+      };
+    } else {
+      filteredConsumer = consumer;
+    }
     switch (type.op()) {
     case ID:
-      final PrimitiveType primitiveType = (PrimitiveType) type;
-      switch (primitiveType) {
-      case UNIT:
-        return (DiscreteDomain<E>)
-            new EnumeratedDiscreteDomain<>(ImmutableList.of(Unit.INSTANCE));
-
+      switch ((PrimitiveType) type) {
       case BOOL:
-        return (DiscreteDomain<E>)
-            new EnumeratedDiscreteDomain<>(ImmutableList.of(false, true));
+        filteredConsumer.accept((E) Boolean.FALSE);
+        filteredConsumer.accept((E) Boolean.TRUE);
+        return true;
+
+      case UNIT:
+        filteredConsumer.accept((E) Unit.INSTANCE);
+        return true;
+
+      case CHAR:
+        for (int i = 0; i < 256; i++) {
+          filteredConsumer.accept((E) Character.valueOf((char) i));
+        }
+        return true;
 
       case INT:
-        return (DiscreteDomain<E>) DiscreteDomain.integers();
-
-      case STRING:
-        return (DiscreteDomain<E>)
-            new UnenumeratedDiscreteDomain<>(String.class);
+        if (rangeSet != null) {
+          for (Range<E> range : rangeSet.asRanges()) {
+            if (!range.hasLowerBound() || !range.hasUpperBound()) {
+              return false;
+            }
+            final int lower =
+                ((BigDecimal) range.lowerEndpoint()).intValue()
+                    + (range.lowerBoundType() == BoundType.OPEN ? 1 : 0);
+            final int upper =
+                ((BigDecimal) range.upperEndpoint()).intValue()
+                - (range.upperBoundType() == BoundType.OPEN ? 1 : 0);
+            for (int i = lower; i <= upper; i++) {
+              consumer.accept((E) Integer.valueOf(i));
+            }
+          }
+          return true;
+        }
+        // fall through
       }
-      break;
+      return false;
 
-    case TUPLE_TYPE:
-    case RECORD_TYPE:
-      final RecordLikeType tupleType = (RecordLikeType) type;
-      final List<DiscreteDomain> domains =
-          tupleType.argTypes().stream().map(t -> discreteDomain(t, typeSystem))
-              .collect(Util.toImmutableList());
-      if (domains.stream()
-          .anyMatch(d -> d instanceof UnenumeratedDiscreteDomain)) {
-        return (DiscreteDomain<E>)
-            new UnenumeratedDiscreteDomain<>(Comparable.class);
-      }
-      return (DiscreteDomain<E>) new ProductDiscreteDomain(domains);
+    case DUMMY_TYPE:
+      assert type == DummyType.INSTANCE;
+      filteredConsumer.accept((E) Unit.INSTANCE);
+      return true;
 
     case DATA_TYPE:
       final DataType dataType = (DataType) type;
-      final List<Comparable> list = new ArrayList<>();
-      dataType.typeConstructors(typeSystem).forEach((name, type1) -> {
-        if (type1.op() == Op.DUMMY_TYPE) {
-          list.add(name);
-        } else {
-          DiscreteDomain d = discreteDomain(type1, typeSystem);
-          for (Comparable v = d.minValue(); v != null; v = d.next(v)) {
-            list.add((Comparable) FlatLists.of(name, v));
-          }
+      for (Map.Entry<String, Type> entry
+          : dataType.typeConstructors(typeSystem).entrySet()) {
+        final String name = entry.getKey();
+        final Type type2 = entry.getValue();
+        final Consumer<E> consumer2 =
+            type2.op() == Op.DUMMY_TYPE
+                ? v -> filteredConsumer.accept((E) FlatLists.of(name))
+                : v -> filteredConsumer.accept((E) FlatLists.of(name, v));
+        if (!populate(typeSystem, type2, path + name + "/", rangeSetMap,
+            consumer2)) {
+          return false;
         }
-      });
-      return (DiscreteDomain<E>) new EnumeratedDiscreteDomain<>(list);
-    }
+      }
+      return true;
 
-    throw new AssertionError("cannot convert type '" + type
-        + "' to discrete domain");
-  }
+    case RECORD_TYPE:
+    case TUPLE_TYPE:
+      final RecordLikeType recordType = (RecordLikeType) type;
+      final List<List<E>> listList = new ArrayList<>();
+      for (Map.Entry<String, Type> entry : recordType.argNameTypes().entrySet()) {
+        final String name = entry.getKey();
+        final Type type2 = entry.getValue();
+        final List<E> list2 = new ArrayList<>();
+        final Consumer<E> consumer2 = list2::add;
+        if (!populate(typeSystem, type2, path + name + '/', rangeSetMap,
+            consumer2)) {
+          return false;
+        }
+        listList.add(list2);
+      }
+      Lists.cartesianProduct(listList)
+          .forEach(list ->
+              filteredConsumer.accept((E) FlatLists.ofComparable((List) list)));
+      return true;
 
-  /** Calls {@link Iterables#concat(Iterable)}, optimizing for the case with 0
-   * or 1 entries. */
-  private static <E> Iterable<? extends E> concat(
-      List<? extends Iterable<? extends E>> iterableList) {
-    switch (iterableList.size()) {
-    case 0:
-      return ImmutableList.of();
-    case 1:
-      return iterableList.get(0);
     default:
-      return Iterables.concat(iterableList);
-    }
-  }
-
-  private static class EnumeratedDiscreteDomain<C extends Comparable<C>>
-      extends DiscreteDomain<C> {
-    private final List<C> values;
-
-    protected EnumeratedDiscreteDomain(List<C> values) {
-      this.values = requireNonNull(values, "values");
-    }
-
-    @CheckForNull
-    @Override public @Nullable C next(C value) {
-      int i = values.indexOf(value);
-      return i + 1 >= values.size() ? null : values.get(i + 1);
-    }
-
-    @CheckForNull @Override public @Nullable C previous(C value) {
-      int i = values.indexOf(value);
-      return i - 1 < 0 ? null : values.get(i - 1);
-    }
-
-    @Override public long distance(C start, C end) {
-      int iStart = values.indexOf(start);
-      int iEnd = values.indexOf(end);
-      return iEnd - iStart;
-    }
-
-    @Override public C minValue() {
-      return values.get(0);
-    }
-
-    @Override public C maxValue() {
-      return values.get(values.size() - 1);
-    }
-  }
-
-  private static class UnenumeratedDiscreteDomain<C extends Comparable<C>>
-      extends DiscreteDomain<C> {
-    UnenumeratedDiscreteDomain(Class<C> unused) {
-    }
-
-    @CheckForNull
-    @Override public @Nullable C next(C value) {
-      throw new UnsupportedOperationException();
-    }
-
-    @CheckForNull @Override public @Nullable C previous(C value) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override public long distance(C start, C end) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override public C minValue() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override public C maxValue() {
-      throw new UnsupportedOperationException();
-    }
-  }
-
-  private static class ProductDiscreteDomain
-      extends DiscreteDomain<FlatLists.ComparableList<Comparable>> {
-    private final List<DiscreteDomain> domains;
-    private final FlatLists.ComparableList<Comparable> minValue;
-    private final FlatLists.ComparableList<Comparable> maxValues;
-
-    ProductDiscreteDomain(List<DiscreteDomain> domains) {
-      this.domains = ImmutableList.copyOf(domains);
-      this.minValue = FlatLists.ofComparable(
-          domains.stream()
-              .map(DiscreteDomain::minValue)
-              .collect(Collectors.toList()));
-      this.maxValues = FlatLists.ofComparable(
-          domains.stream()
-              .map(DiscreteDomain::maxValue)
-              .collect(Collectors.toList()));
-    }
-
-    @CheckForNull @Override public FlatLists.ComparableList<Comparable> next(
-        FlatLists.ComparableList<Comparable> values) {
-      final Comparable[] objects = values.toArray(new Comparable[0]);
-      for (int i = 0; i < values.size(); i++) {
-        Comparable value = values.get(i);
-        final DiscreteDomain domain = domains.get(i);
-        Comparable next = domain.next(value);
-        if (next != null) {
-          objects[i] = next;
-          return (FlatLists.ComparableList) FlatLists.of(objects);
-        }
-        objects[i] = domain.minValue();
-      }
-      return null;
-    }
-
-    @CheckForNull @Override public FlatLists.ComparableList<Comparable> previous(
-        FlatLists.ComparableList<Comparable> values) {
-      throw new UnsupportedOperationException(); // TODO implement, like next
-    }
-
-    @Override public long distance(FlatLists.ComparableList<Comparable> start,
-        FlatLists.ComparableList<Comparable> end) {
-      // A better implementation might be to compute distances between each
-      // pair of values, and multiply by the number of superior values.
-      long d = 0;
-      for (FlatLists.ComparableList<Comparable> c = start;
-           c != null && c.compareTo(end) < 0;
-           c = next(c)) {
-        ++d;
-      }
-      return d;
+      // All other types are not enumerable
+      return false;
     }
   }
 }

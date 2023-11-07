@@ -2666,7 +2666,7 @@ public abstract class Codes {
           if (rangeExtent.iterable == null) {
             throw new AssertionError("infinite: " + rangeExtent);
           }
-          return Lists.newArrayList(rangeExtent.iterable);
+          return ImmutableList.copyOf(rangeExtent.iterable);
         }
       };
 

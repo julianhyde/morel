@@ -20,6 +20,7 @@ package net.hydromatic.morel.ast;
 
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.compile.Extents;
 import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
@@ -39,6 +40,7 @@ import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
@@ -580,20 +582,32 @@ public enum CoreBuilder {
    * fall into a given range-set. The range-set might consist of just
    * {@link Range#all()}, in which case, the list returns all values of the
    * type. */
-  @SuppressWarnings({"UnstableApiUsage", "rawtypes"})
+  @SuppressWarnings({"rawtypes", "unchecked"})
   public Core.Exp extent(TypeSystem typeSystem, Type type,
-      RangeSet<Comparable> rangeSet) {
+      RangeSet rangeSet) {
+    final Map<String, ImmutableRangeSet> map;
+    if (rangeSet.complement().isEmpty()) {
+      map = ImmutableMap.of();
+    } else {
+      map = ImmutableMap.of("/", ImmutableRangeSet.copyOf(rangeSet));
+    }
+    return extent(typeSystem, type, map);
+  }
+
+  @SuppressWarnings("rawtypes")
+  public Core.Exp extent(TypeSystem typeSystem, Type type,
+      Map<String, ImmutableRangeSet> rangeSetMap) {
     final ListType listType = typeSystem.listType(type);
     // Store an ImmutableRangeSet value inside a literal of type 'unit'.
     // The value of such literals is usually Unit.INSTANCE, but we cheat.
     return core.apply(Pos.ZERO, listType,
         core.functionLiteral(typeSystem, BuiltIn.Z_EXTENT),
-        core.internalLiteral(new RangeExtent(rangeSet, type)));
+        core.internalLiteral(new RangeExtent(typeSystem, type, rangeSetMap)));
   }
 
-  @SuppressWarnings({"UnstableApiUsage", "rawtypes", "unchecked"})
-  public Pair<Core.Exp, List<Core.Exp>> mergeExtents(TypeSystem typeSystem,
-      List<? extends Core.Exp> exps, boolean intersect) {
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public Pair<Core.Exp, List<Core.Exp>> intersectExtents(TypeSystem typeSystem,
+      List<? extends Core.Exp> exps) {
     switch (exps.size()) {
     case 0:
       throw new AssertionError();
@@ -602,28 +616,59 @@ public enum CoreBuilder {
       return Pair.of(simplify(typeSystem, exps.get(0)), ImmutableList.of());
 
     default:
-      ImmutableRangeSet rangeSet = intersect
-          ? ImmutableRangeSet.of(Range.all())
-          : ImmutableRangeSet.of();
+      final List<Map<String, ImmutableRangeSet>> rangeSetMaps = new ArrayList<>();
       final List<Core.Exp> remainingExps = new ArrayList<>();
       for (Core.Exp exp : exps) {
         if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
           final Core.Literal argLiteral = (Core.Literal) ((Core.Apply) exp).arg;
           final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
-          rangeSet = intersect
-              ? rangeSet.intersection(list.rangeSet)
-              : rangeSet.union(list.rangeSet);
+          rangeSetMaps.add(list.rangeSetMap);
           continue;
         }
         remainingExps.add(exp);
       }
       final ListType listType = (ListType) exps.get(0).type;
+      Map<String, ImmutableRangeSet> rangeSetMap =
+          Extents.intersect((List) rangeSetMaps);
       Core.Exp exp =
-          core.extent(typeSystem, listType.elementType, rangeSet);
+          core.extent(typeSystem, listType.elementType, rangeSetMap);
       for (Core.Exp remainingExp : remainingExps) {
-        exp = intersect
-            ? core.intersect(typeSystem, exp, remainingExp)
-            : core.union(typeSystem, exp, remainingExp);
+        exp = core.intersect(typeSystem, exp, remainingExp);
+      }
+      return Pair.of(exp, remainingExps);
+    }
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public Pair<Core.Exp, List<Core.Exp>> unionExtents(TypeSystem typeSystem,
+      List<? extends Core.Exp> exps) {
+    switch (exps.size()) {
+    case 0:
+      throw new AssertionError();
+
+    case 1:
+      return Pair.of(simplify(typeSystem, exps.get(0)), ImmutableList.of());
+
+    default:
+      final List<Map<String, ImmutableRangeSet>> rangeSetMaps = new ArrayList<>();
+      final List<Core.Exp> remainingExps = new ArrayList<>();
+      for (Core.Exp exp : exps) {
+        if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
+          final Core.Literal argLiteral = (Core.Literal) ((Core.Apply) exp).arg;
+          final Core.Wrapper wrapper = (Core.Wrapper) argLiteral.value;
+          final RangeExtent list = wrapper.unwrap(RangeExtent.class);
+          rangeSetMaps.add(list.rangeSetMap);
+          continue;
+        }
+        remainingExps.add(exp);
+      }
+      final ListType listType = (ListType) exps.get(0).type;
+      Map<String, ImmutableRangeSet> rangeSetMap =
+          Extents.union((List) rangeSetMaps);
+      Core.Exp exp =
+          core.extent(typeSystem, listType.elementType, rangeSetMap);
+      for (Core.Exp remainingExp : remainingExps) {
+        exp = core.union(typeSystem, exp, remainingExp);
       }
       return Pair.of(exp, remainingExps);
     }
@@ -657,7 +702,7 @@ public enum CoreBuilder {
         if (apply.args().stream()
             .allMatch(exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
           Pair<Core.Exp, List<Core.Exp>> pair =
-              mergeExtents(typeSystem, apply.args(), false);
+              unionExtents(typeSystem, apply.args());
           if (pair.right.isEmpty()) {
             return pair.left;
           }
@@ -667,7 +712,7 @@ public enum CoreBuilder {
         if (apply.args().stream()
             .allMatch(exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
           Pair<Core.Exp, List<Core.Exp>> pair =
-              mergeExtents(typeSystem, apply.args(), true);
+              intersectExtents(typeSystem, apply.args());
           if (pair.right.isEmpty()) {
             return pair.left;
           }
