@@ -40,4 +40,6 @@ from i suchthat (i > 0 andalso i < 10), b suchthat (b = (i mod 2 = 0));
 *)
 from i
 where Option.getOpt i;
+> val it = [(NONE,true),(SOME true,false),(SOME true,true)]
+>   : (bool option * bool) list
 (*) End dummy.smli

@@ -2039,11 +2039,13 @@ public class MainTest {
    * {@code [SOME true, SOME false, NONE]}. */
   @Test void testBooleanExtent() {
     final String ml = "from i\n"
-        + "where Option.getOpt i";
-    final String core = "xxx";
-    ml(ml).assertType("(bool option * bool) list")
+        + "where Option.getOpt (i, false)";
+    final String core = "val it = "
+        + "from i in extent \"bool option\" "
+        + "where #getOpt Option (i, false)";
+    ml(ml).assertType("bool option list")
         .assertCore(-1, is(core))
-        .assertEval(is(list()));
+        .assertEval(is(list(list("SOME", true))));
   }
 
   @Test void testFromNoYield() {

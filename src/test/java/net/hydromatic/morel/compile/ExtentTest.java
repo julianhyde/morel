@@ -124,12 +124,12 @@ public class ExtentTest {
     Core.Literal ten = f.intLiteral(10);
     Core.Exp exp = core.equal(f.typeSystem, core.id(xPat), ten);
     Core.Exp x = generator(f.typeSystem, xPat, null, exp, ImmutableList.of());
-    assertThat(x.toString(), is("[10]"));
+    assertThat(x, hasToString("[10]"));
 
     // pat = "x", exp = "10 = x", extent = "[10]"
     Core.Exp exp2 = core.equal(f.typeSystem, ten, core.id(xPat));
     Core.Exp x2 = generator(f.typeSystem, xPat, null, exp2, ImmutableList.of());
-    assertThat(x2.toString(), is("[10]"));
+    assertThat(x2, hasToString("[10]"));
   }
 
   @Test void testBetween() {
@@ -155,13 +155,13 @@ public class ExtentTest {
     assertThat(x, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) x).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) x).fn).value, is(BuiltIn.Z_EXTENT));
-    assertThat(x.toString(), is("extent \"int [[3..5), (5..10)]\""));
+    assertThat(x, hasToString("extent \"int {/=[[3..5), (5..10)]}\""));
 
     Core.Exp y = generator(f.typeSystem, yPat, null, exp, ImmutableList.of());
     assertThat(y, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) y).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) y).fn).value, is(BuiltIn.Z_LIST));
-    assertThat(y.toString(), is("[20]"));
+    assertThat(y, hasToString("[20]"));
   }
 
 

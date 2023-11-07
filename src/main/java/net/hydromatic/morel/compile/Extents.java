@@ -28,15 +28,20 @@ import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
+import com.google.common.collect.RangeSet;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,13 +143,18 @@ public class Extents {
     return analysis.extentExp;
   }
 
+  /** Analyzes an expression and creates an {@link Analysis}. */
   public static Analysis create(TypeSystem typeSystem, Core.Pat pat,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Core.@Nullable Exp extentExp, Core.@Nullable Exp filterExp,
       List<Core.FromStep> followingSteps) {
     final Extent extent = new Extent(typeSystem, pat, boundPats);
+    final List<Core.Exp> remainingFilters = new ArrayList<>();
 
     final ExtentMap map = new ExtentMap();
+    if (extentExp != null) {
+      extent.g2(map.map, pat, extentExp);
+    }
     if (filterExp != null) {
       extent.g3(map.map, filterExp);
     }
@@ -153,13 +163,13 @@ public class Extents {
         extent.g3(map.map, ((Core.Where) step).exp);
       }
     }
-    final Foo foo = map.get(typeSystem, pat);
+    Foo foo = map.get(typeSystem, pat);
     if (foo == null) {
-      throw new AssertionError("unknown pattern " + pat);
+      foo = new Foo();
+    } else {
+      foo = foo.mergeExtents(typeSystem, true);
     }
-    final List<Core.Exp> remainingFilters = new ArrayList<>();
-    final Foo mergedFoo = foo.mergeExtents(typeSystem, true);
-    return new Analysis(boundPats, extent.goalPats, mergedFoo.extents.get(0),
+    return new Analysis(boundPats, extent.goalPats, foo.extents.get(0),
         foo.filters, remainingFilters);
   }
 
@@ -193,7 +203,7 @@ public class Extents {
     final Core.Apply apply = (Core.Apply) exp;
     final Core.Literal literal = (Core.Literal) apply.arg;
     final RangeExtent rangeExtent = literal.unwrap(RangeExtent.class);
-    return rangeExtent.isUnbounded();
+    return rangeExtent.iterable == null;
   }
 
   public static Core.Decl infinitePats(TypeSystem typeSystem,
@@ -235,6 +245,82 @@ public class Extents {
         });
   }
 
+  /** Intersects a collection of range set maps
+   * (maps from prefix to {@link RangeSet}) into one. */
+  public static <C extends Comparable<C>>
+      Map<String, ImmutableRangeSet<C>> intersect(
+          List<Map<String, ImmutableRangeSet<C>>> rangeSetMaps) {
+    switch (rangeSetMaps.size()) {
+    case 0:
+      // No filters, therefore the extent allows all values.
+      // An empty map expresses this.
+      return ImmutableMap.of();
+
+    case 1:
+      return rangeSetMaps.get(0);
+
+    default:
+      final Multimap<String, ImmutableRangeSet<C>> rangeSetMultimap =
+          HashMultimap.create();
+      for (Map<String, ImmutableRangeSet<C>> rangeSetMap : rangeSetMaps) {
+        rangeSetMap.forEach(rangeSetMultimap::put);
+      }
+      final ImmutableMap.Builder<String, ImmutableRangeSet<C>> rangeSetMap =
+          ImmutableMap.builder();
+      rangeSetMultimap.asMap().forEach((path, rangeSets) ->
+          rangeSetMap.put(path, intersectRangeSets(rangeSets)));
+      return rangeSetMap.build();
+    }
+  }
+
+  /** Unions a collection of range set maps
+   * (maps from prefix to {@link RangeSet}) into one. */
+  public static <C extends Comparable<C>> Map<String, ImmutableRangeSet<C>> union(
+      List<Map<String, ImmutableRangeSet<C>>> rangeSetMaps) {
+    switch (rangeSetMaps.size()) {
+    case 0:
+      // No filters, therefore the extent is empty.
+      // A map containing an empty RangeSet for path "/" expresses this.
+      return ImmutableMap.of("/", ImmutableRangeSet.of());
+
+    case 1:
+      return rangeSetMaps.get(0);
+
+    default:
+      final Multimap<String, ImmutableRangeSet<C>> rangeSetMultimap =
+          HashMultimap.create();
+      for (Map<String, ImmutableRangeSet<C>> rangeSetMap : rangeSetMaps) {
+        rangeSetMap.forEach(rangeSetMultimap::put);
+      }
+      final ImmutableMap.Builder<String, ImmutableRangeSet<C>> rangeSetMap =
+          ImmutableMap.builder();
+      rangeSetMultimap.asMap().forEach((path, rangeSets) ->
+          rangeSetMap.put(path, unionRangeSets(rangeSets)));
+      return rangeSetMap.build();
+    }
+  }
+
+  /** Intersects a collection of {@link RangeSet} into one.
+   *
+   * @see ImmutableRangeSet#intersection(RangeSet) */
+  private static <C extends Comparable<C>> ImmutableRangeSet<C> intersectRangeSets(
+      Collection<ImmutableRangeSet<C>> rangeSets) {
+    return rangeSets.stream().reduce(ImmutableRangeSet.of(Range.all()),
+        ImmutableRangeSet::intersection);
+  }
+
+  /** Unions a collection of {@link RangeSet} into one.
+   *
+   * @see ImmutableRangeSet#union(RangeSet) */
+  private static <C extends Comparable<C>> ImmutableRangeSet<C> unionRangeSets(
+      Collection<ImmutableRangeSet<C>> rangeSets) {
+    return rangeSets.stream().reduce(ImmutableRangeSet.of(),
+        ImmutableRangeSet::union);
+  }
+
+  /** Result of analyzing the variables in a query, pulling filters into the
+   * extent expression for each variable, so that no variable is over an
+   * infinite extent. */
   public static class Analysis {
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
     final Set<Core.NamedPat> goalPats;
@@ -244,12 +330,12 @@ public class Extents {
 
     Analysis(SortedMap<Core.NamedPat, Core.Exp> boundPats,
         Set<Core.NamedPat> goalPats, Core.Exp extentExp,
-        List<Core.Exp> satifiedFilters,
+        List<Core.Exp> satisfiedFilters,
         List<Core.Exp> remainingFilters) {
       this.boundPats = boundPats;
       this.goalPats = goalPats;
       this.extentExp = extentExp;
-      this.satisfiedFilters = satifiedFilters;
+      this.satisfiedFilters = satisfiedFilters;
       this.remainingFilters = remainingFilters;
     }
 
@@ -268,6 +354,15 @@ public class Extents {
       this.typeSystem = typeSystem;
       this.goalPats = ImmutableSet.copyOf(flatten(pat));
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
+    }
+
+
+    /** Adds an extent expression. */
+    void g2(Map<Core.Pat, Foo> map, Core.Pat pat, Core.Exp extentExp) {
+      map.putIfAbsent(pat, new Foo());
+      final Foo foo = map.get(pat);
+//      foo.filters.add(core.andAlso(typeSystem, foo.filters));
+//      foo.extents.add(core.intersect(typeSystem, foo.extents));
     }
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
@@ -487,6 +582,10 @@ public class Extents {
     final List<Core.Exp> extents = new ArrayList<>();
     final List<Core.Exp> filters = new ArrayList<>();
 
+    @Override public String toString() {
+      return "{extents: " + extents + ", filters: " + filters + "}";
+    }
+
     @SuppressWarnings({"UnstableApiUsage", "rawtypes", "unchecked"})
     public Foo mergeExtents(TypeSystem typeSystem, boolean intersect) {
       switch (extents.size()) {
@@ -508,9 +607,11 @@ public class Extents {
             final Core.Apply apply = (Core.Apply) exp;
             final Core.Literal argLiteral = (Core.Literal) apply.arg;
             final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
+/*
             rangeSet = intersect
-                ? rangeSet.intersection(list.rangeSet)
-                : rangeSet.union(list.rangeSet);
+                ? rangeSet.intersection(list.rangeSetMap)
+                : rangeSet.union(list.rangeSetMap);
+ */
             satisfiedFilters.add(exp);
           } else {
             remainingFilters.add(exp);

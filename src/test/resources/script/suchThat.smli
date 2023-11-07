@@ -33,19 +33,20 @@ from i suchthat i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
 from i suchthat i > 0 andalso i < 10,
   b suchthat b = true;
 > val it =
->   [{b=[true, 1],i=1},{b=[true, 2],i=2},{b=[true, 3],i=3},{b=[true, 4],i=4},
->    {b=[true, 5],i=5},{b=[true, 6],i=6},{b=[true, 7],i=7},{b=[true, 8],i=8},
->    {b=[true, 9],i=9}] : {b:bool, i:int} list
+>   [{b=true,i=1},{b=true,i=2},{b=true,i=3},{b=true,i=4},{b=true,i=5},
+>    {b=true,i=6},{b=true,i=7},{b=true,i=8},{b=true,i=9}] : {b:bool, i:int} list
 from i suchthat i > 0 andalso i < 10,
   b suchthat b = (i mod 2 = 0);
 > val it =
->   [{b=[false, 1],i=1},{b=[true, 2],i=2},{b=[false, 3],i=3},{b=[true, 4],i=4},
->    {b=[false, 5],i=5},{b=[true, 6],i=6},{b=[false, 7],i=7},{b=[true, 8],i=8},
->    {b=[false, 9],i=9}] : {b:bool, i:int} list
+>   [{b=false,i=1},{b=true,i=2},{b=false,i=3},{b=true,i=4},{b=false,i=5},
+>    {b=true,i=6},{b=false,i=7},{b=true,i=8},{b=false,i=9}]
+>   : {b:bool, i:int} list
 
 (*) We can iterate over a finite datatype
 from i
 where Option.getOpt i;
+> val it = [(NONE,true),(SOME true,false),(SOME true,true)]
+>   : (bool option * bool) list
 
 (*) If the expression is 'elem set' we can deduce the extent.
 from e suchthat (e elem scott.emp)
