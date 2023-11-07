@@ -123,7 +123,7 @@ public class ExtentTest {
     Core.Literal ten = f.intLiteral(10);
     Core.Exp exp = core.equal(f.typeSystem, core.id(xPat), ten);
     Core.Exp x = generator(f.typeSystem, xPat, null, exp, ImmutableList.of());
-    assertThat(x.toString(), is("[10]"));
+    assertThat(x, hasToString("[10]"));
 
     // pat = "x", exp = "10 = x", extent = "[10]"
     Core.Exp exp2 = core.equal(f.typeSystem, ten, core.id(xPat));
@@ -155,7 +155,7 @@ public class ExtentTest {
     assertThat(((Core.Apply) x).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) x).fn).unwrap(BuiltIn.class),
         is(BuiltIn.Z_EXTENT));
-    assertThat(x, hasToString("extent \"int [[3..5), (5..10)]\""));
+    assertThat(x, hasToString("extent \"int {/=[[3..5), (5..10)]}\""));
 
     Core.Exp y = generator(f.typeSystem, yPat, null, exp, ImmutableList.of());
     assertThat(y, instanceOf(Core.Apply.class));
