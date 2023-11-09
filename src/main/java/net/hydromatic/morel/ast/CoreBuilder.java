@@ -909,10 +909,15 @@ public enum CoreBuilder {
     } else if (exp.op == Op.APPLY
         && ((Core.Apply) exp).fn.op == Op.FN_LITERAL
         && ((Core.Literal) ((Core.Apply) exp).fn).value == BuiltIn.Z_ANDALSO) {
-      ((Core.Apply) exp).args().forEach(arg -> flattenAnd(arg, consumer));
+      flattenAnds(((Core.Apply) exp).args(), consumer);
     } else {
       consumer.accept(exp);
     }
+  }
+
+  /** Flattens the 'and' in every expression into a consumer. */
+  public void flattenAnds(List<Core.Exp> exps, Consumer<Core.Exp> consumer) {
+    exps.forEach(arg -> flattenAnd(arg, consumer));
   }
 
   void flattenOr(Core.Exp exp, Consumer<Core.Exp> consumer) {
@@ -922,10 +927,15 @@ public enum CoreBuilder {
     } else if (exp.op == Op.APPLY
         && ((Core.Apply) exp).fn.op == Op.FN_LITERAL
         && ((Core.Literal) ((Core.Apply) exp).fn).value == BuiltIn.Z_ORELSE) {
-      ((Core.Apply) exp).args().forEach(arg -> flattenOr(arg, consumer));
+      flattenOrs(((Core.Apply) exp).args(), consumer);
     } else {
       consumer.accept(exp);
     }
+  }
+
+  /** Flattens the 'or' in every expression into a consumer. */
+  public void flattenOrs(List<Core.Exp> exps, Consumer<Core.Exp> consumer) {
+    exps.forEach(arg -> flattenOr(arg, consumer));
   }
 }
 

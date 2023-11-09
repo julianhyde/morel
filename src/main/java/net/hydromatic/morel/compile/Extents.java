@@ -26,7 +26,10 @@ import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
@@ -163,14 +166,19 @@ public class Extents {
         extent.g3(map.map, ((Core.Where) step).exp);
       }
     }
-    Foo foo = map.get(typeSystem, pat);
-    if (foo == null) {
-      foo = new Foo();
+    final PairList<Core.Exp, Core.Exp> foo = map.get(typeSystem, pat);
+    final Pair<Core.Exp, Core.Exp> extentFilter;
+    if (foo.isEmpty()) {
+      extentFilter =
+          Pair.of(
+              core.extent(typeSystem, pat.type,
+                  ImmutableRangeSet.of(Range.all())),
+              core.boolLiteral(true));
     } else {
-      foo = foo.mergeExtents(typeSystem, true);
+      extentFilter = reduceAnd(typeSystem, foo);
     }
-    return new Analysis(boundPats, extent.goalPats, foo.extents.get(0),
-        foo.filters, remainingFilters);
+    return new Analysis(boundPats, extent.goalPats, extentFilter.left,
+        core.decomposeAnd(extentFilter.right), remainingFilters);
   }
 
   /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
@@ -358,15 +366,16 @@ public class Extents {
 
 
     /** Adds an extent expression. */
-    void g2(Map<Core.Pat, Foo> map, Core.Pat pat, Core.Exp extentExp) {
-      map.putIfAbsent(pat, new Foo());
-      final Foo foo = map.get(pat);
+    void g2(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map,
+        Core.Pat pat, Core.Exp extentExp) {
+//      map.putIfAbsent(pat, PairList.of());
+//      final PairList<Core.Exp, Core.Exp> foo = map.get(pat);
 //      foo.filters.add(core.andAlso(typeSystem, foo.filters));
 //      foo.extents.add(core.intersect(typeSystem, foo.extents));
     }
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
-    void g3(Map<Core.Pat, Foo> map, Core.Exp filter) {
+    void g3(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map, Core.Exp filter) {
       final Core.Apply apply;
       switch (filter.op) {
       case APPLY:
@@ -374,7 +383,7 @@ public class Extents {
         switch (apply.fn.op) {
         case FN_LITERAL:
           BuiltIn builtIn = ((Core.Literal) apply.fn).unwrap(BuiltIn.class);
-          final Map<Core.Pat, Foo> map2;
+          final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map2;
           switch (builtIn) {
           case Z_ANDALSO:
             // Expression is 'andalso'. Visit each pattern, and 'and' the
@@ -382,10 +391,9 @@ public class Extents {
             map2 = new LinkedHashMap<>();
             apply.arg.forEachArg((arg, i) -> g3(map2, arg));
             map2.forEach((pat, foo) -> {
-              map.putIfAbsent(pat, new Foo());
-              final Foo foo1 = map.get(pat);
-              foo1.filters.add(core.andAlso(typeSystem, foo.filters));
-              foo1.extents.add(core.intersect(typeSystem, foo.extents));
+              map.putIfAbsent(pat, PairList.of());
+              final PairList<Core.Exp, Core.Exp> foo1 = map.get(pat);
+              foo1.addAll(foo);
             });
             break;
 
@@ -394,11 +402,24 @@ public class Extents {
             // constraints (union the generators).
             map2 = new LinkedHashMap<>();
             apply.arg.forEachArg((arg, i) -> g3(map2, arg));
-            map2.forEach((k, foo) -> {
-              map.putIfAbsent(k, new Foo());
-              final Foo foo2 = map.get(k);
-              foo2.filters.add(core.orElse(typeSystem, foo.filters));
-              foo2.extents.add(core.union(typeSystem, foo.extents));
+            map2.forEach((pat, foo) -> {
+              map.putIfAbsent(pat, PairList.of());
+              final PairList<Core.Exp, Core.Exp> foo1 = map.get(pat);
+              if (foo1.isEmpty()) {
+                // [] union [x2, x3, x4]
+                //  =>
+                // [x2, x3, x4]
+                foo1.add(reduceOr(typeSystem, foo));
+              } else {
+                // [x0, x1] union [x2, x3, x4]
+                //  =>
+                // [union(intersect(x0, x1), intersect(x2, x3, x4))]
+                PairList<Core.Exp, Core.Exp> intersectExtents = PairList.of();
+                intersectExtents.add(reduceAnd(typeSystem, foo1));
+                intersectExtents.add(reduceAnd(typeSystem, foo));
+                foo1.clear();
+                foo1.add(reduceOr(typeSystem, intersectExtents));
+              }
             });
             break;
 
@@ -409,22 +430,20 @@ public class Extents {
           case OP_LT:
           case OP_LE:
             g4(builtIn, apply.arg(0), apply.arg(1), (pat, filter2, extent) -> {
-              map.putIfAbsent(pat, new Foo());
-              final Foo foo = map.get(pat);
-              foo.filters.add(filter2);
-              foo.extents.add(extent);
+              map.putIfAbsent(pat, PairList.of());
+              final PairList<Core.Exp, Core.Exp> foo = map.get(pat);
+              foo.add(extent, filter2);
             });
             break;
 
           case OP_ELEM:
-            final Foo foo;
+            final PairList<Core.Exp, Core.Exp> foo;
             switch (apply.arg(0).op) {
             case ID:
               final Core.NamedPat pat = ((Core.Id) apply.arg(0)).idPat;
-              map.putIfAbsent(pat, new Foo());
+              map.putIfAbsent(pat, PairList.of());
               foo = map.get(pat);
-              foo.filters.add(apply);
-              foo.extents.add(apply.arg(1));
+              foo.add(apply.arg(1), apply);
               break;
 
             case TUPLE:
@@ -432,10 +451,9 @@ public class Extents {
               final Core.TuplePat tuplePat =
                   core.tuplePat(typeSystem,
                       transform(tuple.args, arg -> ((Core.Id) arg).idPat));
-              map.putIfAbsent(tuplePat, new Foo());
+              map.putIfAbsent(tuplePat, PairList.of());
               foo = map.get(tuplePat);
-              foo.filters.add(apply);
-              foo.extents.add(apply.arg(1));
+              foo.add(apply.arg(1), apply);
               break;
             }
             break;
@@ -578,7 +596,7 @@ public class Extents {
     }
   }
 
-  static class Foo {
+  static class Foo2 {
     final List<Core.Exp> extents = new ArrayList<>();
     final List<Core.Exp> filters = new ArrayList<>();
 
@@ -587,7 +605,7 @@ public class Extents {
     }
 
     @SuppressWarnings({"UnstableApiUsage", "rawtypes", "unchecked"})
-    public Foo mergeExtents(TypeSystem typeSystem, boolean intersect) {
+    public Foo2 mergeExtents(TypeSystem typeSystem, boolean intersect) {
       switch (extents.size()) {
       case 0:
         throw new AssertionError();
@@ -625,11 +643,55 @@ public class Extents {
               ? core.intersect(typeSystem, exp, remainingExp)
               : core.union(typeSystem, exp, remainingExp);
         }
-        final Foo foo = new Foo();
+        final Foo2 foo = new Foo2();
         foo.extents.add(exp);
         return foo;
       }
     }
+  }
+
+  /** Reduces a list of extent-filter pairs [e0, f0, e1, f1, ...]
+   * to an extent-filter pair [e0 intersect e1 ..., f0 andalso f1 ...].
+   *
+   * <p>If any of the e<sub>i</sub> are calls to
+   * {@link BuiltIn#Z_EXTENT extent}, merges them into a single extent.
+   * For example, in
+   *
+   * <blockquote><pre><code>
+   * [extent "int: (0, inf)", x > 0,
+   *   x elem primes, isPrime x,
+   *   extent "int: (-inf, 10)", x < 10]
+   * </code></pre></blockquote>
+   *
+   * <p>the extents for "(0, inf)" and "(-inf, 10)" are merged into
+   * extent "(0, 10)":
+   *
+   * <blockquote><pre><code>
+   * (extent "int: (0, 10)" intersect primes,
+   *   x > 0 andalso isPrime x andalso x < 10)
+   * </code></pre></blockquote>
+   */
+  static Pair<Core.Exp, Core.Exp> reduceAnd(TypeSystem typeSystem,
+      PairList<Core.Exp, Core.Exp> extentFilters) {
+    if (extentFilters.isEmpty()) {
+      // Empty list would require us to create an infinite extent, but we
+      // don't know the type. Caller must ensure that the list is non-empty.
+      throw new IllegalArgumentException();
+    }
+    final List<Core.Exp> extents = new ArrayList<>();
+    core.flattenAnds(extentFilters.leftList(), extents::add);
+    final Pair<Core.Exp, List<Core.Exp>> pair =
+        core.intersectExtents(typeSystem, extents);
+    return Pair.of(pair.left,
+        core.andAlso(typeSystem, extentFilters.rightList()));
+  }
+
+  /** Reduces a list of extent-filter pairs [e0, f0, e1, f1, ...]
+   * to an extent-filter pair [e0 union e1 ..., f0 orelse f1 ...]. */
+  static Pair<Core.Exp, Core.Exp> reduceOr(TypeSystem typeSystem,
+      PairList<Core.Exp, Core.Exp> extentFilters) {
+    return Pair.of(core.union(typeSystem, extentFilters.leftList()),
+        core.orElse(typeSystem, extentFilters.rightList()));
   }
 
   @FunctionalInterface
@@ -638,41 +700,48 @@ public class Extents {
   }
 
   static class ExtentMap {
-    final Map<Core.Pat, Foo> map = new LinkedHashMap<>();
+    final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map = new LinkedHashMap<>();
 
-    public @Nullable Foo get(TypeSystem typeSystem, Core.Pat pat) {
-      Foo foo = map.get(pat);
-      if (foo != null) {
+    public PairList<Core.Exp, Core.Exp> get(TypeSystem typeSystem,
+        Core.Pat pat) {
+      PairList<Core.Exp, Core.Exp> foo = map.get(pat);
+      if (foo != null && !foo.isEmpty()) {
         return foo;
       }
       if (canGet(pat)) {
         return get_(typeSystem, pat);
       }
-      return null;
+      return ImmutablePairList.of();
     }
 
     /**
      * Constructs an expression for the extent of a pattern.
      * You must have called {@link #canGet} first.
      */
-    private @NonNull Foo get_(TypeSystem typeSystem, Core.Pat pat) {
-      Foo foo = map.get(pat);
-      if (foo != null) {
+    private @NonNull PairList<Core.Exp, Core.Exp> get_(TypeSystem typeSystem,
+        Core.Pat pat) {
+      final PairList<Core.Exp, Core.Exp> foo = map.get(pat);
+      if (foo != null && !foo.isEmpty()) {
         return foo;
       }
       switch (pat.op) {
       case TUPLE_PAT:
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-        final Foo foo1 = new Foo();
         if (tuplePat.args.stream().allMatch(this::canGet)) {
+          // Convert 'from x, y where p(x) andalso q(y)'
+          // to 'from x in extentP, y in extentQ'
+          // and that becomes the extent of '(x, y)'.
           final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+          final List<Core.Exp> filters = new ArrayList<>();
           for (Core.Pat p : tuplePat.args) {
-            Foo f = requireNonNull(get(typeSystem, p), "contradicts canGet");
-            foo1.filters.addAll(f.filters);
-            fromBuilder.scan(p, f.extents.get(0));
+            PairList<Core.Exp, Core.Exp> f =
+                requireNonNull(get(typeSystem, p), "contradicts canGet");
+            fromBuilder.scan(p, core.union(typeSystem, f.leftList()));
+            core.flattenAnds(f.rightList(), filters::add);
           }
-          foo1.extents.add(fromBuilder.build());
+          return PairList.of(fromBuilder.build(), core.andAlso(typeSystem, filters));
         } else {
+          final PairList<Core.Exp, Core.Exp> foo1 = PairList.of();
           map.forEach((pat1, foo2) -> {
             if (pat1.op == Op.TUPLE_PAT) {
               final Core.TuplePat tuplePat1 = (Core.TuplePat) pat1;
@@ -680,20 +749,20 @@ public class Extents {
               if (tuplePat.args.stream().allMatch(arg ->
                   arg instanceof Core.NamedPat
                       && fieldNames.contains(((Core.NamedPat) arg).name))) {
-                foo1.extents.add(foo2.extents.get(0));
+                foo1.addAll(foo2);
               }
             }
           });
+          return foo1;
         }
-        return foo1;
       default:
         throw new AssertionError("contradicts canGet");
       }
     }
 
     boolean canGet(Core.Pat pat) {
-      Foo foo = map.get(pat);
-      if (foo != null) {
+      PairList<Core.Exp, Core.Exp> foo = map.get(pat);
+      if (foo != null && !foo.isEmpty()) {
         return true;
       }
       if (pat.type.isFinite()) {
