@@ -1148,7 +1148,11 @@ public class Core {
       }
     }
 
-    public Exp copy(TypeSystem typeSystem, Environment env,
+    /** Copies this {@code From} with a new set of steps.
+     *
+     * <p>Returns this {@code From} if the steps are the same.
+     * If {@code env} is not null, performs additional checking. */
+    public Exp copy(TypeSystem typeSystem, @Nullable Environment env,
         List<FromStep> steps) {
       return steps.equals(this.steps)
           ? this

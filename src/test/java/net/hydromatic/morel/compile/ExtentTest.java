@@ -32,6 +32,7 @@ import java.util.List;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.compile.Extents.generator;
 
+import static org.apache.calcite.linq4j.tree.Expressions.list;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasToString;
@@ -50,6 +51,8 @@ public class ExtentTest {
     final Core.Id bId = core.id(bPat);
     final Core.IdPat cPat = core.idPat(intType, "c", 0);
     final Core.Id cId = core.id(cPat);
+    final Core.IdPat dPat = core.idPat(intType, "d", 0);
+    final Core.Id dId = core.id(dPat);
     final Core.Exp list12 = core.list(typeSystem, intLiteral(1), intLiteral(2));
 
     Core.Literal intLiteral(int i) {
@@ -66,6 +69,11 @@ public class ExtentTest {
       assertThat(orExps, hasToString(s2));
       assertThat(core.orElse(typeSystem, orExps),
           hasToString(exp.toString()));
+    }
+
+    void checkSubTrue(Core.Exp exp, List<Core.Exp> exps, String s) {
+      final Core.Exp exp2 = core.subTrue(typeSystem, exp, exps);
+      assertThat(exp2, hasToString(s));
     }
   }
 
@@ -165,6 +173,33 @@ public class ExtentTest {
     assertThat(y, hasToString("[20]"));
   }
 
+  @Test void testSubTrue() {
+    final Fixture f = new Fixture();
+    final Core.Exp exp1 =
+        core.andAlso(f.typeSystem, f.aId,
+            core.andAlso(f.typeSystem, f.bId,
+                core.orElse(f.typeSystem, f.cId, f.intLiteral(1))));
+    final String expected1a = "a andalso (c orelse 1)";
+    final String expected1b = "a andalso (b andalso (c orelse 1))";
+    final String expected1c = "b andalso (c orelse 1)";
+    f.checkSubTrue(exp1, list(f.bId), expected1a);
+    f.checkSubTrue(exp1, list(f.cId), expected1b);
+    f.checkSubTrue(exp1, list(f.cId, f.dId, f.list12), expected1b);
+    f.checkSubTrue(exp1, list(f.aId), expected1c);
+    f.checkSubTrue(exp1, list(f.dId), expected1b);
+    f.checkSubTrue(exp1, list(), expected1b);
+
+    final Core.Exp exp2 =
+        core.orElse(f.typeSystem, f.aId,
+            core.orElse(f.typeSystem, f.bId,
+                core.andAlso(f.typeSystem, f.cId, f.dId)));
+    final String expected2a = "a orelse (b orelse c andalso d)";
+    f.checkSubTrue(exp2, list(f.bId), expected2a); // TODO "a"
+    f.checkSubTrue(exp2, list(f.cId), expected2a); // TODO "a orelse (b orelse d)"
+    f.checkSubTrue(exp2, list(f.bId, f.cId), expected2a); // TODO "a"
+    f.checkSubTrue(exp2, list(f.aId), expected2a); // TODO "true"
+    f.checkSubTrue(exp2, list(), expected2a);
+  }
 
   @Test void testFlatten() {
     final Fixture f = new Fixture();

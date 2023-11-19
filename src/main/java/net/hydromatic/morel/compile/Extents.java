@@ -23,7 +23,6 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
-import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
@@ -52,7 +51,6 @@ import java.util.Set;
 import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transform;
 
@@ -137,9 +135,10 @@ public class Extents {
    *   z in (from e in edges group e.j)
    * }</pre></blockquote>
    */
+  // TODO: move this method to the test suite
   public static Core.Exp generator(TypeSystem typeSystem, Core.Pat pat,
       Core.@Nullable Exp extentExp, Core.@Nullable Exp filterExp,
-      List<Core.FromStep> followingSteps) {
+      List<? extends Core.FromStep> followingSteps) {
     final Analysis analysis =
         create(typeSystem, pat, ImmutableSortedMap.of(), extentExp, filterExp,
             followingSteps);
@@ -150,14 +149,11 @@ public class Extents {
   public static Analysis create(TypeSystem typeSystem, Core.Pat pat,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Core.@Nullable Exp extentExp, Core.@Nullable Exp filterExp,
-      List<Core.FromStep> followingSteps) {
+      Iterable<? extends Core.FromStep> followingSteps) {
     final Extent extent = new Extent(typeSystem, pat, boundPats);
     final List<Core.Exp> remainingFilters = new ArrayList<>();
 
     final ExtentMap map = new ExtentMap();
-    if (extentExp != null) {
-      extent.g2(map.map, pat, extentExp);
-    }
     if (filterExp != null) {
       extent.g3(map.map, filterExp);
     }
@@ -364,16 +360,6 @@ public class Extents {
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
     }
 
-
-    /** Adds an extent expression. */
-    void g2(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map,
-        Core.Pat pat, Core.Exp extentExp) {
-//      map.putIfAbsent(pat, PairList.of());
-//      final PairList<Core.Exp, Core.Exp> foo = map.get(pat);
-//      foo.filters.add(core.andAlso(typeSystem, foo.filters));
-//      foo.extents.add(core.intersect(typeSystem, foo.extents));
-    }
-
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
     void g3(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map, Core.Exp filter) {
       final Core.Apply apply;
@@ -401,7 +387,17 @@ public class Extents {
             // Expression is 'orelse'. Visit each pattern, and intersect the
             // constraints (union the generators).
             map2 = new LinkedHashMap<>();
-            apply.arg.forEachArg((arg, i) -> g3(map2, arg));
+            final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map3 =
+                new LinkedHashMap<>();
+            apply.arg.forEachArg((arg, i) -> {
+              g3(map3, arg);
+              map3.forEach((pat, foo) -> {
+                map2.putIfAbsent(pat, PairList.of());
+                final PairList<Core.Exp, Core.Exp> foo2 = map2.get(pat);
+                foo2.add(reduceAnd(typeSystem, foo));
+              });
+              map3.clear();
+            });
             map2.forEach((pat, foo) -> {
               map.putIfAbsent(pat, PairList.of());
               final PairList<Core.Exp, Core.Exp> foo1 = map.get(pat);
@@ -500,7 +496,6 @@ public class Extents {
       }
     }
 
-    @SuppressWarnings("UnstableApiUsage")
     private Core.Exp baz(BuiltIn builtIn, Core.Exp arg) {
       switch (builtIn) {
       case OP_EQ:
@@ -523,129 +518,6 @@ public class Extents {
             ImmutableRangeSet.of(Range.lessThan(((Core.Literal) arg).value)));
       default:
         throw new AssertionError("unexpected: " + builtIn);
-      }
-    }
-
-    @SuppressWarnings("UnstableApiUsage")
-    ExtentFilter extent(Core.Scan scan) {
-      final List<Core.Exp> extents = new ArrayList<>();
-      final List<Core.Exp> filters = new ArrayList<>();
-      extent(scan.pat, scan.exp, extents, filters);
-      final Core.Exp extent;
-      if (extents.isEmpty()) {
-        extent = core.extent(typeSystem, scan.pat.type,
-            ImmutableRangeSet.of(Range.all()));
-      } else {
-        extent = extents.get(0);
-        filters.addAll(skip(extents));
-      }
-      return new ExtentFilter(extent, ImmutableList.copyOf(filters));
-    }
-
-    private void extent(Core.Pat pat, Core.Exp exp, List<Core.Exp> extents,
-        List<Core.Exp> filters) {
-      switch (exp.op) {
-      case APPLY:
-        final Core.Apply apply = (Core.Apply) exp;
-        switch (apply.fn.op) {
-        case FN_LITERAL:
-          switch ((BuiltIn) ((Core.Literal) apply.fn).value) {
-          case OP_ELEM:
-            final List<Core.Exp> args = ((Core.Tuple) apply.arg).args;
-            if (matches(args.get(0), pat)) {
-              extents.add(args.get(1));
-            }
-            break;
-          case Z_ANDALSO:
-            for (Core.Exp e : ((Core.Tuple) apply.arg).args) {
-              extent(pat, e, extents, filters);
-              return;
-            }
-          }
-        }
-      }
-      filters.add(exp);
-    }
-
-    /** Returns whether an expression corresponds exactly to a pattern.
-     * For example "x" matches the pattern "x",
-     * and "(z, y)" matches the pattern "(x, y)". */
-    private static boolean matches(Core.Exp exp, Core.Pat pat) {
-      if (exp.op == Op.ID && pat.op == Op.ID_PAT) {
-        return ((Core.Id) exp).idPat.equals(pat);
-      }
-      if (exp.op == Op.TUPLE && pat.op == Op.TUPLE_PAT) {
-        final Core.Tuple tuple = (Core.Tuple) exp;
-        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-        if (tuple.args.size() == tuplePat.args.size()) {
-          return allMatch(tuple.args, tuplePat.args, Extent::matches);
-        }
-      }
-      return false;
-    }
-  }
-
-  /** A "suchthat" expression split into an extent and filters. */
-  static class ExtentFilter {
-    final Core.Exp extent;
-    final ImmutableList<Core.Exp> filters;
-
-    ExtentFilter(Core.Exp extent, ImmutableList<Core.Exp> filters) {
-      this.extent = extent;
-      this.filters = filters;
-    }
-  }
-
-  static class Foo2 {
-    final List<Core.Exp> extents = new ArrayList<>();
-    final List<Core.Exp> filters = new ArrayList<>();
-
-    @Override public String toString() {
-      return "{extents: " + extents + ", filters: " + filters + "}";
-    }
-
-    @SuppressWarnings({"UnstableApiUsage", "rawtypes", "unchecked"})
-    public Foo2 mergeExtents(TypeSystem typeSystem, boolean intersect) {
-      switch (extents.size()) {
-      case 0:
-        throw new AssertionError();
-
-      case 1:
-        extents.set(0, core.simplify(typeSystem, extents.get(0)));
-        return this;
-
-      default:
-        ImmutableRangeSet rangeSet = intersect
-            ? ImmutableRangeSet.of(Range.all())
-            : ImmutableRangeSet.of();
-        List<Core.Exp> satisfiedFilters = new ArrayList<>();
-        List<Core.Exp> remainingFilters = new ArrayList<>();
-        for (Core.Exp exp : extents) {
-          if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
-            final Core.Apply apply = (Core.Apply) exp;
-            final Core.Literal argLiteral = (Core.Literal) apply.arg;
-            final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
-/*
-            rangeSet = intersect
-                ? rangeSet.intersection(list.rangeSetMap)
-                : rangeSet.union(list.rangeSetMap);
- */
-            satisfiedFilters.add(exp);
-          } else {
-            remainingFilters.add(exp);
-          }
-        }
-        final ListType listType = (ListType) extents.get(0).type;
-        Core.Exp exp =
-            core.extent(typeSystem, listType.elementType, rangeSet);
-        for (Core.Exp remainingExp : remainingFilters) {
-          exp = intersect
-              ? core.intersect(typeSystem, exp, remainingExp)
-              : core.union(typeSystem, exp, remainingExp);
-        }
-        final Foo2 foo = new Foo2();
-        foo.extents.add(exp);
-        return foo;
       }
     }
   }
