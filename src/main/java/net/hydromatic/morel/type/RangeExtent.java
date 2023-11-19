@@ -99,8 +99,7 @@ public class RangeExtent {
   private <E extends Comparable<E>> Iterable<E> toList(Type type,
       TypeSystem typeSystem) {
     final List<E> list = new ArrayList<>();
-    final Consumer<E> consumer = list::add;
-    if (populate(typeSystem, type, "/", rangeSetMap, consumer)) {
+    if (populate(typeSystem, type, "/", rangeSetMap, (Consumer<E>) list::add)) {
       return list;
     }
     return null;

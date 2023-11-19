@@ -16,30 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  *)
-(*
-from i where i > 0 andalso i < 10;
-> val it = [1,2,3,4,5,6,7,8,9] : int list
-from i suchthat i > 0 andalso i < 10;
-> val it = [1,2,3,4,5,6,7,8,9] : int list
-from i suchthat i > 0 andalso i < 10 andalso i mod 3 = 2;
-> val it = [2,5,8] : int list
-from i suchthat i = 0 orelse i = 12;
-> val it = [0,12] : int list
-from i suchthat i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
-> val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int list
-*)
-(*
-from i suchthat i > 0 andalso i < 10,
-  b suchthat b = true;
-> val it =
->   [{b=[true, 1],i=1},{b=[true, 2],i=2},{b=[true, 3],i=3},{b=[true, 4],i=4},
->    {b=[true, 5],i=5},{b=[true, 6],i=6},{b=[true, 7],i=7},{b=[true, 8],i=8},
->    {b=[true, 9],i=9}] : {b:bool, i:int} list
-from i suchthat (i > 0 andalso i < 10), b suchthat (b = (i mod 2 = 0));
->
-*)
-from i
-where Option.getOpt i;
-> val it = [(NONE,true),(SOME true,false),(SOME true,true)]
->   : (bool option * bool) list
+"this is a simple script; modify it for debugging test cases";
+> val it = "this is a simple script; modify it for debugging test cases" : string
+
 (*) End dummy.smli
