@@ -111,7 +111,7 @@ public abstract class Compiles {
 
     // Ensures that once we discover that there is no suchThat, we stop looking;
     // makes things a bit more efficient.
-    boolean mayContainSuchThat = false;
+    boolean mayContainSuchThat = true;
 
     Core.Decl coreDecl;
     tracer.onCore(1, coreDecl0);

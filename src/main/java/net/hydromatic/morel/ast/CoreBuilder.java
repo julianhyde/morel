@@ -844,21 +844,30 @@ public enum CoreBuilder {
   public Core.Exp subTrue(TypeSystem typeSystem, Core.Exp exp,
       List<Core.Exp> trueExps) {
     List<Core.Exp> conjunctions = decomposeAnd(exp);
-    List<Core.Exp> exps = new ArrayList<>();
+    List<Core.Exp> conjunctions2 = new ArrayList<>();
     for (Core.Exp conjunction : conjunctions) {
       if (!trueExps.contains(conjunction)) {
-        exps.add(conjunction);
+        conjunctions2.add(conjunction);
       }
     }
-    return andAlso(typeSystem, exps);
+    if (conjunctions.size() == conjunctions2.size()) {
+      // Don't create a new expression unless we have to.
+      return exp;
+    }
+    return andAlso(typeSystem, conjunctions2);
   }
 
   /** Decomposes an {@code andalso} expression;
    * inverse of {@link #andAlso(TypeSystem, Iterable)}.
    *
-   * <p>Examples: "p1 andalso p2" becomes "[p1, p2]";
-   * "true" becomes "[]";
-   * "false" becomes "[false]". */
+   * <p>Examples:
+   * <ul>
+   * <li>"p1 andalso p2" becomes "[p1, p2]" (two elements);
+   * <li>"p1 andalso p2 andalso p3" becomes "[p1, p2, p3]" (three elements);
+   * <li>"p1 orelse p2" becomes "[p1 orelse p2]" (one element);
+   * <li>"true" becomes "[]" (no elements);
+   * <li>"false" becomes "[false]" (one element).
+   * </ul> */
   public List<Core.Exp> decomposeAnd(Core.Exp exp) {
     final ImmutableList.Builder<Core.Exp> list = ImmutableList.builder();
     flattenAnd(exp, list::add);
@@ -868,16 +877,22 @@ public enum CoreBuilder {
   /** Decomposes an {@code orelse} expression;
    * inverse of {@link #orElse(TypeSystem, Iterable)}.
    *
-   * <p>Examples: "p1 orelse p2" becomes "[p1, p2]";
-   * "false" becomes "[]";
-   * "true" becomes "[true]". */
+   * <p>Examples:
+   * <ul>
+   * <li>"p1 orelse p2" becomes "[p1, p2]" (two elements);
+   * <li>"p1 orelse p2 orelse p3" becomes "[p1, p2, p3]" (three elements);
+   * <li>"p1 andalso p2" becomes "[p1 andalso p2]" (one element);
+   * <li>"false" becomes "[]" (no elements);
+   * <li>"true" becomes "[true]" (one element).
+   * </ul> */
   public List<Core.Exp> decomposeOr(Core.Exp exp) {
     final ImmutableList.Builder<Core.Exp> list = ImmutableList.builder();
     flattenOr(exp, list::add);
     return list.build();
   }
 
-  void flattenAnd(Core.Exp exp, Consumer<Core.Exp> consumer) {
+  /** Flattens the {@code andalso}s in an expression into a consumer. */
+  public void flattenAnd(Core.Exp exp, Consumer<Core.Exp> consumer) {
     //noinspection StatementWithEmptyBody
     if (exp.op == Op.BOOL_LITERAL && (boolean) ((Core.Literal) exp).value) {
       // don't add 'true' to the list
@@ -890,12 +905,13 @@ public enum CoreBuilder {
     }
   }
 
-  /** Flattens the 'and' in every expression into a consumer. */
+  /** Flattens the {@code andalso}s in every expression into a consumer. */
   public void flattenAnds(List<Core.Exp> exps, Consumer<Core.Exp> consumer) {
     exps.forEach(arg -> flattenAnd(arg, consumer));
   }
 
-  void flattenOr(Core.Exp exp, Consumer<Core.Exp> consumer) {
+  /** Flattens the {@code orelse}s in an expression into a consumer. */
+  public void flattenOr(Core.Exp exp, Consumer<Core.Exp> consumer) {
     //noinspection StatementWithEmptyBody
     if (exp.op == Op.BOOL_LITERAL && !(boolean) ((Core.Literal) exp).value) {
       // don't add 'false' to the list
@@ -908,7 +924,7 @@ public enum CoreBuilder {
     }
   }
 
-  /** Flattens the 'or' in every expression into a consumer. */
+  /** Flattens the {@code orelse}s in every expression into a consumer. */
   public void flattenOrs(List<Core.Exp> exps, Consumer<Core.Exp> consumer) {
     exps.forEach(arg -> flattenOr(arg, consumer));
   }
