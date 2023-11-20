@@ -115,7 +115,8 @@ class SuchThatShuttle extends Shuttle {
           break;
 
         case YIELD:
-          fromBuilder.yield_(((Core.Yield) step).exp);
+          final Core.Yield yield = (Core.Yield) step;
+          fromBuilder.yield_(false, yield.bindings, yield.exp);
           break;
 
         case WHERE:
