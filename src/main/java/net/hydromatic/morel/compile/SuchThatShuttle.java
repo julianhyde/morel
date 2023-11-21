@@ -126,6 +126,16 @@ class SuchThatShuttle extends Shuttle {
           fromBuilder.where(condition);
           break;
 
+        case SKIP:
+          final Core.Skip skip = (Core.Skip) step;
+          fromBuilder.skip(skip.exp);
+          break;
+
+        case TAKE:
+          final Core.Take take = (Core.Take) step;
+          fromBuilder.take(take.exp);
+          break;
+
         case GROUP:
           final Core.Group group = (Core.Group) step;
           fromBuilder.group(group.groupExps, group.aggregates);
