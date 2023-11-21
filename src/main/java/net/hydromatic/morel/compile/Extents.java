@@ -532,7 +532,7 @@ public class Extents {
    * <blockquote><pre><code>
    * [extent "int: (0, inf)", x > 0,
    *   x elem primes, isPrime x,
-   *   extent "int: (-inf, 10)", x < 10]
+   *   extent "int: (-inf, 10)", x &lt; 10]
    * </code></pre></blockquote>
    *
    * <p>the extents for "(0, inf)" and "(-inf, 10)" are merged into
@@ -540,7 +540,7 @@ public class Extents {
    *
    * <blockquote><pre><code>
    * (extent "int: (0, 10)" intersect primes,
-   *   x > 0 andalso isPrime x andalso x < 10)
+   *   x > 0 andalso isPrime x andalso x &lt; 10)
    * </code></pre></blockquote>
    */
   static Pair<Core.Exp, Core.Exp> reduceAnd(TypeSystem typeSystem,
