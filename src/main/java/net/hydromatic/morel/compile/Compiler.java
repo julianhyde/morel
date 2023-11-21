@@ -148,7 +148,7 @@ public class Compiler {
   }
 
   /** Compilation context. */
-  static class Context {
+  public static class Context {
     final Environment env;
 
     Context(Environment env) {
