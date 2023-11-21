@@ -388,6 +388,16 @@ public class Compiler {
       final Code filterCode = compile(cx, where.exp);
       return () -> Codes.whereRowSink(filterCode, nextFactory.get());
 
+    case SKIP:
+      final Core.Skip skip = (Core.Skip) firstStep;
+      final Code skipCode = compile(cx, skip.exp);
+      return () -> Codes.skipRowSink(skipCode, nextFactory.get());
+
+    case TAKE:
+      final Core.Take take = (Core.Take) firstStep;
+      final Code takeCode = compile(cx, take.exp);
+      return () -> Codes.takeRowSink(takeCode, nextFactory.get());
+
     case YIELD:
       final Core.Yield yield = (Core.Yield) firstStep;
       if (steps.size() == 1) {
