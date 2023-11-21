@@ -29,7 +29,6 @@ import com.google.common.collect.Iterables;
 import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -184,7 +183,7 @@ public class FromBuilder {
 
   public FromBuilder where(Core.Exp condition) {
     if (condition.op == Op.BOOL_LITERAL
-        && (Boolean) ((Core.Literal) condition).value) {
+        && ((Core.Literal) condition).unwrap(Boolean.class)) {
       // skip "where true"
       return this;
     }
@@ -193,7 +192,7 @@ public class FromBuilder {
 
   public FromBuilder skip(Core.Exp count) {
     if (count.op == Op.INT_LITERAL
-        && ((Core.Literal) count).value.equals(BigDecimal.ZERO)) {
+        && ((Core.Literal) count).unwrap(Integer.class) == 0) {
       // skip "skip 0"
       return this;
     }

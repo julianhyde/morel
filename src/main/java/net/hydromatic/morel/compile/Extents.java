@@ -368,7 +368,7 @@ public class Extents {
         apply = (Core.Apply) filter;
         switch (apply.fn.op) {
         case FN_LITERAL:
-          BuiltIn builtIn = (BuiltIn) ((Core.Literal) apply.fn).value;
+          BuiltIn builtIn = ((Core.Literal) apply.fn).unwrap(BuiltIn.class);
           final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map2;
           switch (builtIn) {
           case Z_ANDALSO:

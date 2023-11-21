@@ -162,13 +162,15 @@ public class ExtentTest {
     Core.Exp x = generator(f.typeSystem, xPat, null, exp, ImmutableList.of());
     assertThat(x, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) x).fn, instanceOf(Core.Literal.class));
-    assertThat(((Core.Literal) ((Core.Apply) x).fn).value, is(BuiltIn.Z_EXTENT));
+    assertThat(((Core.Literal) ((Core.Apply) x).fn).unwrap(BuiltIn.class),
+        is(BuiltIn.Z_EXTENT));
     assertThat(x, hasToString("extent \"int {/=[[3..5), (5..10)]}\""));
 
     Core.Exp y = generator(f.typeSystem, yPat, null, exp, ImmutableList.of());
     assertThat(y, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) y).fn, instanceOf(Core.Literal.class));
-    assertThat(((Core.Literal) ((Core.Apply) y).fn).value, is(BuiltIn.Z_LIST));
+    assertThat(((Core.Literal) ((Core.Apply) y).fn).unwrap(BuiltIn.class),
+        is(BuiltIn.Z_LIST));
     assertThat(y, hasToString("[20]"));
   }
 

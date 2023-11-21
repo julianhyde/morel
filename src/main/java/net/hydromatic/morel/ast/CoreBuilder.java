@@ -611,8 +611,7 @@ public enum CoreBuilder {
       for (Core.Exp exp : exps) {
         if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
           final Core.Literal argLiteral = (Core.Literal) ((Core.Apply) exp).arg;
-          final Core.Wrapper wrapper = (Core.Wrapper) argLiteral.value;
-          final RangeExtent list = wrapper.unwrap(RangeExtent.class);
+          final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
           rangeSetMaps.add(list.rangeSetMap);
           continue;
         }
@@ -646,8 +645,7 @@ public enum CoreBuilder {
       for (Core.Exp exp : exps) {
         if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
           final Core.Literal argLiteral = (Core.Literal) ((Core.Apply) exp).arg;
-          final Core.Wrapper wrapper = (Core.Wrapper) argLiteral.value;
-          final RangeExtent list = wrapper.unwrap(RangeExtent.class);
+          final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
           rangeSetMaps.add(list.rangeSetMap);
           continue;
         }
@@ -902,11 +900,13 @@ public enum CoreBuilder {
   /** Flattens the {@code andalso}s in an expression into a consumer. */
   public void flattenAnd(Core.Exp exp, Consumer<Core.Exp> consumer) {
     //noinspection StatementWithEmptyBody
-    if (exp.op == Op.BOOL_LITERAL && (boolean) ((Core.Literal) exp).value) {
+    if (exp.op == Op.BOOL_LITERAL
+        && ((Core.Literal) exp).unwrap(Boolean.class)) {
       // don't add 'true' to the list
     } else if (exp.op == Op.APPLY
         && ((Core.Apply) exp).fn.op == Op.FN_LITERAL
-        && ((Core.Literal) ((Core.Apply) exp).fn).value == BuiltIn.Z_ANDALSO) {
+        && ((Core.Literal) ((Core.Apply) exp).fn).unwrap(BuiltIn.class)
+            == BuiltIn.Z_ANDALSO) {
       flattenAnds(((Core.Apply) exp).args(), consumer);
     } else {
       consumer.accept(exp);
@@ -921,11 +921,13 @@ public enum CoreBuilder {
   /** Flattens the {@code orelse}s in an expression into a consumer. */
   public void flattenOr(Core.Exp exp, Consumer<Core.Exp> consumer) {
     //noinspection StatementWithEmptyBody
-    if (exp.op == Op.BOOL_LITERAL && !(boolean) ((Core.Literal) exp).value) {
+    if (exp.op == Op.BOOL_LITERAL
+        && !((Core.Literal) exp).unwrap(Boolean.class)) {
       // don't add 'false' to the list
     } else if (exp.op == Op.APPLY
         && ((Core.Apply) exp).fn.op == Op.FN_LITERAL
-        && ((Core.Literal) ((Core.Apply) exp).fn).value == BuiltIn.Z_ORELSE) {
+        && ((Core.Literal) ((Core.Apply) exp).fn).unwrap(BuiltIn.class)
+            == BuiltIn.Z_ORELSE) {
       flattenOrs(((Core.Apply) exp).args(), consumer);
     } else {
       consumer.accept(exp);
