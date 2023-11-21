@@ -77,6 +77,36 @@ public class MorelParserImpl implements MorelParser
       this.lineOffset = jj_input_stream.bufline[jj_input_stream.bufpos];
     }
   }
+
+  /** Given quoted identifier {@code `abc`} returns {@code abc}. */
+  static String unquoteIdentifier(String s) {
+    assert s.charAt(0) == '`';
+    assert s.charAt(s.length() - 1) == '`';
+    return s.substring(1, s.length() - 1);
+  }
+
+  /** Given quoted string {@code "abc"} returns {@code abc}. */
+  static String unquoteString(String s) {
+    assert s.charAt(0) == '"';
+    assert s.charAt(s.length() - 1) == '"';
+    return s.substring(1, s.length() - 1)
+        .replace("\\\\", "\\")
+        .replace("\\\"", "\"");
+  }
+
+  /** Given quoted char literal {@code #"a"} returns {@code a}. */
+  static char unquoteCharLiteral(String s) {
+    assert s.charAt(0) == '#';
+    assert s.charAt(1) == '"';
+    assert s.charAt(s.length() - 1) == '"';
+    String image = s.substring(2, s.length() - 1)
+        .replace("\\\\", "\\")
+        .replace("\\\"", "\"");
+    if (image.length() != 1) {
+      throw new RuntimeException("Error: character constant not length 1");
+    }
+    return image.charAt(0);
+  }
 }
 
 PARSER_END(MorelParserImpl)
@@ -168,11 +198,7 @@ Literal stringLiteral() :
 }
 {
   <QUOTED_STRING> {
-    assert token.image.charAt(0) == '"';
-    assert token.image.charAt(token.image.length() - 1) == '"';
-    String image = token.image.substring(1, token.image.length() - 1)
-        .replace("\\\\", "\\").replace("\\\"", "\"");
-    return ast.stringLiteral(pos(), image);
+    return ast.stringLiteral(pos(), unquoteString(token.image));
   }
 }
 
@@ -182,15 +208,7 @@ Literal charLiteral() :
 }
 {
   <CHAR_LITERAL> {
-    assert token.image.charAt(0) == '#';
-    assert token.image.charAt(1) == '"';
-    assert token.image.charAt(token.image.length() - 1) == '"';
-    String image = token.image.substring(2, token.image.length() - 1)
-        .replace("\\\\", "\\").replace("\\\"", "\"");
-    if (image.length() != 1) {
-      throw new RuntimeException("Error: character constant not length 1");
-    }
-    return ast.charLiteral(pos(), image.charAt(0));
+    return ast.charLiteral(pos(), unquoteCharLiteral(token.image));
   }
 }
 
@@ -201,6 +219,9 @@ Id identifier() :
 {
   <IDENTIFIER> {
     return ast.id(pos(), token.image);
+  }
+| <QUOTED_IDENTIFIER> {
+    return ast.id(pos(), unquoteIdentifier(token.image));
   }
 }
 
@@ -810,7 +831,7 @@ void namedExpression(PairList<Id, Exp> list) :
   final Id id;
 }
 {
-  LOOKAHEAD(<IDENTIFIER> <EQ>)
+  LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <EQ>)
   id = identifier() <EQ> exp = expression() {
     list.add(id, exp);
   }
@@ -911,6 +932,10 @@ void recordExp(Map<String, Exp> map) :
 |
   LOOKAHEAD(<IDENTIFIER> <EQ>)
   <IDENTIFIER> { id = token.image; }
+  <EQ> exp = expression() { map.put(id, exp); }
+|
+  LOOKAHEAD(<QUOTED_IDENTIFIER> <EQ>)
+  <QUOTED_IDENTIFIER> { id = unquoteIdentifier(token.image); }
   <EQ> exp = expression() { map.put(id, exp); }
 |
   exp = expression() {
@@ -1247,7 +1272,10 @@ void recordPat(Map<String, Pat> map) :
   final Ast.Pat pat;
 }
 {
-  ( <NON_NEGATIVE_INTEGER_LITERAL> | <IDENTIFIER> ) { id = token.image; }
+  ( <NON_NEGATIVE_INTEGER_LITERAL> { id = token.image; }
+  | <IDENTIFIER> { id = token.image; }
+  | <QUOTED_IDENTIFIER> { id = unquoteIdentifier(token.image); }
+  )
   (
     <EQ> pat = pat() { map.put(id, pat); }
   |
@@ -1576,6 +1604,8 @@ MORE :
     >
     |
     < IDENTIFIER: <LETTER> (<LETTER>|<DIGIT>|"_"|"'")* >
+    |
+    < QUOTED_IDENTIFIER: "`" (<LETTER>|<DIGIT>|"_"|"'")* "`" >
     |
     < TY_VAR: "'" <LETTER> (<LETTER>|<DIGIT>|"_"|"'")* >
     |
