@@ -376,11 +376,9 @@ public class Extents {
             // filters (intersect the extents).
             map2 = new LinkedHashMap<>();
             apply.arg.forEachArg((arg, i) -> g3(map2, arg));
-            map2.forEach((pat, foo) -> {
-              final PairList<Core.Exp, Core.Exp> foo1 =
-                  map.computeIfAbsent(pat, p -> PairList.of());
-              foo1.addAll(foo);
-            });
+            map2.forEach((pat, foo) ->
+                map.computeIfAbsent(pat, p -> PairList.of())
+                    .addAll(foo));
             break;
 
           case Z_ORELSE:
@@ -391,11 +389,9 @@ public class Extents {
                 new LinkedHashMap<>();
             apply.arg.forEachArg((arg, i) -> {
               g3(map3, arg);
-              map3.forEach((pat, foo) -> {
-                final PairList<Core.Exp, Core.Exp> foo2 =
-                    map2.computeIfAbsent(pat, p -> PairList.of());
-                foo2.add(reduceAnd(typeSystem, foo));
-              });
+              map3.forEach((pat, foo) ->
+                  map2.computeIfAbsent(pat, p -> PairList.of())
+                      .add(reduceAnd(typeSystem, foo)));
               map3.clear();
             });
             map2.forEach((pat, foo) -> {
@@ -425,20 +421,17 @@ public class Extents {
           case OP_GT:
           case OP_LT:
           case OP_LE:
-            g4(builtIn, apply.arg(0), apply.arg(1), (pat, filter2, extent) -> {
-              final PairList<Core.Exp, Core.Exp> foo =
-                  map.computeIfAbsent(pat, p -> PairList.of());
-              foo.add(extent, filter2);
-            });
+            g4(builtIn, apply.arg(0), apply.arg(1), (pat, filter2, extent) ->
+                map.computeIfAbsent(pat, p -> PairList.of())
+                    .add(extent, filter2));
             break;
 
           case OP_ELEM:
-            final PairList<Core.Exp, Core.Exp> foo;
             switch (apply.arg(0).op) {
             case ID:
               final Core.NamedPat pat = ((Core.Id) apply.arg(0)).idPat;
-              foo = map.computeIfAbsent(pat, p -> PairList.of());
-              foo.add(apply.arg(1), apply);
+              map.computeIfAbsent(pat, p1 -> PairList.of())
+                  .add(apply.arg(1), apply);
               break;
 
             case TUPLE:
@@ -446,8 +439,8 @@ public class Extents {
               final Core.TuplePat tuplePat =
                   core.tuplePat(typeSystem,
                       transform(tuple.args, arg -> ((Core.Id) arg).idPat));
-              foo = map.computeIfAbsent(tuplePat, p -> PairList.of());
-              foo.add(apply.arg(1), apply);
+              map.computeIfAbsent(tuplePat, p -> PairList.of())
+                  .add(apply.arg(1), apply);
               break;
             }
             break;
