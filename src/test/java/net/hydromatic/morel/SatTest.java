@@ -22,16 +22,15 @@ import net.hydromatic.morel.util.Sat;
 import net.hydromatic.morel.util.Sat.Term;
 import net.hydromatic.morel.util.Sat.Variable;
 
+import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Tests satisfiability. */
 public class SatTest {
@@ -51,11 +50,9 @@ public class SatTest {
         is("(x ∨ x ∨ y) ∧ (¬x ∨ ¬y ∨ ¬y) ∧ (¬x ∨ y ∨ y)"));
 
     final Map<Variable, Boolean> solution = sat.solve(formula);
-    final Map<Variable, Boolean> expectedMap = new HashMap<Variable, Boolean>();
-    expectedMap.put(x, false);
-    expectedMap.put(y, true);
     assertThat(solution, notNullValue());
-    assertEquals(solution, expectedMap);
+    assertThat(solution,
+        is(ImmutableMap.of(x, false, y, true)));
   }
 
   /** Tests true ("and" with zero arguments). */
