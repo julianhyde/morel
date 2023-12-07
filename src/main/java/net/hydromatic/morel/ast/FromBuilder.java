@@ -37,6 +37,7 @@ import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Static.append;
 
 import static com.google.common.collect.Iterables.getLast;
 
@@ -134,7 +135,6 @@ public class FromBuilder {
 
   public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
     if (exp.op == Op.FROM
-        && steps.isEmpty()
         && core.boolLiteral(true).equals(condition)
         && (pat instanceof Core.IdPat
             && !((Core.From) exp).steps.isEmpty()
@@ -147,8 +147,17 @@ public class FromBuilder {
       final List<Binding> bindings;
       if (pat instanceof Core.RecordPat) {
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         forEach(recordPat.type().argNameTypes.keySet(), recordPat.args,
             (name, arg) -> nameExps.add(name, core.id((Core.IdPat) arg)));
+        bindings = null;
+      } else if (!this.bindings.isEmpty()) {
+        // With at least one binding, and one new variable, the output will be
+        // a record type.
+        final Core.IdPat idPat = (Core.IdPat) pat;
+        final Core.FromStep lastStep = getLast(from.steps);
+        this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
+        lastStep.bindings.forEach(b -> nameExps.add(idPat.name, core.id(b.id)));
         bindings = null;
       } else {
         final Core.IdPat idPat = (Core.IdPat) pat;
@@ -168,7 +177,7 @@ public class FromBuilder {
         }
         final Binding binding = Iterables.getOnlyElement(lastStep.bindings);
         nameExps.add(idPat.name, core.id(binding.id));
-        bindings = ImmutableList.of(Binding.of(idPat));
+        bindings = append(this.bindings, Binding.of(idPat));
       }
       addAll(from.steps);
       return yield_(true, bindings, core.record(typeSystem, nameExps));
@@ -224,7 +233,7 @@ public class FromBuilder {
   }
 
   public FromBuilder yield_(boolean uselessIfLast, Core.Exp exp) {
-    return yield_(false, null, exp);
+    return yield_(uselessIfLast, null, exp);
   }
 
   /** Creates a "yield" step.
@@ -328,24 +337,12 @@ public class FromBuilder {
     return identity ? TupleType.IDENTITY : TupleType.RENAME;
   }
 
-  /** Returns whether tuple is something like "{i = j, j = x}". */
-  private boolean isRename(Core.Tuple tuple) {
-    for (int i = 0; i < tuple.args.size(); i++) {
-      Core.Exp exp = tuple.args.get(i);
-      if (exp.op != Op.ID) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   private Core.Exp build(boolean simplify) {
     if (removeIfLastIndex == steps.size() - 1) {
       removeIfLastIndex = Integer.MIN_VALUE;
       final Core.Yield yield = (Core.Yield) getLast(steps);
       assert yield.exp.op == Op.TUPLE
           && ((Core.Tuple) yield.exp).args.size() == 1
-          && isTrivial((Core.Tuple) yield.exp, bindings, yield.bindings)
           : yield.exp;
       steps.remove(steps.size() - 1);
     }
