@@ -24,23 +24,26 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
@@ -49,6 +52,7 @@ import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.skip;
 
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Iterables.getOnlyElement;
 
 /**
@@ -94,6 +98,8 @@ class SuchThatShuttle extends Shuttle {
 
     Core.From visit(Core.From from) {
       final List<Core.FromStep> steps = from.steps;
+      final DeferredStepList deferredScans = new DeferredStepList(steps);
+
       for (int i = 0; i < steps.size(); i++) {
         final Core.FromStep step = steps.get(i);
         switch (step.op) {
@@ -108,13 +114,15 @@ class SuchThatShuttle extends Shuttle {
             final Core.Exp rewritten =
                 rewrite0(boundPats, scan, skip(steps, i));
             fromBuilder.scan(scan.pat, rewritten, scan.condition);
+            deferredScans.scan(scan.pat, rewritten, scan.condition);
           } else {
-            fromBuilder.scan(scan.pat, scan.exp);
+            deferredScans.scan(scan.pat, scan.exp);
           }
           break;
 
         case YIELD:
           final Core.Yield yield = (Core.Yield) step;
+          deferredScans.flush(fromBuilder);
           fromBuilder.yield_(false, yield.bindings, yield.exp);
           break;
 
@@ -122,16 +130,18 @@ class SuchThatShuttle extends Shuttle {
           final Core.Where where = (Core.Where) step;
           Core.Exp condition =
               core.subTrue(typeSystem, where.exp, satisfiedFilters);
-          fromBuilder.where(condition);
+          deferredScans.where(condition);
           break;
 
         case GROUP:
           final Core.Group group = (Core.Group) step;
+          deferredScans.flush(fromBuilder);
           fromBuilder.group(group.groupExps, group.aggregates);
           break;
 
         case ORDER:
           final Core.Order order = (Core.Order) step;
+          deferredScans.flush(fromBuilder);
           fromBuilder.order(order.orderItems);
           break;
 
@@ -139,6 +149,7 @@ class SuchThatShuttle extends Shuttle {
           throw new AssertionError(step.op);
         }
       }
+      deferredScans.flush(fromBuilder);
       return fromBuilder.build();
     }
 
@@ -217,8 +228,7 @@ class SuchThatShuttle extends Shuttle {
           }
         });
 
-        final SortedMap<String, Core.Exp> nameExps =
-            new TreeMap<>(RecordType.ORDERING);
+        final PairList<String, Core.Exp> nameExps = PairList.of();
         if (scans.isEmpty()) {
           final Extents.Analysis extent =
               Extents.create(typeSystem, scan.pat, boundPats2, scan.exp,
@@ -230,18 +240,18 @@ class SuchThatShuttle extends Shuttle {
           }
           boundPats2.forEach((p, e) -> {
             if (extent.goalPats.contains(p)) {
-              nameExps.put(p.name, e);
+              nameExps.add(p.name, e);
             }
           });
         } else {
-          boundPats2.forEach((p, e) -> nameExps.put(p.name, e));
+          boundPats2.forEach((p, e) -> nameExps.add(p.name, e));
         }
 
         final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
         scans.forEach(fromBuilder::scan);
         filters.forEach(fromBuilder::where);
         fromBuilder.yield_(nameExps.size() == 1
-            ? getOnlyElement(nameExps.values())
+            ? getOnlyElement(nameExps).getValue()
             : core.record(typeSystem, nameExps));
         return fromBuilder.build();
       }
@@ -410,6 +420,86 @@ class SuchThatShuttle extends Shuttle {
   private static class RewriteFailedException extends RuntimeException {
     RewriteFailedException(String message) {
       super(message);
+    }
+  }
+
+  /** Maintains a list of steps that have not been applied yet.
+   *
+   * <p>Holds the state necessary for a classic topological sort algorithm:
+   * For each node, keep the list of unresolved forward references.
+   * After each reference is resolved, remove it from each node's list.
+   * Output each node as its unresolved list becomes empty.
+   * The topological sort is stable.
+   */
+  static class DeferredStepList {
+    final PairList<Set<Core.Pat>, Consumer<FromBuilder>> steps = PairList.of();
+    final ImmutableSet<Core.Pat> forwardRefs;
+
+    DeferredStepList(List<Core.FromStep> steps) {
+      forwardRefs =
+          steps.stream()
+              .filter(step -> step instanceof Core.Scan)
+              .map(step -> ((Core.Scan) step).pat)
+              .collect(toImmutableSet());
+    }
+
+    void scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(exp);
+      steps.add(unresolvedRefs, fromBuilder -> {
+        fromBuilder.scan(pat, exp, condition);
+        resolve(pat);
+      });
+    }
+
+    void scan(Core.Pat pat, Core.Exp exp) {
+      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(exp);
+      steps.add(unresolvedRefs, fromBuilder -> {
+        fromBuilder.scan(pat, exp);
+        resolve(pat);
+      });
+    }
+
+    void where(Core.Exp condition) {
+      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(condition);
+      steps.add(unresolvedRefs,
+          fromBuilder -> fromBuilder.where(condition));
+    }
+
+    private Set<Core.Pat> unresolvedRefs(Core.Exp exp) {
+      Set<Core.Pat> refs = new LinkedHashSet<>();
+      exp.accept(
+          new Visitor() {
+            @Override protected void visit(Core.Id id) {
+              if (forwardRefs.contains(id.idPat)) {
+                refs.add(id.idPat);
+              }
+            }
+          });
+      return refs;
+    }
+
+    /** Marks that a pattern has now been defined.
+     *
+     * <p>After this method, it is possible that some steps might have no
+     * unresolved references. Those steps are now ready to add to the
+     * builder. */
+    void resolve(Core.Pat pat) {
+      steps.forEach((unresolvedRefs, consumer) -> unresolvedRefs.remove(pat));
+    }
+
+    void flush(FromBuilder fromBuilder) {
+      // Are there any scans that had forward references previously but
+      // whose references are now all satisfied? Add them to the builder.
+      for (;;) {
+        int j = steps.firstMatch((unresolvedRefs, consumer) ->
+            unresolvedRefs.isEmpty());
+        if (j < 0) {
+          break;
+        }
+        final Map.Entry<Set<Core.Pat>, Consumer<FromBuilder>> step =
+            steps.remove(j);
+        step.getValue().accept(fromBuilder);
+      }
     }
   }
 }

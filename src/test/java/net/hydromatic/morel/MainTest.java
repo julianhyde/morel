@@ -1958,7 +1958,13 @@ public class MainTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{deptno:int, loc:string, name:string} list")
-        .assertCore(-1, hasToString(core));
+        .assertCore(-1, hasToString(core))
+        .assertEval(
+            is(
+                list(list(10, "ACCOUNTING", "NEW YORK"),
+                    list(20, "RESEARCH", "DALLAS"),
+                    list(30, "SALES", "CHICAGO"),
+                    list(40, "OPERATIONS", "BOSTON"))));
   }
 
   /** As {@link #testFromSuchThat2c()} but with a literal. */
@@ -1966,22 +1972,116 @@ public class MainTest {
     final String ml = "from (dno, name)\n"
         + "  suchthat {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
         + "      elem scott.dept\n"
-        + "    andalso dno = 20";
+        + "    andalso dno > 20";
     final String core0 = "val it = "
         + "from (dno, name) : int * string "
         + "where {deptno = dno, dname = name, loc = \"CHICAGO\"} "
         + "elem #dept scott "
-        + "andalso dno = 20";
+        + "andalso dno > 20";
     final String core1 = "val it = "
         + "from v0 in #dept scott "
         + "where #loc v0 = \"CHICAGO\" "
-        + "where #deptno v0 = 20 "
+        + "where #deptno v0 > 20 "
         + "yield {dno = #deptno v0, name = #dname v0}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{dno:int, name:string} list")
         .assertCore(0, hasToString(core0))
         .assertCore(-1, hasToString(core1));
+  }
+
+  @Test void testFromSuchThat2d2() {
+    final String ml = "from (dno, name)\n"
+        + "  where {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
+        + "      elem scott.dept\n"
+        + "    andalso dno > 20";
+    final String core0 = "val it = "
+        + "from (dno, name) : int * string "
+        + "where {deptno = dno, dname = name, loc = \"CHICAGO\"} "
+        + "elem #dept scott "
+        + "andalso dno > 20";
+    final String core1 = "val it = "
+        + "from (dno, name) in ("
+        + "from v0 in #dept scott "
+        + "where #loc v0 = \"CHICAGO\" "
+        + "where #deptno v0 > 20 "
+        + "yield {dno = #deptno v0, name = #dname v0})";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{dno:int, name:string} list")
+        .assertCore(0, hasToString(core0))
+        .assertCore(-1, hasToString(core1));
+  }
+
+  @Test void testFromSuchThat2d3() {
+    final String ml = "from dno, name, v\n"
+        + "where v elem scott.dept\n"
+        + "where v.deptno = dno\n"
+        + "where name = v.dname\n"
+        + "where v.loc = \"CHICAGO\"\n"
+        + "where dno = 30\n"
+        + "yield {dno = #deptno v, name = #dname v}";
+    final String core0 = "val it = "
+        + "from dno : int "
+        + "join name : string "
+        + "join v : {deptno:int, dname:string, loc:string} "
+        + "where v elem #dept scott "
+        + "where #deptno v = dno "
+        + "where name = #dname v "
+        + "where #loc v = \"CHICAGO\" "
+        + "where dno = 30 "
+        + "yield {dno = #deptno v, name = #dname v}";
+    final String core1 = "val it = "
+        + "from dno in [30] "
+        + "join v in #dept scott "
+        + "join name in [#dname v] "
+        + "where #deptno v = dno "
+        + "where name = #dname v "
+        + "where #loc v = \"CHICAGO\" "
+        + "where dno = 30 "
+        + "yield {dno = #deptno v, name = #dname v}";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{dno:int, name:string} list")
+        .assertCore(0, hasToString(core0))
+        .assertCore(-1, hasToString(core1))
+        .assertEval(is(list(list(30, "SALES"))));
+  }
+
+  @Test void testFromSuchThat2d4() {
+    final String ml = "from dno, name, v\n"
+        + "where v elem scott.dept\n"
+        + "where v.deptno = dno\n"
+        + "where name = v.dname\n"
+        + "where v.loc = \"CHICAGO\"\n"
+        + "where dno > 25\n"
+        + "yield {dno = #deptno v, name = #dname v}";
+    final String core0 = "val it = "
+        + "from dno : int "
+        + "join name : string "
+        + "join v : {deptno:int, dname:string, loc:string} "
+        + "where v elem #dept scott "
+        + "where #deptno v = dno "
+        + "where name = #dname v "
+        + "where #loc v = \"CHICAGO\" "
+        + "where dno > 25 "
+        + "yield {dno = #deptno v, name = #dname v}";
+    final String core1 = "val it = "
+        + "from dno in [30] "
+        + "yield {dno = dno} "
+        + "join v in (from v in #dept scott) "
+        + "join name in (from name in [#dname v]) "
+        + "where #deptno v = dno "
+        + "where name = #dname v "
+        + "where #loc v = \"CHICAGO\" "
+        + "where dno > 25 "
+        + "yield {dno = #deptno v, name = #dname v}";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+        .assertType("{dno:int, name:string} list")
+        .assertCore(0, hasToString(core0))
+        .assertCore(-1, hasToString(core1))
+        .assertEval(is(list(list(30, "SALES"))));
   }
 
   /** As {@link #testFromSuchThat2d()} but using a function.
