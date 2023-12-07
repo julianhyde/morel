@@ -24,6 +24,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.RangeExtent;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
@@ -44,6 +45,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +53,7 @@ import java.util.Set;
 import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Static.transform;
+import static net.hydromatic.morel.util.Static.transformEager;
 
 import static org.apache.calcite.util.Util.minus;
 import static org.apache.calcite.util.Util.skip;
@@ -162,6 +164,14 @@ public class Extents {
         extent.g3(map.map, ((Core.Where) step).exp);
       }
     }
+    extent.definitions.forEach((namedPat, exp) -> {
+      if (!map.map.containsKey(namedPat)) {
+        map.map.put(namedPat,
+            ImmutablePairList.of(
+                core.list(typeSystem, exp),
+                core.equal(typeSystem, core.id(namedPat), exp)));
+      }
+    });
     final PairList<Core.Exp, Core.Exp> foo = map.get(typeSystem, pat);
     final Pair<Core.Exp, Core.Exp> extentFilter;
     if (foo.isEmpty()) {
@@ -352,6 +362,12 @@ public class Extents {
     private final TypeSystem typeSystem;
     final Set<Core.NamedPat> goalPats;
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
+    final List<Core.IdPat> idPats = new ArrayList<>();
+
+    /** Contains definitions, such as "name = d.dname".
+     * With such a definition, "name" won't need an extent, because we
+     * can define it (or inline it) as the expression "d.dname". */
+    final Map<Core.NamedPat, Core.Exp> definitions = new HashMap<>();
 
     Extent(TypeSystem typeSystem, Core.Pat pat,
         SortedMap<Core.NamedPat, Core.Exp> boundPats) {
@@ -436,12 +452,43 @@ public class Extents {
 
             case TUPLE:
               final Core.Tuple tuple = (Core.Tuple) apply.arg(0);
-              final Core.TuplePat tuplePat =
-                  core.tuplePat(typeSystem,
-                      transform(tuple.args, arg -> ((Core.Id) arg).idPat));
-              map.computeIfAbsent(tuplePat, p -> PairList.of())
-                  .add(apply.arg(1), apply);
-              break;
+              if (tuple.args.stream().allMatch(a -> a instanceof Core.Id)) {
+                final Core.TuplePat tuplePat =
+                    core.tuplePat(typeSystem,
+                        transformEager(tuple.args, arg -> ((Core.Id) arg).idPat));
+                map.computeIfAbsent(tuplePat, p -> PairList.of())
+                    .add(apply.arg(1), apply);
+                break;
+              } else if (true) {
+                final Core.Id id = core.id(createId(tuple.type));
+                final Core.Exp apply2 = core.elem(typeSystem, id, apply.arg(1));
+                g3(map,
+                    core.andAlso(typeSystem, apply2,
+                        core.equal(typeSystem, id, tuple)));
+                break;
+              } else if (tuple.args.stream().anyMatch(a ->
+                  a instanceof Core.Literal)) {
+                final List<Core.Exp> conjunctions = new ArrayList<>();
+                final Core.Tuple tuple2 =
+                    core.tuple(tuple.type(),
+                        transformEager(tuple.args,
+                            arg -> {
+                              if (arg instanceof Core.Id) {
+                                return arg;
+                              }
+                              if (arg instanceof Core.Literal) {
+                                final Core.Id id = core.id(createId(arg.type));
+                                conjunctions.add(core.equal(typeSystem, id, arg));
+                                return id;
+                              }
+                              throw new AssertionError("unsupported arg " + arg
+                                  + " in tuple " + tuple);
+                            }));
+                final Core.Exp apply2 = core.elem(typeSystem, tuple2, apply.arg(1));
+                conjunctions.add(0, apply2);
+                g3(map, core.andAlso(typeSystem, conjunctions));
+                break;
+              }
             }
             break;
           }
@@ -453,8 +500,14 @@ public class Extents {
       }
     }
 
-    @SuppressWarnings("SwitchStatementWithTooFewBranches")
     private void g4(BuiltIn builtIn, Core.Exp arg0, Core.Exp arg1,
+        TriConsumer<Core.Pat, Core.Exp, Core.Exp> consumer) {
+      g5(builtIn, arg0, arg1, consumer);
+      g5(builtIn.reverse(), arg1, arg0, consumer);
+    }
+
+    @SuppressWarnings("SwitchStatementWithTooFewBranches")
+    private void g5(BuiltIn builtIn, Core.Exp arg0, Core.Exp arg1,
         TriConsumer<Core.Pat, Core.Exp, Core.Exp> consumer) {
       switch (builtIn) {
       case OP_EQ:
@@ -473,12 +526,8 @@ public class Extents {
                 core.call(typeSystem, builtIn, arg0.type, Pos.ZERO, arg0, arg1),
                 baz(builtIn, arg1));
           }
+          definitions.put(id.idPat, arg1);
           break;
-        default:
-          if (arg0.isConstant() && arg1.op == Op.ID) {
-            // Try switched, "literal = id".
-            g4(builtIn.reverse(), arg1, arg0, consumer);
-          }
         }
         break;
 
@@ -510,6 +559,12 @@ public class Extents {
       default:
         throw new AssertionError("unexpected: " + builtIn);
       }
+    }
+
+    private Core.IdPat createId(Type type) {
+      final Core.IdPat idPat = core.idPat(type, typeSystem.nameGenerator);
+      idPats.add(idPat);
+      return idPat;
     }
   }
 

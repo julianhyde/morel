@@ -46,6 +46,75 @@ from i suchthat i > 0 andalso i < 10,
 >    {b=true,i=6},{b=false,i=7},{b=true,i=8},{b=false,i=9}]
 >   : {b:bool, i:int} list
 
+(* TODO
+from (dno, name)
+suchthat {deptno = dno, dname = name, loc} elem scott.dept
+  andalso dno > 20;
+*)
+
+(*) As previous but with a literal in the record.
+(* TODO
+from (dno, name)
+suchthat {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.dept
+  andalso dno > 20;
+*)
+
+(*) Equivalent to previous, rephrasing 'suchthat' as 'where'
+(* TODO
+from (dno, name)
+where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.dept
+  andalso dno > 20;
+*)
+
+(*) Equivalent to previous, splitting 'where'
+(* TODO
+from (dno, name)
+where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.dept
+where dno > 20;
+*)
+
+(*) Variables 'dno', 'name' are infinite until constrained by conditions.
+from v, dno, name
+where v elem scott.dept
+where v.deptno = dno
+where name = v.dname
+where v.loc = "CHICAGO"
+yield {dno, name = #dname v};
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+
+(*) Forward references are required. 'dno' is infinite until we see the
+(*) condition 'v.deptno = dno', and at that point we haven't declared
+(*) 'v'. So we defer 'dno' until after 'v'.
+from dno, name, v
+where v elem scott.dept
+where v.deptno = dno
+where name = v.dname
+where v.loc = "CHICAGO"
+yield {dno = #deptno v, name = #dname v};
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+
+(*) An extra condition on 'dno' yields empty result.
+from dno, name, v
+where v elem scott.dept
+where v.deptno = dno
+where name = v.dname
+where v.loc = "CHICAGO"
+where dno = 20
+yield {dno = #deptno v, name = #dname v};
+> val it = [] : {dno:int, name:string} list
+
+(*) Inequality on 'dno'
+from dno, name, v
+where v elem scott.dept
+where v.deptno = dno
+where name = v.dname
+where v.loc = "CHICAGO"
+(* TODO
+where dno > 20
+*)
+yield {dno = #deptno v, name = #dname v};
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+
 (*) We can iterate over a finite datatype
 from i
 where Option.getOpt i;
