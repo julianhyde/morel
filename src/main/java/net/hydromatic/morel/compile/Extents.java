@@ -165,7 +165,12 @@ public class Extents {
       }
     }
     extent.definitions.forEach((namedPat, exp) -> {
-      if (!map.map.containsKey(namedPat)) {
+      // Is this expression better than the existing one?
+      // Yes, if there's no existing expression,
+      // or if the existing expression is infinite.
+      // For example, 'dno = v.deptno' is better than 'dno > 25'.
+      if (!map.map.containsKey(namedPat)
+          || Extents.isInfinite(map.map.get(namedPat).left(0))) {
         map.map.put(namedPat,
             ImmutablePairList.of(
                 core.list(typeSystem, exp),
@@ -511,6 +516,12 @@ public class Extents {
         TriConsumer<Core.Pat, Core.Exp, Core.Exp> consumer) {
       switch (builtIn) {
       case OP_EQ:
+        switch (arg0.op) {
+        case ID:
+          final Core.Id id = (Core.Id) arg0;
+          definitions.put(id.idPat, arg1);
+        }
+        // fall through
       case OP_NE:
       case OP_GE:
       case OP_GT:
@@ -526,7 +537,6 @@ public class Extents {
                 core.call(typeSystem, builtIn, arg0.type, Pos.ZERO, arg0, arg1),
                 baz(builtIn, arg1));
           }
-          definitions.put(id.idPat, arg1);
           break;
         }
         break;

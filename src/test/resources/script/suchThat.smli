@@ -109,9 +109,7 @@ where v elem scott.dept
 where v.deptno = dno
 where name = v.dname
 where v.loc = "CHICAGO"
-(* TODO
 where dno > 20
-*)
 yield {dno = #deptno v, name = #dname v};
 > val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
 
