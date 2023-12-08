@@ -2067,10 +2067,9 @@ public class MainTest {
         + "where dno > 25 "
         + "yield {dno = #deptno v, name = #dname v}";
     final String core1 = "val it = "
-        + "from dno in [30] "
-        + "yield {dno = dno} "
-        + "join v in (from v in #dept scott) "
-        + "join name in (from name in [#dname v]) "
+        + "from v in #dept scott "
+        + "join dno in [#deptno v] "
+        + "join name in [#dname v] "
         + "where #deptno v = dno "
         + "where name = #dname v "
         + "where #loc v = \"CHICAGO\" "
