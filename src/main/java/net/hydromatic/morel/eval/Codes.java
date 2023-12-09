@@ -2324,6 +2324,9 @@ public abstract class Codes {
         core.tuple(typeSystem, null, args));
   }
 
+  /** @see BuiltIn#SYS_FILE */
+  private static final Map<String, Object> SYS_FILE = ImmutableMap.of();
+
   /** @see BuiltIn#SYS_PLAN */
   private static final Applicable SYS_PLAN =
       new ApplicableImpl(BuiltIn.SYS_PLAN) {
@@ -2903,6 +2906,7 @@ public abstract class Codes {
           .put(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN)
           .put(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM)
           .put(BuiltIn.SYS_ENV, (Macro) Codes::sysEnv)
+          .put(BuiltIn.SYS_FILE, SYS_FILE)
           .put(BuiltIn.SYS_PLAN, SYS_PLAN)
           .put(BuiltIn.SYS_SET, SYS_SET)
           .put(BuiltIn.SYS_SHOW, SYS_SHOW)

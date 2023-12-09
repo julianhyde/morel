@@ -1249,6 +1249,10 @@ public enum BuiltIn {
   SYS_ENV("Sys", "env", "env", ts ->
       ts.fnType(UNIT, ts.listType(ts.tupleType(STRING, STRING)))),
 
+  /** Value "Sys.file", aka "file", of type "{...}" (partial record). */
+  SYS_FILE("Sys", "file", "file", ts ->
+      ts.recordType(ImmutableSortedMap.of("", UNIT))),
+
   /** Function "Sys.plan", aka "plan", of type "unit &rarr; string". */
   SYS_PLAN("Sys", "plan", "plan", ts -> ts.fnType(UNIT, STRING)),
 
