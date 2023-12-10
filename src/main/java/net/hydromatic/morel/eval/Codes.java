@@ -2325,7 +2325,7 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#SYS_FILE */
-  private static final Map<String, Object> SYS_FILE = ImmutableMap.of();
+  private static final List<Object> SYS_FILE = ImmutableList.of();
 
   /** @see BuiltIn#SYS_PLAN */
   private static final Applicable SYS_PLAN =

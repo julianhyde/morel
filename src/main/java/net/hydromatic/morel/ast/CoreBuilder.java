@@ -179,6 +179,13 @@ public enum CoreBuilder {
       }
       ++slot;
     }
+    if (recordType.isProgressive()) {
+      RecordLikeType recordType2 =
+          recordType.discoverField(typeSystem, fieldName);
+      if (recordType2 != null) {
+        return recordSelector(typeSystem, recordType2, fieldName);
+      }
+    }
     throw new IllegalArgumentException("no field '" + fieldName + "' in type '"
         + recordType + "'");
   }
