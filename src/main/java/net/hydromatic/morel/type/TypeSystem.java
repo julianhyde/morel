@@ -291,6 +291,14 @@ public class TypeSystem {
     return true;
   }
 
+  /** Creates a progressive record type. */
+  public ProgressiveRecordType progressiveRecordType(
+      ProgressiveRecordType.Handler handler,
+      SortedMap<String, ? extends Type> argNameTypes) {
+    Key key = Keys.progressiveRecord(handler, Keys.toKeys(argNameTypes));
+    return (ProgressiveRecordType) typeFor(key);
+  }
+
   /** Creates a "forall" type. */
   public Type forallType(int typeCount, Function<ForallHelper, Type> builder) {
     final ForallHelper helper = new ForallHelper() {
