@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.type;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import java.util.SortedMap;
 
 /** A type that has named fields, as a record type does. */
@@ -26,6 +28,26 @@ public interface RecordLikeType extends Type {
 
   /** Returns the type of the {@code i}th field, or throws. */
   Type argType(int i);
+
+  /** Returns whether this type is progressive.
+   *
+   * <p>Progressive types are records, but can have additional fields each time
+   * you look.
+   *
+   * <p>The "file" value is an example. */
+  default boolean isProgressive() {
+    return false;
+  }
+
+  /** Returns a type similar to this but with a field of the given name,
+   * or null.
+   *
+   * <p>May return this type. If type is progressive, may return a new type with
+   * the required field and all the current fields (and perhaps more fields). */
+  default @Nullable RecordLikeType discoverField(TypeSystem typeSystem,
+      String fieldName) {
+    return argNameTypes().containsKey(fieldName) ? this : null;
+  }
 }
 
 // End RecordLikeType.java
