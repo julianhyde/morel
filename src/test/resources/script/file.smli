@@ -22,6 +22,9 @@
 (*) The "file" value represents the file system, starting in the current
 (*) directory.
 file;
-> val it = () : unit
+> val it = {} : {...}
+
+(*) The "data" subdirectory can be accessed as a field.
+file.data;
 
 (*) End file.smli

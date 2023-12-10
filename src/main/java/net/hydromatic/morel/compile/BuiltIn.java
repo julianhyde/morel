@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import net.hydromatic.morel.eval.Directory;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ForallType;
@@ -1251,7 +1252,9 @@ public enum BuiltIn {
 
   /** Value "Sys.file", aka "file", of type "{...}" (partial record). */
   SYS_FILE("Sys", "file", "file", ts ->
-      ts.recordType(ImmutableSortedMap.of("", UNIT))),
+      ts.progressiveRecordType(new Directory(),
+          ImmutableSortedMap.<String, Type>orderedBy(RecordType.ORDERING)
+              .build())),
 
   /** Function "Sys.plan", aka "plan", of type "unit &rarr; string". */
   SYS_PLAN("Sys", "plan", "plan", ts -> ts.fnType(UNIT, STRING)),
