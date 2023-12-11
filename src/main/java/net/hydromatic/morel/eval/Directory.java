@@ -18,11 +18,16 @@
  */
 package net.hydromatic.morel.eval;
 
-import net.hydromatic.morel.type.ProgressiveRecordType;
-import net.hydromatic.morel.type.RecordLikeType;
-import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.Keys;
+import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.Type;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
 
 import java.io.File;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 import static java.util.Objects.requireNonNull;
 
@@ -31,8 +36,10 @@ import static java.util.Objects.requireNonNull;
  * <p>Its type is progressive, so that it can discover new files and
  * subdirectories.
  */
-public class Directory implements ProgressiveRecordType.Handler {
+public class Directory implements Codes.TypedValue {
   private final File file;
+  private final SortedMap<String, Codes.TypedValue> entries =
+      new TreeMap<>(RecordType.ORDERING);
 
   /** Creates a Directory in the default directory. */
   public Directory() {
@@ -44,9 +51,15 @@ public class Directory implements ProgressiveRecordType.Handler {
     this.file = requireNonNull(file, "file");
   }
 
-  @Override public RecordLikeType discoverField(TypeSystem typeSystem,
-      ProgressiveRecordType type, String fieldName) {
-    return null;
+  @Override public <V> V valueAs(Class<V> clazz) {
+    if (clazz.isAssignableFrom(ImmutableList.class)) {
+      return clazz.cast(ImmutableList.copyOf(entries.values()));
+    }
+    throw new IllegalArgumentException("not a " + clazz);
+  }
+
+  @Override public Type.Key typeKey() {
+    return Keys.record(Maps.transformValues(entries, Codes.TypedValue::typeKey));
   }
 }
 

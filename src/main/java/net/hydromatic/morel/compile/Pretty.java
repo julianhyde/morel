@@ -26,6 +26,7 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
@@ -201,7 +202,10 @@ class Pretty {
     case RECORD_TYPE:
       final RecordType recordType = (RecordType) type;
       //noinspection unchecked,rawtypes
-      list = (List) value;
+      list =
+          value instanceof Codes.TypedValue
+              ? ((Codes.TypedValue) value).valueAs(List.class)
+              : (List) value;
       buf.append("{");
       start = buf.length();
       forEachIndexed(list, recordType.argNameTypes.entrySet(),
@@ -317,16 +321,30 @@ class Pretty {
       return buf;
 
     case RECORD_TYPE:
+    case PROGRESSIVE_RECORD_TYPE:
       final RecordType recordType = (RecordType) typeVal.type;
+      final boolean progressive =
+          type.op() == Op.PROGRESSIVE_RECORD_TYPE
+              || recordType.argNameTypes.containsKey(
+              ProgressiveRecordType.DUMMY);
       buf.append("{");
       start = buf.length();
       recordType.argNameTypes.forEach((name, elementType) -> {
+        if (name.equals(ProgressiveRecordType.DUMMY)) {
+          return;
+        }
         if (buf.length() > start) {
           buf.append(", ");
         }
         pretty1(buf, indent2 + 1, lineEnd, depth, type,
             new LabelVal(name, elementType), 0, 0);
       });
+      if (progressive) {
+        if (buf.length() > start) {
+          buf.append(", ");
+        }
+        pretty1(buf, indent2 + 1, lineEnd, depth, type, "...", 0, 0);
+      }
       return buf.append("}");
 
     case FUNCTION_TYPE:

@@ -25,16 +25,19 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypeVisitor;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
@@ -56,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -403,11 +407,77 @@ public class Resolver {
     if (apply.fn.op == Op.RECORD_SELECTOR) {
       final Ast.RecordSelector recordSelector = (Ast.RecordSelector) apply.fn;
       coreFn = core.recordSelector(typeMap.typeSystem,
-          (RecordLikeType) coreArg.type, recordSelector.name);
+          makeProgressive(coreArg), recordSelector.name);
     } else {
       coreFn = toCore(apply.fn);
     }
     return core.apply(apply.pos, type, coreFn, coreArg);
+  }
+
+  /** Creates a progressive type, if possible. If the argument is constant
+   * then we can ask it for its actual type, and maybe persuade it to widen its
+   * type. */
+  private RecordLikeType makeProgressive(Core.Exp coreArg) {
+    final RecordLikeType recordLikeType = (RecordLikeType) coreArg.type;
+    if (recordLikeType.argNameTypes().containsKey(ProgressiveRecordType.DUMMY)) {
+      Object o = valueOf(coreArg);
+      if (o instanceof Codes.TypedValue) {
+        final Codes.TypedValue typedValue = (Codes.TypedValue) o;
+        final Type type = typedValue.typeKey().toType(typeMap.typeSystem);
+        if (type instanceof RecordLikeType) {
+          final RecordLikeType recordLikeType2 = (RecordLikeType) type;
+          return new RecordLikeType() {
+            @Override public boolean isProgressive() {
+              return true;
+            }
+
+            @Override public String toString() {
+              return recordLikeType2.toString();
+            }
+
+            @Override public SortedMap<String, Type> argNameTypes() {
+              return recordLikeType2.argNameTypes();
+            }
+
+            @Override public Type argType(int i) {
+              return recordLikeType2.argType(i);
+            }
+
+            @Override public Key key() {
+              return recordLikeType2.key();
+            }
+
+            @Override public Op op() {
+              return recordLikeType2.op();
+            }
+
+            @Override public Type copy(TypeSystem typeSystem,
+                UnaryOperator<Type> transform) {
+              return recordLikeType2.copy(typeSystem, transform);
+            }
+
+            @Override public <R> R accept(TypeVisitor<R> typeVisitor) {
+              throw new UnsupportedOperationException();
+            }
+          };
+        }
+      }
+    }
+    return recordLikeType;
+  }
+
+  Object valueOf(Core.Exp exp) {
+    if (exp instanceof Core.Literal) {
+      return ((Core.Literal) exp).value;
+    }
+    if (exp instanceof Core.Id) {
+      Binding binding = env.getOpt(((Core.Id) exp).idPat);
+      if (binding != null) {
+        return binding.value;
+      }
+    }
+    // TODO: field
+    return null; // not constant
   }
 
   private Core.RecordSelector toCore(Ast.RecordSelector recordSelector) {
@@ -453,7 +523,7 @@ public class Resolver {
     //   flattenLet(val x :: xs = [1, 2, 3] and (y, z) = (2, 4), x + y)
     // becomes
     //   let v = ([1, 2, 3], (2, 4)) in case v of (x :: xs, (y, z)) => x + y end
-    if (decls.size() == 0) {
+    if (decls.isEmpty()) {
       return toCore(exp);
     }
     final Ast.Decl decl = decls.get(0);

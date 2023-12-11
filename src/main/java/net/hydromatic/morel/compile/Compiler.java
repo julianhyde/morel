@@ -36,6 +36,7 @@ import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
@@ -721,8 +722,17 @@ public class Compiler {
                 final Pretty pretty =
                     new Pretty(typeSystem, lineWidth, printLength, printDepth,
                         stringDepth);
-                pretty.pretty(buf, pat2.type,
-                    new Pretty.TypedVal(pat2.name, o2, pat2.type));
+                final Pretty.TypedVal typedVal;
+                if (o2 instanceof Codes.TypedValue) {
+                  Codes.TypedValue typedValue = (Codes.TypedValue) o2;
+                  typedVal =
+                      new Pretty.TypedVal(pat2.name,
+                          typedValue.valueAs(Object.class),
+                          Keys.toProgressive(pat2.typeKey()).toType(typeSystem));
+                } else {
+                  typedVal = new Pretty.TypedVal(pat2.name, o2, pat2.type);
+                }
+                pretty.pretty(buf, pat2.type, typedVal);
                 final String line = str(buf);
                 outs.add(line);
                 outLines.accept(line);
