@@ -59,6 +59,10 @@ public class ProgressiveRecordType extends RecordType {
       throw new UnsupportedOperationException("discoverField");
     }
   }
+
+  public enum DefaultHandler implements Handler {
+    INSTANCE
+  }
 }
 
 // End ProgressiveRecordType.java

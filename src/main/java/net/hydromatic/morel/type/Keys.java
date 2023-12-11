@@ -177,6 +177,16 @@ public class Keys {
     }
   }
 
+  /** Converts a record key to a progressive record key,
+   * leaves other keys unchanged. */
+  public static Type.Key toProgressive(Type.Key key) {
+    if (key instanceof RecordKey) {
+      return progressiveRecord(ProgressiveRecordType.DefaultHandler.INSTANCE,
+          ((RecordKey) key).argNameTypes);
+    }
+    return key;
+  }
+
   /** Key that identifies a type by name. */
   private static class NameKey extends Type.Key {
     private final String name;

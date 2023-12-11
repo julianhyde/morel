@@ -2325,7 +2325,7 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#SYS_FILE */
-  private static final List<Object> SYS_FILE = ImmutableList.of();
+  private static final TypedValue SYS_FILE = new Directory();
 
   /** @see BuiltIn#SYS_PLAN */
   private static final Applicable SYS_PLAN =
@@ -3695,6 +3695,12 @@ public abstract class Codes {
    * sure that the position is propagated through the translation process. */
   public interface Positioned extends Applicable {
     Applicable withPos(Pos pos);
+  }
+
+  /** A value that knows its own type. */
+  public interface TypedValue {
+    <V> V valueAs(Class<V> clazz);
+    Type.Key typeKey();
   }
 }
 
