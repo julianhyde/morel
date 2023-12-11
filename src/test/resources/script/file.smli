@@ -27,4 +27,10 @@ file;
 (*) The "data" subdirectory can be accessed as a field.
 file.data;
 
+(*) Now we've done into the directory, its type has widened.
+file;
+
+file.data.scott;
+file.data.scott.emp;
+
 (*) End file.smli

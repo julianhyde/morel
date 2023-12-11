@@ -21,6 +21,7 @@ package net.hydromatic.morel.ast;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.NameGenerator;
+import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -179,10 +180,12 @@ public enum CoreBuilder {
       }
       ++slot;
     }
-    if (recordType.isProgressive()) {
+    Codes.@Nullable TypedValue typedValue = recordType.asTypedValue();
+    if (typedValue != null
+        && typedValue.discoverField(typeSystem, fieldName)) {
       RecordLikeType recordType2 =
-          recordType.discoverField(typeSystem, fieldName);
-      if (recordType2 != null) {
+          (RecordLikeType) typedValue.typeKey().toType(typeSystem);
+      if (recordType2.argNameTypes().containsKey(fieldName)) {
         return recordSelector(typeSystem, recordType2, fieldName);
       }
     }
