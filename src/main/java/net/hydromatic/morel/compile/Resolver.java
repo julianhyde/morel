@@ -431,6 +431,10 @@ public class Resolver {
               return true;
             }
 
+            @Override public Codes.TypedValue asTypedValue() {
+              return typedValue;
+            }
+
             @Override public String toString() {
               return recordLikeType2.toString();
             }

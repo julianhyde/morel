@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.type;
 
+import net.hydromatic.morel.eval.Codes;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.SortedMap;
@@ -39,14 +41,10 @@ public interface RecordLikeType extends Type {
     return false;
   }
 
-  /** Returns a type similar to this but with a field of the given name,
-   * or null.
-   *
-   * <p>May return this type. If type is progressive, may return a new type with
-   * the required field and all the current fields (and perhaps more fields). */
-  default @Nullable RecordLikeType discoverField(TypeSystem typeSystem,
-      String fieldName) {
-    return argNameTypes().containsKey(fieldName) ? this : null;
+  /** Returns a {@link net.hydromatic.morel.eval.Codes.TypedValue} if this
+   * type wraps a single dynamically typed value, otherwise null. */
+  default Codes.@Nullable TypedValue asTypedValue() {
+    return null;
   }
 }
 

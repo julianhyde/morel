@@ -23,6 +23,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
+import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -624,6 +625,10 @@ public class Core {
      * {@link Comparable}, the value will be in a wrapper. */
     public <C> C unwrap(Class<C> clazz) {
       Object v;
+      if (value instanceof Wrapper
+          && ((Wrapper) value).o instanceof Codes.TypedValue) {
+        return ((Codes.TypedValue) ((Wrapper) value).o).valueAs(clazz);
+      }
       if (clazz.isInstance(value) && clazz != Object.class) {
         v = value;
       } else if (Number.class.isAssignableFrom(clazz)
