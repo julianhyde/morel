@@ -143,7 +143,7 @@ public class ExtentTest {
   @Test void testBetween() {
     // pat = "x", exp = "x >= 3 andalso y = 20 andalso x < 10 andalso 5 <> x",
     // extent of x is "extent [[3..5), (5..10)]";
-    // extent of y is "extent [[3..5), (5..10)]";
+    // extent of y is "extent [20, 20]";
     final Fixture f = new Fixture();
     Core.IdPat xPat = core.idPat(PrimitiveType.INT, "x", 0);
     Core.IdPat yPat = core.idPat(PrimitiveType.INT, "y", 0);
@@ -160,10 +160,10 @@ public class ExtentTest {
             core.andAlso(f.typeSystem, exp1,
                 core.andAlso(f.typeSystem, exp2, exp3)));
     Core.Exp x = generator(f.typeSystem, xPat, null, exp, ImmutableList.of());
+    assertThat(x, hasToString("extent \"int {/=[[3..5), (5..10)]}\""));
     assertThat(x, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) x).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) x).fn).value, is(BuiltIn.Z_EXTENT));
-    assertThat(x, hasToString("extent \"int {/=[[3..5), (5..10)]}\""));
 
     Core.Exp y = generator(f.typeSystem, yPat, null, exp, ImmutableList.of());
     assertThat(y, instanceOf(Core.Apply.class));
