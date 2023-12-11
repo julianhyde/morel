@@ -182,7 +182,10 @@ class Pretty {
     case RECORD_TYPE:
       final RecordType recordType = (RecordType) type;
       //noinspection unchecked,rawtypes
-      list = (List) value;
+      list =
+          value instanceof Codes.TypedValue
+              ? ((Codes.TypedValue) value).valueAs(List.class)
+              : (List) value;
       buf.append("{");
       start = buf.length();
       forEachIndexed(list, recordType.argNameTypes.entrySet(),
