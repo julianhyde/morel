@@ -172,8 +172,7 @@ public class Extents {
       if (!map.map.containsKey(namedPat)
           || Extents.isInfinite(map.map.get(namedPat).left(0))) {
         map.map.put(namedPat,
-            ImmutablePairList.of(
-                core.list(typeSystem, exp),
+            ImmutablePairList.of(core.list(typeSystem, exp),
                 core.equal(typeSystem, core.id(namedPat), exp)));
       }
     });

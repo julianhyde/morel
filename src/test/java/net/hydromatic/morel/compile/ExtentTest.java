@@ -142,7 +142,7 @@ public class ExtentTest {
   @Test void testBetween() {
     // pat = "x", exp = "x >= 3 andalso y = 20 andalso x < 10 andalso 5 <> x",
     // extent of x is "extent [[3..5), (5..10)]";
-    // extent of y is "extent [[3..5), (5..10)]";
+    // extent of y is "extent [20, 20]";
     final Fixture f = new Fixture();
     Core.IdPat xPat = core.idPat(PrimitiveType.INT, "x", 0);
     Core.IdPat yPat = core.idPat(PrimitiveType.INT, "y", 0);
