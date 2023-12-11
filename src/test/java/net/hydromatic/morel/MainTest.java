@@ -1990,6 +1990,7 @@ public class MainTest {
         .assertCore(-1, hasToString(core1));
   }
 
+  /** As {@link #testFromSuchThat2c()} but with a literal. */
   @Test void testFromSuchThat2d2() {
     final String ml = "from (dno, name)\n"
         + "  where {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
