@@ -18,8 +18,6 @@
  */
 package net.hydromatic.morel.type;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
-
 import java.util.SortedMap;
 
 import static java.util.Objects.requireNonNull;
@@ -47,17 +45,8 @@ public class ProgressiveRecordType extends RecordType {
     return Keys.progressiveRecord(handler, Keys.toKeys(argNameTypes));
   }
 
-  @Override public @Nullable RecordLikeType discoverField(TypeSystem typeSystem,
-      String fieldName) {
-    return handler.discoverField(typeSystem, this, fieldName);
-  }
-
   /** Handles mutations. */
   public interface Handler {
-    default RecordLikeType discoverField(TypeSystem typeSystem,
-        ProgressiveRecordType type, String fieldName) {
-      throw new UnsupportedOperationException("discoverField");
-    }
   }
 
   public enum DefaultHandler implements Handler {

@@ -3701,6 +3701,13 @@ public abstract class Codes {
   public interface TypedValue {
     <V> V valueAs(Class<V> clazz);
     Type.Key typeKey();
+
+    /** Tries to expand the type to include the given field name.
+     *
+     * <p>Returns whether the type changed. */
+    default boolean discoverField(TypeSystem typeSystem, String fieldName) {
+      return false;
+    }
   }
 }
 
