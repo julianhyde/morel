@@ -127,7 +127,7 @@ public class TypeResolver {
     });
     BuiltIn.forEachStructure(typeSystem, (structure, type) ->
         typeEnvs.accept(structure.name, type));
-    env.forEachType(typeEnvs);
+    env.forEachType(typeSystem, typeEnvs);
     final TypeEnv typeEnv = typeEnvs.typeEnv;
     final Map<Ast.IdPat, Unifier.Term> termMap = new LinkedHashMap<>();
     final Ast.Decl node2 = deduceDeclType(typeEnv, decl, termMap);

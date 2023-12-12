@@ -68,7 +68,7 @@ public interface Type {
 
   /** Structural identifier of a type. */
   abstract class Key {
-    final Op op;
+    public final Op op;
 
     /** Creates a key. */
     protected Key(Op op) {

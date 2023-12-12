@@ -408,6 +408,12 @@ public class Resolver {
       final Ast.RecordSelector recordSelector = (Ast.RecordSelector) apply.fn;
       coreFn = core.recordSelector(typeMap.typeSystem,
           makeProgressive(coreArg), recordSelector.name);
+      if (type.op() == Op.TY_VAR
+          && coreFn.type.op() == Op.FUNCTION_TYPE) {
+        // If we are dereferencing a field in a progressive type, the type
+        // available now may be more precise than the deduced type.
+        type = ((FnType) coreFn.type).resultType;
+      }
     } else {
       coreFn = toCore(apply.fn);
     }
@@ -423,9 +429,10 @@ public class Resolver {
       Object o = valueOf(coreArg);
       if (o instanceof Codes.TypedValue) {
         final Codes.TypedValue typedValue = (Codes.TypedValue) o;
-        final Type type = typedValue.typeKey().toType(typeMap.typeSystem);
-        if (type instanceof RecordLikeType) {
-          final RecordLikeType recordLikeType2 = (RecordLikeType) type;
+        final Type.Key typeKey = typedValue.typeKey();
+        if (typeKey.op == Op.PROGRESSIVE_RECORD_TYPE) {
+          final RecordLikeType recordLikeType2 =
+              (RecordLikeType) typeKey.toType(typeMap.typeSystem);
           return new RecordLikeType() {
             @Override public boolean isProgressive() {
               return true;
@@ -474,13 +481,30 @@ public class Resolver {
     if (exp instanceof Core.Literal) {
       return ((Core.Literal) exp).value;
     }
-    if (exp instanceof Core.Id) {
-      Binding binding = env.getOpt(((Core.Id) exp).idPat);
+    if (exp.op == Op.ID) {
+      final Core.Id id = (Core.Id) exp;
+      Binding binding = env.getOpt(id.idPat);
       if (binding != null) {
         return binding.value;
       }
     }
-    // TODO: field
+    if (exp.op == Op.APPLY) {
+      final Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn.op == Op.RECORD_SELECTOR) {
+        final Core.RecordSelector recordSelector =
+            (Core.RecordSelector) apply.fn;
+        final Object o = valueOf(apply.arg);
+        @SuppressWarnings("unchecked") List<Object> list =
+            o instanceof List
+                ? (List<Object>) o
+                : o instanceof Codes.TypedValue
+                    ? ((Codes.TypedValue) o).valueAs(List.class)
+                    : null;
+        if (list != null) {
+          return list.get(recordSelector.slot);
+        }
+      }
+    }
     return null; // not constant
   }
 
