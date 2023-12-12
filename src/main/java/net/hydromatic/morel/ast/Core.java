@@ -617,8 +617,8 @@ public class Core {
       return new Wrapper(exp, value);
     }
 
-    public Object unwrap() {
-      return ((Wrapper) value).o;
+    public <C> C unwrap(Class<C> clazz) {
+      return clazz.cast(((Wrapper) value).o);
     }
 
     @Override public int hashCode() {
