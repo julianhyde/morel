@@ -1598,7 +1598,7 @@ MORE :
     |
     < IDENTIFIER: <LETTER> (<LETTER>|<DIGIT>|"_"|"'")* >
     |
-    < QUOTED_IDENTIFIER: "`" (<LETTER>|<DIGIT>|"_"|"'")* "`" >
+    < QUOTED_IDENTIFIER: "`" ( (~["`"]) | ("`" "`") )* "`" >
     |
     < TY_VAR: "'" <LETTER> (<LETTER>|<DIGIT>|"_"|"'")* >
     |
