@@ -25,6 +25,39 @@ public final class Parsers {
   private Parsers() {
   }
 
+  /** Given quoted identifier {@code `abc`} returns {@code abc}.
+   * Converts any doubled back-ticks to a single back-tick.
+   * Assumes there are no single back-ticks. */
+  public static String unquoteIdentifier(String s) {
+    assert s.charAt(0) == '`';
+    assert s.charAt(s.length() - 1) == '`';
+    return s.substring(1, s.length() - 1)
+        .replace("``", "`");
+  }
+
+  /** Given quoted string {@code "abc"} returns {@code abc}. */
+  public static String unquoteString(String s) {
+    assert s.charAt(0) == '"';
+    assert s.charAt(s.length() - 1) == '"';
+    return s.substring(1, s.length() - 1)
+        .replace("\\\\", "\\")
+        .replace("\\\"", "\"");
+  }
+
+  /** Given quoted char literal {@code #"a"} returns {@code a}. */
+  public static char unquoteCharLiteral(String s) {
+    assert s.charAt(0) == '#';
+    assert s.charAt(1) == '"';
+    assert s.charAt(s.length() - 1) == '"';
+    String image = s.substring(2, s.length() - 1)
+        .replace("\\\\", "\\")
+        .replace("\\\"", "\"");
+    if (image.length() != 1) {
+      throw new RuntimeException("Error: character constant not length 1");
+    }
+    return image.charAt(0);
+  }
+
   /** Appends an identifier. Encloses it in back-ticks if necessary. */
   public static StringBuilder appendId(StringBuilder buf, String id) {
     if (id.contains("`") || id.contains(" ")) {

@@ -49,6 +49,9 @@ import java.util.List;
 import java.util.Map;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
+import static net.hydromatic.morel.parse.Parsers.unquoteCharLiteral;
+import static net.hydromatic.morel.parse.Parsers.unquoteIdentifier;
+import static net.hydromatic.morel.parse.Parsers.unquoteString;
 
 /**
  * Parser for Standard ML, generated from MorelParser.jj by JavaCC.
@@ -76,36 +79,6 @@ public class MorelParserImpl implements MorelParser
     if (jj_input_stream.bufpos >= 0) {
       this.lineOffset = jj_input_stream.bufline[jj_input_stream.bufpos];
     }
-  }
-
-  /** Given quoted identifier {@code `abc`} returns {@code abc}. */
-  static String unquoteIdentifier(String s) {
-    assert s.charAt(0) == '`';
-    assert s.charAt(s.length() - 1) == '`';
-    return s.substring(1, s.length() - 1);
-  }
-
-  /** Given quoted string {@code "abc"} returns {@code abc}. */
-  static String unquoteString(String s) {
-    assert s.charAt(0) == '"';
-    assert s.charAt(s.length() - 1) == '"';
-    return s.substring(1, s.length() - 1)
-        .replace("\\\\", "\\")
-        .replace("\\\"", "\"");
-  }
-
-  /** Given quoted char literal {@code #"a"} returns {@code a}. */
-  static char unquoteCharLiteral(String s) {
-    assert s.charAt(0) == '#';
-    assert s.charAt(1) == '"';
-    assert s.charAt(s.length() - 1) == '"';
-    String image = s.substring(2, s.length() - 1)
-        .replace("\\\\", "\\")
-        .replace("\\\"", "\"");
-    if (image.length() != 1) {
-      throw new RuntimeException("Error: character constant not length 1");
-    }
-    return image.charAt(0);
   }
 }
 
