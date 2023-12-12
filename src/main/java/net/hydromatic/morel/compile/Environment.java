@@ -19,10 +19,12 @@
 package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -85,11 +87,16 @@ public abstract class Environment {
 
   /** Calls a consumer for each variable and its type.
    * Does not visit obscured bindings. */
-  public void forEachType(BiConsumer<String, Type> consumer) {
+  public void forEachType(TypeSystem typeSystem,
+      BiConsumer<String, Type> consumer) {
     final Set<String> names = new HashSet<>();
     visit(binding -> {
       if (names.add(binding.id.name)) {
-        consumer.accept(binding.id.name, binding.id.type);
+        final Type type =
+            binding.value instanceof Codes.TypedValue
+                ? ((Codes.TypedValue) binding.value).typeKey().toType(typeSystem)
+                : binding.id.type;
+        consumer.accept(binding.id.name, type);
       }
     });
   }

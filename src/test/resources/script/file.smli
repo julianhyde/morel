@@ -26,11 +26,15 @@ file;
 
 (*) The "data" subdirectory can be accessed as a field.
 file.data;
+> val it = {} : {...}
 
 (*) Now we've done into the directory, its type has widened.
 file;
+> val it = {data={},script={},use={}} : {data:{...}, script:{...}, use:{...}}
 
 file.data.scott;
-file.data.scott.emp;
-
+> val it = {} : {...}
+file.data.scott.dept;
+> val it = {} : {...}
+file.data.scott;
 (*) End file.smli
