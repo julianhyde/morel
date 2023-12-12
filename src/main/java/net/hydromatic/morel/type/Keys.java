@@ -139,12 +139,13 @@ public class Keys {
   /** Describes a record, progressive record, or tuple type. */
   static StringBuilder describeRecordType(StringBuilder buf, int left,
       int right, SortedMap<String, Type.Key> argNameTypes, Op op) {
+    final boolean progressive =
+        op == Op.PROGRESSIVE_RECORD_TYPE
+            || argNameTypes.containsKey(ProgressiveRecordType.DUMMY);
     switch (argNameTypes.size()) {
     case 0:
-      if (op != Op.PROGRESSIVE_RECORD_TYPE) {
-        return buf.append("()");
-      }
-      // fall through
+      return buf.append(progressive ? "{...}" : "()");
+
     default:
       if (op == Op.TUPLE_TYPE) {
         return TypeSystem.unparseList(buf, Op.TIMES, left, right,
@@ -167,7 +168,7 @@ public class Keys {
             .append(':')
             .append(typeKey);
       }
-      if (op == Op.PROGRESSIVE_RECORD_TYPE) {
+      if (progressive) {
         if (i > 0) {
           buf.append(", ");
         }
