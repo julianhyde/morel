@@ -171,21 +171,23 @@ class Pretty {
 
     case LIST:
       final ListType listType = (ListType) type;
-      //noinspection unchecked,rawtypes
-      list = (List) value;
+      list = toList(value);
       if (list instanceof RelList) {
-        // Do not attempt to print the elements of a foreign list. It might be huge.
+        // Do not attempt to print the elements of a foreign list. It might be
+        // huge.
+        return buf.append("<relation>");
+      }
+      if (value instanceof Codes.TypedValue) {
+        // A TypedValue is probably a field in a record that represents a
+        // database catalog or a directory of CSV files. If the user wishes to
+        // see the contents of each file they should use a query.
         return buf.append("<relation>");
       }
       return printList(buf, indent, lineEnd, depth, listType.elementType, list);
 
     case RECORD_TYPE:
       final RecordType recordType = (RecordType) type;
-      //noinspection unchecked,rawtypes
-      list =
-          value instanceof Codes.TypedValue
-              ? ((Codes.TypedValue) value).valueAs(List.class)
-              : (List) value;
+      list = toList(value);
       buf.append("{");
       start = buf.length();
       forEachIndexed(list, recordType.argNameTypes.entrySet(),
@@ -200,8 +202,7 @@ class Pretty {
 
     case TUPLE_TYPE:
       final TupleType tupleType = (TupleType) type;
-      //noinspection unchecked,rawtypes
-      list = (List) value;
+      list = toList(value);
       buf.append("(");
       start = buf.length();
       forEachIndexed(list, tupleType.argTypes,
@@ -219,8 +220,7 @@ class Pretty {
 
     case DATA_TYPE:
       final DataType dataType = (DataType) type;
-      //noinspection unchecked,rawtypes
-      list = (List) value;
+      list = toList(value);
       if (dataType.name.equals("vector")) {
         final Type argType = Iterables.getOnlyElement(dataType.arguments);
         return printList(buf.append('#'), indent, lineEnd, depth, argType,
@@ -250,6 +250,15 @@ class Pretty {
     default:
       return buf.append(value);
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<Object> toList(Object value) {
+    if (value instanceof Codes.TypedValue) {
+      Codes.TypedValue typedValue = (Codes.TypedValue) value;
+      return (List<Object>) typedValue.valueAs(List.class);
+    }
+    return (List<Object>) value;
   }
 
   private static Type unqualified(Type type) {

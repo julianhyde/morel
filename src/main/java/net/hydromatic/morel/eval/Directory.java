@@ -24,7 +24,6 @@ import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
@@ -39,6 +38,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedMap;
+import java.util.function.Function;
 
 import static java.util.Objects.requireNonNull;
 
@@ -117,20 +117,21 @@ public class Directory implements Codes.TypedValue {
 
   private static class DataFile implements Codes.TypedValue {
     private final File file;
-    private final ImmutablePairList<String, Type.Key> nameTypes;
+    private final Type.Key typeKey;
+    private final PairList<Integer, Function<String, Object>> parsers;
 
-    DataFile(File file, PairList<String, Type.Key> nameTypes) {
-      this.file = file;
-      this.nameTypes = nameTypes.immutable();
+    DataFile(File file, Type.Key typeKey,
+        PairList<Integer, Function<String, Object>> parsers) {
+      this.file = requireNonNull(file, "file");
+      this.typeKey = requireNonNull(typeKey, "typeKey");
+      this.parsers = parsers.immutable();
     }
 
     static DataFile create(File subFile) {
       try (BufferedReader r = Util.reader(subFile)) {
         String firstLine = r.readLine();
-        PairList<String, Type.Key> nameTypes = PairList.of();
-        if (firstLine == null) {
-          // File is empty. There will be no fields, and row type will be unit.
-        } else {
+        final PairList<String, Type.Key> nameTypes = PairList.of();
+        if (firstLine != null) {
           for (String field : firstLine.split(",")) {
             final String[] split = field.split(":");
             final String subFieldName = split[0];
@@ -154,18 +155,56 @@ public class Directory implements Codes.TypedValue {
             }
             nameTypes.add(subFieldName, subType);
           }
+        } else {
+          // File is empty. There will be no fields, and row type will be unit.
         }
-        return new DataFile(subFile, nameTypes);
+        final ImmutableSortedMap<String, Type.Key> sortedNameTypes =
+            ImmutableSortedMap.<String, Type.Key>orderedBy(RecordType.ORDERING)
+                .putAll(nameTypes)
+                .build();
+        final PairList<Integer, Function<String, Object>> fieldParsers =
+            PairList.of();
+        nameTypes.forEachIndexed((i, name, typeKey) -> {
+          final int j = sortedNameTypes.keySet().asList().indexOf(name);
+          fieldParsers.add(j, parser(typeKey, i));
+        });
+
+        return new DataFile(subFile, Keys.list(Keys.record(sortedNameTypes)),
+            fieldParsers);
       } catch (IOException e) {
         // ignore, and skip file
         return null;
       }
     }
 
+    static Function<String, Object> parser(Type.Key type, int ordinal) {
+      switch (type.op) {
+      case DATA_TYPE:
+        switch (type.toString()) {
+        case "int":
+          return Integer::parseInt;
+        case "real":
+          return Float::parseFloat;
+        case "string":
+          return DataFile::unquoteString;
+        default:
+          throw new IllegalArgumentException("unknown type " + type);
+        }
+      default:
+        throw new IllegalArgumentException("unknown type " + type);
+      }
+    }
+
+    /** Converts "abc" to "abc" and "'abc, def'" to "abc, def". */
+    private static Object unquoteString(String s) {
+      if (s.startsWith("'")) {
+        return s.substring(1, s.length() - 1);
+      }
+      return s;
+    }
+
     @Override public <V> V valueAs(Class<V> clazz) {
-      Object[] values = new Object[nameTypes.size()];
-      List<String> sortedFieldNames =
-          RecordType.ORDERING.immutableSortedCopy(nameTypes.leftList());
+      Object[] values = new Object[parsers.size()];
       try (BufferedReader r = Util.reader(file)) {
         String firstLine = r.readLine();
         if (firstLine == null) {
@@ -178,12 +217,8 @@ public class Directory implements Codes.TypedValue {
             return clazz.cast(list);
           }
           String[] fields = line.split(",");
-          for (int i = 0; i < values.length; i++) {
-            final int j = nameTypes.leftList().indexOf(sortedFieldNames.get(i));
-            String field = fields[j];
-            Type.Key typeKey = nameTypes.rightList().get(j);
-            values[i] = Integer.parseInt(field);
-          }
+          parsers.forEachIndexed((i, j, parser) ->
+              values[i] = parser.apply(fields[j]));
           list.add(ImmutableList.copyOf(values));
         }
       } catch (IOException e) {
@@ -193,12 +228,7 @@ public class Directory implements Codes.TypedValue {
     }
 
     @Override public Type.Key typeKey() {
-      return Keys.list(
-          Keys.record(
-              ImmutableSortedMap
-                  .<String, Type.Key>orderedBy(RecordType.ORDERING)
-                  .putAll(nameTypes)
-                  .build()));
+      return typeKey;
     }
   }
 }

@@ -28,13 +28,35 @@ file;
 file.data;
 > val it = {} : {...}
 
-(*) Now we've done into the directory, its type has widened.
+(*) Now we've gone into the directory, the type of 'file' has widened.
 file;
 > val it = {data={},script={},use={}} : {data:{...}, script:{...}, use:{...}}
 
 file.data.scott;
 > val it = {} : {...}
 file.data.scott.dept;
-> val it = {} : {...}
+> val it =
+>   [{deptno=10,dname="ACCOUNTING",loc="NEW YORK"},
+>    {deptno=20,dname="RESEARCH",loc="DALLAS"},
+>    {deptno=30,dname="SALES",loc="CHICAGO"},
+>    {deptno=40,dname="OPERATIONS",loc="BOSTON"}]
+>   : {deptno:int, dname:string, loc:string} list
+
+(*) Since dept is a list of records, we can query it.
+from d in file.data.scott.dept
+ where d.dname elem ["ACCOUNTING", "SALES"]
+ compute sum of d.deptno;
+> val it = 40 : int
+
+(*) The type of 'file' has widened further.
+file;
+> val it =
+>   {data={scott={bonus=<relation>,dept=<relation>,salgrade=<relation>}},
+>    script={},use={}}
+>   : {data:{scott:{bonus:{bonus:real, ename:string, job:string, sal:real} list, dept:{deptno:int, dname:string, loc:string} list, salgrade:{grade:int, hisal:real, losal:real} list}}, script:{...}, use:{...}}
+
 file.data.scott;
+> val it = {bonus=<relation>,dept=<relation>,salgrade=<relation>}
+>   : {bonus:{bonus:real, ename:string, job:string, sal:real} list, dept:{deptno:int, dname:string, loc:string} list, salgrade:{grade:int, hisal:real, losal:real} list}
+
 (*) End file.smli
