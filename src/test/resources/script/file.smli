@@ -55,13 +55,26 @@ order deptno;
 > val it = [{count=3,deptno=10},{count=5,deptno=20},{count=6,deptno=30}]
 >   : {count:int, deptno:int} list
 
+(*) Bonus is empty (except the line defining the fields).
+val scott = file.data.scott;
+> val scott =
+>   {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
+>   : {bonus:{bonus:real, ename:string, job:string, sal:real} list,
+>      dept:{deptno:int, dname:string, loc:string} list,
+>      emp:
+>          {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
+>           job:string, mgrno:int, sal:real} list,
+>      salgrade:{grade:int, hisal:real, losal:real} list}
+from b in scott.bonus;
+> val it = [] : {bonus:real, ename:string, job:string, sal:real} list
+
 (*) The type of 'file' has widened further.
 file;
 > val it =
 >   {
 >    data=
->    {scott={bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}},
->    script={},use={}}
+>    {scott={bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>},
+>     wordle={}},script={},use={}}
 >   : {
 >      data:{
 >            scott:{bonus:{bonus:real, ename:string, job:string, sal:real} list,
@@ -69,8 +82,8 @@ file;
 >                   emp:
 >                       {comm:real, deptno:int, empno:int, ename:string,
 >                        hiredate:string, job:string, mgrno:int, sal:real} list,
->                   salgrade:{grade:int, hisal:real, losal:real} list}},
->      script:{...}, use:{...}}
+>                   salgrade:{grade:int, hisal:real, losal:real} list},
+>            wordle:{...}}, script:{...}, use:{...}}
 
 file.data.scott;
 > val it = {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
