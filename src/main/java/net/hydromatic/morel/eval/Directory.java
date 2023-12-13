@@ -217,12 +217,12 @@ public class Directory implements Codes.TypedValue {
     }
 
     @Override public <V> V valueAs(Class<V> clazz) {
-      Object[] values = new Object[parsers.size()];
       try (BufferedReader r = fileType.open(file)) {
         String firstLine = r.readLine();
         if (firstLine == null) {
           return null;
         }
+        final Object[] values = new Object[parsers.size()];
         final List<List<Object>> list = new ArrayList<>();
         for (;;) {
           String line = r.readLine();
@@ -236,8 +236,8 @@ public class Directory implements Codes.TypedValue {
         }
       } catch (IOException e) {
         // ignore
+        return null;
       }
-      return null;
     }
 
     @Override public Type.Key typeKey() {
