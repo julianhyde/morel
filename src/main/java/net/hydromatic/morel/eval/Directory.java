@@ -20,7 +20,6 @@ package net.hydromatic.morel.eval;
 
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -77,7 +76,6 @@ public class Directory implements Codes.TypedValue {
   @Override public Type.Key typeKey() {
     if (entries == null) {
       return Keys.progressiveRecord(
-          ProgressiveRecordType.DefaultHandler.INSTANCE,
           ImmutableSortedMap.of());
     }
     return Keys.record(Maps.transformValues(entries, Codes.TypedValue::typeKey));

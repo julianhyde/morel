@@ -293,9 +293,8 @@ public class TypeSystem {
 
   /** Creates a progressive record type. */
   public ProgressiveRecordType progressiveRecordType(
-      ProgressiveRecordType.Handler handler,
       SortedMap<String, ? extends Type> argNameTypes) {
-    Key key = Keys.progressiveRecord(handler, Keys.toKeys(argNameTypes));
+    Key key = Keys.progressiveRecord(Keys.toKeys(argNameTypes));
     return (ProgressiveRecordType) typeFor(key);
   }
 

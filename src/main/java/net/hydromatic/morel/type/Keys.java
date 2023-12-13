@@ -94,9 +94,8 @@ public class Keys {
 
   /** Returns a key that identifies a {@link ProgressiveRecordType}. */
   public static Type.Key progressiveRecord(
-      ProgressiveRecordType.Handler handler,
       SortedMap<String, ? extends Type.Key> argNameTypes) {
-    return new ProgressiveRecordKey(handler,
+    return new ProgressiveRecordKey(
         ImmutableSortedMap.copyOfSorted(argNameTypes));
   }
 
@@ -182,7 +181,7 @@ public class Keys {
    * leaves other keys unchanged. */
   public static Type.Key toProgressive(Type.Key key) {
     if (key instanceof RecordKey) {
-      return progressiveRecord(ProgressiveRecordType.DefaultHandler.INSTANCE,
+      return progressiveRecord(
           ((RecordKey) key).argNameTypes);
     }
     return key;
@@ -443,18 +442,15 @@ public class Keys {
   }
 
   private static class ProgressiveRecordKey extends Type.Key {
-    final ProgressiveRecordType.Handler handler;
     final ImmutableSortedMap<String, Type.Key> argNameTypes;
 
-    ProgressiveRecordKey(ProgressiveRecordType.Handler handler,
-        ImmutableSortedMap<String, Type.Key> argNameTypes) {
+    ProgressiveRecordKey(ImmutableSortedMap<String, Type.Key> argNameTypes) {
       super(Op.PROGRESSIVE_RECORD_TYPE);
-      this.handler = requireNonNull(handler, "handler");
       this.argNameTypes = requireNonNull(argNameTypes);
     }
 
     @Override public Type.Key copy(UnaryOperator<Type.Key> transform) {
-      return progressiveRecord(handler,
+      return progressiveRecord(
           Maps.transformValues(argNameTypes, transform::apply));
     }
 
@@ -464,14 +460,13 @@ public class Keys {
     }
 
     @Override public int hashCode() {
-      return hash(argNameTypes, handler);
+      return argNameTypes.hashCode();
     }
 
     @Override public boolean equals(Object obj) {
       return obj == this
           || obj instanceof ProgressiveRecordKey
-          && ((ProgressiveRecordKey) obj).argNameTypes.equals(argNameTypes)
-          && ((ProgressiveRecordKey) obj).handler.equals(handler);
+          && ((ProgressiveRecordKey) obj).argNameTypes.equals(argNameTypes);
     }
 
     @Override public Type toType(TypeSystem typeSystem) {
@@ -484,7 +479,7 @@ public class Keys {
                 .put(ProgressiveRecordType.DUMMY, PrimitiveType.UNIT)
                 .build();
       }
-      return new ProgressiveRecordType(handler, argNameTypes);
+      return new ProgressiveRecordType(argNameTypes);
     }
   }
 
