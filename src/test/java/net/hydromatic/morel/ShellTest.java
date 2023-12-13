@@ -509,83 +509,143 @@ public class ShellTest {
 
   @Test void testLineWidth() {
     String inputString = "Sys.set (\"lineWidth\", 100);\n"
+        + "100;"
         + "val x = [[1,2,3], [4,5], [6], []];\n"
         + "val y = ([1,2,3], [4,5], [6], []);\n"
         + "val z = {a=[1,2,3], b=[4,5], c=[6], d=()};\n"
+        + "val r = {x=x,y=y,z=z};\n"
+        + "val f = fn s => String.size s;\n"
         + "Sys.set (\"lineWidth\", 40);\n"
-        + "x;"
-        + "y;"
-        + "z;"
+        + "40;\n"
+        + "x;\n"
+        + "y;\n"
+        + "z;\n"
+        + "r;\n"
         + "Sys.set (\"lineWidth\", 20);\n"
-        + "x;"
-        + "y;"
-        + "z;"
+        + "20;\n"
+        + "x;\n"
+        + "y;\n"
+        + "z;\n"
+        + "f;\n"
         + "Sys.set (\"lineWidth\", 1);\n"
-        + "x;"
+        + "1;\n"
+        + "x;\n"
         + "Sys.set (\"lineWidth\", 0);\n"
-        + "x;"
+        + "0;\n"
+        + "x;\n"
         + "Sys.set (\"lineWidth\", ~1);\n"
+        + "~1;\n"
         + "x;\n";
-    String expected = "val it = () : unit\n"
-        + "val x = [[1,2,3],[4,5],[6],[]] : int list list\n"
-        + "val y = ([1,2,3],[4,5],[6],[])"
-        + " : int list * int list * int list * 'a list\n"
-        + "val z = {a=[1,2,3],b=[4,5],c=[6],d=()}"
-        + " : {a:int list, b:int list, c:int list, d:unit}\n"
-        + "val it = () : unit\n"
-        + "val it = [[1,2,3],[4,5],[6],[]]\n"
-        + "  : int list list\n"
-        + "val it = ([1,2,3],[4,5],[6],[])\n"
-        + "  : int list * int list * int list * 'a list\n"
-        + "val it = {a=[1,2,3],b=[4,5],c=[6],d=()}\n"
-        + "  : {a:int list, b:int list, c:int list, d:unit}\n"
-        + "val it = () : unit\n"
-        + "val it =\n"
-        + "  [[1,2,3],[4,5],[6],\n"
-        + "   []]\n"
-        + "  : int list list\n"
-        + "val it =\n"
-        + "  ([1,2,3],[4,5],[6],\n"
-        + "   [])\n"
-        + "  : int list * int list * int list * 'a list\n"
-        + "val it =\n"
-        + "  {a=[1,2,3],b=[4,5],\n"
-        + "   c=[6],d=()}\n"
-        + "  : {a:int list, b:int list, c:int list, d:unit}\n"
-        + "val it =\n"
-        + "  ()\n"
-        + "  : unit\n"
-        + "val it =\n"
-        + "  [\n"
-        + "   [\n"
-        + "    1,\n"
-        + "    2,\n"
-        + "    3],\n"
-        + "   [\n"
-        + "    4,\n"
-        + "    5],\n"
-        + "   [\n"
-        + "    6],\n"
-        + "   []]\n"
-        + "  : int list list\n"
-        + "val it =\n"
-        + "  ()\n"
-        + "  : unit\n"
-        + "val it =\n"
-        + "  [\n"
-        + "   [\n"
-        + "    1,\n"
-        + "    2,\n"
-        + "    3],\n"
-        + "   [\n"
-        + "    4,\n"
-        + "    5],\n"
-        + "   [\n"
-        + "    6],\n"
-        + "   []]\n"
-        + "  : int list list\n"
-        + "val it = () : unit\n"
-        + "val it = [[1,2,3],[4,5],[6],[]] : int list list\n";
+    String[] lines = {
+        // width 100
+        "val it = () : unit",
+        "val it = 100 : int",
+        "val x = [[1,2,3],[4,5],[6],[]] : int list list",
+        "val y = ([1,2,3],[4,5],[6],[])"
+            + " : int list * int list * int list * 'a list",
+        "val z = {a=[1,2,3],b=[4,5],c=[6],d=()}"
+            + " : {a:int list, b:int list, c:int list, d:unit}",
+        "val r = {x=[[1,2,3],[4,5],[6],[]],y=([1,2,3],[4,5],[6],[]),"
+            + "z={a=[1,2,3],b=[4,5],c=[6],d=()}}",
+        "  : {x:int list list, y:int list * int list * int list * 'a list,",
+        "     z:{a:int list, b:int list, c:int list, d:unit}}",
+        "val f = fn : string -> int",
+        // width 40
+        "val it = () : unit",
+        "val it = 40 : int",
+        "val it = [[1,2,3],[4,5],[6],[]]",
+        "  : int list list",
+        "val it = ([1,2,3],[4,5],[6],[])",
+        "  : int list * int list * int list *",
+        "    'a list",
+        "val it = {a=[1,2,3],b=[4,5],c=[6],d=()}",
+        "  : {a:int list, b:int list, c:int list,",
+        "     d:unit}",
+        "val it =",
+        "  {x=[[1,2,3],[4,5],[6],[]],",
+        "   y=([1,2,3],[4,5],[6],[]),",
+        "   z={a=[1,2,3],b=[4,5],c=[6],d=()}}",
+        "  : {x:int list list,",
+        "     y:int list * int list * int list *",
+        "       'a list,",
+        "     z:{a:int list, b:int list,",
+        "        c:int list, d:unit}}",
+        // width 20
+        "val it = () : unit",
+        "val it = 20 : int",
+        "val it =",
+        "  [[1,2,3],[4,5],[6],",
+        "   []]",
+        "  : int list list",
+        "val it =",
+        "  ([1,2,3],[4,5],[6],",
+        "   [])",
+        "  : int list *",
+        "    int list *",
+        "    int list *",
+        "    'a list",
+        "val it =",
+        "  {a=[1,2,3],b=[4,5],",
+        "   c=[6],d=()}",
+        "  : {a:int list,",
+        "     b:int list,",
+        "     c:int list,",
+        "     d:unit}",
+        "val it = fn",
+        "  : string -> int",
+        // width 1
+        "val it =",
+        "  ()",
+        "  :",
+        "    unit",
+        "val it =",
+        "  1",
+        "  :",
+        "    int",
+        "val it =",
+        "  [",
+        "   [",
+        "    1,",
+        "    2,",
+        "    3],",
+        "   [",
+        "    4,",
+        "    5],",
+        "   [",
+        "    6],",
+        "   []]",
+        "  :",
+        "    int list list",
+        // width 0
+        "val it =",
+        "  ()",
+        "  :",
+        "    unit",
+        "val it =",
+        "  0",
+        "  :",
+        "    int",
+        "val it =",
+        "  [",
+        "   [",
+        "    1,",
+        "    2,",
+        "    3],",
+        "   [",
+        "    4,",
+        "    5],",
+        "   [",
+        "    6],",
+        "   []]",
+        "  :",
+        "    int list list",
+        // width ~1
+        "val it = () : unit",
+        "val it = ~1 : int",
+        "val it = [[1,2,3],[4,5],[6],[]] : int list list",
+        "",
+    };
+    String expected = String.join("\n", lines);
     fixture()
         .withRaw(true)
         .withInputString(inputString)
