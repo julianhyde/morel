@@ -23,7 +23,6 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -1252,7 +1251,7 @@ public enum BuiltIn {
 
   /** Value "Sys.file", aka "file", of type "{...}" (partial record). */
   SYS_FILE("Sys", "file", "file", ts ->
-      ts.progressiveRecordType(ProgressiveRecordType.DefaultHandler.INSTANCE,
+      ts.progressiveRecordType(
           ImmutableSortedMap.<String, Type>orderedBy(RecordType.ORDERING)
               .build())),
 

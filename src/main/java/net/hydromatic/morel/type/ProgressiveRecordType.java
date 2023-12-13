@@ -20,21 +20,15 @@ package net.hydromatic.morel.type;
 
 import java.util.SortedMap;
 
-import static java.util.Objects.requireNonNull;
-
 /** Progressive record type. */
 public class ProgressiveRecordType extends RecordType {
   /** A field of this name indicates that a record type is progressive. */
   public static final String DUMMY = "$dummy";
 
-  private final Handler handler;
-
   /** Creates a ProgressiveRecordType. */
-  ProgressiveRecordType(Handler handler,
-      SortedMap<String, Type> argNameTypes) {
+  ProgressiveRecordType(SortedMap<String, Type> argNameTypes) {
     super(argNameTypes);
     assert argNameTypes.containsKey(DUMMY);
-    this.handler = requireNonNull(handler, "handler");
   }
 
   @Override public boolean isProgressive() {
@@ -42,15 +36,7 @@ public class ProgressiveRecordType extends RecordType {
   }
 
   @Override public Key key() {
-    return Keys.progressiveRecord(handler, Keys.toKeys(argNameTypes));
-  }
-
-  /** Handles mutations. */
-  public interface Handler {
-  }
-
-  public enum DefaultHandler implements Handler {
-    INSTANCE
+    return Keys.progressiveRecord(Keys.toKeys(argNameTypes));
   }
 }
 
