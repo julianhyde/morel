@@ -24,6 +24,7 @@ import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
@@ -35,10 +36,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.function.Function;
+import java.util.zip.GZIPInputStream;
 
 import static java.util.Objects.requireNonNull;
 
@@ -94,12 +97,13 @@ public class Directory implements Codes.TypedValue {
       if (subFile.isDirectory()) {
         entries.put(subFile.getName(), new Directory(subFile));
       } else if (subFile.isFile()) {
-        String name;
-        if (subFile.getName().endsWith(".csv")) {
-          name = removeSuffix(subFile.getName(), ".csv");
-          final DataFile dataFile = DataFile.create(subFile);
-          if (dataFile != null) {
-            entries.put(name, dataFile);
+        for (FileType fileType : FileType.values()) {
+          if (subFile.getName().endsWith(fileType.suffix)) {
+            String name = removeSuffix(subFile.getName(), fileType.suffix);
+            final DataFile dataFile = DataFile.create(subFile, fileType);
+            if (dataFile != null) {
+              entries.put(name, dataFile);
+            }
           }
         }
       }
@@ -115,76 +119,85 @@ public class Directory implements Codes.TypedValue {
     return name.substring(0, name.length() - suffix.length());
   }
 
-  private static class DataFile implements Codes.TypedValue {
-    private final File file;
-    private final Type.Key typeKey;
-    private final PairList<Integer, Function<String, Object>> parsers;
+  private static PairList<String, Type.Key> deduceFieldsCsv(BufferedReader r)
+      throws IOException {
+    String firstLine = r.readLine();
+    if (firstLine == null) {
+      // File is empty. There will be no fields, and row type will be unit.
+      return ImmutablePairList.of();
+    }
 
-    DataFile(File file, Type.Key typeKey,
+    final PairList<String, Type.Key> nameTypes = PairList.of();
+    for (String field : firstLine.split(",")) {
+      final String[] split = field.split(":");
+      final String subFieldName = split[0];
+      final String subFieldType =
+          split.length > 1 ? split[1] : "string";
+      Type.Key subType;
+      switch (subFieldType) {
+      case "bool":
+        subType = PrimitiveType.BOOL.key();
+        break;
+      case "decimal":
+      case "double":
+        subType = PrimitiveType.REAL.key();
+        break;
+      case "int":
+        subType = PrimitiveType.INT.key();
+        break;
+      default:
+        subType = PrimitiveType.STRING.key();
+        break;
+      }
+      nameTypes.add(subFieldName, subType);
+    }
+    return nameTypes;
+  }
+
+  private static class DataFile implements Codes.TypedValue {
+    final File file;
+    final FileType fileType;
+    final Type.Key typeKey;
+    final PairList<Integer, Function<String, Object>> parsers;
+
+    DataFile(File file, FileType fileType, Type.Key typeKey,
         PairList<Integer, Function<String, Object>> parsers) {
       this.file = requireNonNull(file, "file");
+      this.fileType = requireNonNull(fileType, "fileType");
       this.typeKey = requireNonNull(typeKey, "typeKey");
       this.parsers = parsers.immutable();
     }
 
-    static DataFile create(File subFile) {
-      try (BufferedReader r = Util.reader(subFile)) {
-        String firstLine = r.readLine();
-        final PairList<String, Type.Key> nameTypes = PairList.of();
-        if (firstLine != null) {
-          for (String field : firstLine.split(",")) {
-            final String[] split = field.split(":");
-            final String subFieldName = split[0];
-            final String subFieldType =
-                split.length > 1 ? split[1] : "string";
-            Type.Key subType;
-            switch (subFieldType) {
-            case "bool":
-              subType = PrimitiveType.BOOL.key();
-              break;
-            case "decimal":
-            case "double":
-              subType = PrimitiveType.REAL.key();
-              break;
-            case "int":
-              subType = PrimitiveType.INT.key();
-              break;
-            default:
-              subType = PrimitiveType.STRING.key();
-              break;
-            }
-            nameTypes.add(subFieldName, subType);
-          }
-        } else {
-          // File is empty. There will be no fields, and row type will be unit.
-        }
+    static DataFile create(File subFile, FileType fileType) {
+      try (BufferedReader r = fileType.open(subFile)) {
+        final PairList<String, Type.Key> nameTypes = fileType.deduceFields(r);
         final ImmutableSortedMap<String, Type.Key> sortedNameTypes =
             ImmutableSortedMap.<String, Type.Key>orderedBy(RecordType.ORDERING)
                 .putAll(nameTypes)
                 .build();
         final PairList<Integer, Function<String, Object>> fieldParsers =
             PairList.of();
-        nameTypes.forEachIndexed((i, name, typeKey) -> {
+        nameTypes.forEach((name, typeKey) -> {
           final int j = sortedNameTypes.keySet().asList().indexOf(name);
-          fieldParsers.add(j, parser(typeKey, i));
+          fieldParsers.add(j, parser(typeKey));
         });
 
-        return new DataFile(subFile, Keys.list(Keys.record(sortedNameTypes)),
-            fieldParsers);
+        return new DataFile(subFile, fileType,
+            Keys.list(Keys.record(sortedNameTypes)), fieldParsers);
       } catch (IOException e) {
         // ignore, and skip file
         return null;
       }
     }
 
-    static Function<String, Object> parser(Type.Key type, int ordinal) {
+    static Function<String, Object> parser(Type.Key type) {
       switch (type.op) {
       case DATA_TYPE:
         switch (type.toString()) {
         case "int":
-          return Integer::parseInt;
+          return s -> s.equals("NULL") ? 0 : Integer.parseInt(s);
         case "real":
-          return Float::parseFloat;
+          return s -> s.equals("NULL") ? 0f : Float.parseFloat(s);
         case "string":
           return DataFile::unquoteString;
         default:
@@ -205,7 +218,7 @@ public class Directory implements Codes.TypedValue {
 
     @Override public <V> V valueAs(Class<V> clazz) {
       Object[] values = new Object[parsers.size()];
-      try (BufferedReader r = Util.reader(file)) {
+      try (BufferedReader r = fileType.open(file)) {
         String firstLine = r.readLine();
         if (firstLine == null) {
           return null;
@@ -218,7 +231,7 @@ public class Directory implements Codes.TypedValue {
           }
           String[] fields = line.split(",");
           parsers.forEachIndexed((i, j, parser) ->
-              values[i] = parser.apply(fields[j]));
+              values[j] = parser.apply(fields[i]));
           list.add(ImmutableList.copyOf(values));
         }
       } catch (IOException e) {
@@ -229,6 +242,34 @@ public class Directory implements Codes.TypedValue {
 
     @Override public Type.Key typeKey() {
       return typeKey;
+    }
+  }
+
+  enum FileType {
+    CSV(".csv"),
+    CSV_GZ(".csv.gz");
+
+    final String suffix;
+
+    FileType(String suffix) {
+      this.suffix = suffix;
+    }
+
+    BufferedReader open(File file) throws IOException {
+      switch (this) {
+      case CSV:
+        return Util.reader(file);
+      case CSV_GZ:
+        return Util.reader(
+            new GZIPInputStream(Files.newInputStream(file.toPath())));
+      default:
+        throw new IllegalArgumentException("cannot open " + file);
+      }
+    }
+
+    PairList<String, Type.Key> deduceFields(BufferedReader r)
+        throws IOException {
+      return deduceFieldsCsv(r);
     }
   }
 }
