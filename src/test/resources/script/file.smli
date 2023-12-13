@@ -48,22 +48,37 @@ from d in file.data.scott.dept
  compute sum of d.deptno;
 > val it = 40 : int
 
+from d in file.data.scott.dept
+join e in file.data.scott.emp on d.deptno = e.deptno
+group e.deptno compute count
+order deptno;
+> val it = [{count=3,deptno=10},{count=5,deptno=20},{count=6,deptno=30}]
+>   : {count:int, deptno:int} list
+
 (*) The type of 'file' has widened further.
 file;
 > val it =
->   {data={scott={bonus=<relation>,dept=<relation>,salgrade=<relation>}},
+>   {
+>    data=
+>    {scott={bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}},
 >    script={},use={}}
 >   : {
 >      data:{
 >            scott:{bonus:{bonus:real, ename:string, job:string, sal:real} list,
 >                   dept:{deptno:int, dname:string, loc:string} list,
+>                   emp:
+>                       {comm:real, deptno:int, empno:int, ename:string,
+>                        hiredate:string, job:string, mgrno:int, sal:real} list,
 >                   salgrade:{grade:int, hisal:real, losal:real} list}},
 >      script:{...}, use:{...}}
 
 file.data.scott;
-> val it = {bonus=<relation>,dept=<relation>,salgrade=<relation>}
+> val it = {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
 >   : {bonus:{bonus:real, ename:string, job:string, sal:real} list,
 >      dept:{deptno:int, dname:string, loc:string} list,
+>      emp:
+>          {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
+>           job:string, mgrno:int, sal:real} list,
 >      salgrade:{grade:int, hisal:real, losal:real} list}
 
 (*) End file.smli
