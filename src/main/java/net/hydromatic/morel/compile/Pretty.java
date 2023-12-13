@@ -139,88 +139,8 @@ class Pretty {
     }
 
     if (value instanceof TypeVal) {
-      final TypeVal typeVal = (TypeVal) value;
-      final int start;
-      buf.append(typeVal.prefix);
-      int indent2 = indent + typeVal.prefix.length();
-      switch (typeVal.type.op()) {
-      case DATA_TYPE:
-      case ID:
-      case TY_VAR:
-        return pretty1(buf, indent2, lineEnd, depth, type,
-            typeVal.type.moniker(), 0, 0);
-
-      case LIST:
-        if (leftPrec > Op.LIST.left
-            || rightPrec > Op.LIST.right) {
-          pretty1(buf, indent2, lineEnd, depth, type, "(", 0, 0);
-          pretty1(buf, indent2, lineEnd, depth, type, typeVal, 0, 0);
-          pretty1(buf, indent2, lineEnd, depth, type, ")", 0, 0);
-          return buf;
-        }
-        final ListType listType = (ListType) typeVal.type;
-        pretty1(buf, indent2, lineEnd, depth, type,
-            new TypeVal("", listType.elementType), leftPrec, Op.LIST.left);
-        return buf.append(" list");
-
-      case TUPLE_TYPE:
-        if (leftPrec > Op.TUPLE_TYPE.left
-            || rightPrec > Op.TUPLE_TYPE.right) {
-          pretty1(buf, indent2, lineEnd, depth, type, "(", 0, 0);
-          pretty1(buf, indent2, lineEnd, depth, type, typeVal, 0, 0);
-          pretty1(buf, indent2, lineEnd, depth, type, ")", 0, 0);
-          return buf;
-        }
-        final TupleType tupleType = (TupleType) typeVal.type;
-        start = buf.length();
-        List<Type> argTypes = tupleType.argTypes;
-        for (int i = 0; i < argTypes.size(); i++) {
-          Type argType = argTypes.get(i);
-          if (buf.length() > start) {
-            pretty1(buf, indent2, lineEnd, depth, type,
-                " * ", 0, 0);
-          }
-          pretty1(buf, indent2, lineEnd, depth, type,
-              new TypeVal("", argType),
-              i == 0 ? leftPrec : Op.TUPLE_TYPE.right,
-              i == argTypes.size() - 1 ? rightPrec : Op.TUPLE_TYPE.left);
-        }
-        return buf;
-
-      case RECORD_TYPE:
-        final RecordType recordType = (RecordType) typeVal.type;
-        buf.append("{");
-        start = buf.length();
-        recordType.argNameTypes.forEach((name, elementType) -> {
-          if (buf.length() > start) {
-            buf.append(", ");
-          }
-          pretty1(buf, indent2 + 1, lineEnd, depth, type,
-              new LabelVal(name, elementType), 0, 0);
-        });
-        return buf.append("}");
-
-      case FUNCTION_TYPE:
-        if (leftPrec > Op.FUNCTION_TYPE.left
-            || rightPrec > Op.FUNCTION_TYPE.right) {
-          pretty1(buf, indent2, lineEnd, depth, type, "(", 0, 0);
-          pretty1(buf, indent2, lineEnd, depth, type, typeVal, 0, 0);
-          pretty1(buf, indent2, lineEnd, depth, type, ")", 0, 0);
-          return buf;
-        }
-        final FnType fnType = (FnType) typeVal.type;
-        pretty1(buf, indent2 + 1, lineEnd, depth, type,
-            new TypeVal("", fnType.paramType),
-            leftPrec, Op.FUNCTION_TYPE.left);
-        pretty1(buf, indent2 + 1, lineEnd, depth, type, " -> ", 0, 0);
-        pretty1(buf, indent2 + 1, lineEnd, depth, type,
-            new TypeVal("", fnType.resultType),
-            Op.FUNCTION_TYPE.right, rightPrec);
-        return buf;
-
-      default:
-        throw new AssertionError("unknown type " + typeVal.type);
-      }
+      return prettyType(buf, indent, lineEnd, depth, type, (TypeVal) value,
+          leftPrec, rightPrec);
     }
 
     if (printDepth >= 0 && depth > printDepth) {
@@ -344,6 +264,91 @@ class Pretty {
 
     default:
       return buf.append(value);
+    }
+  }
+
+  private StringBuilder prettyType(StringBuilder buf, int indent, int[] lineEnd,
+      int depth, Type type, TypeVal typeVal, int leftPrec, int rightPrec) {
+    buf.append(typeVal.prefix);
+    final int indent2 = indent + typeVal.prefix.length();
+    final int start;
+    switch (typeVal.type.op()) {
+    case DATA_TYPE:
+    case ID:
+    case TY_VAR:
+      return pretty1(buf, indent2, lineEnd, depth, type,
+          typeVal.type.moniker(), 0, 0);
+
+    case LIST:
+      if (leftPrec > Op.LIST.left
+          || rightPrec > Op.LIST.right) {
+        pretty1(buf, indent2, lineEnd, depth, type, "(", 0, 0);
+        pretty1(buf, indent2, lineEnd, depth, type, typeVal, 0, 0);
+        pretty1(buf, indent2, lineEnd, depth, type, ")", 0, 0);
+        return buf;
+      }
+      final ListType listType = (ListType) typeVal.type;
+      pretty1(buf, indent2, lineEnd, depth, type,
+          new TypeVal("", listType.elementType), leftPrec, Op.LIST.left);
+      return buf.append(" list");
+
+    case TUPLE_TYPE:
+      if (leftPrec > Op.TUPLE_TYPE.left
+          || rightPrec > Op.TUPLE_TYPE.right) {
+        pretty1(buf, indent2, lineEnd, depth, type, "(", 0, 0);
+        pretty1(buf, indent2, lineEnd, depth, type, typeVal, 0, 0);
+        pretty1(buf, indent2, lineEnd, depth, type, ")", 0, 0);
+        return buf;
+      }
+      final TupleType tupleType = (TupleType) typeVal.type;
+      start = buf.length();
+      List<Type> argTypes = tupleType.argTypes;
+      for (int i = 0; i < argTypes.size(); i++) {
+        Type argType = argTypes.get(i);
+        if (buf.length() > start) {
+          pretty1(buf, indent2, lineEnd, depth, type,
+              " * ", 0, 0);
+        }
+        pretty1(buf, indent2, lineEnd, depth, type,
+            new TypeVal("", argType),
+            i == 0 ? leftPrec : Op.TUPLE_TYPE.right,
+            i == argTypes.size() - 1 ? rightPrec : Op.TUPLE_TYPE.left);
+      }
+      return buf;
+
+    case RECORD_TYPE:
+      final RecordType recordType = (RecordType) typeVal.type;
+      buf.append("{");
+      start = buf.length();
+      recordType.argNameTypes.forEach((name, elementType) -> {
+        if (buf.length() > start) {
+          buf.append(", ");
+        }
+        pretty1(buf, indent2 + 1, lineEnd, depth, type,
+            new LabelVal(name, elementType), 0, 0);
+      });
+      return buf.append("}");
+
+    case FUNCTION_TYPE:
+      if (leftPrec > Op.FUNCTION_TYPE.left
+          || rightPrec > Op.FUNCTION_TYPE.right) {
+        pretty1(buf, indent2, lineEnd, depth, type, "(", 0, 0);
+        pretty1(buf, indent2, lineEnd, depth, type, typeVal, 0, 0);
+        pretty1(buf, indent2, lineEnd, depth, type, ")", 0, 0);
+        return buf;
+      }
+      final FnType fnType = (FnType) typeVal.type;
+      pretty1(buf, indent2 + 1, lineEnd, depth, type,
+          new TypeVal("", fnType.paramType),
+          leftPrec, Op.FUNCTION_TYPE.left);
+      pretty1(buf, indent2 + 1, lineEnd, depth, type, " -> ", 0, 0);
+      pretty1(buf, indent2 + 1, lineEnd, depth, type,
+          new TypeVal("", fnType.resultType),
+          Op.FUNCTION_TYPE.right, rightPrec);
+      return buf;
+
+    default:
+      throw new AssertionError("unknown type " + typeVal.type);
     }
   }
 
