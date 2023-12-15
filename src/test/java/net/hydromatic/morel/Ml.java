@@ -290,7 +290,8 @@ class Ml {
           Compiles.validateExpression(statement, calcite.foreignValues());
       final Environment env = resolved.env;
       final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-      final Resolver resolver = Resolver.of(resolved.typeMap, env);
+      final Session session = null;
+      final Resolver resolver = Resolver.of(resolved.typeMap, env, session);
       final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
       assertThat(valDecl3, instanceOf(Core.NonRecValDecl.class));
       final RelNode rel =
@@ -354,7 +355,8 @@ class Ml {
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, valDecl, typeSystem);
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-    final Resolver resolver = Resolver.of(resolved.typeMap, env);
+    final Session session = null;
+    final Resolver resolver = Resolver.of(resolved.typeMap, env, null);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
     final Analyzer.Analysis analysis =
         Analyzer.analyze(typeSystem, env, valDecl3);

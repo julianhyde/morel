@@ -26,6 +26,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -44,6 +45,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Util;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
@@ -84,6 +86,7 @@ public class Resolver {
   final TypeMap typeMap;
   private final NameGenerator nameGenerator;
   private final Environment env;
+  private final @Nullable Session session;
 
   /** Contains variable declarations whose type at the point they are used is
    * different (more specific) than in their declaration.
@@ -101,22 +104,25 @@ public class Resolver {
 
   private Resolver(TypeMap typeMap, NameGenerator nameGenerator,
       Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
-      Environment env) {
+      Environment env, @Nullable Session session) {
     this.typeMap = typeMap;
     this.nameGenerator = nameGenerator;
     this.variantIdMap = variantIdMap;
     this.env = env;
+    this.session = session;
   }
 
   /** Creates a root Resolver. */
-  public static Resolver of(TypeMap typeMap, Environment env) {
-    return new Resolver(typeMap, new NameGenerator(), new HashMap<>(), env);
+  public static Resolver of(TypeMap typeMap, Environment env,
+      @Nullable Session session) {
+    return new Resolver(typeMap, new NameGenerator(), new HashMap<>(), env,
+        session);
   }
 
   /** Binds a Resolver to a new environment. */
   public Resolver withEnv(Environment env) {
     return env == this.env ? this
-        : new Resolver(typeMap, nameGenerator, variantIdMap, env);
+        : new Resolver(typeMap, nameGenerator, variantIdMap, env, session);
   }
 
   /** Binds a Resolver to an environment that consists of the current
@@ -485,6 +491,14 @@ public class Resolver {
       final Core.Id id = (Core.Id) exp;
       Binding binding = env.getOpt(id.idPat);
       if (binding != null) {
+        if (binding.value == Codes.SYS_FILE) {
+          // We can't evaluate, because we don't have an EvalEnv. But we
+          // can go straight to the Session.
+          if (session == null) {
+            return null;
+          }
+          return session.file.get();
+        }
         return binding.value;
       }
     }
