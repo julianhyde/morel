@@ -2324,8 +2324,29 @@ public abstract class Codes {
         core.tuple(typeSystem, null, args));
   }
 
-  /** @see BuiltIn#SYS_FILE */
-  private static final TypedValue SYS_FILE = new Directory();
+  /** @see BuiltIn#SYS_FILE
+   *
+   * <p>A reference to {@code file} expands to an indirection via the
+   * {@link EvalEnv#SESSION}. Each session has its own file system; this
+   * ensures thread-safety and also predictability. You wouldn't want/expect
+   * the file system to be already 'expanded' in one session because another
+   * session just used it. */
+  public static final Code SYS_FILE =
+      new Code() {
+        @Override public List eval(EvalEnv evalEnv) {
+          final Session session = (Session) evalEnv.getOpt(EvalEnv.SESSION);
+          if (session == null) {
+            // We are sometimes evaluated without a session during compilation.
+            // Return null to indicate that a directory is not available.
+            return null;
+          }
+          return session.file.get().valueAs(List.class);
+        }
+
+        @Override public Describer describe(Describer describer) {
+          return describer.start("file", detail -> {});
+        }
+      };
 
   /** @see BuiltIn#SYS_PLAN */
   private static final Applicable SYS_PLAN =

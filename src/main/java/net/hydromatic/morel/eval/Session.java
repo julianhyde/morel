@@ -22,10 +22,13 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.util.MorelException;
 
+import com.google.common.base.Suppliers;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
 
@@ -40,6 +43,12 @@ public class Session {
   public List<String> out;
   /** Property values. */
   public final Map<Prop, Object> map;
+
+  /** File system.
+   *
+   * <p>Wrapped in a Supplier to avoid the cost of initializing it (scanning
+   * a directory) for every session. */
+  public final Supplier<File> file = Suppliers.memoize(File::createDefault);
 
   /** Implementation of "use". */
   private Shell shell = Shells.INSTANCE;

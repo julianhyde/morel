@@ -91,7 +91,7 @@ public abstract class Compiles {
     final boolean relationalize =
         Prop.RELATIONALIZE.booleanValue(session.map);
 
-    final Resolver resolver = Resolver.of(resolved.typeMap, env);
+    final Resolver resolver = Resolver.of(resolved.typeMap, env, session);
     final Core.Decl coreDecl0 = resolver.toCore(resolved.node);
     tracer.onCore(0, coreDecl0);
 

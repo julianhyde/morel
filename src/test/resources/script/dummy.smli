@@ -19,4 +19,7 @@
 "this is a simple script; modify it for debugging test cases";
 > val it = "this is a simple script; modify it for debugging test cases" : string
 
+file.data;
+file;
+
 (*) End dummy.smli
