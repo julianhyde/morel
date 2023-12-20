@@ -3725,9 +3725,9 @@ public abstract class Codes {
 
     /** Tries to expand the type to include the given field name.
      *
-     * <p>Returns whether the type changed. */
-    default boolean discoverField(TypeSystem typeSystem, String fieldName) {
-      return false;
+     * <p>Returns this value or an expanded value. */
+    default TypedValue discoverField(TypeSystem typeSystem, String fieldName) {
+      return this;
     }
   }
 }

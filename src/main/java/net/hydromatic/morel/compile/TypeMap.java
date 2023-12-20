@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
@@ -33,12 +34,13 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import javax.annotation.Nullable;
 
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
+
+import static java.util.Objects.requireNonNull;
 
 /** The result of type resolution, a map from AST nodes to types. */
 public class TypeMap {
@@ -54,11 +56,18 @@ public class TypeMap {
    * sufficient. */
   private final Map<String, TypeVar> typeVars = new HashMap<>();
 
+  /** Types for nodes that have been refined using progressive types.
+   *
+   * <p>For example, after type deduction "file.data" has type "{...}" but
+   * after expansion that type has become type "{scott: {...}, wordle: {...}}".
+   * We want to use that expanded type for the rest of preparation. */
+  private final Map<AstNode, Type> nodeTypes = new HashMap<>(); // TODO remove?
+
   TypeMap(TypeSystem typeSystem, Map<AstNode, Unifier.Term> nodeTypeTerms,
       Unifier.Substitution substitution) {
-    this.typeSystem = Objects.requireNonNull(typeSystem);
+    this.typeSystem = requireNonNull(typeSystem);
     this.nodeTypeTerms = ImmutableMap.copyOf(nodeTypeTerms);
-    this.substitution = Objects.requireNonNull(substitution.resolve());
+    this.substitution = requireNonNull(substitution.resolve());
   }
 
   @Override public String toString() {
@@ -81,12 +90,18 @@ public class TypeMap {
 
   /** Returns the type of an AST node. */
   public Type getType(AstNode node) {
-    final Unifier.Term term = Objects.requireNonNull(nodeTypeTerms.get(node));
+    if (nodeTypes.containsKey(node)) {
+      return nodeTypes.get(node);
+    }
+    final Unifier.Term term = requireNonNull(nodeTypeTerms.get(node));
     return termToType(term);
   }
 
   /** Returns the type of an AST node, or null if no type is known. */
   public @Nullable Type getTypeOpt(AstNode node) {
+    if (nodeTypes.containsKey(node)) {
+      return nodeTypes.get(node);
+    }
     final Unifier.Term term = nodeTypeTerms.get(node);
     return term == null ? null : termToType(term);
   }
@@ -104,6 +119,10 @@ public class TypeMap {
    * because it is not relevant to the program. */
   public boolean hasType(AstNode node) {
     return nodeTypeTerms.containsKey(node);
+  }
+
+  public void overrideType(Ast.Exp exp, Type type) {
+    nodeTypes.put(exp, type);
   }
 
   /** Visitor that converts type terms into actual types. */

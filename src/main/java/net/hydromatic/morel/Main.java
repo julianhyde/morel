@@ -203,7 +203,7 @@ public class Main {
   }
 
   public void run() {
-    Environment env = Environments.env(typeSystem, valueMap);
+    Environment env = Environments.env(typeSystem, session, valueMap);
     final Consumer<String> echoLines = out::println;
     final Consumer<String> outLines =
         idempotent

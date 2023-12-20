@@ -23,12 +23,17 @@ import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.ProgressiveRecordType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
@@ -51,6 +56,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import org.apache.calcite.util.Holder;
 import org.apache.calcite.util.Util;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,7 +70,9 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -100,9 +108,23 @@ public class TypeResolver {
   }
 
   /** Deduces the type of a declaration. */
-  public static Resolved deduceType(Environment env, Ast.Decl decl,
-      TypeSystem typeSystem) {
-    return new TypeResolver(typeSystem).deduceType_(env, decl);
+  // TODO: remove Session argument and extend interface Environment.
+  public static Resolved deduceType(@Nullable Session session, Environment env,
+      Ast.Decl decl, TypeSystem typeSystem) {
+    final TypeResolver typeResolver = new TypeResolver(typeSystem);
+    int attempt = 0;
+    for (;;) {
+      final AtomicInteger expandCount = new AtomicInteger();
+      final TypeResolver.Resolved resolved =
+          typeResolver.deduceType_(session, env, decl, expandCount);
+      if (expandCount.get() == 0) {
+        return resolved;
+      }
+      if (attempt++ > 0) {
+        throw new IllegalArgumentException(
+            "progressive types have not stabilized");
+      }
+    }
   }
 
   /** Converts a type AST to a type. */
@@ -115,7 +137,8 @@ public class TypeResolver {
     return new Foo().toTypeKey(type);
   }
 
-  private Resolved deduceType_(Environment env, Ast.Decl decl) {
+  private Resolved deduceType_(@Nullable Session session, Environment env,
+      Ast.Decl decl, AtomicInteger expandCount) {
     final TypeEnvHolder typeEnvs = new TypeEnvHolder(EmptyTypeEnv.INSTANCE);
     BuiltIn.forEach(typeSystem, (builtIn, type) -> {
       if (builtIn.structure == null) {
@@ -136,7 +159,11 @@ public class TypeResolver {
     final Unifier.Tracer tracer = debug
         ? Tracers.printTracer(System.out)
         : Tracers.nullTracer();
-    tryAgain:
+
+    // Deduce types. The loop will retry, just once, if there are certain kinds
+    // of errors.
+    boolean retry = false;
+    int retryCount = 0;
     for (;;) {
       final List<Unifier.TermTerm> termPairs = new ArrayList<>();
       terms.forEach(tv ->
@@ -152,33 +179,104 @@ public class TypeResolver {
       final TypeMap typeMap =
           new TypeMap(typeSystem, map, (Unifier.Substitution) result);
       while (!preferredTypes.isEmpty()) {
-        Map.Entry<Unifier.Variable, PrimitiveType> x = preferredTypes.get(0);
-        preferredTypes.remove(0);
+        Map.Entry<Unifier.Variable, PrimitiveType> x = preferredTypes.remove(0);
         final Type type =
             typeMap.termToType(typeMap.substitution.resultMap.get(x.getKey()));
         if (type instanceof TypeVar) {
           equiv(toTerm(x.getValue()), x.getKey());
-          continue tryAgain;
+          retry = true;
         }
       }
 
-      // Check that there are no field references "x.y" or "#y x" where "x" has
-      // an unresolved type.
-      node2.accept(
-          new Visitor() {
-            @Override protected void visit(Ast.Apply apply) {
-              if (apply.fn.op == Op.RECORD_SELECTOR
-                  && typeMap.typeIsVariable(apply.arg)) {
-                throw new TypeException("unresolved flex record (can't tell "
-                    + "what fields there are besides " + apply.fn + ")",
-                    apply.arg.pos);
-              }
-              super.visit(apply);
-            }
-          });
+      List<Ast.Apply> applies = new ArrayList<>();
+      forEachUnresolvedField(node2, typeMap, applies::add);
+      if (!applies.isEmpty()) {
+        for (Ast.Apply apply : applies) {
+          expandCount.incrementAndGet();
+          final Type type = typeMap.getType(apply.arg);
+          System.out.println(apply + " has arg type " + type);
+          expandField(session, env, typeMap, apply);
+        }
+      }
+      if (retry && retryCount++ == 0) {
+        continue;
+      }
 
+      if (expandCount.get() == 0) {
+        checkNoUnresolvedFieldRefs(node2, typeMap);
+      }
       return Resolved.of(env, decl, node2, typeMap);
     }
+  }
+
+  private Codes.@Nullable TypedValue expandField(@Nullable Session session,
+      Environment env, TypeMap typeMap, Ast.Exp exp) {
+    switch (exp.op) {
+    case APPLY:
+      final Ast.Apply apply = (Ast.Apply) exp;
+      if (apply.fn.op == Op.RECORD_SELECTOR) {
+        final Ast.RecordSelector selector = (Ast.RecordSelector) apply.fn;
+        final Codes.TypedValue typedValue =
+            expandField(session, env, typeMap, apply.arg);
+        if (typedValue != null) {
+          typedValue.discoverField(typeSystem, selector.name);
+          final RecordLikeType type =
+              (RecordLikeType) typedValue.typeKey().toType(typeSystem);
+          // TODO do we need overrideType?
+          typeMap.overrideType(exp, type.argNameTypes().get(selector.name));
+          int i =
+              ImmutableList.copyOf(type.argNameTypes().keySet())
+                  .indexOf(selector.name); // subtract 1 for $dummy; TODO
+          if (i >= 0) { // TODO: add a method TypedValue.fieldValue(name)
+            @SuppressWarnings("unchecked")
+            final List<Codes.TypedValue> list = typedValue.valueAs(List.class);
+            return list.get(i);
+          }
+        }
+      }
+      final Type type = typeMap.getType(apply.arg);
+      if (type instanceof RecordLikeType
+          && ((RecordLikeType) type).argNameTypes().containsKey(
+          ProgressiveRecordType.DUMMY)) {
+        System.out.println(type);
+      }
+      return null;
+
+    case ID:
+      final Binding binding = env.getOpt(((Ast.Id) exp).name);
+      if (binding != null
+          && binding.value instanceof Codes.TypedValue) {
+        return (Codes.TypedValue) binding.value;
+      }
+      // fall through
+
+    default:
+      return null;
+    }
+  }
+
+  /** Checks that there are no field references "x.y" or "#y x" where "x" has
+   * an unresolved type. Throws if there are unresolved field references. */
+  private static void checkNoUnresolvedFieldRefs(Ast.Decl decl, TypeMap typeMap) {
+    forEachUnresolvedField(decl, typeMap, apply -> {
+      throw new TypeException("unresolved flex record (can't tell "
+          + "what fields there are besides " + apply.fn + ")",
+          apply.arg.pos);
+    });
+  }
+
+  private static void forEachUnresolvedField(Ast.Decl decl, TypeMap typeMap,
+      Consumer<Ast.Apply> consumer) {
+    decl.accept(
+        new Visitor() {
+          @Override protected void visit(Ast.Apply apply) {
+            if (apply.fn.op == Op.RECORD_SELECTOR
+                && typeMap.typeIsVariable(apply.arg)) {
+              consumer.accept(apply);
+            }
+            super.visit(apply);
+          }
+        });
   }
 
   private <E extends AstNode> E reg(E node,

@@ -51,10 +51,11 @@ public abstract class Compiles {
    *
    * <p>Used for testing. */
   public static TypeResolver.Resolved validateExpression(AstNode statement,
-      Map<String, ForeignValue> valueMap) {
+      Map<Prop, Object> propMap, Map<String, ForeignValue> valueMap) {
     final TypeSystem typeSystem = new TypeSystem();
-    final Environment env = Environments.env(typeSystem, valueMap);
-    return TypeResolver.deduceType(env, toDecl(statement), typeSystem);
+    final Session session = new Session(propMap);
+    final Environment env = Environments.env(typeSystem, session, valueMap);
+    return TypeResolver.deduceType(session, env, toDecl(statement), typeSystem);
   }
 
   /**
@@ -84,7 +85,7 @@ public abstract class Compiles {
       Ast.Decl decl,
       Consumer<CompileException> warningConsumer, Tracer tracer) {
     final TypeResolver.Resolved resolved =
-        TypeResolver.deduceType(env, decl, typeSystem);
+        TypeResolver.deduceType(session, env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
     final int inlinePassCount =
         Math.max(Prop.INLINE_PASS_COUNT.intValue(session.map), 0);

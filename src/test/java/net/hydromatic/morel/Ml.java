@@ -220,7 +220,8 @@ class Ml {
       final Calcite calcite = Calcite.withDataSets(dataSetMap);
       try {
         final TypeResolver.Resolved resolved =
-            Compiles.validateExpression(statement, calcite.foreignValues());
+            Compiles.validateExpression(statement, propMap,
+                calcite.foreignValues());
         tracer.handleCompileException(null);
         action.accept(resolved, calcite);
       } catch (TypeResolver.TypeException e) {
@@ -287,7 +288,8 @@ class Ml {
 
       final Calcite calcite = Calcite.withDataSets(dataSetMap);
       final TypeResolver.Resolved resolved =
-          Compiles.validateExpression(statement, calcite.foreignValues());
+          Compiles.validateExpression(statement, propMap,
+              calcite.foreignValues());
       final Environment env = resolved.env;
       final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
       final Session session = null;
@@ -349,13 +351,13 @@ class Ml {
     }
     final TypeSystem typeSystem = new TypeSystem();
 
+    final Session session = null;
     final Environment env =
-        Environments.env(typeSystem, ImmutableMap.of());
+        Environments.env(typeSystem, session, ImmutableMap.of());
     final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
     final TypeResolver.Resolved resolved =
-        TypeResolver.deduceType(env, valDecl, typeSystem);
+        TypeResolver.deduceType(session, env, valDecl, typeSystem);
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
-    final Session session = null;
     final Resolver resolver = Resolver.of(resolved.typeMap, env, null);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
     final Analyzer.Analysis analysis =

@@ -30,6 +30,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Maps;
 import org.apache.calcite.util.Util;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -65,20 +66,38 @@ public abstract class File implements Codes.TypedValue {
     return baseName;
   }
 
+  /** Expands this file to a file with a more precise type.
+   *
+   * <p>During expansion, record types may get new fields, never lose them.
+   *
+   * <p>This file object may or may not be mutable. If this file is immutable
+   * and is expanded, returns the new file. If this file is mutable, returns
+   * this file regardless of whether expansion occurred; the caller cannot
+   * discern whether expansion occurred. */
+  File expand() {
+    return this;
+  }
+
+  @Override public File discoverField(TypeSystem typeSystem,
+      String fieldName) {
+    return this;
+  }
+
   /** Creates a file based on the default directory (src/test/resources). */
   public static File createDefault() {
     final java.io.File file =
-        new java.io.File("/home/jhyde/dev/morel.4/src/test/resources");
+        new java.io.File("/Users/julianhyde/dev/morel.2/src/test/resources");
     return requireNonNull(create(file), "file");
   }
 
   /** Creates a file (or directory).
    * Returns null if it is not a recognized type. */
   public static File create(java.io.File ioFile) {
-    return UnknownFile.createUnknown(ioFile).expand();
+    return UnknownFile.createUnknown(null, ioFile).expand();
   }
 
-  static UnknownFile createUnknown(java.io.File ioFile) {
+  static UnknownFile createUnknown(@Nullable Directory directory,
+      java.io.File ioFile) {
     FileType fileType;
     if (ioFile.isDirectory()) {
       fileType = FileType.DIRECTORY;
@@ -91,11 +110,17 @@ public abstract class File implements Codes.TypedValue {
         }
       }
     }
-    return new UnknownFile(ioFile, fileType);
+    if (directory != null) {
+      return new UnknownChildFile(directory, ioFile, fileType);
+    } else {
+      return new UnknownFile(ioFile, fileType);
+    }
   }
 
+  /** Returns a string without its suffix; for example,
+   * {@code removeSuffix("x.txt", ".txt")} returns {@code "x"}. */
   private static String removeSuffix(String s, String suffix) {
-    if (s.endsWith(suffix)) {
+    if (!s.endsWith(suffix)) {
       return s;
     }
     return s.substring(0, s.length() - suffix.length());
@@ -168,9 +193,15 @@ public abstract class File implements Codes.TypedValue {
   private static class Directory extends File {
     final SortedMap<String, File> entries; // mutable
 
-    Directory(java.io.File file, SortedMap<String, File> entries) {
+    Directory(java.io.File file) {
       super(file, FileType.DIRECTORY);
-      this.entries = requireNonNull(entries, "entries");
+
+      entries = new TreeMap<>(RecordType.ORDERING);
+      for (java.io.File subFile
+          : Util.first(ioFile.listFiles(), new java.io.File[0])) {
+        UnknownFile f = createUnknown(this, subFile);
+        entries.put(f.baseName, f);
+      }
     }
 
     @Override public <V> V valueAs(Class<V> clazz) {
@@ -188,16 +219,14 @@ public abstract class File implements Codes.TypedValue {
           Maps.transformValues(entries, Codes.TypedValue::typeKey));
     }
 
-    @Override public boolean discoverField(TypeSystem typeSystem,
+    @Override public File discoverField(TypeSystem typeSystem,
         String fieldName) {
-      final File subFile = entries.get(fieldName);
-      if (subFile instanceof UnknownFile) {
-        entries.put(fieldName, ((UnknownFile) subFile).expand());
-        return true;
+      final File file = entries.get(fieldName);
+      if (file != null) {
+        file.expand();
       }
-      return true;
+      return this;
     }
-
   }
 
   /** File that is not a directory, and can be parsed into a set of records. */
@@ -262,17 +291,10 @@ public abstract class File implements Codes.TypedValue {
       return Keys.progressiveRecord(ImmutableSortedMap.of());
     }
 
-    public File expand() {
+    @Override File expand() {
       switch (fileType) {
       case DIRECTORY:
-        final SortedMap<String, File> entries =
-            new TreeMap<>(RecordType.ORDERING);
-        for (java.io.File subFile
-            : Util.first(ioFile.listFiles(), new java.io.File[0])) {
-          UnknownFile f = createUnknown(subFile);
-          entries.put(f.baseName, f);
-        }
-        return new Directory(ioFile, entries);
+        return new Directory(ioFile);
 
       case FILE:
         return this;
@@ -298,6 +320,33 @@ public abstract class File implements Codes.TypedValue {
           return null;
         }
       }
+    }
+
+    @Override public File discoverField(TypeSystem typeSystem,
+        String fieldName) {
+      final File file = expand();
+      if (file == this) {
+        return this;
+      }
+      return file.discoverField(typeSystem, fieldName);
+    }
+  }
+
+  private static class UnknownChildFile extends UnknownFile {
+    private final Directory directory;
+
+    protected UnknownChildFile(Directory directory, java.io.File file,
+        FileType fileType) {
+      super(file, fileType);
+      this.directory = requireNonNull(directory, "directory");
+    }
+
+    @Override File expand() {
+      final File file = super.expand();
+      if (file != this) {
+        directory.entries.put(baseName, file);
+      }
+      return file;
     }
   }
 

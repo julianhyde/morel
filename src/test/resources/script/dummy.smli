@@ -19,7 +19,15 @@
 "this is a simple script; modify it for debugging test cases";
 > val it = "this is a simple script; modify it for debugging test cases" : string
 
-file.data;
-file;
+file.data.wordle;
+(*) file.data.wordle.words;
+(*) file.data.scott.dept;
+(*) from e in file.data.scott.dept;
+(*) file.data.scott;
+(*) file.data;
+(*) file;
+(*) file.data.scott.dept;
+(*) from d in file.data.scott.dept;
+from f in file.data.wordle.words;
 
 (*) End dummy.smli
