@@ -117,12 +117,9 @@ public class TypeResolver {
       final AtomicInteger expandCount = new AtomicInteger();
       final TypeResolver.Resolved resolved =
           typeResolver.deduceType_(session, env, decl, expandCount);
-      if (expandCount.get() == 0) {
+      if (expandCount.get() == 0
+          || attempt++ > 0) {
         return resolved;
-      }
-      if (attempt++ > 0) {
-        throw new IllegalArgumentException(
-            "progressive types have not stabilized");
       }
     }
   }
@@ -162,8 +159,7 @@ public class TypeResolver {
 
     // Deduce types. The loop will retry, just once, if there are certain kinds
     // of errors.
-    boolean retry = false;
-    int retryCount = 0;
+    tryAgain:
     for (;;) {
       final List<Unifier.TermTerm> termPairs = new ArrayList<>();
       terms.forEach(tv ->
@@ -184,12 +180,18 @@ public class TypeResolver {
             typeMap.termToType(typeMap.substitution.resultMap.get(x.getKey()));
         if (type instanceof TypeVar) {
           equiv(toTerm(x.getValue()), x.getKey());
-          retry = true;
+          continue tryAgain;
         }
       }
 
       List<Ast.Apply> applies = new ArrayList<>();
-      forEachUnresolvedField(node2, typeMap, applies::add);
+      forEachUnresolvedField(node2, typeMap, apply -> {
+        final Type type = typeMap.getType(apply.arg);
+        if (isProgressive(type)) {
+          applies.add(apply);
+        }
+      });
+      final int originalExpandCount = expandCount.get();
       if (!applies.isEmpty()) {
         for (Ast.Apply apply : applies) {
           expandCount.incrementAndGet();
@@ -198,15 +200,20 @@ public class TypeResolver {
           expandField(session, env, typeMap, apply);
         }
       }
-      if (retry && retryCount++ == 0) {
-        continue;
-      }
 
-      if (expandCount.get() == 0) {
+      if (expandCount.get() == originalExpandCount) {
         checkNoUnresolvedFieldRefs(node2, typeMap);
       }
       return Resolved.of(env, decl, node2, typeMap);
     }
+  }
+
+  // TODO: centralize and simplify the following logic
+  private static boolean isProgressive(Type type) {
+    return type instanceof ProgressiveRecordType
+        || type instanceof RecordLikeType
+        && ((RecordLikeType) type).argNameTypes()
+        .containsKey(ProgressiveRecordType.DUMMY);
   }
 
   private Codes.@Nullable TypedValue expandField(@Nullable Session session,
