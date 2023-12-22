@@ -83,17 +83,10 @@ public abstract class File implements Codes.TypedValue {
     return this;
   }
 
-  /** Creates a file based on the default directory (src/test/resources). */
-  public static File createDefault() {
-    final java.io.File file =
-        new java.io.File("/Users/julianhyde/dev/morel.2/src/test/resources");
-    return requireNonNull(create(file), "file");
-  }
-
   /** Creates a file (or directory).
-   * Returns null if it is not a recognized type. */
+   * Never returns null. */
   public static File create(java.io.File ioFile) {
-    return UnknownFile.createUnknown(null, ioFile).expand();
+    return createUnknown(null, ioFile).expand();
   }
 
   static UnknownFile createUnknown(@Nullable Directory directory,
@@ -317,7 +310,7 @@ public abstract class File implements Codes.TypedValue {
           return new DataFile(ioFile, fileType, listType, fieldParsers);
         } catch (IOException e) {
           // ignore, and skip file
-          return null;
+          return this;
         }
       }
     }

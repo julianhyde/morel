@@ -48,7 +48,7 @@ public class Session {
    *
    * <p>Wrapped in a Supplier to avoid the cost of initializing it (scanning
    * a directory) for every session. */
-  public final Supplier<File> file = Suppliers.memoize(File::createDefault);
+  public final Supplier<File> file;
 
   /** Implementation of "use". */
   private Shell shell = Shells.INSTANCE;
@@ -63,6 +63,9 @@ public class Session {
    * @param map Map that contains property values */
   public Session(Map<Prop, Object> map) {
     this.map = map;
+    this.file =
+        Suppliers.memoize(() ->
+            File.create(Prop.DIRECTORY.fileValue(this.map)));
   }
 
   /** Calls some code with a new value of {@link Shell}. */
