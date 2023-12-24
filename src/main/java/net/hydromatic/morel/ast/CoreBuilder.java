@@ -171,6 +171,12 @@ public enum CoreBuilder {
 
   public Core.RecordSelector recordSelector(TypeSystem typeSystem,
       RecordLikeType recordType, String fieldName) {
+    final Codes.@Nullable TypedValue typedValue = recordType.asTypedValue();
+    if (typedValue != null) {
+      Codes.TypedValue typedValue2 =
+          typedValue.discoverField(typeSystem, fieldName);
+      recordType = (RecordLikeType) typedValue2.typeKey().toType(typeSystem);
+    }
     int slot = 0;
     for (Map.Entry<String, Type> pair : recordType.argNameTypes().entrySet()) {
       if (pair.getKey().equals(fieldName)) {
@@ -181,20 +187,6 @@ public enum CoreBuilder {
       ++slot;
     }
 
-    // No field, apparently. But is it a dynamically typed record? If so,
-    // ask it to expand its type and look again.
-    final Codes.@Nullable TypedValue typedValue = recordType.asTypedValue();
-    if (typedValue != null) {
-      Codes.TypedValue typedValue2 =
-          typedValue.discoverField(typeSystem, fieldName);
-      RecordLikeType recordType2 =
-          (RecordLikeType) typedValue2.typeKey().toType(typeSystem);
-      if (recordType2.argNameTypes().containsKey(fieldName)) {
-        return recordSelector(typeSystem, recordType2, fieldName);
-      }
-      throw new IllegalArgumentException("no field '" + fieldName
-          + "' in type '" + recordType2 + "'");
-    }
     throw new IllegalArgumentException("no field '" + fieldName
         + "' in type '" + recordType + "'");
   }

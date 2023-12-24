@@ -22,18 +22,31 @@
 (*) The "file" value represents the file system, starting in the current
 (*) directory.
 file;
-> val it = {} : {...}
+> val it =
+>   {META-INF={},data={},junit-platform.properties={},net={},script={},
+>    script.log={},script.sml={},script.sml.out={},surefire={},use={}}
+>   : {META-INF:{...}, data:{...}, junit-platform.properties:{...}, net:{...},
+>      script:{...}, script.log:{...}, script.sml:{...}, script.sml.out:{...},
+>      surefire:{...}, use:{...}, ...}
 
 (*) The "data" subdirectory can be accessed as a field.
 file.data;
-> val it = {} : {...}
+> val it = {scott={},wordle={}} : {scott:{...}, wordle:{...}, ...}
 
 (*) Now we've gone into the directory, the type of 'file' has widened.
 file;
-> val it = {data={},script={},use={}} : {data:{...}, script:{...}, use:{...}}
+> val it =
+>   {META-INF={},data={scott={},wordle={}},junit-platform.properties={},net={},
+>    script={},script.log={},script.sml={},script.sml.out={},surefire={},use={}}
+>   : {META-INF:{...}, data:{scott:{...}, wordle:{...}, ...},
+>      junit-platform.properties:{...}, net:{...}, script:{...}, script.log:{...},
+>      script.sml:{...}, script.sml.out:{...}, surefire:{...}, use:{...}, ...}
 
 file.data.scott;
-> val it = {} : {...}
+> val it = {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
+>   : {bonus:{...} list, dept:{...} list, emp:{...} list, salgrade:{...} list,
+>      ...}
+
 file.data.scott.dept;
 > val it =
 >   [{deptno=10,dname="ACCOUNTING",loc="NEW YORK"},
@@ -59,31 +72,31 @@ order deptno;
 val scott = file.data.scott;
 > val scott =
 >   {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
->   : {bonus:{bonus:real, ename:string, job:string, sal:real} list,
->      dept:{deptno:int, dname:string, loc:string} list,
+>   : {bonus:{...} list, dept:{deptno:int, dname:string, loc:string} list,
 >      emp:
 >          {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
->           job:string, mgrno:int, sal:real} list,
->      salgrade:{grade:int, hisal:real, losal:real} list}
+>           job:string, mgrno:int, sal:real} list, salgrade:{...} list, ...}
 from b in scott.bonus;
 > val it = [] : {bonus:real, ename:string, job:string, sal:real} list
 
 (*) The type of 'file' has widened further.
 file;
 > val it =
->   {
+>   {META-INF={},
 >    data=
 >    {scott={bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>},
->     wordle={}},script={},use={}}
->   : {
+>     wordle={}},junit-platform.properties={},net={},script={},script.log={},
+>    script.sml={},script.sml.out={},surefire={},use={}}
+>   : {META-INF:{...},
 >      data:{
 >            scott:{bonus:{bonus:real, ename:string, job:string, sal:real} list,
 >                   dept:{deptno:int, dname:string, loc:string} list,
 >                   emp:
 >                       {comm:real, deptno:int, empno:int, ename:string,
 >                        hiredate:string, job:string, mgrno:int, sal:real} list,
->                   salgrade:{grade:int, hisal:real, losal:real} list},
->            wordle:{...}}, script:{...}, use:{...}}
+>                   salgrade:{...} list, ...}, wordle:{...}, ...},
+>      junit-platform.properties:{...}, net:{...}, script:{...}, script.log:{...},
+>      script.sml:{...}, script.sml.out:{...}, surefire:{...}, use:{...}, ...}
 
 file.data.scott;
 > val it = {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
@@ -91,7 +104,6 @@ file.data.scott;
 >      dept:{deptno:int, dname:string, loc:string} list,
 >      emp:
 >          {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
->           job:string, mgrno:int, sal:real} list,
->      salgrade:{grade:int, hisal:real, losal:real} list}
+>           job:string, mgrno:int, sal:real} list, salgrade:{...} list, ...}
 
 (*) End file.smli

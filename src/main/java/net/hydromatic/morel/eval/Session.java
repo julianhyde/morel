@@ -65,7 +65,7 @@ public class Session {
     this.map = map;
     this.file =
         Suppliers.memoize(() ->
-            File.create(Prop.DIRECTORY.fileValue(this.map)));
+            Files.create(Prop.DIRECTORY.fileValue(this.map)));
   }
 
   /** Calls some code with a new value of {@link Shell}. */

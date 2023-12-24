@@ -415,7 +415,14 @@ public class Resolver {
       coreFn = core.recordSelector(typeMap.typeSystem,
           makeProgressive(coreArg), recordSelector.name);
       if (type.op() == Op.TY_VAR
-          && coreFn.type.op() == Op.FUNCTION_TYPE) {
+              && coreFn.type.op() == Op.FUNCTION_TYPE
+          || type instanceof RecordType
+              && ((RecordLikeType) type).argNameTypes().containsKey(
+                  ProgressiveRecordType.DUMMY)
+          || type instanceof ListType
+              && ((ListType) type).elementType instanceof RecordType
+              && ((RecordLikeType) ((ListType) type).elementType)
+                  .argNameTypes().containsKey(ProgressiveRecordType.DUMMY)) {
         // If we are dereferencing a field in a progressive type, the type
         // available now may be more precise than the deduced type.
         type = ((FnType) coreFn.type).resultType;
@@ -491,7 +498,7 @@ public class Resolver {
       final Core.Id id = (Core.Id) exp;
       Binding binding = env.getOpt(id.idPat);
       if (binding != null) {
-        if (binding.value == Codes.SYS_FILE) {
+        if (binding.value == Codes.SYS_FILE) { // TODO: is this 'if' still used
           // We can't evaluate, because we don't have an EvalEnv. But we
           // can go straight to the Session.
           if (session == null) {
@@ -684,10 +691,62 @@ public class Resolver {
   Core.Exp toCore(Ast.From from) {
     final Type type = typeMap.getType(from);
     final Core.Exp coreFrom = new FromResolver().run(from);
-    checkArgument(coreFrom.type.equals(type),
+    checkArgument(subsumes(type, coreFrom.type()),
         "Conversion to core did not preserve type: expected [%s] "
             + "actual [%s] from [%s]", type, coreFrom.type, coreFrom);
     return coreFrom;
+  }
+
+  /** An actual type subsumes an expected type if it is equal
+   * or if progressive record types have been expanded. */
+  private static boolean subsumes(Type actualType, Type expectedType) {
+    switch (actualType.op()) {
+    case LIST:
+      if (expectedType.op() != Op.LIST) {
+        return false;
+      }
+      return subsumes(((ListType) actualType).elementType,
+          ((ListType) expectedType).elementType);
+    case RECORD_TYPE:
+      if (expectedType.op() != Op.RECORD_TYPE) {
+        return false;
+      }
+      final SortedMap<String, Type> actualMap =
+          ((RecordType) actualType).argNameTypes();
+      final SortedMap<String, Type> expectedMap =
+          ((RecordType) expectedType).argNameTypes();
+      if (actualMap.containsKey(ProgressiveRecordType.DUMMY)) {
+        return true;
+      }
+      final Iterator<Map.Entry<String, Type>> actualIterator =
+          actualMap.entrySet().iterator();
+      final Iterator<Map.Entry<String, Type>> expectedIterator =
+          expectedMap.entrySet().iterator();
+      for (;;) {
+        if (actualIterator.hasNext()) {
+          if (!expectedIterator.hasNext()) {
+            // expected had fewer entries than actual
+            return false;
+          }
+        } else {
+          if (!expectedIterator.hasNext()) {
+            // expected and actual had same number of entries
+            return true;
+          }
+        }
+        final Map.Entry<String, Type> actual = actualIterator.next();
+        final Map.Entry<String, Type> expected = expectedIterator.next();
+        if (!actual.getKey().equals(expected.getKey())) {
+          return false;
+        }
+        if (!subsumes(actual.getValue(), expected.getValue())) {
+          return false;
+        }
+      }
+      // fall through
+    default:
+      return actualType.equals(expectedType);
+    }
   }
 
   private Core.Aggregate toCore(Ast.Aggregate aggregate,

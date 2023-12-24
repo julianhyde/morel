@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -109,8 +110,16 @@ public class TypeMap {
   /** Returns whether the type of an AST node will be a type variable. */
   public boolean typeIsVariable(AstNode node) {
     final Unifier.Term term = nodeTypeTerms.get(node);
-    return term instanceof Unifier.Variable
-        && termToType(term) instanceof TypeVar;
+    if (term instanceof Unifier.Variable) {
+      final Type type = termToType(term);
+      if (type instanceof TypeVar
+          || type instanceof RecordType
+          && ((RecordType) type).argNameTypes.containsKey(
+              ProgressiveRecordType.DUMMY)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Returns whether an AST node has a type.

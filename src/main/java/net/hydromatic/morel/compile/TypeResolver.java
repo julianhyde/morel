@@ -70,7 +70,6 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -114,11 +113,11 @@ public class TypeResolver {
     final TypeResolver typeResolver = new TypeResolver(typeSystem);
     int attempt = 0;
     for (;;) {
-      final AtomicInteger expandCount = new AtomicInteger();
+      int original = typeSystem.expandCount.get();
       final TypeResolver.Resolved resolved =
-          typeResolver.deduceType_(session, env, decl, expandCount);
-      if (expandCount.get() == 0
-          || attempt++ > 0) {
+          typeResolver.deduceType_(session, env, decl);
+      if (typeSystem.expandCount.get() == original
+          || attempt++ > 10) {
         return resolved;
       }
     }
@@ -135,7 +134,7 @@ public class TypeResolver {
   }
 
   private Resolved deduceType_(@Nullable Session session, Environment env,
-      Ast.Decl decl, AtomicInteger expandCount) {
+      Ast.Decl decl) {
     final TypeEnvHolder typeEnvs = new TypeEnvHolder(EmptyTypeEnv.INSTANCE);
     BuiltIn.forEach(typeSystem, (builtIn, type) -> {
       if (builtIn.structure == null) {
@@ -191,17 +190,14 @@ public class TypeResolver {
           applies.add(apply);
         }
       });
-      final int originalExpandCount = expandCount.get();
+      final int originalExpandCount = typeSystem.expandCount.get();
       if (!applies.isEmpty()) {
         for (Ast.Apply apply : applies) {
-          expandCount.incrementAndGet();
           final Type type = typeMap.getType(apply.arg);
           System.out.println(apply + " has arg type " + type);
           expandField(session, env, typeMap, apply);
         }
-      }
-
-      if (expandCount.get() == originalExpandCount) {
+      } else {
         checkNoUnresolvedFieldRefs(node2, typeMap);
       }
       return Resolved.of(env, decl, node2, typeMap);

@@ -16,11 +16,41 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
+val s = file.data.scott;
+> val s = {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
+>   : {bonus:{...} list, dept:{...} list, emp:{...} list, salgrade:{...} list,
+>      ...}
+from b in s.bonus;
+> val it = [] : {bonus:real, ename:string, job:string, sal:real} list
+s.bonus;
+> val it = [] : {bonus:real, ename:string, job:string, sal:real} list
+file.data.scott.bonus;
+> val it = [] : {bonus:real, ename:string, job:string, sal:real} list
 
 file.data.wordle;
-(*) file.data.wordle.words;
+> val it = {answers=<relation>,words=<relation>}
+>   : {answers:{...} list, words:{...} list, ...}
+
+val w = file.data.wordle;
+> val w = {answers=<relation>,words=<relation>}
+>   : {answers:{...} list, words:{...} list, ...}
+
+from w in file.data.wordle.words;
+> val it =
+>   [{word="aahed"},{word="aalii"},{word="aargh"},{word="aarti"},{word="abaca"},
+>    {word="abaci"},{word="aback"},{word="abacs"},{word="abaft"},{word="abaka"},
+>    {word="abamp"},{word="aband"},...] : {word:string} list
+
+file.data.wordle;
+> val it = {answers=<relation>,words=<relation>}
+>   : {answers:{...} list, words:{word:string} list, ...}
+
+file.data.wordle.words;
+> val it =
+>   [{word="aahed"},{word="aalii"},{word="aargh"},{word="aarti"},{word="abaca"},
+>    {word="abaci"},{word="aback"},{word="abacs"},{word="abaft"},{word="abaka"},
+>    {word="abamp"},{word="aband"},...] : {word:string} list
+
 (*) file.data.scott.dept;
 (*) from e in file.data.scott.dept;
 (*) file.data.scott;
@@ -28,6 +58,14 @@ file.data.wordle;
 (*) file;
 (*) file.data.scott.dept;
 (*) from d in file.data.scott.dept;
+
 from f in file.data.wordle.words;
+> val it =
+>   [{word="aahed"},{word="aalii"},{word="aargh"},{word="aarti"},{word="abaca"},
+>    {word="abaci"},{word="aback"},{word="abacs"},{word="abaft"},{word="abaka"},
+>    {word="abamp"},{word="aband"},...] : {word:string} list
+
+from w in file.data.wordle.words compute count;
+> val it = 12972 : int
 
 (*) End dummy.smli

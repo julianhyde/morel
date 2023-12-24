@@ -30,18 +30,6 @@ Sys.set ("printLength", 64);
 val slow = false;
 > val slow = false : bool
 
-(*) TODO: Remove the following five expressions.
-file;
-> val it = {} : {...}
-file.data;
-> val it = {} : {...}
-file.data.wordle;
-> val it = {} : {...}
-from w in file.data.wordle.words compute count;
-> val it = 12972 : int
-from a in file.data.wordle.answers compute count;
-> val it = 2315 : int
-
 val words = from w in file.data.wordle.words yield w.word;
 > val words =
 >   ["aahed","aalii","aargh","aarti","abaca","abaci","aback","abacs","abaft",
