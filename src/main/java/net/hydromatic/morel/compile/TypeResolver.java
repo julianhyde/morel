@@ -190,10 +190,9 @@ public class TypeResolver {
           applies.add(apply);
         }
       });
-      final int originalExpandCount = typeSystem.expandCount.get();
       if (!applies.isEmpty()) {
         for (Ast.Apply apply : applies) {
-          expandField(session, env, typeMap, apply);
+          expandField(env, apply);
         }
       } else {
         checkNoUnresolvedFieldRefs(node2, typeMap);
@@ -210,27 +209,16 @@ public class TypeResolver {
         .containsKey(ProgressiveRecordType.DUMMY);
   }
 
-  private Codes.@Nullable TypedValue expandField(@Nullable Session session,
-      Environment env, TypeMap typeMap, Ast.Exp exp) {
+  private Codes.@Nullable TypedValue expandField(Environment env, Ast.Exp exp) {
     switch (exp.op) {
     case APPLY:
       final Ast.Apply apply = (Ast.Apply) exp;
       if (apply.fn.op == Op.RECORD_SELECTOR) {
         final Ast.RecordSelector selector = (Ast.RecordSelector) apply.fn;
-        final Codes.TypedValue typedValue =
-            expandField(session, env, typeMap, apply.arg);
+        final Codes.TypedValue typedValue = expandField(env, apply.arg);
         if (typedValue != null) {
           typedValue.discoverField(typeSystem, selector.name);
-          final RecordLikeType type =
-              (RecordLikeType) typedValue.typeKey().toType(typeSystem);
-          int i =
-              ImmutableList.copyOf(type.argNameTypes().keySet())
-                  .indexOf(selector.name);
-          if (i >= 0) { // TODO: add a method TypedValue.fieldValue(name)
-            @SuppressWarnings("unchecked")
-            final List<Codes.TypedValue> list = typedValue.valueAs(List.class);
-            return list.get(i);
-          }
+          return typedValue.fieldValueAs(selector.name, Codes.TypedValue.class);
         }
       }
       return null;

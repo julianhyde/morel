@@ -215,8 +215,15 @@ public class Files {
       }
       throw new IllegalArgumentException("not a " + clazz);
     }
-  }
 
+    @Override public <V> V fieldValueAs(String fieldName, Class<V> clazz) {
+      return clazz.cast(entries.get(fieldName));
+    }
+
+    @Override public <V> V fieldValueAs(int fieldIndex, Class<V> clazz) {
+      return clazz.cast(Iterables.get(entries.values(), fieldIndex));
+    }
+  }
 
   /** File that is not a directory, and can be parsed into a set of records. */
   private static class DataFile extends AbstractFile {

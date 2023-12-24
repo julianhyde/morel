@@ -507,13 +507,11 @@ public class Resolver {
         final Core.RecordSelector recordSelector =
             (Core.RecordSelector) apply.fn;
         final Object o = valueOf(apply.arg);
-        @SuppressWarnings("unchecked") List<Object> list =
-            o instanceof List
-                ? (List<Object>) o
-                : o instanceof Codes.TypedValue
-                    ? ((Codes.TypedValue) o).valueAs(List.class)
-                    : null;
-        if (list != null) {
+        if (o instanceof Codes.TypedValue) {
+          return ((Codes.TypedValue) o).fieldValueAs(recordSelector.slot,
+              Object.class);
+        } else if (o instanceof List) {
+          @SuppressWarnings("unchecked") List<Object> list = (List<Object>) o;
           return list.get(recordSelector.slot);
         }
       }
