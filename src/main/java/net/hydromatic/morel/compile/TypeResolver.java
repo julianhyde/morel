@@ -193,8 +193,6 @@ public class TypeResolver {
       final int originalExpandCount = typeSystem.expandCount.get();
       if (!applies.isEmpty()) {
         for (Ast.Apply apply : applies) {
-          final Type type = typeMap.getType(apply.arg);
-          System.out.println(apply + " has arg type " + type);
           expandField(session, env, typeMap, apply);
         }
       } else {
@@ -236,12 +234,6 @@ public class TypeResolver {
             return list.get(i);
           }
         }
-      }
-      final Type type = typeMap.getType(apply.arg);
-      if (type instanceof RecordLikeType
-          && ((RecordLikeType) type).argNameTypes().containsKey(
-          ProgressiveRecordType.DUMMY)) {
-        System.out.println(type);
       }
       return null;
 
