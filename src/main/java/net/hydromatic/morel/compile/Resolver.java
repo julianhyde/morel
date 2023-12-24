@@ -498,14 +498,6 @@ public class Resolver {
       final Core.Id id = (Core.Id) exp;
       Binding binding = env.getOpt(id.idPat);
       if (binding != null) {
-        if (binding.value == Codes.SYS_FILE) { // TODO: is this 'if' still used
-          // We can't evaluate, because we don't have an EvalEnv. But we
-          // can go straight to the Session.
-          if (session == null) {
-            return null;
-          }
-          return session.file.get();
-        }
         return binding.value;
       }
     }

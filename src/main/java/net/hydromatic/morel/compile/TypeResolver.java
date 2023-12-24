@@ -223,11 +223,9 @@ public class TypeResolver {
           typedValue.discoverField(typeSystem, selector.name);
           final RecordLikeType type =
               (RecordLikeType) typedValue.typeKey().toType(typeSystem);
-          // TODO do we need overrideType?
-          typeMap.overrideType(exp, type.argNameTypes().get(selector.name));
           int i =
               ImmutableList.copyOf(type.argNameTypes().keySet())
-                  .indexOf(selector.name); // subtract 1 for $dummy; TODO
+                  .indexOf(selector.name);
           if (i >= 0) { // TODO: add a method TypedValue.fieldValue(name)
             @SuppressWarnings("unchecked")
             final List<Codes.TypedValue> list = typedValue.valueAs(List.class);
