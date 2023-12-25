@@ -66,6 +66,16 @@ public interface Type {
         });
   }
 
+  /** Returns whether this type is progressive.
+   *
+   * <p>Progressive types are records, but can have additional fields each time
+   * you look.
+   *
+   * <p>The "file" value is an example. */
+  default boolean isProgressive() {
+    return false;
+  }
+
   /** Structural identifier of a type. */
   abstract class Key {
     public final Op op;

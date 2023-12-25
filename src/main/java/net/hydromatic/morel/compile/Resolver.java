@@ -32,7 +32,6 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -416,13 +415,9 @@ public class Resolver {
           makeProgressive(coreArg), recordSelector.name);
       if (type.op() == Op.TY_VAR
               && coreFn.type.op() == Op.FUNCTION_TYPE
-          || type instanceof RecordType
-              && ((RecordLikeType) type).argNameTypes().containsKey(
-                  ProgressiveRecordType.DUMMY)
+          || type.isProgressive()
           || type instanceof ListType
-              && ((ListType) type).elementType instanceof RecordType
-              && ((RecordLikeType) ((ListType) type).elementType)
-                  .argNameTypes().containsKey(ProgressiveRecordType.DUMMY)) {
+              && ((ListType) type).elementType.isProgressive()) {
         // If we are dereferencing a field in a progressive type, the type
         // available now may be more precise than the deduced type.
         type = ((FnType) coreFn.type).resultType;
@@ -438,7 +433,7 @@ public class Resolver {
    * type. */
   private RecordLikeType makeProgressive(Core.Exp coreArg) {
     final RecordLikeType recordLikeType = (RecordLikeType) coreArg.type;
-    if (recordLikeType.argNameTypes().containsKey(ProgressiveRecordType.DUMMY)) {
+    if (coreArg.type.isProgressive()) {
       Object o = valueOf(coreArg);
       if (o instanceof Codes.TypedValue) {
         final Codes.TypedValue typedValue = (Codes.TypedValue) o;
@@ -701,13 +696,13 @@ public class Resolver {
       if (expectedType.op() != Op.RECORD_TYPE) {
         return false;
       }
+      if (actualType.isProgressive()) {
+        return true;
+      }
       final SortedMap<String, Type> actualMap =
           ((RecordType) actualType).argNameTypes();
       final SortedMap<String, Type> expectedMap =
           ((RecordType) expectedType).argNameTypes();
-      if (actualMap.containsKey(ProgressiveRecordType.DUMMY)) {
-        return true;
-      }
       final Iterator<Map.Entry<String, Type>> actualIterator =
           actualMap.entrySet().iterator();
       final Iterator<Map.Entry<String, Type>> expectedIterator =

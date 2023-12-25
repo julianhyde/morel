@@ -31,16 +31,6 @@ public interface RecordLikeType extends Type {
   /** Returns the type of the {@code i}th field, or throws. */
   Type argType(int i);
 
-  /** Returns whether this type is progressive.
-   *
-   * <p>Progressive types are records, but can have additional fields each time
-   * you look.
-   *
-   * <p>The "file" value is an example. */
-  default boolean isProgressive() {
-    return false;
-  }
-
   /** Returns a {@link net.hydromatic.morel.eval.Codes.TypedValue} if this
    * type wraps a single dynamically typed value, otherwise null. */
   default Codes.@Nullable TypedValue asTypedValue() {

@@ -32,8 +32,6 @@ import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.ProgressiveRecordType;
-import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
@@ -186,7 +184,7 @@ public class TypeResolver {
       List<Ast.Apply> applies = new ArrayList<>();
       forEachUnresolvedField(node2, typeMap, apply -> {
         final Type type = typeMap.getType(apply.arg);
-        if (isProgressive(type)) {
+        if (type.isProgressive()) {
           applies.add(apply);
         }
       });
@@ -199,14 +197,6 @@ public class TypeResolver {
       }
       return Resolved.of(env, decl, node2, typeMap);
     }
-  }
-
-  // TODO: centralize and simplify the following logic
-  private static boolean isProgressive(Type type) {
-    return type instanceof ProgressiveRecordType
-        || type instanceof RecordLikeType
-        && ((RecordLikeType) type).argNameTypes()
-        .containsKey(ProgressiveRecordType.DUMMY);
   }
 
   private Codes.@Nullable TypedValue expandField(Environment env, Ast.Exp exp) {

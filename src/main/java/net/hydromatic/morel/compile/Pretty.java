@@ -323,10 +323,7 @@ class Pretty {
     case RECORD_TYPE:
     case PROGRESSIVE_RECORD_TYPE:
       final RecordType recordType = (RecordType) typeVal.type;
-      final boolean progressive =
-          type.op() == Op.PROGRESSIVE_RECORD_TYPE
-              || recordType.argNameTypes.containsKey(
-              ProgressiveRecordType.DUMMY);
+      final boolean progressive = typeVal.type.isProgressive();
       buf.append("{");
       start = buf.length();
       recordType.argNameTypes.forEach((name, elementType) -> {
