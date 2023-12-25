@@ -356,7 +356,7 @@ class Ml {
         Environments.env(typeSystem, session, ImmutableMap.of());
     final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
     final TypeResolver.Resolved resolved =
-        TypeResolver.deduceType(session, env, valDecl, typeSystem);
+        TypeResolver.deduceType(env, valDecl, typeSystem);
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
     final Resolver resolver = Resolver.of(resolved.typeMap, env, null);
     final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);

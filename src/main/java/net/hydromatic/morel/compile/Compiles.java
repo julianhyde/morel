@@ -55,7 +55,7 @@ public abstract class Compiles {
     final TypeSystem typeSystem = new TypeSystem();
     final Session session = new Session(propMap);
     final Environment env = Environments.env(typeSystem, session, valueMap);
-    return TypeResolver.deduceType(session, env, toDecl(statement), typeSystem);
+    return TypeResolver.deduceType(env, toDecl(statement), typeSystem);
   }
 
   /**
@@ -85,7 +85,7 @@ public abstract class Compiles {
       Ast.Decl decl,
       Consumer<CompileException> warningConsumer, Tracer tracer) {
     final TypeResolver.Resolved resolved =
-        TypeResolver.deduceType(session, env, decl, typeSystem);
+        TypeResolver.deduceType(env, decl, typeSystem);
     final boolean hybrid = Prop.HYBRID.booleanValue(session.map);
     final int inlinePassCount =
         Math.max(Prop.INLINE_PASS_COUNT.intValue(session.map), 0);

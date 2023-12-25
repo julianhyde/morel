@@ -24,7 +24,6 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Codes;
-import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -104,18 +103,17 @@ public class TypeResolver {
     this.typeSystem = Objects.requireNonNull(typeSystem);
   }
 
-  /** Deduces the type of a declaration. */
-  // TODO: remove Session argument and extend interface Environment.
-  public static Resolved deduceType(@Nullable Session session, Environment env,
-      Ast.Decl decl, TypeSystem typeSystem) {
+  /** Deduces the datatype of a declaration. */
+  public static Resolved deduceType(Environment env, Ast.Decl decl,
+      TypeSystem typeSystem) {
     final TypeResolver typeResolver = new TypeResolver(typeSystem);
     int attempt = 0;
     for (;;) {
       int original = typeSystem.expandCount.get();
       final TypeResolver.Resolved resolved =
-          typeResolver.deduceType_(session, env, decl);
+          typeResolver.deduceType_(env, decl);
       if (typeSystem.expandCount.get() == original
-          || attempt++ > 10) {
+          || attempt++ > 1) {
         return resolved;
       }
     }
@@ -131,8 +129,7 @@ public class TypeResolver {
     return new Foo().toTypeKey(type);
   }
 
-  private Resolved deduceType_(@Nullable Session session, Environment env,
-      Ast.Decl decl) {
+  private Resolved deduceType_(Environment env, Ast.Decl decl) {
     final TypeEnvHolder typeEnvs = new TypeEnvHolder(EmptyTypeEnv.INSTANCE);
     BuiltIn.forEach(typeSystem, (builtIn, type) -> {
       if (builtIn.structure == null) {

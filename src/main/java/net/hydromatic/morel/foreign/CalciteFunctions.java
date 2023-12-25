@@ -225,7 +225,7 @@ public class CalciteFunctions {
         }
         final Ast.ValDecl valDecl = Compiles.toValDecl(exp);
         final TypeResolver.Resolved resolved =
-            TypeResolver.deduceType(session, env, valDecl, typeSystem);
+            TypeResolver.deduceType(env, valDecl, typeSystem);
         final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
         final Core.NonRecValDecl valDecl3 =
             (Core.NonRecValDecl)
@@ -287,7 +287,7 @@ public class CalciteFunctions {
         }
         final Ast.ValDecl valDecl = Compiles.toValDecl(exp);
         final TypeResolver.Resolved resolved =
-            TypeResolver.deduceType(null, env, valDecl, typeSystem);
+            TypeResolver.deduceType(env, valDecl, typeSystem);
         final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
         final Core.NonRecValDecl valDecl3 = (Core.NonRecValDecl)
             Resolver.of(resolved.typeMap, env, null).toCore(valDecl2);
