@@ -37,7 +37,6 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.type.TypeVisitor;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
@@ -60,7 +59,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -411,8 +409,20 @@ public class Resolver {
     Core.Exp coreFn;
     if (apply.fn.op == Op.RECORD_SELECTOR) {
       final Ast.RecordSelector recordSelector = (Ast.RecordSelector) apply.fn;
-      coreFn = core.recordSelector(typeMap.typeSystem,
-          makeProgressive(coreArg), recordSelector.name);
+      RecordLikeType recordType = (RecordLikeType) coreArg.type;
+      if (coreArg.type.isProgressive()) {
+        Object o = valueOf(env, coreArg);
+        if (o instanceof Codes.TypedValue) {
+          final Codes.TypedValue typedValue = (Codes.TypedValue) o;
+          Codes.TypedValue typedValue2 =
+              typedValue.discoverField(typeMap.typeSystem, recordSelector.name);
+          recordType =
+              (RecordLikeType) typedValue2.typeKey().toType(typeMap.typeSystem);
+        }
+      }
+      coreFn =
+          core.recordSelector(typeMap.typeSystem, recordType,
+              recordSelector.name);
       if (type.op() == Op.TY_VAR
               && coreFn.type.op() == Op.FUNCTION_TYPE
           || type.isProgressive()
@@ -428,64 +438,7 @@ public class Resolver {
     return core.apply(apply.pos, type, coreFn, coreArg);
   }
 
-  /** Creates a progressive type, if possible. If the argument is constant
-   * then we can ask it for its actual type, and maybe persuade it to widen its
-   * type. */
-  private RecordLikeType makeProgressive(Core.Exp coreArg) {
-    final RecordLikeType recordLikeType = (RecordLikeType) coreArg.type;
-    if (coreArg.type.isProgressive()) {
-      Object o = valueOf(coreArg);
-      if (o instanceof Codes.TypedValue) {
-        final Codes.TypedValue typedValue = (Codes.TypedValue) o;
-        final Type.Key typeKey = typedValue.typeKey();
-        if (typeKey.op == Op.PROGRESSIVE_RECORD_TYPE) {
-          final RecordLikeType recordLikeType2 =
-              (RecordLikeType) typeKey.toType(typeMap.typeSystem);
-          return new RecordLikeType() {
-            @Override public boolean isProgressive() {
-              return true;
-            }
-
-            @Override public Codes.TypedValue asTypedValue() {
-              return typedValue;
-            }
-
-            @Override public String toString() {
-              return recordLikeType2.toString();
-            }
-
-            @Override public SortedMap<String, Type> argNameTypes() {
-              return recordLikeType2.argNameTypes();
-            }
-
-            @Override public Type argType(int i) {
-              return recordLikeType2.argType(i);
-            }
-
-            @Override public Key key() {
-              return recordLikeType2.key();
-            }
-
-            @Override public Op op() {
-              return recordLikeType2.op();
-            }
-
-            @Override public Type copy(TypeSystem typeSystem,
-                UnaryOperator<Type> transform) {
-              return recordLikeType2.copy(typeSystem, transform);
-            }
-
-            @Override public <R> R accept(TypeVisitor<R> typeVisitor) {
-              throw new UnsupportedOperationException();
-            }
-          };
-        }
-      }
-    }
-    return recordLikeType;
-  }
-
-  Object valueOf(Core.Exp exp) {
+  static Object valueOf(Environment env, Core.Exp exp) {
     if (exp instanceof Core.Literal) {
       return ((Core.Literal) exp).value;
     }
@@ -501,7 +454,7 @@ public class Resolver {
       if (apply.fn.op == Op.RECORD_SELECTOR) {
         final Core.RecordSelector recordSelector =
             (Core.RecordSelector) apply.fn;
-        final Object o = valueOf(apply.arg);
+        final Object o = valueOf(env, apply.arg);
         if (o instanceof Codes.TypedValue) {
           return ((Codes.TypedValue) o).fieldValueAs(recordSelector.slot,
               Object.class);
@@ -822,13 +775,8 @@ public class Resolver {
         final PatExp x = patExps.get(0);
         Core.NonRecValDecl valDecl =
             core.nonRecValDecl(x.pos, (Core.IdPat) x.pat, x.exp);
-        return rec
-            ? core.let(core.recValDecl(ImmutableList.of(valDecl)), resultExp)
-            : core.let(valDecl, resultExp);
+        return core.let(valDecl, resultExp);
       } else {
-        if (rec) {
-          throw new UnsupportedOperationException();
-        }
         // This is a complex pattern. Allocate an intermediate variable.
         final String name = nameGenerator.get();
         final Core.IdPat idPat = core.idPat(pat.type, name, nameGenerator);
