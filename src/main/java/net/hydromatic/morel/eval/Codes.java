@@ -2324,30 +2324,6 @@ public abstract class Codes {
         core.tuple(typeSystem, null, args));
   }
 
-  /** @see BuiltIn#SYS_FILE
-   *
-   * <p>A reference to {@code file} expands to an indirection via the
-   * {@link EvalEnv#SESSION}. Each session has its own file system; this
-   * ensures thread-safety and also predictability. You wouldn't want/expect
-   * the file system to be already 'expanded' in one session because another
-   * session just used it. */
-  public static final Code SYS_FILE =
-      new Code() {
-        @Override public List eval(EvalEnv evalEnv) {
-          final Session session = (Session) evalEnv.getOpt(EvalEnv.SESSION);
-          if (session == null) {
-            // We are sometimes evaluated without a session during compilation.
-            // Return null to indicate that a directory is not available.
-            return null;
-          }
-          return session.file.get().valueAs(List.class);
-        }
-
-        @Override public Describer describe(Describer describer) {
-          return describer.start("file", detail -> {});
-        }
-      };
-
   /** @see BuiltIn#SYS_PLAN */
   private static final Applicable SYS_PLAN =
       new ApplicableImpl(BuiltIn.SYS_PLAN) {
@@ -2927,7 +2903,7 @@ public abstract class Codes {
           .put(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN)
           .put(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM)
           .put(BuiltIn.SYS_ENV, (Macro) Codes::sysEnv)
-          .put(BuiltIn.SYS_FILE, SYS_FILE)
+          .put(BuiltIn.SYS_FILE, "") // value comes from Session.file
           .put(BuiltIn.SYS_PLAN, SYS_PLAN)
           .put(BuiltIn.SYS_SET, SYS_SET)
           .put(BuiltIn.SYS_SHOW, SYS_SHOW)

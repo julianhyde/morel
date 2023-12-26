@@ -81,11 +81,11 @@ public abstract class Environments {
         return; // ignore Z_ANDALSO, Z_LIST, etc.
       }
       final Type type = key.typeFunction.apply(typeSystem);
-      if (value == Codes.SYS_FILE) {
+      if (key.sessionValue != null) {
         if (session == null) {
           return;
         }
-        value = session.file.get(); // TODO
+        value = key.sessionValue.apply(session);
       }
       if (key.structure == null) {
         bindings.add(Binding.of(core.idPat(type, key.mlName, nameGen), value));
