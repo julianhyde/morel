@@ -138,12 +138,9 @@ public class Keys {
   /** Describes a record, progressive record, or tuple type. */
   static StringBuilder describeRecordType(StringBuilder buf, int left,
       int right, SortedMap<String, Type.Key> argNameTypes, Op op) {
-    final boolean progressive =
-        op == Op.PROGRESSIVE_RECORD_TYPE
-            || argNameTypes.containsKey(ProgressiveRecordType.DUMMY);
     switch (argNameTypes.size()) {
     case 0:
-      return buf.append(progressive ? "{...}" : "()");
+      return buf.append(op == Op.PROGRESSIVE_RECORD_TYPE ? "{...}" : "()");
 
     default:
       if (op == Op.TUPLE_TYPE) {
@@ -157,9 +154,6 @@ public class Keys {
       for (Map.Entry<String, Type.Key> entry : argNameTypes.entrySet()) {
         String name = entry.getKey();
         Type.Key typeKey = entry.getValue();
-        if (name.equals(ProgressiveRecordType.DUMMY)) {
-          continue;
-        }
         if (i++ > 0) {
           buf.append(", ");
         }
@@ -167,7 +161,7 @@ public class Keys {
             .append(':')
             .append(typeKey);
       }
-      if (progressive) {
+      if (op == Op.PROGRESSIVE_RECORD_TYPE) {
         if (i > 0) {
           buf.append(", ");
         }
@@ -470,16 +464,7 @@ public class Keys {
     }
 
     @Override public Type toType(TypeSystem typeSystem) {
-      SortedMap<String, Type> argNameTypes =
-          typeSystem.typesFor(this.argNameTypes);
-      if (!argNameTypes.containsKey(ProgressiveRecordType.DUMMY)) {
-        argNameTypes =
-            ImmutableSortedMap.<String, Type>orderedBy(RecordType.ORDERING)
-                .putAll(argNameTypes)
-                .put(ProgressiveRecordType.DUMMY, PrimitiveType.UNIT)
-                .build();
-      }
-      return new ProgressiveRecordType(argNameTypes);
+      return new ProgressiveRecordType(typeSystem.typesFor(this.argNameTypes));
     }
   }
 

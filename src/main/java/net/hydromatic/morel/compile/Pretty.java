@@ -26,7 +26,6 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.ProgressiveRecordType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
@@ -327,9 +326,6 @@ class Pretty {
       buf.append("{");
       start = buf.length();
       recordType.argNameTypes.forEach((name, elementType) -> {
-        if (name.equals(ProgressiveRecordType.DUMMY)) {
-          return;
-        }
         if (buf.length() > start) {
           buf.append(", ");
         }

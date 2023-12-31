@@ -67,6 +67,7 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -98,6 +99,9 @@ public class TypeResolver {
   static final String LIST_TY_CON = "list";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
+
+  /** A field of this name indicates that a record type is progressive. */
+  static final String PROGRESSIVE_LABEL = "z$dummy";
 
   private TypeResolver(TypeSystem typeSystem) {
     this.typeSystem = Objects.requireNonNull(typeSystem);
@@ -905,9 +909,17 @@ public class TypeResolver {
         final Ast.RecordType recordType = (Ast.RecordType) type;
         final ImmutableSortedMap.Builder<String, Type.Key> argNameTypes =
             ImmutableSortedMap.orderedBy(ORDERING);
-        recordType.fieldTypes.forEach((name, t) ->
-            argNameTypes.put(name, toTypeKey(t)));
-        return Keys.record(argNameTypes.build());
+        final AtomicBoolean progressive = new AtomicBoolean(false);
+        recordType.fieldTypes.forEach((name, t) -> {
+          if (name.equals(PROGRESSIVE_LABEL)) {
+            progressive.set(true);
+          } else {
+            argNameTypes.put(name, toTypeKey(t));
+          }
+        });
+        return progressive.get()
+            ? Keys.progressiveRecord(argNameTypes.build())
+            : Keys.record(argNameTypes.build());
 
       case FUNCTION_TYPE:
         final Ast.FunctionType functionType = (Ast.FunctionType) type;
@@ -1304,9 +1316,14 @@ public class TypeResolver {
           transform(tupleType.argTypes, type1 -> toTerm(type1, subst)));
     case RECORD_TYPE:
       final RecordType recordType = (RecordType) type;
+      SortedMap<String, Type> argNameTypes = recordType.argNameTypes;
+      if (recordType.isProgressive()) {
+        argNameTypes = new TreeMap<>(argNameTypes);
+        argNameTypes.put(PROGRESSIVE_LABEL, PrimitiveType.UNIT);
+      }
       @SuppressWarnings({"rawtypes", "unchecked"})
       final NavigableSet<String> labelNames =
-          (NavigableSet) recordType.argNameTypes.keySet();
+          (NavigableSet) argNameTypes.keySet();
       final String result;
       if (labelNames.isEmpty()) {
         result = PrimitiveType.UNIT.name();
@@ -1320,7 +1337,7 @@ public class TypeResolver {
         result = b.toString();
       }
       final List<Unifier.Term> args =
-          transformEager(recordType.argNameTypes.values(),
+          transformEager(argNameTypes.values(),
               type1 -> toTerm(type1, subst));
       return unifier.apply(result, args);
     case LIST:

@@ -22,13 +22,9 @@ import java.util.SortedMap;
 
 /** Progressive record type. */
 public class ProgressiveRecordType extends RecordType {
-  /** A field of this name indicates that a record type is progressive. */
-  public static final String DUMMY = "z$dummy";
-
   /** Creates a ProgressiveRecordType. */
   ProgressiveRecordType(SortedMap<String, Type> argNameTypes) {
     super(argNameTypes);
-    assert argNameTypes.containsKey(DUMMY);
   }
 
   @Override public boolean isProgressive() {

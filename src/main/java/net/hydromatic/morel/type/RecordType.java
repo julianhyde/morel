@@ -74,10 +74,6 @@ public class RecordType extends BaseType implements RecordLikeType {
         : (RecordType) typeSystem.recordType(argNameTypes2.build());
   }
 
-  @Override public boolean isProgressive() {
-    return argNameTypes.containsKey(ProgressiveRecordType.DUMMY);
-  }
-
   /** Ordering that compares integer values numerically,
    * string values lexicographically,
    * and integer values before string values.
