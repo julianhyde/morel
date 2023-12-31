@@ -61,7 +61,7 @@ public class TypeSystem {
   public final NameGenerator nameGenerator = new NameGenerator();
 
   /** Number of times that
-   * {@link Codes.TypedValue#discoverField(TypeSystem, String)} has caused a
+   * {@link TypedValue#discoverField(TypeSystem, String)} has caused a
    * type to change. */
   public final AtomicInteger expandCount = new AtomicInteger();
 

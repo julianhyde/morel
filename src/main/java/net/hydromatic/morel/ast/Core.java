@@ -23,7 +23,6 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
-import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -32,6 +31,7 @@ import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
@@ -626,8 +626,8 @@ public class Core {
     public <C> C unwrap(Class<C> clazz) {
       Object v;
       if (value instanceof Wrapper
-          && ((Wrapper) value).o instanceof Codes.TypedValue) {
-        return ((Codes.TypedValue) ((Wrapper) value).o).valueAs(clazz);
+          && ((Wrapper) value).o instanceof TypedValue) {
+        return ((TypedValue) ((Wrapper) value).o).valueAs(clazz);
       }
       if (clazz.isInstance(value) && clazz != Object.class) {
         v = value;

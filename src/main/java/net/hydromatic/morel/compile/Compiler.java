@@ -42,6 +42,7 @@ import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.PairList;
 import net.hydromatic.morel.util.TailList;
@@ -724,8 +725,8 @@ public class Compiler {
                     new Pretty(typeSystem, lineWidth, printLength, printDepth,
                         stringDepth);
                 final Pretty.TypedVal typedVal;
-                if (o2 instanceof Codes.TypedValue) {
-                  Codes.TypedValue typedValue = (Codes.TypedValue) o2;
+                if (o2 instanceof TypedValue) {
+                  TypedValue typedValue = (TypedValue) o2;
                   typedVal =
                       new Pretty.TypedVal(pat2.name,
                           typedValue.valueAs(Object.class),

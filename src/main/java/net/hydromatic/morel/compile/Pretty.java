@@ -30,6 +30,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Ord;
 
 import com.google.common.collect.Iterables;
@@ -196,7 +197,7 @@ class Pretty {
         // huge.
         return buf.append("<relation>");
       }
-      if (value instanceof Codes.TypedValue) {
+      if (value instanceof TypedValue) {
         // A TypedValue is probably a field in a record that represents a
         // database catalog or a directory of CSV files. If the user wishes to
         // see the contents of each file they should use a query.
@@ -365,8 +366,8 @@ class Pretty {
 
   @SuppressWarnings("unchecked")
   private static List<Object> toList(Object value) {
-    if (value instanceof Codes.TypedValue) {
-      Codes.TypedValue typedValue = (Codes.TypedValue) value;
+    if (value instanceof TypedValue) {
+      TypedValue typedValue = (TypedValue) value;
       return (List<Object>) typedValue.valueAs(List.class);
     }
     return (List<Object>) value;

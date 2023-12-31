@@ -19,6 +19,7 @@
 package net.hydromatic.morel.eval;
 
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 
 /** Directory in the file system.
  *
@@ -28,7 +29,7 @@ import net.hydromatic.morel.type.TypeSystem;
  * @see Files
  * @see Files#create(java.io.File)
  */
-public interface File extends Codes.TypedValue {
+public interface File extends TypedValue {
   /** Expands this file to a file with a more precise type.
    *
    * <p>During expansion, record types may get new fields, never lose them.

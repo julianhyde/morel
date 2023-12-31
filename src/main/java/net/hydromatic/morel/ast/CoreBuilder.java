@@ -21,7 +21,6 @@ package net.hydromatic.morel.ast;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.NameGenerator;
-import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -35,6 +34,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
@@ -171,9 +171,9 @@ public enum CoreBuilder {
 
   public Core.RecordSelector recordSelector(TypeSystem typeSystem,
       RecordLikeType recordType, String fieldName) {
-    final Codes.@Nullable TypedValue typedValue = recordType.asTypedValue();
+    final @Nullable TypedValue typedValue = recordType.asTypedValue();
     if (typedValue != null) {
-      Codes.TypedValue typedValue2 =
+      TypedValue typedValue2 =
           typedValue.discoverField(typeSystem, fieldName);
       recordType = (RecordLikeType) typedValue2.typeKey().toType(typeSystem);
     }

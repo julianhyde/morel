@@ -23,6 +23,7 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.PairList;
 
@@ -186,7 +187,7 @@ public class Files {
 
     @Override public Type.Key typeKey() {
       return Keys.progressiveRecord(
-          Maps.transformValues(entries, Codes.TypedValue::typeKey));
+          Maps.transformValues(entries, TypedValue::typeKey));
     }
 
     @Override public File discoverField(TypeSystem typeSystem,

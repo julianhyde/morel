@@ -23,7 +23,6 @@ import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
-import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -36,6 +35,7 @@ import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
+import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MartelliUnifier;
 import net.hydromatic.morel.util.Ord;
@@ -200,16 +200,16 @@ public class TypeResolver {
     }
   }
 
-  private Codes.@Nullable TypedValue expandField(Environment env, Ast.Exp exp) {
+  private @Nullable TypedValue expandField(Environment env, Ast.Exp exp) {
     switch (exp.op) {
     case APPLY:
       final Ast.Apply apply = (Ast.Apply) exp;
       if (apply.fn.op == Op.RECORD_SELECTOR) {
         final Ast.RecordSelector selector = (Ast.RecordSelector) apply.fn;
-        final Codes.TypedValue typedValue = expandField(env, apply.arg);
+        final TypedValue typedValue = expandField(env, apply.arg);
         if (typedValue != null) {
           typedValue.discoverField(typeSystem, selector.name);
-          return typedValue.fieldValueAs(selector.name, Codes.TypedValue.class);
+          return typedValue.fieldValueAs(selector.name, TypedValue.class);
         }
       }
       return null;
@@ -217,8 +217,8 @@ public class TypeResolver {
     case ID:
       final Binding binding = env.getOpt(((Ast.Id) exp).name);
       if (binding != null
-          && binding.value instanceof Codes.TypedValue) {
-        return (Codes.TypedValue) binding.value;
+          && binding.value instanceof TypedValue) {
+        return (TypedValue) binding.value;
       }
       // fall through
 

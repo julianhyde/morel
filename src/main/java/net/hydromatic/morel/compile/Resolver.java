@@ -25,7 +25,6 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
-import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -37,6 +36,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableList;
@@ -412,9 +412,9 @@ public class Resolver {
       RecordLikeType recordType = (RecordLikeType) coreArg.type;
       if (coreArg.type.isProgressive()) {
         Object o = valueOf(env, coreArg);
-        if (o instanceof Codes.TypedValue) {
-          final Codes.TypedValue typedValue = (Codes.TypedValue) o;
-          Codes.TypedValue typedValue2 =
+        if (o instanceof TypedValue) {
+          final TypedValue typedValue = (TypedValue) o;
+          TypedValue typedValue2 =
               typedValue.discoverField(typeMap.typeSystem, recordSelector.name);
           recordType =
               (RecordLikeType) typedValue2.typeKey().toType(typeMap.typeSystem);
@@ -455,8 +455,8 @@ public class Resolver {
         final Core.RecordSelector recordSelector =
             (Core.RecordSelector) apply.fn;
         final Object o = valueOf(env, apply.arg);
-        if (o instanceof Codes.TypedValue) {
-          return ((Codes.TypedValue) o).fieldValueAs(recordSelector.slot,
+        if (o instanceof TypedValue) {
+          return ((TypedValue) o).fieldValueAs(recordSelector.slot,
               Object.class);
         } else if (o instanceof List) {
           @SuppressWarnings("unchecked") List<Object> list = (List<Object>) o;

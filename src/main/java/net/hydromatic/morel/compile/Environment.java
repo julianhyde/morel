@@ -19,12 +19,12 @@
 package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -93,8 +93,8 @@ public abstract class Environment {
     visit(binding -> {
       if (names.add(binding.id.name)) {
         final Type type =
-            binding.value instanceof Codes.TypedValue
-                ? ((Codes.TypedValue) binding.value).typeKey().toType(typeSystem)
+            binding.value instanceof TypedValue
+                ? ((TypedValue) binding.value).typeKey().toType(typeSystem)
                 : binding.id.type;
         consumer.accept(binding.id.name, type);
       }
