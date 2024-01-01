@@ -1,0 +1,81 @@
+# File reader and progressive types in Morel version 0.3
+#
+# Description
+#
+# In Morel 0.3 we have added a file reader, to make it easy to browse
+# your file system for data sets in CSV files. A directory appears to
+# Morel a record value, and the fields of that record are the files or
+# sub-directories. If a file is a list of records, such as a CSV file,
+# its type in Morel will be a list of records.
+#
+# To make this work, we extended Morel's type system with a feature we
+# call 'progressive types'.
+#
+# For more information about this feature, see
+# https://github.com/hydromatic/morel/issues/209, and follow
+# @morel_lang on Twitter.
+#
+# Setup for recording
+#
+# * In 'morel' script, add '2>/dev/null' to the last java command.
+# * In bash, export PS1='$ '
+# * Create a title file, /tmp/title.txt, and 'cat /tmp/title.txt'.
+
+I wanted to give a quick demo of a feature we've just added to Morel.
+
+We've added a file reader so that you can easily load and work on data
+sets such as CSV files. We'll be using a data set in a directory
+called "data".
+
+ ls -lR src/test/resources/data
+
+That directory has sub-directories "scott" and "wordle".  Each of
+those has some CSV files, and there's one compressed CSV file.
+
+Now let's start the Morel shell.
+
+ ./morel --directory=src/test/resources/data
+
+Morel is a functional programming language that is also a query
+language. It is strongly typed, and its main type constructors are
+lists and records.
+
+ {name="Fred", age=27};
+ val fred = {name="Fred", age=27};
+ val velma = {name="Velma", age=20};
+ val employees = [fred, velma];
+ from e in employees yield e.age;
+
+We wanted to make the file reader interactive.  You shouldn't have to
+leave the Morel shell to see what files are available.
+
+So you can browse the whole file system as if you are looking at the
+fields of a record. The "file" object is where you start.
+
+As you can see, it is a record with fields "scott" and "wordle". In
+the file reader, every directory is a record, and the fields are the
+files or sub-directories.
+
+Now let's look at "file.scott".
+
+After we have traversed into "scott" and "dept", the type of the
+"file" objet has changed. This is called progressive typing. It gives
+you the benefits of strong typing, but doesn't waste effort gathering
+the type of thousands of files that you're not interested in.
+
+Now we have accessed the data sets, we can run queries on them. Here
+is a query that is similar to a query that you would write in SQL
+using JOIN and GROUP BY.
+
+ val s = file.scott;
+ from d in s.dept
+   join e in s.emp on d.deptno = e.deptno
+   group d.dname compute sum of e.sal;
+
+To recap. The file reader lets you browse the file system starting
+from a single variable called "file", and load data sets from CSV
+files. Progressive types give you the benefits of strong typing but
+without filling your screen with useless type information.
+
+Thanks for listening, and watch out for Morel version 0.3, which
+should be released in a week or two.
