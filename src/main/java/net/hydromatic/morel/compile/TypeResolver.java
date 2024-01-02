@@ -55,8 +55,10 @@ import org.apache.calcite.util.Holder;
 import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -182,48 +184,19 @@ public class TypeResolver {
         }
       }
 
-      List<Ast.Apply> applies = new ArrayList<>();
+      final AtomicBoolean progressive = new AtomicBoolean();
       forEachUnresolvedField(node2, typeMap, apply -> {
         final Type type = typeMap.getType(apply.arg);
         if (type.isProgressive()) {
-          applies.add(apply);
+          progressive.set(true);
         }
       });
-      if (!applies.isEmpty()) {
-        for (Ast.Apply apply : applies) {
-          expandField(env, apply);
-        }
+      if (progressive.get()) {
+        node2.accept(FieldExpander.create(typeSystem, env));
       } else {
         checkNoUnresolvedFieldRefs(node2, typeMap);
       }
       return Resolved.of(env, decl, node2, typeMap);
-    }
-  }
-
-  private @Nullable TypedValue expandField(Environment env, Ast.Exp exp) {
-    switch (exp.op) {
-    case APPLY:
-      final Ast.Apply apply = (Ast.Apply) exp;
-      if (apply.fn.op == Op.RECORD_SELECTOR) {
-        final Ast.RecordSelector selector = (Ast.RecordSelector) apply.fn;
-        final TypedValue typedValue = expandField(env, apply.arg);
-        if (typedValue != null) {
-          typedValue.discoverField(typeSystem, selector.name);
-          return typedValue.fieldValueAs(selector.name, TypedValue.class);
-        }
-      }
-      return null;
-
-    case ID:
-      final Binding binding = env.getOpt(((Ast.Id) exp).name);
-      if (binding != null
-          && binding.value instanceof TypedValue) {
-        return (TypedValue) binding.value;
-      }
-      // fall through
-
-    default:
-      return null;
     }
   }
 
@@ -1577,6 +1550,60 @@ public class TypeResolver {
   public static class TypeException extends CompileException {
     public TypeException(String message, Pos pos) {
       super(message, false, pos);
+    }
+  }
+
+  /** Visitor that expands progressive types if they are used in field
+   * references. */
+  static class FieldExpander extends EnvVisitor {
+    static FieldExpander create(TypeSystem typeSystem, Environment env) {
+      return new FieldExpander(typeSystem, env, new ArrayDeque<>());
+    }
+
+    private FieldExpander(TypeSystem typeSystem, Environment env,
+        Deque<FromContext> fromStack) {
+      super(typeSystem, env, fromStack);
+    }
+
+    @Override protected EnvVisitor push(Environment env) {
+      return new FieldExpander(typeSystem, env, fromStack);
+    }
+
+    @Override protected void visit(Ast.Apply apply) {
+      super.visit(apply);
+      expandField(env, apply);
+    }
+
+    @Override protected void visit(Ast.Id id) {
+      super.visit(id);
+      expandField(env, id);
+    }
+
+    private @Nullable TypedValue expandField(Environment env, Ast.Exp exp) {
+      switch (exp.op) {
+      case APPLY:
+        final Ast.Apply apply = (Ast.Apply) exp;
+        if (apply.fn.op == Op.RECORD_SELECTOR) {
+          final Ast.RecordSelector selector = (Ast.RecordSelector) apply.fn;
+          final TypedValue typedValue = expandField(env, apply.arg);
+          if (typedValue != null) {
+            typedValue.discoverField(typeSystem, selector.name);
+            return typedValue.fieldValueAs(selector.name, TypedValue.class);
+          }
+        }
+        return null;
+
+      case ID:
+        final Binding binding = env.getOpt(((Ast.Id) exp).name);
+        if (binding != null
+            && binding.value instanceof TypedValue) {
+          return (TypedValue) binding.value;
+        }
+        // fall through
+
+      default:
+        return null;
+      }
     }
   }
 }

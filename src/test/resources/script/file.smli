@@ -42,10 +42,19 @@ file;
 >      junit-platform.properties:{...}, net:{...}, script:{...}, script.log:{...},
 >      script.sml:{...}, script.sml.out:{...}, surefire:{...}, use:{...}, ...}
 
-file.data.scott;
-> val it = {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
+(*) A variable via which we can access relations.
+val s = file.data.scott;
+> val s = {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
 >   : {bonus:{...} list, dept:{...} list, emp:{...} list, salgrade:{...} list,
 >      ...}
+
+(*) Access two relations (emp, dept) simultaneously via a variable (s).
+from d in s.dept
+  join e in s.emp on d.deptno = e.deptno
+  group e.deptno compute count
+  order deptno;
+> val it = [{count=3,deptno=10},{count=5,deptno=20},{count=6,deptno=30}]
+>   : {count:int, deptno:int} list
 
 file.data.scott.dept;
 > val it =
