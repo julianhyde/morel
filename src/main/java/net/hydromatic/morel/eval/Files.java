@@ -45,6 +45,7 @@ import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.zip.GZIPInputStream;
 
+import static java.nio.file.Files.newInputStream;
 import static java.util.Objects.requireNonNull;
 
 /** Implementations of {@link File}. */
@@ -388,8 +389,7 @@ public class Files {
       case CSV:
         return Util.reader(file);
       case CSV_GZ:
-        return Util.reader(
-            new GZIPInputStream(java.nio.file.Files.newInputStream(file.toPath())));
+        return Util.reader(new GZIPInputStream(newInputStream(file.toPath())));
       default:
         throw new IllegalArgumentException("cannot open file " + file
             + " of type " + this);

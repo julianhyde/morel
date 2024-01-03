@@ -202,7 +202,8 @@ public class TypeResolver {
 
   /** Checks that there are no field references "x.y" or "#y x" where "x" has
    * an unresolved type. Throws if there are unresolved field references. */
-  private static void checkNoUnresolvedFieldRefs(Ast.Decl decl, TypeMap typeMap) {
+  private static void checkNoUnresolvedFieldRefs(Ast.Decl decl,
+      TypeMap typeMap) {
     forEachUnresolvedField(decl, typeMap, apply -> {
       throw new TypeException("unresolved flex record (can't tell "
           + "what fields there are besides " + apply.fn + ")",
