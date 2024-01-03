@@ -30,11 +30,11 @@ Setup for recording:
   before pressing 'record'.
 -->
 
-# File reader and progressive types in Morel version 0.3
+# File reader and progressive types in Morel version 0.4
 
 ## Abstract
 
-In Morel 0.3 we have added a file reader, to make it easy to browse
+In Morel 0.4 we have added a file reader, to make it easy to browse
 your file system for data sets in CSV files. A directory appears to
 Morel a record value, and the fields of that record are the files or
 subdirectories. If a file is a list of records, such as a CSV file,
@@ -87,7 +87,7 @@ Now let's start the Morel shell:
 
 ```bash
 $ ./morel --directory=src/test/resources/data
-morel version 0.3.0 (java version "21.0.1", JLine terminal, xterm-256color)
+morel version 0.4.0 (java version "21.0.1", JLine terminal, xterm-256color)
 -
 ```
 
