@@ -355,12 +355,6 @@ public enum AstBuilder {
     return new Ast.PrefixCall(exp.pos, Op.SUCH_THAT, exp);
   }
 
-  /** Creates a dummy expression to distinguish "from x" from
-   * "from x in e". */
-  public Ast.Exp fromUnbounded() {
-    return new Ast.Literal(Pos.ZERO, Op.FROM_UNBOUNDED, "unbounded");
-  }
-
   public Ast.Fn fn(Pos pos, Ast.Match... matchList) {
     return new Ast.Fn(pos, ImmutableList.copyOf(matchList));
   }
