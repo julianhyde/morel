@@ -49,7 +49,6 @@ import net.hydromatic.morel.util.ThreadLocals;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
-import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.math.BigDecimal;
@@ -68,6 +67,7 @@ import java.util.function.Supplier;
 import static net.hydromatic.morel.ast.Ast.Direction.DESC;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.str;
 import static net.hydromatic.morel.util.Static.toImmutableList;
 import static net.hydromatic.morel.util.Static.transform;
@@ -332,7 +332,7 @@ public class Compiler {
     }
     final Core.FromStep firstStep = steps.get(0);
     final Supplier<Codes.RowSink> nextFactory =
-        createRowSinkFactory(cx, firstStep.bindings, Util.skip(steps),
+        createRowSinkFactory(cx, firstStep.bindings, skip(steps),
             elementType);
     switch (firstStep.op) {
     case INNER_JOIN:

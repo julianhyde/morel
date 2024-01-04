@@ -35,7 +35,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Holder;
-import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -52,10 +51,10 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.zip;
 import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.plus;
+import static net.hydromatic.morel.util.Static.skip;
 
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static org.apache.calcite.util.Util.skip;
 
 /**
  * Converts {@code suchThat} to {@code in} wherever possible.
@@ -114,7 +113,7 @@ class SuchThatShuttle extends Shuttle {
             fromBuilder.bindings().forEach(b ->
                 boundPats.put(b.id, core.id(b.id)));
             final Core.Exp rewritten =
-                rewrite0(boundPats, scan, Util.skip(steps, i));
+                rewrite0(boundPats, scan, skip(steps, i));
             deferredScans.scan(scan.pat, rewritten, scan.condition);
           } else {
             deferredScans.scan(scan.pat, scan.exp);
@@ -155,7 +154,7 @@ class SuchThatShuttle extends Shuttle {
     }
 
     private Core.Exp rewrite0(SortedMap<Core.NamedPat, Core.Exp> boundPats,
-        Core.Scan scan, Iterable<? extends Core.FromStep> laterSteps) {
+        Core.Scan scan, List<? extends Core.FromStep> laterSteps) {
       try {
         final Map<Core.IdPat, Core.Exp> scans = ImmutableMap.of();
         final List<Core.Exp> filters = ImmutableList.of();
@@ -173,7 +172,8 @@ class SuchThatShuttle extends Shuttle {
           }
         }
 
-        return rewrite(scan, originalPats, boundPats, scans, filters, inFilters);
+        return rewrite(scan, originalPats, boundPats, scans, filters,
+            inFilters);
       } catch (RewriteFailedException e) {
         // We could not rewrite.
         // Try a different approach.

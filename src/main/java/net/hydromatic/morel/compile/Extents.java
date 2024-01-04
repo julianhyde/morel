@@ -53,10 +53,10 @@ import java.util.Set;
 import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import static org.apache.calcite.util.Util.minus;
-import static org.apache.calcite.util.Util.skip;
 
 import static java.util.Objects.requireNonNull;
 
