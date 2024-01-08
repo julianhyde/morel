@@ -27,6 +27,7 @@ import com.google.common.collect.Maps;
 
 import java.util.AbstractList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
@@ -84,6 +85,12 @@ public class Keys {
    * or {@link PrimitiveType#UNIT unit} if the fields are empty). */
   public static Type.Key record(SortedMap<String, ? extends Type.Key> argNameTypes) {
     return new RecordKey(ImmutableSortedMap.copyOfSorted(argNameTypes));
+  }
+
+  /** As {@link #record(SortedMap)} but an {@link Iterable} argument. */
+  public static Type.Key record(
+      Iterable<Map.Entry<String, ? extends Type.Key>> argNameTypes) {
+    return record(ImmutableSortedMap.copyOf(argNameTypes, RecordType.ORDERING));
   }
 
   /** Returns a key that identifies a {@link TupleType}. */

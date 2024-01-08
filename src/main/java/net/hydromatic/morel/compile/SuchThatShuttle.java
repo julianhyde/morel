@@ -24,7 +24,6 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
@@ -228,8 +227,7 @@ class SuchThatShuttle extends Shuttle {
           }
         });
 
-        final SortedMap<String, Core.Exp> nameExps =
-            new TreeMap<>(RecordType.ORDERING);
+        final PairList<String, Core.Exp> nameExps = PairList.of();
         if (scans.isEmpty()) {
           final Extents.Analysis extent =
               Extents.create(typeSystem, scan.pat, boundPats2, scan.exp,
@@ -241,18 +239,18 @@ class SuchThatShuttle extends Shuttle {
           }
           boundPats2.forEach((p, e) -> {
             if (extent.goalPats.contains(p)) {
-              nameExps.put(p.name, e);
+              nameExps.add(p.name, e);
             }
           });
         } else {
-          boundPats2.forEach((p, e) -> nameExps.put(p.name, e));
+          boundPats2.forEach((p, e) -> nameExps.add(p.name, e));
         }
 
         final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
         scans.forEach(fromBuilder::scan);
         filters.forEach(fromBuilder::where);
         fromBuilder.yield_(nameExps.size() == 1
-            ? getOnlyElement(nameExps.values())
+            ? getOnlyElement(nameExps).getValue()
             : core.record(typeSystem, nameExps));
         return fromBuilder.build();
       }

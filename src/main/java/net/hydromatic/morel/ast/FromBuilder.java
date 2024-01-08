@@ -23,6 +23,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.RefChecker;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.PairList;
 import net.hydromatic.morel.util.Static;
 
 import com.google.common.collect.ImmutableList;
@@ -31,9 +32,7 @@ import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
@@ -144,21 +143,21 @@ public class FromBuilder {
                 && ((Core.RecordPat) pat).args.stream()
                     .allMatch(a -> a instanceof Core.IdPat))) {
       final Core.From from = (Core.From) exp;
-      final Map<String, Core.Exp> nameExps = new LinkedHashMap<>();
+      final PairList<String, Core.Exp> nameExps = PairList.of();
       final List<Binding> bindings;
       if (pat instanceof Core.RecordPat) {
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
-        this.bindings.forEach(b -> nameExps.put(b.id.name, core.id(b.id)));
+        this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         forEach(recordPat.type().argNameTypes.keySet(), recordPat.args,
-            (name, arg) -> nameExps.put(name, core.id((Core.IdPat) arg)));
+            (name, arg) -> nameExps.add(name, core.id((Core.IdPat) arg)));
         bindings = null;
       } else if (!this.bindings.isEmpty()) {
         // With at least one binding, and one new variable, the output will be
         // a record type.
         final Core.IdPat idPat = (Core.IdPat) pat;
         final Core.FromStep lastStep = getLast(from.steps);
-        this.bindings.forEach(b -> nameExps.put(b.id.name, core.id(b.id)));
-        lastStep.bindings.forEach(b -> nameExps.put(idPat.name, core.id(b.id)));
+        this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
+        lastStep.bindings.forEach(b -> nameExps.add(idPat.name, core.id(b.id)));
         bindings = null;
       } else {
         final Core.IdPat idPat = (Core.IdPat) pat;
@@ -172,12 +171,12 @@ public class FromBuilder {
             // The last step is 'yield e'. Skip it.
             return this;
           }
-          nameExps.put(idPat.name, ((Core.Yield) lastStep).exp);
+          nameExps.add(idPat.name, ((Core.Yield) lastStep).exp);
           bindings = ImmutableList.of(Binding.of(idPat));
           return yield_(true, bindings, core.record(typeSystem, nameExps));
         }
         final Binding binding = Iterables.getOnlyElement(lastStep.bindings);
-        nameExps.put(idPat.name, core.id(binding.id));
+        nameExps.add(idPat.name, core.id(binding.id));
         bindings = Static.append(this.bindings, Binding.of(idPat));
       }
       addAll(from.steps);

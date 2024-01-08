@@ -59,7 +59,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -429,9 +428,8 @@ public class Compiler {
         final Code argumentCode;
         final Type argumentType;
         if (aggregate.argument == null) {
-          final SortedMap<String, Type> argNameTypes =
-              new TreeMap<>(RecordType.ORDERING);
-          bindings.forEach(b -> argNameTypes.put(b.id.name, b.id.type));
+          final PairList<String, Type> argNameTypes = PairList.of();
+          bindings.forEach(b -> argNameTypes.add(b.id.name, b.id.type));
           argumentType = typeSystem.recordOrScalarType(argNameTypes);
           argumentCode = null;
         } else {

@@ -322,10 +322,7 @@ public class CalciteCompiler extends Compiler {
   private Type removeTypeVars(Type type) {
     return type.copy(typeSystem,
         t -> t instanceof TypeVar
-            ? typeSystem.recordType(
-            ImmutableSortedMap.<String, Type>orderedBy(RecordType.ORDERING)
-                .put("b", PrimitiveType.BOOL)
-                .build())
+            ? typeSystem.recordType(RecordType.map("b", PrimitiveType.BOOL))
             : t);
   }
 

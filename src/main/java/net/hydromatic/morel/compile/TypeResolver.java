@@ -46,7 +46,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import org.apache.calcite.util.Holder;
@@ -69,7 +68,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static net.hydromatic.morel.ast.AstBuilder.ast;
-import static net.hydromatic.morel.type.RecordType.ORDERING;
+import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.skip;
@@ -846,11 +845,10 @@ public class TypeResolver {
 
       case RECORD_TYPE:
         final Ast.RecordType recordType = (Ast.RecordType) type;
-        final ImmutableSortedMap.Builder<String, Type.Key> argNameTypes =
-            ImmutableSortedMap.orderedBy(ORDERING);
+        final SortedMap<String, Type.Key> argNameTypes = mutableMap();
         recordType.fieldTypes.forEach((name, t) ->
             argNameTypes.put(name, toTypeKey(t)));
-        return Keys.record(argNameTypes.build());
+        return Keys.record(argNameTypes);
 
       case FUNCTION_TYPE:
         final Ast.FunctionType functionType = (Ast.FunctionType) type;
@@ -1076,11 +1074,11 @@ public class TypeResolver {
       // we cannot deduce whether a 'c' field is allowed.
       final Ast.RecordPat recordPat = (Ast.RecordPat) pat;
       final NavigableMap<String, Unifier.Term> labelTerms =
-          new TreeMap<>(RecordType.ORDERING);
+          RecordType.mutableMap();
       if (labelNames == null) {
         labelNames = new TreeSet<>(recordPat.args.keySet());
       }
-      final Map<String, Ast.Pat> args = new TreeMap<>(RecordType.ORDERING);
+      final SortedMap<String, Ast.Pat> args = RecordType.mutableMap();
       for (String labelName : labelNames) {
         final Unifier.Variable vArg = unifier.variable();
         labelTerms.put(labelName, vArg);
@@ -1106,7 +1104,7 @@ public class TypeResolver {
           final List<String> fieldList = fieldList(sequence);
           if (fieldList != null) {
             final NavigableMap<String, Unifier.Term> labelTerms2 =
-                new TreeMap<>(RecordType.ORDERING);
+                RecordType.mutableMap();
             forEachIndexed(fieldList, (fieldName, i) -> {
               if (labelTerms.containsKey(fieldName)) {
                 labelTerms2.put(fieldName, sequence.terms.get(i));
