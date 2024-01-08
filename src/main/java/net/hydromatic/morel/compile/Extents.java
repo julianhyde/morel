@@ -463,11 +463,11 @@ public class Extents {
                 map.computeIfAbsent(tuplePat, p -> PairList.of())
                     .add(apply.arg(1), apply);
                 break;
-              } else if (true) {
+              } else if (true) { // TODO remove dead code
                 final Core.Id id = core.id(createId(tuple.type));
-                final Core.Exp apply2 = core.elem(typeSystem, id, apply.arg(1));
+                final Core.Exp elem = core.elem(typeSystem, id, apply.arg(1));
                 g3(map,
-                    core.andAlso(typeSystem, apply2,
+                    core.andAlso(typeSystem, elem,
                         core.equal(typeSystem, id, tuple)));
                 break;
               } else if (tuple.args.stream().anyMatch(a ->

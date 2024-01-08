@@ -19,11 +19,19 @@
 package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Range;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -34,7 +42,11 @@ import static net.hydromatic.morel.compile.Extents.generator;
 
 import static org.apache.calcite.linq4j.tree.Expressions.list;
 import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.anEmptyMap;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.core.Is.is;
 
@@ -54,6 +66,13 @@ public class ExtentTest {
     final Core.IdPat dPat = core.idPat(intType, "d", 0);
     final Core.Id dId = core.id(dPat);
     final Core.Exp list12 = core.list(typeSystem, intLiteral(1), intLiteral(2));
+    final RecordLikeType deptType =
+        typeSystem.recordType(
+            RecordType.map("deptno", PrimitiveType.INT,
+                "dname", PrimitiveType.STRING,
+                "loc", PrimitiveType.STRING));
+    final ListType deptListType = typeSystem.listType(deptType);
+    final Core.IdPat depts = core.idPat(deptListType, "depts", 0);
 
     Core.Literal intLiteral(int i) {
       return core.intLiteral(BigDecimal.valueOf(i));
@@ -216,6 +235,78 @@ public class ExtentTest {
                 core.andAlso(f.typeSystem, f.cId, f.intLiteral(1)))),
         "[a orelse (b orelse c andalso 1)]",
         "[a, b, c andalso 1]");
+  }
+
+  @Test void testAnalysis2c() {
+    final Fixture f = new Fixture();
+    final Core.IdPat loc = core.idPat(PrimitiveType.STRING, "loc", 0);
+    final Core.IdPat deptno = core.idPat(PrimitiveType.INT, "deptno", 0);
+    final Core.IdPat name = core.idPat(PrimitiveType.STRING, "name", 0);
+    final Core.TuplePat pat =
+        core.tuplePat(f.typeSystem, list(loc, deptno, name));
+
+    // from (loc, deptno, name)
+    // where op elem ({deptno = deptno, dname = name, loc = loc}, depts)
+    //    andalso deptno > 20
+    final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
+    final Core.Exp extent =
+        core.extent(f.typeSystem, pat.type, ImmutableRangeSet.of(Range.all()));
+    fromBuilder.scan(pat, extent);
+    final Core.Exp condition0 =
+        core.elem(f.typeSystem,
+            core.record(f.typeSystem,
+                PairList.copyOf("deptno", core.id(deptno),
+                    "dname", core.id(name),
+                    "loc", core.stringLiteral("CHICAGO"))),
+            core.id(f.depts));
+    final Core.Exp condition1 =
+        core.greaterThan(f.typeSystem, core.id(deptno),
+            core.intLiteral(BigDecimal.valueOf(20)));
+    fromBuilder.where(core.andAlso(f.typeSystem, condition0, condition1));
+
+    Extents.Analysis analysis =
+        Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(), null, null,
+            fromBuilder.build().steps);
+    assertThat(analysis, notNullValue());
+    assertThat(analysis.extentExp, is(core.id(f.depts)));
+    assertThat(analysis.satisfiedFilters, hasSize(1));
+    assertThat(analysis.satisfiedFilters.get(0), is(condition0));
+    assertThat(analysis.remainingFilters, empty());
+    assertThat(analysis.boundPats, anEmptyMap());
+    assertThat(analysis.goalPats, is(ImmutableSet.of(loc, deptno, name)));
+  }
+
+  @Test void testAnalysis2d() {
+    final Fixture f = new Fixture();
+    final Core.IdPat dno = core.idPat(PrimitiveType.INT, "dno", 0);
+    final Core.IdPat name = core.idPat(PrimitiveType.STRING, "name", 0);
+    final Core.TuplePat pat = core.tuplePat(f.typeSystem, list(dno, name));
+
+    // from (dno, name)
+    // where op elem ({deptno = dno, dname = name, loc = "CHICAGO"}, depts)
+    //   andalso dno > 20
+    final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
+    final Core.Exp extent =
+        core.extent(f.typeSystem, pat.type, ImmutableRangeSet.of(Range.all()));
+    fromBuilder.scan(pat, extent);
+    final Core.Exp condition0 =
+        core.elem(f.typeSystem,
+            core.record(f.typeSystem,
+                PairList.copyOf("deptno", core.id(dno),
+                    "dname", core.id(name),
+                    "loc", core.stringLiteral("CHICAGO"))),
+            core.id(f.depts));
+    final Core.Exp condition1 =
+        core.greaterThan(f.typeSystem, core.id(dno),
+            core.intLiteral(BigDecimal.valueOf(20)));
+    fromBuilder.where(condition0);
+//    fromBuilder.where(core.andAlso(f.typeSystem, condition0, condition1));
+
+    Extents.Analysis analysis =
+        Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(), null, null,
+            fromBuilder.build().steps);
+    assertThat(analysis, notNullValue());
+    assertThat(analysis.extentExp, is(core.id(f.depts)));
   }
 }
 
