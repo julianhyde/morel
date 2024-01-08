@@ -107,13 +107,16 @@ class SuchThatShuttle extends Shuttle {
         case INNER_JOIN:
           final Core.Scan scan = (Core.Scan) step;
           if (Extents.isInfinite(scan.exp)) {
-            final SortedMap<Core.NamedPat, Core.Exp> boundPats =
-                new TreeMap<>(Core.NamedPat.ORDERING);
-            fromBuilder.bindings().forEach(b ->
-                boundPats.put(b.id, core.id(b.id)));
-            final Core.Exp rewritten =
-                rewrite0(boundPats, scan, skip(steps, i));
-            fromBuilder.scan(scan.pat, rewritten, scan.condition);
+            final Core.Exp rewritten;
+            if (false) { // TODO remove dead code (lots of it!)
+              final SortedMap<Core.NamedPat, Core.Exp> boundPats =
+                  new TreeMap<>(Core.NamedPat.ORDERING);
+              fromBuilder.bindings().forEach(b ->
+                  boundPats.put(b.id, core.id(b.id)));
+              rewritten = rewrite0(boundPats, scan, skip(steps, i));
+            } else {
+              rewritten = rewrite1(scan, skip(steps, i));
+            }
             deferredScans.scan(scan.pat, rewritten, scan.condition);
           } else {
             deferredScans.scan(scan.pat, scan.exp);
@@ -162,7 +165,9 @@ class SuchThatShuttle extends Shuttle {
             UnaryOperator.identity();
         final List<Core.Exp> inFilters = new ArrayList<>();
         for (Core.FromStep step : laterSteps) {
-          if (step.op == Op.WHERE) {
+          if (step == scan) {
+            // continue to second step
+          } else if (step.op == Op.WHERE) {
             core.flattenAnd(((Core.Where) step).exp, inFilters::add);
           } else {
             // If this step is a scan, any subsequent 'where' steps might be
@@ -179,14 +184,19 @@ class SuchThatShuttle extends Shuttle {
         // Try a different approach.
         // Generate an iterator over all values of all variables,
         // then filter.
-        final Extents.Analysis analysis =
-            Extents.create(typeSystem, scan.pat, ImmutableSortedMap.of(), null,
-                null, laterSteps);
-        satisfiedFilters.addAll(analysis.satisfiedFilters);
-        return core.fromBuilder(typeSystem)
-            .scan(scan.pat, analysis.extentExp)
-            .build();
+        return rewrite1(scan, laterSteps);
       }
+    }
+
+    private Core.From rewrite1(Core.Scan scan,
+        List<? extends Core.FromStep> laterSteps) {
+      final Extents.Analysis analysis =
+          Extents.create(typeSystem, scan.pat, ImmutableSortedMap.of(), null,
+              null, laterSteps);
+      satisfiedFilters.addAll(analysis.satisfiedFilters);
+      return core.fromBuilder(typeSystem)
+          .scan(scan.pat, analysis.extentExp)
+          .build();
     }
 
     /** Rewrites a "from vars suchthat condition" expression to a
