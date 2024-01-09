@@ -62,6 +62,17 @@ public class LintTest {
         .add(line -> line.contains("\t"),
             line -> line.state().message("Tab", line))
 
+        // Use of 'Static.' other than in an import.
+        .add(line -> line.contains("Static.")
+                && line.filename().endsWith(".java")
+                && !line.startsWith("import static")
+                && !line.matches("^ *// .*$")
+                && !line.source().fileOpt()
+                .filter(f -> f.getName().equals("LintTest.java")).isPresent()
+                && !line.source().fileOpt()
+                .filter(f -> f.getName().equals("UtilTest.java")).isPresent(),
+            line -> line.state().message("Static", line))
+
         // Comment without space
         .add(line -> line.matches(".* //[^ ].*")
                 && !line.source().fileOpt()

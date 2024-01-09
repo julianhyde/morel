@@ -26,7 +26,6 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.Static;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -39,6 +38,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.SKIP;
+import static net.hydromatic.morel.util.Static.shorterThan;
 
 import static java.util.Objects.requireNonNull;
 
@@ -69,7 +70,7 @@ public abstract class Environments {
    * values. */
   private static Environment env(Environment environment, TypeSystem typeSystem,
       Map<String, ForeignValue> valueMap) {
-    if (Static.SKIP) {
+    if (SKIP) {
       return environment;
     }
     final List<Binding> bindings = new ArrayList<>();
@@ -109,7 +110,7 @@ public abstract class Environments {
 
   /** Creates an environment that is a given environment plus bindings. */
   static Environment bind(Environment env, Iterable<Binding> bindings) {
-    if (Static.shorterThan(bindings, 5)) {
+    if (shorterThan(bindings, 5)) {
       for (Binding binding : bindings) {
         env = env.bind(binding);
       }

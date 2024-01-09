@@ -24,7 +24,6 @@ import net.hydromatic.morel.compile.RefChecker;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
-import net.hydromatic.morel.util.Static;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -37,6 +36,7 @@ import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Static.append;
 
 import static com.google.common.collect.Iterables.getLast;
 
@@ -177,7 +177,7 @@ public class FromBuilder {
         }
         final Binding binding = Iterables.getOnlyElement(lastStep.bindings);
         nameExps.add(idPat.name, core.id(binding.id));
-        bindings = Static.append(this.bindings, Binding.of(idPat));
+        bindings = append(this.bindings, Binding.of(idPat));
       }
       addAll(from.steps);
       return yield_(true, bindings, core.record(typeSystem, nameExps));
