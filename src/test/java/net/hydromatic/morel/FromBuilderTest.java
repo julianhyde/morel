@@ -32,6 +32,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
@@ -53,6 +54,7 @@ public class FromBuilderTest {
     final Core.IdPat aPat = core.idPat(intType, "a", 0);
     final Core.Id aId = core.id(aPat);
     final Core.IdPat bPat = core.idPat(intType, "b", 0);
+    final Core.Id bId = core.id(bPat);
     final Core.IdPat dPat = core.idPat(intPairType, "d", 0);
     final Core.Id dId = core.id(dPat);
     final Core.IdPat iPat = core.idPat(intType, "i", 0);
@@ -375,6 +377,49 @@ public class FromBuilderTest {
         + "where a < 2 "
         + "yield {i = a, j = b} "
         + "where i < j";
+    assertThat(from, hasToString(expected));
+    final Core.Exp e = fromBuilder.buildSimplify();
+    assertThat(e, is(from));
+  }
+
+  @Test void testNestedFromTuple() {
+    // from (a, b) in
+    //   (from (a, b) in
+    //     (from a in [1, 2] join b in [3, 4]))
+    // where a > b andalso b = 10
+    // yield b
+    //   ==>
+    // from a in [1, 2]
+    // join b in [3, 4]
+    // where a > b andalso a = 10
+    // yield b
+    final Fixture f = new Fixture();
+    final Core.Pat abPat =
+        core.tuplePat(f.typeSystem, Arrays.asList(f.aPat, f.bPat));
+
+    final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
+    fromBuilder
+        .scan(abPat,
+            core.fromBuilder(f.typeSystem)
+                .scan(abPat,
+                    core.fromBuilder(f.typeSystem)
+                        .scan(f.aPat, f.list12)
+                        .scan(f.bPat, f.list34)
+                        .build())
+                .build())
+        .where(
+            core.andAlso(f.typeSystem,
+                core.greaterThan(f.typeSystem, f.aId, f.bId),
+                core.equal(f.typeSystem, f.aId,
+                    core.intLiteral(BigDecimal.TEN))))
+        .yield_(f.bId);
+
+    final Core.From from = fromBuilder.build();
+
+    final String expected = "from a in [1, 2] "
+        + "join b in [3, 4] "
+        + "where a > b andalso a = 10 "
+        + "yield b";
     assertThat(from, hasToString(expected));
     final Core.Exp e = fromBuilder.buildSimplify();
     assertThat(e, is(from));

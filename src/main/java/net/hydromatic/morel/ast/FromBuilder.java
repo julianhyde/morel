@@ -141,6 +141,9 @@ public class FromBuilder {
             && getLast(((Core.From) exp).steps).bindings.size() == 1
             || pat instanceof Core.RecordPat
                 && ((Core.RecordPat) pat).args.stream()
+                    .allMatch(a -> a instanceof Core.IdPat)
+            || pat instanceof Core.TuplePat
+                && ((Core.TuplePat) pat).args.stream()
                     .allMatch(a -> a instanceof Core.IdPat))) {
       final Core.From from = (Core.From) exp;
       final PairList<String, Core.Exp> nameExps = PairList.of();
@@ -150,6 +153,12 @@ public class FromBuilder {
         this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         forEach(recordPat.type().argNameTypes.keySet(), recordPat.args,
             (name, arg) -> nameExps.add(name, core.id((Core.IdPat) arg)));
+        bindings = null;
+      } else if (pat instanceof Core.TuplePat) {
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
+        tuplePat.args.forEach(arg ->
+            nameExps.add(((Core.IdPat) arg).name, core.id((Core.IdPat) arg)));
         bindings = null;
       } else if (!this.bindings.isEmpty()) {
         // With at least one binding, and one new variable, the output will be
