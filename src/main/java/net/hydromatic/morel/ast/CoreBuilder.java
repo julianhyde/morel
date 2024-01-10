@@ -253,11 +253,12 @@ public enum CoreBuilder {
     return new Core.Con0Pat(type, tyCon);
   }
 
-  public Core.TuplePat tuplePat(Type type, Iterable<? extends Core.Pat> args) {
+  public Core.TuplePat tuplePat(RecordLikeType type,
+      Iterable<? extends Core.Pat> args) {
     return new Core.TuplePat(type, ImmutableList.copyOf(args));
   }
 
-  public Core.TuplePat tuplePat(Type type, Core.Pat... args) {
+  public Core.TuplePat tuplePat(RecordLikeType type, Core.Pat... args) {
     return new Core.TuplePat(type, ImmutableList.copyOf(args));
   }
 

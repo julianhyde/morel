@@ -612,7 +612,7 @@ public class Resolver {
     case TUPLE_PAT:
       final Ast.TuplePat tuplePat = (Ast.TuplePat) pat;
       final List<Core.Pat> argList = transformEager(tuplePat.args, this::toCore);
-      return core.tuplePat(type, argList);
+      return core.tuplePat((RecordLikeType) type, argList);
 
     default:
       throw new AssertionError("unknown pat " + pat.op);

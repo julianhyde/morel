@@ -27,8 +27,10 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
@@ -101,11 +103,6 @@ public class Core {
     /** Returns the type. */
     public Type type() {
       return type;
-    }
-
-    /** Returns the type's key. */
-    public Type.Key typeKey() {
-      return type().key();
     }
 
     @Override public abstract Pat accept(Shuttle shuttle);
@@ -383,9 +380,21 @@ public class Core {
   public static class TuplePat extends Pat {
     public final List<Pat> args;
 
-    TuplePat(Type type, ImmutableList<Pat> args) {
+    /** Creates a TuplePat.
+     *
+     * <p>Type is {@link PrimitiveType#UNIT} if {@code args} is empty,
+     * otherwise a {@link TupleType}. */
+    TuplePat(RecordLikeType type, ImmutableList<Pat> args) {
       super(Op.TUPLE_PAT, type);
       this.args = requireNonNull(args);
+      checkArgument(args.size() == type.argNameTypes().size());
+      checkArgument(args.isEmpty()
+          ? type == PrimitiveType.UNIT
+          : type instanceof TupleType);
+    }
+
+    @Override public RecordLikeType type() {
+      return (RecordLikeType) type;
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
