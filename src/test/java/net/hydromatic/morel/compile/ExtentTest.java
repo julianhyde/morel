@@ -28,14 +28,13 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Range;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.compile.Extents.generator;
@@ -247,35 +246,53 @@ public class ExtentTest {
     final Core.TuplePat pat =
         core.tuplePat(f.typeSystem, list(loc, deptno, name));
 
-    // from (loc, deptno, name)
-    // where op elem ({deptno = deptno, dname = name, loc = loc}, depts)
-    //    andalso deptno > 20
-    final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
-    final Core.Exp extent =
-        core.extent(f.typeSystem, pat.type, ImmutableRangeSet.of(Range.all()));
-    fromBuilder.scan(pat, extent);
     final Core.Exp condition0 =
         core.elem(f.typeSystem,
             core.record(f.typeSystem,
                 PairList.copyOf("deptno", core.id(deptno),
                     "dname", core.id(name),
-                    "loc", core.stringLiteral("CHICAGO"))),
+                    "loc", core.id(loc))),
             core.id(f.depts));
     final Core.Exp condition1 =
         core.greaterThan(f.typeSystem, core.id(deptno),
             core.intLiteral(BigDecimal.valueOf(20)));
-    fromBuilder.where(core.andAlso(f.typeSystem, condition0, condition1));
 
-    Extents.Analysis analysis =
-        Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(), null, null,
-            fromBuilder.build().steps);
-    assertThat(analysis, notNullValue());
-    assertThat(analysis.extentExp, is(core.id(f.depts)));
-    assertThat(analysis.satisfiedFilters, hasSize(1));
-    assertThat(analysis.satisfiedFilters.get(0), is(condition0));
-    assertThat(analysis.remainingFilters, empty());
-    assertThat(analysis.boundPats, anEmptyMap());
-    assertThat(analysis.goalPats, is(ImmutableSet.of(loc, deptno, name)));
+    final Consumer<Consumer<FromBuilder>> fn = action -> {
+      final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
+      fromBuilder.scan(pat);
+      // Apply one of the variants of 'where' clause
+      action.accept(fromBuilder);
+
+      Extents.Analysis analysis =
+          Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(), null, null,
+          fromBuilder.build().steps);
+      assertThat(analysis, notNullValue());
+      assertThat(analysis.extentExp, is(core.id(f.depts)));
+      assertThat(analysis.satisfiedFilters, hasSize(1));
+      assertThat(analysis.satisfiedFilters.get(0), is(condition0));
+      assertThat(analysis.remainingFilters, empty());
+      assertThat(analysis.boundPats, anEmptyMap());
+      assertThat(analysis.goalPats, is(ImmutableSet.of(loc, deptno, name)));
+    };
+
+    // from (loc, deptno, name)
+    // where op elem ({deptno = deptno, dname = name, loc = loc}, depts)
+    fn.accept(fromBuilder ->
+        fromBuilder.where(condition0));
+
+    // from (loc, deptno, name)
+    // where op elem ({deptno = deptno, dname = name, loc = loc}, depts)
+    // where deptno > 20
+    fn.accept(fromBuilder ->
+        fromBuilder.where(condition0)
+            .where(condition1));
+
+    // from (loc, deptno, name)
+    // where op elem ({deptno = deptno, dname = name, loc = loc}, depts)
+    //    andalso deptno > 20
+    fn.accept(fromBuilder ->
+        fromBuilder.where(
+            core.andAlso(f.typeSystem, condition0, condition1)));
   }
 
   @Test void testAnalysis2d() {
@@ -288,9 +305,7 @@ public class ExtentTest {
     // where op elem ({deptno = dno, dname = name, loc = "CHICAGO"}, depts)
     //   andalso dno > 20
     final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
-    final Core.Exp extent =
-        core.extent(f.typeSystem, pat.type, ImmutableRangeSet.of(Range.all()));
-    fromBuilder.scan(pat, extent);
+    fromBuilder.scan(pat);
     final Core.Exp condition0 =
         core.elem(f.typeSystem,
             core.record(f.typeSystem,
@@ -301,14 +316,14 @@ public class ExtentTest {
     final Core.Exp condition1 =
         core.greaterThan(f.typeSystem, core.id(dno),
             core.intLiteral(BigDecimal.valueOf(20)));
-    fromBuilder.where(condition0);
-//    fromBuilder.where(core.andAlso(f.typeSystem, condition0, condition1));
+    fromBuilder.where(core.andAlso(f.typeSystem, condition0, condition1));
 
     Extents.Analysis analysis =
         Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(), null, null,
             fromBuilder.build().steps);
     assertThat(analysis, notNullValue());
-    assertThat(analysis.extentExp, is(core.id(f.depts)));
+    assertThat(analysis.extentExp,
+        hasToString("from dno in [#deptno v0] join name in [#dname v0]"));
   }
 }
 
