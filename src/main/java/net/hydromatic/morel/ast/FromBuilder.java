@@ -26,7 +26,9 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Range;
 import org.apache.calcite.util.Util;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -129,6 +131,14 @@ public class FromBuilder {
         core.scan(Op.SUCH_THAT, bindings, pat, exp, core.boolLiteral(true)));
   }
 
+  /** Creates an unbounded scan, "from pat". */
+  public FromBuilder scan(Core.Pat pat) {
+    final Core.Exp extent =
+        core.extent(typeSystem, pat.type, ImmutableRangeSet.of(Range.all()));
+    return scan(pat, extent, core.boolLiteral(true));
+  }
+
+  /** Creates a bounded scan, "from pat in exp". */
   public FromBuilder scan(Core.Pat pat, Core.Exp exp) {
     return scan(pat, exp, core.boolLiteral(true));
   }

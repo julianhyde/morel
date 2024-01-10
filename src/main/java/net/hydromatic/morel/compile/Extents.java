@@ -187,8 +187,9 @@ public class Extents {
     } else {
       extentFilter = reduceAnd(typeSystem, foo);
     }
-    return new Analysis(boundPats, extent.goalPats, extentFilter.left,
-        core.decomposeAnd(extentFilter.right), remainingFilters);
+    return new Analysis(boundPats, extent.goalPats, extent.idPats,
+        extentFilter.left, core.decomposeAnd(extentFilter.right),
+        remainingFilters);
   }
 
   /** Converts a singleton id pattern "x" or tuple pattern "(x, y)"
@@ -342,19 +343,21 @@ public class Extents {
   public static class Analysis {
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
     final Set<Core.NamedPat> goalPats;
+    final PairList<Core.IdPat, Core.Exp> newScans;
     final Core.Exp extentExp;
     final List<Core.Exp> satisfiedFilters; // filters satisfied by extentExp
     final List<Core.Exp> remainingFilters;
 
-    Analysis(SortedMap<Core.NamedPat, Core.Exp> boundPats,
-        Set<Core.NamedPat> goalPats, Core.Exp extentExp,
-        List<Core.Exp> satisfiedFilters,
+    private Analysis(SortedMap<Core.NamedPat, Core.Exp> boundPats,
+        Set<Core.NamedPat> goalPats, PairList<Core.IdPat, Core.Exp> newScans,
+        Core.Exp extentExp, List<Core.Exp> satisfiedFilters,
         List<Core.Exp> remainingFilters) {
-      this.boundPats = boundPats;
-      this.goalPats = goalPats;
+      this.boundPats = ImmutableSortedMap.copyOf(boundPats);
+      this.goalPats = ImmutableSet.copyOf(goalPats);
+      this.newScans = newScans.immutable();
       this.extentExp = extentExp;
-      this.satisfiedFilters = satisfiedFilters;
-      this.remainingFilters = remainingFilters;
+      this.satisfiedFilters = ImmutableList.copyOf(satisfiedFilters);
+      this.remainingFilters = ImmutableList.copyOf(remainingFilters);
     }
 
     Set<Core.NamedPat> unboundPats() {
@@ -366,7 +369,7 @@ public class Extents {
     private final TypeSystem typeSystem;
     final Set<Core.NamedPat> goalPats;
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
-    final List<Core.IdPat> idPats = new ArrayList<>();
+    final PairList<Core.IdPat, Core.Exp> idPats = PairList.of();
 
     /** Contains definitions, such as "name = d.dname".
      * With such a definition, "name" won't need an extent, because we
@@ -464,11 +467,19 @@ public class Extents {
                     .add(apply.arg(1), apply);
                 break;
               } else if (true) { // TODO remove dead code
-                final Core.Id id = core.id(createId(tuple.type));
+                final Core.Id id = core.id(createId(tuple.type, apply.arg(1)));
                 final Core.Exp elem = core.elem(typeSystem, id, apply.arg(1));
                 g3(map,
                     core.andAlso(typeSystem, elem,
                         core.equal(typeSystem, id, tuple)));
+                final List<Core.Exp> conjunctions = new ArrayList<>();
+                conjunctions.add(core.elem(typeSystem, id, apply.arg(1)));
+                tuple.forEach((i, name, arg) ->
+                    conjunctions.add(
+                        core.equal(typeSystem,
+                            core.field(typeSystem, id, i),
+                            arg)));
+                g3(map, core.andAlso(typeSystem, conjunctions));
                 break;
               } else if (tuple.args.stream().anyMatch(a ->
                   a instanceof Core.Literal)) {
@@ -481,7 +492,8 @@ public class Extents {
                                 return arg;
                               }
                               if (arg instanceof Core.Literal) {
-                                final Core.Id id = core.id(createId(arg.type));
+                                final Core.Id id = core.id(createId(arg.type,
+                                    apply.arg(1)));
                                 conjunctions.add(core.equal(typeSystem, id, arg));
                                 return id;
                               }
@@ -570,9 +582,9 @@ public class Extents {
       }
     }
 
-    private Core.IdPat createId(Type type) {
+    private Core.IdPat createId(Type type, Core.Exp extent) {
       final Core.IdPat idPat = core.idPat(type, typeSystem.nameGenerator);
-      idPats.add(idPat);
+      idPats.add(idPat, extent);
       return idPat;
     }
   }

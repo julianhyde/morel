@@ -194,7 +194,9 @@ class SuchThatShuttle extends Shuttle {
           Extents.create(typeSystem, scan.pat, ImmutableSortedMap.of(), null,
               null, laterSteps);
       satisfiedFilters.addAll(analysis.satisfiedFilters);
-      return core.fromBuilder(typeSystem)
+      final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+      analysis.newScans.forEach((pat, extent) -> fromBuilder.scan(pat, extent));
+      return fromBuilder
           .scan(scan.pat, analysis.extentExp)
           .build();
     }

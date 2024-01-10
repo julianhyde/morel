@@ -1906,11 +1906,14 @@ public class MainTest {
         + "elem #dept scott "
         + "andalso dno > 20";
     final String core1 = "val it = "
-        + "from (dno, name) in ("
-        + "from v0 in #dept scott "
-        + "where #loc v0 = \"CHICAGO\" "
-        + "where #deptno v0 > 20 "
-        + "yield {dno = #deptno v0, name = #dname v0})";
+        + "from (dno, name) in"
+        + " (from v0 in #dept scott"
+        + " join (dno, name) in ("
+        + "from dno in [#deptno v0] "
+        + "join name in [#dname v0])) "
+        + "where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"},"
+        + " #dept scott) "
+        + "andalso dno > 20";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{dno:int, name:string} list")
@@ -1930,11 +1933,14 @@ public class MainTest {
         + "elem #dept scott "
         + "andalso dno > 20";
     final String core1 = "val it = "
-        + "from (dno, name) in ("
-        + "from v0 in #dept scott "
-        + "where #loc v0 = \"CHICAGO\" "
-        + "where #deptno v0 > 20 "
-        + "yield {dno = #deptno v0, name = #dname v0})";
+        + "from (dno, name) in"
+        + " (from v0 in #dept scott"
+        + " join (dno, name) in ("
+        + "from dno in [#deptno v0] "
+        + "join name in [#dname v0])) "
+        + "where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"},"
+        + " #dept scott) "
+        + "andalso dno > 20";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{dno:int, name:string} list")
