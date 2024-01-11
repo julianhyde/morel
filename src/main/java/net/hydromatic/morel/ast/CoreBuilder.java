@@ -56,6 +56,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -639,7 +640,7 @@ public enum CoreBuilder {
    * extent "[[1, 5], [10, 20]]"
    * }</pre></blockquote>
    */
-  Core.Exp simplify(TypeSystem typeSystem, Core.Exp exp) {
+  public Core.Exp simplify(TypeSystem typeSystem, Core.Exp exp) {
     switch (exp.op) {
     case TUPLE:
       final Core.Tuple tuple = (Core.Tuple) exp;
@@ -708,7 +709,7 @@ public enum CoreBuilder {
   }
 
   /** Calls a built-in function with one type parameter. */
-  private Core.Apply call(TypeSystem typeSystem, BuiltIn builtIn, Type type,
+  public Core.Apply call(TypeSystem typeSystem, BuiltIn builtIn, Type type,
       Pos pos, Core.Exp... args) {
     final Core.Literal literal = functionLiteral(typeSystem, builtIn);
     final ForallType forallType = (ForallType) literal.type;
@@ -757,18 +758,28 @@ public enum CoreBuilder {
     return call(typeSystem, BuiltIn.Z_ANDALSO, a0, a1);
   }
 
+  /** Converts a list of 0 or more expressions into an {@code andalso};
+   * simplifies empty list to "true" and singleton list "[e]" to "e". */
   public Core.Exp andAlso(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
-    return foldRight(ImmutableList.copyOf(exps),
-        (e1, e2) -> andAlso(typeSystem, e1, e2));
+    final List<Core.Exp> expList = ImmutableList.copyOf(exps);
+    if (expList.isEmpty()) {
+      return trueLiteral;
+    }
+    return foldRight(expList, (e1, e2) -> andAlso(typeSystem, e1, e2));
   }
 
   public Core.Exp orElse(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(typeSystem, BuiltIn.Z_ORELSE, a0, a1);
   }
 
+  /** Converts a list of 0 or more expressions into an {@code orelse};
+   * simplifies empty list to "false" and singleton list "[e]" to "e". */
   public Core.Exp orElse(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
-    return foldRight(ImmutableList.copyOf(exps),
-        (e1, e2) -> orElse(typeSystem, e1, e2));
+    final ImmutableList<Core.Exp> expList = ImmutableList.copyOf(exps);
+    if (expList.isEmpty()) {
+      return falseLiteral;
+    }
+    return foldRight(expList, (e1, e2) -> orElse(typeSystem, e1, e2));
   }
 
   private <E> E foldRight(List<E> list, BiFunction<E, E, E> fold) {
@@ -802,6 +813,74 @@ public enum CoreBuilder {
   public Core.Exp intersect(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
     return foldRight(ImmutableList.copyOf(exps),
         (e1, e2) -> intersect(typeSystem, e1, e2));
+  }
+
+  /** Returns an expression substituting every given expression as true.
+   *
+   * <p>For example, if {@code exp} is "{@code x = 1 andalso y > 2}"
+   * and {@code trueExps} is [{@code x = 1}, {@code z = 2}],
+   * returns "{@code y > 2}".
+   */
+  public Core.Exp subTrue(TypeSystem typeSystem, Core.Exp exp,
+      List<Core.Exp> trueExps) {
+    List<Core.Exp> conjunctions = decomposeAnd(exp);
+    List<Core.Exp> exps = new ArrayList<>();
+    for (Core.Exp conjunction : conjunctions) {
+      if (!trueExps.contains(conjunction)) {
+        exps.add(conjunction);
+      }
+    }
+    return andAlso(typeSystem, exps);
+  }
+
+  /** Decomposes an {@code andalso} expression;
+   * inverse of {@link #andAlso(TypeSystem, Iterable)}.
+   *
+   * <p>Examples: "p1 andalso p2" becomes "[p1, p2]";
+   * "true" becomes "[]";
+   * "false" becomes "[false]". */
+  public List<Core.Exp> decomposeAnd(Core.Exp exp) {
+    final ImmutableList.Builder<Core.Exp> list = ImmutableList.builder();
+    flattenAnd(exp, list::add);
+    return list.build();
+  }
+
+  /** Decomposes an {@code orelse} expression;
+   * inverse of {@link #orElse(TypeSystem, Iterable)}.
+   *
+   * <p>Examples: "p1 orelse p2" becomes "[p1, p2]";
+   * "false" becomes "[]";
+   * "true" becomes "[true]". */
+  public List<Core.Exp> decomposeOr(Core.Exp exp) {
+    final ImmutableList.Builder<Core.Exp> list = ImmutableList.builder();
+    flattenOr(exp, list::add);
+    return list.build();
+  }
+
+  void flattenAnd(Core.Exp exp, Consumer<Core.Exp> consumer) {
+    //noinspection StatementWithEmptyBody
+    if (exp.op == Op.BOOL_LITERAL && (boolean) ((Core.Literal) exp).value) {
+      // don't add 'true' to the list
+    } else if (exp.op == Op.APPLY
+        && ((Core.Apply) exp).fn.op == Op.FN_LITERAL
+        && ((Core.Literal) ((Core.Apply) exp).fn).value == BuiltIn.Z_ANDALSO) {
+      ((Core.Apply) exp).args().forEach(arg -> flattenAnd(arg, consumer));
+    } else {
+      consumer.accept(exp);
+    }
+  }
+
+  void flattenOr(Core.Exp exp, Consumer<Core.Exp> consumer) {
+    //noinspection StatementWithEmptyBody
+    if (exp.op == Op.BOOL_LITERAL && !(boolean) ((Core.Literal) exp).value) {
+      // don't add 'false' to the list
+    } else if (exp.op == Op.APPLY
+        && ((Core.Apply) exp).fn.op == Op.FN_LITERAL
+        && ((Core.Literal) ((Core.Apply) exp).fn).value == BuiltIn.Z_ORELSE) {
+      ((Core.Apply) exp).args().forEach(arg -> flattenOr(arg, consumer));
+    } else {
+      consumer.accept(exp);
+    }
   }
 }
 

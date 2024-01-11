@@ -148,6 +148,7 @@ In Standard ML but not in Morel:
                                 match
 <i>matchItem</i> &rarr; <i>pat</i> <b>=&gt;</b> <i>exp</i>
 <i>scan</i> &rarr; <i>pat</i> [ <b>in</b> | <b>=</b> ] <i>exp</i>
+    | <i>var
     | <i>var<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>var<sub>v</sub></i> <b>suchThat</b> <i>exp</i>
                                 constrained iteration (<i>v</i> &ge; 1)
 <i>step</i> &rarr; <b>where</b> <i>exp</i>                filter clause
