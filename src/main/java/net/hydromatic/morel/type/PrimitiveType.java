@@ -20,10 +20,18 @@ package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
 
+import com.google.common.collect.ContiguousSet;
+import com.google.common.collect.DiscreteDomain;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Range;
+import com.google.common.collect.RangeSet;
+import org.apache.calcite.runtime.Unit;
+import org.apache.calcite.util.RangeSets;
 
+import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.SortedMap;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 /** Primitive type. */
@@ -59,9 +67,60 @@ public enum PrimitiveType implements RecordLikeType {
     return Op.ID;
   }
 
+
   public <R> R accept(TypeVisitor<R> typeVisitor) {
     return typeVisitor.visit(this);
   }
+
+  @Override public boolean isFinite() {
+    return this == BOOL || this == UNIT;
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override public <E extends Comparable<E>> boolean populate(
+      RangeSet<E> rangeSet, Consumer<E> consumer) {
+    switch (this) {
+    case BOOL:
+      for (Boolean b : new Boolean[] {false, true}) {
+        if (rangeSet.contains((E) b)) {
+          consumer.accept((E) b);
+        }
+      }
+      return true;
+
+    case UNIT:
+      if (rangeSet.contains((E) Unit.INSTANCE)) {
+        consumer.accept((E) Unit.INSTANCE);
+      }
+      return true;
+
+    case INT:
+      RangeSet<BigDecimal> bigDecimalRangeSet = (RangeSet<BigDecimal>) rangeSet;
+      RangeSet<Integer> integerRangeSet =
+          RangeSets.copy(bigDecimalRangeSet, BigDecimal::intValue);
+      for (Range<Integer> range : integerRangeSet.asRanges()) {
+        if (!range.hasLowerBound() || !range.hasUpperBound()) {
+          return false; // infinite
+        }
+        ContiguousSet.create(range, DiscreteDomain.integers())
+            .forEach(i -> consumer.accept((E) i));
+      }
+      return true;
+
+    case CHAR:
+      rangeSet.asRanges().forEach(r -> {
+        ContiguousSet.create(
+            r.intersection((Range<E>) Range.closedOpen(0, 256)),
+                (DiscreteDomain<E>) DiscreteDomain.integers())
+            .forEach(consumer);
+      });
+      return true;
+
+    default:
+      return false;
+    }
+  }
+
 
   @Override public PrimitiveType copy(TypeSystem typeSystem,
       UnaryOperator<Type> transform) {

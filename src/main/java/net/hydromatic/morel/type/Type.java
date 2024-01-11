@@ -20,7 +20,12 @@ package net.hydromatic.morel.type;
 
 import net.hydromatic.morel.ast.Op;
 
+import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.Range;
+import com.google.common.collect.RangeSet;
+
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 import static java.util.Objects.requireNonNull;
@@ -73,6 +78,20 @@ public interface Type {
    *
    * <p>The "file" value is an example. */
   default boolean isProgressive() {
+    return false;
+  }
+
+  /** Whether this type has a small, fixed set of instances.
+   * True for {@code bool}, data types on finite types. */
+  default boolean isFinite() {
+    return populate(ImmutableRangeSet.of(Range.<String>all()), e -> {});
+  }
+
+  /** Populates a list (or other consumer) with all values of this type that
+   * fall into a specified range. Returns false if this type is not finite
+   * and the range is open above or below. */
+  default <E extends Comparable<E>> boolean populate(RangeSet<E> rangeSet,
+      Consumer<E> consumer) {
     return false;
   }
 

@@ -361,8 +361,8 @@ public class Compiler {
       //
       final Core.Scan scan2 = (Core.Scan) firstStep;
       final Extents.Analysis extentFilter =
-          Extents.create(typeSystem, scan2.pat, ImmutableSortedMap.of(),
-                  scan2.exp);
+          Extents.create(typeSystem, scan2.pat, ImmutableSortedMap.of(), null,
+              scan2.exp, ImmutableList.of());
       final FnType fnType =
           typeSystem.fnType(scan2.pat.type, PrimitiveType.BOOL);
       final Pos pos = Pos.ZERO;
@@ -738,7 +738,8 @@ public class Compiler {
                   typedVal =
                       new Pretty.TypedVal(pat2.name,
                           typedValue.valueAs(Object.class),
-                          Keys.toProgressive(pat2.typeKey()).toType(typeSystem));
+                          Keys.toProgressive(pat2.type().key())
+                              .toType(typeSystem));
                 } else {
                   typedVal = new Pretty.TypedVal(pat2.name, o2, pat2.type);
                 }

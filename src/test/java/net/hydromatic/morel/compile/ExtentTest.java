@@ -46,10 +46,26 @@ public class ExtentTest {
     final PrimitiveType intType = PrimitiveType.INT;
     final Core.IdPat aPat = core.idPat(intType, "a", 0);
     final Core.Id aId = core.id(aPat);
+    final Core.IdPat bPat = core.idPat(intType, "b", 0);
+    final Core.Id bId = core.id(bPat);
+    final Core.IdPat cPat = core.idPat(intType, "c", 0);
+    final Core.Id cId = core.id(cPat);
     final Core.Exp list12 = core.list(typeSystem, intLiteral(1), intLiteral(2));
 
     Core.Literal intLiteral(int i) {
       return core.intLiteral(BigDecimal.valueOf(i));
+    }
+
+    void checkFlatten(Core.Exp exp, String s, String s2) {
+      final List<Core.Exp> andExps = core.decomposeAnd(exp);
+      assertThat(andExps, hasToString(s));
+      assertThat(core.andAlso(typeSystem, andExps),
+          hasToString(exp.toString()));
+
+      final List<Core.Exp> orExps = core.decomposeOr(exp);
+      assertThat(orExps, hasToString(s2));
+      assertThat(core.orElse(typeSystem, orExps),
+          hasToString(exp.toString()));
     }
   }
 
@@ -106,12 +122,12 @@ public class ExtentTest {
     Core.IdPat xPat = core.idPat(PrimitiveType.INT, "x", 0);
     Core.Literal ten = f.intLiteral(10);
     Core.Exp exp = core.equal(f.typeSystem, core.id(xPat), ten);
-    Core.Exp x = generator(f.typeSystem, xPat, exp);
-    assertThat(x, hasToString("[10]"));
+    Core.Exp x = generator(f.typeSystem, xPat, null, exp, ImmutableList.of());
+    assertThat(x.toString(), is("[10]"));
 
     // pat = "x", exp = "10 = x", extent = "[10]"
     Core.Exp exp2 = core.equal(f.typeSystem, ten, core.id(xPat));
-    Core.Exp x2 = generator(f.typeSystem, xPat, exp2);
+    Core.Exp x2 = generator(f.typeSystem, xPat, null, exp2, ImmutableList.of());
     assertThat(x2, hasToString("[10]"));
   }
 
@@ -134,14 +150,14 @@ public class ExtentTest {
         core.andAlso(f.typeSystem, exp0,
             core.andAlso(f.typeSystem, exp1,
                 core.andAlso(f.typeSystem, exp2, exp3)));
-    Core.Exp x = generator(f.typeSystem, xPat, exp);
+    Core.Exp x = generator(f.typeSystem, xPat, null, exp, ImmutableList.of());
     assertThat(x, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) x).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) x).fn).unwrap(BuiltIn.class),
         is(BuiltIn.Z_EXTENT));
     assertThat(x, hasToString("extent \"int [[3..5), (5..10)]\""));
 
-    Core.Exp y = generator(f.typeSystem, yPat, exp);
+    Core.Exp y = generator(f.typeSystem, yPat, null, exp, ImmutableList.of());
     assertThat(y, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) y).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) y).fn).unwrap(BuiltIn.class),
@@ -149,6 +165,25 @@ public class ExtentTest {
     assertThat(y, hasToString("[20]"));
   }
 
+
+  @Test void testFlatten() {
+    final Fixture f = new Fixture();
+    f.checkFlatten(f.aId, "[a]", "[a]");
+    f.checkFlatten(core.boolLiteral(true), "[]", "[true]");
+    f.checkFlatten(core.boolLiteral(false), "[false]", "[]");
+    f.checkFlatten(
+        core.andAlso(f.typeSystem, f.aId,
+            core.andAlso(f.typeSystem, f.bId,
+                core.orElse(f.typeSystem, f.cId, f.intLiteral(1)))),
+        "[a, b, c orelse 1]",
+        "[a andalso (b andalso (c orelse 1))]");
+    f.checkFlatten(
+        core.orElse(f.typeSystem, f.aId,
+            core.orElse(f.typeSystem, f.bId,
+                core.andAlso(f.typeSystem, f.cId, f.intLiteral(1)))),
+        "[a orelse (b orelse c andalso 1)]",
+        "[a, b, c andalso 1]");
+  }
 }
 
 // End ExtentTest.java
