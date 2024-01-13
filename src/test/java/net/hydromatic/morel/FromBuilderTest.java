@@ -399,16 +399,18 @@ public class FromBuilderTest {
     final Core.Pat abPat =
         core.tuplePat(f.typeSystem, Arrays.asList(f.aPat, f.bPat));
 
-    final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
+    final Core.From innermostFrom =
+        f.fromBuilder()
+            .scan(f.aPat, f.list12)
+            .scan(f.bPat, f.list34)
+            .build();
+    final Core.From innerFrom =
+        f.fromBuilder()
+            .scan(abPat, innermostFrom)
+            .build();
+    final FromBuilder fromBuilder = f.fromBuilder();
     fromBuilder
-        .scan(abPat,
-            core.fromBuilder(f.typeSystem)
-                .scan(abPat,
-                    core.fromBuilder(f.typeSystem)
-                        .scan(f.aPat, f.list12)
-                        .scan(f.bPat, f.list34)
-                        .build())
-                .build())
+        .scan(abPat, innerFrom)
         .where(
             core.andAlso(f.typeSystem,
                 core.greaterThan(f.typeSystem, f.aId, f.bId),
@@ -417,7 +419,6 @@ public class FromBuilderTest {
         .yield_(f.bId);
 
     final Core.From from = fromBuilder.build();
-
     final String expected = "from a in [1, 2] "
         + "join b in [3, 4] "
         + "where a > b andalso a = 10 "
@@ -425,6 +426,73 @@ public class FromBuilderTest {
     assertThat(from, hasToString(expected));
     final Core.Exp e = fromBuilder.buildSimplify();
     assertThat(e, is(from));
+
+    // Tuple where variables are not in alphabetical order. Requires
+    // a 'yield' step to re-order variables.
+    //
+    // from (b, a) in
+    //   (from a in [1, 2] join b in [3, 4])
+    // where a > b andalso b = 10
+    // yield b
+    //   ==>
+    // from a in [1, 2]
+    // join b in [3, 4]
+    // yield {a = b, b = a}
+    // where a > b andalso a = 10
+    // yield b
+    final Core.Pat baPat =
+        core.tuplePat(f.typeSystem, Arrays.asList(f.bPat, f.aPat));
+    final FromBuilder fromBuilder2 = f.fromBuilder();
+    fromBuilder2
+        .scan(baPat, innermostFrom)
+        .where(
+            core.andAlso(f.typeSystem,
+                core.greaterThan(f.typeSystem, f.aId, f.bId),
+                core.equal(f.typeSystem, f.aId,
+                    core.intLiteral(BigDecimal.TEN))))
+        .yield_(f.bId);
+
+    final Core.From from2 = fromBuilder2.build();
+    final String expected2 = "from a in [1, 2] "
+        + "join b in [3, 4] "
+        + "yield {a = b, b = a} "
+        + "where a > b andalso a = 10 "
+        + "yield b";
+    assertThat(from2, hasToString(expected2));
+    final Core.Exp e2 = fromBuilder2.buildSimplify();
+    assertThat(e2, is(from2));
+
+    // from (a, j) in
+    //   (from a in [1, 2] join b in [3, 4])
+    // where a > j andalso j = 10
+    // yield j
+    //   ==>
+    // from a in [1, 2]
+    // join b in [3, 4]
+    // yield {a, j = b}
+    // where a > j andalso j = 10
+    // yield j
+    final Core.Pat ajPat =
+        core.tuplePat(f.typeSystem, Arrays.asList(f.aPat, f.jPat));
+    final FromBuilder fromBuilder3 = f.fromBuilder();
+    fromBuilder3
+        .scan(ajPat, innermostFrom)
+        .where(
+            core.andAlso(f.typeSystem,
+                core.greaterThan(f.typeSystem, f.aId, f.jId),
+                core.equal(f.typeSystem, f.jId,
+                    core.intLiteral(BigDecimal.TEN))))
+        .yield_(f.jId);
+
+    final Core.From from3 = fromBuilder3.build();
+    final String expected3 = "from a in [1, 3] "
+        + "join b in [3, 4] "
+//        + "yield {} "
+        + "where a > b andalso a = 10 "
+        + "yield b";
+    assertThat(from3, hasToString(expected3));
+    final Core.Exp e3 = fromBuilder3.buildSimplify();
+    assertThat(e3, is(from3));
   }
 }
 

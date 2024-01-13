@@ -23,6 +23,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.RefChecker;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
@@ -167,9 +168,12 @@ public class FromBuilder {
         bindings = null;
       } else if (pat instanceof Core.TuplePat) {
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-        this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
-        tuplePat.args.forEach(arg ->
-            nameExps.add(((Core.IdPat) arg).name, core.id((Core.IdPat) arg)));
+        final List<Binding> lastBindings =
+            getLast(((Core.From) exp).steps).bindings;
+        Pair.forEach(tuplePat.args, lastBindings, (arg, binding) -> {
+          nameExps.add(((Core.IdPat) arg).name,
+              core.id(binding.id));
+        });
         bindings = null;
       } else if (!this.bindings.isEmpty()) {
         // With at least one binding, and one new variable, the output will be
@@ -200,7 +204,18 @@ public class FromBuilder {
         bindings = append(this.bindings, Binding.of(idPat));
       }
       addAll(from.steps);
-      return yield_(true, bindings, core.record(typeSystem, nameExps));
+      final Core.Exp record;
+      boolean uselessIfLast = true;
+      if (pat instanceof Core.TuplePat) {
+        uselessIfLast = true;
+//          nameExps.leftList().equals(
+//              ImmutableList.copyOf(
+//                  ((RecordLikeType) record.type).argNameTypes().keySet()));
+        record = core.tuple(typeSystem, null, nameExps.rightList());
+      } else {
+        record = core.record(typeSystem, nameExps);
+      }
+      return yield_(uselessIfLast, bindings, record);
     }
     Compiles.acceptBinding(typeSystem, pat, bindings);
     return addStep(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
@@ -361,9 +376,9 @@ public class FromBuilder {
     if (removeIfLastIndex == steps.size() - 1) {
       removeIfLastIndex = Integer.MIN_VALUE;
       final Core.Yield yield = (Core.Yield) getLast(steps);
-      assert yield.exp.op == Op.TUPLE
-          && ((Core.Tuple) yield.exp).args.size() == 1
-          : yield.exp;
+//      assert yield.exp.op == Op.TUPLE
+//          && ((Core.Tuple) yield.exp).args.size() == 1
+//          : yield.exp;
       steps.remove(steps.size() - 1);
     }
     if (simplify
