@@ -62,6 +62,7 @@ import java.util.function.Consumer;
 
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Pair.forEachIndexed;
 import static net.hydromatic.morel.util.Static.transform;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
@@ -544,9 +545,22 @@ public enum CoreBuilder {
     switch (exp.type.op()) {
     case RECORD_TYPE:
     case TUPLE_TYPE:
-      ((RecordLikeType) exp.type).argNameTypes().forEach((name, type) ->
-          bindings.add(
-              Binding.of(idPat(type, name, typeSystem.nameGenerator))));
+      forEachIndexed(((RecordLikeType) exp.type).argNameTypes(),
+          (i, name, type) -> {
+            final Core.NamedPat idPat;
+            if (exp.op == Op.TUPLE
+                && exp.arg(i) instanceof Core.Id
+                && ((Core.Id) exp.arg(i)).idPat.name.equals(name)) {
+              // Use an existing IdPat if we can, rather than generating a new
+              // IdPat with a different sequence number. (The underlying problem
+              // is that the fields of record types have only names, no sequence
+              // numbers.)
+              idPat = ((Core.Id) exp.arg(i)).idPat;
+            } else {
+              idPat = idPat(type, name, typeSystem.nameGenerator);
+            }
+            bindings.add(Binding.of(idPat));
+          });
       break;
     default:
       bindings.add(Binding.of(idPat(exp.type, typeSystem.nameGenerator)));

@@ -460,34 +460,34 @@ public class FromBuilderTest {
     final Core.Exp e2 = fromBuilder2.buildSimplify();
     assertThat(e2, is(from2));
 
-    // from (a, j) in
+    // from (i, j) in
     //   (from a in [1, 2] join b in [3, 4])
-    // where a > j andalso j = 10
-    // yield j
+    // where i > j andalso j = 10
+    // yield i
     //   ==>
     // from a in [1, 2]
     // join b in [3, 4]
-    // yield {a, j = b}
-    // where a > j andalso j = 10
-    // yield j
-    final Core.Pat ajPat =
-        core.tuplePat(f.typeSystem, Arrays.asList(f.aPat, f.jPat));
+    // yield {i = a, j = b}
+    // where i > j andalso j = 10
+    // yield i
+    final Core.Pat ijPat =
+        core.tuplePat(f.typeSystem, Arrays.asList(f.iPat, f.jPat));
     final FromBuilder fromBuilder3 = f.fromBuilder();
     fromBuilder3
-        .scan(ajPat, innermostFrom)
+        .scan(ijPat, innermostFrom)
         .where(
             core.andAlso(f.typeSystem,
-                core.greaterThan(f.typeSystem, f.aId, f.jId),
+                core.greaterThan(f.typeSystem, f.iId, f.jId),
                 core.equal(f.typeSystem, f.jId,
                     core.intLiteral(BigDecimal.TEN))))
         .yield_(f.jId);
 
     final Core.From from3 = fromBuilder3.build();
-    final String expected3 = "from a in [1, 3] "
+    final String expected3 = "from a in [1, 2] "
         + "join b in [3, 4] "
-//        + "yield {} "
-        + "where a > b andalso a = 10 "
-        + "yield b";
+        + "yield {i = a, j = b} "
+        + "where i > j andalso j = 10 "
+        + "yield j";
     assertThat(from3, hasToString(expected3));
     final Core.Exp e3 = fromBuilder3.buildSimplify();
     assertThat(e3, is(from3));
