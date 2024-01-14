@@ -1994,12 +1994,12 @@ public class MainTest {
 
   /** As {@link #testFromSuchThat2c()} but with a literal. */
   @Test void testFromSuchThat2d2() {
-    final String ml = "from (dno, name)\n"
+    final String ml = "from {dno, name}\n"
         + "  where {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
         + "      elem scott.dept\n"
         + "    andalso dno > 20";
     final String core0 = "val it = "
-        + "from (dno, name) : int * string "
+        + "from ({dno = dno, name = name}) : {dno:int, name:string} "
         + "where {deptno = dno, dname = name, loc = \"CHICAGO\"} "
         + "elem #dept scott "
         + "andalso dno > 20";

@@ -209,6 +209,16 @@ public class Extents {
       //noinspection unchecked,rawtypes
       return (List) tuplePat.args;
 
+    case RECORD_PAT:
+      final Core.RecordPat recordPat = (Core.RecordPat) pat;
+      for (Core.Pat arg : recordPat.args) {
+        if (arg.op != Op.ID_PAT) {
+          throw new CompileException("must be id", false, arg.pos);
+        }
+      }
+      //noinspection unchecked,rawtypes
+      return (List) recordPat.args;
+
     default:
       throw new CompileException("must be id", false, pat.pos);
     }

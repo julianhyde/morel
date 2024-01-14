@@ -204,6 +204,9 @@ public class FromBuilder {
         bindings = append(this.bindings, Binding.of(idPat));
       }
       addAll(from.steps);
+      if (true) { // TODO
+        return yield_(true, bindings, core.record(typeSystem, nameExps));
+      }
       final Core.Exp record;
       boolean uselessIfLast = true;
       if (pat instanceof Core.TuplePat) {
