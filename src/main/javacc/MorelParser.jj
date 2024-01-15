@@ -427,27 +427,34 @@ void fromStep(List<FromStep> steps) :
 
 Pair<Pat, Exp> fromSource() :
 {
+  final Id id;
   final Exp exp;
   final Pat pat;
 }
 {
-  pat = pat()
   (
-    <IN> exp = expression() {
-      return Pair.of(pat, exp);
+    LOOKAHEAD(
+      (<IDENTIFIER> | <QUOTED_IDENTIFIER>)
+      (<COMMA> | <JOIN> | <WHERE> | <GROUP> | <COMPUTE>
+        | <SKIP_> | <TAKE> | <YIELD> | <EOF>))
+    id = identifier() {
+      return Pair.of(ast.idPat(id.pos, id.name), null);
     }
   |
-    <EQ> exp = expression() {
-      return Pair.of(pat, ast.fromEq(exp));
-    }
-  |
-    <SUCH_THAT> exp = expression() {
-      return Pair.of(pat, ast.fromSuchThat(exp));
-    }
-  |
-    {
-      return Pair.of(pat, null);
-    }
+    pat = pat()
+    (
+      <IN> exp = expression() {
+        return Pair.of(pat, exp);
+      }
+    |
+      <EQ> exp = expression() {
+        return Pair.of(pat, ast.fromEq(exp));
+      }
+    |
+      <SUCH_THAT> exp = expression() {
+        return Pair.of(pat, ast.fromSuchThat(exp));
+      }
+    )
   )
 }
 
