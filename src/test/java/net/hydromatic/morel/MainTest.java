@@ -1767,6 +1767,35 @@ public class MainTest {
     ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
         .assertParseSame()
         .assertType("(int * int -> bool) -> int list");
+
+    // In "from p in exp" and "from p = exp", p can be any pattern
+    // but in "from v" v can only be an identifier.
+    ml("from x, y in [1, 2], z").assertParseSame();
+    ml("from {x, y} in [{x=1, y=2}], z")
+        .assertParse("from {x = x, y = y} in [{x = 1, y = 2}], z");
+    ml("from {x, y}, z")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \",\" \", \"\" "
+                + "at line 1, column 12."));
+    ml("from {x, y} group")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"group\" \"group \"\" "
+                + "at line 1, column 13."));
+    ml("from {x, y} where true")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"where\" \"where \"\" "
+                + "at line 1, column 13."));
+    ml("from (x, y) where true")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"where\" \"where \"\" "
+                + "at line 1, column 13."));
+    ml("from w as (x, y) order x")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"order\" \"order \"\" "
+                + "at line 1, column 18."));
+    ml("from (x, y)")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \"<EOF>\" at line 1, column 11."));
   }
 
   @Test void testFoo() {
@@ -1950,10 +1979,14 @@ public class MainTest {
   /** Translates a simple {@code suchthat} expression, "{x, y} elem list".
    * Fields are renamed, to disrupt alphabetical ordering. */
   @Test void testFromSuchThat2c() {
-    final String ml = "from (loc, deptno, name) "
+    final String ml = "from loc, deptno, name "
         + "where {deptno, loc, dname = name} elem scott.dept";
     final String core = "val it = "
-        + "from (loc, deptno, name) in #dept scott";
+        + "from loc : string "
+        + "join deptno : int "
+        + "join name : string "
+        + "where op elem ({deptno = deptno, dname = name, loc = loc},"
+        + " #dept scott)";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{deptno:int, loc:string, name:string} list")
@@ -1994,12 +2027,13 @@ public class MainTest {
 
   /** As {@link #testFromSuchThat2c()} but with a literal. */
   @Test void testFromSuchThat2d2() {
-    final String ml = "from {dno, name}\n"
+    final String ml = "from dno, name\n"
         + "  where {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
         + "      elem scott.dept\n"
         + "    andalso dno > 20";
     final String core0 = "val it = "
-        + "from ({dno = dno, name = name}) : {dno:int, name:string} "
+        + "from dno : int "
+        + "join name : string "
         + "where {deptno = dno, dname = name, loc = \"CHICAGO\"} "
         + "elem #dept scott "
         + "andalso dno > 20";
