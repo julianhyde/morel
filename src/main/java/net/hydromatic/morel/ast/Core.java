@@ -1197,11 +1197,26 @@ public class Core {
         throw new AssertionError("deprecated");
       default:
         // SCAN and CROSS_JOIN are valid in ast, not core.
-        throw new AssertionError("not a join type " + op);
+        throw new IllegalArgumentException("not a join type " + op);
       }
       this.pat = requireNonNull(pat, "pat");
       this.exp = requireNonNull(exp, "exp");
       this.condition = requireNonNull(condition, "condition");
+      if (!(exp.type instanceof ListType)) {
+        throw new IllegalArgumentException("scan expression must be list: "
+            + exp.type);
+      }
+      final ListType listType = (ListType) exp.type;
+      if (!canAssign(listType.elementType, pat.type)) {
+        throw new IllegalArgumentException(exp.type + " + " + pat.type);
+      }
+    }
+
+    /** Returns whether you can assign a value of {@code fromType} to a variable
+     * of type {@code toType}. */
+    private static boolean canAssign(Type fromType, Type toType) {
+      return fromType.equals(toType)
+          || toType.isProgressive();
     }
 
     @Override public Scan accept(Shuttle shuttle) {
