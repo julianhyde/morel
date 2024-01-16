@@ -50,6 +50,7 @@ public class FromBuilderTest {
   private static class Fixture {
     final TypeSystem typeSystem = new TypeSystem();
     final PrimitiveType intType = PrimitiveType.INT;
+    final PrimitiveType unitType = PrimitiveType.UNIT;
     final Type intPairType = typeSystem.tupleType(intType, intType);
     final Core.IdPat aPat = core.idPat(intType, "a", 0);
     final Core.Id aId = core.id(aPat);
@@ -61,6 +62,7 @@ public class FromBuilderTest {
     final Core.Id iId = core.id(iPat);
     final Core.IdPat jPat = core.idPat(intType, "j", 0);
     final Core.Id jId = core.id(jPat);
+    final Core.IdPat uPat = core.idPat(unitType, "u", 0);
     final Core.Exp list12 = core.list(typeSystem, intLiteral(1), intLiteral(2));
     final Core.Exp list34 = core.list(typeSystem, intLiteral(3), intLiteral(4));
     final Core.Exp tuple12 =
@@ -335,17 +337,17 @@ public class FromBuilderTest {
   }
 
   @Test void testNested0() {
-    // from i in (from)
+    // from u in (from)
     //   ==>
     // from
     final Fixture f = new Fixture();
     final Core.From innerFrom = f.fromBuilder().build();
 
     final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder.scan(f.iPat, innerFrom);
+    fromBuilder.scan(f.uPat, innerFrom);
 
     final Core.From from = fromBuilder.build();
-    assertThat(from, hasToString("from i in (from)"));
+    assertThat(from, hasToString("from u in (from)"));
     final Core.Exp e = fromBuilder.buildSimplify();
     assertThat(e, hasToString("from"));
   }
