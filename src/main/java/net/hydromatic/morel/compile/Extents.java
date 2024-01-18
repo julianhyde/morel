@@ -609,19 +609,19 @@ public class Extents {
    * {@link BuiltIn#Z_EXTENT extent}, merges them into a single extent.
    * For example, in
    *
-   * <blockquote><pre><code>
+   * <blockquote><pre>{@code
    * [extent "int: (0, inf)", x > 0,
    *   x elem primes, isPrime x,
    *   extent "int: (-inf, 10)", x < 10]
-   * </code></pre></blockquote>
+   * }</pre></blockquote>
    *
    * <p>the extents for "(0, inf)" and "(-inf, 10)" are merged into
    * extent "(0, 10)":
    *
-   * <blockquote><pre><code>
+   * <blockquote><pre>{@code
    * (extent "int: (0, 10)" intersect primes,
    *   x > 0 andalso isPrime x andalso x < 10)
-   * </code></pre></blockquote>
+   * }</pre></blockquote>
    */
   static Pair<Core.Exp, Core.Exp> reduceAnd(TypeSystem typeSystem,
       PairList<Core.Exp, Core.Exp> extentFilters) {

@@ -85,11 +85,11 @@ public class RangeExtent {
    *
    * <p>Examples:
    * "(-inf,+inf)" (true),
-   * "(-inf,0]" (x <= 0),
-   * "{(-inf,3),(10,+inf)}" (x < 3 or x > 10) are unbounded;
+   * "(-inf,0]" (x &le; 0),
+   * "{(-inf,3),(10,+inf)}" (x &lt; 3 or x &gt; 10) are unbounded;
    * "{}" (false),
    * "{3, 10}" (x in [3, 10]),
-   * "(3, 10)" (x >= 3 andalso x <= 10) are bounded. */
+   * "(3, 10)" (x &ge; 3 andalso x &le; 10) are bounded. */
   public boolean isUnbounded() {
     return rangeSetMap.isEmpty();
   }
