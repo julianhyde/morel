@@ -469,10 +469,13 @@ public class Extents {
 
             case TUPLE:
               final Core.Tuple tuple = (Core.Tuple) apply.arg(0);
-              if (tuple.args.stream().allMatch(a -> a instanceof Core.Id)) {
-                final Core.TuplePat tuplePat =
-                    core.tuplePat(typeSystem,
-                        transformEager(tuple.args, arg -> ((Core.Id) arg).idPat));
+              if (tuple.args.stream().allMatch(a -> a instanceof Core.Id)
+                  && "false".isEmpty()) {
+                final List<Core.Pat> patList = new ArrayList<>();
+                tuple.forEach((i, name, exp) -> {
+                  patList.add(core.idPat(exp.type, name, 0));
+                });
+                final Core.TuplePat tuplePat = core.tuplePat(typeSystem, patList);
                 map.computeIfAbsent(tuplePat, p -> PairList.of())
                     .add(apply.arg(1), apply);
                 break;

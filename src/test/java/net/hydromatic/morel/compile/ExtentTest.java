@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
@@ -257,7 +258,7 @@ public class ExtentTest {
         core.greaterThan(f.typeSystem, core.id(deptno),
             core.intLiteral(BigDecimal.valueOf(20)));
 
-    final Consumer<Consumer<FromBuilder>> fn = action -> {
+    final BiConsumer<String, Consumer<FromBuilder>> fn = (v, action) -> {
       final FromBuilder fromBuilder = core.fromBuilder(f.typeSystem);
       fromBuilder.scan(pat);
       // Apply one of the variants of 'where' clause
@@ -265,11 +266,21 @@ public class ExtentTest {
 
       Extents.Analysis analysis =
           Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(), null, null,
-          fromBuilder.build().steps);
+              fromBuilder.build().steps);
       assertThat(analysis, notNullValue());
-      assertThat(analysis.extentExp, is(core.id(f.depts)));
-      assertThat(analysis.satisfiedFilters, hasSize(1));
-      assertThat(analysis.satisfiedFilters.get(0), is(condition0));
+      if ("".isEmpty()) {
+        assertThat(analysis.extentExp,
+            hasToString(("from loc in [#loc v0] "
+                + "join deptno in [#deptno v0] "
+                + "join name in [#dname v0]").replace("v0", v)));
+        assertThat(analysis.satisfiedFilters, hasSize(3));
+        assertThat(analysis.satisfiedFilters.get(0),
+            hasToString("loc = #loc v0".replace("v0", v)));
+      } else {
+        assertThat(analysis.extentExp, hasToString("depts"));
+        assertThat(analysis.satisfiedFilters, hasSize(1));
+        assertThat(analysis.satisfiedFilters.get(0), is(condition0));
+      }
       assertThat(analysis.remainingFilters, empty());
       assertThat(analysis.boundPats, anEmptyMap());
       assertThat(analysis.goalPats, is(ImmutableSet.of(loc, deptno, name)));
@@ -277,20 +288,20 @@ public class ExtentTest {
 
     // from (loc, deptno, name)
     // where op elem ({deptno = deptno, dname = name, loc = loc}, depts)
-    fn.accept(fromBuilder ->
+    fn.accept("v0", fromBuilder ->
         fromBuilder.where(condition0));
 
     // from (loc, deptno, name)
     // where op elem ({deptno = deptno, dname = name, loc = loc}, depts)
     // where deptno > 20
-    fn.accept(fromBuilder ->
+    fn.accept("v1", fromBuilder ->
         fromBuilder.where(condition0)
             .where(condition1));
 
     // from (loc, deptno, name)
     // where op elem ({deptno = deptno, dname = name, loc = loc}, depts)
     //    andalso deptno > 20
-    fn.accept(fromBuilder ->
+    fn.accept("v2", fromBuilder ->
         fromBuilder.where(
             core.andAlso(f.typeSystem, condition0, condition1)));
   }

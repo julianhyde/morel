@@ -23,6 +23,7 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
@@ -36,7 +37,9 @@ import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -98,8 +101,10 @@ class SuchThatShuttle extends Shuttle {
 
     Core.From visit(Core.From from) {
       final List<Core.FromStep> steps = from.steps;
-      final DeferredStepList deferredScans = new DeferredStepList(steps);
+      final DeferredStepList deferredScans =
+          DeferredStepList.create(typeSystem, steps);
 
+      Environment env = Environments.empty();
       for (int i = 0; i < steps.size(); i++) {
         final Core.FromStep step = steps.get(i);
         switch (step.op) {
@@ -117,9 +122,9 @@ class SuchThatShuttle extends Shuttle {
             } else {
               rewritten = rewrite1(scan, skip(steps, i));
             }
-            deferredScans.scan(scan.pat, rewritten, scan.condition);
+            deferredScans.scan(env, scan.pat, rewritten, scan.condition);
           } else {
-            deferredScans.scan(scan.pat, scan.exp);
+            deferredScans.scan(env, scan.pat, scan.exp);
           }
           break;
 
@@ -133,7 +138,7 @@ class SuchThatShuttle extends Shuttle {
           final Core.Where where = (Core.Where) step;
           Core.Exp condition =
               core.subTrue(typeSystem, where.exp, satisfiedFilters);
-          deferredScans.where(condition);
+          deferredScans.where(env, condition);
           break;
 
         case GROUP:
@@ -151,6 +156,7 @@ class SuchThatShuttle extends Shuttle {
         default:
           throw new AssertionError(step.op);
         }
+        env = Environments.empty().bindAll(step.bindings);
       }
       deferredScans.flush(fromBuilder);
       return fromBuilder.build();
@@ -196,9 +202,22 @@ class SuchThatShuttle extends Shuttle {
       satisfiedFilters.addAll(analysis.satisfiedFilters);
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
       analysis.newScans.forEach((pat, extent) -> fromBuilder.scan(pat, extent));
-      return fromBuilder
-          .scan(scan.pat, analysis.extentExp)
-          .build();
+      fromBuilder.scan(scan.pat, analysis.extentExp);
+      if (!analysis.newScans.isEmpty()) {
+        final PairList<String, Core.Id> nameExps = PairList.of();
+        for (Binding b : fromBuilder.bindings()) {
+          Core.IdPat id = (Core.IdPat) b.id;
+          if (!analysis.newScans.leftList().contains(id)) {
+            nameExps.add(id.name, core.id(id));
+          }
+        }
+        if (nameExps.size() == 1) {
+          fromBuilder.yield_(false, null, nameExps.get(0).getValue());
+        } else {
+          fromBuilder.yield_(false, null, core.record(typeSystem, nameExps));
+        }
+      }
+      return fromBuilder.build();
     }
 
     /** Rewrites a "from vars suchthat condition" expression to a
@@ -445,49 +464,59 @@ class SuchThatShuttle extends Shuttle {
    */
   static class DeferredStepList {
     final PairList<Set<Core.Pat>, Consumer<FromBuilder>> steps = PairList.of();
-    final ImmutableSet<Core.Pat> forwardRefs;
+    final FreeFinder freeFinder;
+    final List<Core.NamedPat> refs;
 
-    DeferredStepList(List<Core.FromStep> steps) {
-      forwardRefs =
+    DeferredStepList(FreeFinder freeFinder, List<Core.NamedPat> refs) {
+      this.freeFinder = freeFinder;
+      this.refs = refs;
+    }
+
+    static DeferredStepList create(TypeSystem typeSystem,
+        List<Core.FromStep> steps) {
+      final ImmutableSet<Core.Pat> forwardRefs =
           steps.stream()
               .filter(step -> step instanceof Core.Scan)
               .map(step -> ((Core.Scan) step).pat)
               .collect(toImmutableSet());
+      final List<Core.NamedPat> refs = new ArrayList<>();
+      final Consumer<Core.NamedPat> consumer = p -> {
+        if (forwardRefs.contains(p)) {
+          refs.add(p);
+        }
+      };
+      final FreeFinder freeFinder =
+          new FreeFinder(typeSystem, Environments.empty(),
+              new ArrayDeque<>(), consumer);
+      return new DeferredStepList(freeFinder, refs);
     }
 
-    void scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(exp);
+    void scan(Environment env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(env, exp);
       steps.add(unresolvedRefs, fromBuilder -> {
         fromBuilder.scan(pat, exp, condition);
         resolve(pat);
       });
     }
 
-    void scan(Core.Pat pat, Core.Exp exp) {
-      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(exp);
+    void scan(Environment env, Core.Pat pat, Core.Exp exp) {
+      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(env, exp);
       steps.add(unresolvedRefs, fromBuilder -> {
         fromBuilder.scan(pat, exp);
         resolve(pat);
       });
     }
 
-    void where(Core.Exp condition) {
-      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(condition);
+    void where(Environment env, Core.Exp condition) {
+      final Set<Core.Pat> unresolvedRefs = unresolvedRefs(env, condition);
       steps.add(unresolvedRefs,
           fromBuilder -> fromBuilder.where(condition));
     }
 
-    private Set<Core.Pat> unresolvedRefs(Core.Exp exp) {
-      Set<Core.Pat> refs = new LinkedHashSet<>();
-      exp.accept(
-          new Visitor() {
-            @Override protected void visit(Core.Id id) {
-              if (forwardRefs.contains(id.idPat)) {
-                refs.add(id.idPat);
-              }
-            }
-          });
-      return refs;
+    private Set<Core.Pat> unresolvedRefs(Environment env, Core.Exp exp) {
+      refs.clear();
+      exp.accept(freeFinder.push(env));
+      return new LinkedHashSet<>(refs);
     }
 
     /** Marks that a pattern has now been defined.
@@ -511,6 +540,27 @@ class SuchThatShuttle extends Shuttle {
         final Map.Entry<Set<Core.Pat>, Consumer<FromBuilder>> step =
             steps.remove(j);
         step.getValue().accept(fromBuilder);
+      }
+    }
+  }
+
+  /** Finds free variables in an expression. */
+  private static class FreeFinder extends EnvVisitor {
+    final Consumer<Core.NamedPat> consumer;
+
+    FreeFinder(TypeSystem typeSystem, Environment env,
+        Deque<FromContext> fromStack, Consumer<Core.NamedPat> consumer) {
+      super(typeSystem, env, fromStack);
+      this.consumer = consumer;
+    }
+
+    @Override protected EnvVisitor push(Environment env) {
+      return new FreeFinder(typeSystem, env, fromStack, consumer);
+    }
+
+    @Override protected void visit(Core.Id id) {
+      if (env.getOpt(id.idPat) == null) {
+        consumer.accept(id.idPat);
       }
     }
   }

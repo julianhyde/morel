@@ -562,8 +562,15 @@ public enum CoreBuilder {
             bindings.add(Binding.of(idPat));
           });
       break;
+
     default:
-      bindings.add(Binding.of(idPat(exp.type, typeSystem.nameGenerator)));
+      switch (exp.op) {
+      case ID:
+        bindings.add(Binding.of(((Core.Id) exp).idPat));
+        break;
+      default:
+        bindings.add(Binding.of(idPat(exp.type, typeSystem.nameGenerator)));
+      }
     }
     return yield_(bindings, exp);
   }
