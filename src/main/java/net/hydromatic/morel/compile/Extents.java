@@ -41,7 +41,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -93,7 +92,8 @@ import static java.util.Objects.requireNonNull;
 public class Extents {
   private Extents() {}
 
-  /** Returns an expression that generates the extent of a pattern.
+  /** Analyzes the extent of a pattern in an expression and creates an
+   * {@link Analysis}.
    *
    * <p>For example, given the program
    *
@@ -101,7 +101,7 @@ public class Extents {
    *   let
    *     fun f i = i elem [1, 2, 4]
    *   in
-   *     from x suchthat f x
+   *     from x where f x
    *   end
    * }</pre></blockquote>
    *
@@ -114,7 +114,8 @@ public class Extents {
    *     val edges = [(1, 2), (2, 3), (1, 4), (4, 2), (4, 3)]
    *     fun edge (i, j) = (i, j) elem edges
    *   in
-   *     from (x, y, z) suchthat edge (x, y) andalso edge (y, z) andalso x <> z
+   *     from x, y, z
+   *     where edge (x, y) andalso edge (y, z) andalso x <> z
    *   end
    * }</pre></blockquote>
    *
@@ -137,28 +138,13 @@ public class Extents {
    *   z in (from e in edges group e.j)
    * }</pre></blockquote>
    */
-  // TODO: move this method to the test suite
-  public static Core.Exp generator(TypeSystem typeSystem, Core.Pat pat,
-      Core.@Nullable Exp extentExp, Core.@Nullable Exp filterExp,
-      List<? extends Core.FromStep> followingSteps) {
-    final Analysis analysis =
-        create(typeSystem, pat, ImmutableSortedMap.of(), extentExp, filterExp,
-            followingSteps);
-    return analysis.extentExp;
-  }
-
-  /** Analyzes an expression and creates an {@link Analysis}. */
   public static Analysis create(TypeSystem typeSystem, Core.Pat pat,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
-      Core.@Nullable Exp extentExp, Core.@Nullable Exp filterExp,
       Iterable<? extends Core.FromStep> followingSteps) {
     final Extent extent = new Extent(typeSystem, pat, boundPats);
     final List<Core.Exp> remainingFilters = new ArrayList<>();
 
     final ExtentMap map = new ExtentMap();
-    if (filterExp != null) {
-      extent.g3(map.map, filterExp);
-    }
     for (Core.FromStep step : followingSteps) {
       if (step instanceof Core.Where) {
         extent.g3(map.map, ((Core.Where) step).exp);
@@ -251,7 +237,7 @@ public class Extents {
                       skip(from.steps, step.i + 1);
                   final Analysis analysis =
                       create(typeSystem, scan.pat, ImmutableSortedMap.of(),
-                          scan.exp, null, followingSteps);
+                          followingSteps);
                   for (Core.FromStep step2 : from.steps) {
                     if (step2 == scan) {
                       fromBuilder.scan(scan.pat, analysis.extentExp,

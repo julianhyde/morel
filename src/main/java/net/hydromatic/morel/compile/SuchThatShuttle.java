@@ -54,6 +54,7 @@ import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.skip;
+import static net.hydromatic.morel.util.Static.transform;
 
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Iterables.getOnlyElement;
@@ -197,8 +198,8 @@ class SuchThatShuttle extends Shuttle {
     private Core.From rewrite1(Core.Scan scan,
         List<? extends Core.FromStep> laterSteps) {
       final Extents.Analysis analysis =
-          Extents.create(typeSystem, scan.pat, ImmutableSortedMap.of(), null,
-              null, laterSteps);
+          Extents.create(typeSystem, scan.pat, ImmutableSortedMap.of(),
+              laterSteps);
       satisfiedFilters.addAll(analysis.satisfiedFilters);
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
       analysis.newScans.forEach((pat, extent) -> fromBuilder.scan(pat, extent));
@@ -262,8 +263,8 @@ class SuchThatShuttle extends Shuttle {
         final PairList<String, Core.Exp> nameExps = PairList.of();
         if (scans.isEmpty()) {
           final Extents.Analysis extent =
-              Extents.create(typeSystem, scan.pat, boundPats2, scan.exp,
-                  core.andAlso(typeSystem, filters), ImmutableList.of());
+              Extents.create(typeSystem, scan.pat, boundPats2,
+                  transform(filters, f -> core.where(ImmutableList.of(), f)));
           final Set<Core.NamedPat> unboundPats = extent.unboundPats();
           if (!unboundPats.isEmpty()) {
             throw new RewriteFailedException("Cannot implement 'suchthat'; "

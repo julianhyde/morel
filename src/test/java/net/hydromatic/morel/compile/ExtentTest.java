@@ -38,7 +38,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.compile.Extents.generator;
 
 import static org.apache.calcite.linq4j.tree.Expressions.list;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -93,6 +92,13 @@ public class ExtentTest {
     void checkSubTrue(Core.Exp exp, List<Core.Exp> exps, String s) {
       final Core.Exp exp2 = core.subTrue(typeSystem, exp, exps);
       assertThat(exp2, hasToString(s));
+    }
+
+    Core.Exp extent(Core.Pat pat, Core.Exp filterExp) {
+      final Extents.Analysis analysis =
+          Extents.create(typeSystem, pat, ImmutableSortedMap.of(),
+              ImmutableList.of(core.where(ImmutableList.of(), filterExp)));
+      return analysis.extentExp;
     }
   }
 
@@ -149,12 +155,12 @@ public class ExtentTest {
     Core.IdPat xPat = core.idPat(PrimitiveType.INT, "x", 0);
     Core.Literal ten = f.intLiteral(10);
     Core.Exp exp = core.equal(f.typeSystem, core.id(xPat), ten);
-    Core.Exp x = generator(f.typeSystem, xPat, null, exp, ImmutableList.of());
+    Core.Exp x = f.extent(xPat, exp);
     assertThat(x, hasToString("[10]"));
 
     // pat = "x", exp = "10 = x", extent = "[10]"
     Core.Exp exp2 = core.equal(f.typeSystem, ten, core.id(xPat));
-    Core.Exp x2 = generator(f.typeSystem, xPat, null, exp2, ImmutableList.of());
+    Core.Exp x2 = f.extent(xPat, exp2);
     assertThat(x2, hasToString("[10]"));
   }
 
@@ -177,14 +183,14 @@ public class ExtentTest {
         core.andAlso(f.typeSystem, exp0,
             core.andAlso(f.typeSystem, exp1,
                 core.andAlso(f.typeSystem, exp2, exp3)));
-    Core.Exp x = generator(f.typeSystem, xPat, null, exp, ImmutableList.of());
+    Core.Exp x = f.extent(xPat, exp);
     assertThat(x, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) x).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) x).fn).unwrap(BuiltIn.class),
         is(BuiltIn.Z_EXTENT));
     assertThat(x, hasToString("extent \"int {/=[[3..5), (5..10)]}\""));
 
-    Core.Exp y = generator(f.typeSystem, yPat, null, exp, ImmutableList.of());
+    Core.Exp y = f.extent(yPat, exp);
     assertThat(y, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) y).fn, instanceOf(Core.Literal.class));
     assertThat(((Core.Literal) ((Core.Apply) y).fn).unwrap(BuiltIn.class),
@@ -265,7 +271,7 @@ public class ExtentTest {
       action.accept(fromBuilder);
 
       Extents.Analysis analysis =
-          Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(), null, null,
+          Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(),
               fromBuilder.build().steps);
       assertThat(analysis, notNullValue());
       if ("".isEmpty()) {
@@ -330,7 +336,7 @@ public class ExtentTest {
     fromBuilder.where(core.andAlso(f.typeSystem, condition0, condition1));
 
     Extents.Analysis analysis =
-        Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(), null, null,
+        Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(),
             fromBuilder.build().steps);
     assertThat(analysis, notNullValue());
     assertThat(analysis.extentExp,
