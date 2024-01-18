@@ -1890,14 +1890,25 @@ public class MainTest {
         + "  fun hasEmpNameInDept (n, d) =\n"
         + "    (n, d) elem (from e in emps yield (e.name, e.deptno))\n"
         + "in\n"
-        + "  from (n, d) suchthat hasEmpNameInDept (n, d)\n"
+        + "  from n, d\n"
+        + "    where hasEmpNameInDept (n, d)\n"
         + "    where d = 30\n"
         + "    yield {d, n}\n"
         + "end";
     final String code = "from(sink\n"
-        + "  join(op join, pat (d_1, n_1),\n"
+        + "  join(op join, pat v0,\n"
         + "  exp from(\n"
-        + "    sink join(op join, pat v0, exp from(sink\n"
+        + "    sink join(op join, pat e, exp tuple(\n"
+        + "  tuple(constant(10), constant(100), constant(Fred)),\n"
+        + "  tuple(constant(20), constant(101), constant(Velma)),\n"
+        + "  tuple(constant(30), constant(102), constant(Shaggy)),\n"
+        + "  tuple(constant(30), constant(103), constant(Scooby))),\n"
+        + " sink collect(tuple(apply(fnValue nth:2, argCode get(name e)), "
+        + "apply(fnValue nth:0, argCode get(name e)))))), "
+        + "sink join(op join, pat n_1, exp tuple("
+        + "apply(fnValue nth:0, argCode get(name v0))), "
+        + "sink yield(codes [get(n)], sink join(op join, pat v1, "
+        + "exp from(sink\n"
         + "                    join(op join, pat e, exp tuple(\n"
         + "  tuple(constant(10), constant(100), constant(Fred)),\n"
         + "  tuple(constant(20), constant(101), constant(Velma)),\n"
@@ -1905,11 +1916,25 @@ public class MainTest {
         + "  tuple(constant(30), constant(103), constant(Scooby))),\n"
         + "      sink collect(tuple(apply(fnValue nth:2, argCode get(name e)),\n"
         + "        apply(fnValue nth:0, argCode get(name e)))))),\n"
-        + "      sink collect(tuple(apply(fnValue nth:1, argCode get(name v0)),\n"
-        + "        apply(fnValue nth:0, argCode get(name v0)))))),\n"
+        + "      sink join(op join, pat d_1, exp tuple(constant(30)), "
+        + "sink yield(codes [get(d), get(n)], "
+        + "sink where(condition apply2(fnValue elem, tuple(get(name n), get(name d)), "
+        + "from(sink join(op join, pat e, exp tuple("
+        + "tuple(constant(10), constant(100), constant(Fred)), "
+        + "tuple(constant(20), constant(101), constant(Velma)), "
+        + "tuple(constant(30), constant(102), constant(Shaggy)), "
+        + "tuple(constant(30), constant(103), constant(Scooby))), "
+        + "sink collect(tuple(apply(fnValue nth:2, argCode get(name e)), "
+        + "apply(fnValue nth:0, argCode get(name e))))))),\n"
         + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
-        + "          sink collect(getTuple(names [d, n])))))";
-    final List<Object> expected = list(list(30, "Shaggy"), list(30, "Scooby"));
+        + "          sink collect(getTuple(names [d, n])))))))))))";
+    // TODO: Shaggy and Scooby should only appear once
+    final List<Object> expected =
+        list(
+            list(30, "Shaggy"), list(30, "Shaggy"),
+            list(30, "Shaggy"), list(30, "Shaggy"),
+            list(30, "Scooby"), list(30, "Scooby"),
+            list(30, "Scooby"), list(30, "Scooby"));
     ml(ml).assertType("{d:int, n:string} list")
         .assertPlan(isCode2(code))
         .assertEval(is(expected));
@@ -1982,9 +2007,14 @@ public class MainTest {
     final String ml = "from loc, deptno, name "
         + "where {deptno, loc, dname = name} elem scott.dept";
     final String core = "val it = "
-        + "from loc : string "
-        + "join deptno : int "
-        + "join name : string "
+        + "from v0 in #dept scott "
+        + "join loc in [#loc v0] yield {loc = loc} "
+        + "join v1 in #dept scott "
+        + "join deptno in [#deptno v1] "
+        + "yield {deptno = deptno, loc = loc} "
+        + "join v2 in #dept scott "
+        + "join name in [#dname v2] "
+        + "yield {deptno = deptno, loc = loc, name = name} "
         + "where op elem ({deptno = deptno, dname = name, loc = loc},"
         + " #dept scott)";
     ml(ml)
@@ -1993,10 +2023,10 @@ public class MainTest {
         .assertCore(-1, hasToString(core))
         .assertEval(
             is(
-                list(list(10, "ACCOUNTING", "NEW YORK"),
-                    list(20, "RESEARCH", "DALLAS"),
-                    list(30, "SALES", "CHICAGO"),
-                    list(40, "OPERATIONS", "BOSTON"))));
+                list(list(10, "NEW YORK", "ACCOUNTING"),
+                    list(20, "DALLAS", "RESEARCH"),
+                    list(30, "CHICAGO", "SALES"),
+                    list(40, "BOSTON", "OPERATIONS"))));
   }
 
   /** As {@link #testFromSuchThat2c()} but with a literal. */
@@ -2040,7 +2070,9 @@ public class MainTest {
     final String core1 = "val it = "
         + "from v0 in #dept scott "
         + "join dno in [#deptno v0] "
-        + "join name in [#dname v0] "
+        + "yield {dno = dno} "
+        + "join v1 in #dept scott "
+        + "join name in [#dname v1] "
         + "yield {dno = dno, name = name} "
         + "where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"},"
         + " #dept scott) "

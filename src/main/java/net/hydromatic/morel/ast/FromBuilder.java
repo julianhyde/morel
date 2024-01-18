@@ -158,7 +158,12 @@ public class FromBuilder {
                 && ((Core.TuplePat) pat).args.stream()
                     .allMatch(a -> a instanceof Core.IdPat))) {
       final Core.From from = (Core.From) exp;
+      final Core.FromStep lastStep = getLast(from.steps);
+      final List<Core.FromStep> steps =
+          lastStep.op == Op.YIELD ? Util.skipLast(from.steps) : from.steps;
+
       final PairList<String, Core.Exp> nameExps = PairList.of();
+      boolean uselessIfLast = this.bindings.isEmpty();
       final List<Binding> bindings;
       if (pat instanceof Core.RecordPat) {
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
@@ -168,47 +173,42 @@ public class FromBuilder {
         bindings = null;
       } else if (pat instanceof Core.TuplePat) {
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-        final List<Binding> lastBindings =
-            getLast(((Core.From) exp).steps).bindings;
-        Pair.forEach(tuplePat.args, lastBindings, (arg, binding) -> {
-          nameExps.add(((Core.IdPat) arg).name,
-              core.id(binding.id));
-        });
+        Pair.forEach(tuplePat.args, lastStep.bindings,
+            (arg, binding) ->
+                nameExps.add(((Core.IdPat) arg).name, core.id(binding.id)));
         bindings = null;
       } else if (!this.bindings.isEmpty()) {
         // With at least one binding, and one new variable, the output will be
         // a record type.
         final Core.IdPat idPat = (Core.IdPat) pat;
-        final Core.FromStep lastStep = getLast(from.steps);
         this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         lastStep.bindings.forEach(b -> nameExps.add(idPat.name, core.id(b.id)));
         bindings = null;
       } else {
         final Core.IdPat idPat = (Core.IdPat) pat;
-        final Core.FromStep lastStep = getLast(from.steps);
         if (lastStep instanceof Core.Yield
             && ((Core.Yield) lastStep).exp.op != Op.RECORD) {
           // The last step is a yield scalar, say 'yield x + 1'.
           // Translate it to a yield singleton record, say 'yield {y = x + 1}'
-          addAll(Util.skipLast(from.steps));
-          if (((Core.Yield) lastStep).exp.op == Op.ID) {
+          addAll(steps);
+          if (((Core.Yield) lastStep).exp.op == Op.ID
+              && this.bindings.size() == 1) {
             // The last step is 'yield e'. Skip it.
             return this;
           }
           nameExps.add(idPat.name, ((Core.Yield) lastStep).exp);
           bindings = ImmutableList.of(Binding.of(idPat));
-          return yield_(true, bindings, core.record(typeSystem, nameExps));
+          return yield_(false, bindings, core.record(typeSystem, nameExps));
         }
         final Binding binding = Iterables.getOnlyElement(lastStep.bindings);
         nameExps.add(idPat.name, core.id(binding.id));
         bindings = append(this.bindings, Binding.of(idPat));
       }
-      addAll(from.steps);
+      addAll(steps);
       if (true) { // TODO
-        return yield_(true, bindings, core.record(typeSystem, nameExps));
+        return yield_(uselessIfLast, bindings, core.record(typeSystem, nameExps));
       }
       final Core.Exp record;
-      boolean uselessIfLast = true;
       if (pat instanceof Core.TuplePat) {
         uselessIfLast = true;
 //          nameExps.leftList().equals(
