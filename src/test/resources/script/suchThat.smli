@@ -46,32 +46,30 @@ from i suchthat i > 0 andalso i < 10,
 >    {b=true,i=6},{b=false,i=7},{b=true,i=8},{b=false,i=9}]
 >   : {b:bool, i:int} list
 
-(* TODO
-from (dno, name)
+from (dno, name, loc)
 suchthat {deptno = dno, dname = name, loc} elem scott.dept
   andalso dno > 20;
-*)
+> val it =
+>   [{dno=30,loc="CHICAGO",name="SALES"},{dno=40,loc="BOSTON",name="OPERATIONS"}]
+>   : {dno:int, loc:string, name:string} list
 
 (*) As previous but with a literal in the record.
-(* TODO
 from (dno, name)
 suchthat {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.dept
   andalso dno > 20;
-*)
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
 
 (*) Equivalent to previous, rephrasing 'suchthat' as 'where'
-(* TODO
-from (dno, name)
+from dno, name
 where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.dept
   andalso dno > 20;
-*)
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
 
 (*) Equivalent to previous, splitting 'where'
-(* TODO
-from (dno, name)
+from dno, name
 where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.dept
 where dno > 20;
-*)
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
 
 (*) Variables 'dno', 'name' are infinite until constrained by conditions.
 from v, dno, name
@@ -292,21 +290,17 @@ val edges = [
 > val edges = [{x=1,y=2},{x=2,y=3}] : {x:int, y:int} list
 fun edge (x, y) = {x, y} elem edges;
 > val edge = fn : int * int -> bool
-(*
+(* TODO
 fun path (x, y) =
   edge (x, y)
   orelse exists (
     from z suchthat path (x, z) andalso edge (z, y));
+> val path = fn : int * int -> bool
 *)
-(* TODO should return
-val path = fn : int * int -> bool
- *)
-(*
+(* TODO
 from p suchthat path p;
+> val it = [(1,2),(2,3),(1,3)] : (int * int) list
 *)
-(* TODO should return
-val it = [(1,2),(2,3),(1,3)] : (int * int) list
- *)
 
 (* More edges *)
 (*
@@ -398,35 +392,31 @@ fun sells (bar, beer, price) =
  * Datalog:
  *    Happy(p) <- Frequents(p, bar) AND Likes(p, beer) AND Sells(bar, beer)
  *)
-(*
+(* TODO
 fun happy patron =
   exists (
     from (bar, beer, price) suchthat frequents (patron, bar)
       andalso likes (patron, beer)
       andalso sells (bar, beer, price));
+> val happy = fn : string -> bool
 *)
-(* TODO should return
-val happy = fn : string -> bool
- *)
 
 (* Find happy patrons. Shaggy is happy because the Squirrel and Cask sell
    Amber; Velma is happy because Cask sells Stout. Fred and Scooby are not
    happy. *)
-(*
+(* TODO
 from p suchthat happy p;
+> val it = ["shaggy", "velma"] : string list
 *)
-(* TODO should return
-val it = ["shaggy", "velma"] : string list
- *)
 
 (* A beer is considered cheap if there are at least two bars that sell it for
  * under $3.
-
+ *
  * Datalog:
  *   Cheap(beer) <- Sells(bar1, beer, p1) AND Sells(bar2, beer, p2)
  *     AND p1 < 3 AND p2 < 3 AND bar1 <> bar2
  *)
-(*
+(* TODO
 fun cheap beer =
   exists (
     from (bar1, price1, bar2, price2)
@@ -435,25 +425,22 @@ fun cheap beer =
         andalso price1 < 3
         andalso price2 < 3
         andalso bar1 <> bar2);
+> val cheap = fn : string -> bool
 *)
-(* TODO should return
-val cheap = fn : string -> bool
- *)
 
 (*) Pale is cheap
-(*
+(* TODO
 from b suchthat cheap b;
+> val it = ["pale"] : string list
 *)
-(* TODO should return
-val it = ["pale"] : string list
- *)
 
 (* A rule is safe if:
  * 1. Each distinguished variable,
  * 2. Each variable in an arithmetic subgoal, and
  * 3. Each variable in a negated subgoal,
  *
- *  also appears in a non-negated, relational sub-goal.
+ * also appears in a non-negated, relational sub-goal.
+ *
  * Each of the following is unsafe and not allowed:
  *
  * 1. S(x) <- R(y)
@@ -471,38 +458,36 @@ val it = ["pale"] : string list
  *)
 fun isR y = true;
 > val isR = fn : 'a -> bool
-(*
+(* TODO
 fun isS1 x = exists (from y suchthat isR y);
+> val isS1 = fn : 'a -> bool
 *)
-(* TODO should return
-val isS1 = fn : 'a -> bool
- *)
 
 (*) isS1 is unsafe
-(*
+(* TODO should throw unsafe
 from x suchthat isS1 x;
+> Unsafe
 *)
-(*) TODO should throw unsafe
 
 (*
 fun isS2 x = exists (from y suchthat isR y andalso not (isR x));
 *)
 
 (*) isS2 is unsafe
-(*
+(* TODO should throw unsafe
 from x suchthat isS2 x;
+> Unsafe
 *)
-(*) TODO should throw unsafe
 
 (*
 fun isS3 x = exists (from y suchthat isR y andalso x < y);
 *)
 
 (*) isS3 is unsafe
-(*
+(* TODO should throw unsafe
 from x suchthat isS3 x;
+> Unsafe
 *)
-(*) TODO should throw unsafe
 
 (* Example Datalog Program. Using EDB Sells (bar, beer, price) and
  * Likes (patron, beer), find the patrons who like beers Joe doesn't sell.
@@ -512,20 +497,17 @@ from x suchthat isS3 x;
  *   Answer(p) <- Likes(p, b)
  *     AND NOT JoeSells(b)
  *)
-(*
+(* TODO
 fun caskSells b =
   exists (from (beer, price) suchthat sells ("cask", beer, price));
+> val caskSells = fn : 'a -> bool
 *)
-(* TODO should return
-val caskSells = fn : 'a -> bool
- *)
-(*
+
+(* TODO
 from p suchthat exists (
   from b suchthat likes (p, b) andalso not (caskSells b));
+> val it = ["foo"] : string list
 *)
-(* TODO should return something like
-val it = ["foo"] : string list
- *)
 
 (* Cousin
  *
@@ -548,24 +530,20 @@ fun par (x, p) =
     ("g", "k"),
     ("h", "i")];
 > val par = fn : string * string -> bool
-(*
+(* TODO
 fun sib (x, y) = exists (
   from p suchthat par (x, p) andalso par (y, p) andalso x <> y);
+> val sib = fn : string * string -> bool
 *)
-(* TODO should return
-val sib = fn : string * string -> bool
- *)
 
-(*
+(* TODO
 fun cousin (x, y) = sib (x, y)
   orelse exists (
     from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin (xp, yp));
+> val cousin = fn : string * string -> bool
 *)
-(* TODO should return
-val cousin = fn : string * string -> bool
- *)
 
 (*
  Round 1: (b, c), (c, e), (g, h), (j, k)
@@ -573,38 +551,34 @@ val cousin = fn : string * string -> bool
  Round 3: add (f, g), (f, h), (g, i), (i, k)
  Round 4: add (i, j), (k, k)
  *)
-(*
+(* TODO
 enumerate sib;
+> val it = [("b","c")] : (string * string) list
 *)
-(* TODO return something like
-val it = [("b","c")] : (string * string) list
- *)
+
 (*
 enumerate cousin;
+> val it = [("b","c"), ("c","e"),("g","h"),("j","k"),("f","g"),("f","h"),("g","i"),("i","k"),("i","j"),("k","k")] : (string * string) list
 *)
-(* TODO return something like
-val it = [("b","c"), ("c","e"),("g","h"),("j","k"),("f","g"),("f","h"),("g","i"),("i","k"),("i","j"),("k","k")] : (string * string) list
- *)
 
 (* Nonmonotone relation.
  * 'cousin2' is as 'cousin', but 'orelse' has become 'and not'.
  * The graph is not stratified: there is a path with an infinite number
  * of 'not' as we traverse the cycle cousin - s2 - cousin,
  * where s2 is the expression 'notExists (...)'. *)
-(*
+(* TODO
 fun cousin2 (x, y) = sib (x, y)
   andalso notExists (
     from (xp, yp) suchthat par (x, xp)
       andalso par (y, yp)
       andalso cousin2 (xp, yp));
+> val cousin2 = fn : string * string -> bool
 *)
-(* TODO should return
-val cousin2 = fn : string * string -> bool
- *)
-(*
+
+(* TODO
 enumerate cousin2;
+> Error: non-stratified
 *)
-(*) TODO: maybe give error: non-stratified
 
 (*
  * Coloring Australia using three colors.
