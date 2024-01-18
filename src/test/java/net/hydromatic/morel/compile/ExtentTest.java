@@ -25,6 +25,7 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
@@ -97,7 +98,8 @@ public class ExtentTest {
     Core.Exp extent(Core.Pat pat, Core.Exp filterExp) {
       final Extents.Analysis analysis =
           Extents.create(typeSystem, pat, ImmutableSortedMap.of(),
-              ImmutableList.of(core.where(ImmutableList.of(), filterExp)));
+              ImmutableList.of(core.where(ImmutableList.of(), filterExp)),
+              ImmutablePairList.of());
       return analysis.extentExp;
     }
   }
@@ -270,9 +272,10 @@ public class ExtentTest {
       // Apply one of the variants of 'where' clause
       action.accept(fromBuilder);
 
+      final PairList<Core.IdPat, Core.Exp> idPats = PairList.of();
       Extents.Analysis analysis =
           Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(),
-              fromBuilder.build().steps);
+              fromBuilder.build().steps, idPats);
       assertThat(analysis, notNullValue());
       if ("".isEmpty()) {
         assertThat(analysis.extentExp,
@@ -290,6 +293,8 @@ public class ExtentTest {
       assertThat(analysis.remainingFilters, empty());
       assertThat(analysis.boundPats, anEmptyMap());
       assertThat(analysis.goalPats, is(ImmutableSet.of(loc, deptno, name)));
+      assertThat(idPats, hasSize(1));
+      assertThat(idPats.leftList().get(0), hasToString(v));
     };
 
     // from (loc, deptno, name)
@@ -335,12 +340,15 @@ public class ExtentTest {
             core.intLiteral(BigDecimal.valueOf(20)));
     fromBuilder.where(core.andAlso(f.typeSystem, condition0, condition1));
 
+    final PairList<Core.IdPat, Core.Exp> idPats = PairList.of();
     Extents.Analysis analysis =
         Extents.create(f.typeSystem, pat, ImmutableSortedMap.of(),
-            fromBuilder.build().steps);
+            fromBuilder.build().steps, idPats);
     assertThat(analysis, notNullValue());
     assertThat(analysis.extentExp,
         hasToString("from dno in [#deptno v0] join name in [#dname v0]"));
+    assertThat(idPats, hasSize(1));
+    assertThat(idPats.leftList().get(0), hasToString("v0"));
   }
 }
 

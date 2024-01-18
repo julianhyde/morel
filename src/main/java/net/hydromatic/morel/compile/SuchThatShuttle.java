@@ -26,6 +26,7 @@ import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
@@ -54,7 +55,7 @@ import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.skip;
-import static net.hydromatic.morel.util.Static.transform;
+import static net.hydromatic.morel.util.Static.transformEager;
 
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Iterables.getOnlyElement;
@@ -197,18 +198,19 @@ class SuchThatShuttle extends Shuttle {
 
     private Core.From rewrite1(Core.Scan scan,
         List<? extends Core.FromStep> laterSteps) {
+      final PairList<Core.IdPat, Core.Exp> idPats = PairList.of();
       final Extents.Analysis analysis =
           Extents.create(typeSystem, scan.pat, ImmutableSortedMap.of(),
-              laterSteps);
+              laterSteps, idPats);
       satisfiedFilters.addAll(analysis.satisfiedFilters);
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-      analysis.newScans.forEach((pat, extent) -> fromBuilder.scan(pat, extent));
+      idPats.forEach((pat, extent) -> fromBuilder.scan(pat, extent));
       fromBuilder.scan(scan.pat, analysis.extentExp);
-      if (!analysis.newScans.isEmpty()) {
+      if (!idPats.isEmpty()) {
         final PairList<String, Core.Id> nameExps = PairList.of();
         for (Binding b : fromBuilder.bindings()) {
           Core.IdPat id = (Core.IdPat) b.id;
-          if (!analysis.newScans.leftList().contains(id)) {
+          if (!idPats.leftList().contains(id)) {
             nameExps.add(id.name, core.id(id));
           }
         }
@@ -264,7 +266,9 @@ class SuchThatShuttle extends Shuttle {
         if (scans.isEmpty()) {
           final Extents.Analysis extent =
               Extents.create(typeSystem, scan.pat, boundPats2,
-                  transform(filters, f -> core.where(ImmutableList.of(), f)));
+                  transformEager(filters,
+                      f -> core.where(ImmutableList.of(), f)),
+                  ImmutablePairList.of());
           final Set<Core.NamedPat> unboundPats = extent.unboundPats();
           if (!unboundPats.isEmpty()) {
             throw new RewriteFailedException("Cannot implement 'suchthat'; "

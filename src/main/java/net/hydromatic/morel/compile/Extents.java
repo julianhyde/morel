@@ -140,8 +140,9 @@ public class Extents {
    */
   public static Analysis create(TypeSystem typeSystem, Core.Pat pat,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
-      Iterable<? extends Core.FromStep> followingSteps) {
-    final Extent extent = new Extent(typeSystem, pat, boundPats);
+      Iterable<? extends Core.FromStep> followingSteps,
+      PairList<Core.IdPat, Core.Exp> idPats) {
+    final Extent extent = new Extent(typeSystem, pat, boundPats, idPats);
     final List<Core.Exp> remainingFilters = new ArrayList<>();
 
     final ExtentMap map = new ExtentMap();
@@ -237,7 +238,7 @@ public class Extents {
                       skip(from.steps, step.i + 1);
                   final Analysis analysis =
                       create(typeSystem, scan.pat, ImmutableSortedMap.of(),
-                          followingSteps);
+                          followingSteps, ImmutablePairList.of());
                   for (Core.FromStep step2 : from.steps) {
                     if (step2 == scan) {
                       fromBuilder.scan(scan.pat, analysis.extentExp,
@@ -339,7 +340,6 @@ public class Extents {
   public static class Analysis {
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
     final Set<Core.NamedPat> goalPats;
-    final PairList<Core.IdPat, Core.Exp> newScans;
     final Core.Exp extentExp;
     final List<Core.Exp> satisfiedFilters; // filters satisfied by extentExp
     final List<Core.Exp> remainingFilters;
@@ -350,7 +350,6 @@ public class Extents {
         List<Core.Exp> remainingFilters) {
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
       this.goalPats = ImmutableSet.copyOf(goalPats);
-      this.newScans = newScans.immutable();
       this.extentExp = extentExp;
       this.satisfiedFilters = ImmutableList.copyOf(satisfiedFilters);
       this.remainingFilters = ImmutableList.copyOf(remainingFilters);
@@ -365,7 +364,11 @@ public class Extents {
     private final TypeSystem typeSystem;
     final Set<Core.NamedPat> goalPats;
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
-    final PairList<Core.IdPat, Core.Exp> idPats = PairList.of();
+
+    /** New variables introduced as scans over an existing relation (list of
+     * records). Other variables, which are goals of this extent, are typically
+     * fields of this variable. */
+    final PairList<Core.IdPat, Core.Exp> idPats;
 
     /** Contains definitions, such as "name = d.dname".
      * With such a definition, "name" won't need an extent, because we
@@ -373,10 +376,12 @@ public class Extents {
     final Map<Core.NamedPat, Core.Exp> definitions = new HashMap<>();
 
     Extent(TypeSystem typeSystem, Core.Pat pat,
-        SortedMap<Core.NamedPat, Core.Exp> boundPats) {
+        SortedMap<Core.NamedPat, Core.Exp> boundPats,
+        PairList<Core.IdPat, Core.Exp> idPats) {
       this.typeSystem = typeSystem;
       this.goalPats = ImmutableSet.copyOf(flatten(pat));
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
+      this.idPats = idPats;
     }
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
@@ -582,6 +587,10 @@ public class Extents {
     }
 
     private Core.IdPat createId(Type type, Core.Exp extent) {
+      int i = idPats.firstMatch((id, e) -> extent.equals(e));
+      if (i >= 0) {
+        return idPats.leftList().get(i);
+      }
       final Core.IdPat idPat = core.idPat(type, typeSystem.nameGenerator);
       idPats.add(idPat, extent);
       return idPat;

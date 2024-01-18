@@ -362,7 +362,7 @@ public class Compiler {
       final Core.Scan scan2 = (Core.Scan) firstStep;
       final Extents.Analysis extentFilter =
           Extents.create(typeSystem, scan2.pat, ImmutableSortedMap.of(),
-              ImmutableList.of());
+              ImmutableList.of(), ImmutablePairList.of());
       final FnType fnType =
           typeSystem.fnType(scan2.pat.type, PrimitiveType.BOOL);
       final Pos pos = Pos.ZERO;
