@@ -61,7 +61,20 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Iterables.getOnlyElement;
 
 /**
- * Converts {@code suchThat} to {@code in} wherever possible.
+ * Converts unbounded variables to bounded variables.
+ *
+ * <p>For example, converts
+ *
+ * <blockquote><pre>{@code
+ * from e
+ *   where e elem #dept scott
+ * }</pre></blockquote>
+ *
+ * <p>to
+ *
+ * <blockquote><pre>{@code
+ * from e in #dept scott
+ * }</pre></blockquote>
  */
 class SuchThatShuttle extends Shuttle {
   final @Nullable Environment env;
@@ -71,7 +84,7 @@ class SuchThatShuttle extends Shuttle {
     this.env = env;
   }
 
-  static boolean containsSuchThat(Core.Decl decl) {
+  static boolean containsUnbounded(Core.Decl decl) {
     final Holder<Boolean> found = Holder.of(false);
     decl.accept(new Visitor() {
       @Override protected void visit(Core.Scan scan) {
@@ -89,8 +102,8 @@ class SuchThatShuttle extends Shuttle {
     return from2.equals(from) ? from : from2;
   }
 
-  /** Workspace for converting a particular {@link Core.From} from "suchthat"
-   * to "in" form. */
+  /** Workspace for converting unbounded variables in a particular
+   * {@link Core.From} to bounded scans. */
   static class FromVisitor {
     final TypeSystem typeSystem;
     final FromBuilder fromBuilder;
@@ -240,20 +253,21 @@ class SuchThatShuttle extends Shuttle {
       return fromBuilder.build();
     }
 
-    /** Rewrites a "from vars suchthat condition" expression to a
-     * "from vars in list" expression; returns null if no rewrite is possible.
+    /** Rewrites a "from var where condition" expression to a
+     * "from var in list" expression; returns null if no rewrite is possible.
      *
      * <p>The "filters" argument contains a list of conditions to be applied
      * after generating rows. For example,
-     * "from x suchthat x % 2 = 1 and x elem list"
+     * "from x where x % 2 = 1 andalso x elem list"
      * becomes "from x in list where x % 2 = 1" with the filter "x % 2 = 1".
      *
      * <p>The "scans" argument contains scans to be added. For example,
-     * "from x suchthat x elem list" adds the scan "(x, list)".
+     * "from x where x elem list" adds the scan "(x, list)".
      *
      * <p>The "boundPats" argument contains expressions that are bound to
-     * variables. For example, "from (x, y) suchthat (x, y) elem list"
-     * will add the scan "(e, list)" and boundPats [(x, #1 e), (y, #2 e)].
+     * variables. For example, "from x, y where (x, y) elem list" will add the
+     * scan "(v0, list)" and boundPats [(x, #1 v0), (y, #2 v0)], as if the user
+     * had written "from v0 in list yield {x = #1 v0, y = #2 v0}".
      *
      * @param mapper Renames variables
      * @param boundPats Variables that have been bound to a list
@@ -288,7 +302,7 @@ class SuchThatShuttle extends Shuttle {
                   ImmutablePairList.of());
           final Set<Core.NamedPat> unboundPats = extent.unboundPats();
           if (!unboundPats.isEmpty()) {
-            throw new RewriteFailedException("Cannot implement 'suchthat'; "
+            throw new RewriteFailedException("Cannot implement; "
                 + "variables " + unboundPats + " are not grounded" + "]");
           }
           boundPats2.forEach((p, e) -> {
@@ -372,10 +386,10 @@ class SuchThatShuttle extends Shuttle {
         List<Core.Exp> filters, Core.Exp a0,
         Core.Exp a1, List<Core.Exp> exps2) {
       if (a0.op == Op.ID) {
-        // from ... v suchthat (v elem list)
+        // from ... v where (v elem list)
         final Core.IdPat idPat = (Core.IdPat) ((Core.Id) a0).idPat;
         if (!boundPats.containsKey(idPat)) {
-          // "from a, b, c suchthat (b in list-valued-expression)"
+          // "from a, b, c where (b in list-valued-expression)"
           //  --> remove b from unbound
           //     add (b, scans.size) to bound
           //     add list to scans
@@ -391,10 +405,10 @@ class SuchThatShuttle extends Shuttle {
           return rewrite(scan, mapper, boundPats, scans, filters2, exps2);
         }
       } else if (a0.op == Op.TUPLE) {
-        // from v, w, x suchthat ((v, w, x) elem list)
-        //  -->
-        //  from e suchthat (e elem list)
-        //    yield (e.v, e.w, e.x)
+        // from v, w, x where ((v, w, x) elem list)
+        //   -->
+        // from e in list
+        //   yield {e.v, e.w, e.x}
         final Core.Tuple tuple = (Core.Tuple) a0;
         final Core.IdPat idPat =
             core.idPat(((ListType) a1.type).elementType,

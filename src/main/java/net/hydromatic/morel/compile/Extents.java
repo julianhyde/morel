@@ -76,8 +76,10 @@ import static java.util.Objects.requireNonNull;
  *     fun isOdd i = i % 2 = 0
  *   in
  *     from e in emps,
- *         i suchthat isOdd i andalso i < 100
- *       where i = e.deptno
+ *         i
+ *       where isOdd i
+ *         andalso i < 100
+ *         andalso i = e.deptno
  *   end
  * }</pre></blockquote>
  *
@@ -86,7 +88,8 @@ import static java.util.Objects.requireNonNull;
  * <blockquote><pre>{@code
  *    from e in emps
  *      yield e.deptno
- *      where deptno % 2 = 0 andalso deptno < 100
+ *      where deptno % 2 = 0
+ *        andalso deptno < 100
  * }</pre></blockquote>
  */
 public class Extents {

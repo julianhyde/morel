@@ -2230,8 +2230,8 @@ public class MainTest {
         + "    yield {d, n}\n"
         + "end";
     final String core = "val it = "
-        + "from (n_1, d_1) suchthat"
-        + " (case (n_1, d_1) of (n, d) => op elem ((n, d), "
+        + "from n_1, d_1 "
+        + "where (case (n_1, d_1) of (n, d) => op elem ((n, d), "
         + "from e in ["
         + "{deptno = 30, id = 102, name = \"Shaggy\"}, "
         + "{deptno = 30, id = 103, name = \"Scooby\"}]"

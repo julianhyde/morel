@@ -16,7 +16,9 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Tests for 'suchthat'.
+ * Tests for queries with unbounded variables.
+ * (Originally, such queries used a 'suchthat' keyword, but that keyword
+ * has since been removed.)
  *)
 
 (*) Convert predicates into ranges
