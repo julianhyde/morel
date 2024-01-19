@@ -1949,9 +1949,8 @@ public class MainTest {
     final String ml = "from (loc, deptno, name) "
         + "suchthat {deptno, loc, dname = name} elem scott.dept";
     final String core = "val it = "
-        + "from (deptno, loc, name) in"
-        + " (from v0 in #dept scott "
-        + "yield {deptno = #deptno v0, loc = #loc v0, name = #dname v0})";
+        + "from v0 in #dept scott "
+        + "yield {deptno = #deptno v0, loc = #loc v0, name = #dname v0}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{deptno:int, loc:string, name:string} list")
@@ -1970,11 +1969,10 @@ public class MainTest {
         + "elem #dept scott "
         + "andalso dno = 20)";
     final String core1 = "val it = "
-        + "from (dno, name) in ("
         + "from v0 in #dept scott "
         + "where #loc v0 = \"CHICAGO\" "
         + "where #deptno v0 = 20 "
-        + "yield {dno = #deptno v0, name = #dname v0})";
+        + "yield {dno = #deptno v0, name = #dname v0}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{dno:int, name:string} list")
@@ -2039,10 +2037,10 @@ public class MainTest {
         + " end "
         + "end";
     final String core1 = "val it = "
-        + "from (d_1, e_1) in (from d_1 in #dept scott"
-        + " join e_1 in #emp scott"
-        + " where #deptno d_1 = #deptno e_1"
-        + " where #deptno d_1 = 20) "
+        + "from d_1 in #dept scott "
+        + "join e_1 in #emp scott "
+        + "where #deptno d_1 = #deptno e_1 "
+        + "where #deptno d_1 = 20 "
         + "yield #dname d_1";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
