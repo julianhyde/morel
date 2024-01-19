@@ -77,10 +77,6 @@ public class DataType extends ParameterizedType {
         k -> k.copy(t -> t.substitute(arguments)).toType(typeSystem));
   }
 
-//  @Override public boolean isFinite() {
-//    return typeConstructors(typeSystem).values().stream().allMatch(Type::isFinite);
-//  }
-
   @Override public DataType copy(TypeSystem typeSystem,
       UnaryOperator<Type> transform) {
     final List<Type> arguments = transformEager(this.arguments, transform);

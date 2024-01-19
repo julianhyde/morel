@@ -188,7 +188,8 @@ public class RangeExtent {
     case TUPLE_TYPE:
       final RecordLikeType recordType = (RecordLikeType) type;
       final List<List<E>> listList = new ArrayList<>();
-      for (Map.Entry<String, Type> entry : recordType.argNameTypes().entrySet()) {
+      for (Map.Entry<String, Type> entry
+          : recordType.argNameTypes().entrySet()) {
         final String name = entry.getKey();
         final Type type2 = entry.getValue();
         final List<E> list2 = new ArrayList<>();

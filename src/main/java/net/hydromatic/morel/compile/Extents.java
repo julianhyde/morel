@@ -53,7 +53,6 @@ import java.util.SortedMap;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.skip;
-import static net.hydromatic.morel.util.Static.transformEager;
 
 import static org.apache.calcite.util.Util.minus;
 
@@ -177,7 +176,7 @@ public class Extents {
     } else {
       extentFilter = reduceAnd(typeSystem, foo);
     }
-    return new Analysis(boundPats, extent.goalPats, extent.idPats,
+    return new Analysis(boundPats, extent.goalPats,
         extentFilter.left, core.decomposeAnd(extentFilter.right),
         remainingFilters);
   }
@@ -229,8 +228,7 @@ public class Extents {
       Core.Decl node) {
     return node.accept(
         new Shuttle(typeSystem) {
-          @Override
-          protected Core.From visit(Core.From from) {
+          @Override protected Core.From visit(Core.From from) {
             for (Ord<Core.FromStep> step : Ord.zip(from.steps)) {
               if (step.e instanceof Core.Scan) {
                 final Core.Scan scan = (Core.Scan) step.e;
@@ -293,8 +291,9 @@ public class Extents {
 
   /** Unions a collection of range set maps
    * (maps from prefix to {@link RangeSet}) into one. */
-  public static <C extends Comparable<C>> Map<String, ImmutableRangeSet<C>> union(
-      List<Map<String, ImmutableRangeSet<C>>> rangeSetMaps) {
+  public static <C extends Comparable<C>>
+      Map<String, ImmutableRangeSet<C>> union(
+          List<Map<String, ImmutableRangeSet<C>>> rangeSetMaps) {
     switch (rangeSetMaps.size()) {
     case 0:
       // No filters, therefore the extent is empty.
@@ -321,8 +320,8 @@ public class Extents {
   /** Intersects a collection of {@link RangeSet} into one.
    *
    * @see ImmutableRangeSet#intersection(RangeSet) */
-  private static <C extends Comparable<C>> ImmutableRangeSet<C> intersectRangeSets(
-      Collection<ImmutableRangeSet<C>> rangeSets) {
+  private static <C extends Comparable<C>> ImmutableRangeSet<C>
+      intersectRangeSets(Collection<ImmutableRangeSet<C>> rangeSets) {
     return rangeSets.stream().reduce(ImmutableRangeSet.of(Range.all()),
         ImmutableRangeSet::intersection);
   }
@@ -347,7 +346,7 @@ public class Extents {
     final List<Core.Exp> remainingFilters;
 
     private Analysis(SortedMap<Core.NamedPat, Core.Exp> boundPats,
-        Set<Core.NamedPat> goalPats, PairList<Core.IdPat, Core.Exp> newScans,
+        Set<Core.NamedPat> goalPats,
         Core.Exp extentExp, List<Core.Exp> satisfiedFilters,
         List<Core.Exp> remainingFilters) {
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
@@ -462,55 +461,20 @@ public class Extents {
 
             case TUPLE:
               final Core.Tuple tuple = (Core.Tuple) apply.arg(0);
-              if (tuple.args.stream().allMatch(a -> a instanceof Core.Id)
-                  && "false".isEmpty()) {
-                final List<Core.Pat> patList = new ArrayList<>();
-                tuple.forEach((i, name, exp) -> {
-                  patList.add(core.idPat(exp.type, name, 0));
-                });
-                final Core.TuplePat tuplePat = core.tuplePat(typeSystem, patList);
-                map.computeIfAbsent(tuplePat, p -> PairList.of())
-                    .add(apply.arg(1), apply);
-                break;
-              } else if (true) { // TODO remove dead code
-                final Core.Id id = core.id(createId(tuple.type, apply.arg(1)));
-                final Core.Exp elem = core.elem(typeSystem, id, apply.arg(1));
-                g3(map,
-                    core.andAlso(typeSystem, elem,
-                        core.equal(typeSystem, id, tuple)));
-                final List<Core.Exp> conjunctions = new ArrayList<>();
-                conjunctions.add(core.elem(typeSystem, id, apply.arg(1)));
-                tuple.forEach((i, name, arg) ->
-                    conjunctions.add(
-                        core.equal(typeSystem,
-                            core.field(typeSystem, id, i),
-                            arg)));
-                g3(map, core.andAlso(typeSystem, conjunctions));
-                break;
-              } else if (tuple.args.stream().anyMatch(a ->
-                  a instanceof Core.Literal)) {
-                final List<Core.Exp> conjunctions = new ArrayList<>();
-                final Core.Tuple tuple2 =
-                    core.tuple(tuple.type(),
-                        transformEager(tuple.args,
-                            arg -> {
-                              if (arg instanceof Core.Id) {
-                                return arg;
-                              }
-                              if (arg instanceof Core.Literal) {
-                                final Core.Id id = core.id(createId(arg.type,
-                                    apply.arg(1)));
-                                conjunctions.add(core.equal(typeSystem, id, arg));
-                                return id;
-                              }
-                              throw new AssertionError("unsupported arg " + arg
-                                  + " in tuple " + tuple);
-                            }));
-                final Core.Exp apply2 = core.elem(typeSystem, tuple2, apply.arg(1));
-                conjunctions.add(0, apply2);
-                g3(map, core.andAlso(typeSystem, conjunctions));
-                break;
-              }
+              final Core.Id id = core.id(createId(tuple.type, apply.arg(1)));
+              final Core.Exp elem = core.elem(typeSystem, id, apply.arg(1));
+              g3(map,
+                  core.andAlso(typeSystem, elem,
+                      core.equal(typeSystem, id, tuple)));
+              final List<Core.Exp> conjunctions = new ArrayList<>();
+              conjunctions.add(core.elem(typeSystem, id, apply.arg(1)));
+              tuple.forEach((i, name, arg) ->
+                  conjunctions.add(
+                      core.equal(typeSystem,
+                          core.field(typeSystem, id, i),
+                          arg)));
+              g3(map, core.andAlso(typeSystem, conjunctions));
+              break;
             }
             break;
           }
@@ -649,7 +613,8 @@ public class Extents {
   }
 
   static class ExtentMap {
-    final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map = new LinkedHashMap<>();
+    final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map =
+        new LinkedHashMap<>();
 
     public PairList<Core.Exp, Core.Exp> get(TypeSystem typeSystem,
         Core.Pat pat) {
@@ -688,7 +653,8 @@ public class Extents {
             fromBuilder.scan(p, core.union(typeSystem, f.leftList()));
             core.flattenAnds(f.rightList(), filters::add);
           }
-          return PairList.of(fromBuilder.build(), core.andAlso(typeSystem, filters));
+          return PairList.of(fromBuilder.build(),
+              core.andAlso(typeSystem, filters));
         } else {
           final PairList<Core.Exp, Core.Exp> foo1 = PairList.of();
           map.forEach((pat1, foo2) -> {
@@ -724,7 +690,7 @@ public class Extents {
           return true;
         }
         // If the map contains a tuple with a field for every one of this
-        // tuple's fields (not necessarily in the saem order) then we can use
+        // tuple's fields (not necessarily in the same order) then we can use
         // it.
         for (Core.Pat pat1 : map.keySet()) {
           if (pat1.op == Op.TUPLE_PAT) {

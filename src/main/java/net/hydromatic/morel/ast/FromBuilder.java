@@ -198,20 +198,7 @@ public class FromBuilder {
         bindings = append(this.bindings, Binding.of(idPat));
       }
       addAll(steps);
-      if (true) { // TODO
-        return yield_(uselessIfLast, bindings, core.record(typeSystem, nameExps));
-      }
-      final Core.Exp record;
-      if (pat instanceof Core.TuplePat) {
-        uselessIfLast = true;
-//          nameExps.leftList().equals(
-//              ImmutableList.copyOf(
-//                  ((RecordLikeType) record.type).argNameTypes().keySet()));
-        record = core.tuple(typeSystem, null, nameExps.rightList());
-      } else {
-        record = core.record(typeSystem, nameExps);
-      }
-      return yield_(uselessIfLast, bindings, record);
+      return yield_(uselessIfLast, bindings, core.record(typeSystem, nameExps));
     }
     Compiles.acceptBinding(typeSystem, pat, bindings);
     return addStep(core.scan(Op.INNER_JOIN, bindings, pat, exp, condition));
@@ -372,9 +359,10 @@ public class FromBuilder {
     if (removeIfLastIndex == steps.size() - 1) {
       removeIfLastIndex = Integer.MIN_VALUE;
       final Core.Yield yield = (Core.Yield) getLast(steps);
-//      assert yield.exp.op == Op.TUPLE
-//          && ((Core.Tuple) yield.exp).args.size() == 1
-//          : yield.exp;
+      if (yield.exp.op != Op.TUPLE
+          || ((Core.Tuple) yield.exp).args.size() != 1) {
+        throw new AssertionError(yield.exp);
+      }
       steps.remove(steps.size() - 1);
     }
     if (simplify

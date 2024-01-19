@@ -222,7 +222,8 @@ public class ExtentTest {
                 core.andAlso(f.typeSystem, f.cId, f.dId)));
     final String expected2a = "a orelse (b orelse c andalso d)";
     f.checkSubTrue(exp2, list(f.bId), expected2a); // TODO "a"
-    f.checkSubTrue(exp2, list(f.cId), expected2a); // TODO "a orelse (b orelse d)"
+    f.checkSubTrue(exp2, list(f.cId),
+        expected2a); // TODO "a orelse (b orelse d)"
     f.checkSubTrue(exp2, list(f.bId, f.cId), expected2a); // TODO "a"
     f.checkSubTrue(exp2, list(f.aId), expected2a); // TODO "true"
     f.checkSubTrue(exp2, list(), expected2a);

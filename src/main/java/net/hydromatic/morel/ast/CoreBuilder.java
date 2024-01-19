@@ -637,7 +637,8 @@ public enum CoreBuilder {
       return Pair.of(simplify(typeSystem, exps.get(0)), ImmutableList.of());
 
     default:
-      final List<Map<String, ImmutableRangeSet>> rangeSetMaps = new ArrayList<>();
+      final List<Map<String, ImmutableRangeSet>> rangeSetMaps =
+          new ArrayList<>();
       final List<Core.Exp> remainingExps = new ArrayList<>();
       for (Core.Exp exp : exps) {
         if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
@@ -671,7 +672,8 @@ public enum CoreBuilder {
       return Pair.of(simplify(typeSystem, exps.get(0)), ImmutableList.of());
 
     default:
-      final List<Map<String, ImmutableRangeSet>> rangeSetMaps = new ArrayList<>();
+      final List<Map<String, ImmutableRangeSet>> rangeSetMaps =
+          new ArrayList<>();
       final List<Core.Exp> remainingExps = new ArrayList<>();
       for (Core.Exp exp : exps) {
         if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
