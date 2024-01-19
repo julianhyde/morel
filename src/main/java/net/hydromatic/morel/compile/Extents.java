@@ -233,7 +233,6 @@ public class Extents {
                 final Core.Scan scan = (Core.Scan) step.e;
                 if (isInfinite(scan.exp)) {
                   final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-                  assert scan.op != Op.SUCH_THAT; // SUCH_THAT is deprecated in core
                   List<Core.FromStep> followingSteps =
                       skip(from.steps, step.i + 1);
                   final Analysis analysis =

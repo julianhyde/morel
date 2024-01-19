@@ -1190,12 +1190,7 @@ public class Core {
     Scan(Op op, ImmutableList<Binding> bindings, Pat pat, Exp exp,
         Exp condition) {
       super(op, bindings);
-      switch (op) {
-      case INNER_JOIN:
-        break;
-      case SUCH_THAT:
-        throw new AssertionError("deprecated");
-      default:
+      if (op != Op.INNER_JOIN) {
         // SCAN and CROSS_JOIN are valid in ast, not core.
         throw new IllegalArgumentException("not a join type " + op);
       }
@@ -1229,16 +1224,10 @@ public class Core {
 
     @Override protected AstWriter unparse(AstWriter w, From from, int ordinal,
         int left, int right) {
-      final String prefix = ordinal == 0 ? " "
-          : op == Op.SUCH_THAT ? " join "
-          : op.padded;
-      w.append(prefix)
-          // for these purposes 'in' and 'suchthat' have same precedence as '='
+      w.append(ordinal == 0 ? " " : op.padded)
+          // for these purposes 'in' has same precedence as '='
           .append(pat, 0, Op.EQ.left);
-      if (op == Op.SUCH_THAT) {
-        w.append(" suchthat ")
-            .append(exp, Op.EQ.right, 0);
-      } else if (Extents.isInfinite(exp)) {
+      if (Extents.isInfinite(exp)) {
         // Print "from x : int" rather "from x in extent 'int'"
         w.append(" : ")
             .append(((ListType) exp.type).elementType.moniker());

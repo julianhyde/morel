@@ -492,44 +492,15 @@ public class TypeResolver {
         scanExp = null;
         eq = false;
         scanExp3 = null;
-      } else {
-        switch (scan.exp.op) {
-        case SUCH_THAT:
-          scanExp = ((Ast.PrefixCall) scan.exp).a;
-          final Ast.Pat pat2 =
-              deducePatType(env2, scan.pat, termMap1, null, v16);
-          TypeEnv env4 = env2;
-          for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
-            env4 = env4.bind(e.getKey().name, e.getValue());
-            fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
-                (Unifier.Variable) e.getValue());
-          }
-          final Ast.Exp scanExp2 = deduceType(env4, scanExp, v15);
-          scanExp3 = ast.fromSuchThat(scanExp2);
-          reg(scanExp, v15, toTerm(PrimitiveType.BOOL));
-          final Ast.Exp scanCondition2;
-          if (scan.condition != null) {
-            final Unifier.Variable v5 = unifier.variable();
-            scanCondition2 = deduceType(env4, scan.condition, v5);
-            equiv(v5, toTerm(PrimitiveType.BOOL));
-          } else {
-            scanCondition2 = null;
-          }
-          fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
-          return Pair.of(env4, v);
-
-        case FROM_EQ:
-          eq = true;
-          scanExp = ((Ast.PrefixCall) scan.exp).a;
-          break;
-
-        default:
-          eq = false;
-          scanExp = scan.exp;
-          break;
-        }
+      } else if (scan.exp.op == Op.FROM_EQ) {
+        scanExp = ((Ast.PrefixCall) scan.exp).a;
+        eq = true;
         final Ast.Exp scanExp2 = deduceType(env2, scanExp, v15);
-        scanExp3 = eq ? ast.fromEq(scanExp2) : scanExp2;
+        scanExp3 = ast.fromEq(scanExp2);
+      } else {
+        scanExp = scan.exp;
+        eq = false;
+        scanExp3 = deduceType(env2, scanExp, v15);
       }
       final Ast.Pat pat2 =
           deducePatType(env2, scan.pat, termMap1, null, v16);

@@ -1637,27 +1637,16 @@ public class Ast {
     }
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(this.op.padded)
+      w.append(op.padded)
           .append(pat, 0, 0);
-      if (this.exp != null) {
-        final String op;
-        final Exp exp;
-        switch (this.exp.op) {
-        case FROM_EQ:
-          op = " = ";
-          exp = ((PrefixCall) this.exp).a;
-          break;
-        case SUCH_THAT:
-          op = " suchthat ";
-          exp = ((PrefixCall) this.exp).a;
-          break;
-        default:
-          op = " in ";
-          exp = this.exp;
-          break;
+      if (exp != null) {
+        if (exp.op == Op.FROM_EQ) {
+          w.append(" = ")
+              .append(((PrefixCall) this.exp).a, Op.EQ.right, 0);
+        } else {
+          w.append(" in ")
+              .append(this.exp, Op.EQ.right, 0);
         }
-        w.append(op)
-            .append(exp, Op.EQ.right, 0);
       }
       if (condition != null) {
         w.append(" on ")
