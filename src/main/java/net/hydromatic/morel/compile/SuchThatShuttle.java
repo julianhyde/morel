@@ -107,6 +107,7 @@ class SuchThatShuttle extends Shuttle {
           DeferredStepList.create(typeSystem, steps);
 
       Environment env = Environments.empty();
+      final PairList<Core.IdPat, Core.Exp> idPats = PairList.of();
       for (int i = 0; i < steps.size(); i++) {
         final Core.FromStep step = steps.get(i);
         switch (step.op) {
@@ -122,7 +123,15 @@ class SuchThatShuttle extends Shuttle {
                   boundPats.put(b.id, core.id(b.id)));
               rewritten = rewrite0(boundPats, scan, skip(steps, i));
             } else {
-              rewritten = rewrite1(scan, skip(steps, i));
+              final int idPatCount = idPats.size();
+              rewritten = rewrite1(scan, skip(steps, i), idPats);
+
+              // Create a scan for any new variables introduced by rewrite.
+              idPats.forEachIndexed((j, pat, extent) -> {
+                if (j >= idPatCount) {
+                  fromBuilder.scan(pat, extent);
+                }
+              });
             }
             deferredScans.scan(env, scan.pat, rewritten, scan.condition);
           } else {
@@ -132,6 +141,7 @@ class SuchThatShuttle extends Shuttle {
 
         case YIELD:
           final Core.Yield yield = (Core.Yield) step;
+          killTemporaryScans(idPats);
           deferredScans.flush(fromBuilder);
           fromBuilder.yield_(false, yield.bindings, yield.exp);
           break;
@@ -145,12 +155,14 @@ class SuchThatShuttle extends Shuttle {
 
         case GROUP:
           final Core.Group group = (Core.Group) step;
+          killTemporaryScans(idPats);
           deferredScans.flush(fromBuilder);
           fromBuilder.group(group.groupExps, group.aggregates);
           break;
 
         case ORDER:
           final Core.Order order = (Core.Order) step;
+          killTemporaryScans(idPats);
           deferredScans.flush(fromBuilder);
           fromBuilder.order(order.orderItems);
           break;
@@ -161,7 +173,27 @@ class SuchThatShuttle extends Shuttle {
         env = Environments.empty().bindAll(step.bindings);
       }
       deferredScans.flush(fromBuilder);
+      killTemporaryScans(idPats);
       return fromBuilder.build();
+    }
+
+    private void killTemporaryScans(PairList<Core.IdPat, Core.Exp> idPats) {
+      if (idPats.isEmpty()) {
+        return;
+      }
+      final PairList<String, Core.Id> nameExps = PairList.of();
+      for (Binding b : fromBuilder.bindings()) {
+        Core.IdPat id = (Core.IdPat) b.id;
+        if (!idPats.leftList().contains(id)) {
+          nameExps.add(id.name, core.id(id));
+        }
+      }
+      if (nameExps.size() == 1) {
+        fromBuilder.yield_(false, null, nameExps.get(0).getValue());
+      } else {
+        fromBuilder.yield_(false, null, core.record(typeSystem, nameExps));
+      }
+      idPats.clear();
     }
 
     private Core.Exp rewrite0(SortedMap<Core.NamedPat, Core.Exp> boundPats,
@@ -192,34 +224,19 @@ class SuchThatShuttle extends Shuttle {
         // Try a different approach.
         // Generate an iterator over all values of all variables,
         // then filter.
-        return rewrite1(scan, laterSteps);
+        return rewrite1(scan, laterSteps, PairList.of());
       }
     }
 
     private Core.From rewrite1(Core.Scan scan,
-        List<? extends Core.FromStep> laterSteps) {
-      final PairList<Core.IdPat, Core.Exp> idPats = PairList.of();
+        List<? extends Core.FromStep> laterSteps,
+        PairList<Core.IdPat, Core.Exp> idPats) {
       final Extents.Analysis analysis =
           Extents.create(typeSystem, scan.pat, ImmutableSortedMap.of(),
               laterSteps, idPats);
       satisfiedFilters.addAll(analysis.satisfiedFilters);
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-      idPats.forEach((pat, extent) -> fromBuilder.scan(pat, extent));
       fromBuilder.scan(scan.pat, analysis.extentExp);
-      if (!idPats.isEmpty()) {
-        final PairList<String, Core.Id> nameExps = PairList.of();
-        for (Binding b : fromBuilder.bindings()) {
-          Core.IdPat id = (Core.IdPat) b.id;
-          if (!idPats.leftList().contains(id)) {
-            nameExps.add(id.name, core.id(id));
-          }
-        }
-        if (nameExps.size() == 1) {
-          fromBuilder.yield_(false, null, nameExps.get(0).getValue());
-        } else {
-          fromBuilder.yield_(false, null, core.record(typeSystem, nameExps));
-        }
-      }
       return fromBuilder.build();
     }
 

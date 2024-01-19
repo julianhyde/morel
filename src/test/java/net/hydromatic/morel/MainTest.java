@@ -1905,36 +1905,21 @@ public class MainTest {
         + "  tuple(constant(30), constant(103), constant(Scooby))),\n"
         + " sink collect(tuple(apply(fnValue nth:2, argCode get(name e)), "
         + "apply(fnValue nth:0, argCode get(name e)))))), "
-        + "sink join(op join, pat n_1, exp tuple("
-        + "apply(fnValue nth:0, argCode get(name v0))), "
-        + "sink yield(codes [get(n)], sink join(op join, pat v1, "
-        + "exp from(sink\n"
-        + "                    join(op join, pat e, exp tuple(\n"
+        + "sink join(op join, pat n_1, exp tuple(\n"
+        + " apply(fnValue nth:0, argCode get(name v0))), "
+        + "sink join(op join, pat d_1, exp tuple(constant(30)), "
+        + "sink where(condition apply2(fnValue elem, tuple(get(name n), get(name d)), "
+        + "from(sink join(op join, pat e, exp tuple(\n"
         + "  tuple(constant(10), constant(100), constant(Fred)),\n"
         + "  tuple(constant(20), constant(101), constant(Velma)),\n"
         + "  tuple(constant(30), constant(102), constant(Shaggy)),\n"
         + "  tuple(constant(30), constant(103), constant(Scooby))),\n"
-        + "      sink collect(tuple(apply(fnValue nth:2, argCode get(name e)),\n"
-        + "        apply(fnValue nth:0, argCode get(name e)))))),\n"
-        + "      sink join(op join, pat d_1, exp tuple(constant(30)), "
-        + "sink yield(codes [get(d), get(n)], "
-        + "sink where(condition apply2(fnValue elem, tuple(get(name n), get(name d)), "
-        + "from(sink join(op join, pat e, exp tuple("
-        + "tuple(constant(10), constant(100), constant(Fred)), "
-        + "tuple(constant(20), constant(101), constant(Velma)), "
-        + "tuple(constant(30), constant(102), constant(Shaggy)), "
-        + "tuple(constant(30), constant(103), constant(Scooby))), "
-        + "sink collect(tuple(apply(fnValue nth:2, argCode get(name e)), "
+        + " sink collect(tuple(apply(fnValue nth:2, argCode get(name e)), "
         + "apply(fnValue nth:0, argCode get(name e))))))),\n"
         + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
-        + "          sink collect(getTuple(names [d, n])))))))))))";
-    // TODO: Shaggy and Scooby should only appear once
+        + "          sink collect(tuple(get(name d), get(name n)))))))))";
     final List<Object> expected =
-        list(
-            list(30, "Shaggy"), list(30, "Shaggy"),
-            list(30, "Shaggy"), list(30, "Shaggy"),
-            list(30, "Scooby"), list(30, "Scooby"),
-            list(30, "Scooby"), list(30, "Scooby"));
+        list(list(30, "Shaggy"), list(30, "Scooby"));
     ml(ml).assertType("{d:int, n:string} list")
         .assertPlan(isCode2(code))
         .assertEval(is(expected));
@@ -1952,11 +1937,11 @@ public class MainTest {
         + "end";
     final String core = "val it = "
         + "from d_1 in #dept scott "
-        + "join j suchthat ("
-        + "case (#deptno d_1, j) of"
+        + "join j : string "
+        + "where case (#deptno d_1, j) of"
         + " (d, job) => op elem ((op div (d, 2), job),"
         + " from e in #emp scott"
-        + " yield (#deptno e, #job e))) yield j";
+        + " yield (#deptno e, #job e)) yield j";
     final String code = "from(sink join(op join, pat d_1,\n"
         + "    exp apply(fnValue nth:1, argCode get(name scott)),\n"
         + "  sink join(op join, pat j,\n"
@@ -2008,15 +1993,12 @@ public class MainTest {
         + "where {deptno, loc, dname = name} elem scott.dept";
     final String core = "val it = "
         + "from v0 in #dept scott "
-        + "join loc in [#loc v0] yield {loc = loc} "
-        + "join v1 in #dept scott "
-        + "join deptno in [#deptno v1] "
-        + "yield {deptno = deptno, loc = loc} "
-        + "join v2 in #dept scott "
-        + "join name in [#dname v2] "
-        + "yield {deptno = deptno, loc = loc, name = name} "
+        + "join loc in [#loc v0] "
+        + "join deptno in [#deptno v0] "
+        + "join name in [#dname v0] "
         + "where op elem ({deptno = deptno, dname = name, loc = loc},"
-        + " #dept scott)";
+        + " #dept scott) "
+        + "yield {deptno = deptno, loc = loc, name = name}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{deptno:int, loc:string, name:string} list")
@@ -2042,9 +2024,12 @@ public class MainTest {
         + "andalso dno > 20";
     final String core1 = "val it = "
         + "from v0 in #dept scott "
-        + "where #loc v0 = \"CHICAGO\" "
-        + "where #deptno v0 > 20 "
-        + "yield {dno = #deptno v0, name = #dname v0}";
+        + "join dno in [#deptno v0] "
+        + "join name in [#dname v0] "
+        + "yield {dno = dno, name = name} "
+        + "where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"},"
+        + " #dept scott) "
+        + "andalso dno > 20";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{dno:int, name:string} list")
@@ -2067,13 +2052,11 @@ public class MainTest {
     final String core1 = "val it = "
         + "from v0 in #dept scott "
         + "join dno in [#deptno v0] "
-        + "yield {dno = dno} "
-        + "join v1 in #dept scott "
-        + "join name in [#dname v1] "
-        + "yield {dno = dno, name = name} "
+        + "join name in [#dname v0] "
         + "where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"},"
         + " #dept scott) "
-        + "andalso dno > 20";
+        + "andalso dno > 20 "
+        + "yield {dno = dno, name = name}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{dno:int, name:string} list")
