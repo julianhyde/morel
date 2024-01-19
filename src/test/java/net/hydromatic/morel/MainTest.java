@@ -1700,11 +1700,16 @@ public class MainTest {
     ml("from e in emps").assertParseSame();
     ml("from e in emps where c").assertParseSame();
     ml("from e in emps, d in depts").assertParseSame();
-    ml("from e in emps, d suchthat hasEmp e").assertParseSame();
     ml("from e in emps, d where hasEmp e").assertParseSame();
     ml("from e, d where hasEmp e").assertParseSame();
-    ml("from e in emps, (job, d) suchthat hasEmp (e, d, job)")
+    ml("from e in emps, job, d where hasEmp (e, d, job)")
         .assertParseSame();
+    ml("from a, b in emps where a > b join c join d in depts where c > d")
+        .assertParseSame();
+    // We ought to allow "join v1, v2", but don't currently.
+    ml("from a, b in emps where a > b join c, d in depts where c > d")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \",\" \", \"\" at line 1, column 37."));
     ml("from , d in depts").assertError("Xx");
     ml("from join d in depts on c").assertError("Xx");
     ml("from left join d in depts on c").assertError("Xx");
@@ -2013,12 +2018,13 @@ public class MainTest {
 
   /** As {@link #testFromSuchThat2c()} but with a literal. */
   @Test void testFromSuchThat2d() {
-    final String ml = "from (dno, name)\n"
-        + "  suchthat {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
+    final String ml = "from dno, name\n"
+        + "  where {deptno = dno, dname = name, loc = \"CHICAGO\"}\n"
         + "      elem scott.dept\n"
         + "    andalso dno > 20";
     final String core0 = "val it = "
-        + "from (dno, name) : int * string "
+        + "from dno : int "
+        + "join name : string "
         + "where {deptno = dno, dname = name, loc = \"CHICAGO\"} "
         + "elem #dept scott "
         + "andalso dno > 20";
@@ -2026,10 +2032,10 @@ public class MainTest {
         + "from v0 in #dept scott "
         + "join dno in [#deptno v0] "
         + "join name in [#dname v0] "
-        + "yield {dno = dno, name = name} "
         + "where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"},"
         + " #dept scott) "
-        + "andalso dno > 20";
+        + "andalso dno > 20 "
+        + "yield {dno = dno, name = name}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertType("{dno:int, name:string} list")
@@ -2141,7 +2147,8 @@ public class MainTest {
         + "  fun isDept d =\n"
         + "    d elem scott.dept\n"
         + "in\n"
-        + "  from d suchthat isDept d andalso d.deptno = 20\n"
+        + "  from d\n"
+        + "    where isDept d andalso d.deptno = 20\n"
         + "    yield d.dname\n"
         + "end";
     final String core0 = "val it = "
@@ -2171,7 +2178,8 @@ public class MainTest {
         + "  fun isEmp e =\n"
         + "    e elem scott.emp\n"
         + "in\n"
-        + "  from (d, e) suchthat isDept d\n"
+        + "  from d, e\n"
+        + "    where isDept d\n"
         + "    andalso isEmp e\n"
         + "    andalso d.deptno = e.deptno\n"
         + "    andalso d.deptno = 20\n"
@@ -2184,9 +2192,9 @@ public class MainTest {
         + " let"
         + " val isEmp = fn e => e elem #emp scott "
         + "in"
-        + " from (d_1, e_1) : {deptno:int, dname:string, loc:string} "
-        + "* {comm:real, deptno:int, empno:int, ename:string, hiredate:string,"
-        + " job:string, mgr:int, sal:real}"
+        + " from d_1 : {deptno:int, dname:string, loc:string}"
+        + " join e_1 : {comm:real, deptno:int, empno:int, ename:string, "
+        + "hiredate:string, job:string, mgr:int, sal:real}"
         + " where isDept d_1 "
         + "andalso isEmp e_1 "
         + "andalso #deptno d_1 = #deptno e_1 "
@@ -2216,7 +2224,8 @@ public class MainTest {
         + "  fun hasEmpNameInDept (n, d) =\n"
         + "    (n, d) elem (from e in emps yield (e.name, e.deptno))\n"
         + "in\n"
-        + "  from (n, d) suchthat hasEmpNameInDept (n, d)\n"
+        + "  from n, d\n"
+        + "    where hasEmpNameInDept (n, d)\n"
         + "    where d = 30\n"
         + "    yield {d, n}\n"
         + "end";
