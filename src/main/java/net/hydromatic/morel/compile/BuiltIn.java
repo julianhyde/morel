@@ -1579,7 +1579,10 @@ public enum BuiltIn {
 
   /** Internal list constructor, e.g. "list (1 + 2, 3)" implements "[1 + 2, 3]".
    * It cannot be assigned a type, because the tuple is variadic. */
-  Z_LIST("$", "list", ts -> UNIT);
+  Z_LIST("$", "list", ts -> UNIT),
+
+  /** "prefixesOf abc" returns ["", "a", "ab", "abc"]. */
+  Z_PREFIXES_OF("$", "prefixesOf", ts -> ts.fnType(STRING, ts.listType(STRING)));
 
   /** Name of the structure (e.g. "List", "String"), or null. */
   public final String structure;

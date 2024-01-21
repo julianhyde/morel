@@ -476,6 +476,27 @@ public enum CoreBuilder {
         tuple(tupleType, Lists.asList(arg0, arg1, args)));
   }
 
+  /** Creates a {@link Core.Apply} that calls a built-in function.
+   *
+   * <p>If there are two or more arguments, the call is curried,
+   * e.g. "((f a) b) c", which is conventionally written "f a b c";
+   * if there is one argument, the call is regular, "f a";
+   * if there are no arguments, the argument is unit, "f ()". */
+  public Core.Apply applyCurried(Pos pos, TypeSystem typeSystem,
+      BuiltIn builtIn, Core.Exp... args) {
+    final Core.Literal fn = functionLiteral(typeSystem, builtIn);
+    FnType fnType = (FnType) fn.type;
+    if (args.length == 0) {
+      return apply(pos, fnType.resultType, fn, unitLiteral());
+    }
+    Core.Apply exp = apply(pos, fnType.resultType, fn, args[0]);
+    for (int i = 1; i < args.length; i++) {
+      FnType fnType1 = (FnType) exp.type;
+      exp = core.apply(pos, fnType1.resultType, exp, args[i]);
+    }
+    return exp;
+  }
+
   public Core.Case ifThenElse(Core.Exp condition, Core.Exp ifTrue,
       Core.Exp ifFalse) {
     // Translate "if c then a else b"

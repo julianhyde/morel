@@ -387,6 +387,13 @@ public class Extents {
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
     void g3(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map, Core.Exp filter) {
+      for (Core.NamedPat goalPat : goalPats) {
+        Core.Exp extent = Inverters.invert(typeSystem, filter, goalPat);
+        if (extent != null) {
+          map.computeIfAbsent(goalPat, p -> PairList.of())
+              .add(extent, filter);
+        }
+      }
       final Core.Apply apply;
       switch (filter.op) {
       case APPLY:

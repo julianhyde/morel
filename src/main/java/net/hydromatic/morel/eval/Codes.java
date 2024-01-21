@@ -2679,6 +2679,19 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#Z_PREFIXES_OF */
+  private static final Applicable Z_PREFIXES_OF =
+      new ApplicableImpl(BuiltIn.Z_PREFIXES_OF) {
+        @Override public Object apply(EvalEnv env, Object arg) {
+          String s = (String) arg;
+          ImmutableList.Builder<String> list = ImmutableList.builder();
+          for (int i = 0; i <= s.length(); i++) {
+            list.add(s.substring(0, i));
+          }
+          return list.build();
+        }
+      };
+
   private static void populateBuiltIns(Map<String, Object> valueMap) {
     if (SKIP) {
       return;
@@ -2958,6 +2971,7 @@ public abstract class Codes {
           .put(BuiltIn.Z_SUM_REAL, Z_SUM_REAL)
           .put(BuiltIn.Z_EXTENT, Z_EXTENT)
           .put(BuiltIn.Z_LIST, Z_LIST)
+          .put(BuiltIn.Z_PREFIXES_OF, Z_PREFIXES_OF)
           .build();
 
   public static final Map<Applicable, BuiltIn> BUILT_IN_MAP =
