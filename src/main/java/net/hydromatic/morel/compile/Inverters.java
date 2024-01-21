@@ -42,7 +42,9 @@ abstract class Inverters {
   /** Pattern of arguments to a function. */
   enum ArgPattern {
     /** Function with two curried arguments, "f a b". */
-    F2
+    F2,
+    /** Function with arguments in a tuple, "f (a, b)" or "f ()". */
+    TUPLE
   }
 
   /** Constructs a Registry. */
@@ -55,8 +57,20 @@ abstract class Inverters {
     }
 
     Registry build() {
+      // "from a0 where a0 elem a1" -> "a1"
+      register(ArgPattern.TUPLE, BuiltIn.OP_ELEM, 0, Builder::extent);
+
       // "from a0 where String.isPrefix a0 a1" -> "prefixesOf a1"
       register(ArgPattern.F2, BuiltIn.STRING_IS_PREFIX, 0, Builder::prefixesOf);
+
+      // "from a0 where String.isSuffix a0 a1" -> "suffixesOf a1" TODO
+      // "from a0 where String.isSubstring a0 a1" -> "substringsOf a1" TODO
+      // "from a0 where not a0" -> "[false]"
+      // "from a0 where Option.isSome opt" -> "from x yield SOME x"
+
+      // We could convert
+      // "from i where List.nth (list, i) = e -> "indexesOf (list, e)"
+      // but better to deduce that i is in range 0 .. length(list)
 
       return new Registry(b.build());
     }
@@ -64,6 +78,10 @@ abstract class Inverters {
     static Core.Exp prefixesOf(TypeSystem typeSystem, List<Core.Exp> args) {
       return core.applyCurried(Pos.ZERO, typeSystem, BuiltIn.Z_PREFIXES_OF,
           args.get(1));
+    }
+
+    static Core.Exp extent(TypeSystem typeSystem, List<Core.Exp> args) {
+      return args.get(1);
     }
   }
 
@@ -96,16 +114,21 @@ abstract class Inverters {
     Core.Exp findGenerator(TypeSystem typeSystem, Core.Exp exp,
         Core.Pat pat) {
       if (exp.op == Op.APPLY) {
-        Core.Apply applyExp = (Core.Apply) exp;
+        final Core.Apply applyExp = (Core.Apply) exp;
         if (applyExp.fn.op == Op.APPLY) {
-          Core.Apply applyFn = (Core.Apply) applyExp.fn;
+          final Core.Apply applyFn = (Core.Apply) applyExp.fn;
           if (applyFn.fn.op == Op.FN_LITERAL) {
-            Core.Literal literal = (Core.Literal) applyFn.fn;
-            return find(typeSystem, pat,
-                ArgPattern.F2,
+            final Core.Literal literal = (Core.Literal) applyFn.fn;
+            return find(typeSystem, pat, ArgPattern.F2,
                 literal.unwrap(BuiltIn.class),
-                applyFn.arg,
-                applyExp.arg);
+                Arrays.asList(applyFn.arg, applyExp.arg));
+          }
+        } else if (applyExp.fn.op == Op.FN_LITERAL) {
+          final Core.Literal literal = (Core.Literal) applyExp.fn;
+          if (applyExp.arg.op == Op.TUPLE) {
+            final Core.Tuple tuple = (Core.Tuple) applyExp.arg;
+            return find(typeSystem, pat, ArgPattern.TUPLE,
+                literal.unwrap(BuiltIn.class), tuple.args);
           }
         }
       }
@@ -113,12 +136,12 @@ abstract class Inverters {
     }
 
     Core.Exp find(TypeSystem typeSystem, Core.Pat pat,
-        ArgPattern argPattern, BuiltIn builtIn, Core.Exp... args) {
+        ArgPattern argPattern, BuiltIn builtIn, List<Core.Exp> args) {
       for (Inverter inverter : inverters) {
         if (inverter.argPattern == argPattern && inverter.builtIn == builtIn) {
-          final Core.Exp arg = args[inverter.patternOrdinal];
+          final Core.Exp arg = args.get(inverter.patternOrdinal);
           if (arg instanceof Core.Id && ((Core.Id) arg).idPat.equals(pat)) {
-            return inverter.generate.apply(typeSystem, Arrays.asList(args));
+            return inverter.generate.apply(typeSystem, args);
           }
         }
       }

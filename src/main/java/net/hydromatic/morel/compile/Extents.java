@@ -460,12 +460,6 @@ public class Extents {
 
           case OP_ELEM:
             switch (apply.arg(0).op) {
-            case ID:
-              final Core.NamedPat pat = ((Core.Id) apply.arg(0)).idPat;
-              map.computeIfAbsent(pat, p1 -> PairList.of())
-                  .add(apply.arg(1), apply);
-              break;
-
             case TUPLE:
               final Core.Tuple tuple = (Core.Tuple) apply.arg(0);
               final Core.Id id = core.id(createId(tuple.type, apply.arg(1)));
