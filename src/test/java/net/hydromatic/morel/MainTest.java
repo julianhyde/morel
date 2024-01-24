@@ -2221,6 +2221,65 @@ public class MainTest {
         .assertCore(-1, hasToString(core1));
   }
 
+  /** Tests a join expressed via {@code suchthat}. */
+  @Test void testFromSuchThat2g() {
+    final String ml = "let\n"
+        + "  fun isDept (deptno, dname, loc) =\n"
+        + "    {deptno, dname, loc} elem scott.dept\n"
+        + "  fun isEmp (empno, deptno, ename, sal, comm, hiredate, job, mgr) =\n"
+        + "    {empno, deptno, ename, sal, comm, hiredate, job, mgr}\n"
+        + "      elem scott.emp\n"
+        + "in\n"
+        + "  from deptno, dname, empno, ename, sal, loc,\n"
+        + "      comm, hiredate, job, mgr\n"
+        + "    where isDept (deptno, dname, loc)\n"
+        + "    andalso isEmp (empno, deptno, ename, sal, comm,\n"
+        + "                   hiredate, job, mgr)\n"
+        + "    andalso deptno = 20\n"
+        + "    yield dname\n"
+        + "end";
+    final String core0 = "val it = "
+        + "let"
+        + " val isDept = fn v0 => case v0 of (deptno, dname, loc) =>"
+        + " {deptno = deptno, dname = dname, loc = loc} elem #dept scott "
+        + "in"
+        + " let val"
+        + " isEmp = fn v1 => case v1 of (empno, deptno_1, ename, sal, comm, "
+        + "hiredate, job, mgr) =>"
+        + " {comm = comm, deptno = deptno_1, empno = empno, ename = ename, "
+        + "hiredate = hiredate, job = job, mgr = mgr, sal = sal} "
+        + "elem #emp scott "
+        + "in"
+        + " from deptno_2 : int"
+        + " join dname_1 : string"
+        + " join empno_1 : int"
+        + " join ename_1 : string"
+        + " join sal_1 : real"
+        + " join loc_1 : string"
+        + " join comm_1 : real"
+        + " join hiredate_1 : string"
+        + " join job_1 : string"
+        + " join mgr_1 : int"
+        + " where isDept (deptno_2, dname_1, loc_1)"
+        + " andalso isEmp (empno_1, deptno_2, ename_1, sal_1, comm_1, "
+        + "hiredate_1, job_1, mgr_1)"
+        + " andalso deptno_2 = 20"
+        + " yield dname_1"
+        + " end "
+        + "end";
+    final String core1 = "val it = "
+        + "from d_1 in #dept scott "
+        + "join e_1 in #emp scott "
+        + "where #deptno d_1 = #deptno e_1 "
+        + "andalso #deptno d_1 = 20 "
+        + "yield #dname d_1";
+    ml(ml)
+        .withBinding("scott", BuiltInDataSet.SCOTT)
+//        .assertType("string list")
+        .assertCore(0, hasToString(core0))
+        .assertCore(-1, hasToString(core1));
+  }
+
   /** A {@code suchthat} expression. */
   @Test void testFromSuchThat3() {
     final String ml = "let\n"

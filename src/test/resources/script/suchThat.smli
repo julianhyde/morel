@@ -441,6 +441,34 @@ fun happy patron =
 > val happy = fn : string -> bool
 *)
 
+(*) The full join, inlining functions
+from patron, bar, beer, price
+where {patron, bar} elem barPatrons
+  andalso {patron, beer} elem patronBeers
+  andalso {bar, beer, price} elem barBeers;
+> val it =
+>   [{bar="squirrel",beer="amber",patron="shaggy",price=3},
+>    {bar="cask",beer="stout",patron="velma",price=4},
+>    {bar="squirrel",beer="amber",patron="shaggy",price=3},
+>    {bar="cask",beer="stout",patron="velma",price=4},
+>    {bar="squirrel",beer="amber",patron="shaggy",price=3},
+>    {bar="cask",beer="stout",patron="velma",price=4},
+>    {bar="squirrel",beer="amber",patron="shaggy",price=3},
+>    {bar="cask",beer="stout",patron="velma",price=4},
+>    {bar="squirrel",beer="amber",patron="shaggy",price=3},
+>    {bar="cask",beer="stout",patron="velma",price=4}]
+>   : {bar:string, beer:string, patron:string, price:int} list
+
+(*) Happy patrons
+(* TODO
+from patron, bar, beer, price
+where {patron, bar} elem barPatrons
+  andalso {patron, beer} elem patronBeers
+  andalso {bar, beer, price} elem barBeers
+group patron;
+> val it = ["shaggy", "velma"] : string list
+*)
+
 (* Find happy patrons. Shaggy is happy because the Squirrel and Cask sell
    Amber; Velma is happy because Cask sells Stout. Fred and Scooby are not
    happy. *)
