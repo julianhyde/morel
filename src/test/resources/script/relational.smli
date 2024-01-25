@@ -1582,6 +1582,40 @@ Sys.plan();
 >   "from(sink join(pat e, exp constant([[10, 100, Fred], [20, 101, Velma], [30, 102, Shaggy], [30, 103, Scooby]]), sink where(condition apply2(fnValue =, apply(fnValue nth:0, argCode get(name e)), constant(30)), sink yield(codes [get(e)], sink collect(apply(fnValue nth:2, argCode get(name e)))))))"
 >   : string
 
+(*) into
+let
+  fun clean emps =
+    from e in emps
+    where e.sal > 1000.0
+
+  fun process emps =
+    from e in emps
+    group e.deptno compute count, sum of e.sal
+
+  fun pipeline emps =
+    from e in process (clean emps)
+    yield e.deptno + e.count
+in
+  pipeline scott.emp
+end;
+
+let
+  fun clean emps =
+    from e in emps
+    where e.sal > 1000.0
+
+  fun process emps =
+    from e in emps
+    group e.deptno compute count, sum of e.sal
+
+  fun pipeline emps =
+    from e in emps
+      compute clean
+      (*) into process
+in
+  pipeline scott.emp
+end;
+
 (*) dummy
 from message in ["the end"];
 > val it = ["the end"] : string list
