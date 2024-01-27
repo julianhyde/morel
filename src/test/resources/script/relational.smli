@@ -1134,6 +1134,11 @@ from e in emps
 > val it = 88 : int
 *)
 
+(*) Primitive 'yield' followed  by 'into'
+from e in emps
+  yield e.empno
+  into sum;
+
 (*) Empty from
 from;
 > val it = [()] : unit list
@@ -1598,6 +1603,7 @@ let
 in
   pipeline scott.emp
 end;
+> val it = [24,13,35] : int list
 
 let
   fun clean emps =
@@ -1610,11 +1616,12 @@ let
 
   fun pipeline emps =
     from e in emps
-      compute clean
-      (*) into process
+      through e2 in clean
+      into process
 in
   pipeline scott.emp
 end;
+> val it = [24,13,35] : int list
 
 (*) dummy
 from message in ["the end"];

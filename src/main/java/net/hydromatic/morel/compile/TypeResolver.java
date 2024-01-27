@@ -393,6 +393,9 @@ public class TypeResolver {
           case COMPUTE:
             throw new IllegalArgumentException(
                 "'compute' step must be last in 'from'");
+          case INTO:
+            throw new CompileException("'into' step must be last in 'from'",
+                false, step.e.pos);
           }
         }
         env3 = p.left;
@@ -408,7 +411,8 @@ public class TypeResolver {
       }
       final Ast.From from2 = from.copy(fromSteps, yieldExp2);
       return reg(from2, v,
-          from.isCompute() ? v3 : unifier.apply(LIST_TY_CON, v3));
+          from.isCompute() || from.isInto() ? v3
+              : unifier.apply(LIST_TY_CON, v3));
 
     case ID:
       final Ast.Id id = (Ast.Id) node;
@@ -650,6 +654,21 @@ public class TypeResolver {
           ? group.copy(groupExps, aggregates)
           : ((Ast.Compute) step).copy(aggregates));
       return Pair.of(env3, v);
+
+    case INTO:
+    case THROUGH:
+      // from i in [1,2,3] into f
+      //   f: int list -> string
+      //   expression: string
+      final Ast.Into into = (Ast.Into) step;
+      final Unifier.Variable v13 = unifier.variable();
+      final Unifier.Variable v14 = unifier.variable();
+      final Ast.Exp intoExp = deduceType(env2, into.exp, v14);
+      final Unifier.Term term = fieldRecord(fieldVars);
+      equiv(unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, term), v13),
+          v14);
+      fromSteps.add(into.copy(intoExp));
+      return Pair.of(EmptyTypeEnv.INSTANCE, v13);
 
     default:
       throw new AssertionError("unknown step type " + step.op);

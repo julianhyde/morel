@@ -1814,6 +1814,14 @@ public class MainTest {
         .assertParseThrowsParseException(
             startsWith("Encountered \"<EOF>\" at line 1, column 11."));
     ml("from e in emps\n"
+        + "through e in empsInDept 20\n"
+        + "yield e.sal")
+        .assertParse("from e in emps through e in empsInDept 20 yield #sal e");
+    ml("from e in emps\n"
+        + "yield e.empno\n"
+        + "into sum")
+        .assertParse("from e in emps yield #empno e into sum");
+    ml("from e in emps\n"
         + "yield e.empno\n"
         + "compute sum, count")
         .assertParse("from e in emps "
@@ -1874,6 +1882,19 @@ public class MainTest {
         .assertTypeThrows(
             pos -> throwsA(TypeResolver.TypeException.class,
                 is("no field 'x' in type '{a:int, b:bool}'")));
+    ml("from d in [{a=1,b=true}] yield d.x into List.length")
+        .assertType("int");
+    ml("from d in [{a=1,b=true}] yield d.a into sum")
+        .assertType("int");
+    ml("from d in [{a=1,b=true}] yield d.a $into sum$ yield \"a\"", '$')
+        .assertCompileException(pos ->
+            throwsA(CompileException.class,
+                "'into' step must be last in 'from'", pos));
+    ml("from d in [{a=1,b=true}]\n"
+        + " yield d.a\n"
+        + " through i in (fn x => x)\n"
+        + " yield i + 1")
+        .assertType("int list");
   }
 
   @Test void testFromYieldExpression() {
