@@ -663,8 +663,7 @@ public class TypeResolver {
       final Unifier.Variable v13 = unifier.variable();
       final Unifier.Variable v14 = unifier.variable();
       final Ast.Exp intoExp = deduceType(env2, into.exp, v14);
-      final Unifier.Term term = fieldRecord(fieldVars);
-      equiv(unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, term), v13),
+      equiv(unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, v), v13),
           v14);
       fromSteps.add(into.copy(intoExp));
       return Pair.of(EmptyTypeEnv.INSTANCE, v13);

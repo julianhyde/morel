@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.compile;
 
+import org.apache.calcite.util.Util;
+
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
@@ -853,6 +855,15 @@ public class Resolver {
     final FromBuilder fromBuilder = core.fromBuilder(typeMap.typeSystem, env);
 
     Core.Exp run(Ast.From from) {
+      if (from.isInto()) {
+        // Translate "from ... into f" as if they had written "f (from ...)"
+        Util.skipLast(from.steps).forEach(this::accept);
+        final Core.Exp e = fromBuilder.buildSimplify();
+        final Ast.Into into = (Ast.Into) Util.last(from.steps);
+        final Core.Exp exp = toCore(into.exp);
+        return core.apply(exp.pos, typeMap.getType(from), exp, e);
+      }
+
       from.steps.forEach(this::accept);
       final Core.Exp e = fromBuilder.buildSimplify();
       if (from.isCompute()) {

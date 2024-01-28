@@ -623,6 +623,9 @@ public class MainTest {
 
   @SuppressWarnings("ConstantConditions")
   @Test void testDummy() {
+    ml("from d in [{a=1,b=true}] yield d.a into sum")
+        .assertType("int")
+        .assertEval(is(1));
     switch (0) {
     case 0:
       ml("1").assertEval(is(1));
@@ -1883,7 +1886,8 @@ public class MainTest {
             pos -> throwsA(TypeResolver.TypeException.class,
                 is("no field 'x' in type '{a:int, b:bool}'")));
     ml("from d in [{a=1,b=true}] yield d.a into sum")
-        .assertType("int");
+        .assertType("int")
+        .assertEval(is(1));
     ml("from d in [{a=1,b=true}] yield d.a $into sum$ yield \"a\"", '$')
         .assertCompileException(pos ->
             throwsA(CompileException.class,
