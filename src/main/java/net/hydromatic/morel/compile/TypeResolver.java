@@ -656,7 +656,6 @@ public class TypeResolver {
       return Pair.of(env3, v);
 
     case INTO:
-    case THROUGH:
       // from i in [1,2,3] into f
       //   f: int list -> string
       //   expression: string
@@ -669,6 +668,34 @@ public class TypeResolver {
           v14);
       fromSteps.add(into.copy(intoExp));
       return Pair.of(EmptyTypeEnv.INSTANCE, v13);
+
+    case THROUGH:
+      // from i in [1,2,3] through p in f
+      //   f: int list -> string list
+      //   expression: string list
+      // v17: int list -> string list
+      // v18: string
+      // v19: string list
+      final Ast.Through through = (Ast.Through) step;
+      final Unifier.Variable v17 = unifier.variable();
+      final Unifier.Variable v18 = unifier.variable();
+      final Unifier.Variable v19 = unifier.variable();
+      final HashMap<Ast.IdPat, Unifier.Term> termMap = new HashMap<>();
+      final Ast.Pat throughPat =
+          deducePatType(env, through.pat, termMap, null, v18);
+      final Ast.Exp throughExp = deduceType(env2, through.exp, v17);
+      final Unifier.Term term2 = fieldRecord(fieldVars);
+      equiv(unifier.apply(LIST_TY_CON, v18), v19);
+      equiv(unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, term2), v19),
+          v17);
+      fromSteps.add(through.copy(throughPat, throughExp));
+      TypeEnv env5 = env2;
+      for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap.entrySet()) {
+        env5 = env5.bind(e.getKey().name, e.getValue());
+        fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
+            (Unifier.Variable) e.getValue());
+      }
+      return Pair.of(env5, v19);
 
     default:
       throw new AssertionError("unknown step type " + step.op);
