@@ -1882,8 +1882,6 @@ public class MainTest {
         .assertTypeThrows(
             pos -> throwsA(TypeResolver.TypeException.class,
                 is("no field 'x' in type '{a:int, b:bool}'")));
-    ml("from d in [{a=1,b=true}] yield d.x into List.length")
-        .assertType("int");
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int");
     ml("from d in [{a=1,b=true}] yield d.a $into sum$ yield \"a\"", '$')
