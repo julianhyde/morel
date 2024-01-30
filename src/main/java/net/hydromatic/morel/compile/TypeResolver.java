@@ -393,9 +393,6 @@ public class TypeResolver {
           case COMPUTE:
             throw new IllegalArgumentException(
                 "'compute' step must be last in 'from'");
-          case INTO:
-            throw new CompileException("'into' step must be last in 'from'",
-                false, step.e.pos);
           }
         }
         env3 = p.left;

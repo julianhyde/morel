@@ -1814,14 +1814,6 @@ public class MainTest {
         .assertParseThrowsParseException(
             startsWith("Encountered \"<EOF>\" at line 1, column 11."));
     ml("from e in emps\n"
-        + "through e in empsInDept 20\n"
-        + "yield e.sal")
-        .assertParse("from e in emps through e in empsInDept 20 yield #sal e");
-    ml("from e in emps\n"
-        + "yield e.empno\n"
-        + "into sum")
-        .assertParse("from e in emps yield #empno e into sum");
-    ml("from e in emps\n"
         + "yield e.empno\n"
         + "compute sum, count")
         .assertParse("from e in emps "
@@ -1882,30 +1874,6 @@ public class MainTest {
         .assertTypeThrows(
             pos -> throwsA(TypeResolver.TypeException.class,
                 is("no field 'x' in type '{a:int, b:bool}'")));
-    ml("from d in [{a=1,b=true}] yield d.a into List.length")
-        .assertType("int");
-    ml("from d in [{a=1,b=true}] yield d.a into sum")
-        .assertType("int")
-        .assertEval(is(1));
-    ml("from d in [{a=1,b=true}] yield d.a $into sum$ yield \"a\"", '$')
-        .assertCompileException(pos ->
-            throwsA(CompileException.class,
-                "'into' step must be last in 'from'", pos));
-    // "map String.size" has type "string list -> int list",
-    // and therefore the type of "j" is "int"
-    ml("from s in [\"ab\",\"c\"]\n"
-        + " through j in (map String.size)")
-        .assertType("int list");
-    ml("from s in [\"ab\",\"c\"]\n"
-        + " through j in (map String.size)\n"
-        + " yield j + 2")
-        .assertType("int list");
-    ml("from d in [{a=1,b=true},{a=2,b=false}]\n"
-        + " yield d.a\n"
-        + " through s in (fn ints =>\n"
-        + "   from i in ints yield substring (\"abc\", 0, i))")
-        .assertType("string list")
-        .assertEval(is(list("a", "ab")));
   }
 
   @Test void testFromYieldExpression() {

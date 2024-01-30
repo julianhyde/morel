@@ -1134,12 +1134,6 @@ from e in emps
 > val it = 88 : int
 *)
 
-(*) Primitive 'yield' followed  by 'into'
-from e in emps
-  yield e.deptno
-  into sum;
-> val it = 90 : int
-
 (*) Empty from
 from;
 > val it = [()] : unit list
