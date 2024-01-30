@@ -1109,6 +1109,37 @@ from e in emps
   compute si = sum of e.id, c = count, si1 = sum of e.id + 1;
 > val it = {c=4,si=406,si1=410} : {c:int, si:int, si1:int}
 
+(*) Primitive 'yield' followed by composite 'compute';
+(*) fine as long as it doesn't reference fields
+(* TODO
+from e in emps
+  yield e.empno
+  compute sum, count;
+> val it = {count = 3, sum = 88} : {count:int, sum:int}
+*)
+
+"";
+> val it = "" : string
+
+from e in emps
+  yield e.empno
+  compute sum of empno;
+> stdIn:4.18-4.23 Error: unbound variable or constructor: empno
+>   raised at: stdIn:4.18-4.23
+
+(* TODO
+from e in emps
+  yield {e.empno}
+  compute sum of empno;
+> val it = 88 : int
+*)
+
+(*) Primitive 'yield' followed  by 'into'
+from e in emps
+  yield e.deptno
+  into sum;
+> val it = 90 : int
+
 (*) Empty from
 from;
 > val it = [()] : unit list

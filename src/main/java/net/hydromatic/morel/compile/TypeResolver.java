@@ -56,6 +56,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -188,7 +189,7 @@ public class TypeResolver {
         if (type.isProgressive()) {
           progressive.set(true);
         }
-      });
+      }, apply -> {}, apply -> {});
       if (progressive.get()) {
         node2.accept(FieldExpander.create(typeSystem, env));
       } else {
@@ -202,21 +203,50 @@ public class TypeResolver {
    * an unresolved type. Throws if there are unresolved field references. */
   private static void checkNoUnresolvedFieldRefs(Ast.Decl decl,
       TypeMap typeMap) {
-    forEachUnresolvedField(decl, typeMap, apply -> {
-      throw new TypeException("unresolved flex record (can't tell "
-          + "what fields there are besides " + apply.fn + ")",
-          apply.arg.pos);
-    });
+    forEachUnresolvedField(decl, typeMap,
+        apply -> {
+          throw new TypeException("unresolved flex record (can't tell "
+              + "what fields there are besides " + apply.fn + ")",
+              apply.arg.pos);
+        },
+        apply -> {
+          throw new TypeException("reference to field "
+              + ((Ast.RecordSelector) apply.fn).name
+              + " of non-record type " + typeMap.getType(apply.arg),
+              apply.arg.pos);
+        },
+        apply -> {
+          throw new TypeException("no field '"
+              + ((Ast.RecordSelector) apply.fn).name
+              + "' in type '" + typeMap.getType(apply.arg) + "'",
+              apply.arg.pos);
+        });
   }
 
   private static void forEachUnresolvedField(Ast.Decl decl, TypeMap typeMap,
-      Consumer<Ast.Apply> consumer) {
+      Consumer<Ast.Apply> variableConsumer,
+      Consumer<Ast.Apply> notRecordTypeConsumer,
+      Consumer<Ast.Apply> noFieldConsumer) {
     decl.accept(
         new Visitor() {
           @Override protected void visit(Ast.Apply apply) {
-            if (apply.fn.op == Op.RECORD_SELECTOR
-                && typeMap.typeIsVariable(apply.arg)) {
-              consumer.accept(apply);
+            if (apply.fn.op == Op.RECORD_SELECTOR) {
+              final Ast.RecordSelector recordSelector =
+                  (Ast.RecordSelector) apply.fn;
+              if (typeMap.typeIsVariable(apply.arg)) {
+                variableConsumer.accept(apply);
+              } else {
+                final Collection<String> fieldNames =
+                    typeMap.typeFieldNames(apply.arg);
+                if (fieldNames == null) {
+                  notRecordTypeConsumer.accept(apply);
+                } else {
+                  if (!fieldNames.contains(recordSelector.name)) {
+                    // "#f r" is valid if "r" is a record type with a field "f"
+                    noFieldConsumer.accept(apply);
+                  }
+                }
+              }
             }
             super.visit(apply);
           }
@@ -361,12 +391,11 @@ public class TypeResolver {
         if (step.i != from.steps.size() - 1) {
           switch (step.e.op) {
           case COMPUTE:
-            throw new AssertionError("'compute' step must be last in 'from'");
-          case YIELD:
-            if (((Ast.Yield) step.e).exp.op != Op.RECORD) {
-              throw new AssertionError("'yield' step that is not last in 'from'"
-                  + " must be a record expression");
-            }
+            throw new IllegalArgumentException(
+                "'compute' step must be last in 'from'");
+          case INTO:
+            throw new CompileException("'into' step must be last in 'from'",
+                false, step.e.pos);
           }
         }
         env3 = p.left;
