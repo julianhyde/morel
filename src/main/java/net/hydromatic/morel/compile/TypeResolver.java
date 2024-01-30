@@ -64,7 +64,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.NavigableSet;
-import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -83,6 +82,7 @@ import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import static java.lang.String.join;
+import static java.util.Objects.requireNonNull;
 
 /** Resolves the type of an expression. */
 @SuppressWarnings("StaticPseudoFunctionalStyleMethod")
@@ -105,7 +105,7 @@ public class TypeResolver {
   static final String PROGRESSIVE_LABEL = "z$dummy";
 
   private TypeResolver(TypeSystem typeSystem) {
-    this.typeSystem = Objects.requireNonNull(typeSystem);
+    this.typeSystem = requireNonNull(typeSystem);
   }
 
   /** Deduces the datatype of a declaration. */
@@ -226,8 +226,8 @@ public class TypeResolver {
 
   private <E extends AstNode> E reg(E node,
       Unifier.Variable variable, Unifier.Term term) {
-    Objects.requireNonNull(node);
-    Objects.requireNonNull(term);
+    requireNonNull(node);
+    requireNonNull(term);
     map.put(node, term);
     if (variable != null) {
       equiv(term, variable);
@@ -238,7 +238,6 @@ public class TypeResolver {
   private Ast.Exp deduceType(TypeEnv env, Ast.Exp node, Unifier.Variable v) {
     final List<Ast.Exp> args2;
     final Unifier.Variable v2;
-    Unifier.Variable v3 = null;
     final Map<Ast.IdPat, Unifier.Term> termMap;
     switch (node.op) {
     case BOOL_LITERAL:
@@ -353,6 +352,7 @@ public class TypeResolver {
       // "(from exp: v50 as id: v60 [, exp: v51 as id: v61]...
       //  [where filterExp: v5] [yield yieldExp: v4]): v"
       final Ast.From from = (Ast.From) node;
+      Unifier.Variable v3 = unifier.variable();
       TypeEnv env3 = env;
       final Map<Ast.Id, Unifier.Variable> fieldVars = new LinkedHashMap<>();
       final List<Ast.FromStep> fromSteps = new ArrayList<>();
@@ -378,7 +378,7 @@ public class TypeResolver {
         v3 = unifier.variable();
         yieldExp2 = deduceType(env3, from.implicitYieldExp, v3);
       } else {
-        Objects.requireNonNull(v3);
+        requireNonNull(v3);
         yieldExp2 = null;
       }
       final Ast.From from2 =
@@ -478,6 +478,7 @@ public class TypeResolver {
   private Pair<TypeEnv, Unifier.Variable> deduceStepType(TypeEnv env,
       Ast.FromStep step, Unifier.Variable v, final TypeEnv env2,
       Map<Ast.Id, Unifier.Variable> fieldVars, List<Ast.FromStep> fromSteps) {
+    requireNonNull(v);
     switch (step.op) {
     case SCAN:
       final Ast.Scan scan = (Ast.Scan) step;
@@ -1397,9 +1398,9 @@ public class TypeResolver {
 
     BindTypeEnv(String definedName,
         Function<TypeSystem, Unifier.Term> termFactory, TypeEnv parent) {
-      this.definedName = Objects.requireNonNull(definedName);
-      this.termFactory = Objects.requireNonNull(termFactory);
-      this.parent = Objects.requireNonNull(parent);
+      this.definedName = requireNonNull(definedName);
+      this.termFactory = requireNonNull(termFactory);
+      this.parent = requireNonNull(parent);
     }
 
     @Override public Unifier.Term get(TypeSystem typeSystem, String name,
@@ -1442,7 +1443,7 @@ public class TypeResolver {
     private TypeEnv typeEnv;
 
     TypeEnvHolder(TypeEnv typeEnv) {
-      this.typeEnv = Objects.requireNonNull(typeEnv);
+      this.typeEnv = requireNonNull(typeEnv);
     }
 
     @Override public void accept(String name, Type type) {
@@ -1468,9 +1469,9 @@ public class TypeResolver {
     private Resolved(Environment env,
         Ast.Decl originalNode, Ast.Decl node, TypeMap typeMap) {
       this.env = env;
-      this.originalNode = Objects.requireNonNull(originalNode);
-      this.node = Objects.requireNonNull(node);
-      this.typeMap = Objects.requireNonNull(typeMap);
+      this.originalNode = requireNonNull(originalNode);
+      this.node = requireNonNull(node);
+      this.typeMap = requireNonNull(typeMap);
       Preconditions.checkArgument(originalNode instanceof Ast.FunDecl
           ? node instanceof Ast.ValDecl
           : originalNode.getClass() == node.getClass());
