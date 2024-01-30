@@ -47,7 +47,6 @@ import net.hydromatic.morel.util.Unifier;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import org.apache.calcite.util.Holder;
@@ -381,9 +380,7 @@ public class TypeResolver {
         requireNonNull(v3);
         yieldExp2 = null;
       }
-      final Ast.From from2 =
-          from.copy(fromSteps,
-              from.implicitYieldExp != null ? yieldExp2 : null);
+      final Ast.From from2 = from.copy(fromSteps, yieldExp2);
       return reg(from2, v,
           from.isCompute() ? v3 : unifier.apply(LIST_TY_CON, v3));
 
@@ -513,6 +510,7 @@ public class TypeResolver {
         fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
             (Unifier.Variable) e.getValue());
       }
+      v = fieldVar(fieldVars);
       final Ast.Exp scanCondition2;
       if (scan.condition != null) {
         final Unifier.Variable v5 = unifier.variable();
@@ -583,8 +581,6 @@ public class TypeResolver {
       final Ast.Group group = (Ast.Group) step;
       validateGroup(group);
       TypeEnv env3 = env;
-      final Map<Ast.Id, Unifier.Variable> inFieldVars =
-          ImmutableMap.copyOf(fieldVars);
       fieldVars.clear();
       final PairList<Ast.Id, Ast.Exp> groupExps = PairList.of();
       for (Map.Entry<Ast.Id, Ast.Exp> groupExp : group.groupExps) {
@@ -606,18 +602,16 @@ public class TypeResolver {
         final Ast.Exp aggregateFn2 =
             deduceType(env2, aggregate.aggregate, v9);
         final Ast.Exp arg2;
-        final Unifier.Term term;
+        final Unifier.Variable v10;
         if (aggregate.argument == null) {
           arg2 = null;
-          term = fieldRecord(inFieldVars);
+          v10 = v;
         } else {
-          final Unifier.Variable v10 = unifier.variable();
+          v10 = unifier.variable();
           arg2 = deduceType(env2, aggregate.argument, v10);
-          term = v10;
         }
         reg(aggregate.aggregate, null, v9);
-        equiv(
-            unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, term), v8),
+        equiv(unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, v10), v8),
             v9);
         env3 = env3.bind(id.name, v8);
         fieldVars.put(id, v8);
@@ -649,16 +643,16 @@ public class TypeResolver {
     }
   }
 
-  private Unifier.Term fieldRecord(Map<Ast.Id, Unifier.Variable> fieldVars) {
+  private Unifier.Variable fieldVar(Map<Ast.Id, Unifier.Variable> fieldVars) {
     switch (fieldVars.size()) {
     case 0:
-      return toTerm(PrimitiveType.UNIT);
+      return equiv(toTerm(PrimitiveType.UNIT), unifier.variable());
     case 1:
       return Iterables.getOnlyElement(fieldVars.values());
     default:
       final TreeMap<String, Unifier.Variable> map = new TreeMap<>();
       fieldVars.forEach((k, v) -> map.put(k.name, v));
-      return record(map);
+      return equiv(record(map), unifier.variable());
     }
   }
 
@@ -1246,8 +1240,9 @@ public class TypeResolver {
         ast.apply(ast.id(Pos.ZERO, call.op.opName), call.a), v);
   }
 
-  private void equiv(Unifier.Term term, Unifier.Variable atom) {
-    terms.add(new TermVariable(term, atom));
+  private Unifier.Variable equiv(Unifier.Term term, Unifier.Variable v) {
+    terms.add(new TermVariable(term, v));
+    return v;
   }
 
   private void equiv(Unifier.Term term, Unifier.Term term2) {
