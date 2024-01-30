@@ -1524,6 +1524,17 @@ public class Ast {
           fields = ImmutableSet.copyOf(nextFields);
           break;
 
+        case THROUGH:
+          final Through through = (Through) step;
+          nextFields.clear();
+          through.pat.visit(p -> {
+            if (p instanceof IdPat) {
+              nextFields.add(ast.id(Pos.ZERO, ((IdPat) p).name));
+            }
+          });
+          fields = ImmutableSet.copyOf(nextFields);
+          break;
+
         case COMPUTE:
         case GROUP:
           final Group group = (Group) step;

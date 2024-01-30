@@ -1885,6 +1885,8 @@ public class MainTest {
         .assertTypeThrows(
             pos -> throwsA(TypeResolver.TypeException.class,
                 is("no field 'x' in type '{a:int, b:bool}'")));
+    ml("from d in [{a=1,b=true}] yield d.a into List.length")
+        .assertType("int");
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int")
         .assertEval(is(1));
@@ -1892,11 +1894,21 @@ public class MainTest {
         .assertCompileException(pos ->
             throwsA(CompileException.class,
                 "'into' step must be last in 'from'", pos));
-    ml("from d in [{a=1,b=true}]\n"
-        + " yield d.a\n"
-        + " through i in (fn x => x)\n"
-        + " yield i + 1")
+    // "map String.size" has type "string list -> int list",
+    // and therefore the type of "j" is "int"
+    ml("from s in [\"ab\",\"c\"]\n"
+        + " through j in (map String.size)")
         .assertType("int list");
+    ml("from s in [\"ab\",\"c\"]\n"
+        + " through j in (map String.size)\n"
+        + " yield j + 2")
+        .assertType("int list");
+    ml("from d in [{a=1,b=true},{a=2,b=false}]\n"
+        + " yield d.a\n"
+        + " through s in (fn ints =>\n"
+        + "   from i in ints yield substring (\"abc\", 0, i))")
+        .assertType("string list")
+        .assertEval(is(list("a", "ab")));
   }
 
   @Test void testFromYieldExpression() {
