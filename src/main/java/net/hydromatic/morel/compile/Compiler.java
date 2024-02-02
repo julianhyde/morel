@@ -644,7 +644,7 @@ public class Compiler {
   private void compileMatch(Context cx, Core.Match match,
       BiConsumer<Core.Pat, Code> consumer) {
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.bindPattern(typeSystem, bindings, match.pat);
+    Compiles.acceptBinding(typeSystem, match.pat, bindings);
     final Code code = compile(cx.bindAll(bindings), match.exp);
     consumer.accept(match.pat, code);
   }

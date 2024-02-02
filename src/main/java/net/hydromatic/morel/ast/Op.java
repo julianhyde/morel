@@ -129,7 +129,7 @@ public enum Op {
   APPLY(" ", 8),
   CASE,
   FROM,
-  SCAN(" "),
+  SCAN(" join "),
   LEFT_JOIN(" left join "),
   RIGHT_JOIN(" right join "),
   FULL_JOIN(" full join "),
@@ -223,6 +223,18 @@ public enum Op {
     default:
       throw new AssertionError("unknown op " + this);
     }
+  }
+
+  /** Returns whether this operator is a join operator that generates null
+   * values (NONE option) on the right. */
+  public boolean generatesNullsOnRight() {
+    return this == LEFT_JOIN || this == FULL_JOIN;
+  }
+
+  /** Returns whether this operator is a join operator that generates null
+   * values (NONE option) on the left. */
+  public boolean generatesNullsOnLeft() {
+    return this == RIGHT_JOIN || this == FULL_JOIN;
   }
 }
 

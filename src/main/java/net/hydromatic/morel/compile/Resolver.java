@@ -899,7 +899,8 @@ public class Resolver {
         coreCondition = core.boolLiteral(true);
       } else {
         final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
-        Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
+        Compiles.acceptBinding(typeMap.typeSystem, corePat,
+            scan.op.generatesNullsOnRight(), bindings2);
         coreCondition = r.withEnv(bindings2).toCore(scan.condition);
       }
       fromBuilder.scan(scan.op, corePat, coreExp, coreCondition);

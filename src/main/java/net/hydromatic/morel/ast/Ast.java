@@ -1598,16 +1598,7 @@ public class Ast {
         return w.append("(").append(this, 0, 0).append(")");
       } else {
         w.append("from");
-        forEachIndexed(steps, (step, i) -> {
-          if (step.op == Op.SCAN && i > 0) {
-            if (steps.get(i - 1).op == Op.SCAN) {
-              w.append(",");
-            } else {
-              w.append(" join");
-            }
-          }
-          step.unparse(w, 0, 0);
-        });
+        forEachIndexed(steps, (step, i) -> step.unparse(w, this, i, 0, 0));
         return w;
       }
     }
@@ -1642,6 +1633,13 @@ public class Ast {
     FromStep(Pos pos, Op op) {
       super(pos, op);
     }
+
+    @Override final AstWriter unparse(AstWriter w, int left, int right) {
+      return unparse(w, null, -1, left, right);
+    }
+
+    abstract AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right);
   }
 
   /** A scan (e.g. "e in emps", "e")
@@ -1662,8 +1660,13 @@ public class Ast {
       this.condition = condition;
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(op.padded)
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
+      w.append(ordinal == 0
+              ? " "
+              : op == Op.SCAN && from.steps.get(ordinal - 1).op == Op.SCAN
+                  ? ", "
+                  : op.padded)
           .append(pat, 0, 0);
       if (exp != null) {
         if (exp.op == Op.FROM_EQ) {
@@ -1707,7 +1710,8 @@ public class Ast {
       this.exp = exp;
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
       return w.append(" where ").append(exp, 0, 0);
     }
 
@@ -1733,7 +1737,8 @@ public class Ast {
       this.exp = exp;
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
       return w.append(" skip ").append(exp, 0, 0);
     }
 
@@ -1759,7 +1764,8 @@ public class Ast {
       this.exp = exp;
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
       return w.append(" take ").append(exp, 0, 0);
     }
 
@@ -1785,7 +1791,8 @@ public class Ast {
       this.exp = exp;
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
       return w.append(" yield ").append(exp, 0, 0);
     }
 
@@ -1811,7 +1818,8 @@ public class Ast {
       this.exp = exp;
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
       return w.append(" into ").append(exp, 0, 0);
     }
 
@@ -1839,7 +1847,8 @@ public class Ast {
       this.exp = exp;
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
       return w.append(" through ").append(pat, 0, 0)
           .append(" in ").append(exp, 0, 0);
     }
@@ -1869,7 +1878,8 @@ public class Ast {
       this.orderItems = requireNonNull(orderItems);
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
       return w.append(" order ").appendAll(orderItems, ", ");
     }
 
@@ -1938,7 +1948,8 @@ public class Ast {
       this.aggregates = aggregates;
     }
 
-    @Override AstWriter unparse(AstWriter w, int left, int right) {
+    @Override AstWriter unparse(AstWriter w, Ast.From from, int ordinal,
+        int left, int right) {
       if (op == Op.GROUP) {
         w.append(" group");
       }

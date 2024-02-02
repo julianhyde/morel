@@ -307,10 +307,10 @@ public abstract class Compiles {
 
   static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
       Core.DatatypeDecl datatypeDecl) {
-    datatypeDecl.accept(binding(typeSystem, bindings));
+    datatypeDecl.accept(new PatternBinder(typeSystem, false, bindings));
   }
 
-  /** Richer than {@link #bindPattern(TypeSystem, List, Core.Pat)} because
+  /** Richer than {@link #acceptBinding(TypeSystem, Core.Pat, List)} because
    * we have the expression. */
   static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
       Core.ValDecl valDecl) {
@@ -321,24 +321,10 @@ public abstract class Compiles {
     });
   }
 
-  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
-      Core.Pat pat) {
-    pat.accept(binding(typeSystem, bindings));
-  }
-
-  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
-      Core.NamedPat namedPat) {
-    bindings.add(Binding.of(namedPat));
-  }
-
   public static void bindDataType(TypeSystem typeSystem, List<Binding> bindings,
       DataType dataType) {
     dataType.typeConstructors.keySet().forEach(name ->
         bindings.add(typeSystem.bindTyCon(dataType, name)));
-  }
-
-  static PatternBinder binding(TypeSystem typeSystem, List<Binding> bindings) {
-    return new PatternBinder(typeSystem, bindings);
   }
 
   /** Visits a pattern, adding bindings to a list.
@@ -347,26 +333,36 @@ public abstract class Compiles {
    * don't use this method: just bind directly. */
   public static void acceptBinding(TypeSystem typeSystem, Core.Pat pat,
       List<Binding> bindings) {
-    pat.accept(binding(typeSystem, bindings));
+    acceptBinding(typeSystem, pat, false, bindings);
+  }
+
+  /** Visits a pattern, adding bindings to a list, optionally making types
+   * optional (if they are from the null-generating side of an outer join). */
+  public static void acceptBinding(TypeSystem typeSystem, Core.Pat pat,
+      boolean optional, List<Binding> bindings) {
+    pat.accept(new PatternBinder(typeSystem, optional, bindings));
   }
 
   /** Visitor that adds a {@link Binding} each time it see an
    * {@link Core.IdPat} or {@link Core.AsPat}. */
   private static class PatternBinder extends Visitor {
     private final TypeSystem typeSystem;
+    private final boolean optional;
     private final List<Binding> bindings;
 
-    PatternBinder(TypeSystem typeSystem, List<Binding> bindings) {
+    PatternBinder(TypeSystem typeSystem, boolean optional,
+        List<Binding> bindings) {
       this.typeSystem = typeSystem;
+      this.optional = optional;
       this.bindings = bindings;
     }
 
     @Override protected void visit(Core.IdPat idPat) {
-      bindPattern(typeSystem, bindings, idPat);
+      bindings.add(Binding.of(idPat).withOptional(optional));
     }
 
     @Override protected void visit(Core.AsPat asPat) {
-      bindPattern(typeSystem, bindings, asPat);
+      bindings.add(Binding.of(asPat).withOptional(optional));
       super.visit(asPat);
     }
 

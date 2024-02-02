@@ -1224,7 +1224,7 @@ public class Core {
 
     @Override protected AstWriter unparse(AstWriter w, From from, int ordinal,
         int left, int right) {
-      w.append(ordinal == 0 ? " " : " join ")
+      w.append(ordinal == 0 ? " " : op.padded)
           // for these purposes 'in' has same precedence as '='
           .append(pat, 0, Op.EQ.left);
       if (Extents.isInfinite(exp)) {

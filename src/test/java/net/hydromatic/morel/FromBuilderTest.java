@@ -21,6 +21,8 @@ package net.hydromatic.morel;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -33,8 +35,10 @@ import com.google.common.collect.ImmutableSet;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
@@ -493,6 +497,28 @@ public class FromBuilderTest {
     assertThat(from3, hasToString(expected3));
     final Core.Exp e3 = fromBuilder3.buildSimplify();
     assertThat(e3, is(from3));
+  }
+
+  @Test void testOuterJoin() {
+    final Fixture f = new Fixture();
+    BuiltIn.dataTypes(f.typeSystem, new ArrayList<>()); // need "option"
+
+    final BiConsumer<Op, String> fn = (op, expectedType) -> {
+      final FromBuilder b = f.fromBuilder();
+      b.scan(f.aPat, f.list12)
+          .scan(op, f.bPat, f.list34,
+              core.equal(f.typeSystem, core.id(f.aPat), core.id(f.bPat)));
+      final Core.From e = b.build();
+      final String expected = "from a in [1, 2]"
+          + op.padded
+          + "b in [3, 4] on a = b";
+      assertThat(e, hasToString(expected));
+      assertThat(e.type, hasToString(expectedType));
+    };
+    fn.accept(Op.SCAN, "{a:int, b:int} list");
+    fn.accept(Op.LEFT_JOIN, "{a:int, b:int option} list");
+    fn.accept(Op.RIGHT_JOIN, "{a:int option, b:int} list");
+    fn.accept(Op.FULL_JOIN, "{a:int option, b:int option} list");
   }
 }
 

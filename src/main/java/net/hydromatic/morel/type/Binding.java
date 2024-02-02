@@ -34,30 +34,34 @@ public class Binding {
   public final Object value;
   /** If true, the binding is ignored by inlining. */
   public final boolean parameter;
+  /** If true, the binding is from the null-generating side of an outer join,
+   * and the type will be wrapped in 'optional'. */
+  public final boolean optional;
 
   private Binding(Core.NamedPat id, Core.Exp exp, Object value,
-      boolean parameter) {
+      boolean parameter, boolean optional) {
     this.id = requireNonNull(id);
     this.exp = exp;
     this.value = requireNonNull(value);
+    this.optional = optional;
     assert !(value instanceof Core.IdPat);
     this.parameter = parameter;
   }
 
   public static Binding of(Core.NamedPat id) {
-    return new Binding(id, null, Unit.INSTANCE, false);
+    return new Binding(id, null, Unit.INSTANCE, false, false);
   }
 
   public static Binding of(Core.NamedPat id, Core.Exp exp) {
-    return new Binding(id, exp, Unit.INSTANCE, false);
+    return new Binding(id, exp, Unit.INSTANCE, false, false);
   }
 
   public static Binding of(Core.NamedPat id, Object value) {
-    return new Binding(id, null, value, false);
+    return new Binding(id, null, value, false, false);
   }
 
   @Override public int hashCode() {
-    return Objects.hash(id, exp, value);
+    return Objects.hash(id, exp, value, parameter, optional);
   }
 
   @Override public boolean equals(Object o) {
@@ -65,11 +69,19 @@ public class Binding {
         || o instanceof Binding
         && id.equals(((Binding) o).id)
         && Objects.equals(exp, ((Binding) o).exp)
-        && value.equals(((Binding) o).value);
+        && value.equals(((Binding) o).value)
+        && parameter == (((Binding) o).parameter)
+        && optional == (((Binding) o).optional);
   }
 
   public Binding withParameter(boolean parameter) {
-    return new Binding(id, exp, value, parameter);
+    return parameter == this.parameter ? this
+        : new Binding(id, exp, value, parameter, optional);
+  }
+
+  public Binding withOptional(boolean optional) {
+    return optional == this.optional ? this
+        : new Binding(id, exp, value, parameter, optional);
   }
 
   @Override public String toString() {
