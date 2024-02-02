@@ -30,7 +30,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class NameGenerator {
   private int id = 0;
-  private final Map<String, AtomicInteger> nameCounts = new HashMap<>();
+  private final Map<String, AtomicInteger> nameCounts;
+
+  /** Creates a name generator. */
+  public NameGenerator() {
+    this(new HashMap<>());
+  }
+
+  /** Creates a name generator with certain variables already allocated. */
+  public NameGenerator(Map<String, AtomicInteger> nameCounts) {
+    this.nameCounts = nameCounts;
+  }
 
   /** Generates a name that is unique in this program. */
   public String get() {

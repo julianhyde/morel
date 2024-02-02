@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.type;
 
+import org.apache.calcite.util.Util;
+
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.Unit;
 
@@ -31,29 +33,39 @@ import static java.util.Objects.requireNonNull;
 public class Binding {
   public final Core.NamedPat id;
   public final Core.Exp exp;
+  public final Core.Exp exp2;
   public final Object value;
   /** If true, the binding is ignored by inlining. */
   public final boolean parameter;
 
   private Binding(Core.NamedPat id, Core.Exp exp, Object value,
-      boolean parameter) {
+      boolean parameter, Core.Exp exp2) {
     this.id = requireNonNull(id);
     this.exp = exp;
     this.value = requireNonNull(value);
     assert !(value instanceof Core.IdPat);
     this.parameter = parameter;
+    this.exp2 = exp2;
+  }
+
+  public Core.Exp exp() {
+    return Util.first(exp, exp2);
   }
 
   public static Binding of(Core.NamedPat id) {
-    return new Binding(id, null, Unit.INSTANCE, false);
+    return new Binding(id, null, Unit.INSTANCE, false, null);
   }
 
   public static Binding of(Core.NamedPat id, Core.Exp exp) {
-    return new Binding(id, exp, Unit.INSTANCE, false);
+    return new Binding(id, exp, Unit.INSTANCE, false, null);
+  }
+
+  public static Binding of(Core.NamedPat id, Core.Exp exp, Object value) {
+    return new Binding(id, null, value, false, exp);
   }
 
   public static Binding of(Core.NamedPat id, Object value) {
-    return new Binding(id, null, value, false);
+    return new Binding(id, null, value, false, null);
   }
 
   @Override public int hashCode() {
@@ -69,7 +81,7 @@ public class Binding {
   }
 
   public Binding withParameter(boolean parameter) {
-    return new Binding(id, exp, value, parameter);
+    return new Binding(id, exp, value, parameter, exp2);
   }
 
   @Override public String toString() {
