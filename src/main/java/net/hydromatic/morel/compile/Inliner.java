@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
@@ -30,12 +31,17 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 
+import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.ObjIntConsumer;
+import java.util.function.Supplier;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
@@ -46,38 +52,75 @@ import static java.util.Objects.requireNonNull;
  */
 public class Inliner extends EnvShuttle {
   private final Analyzer.@Nullable Analysis analysis;
+  private final Supplier<Uniquifier> uniquifierSupplier;
 
   /** Private constructor. */
-  private Inliner(TypeSystem typeSystem, Environment env,
-      Analyzer.Analysis analysis) {
+  private Inliner(TypeSystem typeSystem, Analyzer.Analysis analysis,
+      Supplier<Uniquifier> uniquifierSupplier, Environment env) {
     super(typeSystem, env);
     this.analysis = analysis;
+    this.uniquifierSupplier = uniquifierSupplier;
   }
 
   /** Creates an Inliner.
    *
    * <p>If {@code analysis} is null, no variables are inlined. */
   public static Inliner of(TypeSystem typeSystem, Environment env,
-      Analyzer.@Nullable Analysis analysis) {
-    return new Inliner(typeSystem, env, analysis);
+      Analyzer.@Nullable Analysis analysis, Core.Decl exp) {
+    final Map<String, AtomicInteger> map = new HashMap<>();
+    final ObjIntConsumer<String> consumer = (name, count) -> {
+      AtomicInteger v = map.get(name);
+      if (v == null) {
+        map.put(name, new AtomicInteger(count));
+      } else {
+        v.accumulateAndGet(count, Math::max);
+      }
+    };
+    @SuppressWarnings("FunctionalExpressionCanBeFolded")
+    final Supplier<Uniquifier> uniquifierSupplier =
+        Suppliers.memoize(() -> {
+          exp.accept(
+              new Visitor() {
+                private void visit_(Core.NamedPat idPat) {
+                  consumer.accept(idPat.name, idPat.i + 1);
+                }
+                @Override protected void visit(Core.IdPat idPat) {
+                  visit_(idPat);
+                }
+                @Override protected void visit(Core.AsPat idPat) {
+                  visit_(idPat);
+                }
+                @Override protected void visit(Core.Id id) {
+                  visit_(id.idPat);
+                }
+              });
+          return Uniquifier.create(typeSystem, new NameGenerator(map), env);
+        })::get;
+    return new Inliner(typeSystem, analysis, uniquifierSupplier, env);
   }
 
   @Override protected Inliner push(Environment env) {
-    return new Inliner(typeSystem, env, analysis);
+    return new Inliner(typeSystem, analysis, uniquifierSupplier, env);
+  }
+
+  Core.Exp expand(Core.Exp exp) {
+    final Uniquifier uniquifier = uniquifierSupplier.get();
+    final Core.Exp exp2 = exp.accept(uniquifier);
+    return exp2.accept(this);
   }
 
   @Override protected Core.Exp visit(Core.Id id) {
     final Binding binding = env.getOpt(id.idPat);
     if (binding != null
         && !binding.parameter) {
-      if (binding.exp != null) {
+      if (binding.exp() != null) {
         final Analyzer.Use use =
             analysis == null ? Analyzer.Use.MULTI_UNSAFE
                 : requireNonNull(analysis.map.get(id.idPat));
         switch (use) {
         case ATOMIC:
         case ONCE_SAFE:
-          return binding.exp.accept(this);
+          return expand(binding.exp());
         }
       }
       Object v = binding.value;

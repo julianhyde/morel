@@ -118,7 +118,7 @@ public abstract class Compiles {
     tracer.onCore(1, coreDecl0);
     if (inlinePassCount == 0) {
       // Inlining is disabled. Use the Inliner in a limited mode.
-      final Inliner inliner = Inliner.of(typeSystem, env, null);
+      final Inliner inliner = Inliner.of(typeSystem, env, null, coreDecl0);
       coreDecl = coreDecl0.accept(inliner);
     } else {
       final @Nullable Relationalizer relationalizer =
@@ -130,7 +130,7 @@ public abstract class Compiles {
       for (int i = 0; i < inlinePassCount; i++) {
         final Analyzer.Analysis analysis =
             Analyzer.analyze(typeSystem, env, coreDecl);
-        final Inliner inliner = Inliner.of(typeSystem, env, analysis);
+        final Inliner inliner = Inliner.of(typeSystem, env, analysis, coreDecl);
         final Core.Decl coreDecl2 = coreDecl;
         coreDecl = coreDecl2.accept(inliner);
         if (relationalizer != null) {

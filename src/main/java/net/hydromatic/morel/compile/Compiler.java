@@ -677,7 +677,9 @@ public class Compiler {
               throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
             }
             pairs.forEach((pat2, o2) -> {
-              outBindings.accept(Binding.of(pat2, o2));
+//              outBindings.accept(Binding.of(pat2, o2));
+//               outBindings.accept(Binding.of(pat2, exp.accept(Uniquifier.create(typeSystem, typeSystem.nameGenerator)), o2));
+               outBindings.accept(Binding.of(pat2, exp, o2));
               if (pat2 != skipPat) {
                 int stringDepth = Prop.STRING_DEPTH.intValue(session.map);
                 int lineWidth = Prop.LINE_WIDTH.intValue(session.map);
