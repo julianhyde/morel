@@ -672,7 +672,7 @@ public class TypeResolver {
         final Ast.Exp arg2;
         final Unifier.Variable v10;
         if (aggregate.argument == null) {
-          v10 = fieldVar(inStepVars);
+          v10 = v;
           arg2 = null;
         } else {
           v10 = unifier.variable();
