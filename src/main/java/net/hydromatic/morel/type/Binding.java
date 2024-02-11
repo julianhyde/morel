@@ -18,10 +18,10 @@
  */
 package net.hydromatic.morel.type;
 
-import org.apache.calcite.util.Util;
-
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.Unit;
+
+import org.apache.calcite.util.Util;
 
 import java.util.Objects;
 
