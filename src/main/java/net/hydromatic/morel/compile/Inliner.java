@@ -104,7 +104,7 @@ public class Inliner extends EnvShuttle {
   }
 
   Core.Exp expand(Core.Exp exp) {
-    final Uniquifier uniquifier = uniquifierSupplier.get();
+    final Uniquifier uniquifier = uniquifierSupplier.get().push(env);
     final Core.Exp exp2 = exp.accept(uniquifier);
     return exp2.accept(this);
   }

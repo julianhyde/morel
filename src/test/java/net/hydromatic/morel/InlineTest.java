@@ -100,7 +100,8 @@ public class InlineTest {
         + "  end";
     final String core = "val f = fn x => x + 1 + x";
     ml(ml)
-        .assertEval(whenAppliedTo(2, is(5))).assertCore(2, hasToString(core));
+        .assertEval(whenAppliedTo(2, is(5)))
+        .assertCore(2, hasToString(core));
   }
 
   @Test void testInlineChained() {
