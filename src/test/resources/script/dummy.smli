@@ -16,6 +16,19 @@
  * language governing permissions and limitations under the
  * License.
  *)
+(*) Closure
+(*
+let
+  fun f x = 1 + x;
+  val x = f 2;
+  fun f y = x + y;
+  val x = 10
+in
+  f x
+end;
+> val it = 13 : int
+*)
+
 fun isEmp e =
   e elem scott.emp;
 > val isEmp = fn

@@ -44,6 +44,9 @@ public class Session {
   /** Property values. */
   public final Map<Prop, Object> map;
 
+//  public final Uniquifier uniquifier =
+//      Uniquifier.create(typeSystem, typeSystem.nameGenerator, evalEnv);
+
   /** File system.
    *
    * <p>Wrapped in a Supplier to avoid the cost of initializing it (scanning

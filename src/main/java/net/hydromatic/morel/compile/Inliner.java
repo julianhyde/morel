@@ -109,6 +109,20 @@ public class Inliner extends EnvShuttle {
     return exp2.accept(this);
   }
 
+  Core.Exp expand2(Core.Exp exp) {
+    final Uniquifier uniquifier = uniquifierSupplier.get().push(env);
+    return exp.accept(uniquifier);
+  }
+
+  Core.Exp expand3(Core.@Nullable Exp exp, Core.@Nullable Exp exp2) {
+    if (exp != null) {
+      return exp.accept(this);
+    }
+    requireNonNull(exp2);
+    final Uniquifier uniquifier = uniquifierSupplier.get().push(env);
+    return exp2.accept(uniquifier);
+  }
+
   @Override protected Core.Exp visit(Core.Id id) {
     final Binding binding = env.getOpt(id.idPat);
     if (binding != null
@@ -120,7 +134,7 @@ public class Inliner extends EnvShuttle {
         switch (use) {
         case ATOMIC:
         case ONCE_SAFE:
-          return expand(binding.exp());
+          return expand3(binding.exp, binding.exp2);
         }
       }
       Object v = binding.value;

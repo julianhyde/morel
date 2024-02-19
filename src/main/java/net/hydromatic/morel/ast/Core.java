@@ -582,6 +582,11 @@ public class Core {
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.id(idPat.name, idPat.i);
     }
+
+    public Id copy(NamedPat idPat) {
+      return idPat == this.idPat ? this
+          : core.id(idPat);
+    }
   }
 
   /** Record selector function. */

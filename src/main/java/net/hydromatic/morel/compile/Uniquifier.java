@@ -27,7 +27,7 @@ import java.util.Map;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /** TODO: Javadoc. */
-class Uniquifier extends EnvShuttle {
+public class Uniquifier extends EnvShuttle {
   final Map<Core.IdPat, Core.IdPat> map;
   private final NameGenerator nameGenerator;
 
@@ -38,7 +38,7 @@ class Uniquifier extends EnvShuttle {
     this.map = map;
   }
 
-  protected static Uniquifier create(TypeSystem typeSystem,
+  public static Uniquifier create(TypeSystem typeSystem,
       NameGenerator nameGenerator, Environment env) {
     return new Uniquifier(typeSystem, env, nameGenerator,
         new HashMap<>());
@@ -59,7 +59,7 @@ class Uniquifier extends EnvShuttle {
   }
 
   @Override protected Core.Exp visit(Core.Id id) {
-    return core.id(id.idPat.accept(this));
+    return id.copy(id.idPat.accept(this));
   }
 }
 
