@@ -19,19 +19,23 @@
 package net.hydromatic.morel;
 
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
+import net.hydromatic.morel.compile.Uniquifier2;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.MorelException;
 
@@ -52,10 +56,13 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.ObjIntConsumer;
 
 import static net.hydromatic.morel.util.Static.str;
 
@@ -208,7 +215,45 @@ public class Main {
         idempotent
             ? x -> out.println("> " + x.replace("\n", "\n> "))
             : echoLines;
-    final BindingMap outBindings = new BindingMap();
+    final BindingMap outBindings =
+        new BindingMap() {
+          final Map<String, AtomicInteger> map = new HashMap<>();
+          final ObjIntConsumer<String> consumer = (name, count) -> {
+            AtomicInteger v = map.get(name);
+            if (v == null) {
+              map.put(name, new AtomicInteger(count));
+            } else {
+              v.accumulateAndGet(count, Math::max);
+            }
+          };
+          private final Visitor visitor = new Visitor() {
+            private void visit_(Core.NamedPat idPat) {
+              consumer.accept(idPat.name, idPat.i + 1);
+            }
+
+            @Override protected void visit(Core.IdPat idPat) {
+              visit_(idPat);
+            }
+
+            @Override protected void visit(Core.AsPat idPat) {
+              visit_(idPat);
+            }
+
+            @Override protected void visit(Core.Id id) {
+              visit_(id.idPat);
+            }
+          };
+          private final Uniquifier2 uniquifier =
+              Uniquifier2.create(typeSystem, env);
+
+          @Override void add(Binding binding) {
+            if (binding.exp2 != null) {
+              Core.Exp exp3 = binding.exp2.accept(uniquifier);
+              binding = Binding.of(binding.id, exp3, binding.value);
+            }
+            super.add(binding);
+          }
+        };
     final Shell shell = new Shell(this, env, echoLines, outLines, outBindings);
     session.withShell(shell, outLines, session1 ->
         shell.run(session1, new BufferingReader(in), echoLines, outLines));

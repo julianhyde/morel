@@ -17,7 +17,7 @@
  * License.
  *)
 (*) Closure
-(*
+(*)
 let
   fun f x = 1 + x;
   val x = f 2;
@@ -27,7 +27,7 @@ in
   f x
 end;
 > val it = 13 : int
-*)
+(*)
 
 fun isEmp e =
   e elem scott.emp;
@@ -38,5 +38,16 @@ fun isEmp e =
 from e
   where isEmp e andalso e.deptno = 20
   yield e.ename;
+> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
+
+(*) 'yield' uses 'case' to deconstruct a tuple
+from p in [(1, 2), (3, 5)]
+  yield case p of (x, y) => {x, y};
+> val it = [{x=1,y=2},{x=3,y=5}] : {x:int, y:int} list
+
+(*) 'yield' uses 'case' to deconstruct a record
+from p in [{x = 1, y = 2}, {x = 3, y = 5}]
+  yield case p of {x=x, y=y} => (x, y);
+> val it = [(1,2),(3,5)] : (int * int) list
 
 (*) End dummy.smli
