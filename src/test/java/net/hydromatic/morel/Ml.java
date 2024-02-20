@@ -40,13 +40,13 @@ import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.DataSet;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
-import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Iterables;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
@@ -446,7 +446,7 @@ class Ml {
   @CanIgnoreReturnValue
   private <E extends Throwable> Object eval(Session session, Environment env,
       TypeSystem typeSystem, AstNode statement, Calcite calcite) {
-    final List<Binding> bindings = new ArrayList<>();
+    final BindingMap bindings = new BindingMap();
     final List<Throwable> warningList = new ArrayList<>();
     try {
       CompiledStatement compiledStatement =
@@ -463,14 +463,14 @@ class Ml {
     tracer.onWarnings(warningList);
     final Object result;
     if (statement instanceof Ast.Exp) {
-      result = bindingValue(bindings, "it");
-    } else if (bindings.size() == 1) {
-      result = bindings.get(0).value;
+      result = requireNonNull(bindings.get("it")).value;
+    } else if (bindings.values().size() == 1) {
+      result = Iterables.getOnlyElement(bindings.values()).value;
     } else {
       Map<String, Object> map = new LinkedHashMap<>();
-      bindings.forEach(b -> {
-        if (!b.id.name.equals("it")) {
-          map.put(b.id.name, b.value);
+      bindings.forEach((name, b) -> {
+        if (!name.equals("it")) {
+          map.put(name, b.value);
         }
       });
       result = map;
@@ -478,15 +478,6 @@ class Ml {
     tracer.onResult(result);
     tracer.onPlan(session.code);
     return result;
-  }
-
-  private Object bindingValue(List<Binding> bindings, String name) {
-    for (Binding binding : bindings) {
-      if (binding.id.name.equals(name)) {
-        return binding.value;
-      }
-    }
-    return null;
   }
 
   Ml assertCompileException(

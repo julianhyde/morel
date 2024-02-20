@@ -44,7 +44,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Runnables;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -71,6 +70,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static net.hydromatic.morel.util.Static.str;
@@ -270,8 +270,7 @@ public class Shell {
     final SubShell subShell =
         new SubShell(1, config.maxUseDepth, lineFn, config.echo, typeSystem,
             env, terminal.writer()::println, session, config.directory);
-    final Map<String, Binding> bindings = new LinkedHashMap<>();
-    subShell.extracted(bindings);
+    subShell.extracted((name, binding) -> {});
   }
 
   /** Instantiates a class.
@@ -454,10 +453,9 @@ public class Shell {
       this.directory = directory;
     }
 
-    void extracted(@Nullable Map<String, Binding> outBindings) {
+    void extracted(BiConsumer<String, Binding> outBindings) {
       final StringBuilder buf = new StringBuilder();
-      final Map<String, Binding> bindingMap = new LinkedHashMap<>();
-      final List<Binding> bindings = new ArrayList<>();
+      final BindingMap bindingMap = new BindingMap();
       Environment env1 = env;
       for (;;) {
         final Pair<LineType, String> line = lineFn.read(buf);
@@ -493,14 +491,10 @@ public class Shell {
                         statement, null, warningList::add, tracer);
                 final Use shell = new Use(env0, bindingMap);
                 session.withShell(shell, outLines, session1 ->
-                    compiled.eval(session1, env0, outLines, bindings::add));
-                bindings.forEach(b -> bindingMap.put(b.id.name, b));
+                    compiled.eval(session1, env0, outLines, bindingMap::add));
                 env1 = env0.bindAll(bindingMap.values());
-                if (outBindings != null) {
-                  outBindings.putAll(bindingMap);
-                }
+                bindingMap.forEach(outBindings);
                 bindingMap.clear();
-                bindings.clear();
               } catch (ParseException | CompileException e) {
                 outLines.accept(e.getMessage());
               }
@@ -520,9 +514,9 @@ public class Shell {
     /** Implementation of the "use" function. */
     private class Use implements Session.Shell {
       private final Environment env;
-      private final Map<String, Binding> bindings;
+      private final BindingMap bindings;
 
-      Use(Environment env, Map<String, Binding> bindings) {
+      Use(Environment env, BindingMap bindings) {
         this.env = env;
         this.bindings = bindings;
       }
@@ -550,7 +544,7 @@ public class Shell {
           final SubShell subShell =
               new SubShell(depth + 1, maxDepth, new ReaderLineFn(bufferedReader),
                   false, typeSystem, env, outLines, session, directory);
-          subShell.extracted(bindings);
+          subShell.extracted(bindings::put);
         } catch (IOException e) {
           e.printStackTrace();
         }

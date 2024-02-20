@@ -32,7 +32,6 @@ import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.ParseException;
-import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.MorelException;
 
@@ -53,7 +52,6 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -210,7 +208,7 @@ public class Main {
         idempotent
             ? x -> out.println("> " + x.replace("\n", "\n> "))
             : echoLines;
-    final Map<String, Binding> outBindings = new LinkedHashMap<>();
+    final BindingMap outBindings = new BindingMap();
     final Shell shell = new Shell(this, env, echoLines, outLines, outBindings);
     session.withShell(shell, outLines, session1 ->
         shell.run(session1, new BufferingReader(in), echoLines, outLines));
@@ -225,10 +223,10 @@ public class Main {
     protected final Environment env0;
     protected final Consumer<String> echoLines;
     protected final Consumer<String> outLines;
-    protected final Map<String, Binding> bindingMap;
+    protected final BindingMap bindingMap;
 
     Shell(Main main, Environment env0, Consumer<String> echoLines,
-        Consumer<String> outLines, Map<String, Binding> bindingMap) {
+        Consumer<String> outLines, BindingMap bindingMap) {
       this.main = main;
       this.env0 = env0;
       this.echoLines = echoLines;
@@ -305,9 +303,8 @@ public class Main {
    * shell. */
   static class SubShell extends Shell {
 
-    SubShell(Main main, Consumer<String> echoLines,
-        Consumer<String> outLines,
-        Map<String, Binding> outBindings, Environment env0) {
+    SubShell(Main main, Consumer<String> echoLines, Consumer<String> outLines,
+        BindingMap outBindings, Environment env0) {
       super(main, env0, echoLines, outLines, outBindings);
     }
 
@@ -344,9 +341,7 @@ public class Main {
         final CompiledStatement compiled =
             Compiles.prepareStatement(main.typeSystem, main.session, env,
                 statement, null, e -> appendToOutput(e, outLines), tracer);
-        final List<Binding> bindings = new ArrayList<>();
-        compiled.eval(main.session, env, outLines, bindings::add);
-        bindings.forEach(b -> this.bindingMap.put(b.id.name, b));
+        compiled.eval(main.session, env, outLines, this.bindingMap::add);
       } catch (Codes.MorelRuntimeException e) {
         appendToOutput(e, outLines);
       }
