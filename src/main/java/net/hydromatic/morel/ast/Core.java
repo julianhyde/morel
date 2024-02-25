@@ -1205,7 +1205,8 @@ public class Core {
       }
       final ListType listType = (ListType) exp.type;
       if (!canAssign(listType.elementType, pat.type)) {
-        throw new IllegalArgumentException(exp.type + " + " + pat.type);
+        throw new IllegalArgumentException("cannot assign expression of type '"
+            + exp.type + "' to variable of type '" + pat.type + "'");
       }
     }
 

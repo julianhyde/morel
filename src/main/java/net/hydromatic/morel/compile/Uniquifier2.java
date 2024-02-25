@@ -69,6 +69,10 @@ public class Uniquifier2 extends EnvShuttle {
   @Override protected Core.Exp visit(Core.Id id) {
     return id.copy(id.idPat.accept(this));
   }
+
+  public void clearLocal() {
+    map.clear();
+  }
 }
 
 // End Uniquifier2.java

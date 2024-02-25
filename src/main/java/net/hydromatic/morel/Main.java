@@ -217,32 +217,6 @@ public class Main {
             : echoLines;
     final BindingMap outBindings =
         new BindingMap() {
-          final Map<String, AtomicInteger> map = new HashMap<>();
-          final ObjIntConsumer<String> consumer = (name, count) -> {
-            AtomicInteger v = map.get(name);
-            if (v == null) {
-              map.put(name, new AtomicInteger(count));
-            } else {
-              v.accumulateAndGet(count, Math::max);
-            }
-          };
-          private final Visitor visitor = new Visitor() {
-            private void visit_(Core.NamedPat idPat) {
-              consumer.accept(idPat.name, idPat.i + 1);
-            }
-
-            @Override protected void visit(Core.IdPat idPat) {
-              visit_(idPat);
-            }
-
-            @Override protected void visit(Core.AsPat idPat) {
-              visit_(idPat);
-            }
-
-            @Override protected void visit(Core.Id id) {
-              visit_(id.idPat);
-            }
-          };
           private final Uniquifier2 uniquifier =
               Uniquifier2.create(typeSystem, env);
 
@@ -252,6 +226,10 @@ public class Main {
               binding = Binding.of(binding.id, exp3, binding.value);
             }
             super.add(binding);
+          }
+
+          @Override void clearLocal() {
+            uniquifier.clearLocal();
           }
         };
     final Shell shell = new Shell(this, env, echoLines, outLines, outBindings);
@@ -386,6 +364,7 @@ public class Main {
         final CompiledStatement compiled =
             Compiles.prepareStatement(main.typeSystem, main.session, env,
                 statement, null, e -> appendToOutput(e, outLines), tracer);
+        this.bindingMap.clearLocal();
         compiled.eval(main.session, env, outLines, this.bindingMap::add);
       } catch (Codes.MorelRuntimeException e) {
         appendToOutput(e, outLines);

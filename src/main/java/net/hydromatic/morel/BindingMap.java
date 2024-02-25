@@ -77,6 +77,9 @@ class BindingMap {
   @Nullable Binding get(String name) {
     return byName.get(name);
   }
+
+  void clearLocal() {
+  }
 }
 
 // End BindingMap.java
