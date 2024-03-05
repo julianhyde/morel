@@ -55,7 +55,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -678,13 +677,14 @@ public class Compiler {
           final List<String> outs = new ArrayList<>();
           try {
             final Object o = code.eval(evalEnv);
-            final Map<Core.NamedPat, Object> pairs = new LinkedHashMap<>();
-            if (!Closure.bindRecurse(pat.withType(type), o, pairs::put)) {
+            final List<Binding> pairs = new ArrayList<>();
+            if (!Closure.bindRecurse(pat.withType(type), o, (pat2, o2) ->
+                pairs.add(Binding.of(pat2, exp, o2)))) {
               throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
             }
-            pairs.forEach((pat2, o2) -> {
-              outBindings.accept(Binding.of(pat2, o2));
-              if (pat2 != skipPat) {
+            pairs.forEach(binding -> {
+              outBindings.accept(binding);
+              if (binding.id != skipPat) {
                 int stringDepth = Prop.STRING_DEPTH.intValue(session.map);
                 int lineWidth = Prop.LINE_WIDTH.intValue(session.map);
                 int printDepth = Prop.PRINT_DEPTH.intValue(session.map);
@@ -693,17 +693,19 @@ public class Compiler {
                     new Pretty(typeSystem, lineWidth, printLength, printDepth,
                         stringDepth);
                 final Pretty.TypedVal typedVal;
-                if (o2 instanceof TypedValue) {
-                  TypedValue typedValue = (TypedValue) o2;
+                if (binding.value instanceof TypedValue) {
+                  TypedValue typedValue = (TypedValue) binding.value;
                   typedVal =
-                      new Pretty.TypedVal(pat2.name,
+                      new Pretty.TypedVal(binding.id.name,
                           typedValue.valueAs(Object.class),
-                          Keys.toProgressive(pat2.type().key())
+                          Keys.toProgressive(binding.id.type().key())
                               .toType(typeSystem));
                 } else {
-                  typedVal = new Pretty.TypedVal(pat2.name, o2, pat2.type);
+                  typedVal =
+                      new Pretty.TypedVal(binding.id.name, binding.value,
+                          binding.id.type);
                 }
-                pretty.pretty(buf, pat2.type, typedVal);
+                pretty.pretty(buf, binding.id.type, typedVal);
                 final String line = str(buf);
                 outs.add(line);
                 outLines.accept(line);

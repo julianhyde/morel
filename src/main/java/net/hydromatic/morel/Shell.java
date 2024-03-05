@@ -65,7 +65,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -484,11 +483,10 @@ public class Shell {
                 smlParser.zero("stdIn");
                 statement = smlParser.statementSemicolon();
                 final Environment env0 = env1;
-                final List<CompileException> warningList = new ArrayList<>();
                 final Tracer tracer = Tracers.empty();
                 final CompiledStatement compiled =
                     Compiles.prepareStatement(typeSystem, session, env0,
-                        statement, null, warningList::add, tracer);
+                        statement, null, e -> {}, tracer);
                 final Use shell = new Use(env0, bindingMap);
                 session.withShell(shell, outLines, session1 ->
                     compiled.eval(session1, env0, outLines, bindingMap::add));

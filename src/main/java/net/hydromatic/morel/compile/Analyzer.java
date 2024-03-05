@@ -20,6 +20,9 @@ package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 
 import com.google.common.collect.HashMultimap;
@@ -27,10 +30,17 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 /**
  * Shuttle that counts how many times each expression is used.
@@ -57,8 +67,45 @@ public class Analyzer extends EnvVisitor {
 
     // Mark all top-level bindings so that they will not be removed
     if (node instanceof Core.NonRecValDecl) {
-      analyzer.use(((Core.NonRecValDecl) node).pat).top = true;
+      final Core.NonRecValDecl nonRecValDecl = (Core.NonRecValDecl) node;
+      analyzer.use(nonRecValDecl.pat).top = true;
+
+      // If "e" uses "v1" from the environment,
+      // and "v1" is defined using expression "e1",
+      // convert "e" into "let v1 = e1 in e".
+      // And so forth, for any expressions used by "e1".
+      final Queue<Core.Exp> queue = new ArrayDeque<>();
+      final Set<Core.NamedPat> names = new LinkedHashSet<>();
+      final List<Core.NonRecValDecl> declList = new ArrayList<>();
+      final Visitor visitor =
+          new Visitor() {
+            @Override protected void visit(Core.Id id) {
+              if (names.add(id.idPat)) {
+                final Binding binding = env.getOpt(id.idPat);
+                if (binding != null && binding.exp != null) {
+                  queue.add(binding.exp);
+                  declList.add(
+                      core.nonRecValDecl(Pos.ZERO, id.idPat, binding.exp));
+                }
+              }
+              super.visit(id);
+            }
+          };
+      node.accept(visitor);
+      for (;;) {
+        Core.Exp e = queue.poll();
+        if (e == null) {
+          break;
+        }
+        e.accept(visitor);
+      }
+
+      if (!declList.isEmpty()) {
+        declList.add(nonRecValDecl);
+        node = core.recValDecl(declList);
+      }
     }
+
     node.accept(analyzer);
     return analyzer.result();
   }

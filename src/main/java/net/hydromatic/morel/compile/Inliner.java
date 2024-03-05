@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
@@ -27,14 +28,19 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.TupleType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypeVar;
 
 import com.google.common.collect.ImmutableMap;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -144,10 +150,26 @@ public class Inliner extends EnvShuttle {
       // becomes
       //   let x = A in E end
       final Core.Fn fn = (Core.Fn) apply2.fn;
-      return core.let(
-          core.nonRecValDecl(apply2.pos, fn.idPat, apply2.arg), fn.exp);
+      final Core.Let let =
+          core.let(core.nonRecValDecl(apply2.pos, fn.idPat, apply2.arg),
+              fn.exp);
+      // Type may have become specialized. E.g. when you substitute 'x = 2'
+      // into '(fn x => x) 2' the type changes from "'a" to "int".
+      if (let.type == apply2.type) {
+        return let;
+      }
+      final UnaryOperator<Type> typeTransform =
+          unify(apply2.fn.type, apply.fn.type);
+      return substituteType(let, typeTransform);
     }
     return apply2;
+  }
+
+  /** Returns a copy of {@code exp}, converting every occurrence of
+   * {@code fromType} to {@code toType}. */
+  private Core.Exp substituteType(Core.Exp exp,
+      UnaryOperator<Type> typeTransform) {
+    return exp.accept(new CopyingShuttle(typeSystem, typeTransform));
   }
 
   @Override protected Core.Exp visit(Core.Case caseOf) {
@@ -206,6 +228,71 @@ public class Inliner extends EnvShuttle {
       return let.exp.accept(bind(bindings));
     }
     return super.visit(let);
+  }
+
+  /** Shuttle that copies an expression, transforming its type as it goes. */
+  private static class CopyingShuttle extends Shuttle {
+    final UnaryOperator<Type> typeTransform;
+    final Map<Core.NamedPat, Core.IdPat> idPatMap = new HashMap<>();
+
+    protected CopyingShuttle(TypeSystem typeSystem,
+        UnaryOperator<Type> typeTransform) {
+      super(typeSystem);
+      this.typeTransform = typeTransform;
+    }
+
+    @Override protected Core.IdPat visit(Core.IdPat idPat) {
+      final Core.IdPat idPat1 = idPatMap.get(idPat);
+      if (idPat1 != null) {
+        return idPat1;
+      }
+      Type type = idPat.type.copy(typeSystem, typeTransform);
+      if (!type.equals(idPat.type)) {
+        final Core.IdPat idPat2 =
+            core.idPat(type, typeSystem.nameGenerator);
+        idPatMap.put(idPat, idPat2);
+        return idPat2;
+      }
+      return super.visit(idPat);
+    }
+
+    @Override protected Core.Exp visit(Core.Id id) {
+      final Core.IdPat idPat = idPatMap.get(id.idPat);
+      if (idPat != null) {
+        return core.id(idPat);
+      }
+      return super.visit(id);
+    }
+  }
+
+  /** Given a source and destination type, returns the substitution
+   * that converted source to destination.
+   *
+   * <p>Examples:
+   * <ul>
+   *   <li>{@code unify(var(0), int)} &rarr; [var(0) &rarr; int]
+   *   <li>{@code unify(var(0), bool list)} &rarr; [var(0) &rarr; bool list]
+   *   <li>{@code unify(var(0) * var(0), int * int)} &rarr; [var(0) &rarr; int]
+   * </ul>
+   */
+  UnaryOperator<Type> unify(Type fromType, Type toType) {
+    if (fromType instanceof TypeVar) {
+      return t -> t.equals(fromType) ? toType : t;
+    }
+    if (fromType instanceof TupleType
+        && toType instanceof TupleType) {
+      // This is wrong.
+      return unify(((TupleType) fromType).argType(0),
+          ((TupleType) toType).argType(0));
+    }
+    if (fromType instanceof FnType
+        && toType instanceof FnType) {
+      // This is wrong.
+      return unify(((FnType) fromType).resultType,
+          ((FnType) toType).resultType);
+    }
+    // And so is this
+    return t -> t;
   }
 }
 
