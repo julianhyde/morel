@@ -1104,7 +1104,7 @@ public class Core {
 
     public Case copy(Exp exp, List<Match> matchList) {
       return exp == this.exp && matchList.equals(this.matchList) ? this
-          : core.caseOf(pos, type, exp, matchList);
+          : core.caseOf(pos, matchList.get(0).exp.type, exp, matchList);
     }
   }
 

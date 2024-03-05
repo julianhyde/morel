@@ -56,6 +56,10 @@ public class Binding {
     return new Binding(id, null, value, false);
   }
 
+  public static Binding of(Core.NamedPat id, Core.Exp exp, Object value) {
+    return new Binding(id, exp, value, false);
+  }
+
   @Override public int hashCode() {
     return Objects.hash(id, exp, value);
   }

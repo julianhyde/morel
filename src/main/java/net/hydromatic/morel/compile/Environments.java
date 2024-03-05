@@ -150,18 +150,30 @@ public abstract class Environments {
       return binding.id + ", ...";
     }
 
-    @Override public @Nullable Binding getOpt(String name) {
-      if (name.equals(binding.id.name)) {
-        return binding;
+    @Override public final @Nullable Binding getOpt(String name) {
+      // Manual tail recursion elimination:
+      // Loop rather than recurse, to save stack space.
+      for (SubEnvironment t = this;; t = (SubEnvironment) t.parent) {
+        if (name.equals(t.binding.id.name)) {
+          return t.binding;
+        }
+        if (!(t.parent instanceof SubEnvironment)) {
+          return t.parent.getOpt(name);
+        }
       }
-      return parent.getOpt(name);
     }
 
-    @Override public @Nullable Binding getOpt(Core.NamedPat id) {
-      if (id.equals(binding.id)) {
-        return binding;
+    @Override public final @Nullable Binding getOpt(Core.NamedPat id) {
+      // Manual tail recursion elimination:
+      // Loop rather than recurse, to save stack space.
+      for (SubEnvironment t = this;; t = (SubEnvironment) t.parent) {
+        if (id.equals(t.binding.id)) {
+          return t.binding;
+        }
+        if (!(t.parent instanceof SubEnvironment)) {
+          return t.parent.getOpt(id);
+        }
       }
-      return parent.getOpt(id);
     }
 
     @Override protected Environment bind(Binding binding) {

@@ -89,5 +89,4 @@ swap (1, "foo");
 > val it = {a=fn,b=fn}
 >   : {a:'a list -> ('a * 'a list) option, b:'b list -> ('b * 'b list) option}
 
-
 (*) End dummy.smli

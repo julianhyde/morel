@@ -269,10 +269,9 @@ class Ml {
         final AstNode statement = parser.statementEof();
         final Environment env = Environments.empty();
         final Session session = new Session(propMap);
-        final List<CompileException> warningList = new ArrayList<>();
         final CompiledStatement compiled =
             Compiles.prepareStatement(typeSystem, session, env, statement,
-                null, warningList::add, tracer);
+                null, e -> {}, tracer);
         action.accept(compiled);
       } catch (ParseException e) {
         throw new RuntimeException(e);
