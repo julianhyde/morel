@@ -24,7 +24,6 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
-import net.hydromatic.morel.util.PairList;
 import net.hydromatic.morel.util.Unifier;
 
 import com.google.common.collect.ImmutableMap;
@@ -37,11 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static net.hydromatic.morel.util.Pair.forEach;
-import static net.hydromatic.morel.util.Static.transform;
-import static net.hydromatic.morel.util.Static.transformEager;
 
 import static java.util.Objects.requireNonNull;
 
@@ -51,19 +45,23 @@ public class TypeMap {
   private final Map<AstNode, Unifier.Term> nodeTypeTerms;
   final Unifier.Substitution substitution;
 
-  /** Map from type variable name to type variable. The ordinal of the variable
-   * is the size of the map at the time it is registered.
-   *
-   * <p>This map is never iterated over, and therefore the deterministic
-   * iteration provided by LinkedHashMap is not necessary, and HashMap is
-   * sufficient. */
-  private final Map<String, TypeVar> typeVars = new HashMap<>();
+  private final TermToTypeConverter termToTypeConverter;
 
   TypeMap(TypeSystem typeSystem, Map<AstNode, Unifier.Term> nodeTypeTerms,
       Unifier.Substitution substitution) {
     this.typeSystem = requireNonNull(typeSystem);
     this.nodeTypeTerms = ImmutableMap.copyOf(nodeTypeTerms);
     this.substitution = requireNonNull(substitution.resolve());
+
+    // Map from type variable name to type variable. The ordinal of the variable
+    // is the size of the map at the time it is registered.
+    final Map<String, TypeVar> typeVars = new HashMap<>();
+    this.termToTypeConverter =
+        new TermToTypeConverter(typeSystem,
+            substitution.resultMap::get,
+            variable ->
+                typeVars.computeIfAbsent(variable.toString(),
+                    varName -> new TypeVar(typeVars.size())));
   }
 
   @Override public String toString() {
@@ -81,7 +79,7 @@ public class TypeMap {
   }
 
   Type termToType(Unifier.Term term) {
-    return term.accept(new TermToTypeConverter(this));
+    return term.accept(termToTypeConverter);
   }
 
   /** Returns the type of an AST node. */
@@ -138,84 +136,6 @@ public class TypeMap {
       }
     }
     return null;
-  }
-
-  /** Visitor that converts type terms into actual types. */
-  private static class TermToTypeConverter
-      implements Unifier.TermVisitor<Type> {
-    private final TypeMap typeMap;
-
-    TermToTypeConverter(TypeMap typeMap) {
-      this.typeMap = typeMap;
-    }
-
-    public Type visit(Unifier.Sequence sequence) {
-      final Type type;
-      switch (sequence.operator) {
-      case TypeResolver.FN_TY_CON:
-        assert sequence.terms.size() == 2;
-        final Type paramType = sequence.terms.get(0).accept(this);
-        final Type resultType = sequence.terms.get(1).accept(this);
-        return typeMap.typeSystem.fnType(paramType, resultType);
-
-      case TypeResolver.TUPLE_TY_CON:
-        assert sequence.terms.size() != 1;
-        final List<Type> argTypes =
-            transformEager(sequence.terms, term -> term.accept(this));
-        return typeMap.typeSystem.tupleType(argTypes);
-
-      case TypeResolver.LIST_TY_CON:
-        assert sequence.terms.size() == 1;
-        final Type elementType = sequence.terms.get(0).accept(this);
-        return typeMap.typeSystem.listType(elementType);
-
-      case "bool":
-      case "char":
-      case "int":
-      case "real":
-      case "string":
-      case "unit":
-      default:
-        type = typeMap.typeSystem.lookupOpt(sequence.operator);
-        if (type != null) {
-          if (sequence.terms.isEmpty()) {
-            return type;
-          }
-          final List<Type> types =
-              transform(sequence.terms, t -> t.accept(this));
-          return typeMap.typeSystem.apply(type, types);
-        }
-        if (sequence.operator.startsWith(TypeResolver.RECORD_TY_CON)) {
-          // E.g. "record:a:b" becomes record type "{a:t0, b:t1}".
-          final List<String> argNames = TypeResolver.fieldList(sequence);
-          if (argNames != null) {
-            final PairList<String, Type> argNameTypes = PairList.of();
-            final AtomicBoolean progressive = new AtomicBoolean(false);
-            forEach(argNames, sequence.terms, (name, term) -> {
-              if (name.equals(TypeResolver.PROGRESSIVE_LABEL)) {
-                progressive.set(true);
-              } else {
-                argNameTypes.add(name, term.accept(this));
-              }
-            });
-            return progressive.get()
-                ? typeMap.typeSystem.progressiveRecordType(argNameTypes)
-                : typeMap.typeSystem.recordType(argNameTypes);
-          }
-        }
-        throw new AssertionError("unknown type constructor "
-            + sequence.operator);
-      }
-    }
-
-    public Type visit(Unifier.Variable variable) {
-      final Unifier.Term term = typeMap.substitution.resultMap.get(variable);
-      if (term == null) {
-        return typeMap.typeVars.computeIfAbsent(variable.toString(),
-            varName -> new TypeVar(typeMap.typeVars.size()));
-      }
-      return term.accept(this);
-    }
   }
 }
 

@@ -25,10 +25,8 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
-import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
-import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -37,7 +35,6 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.MapList;
-import net.hydromatic.morel.util.MartelliUnifier;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
@@ -87,9 +84,7 @@ import static java.util.Objects.requireNonNull;
 
 /** Resolves the type of an expression. */
 @SuppressWarnings("StaticPseudoFunctionalStyleMethod")
-public class TypeResolver {
-  private final TypeSystem typeSystem;
-  private final Unifier unifier = new MartelliUnifier();
+public class TypeResolver extends TypeUnifier {
   private final List<TermVariable> terms = new ArrayList<>();
   private final Map<AstNode, Unifier.Term> map = new HashMap<>();
   private final Map<Unifier.Variable, Unifier.Action> actionMap =
@@ -97,16 +92,8 @@ public class TypeResolver {
   private final PairList<Unifier.Variable, PrimitiveType> preferredTypes =
       PairList.of();
 
-  static final String TUPLE_TY_CON = "tuple";
-  static final String LIST_TY_CON = "list";
-  static final String RECORD_TY_CON = "record";
-  static final String FN_TY_CON = "fn";
-
-  /** A field of this name indicates that a record type is progressive. */
-  static final String PROGRESSIVE_LABEL = "z$dummy";
-
   private TypeResolver(TypeSystem typeSystem) {
-    this.typeSystem = requireNonNull(typeSystem);
+    super(typeSystem);
   }
 
   /** Deduces the datatype of a declaration. */
@@ -1333,74 +1320,6 @@ public class TypeResolver {
     }
   }
 
-  private List<Unifier.Term> toTerms(Iterable<? extends Type> types,
-      Subst subst) {
-    return transformEager(types, type -> toTerm(type, subst));
-  }
-
-  private Unifier.Term toTerm(PrimitiveType type) {
-    return unifier.atom(type.moniker);
-  }
-
-  private Unifier.Term toTerm(Type type, Subst subst) {
-    switch (type.op()) {
-    case ID:
-      return toTerm((PrimitiveType) type);
-    case TY_VAR:
-      final Unifier.Variable variable = subst.get((TypeVar) type);
-      return variable != null ? variable : unifier.variable();
-    case DATA_TYPE:
-      final DataType dataType = (DataType) type;
-      return unifier.apply(dataType.name(), toTerms(dataType.arguments, subst));
-    case FUNCTION_TYPE:
-      final FnType fnType = (FnType) type;
-      return unifier.apply(FN_TY_CON, toTerm(fnType.paramType, subst),
-          toTerm(fnType.resultType, subst));
-    case TUPLE_TYPE:
-      final TupleType tupleType = (TupleType) type;
-      return unifier.apply(TUPLE_TY_CON,
-          transform(tupleType.argTypes, type1 -> toTerm(type1, subst)));
-    case RECORD_TYPE:
-      final RecordType recordType = (RecordType) type;
-      SortedMap<String, Type> argNameTypes = recordType.argNameTypes;
-      if (recordType.isProgressive()) {
-        argNameTypes = new TreeMap<>(argNameTypes);
-        argNameTypes.put(PROGRESSIVE_LABEL, PrimitiveType.UNIT);
-      }
-      @SuppressWarnings({"rawtypes", "unchecked"})
-      final NavigableSet<String> labelNames =
-          (NavigableSet) argNameTypes.keySet();
-      final String result;
-      if (labelNames.isEmpty()) {
-        result = PrimitiveType.UNIT.name();
-      } else if (TypeSystem.areContiguousIntegers(labelNames)) {
-        result = TUPLE_TY_CON;
-      } else {
-        final StringBuilder b = new StringBuilder(RECORD_TY_CON);
-        for (String label : labelNames) {
-          b.append(':').append(label);
-        }
-        result = b.toString();
-      }
-      final List<Unifier.Term> args =
-          transformEager(argNameTypes.values(),
-              type1 -> toTerm(type1, subst));
-      return unifier.apply(result, args);
-    case LIST:
-      final ListType listType = (ListType) type;
-      return unifier.apply(LIST_TY_CON,
-          toTerm(listType.elementType, subst));
-    case FORALL_TYPE:
-      final ForallType forallType = (ForallType) type;
-      Subst subst2 = subst;
-      for (int i = 0; i < forallType.parameterCount; i++) {
-        subst2 = subst2.plus(typeSystem.typeVariable(i), unifier.variable());
-      }
-      return toTerm(forallType.type, subst2);
-    default:
-      throw new AssertionError("unknown type: " + type.moniker());
-    }
-  }
 
   /** Empty type environment. */
   enum EmptyTypeEnv implements TypeEnv {
@@ -1562,60 +1481,6 @@ public class TypeResolver {
         }
       }
       throw new AssertionError("not an expression: " + node);
-    }
-  }
-
-  /** Substitution. */
-  private abstract static class Subst {
-    static final Subst EMPTY = new EmptySubst();
-
-    Subst plus(TypeVar typeVar, Unifier.Variable variable) {
-      return new PlusSubst(this, typeVar, variable);
-    }
-
-    abstract Unifier.Variable get(TypeVar typeVar);
-  }
-
-  /** Empty substitution. */
-  private static class EmptySubst extends Subst {
-    @Override public String toString() {
-      return "[]";
-    }
-
-    @Override Unifier.Variable get(TypeVar typeVar) {
-      return null;
-    }
-  }
-
-  /** Substitution that adds one (type, variable) assignment to a parent
-   * substitution. */
-  private static class PlusSubst extends Subst {
-    final Subst parent;
-    final TypeVar typeVar;
-    final Unifier.Variable variable;
-
-    PlusSubst(Subst parent, TypeVar typeVar, Unifier.Variable variable) {
-      this.parent = parent;
-      this.typeVar = typeVar;
-      this.variable = variable;
-    }
-
-    @Override Unifier.Variable get(TypeVar typeVar) {
-      return typeVar.equals(this.typeVar)
-          ? variable
-          : parent.get(typeVar);
-    }
-
-    @Override public String toString() {
-      final Map<TypeVar, Unifier.Term> map = new LinkedHashMap<>();
-      for (PlusSubst e = this;;) {
-        map.putIfAbsent(e.typeVar, e.variable);
-        if (e.parent instanceof PlusSubst) {
-          e = (PlusSubst) e.parent;
-        } else {
-          return map.toString();
-        }
-      }
     }
   }
 
