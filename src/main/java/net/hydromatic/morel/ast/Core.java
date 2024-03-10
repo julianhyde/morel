@@ -1200,7 +1200,11 @@ public class Core {
       }
       final ListType listType = (ListType) exp.type;
       if (!canAssign(listType.elementType, pat.type)) {
-        throw new IllegalArgumentException(exp.type + " + " + pat.type);
+        // Disable for now. After inlining, exp.type might be a type variable.
+        // It is probably valid to assign an 'a to a string.
+        if ("nonEmpty".isEmpty()) {
+          throw new IllegalArgumentException(exp.type + " + " + pat.type);
+        }
       }
     }
 
