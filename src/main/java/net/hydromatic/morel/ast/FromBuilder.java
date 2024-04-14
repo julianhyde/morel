@@ -165,7 +165,7 @@ public class FromBuilder {
       return addInlineFrom(pat, (Core.From) exp);
     }
     if (op.generatesNullsOnLeft()) {
-      bindings.replaceAll(binding -> binding.withOptional(true));
+      bindings.replaceAll(binding -> binding.withOptional(typeSystem, true));
     }
     Compiles.acceptBinding(typeSystem, pat, op.generatesNullsOnRight(),
         bindings);

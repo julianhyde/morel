@@ -36,6 +36,7 @@ import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
@@ -643,7 +644,7 @@ public class CalciteCompiler extends Compiler {
   private Core.Tuple toRecord(RelContext cx, Core.Id id) {
     final Binding binding = cx.env.getOpt(id.idPat);
     checkNotNull(binding, "not found", id);
-    final Type type = binding.id.type;
+    Type type = stripOption(binding.id.type);
     if (type instanceof RecordType) {
       final RecordType recordType = (RecordType) type;
       final List<Core.Exp> args = new ArrayList<>();
@@ -655,6 +656,18 @@ public class CalciteCompiler extends Compiler {
       return core.tuple(recordType, args);
     }
     return null;
+  }
+
+  /** Converts {@code int option} to {@code int}
+   * and {@code bool option option} to {@code bool}.
+   *
+   * @see TypeSystem#option(Type) */
+  private static Type stripOption(Type type) {
+    while (type instanceof DataType
+        && ((DataType) type).name.equals("option")) {
+      type = ((DataType) type).arguments.get(0);
+    }
+    return type;
   }
 
   private List<RexNode> translateList(RelContext cx, List<Core.Exp> exps) {

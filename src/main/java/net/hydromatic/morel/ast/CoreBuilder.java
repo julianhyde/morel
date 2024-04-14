@@ -383,9 +383,7 @@ public enum CoreBuilder {
         return lastBindings.get(0).id.type;
       }
       final PairList<String, Type> argNameTypes = PairList.of();
-      lastBindings
-          .forEach(b -> argNameTypes.add(b.id.name,
-              b.optional ? typeSystem.option(b.id.type) : b.id.type));
+      lastBindings.forEach(b -> argNameTypes.add(b.id.name, b.id.type));
       return typeSystem.recordType(argNameTypes);
     }
   }

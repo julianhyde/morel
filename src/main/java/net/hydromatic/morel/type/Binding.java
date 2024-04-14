@@ -79,9 +79,11 @@ public class Binding {
         : new Binding(id, exp, value, parameter, optional);
   }
 
-  public Binding withOptional(boolean optional) {
-    return optional == this.optional ? this
-        : new Binding(id, exp, value, parameter, optional);
+  public Binding withOptional(TypeSystem typeSystem, boolean optional) {
+    return optional == this.optional
+        ? this
+        : new Binding(optional ? id.withType(typeSystem.option(id.type)) : id,
+            exp, value, parameter, optional);
   }
 
   @Override public String toString() {

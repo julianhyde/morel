@@ -358,11 +358,11 @@ public abstract class Compiles {
     }
 
     @Override protected void visit(Core.IdPat idPat) {
-      bindings.add(Binding.of(idPat).withOptional(optional));
+      bindings.add(Binding.of(idPat).withOptional(typeSystem, optional));
     }
 
     @Override protected void visit(Core.AsPat asPat) {
-      bindings.add(Binding.of(asPat).withOptional(optional));
+      bindings.add(Binding.of(asPat).withOptional(typeSystem, optional));
       super.visit(asPat);
     }
 
