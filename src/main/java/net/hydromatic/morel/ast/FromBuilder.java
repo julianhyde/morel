@@ -42,8 +42,6 @@ import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.append;
 
 import static com.google.common.collect.Iterables.getLast;
-import static net.hydromatic.morel.util.Static.appendAll;
-import static net.hydromatic.morel.util.Static.transform;
 
 /** Builds a {@link Core.From}.
  *
@@ -173,27 +171,12 @@ public class FromBuilder {
         forEach(recordPat.type().argNameTypes.keySet(), recordPat.args,
             (name, arg) -> nameExps.add(name, core.id((Core.IdPat) arg)));
         bindings = null;
-/*
-        bindings =
-            appendAll(this.bindings,
-                transform(recordPat.args, arg -> Binding.of((Core.IdPat) arg)));
-*/
-/*
-        bindings =
-            appendAll(this.bindings,
-                lastStep.bindings);
-*/
       } else if (pat instanceof Core.TuplePat) {
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
         forEach(tuplePat.args, lastStep.bindings,
             (arg, binding) ->
                 nameExps.add(((Core.IdPat) arg).name, core.id(binding.id)));
         bindings = null;
-/*
-        bindings =
-            appendAll(this.bindings,
-                transform(tuplePat.args, arg -> Binding.of((Core.IdPat) arg)));
-*/
       } else if (!this.bindings.isEmpty()) {
         // With at least one binding, and one new variable, the output will be
         // a record type.
@@ -201,9 +184,6 @@ public class FromBuilder {
         this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         lastStep.bindings.forEach(b -> nameExps.add(idPat.name, core.id(b.id)));
         bindings = null;
-/*
-        bindings = append(this.bindings, Binding.of(idPat));
-*/
       } else {
         final Core.IdPat idPat = (Core.IdPat) pat;
         if (lastStep instanceof Core.Yield
@@ -228,12 +208,6 @@ public class FromBuilder {
       return yield_(uselessIfLast, bindings, core.record(typeSystem, nameExps));
     }
     Compiles.acceptBinding(typeSystem, pat, bindings);
-    return addStep(core.scan(bindings, pat, exp, condition));
-//    return scan(bindings, pat, exp, condition);
-  }
-
-  private FromBuilder scan_(List<Binding> bindings,
-      Core.Pat pat, Core.Exp exp, Core.Exp condition) {
     return addStep(core.scan(bindings, pat, exp, condition));
   }
 
@@ -429,7 +403,7 @@ public class FromBuilder {
     }
 
     @Override protected void visit(Core.Scan scan) {
-      scan_(scan.bindings, scan.pat, scan.exp, scan.condition);
+      scan(scan.pat, scan.exp, scan.condition);
     }
 
     @Override protected void visit(Core.Where where) {
