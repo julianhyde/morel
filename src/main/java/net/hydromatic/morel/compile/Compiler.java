@@ -780,7 +780,7 @@ public class Compiler {
     @Override public Describer describe(Describer describer) {
       return describer.start("match", d ->
           patCodes.forEach((pat, code) ->
-              d.arg("", pat.toString()).arg("", code)));
+              d.arg("", pat.describe(describer)).arg("", code)));
     }
 
     @Override public Object eval(EvalEnv evalEnv) {

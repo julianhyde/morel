@@ -129,6 +129,13 @@ public class Static {
     return ImmutableList.<E>builder().addAll(list).add(e).build();
   }
 
+  /** Returns a list with several elements appended.
+   *
+   * @see ConsList */
+  public static <E> List<E> appendAll(List<E> list, Iterable<E> list2) {
+    return ImmutableList.<E>builder().addAll(list).addAll(list2).build();
+  }
+
   /** Prepends an element to a list. */
   public static <E> List<E> plus(E e, List<E> list) {
     return ConsList.of(e, list);

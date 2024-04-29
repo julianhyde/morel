@@ -1955,7 +1955,7 @@ public class MainTest {
         + "    yield {d, n}\n"
         + "end";
     final String code = "from(sink\n"
-        + "  join(pat v0,\n"
+        + "  join(pat v1,\n"
         + "  exp from(\n"
         + "    sink join(pat e, exp tuple(\n"
         + "  tuple(constant(10), constant(100), constant(Fred)),\n"
@@ -1965,7 +1965,7 @@ public class MainTest {
         + " sink collect(tuple(apply(fnValue nth:2, argCode get(name e)), "
         + "apply(fnValue nth:0, argCode get(name e)))))), "
         + "sink join(pat n_1, exp tuple(\n"
-        + " apply(fnValue nth:0, argCode get(name v0))), "
+        + " apply(fnValue nth:0, argCode get(name v1))), "
         + "sink join(pat d_1, exp tuple(constant(30)), "
         + "sink where(condition apply2(fnValue elem,\n"
         + "                            tuple(get(name n), get(name d)), "

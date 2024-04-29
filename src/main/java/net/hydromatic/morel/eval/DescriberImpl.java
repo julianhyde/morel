@@ -18,11 +18,16 @@
  */
 package net.hydromatic.morel.eval;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /** Implementation of {@link net.hydromatic.morel.eval.Code .Describer}. */
 class DescriberImpl implements Describer {
   final StringBuilder buf = new StringBuilder();
+  final Map<String, List<Integer>> nameIds = new HashMap<>();
 
   @Override public String toString() {
     return buf.toString();
@@ -37,6 +42,17 @@ class DescriberImpl implements Describer {
     return this;
   }
 
+  @Override public int register(String name, int i) {
+    final List<Integer> list =
+        nameIds.computeIfAbsent(name, id_ -> new ArrayList<>());
+    int j = list.indexOf(i);
+    if (j < 0) {
+      j = list.size();
+      list.add(i);
+    }
+    return j;
+  }
+
   /** Implementation of
    * {@link Detail}. */
   private class DetailImpl implements Detail {
@@ -45,7 +61,7 @@ class DescriberImpl implements Describer {
     @Override public Detail arg(String name, Object value) {
       buf.append(buf.length() == start ? "(" : ", ")
           .append(name)
-          .append(name.equals("") ? "" : " ")
+          .append(name.isEmpty() ? "" : " ")
           .append(value);
       return this;
     }
@@ -53,7 +69,7 @@ class DescriberImpl implements Describer {
     @Override public Detail arg(String name, Describable describable) {
       buf.append(buf.length() == start ? "(" : ", ")
           .append(name)
-          .append(name.equals("") ? "" : " ");
+          .append(name.isEmpty() ? "" : " ");
       describable.describe(DescriberImpl.this);
       return this;
     }
