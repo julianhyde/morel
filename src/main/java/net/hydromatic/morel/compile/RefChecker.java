@@ -44,7 +44,8 @@ public class RefChecker extends EnvVisitor {
   }
 
   @Override protected void visit(Core.Id id) {
-    verifyNotNull(env.getOpt(id.idPat), "not found", id);
+    verifyNotNull(env.getOpt(id.idPat), "not found: %s; env=[%s]", id.idPat,
+        env.lazyString());
   }
 }
 

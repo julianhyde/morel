@@ -61,12 +61,15 @@ public abstract class Environment {
   /** Converts this environment to a string.
    *
    * <p>This method does not override the {@link #toString()} method; if we did,
-   * debuggers would invoke it automatically, burning lots of CPU and memory. */
-  public String asString() {
-    final StringBuilder b = new StringBuilder();
-    getValueMap().forEach((k, v) ->
-        b.append(v).append("\n"));
-    return b.toString();
+   * debuggers would invoke it automatically, burning lots of CPU and memory.
+   * Instead, it returns an object whose {@link Object#toString()} method (if
+   * and when it is invoked) will generate and return the description.
+   *
+   * <p>Calling this method ({@code lazyString}) is fairly cheap.
+   * The resulting object can be passed to deferred logging APIs such as
+   * {@link com.google.common.base.Verify#verify(boolean, String, Object)}. */
+  public Object lazyString() {
+    return new LazyDescription(this);
   }
 
   /** Returns the binding of {@code name} if bound, null if not. */
@@ -136,6 +139,20 @@ public abstract class Environment {
     final List<Binding> bindingList = new ArrayList<>();
     env.visit(bindingList::add);
     return bindAll(reverse(bindingList));
+  }
+
+  /** Helper for {@link #lazyString()}, an object whose {@link #toString()}
+   * method invokes {@link Environments#describe(Environment)}. */
+  private static class LazyDescription {
+    private final Environment env;
+
+    LazyDescription(Environment env) {
+      this.env = env;
+    }
+
+    @Override public String toString() {
+      return Environments.describe(env);
+    }
   }
 }
 

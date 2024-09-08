@@ -135,11 +135,33 @@ public abstract class Environments {
     }
   }
 
+  /** Creates a description of an environment. */
+  public static String describe(Environment e) {
+    final StringBuilder b = new StringBuilder();
+    for (;;) {
+      if (e instanceof SubEnvironment) {
+        final SubEnvironment e2 = (SubEnvironment) e;
+        b.append(e2.binding.id)
+            .append("; ");
+        e = e2.parent;
+      } else if (e instanceof MapEnvironment) {
+        final MapEnvironment e2 = (MapEnvironment) e;
+        b.append("map with ")
+            .append(e2.map.size())
+            .append(" elements");
+        break;
+      } else {
+        break;
+      }
+    }
+    return b.toString();
+  }
+
   /** Environment that inherits from a parent environment and adds one
    * binding. */
   static class SubEnvironment extends Environment {
-    private final Environment parent;
-    private final Binding binding;
+    final Environment parent;
+    final Binding binding;
 
     SubEnvironment(Environment parent, Binding binding) {
       this.parent = requireNonNull(parent);
