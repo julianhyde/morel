@@ -365,6 +365,15 @@ from d in depts, i in range 0 5;
 >    {d={deptno=40,name="Support"},i=3},{d={deptno=40,name="Support"},i=4}]
 >   : {d:{deptno:int, name:string}, i:int} list
 
+(*) join that uses a function
+fun positives list = from h in list where h > 0;
+> val positives = fn : int list -> int list
+
+from i in [10, 20],
+    k in (positives [1, 2])
+  yield k;
+> val it = [1,2,1,2] : int list
+
 (*) 3-way comma join
 from x in ["a", "b"],
     y in ["c", "d"],
