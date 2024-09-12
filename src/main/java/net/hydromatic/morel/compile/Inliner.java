@@ -223,7 +223,7 @@ public class Inliner extends EnvShuttle {
       // This declaration has one use; remove the declaration, and replace its
       // use inside the expression.
       final List<Binding> bindings = new ArrayList<>();
-      Compiles.bindPattern(typeSystem, bindings, let.decl);
+      Compiles.bindPattern(typeSystem, bindings::add, let.decl);
       return let.exp.accept(bind(bindings));
     }
     return super.visit(let);

@@ -70,26 +70,26 @@ abstract class EnvShuttle extends Shuttle {
   @Override protected Core.Match visit(Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();
     final Core.Pat pat2 = match.pat.accept(this);
-    Compiles.bindPattern(typeSystem, bindings, pat2);
+    Compiles.bindPattern(typeSystem, bindings::add, pat2);
     return core.match(match.pos, pat2, match.exp.accept(bind(bindings)));
   }
 
   @Override protected Core.Exp visit(Core.Let let) {
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.bindPattern(typeSystem, bindings, let.decl);
+    Compiles.bindPattern(typeSystem, bindings::add, let.decl);
     return let.copy(let.decl.accept(this), let.exp.accept(bind(bindings)));
   }
 
   @Override protected Core.Exp visit(Core.Local local) {
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.bindDataType(typeSystem, bindings, local.dataType);
+    Compiles.bindDataType(typeSystem, bindings::add, local.dataType);
     return local.copy(local.dataType, local.exp.accept(bind(bindings)));
   }
 
   @Override protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
     final List<Binding> bindings = new ArrayList<>();
     recValDecl.list.forEach(decl ->
-        Compiles.bindPattern(typeSystem, bindings, decl.pat));
+        Compiles.bindPattern(typeSystem, bindings::add, decl.pat));
     return recValDecl.copy(bind(bindings).visitList(recValDecl.list));
   }
 

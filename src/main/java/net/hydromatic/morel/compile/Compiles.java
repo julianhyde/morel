@@ -305,39 +305,40 @@ public abstract class Compiles {
     return decl.exp;
   }
 
-  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+  static void bindPattern(TypeSystem typeSystem, Consumer<Binding> bindings,
       Core.DatatypeDecl datatypeDecl) {
     datatypeDecl.accept(binding(typeSystem, bindings));
   }
 
-  /** Richer than {@link #bindPattern(TypeSystem, List, Core.Pat)} because
+  /** Richer than {@link #bindPattern(TypeSystem, Consumer, Core.Pat)} because
    * we have the expression. */
-  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+  static void bindPattern(TypeSystem typeSystem, Consumer<Binding> bindings,
       Core.ValDecl valDecl) {
     valDecl.forEachBinding((pat, exp, pos) -> {
       if (pat instanceof Core.IdPat) {
-        bindings.add(Binding.of(pat, exp));
+        bindings.accept(Binding.of(pat, exp));
       }
     });
   }
 
-  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+  static void bindPattern(TypeSystem typeSystem, Consumer<Binding> bindings,
       Core.Pat pat) {
     pat.accept(binding(typeSystem, bindings));
   }
 
-  static void bindPattern(TypeSystem typeSystem, List<Binding> bindings,
+  static void bindPattern(TypeSystem typeSystem, Consumer<Binding> bindings,
       Core.NamedPat namedPat) {
-    bindings.add(Binding.of(namedPat));
+    bindings.accept(Binding.of(namedPat));
   }
 
-  public static void bindDataType(TypeSystem typeSystem, List<Binding> bindings,
-      DataType dataType) {
+  public static void bindDataType(TypeSystem typeSystem,
+      Consumer<Binding> bindings, DataType dataType) {
     dataType.typeConstructors.keySet().forEach(name ->
-        bindings.add(typeSystem.bindTyCon(dataType, name)));
+        bindings.accept(typeSystem.bindTyCon(dataType, name)));
   }
 
-  static PatternBinder binding(TypeSystem typeSystem, List<Binding> bindings) {
+  static PatternBinder binding(TypeSystem typeSystem,
+      Consumer<Binding> bindings) {
     return new PatternBinder(typeSystem, bindings);
   }
 
@@ -346,7 +347,7 @@ public abstract class Compiles {
    * <p>If the pattern is an {@link net.hydromatic.morel.ast.Core.IdPat},
    * don't use this method: just bind directly. */
   public static void acceptBinding(TypeSystem typeSystem, Core.Pat pat,
-      List<Binding> bindings) {
+      Consumer<Binding> bindings) {
     pat.accept(binding(typeSystem, bindings));
   }
 
@@ -354,9 +355,9 @@ public abstract class Compiles {
    * {@link Core.IdPat} or {@link Core.AsPat}. */
   private static class PatternBinder extends Visitor {
     private final TypeSystem typeSystem;
-    private final List<Binding> bindings;
+    private final Consumer<Binding> bindings;
 
-    PatternBinder(TypeSystem typeSystem, List<Binding> bindings) {
+    PatternBinder(TypeSystem typeSystem, Consumer<Binding> bindings) {
       this.typeSystem = typeSystem;
       this.bindings = bindings;
     }

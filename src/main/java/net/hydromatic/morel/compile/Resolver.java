@@ -202,7 +202,8 @@ public class Resolver {
     if (valDecl.rec) {
       final List<Core.Pat> pats = new ArrayList<>();
       matches.forEach((pat, exp) -> pats.add(toCore(pat)));
-      pats.forEach(p -> Compiles.acceptBinding(typeMap.typeSystem, p, bindings));
+      pats.forEach(p ->
+          Compiles.acceptBinding(typeMap.typeSystem, p, bindings::add));
       final Resolver r = withEnv(bindings);
       final Iterator<Core.Pat> patIter = pats.iterator();
       matches.forEach((pat, exp) ->
@@ -214,7 +215,7 @@ public class Resolver {
           patExps.add(
               new PatExp(toCore(pat), toCore(exp), pat.pos.plus(exp.pos))));
       patExps.forEach(x ->
-          Compiles.acceptBinding(typeMap.typeSystem, x.pat, bindings));
+          Compiles.acceptBinding(typeMap.typeSystem, x.pat, bindings::add));
     }
 
     // Convert recursive to non-recursive if the bound variable is not
@@ -624,7 +625,7 @@ public class Resolver {
   private Core.Match toCore(Ast.Match match) {
     final Core.Pat pat = toCore(match.pat);
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.acceptBinding(typeMap.typeSystem, pat, bindings);
+    Compiles.acceptBinding(typeMap.typeSystem, pat, bindings::add);
     final Core.Exp exp = withEnv(bindings).toCore(match.exp);
     return core.match(match.pos, pat, exp);
   }
@@ -895,7 +896,7 @@ public class Resolver {
         corePat = r.toCore(scan.pat, listType.elementType);
       }
       final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
-      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
+      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2::add);
       Core.Exp coreCondition = scan.condition == null
           ? core.boolLiteral(true)
           : r.withEnv(bindings2).toCore(scan.condition);

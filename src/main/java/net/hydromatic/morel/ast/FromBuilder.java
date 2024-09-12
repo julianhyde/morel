@@ -211,7 +211,7 @@ public class FromBuilder {
       addAll(steps);
       return yield_(uselessIfLast, bindings, core.record(typeSystem, nameExps));
     }
-    Compiles.acceptBinding(typeSystem, pat, bindings);
+    Compiles.acceptBinding(typeSystem, pat, bindings::add);
     return addStep(core.scan(bindings, pat, exp, condition));
   }
 

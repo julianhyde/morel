@@ -635,7 +635,7 @@ public class Compiler {
   private void compileMatch(Context cx, Core.Match match,
       BiConsumer<Core.Pat, Code> consumer) {
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.bindPattern(typeSystem, bindings, match.pat);
+    Compiles.bindPattern(typeSystem, bindings::add, match.pat);
     final Code code = compile(cx.bindAll(bindings), match.exp);
     consumer.accept(match.pat, code);
   }
@@ -644,7 +644,7 @@ public class Compiler {
       Core.@Nullable Pat skipPat,
       Set<Core.Exp> queriesToWrap, List<Code> matchCodes,
       List<Binding> bindings, List<Action> actions) {
-    Compiles.bindPattern(typeSystem, bindings, valDecl);
+    Compiles.bindPattern(typeSystem, bindings::add, valDecl);
     final List<Binding> newBindings = new TailList<>(bindings);
     final Map<Core.NamedPat, LinkCode> linkCodes = new HashMap<>();
     if (valDecl.op == Op.REC_VAL_DECL) {
