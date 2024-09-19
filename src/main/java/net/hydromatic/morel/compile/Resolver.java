@@ -354,7 +354,8 @@ public class Resolver {
 
   private Core.Id toCore(Ast.Id id) {
     final Binding binding = env.getOpt(id.name);
-    checkNotNull(binding, "not found", id);
+    checkNotNull(binding, "id [%s] not found in env [%s]", id,
+        env.lazyString());
     final Core.NamedPat idPat = getIdPat(id, binding);
     return core.id(idPat);
   }
@@ -895,12 +896,15 @@ public class Resolver {
         final ListType listType = (ListType) coreExp.type;
         corePat = r.toCore(scan.pat, listType.elementType);
       }
-      final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
-      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2::add);
-      Core.Exp coreCondition = scan.condition == null
-          ? core.boolLiteral(true)
-          : r.withEnv(bindings2).toCore(scan.condition);
-      fromBuilder.scan(corePat, coreExp, coreCondition);
+      Core.Exp coreCondition;
+      if (scan.condition == null) {
+        coreCondition = core.boolLiteral(true);
+      } else {
+        final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
+        Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2::add);
+        coreCondition = r.withEnv(bindings2).toCore(scan.condition);
+      }
+      fromBuilder.scan(corePat, coreExp, coreCondition, null);
     }
 
     @Override protected void visit(Ast.Where where) {

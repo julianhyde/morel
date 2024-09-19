@@ -26,6 +26,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Holder;
@@ -121,7 +122,8 @@ class SuchThatShuttle extends Shuttle {
                 fromBuilder.scan(pat, extent);
               }
             });
-            deferredScans.scan(env, scan.pat, rewritten, scan.condition);
+            deferredScans.scan(env, scan.pat, rewritten, scan.condition,
+                scan.bindings);
           } else {
             deferredScans.scan(env, scan.pat, scan.exp);
           }
@@ -236,10 +238,11 @@ class SuchThatShuttle extends Shuttle {
       return new DeferredStepList(freeFinder, refs);
     }
 
-    void scan(Environment env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+    void scan(Environment env, Core.Pat pat, Core.Exp exp, Core.Exp condition,
+        ImmutableList<Binding> bindings) {
       final Set<Core.Pat> unresolvedRefs = unresolvedRefs(env, exp);
       steps.add(unresolvedRefs, fromBuilder -> {
-        fromBuilder.scan(pat, exp, condition);
+        fromBuilder.scan(pat, exp, condition, bindings);
         resolve(pat);
       });
     }

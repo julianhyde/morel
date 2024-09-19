@@ -16,6 +16,27 @@
  * language governing permissions and limitations under the
  * License.
  *)
+val triples =
+  from t in [{x=1,y=2}, {x=2,y=6}, {x=3, y=5}]
+    yield {t.x, t.y, foo = fn z => t.x * z + t.y};
+> val triples = [{foo=fn,x=1,y=2},{foo=fn,x=2,y=6},{foo=fn,x=3,y=5}]
+>   : {foo:int -> int, x:int, y:int} list
+
+from {foo,x,y} in triples
+  order foo ~1, x;
+> val it = [{foo=fn,x=1,y=2},{foo=fn,x=3,y=5},{foo=fn,x=2,y=6}]
+>   : {foo:int -> int, x:int, y:int} list
+
+(*
+fun positives list = from h in list where h > 0;
+> val positives = fn : int list -> int list
+
+from i in [10, 20],
+    k in (positives [1, 2])
+  yield k;
+> val it = [11,12,21,22] : int list
+*)
+
 (*) Closure
 (*
 let

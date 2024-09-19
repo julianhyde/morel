@@ -158,11 +158,11 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
    * PairList. */
   ImmutablePairList<T, U> immutable();
 
-  /** Applies a mapping function to each element of this list. */
+  /** Lazily applies a mapping function to each element of this list. */
   <R> List<R> transform(BiFunction<T, U, R> function);
 
-  /** Applies a mapping function to each element of this list. */
-  <R> ImmutableList<R> transform2(BiFunction<T, U, R> function);
+  /** Eagerly applies a mapping function to each element of this list. */
+  <R> ImmutableList<R> transformEager(BiFunction<T, U, R> function);
 
   /** Returns whether the predicate is true for at least one pair
    * in this list. */

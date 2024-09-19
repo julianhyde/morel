@@ -368,6 +368,7 @@ public class FromBuilderTest {
 
     final FromBuilder fromBuilder = f.fromBuilder();
     fromBuilder.scan(
+        ImmutableList.of(Binding.of(f.iPat), Binding.of(f.jPat)),
         core.recordPat(f.typeSystem, ImmutableSet.of("i", "j"),
             ImmutableList.of(f.aPat, f.bPat)),
             innerFrom)

@@ -242,7 +242,7 @@ public class Extents {
                   for (Core.FromStep step2 : from.steps) {
                     if (step2 == scan) {
                       fromBuilder.scan(scan.pat, analysis.extentExp,
-                          scan.condition); // TODO
+                          scan.condition, scan.bindings); // TODO
                     } else if (step2 instanceof Core.Where) {
                       fromBuilder.where(
                           core.subTrue(typeSystem,

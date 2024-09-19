@@ -378,7 +378,7 @@ class PairListTest {
 
       assertThat(list3.transform((s, i) -> s + i),
           is(Arrays.asList("a1", "null5", "c3")));
-      assertThat(list3.transform2((s, i) -> s + i),
+      assertThat(list3.transformEager((s, i) -> s + i),
           is(Arrays.asList("a1", "null5", "c3")));
 
       final BiPredicate<String, Integer> gt2 = (s, i) -> i > 2;

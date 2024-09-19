@@ -289,6 +289,18 @@ public class Core {
       this.pat = requireNonNull(pat);
     }
 
+    @Override public int hashCode() {
+      return name.hashCode() + i;
+    }
+
+    @Override public boolean equals(Object obj) {
+      return obj == this
+          || obj instanceof AsPat
+          && ((AsPat) obj).name.equals(name)
+          && ((AsPat) obj).i == i
+          && ((AsPat) obj).pat.equals(pat);
+    }
+
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       return w.id(name).append(" as ").append(pat, 0, 0);
     }
@@ -1190,7 +1202,7 @@ public class Core {
 
     FromStep(Op op, ImmutableList<Binding> bindings) {
       super(Pos.ZERO, op);
-      this.bindings = bindings;
+      this.bindings = requireNonNull(bindings);
     }
 
     @Override final AstWriter unparse(AstWriter w, int left, int right) {
