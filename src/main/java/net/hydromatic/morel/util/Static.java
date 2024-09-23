@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.RandomAccess;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collector;
@@ -198,6 +199,24 @@ public class Static {
     }
     final ImmutableList.Builder<T> b = ImmutableList.builder();
     elements.forEach(e -> b.add(mapper.apply(e)));
+    return b.build();
+  }
+
+  /** Eagerly converts a pair of Iterables to an ImmutableList, applying a
+   * mapping function to each pair of elements. */
+  public static <T, U, V> ImmutableList<V> transformEager(
+      Iterable<? extends T> ts, Iterable<? extends U> us,
+      BiFunction<T, U, V> mapper) {
+    if (Iterables.isEmpty(ts) || Iterables.isEmpty(us)) {
+      // Save ourselves the effort of creating a Builder.
+      return ImmutableList.of();
+    }
+    final ImmutableList.Builder<V> b = ImmutableList.builder();
+    final Iterator<? extends T> tIter = ts.iterator();
+    final Iterator<? extends U> uIter = us.iterator();
+    while (tIter.hasNext() && uIter.hasNext()) {
+      b.add(mapper.apply(tIter.next(), uIter.next()));
+    }
     return b.build();
   }
 

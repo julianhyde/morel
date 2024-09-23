@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.append;
+import static net.hydromatic.morel.util.Static.transformEager;
 
 import static com.google.common.collect.Iterables.getLast;
 
@@ -173,14 +174,18 @@ public class FromBuilder {
     final boolean uselessIfLast = this.bindings.isEmpty();
     if (pat instanceof Core.RecordPat) {
       final Core.RecordPat recordPat = (Core.RecordPat) pat;
-      this.bindings.forEach(b -> nameExps.add(b.id, core.id(b.id)));
-      forEach(recordPat.type().argNameTypes.keySet(), recordPat.args,
-          (name, arg) ->
-              nameExps.add(
-                  core.idPat(arg.type, name, typeSystem.nameGenerator),
-                  core.id((Core.IdPat) arg)));
       final List<Binding> bindings2 =
-          bindings2a == null ? null : Util.last(bindings2a, bindingCount(pat));
+          bindings2a == null
+              ? transformEager(recordPat.type().argNameTypes.keySet(),
+                  recordPat.args,
+                  (name, arg) ->
+                      Binding.of(core.idPat(arg.type, name,
+                          typeSystem.nameGenerator)))
+              : Util.last(bindings2a, bindingCount(pat));
+      this.bindings.forEach(b -> nameExps.add(b.id, core.id(b.id)));
+      forEach(lastStep.bindings, bindings2,
+          (inBinding, binding) ->
+              nameExps.add(binding.id, core.id(inBinding.id)));
       addAll(steps);
       return yield3(bindings2, uselessIfLast, nameExps);
     } else if (pat instanceof Core.TuplePat) {
@@ -188,12 +193,10 @@ public class FromBuilder {
       forEach(tuplePat.args, lastStep.bindings,
           (arg, binding) ->
               nameExps.add((Core.IdPat) arg, core.id(binding.id)));
-      final List<Binding> bindings2;
-      if (bindings2a == null) {
-        bindings2 = nameExps.transform((namedPat, e) -> Binding.of(namedPat));
-      } else {
-        bindings2 = Util.last(bindings2a, bindingCount(pat));
-      }
+      final List<Binding> bindings2 =
+          bindings2a == null
+              ? nameExps.transform((namedPat, e) -> Binding.of(namedPat))
+              : Util.last(bindings2a, bindingCount(pat));
       addAll(steps);
       return yield3(bindings2, uselessIfLast, nameExps);
     } else if (lastStep instanceof Core.Yield
