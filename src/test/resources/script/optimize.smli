@@ -1,0 +1,189 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Optimization problems, based on Gurobi diet.py.
+ *)
+
+(*) Fake out the integer structure.
+val Integer =
+  {maxInt = 2147483647};
+> val Integer = {maxInt=2147483647} : {maxInt:int}
+
+(* Diet ***********************************************************)
+(* Builds and solves the classic diet problem. Demonstrates model
+ * construction and simple model modification – after the initial
+ * model is solved, a constraint is added to limit the number of
+ * dairy servings.
+ *
+ * Nutrition guidelines, based on
+ * USDA Dietary Guidelines for Americans, 2005
+ * http://www.health.gov/DietaryGuidelines/dga2005/
+ *)
+val categories = [
+  {category="calories", minNutrition=1800, maxNutrition=2200},
+  {category="protein", minNutrition=91, maxNutrition=Integer.maxInt},
+  {category="fat", minNutrition=0, maxNutrition=65},
+  {category="sodium", minNutrition=0, maxNutrition=1779}];
+> val categories =
+>   [{category="calories",maxNutrition=2200,minNutrition=1800},
+>    {category="protein",maxNutrition=2147483647,minNutrition=91},
+>    {category="fat",maxNutrition=65,minNutrition=0},
+>    {category="sodium",maxNutrition=1779,minNutrition=0}]
+>   : {category:string, maxNutrition:int, minNutrition:int} list
+
+val foods = [
+  {food="hamburger", cost=2.49},
+  {food="chicken", cost=2.89},
+  {food="hot dog", cost=1.50},
+  {food="fries", cost=1.89},
+  {food="macaroni", cost=2.09},
+  {food="pizza", cost=1.99},
+  {food="salad", cost=2.49},
+  {food="milk", cost=0.89},
+  {food="ice cream", cost=1.59}];
+> val foods =
+>   [{cost=2.49,food="hamburger"},{cost=2.89,food="chicken"},
+>    {cost=1.5,food="hot dog"},{cost=1.89,food="fries"},
+>    {cost=2.09,food="macaroni"},{cost=1.99,food="pizza"},
+>    {cost=2.49,food="salad"},{cost=0.89,food="milk"},
+>    {cost=1.59,food="ice cream"}] : {cost:real, food:string} list
+
+(*) Nutrition values for the foods
+val nutritionValues = [
+  {food="hamburger", category="calories", value=410.0},
+  {food="hamburger", category="protein", value=24.0},
+  {food="hamburger", category="fat", value=26.0},
+  {food="hamburger", category="sodium", value=730.0},
+  {food="chicken", category="calories", value=420.0},
+  {food="chicken", category="protein", value=32.0},
+  {food="chicken", category="fat", value=10.0},
+  {food="chicken", category="sodium", value=1190.0},
+  {food="hot dog", category="calories", value=560.0},
+  {food="hot dog", category="protein", value=20.0},
+  {food="hot dog", category="fat", value=32.0},
+  {food="hot dog", category="sodium", value=1800.0},
+  {food="fries", category="calories", value=380.0},
+  {food="fries", category="protein", value=4.0},
+  {food="fries", category="fat", value=19.0},
+  {food="fries", category="sodium", value=270.0},
+  {food="macaroni", category="calories", value=320.0},
+  {food="macaroni", category="protein", value=12.0},
+  {food="macaroni", category="fat", value=10.0},
+  {food="macaroni", category="sodium", value=930.0},
+  {food="pizza", category="calories", value=320.0},
+  {food="pizza", category="protein", value=15.0},
+  {food="pizza", category="fat", value=12.0},
+  {food="pizza", category="sodium", value=820.0},
+  {food="salad", category="calories", value=320.0},
+  {food="salad", category="protein", value=31.0},
+  {food="salad", category="fat", value=12.0},
+  {food="salad", category="sodium", value=1230.0},
+  {food="milk", category="calories", value=100.0},
+  {food="milk", category="protein", value=8.0},
+  {food="milk", category="fat", value=2.5},
+  {food="milk", category="sodium", value=125.0},
+  {food="ice cream", category="calories", value=330.0},
+  {food="ice cream", category="protein", value=8.0},
+  {food="ice cream", category="fat", value=10.0},
+  {food="ice cream", category="sodium", value=180.0}];
+> val nutritionValues =
+>   [{category="calories",food="hamburger",value=410.0},
+>    {category="protein",food="hamburger",value=24.0},
+>    {category="fat",food="hamburger",value=26.0},
+>    {category="sodium",food="hamburger",value=730.0},
+>    {category="calories",food="chicken",value=420.0},
+>    {category="protein",food="chicken",value=32.0},
+>    {category="fat",food="chicken",value=10.0},
+>    {category="sodium",food="chicken",value=1190.0},
+>    {category="calories",food="hot dog",value=560.0},
+>    {category="protein",food="hot dog",value=20.0},
+>    {category="fat",food="hot dog",value=32.0},
+>    {category="sodium",food="hot dog",value=1800.0},...]
+>   : {category:string, food:string, value:real} list
+
+datatype Food =
+  HAMBURGER | CHICKEN | HOT_DOG | FRIES | MACARONI | PIZZA | SALAD | MILK | ICE_CREAM;
+> datatype Food = CHICKEN | FRIES | HAMBURGER | HOT_DOG | ICE_CREAM | MACARONI | MILK | PIZZA | SALAD
+
+fun cost food =
+  only (
+    from f in foods
+      where f.food = food
+      yield f.cost);
+> val cost = fn : string -> real
+
+(*) Vector product of a dictionary (alpha, int) and a function (alpha -> int)
+fun prod dict f =
+  from (k, v) in dict
+    compute sum of v * (f k);
+> val prod = fn : ('a * int) list -> ('a -> int) -> int
+
+(*) Create decision variables for the foods to buy
+(*
+from buy: (Food, Int) dict
+  (*) Nutrition constraints
+  where notExists (
+    from f in foods
+      where true)
+  (*) The objective is to minimize the costs
+  order prod (buy, cost) desc limit 1;
+*)
+
+(*
+# Nutrition constraints
+m.addConstrs(
+    (
+        gp.quicksum(nutritionValues[f, c] * buy[f] for f in foods)
+        == [minNutrition[c], maxNutrition[c]]
+        for c in categories
+    ),
+    "_",
+)
+
+# Using looping constructs, the preceding statement would be:
+#
+# for c in categories:
+#  m.addRange(sum(nutritionValues[f, c] * buy[f] for f in foods),
+#             minNutrition[c], maxNutrition[c], c)
+
+
+def printSolution():
+    if m.status == GRB.OPTIMAL:
+        print(f"\nCost: {m.ObjVal:g}")
+        print("\nBuy:")
+        for f in foods:
+            if buy[f].X > 0.0001:
+                print(f"{f} {buy[f].X:g}")
+    else:
+        print("No solution")
+
+
+# Solve
+m.optimize()
+printSolution()
+
+print("\nAdding constraint: at most 6 servings of dairy")
+m.addConstr(buy.sum(["milk", "ice cream"]) <= 6, "limit_dairy")
+
+# Solve
+m.optimize()
+printSolution()
+
+*)
+
+(*) End optimize.smli
