@@ -31,7 +31,7 @@ Int;
 > val it =
 >   {abs=fn,compare=fn,div=fn,fromInt=fn,fromLarge=fn,fromString=fn,max=fn,
 >    maxInt=SOME 2147483647,min=fn,minInt=SOME 2147483647,mod=fn,
->    precision=SOME 10,quot=fn,rem=fn,sameSign=fn,sign=fn,toInt=fn,toLarge=fn,
+>    precision=SOME 32,quot=fn,rem=fn,sameSign=fn,sign=fn,toInt=fn,toLarge=fn,
 >    toString=fn}
 >   : {abs:int -> int, compare:int * int -> order, div:int * int -> int,
 >      fromInt:int -> int, fromLarge:int -> int, fromString:string -> int option,
@@ -147,6 +147,15 @@ Sys.plan ();
 > val it =
 >   "apply2(fnValue +, constant(2), apply2(fnValue *, constant(3), constant(4)))"
 >   : string
+14 div 3;
+> val it = 4 : int
+14 div ~3;
+> val it = ~5 : int
+
+from (i, j) in [(14, 3), (~14, 3), (14, ~3), (~14, ~3)]
+ where (i div j) <> Int.`div` (i, j)
+ orelse (i mod j) <> Int.`mod` (i, j);
+> val it = [] : {i:int, j:int} list
 
 fn x => x + 1;
 > val it = fn : int -> int
@@ -1467,6 +1476,18 @@ Int.compare;
 > val it = fn : int * int -> order
 Int.compare (4, 3);
 > val it = GREATER : order
+Int.`div`;
+> val it = fn : int * int -> int
+Int.`div` (14, 3);
+> val it = 4 : int
+Int.`div` (~14, 3);
+> val it = ~5 : int
+Int.`div` (14, ~3);
+> val it = ~5 : int
+Int.`div` (~14, ~3);
+> val it = 4 : int
+Int.`div` (0, ~3);
+> val it = 0 : int
 Int.fromInt;
 > val it = fn : int -> int
 Int.fromInt 3;
@@ -1491,26 +1512,42 @@ Int.min (4, 3);
 > val it = 3 : int
 Int.`mod`;
 > val it = fn : int * int -> int
-Int.`mod` (11, 3);
+Int.`mod` (14, 3);
 > val it = 2 : int
-Int.`mod` (~11, 3);
+Int.`mod` (~14, 3);
 > val it = 1 : int
-Int.`mod` (11, ~3);
+Int.`mod` (14, ~3);
 > val it = ~1 : int
-Int.`mod` (~11, ~3);
+Int.`mod` (~14, ~3);
 > val it = ~2 : int
+Int.`mod` (0, ~3);
+> val it = 0 : int
+Int.quot;
+> val it = fn : int * int -> int
+Int.quot (14, 3);
+> val it = 4 : int
+Int.quot (~14, 3);
+> val it = ~4 : int
+Int.quot (14, ~3);
+> val it = ~4 : int
+Int.quot (~14, ~3);
+> val it = 4 : int
+Int.quot (0, ~3);
+> val it = 0 : int
 Int.precision;
-> val it = SOME 10 : int option
+> val it = SOME 32 : int option
 Int.rem;
 > val it = fn : int * int -> int
-Int.rem (11, 2);
-> val it = 1 : int
-Int.rem (~11, 2);
-> val it = 1 : int
-Int.rem (11, ~2);
-> val it = ~1 : int
-Int.rem (~11, ~2);
-> val it = ~1 : int
+Int.rem (14, 3);
+> val it = 2 : int
+Int.rem (~14, 3);
+> val it = ~2 : int
+Int.rem (14, ~3);
+> val it = 2 : int
+Int.rem (~14, ~3);
+> val it = ~2 : int
+Int.rem (0, ~3);
+> val it = 0 : int
 Int.sameSign;
 > val it = fn : int * int -> bool
 Int.sameSign (3, ~2);

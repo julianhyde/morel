@@ -327,12 +327,7 @@ public abstract class Codes {
   };
 
   /** @see BuiltIn#OP_DIV */
-  private static final Applicable OP_DIV =
-      new Applicable2<Integer, Integer, Integer>(BuiltIn.OP_DIV) {
-        @Override public Integer apply(Integer a0, Integer a1) {
-          return Math.floorDiv(a0, a1);
-        }
-      };
+  private static final Applicable OP_DIV = new IntDiv(BuiltIn.OP_DIV);
 
   /** @see BuiltIn#GENERAL_OP_O */
   private static final Applicable GENERAL_OP_O =
@@ -430,12 +425,7 @@ public abstract class Codes {
   private static final List INT_MIN_INT = optionSome(Integer.MAX_VALUE);
 
   /** @see BuiltIn#INT_DIV */
-  private static final Applicable INT_DIV =
-      new Applicable2<Integer, Integer, Integer>(BuiltIn.INT_DIV) {
-        @Override public Integer apply(Integer a0, Integer a1) {
-          return Math.floorMod(a0, a1);
-        }
-      };
+  private static final Applicable INT_DIV = new IntDiv(BuiltIn.INT_DIV);
 
   /** @see BuiltIn#INT_MOD */
   private static final Applicable INT_MOD = new IntMod(BuiltIn.INT_MOD);
@@ -452,15 +442,26 @@ public abstract class Codes {
     }
   }
 
+  /** Implements {@link #INT_DIV} and {@link #OP_DIV}. */
+  private static class IntDiv
+      extends Applicable2<Integer, Integer, Integer> {
+    IntDiv(BuiltIn builtIn) {
+      super(builtIn);
+    }
+
+    @Override public Integer apply(Integer a0, Integer a1) {
+      return Math.floorDiv(a0, a1);
+    }
+  }
+
   /** @see BuiltIn#INT_PRECISION */
-  // 10^10 < 2^31 < 10^11
-  private static final List INT_PRECISION = optionSome(10);
+  private static final List INT_PRECISION = optionSome(32); // Java int 32 bits
 
   /** @see BuiltIn#INT_QUOT */
   private static final Applicable INT_QUOT =
       new Applicable2<Integer, Integer, Integer>(BuiltIn.INT_QUOT) {
         @Override public Integer apply(Integer a0, Integer a1) {
-          return Math.floorMod(a0, a1);
+          return a0 / a1;
         }
       };
 
@@ -468,7 +469,7 @@ public abstract class Codes {
   private static final Applicable INT_REM =
       new Applicable2<Integer, Integer, Integer>(BuiltIn.INT_REM) {
         @Override public Integer apply(Integer a0, Integer a1) {
-          return Math.floorMod(a0, a1);
+          return a0 % a1;
         }
       };
 
