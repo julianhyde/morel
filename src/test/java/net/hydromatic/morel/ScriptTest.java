@@ -141,7 +141,7 @@ public class ScriptTest {
     final File scriptDirectory = inFile.getParentFile();
     final boolean loadDictionary =
         inFile.getPath()
-            .matches(".*/(blog|dummy|foreign|hybrid|suchThat)\\.(sml|smli)");
+            .matches(".*/(blog|dummy2?|foreign|hybrid|suchThat)\\.(sml|smli)");
     final Map<String, ForeignValue> dictionary =
         loadDictionary
             ? Calcite.withDataSets(BuiltInDataSet.DICTIONARY).foreignValues()
@@ -156,7 +156,7 @@ public class ScriptTest {
       }
     }
     // For the "file.smli" test, move to a subdirectory; it's more predictable
-    if (inFile.getPath().matches(".*/(file|dummy)\\.(sml|smli)")) {
+    if (inFile.getPath().matches(".*/(file|dummy2?)\\.(sml|smli)")) {
       directory = new File(directory, "data");
     }
     Prop.DIRECTORY.set(propMap, directory);

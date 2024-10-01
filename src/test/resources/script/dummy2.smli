@@ -1,0 +1,336 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * dummy2.smli - stuff that has been in dummy.smli but already works
+ *)
+
+(*) WordCount in Morel
+val lines = ["a skunk sat on a stump",
+  "and thunk the stump stunk",
+  "but the stump thunk the skunk stunk"];
+> val lines =
+>   ["a skunk sat on a stump","and thunk the stump stunk",
+>    "but the stump thunk the skunk stunk"] : string list
+fun split s =
+  let
+    fun split0 [] word words = word :: words
+      | split0 (#" " :: s) word words = split0 s "" (word :: words)
+      | split0 (c :: s) word words = split0 s (word ^ (String.str c)) words
+  in
+    List.rev (split0 (String.explode s) "" [])
+  end;
+> val split = fn : string -> string list
+
+(*) wordCount again
+fun mapReduce mapper reducer list =
+  from e in list,
+      (k, v) in mapper e
+    group k compute c = (fn vs => reducer (k, vs)) of v;
+> val mapReduce = fn
+>   : ('a -> ('b * 'c) list) ->
+>      ('b * 'c list -> 'd) -> 'a list -> {c:'d, k:'b} list
+fun wc_mapper line =
+  List.map (fn w => (w, 1)) (split line);
+> val wc_mapper = fn : string -> (string * int) list
+fun wc_reducer (key, values) =
+  List.foldl (fn (x, y) => x + y) 0 values;
+> val wc_reducer = fn : 'a * int list -> int
+val wordCount = mapReduce wc_mapper wc_reducer;
+> val wordCount = fn : string list -> {c:int, k:string} list
+(*
+from p in wordCount lines order p.k;
+> val it =
+>   [{c=2,k="a"},{c=1,k="and"},{c=1,k="but"},{c=1,k="on"},{c=1,k="sat"},
+>    {c=2,k="skunk"},{c=3,k="stump"},{c=2,k="stunk"},{c=3,k="the"},
+>    {c=2,k="thunk"}] : {c:int, k:string} list
+*)
+
+val triples =
+  from t in [{x=1,y=2}, {x=2,y=6}, {x=3, y=5}]
+    yield {t.x, t.y, foo = fn z => t.x * z + t.y};
+> val triples = [{foo=fn,x=1,y=2},{foo=fn,x=2,y=6},{foo=fn,x=3,y=5}]
+>   : {foo:int -> int, x:int, y:int} list
+
+from {foo,x,y} in triples
+  order foo ~1, x;
+> val it = [{foo=fn,x=1,y=2},{foo=fn,x=3,y=5},{foo=fn,x=2,y=6}]
+>   : {foo:int -> int, x:int, y:int} list
+
+fun positives list = from h in list where h > 0;
+> val positives = fn : int list -> int list
+
+from i in [10, 20],
+    k in (positives [1, 2])
+  yield k;
+> val it = [1,2,1,2] : int list
+
+(*) Closure
+let
+  fun f x = 1 + x;
+  val x = f 2;
+  fun f y = x + y;
+  val x = 10
+in
+  f x
+end;
+> val it = 13 : int
+
+fun isEmp e =
+  e elem scott.emp;
+> val isEmp = fn
+>   :
+>      {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
+>       job:string, mgr:int, sal:real} -> bool
+from e
+  where isEmp e andalso e.deptno = 20
+  yield e.ename;
+> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
+
+(*) 'yield' uses 'case' to deconstruct a tuple
+from p in [(1, 2), (3, 5)]
+  yield case p of (x, y) => {x, y};
+> val it = [{x=1,y=2},{x=3,y=5}] : {x:int, y:int} list
+
+(*) 'yield' uses 'case' to deconstruct a record
+from p in [{x = 1, y = 2}, {x = 3, y = 5}]
+  yield case p of {x=x, y=y} => (x, y);
+> val it = [(1,2),(3,5)] : (int * int) list
+
+(*) Three different kinds of 'max'
+fun max_alpha (x, y) = if x < y then y else x;
+> val max_alpha = fn : 'a * 'a -> 'a
+max_alpha (2, 3);
+> val it = 3 : int
+
+fun strTimes s 0 l = l
+  | strTimes s i l = strTimes ("a" ^ s) (i - 1) (s :: l);
+> val strTimes = fn : string -> int -> string list -> string list
+
+strTimes "" 3 [];
+> val it = ["aa","a",""] : string list
+
+(*
+fun swap (x, y) = (y, x);
+> val swap = fn : 'a * 'b -> 'b * 'a
+
+swap (1, "foo");
+> val it = ("foo",1) : string * int
+*)
+
+(*) Record containing polymorphic functions:
+(*)  val it = {a=fn,b=fn}
+(*) : {a:'a list -> ('a * 'a list) option, b:'b list -> ('b * 'b list) option}
+(*
+{a = fn x => case x of [] => NONE | (h :: t) => SOME (h, t),
+ b = fn x => case x of [] => NONE | (h :: t) => SOME (h, t)};
+> val it = {a=fn,b=fn}
+>   : {a:'a list -> ('a * 'a list) option, b:'b list -> ('b * 'b list) option}
+*)
+
+(*) Given a list of strings, 'prefixes' returns a list of their
+(*) prefixes that are one character shorter.
+val prefixes = List.map (fn s =>
+  if s = "" then s
+  else String.substring(s, 0, String.size s - 1));
+> val prefixes = fn : string list -> string list
+prefixes ["cat", "dog", "", "car", "cart"];
+> val it = ["ca","do","","ca","car"] : string list
+
+(*) Fixed-point over union, with an iteration limit 'n'.
+(*) A semi-naive algorithm applies the function only to
+(*) the deltas (the elements added by the function last
+(*) time) so is more efficient than the naive algorithm.
+fun fixu_semi_naive (f, a, n) =
+  let
+    fun contains (list, e) =
+      List.exists (fn e2 => e = e2) list
+    fun minus (list1, list2) =
+      List.filter (fn e => not (contains (list2, e))) list1
+    fun fixInc (a, delta, i) =
+      let
+        val a2 = f delta
+        val newDelta = minus (a2, a)
+      in
+        if newDelta = [] orelse i = n then
+          a
+        else
+          fixInc (a union newDelta, newDelta, i + 1)
+      end
+  in
+    fixInc ([], a, 0)
+  end;
+> val fixu_semi_naive = fn : ('a list -> 'a list) * 'a list * int -> 'a list
+val zz = fixu_semi_naive (prefixes, ["cat", "dog", "", "car", "cart"], ~1);
+> val zz = ["ca","do","","ca","car","c","d","c"] : string list
+
+Sys.set ("printLength", 64);
+> val it = () : unit
+
+(*) State adjacency
+val adjacent_states =
+ [{state="AK", adjacents=[]},
+  {state="AL", adjacents=["MS", "TN", "GA", "FL"]},
+  {state="AR", adjacents=["MO", "TN", "MS", "LA", "TX", "OK"]},
+  {state="AZ", adjacents=["CA", "NV", "UT", "CO", "NM"]},
+  {state="CA", adjacents=["OR", "NV", "AZ"]},
+  {state="CO", adjacents=["WY", "NE", "KS", "OK", "NM", "AZ", "UT"]},
+  {state="CT", adjacents=["NY", "MA", "RI"]},
+  {state="DC", adjacents=["MD", "VA"]},
+  {state="DE", adjacents=["MD", "PA", "NJ"]},
+  {state="FL", adjacents=["AL", "GA"]},
+  {state="GA", adjacents=["FL", "AL", "TN", "NC", "SC"]},
+  {state="HI", adjacents=[]},
+  {state="IA", adjacents=["MN", "WI", "IL", "MO", "NE", "SD"]},
+  {state="ID", adjacents=["MT", "WY", "UT", "NV", "OR", "WA"]},
+  {state="IL", adjacents=["IN", "KY", "MO", "IA", "WI"]},
+  {state="IN", adjacents=["MI", "OH", "KY", "IL"]},
+  {state="KS", adjacents=["NE", "MO", "OK", "CO"]},
+  {state="KY", adjacents=["IN", "OH", "WV", "VA", "TN", "MO", "IL"]},
+  {state="LA", adjacents=["TX", "AR", "MS"]},
+  {state="MA", adjacents=["RI", "CT", "NY", "NH", "VT"]},
+  {state="MD", adjacents=["VA", "WV", "PA", "DC", "DE"]},
+  {state="ME", adjacents=["NH"]},
+  {state="MI", adjacents=["WI", "IN", "OH"]},
+  {state="MN", adjacents=["WI", "IA", "SD", "ND"]},
+  {state="MO", adjacents=["IA", "IL", "KY", "TN", "AR", "OK", "KS", "NE"]},
+  {state="MS", adjacents=["LA", "AR", "TN", "AL"]},
+  {state="MT", adjacents=["ND", "SD", "WY", "ID"]},
+  {state="NC", adjacents=["VA", "TN", "GA", "SC"]},
+  {state="ND", adjacents=["MN", "SD", "MT"]},
+  {state="NE", adjacents=["SD", "IA", "MO", "KS", "CO", "WY"]},
+  {state="NH", adjacents=["VT", "ME", "MA"]},
+  {state="NJ", adjacents=["DE", "PA", "NY"]},
+  {state="NM", adjacents=["AZ", "UT", "CO", "OK", "TX"]},
+  {state="NV", adjacents=["ID", "UT", "AZ", "CA", "OR"]},
+  {state="NY", adjacents=["NJ", "PA", "VT", "MA", "CT"]},
+  {state="OH", adjacents=["PA", "WV", "KY", "IN", "MI"]},
+  {state="OK", adjacents=["KS", "MO", "AR", "TX", "NM", "CO"]},
+  {state="OR", adjacents=["CA", "NV", "ID", "WA"]},
+  {state="PA", adjacents=["NY", "NJ", "DE", "MD", "WV", "OH"]},
+  {state="RI", adjacents=["CT", "MA"]},
+  {state="SC", adjacents=["GA", "NC"]},
+  {state="SD", adjacents=["ND", "MN", "IA", "NE", "WY", "MT"]},
+  {state="TN", adjacents=["KY", "VA", "NC", "GA", "AL", "MS", "AR", "MO"]},
+  {state="TX", adjacents=["NM", "OK", "AR", "LA"]},
+  {state="UT", adjacents=["ID", "WY", "CO", "NM", "AZ", "NV"]},
+  {state="VA", adjacents=["NC", "TN", "KY", "WV", "MD", "DC"]},
+  {state="VT", adjacents=["NY", "NH", "MA"]},
+  {state="WA", adjacents=["ID", "OR"]},
+  {state="WI", adjacents=["MI", "MN", "IA", "IL"]},
+  {state="WV", adjacents=["OH", "PA", "MD", "VA", "KY"]},
+  {state="WY", adjacents=["MT", "SD", "NE", "CO", "UT", "ID"]}];
+> val adjacent_states =
+>   [{adjacents=[],state="AK"},{adjacents=["MS","TN","GA","FL"],state="AL"},
+>    {adjacents=["MO","TN","MS","LA","TX","OK"],state="AR"},
+>    {adjacents=["CA","NV","UT","CO","NM"],state="AZ"},
+>    {adjacents=["OR","NV","AZ"],state="CA"},
+>    {adjacents=["WY","NE","KS","OK","NM","AZ","UT"],state="CO"},
+>    {adjacents=["NY","MA","RI"],state="CT"},{adjacents=["MD","VA"],state="DC"},
+>    {adjacents=["MD","PA","NJ"],state="DE"},{adjacents=["AL","GA"],state="FL"},
+>    {adjacents=["FL","AL","TN","NC","SC"],state="GA"},{adjacents=[],state="HI"},
+>    {adjacents=["MN","WI","IL","MO","NE","SD"],state="IA"},
+>    {adjacents=["MT","WY","UT","NV","OR","WA"],state="ID"},
+>    {adjacents=["IN","KY","MO","IA","WI"],state="IL"},
+>    {adjacents=["MI","OH","KY","IL"],state="IN"},
+>    {adjacents=["NE","MO","OK","CO"],state="KS"},
+>    {adjacents=["IN","OH","WV","VA","TN","MO","IL"],state="KY"},
+>    {adjacents=["TX","AR","MS"],state="LA"},
+>    {adjacents=["RI","CT","NY","NH","VT"],state="MA"},
+>    {adjacents=["VA","WV","PA","DC","DE"],state="MD"},
+>    {adjacents=["NH"],state="ME"},{adjacents=["WI","IN","OH"],state="MI"},
+>    {adjacents=["WI","IA","SD","ND"],state="MN"},
+>    {adjacents=["IA","IL","KY","TN","AR","OK","KS","NE"],state="MO"},
+>    {adjacents=["LA","AR","TN","AL"],state="MS"},
+>    {adjacents=["ND","SD","WY","ID"],state="MT"},
+>    {adjacents=["VA","TN","GA","SC"],state="NC"},
+>    {adjacents=["MN","SD","MT"],state="ND"},
+>    {adjacents=["SD","IA","MO","KS","CO","WY"],state="NE"},
+>    {adjacents=["VT","ME","MA"],state="NH"},
+>    {adjacents=["DE","PA","NY"],state="NJ"},
+>    {adjacents=["AZ","UT","CO","OK","TX"],state="NM"},
+>    {adjacents=["ID","UT","AZ","CA","OR"],state="NV"},
+>    {adjacents=["NJ","PA","VT","MA","CT"],state="NY"},
+>    {adjacents=["PA","WV","KY","IN","MI"],state="OH"},
+>    {adjacents=["KS","MO","AR","TX","NM","CO"],state="OK"},
+>    {adjacents=["CA","NV","ID","WA"],state="OR"},
+>    {adjacents=["NY","NJ","DE","MD","WV","OH"],state="PA"},
+>    {adjacents=["CT","MA"],state="RI"},{adjacents=["GA","NC"],state="SC"},
+>    {adjacents=["ND","MN","IA","NE","WY","MT"],state="SD"},
+>    {adjacents=["KY","VA","NC","GA","AL","MS","AR","MO"],state="TN"},
+>    {adjacents=["NM","OK","AR","LA"],state="TX"},
+>    {adjacents=["ID","WY","CO","NM","AZ","NV"],state="UT"},
+>    {adjacents=["NC","TN","KY","WV","MD","DC"],state="VA"},
+>    {adjacents=["NY","NH","MA"],state="VT"},{adjacents=["ID","OR"],state="WA"},
+>    {adjacents=["MI","MN","IA","IL"],state="WI"},
+>    {adjacents=["OH","PA","MD","VA","KY"],state="WV"},
+>    {adjacents=["MT","SD","NE","CO","UT","ID"],state="WY"}]
+>   : {adjacents:string list, state:string} list
+
+(*) Pairs of states that share a border
+val pairs =
+  from s in adjacent_states,
+      adjacent in s.adjacents
+  yield {s.state, adjacent};
+> val pairs =
+>   [{adjacent="MS",state="AL"},{adjacent="TN",state="AL"},
+>    {adjacent="GA",state="AL"},{adjacent="FL",state="AL"},
+>    {adjacent="MO",state="AR"},{adjacent="TN",state="AR"},
+>    {adjacent="MS",state="AR"},{adjacent="LA",state="AR"},
+>    {adjacent="TX",state="AR"},{adjacent="OK",state="AR"},
+>    {adjacent="CA",state="AZ"},{adjacent="NV",state="AZ"},
+>    {adjacent="UT",state="AZ"},{adjacent="CO",state="AZ"},
+>    {adjacent="NM",state="AZ"},{adjacent="OR",state="CA"},
+>    {adjacent="NV",state="CA"},{adjacent="AZ",state="CA"},
+>    {adjacent="WY",state="CO"},{adjacent="NE",state="CO"},
+>    {adjacent="KS",state="CO"},{adjacent="OK",state="CO"},
+>    {adjacent="NM",state="CO"},{adjacent="AZ",state="CO"},
+>    {adjacent="UT",state="CO"},{adjacent="NY",state="CT"},
+>    {adjacent="MA",state="CT"},{adjacent="RI",state="CT"},
+>    {adjacent="MD",state="DC"},{adjacent="VA",state="DC"},
+>    {adjacent="MD",state="DE"},{adjacent="PA",state="DE"},
+>    {adjacent="NJ",state="DE"},{adjacent="AL",state="FL"},
+>    {adjacent="GA",state="FL"},{adjacent="FL",state="GA"},
+>    {adjacent="AL",state="GA"},{adjacent="TN",state="GA"},
+>    {adjacent="NC",state="GA"},{adjacent="SC",state="GA"},
+>    {adjacent="MN",state="IA"},{adjacent="WI",state="IA"},
+>    {adjacent="IL",state="IA"},{adjacent="MO",state="IA"},
+>    {adjacent="NE",state="IA"},{adjacent="SD",state="IA"},
+>    {adjacent="MT",state="ID"},{adjacent="WY",state="ID"},
+>    {adjacent="UT",state="ID"},{adjacent="NV",state="ID"},
+>    {adjacent="OR",state="ID"},{adjacent="WA",state="ID"},
+>    {adjacent="IN",state="IL"},{adjacent="KY",state="IL"},
+>    {adjacent="MO",state="IL"},{adjacent="IA",state="IL"},
+>    {adjacent="WI",state="IL"},{adjacent="MI",state="IN"},
+>    {adjacent="OH",state="IN"},{adjacent="KY",state="IN"},
+>    {adjacent="IL",state="IN"},{adjacent="NE",state="KS"},
+>    {adjacent="MO",state="KS"},{adjacent="OK",state="KS"},...]
+>   : {adjacent:string, state:string} list
+
+(*) Now, back to the states.
+(*) The semi-naive algorithm gets to 11 hops more efficiently.
+fun states_within2 s n =
+  fixu_semi_naive ((fn states =>
+    from s in states,
+        p in pairs
+      where p.state = s
+      group p.adjacent), [s], n);
+> val states_within2 = fn : string -> int -> string list
+from s in states_within2 "CA" 1 order s;
+> val it = ["AZ","NV","OR"] : string list
+
+(*) End dummy2.smli
