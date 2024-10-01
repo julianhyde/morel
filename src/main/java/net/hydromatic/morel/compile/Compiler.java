@@ -698,7 +698,7 @@ public class Compiler {
                   typedVal =
                       new Pretty.TypedVal(binding.id.name,
                           typedValue.valueAs(Object.class),
-                          Keys.toProgressive(binding.id.type().key())
+                          Keys.toProgressive(typedValue.typeKey())
                               .toType(typeSystem));
                 } else {
                   typedVal =
