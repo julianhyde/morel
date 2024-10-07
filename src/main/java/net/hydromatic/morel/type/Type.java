@@ -82,6 +82,23 @@ public interface Type {
     return false;
   }
 
+  /** Returns whether a type contains any progressive record types. */
+  default boolean containsProgressive() {
+    class V extends TypeVisitor<Void> {
+      int count = 0;
+
+      @Override public Void visit(RecordType recordType) {
+        if (recordType.isProgressive()) {
+          ++count;
+        }
+        return super.visit(recordType);
+      }
+    }
+    V v = new V();
+    accept(v);
+    return v.count > 0;
+  }
+
   /** Structural identifier of a type. */
   abstract class Key {
     public final Op op;

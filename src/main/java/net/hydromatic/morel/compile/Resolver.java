@@ -37,6 +37,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.PairList;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -53,11 +54,11 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.function.BiConsumer;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -194,26 +195,33 @@ public class Resolver {
   private ResolvedValDecl resolveValDecl(Ast.ValDecl valDecl,
       List<Binding> bindings) {
     final boolean composite = valDecl.valBinds.size() > 1;
-    final Map<Ast.Pat, Ast.Exp> matches = new LinkedHashMap<>();
+    final PairList<Ast.Pat, Ast.Exp> matches = PairList.of();
     valDecl.valBinds.forEach(valBind ->
-        flatten(matches, composite, valBind.pat, valBind.exp));
+        flatten(matches::add, composite, valBind.pat, valBind.exp));
+
+    // Translate patterns in a first pass, before translating expressions.
+    final PairList<Pos, Core.Pat> posPats = PairList.of();
+    matches.forEach((pat, exp) ->
+        posPats.add(pat.pos.plus(exp.pos), toCore(pat)));
 
     final List<PatExp> patExps = new ArrayList<>();
     if (valDecl.rec) {
-      final List<Core.Pat> pats = new ArrayList<>();
-      matches.forEach((pat, exp) -> pats.add(toCore(pat)));
-      pats.forEach(p ->
-          Compiles.acceptBinding(typeMap.typeSystem, p, bindings::add));
+      posPats.forEach((pos, pat) ->
+          Compiles.acceptBinding(typeMap.typeSystem, pat, bindings::add));
       final Resolver r = withEnv(bindings);
-      final Iterator<Core.Pat> patIter = pats.iterator();
-      matches.forEach((pat, exp) ->
-          patExps.add(
-              new PatExp(patIter.next(), r.toCore(exp),
-                  pat.pos.plus(exp.pos))));
+      posPats.forEachIndexed((i, pos, pat) -> {
+        final Core.Exp coreExp = r.toCore(matches.right(i));
+        patExps.add(new PatExp(pat, coreExp, pos));
+      });
     } else {
-      matches.forEach((pat, exp) ->
-          patExps.add(
-              new PatExp(toCore(pat), toCore(exp), pat.pos.plus(exp.pos))));
+      posPats.forEachIndexed((i, pos, pat) -> {
+        final Core.Exp coreExp = toCore(matches.right(i));
+        if (pat.type.containsProgressive()
+            && matchesModuloProgressive(coreExp.type, pat.type)) {
+          pat = toCore(matches.left(i), coreExp.type, coreExp.type);
+        }
+        patExps.add(new PatExp(pat, coreExp, pos));
+      });
       patExps.forEach(x ->
           Compiles.acceptBinding(typeMap.typeSystem, x.pat, bindings::add));
     }
@@ -248,6 +256,43 @@ public class Resolver {
     }
 
     return new ResolvedValDecl(rec, ImmutableList.copyOf(patExps), pat, exp);
+  }
+
+  private static boolean matchesModuloProgressive(Type type0, Type type1) {
+    final Op op0 = type0.op();
+    if (op0 != type1.op()) {
+      return false;
+    }
+    switch (op0) {
+    case RECORD_TYPE:
+    case TUPLE_TYPE:
+      if (!type0.isProgressive()
+          && type1.isProgressive()) {
+        return true;
+      }
+      final RecordLikeType recordType0 = (RecordLikeType) type0;
+      final RecordLikeType recordType1 = (RecordLikeType) type1;
+      final List<Type> argTypes0 = recordType0.argTypes();
+      final List<Type> argTypes1 = recordType1.argTypes();
+      return argTypes0.size() == argTypes1.size()
+          && Pair.allMatch(argTypes0, argTypes1,
+              Resolver::matchesModuloProgressive);
+
+    case FUNCTION_TYPE:
+      final FnType fnType0 = (FnType) type0;
+      final FnType fnType1 = (FnType) type1;
+      return matchesModuloProgressive(fnType0.paramType, fnType1.paramType)
+          && matchesModuloProgressive(fnType0.resultType, fnType1.resultType);
+
+    case LIST:
+      final ListType listType0 = (ListType) type0;
+      final ListType listType1 = (ListType) type1;
+      return matchesModuloProgressive(listType0.elementType,
+          listType1.elementType);
+
+    default:
+      return false;
+    }
   }
 
   /** Returns whether any of the expressions in {@code exps} references
@@ -525,13 +570,13 @@ public class Resolver {
     return resolvedDecl.toExp(e2);
   }
 
-  static void flatten(Map<Ast.Pat, Ast.Exp> matches, boolean flatten,
+  static void flatten(BiConsumer<Ast.Pat, Ast.Exp> matches, boolean flatten,
       Ast.Pat pat, Ast.Exp exp) {
     if (flatten && pat.op == Op.TUPLE_PAT && exp.op == Op.TUPLE) {
       forEach(((Ast.TuplePat) pat).args, ((Ast.Tuple) exp).args,
           (p, e) -> flatten(matches, true, p, e));
     } else {
-      matches.put(pat, exp);
+      matches.accept(pat, exp);
     }
   }
 
