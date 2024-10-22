@@ -128,6 +128,19 @@ public abstract class Environment {
     return Environments.bind(this, bindings);
   }
 
+  /** Returns an environment that is the same as this, but applying a
+   * substitution.
+   *
+   * <p>If {@code substitution} contains the pair (x, y)
+   * and if this environment has {@code x} then the returned
+   * environment will instead have {@code y}. */
+  public Environment substitute(Map<Core.Id, Core.Id> substitution) {
+    if (substitution.isEmpty()) {
+      return this;
+    }
+    return new Environments.SubstitutingEnvironment(this, substitution);
+  }
+
   /** If this environment only defines bindings in the given set, returns
    * its parent. Never returns null. The empty environment returns itself. */
   abstract Environment nearestAncestorNotObscuredBy(Set<Core.NamedPat> names);

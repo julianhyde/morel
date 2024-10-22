@@ -175,11 +175,11 @@ public class Inliner extends EnvShuttle {
     final Core.Exp exp = caseOf.exp.accept(this);
     final List<Core.Match> matchList = visitList(caseOf.matchList);
     if (matchList.size() == 1) {
-      final Map<Core.Id, Core.Id> substitution =
-          getSub(exp, matchList.get(0));
+      final Core.Match match = matchList.get(0);
+      final Map<Core.Id, Core.Id> substitution = getSub(exp, match);
       if (substitution != null) {
-        return Replacer.substitute(typeSystem, substitution,
-            matchList.get(0).exp);
+        return Replacer.substitute(typeSystem, env.substitute(substitution),
+            substitution, match.exp);
       }
     }
     return caseOf.copy(exp, matchList);

@@ -208,7 +208,7 @@ public abstract class Environments {
         // garbage-collected.
         env = parent;
         while (env instanceof SubEnvironment
-            && ((SubEnvironment) env).binding.id.name.equals(binding.id.name)) {
+            && ((SubEnvironment) env).binding.id.equals(binding.id)) {
           env = ((SubEnvironment) env).parent;
         }
       } else {
@@ -316,6 +316,70 @@ public abstract class Environments {
         ++i;
       }
       return -1;
+    }
+  }
+
+  static class SubstitutingEnvironment extends Environment {
+    private final Environment delegate;
+    private final ImmutableMap<Core.Id, Core.Id> byId;
+    private final ImmutableMap<Core.NamedPat, Core.Id> byPat;
+    private final ImmutableMap<String, Core.Id> byName;
+
+    SubstitutingEnvironment(Environment delegate,
+        Map<Core.Id, Core.Id> byId) {
+      this.delegate = requireNonNull(delegate);
+      this.byId = ImmutableMap.copyOf(byId);
+      final ImmutableMap.Builder<Core.NamedPat, Core.Id> patBuilder =
+          ImmutableMap.builder();
+      final ImmutableMap.Builder<String, Core.Id> nameBuilder =
+          ImmutableMap.builder();
+      byId.forEach((k, v) -> {
+        patBuilder.put(k.idPat, v);
+        nameBuilder.put(k.idPat.name, v);
+      });
+      this.byPat = patBuilder.build();
+      this.byName = nameBuilder.build();
+    }
+
+    @Override void visit(Consumer<Binding> consumer) {
+      delegate.visit(binding -> consumer.accept(substitute(binding)));
+    }
+
+    private Binding substitute(Binding binding) {
+      for (Map.Entry<Core.Id, Core.Id> entry : byId.entrySet()) {
+        if (binding.id.equals(entry.getKey().idPat)) {
+          return Binding.of(entry.getValue().idPat, binding.exp, binding.value);
+        }
+      }
+      return binding;
+    }
+
+    @Override public @Nullable Binding getOpt(String name) {
+      final Core.Id id = byName.get(name);
+      final String name2 = id != null ? id.idPat.name : name;
+      return delegate.getOpt(name2);
+    }
+
+    @Override public @Nullable Binding getOpt(Core.NamedPat idPat) {
+      final Core.Id id = byPat.get(idPat);
+      final Core.NamedPat idPat2 = id != null ? id.idPat : idPat;
+      return delegate.getOpt(idPat2);
+    }
+
+    @Override Environment nearestAncestorNotObscuredBy(Set<Core.NamedPat> names) {
+      ImmutableSet.Builder<Core.NamedPat> b = ImmutableSet.builder();
+      names.forEach(idPat -> {
+        final Core.Id id = byPat.get(idPat);
+        final Core.NamedPat idPat2 = id != null ? id.idPat : idPat;
+        b.add(idPat2);
+      });
+      return delegate.nearestAncestorNotObscuredBy(b.build());
+    }
+
+    @Override int distance(int soFar, Core.NamedPat idPat) {
+      final Core.Id id = byPat.get(idPat);
+      final Core.NamedPat idPat2 = id != null ? id.idPat : idPat;
+      return delegate.distance(soFar, idPat2);
     }
   }
 }
