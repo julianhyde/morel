@@ -271,6 +271,83 @@ from i where isBetween (i, 5, 8);
 > val it = [5, 6, 7, 8] : int list
 *)
 
+(*) "argMin" is an aggregate function that, when applied to a list of
+(*) (x, y) pairs, returns the value of x where y has the smallest value.
+fun argMin xDefault [] = xDefault
+  | argMin xDefault ((x0, y0) :: tuples) =
+  let
+    fun f (x0, y0, []) = x0
+      | f (x0, y0, ((x1, y1) :: tuples2)) =
+         if y1 < y0 then
+           f (x1, y1, tuples2)
+         else
+           f (x0, y0, tuples2)
+  in
+    f (x0, y0, tuples)
+  end;
+> val argMin = fn : 'a -> ('a * 'b) list -> 'a
+argMin "b" [];
+> val it = "b" : string
+argMin "b" [("a", 1), ("b", 2), ("c", 3)];
+> val it = "a" : string
+argMin "b" [("a", 3), ("b", 2), ("c", 1)];
+> val it = "c" : string
+argMin "b" [("a", 2), ("b", 1), ("c", 3), ("d", 1)];
+> val it = "b" : string
+
+(*) "argMax" is an aggregate function that, when applied to a list of
+(*) (x, y) pairs, returns the value of x where y has the largest value.
+fun argMax xDefault [] = xDefault
+  | argMax xDefault ((x0, y0) :: tuples) =
+  let
+    fun f (x0, y0, []) = x0
+      | f (x0, y0, ((x1, y1) :: tuples2)) =
+         if y1 > y0 then
+           f (x1, y1, tuples2)
+         else
+           f (x0, y0, tuples2)
+  in
+    f (x0, y0, tuples)
+  end;
+> val argMax = fn : 'a -> ('a * 'b) list -> 'a
+argMax "b" [];
+> val it = "b" : string
+argMax "b" [("a", 1), ("b", 2), ("c", 3)];
+> val it = "c" : string
+argMax "b" [("a", 3), ("b", 2), ("c", 1)];
+> val it = "a" : string
+argMax "b" [("a", 2), ("b", 1), ("c", 3), ( "d", 1)];
+> val it = "c" : string
+
+fun argMin0 tuples = argMin 0 tuples;
+> val argMin0 = fn : (int * 'a) list -> int
+fun argMax0 tuples = argMax 0 tuples;
+> val argMax0 = fn : (int * 'a) list -> int
+
+(*) "pow (x, y)" returns x to the power of y (where x and y are integers)
+fun pow (x, y) = if y = 0 then 1 else x * pow (x, y - 1);
+> val pow = fn : int * int -> int
+pow (2, 5);
+> val it = 32 : int
+
+(*
+from k in [2, 3, 4, 5, 6], x, y
+ where x > 0 andalso y > 0 andalso y < k andalso x < k andalso x + y = k
+ yield {k, p = pow (x, y)};
+*)
+
+(*) If x + y = k (a constant), at what value of x is x ^ y maximized?
+from k in [2,3,4,5,6,7,8,9,10],
+    x in [1,2,3,4,5,6,7,8,9],
+    y
+  where x + y = k andalso y >= 0 andalso y <= 100
+  yield {k, x, p = pow (x, y)}
+  group k compute x = argMax0 of (x, p), p = max of p;
+> val it =
+>   [{k=2,p=1,x=1},{k=3,p=2,x=2},{k=4,p=4,x=2},{k=5,p=9,x=3},{k=6,p=27,x=3},
+>    {k=7,p=81,x=3},{k=8,p=256,x=4},{k=9,p=1024,x=4},{k=10,p=4096,x=4}]
+>   : {k:int, p:int, x:int} list
+
 (* ------------------------------------------------------ *)
 (*) Convenience function that converts a predicate to a relation
 (*
