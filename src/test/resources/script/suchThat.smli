@@ -34,6 +34,16 @@ from i where i = 0 orelse i = 12;
 > val it = [0,12] : int list
 from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
 > val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int list
+from i in [2, 5, 7],
+    j
+  where j > 3 andalso j < i andalso j < 1000;
+> val it = [{i=5,j=4},{i=7,j=4},{i=7,j=5},{i=7,j=6}] : {i:int, j:int} list
+(*
+from i in [2, 5, 7],
+    j
+  where j > 3 andalso j < i;
+> val it = [{i=5,j=4},{i=7,j=4},{i=7,j=5},{i=7,j=6}] : {i:int, j:int} list
+*)
 from i
 where i > 0 andalso i < 10
 join b

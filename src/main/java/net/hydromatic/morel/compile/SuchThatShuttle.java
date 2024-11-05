@@ -26,8 +26,8 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedMap;
 import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -38,6 +38,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.function.Consumer;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
@@ -106,6 +108,7 @@ class SuchThatShuttle extends Shuttle {
 
       Environment env = Environments.empty();
       final PairList<Core.IdPat, Core.Exp> idPats = PairList.of();
+      final SortedMap<Core.NamedPat, Core.Exp> boundPats = new TreeMap<>();
       for (int i = 0; i < steps.size(); i++) {
         final Core.FromStep step = steps.get(i);
         switch (step.op) {
@@ -113,7 +116,11 @@ class SuchThatShuttle extends Shuttle {
           final Core.Scan scan = (Core.Scan) step;
           if (Extents.isInfinite(scan.exp)) {
             final int idPatCount = idPats.size();
-            final Core.Exp rewritten = rewrite1(scan, skip(steps, i), idPats);
+            final List<Core.FromStep> laterSteps = skip(steps, i + 1);
+            final Extents.Analysis analysis =
+                Extents.create(typeSystem, scan.pat, boundPats,
+                    laterSteps, idPats);
+            final Core.Exp rewritten = rewrite1(scan, analysis);
 
             // Create a scan for any new variables introduced by rewrite.
             idPats.forEachIndexed((j, pat, extent) -> {
@@ -124,6 +131,20 @@ class SuchThatShuttle extends Shuttle {
             deferredScans.scan(env, scan.pat, rewritten, scan.condition);
           } else {
             deferredScans.scan(env, scan.pat, scan.exp);
+          }
+          if (scan.pat instanceof Core.NamedPat) {
+            // Analyze this step to provide constraints for later steps.
+            //
+            // For example, in
+            //   from i in [3, 5, 6],
+            //       j
+            //     where j > 3 andalso j < i
+            // the bound on i in "scan i in [3, 5, 6]"
+            // helps make j finite in "scan j".
+            final Extents.Analysis analysis =
+                Extents.create(typeSystem, scan.pat, boundPats,
+                    ImmutableList.of(step), idPats);
+            boundPats.put((Core.NamedPat) scan.pat, analysis.extentExp);
           }
           break;
 
@@ -186,12 +207,7 @@ class SuchThatShuttle extends Shuttle {
 
     /** Rewrites an unbounded scan to a {@code from} expression,
      * using predicates in later steps to determine the ranges of variables. */
-    private Core.From rewrite1(Core.Scan scan,
-        List<? extends Core.FromStep> laterSteps,
-        PairList<Core.IdPat, Core.Exp> idPats) {
-      final Extents.Analysis analysis =
-          Extents.create(typeSystem, scan.pat, ImmutableSortedMap.of(),
-              laterSteps, idPats);
+    private Core.From rewrite1(Core.Scan scan, Extents.Analysis analysis) {
       satisfiedFilters.addAll(analysis.satisfiedFilters);
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
       fromBuilder.scan(scan.pat, analysis.extentExp);

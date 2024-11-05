@@ -152,6 +152,12 @@ public class Extents {
       if (step instanceof Core.Where) {
         extent.g3(map.map, ((Core.Where) step).exp);
       }
+      if (step instanceof Core.Scan) {
+        final Core.Scan scan = (Core.Scan) step;
+        final Core.Exp condition =
+            core.elem(typeSystem, core.id(scan.pat), scan.exp);
+        extent.g3(map.map, condition);
+      }
     }
     extent.definitions.forEach((namedPat, exp) -> {
       // Is this expression better than the existing one?
@@ -517,6 +523,19 @@ public class Extents {
             consumer.accept(id.idPat,
                 core.call(typeSystem, builtIn, arg0.type, Pos.ZERO, arg0, arg1),
                 baz(builtIn, arg1));
+          }
+          if (arg1 instanceof Core.Id) {
+            // If exp is "id = id1" and id1 has extent e,
+            //  add extent "id: e1"
+            // If exp is "id < id1" and id1 has extent e,
+            //  add extent "id: (-inf, max(e))"
+            final Core.Exp extent = boundPats.get(((Core.Id) arg1).idPat);
+            if (extent != null) {
+              final Core.Apply call =
+                  core.call(typeSystem, builtIn, arg0.type, Pos.ZERO, arg0, arg1);
+              consumer.accept(id.idPat, call,
+                  core.lessThanAllExtent(typeSystem, builtIn, extent));
+            }
           }
           break;
         }

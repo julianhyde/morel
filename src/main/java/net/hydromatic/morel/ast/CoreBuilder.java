@@ -45,6 +45,7 @@ import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Ordering;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -63,6 +64,7 @@ import java.util.function.Consumer;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
+import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.transform;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
@@ -173,6 +175,26 @@ public enum CoreBuilder {
   /** Creates a reference to a value. */
   public Core.Id id(Core.NamedPat idPat) {
     return new Core.Id(idPat);
+  }
+
+  /** Converts a pattern to an expression.
+   *
+   * <p>This method is a generalization of {@link #id(Core.NamedPat)}.
+   * An {@link Core.IdPat} becomes an id: {@code i};
+   * a {@link Core.TuplePat} becomes a tuple: {@code (i, j)};
+   * a {@link Core.RecordPat} becomes a record: {@code {a = i, b = j} }. */
+  public Core.Exp id(Core.Pat pat) {
+    switch (pat.op) {
+    case ID_PAT:
+      return id((Core.NamedPat) pat);
+    case TUPLE_PAT:
+    case RECORD_PAT:
+      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+      final List<Core.Exp> expList = transform(tuplePat.args, this::id);
+      return tuple((RecordLikeType) pat.type, expList);
+    default:
+      throw new AssertionError("unknown: " + pat);
+    }
   }
 
   public Core.RecordSelector recordSelector(TypeSystem typeSystem,
@@ -642,20 +664,25 @@ public enum CoreBuilder {
         if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
           final Core.Literal argLiteral = (Core.Literal) ((Core.Apply) exp).arg;
           final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
-          rangeSetMaps.add(list.rangeSetMap);
+          if (!list.isUnbounded()) {
+            rangeSetMaps.add(list.rangeSetMap);
+          }
           continue;
         }
         remainingExps.add(exp);
       }
-      final ListType listType = (ListType) exps.get(0).type;
-      Map<String, ImmutableRangeSet> rangeSetMap =
-          Extents.intersect((List) rangeSetMaps);
-      Core.Exp exp =
-          core.extent(typeSystem, listType.elementType, rangeSetMap);
-      for (Core.Exp remainingExp : remainingExps) {
-        exp = core.intersect(typeSystem, exp, remainingExp);
+      final List<Core.Exp> args;
+      if (rangeSetMaps.isEmpty()) {
+        args = remainingExps;
+      } else {
+        final ListType listType = (ListType) exps.get(0).type;
+        Map<String, ImmutableRangeSet> rangeSetMap =
+            Extents.intersect((List) rangeSetMaps);
+        args =
+            plus(core.extent(typeSystem, listType.elementType, rangeSetMap),
+                remainingExps);
       }
-      return Pair.of(exp, remainingExps);
+      return Pair.of(core.intersect(typeSystem, args), remainingExps);
     }
   }
 
@@ -693,6 +720,49 @@ public enum CoreBuilder {
       }
       return Pair.of(exp, remainingExps);
     }
+  }
+
+  /** Returns an extent that contains all points less than any point in
+   * the given extent (if op == OP_LT, similarly OP_LE, OP_GT, OP_GE).
+   *
+   * <p>For example, "allExtent(OP_LT, '[3, 5, 8]')" returns "[8, inf)";
+   * "allExtent(OP_LT, '[0, 10)')" returns "(-inf, 10)";
+   * "allExtent(OP_LT, '[0, 10]')" returns "(-inf, 10)".
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public Core.Exp lessThanAllExtent(TypeSystem typeSystem, BuiltIn op,
+      Core.Exp exp) {
+    if (exp.isCallTo(BuiltIn.Z_LIST)) {
+      switch (op) {
+      case OP_GE:
+        return extent(typeSystem, exp.type,
+            ImmutableRangeSet.of(Range.atLeast(min((Core.Apply) exp))));
+      case OP_GT:
+        return extent(typeSystem, exp.type,
+            ImmutableRangeSet.of(Range.greaterThan(min((Core.Apply) exp))));
+      case OP_LE:
+        return extent(typeSystem, exp.type,
+            ImmutableRangeSet.of(Range.atMost(max((Core.Apply) exp))));
+      case OP_LT:
+        return extent(typeSystem, exp.type,
+            ImmutableRangeSet.of(Range.lessThan(max((Core.Apply) exp))));
+      }
+    }
+    throw new AssertionError("unexpected: " + exp);
+  }
+
+  /** Returns the largest value in a list of literals. */
+  private static Comparable max(Core.Apply exp) {
+    final List<Core.Exp> args = exp.args();
+    return args.stream().map(e -> ((Core.Literal) e).value)
+        .max(Ordering.natural()).get();
+  }
+
+  /** Returns the smallest value in a list of literals. */
+  private static Comparable min(Core.Apply exp) {
+    final List<Core.Exp> args = exp.args();
+    return args.stream().map(e -> ((Core.Literal) e).value)
+        .min(Ordering.natural()).get();
   }
 
   /** Simplifies an expression.
@@ -802,6 +872,11 @@ public enum CoreBuilder {
     return call(typeSystem, BuiltIn.OP_LT, a0.type, Pos.ZERO, a0, a1);
   }
 
+  public Core.Exp lessThanOrEqualTo(TypeSystem typeSystem, Core.Exp a0,
+      Core.Exp a1) {
+    return call(typeSystem, BuiltIn.OP_LE, a0.type, Pos.ZERO, a0, a1);
+  }
+
   public Core.Exp greaterThan(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(typeSystem, BuiltIn.OP_GT, a0.type, Pos.ZERO, a0, a1);
   }
@@ -824,6 +899,12 @@ public enum CoreBuilder {
     return call(typeSystem, BuiltIn.Z_ANDALSO, a0, a1);
   }
 
+  /** Equivalent to "andAlso(a0, andAlso(a1, andAlso(rest[0], ...)))". */
+  public Core.Exp andAlso(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1,
+      Core.Exp... rest) {
+    return andAlso(typeSystem, Lists.asList(a0, a1, rest));
+  }
+
   /** Converts a list of 0 or more expressions into an {@code andalso};
    * simplifies empty list to "true" and singleton list "[e]" to "e". */
   public Core.Exp andAlso(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
@@ -836,6 +917,12 @@ public enum CoreBuilder {
 
   public Core.Exp orElse(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(typeSystem, BuiltIn.Z_ORELSE, a0, a1);
+  }
+
+  /** Equivalent to "orElse(a0, orElse(a1, orElse(rest[0], ...)))". */
+  public Core.Exp orElse(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1,
+      Core.Exp... rest) {
+    return orElse(typeSystem, Lists.asList(a0, a1, rest));
   }
 
   /** Converts a list of 0 or more expressions into an {@code orelse};
