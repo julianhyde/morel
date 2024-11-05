@@ -727,10 +727,9 @@ public enum CoreBuilder {
    *
    * <p>For example, "allExtent(OP_LT, '[3, 5, 8]')" returns "[8, inf)";
    * "allExtent(OP_LT, '[0, 10)')" returns "(-inf, 10)";
-   * "allExtent(OP_LT, '[0, 10]')" returns "(-inf, 10)".
-   */
+   * "allExtent(OP_LT, '[0, 10]')" returns "(-inf, 10)". */
   @SuppressWarnings({"unchecked", "rawtypes"})
-  public Core.Exp lessThanAllExtent(TypeSystem typeSystem, BuiltIn op,
+  public Core.@Nullable Exp allExtent(TypeSystem typeSystem, BuiltIn op,
       Core.Exp exp) {
     if (exp.isCallTo(BuiltIn.Z_LIST)) {
       switch (op) {
@@ -748,10 +747,11 @@ public enum CoreBuilder {
             ImmutableRangeSet.of(Range.lessThan(max((Core.Apply) exp))));
       }
     }
-    throw new AssertionError("unexpected: " + exp);
+    return null;
   }
 
   /** Returns the largest value in a list of literals. */
+  @SuppressWarnings({"rawtypes", "OptionalGetWithoutIsPresent"})
   private static Comparable max(Core.Apply exp) {
     final List<Core.Exp> args = exp.args();
     return args.stream().map(e -> ((Core.Literal) e).value)
@@ -759,6 +759,7 @@ public enum CoreBuilder {
   }
 
   /** Returns the smallest value in a list of literals. */
+  @SuppressWarnings({"rawtypes", "OptionalGetWithoutIsPresent"})
   private static Comparable min(Core.Apply exp) {
     final List<Core.Exp> args = exp.args();
     return args.stream().map(e -> ((Core.Literal) e).value)

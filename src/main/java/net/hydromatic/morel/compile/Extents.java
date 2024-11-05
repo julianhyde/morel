@@ -533,8 +533,11 @@ public class Extents {
             if (extent != null) {
               final Core.Apply call =
                   core.call(typeSystem, builtIn, arg0.type, Pos.ZERO, arg0, arg1);
-              consumer.accept(id.idPat, call,
-                  core.lessThanAllExtent(typeSystem, builtIn, extent));
+              final Core.Exp allExtent =
+                  core.allExtent(typeSystem, builtIn, extent);
+              if (allExtent != null) {
+                consumer.accept(id.idPat, call, allExtent);
+              }
             }
           }
           break;

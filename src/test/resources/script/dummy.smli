@@ -19,4 +19,15 @@
 "this is a simple script; modify it for debugging test cases";
 > val it = "this is a simple script; modify it for debugging test cases" : string
 
+(*
+from i, j, k
+  where i > 0
+  andalso k < 5
+  andalso j > i
+  andalso j < k;
+*)
+
+from i, j where i elem [3, 5] andalso i < j andalso j < 7;
+> val it = [{i=3,j=2},{i=5,j=2},{i=5,j=3},{i=5,j=4}] : {i:int, j:int} list
+
 (*) End dummy.smli

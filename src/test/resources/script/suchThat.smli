@@ -38,11 +38,26 @@ from i in [2, 5, 7],
     j
   where j > 3 andalso j < i andalso j < 1000;
 > val it = [{i=5,j=4},{i=7,j=4},{i=7,j=5},{i=7,j=6}] : {i:int, j:int} list
-(*
 from i in [2, 5, 7],
     j
   where j > 3 andalso j < i;
 > val it = [{i=5,j=4},{i=7,j=4},{i=7,j=5},{i=7,j=6}] : {i:int, j:int} list
+from i, j
+  where i elem [2, 5, 7]
+  where j > 3 andalso j < i;
+> val it = [{i=5,j=4},{i=7,j=4},{i=7,j=5},{i=7,j=6}] : {i:int, j:int} list
+from i, j
+  where i elem [2, 5, 7]
+  where j > 3
+  where j < i;
+> val it = [{i=5,j=4},{i=7,j=4},{i=7,j=5},{i=7,j=6}] : {i:int, j:int} list
+(*
+from i, j, k
+  where i > 0
+  andalso k < 5
+  andalso j > i
+  andalso j < k;
+> val it = : {i:int, j:int, k:int} list
 *)
 from i
 where i > 0 andalso i < 10
@@ -280,6 +295,22 @@ fun isBetween (i, j, k) =
 from i where isBetween (i, 5, 8);
 > val it = [5, 6, 7, 8] : int list
 *)
+
+(*
+let
+fun isBetween (i, j, k) =
+  i <= j andalso j <= k andalso i <= k
+in
+from i where isBetween (i, 5, 8)
+end;
+> val it = [5, 6, 7, 8] : int list
+*)
+
+(*) TODO when inlining is implemented, replace 'i < j' with 'isLt (i, j)'
+fun isLt (i, j) = i < j;
+> val isLt = fn : 'a * 'a -> bool
+from i, j where i elem [3, 5] andalso i < j andalso j < 7;
+> val it = [{i=3,j=2},{i=5,j=2},{i=5,j=3},{i=5,j=4}] : {i:int, j:int} list
 
 (*) "argMin" is an aggregate function that, when applied to a list of
 (*) (x, y) pairs, returns the value of x where y has the smallest value.
