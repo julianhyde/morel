@@ -205,14 +205,13 @@ end;
 > val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
 
 (*) As previous, but 'fun' followed by 'from' without using 'let'
-(*) TODO should return same as previous, currently can't inline fun declared separately
 fun isEmp e =
   e elem scott.emp;
 > val isEmp = fn
 >   :
 >      {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
 >       job:string, mgr:int, sal:real} -> bool
-(*
+(* TODO should return same as previous, currently can't inline fun declared separately
 from e
   where isEmp e andalso e.deptno = 20
   yield e.ename;
@@ -230,8 +229,7 @@ end;
 > val it = ["SMITH","ADAMS"] : string list
 
 (*) A disjunctive condition prevents the extent.
-(*) TODO: throw an error, rather than returning an empty list
-(*
+(* TODO: throw an error, rather than returning an empty list
 let
   fun isEmp50 e =
     e elem scott.emp orelse e.deptno = 50
@@ -249,7 +247,7 @@ fun hasJob (e, job) =
  *)
 
 (*) Valid, because the argument has an extent.
-(*
+(* TODO
 let
   fun hasJob (e, job) =
     e.job = job
@@ -265,8 +263,7 @@ val it =
 *)
 
 (*) Invalid, because the argument has no extent.
-(*) TODO should give error 'e not grounded'
-(*
+(* TODO should give error 'e not grounded'
 let
   fun hasJob (e, job) =
     e.job = job
@@ -281,7 +278,7 @@ fun isPrefix (s1, s2) =
   String.isPrefix s1 s2;
 > val isPrefix = fn : string * string -> bool
 (*) This is invalid, but it could be valid
-(*
+(* TODO
 from s where isPrefix (s, "abcd");
 > val it = ["", "a", "ab", "abc", "abcd"] : string list
 *)
@@ -291,12 +288,12 @@ from s where isPrefix (s, "abcd");
 fun isBetween (i, j, k) =
   i <= j andalso j <= k;
 > val isBetween = fn : 'a * 'a * 'a -> bool
-(*
+(* TODO
 from i where isBetween (i, 5, 8);
 > val it = [5, 6, 7, 8] : int list
 *)
 
-(*
+(* TODO
 let
 fun isBetween (i, j, k) =
   i <= j andalso j <= k andalso i <= k
@@ -306,11 +303,14 @@ end;
 > val it = [5, 6, 7, 8] : int list
 *)
 
-(*) TODO when inlining is implemented, replace 'i < j' with 'isLt (i, j)'
 fun isLt (i, j) = i < j;
 > val isLt = fn : 'a * 'a -> bool
 from i, j where i elem [3, 5] andalso i < j andalso j < 7;
-> val it = [{i=3,j=2},{i=5,j=2},{i=5,j=3},{i=5,j=4}] : {i:int, j:int} list
+> val it = [{i=3,j=4},{i=3,j=5},{i=3,j=6},{i=5,j=6}] : {i:int, j:int} list
+(* TODO when inlining is implemented, replace 'i < j' with 'isLt (i, j)'
+from i, j where i elem [3, 5] andalso isLt (i, j) andalso j < 7;
+> val it = [{i=3,j=4},{i=3,j=5},{i=3,j=6},{i=5,j=6}] : {i:int, j:int} list
+*)
 
 (*) "argMin" is an aggregate function that, when applied to a list of
 (*) (x, y) pairs, returns the value of x where y has the smallest value.
@@ -371,7 +371,7 @@ fun pow (x, y) = if y = 0 then 1 else x * pow (x, y - 1);
 pow (2, 5);
 > val it = 32 : int
 
-(*
+(* TODO
 from k in [2, 3, 4, 5, 6], x, y
  where x > 0 andalso y > 0 andalso y < k andalso x < k andalso x + y = k
  yield {k, p = pow (x, y)};
@@ -398,8 +398,7 @@ fun enumerate predicate =
 (* TODO should print
 val enumerate = fn : ('a -> bool) -> 'a list
 *)
-(*) TODO should return non-empty list
-(*
+(* TODO should return non-empty list
 enumerate isEmp;
 *)
 
@@ -472,27 +471,27 @@ fun edge (x, y) = (x, y) elem edges;
 > val edge = fn : int * int -> bool
 
 (*) Return points that are 2 hops apart.
-(*
+(* TODO
 from x, y, z where edge (x, y) andalso edge (y, z) andalso x <> z
   group x, z;
 *)
 
 (* Previous is equivalent to following. (Which implies a theorem connecting
    'exists' with 'group' and variable elimination.) *)
-(*
+(* TODO
 from x, z
   where exists (from y where edge (x, y) andalso edge (y, z))
   andalso x <> z;
 *)
 
 (*) Also equivalent.
-(*
+(* TODO
 from x, z where exists (
    from y where edge (x, y) andalso edge (y, z) andalso x <> z);
 *)
 
 (*) Also equivalent.
-(*
+(* TODO
 from x, y
   where edge (x, y)
   join y2, z
@@ -629,7 +628,7 @@ from x where isS1 x;
 > Unsafe
 *)
 
-(*
+(* TODO
 fun isS2 x = exists (from y where isR y andalso not (isR x));
 *)
 
@@ -639,7 +638,7 @@ from x where isS2 x;
 > Unsafe
 *)
 
-(*
+(* TODO
 fun isS3 x = exists (from y where isR y andalso x < y);
 *)
 
@@ -717,12 +716,12 @@ enumerate sib;
 > val it = [("b","c")] : (string * string) list
 *)
 
-(*
+(* TODO
 enumerate cousin;
 > val it = [("b","c"), ("c","e"),("g","h"),("j","k"),("f","g"),("f","h"),("g","i"),("i","k"),("i","j"),("k","k")] : (string * string) list
 *)
 
-(* Nonmonotone relation.
+(* Non-monotone relation.
  * 'cousin2' is as 'cousin', but 'orelse' has become 'and not'.
  * The graph is not stratified: there is a path with an infinite number
  * of 'not' as we traverse the cycle cousin - s2 - cousin,

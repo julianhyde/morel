@@ -59,6 +59,7 @@ import static net.hydromatic.morel.util.Pair.forEachIndexed;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 /** Core expressions.
@@ -1200,7 +1201,9 @@ public class Core {
       }
       final ListType listType = (ListType) exp.type;
       if (!canAssign(listType.elementType, pat.type)) {
-        throw new IllegalArgumentException(exp.type + " + " + pat.type);
+        throw new IllegalArgumentException(
+            format("cannot assign elements of '%s' to '%s' pattern", exp.type,
+                pat.type));
       }
     }
 

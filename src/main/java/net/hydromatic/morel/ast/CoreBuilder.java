@@ -732,18 +732,19 @@ public enum CoreBuilder {
   public Core.@Nullable Exp allExtent(TypeSystem typeSystem, BuiltIn op,
       Core.Exp exp) {
     if (exp.isCallTo(BuiltIn.Z_LIST)) {
+      final ListType listType = (ListType) exp.type;
       switch (op) {
       case OP_GE:
-        return extent(typeSystem, exp.type,
+        return extent(typeSystem, listType.elementType,
             ImmutableRangeSet.of(Range.atLeast(min((Core.Apply) exp))));
       case OP_GT:
-        return extent(typeSystem, exp.type,
+        return extent(typeSystem, listType.elementType,
             ImmutableRangeSet.of(Range.greaterThan(min((Core.Apply) exp))));
       case OP_LE:
-        return extent(typeSystem, exp.type,
+        return extent(typeSystem, listType.elementType,
             ImmutableRangeSet.of(Range.atMost(max((Core.Apply) exp))));
       case OP_LT:
-        return extent(typeSystem, exp.type,
+        return extent(typeSystem, listType.elementType,
             ImmutableRangeSet.of(Range.lessThan(max((Core.Apply) exp))));
       }
     }
