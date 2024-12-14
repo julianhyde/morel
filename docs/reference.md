@@ -317,14 +317,16 @@ Exception:
 | false | bool | Literal false. |
 | not | bool &rarr; bool | "not b" returns the logical inverse of `b`. |
 | abs | int &rarr; int | "abs n" returns the absolute value of `n`. |
-
 | Bag.nil | &alpha; bag | "nil" is the empty bag. |
 | Bag.null | &alpha; bag &rarr; bool | "null b" returns `true` if the bag `b` is empty. |
+| Bag.fromList | &alpha; list &rarr; &alpha; bag | "fromList b" creates a new bag from `l`, whose length is `length l` and whose elements are the same as those of `l`. Raises `Size` if `maxLen` &lt; `n`. |
 | Bag.length | &alpha; bag &rarr; int | "length b" returns the number of elements in the bag `b`. |
 | Bag.at | &alpha; bag * &alpha; bag &rarr; &alpha; bag | "at (b1, b2)" returns the bag that is the concatenation of `b1` and `b2`. |
 | Bag.hd | &alpha; bag &rarr; &alpha; | "hd b" returns an arbitrary element of bag `b`. Raises `Empty` if `b` is `nil`. |
 | Bag.tl | &alpha; bag &rarr; &alpha; bag | "tl l" returns all but one arbitrary element of bag `b`. Raises `Empty` if `b` is `nil`. |
 | Bag.getItem | &alpha; bag &rarr; * (&alpha; * &alpha; bag) option | "getItem b" returns `NONE` if the bag `b` is empty, and `SOME (hd b, tl b)` otherwise (applying `hd` and `tl` simultaneously so that they choose/remove the same arbitrary element). |
+| Bag.take | &alpha; bag * int &rarr; &alpha; bag | "take (b, i)" returns an arbitrary `i` elements of the bag `b`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`. We have `take(b, length b)` = `b`. |
+| Bag.drop | &alpha; bag * int &rarr; &alpha; bag | "drop (b, i)" returns what is left after dropping an arbitrary `i` elements of the bag `b`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`.<br><br>We have `drop(b, length b)` = `[]`. |
 | Bag.concat | &alpha; bag bag &rarr; &alpha; bag | "concat l" returns the bag that is the concatenation of all the bags in `bag`. |
 | Bag.app | (&alpha; &rarr; unit) &rarr; &alpha; bag &rarr; unit | "app f l" applies `f` to the elements of `bag`. |
 | Bag.map | (&alpha; &rarr; &beta;) &rarr; &alpha; bag &rarr; &beta; bag | "map f l" applies `f` to each element of `bag`, returning the bag of results. |
@@ -336,8 +338,6 @@ Exception:
 | Bag.exists | (&alpha; &rarr; bool) &rarr; &alpha; bag &rarr; bool | "exists f l" applies `f` to each element `x` of the bag `bag`, in arbitrary order, until `f(x)` evaluates to `true`; it returns `true` if such an `x` exists and `false` otherwise. |
 | Bag.all | (&alpha; &rarr; bool) &rarr; &alpha; bag &rarr; bool | "all f l" applies `f` to each element `x` of the bag `bag`, in arbitrary order, until `f(x)` evaluates to `false`; it returns `false` if such an `x` exists and `true` otherwise. It is equivalent to `not(exists (not o f) l))`. |
 | Bag.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; bag | "tabulate (n, f)" returns a bag of length `n` equal to `[f(0), f(1), ..., f(n-1)]`. Raises `Size` if `n` &lt; 0. |
-| Bag.collate | (&alpha; * &alpha; &rarr; order) &rarr; &alpha; bag * &alpha; bag &rarr; order | "collate f (l1, l2)" performs lexicographic comparison of the two bags using the given ordering `f` on the bag elements. |
-
 | General.ignore | &alpha; &rarr; unit | "ignore x" always returns `unit`. The function evaluates its argument but throws away the value. |
 | General.op o | (&beta; &rarr; &gamma;) (&alpha; &rarr; &beta;) &rarr; &alpha; &rarr; &gamma; | "f o g" is the function composition of `f` and `g`. Thus, `(f o g) a` is equivalent to `f (g a)`. |
 | Interact.use | string &rarr; unit | "use f" loads source text from the file named `f`. |
