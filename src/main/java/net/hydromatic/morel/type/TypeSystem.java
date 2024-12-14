@@ -178,6 +178,11 @@ public class TypeSystem {
     return (RecordLikeType) typeFor(Keys.tuple(Keys.toKeys(argTypes)));
   }
 
+  /** Creates a bag type. */
+  public ListType bagType(Type elementType) {
+    return (ListType) typeFor(Keys.list(elementType.key()));
+  }
+
   /** Creates a list type. */
   public ListType listType(Type elementType) {
     return (ListType) typeFor(Keys.list(elementType.key()));
@@ -335,6 +340,10 @@ public class TypeSystem {
         return listType(get(i));
       }
 
+      public Type bag(int i) {
+        return TypeSystem.this.bag(get(i));
+      }
+
       public Type vector(int i) {
         return TypeSystem.this.vector(get(i));
       }
@@ -456,6 +465,14 @@ public class TypeSystem {
     return (TypeVar) typeFor(Keys.ordinal(ordinal));
   }
 
+  /** Creates a "bag" type.
+   *
+   * <p>"bag(type)" is shorthand for "apply(lookup("bag"), type)". */
+  public Type bag(Type type) {
+    final Type bagType = lookup("bag");
+    return apply(bagType, type);
+  }
+
   /** Creates an "option" type.
    *
    * <p>"option(type)" is shorthand for "apply(lookup("option"), type)". */
@@ -514,6 +531,8 @@ public class TypeSystem {
   public interface ForallHelper {
     /** Creates type {@code `i}. */
     TypeVar get(int i);
+    /** Creates type {@code `i bag}. */
+    Type bag(int i);
     /** Creates type {@code `i list}. */
     ListType list(int i);
     /** Creates type {@code `i vector}. */
