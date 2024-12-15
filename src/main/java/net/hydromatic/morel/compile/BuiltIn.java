@@ -2727,6 +2727,13 @@ public enum BuiltIn {
    */
   Z_LIST("$", "list", ts -> UNIT);
 
+  /**
+   * The internal type, named "$stream", that is a union of "list" and "bag".
+   * When you write 'from e in emps', 'emps' must be a stream -- either a list
+   * or a bag.
+   */
+  public static final String STREAM_TYPE = Eqtype.STREAM.mlName;
+
   /** Name of the structure (e.g. "List", "String"), or null. */
   public final String structure;
 
@@ -3048,6 +3055,11 @@ public enum BuiltIn {
   /** Built-in equality type. */
   public enum Eqtype implements BuiltInType {
     BAG("bag", 1),
+
+    // Another internal datatype. Stream is a union of list and bag.
+    //   datatype 'a stream = LIST of 'a list | BAG of 'a bag
+    STREAM("$stream", 1),
+
     VECTOR("vector", 1);
 
     private final String mlName;
