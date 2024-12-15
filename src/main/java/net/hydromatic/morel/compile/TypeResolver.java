@@ -111,6 +111,7 @@ public class TypeResolver {
   static final String TUPLE_TY_CON = "tuple";
   static final String OVERLOAD_TY_CON = BuiltIn.Datatype.OVERLOAD.mlName();
   static final String LIST_TY_CON = "list";
+  static final String STREAM_TY_CON = BuiltIn.STREAM_TYPE;
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
 
