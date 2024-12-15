@@ -99,6 +99,7 @@ public class TypeResolver {
 
   static final String TUPLE_TY_CON = "tuple";
   static final String LIST_TY_CON = "list";
+  static final String STREAM_TY_CON = BuiltIn.STREAM_TYPE;
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
 
@@ -533,7 +534,7 @@ public class TypeResolver {
       final Ast.Pat pat2 =
           deducePatType(env2, scan.pat, termMap1, null, v16);
       if (scanExp != null) {
-        reg(scanExp, v15, eq ? v16 : unifier.apply(LIST_TY_CON, v16));
+        reg(scanExp, v15, eq ? v16 : unifier.apply(STREAM_TY_CON, v16));
       }
       TypeEnv env4 = env2;
       for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {

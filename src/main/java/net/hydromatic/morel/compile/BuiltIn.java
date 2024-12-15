@@ -1955,6 +1955,11 @@ public enum BuiltIn {
    * It cannot be assigned a type, because the tuple is variadic. */
   Z_LIST("$", "list", ts -> UNIT);
 
+  /** The internal type, named "$stream", that is a union of "list" and "bag".
+   * When you write 'from e in emps', 'emps' must be a stream -- either a list
+   * or a bag. */
+  public static final String STREAM_TYPE = "$stream";
+
   /** Name of the structure (e.g. "List", "String"), or null. */
   public final String structure;
 
@@ -2080,6 +2085,10 @@ public enum BuiltIn {
         h.tyCon("NIL").tyCon("CONS", h.get(0)));
     defineDataType(typeSystem, bindings, "$bool", true, 0, h ->
         h.tyCon("FALSE").tyCon("TRUE"));
+
+    // Another internal datatype. Stream is a union of list and bag.
+    //   datatype 'a stream = LIST of 'a list | BAG of 'a bag
+    defineEqType(typeSystem, STREAM_TYPE, 1);
   }
 
   private static void defineEqType(TypeSystem ts, String name, int varCount) {
