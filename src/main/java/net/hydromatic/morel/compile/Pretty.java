@@ -117,7 +117,7 @@ class Pretty {
           0, 0);
       buf.append(' ');
       pretty1(buf, indent + 2, lineEnd, depth, PrimitiveType.BOOL,
-          new TypeVal(": ", unqualified(typedVal.type)), 0, 0);
+          new TypeVal(": ", typeSystem.unqualified(typedVal.type)), 0, 0);
       return buf;
     }
 
@@ -379,11 +379,6 @@ class Pretty {
       return (List<Object>) typedValue.valueAs(List.class);
     }
     return (List<Object>) value;
-  }
-
-  private static Type unqualified(Type type) {
-    return type instanceof ForallType ? unqualified(((ForallType) type).type)
-        : type;
   }
 
   private StringBuilder printList(@NonNull StringBuilder buf,

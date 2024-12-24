@@ -398,6 +398,41 @@ public class TypeSystem {
     };
   }
 
+  /** Removes any "forall" qualifier of a type, and renumbers the remaining
+   * type variables.
+   *
+   * <p>Examples:
+   * <ul>
+   *   <li>{@code forall 'a. 'a list}
+   *        &rarr; {@code 'a list}
+   *   <li>{@code forall 'a 'b. 'b list}
+   *        &rarr; {@code 'a list}
+   *   <li>{@code forall 'a 'b 'c. 'c * 'a -> {x:'a, y:'c} }
+   *        &rarr; {@code 'a * 'b -> {x:b, y:a'} }
+   * </ul>
+   *
+   * @param type
+   * @return
+   */
+  public Type unqualified(Type type) {
+    while (type instanceof ForallType) {
+      type = ((ForallType) type).type;
+    }
+    // Renumber type variables:
+    //   'b list   ->  'a list
+    //   ('b * 'a * 'b)  ->  ('a * 'b * 'a)
+    //   ('a * 'c * 'a)  ->  ('a * 'b * 'a)
+    return type.accept(
+        new TypeShuttle(this) {
+          final Map<Integer, TypeVar> map = new HashMap<>();
+
+          @Override public Type visit(TypeVar typeVar) {
+            return map.computeIfAbsent(typeVar.ordinal,
+                i -> typeVariable(map.size()));
+          }
+        });
+  }
+
   public Pair<DataType, Type.Key> lookupTyCon(String tyConName) {
     return typeConstructorByName.get(tyConName);
   }
