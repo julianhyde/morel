@@ -498,7 +498,9 @@ public class TypeSystem {
     final Set<TypeVar> vars = new LinkedHashSet<>();
 
     @Override public Void visit(DataType dataType) {
-      return null; // ignore type variables in the datatype
+      // Include arguments but ignore parameters
+      dataType.arguments.forEach(t -> t.accept(this));
+      return null;
     }
 
     @Override public Void visit(TypeVar typeVar) {
