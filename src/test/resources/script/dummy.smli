@@ -63,4 +63,64 @@ o4a (SOME 1);
 o4a ["a"];
 > val it = false : bool
 
+(* DONE
+bag [1,2,3];
+> val it = [1,2,3] : int bag
+from e in [1,2,3];
+> val it = [1,2,3] : int list
+fun l2 [] = 0 | l2 (h :: (t: bool list)) = 1 + (l2 t);
+> val l2 = fn : bool list -> int
+bag [1,2,3];
+> val it = [1,2,3] : int bag
+bag [[1],[2],[3]];
+> val it = [[1],[2],[3]] : int list bag
+from e in (bag [1,2,3]);
+> val it = [1,2,3] : int bag
+from i in (bag [1,2,3]) where i > 1;
+> val it = [2,3] : int bag
+from i in (bag [1,2,3]) distinct;
+> val it = [1,2,3] : int bag
+from i in [1,2,3] distinct;
+> val it = [1,2,3] : int bag
+from i in (bag [1,2,3]) group;
+> val it = [()] : unit bag
+from i in (bag [1,2,3]) group i;
+> val it = [1,2,3] : int bag
+fun g [] = NONE
+  | g (h :: t) = SOME (h, t);
+> val g = fn : 'a list -> ('a * 'a list) option
+
+fun chars s =
+    List.tabulate (size s, fn i => (i, String.sub (s, i)));
+> val chars = fn : string -> (int * char) list
+fun symPos c (s, i) =
+    from (i2, c2) in chars s
+      where i2 = i andalso c2 = c
+      yield i + 1;
+> val symPos = fn : char -> string * int -> int list
+fun seqPos r1 r2 (s, i) =
+    from j in r1 (s, i),
+        k in r2 (s, j)
+      yield k;
+> val seqPos = fn
+>   : ('a * 'b -> 'c list) -> ('a * 'c -> 'd list) -> 'a * 'b -> 'd list
+val r = seqPos (symPos #"l") (symPos #"o");
+> val r = fn : string * int -> int list
+
+*)
+
+(*) CURRENT
+from (i, j) in [(14, 3), (~14, 3), (14, ~3), (~14, ~3)]
+ where (i div j) <> Int.`div` (i, j)
+ orelse (i mod j) <> Int.`mod` (i, j);
+> val it = [] : {i:int, j:int} list
+(*)
+
+(* TODO
+List.length Bag.nil;
+> val it = 0 : int
+from i in (bag [1,2,3]) group i compute count;
+> val it = [1,2,3] : int bag
+*)
+
 (*) End dummy.smli

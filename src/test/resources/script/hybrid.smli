@@ -29,7 +29,7 @@ Sys.set ("hybrid", true);
 from e in scott.emp
 where e.deptno = 20
 yield e.empno;
-> val it = [7369,7566,7788,7876,7902] : int list
+> val it = [7369,7566,7788,7876,7902] : int bag
 Sys.plan();
 > val it =
 >   "calcite(plan LogicalProject(empno=[$2])
@@ -108,7 +108,7 @@ in
   where e.deptno = 20
   yield e.empno
 end;
-> val it = [7369,7566,7788,7876,7902] : int list
+> val it = [7369,7566,7788,7876,7902] : int bag
 Sys.plan();
 > val it =
 >   "calcite(plan LogicalProject(empno=[$2])
@@ -128,7 +128,7 @@ in
   where e.deptno = List.nth (deptNos, 1)
   yield e.empno + 13 mod ten
 end;
-> val it = [7372,7569,7791,7879,7905] : int list
+> val it = [7372,7569,7791,7879,7905] : int bag
 Sys.plan();
 > val it =
 >   "let(matchCode0 match(ten, apply2(fnValue +, constant(7), constant(3))), resultCode calcite(plan LogicalProject($f0=[+($2, MOD(13, morelScalar('ten', '{
@@ -152,7 +152,7 @@ in
   from d in scott.dept
   yield double d.deptno
 end;
-> val it = [20,40,60,80] : int list
+> val it = [20,40,60,80] : int bag
 Sys.plan();
 > val it =
 >   "calcite(plan LogicalProject($f0=[*($0, 2)])
@@ -216,7 +216,7 @@ Sys.plan();
 
 (*) Simple query with scan, filter, project
 from e in scott.emp where e.deptno = 30 yield e.empno;
-> val it = [7499,7521,7654,7698,7844,7900] : int list
+> val it = [7499,7521,7654,7698,7844,7900] : int bag
 Sys.plan();
 > val it =
 >   "calcite(plan LogicalProject(empno=[$2])
@@ -234,7 +234,7 @@ in
   where e.deptno = 30
   yield e.empno
 end;
-> val it = [7499,7521,7654,7698,7844,7900] : int list
+> val it = [7499,7521,7654,7698,7844,7900] : int bag
 Sys.plan();
 > val it =
 >   "calcite(plan LogicalProject(empno=[$2])
@@ -253,7 +253,7 @@ in
   where e.deptno = thirty
   yield e.empno
 end;
-> val it = [7499,7521,7654,7698,7844,7900] : int list
+> val it = [7499,7521,7654,7698,7844,7900] : int bag
 Sys.plan();
 > val it =
 >   "calcite(plan LogicalProject(empno=[$2])
