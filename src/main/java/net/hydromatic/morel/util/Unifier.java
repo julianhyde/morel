@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
 
@@ -39,10 +41,18 @@ import static java.util.Objects.requireNonNull;
 /** Given pairs of terms, finds a substitution to minimize those pairs of
  * terms. */
 public abstract class Unifier {
-  private int varId;
   private final Map<String, Variable> variableMap = new HashMap<>();
   private final Map<String, Sequence> atomMap = new HashMap<>();
   private final Map<String, Sequence> sequenceMap = new HashMap<>();
+
+  /** Assists with the generation of unique names by recording the lowest
+   * ordinal, for a given prefix, for which a name has not yet been generated.
+   *
+   * <p>For example, if we have called {@code name("T")} twice, and thereby
+   * generated "T0" and "T1, then the map will contain {@code code("T", 2)},
+   * indicating that the next call to {@code name("T")} should generate "T2".
+   */
+  private final Map<String, AtomicInteger> nameMap = new HashMap<>();
 
   /** Whether this unifier checks for cycles in substitutions. */
   public boolean occurs() {
@@ -74,21 +84,47 @@ public abstract class Unifier {
 
   /** Creates a new variable, with a new name. */
   public Variable variable() {
-    for (;;) {
-      final int ordinal = varId++;
-      final String name = "T" + ordinal;
-      if (!variableMap.containsKey(name)) {
-        final Variable variable = new Variable(ordinal);
-        assert variable.name.equals(name);
-        variableMap.put(name, variable);
-        return variable;
-      }
-    }
+    return newName("T",
+        (name, ordinal) -> {
+          final Variable variable = new Variable(name, ordinal);
+          variableMap.put(variable.name, variable);
+          return variable;
+        });
   }
 
   /** Creates an atom, or returns an existing one with the same name. */
   public Term atom(String name) {
     return atomMap.computeIfAbsent(name, Sequence::new);
+  }
+
+  /** Creates an atom with a unique name. */
+  public Term atomUnique(String prefix) {
+    return newName(prefix, (name, ordinal) -> {
+      final Sequence sequence = new Sequence(name);
+      atomMap.put(name, sequence);
+      return sequence;
+    });
+  }
+
+  /** Finds an ordinal that makes a name unique among atomcs and variables. */
+  private <T> T newName(String prefix,
+      BiFunction<String, Integer, T> consumer) {
+    final AtomicInteger sequence =
+        nameMap.computeIfAbsent(prefix, prefix2 -> new AtomicInteger());
+    for (;;) {
+      final int ordinal = sequence.getAndIncrement();
+      final String name = prefix + ordinal;
+
+      // Make sure that there is no variable or atom with the same name. This
+      // might happen if they have been created directly, without using this
+      // 'newName' method. This time we had to go around the loop a few times,
+      // but because we called sequence.getAndIncrement(), the next call to
+      // 'newName' with the same prefix will be more efficient.
+      if (!variableMap.containsKey(name)
+          && !atomMap.containsKey(name)) {
+        return consumer.apply(name, ordinal);
+      }
+    }
   }
 
   /** Creates a substitution.
