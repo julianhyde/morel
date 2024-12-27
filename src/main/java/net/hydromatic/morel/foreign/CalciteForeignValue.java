@@ -90,7 +90,7 @@ public class CalciteForeignValue implements ForeignValue {
             field ->
                 fields.add(
                     convert(field.getName()), Converters.fieldType(field)));
-    return typeSystem.listType(typeSystem.recordType(fields));
+    return typeSystem.bagType(typeSystem.recordType(fields));
   }
 
   private String convert(String name) {
