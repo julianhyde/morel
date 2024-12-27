@@ -170,25 +170,25 @@ where {deptno = dno, dname = name, loc} elem scott.depts
   andalso dno > 20;
 > val it =
 >   [{dno=30,loc="CHICAGO",name="SALES"},{dno=40,loc="BOSTON",name="OPERATIONS"}]
->   : {dno:int, loc:string, name:string} list
+>   : {dno:int, loc:string, name:string} bag
 
 (*) As previous but with a literal in the record.
 from dno, name
 where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.depts
   andalso dno > 20;
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
 
 (*) Equivalent to previous, rephrasing 'suchthat' as 'where'
 from dno, name
 where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.depts
   andalso dno > 20;
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
 
 (*) Equivalent to previous, splitting 'where'
 from dno, name
 where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.depts
 where dno > 20;
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
 
 (*) Variables 'dno', 'name' are infinite until constrained by conditions.
 from v, dno, name
@@ -197,7 +197,7 @@ where v.deptno = dno
 where name = v.dname
 where v.loc = "CHICAGO"
 yield {dno, name = #dname v};
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
 
 (*) Forward references are required. 'dno' is infinite until we see the
 (*) condition 'v.deptno = dno', and at that point we haven't declared
@@ -208,7 +208,7 @@ where v.deptno = dno
 where name = v.dname
 where v.loc = "CHICAGO"
 yield {dno = #deptno v, name = #dname v};
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
 
 (*) An extra condition on 'dno' yields empty result.
 from dno, name, v
@@ -218,7 +218,7 @@ where name = v.dname
 where v.loc = "CHICAGO"
 where dno = 20
 yield {dno = #deptno v, name = #dname v};
-> val it = [] : {dno:int, name:string} list
+> val it = [] : {dno:int, name:string} bag
 
 (*) Inequality on 'dno'
 from dno, name, v
@@ -228,7 +228,7 @@ where name = v.dname
 where v.loc = "CHICAGO"
 where dno > 20
 yield {dno = #deptno v, name = #dname v};
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} list
+> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
 
 (*) We can iterate over a finite datatype
 from i
@@ -241,7 +241,7 @@ from e
   where (e elem scott.emps)
   where e.deptno = 20
   yield e.ename;
-> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
+> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string bag
 
 (*) A function that finds its data internally.
 let
@@ -253,7 +253,7 @@ in
     where e.deptno = 20
     yield e.ename
 end;
-> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
+> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string bag
 
 (*) As above, using 'andalso' rather than 'where'
 let
@@ -264,7 +264,7 @@ in
     where isEmp e andalso e.deptno = 20
     yield e.ename
 end;
-> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string list
+> val it = ["SMITH","JONES","SCOTT","ADAMS","FORD"] : string bag
 
 (*) As previous, but 'fun' followed by 'from' without using 'let'
 (*) TODO should return same as previous, currently can't inline fun declared separately
@@ -289,7 +289,7 @@ in
     where isClerk e andalso e.deptno = 20
     yield e.ename
 end;
-> val it = ["SMITH","ADAMS"] : string list
+> val it = ["SMITH","ADAMS"] : string bag
 
 (*) A disjunctive condition prevents the extent.
 (*) TODO: throw an error, rather than returning an empty list

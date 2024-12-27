@@ -315,7 +315,7 @@ public class Compiler {
   protected Code compileFrom(Context cx, Core.From from) {
     Supplier<Codes.RowSink> rowSinkFactory =
         createRowSinkFactory(
-            cx, Core.StepEnv.EMPTY, from.steps, from.type().elementType);
+            cx, Core.StepEnv.EMPTY, from.steps, from.type().arg(0));
     return Codes.from(rowSinkFactory);
   }
 

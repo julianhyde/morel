@@ -383,17 +383,26 @@ public enum CoreBuilder {
     return new Core.Case(pos, type, exp, ImmutableList.copyOf(matchList));
   }
 
-  public Core.From from(ListType type, List<Core.FromStep> steps) {
+  public Core.From from(Type type, List<Core.FromStep> steps) {
     return new Core.From(type, ImmutableList.copyOf(steps));
   }
 
-  /** Derives the result type, then calls {@link #from(ListType, List)}. */
+  /** Derives the result type, then calls {@link #from(Type, List)}. */
   public Core.From from(TypeSystem typeSystem, List<Core.FromStep> steps) {
     final Type elementType = fromElementType(typeSystem, steps);
-    return from(typeSystem.listType(elementType), steps);
+    final Type collectionType;
+    if (fromOrdered(steps)) {
+      collectionType = typeSystem.listType(elementType);
+    } else {
+      collectionType = typeSystem.bagType(elementType);
+    }
+    return from(collectionType, steps);
   }
 
-  /** Returns the element type of a {@link Core.From} with the given steps. */
+  /**
+   * Returns the datatype of an element a {@link Core.From} with the given
+   * steps.
+   */
   private Type fromElementType(
       TypeSystem typeSystem, List<Core.FromStep> steps) {
     final Core.StepEnv lastStep = lastEnv(steps);
@@ -404,6 +413,17 @@ public enum CoreBuilder {
       return argNameTypes.right(0);
     }
     return typeSystem.recordType(argNameTypes);
+  }
+
+  /**
+   * Returns whether the output of the last of a sequence of steps is ordered.
+   */
+  private boolean fromOrdered(List<Core.FromStep> steps) {
+    boolean ordered = true;
+    for (Core.FromStep step : steps) {
+      ordered = step.isOrdered(ordered);
+    }
+    return ordered;
   }
 
   /**
@@ -734,14 +754,14 @@ public enum CoreBuilder {
           }
           remainingExps.add(exp);
         }
-        final ListType listType = (ListType) exps.get(0).type;
+        final Type listType = exps.get(0).type;
         Map<String, ImmutableRangeSet> rangeSetMap =
             Extents.intersect((List) rangeSetMaps);
         Core.Exp exp =
             core.listIntersect(
                 typeSystem,
                 plus(
-                    core.extent(typeSystem, listType.elementType, rangeSetMap),
+                    core.extent(typeSystem, listType.arg(0), rangeSetMap),
                     remainingExps));
         return Pair.of(exp, remainingExps);
     }
@@ -772,14 +792,14 @@ public enum CoreBuilder {
           }
           remainingExps.add(exp);
         }
-        final ListType listType = (ListType) exps.get(0).type;
+        final Type listType = exps.get(0).type;
         Map<String, ImmutableRangeSet> rangeSetMap =
             Extents.union((List) rangeSetMaps);
         Core.Exp exp =
             core.listConcat(
                 typeSystem,
                 plus(
-                    core.extent(typeSystem, listType.elementType, rangeSetMap),
+                    core.extent(typeSystem, listType.arg(0), rangeSetMap),
                     remainingExps));
         return Pair.of(exp, remainingExps);
     }
@@ -965,12 +985,7 @@ public enum CoreBuilder {
   }
 
   public Core.Exp only(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
-    return call(
-        typeSystem,
-        BuiltIn.RELATIONAL_ONLY,
-        ((ListType) a0.type).elementType,
-        pos,
-        a0);
+    return call(typeSystem, BuiltIn.RELATIONAL_ONLY, a0.type.arg(0), pos, a0);
   }
 
   public Core.Exp nonEmpty(TypeSystem typeSystem, Pos pos, Core.Exp a0) {

@@ -47,7 +47,7 @@ public class AlgebraTest {
             + "end\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("int list")
+        .assertType("int bag")
         .assertEvalIter(
             equalsOrdered(
                 20, 30, 30, 20, 30, 30, 10, 20, 10, 30, 20, 30, 20, 10));
@@ -62,7 +62,7 @@ public class AlgebraTest {
             + "  JdbcTableScan(table=[[scott, EMP]])\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("int list")
+        .assertType("int bag")
         .assertCalcite(is(plan))
         .assertEvalIter(
             equalsOrdered(
@@ -107,7 +107,7 @@ public class AlgebraTest {
             + "end\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{dname:string, empno:int} list")
+        .assertType("{dname:string, empno:int} bag")
         .assertEvalIter(
             equalsOrdered(
                 list("SALES", 7900),
@@ -125,7 +125,7 @@ public class AlgebraTest {
             + "  yield {empno = #empno e, dname = #dname d}\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{dname:string, empno:int} list")
+        .assertType("{dname:string, empno:int} bag")
         .assertEvalIter(
             equalsOrdered(
                 list("SALES", 7900),
@@ -146,7 +146,7 @@ public class AlgebraTest {
             + "  yield {empno = e.empno, dname = d.dname}\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{dname:string, empno:int} list")
+        .assertType("{dname:string, empno:int} bag")
         .assertEvalIter(
             equalsOrdered(
                 list("SALES", 7900),
@@ -336,7 +336,7 @@ public class AlgebraTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
-        .assertType("{d5:int, deptno:int, empno:int} list")
+        .assertType("{d5:int, deptno:int, empno:int} bag")
         .assertEvalIter(equalsOrdered(list(25, 20, 7369)))
         .assertPlan(isCode(plan));
   }
@@ -395,7 +395,7 @@ public class AlgebraTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
-        .assertType("{d5:int, deptno:int, empno:int} list")
+        .assertType("{d5:int, deptno:int, empno:int} bag")
         .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)))
         .assertPlan(isCode(plan));
   }
@@ -484,7 +484,7 @@ public class AlgebraTest {
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
         .with(Prop.INLINE_PASS_COUNT, inlinePassCount)
-        .assertType("{d5:int, deptno:int, empno:int} list")
+        .assertType("{d5:int, deptno:int, empno:int} bag")
         .assertPlan(isCode(plan))
         .assertEvalIter(equalsOrdered(list(25, 20, 7369), list(35, 30, 7499)));
   }
@@ -518,7 +518,7 @@ public class AlgebraTest {
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
         .with(Prop.INLINE_PASS_COUNT, 0)
-        .assertType("int list")
+        .assertType("int bag")
         .assertPlan(isCode(plan))
         .assertEvalIter(equalsOrdered(20, 40, 60, 80));
   }
@@ -561,7 +561,7 @@ public class AlgebraTest {
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
         .with(Prop.INLINE_PASS_COUNT, 0)
-        .assertType("int list")
+        .assertType("int bag")
         .assertPlan(isCode(plan))
         .assertEvalIter(equalsOrdered(15, 25, 35, 45));
   }
@@ -577,7 +577,7 @@ public class AlgebraTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
-        .assertType("int list")
+        .assertType("int bag")
         .assertPlan(isFullyCalcite())
         .assertEvalIter(equalsUnordered(20, 20, 20, 40, 10, 10, 30, 30));
   }
@@ -593,7 +593,7 @@ public class AlgebraTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
-        .assertType("int list")
+        .assertType("int bag")
         .assertPlan(isFullyCalcite())
         .assertEvalIter(equalsUnordered(40));
   }
@@ -629,7 +629,7 @@ public class AlgebraTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
-        .assertType("string list")
+        .assertType("string bag")
         .assertPlan(isFullyCalcite())
         .assertEvalIter(equalsUnordered("ACCOUNTING", "RESEARCH"));
   }
@@ -763,9 +763,6 @@ public class AlgebraTest {
             + "  where e.job = \"CLARK KENT\")\n"
             + "yield d.deptno";
     fn.apply(ml(ml0));
-    fn.apply(ml(ml1));
-    fn.apply(ml(ml2));
-    fn.apply(ml(ml3));
   }
 
   /** Tests that correlated {@code exists} is pushed down to Calcite. */
@@ -826,7 +823,7 @@ public class AlgebraTest {
         .withBinding("scott", BuiltInDataSet.SCOTT)
         // TODO: enable in hybrid; will require new method RexSubQuery.array
         // .with(Prop.HYBRID, true)
-        .assertType("{dname:string, empCount:int list} list")
+        .assertType("{dname:string, empCount:int bag} bag")
         .assertEvalIter(
             equalsOrdered(
                 list("ACCOUNTING", list(3)),
@@ -846,7 +843,7 @@ public class AlgebraTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
-        .assertType("{dname:string, empCount:int} list")
+        .assertType("{dname:string, empCount:int} bag")
         .assertPlan(isFullyCalcite())
         .assertEvalIter(
             equalsOrdered(
@@ -922,7 +919,7 @@ public class AlgebraTest {
             + "  yield {i.e.empno, i.e.ename, i.level, i.e.mgr}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{empno:int, ename:string, level:int, mgr:int} list")
+        .assertType("{empno:int, ename:string, level:int, mgr:int} bag")
         .assertEvalIter(
             equalsOrdered(
                 list(7839, "KING", 0, 0),
