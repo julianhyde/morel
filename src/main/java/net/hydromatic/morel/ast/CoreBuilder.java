@@ -383,17 +383,26 @@ public enum CoreBuilder {
     return new Core.Case(pos, type, exp, ImmutableList.copyOf(matchList));
   }
 
-  public Core.From from(ListType type, List<Core.FromStep> steps) {
+  public Core.From from(Type type, List<Core.FromStep> steps) {
     return new Core.From(type, ImmutableList.copyOf(steps));
   }
 
-  /** Derives the result type, then calls {@link #from(ListType, List)}. */
+  /** Derives the result type, then calls {@link #from(Type, List)}. */
   public Core.From from(TypeSystem typeSystem, List<Core.FromStep> steps) {
     final Type elementType = fromElementType(typeSystem, steps);
-    return from(typeSystem.listType(elementType), steps);
+    final Type collectionType;
+    if (fromOrdered(steps)) {
+      collectionType = typeSystem.listType(elementType);
+    } else {
+      collectionType = typeSystem.bagType(elementType);
+    }
+    return from(collectionType, steps);
   }
 
-  /** Returns the element type of a {@link Core.From} with the given steps. */
+  /**
+   * Returns the datatype of an element a {@link Core.From} with the given
+   * steps.
+   */
   private Type fromElementType(
       TypeSystem typeSystem, List<Core.FromStep> steps) {
     if (!steps.isEmpty() && Iterables.getLast(steps) instanceof Core.Yield) {
@@ -407,6 +416,17 @@ public enum CoreBuilder {
       lastBindings.forEach(b -> argNameTypes.add(b.id.name, b.id.type));
       return typeSystem.recordType(argNameTypes);
     }
+  }
+
+  /**
+   * Returns whether the output of the last of a sequence of steps is ordered.
+   */
+  private boolean fromOrdered(List<Core.FromStep> steps) {
+    boolean ordered = true;
+    for (Core.FromStep step : steps) {
+      ordered = step.isOrdered(ordered);
+    }
+    return ordered;
   }
 
   /**
@@ -704,11 +724,10 @@ public enum CoreBuilder {
           }
           remainingExps.add(exp);
         }
-        final ListType listType = (ListType) exps.get(0).type;
+        final Type listType = exps.get(0).type;
         Map<String, ImmutableRangeSet> rangeSetMap =
             Extents.intersect((List) rangeSetMaps);
-        Core.Exp exp =
-            core.extent(typeSystem, listType.elementType, rangeSetMap);
+        Core.Exp exp = core.extent(typeSystem, listType.arg(0), rangeSetMap);
         for (Core.Exp remainingExp : remainingExps) {
           exp = core.intersect(typeSystem, exp, remainingExp);
         }
@@ -741,11 +760,10 @@ public enum CoreBuilder {
           }
           remainingExps.add(exp);
         }
-        final ListType listType = (ListType) exps.get(0).type;
+        final Type listType = (Type) exps.get(0).type;
         Map<String, ImmutableRangeSet> rangeSetMap =
             Extents.union((List) rangeSetMaps);
-        Core.Exp exp =
-            core.extent(typeSystem, listType.elementType, rangeSetMap);
+        Core.Exp exp = core.extent(typeSystem, listType.arg(0), rangeSetMap);
         for (Core.Exp remainingExp : remainingExps) {
           exp = core.union(typeSystem, exp, remainingExp);
         }
@@ -929,12 +947,7 @@ public enum CoreBuilder {
   }
 
   public Core.Exp only(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
-    return call(
-        typeSystem,
-        BuiltIn.RELATIONAL_ONLY,
-        ((ListType) a0.type).elementType,
-        pos,
-        a0);
+    return call(typeSystem, BuiltIn.RELATIONAL_ONLY, a0.type.arg(0), pos, a0);
   }
 
   public Core.Exp nonEmpty(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
@@ -948,13 +961,7 @@ public enum CoreBuilder {
   }
 
   public Core.Exp union(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
-    return call(
-        typeSystem,
-        BuiltIn.OP_UNION,
-        ((ListType) a0.type).elementType,
-        Pos.ZERO,
-        a0,
-        a1);
+    return call(typeSystem, BuiltIn.OP_UNION, a0.type.arg(0), Pos.ZERO, a0, a1);
   }
 
   public Core.Exp union(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
@@ -964,12 +971,7 @@ public enum CoreBuilder {
 
   public Core.Exp intersect(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(
-        typeSystem,
-        BuiltIn.OP_INTERSECT,
-        ((ListType) a0.type).elementType,
-        Pos.ZERO,
-        a0,
-        a1);
+        typeSystem, BuiltIn.OP_INTERSECT, a0.type.arg(0), Pos.ZERO, a0, a1);
   }
 
   public Core.Exp intersect(TypeSystem typeSystem, Iterable<Core.Exp> exps) {

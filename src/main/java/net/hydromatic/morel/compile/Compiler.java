@@ -316,7 +316,7 @@ public class Compiler {
   protected Code compileFrom(Context cx, Core.From from) {
     Supplier<Codes.RowSink> rowSinkFactory =
         createRowSinkFactory(
-            cx, ImmutableList.of(), from.steps, from.type().elementType);
+            cx, ImmutableList.of(), from.steps, from.type().arg(0));
     return Codes.from(rowSinkFactory);
   }
 
