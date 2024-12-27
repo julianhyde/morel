@@ -24,6 +24,7 @@ import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
 import static org.hamcrest.core.IsNull.notNullValue;
+import static org.hamcrest.core.IsSame.sameInstance;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -175,6 +176,42 @@ public abstract class UnifierTest {
             ImmutableList.of(),
             Tracers.nullTracer());
     assertThat(result, not(instanceOf(Unifier.Substitution.class)));
+  }
+
+  @Test
+  void testAtom() {
+    final Unifier.Term a0 = unifier.atomUnique("A");
+    assertThat(a0, hasToString("A0"));
+    final Unifier.Term a1 = unifier.atomUnique("A");
+    assertThat(a1, hasToString("A1"));
+    final Unifier.Term v0 = unifier.variable();
+    assertThat(v0, hasToString("T0"));
+    final Unifier.Term a2 = unifier.atomUnique("T");
+    assertThat(a2, hasToString("T1"));
+    final Unifier.Term a3 = unifier.atomUnique("T1");
+    assertThat(a3, hasToString("T10"));
+    final Unifier.Term v1 = unifier.variable();
+    assertThat(v1, hasToString("T2"));
+    final Unifier.Term v2 = unifier.variable();
+    final Unifier.Variable v1b = unifier.variable(v1.toString());
+    assertThat(v1b, sameInstance(v1));
+    final Unifier.Variable v1c = unifier.variable(2);
+    assertThat(v1c, sameInstance(v1));
+    final Unifier.Variable v2a = unifier.variable(3);
+    assertThat(v2a, sameInstance(v2));
+    final Unifier.Term v3 = unifier.variable();
+    final Unifier.Term v4 = unifier.variable();
+    final Unifier.Term v5 = unifier.variable();
+    final Unifier.Term v6 = unifier.variable();
+    final Unifier.Variable v4a = unifier.variable(5);
+    assertThat(v4a, sameInstance(v4));
+    final Unifier.Term v7 = unifier.variable();
+    final Unifier.Term v8 = unifier.variable();
+    assertThat(
+        Arrays.asList(v0, v1, v2, v3, v4, v5, v6, v7, v8),
+        hasToString("[T0, T2, T3, T4, T5, T6, T7, T8, T9]"));
+    final Unifier.Term v9 = unifier.variable();
+    assertThat("avoids T10 name used by a3 above", v9, hasToString("T11"));
   }
 
   @Test
