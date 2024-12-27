@@ -21,6 +21,7 @@ package net.hydromatic.morel;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -33,6 +34,7 @@ import com.google.common.collect.ImmutableSet;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
@@ -49,6 +51,10 @@ import static org.hamcrest.Matchers.hasToString;
 public class FromBuilderTest {
   private static class Fixture {
     final TypeSystem typeSystem = new TypeSystem();
+    {
+      // Register 'bag'
+      BuiltIn.dataTypes(typeSystem, new ArrayList<>());
+    }
     final PrimitiveType intType = PrimitiveType.INT;
     final PrimitiveType unitType = PrimitiveType.UNIT;
     final Type intPairType = typeSystem.tupleType(intType, intType);

@@ -68,6 +68,14 @@ public class DataType extends ParameterizedType {
     return Keys.datatype(name, Keys.toKeys(arguments), typeConstructors);
   }
 
+  @Override public Type arg(int i) {
+    return arguments.get(i);
+  }
+
+  @Override public boolean isCollection() {
+    return name.equals("bag");
+  }
+
   public <R> R accept(TypeVisitor<R> typeVisitor) {
     return typeVisitor.visit(this);
   }

@@ -70,11 +70,16 @@ public class FromBuilder {
    * the last step. (For example, "yield {i = i}", which changes the result
    * shape if the last step but is otherwise a no-op.) */
   private int removeIfNotLastIndex = Integer.MIN_VALUE;
+
   /** If non-negative, flags that particular step should be removed if it is
    * the last step. (For example, we flatten "from p in (from q in list)",
    * to "from q in list yield {p = q}" but we want to remove "yield {p = q}"
    * if it turns out to be the last step.) */
   private int removeIfLastIndex = Integer.MIN_VALUE;
+
+  /** Whether the result of this "from" expression has deterministic order.
+   * The result will be a {@code list} if true, a {@code bag} if false. */
+  private boolean ordered = true;
 
   /** Use {@link net.hydromatic.morel.ast.CoreBuilder#fromBuilder}. */
   FromBuilder(TypeSystem typeSystem, @Nullable Environment env) {
@@ -105,6 +110,7 @@ public class FromBuilder {
       RefChecker.of(typeSystem, env.bindAll(bindings))
           .visitStep(step, bindings);
     }
+    ordered = step.isOrdered(ordered);
     if (removeIfNotLastIndex == steps.size() - 1) {
       // A trivial record yield with a single yield, e.g. 'yield {i = i}', has
       // a purpose only if it is the last step. (It forces the return to be a

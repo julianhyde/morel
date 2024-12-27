@@ -22,9 +22,9 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.FnType;
-import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 
 import com.google.common.collect.ImmutableList;
@@ -36,6 +36,7 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.skip;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getLast;
 
 /**
@@ -101,10 +102,12 @@ public class Relationalizer extends EnvShuttle {
     if (exp instanceof Core.From) {
       return (Core.From) exp;
     } else {
-      final ListType listType = (ListType) exp.type;
+      checkArgument(exp.type.isCollection(), "not a collection type: %s",
+          exp.type);
+      final Type elementType = exp.type.arg(0);
       final String name = typeSystem.nameGenerator.get();
       final Core.IdPat id =
-          core.idPat(listType.elementType, name, typeSystem.nameGenerator);
+          core.idPat(elementType, name, typeSystem.nameGenerator);
       final List<Binding> bindings = new ArrayList<>();
       Compiles.acceptBinding(typeSystem, id, bindings);
       final Core.Scan scan =

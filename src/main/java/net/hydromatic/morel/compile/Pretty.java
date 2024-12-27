@@ -33,7 +33,6 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Ord;
 
-import com.google.common.collect.Iterables;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
@@ -41,6 +40,8 @@ import java.util.List;
 import static net.hydromatic.morel.parse.Parsers.appendId;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
 import static net.hydromatic.morel.util.Static.endsWith;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
@@ -243,7 +244,7 @@ class Pretty {
       final DataType dataType = (DataType) type;
       list = toList(value);
       if (dataType.name.equals("vector")) {
-        final Type argType = Iterables.getOnlyElement(dataType.arguments);
+        final Type argType = dataType.arg(0);
         return printList(buf.append('#'), indent, lineEnd, depth, argType,
             list);
       }
@@ -252,7 +253,12 @@ class Pretty {
         // its type, e.g.
         //  val odds = [1,3,5] : int list
         //  val evens = [0,2,4] : int bag
-        final Type argType = Iterables.getOnlyElement(dataType.arguments);
+        if (list instanceof RelList) {
+          // Do not attempt to print the elements of a foreign list. It might be
+          // huge.
+          return buf.append("<relation>");
+        }
+        final Type argType = dataType.arg(0);
         return printList(buf, indent, lineEnd, depth, argType,
             list);
       }
@@ -296,23 +302,19 @@ class Pretty {
     final int start;
     switch (typeVal.type.op()) {
     case DATA_TYPE:
+      if (typeVal.type.isCollection()) {
+        return prettyCollectionType(buf, lineEnd, depth, type, typeVal,
+            leftPrec, rightPrec, indent2, "bag");
+      }
+      // fall through
     case ID:
     case TY_VAR:
       return pretty1(buf, indent2, lineEnd, depth, type,
           typeVal.type.moniker(), 0, 0);
 
     case LIST:
-      if (leftPrec > Op.LIST.left
-          || rightPrec > Op.LIST.right) {
-        pretty1(buf, indent2, lineEnd, depth, type, "(", 0, 0);
-        pretty1(buf, indent2, lineEnd, depth, type, typeVal, 0, 0);
-        pretty1(buf, indent2, lineEnd, depth, type, ")", 0, 0);
-        return buf;
-      }
-      final ListType listType = (ListType) typeVal.type;
-      pretty1(buf, indent2, lineEnd, depth, type,
-          new TypeVal("", listType.elementType), leftPrec, Op.LIST.left);
-      return buf.append(" list");
+      return prettyCollectionType(buf, lineEnd, depth, type, typeVal,
+          leftPrec, rightPrec, indent2, "list");
 
     case TUPLE_TYPE:
       if (leftPrec > Op.TUPLE_TYPE.left
@@ -379,6 +381,25 @@ class Pretty {
     default:
       throw new AssertionError("unknown type " + typeVal.type);
     }
+  }
+
+  /** Prints "list" and "bag" types in a similar way. */
+  private StringBuilder prettyCollectionType(StringBuilder buf, int[] lineEnd,
+      int depth, Type type, TypeVal typeVal, int leftPrec, int rightPrec,
+      int indent2, String typeName) {
+    if (leftPrec > Op.LIST.left
+        || rightPrec > Op.LIST.right) {
+      pretty1(buf, indent2, lineEnd, depth, type, "(", 0, 0);
+      pretty1(buf, indent2, lineEnd, depth, type, typeVal, 0, 0);
+      pretty1(buf, indent2, lineEnd, depth, type, ")", 0, 0);
+      return buf;
+    }
+    checkArgument(typeVal.type.isCollection(), "not a collection type: %s",
+        type);
+    final Type elementType = typeVal.type.arg(0);
+    pretty1(buf, indent2, lineEnd, depth, type,
+        new TypeVal("", elementType), leftPrec, Op.LIST.left);
+    return buf.append(" ").append(typeName);
   }
 
   @SuppressWarnings("unchecked")

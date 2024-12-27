@@ -46,6 +46,12 @@ public interface Type {
   /** Type operator. */
   Op op();
 
+  /** Returns the {@code i}th type parameter. Throws for types except
+   * {@link ListType} and {@link DataType}. */
+  default Type arg(int i) {
+    throw new UnsupportedOperationException();
+  }
+
   /** Copies this type, applying a given transform to component types,
    * and returning the original type if the component types are unchanged. */
   Type copy(TypeSystem typeSystem, UnaryOperator<Type> transform);
@@ -79,6 +85,14 @@ public interface Type {
   /** Whether this type has a small, fixed set of instances.
    * True for {@code bool}, data types on finite types. */
   default boolean isFinite() {
+    return false;
+  }
+
+  /** Whether this is a collection type (list or bag).
+   *
+   * <p>If a type is a collection type, {@code arg(0)} returns the element
+   * type. */
+  default boolean isCollection() {
     return false;
   }
 

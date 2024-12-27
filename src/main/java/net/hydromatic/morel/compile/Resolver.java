@@ -891,8 +891,8 @@ public class Resolver {
                 ImmutableRangeSet.of(Range.all()));
       } else {
         coreExp = r.toCore(scan.exp);
-        final ListType listType = (ListType) coreExp.type;
-        corePat = r.toCore(scan.pat, listType.elementType);
+        final Type elementType = coreExp.type.arg(0);
+        corePat = r.toCore(scan.pat, elementType);
       }
       final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
       Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
@@ -934,7 +934,7 @@ public class Resolver {
       fromBuilder.clear();
       final Core.Exp exp = toCore(through.exp);
       final Core.Pat pat = toCore(through.pat);
-      final Type type = typeMap.typeSystem.listType(pat.type);
+      final Type type = typeMap.typeSystem.bagType(pat.type);
       fromBuilder.scan(pat, core.apply(through.pos, type, exp, from));
     }
 

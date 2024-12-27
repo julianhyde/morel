@@ -179,8 +179,9 @@ public class TypeSystem {
   }
 
   /** Creates a bag type. */
-  public ListType bagType(Type elementType) {
-    return (ListType) typeFor(Keys.list(elementType.key()));
+  public Type bagType(Type elementType) {
+    return typeFor(
+        Keys.apply(Keys.name("bag"), ImmutableList.of(elementType.key())));
   }
 
   /** Creates a list type. */

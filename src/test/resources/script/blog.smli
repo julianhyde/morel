@@ -670,7 +670,7 @@ fun wordCount lines =
         word in split line
     group word compute count
   end;
-> val wordCount = fn : string list -> {count:int, word:string} list
+> val wordCount = fn : string list -> {count:int, word:string} bag
 from p in wordCount lines order p.word;
 > val it =
 >   [{count=2,word="a"},{count=1,word="and"},{count=1,word="but"},
@@ -684,9 +684,9 @@ val emps = scott.emp;
 > val emps = <relation>
 >   :
 >     {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
->      job:string, mgr:int, sal:real} list
+>      job:string, mgr:int, sal:real} bag
 val depts = scott.dept;
-> val depts = <relation> : {deptno:int, dname:string, loc:string} list
+> val depts = <relation> : {deptno:int, dname:string, loc:string} bag
 
 from e in emps
   group e.deptno compute sumSal = sum of e.sal
@@ -966,14 +966,14 @@ from e in emps
   where nameLength > 4
   group deptno compute c = count, s = sum of nameLength;
 > val it = [{c=1,deptno=20,s=5},{c=2,deptno=30,s=12}]
->   : {c:int, deptno:int, s:int} list
+>   : {c:int, deptno:int, s:int} bag
 from e in emps
   order e.deptno, e.id desc
   yield {e.name, nameLength = String.size e.name, e.id, e.deptno}
   where nameLength > 4
   group deptno compute c = count, s = sum of nameLength
   where s > 10;
-> val it = [{c=2,deptno=30,s=12}] : {c:int, deptno:int, s:int} list
+> val it = [{c=2,deptno=30,s=12}] : {c:int, deptno:int, s:int} bag
 from e in emps
   order e.deptno, e.id desc
   yield {e.name, nameLength = String.size e.name, e.id, e.deptno}
@@ -981,7 +981,7 @@ from e in emps
   group deptno compute c = count, s = sum of nameLength
   where s > 10
   yield c + s;
-> val it = [14] : int list
+> val it = [14] : int bag
 
 (*) Integration with Apache Calcite - schemas
 foodmart;
@@ -1007,25 +1007,25 @@ foodmart;
 >      account:
 >              {account_description:string, account_id:int, account_parent:int,
 >               account_rollup:string, account_type:string,
->               custom_members:string} list,
+>               custom_members:string} bag,
 >      agg_c_10_sales_fact_1997:
 >                               {customer_count:int, fact_count:int,
 >                                month_of_year:int, quarter:string,
 >                                store_cost:real, store_sales:real, the_year:int,
->                                unit_sales:real} list,
+>                                unit_sales:real} bag,
 >      agg_c_14_sales_fact_1997:
 >                               {customer_id:int, fact_count:int,
 >                                month_of_year:int, product_id:int,
 >                                promotion_id:int, quarter:string,
 >                                store_cost:real, store_id:int, store_sales:real,
->                                the_year:int, unit_sales:real} list,
+>                                the_year:int, unit_sales:real} bag,
 >      agg_c_special_sales_fact_1997:
 >                                    {customer_id:int, fact_count:int,
 >                                     product_id:int, promotion_id:int,
 >                                     store_cost_sum:real, store_id:int,
 >                                     store_sales_sum:real, time_month:int,
 >                                     time_quarter:string, time_year:int,
->                                     unit_sales_sum:real} list,
+>                                     unit_sales_sum:real} bag,
 >      agg_g_ms_pcat_sales_fact_1997:
 >                                    {customer_count:int, fact_count:int,
 >                                     gender:string, marital_status:string,
@@ -1033,43 +1033,43 @@ foodmart;
 >                                     product_department:string,
 >                                     product_family:string, quarter:string,
 >                                     store_cost:real, store_sales:real,
->                                     the_year:int, unit_sales:real} list,
+>                                     the_year:int, unit_sales:real} bag,
 >      agg_l_03_sales_fact_1997:
 >                               {customer_id:int, fact_count:int,
 >                                store_cost:real, store_sales:real, time_id:int,
->                                unit_sales:real} list,
+>                                unit_sales:real} bag,
 >      agg_l_04_sales_fact_1997:
 >                               {customer_count:int, fact_count:int,
 >                                store_cost:real, store_sales:real, time_id:int,
->                                unit_sales:real} list,
+>                                unit_sales:real} bag,
 >      agg_l_05_sales_fact_1997:
 >                               {customer_id:int, fact_count:int, product_id:int,
 >                                promotion_id:int, store_cost:real, store_id:int,
->                                store_sales:real, unit_sales:real} list,
+>                                store_sales:real, unit_sales:real} bag,
 >      agg_lc_06_sales_fact_1997:
 >                                {city:string, country:string, fact_count:int,
 >                                 state_province:string, store_cost:real,
->                                 store_sales:real, time_id:int, unit_sales:real} list,
+>                                 store_sales:real, time_id:int, unit_sales:real} bag,
 >      agg_lc_100_sales_fact_1997:
 >                                 {customer_id:int, fact_count:int,
 >                                  product_id:int, quarter:string,
 >                                  store_cost:real, store_sales:real,
->                                  the_year:int, unit_sales:real} list,
+>                                  the_year:int, unit_sales:real} bag,
 >      agg_ll_01_sales_fact_1997:
 >                                {customer_id:int, fact_count:int,
 >                                 product_id:int, store_cost:real,
->                                 store_sales:real, time_id:int, unit_sales:real} list,
+>                                 store_sales:real, time_id:int, unit_sales:real} bag,
 >      agg_pl_01_sales_fact_1997:
 >                                {customer_id:int, fact_count:int,
 >                                 product_id:int, store_cost_sum:real,
 >                                 store_sales_sum:real, time_id:int,
->                                 unit_sales_sum:real} list,
+>                                 unit_sales_sum:real} bag,
 >      category:
 >               {category_description:string, category_id:string,
->                category_parent:string, category_rollup:string} list,
+>                category_parent:string, category_rollup:string} bag,
 >      currency:
 >               {conversion_ratio:real, currency:string, currency_id:int,
->                date:string} list,
+>                date:string} bag,
 >      customer:
 >               {account_num:int, address1:string, address2:string,
 >                address3:string, address4:string, birthdate:string, city:string,
@@ -1079,51 +1079,51 @@ foodmart;
 >                marital_status:string, member_card:string, mi:string,
 >                num_cars_owned:int, num_children_at_home:int, occupation:string,
 >                phone1:string, phone2:string, postal_code:string,
->                state_province:string, total_children:int, yearly_income:string} list,
->      days:{day:int, week_day:string} list,
->      department:{department_description:string, department_id:int} list,
+>                state_province:string, total_children:int, yearly_income:string} bag,
+>      days:{day:int, week_day:string} bag,
+>      department:{department_description:string, department_id:int} bag,
 >      employee:
 >               {birth_date:string, department_id:int, education_level:string,
 >                employee_id:int, end_date:string, first_name:string,
 >                full_name:string, gender:string, hire_date:string,
 >                last_name:string, management_role:string, marital_status:string,
 >                position_id:int, position_title:string, salary:real,
->                store_id:int, supervisor_id:int} list,
->      employee_closure:{distance:int, employee_id:int, supervisor_id:int} list,
+>                store_id:int, supervisor_id:int} bag,
+>      employee_closure:{distance:int, employee_id:int, supervisor_id:int} bag,
 >      expense_fact:
 >                   {account_id:int, amount:real, category_id:string,
->                    currency_id:int, exp_date:string, store_id:int, time_id:int} list,
+>                    currency_id:int, exp_date:string, store_id:int, time_id:int} bag,
 >      inventory_fact_1997:
 >                          {product_id:int, store_id:int, store_invoice:real,
 >                           supply_time:int, time_id:int, units_ordered:int,
 >                           units_shipped:int, warehouse_cost:real,
->                           warehouse_id:int, warehouse_sales:real} list,
+>                           warehouse_id:int, warehouse_sales:real} bag,
 >      inventory_fact_1998:
 >                          {product_id:int, store_id:int, store_invoice:real,
 >                           supply_time:int, time_id:int, units_ordered:int,
 >                           units_shipped:int, warehouse_cost:real,
->                           warehouse_id:int, warehouse_sales:real} list,
+>                           warehouse_id:int, warehouse_sales:real} bag,
 >      position:
 >               {management_role:string, max_scale:real, min_scale:real,
->                pay_type:string, position_id:int, position_title:string} list,
+>                pay_type:string, position_id:int, position_title:string} bag,
 >      product:
 >              {brand_name:string, cases_per_pallet:int, gross_weight:real,
 >               low_fat:bool, net_weight:real, product_class_id:int,
 >               product_id:int, product_name:string, recyclable_package:bool,
 >               shelf_depth:real, shelf_height:real, shelf_width:real, sku:int,
->               srp:real, units_per_case:int} list,
+>               srp:real, units_per_case:int} bag,
 >      product_class:
 >                    {product_category:string, product_class_id:int,
 >                     product_department:string, product_family:string,
->                     product_subcategory:string} list,
+>                     product_subcategory:string} bag,
 >      promotion:
 >                {cost:real, end_date:string, media_type:string,
 >                 promotion_district_id:int, promotion_id:int,
->                 promotion_name:string, start_date:string} list,
+>                 promotion_name:string, start_date:string} bag,
 >      region:
 >             {region_id:int, sales_city:string, sales_country:string,
 >              sales_district:string, sales_district_id:int, sales_region:string,
->              sales_state_province:string} list,
+>              sales_state_province:string} bag,
 >      reserve_employee:
 >                       {birth_date:string, department_id:int,
 >                        education_level:string, employee_id:int,
@@ -1131,23 +1131,23 @@ foodmart;
 >                        gender:string, hire_date:string, last_name:string,
 >                        marital_status:string, position_id:int,
 >                        position_title:string, salary:real, store_id:int,
->                        supervisor_id:int} list,
+>                        supervisor_id:int} bag,
 >      salary:
 >             {currency_id:int, department_id:int, employee_id:int,
 >              overtime_paid:real, pay_date:string, salary_paid:real,
->              vacation_accrued:real, vacation_used:real} list,
+>              vacation_accrued:real, vacation_used:real} bag,
 >      sales_fact_1997:
 >                      {customer_id:int, product_id:int, promotion_id:int,
 >                       store_cost:real, store_id:int, store_sales:real,
->                       time_id:int, unit_sales:real} list,
+>                       time_id:int, unit_sales:real} bag,
 >      sales_fact_1998:
 >                      {customer_id:int, product_id:int, promotion_id:int,
 >                       store_cost:real, store_id:int, store_sales:real,
->                       time_id:int, unit_sales:real} list,
+>                       time_id:int, unit_sales:real} bag,
 >      sales_fact_dec_1998:
 >                          {customer_id:int, product_id:int, promotion_id:int,
 >                           store_cost:real, store_id:int, store_sales:real,
->                           time_id:int, unit_sales:real} list,
+>                           time_id:int, unit_sales:real} bag,
 >      store:
 >            {coffee_bar:bool, first_opened_date:string, florist:bool,
 >             frozen_sqft:int, grocery_sqft:int, last_remodel_date:string,
@@ -1156,7 +1156,7 @@ foodmart;
 >             store_id:int, store_manager:string, store_name:string,
 >             store_number:int, store_phone:string, store_postal_code:string,
 >             store_sqft:int, store_state:string, store_street_address:string,
->             store_type:string, video_store:bool} list,
+>             store_type:string, video_store:bool} bag,
 >      store_ragged:
 >                   {coffee_bar:bool, first_opened_date:string, florist:bool,
 >                    frozen_sqft:int, grocery_sqft:int, last_remodel_date:string,
@@ -1166,36 +1166,36 @@ foodmart;
 >                    store_name:string, store_number:int, store_phone:string,
 >                    store_postal_code:string, store_sqft:int,
 >                    store_state:string, store_street_address:string,
->                    store_type:string, video_store:bool} list,
+>                    store_type:string, video_store:bool} bag,
 >      time_by_day:
 >                  {day_of_month:int, fiscal_period:string, month_of_year:int,
 >                   quarter:string, the_date:string, the_day:string,
 >                   the_month:string, the_year:int, time_id:int,
->                   week_of_year:int} list,
+>                   week_of_year:int} bag,
 >      warehouse:
 >                {stores_id:int, wa_address1:string, wa_address2:string,
 >                 wa_address3:string, wa_address4:string, warehouse_city:string,
 >                 warehouse_class_id:int, warehouse_country:string,
 >                 warehouse_fax:string, warehouse_id:int, warehouse_name:string,
 >                 warehouse_owner_name:string, warehouse_phone:string,
->                 warehouse_postal_code:string, warehouse_state_province:string} list,
->      warehouse_class:{description:string, warehouse_class_id:int} list}
+>                 warehouse_postal_code:string, warehouse_state_province:string} bag,
+>      warehouse_class:{description:string, warehouse_class_id:int} bag}
 scott;
 > val it = {bonus=<relation>,dept=<relation>,emp=<relation>,salgrade=<relation>}
->   : {bonus:{comm:real, ename:string, job:string, sal:real} list,
->      dept:{deptno:int, dname:string, loc:string} list,
+>   : {bonus:{comm:real, ename:string, job:string, sal:real} bag,
+>      dept:{deptno:int, dname:string, loc:string} bag,
 >      emp:
 >          {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
->           job:string, mgr:int, sal:real} list,
->      salgrade:{grade:int, hisal:real, losal:real} list}
+>           job:string, mgr:int, sal:real} bag,
+>      salgrade:{grade:int, hisal:real, losal:real} bag}
 scott.dept;
-> val it = <relation> : {deptno:int, dname:string, loc:string} list
+> val it = <relation> : {deptno:int, dname:string, loc:string} bag
 from d in scott.dept
   where notExists (from e in scott.emp
     where e.deptno = d.deptno
     andalso e.job = "CLERK");
 > val it = [{deptno=40,dname="OPERATIONS",loc="BOSTON"}]
->   : {deptno:int, dname:string, loc:string} list
+>   : {deptno:int, dname:string, loc:string} bag
 
 (*) Integration with Apache Calcite - relational algebra
 Sys.set ("hybrid", true);
@@ -1205,7 +1205,7 @@ from d in scott.dept
     where e.deptno = d.deptno
     andalso e.job = "CLERK");
 > val it = [{deptno=40,dname="OPERATIONS",loc="BOSTON"}]
->   : {deptno:int, dname:string, loc:string} list
+>   : {deptno:int, dname:string, loc:string} bag
 Sys.plan();
 > val it =
 >   "calcite(plan LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
@@ -1246,7 +1246,7 @@ fun mapReduce mapper reducer list =
     group k compute c = (fn vs => reducer (k, vs)) of v;
 > val mapReduce = fn
 >   : ('a -> ('b * 'c) list)
->     -> ('b * 'c list -> 'd) -> 'a list -> {c:'d, k:'b} list
+>     -> ('b * 'c list -> 'd) -> 'a list -> {c:'d, k:'b} bag
 fun wc_mapper line =
   List.map (fn w => (w, 1)) (split line);
 > val wc_mapper = fn : string -> (string * int) list
@@ -1254,7 +1254,7 @@ fun wc_reducer (key, values) =
   List.foldl (fn (x, y) => x + y) 0 values;
 > val wc_reducer = fn : 'a * int list -> int
 val wordCount = mapReduce wc_mapper wc_reducer;
-> val wordCount = fn : string list -> {c:int, k:string} list
+> val wordCount = fn : string list -> {c:int, k:string} bag
 from p in wordCount lines order p.k;
 > val it =
 >   [{c=2,k="a"},{c=1,k="and"},{c=1,k="but"},{c=1,k="on"},{c=1,k="sat"},

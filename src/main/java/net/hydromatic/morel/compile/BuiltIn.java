@@ -145,13 +145,13 @@ public enum BuiltIn {
   /** Infix operator "elem", of type "&alpha; * &alpha; list; &rarr; bool". */
   OP_ELEM(null, "op elem", ts ->
       ts.forallType(1, h ->
-          ts.fnType(ts.tupleType(h.get(0), ts.listType(h.get(0))), BOOL))),
+          ts.fnType(ts.tupleType(h.get(0), h.bag(0)), BOOL))),
 
   /** Infix operator "notelem", of type "&alpha; * &alpha; list; &rarr;
    * bool". */
   OP_NOT_ELEM(null, "op notelem", ts ->
       ts.forallType(1, h ->
-          ts.fnType(ts.tupleType(h.get(0), ts.listType(h.get(0))), BOOL))),
+          ts.fnType(ts.tupleType(h.get(0), h.bag(0)), BOOL))),
 
   /** Infix operator "-", of type "&alpha; * &alpha; &rarr; &alpha;"
    * (where &alpha; must be numeric). */
@@ -1501,7 +1501,7 @@ public enum BuiltIn {
   REAL_UNORDERED("Real", "unordered", ts ->
       ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
 
-  /** Function "Relational.count", aka "count", of type "int list &rarr; int".
+  /** Function "Relational.count", aka "count", of type "int bag &rarr; int".
    *
    * <p>Often used with {@code group}:
    *
@@ -1514,9 +1514,9 @@ public enum BuiltIn {
    * </blockquote>
    */
   RELATIONAL_COUNT("Relational", "count", "count", ts ->
-      ts.forallType(1, h -> ts.fnType(h.list(0), INT))),
+      ts.forallType(1, h -> ts.fnType(h.bag(0), INT))),
 
-  /** Function "Relational.exists", aka "exists", of type "&alpha; list
+  /** Function "Relational.exists", aka "exists", of type "&alpha; bag
    * &rarr; bool".
    *
    * <p>For example,
@@ -1530,9 +1530,9 @@ public enum BuiltIn {
    * }</pre>
    */
   RELATIONAL_EXISTS("Relational", "exists", "exists", ts ->
-      ts.forallType(1, h -> ts.fnType(h.list(0), BOOL))),
+      ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
 
-  /** Function "Relational.notExists", aka "notExists", of type "&alpha; list
+  /** Function "Relational.notExists", aka "notExists", of type "&alpha; bag
    * &rarr; bool".
    *
    * <p>For example,
@@ -1545,21 +1545,21 @@ public enum BuiltIn {
    *   andalso e.job = 'CLERK')
    * }</pre>
    *
-   * <p>{@code notExists list} is equivalent to {@code not (exists list)},
+   * <p>{@code notExists bag} is equivalent to {@code not (exists bag)},
    * but the former may be more convenient, because it requires fewer
    * parentheses.
    */
   RELATIONAL_NOT_EXISTS("Relational", "notExists", "notExists", ts ->
-      ts.forallType(1, h -> ts.fnType(h.list(0), BOOL))),
+      ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
 
-  /** Function "Relational.only", aka "only", of type "&alpha; list
+  /** Function "Relational.only", aka "only", of type "&alpha; bag
    * &rarr; &alpha;".
    *
-   * <p>"only list" returns the only element of {@code list}. It raises
+   * <p>"only bag" returns the only element of {@code bag}. It raises
    * {@link net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY Empty}
-   * if {@code list} is nil,
+   * if {@code bag} is nil,
    * {@link net.hydromatic.morel.eval.Codes.BuiltInExn#SIZE Size}
-   * if {@code list} has more than one element.
+   * if {@code bag} has more than one element.
    *
    * <p>"only" allows you to write the equivalent of a scalar sub-query:
    *
@@ -1571,22 +1571,22 @@ public enum BuiltIn {
    * }</pre>
    */
   RELATIONAL_ONLY("Relational", "only", "only", ts ->
-      ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
+      ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
-  /** Function "Relational.iterate", aka "iterate", of type "&alpha; list
-   * &rarr; (&alpha; list &rarr; &alpha; list &rarr; &alpha; list)
-   * &rarr; &alpha; list".
+  /** Function "Relational.iterate", aka "iterate", of type "&alpha; bag
+   * &rarr; (&alpha; bag &rarr; &alpha; bag &rarr; &alpha; bag)
+   * &rarr; &alpha; bag".
    *
-   * <p>"iterate initialList listUpdate" computes a fixed point, starting
-   * with a list and iterating by passing it to a function. */
+   * <p>"iterate initialBag bagUpdate" computes a fixed point, starting
+   * with a bag and iterating by passing it to a function. */
   RELATIONAL_ITERATE("Relational", "iterate", "iterate", ts ->
       ts.forallType(1, h ->
-          ts.fnType(h.list(0),
-              ts.fnType(ts.tupleType(h.list(0), h.list(0)), h.list(0)),
-              h.list(0)))),
+          ts.fnType(h.bag(0),
+              ts.fnType(ts.tupleType(h.bag(0), h.bag(0)), h.bag(0)),
+              h.bag(0)))),
 
   /** Function "Relational.sum", aka "sum", of type
-   *  "&alpha; list &rarr; &alpha;" (where &alpha; must be numeric).
+   *  "&alpha; bag &rarr; &alpha;" (where &alpha; must be numeric).
    *
    * <p>Often used with {@code group}:
    *
@@ -1599,17 +1599,17 @@ public enum BuiltIn {
    * </blockquote>
    */
   RELATIONAL_SUM("Relational", "sum", "sum", ts ->
-      ts.forallType(1, h -> ts.fnType(ts.listType(h.get(0)), h.get(0)))),
+      ts.forallType(1, h -> ts.fnType(ts.bagType(h.get(0)), h.get(0)))),
 
   /** Function "Relational.max", aka "max", of type
-   *  "&alpha; list &rarr; &alpha;" (where &alpha; must be comparable). */
+   *  "&alpha; bag &rarr; &alpha;" (where &alpha; must be comparable). */
   RELATIONAL_MAX("Relational", "max", "max", ts ->
-      ts.forallType(1, h -> ts.fnType(ts.listType(h.get(0)), h.get(0)))),
+      ts.forallType(1, h -> ts.fnType(ts.bagType(h.get(0)), h.get(0)))),
 
   /** Function "Relational.min", aka "min", of type
-   *  "&alpha; list &rarr; &alpha;" (where &alpha; must be comparable). */
+   *  "&alpha; bag &rarr; &alpha;" (where &alpha; must be comparable). */
   RELATIONAL_MIN("Relational", "min", "min", ts ->
-      ts.forallType(1, h -> ts.fnType(ts.listType(h.get(0)), h.get(0)))),
+      ts.forallType(1, h -> ts.fnType(ts.bagType(h.get(0)), h.get(0)))),
 
   /** Function "Sys.env", aka "env", of type "unit &rarr; string list". */
   SYS_ENV("Sys", "env", "env", ts ->
@@ -2085,6 +2085,7 @@ public enum BuiltIn {
         h.tyCon("NIL").tyCon("CONS", h.get(0)));
     defineDataType(typeSystem, bindings, "$bool", true, 0, h ->
         h.tyCon("FALSE").tyCon("TRUE"));
+    defineDataType(typeSystem, bindings, "$bag", true, 0, h -> h);
 
     // Another internal datatype. Stream is a union of list and bag.
     //   datatype 'a stream = LIST of 'a list | BAG of 'a bag

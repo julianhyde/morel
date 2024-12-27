@@ -1112,7 +1112,7 @@ public class Core {
   public static class From extends Exp {
     public final ImmutableList<FromStep> steps;
 
-    From(ListType type, ImmutableList<FromStep> steps) {
+    From(Type type, ImmutableList<FromStep> steps) {
       super(Pos.ZERO, Op.FROM, type);
       this.steps = requireNonNull(steps);
     }
@@ -1125,10 +1125,6 @@ public class Core {
 
     @Override public int hashCode() {
       return steps.hashCode();
-    }
-
-    @Override public ListType type() {
-      return (ListType) type;
     }
 
     @Override public Exp accept(Shuttle shuttle) {
@@ -1171,6 +1167,16 @@ public class Core {
       this.bindings = bindings;
     }
 
+    /** Returns whether the output of this step is ordered, given whether the
+     * input is ordered.
+     *
+     * <p>For example, {@link Where} and {@link Yield} are ordered if and only
+     * if their input is ordered; {@link Order} is always ordered;
+     * {@link Group} is unordered. */
+    public boolean isOrdered(boolean inputIsOrdered) {
+      return inputIsOrdered;
+    }
+
     @Override final AstWriter unparse(AstWriter w, int left, int right) {
       return unparse(w, null, -1, left, right);
     }
@@ -1194,12 +1200,11 @@ public class Core {
       this.pat = requireNonNull(pat, "pat");
       this.exp = requireNonNull(exp, "exp");
       this.condition = requireNonNull(condition, "condition");
-      if (!(exp.type instanceof ListType)) {
-        throw new IllegalArgumentException("scan expression must be list: "
-            + exp.type);
+      if (!exp.type.isCollection()) {
+        throw new IllegalArgumentException(
+            "scan expression must be list or bag: " + exp.type);
       }
-      final ListType listType = (ListType) exp.type;
-      if (!canAssign(listType.elementType, pat.type)) {
+      if (!canAssign(exp.type.arg(0), pat.type)) {
         throw new IllegalArgumentException(exp.type + " + " + pat.type);
       }
     }
@@ -1209,6 +1214,18 @@ public class Core {
     private static boolean canAssign(Type fromType, Type toType) {
       return fromType.equals(toType)
           || toType.isProgressive();
+    }
+
+    /** {@inheritDoc}
+     *
+     * <p>A {@code Scan} is ordered only if the input is ordered and
+     * {@link #exp} is ordered. Think of it as like nested loops join.
+     *
+     * <p>If a {@code Scan} is the first step in the {@code from}, we think of
+     * its input as an ordered list containing {@code unit}. Therefore, its
+     * output is ordered if {@code exp} is a {@code list}. */
+    @Override public boolean isOrdered(boolean inputIsOrdered) {
+      return inputIsOrdered && exp.type instanceof ListType;
     }
 
     @Override public Scan accept(Shuttle shuttle) {
@@ -1353,6 +1370,15 @@ public class Core {
       this.orderItems = requireNonNull(orderItems);
     }
 
+    /** {@inheritDoc}
+     *
+     * <p>{@code Order} is always ordered. If there are zero keys, or the keys
+     * not exhaustive, the order is not deterministic, but the ordering is still
+     * clearly part of the information in the value. */
+    @Override public boolean isOrdered(boolean inputIsOrdered) {
+      return true;
+    }
+
     @Override public Order accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
@@ -1416,6 +1442,10 @@ public class Core {
       super(Op.GROUP, bindings);
       this.groupExps = groupExps;
       this.aggregates = aggregates;
+    }
+
+    @Override public boolean isOrdered(boolean inputIsOrdered) {
+      return false;
     }
 
     @Override public Group accept(Shuttle shuttle) {

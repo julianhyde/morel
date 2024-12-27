@@ -50,6 +50,8 @@ public class TypeMap {
   public final TypeSystem typeSystem;
   private final Map<AstNode, Unifier.Term> nodeTypeTerms;
   final Unifier.Substitution substitution;
+  private final Unifier.Term orderedTerm;
+  private final Unifier.Term unorderedTerm;
 
   /** Map from type variable name to type variable. The ordinal of the variable
    * is the size of the map at the time it is registered.
@@ -60,10 +62,13 @@ public class TypeMap {
   private final Map<String, TypeVar> typeVars = new HashMap<>();
 
   TypeMap(TypeSystem typeSystem, Map<AstNode, Unifier.Term> nodeTypeTerms,
-      Unifier.Substitution substitution) {
+      Unifier.Substitution substitution, Unifier.Term orderedTerm,
+      Unifier.Term unorderedTerm) {
     this.typeSystem = requireNonNull(typeSystem);
     this.nodeTypeTerms = ImmutableMap.copyOf(nodeTypeTerms);
     this.substitution = requireNonNull(substitution.resolve());
+    this.orderedTerm = orderedTerm;
+    this.unorderedTerm = unorderedTerm;
   }
 
   @Override public String toString() {
@@ -168,6 +173,24 @@ public class TypeMap {
         assert sequence.terms.size() == 1;
         final Type elementType = sequence.terms.get(0).accept(this);
         return typeMap.typeSystem.listType(elementType);
+
+      case TypeResolver.STREAM_TY_CON:
+        assert sequence.terms.size() == 2;
+        final Type term0 = sequence.terms.get(0).accept(this);
+        final Type elementType2 = sequence.terms.get(1).accept(this);
+        if (term0 == typeMap.typeSystem.lookupInternal("$bag")) {
+          return typeMap.typeSystem.bagType(elementType2);
+        } else if (term0 == typeMap.typeSystem.lookupInternal("$list")) {
+          return typeMap.typeSystem.listType(elementType2);
+        } else {
+          throw new IllegalArgumentException("expected list or bag, got " + term0);
+        }
+
+      case "$list":
+        return typeMap.typeSystem.lookupInternal("$list");
+
+      case "$bag":
+        return typeMap.typeSystem.lookupInternal("$bag");
 
       case "bool":
       case "char":

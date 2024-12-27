@@ -1888,7 +1888,7 @@ public class MainTest {
         .assertTypeThrows(
             pos -> throwsA(TypeResolver.TypeException.class,
                 is("no field 'x' in type '{a:int, b:bool}'")));
-    ml("from d in [{a=1,b=true}] yield d.a into List.length")
+    ml("from d in [{a=1,b=true}] yield d.a into Bag.length")
         .assertType("int");
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int")
@@ -1900,17 +1900,17 @@ public class MainTest {
     // "map String.size" has type "string list -> int list",
     // and therefore the type of "j" is "int"
     ml("from s in [\"ab\",\"c\"]\n"
-        + " through j in (map String.size)")
-        .assertType("int list");
+        + " through j in (Bag.map String.size)")
+        .assertType("int bag");
     ml("from s in [\"ab\",\"c\"]\n"
-        + " through j in (map String.size)\n"
+        + " through j in (Bag.map String.size)\n"
         + " yield j + 2")
-        .assertType("int list");
+        .assertType("int bag");
     ml("from d in [{a=1,b=true},{a=2,b=false}]\n"
         + " yield d.a\n"
         + " through s in (fn ints =>\n"
         + "   from i in ints yield substring (\"abc\", 0, i))")
-        .assertType("string list")
+        .assertType("string bag")
         .assertEval(is(list("a", "ab")));
   }
 
@@ -2454,7 +2454,7 @@ public class MainTest {
     // "{deptno = deptno}", because there is only one variable defined (the
     // "group" clause defines "deptno" and hides the "e" from the "from"
     // clause).
-    ml(ml).assertType("int list")
+    ml(ml).assertType("int bag")
         .assertEvalIter(equalsUnordered(10, 20));
   }
 
@@ -2469,7 +2469,7 @@ public class MainTest {
         + "in\n"
         + "  from e in emps group #deptno e, parity = e.id mod 2\n"
         + "end";
-    ml(ml).assertType("{deptno:int, parity:int} list")
+    ml(ml).assertType("{deptno:int, parity:int} bag")
         .assertEvalIter(equalsUnordered(list(10, 0), list(20, 1)));
   }
 
@@ -2497,7 +2497,7 @@ public class MainTest {
         + "end";
     ml("val x = " + ml)
         .assertParseDecl(Ast.ValDecl.class, "val x = " + expected);
-    ml(ml).assertType("{deptno:int, sumId:int} list")
+    ml(ml).assertType("{deptno:int, sumId:int} bag")
         .assertEvalIter(equalsUnordered(list(10, 202), list(20, 101)));
   }
 
@@ -2537,21 +2537,21 @@ public class MainTest {
             is("cannot derive label for expression fn x => x"));
     ml("from e in [{x = 1, y = 5}]\n"
         + "  group compute sum of e.x")
-        .assertType(hasMoniker("int list"));
+        .assertType(hasMoniker("int bag"));
     ml("from e in [1, 2, 3]\n"
         + "  group compute sum of e")
-        .assertType(hasMoniker("int list"));
+        .assertType(hasMoniker("int bag"));
   }
 
   @Test void testGroupSansOf() {
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
         + "  group compute c = count")
-        .assertType(hasMoniker("int list"))
+        .assertType(hasMoniker("int bag"))
         .assertEvalIter(equalsUnordered(3));
 
     ml("from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]\n"
         + "  group e.a compute rows = (fn x => x)")
-        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} list} list"))
+        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} list} bag"))
         .assertEvalIter(
             equalsUnordered(
                 list(1, list(list(1, 5), list(1, 1))),
@@ -2630,7 +2630,7 @@ public class MainTest {
     ml("from (i, j) in [(1, 1), (2, 3), (3, 4)]\n"
         + "  group j = i mod 2\n"
         + "  compute sum of j")
-        .assertType("{j:int, sum:int} list")
+        .assertType("{j:int, sum:int} bag")
         .assertEvalIter(equalsUnordered(list(1, 5), list(0, 3)));
 
     // "compute" must not be followed by other steps
@@ -2672,7 +2672,7 @@ public class MainTest {
         + " group deptno = #deptno e"
         + " compute s = sum of #empno e + #altitude d";
     ml(ml).assertParse(expected)
-        .assertType("{deptno:int, s:int} list")
+        .assertType("{deptno:int, s:int} bag")
         .assertEvalIter(equalsOrdered(list(10, 3600)));
   }
 
@@ -2684,7 +2684,7 @@ public class MainTest {
         + " group a1 = #a r, b1 = #b r"
         + " group c2 = a1 + b1 compute s2 = sum of a1";
     ml(ml).assertParse(expected)
-        .assertType(hasMoniker("{c2:int, s2:int} list"))
+        .assertType(hasMoniker("{c2:int, s2:int} bag"))
         .assertEvalIter(equalsOrdered(list(5, 2)));
   }
 
@@ -2713,11 +2713,26 @@ public class MainTest {
         .assertEvalIter(equalsOrdered(list()));
   }
 
+  @Test void testFromBag() {
+    ml("from i in bag [1,2]")
+        .assertType(hasMoniker("int bag"));
+    ml("from i in bag [1,2] where i > 1")
+        .assertType(hasMoniker("int bag"));
+    ml("from i in bag [1,2] distinct")
+        .assertType(hasMoniker("int bag"));
+    ml("from i in [1,2] distinct")
+        .assertType(hasMoniker("int bag"));
+    ml("from i in [1,2] group i compute count")
+        .assertType(hasMoniker("{count:int, i:int} bag"));
+    ml("from i in bag [1,2] group i compute count")
+        .assertType(hasMoniker("{count:int, i:int} bag"));
+  }
+
   @Test void testFromPattern() {
     ml("from (x, y) in [(1,2),(3,4),(3,0)] group sum = x + y")
         .assertParse("from (x, y) in [(1, 2), (3, 4), (3, 0)] "
             + "group sum = x + y")
-        .assertType(hasMoniker("int list"))
+        .assertType(hasMoniker("int bag"))
         .assertEvalIter(equalsUnordered(3, 7));
     ml("from {c, a, ...} in [{a=1.0,b=true,c=3},{a=1.5,b=true,c=4}]")
         .assertParse("from {a = a, c = c, ...}"
@@ -2745,7 +2760,7 @@ public class MainTest {
         + "end";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{deptno:int, empno:int, ename:string} list");
+        .assertType("{deptno:int, empno:int, ename:string} bag");
   }
 
   @Test void testToCoreAndBack() {
