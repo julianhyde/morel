@@ -3131,7 +3131,10 @@ public class MainTest {
             + "    [{id = 100, name = \"Fred\", deptno = 10},\n"
             + "     {id = 101, name = \"Velma\", deptno = 20},\n"
             + "     {id = 102, name = \"Shaggy\", deptno = 10}]\n"
-            + "  fun sum [] = 0 | sum (h::t) = h + (sum t)\n"
+            + "  fun sum bag =\n"
+            + "    case Bag.getItem bag of\n"
+            + "        NONE => 0\n"
+            + "      | SOME (h, t) => h + (sum t)\n"
             + "in\n"
             + "  from e in emps\n"
             + "    group #deptno e\n"
@@ -3142,7 +3145,9 @@ public class MainTest {
             + "[{deptno = 10, id = 100, name = \"Fred\"},"
             + " {deptno = 20, id = 101, name = \"Velma\"},"
             + " {deptno = 10, id = 102, name = \"Shaggy\"}]; "
-            + "fun sum ([]) = 0 | sum (h :: t) = h + sum t "
+            + "fun sum bag = case #getItem Bag bag of"
+            + " NONE => 0"
+            + " | SOME (h, t) => h + sum t "
             + "in"
             + " from e in emps"
             + " group deptno = #deptno e"
@@ -3212,7 +3217,7 @@ public class MainTest {
 
     ml("from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]\n"
             + "  group e.a compute rows = (fn x => x)")
-        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} list} bag"))
+        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} bag} bag"))
         .assertEvalIter(
             equalsUnordered(
                 list(1, list(list(1, 5), list(1, 1))),
