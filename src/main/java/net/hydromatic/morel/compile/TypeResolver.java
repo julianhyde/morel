@@ -388,6 +388,7 @@ public class TypeResolver {
       final Map<Ast.Id, Unifier.Variable> fieldVars = new LinkedHashMap<>();
       final List<Ast.FromStep> fromSteps = new ArrayList<>();
       Triple p = Triple.of(env, unifier.variable(), unifier.variable());
+      equiv(p.orderingTerm, orderedTerm()); // an empty "from" is "unit list"
       for (Ord<Ast.FromStep> step : Ord.zip(from.steps)) {
         p = deduceStepType(env, step.e, p, fieldVars, fromSteps);
         if (step.i != from.steps.size() - 1) {
