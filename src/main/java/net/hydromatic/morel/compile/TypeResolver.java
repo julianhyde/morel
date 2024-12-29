@@ -710,7 +710,7 @@ public class TypeResolver {
           Unifier.Sequence fnType =
               unifier.apply(
                   FN_TY_CON,
-                  unifier.apply(STREAM_TY_CON, unifier.variable(), v10),
+                  unifier.apply(STREAM_TY_CON, unorderedTerm(), v10),
                   v8);
           equiv(fnType, v9);
           env3 = env3.bind(id.name, v8);

@@ -102,7 +102,9 @@ from r in recList group r.i;
 from r in recBag group r.i;
 > val it = [1,2] : int bag
 
-(*) aggregate functions produce bags
+(*) the input to an aggregate functions is a bag, even if the input
+(*) stream is a list. (We need to devise syntax for aggregate functions
+(*) to sort their input.)
 from r in recList group r.i compute count;
 > val it = [{count=2,i=1},{count=1,i=2}] : {count:int, i:int} bag
 from r in recBag group r.i compute count;
@@ -128,9 +130,9 @@ from i in intList order ();
 from i in intBag order ();
 > val it = [1,2,3] : int list
 from r in recList group r.i compute bs = (fn x => x) of r.b order i desc;
-> val it = [{bs=[true,false],i=1},{bs=[false],i=2}] : {bs:bool bag, i:int} list
+> val it = [{bs=[false],i=2},{bs=[true,false],i=1}] : {bs:bool bag, i:int} list
 from r in recBag group r.i compute bs = (fn x => x) of r.b order i desc;
-> val it = [{bs=[true,false],i=1},{bs=[false],i=2}] : {bs:bool bag, i:int} list
+> val it = [{bs=[false],i=2},{bs=[true,false],i=1}] : {bs:bool bag, i:int} list
 
 (*) join preserves collection type (should it?)
 
