@@ -607,6 +607,9 @@ public class TypeResolver {
         return p;
 
       case SKIP:
+        // "skip" is allowed for ordered and unordered collections (though it
+        // makes less sense if the collection is unordered). The output has the
+        // same type as the input. The skip expression must be an int.
         final Ast.Skip skip = (Ast.Skip) step;
         final Variable v11 = unifier.variable();
         final Ast.Exp skipCount = deduceType(p.env, skip.exp, v11);
@@ -615,6 +618,9 @@ public class TypeResolver {
         return p;
 
       case TAKE:
+        // "take" is allowed for ordered and unordered collections (though it
+        // makes less sense if the collection is unordered). The output has the
+        // same type as the input. The take expression must be an int.
         final Ast.Take take = (Ast.Take) step;
         final Variable v12 = unifier.variable();
         final Ast.Exp takeCount = deduceType(p.env, take.exp, v12);
@@ -826,7 +832,7 @@ public class TypeResolver {
       final Unifier.Variable c2 = unifier.variable();
       PairList<Unifier.Term, Unifier.Term> argResults1 =
           copyOf(listTerm(p.v), listTerm(v2), bagTerm(p.v), bagTerm(v2));
-      // TODO     constraints.add(unifier.constraint(p.c, c2, argResults1));
+      constraints.add(unifier.constraint(p.c, c2, argResults1));
       return Triple.of(env3, v2, c2);
     } else {
       fromSteps.add(((Ast.Compute) group).copy(aggregates));
