@@ -148,9 +148,21 @@ from i in intBag yield {j=i*i, i};
 
 (*) notelem works on both 'bag' and 'list' values
 
-(*) skip requires ordered
+(*) skip preserves collection type (but makes more sense for ordered)
+from i in intList skip 1;
+> val it = [2,3] : int list
+from i in intBag skip 1;
+> val it = [2,3] : int bag
 
-(*) take requires ordered
+(*) take preserves collection type (but makes more sense for ordered)
+from i in intList take 2;
+> val it = [1,2] : int list
+from i in intBag take 2;
+> val it = [1,2] : int bag
+from i in intList skip 1 take 1;
+> val it = [2] : int list
+from i in intBag skip 1 take 1;
+> val it = [2] : int bag
 
 (*) dummy
 from message in ["the end"];

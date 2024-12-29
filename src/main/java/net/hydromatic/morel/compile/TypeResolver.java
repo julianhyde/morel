@@ -619,18 +619,24 @@ public class TypeResolver {
         return triple.withOrdering(unorderedTerm());
 
       case SKIP:
+        // "skip" is allowed for ordered and unordered collections (though it
+        // makes less sense if the collection is unordered). The output has the
+        // same type as the input. The skip expression must be an int.
         final Ast.Skip skip = (Ast.Skip) step;
         final Unifier.Variable v11 = unifier.variable();
         final Ast.Exp skipCount = deduceType(triple.env, skip.exp, v11);
-        equiv(v11, orderedTerm());
+        equiv(v11, toTerm(PrimitiveType.INT));
         fromSteps.add(skip.copy(skipCount));
         return triple;
 
       case TAKE:
+        // "take" is allowed for ordered and unordered collections (though it
+        // makes less sense if the collection is unordered). The output has the
+        // same type as the input. The take expression must be an int.
         final Ast.Take take = (Ast.Take) step;
         final Unifier.Variable v12 = unifier.variable();
         final Ast.Exp takeCount = deduceType(triple.env, take.exp, v12);
-        equiv(v12, orderedTerm());
+        equiv(v12, toTerm(PrimitiveType.INT));
         fromSteps.add(take.copy(takeCount));
         return triple;
 
