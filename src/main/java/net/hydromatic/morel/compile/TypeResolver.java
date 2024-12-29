@@ -651,7 +651,7 @@ public class TypeResolver {
         reg(aggregate.aggregate, null, v9);
         equiv(
             unifier.apply(FN_TY_CON,
-                unifier.apply(STREAM_TY_CON, unifier.variable(), v10), v8),
+                unifier.apply(STREAM_TY_CON, unorderedTerm(), v10), v8),
             v9);
         env3 = env3.bind(id.name, v8);
         fieldVars.put(id, v8);
