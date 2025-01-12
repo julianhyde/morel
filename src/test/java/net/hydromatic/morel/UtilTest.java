@@ -27,6 +27,8 @@ import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Folder;
 import net.hydromatic.morel.util.MapList;
+import net.hydromatic.morel.util.MergeableMap;
+import net.hydromatic.morel.util.MergeableMaps;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.Static;
 import net.hydromatic.morel.util.TailList;
@@ -50,6 +52,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -63,10 +66,13 @@ import static net.hydromatic.morel.util.Static.nextPowerOfTwo;
 import static net.hydromatic.morel.util.Static.transform;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.aMapWithSize;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -442,6 +448,97 @@ public class UtilTest {
     final StringBuilder empty = new StringBuilder();
     assertThat(endsWith(empty, "z"), is(false));
     assertThat(endsWith(empty, ""), is(true));
+  }
+
+  /** Tests {@link net.hydromatic.morel.util.MergeableMap}. */
+  @Test void testMergeableMap() {
+    MergeableMap<String, Integer> map = MergeableMaps.create(Integer::sum);
+    assertThat(map.size(), is(0));
+    assertThat(map.entrySet(), hasSize(0));
+
+    Integer v = map.put("a", 1);
+    assertThat(v, nullValue());
+    assertThat(map.size(), is(1));
+    assertThat(map, hasToString("{a=1}"));
+
+    v = map.put("b", 2);
+    assertThat(v, nullValue());
+    assertThat(map.size(), is(2));
+    assertThat(map, hasToString("{a=1, b=2}"));
+
+    v = map.put("c", 3);
+    assertThat(v, nullValue());
+    assertThat(map.size(), is(3));
+    assertThat(map, hasToString("{a=1, b=2, c=3}"));
+
+    assertThat(map.equiv("a", "a"), is(true));
+    assertThat(map.equiv("a", "c"), is(false));
+    try {
+      final boolean equiv = map.equiv("a", "d");
+      fail("expected error, got " + equiv);
+    } catch (IllegalArgumentException e) {
+      assertThat(e.getMessage(), is("not in set"));
+    }
+    try {
+      final boolean equiv = map.equiv("zz", "a");
+      fail("expected error, got " + equiv);
+    } catch (IllegalArgumentException e) {
+      assertThat(e.getMessage(), is("not in set"));
+    }
+
+    // Make c equivalent to a.
+    map.merge("a", "c");
+    assertThat(map.equiv("a", "c"), is(true));
+    assertThat(map.equiv("a", "a"), is(true));
+    assertThat(map.equiv("c", "a"), is(true));
+    assertThat(map.equiv("a", "b"), is(false));
+    assertThat(map.size(), is(3));
+    v = map.get("a");
+    assertThat(v, is(4)); // 1 + 3
+    v = map.get("c");
+    assertThat(v, is(4));
+
+    // Make b equivalent to c.
+    map.merge("b", "c");
+    assertThat(map.equiv("a", "c"), is(true));
+    assertThat(map.equiv("a", "a"), is(true));
+    assertThat(map.equiv("c", "a"), is(true));
+    assertThat(map.equiv("a", "b"), is(true));
+    v = map.get("a");
+    assertThat(v, is(6)); // 1 + 2 + 3
+  }
+
+  /** Tests {@link MergeableMap} using the Collatz Conjecture.
+   *
+   * <p>The Collatz Conjecture states that if you start with any integer, and
+   * generate a successor. then eventually you will reach 1. The successor
+   * to {@code n} is {@code n / 2} if {@code n} is even, otherwise
+   * {@code n * 3 + 1}.
+   *
+   * <p>The Conjecture is unproven, but no counterexample has been found.
+   *
+   * <p>In this test, we merge each {@code n} with its successor. */
+  @Test void testMergeableMap2() {
+    MergeableMap<Integer, Integer> map = MergeableMaps.create((x, y) -> x);
+    for (int i = 0; i < 1000; i++) {
+      map.put(i, i);
+    }
+    assertThat(map, aMapWithSize(1000));
+
+    for (int i = 0; i < 1000; i++) {
+      int j =
+          i % 2 == 0
+              ? i / 2
+              : 3 * i + 1;
+      map.computeIfAbsent(j, j2 -> j2);
+      map.merge(j, i);
+    }
+    assertThat(map, aMapWithSize(1334));
+    assertThat(new TreeSet<>(map.values()), hasSize(336));
+  }
+
+  enum Dummy {
+    INSTANCE
   }
 }
 
