@@ -31,10 +31,10 @@ import java.util.Map;
  */
 public interface MergeableMap<K, V>  extends Map<K, V> {
   /** Merges two keys, and returns the merged value. */
-  V merge(K k0, K k1);
+  V merge(K key0, K key1);
 
   /** Returns whether two keys are in the same equivalence set. */
-  boolean equiv(K k0, K k1);
+  boolean inSameSet(K key0, K key1);
 }
 
 // End MergeableMap.java

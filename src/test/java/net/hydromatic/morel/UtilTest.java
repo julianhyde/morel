@@ -452,6 +452,8 @@ public class UtilTest {
 
   /** Tests {@link net.hydromatic.morel.util.MergeableMap}. */
   @Test void testMergeableMap() {
+    // Create a map with string keys. The value is an arbitrary integer, and
+    // values are summed when two equivalence sets are merged.
     MergeableMap<String, Integer> map = MergeableMaps.create(Integer::sum);
     assertThat(map.size(), is(0));
     assertThat(map.entrySet(), hasSize(0));
@@ -471,16 +473,16 @@ public class UtilTest {
     assertThat(map.size(), is(3));
     assertThat(map, hasToString("{a=1, b=2, c=3}"));
 
-    assertThat(map.equiv("a", "a"), is(true));
-    assertThat(map.equiv("a", "c"), is(false));
+    assertThat(map.inSameSet("a", "a"), is(true));
+    assertThat(map.inSameSet("a", "c"), is(false));
     try {
-      final boolean equiv = map.equiv("a", "d");
+      final boolean equiv = map.inSameSet("a", "d");
       fail("expected error, got " + equiv);
     } catch (IllegalArgumentException e) {
       assertThat(e.getMessage(), is("not in set"));
     }
     try {
-      final boolean equiv = map.equiv("zz", "a");
+      final boolean equiv = map.inSameSet("zz", "a");
       fail("expected error, got " + equiv);
     } catch (IllegalArgumentException e) {
       assertThat(e.getMessage(), is("not in set"));
@@ -488,10 +490,10 @@ public class UtilTest {
 
     // Make c equivalent to a.
     map.merge("a", "c");
-    assertThat(map.equiv("a", "c"), is(true));
-    assertThat(map.equiv("a", "a"), is(true));
-    assertThat(map.equiv("c", "a"), is(true));
-    assertThat(map.equiv("a", "b"), is(false));
+    assertThat(map.inSameSet("a", "c"), is(true));
+    assertThat(map.inSameSet("a", "a"), is(true));
+    assertThat(map.inSameSet("c", "a"), is(true));
+    assertThat(map.inSameSet("a", "b"), is(false));
     assertThat(map.size(), is(3));
     v = map.get("a");
     assertThat(v, is(4)); // 1 + 3
@@ -500,10 +502,10 @@ public class UtilTest {
 
     // Make b equivalent to c.
     map.merge("b", "c");
-    assertThat(map.equiv("a", "c"), is(true));
-    assertThat(map.equiv("a", "a"), is(true));
-    assertThat(map.equiv("c", "a"), is(true));
-    assertThat(map.equiv("a", "b"), is(true));
+    assertThat(map.inSameSet("a", "c"), is(true));
+    assertThat(map.inSameSet("a", "a"), is(true));
+    assertThat(map.inSameSet("c", "a"), is(true));
+    assertThat(map.inSameSet("a", "b"), is(true));
     v = map.get("a");
     assertThat(v, is(6)); // 1 + 2 + 3
   }

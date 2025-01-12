@@ -52,13 +52,13 @@ public abstract class MergeableMaps {
       this.combiner = combiner;
     }
 
-    @Override public boolean equiv(K k0, K k1) {
-      final Item<K, V> item0 = map.get(k0);
+    @Override public boolean inSameSet(K key0, K key1) {
+      final Item<K, V> item0 = map.get(key0);
       if (item0 == null) {
         throw new IllegalArgumentException("not in set");
       }
       final Item<K, V> root0 = item0.resolve();
-      final Item<K, V> item1 = map.get(k1);
+      final Item<K, V> item1 = map.get(key1);
       if (item1 == null) {
         throw new IllegalArgumentException("not in set");
       }
@@ -103,13 +103,13 @@ public abstract class MergeableMaps {
       };
     }
 
-    @Override public V merge(K k0, K k1) {
-      final Item<K, V> item0 = map.get(k0);
+    @Override public V merge(K key0, K key1) {
+      final Item<K, V> item0 = map.get(key0);
       final Item<K, V> root0 = item0.resolve();
-      final Item<K, V> item1 = map.get(k1);
+      final Item<K, V> item1 = map.get(key1);
       final Item<K, V> root1 = item1.resolve();
       if (root0 == root1) {
-        // k0 and k1 were already in same equivalence set
+        // key0 and key1 were already in same equivalence set
         return root0.v;
       }
       root0.v = combiner.apply(root0.v, root1.v);
@@ -149,32 +149,39 @@ public abstract class MergeableMaps {
       if (parent == null) {
         return this;
       }
+
+      // Find the root (the ancestor that has no parent)
       Item<K, V> root = this;
       while (root.parent != null) {
         root = root.parent;
       }
-      // If root is not the parent, fix up the chain
-      if (root != parent) {
-        for (Item<K, V> i2 = this; i2.parent != root;) {
-          @Nullable Item<K, V> next = i2;
-          i2 = requireNonNull(i2.parent);
-          next.parent = root;
-        }
+
+      // Walk the chain, making every item point directly to the root. Only
+      // has an effect if the chain is longer than 2: if the chain is
+      // [a, b, c, root] then a and b will be modified, and c will already point
+      // to root.
+      for (Item<K, V> item = this; item.parent != root;) {
+        Item<K, V> previous = item;
+        item = requireNonNull(item.parent);
+        previous.parent = root;
       }
+
       return root;
     }
 
     /** Sets the root of this item and its ancestors. */
     void setRoot(Item<K, V> item) {
       checkArgument(item.parent == null);
-      for (Item<K, V> i = this;;) {
-        @Nullable Item<K, V> next = i.parent;
-        i.parent = item;
+      for (Item<K, V> item2 = this;;) {
+        @Nullable Item<K, V> next = item2.parent;
+        item2.parent = item;
         if (next == null) {
-          i.v = null;
+          // We only need to clear 'v' for the item that was previously a root.
+          // In non-root items 'v' was already null.
+          item2.v = null;
           break;
         }
-        i = next;
+        item2 = next;
       }
     }
   }
