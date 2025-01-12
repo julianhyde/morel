@@ -34,7 +34,9 @@ public interface MergeableMap<K, V>  extends Map<K, V> {
   V union(K key0, K key1);
 
   /** Returns whether two keys are in the same equivalence set. */
-  boolean inSameSet(K key0, K key1);
+  default boolean inSameSet(K key0, K key1) {
+    return find(key0).equals(find(key1));
+  }
 
   /** Returns the representative key of the set that {@code key} belongs to.
    *
@@ -47,6 +49,9 @@ public interface MergeableMap<K, V>  extends Map<K, V> {
   @Deprecated @Override default V remove(Object key) {
     throw new UnsupportedOperationException("remove");
   }
+
+  /** Returns the number of equivalence sets in this map. */
+  int setCount();
 }
 
 // End MergeableMap.java

@@ -73,6 +73,7 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.oneOf;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -461,16 +462,19 @@ public class UtilTest {
     Integer v = map.put("a", 1);
     assertThat(v, nullValue());
     assertThat(map.size(), is(1));
+    assertThat(map.setCount(), is(1));
     assertThat(map, hasToString("{a=1}"));
 
     v = map.put("b", 2);
     assertThat(v, nullValue());
     assertThat(map.size(), is(2));
+    assertThat(map.setCount(), is(2));
     assertThat(map, hasToString("{a=1, b=2}"));
 
     v = map.put("c", 3);
     assertThat(v, nullValue());
     assertThat(map.size(), is(3));
+    assertThat(map.setCount(), is(3));
     assertThat(map, hasToString("{a=1, b=2, c=3}"));
 
     assertThat(map.inSameSet("a", "a"), is(true));
@@ -490,6 +494,7 @@ public class UtilTest {
 
     // Make c equivalent to a.
     map.union("a", "c");
+    assertThat(map.setCount(), is(2));
     assertThat(map.inSameSet("a", "c"), is(true));
     assertThat(map.inSameSet("a", "a"), is(true));
     assertThat(map.inSameSet("c", "a"), is(true));
@@ -502,12 +507,33 @@ public class UtilTest {
 
     // Make b equivalent to c.
     map.union("b", "c");
+    assertThat(map.setCount(), is(1));
     assertThat(map.inSameSet("a", "c"), is(true));
     assertThat(map.inSameSet("a", "a"), is(true));
     assertThat(map.inSameSet("c", "a"), is(true));
     assertThat(map.inSameSet("a", "b"), is(true));
     v = map.get("a");
     assertThat(v, is(6)); // 1 + 2 + 3
+
+    // Add d, equivalent to e.
+    map.put("d", 4);
+    assertThat(map.setCount(), is(2));
+    assertThat(map.find("d"), is("d"));
+    map.put("e", 5);
+    assertThat(map.setCount(), is(3));
+    assertThat(map.find("d"), is("d"));
+    v = map.union("d", "e");
+    assertThat(v, is(9)); // 4 + 5
+    assertThat(map.setCount(), is(2));
+    assertThat(map.find("d"), oneOf("d", "e"));
+    assertThat(map.find("e"), oneOf("d", "e"));
+    assertThat(map.find("a"), oneOf("a", "b", "c"));
+
+    // Merge {a, b, c} with {d, e}
+    v = map.union("e", "a");
+    assertThat(v, is(15)); // 1 + 2 + 3 + 4 + 5
+    assertThat(map.setCount(), is(1));
+    assertThat(map.find("a"), oneOf("a", "b", "c", "d", "e"));
 
     // MergeableMap.remove is not supported
     try {

@@ -29,8 +29,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BinaryOperator;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 import static java.util.Objects.requireNonNull;
 
 /** Implementations of {@link MergeableMap}. */
@@ -46,6 +44,8 @@ public abstract class MergeableMaps {
   /** Implementation of {@link MergeableMap} that maps each key to an
    * {@link Item} via a backing map.
    *
+   * <p>The implementation uses path compression but not rank.
+   *
    * @param <K> Key type
    * @param <V> Value type
    */
@@ -53,6 +53,9 @@ public abstract class MergeableMaps {
       implements MergeableMap<K, V> {
     private final Map<K, Item<K, V>> map;
     private final BinaryOperator<V> combiner;
+    /** Number of times that {@link #union(Object, Object)} has merged two
+     * equivalence sets. */
+    private int mergeCount = 0;
 
     MergeableMapImpl(Map<K, Item<K, V>> map, BinaryOperator<V> combiner) {
       this.map = map;
@@ -61,34 +64,35 @@ public abstract class MergeableMaps {
 
     @Override public void clear() {
       map.clear();
+      mergeCount = 0;
     }
 
-    @Override public K find(K key) {
+    /** Returns the root item for a given key. */
+    private Item<K, V> root(K key) {
+      return item(key).resolve();
+    }
+
+    /** Returns the item for a given key. */
+    private Item<K, V> item(K key) {
       final Item<K, V> item = map.get(key);
       if (item == null) {
         throw new IllegalArgumentException("not in set");
       }
-      return item.key;
+      return item;
+    }
+
+    @Override public K find(K key) {
+      return root(key).key;
     }
 
     @Override public boolean inSameSet(K key0, K key1) {
-      final Item<K, V> item0 = map.get(key0);
-      if (item0 == null) {
-        throw new IllegalArgumentException("not in set");
-      }
-      final Item<K, V> root0 = item0.resolve();
-      final Item<K, V> item1 = map.get(key1);
-      if (item1 == null) {
-        throw new IllegalArgumentException("not in set");
-      }
-      final Item<K, V> root1 = item1.resolve();
-      return root0 == root1;
+      return root(key0) == root(key1);
     }
 
     @Override public V put(K key, V value) {
       final Item<K, V> item = map.get(key);
       if (item == null) {
-        // Key is not previously known. Add k as a new equivalence class.
+        // Key is not previously known. Add key as a new equivalence class.
         map.put(key, new Item<>(key, value));
         return null;
       }
@@ -123,21 +127,49 @@ public abstract class MergeableMaps {
     }
 
     @Override public V union(K key0, K key1) {
-      final Item<K, V> item0 = map.get(key0);
-      final Item<K, V> root0 = item0.resolve();
-      final Item<K, V> item1 = map.get(key1);
+      final Item<K, V> root0 = root(key0);
+      final Item<K, V> item1 = item(key1);
       final Item<K, V> root1 = item1.resolve();
       if (root0 == root1) {
         // key0 and key1 were already in same equivalence set
         return root0.value;
       }
+      ++mergeCount; // number of equivalence sets has decreased
+
+      // Set the root of item1, and all its ancestors including root1, to root0.
+      for (Item<K, V> item2 = item1;;) {
+        @Nullable Item<K, V> next = item2.parent;
+        item2.parent = root0;
+        if (next == null) {
+          break;
+        }
+        item2 = next;
+      }
+
+      // Combine values.
       root0.value = combiner.apply(root0.value, root1.value);
-      item1.setRoot(root0);
+      root1.value = null; // no longer a root
       return root0.value;
+    }
+
+    @Override public int setCount() {
+      // The number of equivalence sets increases by one each time a key is
+      // added, and decreases by one each time 'union' merges two sets.
+      // Therefore, the number of equivalence sets is the number of keys minus
+      // the number of merges.
+      return map.size() - mergeCount;
+    }
+
+    @Override public int size() {
+      return map.size();
     }
   }
 
-  /** Wrapper to distinguish payloads from equivalence classes.
+  /** All the information about a key in a {@link MergeableMap}.
+   *
+   * <p>An item is either a root (in which case {@link #parent} is null),
+   * or a non-root (in which case {@link #parent} is not-null,
+   * and {@link #value} is null).
    *
    * @param <K> Key type
    * @param <V> Value type
@@ -175,10 +207,12 @@ public abstract class MergeableMaps {
         root = root.parent;
       }
 
-      // Walk the chain, making every item point directly to the root. Only
-      // has an effect if the chain is longer than 2: if the chain is
+      // Compress the path: walk the towards the root, making every item point
+      // directly to the root.
+      //
+      // Only has an effect if the chain is longer than 2. If the chain is
       // [a, b, c, root] then a and b will be modified, and c will already point
-      // to root.
+      // to root. If the chain is [c, root] then no modifications are needed.
       for (Item<K, V> item = this; item.parent != root;) {
         Item<K, V> previous = item;
         item = requireNonNull(item.parent);
@@ -186,22 +220,6 @@ public abstract class MergeableMaps {
       }
 
       return root;
-    }
-
-    /** Sets the root of this item and its ancestors. */
-    void setRoot(Item<K, V> item) {
-      checkArgument(item.parent == null);
-      for (Item<K, V> item2 = this;;) {
-        @Nullable Item<K, V> next = item2.parent;
-        item2.parent = item;
-        if (next == null) {
-          // We only need to clear 'v' for the item that was previously a root.
-          // In non-root items 'v' was already null.
-          item2.value = null;
-          break;
-        }
-        item2 = next;
-      }
     }
   }
 }
