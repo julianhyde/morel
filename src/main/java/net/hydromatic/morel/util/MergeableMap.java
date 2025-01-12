@@ -31,10 +31,22 @@ import java.util.Map;
  */
 public interface MergeableMap<K, V>  extends Map<K, V> {
   /** Merges two keys, and returns the merged value. */
-  V merge(K key0, K key1);
+  V union(K key0, K key1);
 
   /** Returns whether two keys are in the same equivalence set. */
   boolean inSameSet(K key0, K key1);
+
+  /** Returns the representative key of the set that {@code key} belongs to.
+   *
+   * <p>Throws if {@code key} is not in the map; never returns null. */
+  K find(K key);
+
+  /** {@inheritDoc}
+   *
+   * <p>Deletion of individual elements is not supported. */
+  @Deprecated @Override default V remove(Object key) {
+    throw new UnsupportedOperationException("remove");
+  }
 }
 
 // End MergeableMap.java

@@ -489,7 +489,7 @@ public class UtilTest {
     }
 
     // Make c equivalent to a.
-    map.merge("a", "c");
+    map.union("a", "c");
     assertThat(map.inSameSet("a", "c"), is(true));
     assertThat(map.inSameSet("a", "a"), is(true));
     assertThat(map.inSameSet("c", "a"), is(true));
@@ -501,13 +501,27 @@ public class UtilTest {
     assertThat(v, is(4));
 
     // Make b equivalent to c.
-    map.merge("b", "c");
+    map.union("b", "c");
     assertThat(map.inSameSet("a", "c"), is(true));
     assertThat(map.inSameSet("a", "a"), is(true));
     assertThat(map.inSameSet("c", "a"), is(true));
     assertThat(map.inSameSet("a", "b"), is(true));
     v = map.get("a");
     assertThat(v, is(6)); // 1 + 2 + 3
+
+    // MergeableMap.remove is not supported
+    try {
+      @SuppressWarnings("deprecation")
+      final Integer value = map.remove("a");
+      fail("expected error, got " + value);
+    } catch (UnsupportedOperationException e) {
+      assertThat(e.getMessage(), is("remove"));
+    }
+
+    // MergeableMap.clear is supported
+    map.clear();
+    assertThat(map, aMapWithSize(0));
+    assertThat(map, hasToString("{}"));
   }
 
   /** Tests {@link MergeableMap} using the Collatz Conjecture.
@@ -519,8 +533,9 @@ public class UtilTest {
    *
    * <p>The Conjecture is unproven, but no counterexample has been found.
    *
-   * <p>In this test, we merge each {@code n} with its successor. */
-  @Test void testMergeableMap2() {
+   * <p>In this test, we merge each {@code n} from 0 to 1,000 with its
+   * successor. */
+  @Test void testMergeableMapCollatz() {
     MergeableMap<Integer, Integer> map = MergeableMaps.create((x, y) -> x);
     for (int i = 0; i < 1000; i++) {
       map.put(i, i);
@@ -533,7 +548,7 @@ public class UtilTest {
               ? i / 2
               : 3 * i + 1;
       map.computeIfAbsent(j, j2 -> j2);
-      map.merge(j, i);
+      map.union(j, i);
     }
     assertThat(map, aMapWithSize(1334));
     assertThat(new TreeSet<>(map.values()), hasSize(336));

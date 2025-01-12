@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.util;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.AbstractMap;
@@ -42,6 +43,12 @@ public abstract class MergeableMaps {
     return new MergeableMapImpl<>(new HashMap<>(), combiner);
   }
 
+  /** Implementation of {@link MergeableMap} that maps each key to an
+   * {@link Item} via a backing map.
+   *
+   * @param <K> Key type
+   * @param <V> Value type
+   */
   static class MergeableMapImpl<K, V> extends AbstractMap<K, V>
       implements MergeableMap<K, V> {
     private final Map<K, Item<K, V>> map;
@@ -50,6 +57,18 @@ public abstract class MergeableMaps {
     MergeableMapImpl(Map<K, Item<K, V>> map, BinaryOperator<V> combiner) {
       this.map = map;
       this.combiner = combiner;
+    }
+
+    @Override public void clear() {
+      map.clear();
+    }
+
+    @Override public K find(K key) {
+      final Item<K, V> item = map.get(key);
+      if (item == null) {
+        throw new IllegalArgumentException("not in set");
+      }
+      return item.key;
     }
 
     @Override public boolean inSameSet(K key0, K key1) {
@@ -66,23 +85,23 @@ public abstract class MergeableMaps {
       return root0 == root1;
     }
 
-    @Override public V put(K k, V v) {
-      final Item<K, V> item = map.get(k);
+    @Override public V put(K key, V value) {
+      final Item<K, V> item = map.get(key);
       if (item == null) {
         // Key is not previously known. Add k as a new equivalence class.
-        map.put(k, new Item<>(k, null, v));
+        map.put(key, new Item<>(key, value));
         return null;
       }
       // Key is already known. Replace the value for its equivalence set.
       Item<K, V> rootItem = item.resolve();
-      V oldV = rootItem.v;
-      rootItem.v = v;
-      return oldV;
+      V previousValue = rootItem.value;
+      rootItem.value = value;
+      return previousValue;
     }
 
-    @Override public Set<Entry<K, V>> entrySet() {
+    @Override public @NonNull Set<Entry<K, V>> entrySet() {
       return new AbstractSet<Entry<K, V>>() {
-        @Override public Iterator<Entry<K, V>> iterator() {
+        @Override public @NonNull Iterator<Entry<K, V>> iterator() {
           final Iterator<Item<K, V>> items = map.values().iterator();
           return new Iterator<Entry<K, V>>() {
             @Override public boolean hasNext() {
@@ -92,7 +111,7 @@ public abstract class MergeableMaps {
             @Override public Entry<K, V> next() {
               final Item<K, V> item = items.next();
               final Item<K, V> root = item.resolve();
-              return new MapEntry<>(item.k, root.v);
+              return new MapEntry<>(item.key, root.value);
             }
           };
         }
@@ -103,18 +122,18 @@ public abstract class MergeableMaps {
       };
     }
 
-    @Override public V merge(K key0, K key1) {
+    @Override public V union(K key0, K key1) {
       final Item<K, V> item0 = map.get(key0);
       final Item<K, V> root0 = item0.resolve();
       final Item<K, V> item1 = map.get(key1);
       final Item<K, V> root1 = item1.resolve();
       if (root0 == root1) {
         // key0 and key1 were already in same equivalence set
-        return root0.v;
+        return root0.value;
       }
-      root0.v = combiner.apply(root0.v, root1.v);
+      root0.value = combiner.apply(root0.value, root1.value);
       item1.setRoot(root0);
-      return root0.v;
+      return root0.value;
     }
   }
 
@@ -124,21 +143,21 @@ public abstract class MergeableMaps {
    * @param <V> Value type
    */
   private static class Item<K, V> {
-    K k;
+    final K key;
     @Nullable Item<K, V> parent; // null if a root
-    V v; // null if not a root
+    @Nullable V value; // null if not a root
 
-    /** Creates an Item. */
-    private Item(K k, @Nullable Item<K, V> parent, V v) {
-      this.k = requireNonNull(k);
-      this.parent = parent;
-      this.v = v;
+    /** Creates a root Item. (Parent is null, but will be assigned later if this
+     * Item becomes non-root.) */
+    private Item(K key, V value) {
+      this.key = requireNonNull(key);
+      this.value = value;
     }
 
     @Override public String toString() {
-      return "{k=" + k
-          + ", parent=" + (parent == null ? null : parent.k)
-          + ", v=" + v + "}";
+      return "{k=" + key
+          + ", parent=" + (parent == null ? null : parent.key)
+          + ", v=" + value + "}";
     }
 
     /** Returns the ultimate parent of this Item.
@@ -178,7 +197,7 @@ public abstract class MergeableMaps {
         if (next == null) {
           // We only need to clear 'v' for the item that was previously a root.
           // In non-root items 'v' was already null.
-          item2.v = null;
+          item2.value = null;
           break;
         }
         item2 = next;
