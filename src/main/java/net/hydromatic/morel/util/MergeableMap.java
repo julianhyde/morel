@@ -28,10 +28,11 @@ import java.util.Map;
  *
  * @param <K> Key type
  * @param <V> Value type
+ * @param <S> Sum type
  */
-public interface MergeableMap<K, V>  extends Map<K, V> {
+public interface MergeableMap<K, V, S>  extends Map<K, V> {
   /** Merges two keys, and returns the merged value. */
-  V union(K key0, K key1);
+  EqSet<K, S> union(K key0, K key1);
 
   /** Returns whether two keys are in the same equivalence set. */
   default boolean inSameSet(K key0, K key1) {
@@ -41,7 +42,7 @@ public interface MergeableMap<K, V>  extends Map<K, V> {
   /** Returns the representative key of the set that {@code key} belongs to.
    *
    * <p>Throws if {@code key} is not in the map; never returns null. */
-  K find(K key);
+  EqSet<K, S> find(K key);
 
   /** {@inheritDoc}
    *
@@ -52,6 +53,19 @@ public interface MergeableMap<K, V>  extends Map<K, V> {
 
   /** Returns the number of equivalence sets in this map. */
   int setCount();
+
+  /** An equivalence set.
+   *
+   * @param <K> Key type
+   * @param <S> Sum type
+   */
+  interface EqSet<K, S> {
+    /** Representative key. */
+    K getKey();
+
+    /** Value for the equivalence set. */
+    S sum();
+  }
 }
 
 // End MergeableMap.java

@@ -74,6 +74,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.oneOf;
+import static org.hamcrest.Matchers.sameInstance;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -455,7 +456,8 @@ public class UtilTest {
   @Test void testMergeableMap() {
     // Create a map with string keys. The value is an arbitrary integer, and
     // values are summed when two equivalence sets are merged.
-    MergeableMap<String, Integer> map = MergeableMaps.create(Integer::sum);
+    MergeableMap<String, Integer, Integer> map =
+        MergeableMaps.create(i -> i, Integer::sum, (s, i, j) -> s - i + j);
     assertThat(map.size(), is(0));
     assertThat(map.entrySet(), hasSize(0));
 
@@ -501,9 +503,14 @@ public class UtilTest {
     assertThat(map.inSameSet("a", "b"), is(false));
     assertThat(map.size(), is(3));
     v = map.get("a");
-    assertThat(v, is(4)); // 1 + 3
+    assertThat(v, is(1));
+    MergeableMap.EqSet<String, Integer> s = map.find("a");
+    assertThat(s.getKey(), oneOf("a", "c"));
+    assertThat(s.sum(), is(4)); // 1 + 3
     v = map.get("c");
-    assertThat(v, is(4));
+    assertThat(v, is(3));
+    MergeableMap.EqSet<String, Integer> s2 = map.find("c");
+    assertThat(s2, sameInstance(s));
 
     // Make b equivalent to c.
     map.union("b", "c");
@@ -513,27 +520,49 @@ public class UtilTest {
     assertThat(map.inSameSet("c", "a"), is(true));
     assertThat(map.inSameSet("a", "b"), is(true));
     v = map.get("a");
-    assertThat(v, is(6)); // 1 + 2 + 3
+    assertThat(v, is(1));
+    s = map.find("a");
+    assertThat(s.getKey(), oneOf("a", "b", "c"));
+    assertThat(s.sum(), is(6)); // 1 + 2 + 3
 
     // Add d, equivalent to e.
     map.put("d", 4);
     assertThat(map.setCount(), is(2));
-    assertThat(map.find("d"), is("d"));
+    s = map.find("d");
+    assertThat(s.getKey(), is("d"));
+    assertThat(s.sum(), is(4));
     map.put("e", 5);
     assertThat(map.setCount(), is(3));
-    assertThat(map.find("d"), is("d"));
-    v = map.union("d", "e");
-    assertThat(v, is(9)); // 4 + 5
+    s = map.union("d", "e");
+    assertThat(s.sum(), is(9)); // 4 + 5
+    assertThat(s.getKey(), oneOf("d", "e"));
     assertThat(map.setCount(), is(2));
-    assertThat(map.find("d"), oneOf("d", "e"));
-    assertThat(map.find("e"), oneOf("d", "e"));
-    assertThat(map.find("a"), oneOf("a", "b", "c"));
+    assertThat(map.find("d"), sameInstance(s));
+    assertThat(map.find("e"), sameInstance(s));
+    s = map.find("a");
+    assertThat(s.getKey(), oneOf("a", "b", "c"));
+
+    try {
+      s = map.find("z");
+      fail("expected error, got " + s);
+    } catch (IllegalArgumentException e) {
+      assertThat(e.getMessage(), is("not in set"));
+    }
 
     // Merge {a, b, c} with {d, e}
-    v = map.union("e", "a");
-    assertThat(v, is(15)); // 1 + 2 + 3 + 4 + 5
+    s = map.union("e", "a");
+    assertThat(s.getKey(), oneOf("a", "b", "c", "d", "e"));
+    assertThat(s.sum(), is(15)); // 1 + 2 + 3 + 4 + 5
     assertThat(map.setCount(), is(1));
-    assertThat(map.find("a"), oneOf("a", "b", "c", "d", "e"));
+    assertThat(map.find("a"), sameInstance(s));
+    assertThat(map.find("e"), sameInstance(s));
+
+    // "put" updates the total.
+    int prevSum = s.sum();
+    map.put("a", map.get("a") + 3);
+    assertThat(map.find("a").sum(), is(prevSum + 3));
+    map.put("e", map.get("e") + 7);
+    assertThat(map.find("a").sum(), is(prevSum + 10));
 
     // MergeableMap.remove is not supported
     try {
@@ -562,7 +591,8 @@ public class UtilTest {
    * <p>In this test, we merge each {@code n} from 0 to 1,000 with its
    * successor. */
   @Test void testMergeableMapCollatz() {
-    MergeableMap<Integer, Integer> map = MergeableMaps.create((x, y) -> x);
+    MergeableMap<Integer, Integer, Integer> map =
+        MergeableMaps.create(i -> i, Integer::sum, (s, i, j) -> s - i + j);
     for (int i = 0; i < 1000; i++) {
       map.put(i, i);
     }
@@ -580,8 +610,44 @@ public class UtilTest {
     assertThat(new TreeSet<>(map.values()), hasSize(336));
   }
 
+  @Test void testMergeableMapDummy() {
+    MergeableMap<String, Dummy, Dummy> m =
+        MergeableMaps.create(Dummy::bind, Dummy::add, Dummy::update);
+    m.put("a", Dummy.INSTANCE);
+    assertThat(m.containsKey("a"), is(true));
+    assertThat(m.containsKey("b"), is(false));
+    assertThat(m.get("a"), is(Dummy.INSTANCE));
+
+    m.put("b", Dummy.INSTANCE);
+    m.put("c", Dummy.INSTANCE);
+    assertThat(m.setCount(), is(3));
+
+    m.union("b", "a");
+    assertThat(m.setCount(), is(2));
+    assertThat(m.get("a"), is(Dummy.INSTANCE));
+    assertThat(m.get("b"), is(Dummy.INSTANCE));
+    MergeableMap.EqSet<String, Dummy> eqSet = m.find("a");
+    assertThat(eqSet.getKey(), oneOf("a", "b"));
+    assertThat(eqSet.sum(), is(Dummy.INSTANCE));
+    eqSet = m.find("c");
+    assertThat(eqSet.getKey(), is("c"));
+    assertThat(eqSet.sum(), is(Dummy.INSTANCE));
+  }
+
   enum Dummy {
-    INSTANCE
+    INSTANCE;
+
+    public Dummy update(Dummy d1, Dummy d2) {
+      return this;
+    }
+
+    public static Dummy bind(Dummy d) {
+      return d;
+    }
+
+    public Dummy add(Dummy d) {
+      return this;
+    }
   }
 }
 
