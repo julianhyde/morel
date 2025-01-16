@@ -27,8 +27,10 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static java.util.Objects.requireNonNull;
@@ -42,6 +44,11 @@ public abstract class MergeableMaps {
   public static <K, V, S> MergeableMap<K, V, S> create(Function<V, S> bind,
       BinaryOperator<S> add, TriFunction<S, V, V, S> update) {
     return new MergeableMapImpl<>(new LinkedHashMap<>(), bind, add, update);
+  }
+
+  /** Creates a MergeableSet backed by a {@link LinkedHashMap}. */
+  public static <E> MergeableSet<E> createSet() {
+    return new MergeableSetImpl<>(new LinkedHashMap<>());
   }
 
   /** Implementation of {@link MergeableMap} that maps each key to an
@@ -79,7 +86,7 @@ public abstract class MergeableMaps {
 
     /** Returns the root item for a given key. */
     private Item<K, V, S> root(K key) {
-      return item(key).resolve();
+      return item(key).resolve2();
     }
 
     /** Returns the item for a given key. */
@@ -119,7 +126,7 @@ public abstract class MergeableMaps {
       item.value = value;
 
       // Update the sum for the equivalence set.
-      Item<K, V, S> rootItem = item.resolve();
+      Item<K, V, S> rootItem = item.resolve2();
       rootItem.sum = update.apply(rootItem.sum, previousValue, value);
       return previousValue;
     }
@@ -139,7 +146,7 @@ public abstract class MergeableMaps {
             }
 
             @Override public Entry<K, V> next() {
-              return items.next().resolve();
+              return items.next().resolve2();
             }
           };
         }
@@ -153,15 +160,15 @@ public abstract class MergeableMaps {
     @Override public EqSet<K, S> union(K key0, K key1) {
       final Item<K, V, S> root0 = root(key0);
       final Item<K, V, S> item1 = item(key1);
-      final Item<K, V, S> root1 = item1.resolve();
+      final Item<K, V, S> root1 = item1.resolve2();
       if (root0 != root1) {
         // If key0 and key1 are already in same equivalence set, there's nothing
         // to do. Otherwise, the number of equivalence sets has decreased
         ++mergeCount;
 
         // Set the root of item1, and all its ancestors including root1, to root0.
-        for (Item<K, V, S> item2 = item1;;) {
-          @Nullable Item<K, V, S> next = item2.parent;
+        for (SetItem<K> item2 = item1;;) {
+          @Nullable SetItem<K> next = item2.parent;
           item2.parent = root0;
           if (next == null) {
             break;
@@ -189,6 +196,165 @@ public abstract class MergeableMaps {
     }
   }
 
+  /** Implementation of {@link MergeableMap} that maps each key to an
+   * {@link Item} via a backing map.
+   *
+   * <p>The implementation uses path compression but not rank.
+   *
+   * @param <E> Element type
+   */
+  static class MergeableSetImpl<E> extends AbstractSet<E>
+      implements MergeableSet<E> {
+    private final Map<E, SetItem<E>> map;
+
+    /** Number of times that {@link #union(Object, Object)} has merged two
+     * equivalence sets. */
+    private int mergeCount = 0;
+
+    MergeableSetImpl(Map<E, SetItem<E>> map) {
+      this.map = map;
+    }
+
+    @Override public void clear() {
+      map.clear();
+      mergeCount = 0;
+    }
+
+    @Override public @NonNull Iterator<E> iterator() {
+      return map.keySet().iterator();
+    }
+
+    @Override public @NonNull Spliterator<E> spliterator() {
+      return map.keySet().spliterator();
+    }
+
+    @Override public void forEach(Consumer<? super E> action) {
+      map.keySet().forEach(action);
+    }
+
+    /** Returns the root item for a given element. */
+    private SetItem<E> root(E e) {
+      return item(e).resolve();
+    }
+
+    /** Returns the item for a given key. */
+    private SetItem<E> item(E e) {
+      final SetItem<E> item = map.get(e);
+      if (item == null) {
+        throw new IllegalArgumentException("not in set");
+      }
+      return item;
+    }
+
+    @Override public E find(E e) {
+      return root(e).key;
+    }
+
+    @Override public boolean inSameSet(E element0, E element1) {
+      return root(element0) == root(element1);
+    }
+
+    @Override public boolean add(E e) {
+      final SetItem<E> item = map.get(e);
+      if (item == null) {
+        // Key is not previously known. Add key as a new equivalence class.
+        map.put(e, new SetItem<>(e));
+        return true;
+      }
+      return false;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override public boolean remove(Object o) {
+      throw new UnsupportedOperationException("remove");
+    }
+
+    @Override public E union(E element0, E element1) {
+      final SetItem<E> root0 = root(element0);
+      final SetItem<E> item1 = item(element1);
+      final SetItem<E> root1 = item1.resolve();
+      if (root0 != root1) {
+        // If key0 and key1 are already in same equivalence set, there's nothing
+        // to do. Otherwise, the number of equivalence sets has decreased
+        ++mergeCount;
+
+        // Set the root of item1, and all its ancestors including root1, to root0.
+        for (SetItem<E> item2 = item1;;) {
+          @Nullable SetItem<E> next = item2.parent;
+          item2.parent = root0;
+          if (next == null) {
+            break;
+          }
+          item2 = next;
+        }
+      }
+      return root0.key;
+    }
+
+    @Override public int setCount() {
+      // The number of equivalence sets increases by one each time a key is
+      // added, and decreases by one each time 'union' merges two sets.
+      // Therefore, the number of equivalence sets is the number of keys minus
+      // the number of merges.
+      return map.size() - mergeCount;
+    }
+
+    @Override public int size() {
+      return map.size();
+    }
+  }
+
+  /** All the information about a key in a {@link MergeableSet}.
+   *
+   * <p>An item is either a root (in which case {@link #parent} is null),
+   * or a non-root (in which case {@link #parent} is not-null.
+   *
+   * @param <E> Element type
+   */
+  private static class SetItem<E> {
+    final E key;
+    @Nullable SetItem<E> parent; // null if a root
+
+    SetItem(E key) {
+      this.key = requireNonNull(key);
+    }
+
+    @Override public String toString() {
+      return "{k=" + key
+          + ", parent=" + (parent == null ? null : parent.key) + "}";
+    }
+
+    /** Returns the ultimate parent of this Item.
+     *
+     * <p>Fixes up any parents it finds along the way, but does not merge any
+     * sets. */
+    SetItem<E> resolve() {
+      if (parent == null) {
+        return this;
+      }
+
+      // Find the root (the ancestor that has no parent)
+      SetItem<E> root = this;
+      while (root.parent != null) {
+        root = root.parent;
+      }
+
+      // Compress the path: walk the towards the root, making every item point
+      // directly to the root.
+      //
+      // Only has an effect if the chain is longer than 2. If the chain is
+      // [a, b, c, root] then a and b will be modified, and c will already point
+      // to root. If the chain is [c, root] then no modifications are needed.
+      for (SetItem<E> item = this; item.parent != root;) {
+        SetItem<E> previous = item;
+        item = requireNonNull(item.parent);
+        previous.parent = root;
+      }
+
+      return root;
+    }
+  }
+
   /** All the information about a key in a {@link MergeableMap}.
    *
    * <p>An item is either a root (in which case {@link #parent} is null),
@@ -200,16 +366,15 @@ public abstract class MergeableMaps {
    * @param <S> Sum type
    */
   private static class Item<K, V, S>
+      extends SetItem<K>
       implements MergeableMap.EqSet<K, S>, Map.Entry<K, V> {
-    final K key;
-    @Nullable Item<K, V, S> parent; // null if a root
     V value;
     S sum; // null if not a root
 
     /** Creates a root Item. (Parent is null, but will be assigned later if this
      * Item becomes non-root.) */
     private Item(K key, V value, S sum) {
-      this.key = requireNonNull(key);
+      super(key);
       this.value = requireNonNull(value);
       this.sum = requireNonNull(sum);
     }
@@ -241,34 +406,8 @@ public abstract class MergeableMaps {
       return sum;
     }
 
-    /** Returns the ultimate parent of this Item.
-     *
-     * <p>Fixes up any parents it finds along the way, but does not merge any
-     * sets. */
-    private Item<K, V, S> resolve() {
-      if (parent == null) {
-        return this;
-      }
-
-      // Find the root (the ancestor that has no parent)
-      Item<K, V, S> root = this;
-      while (root.parent != null) {
-        root = root.parent;
-      }
-
-      // Compress the path: walk the towards the root, making every item point
-      // directly to the root.
-      //
-      // Only has an effect if the chain is longer than 2. If the chain is
-      // [a, b, c, root] then a and b will be modified, and c will already point
-      // to root. If the chain is [c, root] then no modifications are needed.
-      for (Item<K, V, S> item = this; item.parent != root;) {
-        Item<K, V, S> previous = item;
-        item = requireNonNull(item.parent);
-        previous.parent = root;
-      }
-
-      return root;
+    Item<K, V, S> resolve2() {
+      return (Item<K, V, S>) resolve();
     }
   }
 

@@ -29,6 +29,7 @@ import net.hydromatic.morel.util.Folder;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MergeableMap;
 import net.hydromatic.morel.util.MergeableMaps;
+import net.hydromatic.morel.util.MergeableSet;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.Static;
 import net.hydromatic.morel.util.TailList;
@@ -456,7 +457,7 @@ public class UtilTest {
   @Test void testMergeableMap() {
     // Create a map with string keys. The value is an arbitrary integer, and
     // values are summed when two equivalence sets are merged.
-    MergeableMap<String, Integer, Integer> map =
+    final MergeableMap<String, Integer, Integer> map =
         MergeableMaps.create(i -> i, Integer::sum, (s, i, j) -> s - i + j);
     assertThat(map.size(), is(0));
     assertThat(map.entrySet(), hasSize(0));
@@ -591,7 +592,7 @@ public class UtilTest {
    * <p>In this test, we merge each {@code n} from 0 to 1,000 with its
    * successor. */
   @Test void testMergeableMapCollatz() {
-    MergeableMap<Integer, Integer, Integer> map =
+    final MergeableMap<Integer, Integer, Integer> map =
         MergeableMaps.create(i -> i, Integer::sum, (s, i, j) -> s - i + j);
     for (int i = 0; i < 1000; i++) {
       map.put(i, i);
@@ -611,27 +612,69 @@ public class UtilTest {
   }
 
   @Test void testMergeableMapDummy() {
-    MergeableMap<String, Dummy, Dummy> m =
+    final MergeableMap<String, Dummy, Dummy> map =
         MergeableMaps.create(Dummy::bind, Dummy::add, Dummy::update);
-    m.put("a", Dummy.INSTANCE);
-    assertThat(m.containsKey("a"), is(true));
-    assertThat(m.containsKey("b"), is(false));
-    assertThat(m.get("a"), is(Dummy.INSTANCE));
+    map.put("a", Dummy.INSTANCE);
+    assertThat(map.containsKey("a"), is(true));
+    assertThat(map.containsKey("b"), is(false));
+    assertThat(map.get("a"), is(Dummy.INSTANCE));
 
-    m.put("b", Dummy.INSTANCE);
-    m.put("c", Dummy.INSTANCE);
-    assertThat(m.setCount(), is(3));
+    map.put("b", Dummy.INSTANCE);
+    map.put("c", Dummy.INSTANCE);
+    assertThat(map.setCount(), is(3));
 
-    m.union("b", "a");
-    assertThat(m.setCount(), is(2));
-    assertThat(m.get("a"), is(Dummy.INSTANCE));
-    assertThat(m.get("b"), is(Dummy.INSTANCE));
-    MergeableMap.EqSet<String, Dummy> eqSet = m.find("a");
+    map.union("b", "a");
+    assertThat(map.setCount(), is(2));
+    assertThat(map.get("a"), is(Dummy.INSTANCE));
+    assertThat(map.get("b"), is(Dummy.INSTANCE));
+    MergeableMap.EqSet<String, Dummy> eqSet = map.find("a");
     assertThat(eqSet.getKey(), oneOf("a", "b"));
     assertThat(eqSet.sum(), is(Dummy.INSTANCE));
-    eqSet = m.find("c");
+    eqSet = map.find("c");
     assertThat(eqSet.getKey(), is("c"));
     assertThat(eqSet.sum(), is(Dummy.INSTANCE));
+  }
+
+  @Test void testMergeableSet() {
+    final MergeableSet<String> set = MergeableMaps.createSet();
+    set.add("a");
+    assertThat(set.contains("a"), is(true));
+    assertThat(set.contains("b"), is(false));
+    assertThat(set.find("a"), is("a"));
+
+    set.add("b");
+    set.add("c");
+    assertThat(set.setCount(), is(3));
+
+    set.union("b", "a");
+    assertThat(set.setCount(), is(2));
+    assertThat(set.find("a"), oneOf("a", "b"));
+    assertThat(set.find("b"), oneOf("a", "b"));
+    assertThat(set.find("c"), is("c"));
+    assertThat(set.contains("z"), is(false));
+    try {
+      String x = set.find("z");
+      fail("expected error, got " + x);
+    } catch (IllegalArgumentException e) {
+      assertThat(e.getMessage(), is("not in set"));
+    }
+
+    assertThat(set, hasToString("[a, b, c]"));
+    assertThat(set, hasSize(3));
+
+    // MergeableSet.remove is not supported
+    try {
+      @SuppressWarnings("deprecation")
+      final boolean value = set.remove("a");
+      fail("expected error, got " + value);
+    } catch (UnsupportedOperationException e) {
+      assertThat(e.getMessage(), is("remove"));
+    }
+
+    // MergeableSet.clear is supported
+    set.clear();
+    assertThat(set, hasSize(0));
+    assertThat(set, hasToString("[]"));
   }
 
   enum Dummy {

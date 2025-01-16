@@ -18,57 +18,45 @@
  */
 package net.hydromatic.morel.util;
 
-import java.util.Map;
+import java.util.Set;
 
-/** Map that allows keys to be merged into equivalence sets.
+/** Set that allows elements be merged into equivalence sets.
  *
- * <p>It is an implementation of the union-find algorithm using the
+ * <p>Like {@link MergeableMap}, {@code MergeableSet}
+ * is an implementation of the union-find algorithm using the
  * <a href="https://en.wikipedia.org/wiki/Disjoint-set_data_structure">disjoint
  * set</a> data structure.
  *
- * @param <K> Key type
- * @param <V> Value type
- * @param <S> Sum type
+ * @param <E> Element type
  *
- * @see MergeableSet
- * @see MergeableMaps#create
+ * @see MergeableMap
+ * @see MergeableMaps#createSet
  */
-public interface MergeableMap<K, V, S>  extends Map<K, V> {
-  /** Merges two keys, and returns the merged value. */
-  EqSet<K, S> union(K key0, K key1);
+public interface MergeableSet<E>  extends Set<E> {
+  /** Merges two keys, and returns the representative key of the merged
+   * equivalence set. */
+  E union(E key0, E key1);
 
   /** Returns whether two keys are in the same equivalence set. */
-  default boolean inSameSet(K key0, K key1) {
+  default boolean inSameSet(E key0, E key1) {
     return find(key0).equals(find(key1));
   }
 
-  /** Returns the representative key of the set that {@code key} belongs to.
+  /** Returns the representative key of the set that element {@code e} belongs
+   * to.
    *
-   * <p>Throws if {@code key} is not in the map; never returns null. */
-  EqSet<K, S> find(K key);
+   * <p>Throws if {@code e} is not in the set; never returns null. */
+  E find(E e);
 
   /** {@inheritDoc}
    *
    * <p>Deletion of individual elements is not supported. */
-  @Deprecated @Override default V remove(Object key) {
+  @Deprecated @Override default boolean remove(Object key) {
     throw new UnsupportedOperationException("remove");
   }
 
-  /** Returns the number of equivalence sets in this map. */
+  /** Returns the number of equivalence sets in this set. */
   int setCount();
-
-  /** An equivalence set.
-   *
-   * @param <K> Key type
-   * @param <S> Sum type
-   */
-  interface EqSet<K, S> {
-    /** Representative key. */
-    K getKey();
-
-    /** Value for the equivalence set. */
-    S sum();
-  }
 }
 
-// End MergeableMap.java
+// End MergeableSet.java
