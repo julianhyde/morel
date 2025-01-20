@@ -35,23 +35,38 @@ import java.util.function.Function;
 
 import static java.util.Objects.requireNonNull;
 
-/** Implementations of {@link MergeableMap}. */
-public abstract class MergeableMaps {
-  private MergeableMaps() {
+/** Implementations and helpers for {@link UnionSet}
+ * and {@link UnionMap}. */
+public abstract class Unions {
+  private Unions() {
   }
 
-  /** Creates a MergeableMap backed by a {@link LinkedHashMap}. */
-  public static <K, V, S> MergeableMap<K, V, S> create(Function<V, S> bind,
+  /** Creates a UnionMap backed by a {@link LinkedHashMap}.
+   *
+   * <p>The functions are called at various points in the lifecycle:
+   * <ul>
+   * <li>{@code bind(value)} is called to generate a sum value for an
+   *   equivalence set that contains one key, e.g. when
+   *   {@code put(key, value)} is called on a new key;
+   * <li>{@code add(sum1, sum2)} is called to combine two sums {@code sum1} and
+   *   {@code sum2} when two equivalence sets are merged;
+   * <li>{@code update(sum, value1, value2)} is called to generate a new sum
+   *   for an equivalence set when {@code put(key, value2)} has been called
+   *   to change the value of {@code key} from {@code value1} to
+   *   {@code value2}.
+   * </ul>
+   */
+  public static <K, V, S> UnionMap<K, V, S> createMap(Function<V, S> bind,
       BinaryOperator<S> add, TriFunction<S, V, V, S> update) {
-    return new MergeableMapImpl<>(new LinkedHashMap<>(), bind, add, update);
+    return new UnionMapImpl<>(new LinkedHashMap<>(), bind, add, update);
   }
 
-  /** Creates a MergeableSet backed by a {@link LinkedHashMap}. */
-  public static <E> MergeableSet<E> createSet() {
-    return new MergeableSetImpl<>(new LinkedHashMap<>());
+  /** Creates a UnionSet backed by a {@link LinkedHashMap}. */
+  public static <E> UnionSet<E> createSet() {
+    return new UnionSetImpl<>(new LinkedHashMap<>());
   }
 
-  /** Implementation of {@link MergeableMap} that maps each key to an
+  /** Implementation of {@link UnionMap} that maps each key to an
    * {@link Item} via a backing map.
    *
    * <p>The implementation uses path compression but not rank.
@@ -60,8 +75,8 @@ public abstract class MergeableMaps {
    * @param <V> Value type
    * @param <S> Sum type
    */
-  static class MergeableMapImpl<K, V, S> extends AbstractMap<K, V>
-      implements MergeableMap<K, V, S> {
+  static class UnionMapImpl<K, V, S> extends AbstractMap<K, V>
+      implements UnionMap<K, V, S> {
     private final Map<K, Item<K, V, S>> map;
     private final Function<V, S> bind;
     private final BiFunction<S, S, S> add;
@@ -71,7 +86,7 @@ public abstract class MergeableMaps {
      * equivalence sets. */
     private int mergeCount = 0;
 
-    MergeableMapImpl(Map<K, Item<K, V, S>> map, Function<V, S> bind,
+    UnionMapImpl(Map<K, Item<K, V, S>> map, Function<V, S> bind,
         BinaryOperator<S> add, TriFunction<S, V, V, S> update) {
       this.map = map;
       this.bind = bind;
@@ -196,22 +211,22 @@ public abstract class MergeableMaps {
     }
   }
 
-  /** Implementation of {@link MergeableMap} that maps each key to an
+  /** Implementation of {@link UnionMap} that maps each key to an
    * {@link Item} via a backing map.
    *
    * <p>The implementation uses path compression but not rank.
    *
    * @param <E> Element type
    */
-  static class MergeableSetImpl<E> extends AbstractSet<E>
-      implements MergeableSet<E> {
+  static class UnionSetImpl<E> extends AbstractSet<E>
+      implements UnionSet<E> {
     private final Map<E, SetItem<E>> map;
 
     /** Number of times that {@link #union(Object, Object)} has merged two
      * equivalence sets. */
     private int mergeCount = 0;
 
-    MergeableSetImpl(Map<E, SetItem<E>> map) {
+    UnionSetImpl(Map<E, SetItem<E>> map) {
       this.map = map;
     }
 
@@ -304,7 +319,7 @@ public abstract class MergeableMaps {
     }
   }
 
-  /** All the information about a key in a {@link MergeableSet}.
+  /** All the information about a key in a {@link UnionSet}.
    *
    * <p>An item is either a root (in which case {@link #parent} is null),
    * or a non-root (in which case {@link #parent} is not-null.
@@ -355,7 +370,7 @@ public abstract class MergeableMaps {
     }
   }
 
-  /** All the information about a key in a {@link MergeableMap}.
+  /** All the information about a key in a {@link UnionMap}.
    *
    * <p>An item is either a root (in which case {@link #parent} is null),
    * or a non-root (in which case {@link #parent} is not-null,
@@ -367,7 +382,7 @@ public abstract class MergeableMaps {
    */
   private static class Item<K, V, S>
       extends SetItem<K>
-      implements MergeableMap.EqSet<K, S>, Map.Entry<K, V> {
+      implements UnionMap.EqSet<K, S>, Map.Entry<K, V> {
     V value;
     S sum; // null if not a root
 
@@ -426,11 +441,11 @@ public abstract class MergeableMaps {
      *
      * @param t First function argument
      * @param u Second function argument
-     * @param v Third argument
+     * @param v Third function argument
      * @return the function result
      */
     R apply(T t, U u, V v);
   }
 }
 
-// End MergeableMaps.java
+// End Unions.java

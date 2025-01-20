@@ -22,17 +22,17 @@ import java.util.Set;
 
 /** Set that allows elements be merged into equivalence sets.
  *
- * <p>Like {@link MergeableMap}, {@code MergeableSet}
+ * <p>Like {@link UnionMap}, {@code UnionSet}
  * is an implementation of the union-find algorithm using the
  * <a href="https://en.wikipedia.org/wiki/Disjoint-set_data_structure">disjoint
  * set</a> data structure.
  *
  * @param <E> Element type
  *
- * @see MergeableMap
- * @see MergeableMaps#createSet
+ * @see UnionMap
+ * @see Unions#createSet
  */
-public interface MergeableSet<E>  extends Set<E> {
+public interface UnionSet<E>  extends Set<E> {
   /** Merges two keys, and returns the representative key of the merged
    * equivalence set. */
   E union(E key0, E key1);
@@ -59,4 +59,4 @@ public interface MergeableSet<E>  extends Set<E> {
   int setCount();
 }
 
-// End MergeableSet.java
+// End UnionSet.java

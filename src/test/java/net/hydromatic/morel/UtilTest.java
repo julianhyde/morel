@@ -27,12 +27,12 @@ import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Folder;
 import net.hydromatic.morel.util.MapList;
-import net.hydromatic.morel.util.MergeableMap;
-import net.hydromatic.morel.util.MergeableMaps;
-import net.hydromatic.morel.util.MergeableSet;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.Static;
 import net.hydromatic.morel.util.TailList;
+import net.hydromatic.morel.util.UnionMap;
+import net.hydromatic.morel.util.UnionSet;
+import net.hydromatic.morel.util.Unions;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -453,12 +453,12 @@ public class UtilTest {
     assertThat(endsWith(empty, ""), is(true));
   }
 
-  /** Tests {@link net.hydromatic.morel.util.MergeableMap}. */
-  @Test void testMergeableMap() {
+  /** Tests {@link UnionMap}. */
+  @Test void testUnionMap() {
     // Create a map with string keys. The value is an arbitrary integer, and
     // values are summed when two equivalence sets are merged.
-    final MergeableMap<String, Integer, Integer> map =
-        MergeableMaps.create(i -> i, Integer::sum, (s, i, j) -> s - i + j);
+    final UnionMap<String, Integer, Integer> map =
+        Unions.createMap(i -> i, Integer::sum, (s, i, j) -> s - i + j);
     assertThat(map.size(), is(0));
     assertThat(map.entrySet(), hasSize(0));
 
@@ -505,12 +505,12 @@ public class UtilTest {
     assertThat(map.size(), is(3));
     v = map.get("a");
     assertThat(v, is(1));
-    MergeableMap.EqSet<String, Integer> s = map.find("a");
+    UnionMap.EqSet<String, Integer> s = map.find("a");
     assertThat(s.getKey(), oneOf("a", "c"));
     assertThat(s.sum(), is(4)); // 1 + 3
     v = map.get("c");
     assertThat(v, is(3));
-    MergeableMap.EqSet<String, Integer> s2 = map.find("c");
+    UnionMap.EqSet<String, Integer> s2 = map.find("c");
     assertThat(s2, sameInstance(s));
 
     // Make b equivalent to c.
@@ -565,7 +565,7 @@ public class UtilTest {
     map.put("e", map.get("e") + 7);
     assertThat(map.find("a").sum(), is(prevSum + 10));
 
-    // MergeableMap.remove is not supported
+    // UnionMap.remove is not supported
     try {
       @SuppressWarnings("deprecation")
       final Integer value = map.remove("a");
@@ -574,13 +574,13 @@ public class UtilTest {
       assertThat(e.getMessage(), is("remove"));
     }
 
-    // MergeableMap.clear is supported
+    // UnionMap.clear is supported
     map.clear();
     assertThat(map, aMapWithSize(0));
     assertThat(map, hasToString("{}"));
   }
 
-  /** Tests {@link MergeableMap} using the Collatz Conjecture.
+  /** Tests {@link UnionMap} using the Collatz Conjecture.
    *
    * <p>The Collatz Conjecture states that if you start with any integer, and
    * generate a successor. then eventually you will reach 1. The successor
@@ -591,9 +591,9 @@ public class UtilTest {
    *
    * <p>In this test, we merge each {@code n} from 0 to 1,000 with its
    * successor. */
-  @Test void testMergeableMapCollatz() {
-    final MergeableMap<Integer, Integer, Integer> map =
-        MergeableMaps.create(i -> i, Integer::sum, (s, i, j) -> s - i + j);
+  @Test void testUnionMapCollatz() {
+    final UnionMap<Integer, Integer, Integer> map =
+        Unions.createMap(i -> i, Integer::sum, (s, i, j) -> s - i + j);
     for (int i = 0; i < 1000; i++) {
       map.put(i, i);
     }
@@ -611,9 +611,9 @@ public class UtilTest {
     assertThat(new TreeSet<>(map.values()), hasSize(336));
   }
 
-  @Test void testMergeableMapDummy() {
-    final MergeableMap<String, Dummy, Dummy> map =
-        MergeableMaps.create(Dummy::bind, Dummy::add, Dummy::update);
+  @Test void testUnionMapDummy() {
+    final UnionMap<String, Dummy, Dummy> map =
+        Unions.createMap(Dummy::bind, Dummy::add, Dummy::update);
     map.put("a", Dummy.INSTANCE);
     assertThat(map.containsKey("a"), is(true));
     assertThat(map.containsKey("b"), is(false));
@@ -627,7 +627,7 @@ public class UtilTest {
     assertThat(map.setCount(), is(2));
     assertThat(map.get("a"), is(Dummy.INSTANCE));
     assertThat(map.get("b"), is(Dummy.INSTANCE));
-    MergeableMap.EqSet<String, Dummy> eqSet = map.find("a");
+    UnionMap.EqSet<String, Dummy> eqSet = map.find("a");
     assertThat(eqSet.getKey(), oneOf("a", "b"));
     assertThat(eqSet.sum(), is(Dummy.INSTANCE));
     eqSet = map.find("c");
@@ -635,8 +635,8 @@ public class UtilTest {
     assertThat(eqSet.sum(), is(Dummy.INSTANCE));
   }
 
-  @Test void testMergeableSet() {
-    final MergeableSet<String> set = MergeableMaps.createSet();
+  @Test void testUnionSet() {
+    final UnionSet<String> set = Unions.createSet();
     set.add("a");
     assertThat(set.contains("a"), is(true));
     assertThat(set.contains("b"), is(false));
@@ -662,7 +662,7 @@ public class UtilTest {
     assertThat(set, hasToString("[a, b, c]"));
     assertThat(set, hasSize(3));
 
-    // MergeableSet.remove is not supported
+    // UnionSet.remove is not supported
     try {
       @SuppressWarnings("deprecation")
       final boolean value = set.remove("a");
@@ -671,7 +671,7 @@ public class UtilTest {
       assertThat(e.getMessage(), is("remove"));
     }
 
-    // MergeableSet.clear is supported
+    // UnionSet.clear is supported
     set.clear();
     assertThat(set, hasSize(0));
     assertThat(set, hasToString("[]"));

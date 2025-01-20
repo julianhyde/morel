@@ -26,14 +26,20 @@ import java.util.Map;
  * <a href="https://en.wikipedia.org/wiki/Disjoint-set_data_structure">disjoint
  * set</a> data structure.
  *
+ * <p>Because it is a map, not only can keys be merged into equivalence sets,
+ * but keys have associated values (of type {@code <V>}). The equivalence set
+ * also has a value (of type {@code <S>} for 'sum'); that value is computed
+ * from the keys and values that comprise the set, and is rolled up when who
+ * sets are merged.
+ *
  * @param <K> Key type
  * @param <V> Value type
  * @param <S> Sum type
  *
- * @see MergeableSet
- * @see MergeableMaps#create
+ * @see UnionSet
+ * @see Unions#createMap
  */
-public interface MergeableMap<K, V, S>  extends Map<K, V> {
+public interface UnionMap<K, V, S>  extends Map<K, V> {
   /** Merges two keys, and returns the merged value. */
   EqSet<K, S> union(K key0, K key1);
 
@@ -42,7 +48,7 @@ public interface MergeableMap<K, V, S>  extends Map<K, V> {
     return find(key0).equals(find(key1));
   }
 
-  /** Returns the representative key of the set that {@code key} belongs to.
+  /** Returns the equivalence set that {@code key} belongs to.
    *
    * <p>Throws if {@code key} is not in the map; never returns null. */
   EqSet<K, S> find(K key);
@@ -71,4 +77,4 @@ public interface MergeableMap<K, V, S>  extends Map<K, V> {
   }
 }
 
-// End MergeableMap.java
+// End UnionMap.java
