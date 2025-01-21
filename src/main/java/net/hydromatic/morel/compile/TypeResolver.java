@@ -99,7 +99,7 @@ public class TypeResolver {
 
   static final String TUPLE_TY_CON = "tuple";
   static final String LIST_TY_CON = "list";
-  static final String STREAM_TY_CON = BuiltIn.STREAM_TYPE;
+  static final String BAG_TY_CON = "bag";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
 
@@ -174,8 +174,7 @@ public class TypeResolver {
         throw new TypeException("Cannot deduce type: " + result, Pos.ZERO);
       }
       final TypeMap typeMap =
-          new TypeMap(typeSystem, map, (Unifier.Substitution) result,
-              orderedTerm(), unorderedTerm());
+          new TypeMap(typeSystem, map, (Unifier.Substitution) result);
       while (!preferredTypes.isEmpty()) {
         Map.Entry<Unifier.Variable, PrimitiveType> x = preferredTypes.remove(0);
         final Type type =
@@ -319,7 +318,7 @@ public class TypeResolver {
         args2.add(deduceType(env, arg, vArg2));
       }
       return reg(list.copy(args2), v,
-          unifier.apply(STREAM_TY_CON, orderedTerm(), vArg2));
+          unifier.apply(LIST_TY_CON, vArg2));
 
     case RECORD:
       final Ast.Record record = (Ast.Record) node;
@@ -387,8 +386,8 @@ public class TypeResolver {
       final Ast.From from = (Ast.From) node;
       final Map<Ast.Id, Unifier.Variable> fieldVars = new LinkedHashMap<>();
       final List<Ast.FromStep> fromSteps = new ArrayList<>();
-      Triple p = Triple.of(env, unifier.variable(), unifier.variable());
-      equiv(p.orderingTerm, orderedTerm()); // an empty "from" is "unit list"
+      final boolean ordered = true; // an empty "from" is "unit list"
+      Triple p = Triple.of(env, unifier.variable(), ordered);
       for (Ord<Ast.FromStep> step : Ord.zip(from.steps)) {
         p = deduceStepType(env, step.e, p, fieldVars, fromSteps);
         if (step.i != from.steps.size() - 1) {
@@ -413,7 +412,8 @@ public class TypeResolver {
       if (from.isCompute() || from.isInto()) {
         return reg(from2, v, p.v);
       } else {
-        return reg(from2, v, unifier.apply(STREAM_TY_CON, p.orderingTerm, p.v));
+        return reg(from2, v,
+            unifier.apply(p.ordered ? LIST_TY_CON : BAG_TY_CON, p.v));
       }
 
     case ID:
@@ -506,7 +506,7 @@ public class TypeResolver {
 
   private Triple deduceStepType(TypeEnv env, Ast.FromStep step, Triple triple,
       Map<Ast.Id, Unifier.Variable> fieldVars, List<Ast.FromStep> fromSteps) {
-    final Unifier.Term orderTerm;
+    final boolean ordered;
     switch (step.op) {
     case SCAN:
       final Ast.Scan scan = (Ast.Scan) step;
@@ -515,20 +515,22 @@ public class TypeResolver {
       final Map<Ast.IdPat, Unifier.Term> termMap1 = new HashMap<>();
       if (scan.exp == null) {
         scanExp3 = null;
-        orderTerm = orderedTerm();
+        ordered = true;
       } else if (scan.exp.op == Op.FROM_EQ) {
         final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
         final Unifier.Variable v15 = unifier.variable();
         final Ast.Exp scanExp2 = deduceType(triple.env, scanExp, v15);
         scanExp3 = ast.fromEq(scanExp2);
-        orderTerm = orderedTerm();
+        ordered = true;
         reg(scanExp, v15, v16);
       } else {
         final Ast.Exp scanExp = scan.exp;
         final Unifier.Variable v15 = unifier.variable();
         scanExp3 = deduceType(triple.env, scanExp, v15);
-        orderTerm = unifier.variable(); // inherit list/bag from scan.exp
-        reg(scanExp, v15, unifier.apply(STREAM_TY_CON, orderTerm, v16));
+        // Assume bag (not ordered). If exp turns out to be a list, we will
+        // change our minds later.
+        ordered = false;
+        reg(scanExp, v15, unifier.apply(BAG_TY_CON, v16));
       }
       final Ast.Pat pat2 =
           deducePatType(triple.env, scan.pat, termMap1, null, v16);
@@ -548,7 +550,7 @@ public class TypeResolver {
         scanCondition2 = null;
       }
       fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
-      return Triple.of(env4, v, orderTerm);
+      return Triple.of(env4, v, ordered);
 
     case WHERE:
       final Ast.Where where = (Ast.Where) step;
@@ -561,7 +563,7 @@ public class TypeResolver {
     case DISTINCT:
       final Ast.Distinct distinct = (Ast.Distinct) step;
       fromSteps.add(distinct);
-      return triple.withOrdering(unorderedTerm());
+      return triple.withOrdering(false);
 
     case SKIP:
       // "skip" is allowed for ordered and unordered collections (though it
@@ -597,9 +599,9 @@ public class TypeResolver {
         final TypeEnv[] envs = {env};
         forEach(record2.args.keySet(), sequence.terms, (name, term) ->
             envs[0] = envs[0].bind(name, term));
-        return Triple.of(envs[0], v6, triple.orderingTerm);
+        return Triple.of(envs[0], v6, triple.ordered);
       } else {
-        return Triple.of(triple.env, v6, triple.orderingTerm);
+        return Triple.of(triple.env, v6, triple.ordered);
       }
 
     case ORDER:
@@ -612,7 +614,7 @@ public class TypeResolver {
                 orderItem.direction));
       }
       fromSteps.add(order.copy(orderItems));
-      return triple.withOrdering(orderedTerm());
+      return triple.withOrdering(true);
 
     case GROUP:
     case COMPUTE:
@@ -651,7 +653,7 @@ public class TypeResolver {
         reg(aggregate.aggregate, null, v9);
         equiv(
             unifier.apply(FN_TY_CON,
-                unifier.apply(STREAM_TY_CON, unorderedTerm(), v10), v8),
+                unifier.apply(BAG_TY_CON, v10), v8),
             v9);
         env3 = env3.bind(id.name, v8);
         fieldVars.put(id, v8);
@@ -662,11 +664,14 @@ public class TypeResolver {
       }
       if (step.op == Op.GROUP) {
         fromSteps.add(group.copy(groupExps, aggregates));
-        return Triple.of(env3, triple.v, unorderedTerm());
+        ordered = false;
+        return Triple.of(env3, triple.v, ordered);
       } else {
-        // Ordering is irrelevant because result is a singleton.
         fromSteps.add(((Ast.Compute) step).copy(aggregates));
-        return Triple.of(env3, triple.v, orderedTerm());
+
+        // Ordering is irrelevant because result is a singleton.
+        ordered = true;
+        return Triple.of(env3, triple.v, ordered);
       }
 
     case INTO:
@@ -679,11 +684,12 @@ public class TypeResolver {
       final Ast.Exp intoExp = deduceType(triple.env, into.exp, v14);
       equiv(
           unifier.apply(FN_TY_CON,
-              unifier.apply(STREAM_TY_CON, unorderedTerm(), triple.v), v13),
+              unifier.apply(BAG_TY_CON, triple.v), v13),
           v14);
       fromSteps.add(into.copy(intoExp));
       // Ordering is irrelevant because result is a singleton.
-      return Triple.of(EmptyTypeEnv.INSTANCE, v13, orderedTerm());
+      ordered = true;
+      return Triple.of(EmptyTypeEnv.INSTANCE, v13, ordered);
 
     case THROUGH:
       // from i in [1,2,3] through p in f
@@ -699,13 +705,13 @@ public class TypeResolver {
       final Unifier.Variable v18 = unifier.variable();
       final Unifier.Variable v19 = unifier.variable();
       final Unifier.Variable v20 = unifier.variable();
-      equiv(unifier.apply(STREAM_TY_CON, unorderedTerm(), triple.v), v20);
+      equiv(unifier.apply(BAG_TY_CON, triple.v), v20);
 
       final Map<Ast.IdPat, Unifier.Term> termMap = new HashMap<>();
       final Ast.Pat throughPat =
           deducePatType(env, through.pat, termMap, null, v18);
       final Ast.Exp throughExp = deduceType(triple.env, through.exp, v17);
-      equiv(unifier.apply(STREAM_TY_CON, unorderedTerm(), v18), v19);
+      equiv(unifier.apply(BAG_TY_CON, v18), v19);
       equiv(unifier.apply(FN_TY_CON, v20, v19), v17);
       fromSteps.add(through.copy(throughPat, throughExp));
       TypeEnv env5 = env;
@@ -716,24 +722,12 @@ public class TypeResolver {
             (Unifier.Variable) e.getValue());
       }
       // Ordering is irrelevant because result is a singleton.
-      final Unifier.Term orderTerm2 = unorderedTerm();
-      return Triple.of(env5, v18, orderTerm2);
+      ordered = false;
+      return Triple.of(env5, v18, ordered);
 
     default:
       throw new AssertionError("unknown step type " + step.op);
     }
-  }
-
-  /** Term that, as first argument to {@link #STREAM_TY_CON}, indicates that
-   * the stream is ordered, and will therefore become a {@code list}. */
-  private Unifier.Term orderedTerm() {
-    return unifier.atom("$list");
-  }
-
-  /** Term that, as first argument to {@link #STREAM_TY_CON}, indicates that
-   * the stream is unordered, and will therefore become a {@code bag}. */
-  private Unifier.Term unorderedTerm() {
-    return unifier.atom("$bag");
   }
 
   /** Validates a {@code Group}. Throws if there are duplicate names among
@@ -1318,17 +1312,15 @@ public class TypeResolver {
       for (Ast.Pat arg : list.args) {
         deducePatType(env, arg, termMap, null, vArg2);
       }
-      return reg(list, v,
-          unifier.apply(STREAM_TY_CON, orderedTerm(), vArg2));
+      return reg(list, v, unifier.apply(LIST_TY_CON, vArg2));
 
     case CONS_PAT:
       final Unifier.Variable elementType = unifier.variable();
-      final Unifier.Variable collectionType = unifier.variable();
       final Ast.InfixPat call = (Ast.InfixPat) pat;
       deducePatType(env, call.p0, termMap, null, elementType);
       deducePatType(env, call.p1, termMap, null, v);
       return reg(call, v,
-          unifier.apply(STREAM_TY_CON, collectionType, elementType));
+          unifier.apply(LIST_TY_CON, elementType));
 
     default:
       throw new AssertionError("cannot deduce type for pattern " + pat.op);
@@ -1395,7 +1387,7 @@ public class TypeResolver {
       final DataType dataType = (DataType) type;
       if (dataType.name.equals("bag")) { // TODO constant
         assert dataType.arguments.size() == 1;
-        return unifier.apply(STREAM_TY_CON, unorderedTerm(),
+        return unifier.apply(BAG_TY_CON,
             toTerm(dataType.arguments.get(0), subst));
       }
       return unifier.apply(dataType.name(), toTerms(dataType.arguments, subst));
@@ -1435,8 +1427,7 @@ public class TypeResolver {
       return unifier.apply(result, args);
     case LIST:
       final ListType listType = (ListType) type;
-      return unifier.apply(STREAM_TY_CON, orderedTerm(),
-          toTerm(listType.elementType, subst));
+      return unifier.apply(LIST_TY_CON, toTerm(listType.elementType, subst));
     case FORALL_TYPE:
       final ForallType forallType = (ForallType) type;
       Subst subst2 = subst;
@@ -1732,25 +1723,24 @@ public class TypeResolver {
   private static class Triple {
     final TypeEnv env;
     final Unifier.Variable v;
-    final Unifier.Term orderingTerm;
+    final boolean ordered;
 
-    private Triple(TypeEnv env, Unifier.Variable v, Unifier.Term orderingTerm) {
+    private Triple(TypeEnv env, Unifier.Variable v, boolean ordered) {
       this.env = requireNonNull(env);
       this.v = requireNonNull(v);
-      this.orderingTerm = requireNonNull(orderingTerm);
+      this.ordered = ordered;
     }
 
-    static Triple of(TypeEnv env, Unifier.Variable v,
-        Unifier.Term orderingTerm) {
-      return new Triple(env, v, orderingTerm);
+    static Triple of(TypeEnv env, Unifier.Variable v, boolean ordered) {
+      return new Triple(env, v, ordered);
     }
 
     Triple withV(Unifier.Variable v) {
-      return new Triple(env, v, orderingTerm);
+      return new Triple(env, v, ordered);
     }
 
-    Triple withOrdering(Unifier.Term orderingTerm) {
-      return new Triple(env, v, orderingTerm);
+    Triple withOrdering(boolean ordered) {
+      return new Triple(env, v, ordered);
     }
   }
 }
