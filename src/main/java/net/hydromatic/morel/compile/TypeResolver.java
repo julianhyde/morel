@@ -111,13 +111,8 @@ public class TypeResolver {
   static final String TUPLE_TY_CON = "tuple";
   static final String OVERLOAD_TY_CON = BuiltIn.Datatype.OVERLOAD.mlName();
   static final String LIST_TY_CON = "list";
-  static final String STREAM_TY_CON = "$stream";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
-
-  static {
-    assert STREAM_TY_CON.equals(BuiltIn.Eqtype.STREAM.mlName());
-  }
 
   /** A field of this name indicates that a record type is progressive. */
   static final String PROGRESSIVE_LABEL = "z$dummy";
@@ -190,12 +185,7 @@ public class TypeResolver {
         throw new TypeException("Cannot deduce type: " + result, Pos.ZERO);
       }
       final TypeMap typeMap =
-          new TypeMap(
-              typeSystem,
-              map,
-              (Substitution) result,
-              orderedTerm(),
-              unorderedTerm());
+          new TypeMap(typeSystem, map, (Substitution) result);
       while (!preferredTypes.isEmpty()) {
         Map.Entry<Variable, PrimitiveType> x = preferredTypes.remove(0);
         final Type type =
@@ -593,7 +583,7 @@ public class TypeResolver {
       Triple p,
       PairList<Ast.Id, Unifier.Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
-    final Unifier.Term orderTerm;
+    final boolean ordered;
     switch (step.op) {
       case SCAN:
         return deduceScanStepType((Ast.Scan) step, p, fieldVars, fromSteps);
@@ -836,22 +826,6 @@ public class TypeResolver {
       fromSteps.add(((Ast.Compute) group).copy(aggregates));
       return Triple.singleton(env3, v2);
     }
-  }
-
-  /**
-   * Term that, as first argument to {@link #STREAM_TY_CON}, indicates that the
-   * stream is ordered, and will therefore become a {@code list}.
-   */
-  private Unifier.Term orderedTerm() {
-    return unifier.atom("$list");
-  }
-
-  /**
-   * Term that, as first argument to {@link #STREAM_TY_CON}, indicates that the
-   * stream is unordered, and will therefore become a {@code bag}.
-   */
-  private Unifier.Term unorderedTerm() {
-    return unifier.atom("$bag");
   }
 
   /**
@@ -1708,8 +1682,7 @@ public class TypeResolver {
         final DataType dataType = (DataType) type;
         if (dataType.name.equals(BAG_TY_CON)) {
           assert dataType.arguments.size() == 1;
-          return unifier.apply(
-              STREAM_TY_CON, unorderedTerm(), toTerm(dataType.arg(0), subst));
+          return unifier.apply(BAG_TY_CON, toTerm(dataType.arg(0), subst));
         }
         return unifier.apply(
             dataType.name(), toTerms(dataType.arguments, subst));
