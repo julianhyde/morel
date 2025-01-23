@@ -2718,6 +2718,19 @@ public class MainTest {
         .assertEvalIter(equalsOrdered(list()));
   }
 
+  @Test void testFromDummy() {
+    checkFromDummy(true);
+  }
+
+  void checkFromDummy(boolean skip) {
+    if (!skip) {
+      ml("from i in bag [1,2]")
+          .assertType(hasMoniker("int bag"));
+    }
+    ml("from i in [1,2]")
+        .assertType(hasMoniker("int list"));
+  }
+
   @Test void testFromBag() {
     ml("from i in bag [1,2]")
         .assertType(hasMoniker("int bag"));

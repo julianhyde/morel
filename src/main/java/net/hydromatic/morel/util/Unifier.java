@@ -163,11 +163,7 @@ public abstract class Unifier {
   }
 
   protected Failure failure(String reason) {
-    return new Failure() {
-      @Override public String toString() {
-        return reason;
-      }
-    };
+    return () -> reason;
   }
 
   /** Called by the unifier when a Term's type becomes known. */
@@ -183,7 +179,15 @@ public abstract class Unifier {
   }
 
   /** Result indicating that unification was not possible. */
-  public static class Failure implements Result {
+  public interface Failure extends Result {
+    String reason();
+  }
+
+  /** Result indicating that unification may be possible if we adjust some
+   * initial parameters. */
+  public interface Retry extends Result {
+    /** Changes some stuff so that we can try unification again. */
+    void amend();
   }
 
   /** The results of a successful unification. Gives access to the raw variable
