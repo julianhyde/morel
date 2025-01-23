@@ -98,6 +98,7 @@ public class TypeResolver {
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
   private final List<Unifier.Constraint> constraints = new ArrayList<>();
+  private final Map<String, String> collectionMap = new HashMap<>();
 
   static final String BAG_TY_CON = BuiltIn.Eqtype.BAG.mlName();
   static final String TUPLE_TY_CON = "tuple";
@@ -158,8 +159,10 @@ public class TypeResolver {
     final Ast.Decl node2 = deduceDeclType(typeEnv, decl, PairList.of());
     final boolean debug = false;
     @SuppressWarnings("ConstantConditions")
-    final Unifier.Tracer tracer =
+    final Tracers.ConfigurableTracer tracer =
         debug ? Tracers.printTracer(System.out) : Tracers.nullTracer();
+
+    collectionMap.put("foo", "bar"); // TODO
 
     // Deduce types. The loop will retry, just once, if there are certain kinds
     // of errors.
@@ -168,14 +171,34 @@ public class TypeResolver {
       final List<Unifier.TermTerm> termPairs = new ArrayList<>();
       terms.forEach(
           tv -> termPairs.add(new Unifier.TermTerm(tv.term, tv.variable)));
+      final Tracers.ConfigurableTracer tracer2;
+      if (!collectionMap.isEmpty()) {
+        tracer2 =
+            tracer.withConflictHandler(
+                (left, right) -> {
+                  tracer.onConflict(left, right);
+                  final String leftOp = collectionMap.get(left.operator);
+                  final String rightOp = collectionMap.get(right.operator);
+                  assert false;
+                });
+      } else {
+        tracer2 = tracer;
+      }
       final Unifier.Result result =
-          unifier.unify(termPairs, actionMap, constraints, tracer);
-      if (!(result instanceof Unifier.Substitution)) {
+          unifier.unify(termPairs, actionMap, constraints, tracer2);
+      if (result instanceof Unifier.Retry) {
+        final Unifier.Retry retry = (Unifier.Retry) result;
+        retry.amend();
+        continue;
+      }
+      if (result instanceof Unifier.Failure) {
         final String extra =
             ";\n"
                 + " term pairs:\n"
                 + join("\n", transform(terms, Object::toString));
-        throw new TypeException("Cannot deduce type: " + result, Pos.ZERO);
+        final Unifier.Failure failure = (Unifier.Failure) result;
+        throw new TypeException(
+            "Cannot deduce type: " + failure.reason(), Pos.ZERO);
       }
       final TypeMap typeMap =
           new TypeMap(typeSystem, map, (Unifier.Substitution) result);
@@ -564,7 +587,8 @@ public class TypeResolver {
           // Assume bag (not ordered). If exp turns out to be a list, we will
           // change our minds later.
           ordered = false;
-          reg(scanExp, v15, unifier.apply(BAG_TY_CON, v16));
+          String name = defineOp(BAG_TY_CON);
+          reg(scanExp, v15, unifier.apply(name, v16));
         }
         final Ast.Pat pat2 =
             deducePatType(triple.env, scan.pat, termMap1, null, v16);
@@ -772,6 +796,18 @@ public class TypeResolver {
 
       default:
         throw new AssertionError("unknown step type " + step.op);
+    }
+  }
+
+  private String defineOp(String preferredTypeConstructor) {
+    for (int i = 0; ; ) {
+      final String key = preferredTypeConstructor + '$' + i;
+      if (collectionMap.containsKey(key)) {
+        ++i;
+        continue;
+      }
+      collectionMap.put(key, preferredTypeConstructor);
+      return key;
     }
   }
 

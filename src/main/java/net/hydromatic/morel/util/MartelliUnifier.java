@@ -178,7 +178,7 @@ public class MartelliUnifier extends Unifier {
   }
 
   /** Workspace for {@link MartelliUnifier}. */
-  static class Work {
+  class Work {
     final Tracer tracer;
     final ArrayQueue<TermTerm> deleteQueue = new ArrayQueue<>();
     final ArrayQueue<TermTerm> seqSeqQueue = new ArrayQueue<>();
