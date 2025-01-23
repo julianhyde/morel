@@ -182,7 +182,7 @@ public class MartelliUnifier extends Unifier {
   }
 
   /** Workspace for {@link MartelliUnifier}. */
-  static class Work {
+  class Work {
     final Tracer tracer;
     final ArrayQueue<TermTerm> deleteQueue = new ArrayQueue<>();
     final ArrayQueue<TermTerm> seqSeqQueue = new ArrayQueue<>();
@@ -236,8 +236,6 @@ public class MartelliUnifier extends Unifier {
 
     /**
      * Applies a mapping to all term pairs in a list, modifying them in place.
-     *
-     * @return
      */
     private @Nullable Failure substituteList(Variable variable, Term term) {
       sub(variable, term, deleteQueue, Kind.DELETE);
