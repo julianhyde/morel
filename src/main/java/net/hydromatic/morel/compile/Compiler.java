@@ -536,6 +536,15 @@ public class Compiler {
       Set<Core.Exp> queriesToWrap, List<Code> matchCodes,
       List<Binding> bindings, List<Action> actions) {
     switch (decl.op) {
+    case OVER_DECL:
+      final Core.OverDecl overDecl = (Core.OverDecl) decl;
+      if (actions != null) {
+        actions.add((outLines, outBindings, evalEnv) -> {
+          outLines.accept("over " + overDecl.name);
+        });
+      }
+      break;
+
     case VAL_DECL:
     case REC_VAL_DECL:
       final Core.ValDecl valDecl = (Core.ValDecl) decl;
