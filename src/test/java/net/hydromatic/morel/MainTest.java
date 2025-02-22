@@ -260,6 +260,8 @@ public class MainTest {
             containsString(
                 "Encountered \" \"rec\" \"rec \"\" at line 1, column 19."));
 
+    ml("let val inst first = fn (x, y) => x in x + y end").assertParseSame();
+
     // : is right-associative and low precedence
     ml("1 : int : int").assertParseSame();
     ml("(2 : int) + 1 : int").assertParseSame();
