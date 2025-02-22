@@ -1157,7 +1157,7 @@ public class TypeResolver {
     for (Ast.FunBind funBind : funDecl.funBinds) {
       valBindList.add(toValBind(env, funBind));
     }
-    return ast.valDecl(funDecl.pos, true, valBindList);
+    return ast.valDecl(funDecl.pos, true, false, valBindList);
   }
 
   private Ast.ValBind toValBind(TypeEnv env, Ast.FunBind funBind) {

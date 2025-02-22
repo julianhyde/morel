@@ -34,16 +34,29 @@ over second;
 over third;
 > over third
 
-(*
-inst first = fn (x, y) -> x;
-inst second = fn (x, y) -> y;
+val inst first = fn (x, y) => x;
+> val first = fn : 'a * 'b -> 'a
+val inst second = fn (x, y) => y;
+> val second = fn : 'a * 'b -> 'b
 
-inst first = fn (x, y, z) -> x;
-inst second = fn (x, y, z) -> y;
-inst third = fn (x, y, z) -> z;
+val inst first = fn (x, y, z) => x;
+> val first = fn : 'a * 'b * 'c -> 'a
+val inst second = fn (x, y, z) => y;
+> val second = fn : 'a * 'b * 'c -> 'b
+val inst third = fn (x, y, z) => z;
+> val third = fn : 'a * 'b * 'c -> 'c
 
-val demo = fn r -> (second r, first r)
+val demo = fn r => (second r, first r);
+> val demo = fn : 'a * 'b * 'c -> 'b * 'a
+(* Should be:
 > val demo = fn : (first : 'a -> 'b, second : 'a -> 'c) => 'a -> ('c, 'b)
+*)
+demo (3,"four",5);
+> val it = ("four",3) : string * int
+
+(* This should also work:
+demo (3,"four");
+> val it = ("four",3) : string * int
 *)
 
 (*) End overload.smli

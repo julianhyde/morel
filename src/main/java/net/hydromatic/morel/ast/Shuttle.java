@@ -224,7 +224,8 @@ public class Shuttle {
   }
 
   protected Ast.ValDecl visit(Ast.ValDecl valDecl) {
-    return ast.valDecl(valDecl.pos, valDecl.rec, visitList(valDecl.valBinds));
+    return ast.valDecl(
+        valDecl.pos, valDecl.rec, valDecl.inst, visitList(valDecl.valBinds));
   }
 
   protected Ast.ValBind visit(Ast.ValBind valBind) {
