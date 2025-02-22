@@ -283,7 +283,7 @@ public abstract class Compiles {
   /** Converts {@code e} to {@code val = e}. */
   public static Ast.ValDecl toValDecl(Ast.Exp statement) {
     final Pos pos = statement.pos;
-    return ast.valDecl(pos, false,
+    return ast.valDecl(pos, false, false,
         ImmutableList.of(ast.valBind(pos, ast.idPat(pos, "it"), statement)));
   }
 
