@@ -1113,11 +1113,14 @@ public class Ast {
   /** Parse tree node of a value declaration. */
   public static class ValDecl extends Decl {
     public final boolean rec;
+    public final boolean inst;
     public final List<ValBind> valBinds;
 
-    protected ValDecl(Pos pos, boolean rec, ImmutableList<ValBind> valBinds) {
+    protected ValDecl(
+        Pos pos, boolean rec, boolean inst, ImmutableList<ValBind> valBinds) {
       super(pos, Op.VAL_DECL);
       this.rec = rec;
+      this.inst = inst;
       this.valBinds = requireNonNull(valBinds);
       checkArgument(!valBinds.isEmpty());
     }
@@ -1146,7 +1149,10 @@ public class Ast {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      String sep = rec ? "val rec " : "val ";
+      String sep =
+          rec
+              ? (inst ? "val rec inst " : "val rec ")
+              : (inst ? "val inst " : "val ");
       for (ValBind valBind : valBinds) {
         w.append(sep);
         sep = " and ";
@@ -1162,7 +1168,7 @@ public class Ast {
     public ValDecl copy(Iterable<ValBind> valBinds) {
       return Iterables.elementsEqual(this.valBinds, valBinds)
           ? this
-          : ast.valDecl(pos, rec, valBinds);
+          : ast.valDecl(pos, rec, inst, valBinds);
     }
   }
 

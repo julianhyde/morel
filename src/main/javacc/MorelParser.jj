@@ -1088,16 +1088,18 @@ ValDecl valDecl() :
 {
   final Span span;
   boolean rec = false;
+  boolean inst = false;
   final List<Ast.ValBind> valBinds = new ArrayList<>();
 }
 {
   <VAL> { span = Span.of(pos()); }
   [ <REC> { rec = true; } ]
+  [ <INST> { inst = true; } ]
   valBind(valBinds)
   (
     <AND> valBind(valBinds)
   )*
-  { return ast.valDecl(span.end(this), rec, valBinds); }
+  { return ast.valDecl(span.end(this), rec, inst, valBinds); }
 }
 
 void valBind(List<Ast.ValBind> valBinds) :
@@ -1608,6 +1610,7 @@ AstNode statementEof() :
 | < YIELD: "yield" >
 
 // The following are extensions for overloaded operators:
+| < INST: "inst" >
 | < OVER: "over" >
 }
 
