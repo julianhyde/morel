@@ -255,6 +255,7 @@ In Standard ML but not in Morel:
 <i>valbind</i> &rarr; <i>pat</i> <b>=</b> <i>exp</i> [ <b>and</b> <i>valbind</i> ]*
                                 destructuring
     | <b>rec</b> <i>valbind</i>               recursive
+    | <b>inst</b> <i>valbind</i>              overload instance
 <i>funbind</i> &rarr; <i>funmatch</i> [ <b>and</b> <i>funmatch</i> ]*
                                 clausal function
 <i>funmatch</i> &rarr; <i>funmatchItem</i> [ '<b>|</b>' funmatchItem ]*
