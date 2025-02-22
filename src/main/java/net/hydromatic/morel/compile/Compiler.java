@@ -610,6 +610,16 @@ public class Compiler {
             cx, valDecl, skipPat, queriesToWrap, matchCodes, bindings, actions);
         break;
 
+      case OVER_DECL:
+        final Core.OverDecl overDecl = (Core.OverDecl) decl;
+        if (actions != null) {
+          actions.add(
+              (outLines, outBindings, evalEnv) -> {
+                outLines.accept("over " + overDecl.name);
+              });
+        }
+        break;
+
       case DATATYPE_DECL:
         final Core.DatatypeDecl datatypeDecl = (Core.DatatypeDecl) decl;
         compileDatatypeDecl(datatypeDecl.dataTypes, bindings, actions);

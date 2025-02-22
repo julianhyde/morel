@@ -862,6 +862,42 @@ public class Core {
     public abstract Decl accept(Shuttle shuttle);
   }
 
+  /** Overloaded operator declaration. */
+  public static class OverDecl extends Decl {
+    public final String name;
+
+    OverDecl(String name) {
+      super(Pos.ZERO, Op.OVER_DECL);
+      this.name = requireNonNull(name);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(Op.OVER_DECL, name);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o == this
+          || o instanceof OverDecl && name.equals(((OverDecl) o).name);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("over ").append(name);
+    }
+
+    @Override
+    public OverDecl accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+  }
+
   /** Datatype declaration. */
   public static class DatatypeDecl extends Decl {
     public final List<DataType> dataTypes;

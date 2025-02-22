@@ -140,6 +140,9 @@ public class Resolver {
 
   public Core.Decl toCore(Ast.Decl node) {
     switch (node.op) {
+      case OVER_DECL:
+        return toCore((Ast.OverDecl) node);
+
       case VAL_DECL:
         return toCore((Ast.ValDecl) node);
 
@@ -150,6 +153,14 @@ public class Resolver {
         throw new AssertionError(
             "unknown decl [" + node.op + ", " + node + "]");
     }
+  }
+
+  /**
+   * Converts an {@link net.hydromatic.morel.ast.Ast.OverDecl} to a Core {@link
+   * net.hydromatic.morel.ast.Core.OverDecl}.
+   */
+  public Core.Decl toCore(Ast.OverDecl overDecl) {
+    return core.overDecl(overDecl.name);
   }
 
   /**

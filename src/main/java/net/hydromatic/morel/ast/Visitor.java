@@ -150,6 +150,8 @@ public class Visitor {
 
   // declarations
 
+  protected void visit(Ast.OverDecl overDecl) {}
+
   protected void visit(Ast.FunDecl funDecl) {
     funDecl.funBinds.forEach(this::accept);
   }
@@ -331,6 +333,8 @@ public class Visitor {
   }
 
   protected void visit(Core.DatatypeDecl datatypeDecl) {}
+
+  protected void visit(Core.OverDecl overDecl) {}
 
   protected void visit(Core.Fn fn) {
     fn.idPat.accept(this);
