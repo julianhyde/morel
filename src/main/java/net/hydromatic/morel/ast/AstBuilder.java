@@ -370,6 +370,10 @@ public enum AstBuilder {
     return new Ast.Fn(pos, ImmutableList.copyOf(matchList));
   }
 
+  public Ast.OverDecl overDecl(Pos pos, String id) {
+    return new Ast.OverDecl(pos, id);
+  }
+
   public Ast.FunDecl funDecl(Pos pos,
       Iterable<? extends Ast.FunBind> valBinds) {
     return new Ast.FunDecl(pos, ImmutableList.copyOf(valBinds));
