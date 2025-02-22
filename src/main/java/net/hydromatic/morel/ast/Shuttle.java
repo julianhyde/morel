@@ -195,6 +195,10 @@ public class Shuttle {
 
   // declarations
 
+  protected Ast.OverDecl visit(Ast.OverDecl overDecl) {
+    return ast.overDecl(overDecl.pos, overDecl.name);
+  }
+
   protected Ast.Decl visit(Ast.FunDecl funDecl) {
     return ast.funDecl(funDecl.pos, visitList(funDecl.funBinds));
   }
@@ -442,6 +446,10 @@ public class Shuttle {
 
   protected Core.Yield visit(Core.Yield yield) {
     return yield.copy(yield.bindings, yield.exp.accept(this));
+  }
+
+  public Core.OverDecl visit(Core.OverDecl overDecl) {
+    return overDecl;
   }
 }
 

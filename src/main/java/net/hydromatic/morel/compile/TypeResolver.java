@@ -854,6 +854,9 @@ public class TypeResolver {
   private Ast.Decl deduceDeclType(TypeEnv env, Ast.Decl node,
       BiConsumer<Ast.IdPat, Unifier.Term> termMap) {
     switch (node.op) {
+    case OVER_DECL:
+      return node;
+
     case VAL_DECL:
       return deduceValDeclType(env, (Ast.ValDecl) node, termMap);
 

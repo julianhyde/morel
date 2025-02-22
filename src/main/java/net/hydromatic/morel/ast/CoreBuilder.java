@@ -487,6 +487,10 @@ public enum CoreBuilder {
             match(pos, boolWildcardPat, ifFalse)));
   }
 
+  public Core.OverDecl overDecl(String name) {
+    return new Core.OverDecl(name);
+  }
+
   public Core.DatatypeDecl datatypeDecl(Iterable<DataType> dataTypes) {
     return new Core.DatatypeDecl(ImmutableList.copyOf(dataTypes));
   }
