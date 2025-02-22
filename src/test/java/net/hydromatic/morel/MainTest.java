@@ -152,6 +152,8 @@ public class MainTest {
     ml("fun plus x y = x + y")
         .assertParseDecl(Ast.FunDecl.class, "fun plus x y = x + y");
 
+    ml("over x").assertParseDecl(Ast.OverDecl.class, "over x");
+
     ml("datatype 'a option = NONE | SOME of 'a")
         .assertParseDecl(
             Ast.DatatypeDecl.class, "datatype 'a option = NONE | SOME of 'a");

@@ -1065,6 +1065,8 @@ Ast.Decl decl() :
   n = valDecl() { return n; }
 |
   n = funDecl() { return n; }
+|
+  n = overDecl() { return n; }
 }
 
 /** Parses a declaration followed by end-of-file. */
@@ -1074,6 +1076,19 @@ Ast.Decl declEof() :
 }
 {
   d = decl() <EOF> { return d; }
+}
+
+/** Parses an overload declaration, e.g.
+ * {@code over myFun}. */
+Ast.OverDecl overDecl() :
+{
+  final Span span;
+  final Ast.Id id;
+}
+{
+  <OVER> { span = Span.of(pos()); }
+  id = identifier()
+  { return ast.overDecl(span.end(this), id.name); }
 }
 
 /** Parses a type declaration, e.g.
@@ -1533,6 +1548,9 @@ AstNode statementEof() :
 | < UNION: "union" >
 | < WHERE: "where" >
 | < YIELD: "yield" >
+
+// The following are extensions for overloaded operators:
+| < OVER: "over" >
 }
 
 /* LITERALS */
