@@ -25,7 +25,8 @@ Sys.set ("printLength", 64);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* Example based on "A Second Look at Overloading" by Martin Odersky, Philip
+(* ---------------------------------------------------------------------------
+ * Example based on "A Second Look at Overloading" by Martin Odersky, Philip
  * Wadler, Martin Wehr (1995). *)
 over first;
 > over first
@@ -58,5 +59,38 @@ demo (3,"four",5);
 demo (3,"four");
 > val it = ("four",3) : string * int
 *)
+
+(* ---------------------------------------------------------------------------
+ * A simpler case, will help us mix lists and bags in queries. *)
+
+(* A type similar to the built-in 'bag', and a function to convert any list to
+   a multiset. *)
+datatype 'a multiset =
+    MULTI_NIL
+  | MULTI_CONS of ('a * 'a multiset);
+> datatype 'a multiset = MULTI_CONS of 'a * 'a multiset | MULTI_NIL
+fun listToMultiset [] = MULTI_NIL
+  | listToMultiset (h :: t) = MULTI_CONS (h, listToMultiset t);
+> val listToMultiset = fn : 'a list -> 'a multiset
+
+(* Declare that 'unsort' is overloaded. *)
+over unsort;
+> over unsort
+
+(* Declare an instance of 'unsort' that converts a list to a multiset. *)
+val inst unsort = fn aList => listToMultiset aList;
+> val unsort = fn : 'a list -> 'a multiset
+unsort [1, 2];
+> val it = MULTI_CONS (1,MULTI_CONS (2,MULTI_NIL)) : int multiset
+
+(* Declare an instance of 'unsort' that leaves a multiset as a multiset. *)
+val inst unsort = fn aBag: 'a multiset => aBag;
+> val unsort = fn : 'a multiset -> 'a multiset
+unsort (MULTI_CONS (1, MULTI_CONS (2, MULTI_NIL)));
+> val it = MULTI_CONS (1,MULTI_CONS (2,MULTI_NIL)) : int multiset
+
+(*) The list variant still works.
+unsort [4];
+> val it = MULTI_CONS (4,MULTI_NIL) : int multiset
 
 (*) End overload.smli
