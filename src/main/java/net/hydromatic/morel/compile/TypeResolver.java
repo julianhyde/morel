@@ -150,8 +150,7 @@ public class TypeResolver {
         typeEnvs.accept(structure.name, type));
     env.forEachType(typeSystem, typeEnvs);
     final TypeEnv typeEnv = typeEnvs.typeEnv;
-    final Map<Ast.IdPat, Unifier.Term> termMap = new LinkedHashMap<>();
-    final Ast.Decl node2 = deduceDeclType(typeEnv, decl, termMap);
+    final Ast.Decl node2 = deduceDeclType(typeEnv, decl, (key, term) -> {});
     final boolean debug = false;
     @SuppressWarnings("ConstantConditions")
     final Unifier.Tracer tracer = debug
@@ -269,7 +268,7 @@ public class TypeResolver {
   private Ast.Exp deduceType(TypeEnv env, Ast.Exp node, Unifier.Variable v) {
     final List<Ast.Exp> args2;
     final Unifier.Variable v2;
-    final Map<Ast.IdPat, Unifier.Term> termMap;
+    final PairList<Ast.IdPat, Unifier.Term> termMap;
     switch (node.op) {
     case BOOL_LITERAL:
       return reg(node, v, toTerm(PrimitiveType.BOOL));
@@ -334,11 +333,11 @@ public class TypeResolver {
 
     case LET:
       final Ast.Let let = (Ast.Let) node;
-      termMap = new LinkedHashMap<>();
+      termMap = PairList.of();
       TypeEnv env2 = env;
       final List<Ast.Decl> decls = new ArrayList<>();
       for (Ast.Decl decl : let.decls) {
-        decls.add(deduceDeclType(env2, decl, termMap));
+        decls.add(deduceDeclType(env2, decl, termMap::add));
         env2 = bindAll(env2, termMap);
         termMap.clear();
       }
@@ -443,7 +442,8 @@ public class TypeResolver {
       final List<Ast.Match> matchList = new ArrayList<>();
       for (Ast.Match match : fn.matchList) {
         matchList.add(
-            deduceMatchType(env, match, new HashMap<>(), v, resultVariable));
+            deduceMatchType(env, match, (idPat, term1) -> {}, v,
+                resultVariable));
       }
       final Ast.Fn fn2b = fn.copy(matchList);
       return reg(fn2b, null, v);
@@ -494,7 +494,7 @@ public class TypeResolver {
       final Ast.Exp scanExp3;
       final Unifier.Variable v15 = unifier.variable();
       final Unifier.Variable v16 = unifier.variable();
-      final Map<Ast.IdPat, Unifier.Term> termMap1 = new HashMap<>();
+      final PairList<Ast.IdPat, Unifier.Term> termMap1 = PairList.of();
       if (scan.exp == null) {
         scanExp = null;
         eq = false;
@@ -510,12 +510,12 @@ public class TypeResolver {
         scanExp3 = deduceType(env2, scanExp, v15);
       }
       final Ast.Pat pat2 =
-          deducePatType(env2, scan.pat, termMap1, null, v16);
+          deducePatType(env2, scan.pat, termMap1::add, null, v16);
       if (scanExp != null) {
         reg(scanExp, v15, eq ? v16 : unifier.apply(LIST_TY_CON, v16));
       }
       TypeEnv env4 = env2;
-      for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1.entrySet()) {
+      for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap1) {
         env4 = env4.bind(e.getKey().name, e.getValue());
         fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
             (Unifier.Variable) e.getValue());
@@ -677,16 +677,16 @@ public class TypeResolver {
       final Unifier.Variable v20 = unifier.variable();
       equiv(unifier.apply(LIST_TY_CON, v), v20);
 
-      final Map<Ast.IdPat, Unifier.Term> termMap = new HashMap<>();
+      final PairList<Ast.IdPat, Unifier.Term> termMap = PairList.of();
       final Ast.Pat throughPat =
-          deducePatType(env, through.pat, termMap, null, v18);
+          deducePatType(env, through.pat, termMap::add, null, v18);
       final Ast.Exp throughExp = deduceType(env2, through.exp, v17);
       equiv(unifier.apply(LIST_TY_CON, v18), v19);
       equiv(unifier.apply(FN_TY_CON, v20, v19), v17);
       fromSteps.add(through.copy(throughPat, throughExp));
       TypeEnv env5 = env;
       fieldVars.clear();
-      for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap.entrySet()) {
+      for (Map.Entry<Ast.IdPat, Unifier.Term> e : termMap) {
         env5 = env5.bind(e.getKey().name, e.getValue());
         fieldVars.put(ast.id(Pos.ZERO, e.getKey().name),
             (Unifier.Variable) e.getValue());
@@ -827,11 +827,13 @@ public class TypeResolver {
   }
 
   private Ast.Match deduceMatchType(TypeEnv env, Ast.Match match,
-      Map<Ast.IdPat, Unifier.Term> termMap, Unifier.Variable argVariable,
+      BiConsumer<Ast.IdPat, Unifier.Term> termMap, Unifier.Variable argVariable,
       Unifier.Variable resultVariable) {
     final Unifier.Variable vPat = unifier.variable();
-    Ast.Pat pat2 = deducePatType(env, match.pat, termMap, null, vPat);
-    TypeEnv env2 = bindAll(env, termMap);
+    final PairList<Ast.IdPat, Unifier.Term> termMap1 = PairList.of();
+    Ast.Pat pat2 = deducePatType(env, match.pat, termMap1::add, null, vPat);
+    termMap1.forEach(termMap);
+    TypeEnv env2 = bindAll(env, termMap1);
     Ast.Exp e2 = deduceType(env2, match.exp, resultVariable);
     Ast.Match match2 = match.copy(pat2, e2);
     return reg(match2, argVariable,
@@ -848,9 +850,9 @@ public class TypeResolver {
     }
     final List<Ast.Match> matchList2 = new ArrayList<>();
     for (Ast.Match match : matchList) {
-      final Map<Ast.IdPat, Unifier.Term> termMap = new HashMap<>();
+      final PairList<Ast.IdPat, Unifier.Term> termMap = PairList.of();
       final Ast.Pat pat2 =
-          deducePatType(env, match.pat, termMap, labelNames, argVariable);
+          deducePatType(env, match.pat, termMap::add, labelNames, argVariable);
       final TypeEnv env2 = bindAll(env, termMap);
       final Ast.Exp e2 = deduceType(env2, match.exp, resultVariable);
       matchList2.add(match.copy(pat2, e2));
@@ -876,7 +878,7 @@ public class TypeResolver {
   }
 
   private AstNode deduceValBindType(TypeEnv env, Ast.ValBind valBind,
-      Map<Ast.IdPat, Unifier.Term> termMap, Unifier.Variable v,
+      BiConsumer<Ast.IdPat, Unifier.Term> termMap, Unifier.Variable v,
       Unifier.Variable vPat) {
     deducePatType(env, valBind.pat, termMap, null, vPat);
     final Ast.Exp e2 = deduceType(env, valBind.exp, vPat);
@@ -885,15 +887,15 @@ public class TypeResolver {
   }
 
   private static TypeEnv bindAll(TypeEnv env,
-      Map<Ast.IdPat, Unifier.Term> termMap) {
-    for (Map.Entry<Ast.IdPat, Unifier.Term> entry : termMap.entrySet()) {
+      PairList<Ast.IdPat, Unifier.Term> termMap) {
+    for (Map.Entry<Ast.IdPat, Unifier.Term> entry : termMap) {
       env = env.bind(entry.getKey().name, entry.getValue());
     }
     return env;
   }
 
   private Ast.Decl deduceDeclType(TypeEnv env, Ast.Decl node,
-      Map<Ast.IdPat, Unifier.Term> termMap) {
+      BiConsumer<Ast.IdPat, Unifier.Term> termMap) {
     switch (node.op) {
     case VAL_DECL:
       return deduceValDeclType(env, (Ast.ValDecl) node, termMap);
@@ -914,7 +916,7 @@ public class TypeResolver {
 
   private Ast.Decl deduceDataTypeDeclType(TypeEnv env,
       Ast.DatatypeDecl datatypeDecl,
-      Map<Ast.IdPat, Unifier.Term> termMap) {
+      BiConsumer<Ast.IdPat, Unifier.Term> termMap) {
     final List<Keys.DataTypeKey> keys = new ArrayList<>();
     for (Ast.DatatypeBind bind : datatypeDecl.binds) {
       final Foo foo = new Foo();
@@ -941,7 +943,7 @@ public class TypeResolver {
         } else {
           tyConType = dataType;
         }
-        termMap.put((Ast.IdPat) ast.idPat(tyCon.pos, tyCon.id.name),
+        termMap.accept((Ast.IdPat) ast.idPat(tyCon.pos, tyCon.id.name),
             toTerm(tyConType, Subst.EMPTY));
         map.put(tyCon, toTerm(tyConType, Subst.EMPTY));
       }
@@ -952,7 +954,7 @@ public class TypeResolver {
   }
 
   private Ast.Decl deduceValDeclType(TypeEnv env, Ast.ValDecl valDecl,
-      Map<Ast.IdPat, Unifier.Term> termMap) {
+      BiConsumer<Ast.IdPat, Unifier.Term> termMap) {
     final Holder<TypeEnv> envHolder = Holder.of(env);
     final Map<Ast.ValBind, Supplier<Unifier.Variable>> map0 =
         new LinkedHashMap<>();
@@ -1184,8 +1186,8 @@ public class TypeResolver {
    * @param v Type variable that this method should equate the type term that it
    *   derives for this pattern */
   private Ast.Pat deducePatType(TypeEnv env, Ast.Pat pat,
-      Map<Ast.IdPat, Unifier.Term> termMap, NavigableSet<String> labelNames,
-      Unifier.Variable v) {
+      BiConsumer<Ast.IdPat, Unifier.Term> termMap,
+      NavigableSet<String> labelNames, Unifier.Variable v) {
     switch (pat.op) {
     case BOOL_LITERAL_PAT:
       return reg(pat, v, toTerm(PrimitiveType.BOOL));
@@ -1212,7 +1214,7 @@ public class TypeResolver {
         final DataType dataType0 = pair1.left;
         return reg(pat, v, toTerm(dataType0, Subst.EMPTY));
       }
-      termMap.put(idPat, v);
+      termMap.accept(idPat, v);
       // fall through
 
     case WILDCARD_PAT:
@@ -1220,7 +1222,7 @@ public class TypeResolver {
 
     case AS_PAT:
       final Ast.AsPat asPat = (Ast.AsPat) pat;
-      termMap.put(asPat.id, v);
+      termMap.accept(asPat.id, v);
       deducePatType(env, asPat.pat, termMap, null, v);
       return reg(pat, null, v);
 
