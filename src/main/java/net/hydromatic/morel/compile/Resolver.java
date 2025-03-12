@@ -30,7 +30,6 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -339,6 +338,7 @@ public class Resolver {
       return toCore((Ast.Let) exp);
     case FROM:
     case EXISTS:
+    case FORALL:
       return toCore((Ast.FromBase) exp);
     case TUPLE:
       return toCore((Ast.Tuple) exp);
@@ -493,10 +493,7 @@ public class Resolver {
   private Core.Exp toCoreImplies(Ast.Exp a0, Ast.Exp a1) {
     Core.Exp core0 = toCore(a0);
     Core.Exp core1 = toCore(a1);
-    Core.Literal not =
-        core.functionLiteral(typeMap.typeSystem, BuiltIn.NOT);
-    return core.orElse(typeMap.typeSystem,
-        core.apply(a1.pos, PrimitiveType.BOOL, not, core0),
+    return core.orElse(typeMap.typeSystem, core.not(typeMap.typeSystem, core0),
         core1);
   }
 
@@ -883,6 +880,14 @@ public class Resolver {
         // Translate "exists ..." as if they had written
         // "Relational.exists (from ...)"
         return core.exists(typeMap.typeSystem, from.pos, coreFrom);
+      } else if (from.op == Op.FORALL) {
+        // Translate "forall ... require e" as if they had written
+        // "not exists (from ... where not e)".
+        //
+        // We assume that the last step 'require e', and we know that
+        // 'require e' translates to the same as 'where not e'.
+        checkArgument(last(from.steps).op == Op.REQUIRE);
+        return core.notExists(typeMap.typeSystem, from.pos, coreFrom);
       } else if (from.isCompute()) {
         return core.only(typeMap.typeSystem, from.pos, coreFrom);
       } else {
@@ -924,6 +929,14 @@ public class Resolver {
     @Override protected void visit(Ast.Where where) {
       final Resolver r = withEnv(fromBuilder.bindings());
       fromBuilder.where(r.toCore(where.exp));
+    }
+
+    @Override protected void visit(Ast.Require require) {
+      // 'require e' translates to the same as 'where not e'
+      final Resolver r = withEnv(fromBuilder.bindings());
+      final Core.Exp coreRequire = r.toCore(require.exp);
+      final Core.Exp coreNot = core.not(typeMap.typeSystem, coreRequire);
+      fromBuilder.where(coreNot);
     }
 
     @Override protected void visit(Ast.Skip skip) {

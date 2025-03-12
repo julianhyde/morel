@@ -1581,7 +1581,7 @@ public class Ast {
       if (left > op.left || op.right < right) {
         return w.append("(").append(this, 0, 0).append(")");
       } else {
-        w.append(op == Op.FROM ? "from" : "exists");
+        w.append(op.lowerName()); // "from", "exists", "forall"
         forEachIndexed(steps, (step, i) -> {
           if (step.op == Op.SCAN && i > 0) {
             if (steps.get(i - 1).op == Op.SCAN) {
@@ -1654,6 +1654,29 @@ public class Ast {
       return this.steps.equals(steps)
           ? this
           : ast.exists(pos, steps);
+    }
+
+    @Override public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+  }
+
+  /** Forall expression. */
+  public static class Forall extends FromBase {
+    Forall(Pos pos, ImmutableList<FromStep> steps) {
+      super(pos, Op.FORALL, steps, null);
+    }
+
+    @Override public Forall copy(List<FromStep> steps,
+        @Nullable Exp implicitYieldExp) {
+      checkArgument(implicitYieldExp == null);
+      return this.steps.equals(steps)
+          ? this
+          : ast.forall(pos, steps);
     }
 
     @Override public Exp accept(Shuttle shuttle) {
@@ -1766,6 +1789,32 @@ public class Ast {
 
     public Where copy(Exp exp) {
       return this.exp.equals(exp) ? this : new Where(pos, exp);
+    }
+  }
+
+  /** A {@code require} clause in a {@code forall} expression. */
+  public static class Require extends FromStep {
+    public final Exp exp;
+
+    Require(Pos pos, Exp exp) {
+      super(pos, Op.REQUIRE);
+      this.exp = exp;
+    }
+
+    @Override AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(" require ").append(exp, 0, 0);
+    }
+
+    @Override public AstNode accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Require copy(Exp exp) {
+      return this.exp.equals(exp) ? this : new Require(pos, exp);
     }
   }
 

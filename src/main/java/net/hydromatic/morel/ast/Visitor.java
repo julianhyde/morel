@@ -193,6 +193,13 @@ public class Visitor {
     }
   }
 
+  protected void visit(Ast.Forall forall) {
+    forall.steps.forEach(this::accept);
+    if (forall.implicitYieldExp != null) {
+      forall.implicitYieldExp.accept(this);
+    }
+  }
+
   protected void visit(Ast.Scan scan) {
     scan.pat.accept(this);
     if (scan.exp != null) {
@@ -216,6 +223,10 @@ public class Visitor {
 
   protected void visit(Ast.Where where) {
     where.exp.accept(this);
+  }
+
+  protected void visit(Ast.Require require) {
+    require.exp.accept(this);
   }
 
   protected void visit(Ast.Skip skip) {

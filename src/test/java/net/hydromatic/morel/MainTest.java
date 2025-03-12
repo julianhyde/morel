@@ -1983,6 +1983,141 @@ public class MainTest {
             + "compute sum = sum, count = count");
   }
 
+  /** This test is a copy of {@link #testParseFrom()}, replacing "from" with
+   * "forall". */
+  @Test void testParseForall() {
+    ml("forall require true").assertParseSame();
+    ml("forall e in emps require true").assertParseSame();
+    ml("forall e in emps where c").assertParseSame();
+    ml("forall e in emps, d in depts").assertParseSame();
+    ml("forall e in emps, d where hasEmp e").assertParseSame();
+    ml("forall e, d where hasEmp e").assertParseSame();
+    ml("forall e in emps, job, d where hasEmp (e, d, job)")
+        .assertParseSame();
+    ml("forall a, b in emps where a > b join c join d in depts where c > d")
+        .assertParse("forall a, b in emps where a > b "
+            + "join c, d in depts where c > d");
+    ml("forall a, b in emps where a > b join c, d in depts where c > d")
+        .assertParseSame();
+    ml("forall e in emps, d in depts on e.deptno = d.deptno")
+        .assertParse("forall e in emps, d in depts on #deptno e = #deptno d");
+    ml("forall e in emps on true, d in depts on e.deptno = d.deptno")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"on\" \"on \"\" "
+                + "at line 1, column 18."));
+    ml("forall e, d in depts on e.deptno = d.deptno")
+        .assertParse("forall e, d in depts on #deptno e = #deptno d");
+    ml("forall , d in depts").assertError("Xx");
+    ml("forall join d in depts on c").assertError("Xx");
+    ml("forall left join d in depts on c").assertError("Xx");
+    ml("forall right join d in depts on c").assertError("Xx");
+    ml("forall full join d in depts on c").assertError("Xx");
+    ml("forall e in emps join d in depts").assertError("Xx");
+    ml("forall e in emps join d in depts where c").assertError("Xx");
+    ml("forall e in emps join d in depts on c")
+        .assertParse("forall e in emps, d in depts on c");
+    if ("TODO".isEmpty()) {
+      ml("forall e in emps left join d in depts on c").assertParseSame();
+      ml("forall e in emps right join d in depts on c").assertParseSame();
+      ml("forall e in emps full join d in depts on c").assertParseSame();
+    }
+    ml("forall e in (forall z in emps), d in (forall y in depts) on c")
+        .assertParseSame();
+    ml("forall e in emps distinct").assertParseSame();
+    ml("forall e in emps distinct where deptno > 10").assertParseSame();
+    ml("forall e in emps\n"
+        + " group e.deptno\n"
+        + " join d in depts on deptno = d.deptno\n"
+        + " group d.location\n")
+        .assertParse("forall e in emps"
+            + " group deptno = #deptno e"
+            + " join d in depts on deptno = #deptno d"
+            + " group location = #location d");
+    // As previous, but use 'group e = {...}' so that we can write 'e.deptno'
+    // later in the query.
+    ml("forall e in emps\n"
+        + " group e = {e.deptno}\n"
+        + " join d in depts on e.deptno = d.deptno\n"
+        + " group d.location")
+        .assertParse("forall e in emps"
+            + " group e = {deptno = #deptno e}"
+            + " join d in depts on #deptno e = #deptno d"
+            + " group location = #location d");
+    ml("(forall e in emps where e.id = 101, d in depts)")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"in\" \"in \"\" at line 1, column 39."));
+    ml("forall e in emps where e.id = 101 join d in depts")
+        .assertParse("forall e in emps where #id e = 101 join d in depts");
+    // after 'group', you have to use 'join' not ','
+    ml("(forall e in emps\n"
+        + " group e.id compute count,\n"
+        + " d in depts\n"
+        + " where false)")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"in\" \"in \"\" at line 3, column 4."));
+    ml("(forall e in emps\n"
+        + " group e.id compute count\n"
+        + " join d in depts\n"
+        + " where false)")
+        .assertParse("forall e in emps"
+            + " group id = #id e compute count = count"
+            + " join d in depts where false");
+    ml("forall e in emps skip 1 take 2").assertParseSame();
+    ml("forall e in emps order e.empno take 2")
+        .assertParse("forall e in emps order #empno e take 2");
+    ml("forall e in emps order e.empno take 2 skip 3 skip 1+1 take 2")
+        .assertParse("forall e in emps order #empno e take 2 skip 3 skip 1 + 1 "
+            + "take 2");
+    ml("fn f => forall i in [1, 2, 3] where f i")
+        .assertParseSame();
+    ml("fn f => forall i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
+        .assertParse("fn f => forall i in [1, 2, 3],"
+            + " j in [3, 4] on f (i, j) yield i + j");
+
+    // In "forall p in exp" and "forall p = exp", p can be any pattern
+    // but in "forall v" v can only be an identifier.
+    ml("forall x, y in [1, 2], z").assertParseSame();
+    ml("forall {x, y} in [{x=1, y=2}], z")
+        .assertParse("forall {x = x, y = y} in [{x = 1, y = 2}], z");
+    ml("forall {x, y}, z")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \",\" \", \"\" "
+                + "at line 1, column 14."));
+    ml("forall {x, y} group")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"group\" \"group \"\" "
+                + "at line 1, column 15."));
+    ml("forall {x, y} where true")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"where\" \"where \"\" "
+                + "at line 1, column 15."));
+    ml("forall (x, y) where true")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"where\" \"where \"\" "
+                + "at line 1, column 15."));
+    ml("forall w as (x, y) order x")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \" \"order\" \"order \"\" "
+                + "at line 1, column 20."));
+    ml("forall (x, y)")
+        .assertParseThrowsParseException(
+            startsWith("Encountered \"<EOF>\" at line 1, column 13."));
+    ml("forall e in emps\n"
+        + "through e in empsInDept 20\n"
+        + "yield e.sal")
+        .assertParse("forall e in emps through e in empsInDept 20 yield #sal e");
+    ml("forall e in emps\n"
+        + "yield e.empno\n"
+        + "into sum")
+        .assertParse("forall e in emps yield #empno e into sum");
+    ml("forall e in emps\n"
+        + "yield e.empno\n"
+        + "compute sum, count")
+        .assertParse("forall e in emps "
+            + "yield #empno e "
+            + "compute sum = sum, count = count");
+  }
+
   @Test void testFromYield() {
     ml("from a in [1], b in [true]")
         .assertType("{a:int, b:bool} list");
@@ -2041,6 +2176,10 @@ public class MainTest {
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int")
         .assertEval(is(1));
+    ml("exists d in [{a=1,b=true}] where d.a = 0")
+        .assertType("bool");
+    ml("forall d in [{a=1,b=true}] require d.a = 0")
+        .assertType("bool");
     ml("from d in [{a=1,b=true}] yield d.a into sum $yield \"a\"$", '$')
         .assertCompileException(pos ->
             throwsA(CompileException.class,
@@ -2049,6 +2188,25 @@ public class MainTest {
         .assertCompileException(pos ->
             throwsA(CompileException.class,
                 "'into' step must not occur in 'exists'", pos));
+
+
+    ml("forall d in [{a=1,b=true}] yield d.a $into sum$", '$')
+        .assertCompileException(pos ->
+            throwsA(CompileException.class,
+                "'into' step must not occur in 'forall'", pos));
+    ml("forall d in [{a=1,b=true}] yield d.a $compute sum$", '$')
+        .assertCompileException(pos ->
+            throwsA(CompileException.class,
+                "'compute' step must not occur in 'forall'", pos));
+    ml("forall d in [{a=1,b=true}] $yield d.a$", '$')
+        .assertCompileException(pos ->
+            throwsA(CompileException.class,
+                "last step of 'forall' must be 'require'", pos));
+    ml("forall $d in [{a=1,b=true}]$", '$')
+        .assertCompileException(pos ->
+            throwsA(CompileException.class,
+                "last step of 'forall' must be 'require'", pos));
+
     // "map String.size" has type "string list -> int list",
     // and therefore the type of "j" is "int"
     ml("from s in [\"ab\",\"c\"]\n"

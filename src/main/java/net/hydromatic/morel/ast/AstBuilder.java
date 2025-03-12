@@ -340,6 +340,10 @@ public enum AstBuilder {
     return new Ast.Exists(pos, ImmutableList.copyOf(steps));
   }
 
+  public Ast.Forall forall(Pos pos, List<Ast.FromStep> steps) {
+    return new Ast.Forall(pos, ImmutableList.copyOf(steps));
+  }
+
   public Ast.From from(Pos pos, List<Ast.FromStep> steps) {
     final Ast.Exp implicitYieldExp =
         Ast.From.implicitYieldExp(pos, steps);
@@ -494,6 +498,10 @@ public enum AstBuilder {
 
   public Ast.FromStep distinct(Pos pos) {
     return new Ast.Distinct(pos);
+  }
+
+  public Ast.FromStep require(Pos pos, Ast.Exp exp) {
+    return new Ast.Require(pos, exp);
   }
 
   public Ast.FromStep skip(Pos pos, Ast.Exp exp) {

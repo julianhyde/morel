@@ -75,6 +75,7 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
@@ -364,23 +365,11 @@ public class TypeResolver {
       return reg(if2, null, v);
 
     case CASE:
-      final Ast.Case case_ = (Ast.Case) node;
-      v2 = unifier.variable();
-      final Ast.Exp e2b = deduceType(env, case_.exp, v2);
-      final NavigableSet<String> labelNames = new TreeSet<>();
-      final Unifier.Term argType = map.get(e2b);
-      if (argType instanceof Unifier.Sequence) {
-        final List<String> fieldList = fieldList((Unifier.Sequence) argType);
-        if (fieldList != null) {
-          labelNames.addAll(fieldList);
-        }
-      }
-      final List<Ast.Match> matchList2 =
-          deduceMatchListType(env, case_.matchList, labelNames, v2, v);
-      return reg(case_.copy(e2b, matchList2), null, v);
+      return deduceCaseType(env, (Ast.Case) node, v);
 
     case FROM:
     case EXISTS:
+    case FORALL:
       // "(from exp: v50 as id: v60 [, exp: v51 as id: v61]...
       //  [where filterExp: v5] [yield yieldExp: v4]): v"
       final Ast.FromBase from = (Ast.FromBase) node;
@@ -394,16 +383,19 @@ public class TypeResolver {
         switch (step.e.op) {
         case COMPUTE:
         case INTO:
-          if (from.op == Op.EXISTS) {
+        case REQUIRE:
+          if (step.e.op == Op.REQUIRE && from.op != Op.FORALL
+              || step.e.op == Op.COMPUTE && from.op != Op.FROM
+              || step.e.op == Op.INTO && from.op != Op.FROM) {
             String message =
-                step.e.op == Op.INTO ? "'into' step must not occur in 'exists'"
-                    : "'compute' step must not occur in 'exists'";
+                String.format("'%s' step must not occur in '%s'",
+                    step.e.op.lowerName(), from.op.lowerName());
             throw new CompileException(message, false, step.e.pos);
           }
           if (step.i != from.steps.size() - 1) {
             String message =
-                step.e.op == Op.INTO ? "'into' step must be last in 'from'"
-                    : "'compute' step must be last in 'from'";
+                String.format("'%s' step must be last in '%s'",
+                    step.e.op.lowerName(), from.op.lowerName());
             throw new CompileException(message, false,
                 from.steps.get(step.i + 1).pos);
           }
@@ -411,6 +403,15 @@ public class TypeResolver {
         }
         env3 = p.left;
         v3 = p.right;
+      }
+      if (from.op == Op.FORALL) {
+        AstNode step = from.steps.isEmpty() ? from : last(from.steps);
+        if (step.op != Op.REQUIRE) {
+          String message =
+              String.format("last step of '%s' must be '%s'",
+                  from.op.lowerName(), Op.REQUIRE.lowerName());
+          throw new CompileException(message, false, step.pos);
+        }
       }
       final Ast.Exp yieldExp2;
       if (from.implicitYieldExp != null) {
@@ -422,8 +423,10 @@ public class TypeResolver {
       }
       final Ast.FromBase from2 = from.copy(fromSteps, yieldExp2);
       return reg(from2, v,
-          node.op == Op.EXISTS ? toTerm(PrimitiveType.BOOL)
-              : from.isCompute() || from.isInto() ? v3
+          node.op == Op.EXISTS || node.op == Op.FORALL
+              ? toTerm(PrimitiveType.BOOL)
+              : from.isCompute() || from.isInto()
+              ? v3
               : unifier.apply(LIST_TY_CON, v3));
 
     case ID:
@@ -570,6 +573,14 @@ public class TypeResolver {
       final Ast.Exp filter2 = deduceType(env2, where.exp, v5);
       equiv(v5, toTerm(PrimitiveType.BOOL));
       fromSteps.add(where.copy(filter2));
+      return Pair.of(env2, v);
+
+    case REQUIRE:
+      final Ast.Require require = (Ast.Require) step;
+      final Unifier.Variable v21 = unifier.variable();
+      final Ast.Exp filter3 = deduceType(env2, require.exp, v21);
+      equiv(v21, toTerm(PrimitiveType.BOOL));
+      fromSteps.add(require.copy(filter3));
       return Pair.of(env2, v);
 
     case DISTINCT:
@@ -841,6 +852,23 @@ public class TypeResolver {
       matchList2.add(match.copy(pat2, e2));
     }
     return matchList2;
+  }
+
+  private Ast.Case deduceCaseType(TypeEnv env, Ast.Case case_,
+      Unifier.Variable v) {
+    final Unifier.Variable v2 = unifier.variable();
+    final Ast.Exp e2b = deduceType(env, case_.exp, v2);
+    final NavigableSet<String> labelNames = new TreeSet<>();
+    final Unifier.Term argType = map.get(e2b);
+    if (argType instanceof Unifier.Sequence) {
+      final List<String> fieldList = fieldList((Unifier.Sequence) argType);
+      if (fieldList != null) {
+        labelNames.addAll(fieldList);
+      }
+    }
+    final List<Ast.Match> matchList2 =
+        deduceMatchListType(env, case_.matchList, labelNames, v2, v);
+    return reg(case_.copy(e2b, matchList2), null, v);
   }
 
   private AstNode deduceValBindType(TypeEnv env, Ast.ValBind valBind,

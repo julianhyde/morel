@@ -19,8 +19,13 @@
 package net.hydromatic.morel.ast;
 
 import com.google.common.collect.ImmutableMap;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
-/** Sub-types of {@link AstNode}. */
+import java.util.Locale;
+
+import static java.util.Objects.requireNonNull;
+
+/** Subtypes of {@link AstNode}. */
 public enum Op {
   // identifiers
   ID(true),
@@ -131,6 +136,7 @@ public enum Op {
   CASE,
   FROM,
   EXISTS,
+  FORALL,
   SCAN(" "),
   DISTINCT,
   WHERE,
@@ -138,6 +144,7 @@ public enum Op {
   COMPUTE,
   ORDER,
   ORDER_ITEM,
+  REQUIRE,
   SKIP,
   TAKE,
   YIELD,
@@ -153,7 +160,7 @@ public enum Op {
   /** Right precedence */
   public final int right;
   /** Operator name. Sometimes null, sometimes something like "op +". */
-  public final String opName;
+  public final @Nullable String opName;
 
   public static final ImmutableMap<String, Op> BY_OP_NAME;
 
@@ -173,7 +180,7 @@ public enum Op {
   }
 
   Op() {
-    this(null, 0, 0);
+    this("", 0, 0);
   }
 
   Op(boolean atom) {
@@ -196,12 +203,15 @@ public enum Op {
   }
 
   Op(String padded, int left, int right) {
-    this.padded = padded;
+    this.padded = requireNonNull(padded);
     this.left = left;
     this.right = right;
-    this.opName = padded == null || padded.isEmpty()
-        ? null
-        : "op " + padded.trim();
+    this.opName = padded.isEmpty() ? null : "op " + padded.trim();
+  }
+
+  /** Returns the name in lower case, e.g. "exists" for {@link #EXISTS}. */
+  public String lowerName() {
+    return name().toLowerCase(Locale.ROOT);
   }
 
   /** Converts the op of a literal or tuple expression to the corresponding op
