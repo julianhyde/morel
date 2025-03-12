@@ -339,6 +339,24 @@ Exp from() :
   }
 }
 
+/** Parses a "{@code exists id in exp where exp}" expression. */
+Exp exists() :
+{
+  final Span span;
+  Span stepSpan;
+  final List<FromStep> steps = new ArrayList<>();
+}
+{
+  <EXISTS> { span = Span.of(pos()); }
+  [ fromFirstScan(steps)
+    ( <COMMA> fromScan(steps) )*
+  ]
+  ( fromStep(steps) )*
+  {
+    return ast.exists(span.end(this), steps);
+  }
+}
+
 void fromFirstScan(List<FromStep> steps) :
 {
   final Pair<Pat, Exp> patExp;
@@ -890,6 +908,8 @@ Exp atom() :
   e = caseOf() { return e; }
 |
   e = from() { return e; }
+|
+  e = exists() { return e; }
 |
   <LPAREN> {
     span = Span.of(pos());
@@ -1449,40 +1469,41 @@ AstNode statementEof() :
 | < CASE: "case" >
 | < DATATYPE: "datatype" >
 | < DIV: "div" >
-| < ELEM: "elem" >
 | < ELSE: "else" >
-| < EXCEPT: "except" >
 | < END: "end" >
 | < FN: "fn" >
 | < FUN: "fun" >
 | < IF: "if" >
 | < IN: "in" >
-| < INTERSECT: "intersect" >
 | < LET: "let" >
 | < MOD: "mod" >
-| < NOT_ELEM: "notelem" >
 | < O: "o" >
 | < OF: "of" >
 | < ORELSE: "orelse" >
 | < REC: "rec" >
 | < THEN: "then" >
-| < UNION: "union" >
 | < VAL: "val" >
 
 // The following are relational extensions:
 | < COMPUTE: "compute" >
 | < DESC: "desc" >
 | < DISTINCT: "distinct" >
+| < ELEM: "elem" >
+| < EXCEPT: "except" >
+| < EXISTS: "exists" >
 | < FROM: "from" >
 | < GROUP: "group" >
 | < IMPLIES: "implies" >
+| < INTERSECT: "intersect" >
 | < INTO: "into" >
 | < JOIN: "join" >
+| < NOT_ELEM: "notelem" >
 | < ON: "on" >
 | < ORDER: "order" >
 | < SKIP_: "skip" >
 | < TAKE: "take" >
 | < THROUGH: "through" >
+| < UNION: "union" >
 | < WHERE: "where" >
 | < YIELD: "yield" >
 }

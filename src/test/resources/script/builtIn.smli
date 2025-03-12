@@ -916,15 +916,15 @@ Sys.plan ();
 >   : string
 
 (*) val exists : ('a -> bool) -> 'a list -> bool
-List.exists;
+List.`exists`;
 > val it = fn : ('a -> bool) -> 'a list -> bool
-List.exists (fn x => x mod 2 = 0) [1,3,5];
+List.`exists` (fn x => x mod 2 = 0) [1,3,5];
 > val it = false : bool
-List.exists (fn x => x mod 2 = 0) [2,4,6];
+List.`exists` (fn x => x mod 2 = 0) [2,4,6];
 > val it = true : bool
-List.exists (fn x => x mod 2 = 0) [1,2,3];
+List.`exists` (fn x => x mod 2 = 0) [1,2,3];
 > val it = true : bool
-List.exists (fn x => x mod 2 = 0) [];
+List.`exists` (fn x => x mod 2 = 0) [];
 > val it = false : bool
 Sys.plan ();
 > val it =
@@ -2634,11 +2634,11 @@ Sys.plan ();
 > val it = "apply(fnValue Relational.count, argCode tuple(constant(false)))"
 >   : string
 
-Relational.exists [1, 2, 3];
+Relational.`exists` [1, 2, 3];
 > val it = true : bool
-Relational.exists [];
+Relational.`exists` [];
 > val it = false : bool
-Relational.exists [false];
+Relational.`exists` [false];
 > val it = true : bool
 Sys.plan ();
 > val it = "apply(fnValue Relational.exists, argCode tuple(constant(false)))"
@@ -3208,9 +3208,9 @@ Sys.plan ();
 >   : string
 
 (*) Vector.exists : ('a -> bool) -> 'a vector -> bool
-Vector.exists;
+Vector.`exists`;
 > val it = fn : ('a -> bool) -> 'a vector -> bool
-Vector.exists (fn j => j mod 2 = 0) (Vector.fromList [3,5,7,8,9]);
+Vector.`exists` (fn j => j mod 2 = 0) (Vector.fromList [3,5,7,8,9]);
 > val it = true : bool
 Sys.plan ();
 > val it =

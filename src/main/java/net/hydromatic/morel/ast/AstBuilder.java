@@ -336,6 +336,10 @@ public enum AstBuilder {
     return new Ast.Case(pos, exp, ImmutableList.copyOf(matchList));
   }
 
+  public Ast.Exists exists(Pos pos, List<Ast.FromStep> steps) {
+    return new Ast.Exists(pos, ImmutableList.copyOf(steps));
+  }
+
   public Ast.From from(Pos pos, List<Ast.FromStep> steps) {
     final Ast.Exp implicitYieldExp =
         Ast.From.implicitYieldExp(pos, steps);

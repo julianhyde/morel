@@ -1104,7 +1104,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_NULL */
   private static final Applicable LIST_NULL =
-      isNotEmpty(BuiltIn.LIST_NULL);
+      isEmpty(BuiltIn.LIST_NULL);
 
   /** @see BuiltIn#LIST_LENGTH */
   private static final Applicable LIST_LENGTH = length(BuiltIn.LIST_LENGTH);
@@ -2349,9 +2349,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_EXISTS */
   private static final Applicable RELATIONAL_EXISTS =
-      isEmpty(BuiltIn.RELATIONAL_EXISTS);
+      isNotEmpty(BuiltIn.RELATIONAL_EXISTS);
 
-  private static ApplicableImpl isEmpty(final BuiltIn builtIn) {
+  private static ApplicableImpl isNotEmpty(final BuiltIn builtIn) {
     return new ApplicableImpl(builtIn) {
       @Override public Object apply(EvalEnv env, Object arg) {
         return !((List) arg).isEmpty();
@@ -2361,9 +2361,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_NOT_EXISTS */
   private static final Applicable RELATIONAL_NOT_EXISTS =
-      isNotEmpty(BuiltIn.RELATIONAL_NOT_EXISTS);
+      isEmpty(BuiltIn.RELATIONAL_NOT_EXISTS);
 
-  private static ApplicableImpl isNotEmpty(BuiltIn builtIn) {
+  private static ApplicableImpl isEmpty(BuiltIn builtIn) {
     return new ApplicableImpl(builtIn) {
       @Override public Boolean apply(EvalEnv env, Object arg) {
         return ((List) arg).isEmpty();

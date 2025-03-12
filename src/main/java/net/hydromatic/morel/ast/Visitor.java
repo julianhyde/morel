@@ -186,6 +186,13 @@ public class Visitor {
     }
   }
 
+  protected void visit(Ast.Exists exists) {
+    exists.steps.forEach(this::accept);
+    if (exists.implicitYieldExp != null) {
+      exists.implicitYieldExp.accept(this);
+    }
+  }
+
   protected void visit(Ast.Scan scan) {
     scan.pat.accept(this);
     if (scan.exp != null) {

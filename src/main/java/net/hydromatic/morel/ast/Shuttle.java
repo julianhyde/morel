@@ -222,6 +222,10 @@ public class Shuttle {
     return ast.from(from.pos, from.steps);
   }
 
+  protected Ast.Exp visit(Ast.Exists exists) {
+    return ast.exists(exists.pos, exists.steps);
+  }
+
   protected AstNode visit(Ast.Order order) {
     return ast.order(order.pos, order.orderItems);
   }

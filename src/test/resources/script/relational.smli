@@ -551,11 +551,11 @@ from e in emps
 (*) exists (defining the "exists" function ourselves)
 (*) and correlated sub-query
 let
-  fun exists [] = false
-    | exists (hd :: tl) = true
+  fun exists_ [] = false
+    | exists_ (hd :: tl) = true
 in
   from e in emps
-  where exists (from d in depts
+  where exists_ (from d in depts
                 where d.deptno = e.deptno
                 andalso d.name = "Engineering")
   yield e.name
@@ -819,8 +819,8 @@ order deptno;
 from e in emps
 group e.deptno
   compute sumId = sum of e.id,
-          existsId = exists of e.id,
-          existsStar = exists
+          existsId = Relational.`exists` of e.id,
+          existsStar = Relational.`exists`
 order deptno;
 > val it =
 >   [{deptno=10,existsId=true,existsStar=true,sumId=100},
@@ -1179,6 +1179,14 @@ from e in emps
   yield e.deptno
   into sum;
 > val it = 90 : int
+
+(*) Multiple 'into' is not allowed
+from e in emps
+  yield e.deptno
+  into sum
+  into sum;
+> stdIn:6.3-6.11 Error: 'into' step must be last in 'from'
+>   raised at: stdIn:6.3-6.11
 
 (*) Empty from
 from;

@@ -380,9 +380,10 @@ public class TypeResolver {
       return reg(case_.copy(e2b, matchList2), null, v);
 
     case FROM:
+    case EXISTS:
       // "(from exp: v50 as id: v60 [, exp: v51 as id: v61]...
       //  [where filterExp: v5] [yield yieldExp: v4]): v"
-      final Ast.From from = (Ast.From) node;
+      final Ast.FromBase from = (Ast.FromBase) node;
       Unifier.Variable v3 = unifier.variable();
       TypeEnv env3 = env;
       final Map<Ast.Id, Unifier.Variable> fieldVars = new LinkedHashMap<>();
@@ -390,15 +391,23 @@ public class TypeResolver {
       for (Ord<Ast.FromStep> step : Ord.zip(from.steps)) {
         Pair<TypeEnv, Unifier.Variable> p =
             deduceStepType(env, step.e, v3, env3, fieldVars, fromSteps);
-        if (step.i != from.steps.size() - 1) {
-          switch (step.e.op) {
-          case COMPUTE:
-            throw new IllegalArgumentException(
-                "'compute' step must be last in 'from'");
-          case INTO:
-            throw new CompileException("'into' step must be last in 'from'",
-                false, step.e.pos);
+        switch (step.e.op) {
+        case COMPUTE:
+        case INTO:
+          if (from.op == Op.EXISTS) {
+            String message =
+                step.e.op == Op.INTO ? "'into' step must not occur in 'exists'"
+                    : "'compute' step must not occur in 'exists'";
+            throw new CompileException(message, false, step.e.pos);
           }
+          if (step.i != from.steps.size() - 1) {
+            String message =
+                step.e.op == Op.INTO ? "'into' step must be last in 'from'"
+                    : "'compute' step must be last in 'from'";
+            throw new CompileException(message, false,
+                from.steps.get(step.i + 1).pos);
+          }
+          break;
         }
         env3 = p.left;
         v3 = p.right;
@@ -411,9 +420,10 @@ public class TypeResolver {
         requireNonNull(v3);
         yieldExp2 = null;
       }
-      final Ast.From from2 = from.copy(fromSteps, yieldExp2);
+      final Ast.FromBase from2 = from.copy(fromSteps, yieldExp2);
       return reg(from2, v,
-          from.isCompute() || from.isInto() ? v3
+          node.op == Op.EXISTS ? toTerm(PrimitiveType.BOOL)
+              : from.isCompute() || from.isInto() ? v3
               : unifier.apply(LIST_TY_CON, v3));
 
     case ID:

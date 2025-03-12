@@ -130,6 +130,7 @@ public enum Op {
   APPLY(" ", 8),
   CASE,
   FROM,
+  EXISTS,
   SCAN(" "),
   DISTINCT,
   WHERE,
@@ -198,7 +199,7 @@ public enum Op {
     this.padded = padded;
     this.left = left;
     this.right = right;
-    this.opName = padded == null || padded.equals("")
+    this.opName = padded == null || padded.isEmpty()
         ? null
         : "op " + padded.trim();
   }

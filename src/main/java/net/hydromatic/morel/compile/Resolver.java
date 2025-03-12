@@ -338,7 +338,8 @@ public class Resolver {
     case LET:
       return toCore((Ast.Let) exp);
     case FROM:
-      return toCore((Ast.From) exp);
+    case EXISTS:
+      return toCore((Ast.FromBase) exp);
     case TUPLE:
       return toCore((Ast.Tuple) exp);
     case RECORD:
@@ -643,7 +644,7 @@ public class Resolver {
     return core.match(match.pos, pat, exp);
   }
 
-  Core.Exp toCore(Ast.From from) {
+  Core.Exp toCore(Ast.FromBase from) {
     final Type type = typeMap.getType(from);
     final Core.Exp coreFrom = new FromResolver().run(from);
     checkArgument(subsumes(type, coreFrom.type()),
@@ -868,7 +869,7 @@ public class Resolver {
   private class FromResolver extends Visitor {
     final FromBuilder fromBuilder = core.fromBuilder(typeMap.typeSystem, env);
 
-    Core.Exp run(Ast.From from) {
+    Core.Exp run(Ast.FromBase from) {
       if (from.isInto()) {
         // Translate "from ... into f" as if they had written "f (from ...)"
         final Core.Exp coreFrom = run(skipLast(from.steps));
@@ -878,7 +879,11 @@ public class Resolver {
       }
 
       final Core.Exp coreFrom = run(from.steps);
-      if (from.isCompute()) {
+      if (from.op == Op.EXISTS) {
+        // Translate "exists ..." as if they had written
+        // "Relational.exists (from ...)"
+        return core.exists(typeMap.typeSystem, from.pos, coreFrom);
+      } else if (from.isCompute()) {
         return core.only(typeMap.typeSystem, from.pos, coreFrom);
       } else {
         return coreFrom;

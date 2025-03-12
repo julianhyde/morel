@@ -861,6 +861,11 @@ public enum CoreBuilder {
         ((ListType) a0.type).elementType, pos, a0);
   }
 
+  public Core.Exp exists(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
+    return call(typeSystem, BuiltIn.RELATIONAL_EXISTS, PrimitiveType.BOOL, pos,
+        a0);
+  }
+
   public Core.Exp union(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
     return call(typeSystem, BuiltIn.OP_UNION,
         ((ListType) a0.type).elementType, Pos.ZERO, a0, a1);

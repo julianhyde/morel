@@ -39,7 +39,13 @@ Contributions are welcome!
 In Morel but not Standard ML:
 * `from` expression with `in`, `join`, `where`, `distinct`, `group`,
   `compute`, `into`, `order`, `skip`, `take`, `through`, `yield` clauses
-* `union`, `except`, `intersect`, `elem`, `notelem`, `implies` operators
+* `elem`,
+  `except`,
+  `exists`,
+  `implies`,
+  `intersect`,
+  `notelem`,
+  `union` operators
 * "*lab* `=`" is optional in `exprow`
 * identifiers may be quoted
   (for example, <code>\`an identifier\`</code>)
@@ -141,6 +147,8 @@ In Standard ML but not in Morel:
     | <b>fn</b> <i>match</i>                  function
     | <b>from</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>*
                                 relational expression (<i>s</i> &ge; 0)
+    | <b>exists</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>*
+                                existential quantifier (<i>s</i> &ge; 0)
 <i>exprow</i> &rarr; <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
                                 expression row
 <i>exprowItem</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i>

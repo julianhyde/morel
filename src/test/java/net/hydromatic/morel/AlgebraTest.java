@@ -577,7 +577,7 @@ public class AlgebraTest {
    * (There are no correlating variables.) */
   @Test void testExists() {
     final String ml = "from d in scott.dept\n"
-        + "where exists (\n"
+        + "where Relational.`exists` (\n"
         + "  from e in scott.emp\n"
         + "  where e.job = \"CLERK\")\n"
         + "yield d.deptno";
@@ -613,7 +613,7 @@ public class AlgebraTest {
             .assertPlan(isFullyCalcite())
             .assertEvalIter(equalsOrdered(10, 20, 30, 40));
     final String ml0 = "from d in scott.dept\n"
-        + "where not (exists (\n"
+        + "where not (Relational.`exists` (\n"
         + "  from e in scott.emp\n"
         + "  where e.job = \"CLARK KENT\"))\n"
         + "yield d.deptno";
@@ -650,7 +650,7 @@ public class AlgebraTest {
   /** Tests that correlated {@code exists} is pushed down to Calcite. */
   @Test void testExistsCorrelated() {
     final String ml = "from d in scott.dept\n"
-        + "where exists (\n"
+        + "where Relational.`exists` (\n"
         + "  from e in scott.emp\n"
         + "  where e.deptno = d.deptno\n"
         + "  andalso e.job = \"CLERK\")";

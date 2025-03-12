@@ -19,7 +19,7 @@
  * Tests for logical expressions.
  *)
 
-(*) Implies
+(* == Implies ========================================== *)
 false implies false;
 > val it = true : bool
 false implies true;
@@ -29,7 +29,8 @@ true implies false;
 true implies true;
 > val it = true : bool
 
-(*) All departments are not department 30 or are called "SALES".
+(* All departments are not department 30 or are called
+   "SALES". *)
 from d in scott.dept
   where d.deptno = 30 implies d.dname = "SALES";
 > val it =
@@ -39,7 +40,8 @@ from d in scott.dept
 >    {deptno=40,dname="OPERATIONS",loc="BOSTON"}]
 >   : {deptno:int, dname:string, loc:string} list
 
-(*) Three departments are not department 30 or are called "RESEARCH".
+(* Three departments are not department 30 or are called
+   "RESEARCH". *)
 from d in scott.dept
   where d.deptno = 30 implies d.dname = "RESEARCH";
 > val it =
@@ -47,5 +49,51 @@ from d in scott.dept
 >    {deptno=20,dname="RESEARCH",loc="DALLAS"},
 >    {deptno=40,dname="OPERATIONS",loc="BOSTON"}]
 >   : {deptno:int, dname:string, loc:string} list
+
+(* == Exists =========================================== *)
+
+(* Exists in a lambda. *)
+val g = fn f => exists i in [1, 2, 3] where f i;
+> val g = fn : (int -> bool) -> bool
+g (fn i => i mod 2 = 0);
+> val it = true : bool
+g (fn i => i mod 5 = 0);
+> val it = false : bool
+
+(* Exists with a join in a lambda. *)
+val g2 = fn f => exists i in [1, 2, 3] join j in [3, 4] on f (i, j);
+> val g2 = fn : (int * int -> bool) -> bool
+g2 (fn (i, j) => j - i = 2);
+> val it = true : bool
+
+(* As previous, but with a spurious 'yield' step. *)
+val g3 = fn f => exists i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j;
+> val g3 = fn : (int * int -> bool) -> bool
+g3 (fn (i, j) => j - i = 2);
+> val it = true : bool
+
+(* Empty 'exists' iterates over zero variables, a collection
+   that contains one instance of the unit tuple, hence
+   returns true. *)
+exists;
+> val it = true : bool
+not exists;
+> val it = false : bool
+
+(* Empty 'exists' with 'where'. *)
+exists where true;
+> val it = true : bool
+exists where false;
+> val it = false : bool
+not exists where false;
+> val it = true : bool
+
+exists e in scott.emps where e.deptno = 20 into sum;
+> stdIn:2.44-2.52 Error: 'into' step must not occur in 'exists'
+>   raised at: stdIn:2.44-2.52
+
+exists e in scott.emps where e.deptno = 20 compute min of e.job;
+> stdIn:2.44-2.64 Error: 'compute' step must not occur in 'exists'
+>   raised at: stdIn:2.44-2.64
 
 (*) End logic.smli
