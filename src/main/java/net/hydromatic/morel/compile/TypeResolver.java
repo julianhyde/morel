@@ -296,6 +296,7 @@ public class TypeResolver {
 
     case ANDALSO:
     case ORELSE:
+    case IMPLIES:
       return infix(env, (Ast.InfixCall) node, v, PrimitiveType.BOOL);
 
     case TUPLE:

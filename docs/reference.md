@@ -39,7 +39,7 @@ Contributions are welcome!
 In Morel but not Standard ML:
 * `from` expression with `in`, `join`, `where`, `distinct`, `group`,
   `compute`, `into`, `order`, `skip`, `take`, `through`, `yield` clauses
-* `union`, `except`, `intersect`, `elem`, `notelem` operators
+* `union`, `except`, `intersect`, `elem`, `notelem`, `implies` operators
 * "*lab* `=`" is optional in `exprow`
 * identifiers may be quoted
   (for example, <code>\`an identifier\`</code>)
@@ -276,6 +276,7 @@ This grammar uses the following notation:
 | o        |    infix 3 | Compose |
 | andalso  |    infix 2 | Logical and |
 | orelse   |    infix 1 | Logical or |
+| implies  |    infix 0 | Logical implication |
 
 ## Built-in types
 

@@ -121,6 +121,7 @@ public enum Op {
   COMPOSE(" o ", 3),
   ANDALSO(" andalso ", 2),
   ORELSE(" orelse ", 1),
+  IMPLIES(" implies ", 0),
   BEFORE(" before ", 0),
   LET,
   LOCAL,

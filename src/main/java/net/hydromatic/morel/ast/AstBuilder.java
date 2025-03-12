@@ -250,6 +250,10 @@ public enum AstBuilder {
     return infix(Op.ORELSE, a0, a1);
   }
 
+  public Ast.Exp implies(Ast.Exp a0, Ast.Exp a1) {
+    return infix(Op.IMPLIES, a0, a1);
+  }
+
   public Ast.Exp plus(Ast.Exp a0, Ast.Exp a1) {
     return infix(Op.PLUS, a0, a1);
   }

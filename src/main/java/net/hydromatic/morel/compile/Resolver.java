@@ -30,6 +30,7 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -324,6 +325,8 @@ public class Resolver {
     case ANDALSO:
     case ORELSE:
       return toCore((Ast.InfixCall) exp);
+    case IMPLIES:
+      return toCoreImplies(((Ast.InfixCall) exp).a0, ((Ast.InfixCall) exp).a1);
     case APPLY:
       return toCore((Ast.Apply) exp);
     case FN:
@@ -483,6 +486,17 @@ public class Resolver {
     return core.apply(call.pos, typeMap.getType(call),
         core.functionLiteral(typeMap.typeSystem, builtIn),
         core.tuple(typeMap.typeSystem, core0, core1));
+  }
+
+  /** Translate "p implies q" as "(not p) orelse q". */
+  private Core.Exp toCoreImplies(Ast.Exp a0, Ast.Exp a1) {
+    Core.Exp core0 = toCore(a0);
+    Core.Exp core1 = toCore(a1);
+    Core.Literal not =
+        core.functionLiteral(typeMap.typeSystem, BuiltIn.NOT);
+    return core.orElse(typeMap.typeSystem,
+        core.apply(a1.pos, PrimitiveType.BOOL, not, core0),
+        core1);
   }
 
   private BuiltIn toBuiltIn(Op op) {

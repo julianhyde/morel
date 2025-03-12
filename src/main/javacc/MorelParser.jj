@@ -802,13 +802,29 @@ Exp expression1() :
   { return e; }
 }
 
+/** Parses an expression of precedence level 0 (implies). */
+Exp expression0() :
+{
+  Exp e;
+  Exp e2;
+}
+{
+  e = expression1()
+  (
+    <IMPLIES> e2 = expression1() {
+      e = ast.implies(e, e2);
+    }
+  )*
+  { return e; }
+}
+
 Exp expression() :
 {
   Exp e;
   Type t;
 }
 {
-  e = expression1()
+  e = expression0()
   (
     <COLON> t = type() {
       e = ast.annotatedExp(e.pos.plus(t.pos), e, t);
@@ -1459,6 +1475,7 @@ AstNode statementEof() :
 | < DISTINCT: "distinct" >
 | < FROM: "from" >
 | < GROUP: "group" >
+| < IMPLIES: "implies" >
 | < INTO: "into" >
 | < JOIN: "join" >
 | < ON: "on" >

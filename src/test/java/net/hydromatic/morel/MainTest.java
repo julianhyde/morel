@@ -234,6 +234,19 @@ public class MainTest {
     ml("a = (f o g) andalso (c = d)").assertParse("a = (f o g) andalso c = d");
     ml("(a = f) o g andalso (c = d)").assertParse("a = f o g andalso c = d");
 
+    // implies is left-associative
+    ml("x > 5 implies y > 3").assertParseSame();
+    ml("a implies b implies c").assertParseSame();
+    ml("(a implies b) implies c").assertParse("a implies b implies c");
+    ml("a implies (b implies c)").assertParseSame();
+
+    // implies has lower precedence than andalso and orelse
+    ml("a andalso b implies c").assertParseSame();
+    ml("a orelse b implies c orelse d").assertParseSame();
+    ml("a andalso b implies c orelse d andalso e").assertParseSame();
+    ml("(a andalso b) implies (c orelse (d andalso e))")
+        .assertParse("a andalso b implies c orelse d andalso e");
+
     // @ is right-associative;
     // lower precedence than "+" (6), higher than "=" (4)
     ml("f @ g").assertParseSame();
