@@ -19,6 +19,86 @@
  * Tests for logical expressions.
  *)
 
+val emps = scott.emp;
+> val emps = <relation>
+>   :
+>     {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
+>      job:string, mgr:int, sal:real} list
+val depts = scott.dept;
+> val depts = <relation> : {deptno:int, dname:string, loc:string} list
+
+(* == Simple examples ================================== *)
+
+(* Q1. Do any employees have a salary under 900? *)
+exists e in emps
+  where e.sal < 900.0;
+> val it = true : bool
+
+(* Answer to Q1 using 'from' and 'List.null'. *)
+not (List.null (from e in emps where e.sal < 900.0));
+> val it = true : bool
+
+(* Answer to Q1 using 'from' and 'compute'. *)
+(from e in emps
+  where e.sal < 900.0
+  compute count) > 0;
+> val it = true : bool
+
+(* Q2. Do all employees have a salary greater than 1,000? *)
+forall e in emps
+  require e.sal > 1000.0;
+> val it = false : bool
+
+(* Answer to Q2 using 'exists'. *)
+not (exists e in emps
+  where not (e.sal > 1000.0));
+> val it = false : bool
+
+(* Answer to Q2 using 'from' and 'List.null'. *)
+List.null (from e in emps where not (e.sal > 1000.0));
+> val it = false : bool
+
+(* Q3. Do all employees in department 10 earn over 1,000? *)
+forall e in emps
+  where e.deptno = 10
+  require e.sal > 1000.0;
+> val it = true : bool
+
+(* Not equivalent to Q3. Syntax is valid, but query
+   does not return the result the user wanted. *)
+forall e in emps
+  require e.deptno = 10 andalso e.sal > 1000.0;
+> val it = false : bool
+
+(* Answer to Q3 using 'implies'. *)
+forall e in emps
+  require e.deptno = 10 implies e.sal > 1000.0;
+> val it = true : bool
+
+(* Answer to Q3 using 'if'. *)
+forall e in emps
+  require if e.deptno = 10 then e.sal > 1000.0 else true;
+> val it = true : bool
+
+(* Answer to Q3 using 'not ... orelse'. *)
+forall e in emps
+  require not (e.deptno = 10) orelse e.sal > 1000.0;
+> val it = true : bool
+
+(* Answer to Q3 using 'where'. *)
+forall e in emps
+  where e.deptno = 10
+  require e.sal > 1000.0;
+> val it = true : bool
+
+(* Answer to Q3 using unconstrained variables. *)
+(* TODO
+forall e
+  require e elem emps andalso e.deptno = 10
+    implies e.sal > 1000.0;
+> val it = true : bool
+*)
+
 (* == Implies ========================================== *)
 false implies false;
 > val it = true : bool
@@ -27,6 +107,14 @@ false implies true;
 true implies false;
 > val it = false : bool
 true implies true;
+> val it = true : bool
+
+(*) 'implies' is left-associative
+false implies true implies false;
+> val it = false : bool
+(false implies true) implies false;
+> val it = false : bool
+false implies (true implies false);
 > val it = true : bool
 
 (* All departments are not department 30 or are called
@@ -114,6 +202,12 @@ forall i in [2, 3, 4, 12, 14] require i > 10 implies i mod 2 = 0;
 > val it = true : bool
 forall i in [2, 3, 4, 12, 14] where i > 10 require i mod 2 = 0;
 > val it = true : bool
+
+(*) Empty 'forall' iterates over one row.
+forall require true;
+> val it = true : bool
+forall require false;
+> val it = false : bool
 
 (*) 'forall' requires 'require'
 forall i in [2, 3, 4, 12, 14] where i > 10;
