@@ -1429,10 +1429,12 @@ public class Core {
     @Override protected AstWriter unparse(AstWriter w, From from, int ordinal,
         int left, int right) {
       w.append(" group");
-      Pair.forEachIndexed(groupExps, (i, id, exp) -> // lint:skip
+      Pair.forEachIndexed(groupExps, // lint:skip
+          (i, id, exp) ->
           w.append(i == 0 ? " " : ", ")
               .append(id, 0, 0).append(" = ").append(exp, 0, 0));
-      Pair.forEachIndexed(aggregates, (i, name, aggregate) -> // lint:skip
+      Pair.forEachIndexed(aggregates, // lint:skip
+          (i, name, aggregate) ->
           w.append(i == 0 ? " compute " : ", ")
               .append(name, 0, 0).append(" = ").append(aggregate, 0, 0));
       return w;
