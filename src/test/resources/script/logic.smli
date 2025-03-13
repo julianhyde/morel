@@ -99,6 +99,35 @@ forall e
 > val it = true : bool
 *)
 
+(* Q4. Find all departments with at least one clerk. *)
+from d in depts
+  where (exists e in emps
+    where e.deptno = d.deptno
+    andalso e.job = "CLERK");
+> val it =
+>   [{deptno=10,dname="ACCOUNTING",loc="NEW YORK"},
+>    {deptno=20,dname="RESEARCH",loc="DALLAS"},
+>    {deptno=30,dname="SALES",loc="CHICAGO"}]
+>   : {deptno:int, dname:string, loc:string} list
+
+(* Q5. Find all departments with no clerks. *)
+from d in depts
+  where not (exists e in emps
+    where e.deptno = d.deptno
+    andalso e.job = "CLERK");
+> val it = [{deptno=40,dname="OPERATIONS",loc="BOSTON"}]
+>   : {deptno:int, dname:string, loc:string} list
+
+(* Q6. Find all departments where all employees earn more than 1,000. *)
+from d in depts
+  where (forall e in emps
+    require e.deptno = d.deptno
+    implies e.sal > 1000.0);
+> val it =
+>   [{deptno=10,dname="ACCOUNTING",loc="NEW YORK"},
+>    {deptno=40,dname="OPERATIONS",loc="BOSTON"}]
+>   : {deptno:int, dname:string, loc:string} list
+
 (* == Implies ========================================== *)
 false implies false;
 > val it = true : bool

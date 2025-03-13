@@ -1194,7 +1194,7 @@ scott;
 scott.dept;
 > val it = <relation> : {deptno:int, dname:string, loc:string} list
 from d in scott.dept
-  where notExists (from e in scott.emp
+  where empty (from e in scott.emp
     where e.deptno = d.deptno
     andalso e.job = "CLERK");
 > val it = [{deptno=40,dname="OPERATIONS",loc="BOSTON"}]
@@ -1204,7 +1204,7 @@ from d in scott.dept
 Sys.set ("hybrid", true);
 > val it = () : unit
 from d in scott.dept
-  where notExists (from e in scott.emp
+  where empty (from e in scott.emp
     where e.deptno = d.deptno
     andalso e.job = "CLERK");
 > val it = [{deptno=40,dname="OPERATIONS",loc="BOSTON"}]

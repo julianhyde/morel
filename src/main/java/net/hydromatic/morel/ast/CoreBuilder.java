@@ -866,13 +866,13 @@ public enum CoreBuilder {
         ((ListType) a0.type).elementType, pos, a0);
   }
 
-  public Core.Exp exists(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
-    return call(typeSystem, BuiltIn.RELATIONAL_EXISTS, PrimitiveType.BOOL, pos,
-        a0);
+  public Core.Exp nonEmpty(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
+    return call(typeSystem, BuiltIn.RELATIONAL_NON_EMPTY, PrimitiveType.BOOL,
+        pos, a0);
   }
 
-  public Core.Exp notExists(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
-    return call(typeSystem, BuiltIn.RELATIONAL_NOT_EXISTS, PrimitiveType.BOOL,
+  public Core.Exp empty(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
+    return call(typeSystem, BuiltIn.RELATIONAL_EMPTY, PrimitiveType.BOOL,
         pos, a0);
   }
 

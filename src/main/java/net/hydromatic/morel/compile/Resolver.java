@@ -878,8 +878,8 @@ public class Resolver {
       final Core.Exp coreFrom = run(from.steps);
       if (from.op == Op.EXISTS) {
         // Translate "exists ..." as if they had written
-        // "Relational.exists (from ...)"
-        return core.exists(typeMap.typeSystem, from.pos, coreFrom);
+        // "Relational.nonEmpty (from ...)"
+        return core.nonEmpty(typeMap.typeSystem, from.pos, coreFrom);
       } else if (from.op == Op.FORALL) {
         // Translate "forall ... require e" as if they had written
         // "not exists (from ... where not e)".
@@ -887,7 +887,7 @@ public class Resolver {
         // We assume that the last step 'require e', and we know that
         // 'require e' translates to the same as 'where not e'.
         checkArgument(last(from.steps).op == Op.REQUIRE);
-        return core.notExists(typeMap.typeSystem, from.pos, coreFrom);
+        return core.empty(typeMap.typeSystem, from.pos, coreFrom);
       } else if (from.isCompute()) {
         return core.only(typeMap.typeSystem, from.pos, coreFrom);
       } else {

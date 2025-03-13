@@ -815,18 +815,30 @@ order deptno;
 >    {deptno=20,sumId=101,sumIdPlusDeptno=121}]
 >   : {deptno:int, sumId:int, sumIdPlusDeptno:int} list
 
-(*) 'group' with 'exists' as an aggregate function
+(*) 'group' with 'nonEmpty' and 'empty' as aggregate functions
 from e in emps
 group e.deptno
   compute sumId = sum of e.id,
-          existsId = Relational.`exists` of e.id,
-          existsStar = Relational.`exists`
+          existsId = Relational.nonEmpty of e.id,
+          notExistsId = Relational.empty of e.id,
+          existsStar = Relational.nonEmpty
 order deptno;
 > val it =
->   [{deptno=10,existsId=true,existsStar=true,sumId=100},
->    {deptno=20,existsId=true,existsStar=true,sumId=101},
->    {deptno=30,existsId=true,existsStar=true,sumId=205}]
->   : {deptno:int, existsId:bool, existsStar:bool, sumId:int} list
+>   [{deptno=10,existsId=true,existsStar=true,notExistsId=false,sumId=100},
+>    {deptno=20,existsId=true,existsStar=true,notExistsId=false,sumId=101},
+>    {deptno=30,existsId=true,existsStar=true,notExistsId=false,sumId=205}]
+>   : {deptno:int, existsId:bool, existsStar:bool, notExistsId:bool, sumId:int} list
+
+(*) 'compute' with 'empty' and 'nonEmpty' as an aggregate functions
+from e in emps
+compute empty, nonEmpty;
+> val it = {empty=false,nonEmpty=true} : {empty:bool, nonEmpty:bool}
+
+(*) 'compute' with 'empty' and 'nonEmpty' as an aggregate functions
+from e in emps
+where e.deptno = 50
+compute empty, nonEmpty;
+> val it = {empty=true,nonEmpty=false} : {empty:bool, nonEmpty:bool}
 
 (*) 'group' with record key
 (*) (useful if we want to refer to 'e' later in the pipeline)
