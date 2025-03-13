@@ -372,61 +372,62 @@ public class TypeResolver {
     case FORALL:
       // "(from exp: v50 as id: v60 [, exp: v51 as id: v61]...
       //  [where filterExp: v5] [yield yieldExp: v4]): v"
-      final Ast.FromBase from = (Ast.FromBase) node;
+      // "(exists exp: v50 as id: v60 [, exp: v51 as id: v61]...
+      //  [where filterExp: v5] [yield yieldExp: v4]): v" (v boolean)
+      // "(forall exp: v50 as id: v60 [, exp: v51 as id: v61]...
+      //   require requireExp: v21): v" (v boolean)
+      final Ast.Query query = (Ast.Query) node;
       Unifier.Variable v3 = unifier.variable();
       TypeEnv env3 = env;
       final Map<Ast.Id, Unifier.Variable> fieldVars = new LinkedHashMap<>();
       final List<Ast.FromStep> fromSteps = new ArrayList<>();
-      for (Ord<Ast.FromStep> step : Ord.zip(from.steps)) {
+      for (Ord<Ast.FromStep> step : Ord.zip(query.steps)) {
         Pair<TypeEnv, Unifier.Variable> p =
             deduceStepType(env, step.e, v3, env3, fieldVars, fromSteps);
         switch (step.e.op) {
         case COMPUTE:
         case INTO:
         case REQUIRE:
-          if (step.e.op == Op.REQUIRE && from.op != Op.FORALL
-              || step.e.op == Op.COMPUTE && from.op != Op.FROM
-              || step.e.op == Op.INTO && from.op != Op.FROM) {
+          if (step.e.op == Op.REQUIRE && query.op != Op.FORALL
+              || step.e.op == Op.COMPUTE && query.op != Op.FROM
+              || step.e.op == Op.INTO && query.op != Op.FROM) {
             String message =
                 String.format("'%s' step must not occur in '%s'",
-                    step.e.op.lowerName(), from.op.lowerName());
+                    step.e.op.lowerName(), query.op.lowerName());
             throw new CompileException(message, false, step.e.pos);
           }
-          if (step.i != from.steps.size() - 1) {
+          if (step.i != query.steps.size() - 1) {
             String message =
                 String.format("'%s' step must be last in '%s'",
-                    step.e.op.lowerName(), from.op.lowerName());
+                    step.e.op.lowerName(), query.op.lowerName());
             throw new CompileException(message, false,
-                from.steps.get(step.i + 1).pos);
+                query.steps.get(step.i + 1).pos);
           }
           break;
         }
         env3 = p.left;
         v3 = p.right;
       }
-      if (from.op == Op.FORALL) {
-        AstNode step = from.steps.isEmpty() ? from : last(from.steps);
+      if (query.op == Op.FORALL) {
+        AstNode step = query.steps.isEmpty() ? query : last(query.steps);
         if (step.op != Op.REQUIRE) {
-          String message =
-              String.format("last step of '%s' must be '%s'",
-                  from.op.lowerName(), Op.REQUIRE.lowerName());
-          throw new CompileException(message, false, step.pos);
+          throw new CompileException("last step of 'forall' must be 'require'",
+              false, step.pos);
         }
       }
       final Ast.Exp yieldExp2;
-      if (from.implicitYieldExp != null) {
+      if (query.implicitYieldExp != null) {
         v3 = unifier.variable();
-        yieldExp2 = deduceType(env3, from.implicitYieldExp, v3);
+        yieldExp2 = deduceType(env3, query.implicitYieldExp, v3);
       } else {
         requireNonNull(v3);
         yieldExp2 = null;
       }
-      final Ast.FromBase from2 = from.copy(fromSteps, yieldExp2);
-      return reg(from2, v,
-          node.op == Op.EXISTS || node.op == Op.FORALL
-              ? toTerm(PrimitiveType.BOOL)
-              : from.isCompute() || from.isInto()
-              ? v3
+      final Ast.Query query2 = query.copy(fromSteps, yieldExp2);
+      return reg(query2, v,
+          node.op == Op.EXISTS ? toTerm(PrimitiveType.BOOL)
+              : node.op == Op.FORALL ? toTerm(PrimitiveType.BOOL)
+              : query.isCompute() || query.isInto() ? v3
               : unifier.apply(LIST_TY_CON, v3));
 
     case ID:
@@ -448,43 +449,7 @@ public class TypeResolver {
       return reg(fn2b, null, v);
 
     case APPLY:
-      final Ast.Apply apply = (Ast.Apply) node;
-      final Unifier.Variable vFn = unifier.variable();
-      final Unifier.Variable vArg = unifier.variable();
-      equiv(unifier.apply(FN_TY_CON, vArg, v), vFn);
-      final Ast.Exp arg2;
-      if (apply.arg instanceof Ast.RecordSelector) {
-        // node is "f #field" and has type "v"
-        // "f" has type "vArg -> v" and also "vFn"
-        // "#field" has type "vArg" and also "vRec -> vField"
-        // When we resolve "vRec" we can then deduce "vField".
-        final Unifier.Variable vRec = unifier.variable();
-        final Unifier.Variable vField = unifier.variable();
-        deduceRecordSelectorType(env, vField, vRec,
-            (Ast.RecordSelector) apply.arg);
-        arg2 = reg(apply.arg, vArg, unifier.apply(FN_TY_CON, vRec, vField));
-      } else {
-        arg2 = deduceType(env, apply.arg, vArg);
-      }
-      final Ast.Exp fn2;
-      if (apply.fn instanceof Ast.RecordSelector) {
-        // node is "#field arg" and has type "v"
-        // "#field" has type "vArg -> v"
-        // "arg" has type "vArg"
-        // When we resolve "vArg" we can then deduce "v".
-        deduceRecordSelectorType(env, v, vArg,
-            (Ast.RecordSelector) apply.fn);
-        fn2 = apply.fn;
-      } else {
-        fn2 = deduceType(env, apply.fn, vFn);
-      }
-      if (fn2 instanceof Ast.Id) {
-        final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(((Ast.Id) fn2).name);
-        if (builtIn != null) {
-          builtIn.prefer(t -> preferredTypes.add(v, t));
-        }
-      }
-      return reg(apply.copy(fn2, arg2), null, v);
+      return deduceApplyType(env, (Ast.Apply) node, v);
 
     case AT:
     case CARET:
@@ -781,6 +746,45 @@ public class TypeResolver {
     } else {
       return unifier.apply(TUPLE_TY_CON, types);
     }
+  }
+
+  private Ast.Apply deduceApplyType(TypeEnv env, Ast.Apply apply,
+      Unifier.Variable v) {
+    final Unifier.Variable vFn = unifier.variable();
+    final Unifier.Variable vArg = unifier.variable();
+    equiv(unifier.apply(FN_TY_CON, vArg, v), vFn);
+    final Ast.Exp arg2;
+    if (apply.arg instanceof Ast.RecordSelector) {
+      // node is "f #field" and has type "v"
+      // "f" has type "vArg -> v" and also "vFn"
+      // "#field" has type "vArg" and also "vRec -> vField"
+      // When we resolve "vRec" we can then deduce "vField".
+      final Unifier.Variable vRec = unifier.variable();
+      final Unifier.Variable vField = unifier.variable();
+      deduceRecordSelectorType(env, vField, vRec,
+          (Ast.RecordSelector) apply.arg);
+      arg2 = reg(apply.arg, vArg, unifier.apply(FN_TY_CON, vRec, vField));
+    } else {
+      arg2 = deduceType(env, apply.arg, vArg);
+    }
+    final Ast.Exp fn2;
+    if (apply.fn instanceof Ast.RecordSelector) {
+      // node is "#field arg" and has type "v"
+      // "#field" has type "vArg -> v"
+      // "arg" has type "vArg"
+      // When we resolve "vArg" we can then deduce "v".
+      fn2 =
+          deduceRecordSelectorType(env, v, vArg, (Ast.RecordSelector) apply.fn);
+    } else {
+      fn2 = deduceType(env, apply.fn, vFn);
+    }
+    if (fn2 instanceof Ast.Id) {
+      final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(((Ast.Id) fn2).name);
+      if (builtIn != null) {
+        builtIn.prefer(t -> preferredTypes.add(v, t));
+      }
+    }
+    return reg(apply.copy(fn2, arg2), null, v);
   }
 
   private Ast.RecordSelector deduceRecordSelectorType(TypeEnv env,

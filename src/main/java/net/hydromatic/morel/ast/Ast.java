@@ -1485,14 +1485,15 @@ public class Ast {
     }
   }
 
-  /** From or Exists expression. */
-  public abstract static class FromBase extends Exp {
+  /** Base class for "{@code from}", "{@code exists}" or "{@code forall}"
+   * expression. */
+  public abstract static class Query extends Exp {
     public final ImmutableList<FromStep> steps;
     /** An implicit yield expression, if the last step is not a {@link Yield};
      * null if the last step is a {@link Yield}. */
     public final @Nullable Exp implicitYieldExp;
 
-    FromBase(Pos pos, Op op, ImmutableList<FromStep> steps,
+    Query(Pos pos, Op op, ImmutableList<FromStep> steps,
         @Nullable Exp implicitYieldExp) {
       super(pos, op);
       this.steps = requireNonNull(steps);
@@ -1598,7 +1599,7 @@ public class Ast {
 
     /** Creates a copy of this {@code From} or {@code Exists} with given
      * contents, or {@code this} if the contents are the same. */
-    public abstract FromBase copy(List<FromStep> steps,
+    public abstract Query copy(List<FromStep> steps,
         @Nullable Exp implicitYieldExp);
 
     /** Returns whether this {@code from} expression ends with a {@code compute}
@@ -1618,7 +1619,7 @@ public class Ast {
   }
 
   /** From expression. */
-  public static class From extends FromBase {
+  public static class From extends Query {
     From(Pos pos, ImmutableList<FromStep> steps,
         @Nullable Exp implicitYieldExp) {
       super(pos, Op.FROM, steps, implicitYieldExp);
@@ -1643,7 +1644,7 @@ public class Ast {
   }
 
   /** Exists expression. */
-  public static class Exists extends FromBase {
+  public static class Exists extends Query {
     Exists(Pos pos, ImmutableList<FromStep> steps) {
       super(pos, Op.EXISTS, steps, null);
     }
@@ -1666,7 +1667,7 @@ public class Ast {
   }
 
   /** Forall expression. */
-  public static class Forall extends FromBase {
+  public static class Forall extends Query {
     Forall(Pos pos, ImmutableList<FromStep> steps) {
       super(pos, Op.FORALL, steps, null);
     }

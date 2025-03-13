@@ -339,7 +339,7 @@ public class Resolver {
     case FROM:
     case EXISTS:
     case FORALL:
-      return toCore((Ast.FromBase) exp);
+      return toCore((Ast.Query) exp);
     case TUPLE:
       return toCore((Ast.Tuple) exp);
     case RECORD:
@@ -641,9 +641,9 @@ public class Resolver {
     return core.match(match.pos, pat, exp);
   }
 
-  Core.Exp toCore(Ast.FromBase from) {
-    final Type type = typeMap.getType(from);
-    final Core.Exp coreFrom = new FromResolver().run(from);
+  Core.Exp toCore(Ast.Query query) {
+    final Type type = typeMap.getType(query);
+    final Core.Exp coreFrom = new FromResolver().run(query);
     checkArgument(subsumes(type, coreFrom.type()),
         "Conversion to core did not preserve type: expected [%s] "
             + "actual [%s] from [%s]", type, coreFrom.type, coreFrom);
@@ -860,36 +860,37 @@ public class Resolver {
     }
   }
 
-  /** Visitor that converts {@link Ast.From} to {@link Core.From} by
+  /** Visitor that converts a {@link Ast.From}, {@link Ast.Exists}
+   * or {@link Ast.Forall} to {@link Core.From} by
    * handling each subtype of {@link Ast.FromStep} calling
    * {@link FromBuilder} appropriately. */
   private class FromResolver extends Visitor {
     final FromBuilder fromBuilder = core.fromBuilder(typeMap.typeSystem, env);
 
-    Core.Exp run(Ast.FromBase from) {
-      if (from.isInto()) {
+    Core.Exp run(Ast.Query query) {
+      if (query.isInto()) {
         // Translate "from ... into f" as if they had written "f (from ...)"
-        final Core.Exp coreFrom = run(skipLast(from.steps));
-        final Ast.Into into = (Ast.Into) last(from.steps);
+        final Core.Exp coreFrom = run(skipLast(query.steps));
+        final Ast.Into into = (Ast.Into) last(query.steps);
         final Core.Exp exp = toCore(into.exp);
-        return core.apply(exp.pos, typeMap.getType(from), exp, coreFrom);
+        return core.apply(exp.pos, typeMap.getType(query), exp, coreFrom);
       }
 
-      final Core.Exp coreFrom = run(from.steps);
-      if (from.op == Op.EXISTS) {
+      final Core.Exp coreFrom = run(query.steps);
+      if (query.op == Op.EXISTS) {
         // Translate "exists ..." as if they had written
         // "Relational.nonEmpty (from ...)"
-        return core.nonEmpty(typeMap.typeSystem, from.pos, coreFrom);
-      } else if (from.op == Op.FORALL) {
+        return core.nonEmpty(typeMap.typeSystem, query.pos, coreFrom);
+      } else if (query.op == Op.FORALL) {
         // Translate "forall ... require e" as if they had written
         // "not exists (from ... where not e)".
         //
-        // We assume that the last step 'require e', and we know that
-        // 'require e' translates to the same as 'where not e'.
-        checkArgument(last(from.steps).op == Op.REQUIRE);
-        return core.empty(typeMap.typeSystem, from.pos, coreFrom);
-      } else if (from.isCompute()) {
-        return core.only(typeMap.typeSystem, from.pos, coreFrom);
+        // We assume that the last step is 'require e', and we know that
+        // 'require e' will have been translated to the same as 'where not e'.
+        checkArgument(last(query.steps).op == Op.REQUIRE);
+        return core.empty(typeMap.typeSystem, query.pos, coreFrom);
+      } else if (query.isCompute()) {
+        return core.only(typeMap.typeSystem, query.pos, coreFrom);
       } else {
         return coreFrom;
       }
