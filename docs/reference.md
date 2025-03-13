@@ -149,9 +149,9 @@ In Standard ML but not in Morel:
     | <b>from</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>* [ <i>terminalStep</i> ]
                                 relational expression (<i>s</i> &ge; 0)
     | <b>exists</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>*
-                                existential quantifier (<i>s</i> &ge; 0)
+                                existential quantification (<i>s</i> &ge; 0)
     | <b>forall</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>* <b>require</b> <i>exp</i>
-                                universal quantifier (<i>s</i> &ge; 0)
+                                universal quantification (<i>s</i> &ge; 0)
 <i>exprow</i> &rarr; <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
                                 expression row
 <i>exprowItem</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i>
