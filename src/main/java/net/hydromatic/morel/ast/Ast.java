@@ -430,7 +430,8 @@ public class Ast {
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       w.append("{");
-      Ord.forEachIndexed(args, (i, k, v) -> // lint:skip
+      Ord.forEachIndexed(args, // lint:skip
+          (i, k, v) ->
           w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
       if (ellipsis) {
         w.append(args.isEmpty() ? "..." : ", ...");
@@ -642,7 +643,8 @@ public class Ast {
 
     AstWriter unparse(AstWriter w, int left, int right) {
       w.append("{");
-      Ord.forEachIndexed(fieldTypes, (i, field, type) -> // lint:skip
+      Ord.forEachIndexed(fieldTypes, // lint:skip
+          (i, field, type) ->
           w.append(i > 0 ? ", " : "")
               .id(field).append(": ").append(type, 0, 0));
       return w.append("}");
@@ -1210,7 +1212,8 @@ public class Ast {
 
     @Override AstWriter unparse(AstWriter w, int left, int right) {
       w.append("{");
-      Ord.forEachIndexed(args, (i, k, v) -> // lint:skip
+      Ord.forEachIndexed(args, // lint:skip
+          (i, k, v) ->
           w.append(i > 0 ? ", " : "").append(k).append(" = ").append(v, 0, 0));
       return w.append("}");
     }
