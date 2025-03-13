@@ -316,10 +316,10 @@ public class MainTest {
   @Test void testParseComment() {
     ml("1 + (* 2 + *) 3")
         .assertParse("1 + 3");
-    ml("1 +\n"
+    ml("1 +\n" //
         + "(* 2 +\n"
         + " *) 3").assertParse("1 + 3");
-    ml("(* 1 +\n"
+    ml("(* 1 +\n" //
         + "2 +\n"
         + "3 *) 5 + 6").assertParse("5 + 6");
   }
@@ -608,7 +608,7 @@ public class MainTest {
 
   @Disabled("disable failing test - enable when we have polymorphic types")
   @Test void testExponentialType0() {
-    final String ml = "let\n"
+    final String ml = "let\n" //
         + "  fun f x = (x, x)\n"
         + "in\n"
         + "  f (f 0)\n"
@@ -772,7 +772,7 @@ public class MainTest {
         + "then\n"
         + "  if true then 2 else 3\n"
         + "else 4").assertEval(is(4));
-    ml("if false\n"
+    ml("if false\n" //
         + "then\n"
         + "  if true then 2 else 3\n"
         + "else\n"
@@ -787,7 +787,7 @@ public class MainTest {
             + "          x => ...\n"
             + "    -->   y => ...\n");
     ml("case 1 of 1 => 2")
-        .assertError("Warning: match nonexhaustive\n"
+        .assertError("Warning: match nonexhaustive\n" //
             + "          1 => ...\n");
     ml("let val f = fn x => case x of x => x + 1 in f 2 end").assertEval(is(3));
 
@@ -1358,28 +1358,28 @@ public class MainTest {
   }
 
   @Test void testMatchCoverage4() {
-    final String ml = ""
+    final String ml = "" //
         + "fun f 1 = 2\n"
         + "  | f _ = 1";
     ml(ml).assertMatchCoverage(OK);
   }
 
   @Test void testMatchCoverage5() {
-    final String ml = ""
+    final String ml = "" //
         + "fun f [] = 0\n"
         + "  | f (h :: t) = 1 + (f t)";
     ml(ml).assertMatchCoverage(OK);
   }
 
   @Test void testMatchCoverage6() {
-    final String ml = ""
+    final String ml = "" //
         + "fun f (0, y) = y\n"
         + "  | f (x, y) = x + y + 1";
     ml(ml).assertMatchCoverage(OK);
   }
 
   @Test void testMatchCoverage7() {
-    final String ml = ""
+    final String ml = "" //
         + "fun f (x, y, 0) = y\n"
         + "  | f (x, y, z) = x + z";
     ml(ml).assertMatchCoverage(OK);
@@ -1398,7 +1398,7 @@ public class MainTest {
 
   @Test void testMatchCoverage9() {
     // The last case is redundant because we know that unit has only one value.
-    final String ml = ""
+    final String ml = "" //
         + "fun f () = 1\n"
         + "  | $f _ = 0$";
     ml(ml, '$').assertMatchCoverage(REDUNDANT);
@@ -1548,7 +1548,7 @@ public class MainTest {
 
   /** A function with two arguments. */
   @Test void testFunTwoArgs() {
-    final String ml = "let\n"
+    final String ml = "let\n" //
         + "  fun sum x y = x + y\n"
         + "in\n"
         + "  sum 5 3\n"
@@ -1832,15 +1832,15 @@ public class MainTest {
     ml("from (x, y)")
         .assertParseThrowsParseException(
             startsWith("Encountered \"<EOF>\" at line 1, column 11."));
-    ml("from e in emps\n"
+    ml("from e in emps\n" //
         + "through e in empsInDept 20\n"
         + "yield e.sal")
         .assertParse("from e in emps through e in empsInDept 20 yield #sal e");
-    ml("from e in emps\n"
+    ml("from e in emps\n" //
         + "yield e.empno\n"
         + "into sum")
         .assertParse("from e in emps yield #empno e into sum");
-    ml("from e in emps\n"
+    ml("from e in emps\n" //
         + "yield e.empno\n"
         + "compute sum, count")
         .assertParse("from e in emps "
@@ -1967,15 +1967,15 @@ public class MainTest {
     ml("exists (x, y)")
         .assertParseThrowsParseException(
             startsWith("Encountered \"<EOF>\" at line 1, column 13."));
-    ml("exists e in emps\n"
+    ml("exists e in emps\n" //
         + "through e in empsInDept 20\n"
         + "yield e.sal")
         .assertParse("exists e in emps through e in empsInDept 20 yield #sal e");
-    ml("exists e in emps\n"
+    ml("exists e in emps\n" //
         + "yield e.empno\n"
         + "into sum")
         .assertParse("exists e in emps yield #empno e into sum");
-    ml("exists e in emps\n"
+    ml("exists e in emps\n" //
         + "yield e.empno\n"
         + "compute sum, count")
         .assertParse("exists e in emps "
@@ -2102,15 +2102,15 @@ public class MainTest {
     ml("forall (x, y)")
         .assertParseThrowsParseException(
             startsWith("Encountered \"<EOF>\" at line 1, column 13."));
-    ml("forall e in emps\n"
+    ml("forall e in emps\n" //
         + "through e in empsInDept 20\n"
         + "yield e.sal")
         .assertParse("forall e in emps through e in empsInDept 20 yield #sal e");
-    ml("forall e in emps\n"
+    ml("forall e in emps\n" //
         + "yield e.empno\n"
         + "into sum")
         .assertParse("forall e in emps yield #empno e into sum");
-    ml("forall e in emps\n"
+    ml("forall e in emps\n" //
         + "yield e.empno\n"
         + "compute sum, count")
         .assertParse("forall e in emps "
@@ -2209,7 +2209,7 @@ public class MainTest {
 
     // "map String.size" has type "string list -> int list",
     // and therefore the type of "j" is "int"
-    ml("from s in [\"ab\",\"c\"]\n"
+    ml("from s in [\"ab\",\"c\"]\n" //
         + " through j in (map String.size)")
         .assertType("int list");
     ml("from s in [\"ab\",\"c\"]\n"
@@ -2636,7 +2636,7 @@ public class MainTest {
    * {@code bool option} and therefore iterates over
    * {@code [SOME true, SOME false, NONE]}. */
   @Test void testBooleanExtent() {
-    final String ml = "from i\n"
+    final String ml = "from i\n" //
         + "where Option.getOpt (i, false)";
     final String core = "val it = "
         + "from i in extent \"bool option\" "
@@ -2812,18 +2812,18 @@ public class MainTest {
   }
 
   @Test void testGroupAs() {
-    final String ml0 = "from e in emp\n"
+    final String ml0 = "from e in emp\n" //
         + "group deptno = e.deptno";
-    final String ml1 = "from e in emp\n"
+    final String ml1 = "from e in emp\n" //
         + "group e.deptno";
-    final String ml2 = "from e in emp\n"
+    final String ml2 = "from e in emp\n" //
         + "group #deptno e";
     final String expected = "from e in emp group deptno = #deptno e";
     ml(ml0).assertParse(expected);
     ml(ml1).assertParse(expected);
     ml(ml2).assertParse(expected);
 
-    final String ml3 = "from e in emp\n"
+    final String ml3 = "from e in emp\n" //
         + "group e, h = f + e.g";
     final String expected3 = "from e in emp group e = e, h = f + #g e";
     ml(ml3).assertParse(expected3);
@@ -2845,10 +2845,10 @@ public class MainTest {
     ml("from e in emp group compute (fn x => x) of e.job")
         .assertParseThrowsIllegalArgumentException(
             is("cannot derive label for expression fn x => x"));
-    ml("from e in [{x = 1, y = 5}]\n"
+    ml("from e in [{x = 1, y = 5}]\n" //
         + "  group compute sum of e.x")
         .assertType(hasMoniker("int list"));
-    ml("from e in [1, 2, 3]\n"
+    ml("from e in [1, 2, 3]\n" //
         + "  group compute sum of e")
         .assertType(hasMoniker("int list"));
   }
