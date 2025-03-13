@@ -177,7 +177,7 @@ public class ScriptTest {
     }
     final String diff = TestUtils.diff(refFile, outFile);
     if (!diff.isEmpty()) {
-      fail("Files differ: " + refFile + " " + outFile + "\n" \\
+      fail("Files differ: " + refFile + " " + outFile + "\n" //
           + diff);
     }
   }
