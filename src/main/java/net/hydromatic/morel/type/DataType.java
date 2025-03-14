@@ -88,11 +88,11 @@ public class DataType extends ParameterizedType {
 
   /** Writes out the definition of the datatype. For example,
    *
-   * <blockquote><pre>{@code
+   * <pre>{@code
    * datatype ('a,'b) tree =
    *     Empty
    *   | Node of ('a,'b) tree * 'b * 'a * ('a,'b) tree
-   * }</pre></blockquote>
+   * }</pre>
    */
   public StringBuilder describe(StringBuilder buf) {
     buf.append("datatype ")

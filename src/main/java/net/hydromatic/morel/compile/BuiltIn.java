@@ -937,10 +937,10 @@ public enum BuiltIn {
    * <p>Because {@code join} is a keyword in Morel, you must quote the function
    * name using backticks. For example:
    *
-   * <blockquote><pre>{@code
+   * <pre>{@code
    * Option.`join` (SOME (SOME 1));
    * > val it = SOME 1 : int option
-   * }</pre></blockquote>
+   * }</pre>
    */
   OPTION_JOIN("Option", "join", ts ->
       ts.forallType(1, h -> ts.fnType(ts.option(h.option(0)), h.option(0)))),
