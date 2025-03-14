@@ -699,15 +699,15 @@ public enum CoreBuilder {
    *
    * <p>In particular, it merges extents. For example,
    *
-   * <blockquote>{@code
+   * <pre>{@code
    * extent "[10, 20]" orelse (extent "[-inf,5]" andalso "[1,int]")
-   * }</blockquote>
+   * }</pre>
    *
    * <p>becomes
    *
-   * <blockquote>{@code
+   * <pre>{@code
    * extent "[[1, 5], [10, 20]]"
-   * }</blockquote>
+   * }</pre>
    */
   public Core.Exp simplify(TypeSystem typeSystem, Core.Exp exp) {
     switch (exp.op) {

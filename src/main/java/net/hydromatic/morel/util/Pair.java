@@ -67,15 +67,15 @@ public class Pair<T1, T2> implements Comparable<Pair<T1, T2>>,
    * <p>This is a shorthand that allows you to omit implicit types. For
    * example, you can write:
    *
-   * <blockquote>{@code
+   * <pre>{@code
    * return Pair.of(s, n);
-   * }</blockquote>
+   * }</pre>
    *
    * <p>instead of
    *
-   * <blockquote>{@code
+   * <pre>{@code
    * return new Pair&lt;String, Integer&gt;(s, n);
-   * }</blockquote>
+   * }</pre>
    *
    * @param left  left value
    * @param right right value
