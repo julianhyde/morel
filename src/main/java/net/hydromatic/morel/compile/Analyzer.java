@@ -172,11 +172,11 @@ public class Analyzer extends EnvVisitor {
     /** The binding occurs at most once in each of several distinct case
      * branches; none of these occurrences is inside a lambda. For example:
      *
-     * <pre>{@code
+     * <blockquote><pre>{@code
      * case xs of
      *   [] => y + 1
      * | x :: xs => y + 2
-     * }</pre>
+     * }</pre></blockquote>
      *
      * <p>In this expression, {@code y} occurs only once in each case branch.
      * Inlining {@code y} may duplicate code, but it will not duplicate work. */
@@ -188,16 +188,16 @@ public class Analyzer extends EnvVisitor {
      * <p>We must not inline an arbitrary expression inside a lambda, as the
      * following example (from GHC inlining section 2.2) shows:
      *
-     * <pre>{@code
+     * <blockquote><pre>{@code
      * val f = fn x => E
      * val g = fn ys => map f ys
-     * }</pre>
+     * }</pre></blockquote>
      *
      * <p>If we were to inline f inside g, thus:
      *
-     * <pre>{@code
+     * <blockquote><pre>{@code
      * val g = fn ys => map (fn x => E) ys
-     * }</pre>
+     * }</pre></blockquote>
      *
      * <p>no code is duplicated, but a small bounded amount of work is
      * duplicated, because the closure {@code fn x => E} must be allocated
