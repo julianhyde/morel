@@ -1062,9 +1062,9 @@ public class TypeResolver {
    *
    * <p>If there are multiple clauses, we generate {@code case}:
    *
-   * <blockquote>
+   * <pre>
    * {@code fun gcd a 0 = a | gcd a b = gcd b (a mod b)}
-   * </blockquote>
+   * </pre>
    *
    * <p>becomes
    *
