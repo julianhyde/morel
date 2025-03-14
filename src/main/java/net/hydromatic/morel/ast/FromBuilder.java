@@ -277,9 +277,9 @@ public class FromBuilder {
    * Later steps are relying on the variables remaining the same. For example,
    * in
    *
-   * <blockquote>{@code
+   * <pre>{@code
    * from ... yield {a = b} where a > 5
-   * }</blockquote>
+   * }</pre>
    *
    * <p>the {@code a} in {@code a > 5} references {@code IdPat('a', 0)} and we
    * don't want yield to generate an {@code IdPat('a', 1)}.

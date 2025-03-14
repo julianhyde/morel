@@ -698,13 +698,16 @@ public enum CoreBuilder {
   /** Simplifies an expression.
    *
    * <p>In particular, it merges extents. For example,
-   * <blockquote><pre>{@code
+   *
+   * <pre>{@code
    * extent "[10, 20]" orelse (extent "[-inf,5]" andalso "[1,int]")
-   * }</pre></blockquote>
-   * becomes
-   * <blockquote><pre>{@code
+   * }</pre>
+   *
+   * <p>becomes
+   *
+   * <pre>{@code
    * extent "[[1, 5], [10, 20]]"
-   * }</pre></blockquote>
+   * }</pre>
    */
   public Core.Exp simplify(TypeSystem typeSystem, Core.Exp exp) {
     switch (exp.op) {

@@ -1061,12 +1061,17 @@ public class TypeResolver {
    * becomes {@code val rec sum = fn x => fn y => x + y}.
    *
    * <p>If there are multiple clauses, we generate {@code case}:
+   *
+   * <pre>
    * {@code fun gcd a 0 = a | gcd a b = gcd b (a mod b)}
-   * becomes
-   * {@code val rec gcd = fn x => fn y =>
+   * </pre>
+   *
+   * <p>becomes
+   *
+   * <pre>{@code val rec gcd = fn x => fn y =>
    * case (x, y) of
    *     (a, 0) => a
-   *   | (a, b) = gcd b (a mod b)}.
+   *   | (a, b) = gcd b (a mod b)}</pre>
    */
   private Ast.ValDecl toValDecl(TypeEnv env, Ast.FunDecl funDecl) {
     final List<Ast.ValBind> valBindList = new ArrayList<>();

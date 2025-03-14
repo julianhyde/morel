@@ -85,6 +85,7 @@ License.
     <findbugs.version>3.0.2</findbugs.version>
     <foodmart-data-hsqldb.version>0.5</foodmart-data-hsqldb.version>
     <git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
+    <googleformatter-maven-plugin.version>1.7.5</googleformatter-maven-plugin.version>
     <!-- We support (and test) Guava as low as 21. -->
     <guava.version>33.4.0-jre</guava.version>
     <hamcrest.version>3.0</hamcrest.version>
@@ -214,6 +215,28 @@ License.
     <pluginManagement />
 
     <plugins>
+      <plugin>
+        <groupId>com.theoryinpractise</groupId>
+        <artifactId>googleformatter-maven-plugin</artifactId>
+        <version>${googleformatter-maven-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>reformat-sources</id>
+            <configuration>
+              <includeStale>false</includeStale>
+              <style>GOOGLE</style>
+              <filterModified>false</filterModified>
+              <skip>true</skip>
+              <fixImports>true</fixImports>
+              <maxLineLength>80</maxLineLength>
+            </configuration>
+            <goals>
+              <goal>format</goal>
+            </goals>
+            <phase>process-sources</phase>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
