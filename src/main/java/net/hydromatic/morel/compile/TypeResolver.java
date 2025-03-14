@@ -1068,11 +1068,10 @@ public class TypeResolver {
    *
    * <p>becomes
    *
-   * <blockquote><pre>
-   * {@code val rec gcd = fn x => fn y =>
+   * <pre>{@code val rec gcd = fn x => fn y =>
    * case (x, y) of
    *     (a, 0) => a
-   *   | (a, b) = gcd b (a mod b)}</pre></blockquote>
+   *   | (a, b) = gcd b (a mod b)}</pre>
    */
   private Ast.ValDecl toValDecl(TypeEnv env, Ast.FunDecl funDecl) {
     final List<Ast.ValBind> valBindList = new ArrayList<>();
