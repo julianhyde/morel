@@ -949,20 +949,6 @@ public class TypeResolver {
     final Ast.Exp e2 = deduceType(env, valBind.exp, vPat);
     final Ast.ValBind valBind2 = valBind.copy(valBind.pat, e2);
     Unifier.Sequence fnTerm = unifier.apply(FN_TY_CON, vPat, vPat);
-    /*
-       if (valBind.pat instanceof Ast.IdPat) {
-         final Ast.IdPat idPat = (Ast.IdPat) valBind.pat;
-         if (env.hasOverloaded(idPat.name)) {
-           Unifier.Term term =
-               env.get(typeSystem, idPat.name, name ->
-                   new RuntimeException("oops, should have " + idPat.name));
-           assert term instanceof Unifier.Sequence : term;
-           Unifier.Sequence sequence = (Unifier.Sequence) term;
-           assert sequence.operator.equals(OVERLOAD_TY_CON);
-           fnTerm = unifier.apply(sequence.operator, append(sequence.terms, fnTerm));
-         }
-       }
-    */
     return reg(valBind2, v, fnTerm);
   }
 
