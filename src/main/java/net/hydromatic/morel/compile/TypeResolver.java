@@ -65,6 +65,7 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.OverloadedType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -95,6 +96,7 @@ public class TypeResolver {
       PairList.of();
 
   static final String TUPLE_TY_CON = "tuple";
+  static final String OVERLOAD_TY_CON = "over";
   static final String LIST_TY_CON = "list";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
@@ -128,7 +130,7 @@ public class TypeResolver {
 
   /** Converts a type AST to a type key. */
   public static Type.Key toTypeKey(Ast.Type type) {
-    return new Foo().toTypeKey(type);
+    return new KeyBuilder().toTypeKey(type);
   }
 
   private Resolved deduceType_(Environment env, Ast.Decl decl) {
@@ -147,8 +149,7 @@ public class TypeResolver {
         typeSystem, (structure, type) -> typeEnvs.accept(structure.name, type));
     env.forEachType(typeSystem, typeEnvs);
     final TypeEnv typeEnv = typeEnvs.typeEnv;
-    final PairList<Ast.IdPat, Unifier.Term> termMap = PairList.of();
-    final Ast.Decl node2 = deduceDeclType(typeEnv, decl, termMap);
+    final Ast.Decl node2 = deduceDeclType(typeEnv, decl, PairList.of());
     final boolean debug = false;
     @SuppressWarnings("ConstantConditions")
     final Unifier.Tracer tracer =
@@ -801,9 +802,9 @@ public class TypeResolver {
     equiv(unifier.apply(FN_TY_CON, vArg, v), vFn);
     final Ast.Exp arg2;
     if (apply.arg instanceof Ast.RecordSelector) {
-      // node is "f #field" and has type "v"
-      // "f" has type "vArg -> v" and also "vFn"
-      // "#field" has type "vArg" and also "vRec -> vField"
+      // "apply" is "f #field" and has type "v";
+      // "f" has type "vArg -> v" and also "vFn";
+      // "#field" has type "vArg" and also "vRec -> vField".
       // When we resolve "vRec" we can then deduce "vField".
       final Unifier.Variable vRec = unifier.variable();
       final Unifier.Variable vField = unifier.variable();
@@ -815,13 +816,20 @@ public class TypeResolver {
     }
     final Ast.Exp fn2;
     if (apply.fn instanceof Ast.RecordSelector) {
-      // node is "#field arg" and has type "v"
-      // "#field" has type "vArg -> v"
-      // "arg" has type "vArg"
+      // "apply" is "#field arg" and has type "v";
+      // "#field" has type "vArg -> v";
+      // "arg" has type "vArg".
       // When we resolve "vArg" we can then deduce "v".
       fn2 =
           deduceRecordSelectorType(env, v, vArg, (Ast.RecordSelector) apply.fn);
     } else {
+      if (apply.fn instanceof Ast.Id
+          && env.hasOverloaded(((Ast.Id) apply.fn).name)) {
+        // "apply" is "f arg" and has type "v";
+        // "f" is an overloaded name, and has type "vArg -> v";
+        // "arg" has type "vArg".
+        // To resolve overloading, we apply constraints to "vArg".
+      }
       fn2 = deduceType(env, apply.fn, vFn);
     }
     if (fn2 instanceof Ast.Id) {
@@ -942,7 +950,8 @@ public class TypeResolver {
     deducePatType(env, valBind.pat, termMap, null, vPat);
     final Ast.Exp e2 = deduceType(env, valBind.exp, vPat);
     final Ast.ValBind valBind2 = valBind.copy(valBind.pat, e2);
-    return reg(valBind2, v, unifier.apply(FN_TY_CON, vPat, vPat));
+    Unifier.Sequence fnTerm = unifier.apply(FN_TY_CON, vPat, vPat);
+    return reg(valBind2, v, fnTerm);
   }
 
   private static TypeEnv bindAll(
@@ -957,7 +966,8 @@ public class TypeResolver {
       TypeEnv env, Ast.Decl node, PairList<Ast.IdPat, Unifier.Term> termMap) {
     switch (node.op) {
       case OVER_DECL:
-        return node;
+        final Ast.OverDecl overDecl = (Ast.OverDecl) node;
+        return deduceOverDeclType(env, overDecl, termMap);
 
       case VAL_DECL:
         return deduceValDeclType(env, (Ast.ValDecl) node, termMap);
@@ -982,15 +992,17 @@ public class TypeResolver {
       PairList<Ast.IdPat, Unifier.Term> termMap) {
     final List<Keys.DataTypeKey> keys = new ArrayList<>();
     for (Ast.DatatypeBind bind : datatypeDecl.binds) {
-      final Foo foo = new Foo();
-      bind.tyVars.forEach(foo::toTypeKey);
+      final KeyBuilder keyBuilder = new KeyBuilder();
+      bind.tyVars.forEach(keyBuilder::toTypeKey);
 
       final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
       deduceDatatypeBindType(bind, tyCons);
 
       keys.add(
           Keys.datatype(
-              bind.name.name, Keys.ordinals(foo.tyVarMap.size()), tyCons));
+              bind.name.name,
+              Keys.ordinals(keyBuilder.tyVarMap.size()),
+              tyCons));
     }
     final List<Type> types = typeSystem.dataTypes(keys);
 
@@ -1021,16 +1033,25 @@ public class TypeResolver {
     return datatypeDecl;
   }
 
+  private Ast.Decl deduceOverDeclType(
+      TypeEnv env,
+      Ast.OverDecl overDecl,
+      PairList<Ast.IdPat, Unifier.Term> termMap) {
+    map.put(overDecl, toTerm(PrimitiveType.UNIT));
+    termMap.add(overDecl.pat, toTerm(typeSystem.overloadedType(), Subst.EMPTY));
+    return overDecl;
+  }
+
   private Ast.Decl deduceValDeclType(
       TypeEnv env,
       Ast.ValDecl valDecl,
       PairList<Ast.IdPat, Unifier.Term> termMap) {
     final Holder<TypeEnv> envHolder = Holder.of(env);
-    final Map<Ast.ValBind, Supplier<Unifier.Variable>> map0 =
-        new LinkedHashMap<>();
+    final PairList<Ast.ValBind, Supplier<Unifier.Variable>> map0 =
+        PairList.of();
     //noinspection FunctionalExpressionCanBeFolded
     valDecl.valBinds.forEach(
-        b -> map0.put(b, Suppliers.memoize(unifier::variable)::get));
+        b -> map0.add(b, Suppliers.memoize(unifier::variable)::get));
     map0.forEach(
         (valBind, vPatSupplier) -> {
           // If recursive, bind each value (presumably a function) to its type
@@ -1062,16 +1083,16 @@ public class TypeResolver {
 
   private void deduceDatatypeBindType(
       Ast.DatatypeBind datatypeBind, SortedMap<String, Type.Key> tyCons) {
-    Foo foo = new Foo();
+    KeyBuilder keyBuilder = new KeyBuilder();
     for (Ast.TyCon tyCon : datatypeBind.tyCons) {
       tyCons.put(
           tyCon.id.name,
-          tyCon.type == null ? Keys.dummy() : foo.toTypeKey(tyCon.type));
+          tyCon.type == null ? Keys.dummy() : keyBuilder.toTypeKey(tyCon.type));
     }
   }
 
   /** Workspace for converting types to keys. */
-  private static class Foo {
+  private static class KeyBuilder {
     final Map<String, Integer> tyVarMap = new HashMap<>();
 
     /** Converts an AST type into a type key. */
@@ -1400,7 +1421,7 @@ public class TypeResolver {
 
       case CON_PAT:
         final Ast.ConPat conPat = (Ast.ConPat) pat;
-        // e.g. "SOME x" has type "int option", "x" has type "int"
+        // e.g. "SOME x" has type "int option"; "x" has type "int".
         final Pair<DataType, Type.Key> pair =
             typeSystem.lookupTyCon(conPat.tyCon.name);
         if (pair == null) {
@@ -1504,6 +1525,11 @@ public class TypeResolver {
     return transformEager(types, type -> toTerm(type, subst));
   }
 
+  private List<Unifier.Term> toTerms(
+      Collection<? extends Type> types, Subst subst) {
+    return transformEager(types, type -> toTerm(type, subst));
+  }
+
   private Unifier.Term toTerm(PrimitiveType type) {
     return unifier.atom(type.moniker);
   }
@@ -1525,6 +1551,11 @@ public class TypeResolver {
             FN_TY_CON,
             toTerm(fnType.paramType, subst),
             toTerm(fnType.resultType, subst));
+      case OVERLOADED_TYPE:
+        final OverloadedType overloadedType = (OverloadedType) type;
+        return unifier.apply(
+            OVERLOAD_TY_CON,
+            transform(overloadedType.types, type1 -> toTerm(type1, subst)));
       case TUPLE_TYPE:
         final TupleType tupleType = (TupleType) type;
         return unifier.apply(
@@ -1552,8 +1583,7 @@ public class TypeResolver {
           }
           result = b.toString();
         }
-        final List<Unifier.Term> args =
-            transformEager(argNameTypes.values(), t -> toTerm(t, subst));
+        final List<Unifier.Term> args = toTerms(argNameTypes.values(), subst);
         return unifier.apply(result, args);
       case LIST:
         final ListType listType = (ListType) type;
@@ -1583,14 +1613,11 @@ public class TypeResolver {
     }
 
     @Override
-    public boolean has(String name) {
-      return false;
-    }
-
-    @Override
     public TypeEnv bind(
-        String name, Function<TypeSystem, Unifier.Term> termFactory) {
-      return new BindTypeEnv(name, termFactory, this);
+        String name,
+        boolean overloaded,
+        Function<TypeSystem, Unifier.Term> termFactory) {
+      return new BindTypeEnv(name, overloaded, termFactory, this);
     }
 
     @Override
@@ -1601,29 +1628,61 @@ public class TypeResolver {
 
   /** Type environment. */
   interface TypeEnv {
+    /**
+     * Returns a term for the variable with a given name, creating if necessary.
+     */
     Unifier.Term get(
         TypeSystem typeSystem,
         String name,
         Function<String, RuntimeException> exceptionFactory);
 
-    boolean has(String name);
+    /**
+     * Returns whether a variable of the given name is defined in this
+     * environment.
+     */
+    default boolean has(String name) {
+      return false;
+    }
 
-    TypeEnv bind(String name, Function<TypeSystem, Unifier.Term> termFactory);
+    /** Returns whether a given name is overloaded in this environment. */
+    default boolean hasOverloaded(String name) {
+      return false;
+    }
+
+    TypeEnv bind(
+        String name,
+        boolean overloaded,
+        Function<TypeSystem, Unifier.Term> termFactory);
+
+    default TypeEnv bind(String name, boolean overloaded, Unifier.Term term) {
+      return bind(name, overloaded, new SimpleTermFactory(term));
+    }
 
     default TypeEnv bind(String name, Unifier.Term term) {
-      return bind(
-          name,
-          new Function<TypeSystem, Unifier.Term>() {
-            @Override
-            public Unifier.Term apply(TypeSystem typeSystem) {
-              return term;
-            }
+      boolean overloaded =
+          term instanceof Unifier.Sequence
+                  && ((Unifier.Sequence) term).operator.equals(OVERLOAD_TY_CON)
+              || hasOverloaded(name);
+      return bind(name, overloaded, new SimpleTermFactory(term));
+    }
+  }
 
-            @Override
-            public String toString() {
-              return term.toString();
-            }
-          });
+  /** Factory that always returns a given {@link Unifier.Term}. */
+  static class SimpleTermFactory implements Function<TypeSystem, Unifier.Term> {
+    private final Unifier.Term term;
+
+    SimpleTermFactory(Unifier.Term term) {
+      this.term = term;
+    }
+
+    @Override
+    public Unifier.Term apply(TypeSystem typeSystem) {
+      return term;
+    }
+
+    @Override
+    public String toString() {
+      return term.toString();
     }
   }
 
@@ -1648,14 +1707,17 @@ public class TypeResolver {
    */
   private static class BindTypeEnv implements TypeEnv {
     private final String definedName;
+    private final boolean overloaded;
     private final Function<TypeSystem, Unifier.Term> termFactory;
     private final TypeEnv parent;
 
     BindTypeEnv(
         String definedName,
+        boolean overloaded,
         Function<TypeSystem, Unifier.Term> termFactory,
         TypeEnv parent) {
       this.definedName = requireNonNull(definedName);
+      this.overloaded = overloaded;
       this.termFactory = requireNonNull(termFactory);
       this.parent = requireNonNull(parent);
     }
@@ -1677,13 +1739,37 @@ public class TypeResolver {
 
     @Override
     public boolean has(String name) {
-      return name.equals(definedName) || parent.has(name);
+      for (BindTypeEnv e = this; ; e = (BindTypeEnv) e.parent) {
+        if (e.definedName.equals(name)) {
+          return true;
+        }
+        if (!(e.parent instanceof BindTypeEnv)) {
+          return e.parent.has(name);
+        }
+      }
+    }
+
+    @Override
+    public boolean hasOverloaded(String name) {
+      for (BindTypeEnv e = this; ; e = (BindTypeEnv) e.parent) {
+        // A variable is overloaded if any of its declarations are overloaded.
+        // So, if this declaration matches name but is not overloaded, carry on
+        // looking further up the stack.
+        if (e.definedName.equals(name) && e.overloaded) {
+          return true;
+        }
+        if (!(e.parent instanceof BindTypeEnv)) {
+          return e.parent.hasOverloaded(name);
+        }
+      }
     }
 
     @Override
     public TypeEnv bind(
-        String name, Function<TypeSystem, Unifier.Term> termFactory) {
-      return new BindTypeEnv(name, termFactory, this);
+        String name,
+        boolean overloaded,
+        Function<TypeSystem, Unifier.Term> termFactory) {
+      return new BindTypeEnv(name, overloaded, termFactory, this);
     }
 
     @Override
@@ -1702,7 +1788,7 @@ public class TypeResolver {
 
   /**
    * Contains a {@link TypeEnv} and adds to it by calling {@link
-   * TypeEnv#bind(String, Function)}.
+   * TypeEnv#bind(String, boolean, Function)}.
    */
   private class TypeEnvHolder implements BiConsumer<String, Type> {
     private TypeEnv typeEnv;
@@ -1716,6 +1802,7 @@ public class TypeResolver {
       typeEnv =
           typeEnv.bind(
               name,
+              false,
               new Function<TypeSystem, Unifier.Term>() {
                 @Override
                 public Unifier.Term apply(TypeSystem typeSystem_) {

@@ -819,29 +819,34 @@ public class Core {
     public abstract Decl accept(Shuttle shuttle);
   }
 
-  /** Overloaded operator declaration. */
+  /**
+   * Overloaded operator declaration.
+   *
+   * <p>TODO: Do we even need OverDecl in core? Didn't we resolve overloads to
+   * unique names during type resolution?
+   */
   public static class OverDecl extends Decl {
-    public final String name;
+    public final IdPat pat;
 
-    OverDecl(String name) {
+    OverDecl(IdPat pat) {
       super(Pos.ZERO, Op.OVER_DECL);
-      this.name = requireNonNull(name);
+      this.pat = requireNonNull(pat);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(Op.OVER_DECL, name);
+      return Objects.hash(Op.OVER_DECL, pat);
     }
 
     @Override
     public boolean equals(Object o) {
       return o == this
-          || o instanceof OverDecl && name.equals(((OverDecl) o).name);
+          || o instanceof OverDecl && pat.equals(((OverDecl) o).pat);
     }
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("over ").append(name);
+      return w.append("over ").append(pat.name);
     }
 
     @Override

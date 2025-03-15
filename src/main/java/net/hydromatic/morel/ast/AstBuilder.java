@@ -371,7 +371,7 @@ public enum AstBuilder {
     return new Ast.Fn(pos, ImmutableList.copyOf(matchList));
   }
 
-  public Ast.OverDecl overDecl(Pos pos, String id) {
+  public Ast.OverDecl overDecl(Pos pos, Ast.IdPat id) {
     return new Ast.OverDecl(pos, id);
   }
 
