@@ -22,6 +22,7 @@ import net.hydromatic.morel.ast.Op;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import java.util.AbstractList;
@@ -185,6 +186,11 @@ public class Keys {
           ((RecordKey) key).argNameTypes);
     }
     return key;
+  }
+
+  /** Returns a key for an overloaded type. */
+  public static Type.Key overloaded(List<Type.Key> keys) {
+    return new OverloadedKey(keys);
   }
 
   /** Key that identifies a type by name. */
@@ -438,6 +444,47 @@ public class Keys {
       case 1:
         return new RecordType(typeSystem.typesFor(argNameTypes));
       }
+    }
+  }
+
+  /** Key of an overloaded type. */
+  private static class OverloadedKey extends Type.Key {
+    final List<Type.Key> types;
+
+    OverloadedKey(List<Type.Key> types) {
+      super(Op.OVERLOADED_TYPE);
+      this.types = requireNonNull(types);
+    }
+
+    @Override public Type.Key copy(UnaryOperator<Type.Key> transform) {
+      return overloaded(Lists.transform(types, transform::apply));
+    }
+
+    @Override public StringBuilder describe(StringBuilder buf, int left,
+        int right) {
+      buf.append("overloaded {");
+      int i = 0;
+      for (Type.Key entry : types) {
+        if (i++ > 0) {
+          buf.append(", ");
+        }
+        buf.append(entry);
+      }
+      return buf.append('}');
+    }
+
+    @Override public int hashCode() {
+      return types.hashCode();
+    }
+
+    @Override public boolean equals(Object obj) {
+      return obj == this
+          || obj instanceof OverloadedKey
+          && ((OverloadedKey) obj).types.equals(types);
+    }
+
+    @Override public Type toType(TypeSystem typeSystem) {
+      return new OverloadedType(typeSystem.typesFor(types));
     }
   }
 

@@ -1029,7 +1029,10 @@ Ast.OverDecl overDecl() :
 {
   <OVER> { span = Span.of(pos()); }
   id = identifier()
-  { return ast.overDecl(span.end(this), id.name); }
+  {
+    return ast.overDecl(span.end(this),
+        (Ast.IdPat) ast.idPat(id.pos, id.name));
+  }
 }
 
 /** Parses a type declaration, e.g.

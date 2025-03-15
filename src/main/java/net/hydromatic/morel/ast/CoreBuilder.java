@@ -487,8 +487,8 @@ public enum CoreBuilder {
             match(pos, boolWildcardPat, ifFalse)));
   }
 
-  public Core.OverDecl overDecl(String name) {
-    return new Core.OverDecl(name);
+  public Core.OverDecl overDecl(Core.IdPat pat) {
+    return new Core.OverDecl(pat);
   }
 
   public Core.DatatypeDecl datatypeDecl(Iterable<DataType> dataTypes) {

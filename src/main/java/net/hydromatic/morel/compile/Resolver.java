@@ -150,7 +150,7 @@ public class Resolver {
   /** Converts an {@link net.hydromatic.morel.ast.Ast.OverDecl}
    * to a Core {@link net.hydromatic.morel.ast.Core.OverDecl}. */
   public Core.Decl toCore(Ast.OverDecl overDecl) {
-    return core.overDecl(overDecl.name);
+    throw new UnsupportedOperationException();
   }
 
   /** Converts a simple {@link net.hydromatic.morel.ast.Ast.ValDecl},
