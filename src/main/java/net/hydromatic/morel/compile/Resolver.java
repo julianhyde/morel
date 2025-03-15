@@ -158,7 +158,7 @@ public class Resolver {
    * net.hydromatic.morel.ast.Core.OverDecl}.
    */
   public Core.Decl toCore(Ast.OverDecl overDecl) {
-    return core.overDecl(overDecl.name);
+    throw new UnsupportedOperationException();
   }
 
   /**
