@@ -614,9 +614,8 @@ public class Compiler {
         final Core.OverDecl overDecl = (Core.OverDecl) decl;
         if (actions != null) {
           actions.add(
-              (outLines, outBindings, evalEnv) -> {
-                outLines.accept("over " + overDecl.name);
-              });
+              (outLines, outBindings, evalEnv) ->
+                  outLines.accept("over " + overDecl.pat));
         }
         break;
 

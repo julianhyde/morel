@@ -941,22 +941,22 @@ public class Ast {
 
   /** Parse tree node of an overload declaration. */
   public static class OverDecl extends Decl {
-    public final String name;
+    public final IdPat pat;
 
-    OverDecl(Pos pos, String name) {
+    OverDecl(Pos pos, IdPat pat) {
       super(pos, Op.OVER_DECL);
-      this.name = requireNonNull(name);
+      this.pat = requireNonNull(pat);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(Op.OVER_DECL, name);
+      return Objects.hash(Op.OVER_DECL, pat);
     }
 
     @Override
     public boolean equals(Object o) {
       return o == this
-          || o instanceof OverDecl && name.equals(((OverDecl) o).name);
+          || o instanceof OverDecl && pat.equals(((OverDecl) o).pat);
     }
 
     public OverDecl accept(Shuttle shuttle) {
@@ -970,7 +970,7 @@ public class Ast {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("over ").append(name);
+      return w.append("over ").append(pat.name);
     }
   }
 

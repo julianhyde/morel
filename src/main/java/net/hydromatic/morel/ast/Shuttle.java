@@ -206,7 +206,7 @@ public class Shuttle {
   // declarations
 
   protected Ast.OverDecl visit(Ast.OverDecl overDecl) {
-    return ast.overDecl(overDecl.pos, overDecl.name);
+    return ast.overDecl(overDecl.pos, overDecl.pat);
   }
 
   protected Ast.Decl visit(Ast.FunDecl funDecl) {

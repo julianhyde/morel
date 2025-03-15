@@ -553,6 +553,21 @@ public class MainTest {
   }
 
   @Test
+  void testOverload() {
+    final String ml =
+        "let\n"
+            + "  over foo\n"
+            + "  val inst foo = fn NONE => [] | SOME x => [x]\n"
+            + "  val inst foo = fn list => List.null list\n"
+            + "in\n"
+            + "  foo (SOME 1)\n"
+            + "end";
+    String expected =
+        "unresolved flex record (can't tell what fields there are besides #job)";
+    ml(ml).assertType(expected);
+  }
+
+  @Test
   void testApply() {
     ml("hd [\"abc\"]").assertType("string");
   }
