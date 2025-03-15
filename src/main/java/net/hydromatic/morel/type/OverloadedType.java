@@ -18,12 +18,10 @@
  */
 package net.hydromatic.morel.type;
 
-import net.hydromatic.morel.ast.Op;
-
 import com.google.common.collect.ImmutableList;
-
 import java.util.List;
 import java.util.function.UnaryOperator;
+import net.hydromatic.morel.ast.Op;
 
 /** Overloaded type. */
 public class OverloadedType extends BaseType {
@@ -34,16 +32,19 @@ public class OverloadedType extends BaseType {
     this.types = ImmutableList.copyOf(types);
   }
 
-  @Override public <R> R accept(TypeVisitor<R> typeVisitor) {
+  @Override
+  public <R> R accept(TypeVisitor<R> typeVisitor) {
     return typeVisitor.visit(this);
   }
 
-  @Override public Key key() {
+  @Override
+  public Key key() {
     return Keys.overloaded(Keys.toKeys(types));
   }
 
-  @Override public OverloadedType copy(TypeSystem typeSystem,
-      UnaryOperator<Type> transform) {
+  @Override
+  public OverloadedType copy(
+      TypeSystem typeSystem, UnaryOperator<Type> transform) {
     throw new UnsupportedOperationException();
   }
 }
