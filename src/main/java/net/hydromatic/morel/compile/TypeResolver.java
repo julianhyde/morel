@@ -1323,7 +1323,7 @@ public class TypeResolver {
             typeSystem.lookupTyCon(idPat.name);
         if (pair1 != null) {
           // It is a zero argument constructor, e.g. the LESS constructor of the
-          // order type
+          // 'order' type.
           final DataType dataType0 = pair1.left;
           return reg(pat, v, toTerm(dataType0, Subst.EMPTY));
         }
@@ -1393,9 +1393,8 @@ public class TypeResolver {
         actionMap.put(
             v,
             (v3, t, substitution, termPairs) -> {
-              // We now know the type of the source record, say "{a: int, b:
-              // real}".
-              // So, now we can fill out the ellipsis.
+              // We now know the type of the source record, say
+              // "{a: int, b: real}". So, now we can fill out the ellipsis.
               assert v == v3;
               if (t instanceof Unifier.Sequence) {
                 final Unifier.Sequence sequence = (Unifier.Sequence) t;
@@ -1420,7 +1419,7 @@ public class TypeResolver {
 
       case CON_PAT:
         final Ast.ConPat conPat = (Ast.ConPat) pat;
-        // e.g. "SOME x" has type "int option", "x" has type "int"
+        // e.g. "SOME x" has type "int option"; "x" has type "int".
         final Pair<DataType, Type.Key> pair =
             typeSystem.lookupTyCon(conPat.tyCon.name);
         if (pair == null) {
@@ -1579,8 +1578,7 @@ public class TypeResolver {
           result = b.toString();
         }
         final List<Unifier.Term> args =
-            transformEager(
-                argNameTypes.values(), type1 -> toTerm(type1, subst));
+            transformEager(argNameTypes.values(), t -> toTerm(t, subst));
         return unifier.apply(result, args);
       case LIST:
         final ListType listType = (ListType) type;

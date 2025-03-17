@@ -89,8 +89,6 @@ public class Pair<T1, T2>
     return of(entry.getKey(), entry.getValue());
   }
 
-  // ~ Methods ----------------------------------------------------------------
-
   @SuppressWarnings("rawtypes")
   public boolean equals(Object obj) {
     return this == obj

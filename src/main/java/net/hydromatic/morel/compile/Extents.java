@@ -447,8 +447,7 @@ public class Extents {
 
                 case Z_ORELSE:
                   // Expression is 'orelse'. Visit each pattern, and intersect
-                  // the
-                  // constraints (union the generators).
+                  // the constraints (union the generators).
                   map2 = new LinkedHashMap<>();
                   final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map3 =
                       new LinkedHashMap<>();

@@ -476,11 +476,10 @@ public class ShellTest {
             + "x;"
             + "Sys.set (\"printDepth\", ~1);\n"
             + "x;";
-    // TODO: wrap types linke this:
+    // TODO: wrap types like this:
     // val it = ...
     //  : {a:int, b:int list,
-    //     c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list}
-    // list}
+    //     c:{d:int, e:int list, f:{g:int, h:{i:int list}} list} list}
     String expected =
         "val it = () : unit\n"
             + "val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=#,h=#,i=#}]}]}\n"

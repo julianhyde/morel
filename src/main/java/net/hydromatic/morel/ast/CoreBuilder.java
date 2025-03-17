@@ -594,10 +594,8 @@ public enum CoreBuilder {
                   && ((Core.Id) exp.arg(i)).idPat.name.equals(name)) {
                 // Use an existing IdPat if we can, rather than generating a new
                 // IdPat with a different sequence number. (The underlying
-                // problem
-                // is that the fields of record types have only names, no
-                // sequence
-                // numbers.)
+                // problem is that the fields of record types have only names,
+                // no sequence numbers.)
                 idPat = ((Core.Id) exp.arg(i)).idPat;
               } else {
                 idPat = idPat(type, name, typeSystem.nameGenerator);

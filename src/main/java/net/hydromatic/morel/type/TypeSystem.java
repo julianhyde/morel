@@ -212,9 +212,9 @@ public class TypeSystem {
         .values()
         .forEach(
             dataType -> {
-              // We have just created an entry for the moniker (e.g. "'a
-              // option"),
-              // so now create an entry for the name (e.g. "option").
+              // We have just created an entry for the moniker
+              // (e.g. "'a option"), so now create an entry for the name
+              // (e.g. "option").
               Type t =
                   dataType.arguments.isEmpty()
                       ? dataType

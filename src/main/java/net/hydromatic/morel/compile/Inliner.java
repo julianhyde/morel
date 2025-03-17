@@ -104,7 +104,7 @@ public class Inliner extends EnvShuttle {
             }
             // Applicable (including Closure) that does not map to a BuiltIn
             // is not considered 'constant', mainly because it creates messy
-            // plans
+            // plans.
             break;
 
           default:
