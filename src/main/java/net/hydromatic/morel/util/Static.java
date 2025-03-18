@@ -209,11 +209,33 @@ public class Static {
    */
   public static <E, T> ImmutableList<T> transformEager(
       Iterable<? extends E> elements, Function<E, T> mapper) {
-    if (Iterables.isEmpty(elements)) {
+    if (elements instanceof Collection) {
+      // If elements is a Collection, we can optimize by pre-sizing the builder
+      return transformEager((Collection<? extends E>) elements, mapper);
+    }
+    final ImmutableList.Builder<T> b = ImmutableList.builder();
+    elements.forEach(e -> b.add(mapper.apply(e)));
+    return b.build();
+  }
+
+  /**
+   * Eagerly converts a Collection to an ImmutableList, applying a mapping
+   * function to each element.
+   *
+   * <p>More efficient than {@link #transformEager(Iterable, Function)}, because
+   * we can optimize the size of the builder for the size of the collection, and
+   * can avoid creating a builder if the collection is empty.
+   */
+  public static <E, T> ImmutableList<T> transformEager(
+      Collection<? extends E> elements, Function<E, T> mapper) {
+    if (elements.isEmpty()) {
       // Save ourselves the effort of creating a Builder.
       return ImmutableList.of();
     }
-    final ImmutableList.Builder<T> b = ImmutableList.builder();
+
+    // Optimize by making the builder the same size as the collection.
+    final ImmutableList.Builder<T> b =
+        ImmutableList.builderWithExpectedSize(elements.size());
     elements.forEach(e -> b.add(mapper.apply(e)));
     return b.build();
   }
