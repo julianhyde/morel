@@ -297,7 +297,12 @@ License.
         <executions>
           <execution>
             <id>validate</id>
-            <phase>validate</phase>
+            <!-- Although the checkstyle documentation recommends
+                 the 'validate' phase, we want to run in the same
+                 phase as google-formatter. We want google-formatter
+                 to break lines before checkstyle complains they are
+                 too long. -->
+            <phase>process-sources</phase>
             <configuration>
               <configLocation>${top.dir}/src/main/config/checkstyle/checker.xml</configLocation>
               <suppressionsLocation>${top.dir}/src/main/config/checkstyle/suppressions.xml</suppressionsLocation>
