@@ -34,6 +34,8 @@ public class MartelliUnifier extends Unifier {
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
       Tracer tracer) {
+    final List<TermTerm> originalTermPairs = termPairs;
+    final long start = System.nanoTime();
 
     // delete: G u { t = t }
     //   => G
@@ -56,10 +58,20 @@ public class MartelliUnifier extends Unifier {
     //  => fail
     // if x in vars(f(s0, ..., sk))
 
-    termPairs = new ArrayList<>(termPairs);
+    termPairs = new ArrayList<>(originalTermPairs);
     final Map<Variable, Term> result = new LinkedHashMap<>();
-    for (; ; ) {
+    for (int iteration = 0; ; iteration++) {
       if (termPairs.isEmpty()) {
+        long duration = System.nanoTime() - start;
+        if (false) {
+          System.out.printf(
+              "Term count %,d iterations %,d duration %,d nanos"
+                  + " (%,d nanos per iteration)%n",
+              originalTermPairs.size(),
+              iteration,
+              duration,
+              duration / (iteration + 1));
+        }
         return SubstitutionResult.create(result);
       }
       int i = findDelete(termPairs);
