@@ -362,7 +362,20 @@ public class Resolver {
         return toCore((Ast.Id) exp);
       case ANDALSO:
       case ORELSE:
+      case EQ:
+      case NE:
+      case LT:
+      case LE:
+      case GE:
+      case GT:
+      case MOD:
+      case DIV:
+      case TIMES:
+      case MINUS:
+      case PLUS:
         return toCore((Ast.InfixCall) exp);
+      case NEGATE:
+        return toCore((Ast.PrefixCall) exp);
       case IMPLIES:
         return toCoreImplies(
             ((Ast.InfixCall) exp).a0, ((Ast.InfixCall) exp).a1);
@@ -541,6 +554,16 @@ public class Resolver {
         typeMap.getType(call),
         core.functionLiteral(typeMap.typeSystem, builtIn),
         core.tuple(typeMap.typeSystem, core0, core1));
+  }
+
+  private Core.Apply toCore(Ast.PrefixCall call) {
+    Core.Exp core0 = toCore(call.a);
+    final BuiltIn builtIn = toBuiltIn(call.op);
+    return core.apply(
+        call.pos,
+        typeMap.getType(call),
+        core.functionLiteral(typeMap.typeSystem, builtIn),
+        core0);
   }
 
   /** Translate "p implies q" as "(not p) orelse q". */

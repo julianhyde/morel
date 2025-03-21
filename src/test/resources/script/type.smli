@@ -581,4 +581,41 @@ val all_cases = (quadratic_case(), nested_quadratic_case(), cross_chain());
 >     ('cb -> {field:'cb}) * ('cc -> 'cc) * ('cd -> 'cd * 'cd) *
 >     ('ce -> 'ce * 'ce * 'ce) * ('cf -> 'cf tree))
 
+fun isDivisible(n : int, d : int) : bool =
+    n mod d = 0;
+> val isDivisible = fn : int * int -> bool
+
+(* Helper function to find the smallest divisor starting from a given value *)
+fun findSmallestDivisor(n : int, start : int) : int =
+    if start * start > n then n
+    else if isDivisible(n, start) then start
+    else findSmallestDivisor(n, start + 1);
+> val findSmallestDivisor = fn : int * int -> int
+
+(* Function to get the smallest prime factor *)
+fun smallestFactor(n : int) : int =
+    if n <= 1 then n
+    else findSmallestDivisor(n, 2);
+> val smallestFactor = fn : int -> int
+
+(* Main function to factorize a number *)
+fun factorize(n : int) : int list =
+    if n <= 1 then [n]
+    else
+        let
+            val factor = smallestFactor(n)
+        in
+            if factor = n then [n]
+            else factor :: factorize(n div factor)
+        end;
+> val factorize = fn : int -> int list
+
+(* Example usage *)
+factorize 60;
+> val it = [2,2,3,5] : int list
+factorize 84;
+> val it = [2,2,3,7] : int list
+factorize 101;
+> val it = [101] : int list
+
 (*) End type.smli
