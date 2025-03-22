@@ -18,12 +18,14 @@
  */
 package net.hydromatic.morel.util;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Unification algorithm due to Martelli, Montanari (1976) and Paterson, Wegman
@@ -34,7 +36,6 @@ public class MartelliUnifier extends Unifier {
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
       Tracer tracer) {
-    final List<TermTerm> originalTermPairs = termPairs;
     final long start = System.nanoTime();
 
     // delete: G u { t = t }
@@ -58,32 +59,18 @@ public class MartelliUnifier extends Unifier {
     //  => fail
     // if x in vars(f(s0, ..., sk))
 
-    termPairs = new ArrayList<>(originalTermPairs);
+    final Work work = new Work(tracer, termPairs);
     final Map<Variable, Term> result = new LinkedHashMap<>();
     for (int iteration = 0; ; iteration++) {
-      if (termPairs.isEmpty()) {
-        long duration = System.nanoTime() - start;
-        if (true) {
-          System.out.printf(
-              "Term count %,d iterations %,d duration %,d nanos"
-                  + " (%,d nanos per iteration)%n",
-              originalTermPairs.size(),
-              iteration,
-              duration,
-              duration / (iteration + 1));
-        }
-        return SubstitutionResult.create(result);
-      }
-      int i = findDelete(termPairs);
-      if (i >= 0) {
-        final TermTerm pair = termPairs.remove(i); // delete
+      // delete
+      @Nullable TermTerm pair = work.popDelete();
+      if (pair != null) {
         tracer.onDelete(pair.left, pair.right);
         continue;
       }
 
-      i = findSeqSeq(termPairs);
-      if (i >= 0) {
-        final TermTerm pair = termPairs.get(i);
+      pair = work.popSeqSeq();
+      if (pair != null) {
         final Sequence left = (Sequence) pair.left;
         final Sequence right = (Sequence) pair.right;
 
@@ -92,25 +79,17 @@ public class MartelliUnifier extends Unifier {
           tracer.onConflict(left, right);
           return failure("conflict: " + left + " vs " + right);
         }
-        termPairs.remove(i); // decompose
+
+        // decompose
         tracer.onSequence(left, right);
         for (int j = 0; j < left.terms.size(); j++) {
-          termPairs.add(new TermTerm(left.terms.get(j), right.terms.get(j)));
+          work.add(new TermTerm(left.terms.get(j), right.terms.get(j)));
         }
         continue;
       }
 
-      i = findNonVarVar(termPairs);
-      if (i >= 0) {
-        final TermTerm pair = termPairs.get(i);
-        termPairs.set(i, new TermTerm(pair.right, pair.left));
-        tracer.onSwap(pair.left, pair.right);
-        continue; // swap
-      }
-
-      i = findVarAny(termPairs);
-      if (i >= 0) {
-        final TermTerm pair = termPairs.remove(i);
+      pair = work.popVarAny();
+      if (pair != null) {
         final Variable variable = (Variable) pair.left;
         final Term term = pair.right;
         if (term.contains(variable)) {
@@ -119,54 +98,48 @@ public class MartelliUnifier extends Unifier {
         }
         tracer.onVariable(variable, term);
         result.put(variable, term);
-        act(
-            variable,
-            term,
-            termPairs,
-            new Substitution(result),
-            termActions,
-            0);
-        substituteList(termPairs, tracer, ImmutableMap.of(variable, term));
+        act(variable, term, work, new Substitution(result), termActions, 0);
+        work.substituteList(ImmutableMap.of(variable, term));
       }
-    }
-  }
 
-  /** Applies a mapping to all term pairs in a list, modifying them in place. */
-  private void substituteList(
-      List<TermTerm> termPairs, Tracer tracer, Map<Variable, Term> map) {
-    for (int j = 0; j < termPairs.size(); j++) {
-      final TermTerm pair2 = termPairs.get(j);
-      final Term left2 = pair2.left.apply(map);
-      final Term right2 = pair2.right.apply(map);
-      if (left2 != pair2.left || right2 != pair2.right) {
-        tracer.onSubstitute(pair2.left, pair2.right, left2, right2);
-        termPairs.set(j, new TermTerm(left2, right2));
+      final long duration = System.nanoTime() - start;
+      if (true) {
+        System.out.printf(
+            "Term count %,d iterations %,d duration %,d nanos"
+                + " (%,d nanos per iteration)%n",
+            termPairs.size(), iteration, duration, duration / (iteration + 1));
       }
+      return SubstitutionResult.create(result);
     }
   }
 
   private void act(
       Variable variable,
       Term term,
-      List<TermTerm> termPairs,
+      Work work,
       Substitution substitution,
       Map<Variable, Action> termActions,
       int depth) {
     final Action action = termActions.get(variable);
     if (action != null) {
-      action.accept(variable, term, substitution, termPairs);
+      action.accept(
+          variable,
+          term,
+          substitution,
+          (leftTerm, rightTerm) -> work.add(new TermTerm(leftTerm, rightTerm)));
     }
     if (term instanceof Variable) {
-      // Copy list to prevent concurrent modification, in case the action
-      // appends to the list. Limit on depth, to prevent infinite recursion.
-      final List<TermTerm> termPairsCopy = new ArrayList<>(termPairs);
+      // Create a temporary list to prevent concurrent modification, in case the
+      // action appends to the list. Limit on depth, to prevent infinite
+      // recursion.
+      final List<TermTerm> termPairsCopy = work.allTermPairs();
       termPairsCopy.forEach(
           termPair -> {
             if (termPair.left.equals(term) && depth < 2) {
               act(
                   variable,
                   termPair.right,
-                  termPairs,
+                  work,
                   substitution,
                   termActions,
                   depth + 1);
@@ -178,7 +151,7 @@ public class MartelliUnifier extends Unifier {
         act(
             (Variable) term,
             variable,
-            termPairs,
+            work,
             substitution,
             termActions,
             depth + 1);
@@ -189,13 +162,7 @@ public class MartelliUnifier extends Unifier {
           // Substitution contains "variable2 -> variable"; call the actions of
           // "variable2", because it too has just been unified.
           if (v.equals(variable)) {
-            act(
-                variable2,
-                term,
-                termPairs,
-                substitution,
-                termActions,
-                depth + 1);
+            act(variable2, term, work, substitution, termActions, depth + 1);
           }
         });
   }
@@ -240,6 +207,109 @@ public class MartelliUnifier extends Unifier {
       }
     }
     return -1;
+  }
+
+  /** Workspace for {@link MartelliUnifier}. */
+  static class Work {
+    final Tracer tracer;
+    final ArrayQueue<TermTerm> deleteQueue = new ArrayQueue<>();
+    final ArrayQueue<TermTerm> seqSeqQueue = new ArrayQueue<>();
+    final ArrayQueue<TermTerm> varAnyQueue = new ArrayQueue<>();
+
+    Work(Tracer tracer, List<TermTerm> termPairs) {
+      this.tracer = tracer;
+      termPairs.forEach(this::add);
+    }
+
+    private static boolean isSeqSeq(TermTerm pair) {
+      return pair.left instanceof Sequence && pair.right instanceof Sequence;
+    }
+
+    private static boolean isDelete(TermTerm pair) {
+      return pair.left.equals(pair.right);
+    }
+
+    private static boolean isVarAny(TermTerm pair) {
+      return pair.left instanceof Variable;
+    }
+
+    void add(TermTerm pair) {
+      if (isDelete(pair)) {
+        deleteQueue.add(pair);
+      } else if (isSeqSeq(pair)) {
+        seqSeqQueue.add(pair);
+      } else if (!(pair.left instanceof Variable) && pair.right instanceof Variable) {
+        tracer.onSwap(pair.left, pair.right);
+        varAnyQueue.add(new TermTerm(pair.right, pair.left));
+      } else {
+        varAnyQueue.add(new TermTerm(pair.left, pair.right));
+      }
+    }
+
+    /** Finds, and removes, the first pair whose left and right are equal. */
+    @Nullable
+    TermTerm popDelete() {
+      return deleteQueue.poll();
+    }
+
+    /**
+     * Finds, and removes, the first pair whose left and right are both
+     * sequences.
+     */
+    @Nullable
+    TermTerm popSeqSeq() {
+      return seqSeqQueue.poll();
+    }
+
+    /**
+     * Finds, and removes, the first pair whose left is a variable. Right might
+     * be anything.
+     */
+    @Nullable
+    TermTerm popVarAny() {
+      return varAnyQueue.poll();
+    }
+
+    /** Returns a list of all term pairs. */
+    List<TermTerm> allTermPairs() {
+      final ImmutableList.Builder<TermTerm> builder = ImmutableList.builder();
+      deleteQueue.forAll(builder::add);
+      seqSeqQueue.forAll(builder::add);
+      varAnyQueue.forAll(builder::add);
+      return builder.build();
+    }
+
+    /**
+     * Applies a mapping to all term pairs in a list, modifying them in place.
+     */
+    private void substituteList(Map<Variable, Term> map) {
+      sub(map, deleteQueue, Work::isDelete);
+      sub(map, seqSeqQueue, Work::isSeqSeq);
+      sub(map, varAnyQueue, Work::isVarAny);
+    }
+
+    private void sub(
+        Map<Variable, Term> map,
+        ArrayQueue<TermTerm> queue,
+        Predicate<TermTerm> predicate) {
+      for (int j = 0; j < queue.size(); j++) {
+        final TermTerm pair2 = queue.get(j);
+        final Term left2 = pair2.left.apply(map);
+        final Term right2 = pair2.right.apply(map);
+        if (left2 != pair2.left || right2 != pair2.right) {
+          tracer.onSubstitute(pair2.left, pair2.right, left2, right2);
+          TermTerm pair = new TermTerm(left2, right2);
+          if (predicate.test(pair)) {
+            // Still belongs in this queue
+            queue.set(j, pair);
+          } else {
+            // Belongs in another queue
+            queue.remove(j);
+            add(pair);
+          }
+        }
+      }
+    }
   }
 }
 
