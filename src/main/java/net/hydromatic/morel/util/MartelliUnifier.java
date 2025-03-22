@@ -63,7 +63,7 @@ public class MartelliUnifier extends Unifier {
     for (int iteration = 0; ; iteration++) {
       if (termPairs.isEmpty()) {
         long duration = System.nanoTime() - start;
-        if (false) {
+        if (true) {
           System.out.printf(
               "Term count %,d iterations %,d duration %,d nanos"
                   + " (%,d nanos per iteration)%n",
