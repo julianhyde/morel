@@ -100,6 +100,7 @@ public class MartelliUnifier extends Unifier {
         result.put(variable, term);
         act(variable, term, work, new Substitution(result), termActions, 0);
         work.substituteList(ImmutableMap.of(variable, term));
+        continue;
       }
 
       final long duration = System.nanoTime() - start;
@@ -221,6 +222,13 @@ public class MartelliUnifier extends Unifier {
       termPairs.forEach(this::add);
     }
 
+    @Override
+    public String toString() {
+      return "delete " + deleteQueue.asList()
+          + " seqSeq " + seqSeqQueue.asList()
+          + " varAny " + varAnyQueue.asList();
+    }
+
     private static boolean isSeqSeq(TermTerm pair) {
       return pair.left instanceof Sequence && pair.right instanceof Sequence;
     }
@@ -293,19 +301,20 @@ public class MartelliUnifier extends Unifier {
         ArrayQueue<TermTerm> queue,
         Predicate<TermTerm> predicate) {
       for (int j = 0; j < queue.size(); j++) {
-        final TermTerm pair2 = queue.get(j);
-        final Term left2 = pair2.left.apply(map);
-        final Term right2 = pair2.right.apply(map);
-        if (left2 != pair2.left || right2 != pair2.right) {
-          tracer.onSubstitute(pair2.left, pair2.right, left2, right2);
-          TermTerm pair = new TermTerm(left2, right2);
-          if (predicate.test(pair)) {
+        final TermTerm pair = queue.get(j);
+        final Term left2 = pair.left.apply(map);
+        final Term right2 = pair.right.apply(map);
+        if (left2 != pair.left || right2 != pair.right) {
+          tracer.onSubstitute(pair.left, pair.right, left2, right2);
+          TermTerm pair2 = new TermTerm(left2, right2);
+          if (predicate.test(pair2)) {
             // Still belongs in this queue
-            queue.set(j, pair);
+            queue.set(j, pair2);
           } else {
             // Belongs in another queue
             queue.remove(j);
-            add(pair);
+            add(pair2);
+            --j;
           }
         }
       }
