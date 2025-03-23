@@ -21,9 +21,10 @@ package net.hydromatic.morel.util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
-import java.util.function.Predicate;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -168,54 +169,12 @@ public class MartelliUnifier extends Unifier {
         });
   }
 
-  private int findDelete(List<TermTerm> termPairs) {
-    for (int i = 0; i < termPairs.size(); i++) {
-      TermTerm termTerm = termPairs.get(i);
-      if (termTerm.left.equals(termTerm.right)) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  private int findSeqSeq(List<TermTerm> termPairs) {
-    for (int i = 0; i < termPairs.size(); i++) {
-      TermTerm termTerm = termPairs.get(i);
-      if (termTerm.left instanceof Sequence
-          && termTerm.right instanceof Sequence) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  private int findNonVarVar(List<TermTerm> termPairs) {
-    for (int i = 0; i < termPairs.size(); i++) {
-      TermTerm termTerm = termPairs.get(i);
-      if (!(termTerm.left instanceof Variable)
-          && termTerm.right instanceof Variable) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  private int findVarAny(List<TermTerm> termPairs) {
-    for (int i = 0; i < termPairs.size(); i++) {
-      TermTerm termTerm = termPairs.get(i);
-      if (termTerm.left instanceof Variable) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
   /** Workspace for {@link MartelliUnifier}. */
   static class Work {
     final Tracer tracer;
-    final ArrayQueue<TermTerm> deleteQueue = new ArrayQueue<>();
-    final ArrayQueue<TermTerm> seqSeqQueue = new ArrayQueue<>();
-    final ArrayQueue<TermTerm> varAnyQueue = new ArrayQueue<>();
+    final List<TermTerm> deleteQueue = new LinkedList<>();
+    final List<TermTerm> seqSeqQueue = new LinkedList<>();
+    final List<TermTerm> varAnyQueue = new LinkedList<>();
 
     Work(Tracer tracer, List<TermTerm> termPairs) {
       this.tracer = tracer;
@@ -224,40 +183,35 @@ public class MartelliUnifier extends Unifier {
 
     @Override
     public String toString() {
-      return "delete " + deleteQueue.asList()
-          + " seqSeq " + seqSeqQueue.asList()
-          + " varAny " + varAnyQueue.asList();
-    }
-
-    private static boolean isSeqSeq(TermTerm pair) {
-      return pair.left instanceof Sequence && pair.right instanceof Sequence;
-    }
-
-    private static boolean isDelete(TermTerm pair) {
-      return pair.left.equals(pair.right);
-    }
-
-    private static boolean isVarAny(TermTerm pair) {
-      return pair.left instanceof Variable;
+      return "delete "
+          + deleteQueue
+          + " seqSeq "
+          + seqSeqQueue
+          + " varAny "
+          + varAnyQueue;
     }
 
     void add(TermTerm pair) {
-      if (isDelete(pair)) {
-        deleteQueue.add(pair);
-      } else if (isSeqSeq(pair)) {
-        seqSeqQueue.add(pair);
-      } else if (!(pair.left instanceof Variable) && pair.right instanceof Variable) {
-        tracer.onSwap(pair.left, pair.right);
-        varAnyQueue.add(new TermTerm(pair.right, pair.left));
-      } else {
-        varAnyQueue.add(new TermTerm(pair.left, pair.right));
+      switch (Kind.of(pair)) {
+        case DELETE:
+          deleteQueue.add(pair);
+          break;
+        case SEQ_SEQ:
+          seqSeqQueue.add(pair);
+          break;
+        case NON_VAR_VAR:
+          tracer.onSwap(pair.left, pair.right);
+          pair = new TermTerm(pair.right, pair.left);
+          // fall through
+        case VAR_ANY:
+          varAnyQueue.add(pair);
       }
     }
 
     /** Finds, and removes, the first pair whose left and right are equal. */
     @Nullable
     TermTerm popDelete() {
-      return deleteQueue.poll();
+      return deleteQueue.isEmpty() ? null : deleteQueue.remove(0);
     }
 
     /**
@@ -266,7 +220,7 @@ public class MartelliUnifier extends Unifier {
      */
     @Nullable
     TermTerm popSeqSeq() {
-      return seqSeqQueue.poll();
+      return seqSeqQueue.isEmpty() ? null : seqSeqQueue.remove(0);
     }
 
     /**
@@ -275,15 +229,15 @@ public class MartelliUnifier extends Unifier {
      */
     @Nullable
     TermTerm popVarAny() {
-      return varAnyQueue.poll();
+      return varAnyQueue.isEmpty() ? null : varAnyQueue.remove(0);
     }
 
     /** Returns a list of all term pairs. */
     List<TermTerm> allTermPairs() {
       final ImmutableList.Builder<TermTerm> builder = ImmutableList.builder();
-      deleteQueue.forAll(builder::add);
-      seqSeqQueue.forAll(builder::add);
-      varAnyQueue.forAll(builder::add);
+      deleteQueue.forEach(builder::add);
+      seqSeqQueue.forEach(builder::add);
+      varAnyQueue.forEach(builder::add);
       return builder.build();
     }
 
@@ -291,32 +245,56 @@ public class MartelliUnifier extends Unifier {
      * Applies a mapping to all term pairs in a list, modifying them in place.
      */
     private void substituteList(Map<Variable, Term> map) {
-      sub(map, deleteQueue, Work::isDelete);
-      sub(map, seqSeqQueue, Work::isSeqSeq);
-      sub(map, varAnyQueue, Work::isVarAny);
+      sub(map, deleteQueue, Kind.DELETE);
+      sub(map, seqSeqQueue, Kind.SEQ_SEQ);
+      sub(map, varAnyQueue, Kind.VAR_ANY);
     }
 
-    private void sub(
-        Map<Variable, Term> map,
-        ArrayQueue<TermTerm> queue,
-        Predicate<TermTerm> predicate) {
-      for (int j = 0; j < queue.size(); j++) {
-        final TermTerm pair = queue.get(j);
+    private void sub(Map<Variable, Term> map, List<TermTerm> queue, Kind kind) {
+      for (ListIterator<TermTerm> iter = queue.listIterator();
+          iter.hasNext(); ) {
+        final TermTerm pair = iter.next();
         final Term left2 = pair.left.apply(map);
         final Term right2 = pair.right.apply(map);
         if (left2 != pair.left || right2 != pair.right) {
           tracer.onSubstitute(pair.left, pair.right, left2, right2);
           TermTerm pair2 = new TermTerm(left2, right2);
-          if (predicate.test(pair2)) {
+          final Kind kind2 = Kind.of(pair2);
+          if (kind2 == kind) {
             // Still belongs in this queue
-            queue.set(j, pair2);
+            iter.set(pair2);
+          } else if (kind2 == Kind.NON_VAR_VAR && kind == Kind.VAR_ANY) {
+            iter.set(new TermTerm(pair2.right, pair2.left));
           } else {
             // Belongs in another queue
-            queue.remove(j);
+            iter.remove();
             add(pair2);
-            --j;
           }
         }
+      }
+    }
+  }
+
+  private enum Kind {
+    DELETE,
+    SEQ_SEQ,
+    VAR_ANY,
+    NON_VAR_VAR;
+
+    static Kind of(TermTerm pair) {
+      if (pair.left.equals(pair.right)) {
+        return DELETE;
+      }
+      if (pair.left instanceof Sequence) {
+        if (pair.right instanceof Sequence) {
+          return SEQ_SEQ;
+        } else {
+          assert pair.right instanceof Variable;
+          return NON_VAR_VAR;
+        }
+      } else {
+        assert pair.left instanceof Variable;
+        return VAR_ANY;
       }
     }
   }
