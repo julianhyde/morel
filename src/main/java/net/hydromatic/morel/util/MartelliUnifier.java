@@ -64,14 +64,16 @@ public class MartelliUnifier extends Unifier {
     final Map<Variable, Term> result = new LinkedHashMap<>();
     for (int iteration = 0; ; iteration++) {
       // delete
-      @Nullable TermTerm pair = work.popDelete();
-      if (pair != null) {
-        tracer.onDelete(pair.left, pair.right);
-        continue;
+      if (!work.deleteQueue.isEmpty()) {
+        @Nullable TermTerm pair = work.deleteQueue.remove(0);
+        if (pair != null) {
+          tracer.onDelete(pair.left, pair.right);
+          continue;
+        }
       }
 
-      pair = work.popSeqSeq();
-      if (pair != null) {
+      if (!work.seqSeqQueue.isEmpty()) {
+        TermTerm pair = work.seqSeqQueue.remove(0);
         final Sequence left = (Sequence) pair.left;
         final Sequence right = (Sequence) pair.right;
 
@@ -89,8 +91,8 @@ public class MartelliUnifier extends Unifier {
         continue;
       }
 
-      pair = work.popVarAny();
-      if (pair != null) {
+      if (!work.varAnyQueue.isEmpty()) {
+        TermTerm pair = work.varAnyQueue.remove(0);
         final Variable variable = (Variable) pair.left;
         final Term term = pair.right;
         if (term.contains(variable)) {
@@ -100,7 +102,7 @@ public class MartelliUnifier extends Unifier {
         tracer.onVariable(variable, term);
         result.put(variable, term);
         act(variable, term, work, new Substitution(result), termActions, 0);
-        work.substituteList(ImmutableMap.of(variable, term));
+        work.substituteList(variable, term);
         continue;
       }
 
@@ -130,14 +132,14 @@ public class MartelliUnifier extends Unifier {
           substitution,
           (leftTerm, rightTerm) -> work.add(new TermTerm(leftTerm, rightTerm)));
     }
-    if (term instanceof Variable) {
+    if (term instanceof Variable && depth < 2) {
       // Create a temporary list to prevent concurrent modification, in case the
       // action appends to the list. Limit on depth, to prevent infinite
       // recursion.
       final List<TermTerm> termPairsCopy = work.allTermPairs();
       termPairsCopy.forEach(
           termPair -> {
-            if (termPair.left.equals(term) && depth < 2) {
+            if (termPair.left.equals(term)) {
               act(
                   variable,
                   termPair.right,
@@ -208,30 +210,6 @@ public class MartelliUnifier extends Unifier {
       }
     }
 
-    /** Finds, and removes, the first pair whose left and right are equal. */
-    @Nullable
-    TermTerm popDelete() {
-      return deleteQueue.isEmpty() ? null : deleteQueue.remove(0);
-    }
-
-    /**
-     * Finds, and removes, the first pair whose left and right are both
-     * sequences.
-     */
-    @Nullable
-    TermTerm popSeqSeq() {
-      return seqSeqQueue.isEmpty() ? null : seqSeqQueue.remove(0);
-    }
-
-    /**
-     * Finds, and removes, the first pair whose left is a variable. Right might
-     * be anything.
-     */
-    @Nullable
-    TermTerm popVarAny() {
-      return varAnyQueue.isEmpty() ? null : varAnyQueue.remove(0);
-    }
-
     /** Returns a list of all term pairs. */
     List<TermTerm> allTermPairs() {
       final ImmutableList.Builder<TermTerm> builder = ImmutableList.builder();
@@ -244,18 +222,18 @@ public class MartelliUnifier extends Unifier {
     /**
      * Applies a mapping to all term pairs in a list, modifying them in place.
      */
-    private void substituteList(Map<Variable, Term> map) {
-      sub(map, deleteQueue, Kind.DELETE);
-      sub(map, seqSeqQueue, Kind.SEQ_SEQ);
-      sub(map, varAnyQueue, Kind.VAR_ANY);
+    private void substituteList(Variable variable, Term term) {
+      sub(variable, term, deleteQueue, Kind.DELETE);
+      sub(variable, term, seqSeqQueue, Kind.SEQ_SEQ);
+      sub(variable, term, varAnyQueue, Kind.VAR_ANY);
     }
 
-    private void sub(Map<Variable, Term> map, List<TermTerm> queue, Kind kind) {
+    private void sub(Variable variable, Term term, List<TermTerm> queue, Kind kind) {
       for (ListIterator<TermTerm> iter = queue.listIterator();
           iter.hasNext(); ) {
         final TermTerm pair = iter.next();
-        final Term left2 = pair.left.apply(map);
-        final Term right2 = pair.right.apply(map);
+        final Term left2 = pair.left.apply1(variable, term);
+        final Term right2 = pair.right.apply1(variable, term);
         if (left2 != pair.left || right2 != pair.right) {
           tracer.onSubstitute(pair.left, pair.right, left2, right2);
           TermTerm pair2 = new TermTerm(left2, right2);
