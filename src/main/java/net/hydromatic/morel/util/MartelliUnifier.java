@@ -19,6 +19,7 @@
 package net.hydromatic.morel.util;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
@@ -34,8 +35,18 @@ public class MartelliUnifier extends Unifier {
   public @NonNull Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
+      Map<Variable, List<Variable>> constraints,
       Tracer tracer) {
     final long start = System.nanoTime();
+
+    // Invert the constraints map. Fails if a variable appears in more than one
+    // constraint.
+    final ImmutableMap.Builder<Variable, Variable> b = ImmutableMap.builder();
+    constraints.forEach(
+        (key, values) -> {
+          values.forEach(value -> b.put(value, key));
+        });
+    final ImmutableMap<Variable, Variable> backConstraints = b.build();
 
     // delete: G u { t = t }
     //   => G
@@ -99,6 +110,12 @@ public class MartelliUnifier extends Unifier {
         }
         tracer.onVariable(variable, term);
         result.put(variable, term);
+        Variable constrainedVariable = backConstraints.get(variable);
+        if (constrainedVariable != null) {
+          // TODO
+          //          Result result2 =
+          //              unify(ImmutableList.of(new TermTerm()))
+        }
         if (!termActions.isEmpty()) {
           act(variable, term, work, new Substitution(result), termActions, 0);
         }

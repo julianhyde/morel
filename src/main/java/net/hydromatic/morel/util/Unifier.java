@@ -123,6 +123,7 @@ public abstract class Unifier {
   public abstract @NonNull Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
+      Map<Variable, List<Variable>> constraints,
       Tracer tracer);
 
   private static void checkCycles(

@@ -138,7 +138,11 @@ public abstract class UnifierTest {
   void assertThatUnify(
       List<Unifier.TermTerm> termPairs, Matcher<String> matcher) {
     final Unifier.Result result =
-        unifier.unify(termPairs, ImmutableMap.of(), Tracers.nullTracer());
+        unifier.unify(
+            termPairs,
+            ImmutableMap.of(),
+            ImmutableMap.of(),
+            Tracers.nullTracer());
     assertThat(result, notNullValue());
     assertThat(result instanceof Unifier.Substitution, is(true));
     assertThat(((Unifier.Substitution) result).resolve().toString(), matcher);
@@ -161,7 +165,11 @@ public abstract class UnifierTest {
 
   void assertThatCannotUnify(List<Unifier.TermTerm> pairList) {
     final Unifier.Result result =
-        unifier.unify(pairList, ImmutableMap.of(), Tracers.nullTracer());
+        unifier.unify(
+            pairList,
+            ImmutableMap.of(),
+            ImmutableMap.of(),
+            Tracers.nullTracer());
     assertThat(result, not(instanceOf(Unifier.Substitution.class)));
   }
 
@@ -361,6 +369,7 @@ public abstract class UnifierTest {
       final Unifier.Result unify =
           unifier.unify(
               Arrays.asList(termTerms),
+              ImmutableMap.of(),
               ImmutableMap.of(),
               Tracers.nullTracer());
       assertThat(unify, notNullValue());
