@@ -19,9 +19,7 @@
 package net.hydromatic.morel.util;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -174,9 +172,9 @@ public class MartelliUnifier extends Unifier {
   /** Workspace for {@link MartelliUnifier}. */
   static class Work {
     final Tracer tracer;
-    final List<TermTerm> deleteQueue = new LinkedList<>();
-    final List<TermTerm> seqSeqQueue = new LinkedList<>();
-    final List<TermTerm> varAnyQueue = new LinkedList<>();
+    final ArrayQueue<TermTerm> deleteQueue = new ArrayQueue<>();
+    final ArrayQueue<TermTerm> seqSeqQueue = new ArrayQueue<>();
+    final ArrayQueue<TermTerm> varAnyQueue = new ArrayQueue<>();
 
     Work(Tracer tracer, List<TermTerm> termPairs) {
       this.tracer = tracer;
@@ -228,7 +226,8 @@ public class MartelliUnifier extends Unifier {
       sub(variable, term, varAnyQueue, Kind.VAR_ANY);
     }
 
-    private void sub(Variable variable, Term term, List<TermTerm> queue, Kind kind) {
+    private void sub(
+        Variable variable, Term term, ArrayQueue<TermTerm> queue, Kind kind) {
       for (ListIterator<TermTerm> iter = queue.listIterator();
           iter.hasNext(); ) {
         final TermTerm pair = iter.next();

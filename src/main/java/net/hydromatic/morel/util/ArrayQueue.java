@@ -23,6 +23,7 @@ import static java.util.Objects.requireNonNull;
 import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.function.Consumer;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -58,6 +59,11 @@ public class ArrayQueue<E> {
     return sub(end, start, elements.length);
   }
 
+  /** Returns whether this queue is empty. (Same as {@code size() == 0}.) */
+  public boolean isEmpty() {
+    return start == end;
+  }
+
   /** Returns the element at position {@code i}. */
   public E get(int i) {
     if (i < 0 || i >= size()) {
@@ -67,12 +73,15 @@ public class ArrayQueue<E> {
   }
 
   /** Sets the element at position {@code i}. */
-  public void set(int i, E e) {
+  public E set(int i, E e) {
     if (i < 0 || i >= size()) {
       throw new IndexOutOfBoundsException();
     }
     requireNonNull(e);
-    elements[add(start, i, elements.length)] = e;
+    int k = add(start, i, elements.length);
+    E previous = elements[k];
+    elements[k] = e;
+    return previous;
   }
 
   /** Adds an element to the tail. */
@@ -103,13 +112,23 @@ public class ArrayQueue<E> {
   public List<E> asList() {
     return new AbstractList<E>() {
       @Override
+      public int size() {
+        return ArrayQueue.this.size();
+      }
+
+      @Override
       public E get(int index) {
         return ArrayQueue.this.get(index);
       }
 
       @Override
-      public int size() {
-        return ArrayQueue.this.size();
+      public E set(int index, E element) {
+        return ArrayQueue.this.set(index, element);
+      }
+
+      @Override
+      public E remove(int index) {
+        return ArrayQueue.this.remove(index);
       }
     };
   }
@@ -148,7 +167,7 @@ public class ArrayQueue<E> {
   }
 
   /** Calls a consumer with each element, in order. */
-  public void forAll(Consumer<E> consumer) {
+  public void forEach(Consumer<E> consumer) {
     if (start <= end) {
       for (int i = start; i < end; i++) {
         consumer.accept(elements[i]);
@@ -195,6 +214,10 @@ public class ArrayQueue<E> {
       elements[end] = null;
     }
     return e;
+  }
+
+  public ListIterator<E> listIterator() {
+    return asList().listIterator();
   }
 }
 
