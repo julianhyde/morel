@@ -167,7 +167,7 @@ public class ArrayQueue<E> {
   }
 
   /** Calls a consumer with each element, in order. */
-  public void forEach(Consumer<E> consumer) {
+  public void forEach(Consumer<? super E> consumer) {
     if (start <= end) {
       for (int i = start; i < end; i++) {
         consumer.accept(elements[i]);
