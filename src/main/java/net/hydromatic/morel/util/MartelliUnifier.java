@@ -18,12 +18,11 @@
  */
 package net.hydromatic.morel.util;
 
-import java.util.Iterator;
+import com.google.common.collect.ImmutableList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
-import java.util.function.Consumer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -209,21 +208,13 @@ public class MartelliUnifier extends Unifier {
       }
     }
 
-    /** Returns an iterable of all term pairs. */
-    Iterable<TermTerm> allTermPairs() {
-      return new Iterable<TermTerm>() {
-        @Override
-        public Iterator<TermTerm> iterator() {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void forEach(Consumer<? super TermTerm> action) {
-          deleteQueue.forEach(action);
-          seqSeqQueue.forEach(action);
-          varAnyQueue.forEach(action);
-        }
-      };
+    /** Returns a list of all term pairs. */
+    List<TermTerm> allTermPairs() {
+      final ImmutableList.Builder<TermTerm> builder = ImmutableList.builder();
+      deleteQueue.forEach(builder::add);
+      seqSeqQueue.forEach(builder::add);
+      varAnyQueue.forEach(builder::add);
+      return builder.build();
     }
 
     /**
