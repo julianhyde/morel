@@ -99,7 +99,9 @@ public class MartelliUnifier extends Unifier {
         }
         tracer.onVariable(variable, term);
         result.put(variable, term);
-        act(variable, term, work, new Substitution(result), termActions, 0);
+        if (!termActions.isEmpty()) {
+          act(variable, term, work, new Substitution(result), termActions, 0);
+        }
         work.substituteList(variable, term);
         continue;
       }
