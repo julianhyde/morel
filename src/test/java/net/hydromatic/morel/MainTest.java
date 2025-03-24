@@ -568,8 +568,7 @@ public class MainTest {
             + "in\n"
             + "  foo (SOME 1)\n"
             + "end";
-    String expected =
-        "unresolved flex record (can't tell what fields there are besides #job)";
+    String expected = "int list";
     ml(ml).assertType(expected);
   }
 
