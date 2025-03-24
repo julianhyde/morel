@@ -332,9 +332,9 @@ public class Visitor {
     tuple.args.forEach(this::accept);
   }
 
-  protected void visit(Core.DatatypeDecl datatypeDecl) {}
-
   protected void visit(Core.OverDecl overDecl) {}
+
+  protected void visit(Core.DatatypeDecl datatypeDecl) {}
 
   protected void visit(Core.Fn fn) {
     fn.idPat.accept(this);
