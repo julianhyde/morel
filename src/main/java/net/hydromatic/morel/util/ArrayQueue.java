@@ -43,6 +43,11 @@ public class ArrayQueue<E> {
     elements = (E[]) new Object[16];
   }
 
+  @Override
+  public String toString() {
+    return asList().toString();
+  }
+
   /** Removes the element at the head of this queue, or returns null. */
   public @Nullable E poll() {
     if (start == end) {

@@ -536,18 +536,38 @@ public class UtilTest {
     ArrayQueue<String> q = new ArrayQueue<>();
     List<String> list = new LinkedList<>();
     assertThat(q.size(), is(0));
+    assertThat(q.isEmpty(), is(true));
     assertThat(q.asList(), is(list));
+    try {
+      String s = q.get(0);
+      fail("expected error, got " + s);
+    } catch (IndexOutOfBoundsException e) {
+      assertThat(e.getMessage(), nullValue());
+    }
+    assertThat(q.toString(), is(list.toString()));
 
     q.add("a");
     list.add("a");
     assertThat(q.asList(), is(list));
     assertThat(q.size(), is(1));
+    assertThat(q.isEmpty(), is(false));
     assertThat(q.get(0), is("a"));
+    assertThat(q.asList(), is(list));
+    assertThat(q.toString(), is(list.toString()));
 
     String poll = q.poll();
     list.remove(0);
     assertThat(poll, is("a"));
+    assertThat(q.size(), is(0));
+    assertThat(q.isEmpty(), is(true));
+    try {
+      String s = q.get(0);
+      fail("expected error, got " + s);
+    } catch (IndexOutOfBoundsException e) {
+      assertThat(e.getMessage(), nullValue());
+    }
     assertThat(q.asList(), is(list));
+    assertThat(q.toString(), is(list.toString()));
 
     String poll2 = q.poll();
     assertThat(poll2, nullValue());
@@ -571,7 +591,7 @@ public class UtilTest {
           break;
         case 5:
         default:
-          if (q.size() > 0) {
+          if (!q.isEmpty()) {
             final int z = r.nextInt(q.size());
             q.remove(z);
             if (z == 0 || z == list.size() - 1) {
