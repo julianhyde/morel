@@ -27,12 +27,16 @@ import static org.hamcrest.core.IsNull.notNullValue;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import net.hydromatic.morel.util.MartelliUnifier;
 import net.hydromatic.morel.util.RobinsonUnifier;
 import net.hydromatic.morel.util.Tracers;
 import net.hydromatic.morel.util.Unifier;
+import net.hydromatic.morel.util.Unifiers;
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.Test;
 
@@ -318,6 +322,23 @@ public abstract class UnifierTest {
     final Unifier.Term e1 = p(f(X), a(), Y);
     final Unifier.Term e2 = p(f(bill()), Z, g(b()));
     assertThatUnify(e1, e2, is("[bill/X, g(b)/Y, a/Z]"));
+  }
+
+  /** Tests {@link Unifiers#dump(PrintWriter, Iterable)}. */
+  @Test
+  void testUnifierDump() {
+    List<Unifier.TermTerm> pairs = new ArrayList<>();
+    final Unifier.Term intAtom = unifier.atom("int");
+    final Unifier.Variable t5 = unifier.variable(5);
+    pairs.add(new Unifier.TermTerm(intAtom, t5));
+    StringWriter sw = new StringWriter();
+    Unifiers.dump(new PrintWriter(sw), pairs);
+    String expected =
+        "List<Unifier.TermTerm> pairs = new ArrayList<>();\n"
+            + "final Unifier.Term int = unifier.atom(\"int\");\n"
+            + "final Unifier.Variable t5 = unifier.variable(5);\n"
+            + "pairs.add(new Unifier.TermTerm(int, t5));\n";
+    assertThat(sw, hasToString(expected));
   }
 
   /**
