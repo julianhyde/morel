@@ -206,16 +206,25 @@ class PairLists {
     @SuppressWarnings("unchecked")
     @Override
     public List<T> leftList() {
-      final int size = list.size() / 2;
       return new RandomAccessList<T>() {
         @Override
         public int size() {
-          return size;
+          return list.size() / 2;
         }
 
         @Override
         public T get(int index) {
           return (T) list.get(index * 2);
+        }
+
+        @Override
+        public T set(int index, T element) {
+          return (T) list.set(index * 2, element);
+        }
+
+        @Override
+        public T remove(int index) {
+          return (T) list.remove(index * 2);
         }
       };
     }
@@ -223,16 +232,25 @@ class PairLists {
     @SuppressWarnings("unchecked")
     @Override
     public List<U> rightList() {
-      final int size = list.size() / 2;
       return new RandomAccessList<U>() {
         @Override
         public int size() {
-          return size;
+          return list.size() / 2;
         }
 
         @Override
         public U get(int index) {
           return (U) list.get(index * 2 + 1);
+        }
+
+        @Override
+        public U set(int index, U element) {
+          return (U) list.set(index * 2 + 1, element);
+        }
+
+        @Override
+        public U remove(int index) {
+          return (U) list.remove(index * 2 + 1);
         }
       };
     }
