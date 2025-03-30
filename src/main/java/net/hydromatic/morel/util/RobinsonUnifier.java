@@ -74,7 +74,7 @@ public class RobinsonUnifier extends Unifier {
   public @NonNull Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
-      Map<Variable, List<Variable>> constraints,
+      List<Constraint> constraints,
       Tracer tracer) {
     if (!constraints.isEmpty()) {
       throw new AssertionError("Constraints are not supported");
