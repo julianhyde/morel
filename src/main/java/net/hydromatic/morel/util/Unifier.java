@@ -19,7 +19,9 @@
 package net.hydromatic.morel.util;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
 
 import com.google.common.collect.ImmutableList;
@@ -91,6 +93,14 @@ public abstract class Unifier {
     return atomMap.computeIfAbsent(name, Sequence::new);
   }
 
+  /** Creates a constraint. */
+  public Constraint constraint(
+      Unifier.Variable arg,
+      Unifier.Variable result,
+      PairList<Unifier.Term, Unifier.Term> argResults) {
+    return new Constraint(arg, result, argResults);
+  }
+
   /**
    * Creates a substitution.
    *
@@ -123,7 +133,7 @@ public abstract class Unifier {
   public abstract @NonNull Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
-      Map<Variable, List<Variable>> constraints,
+      List<Constraint> constraints,
       Tracer tracer);
 
   private static void checkCycles(
@@ -134,7 +144,7 @@ public abstract class Unifier {
     }
   }
 
-  protected Failure failure(String reason) {
+  protected static Failure failure(String reason) {
     return new Failure() {
       @Override
       public String toString() {
@@ -282,6 +292,17 @@ public abstract class Unifier {
 
     /** Accepts a visitor. */
     <R> R accept(TermVisitor<R> visitor);
+
+    /**
+     * Returns whether this term could possibly unify with another term.
+     *
+     * <p>Returns true if {@code this} or {@code term} is a variable, or if they
+     * are sequences with the same operator and number of terms, and if all
+     * pairs of those terms could unify.
+     */
+    default boolean couldUnifyWith(Term term) {
+      return true;
+    }
   }
 
   /**
@@ -435,6 +456,19 @@ public abstract class Unifier {
     }
 
     @Override
+    public boolean couldUnifyWith(Term term) {
+      if (term instanceof Variable) {
+        return true;
+      }
+      final Sequence sequence = (Sequence) term;
+      if (!operator.equals(((Sequence) term).operator)
+          || terms.size() != sequence.terms.size()) {
+        return false;
+      }
+      return allMatch(terms, sequence.terms, Term::couldUnifyWith);
+    }
+
+    @Override
     public String toString() {
       if (terms.isEmpty()) {
         return operator;
@@ -519,6 +553,39 @@ public abstract class Unifier {
 
     public <R> R accept(TermVisitor<R> visitor) {
       return visitor.visit(this);
+    }
+  }
+
+  /**
+   * Constraint arising from a call to an overloaded function.
+   *
+   * <p>Consider a call to an overloaded function with two overloads {@code c ->
+   * d} and {@code e -> f}. If the argument ({@code a}) unifies to {@code c}
+   * then the result ({@code b}) is {@code d}; if the argument unifies to {@code
+   * e} then the result is {@code f}.
+   *
+   * <p>This is represented as the following constraint:
+   *
+   * <pre>{@code
+   * {arg: a, result: b, argResults [{c, d}, {e, f}]}
+   * }</pre>
+   */
+  public static final class Constraint {
+    public final Variable arg;
+    public final Variable result;
+    public final PairList<Term, Term> argResults;
+
+    /** Creates a Constraint. */
+    Constraint(Variable arg, Variable result, PairList<Term, Term> argResults) {
+      this.arg = requireNonNull(arg);
+      this.result = requireNonNull(result);
+      this.argResults = argResults.immutable();
+      checkArgument(!argResults.isEmpty());
+    }
+
+    @Override
+    public String toString() {
+      return format("{constraint %s %s %s}", arg, result, argResults);
     }
   }
 

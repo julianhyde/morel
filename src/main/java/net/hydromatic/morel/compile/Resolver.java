@@ -140,7 +140,7 @@ public class Resolver {
   public Core.Decl toCore(Ast.Decl node) {
     switch (node.op) {
       case OVER_DECL:
-        return toCore((Ast.OverDecl) node);
+        return toCore(typeMap.typeSystem, (Ast.OverDecl) node);
 
       case VAL_DECL:
         return toCore((Ast.ValDecl) node);
@@ -158,8 +158,10 @@ public class Resolver {
    * Converts an {@link net.hydromatic.morel.ast.Ast.OverDecl} to a Core {@link
    * net.hydromatic.morel.ast.Core.OverDecl}.
    */
-  public Core.Decl toCore(Ast.OverDecl overDecl) {
-    throw new UnsupportedOperationException();
+  public Core.Decl toCore(TypeSystem typeSystem, Ast.OverDecl overDecl) {
+    Type overloadType = typeSystem.lookup(BuiltIn.Datatype.OVERLOAD);
+    Core.IdPat idPat = core.idPat(overloadType, overDecl.pat.name, 0);
+    return core.overDecl(idPat);
   }
 
   /**
@@ -192,10 +194,15 @@ public class Resolver {
   }
 
   private ResolvedDecl resolve(Ast.Decl decl, List<Binding> bindings) {
-    if (decl instanceof Ast.DatatypeDecl) {
-      return resolveDatatypeDecl((Ast.DatatypeDecl) decl, bindings);
-    } else {
-      return resolveValDecl((Ast.ValDecl) decl, bindings);
+    switch (decl.op) {
+      case DATATYPE_DECL:
+        return resolveDatatypeDecl((Ast.DatatypeDecl) decl, bindings);
+      case OVER_DECL:
+        return resolveOverDecl((Ast.OverDecl) decl, bindings);
+      case VAL_DECL:
+        return resolveValDecl((Ast.ValDecl) decl, bindings);
+      default:
+        throw new AssertionError(decl);
     }
   }
 
@@ -213,6 +220,16 @@ public class Resolver {
                   bindings.add(typeMap.typeSystem.bindTyCon(dataType, name)));
     }
     return new ResolvedDatatypeDecl(ImmutableList.copyOf(dataTypes));
+  }
+
+  private static ResolvedDecl resolveOverDecl(
+      Ast.OverDecl decl, List<Binding> bindings) {
+    return new ResolvedDecl() {
+      @Override
+      Core.Exp toExp(Core.Exp resultExp) {
+        return resultExp;
+      }
+    };
   }
 
   private ResolvedValDecl resolveValDecl(

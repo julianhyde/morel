@@ -28,6 +28,7 @@ Sys.set ("stringDepth", ~1);
 (* ---------------------------------------------------------------------------
  * Example based on "A Second Look at Overloading" by Martin Odersky, Philip
  * Wadler, Martin Wehr (1995). *)
+(*
 over first;
 > over first
 over second;
@@ -49,21 +50,94 @@ val inst third = fn (x, y, z) => z;
 
 val demo = fn r => (second r, first r);
 > val demo = fn : 'a * 'b * 'c -> 'b * 'a
+*)
 (* Should be:
 > val demo = fn : (first : 'a -> 'b, second : 'a -> 'c) => 'a -> ('c, 'b)
 *)
+(*
 demo (3,"four",5);
 > val it = ("four",3) : string * int
 
-(* This should also work:
 demo (3,"four");
 > val it = ("four",3) : string * int
 *)
 
 (* ---------------------------------------------------------------------------
- * Very simple case. 'foo', when applied to an option, yields a list of the
+ * Two overloads, bool -> bool and int -> int. We call with bool argument,
+   expect bool result. *)
+let
+  over o1
+  val inst o1 = fn i: int => i
+  val inst o1 = fn b: bool => b
+in
+  o1 false
+end;
+> val it = false : bool
+
+(* As previous, but at top level. *)
+over o1;
+> over o1
+val inst o1 = fn i: int => i;
+> val o1 = fn : int -> int
+val inst o1 = fn b: bool => b;
+> val o1 = fn : bool -> bool
+o1 false;
+> val it = false : bool
+o1 123;
+> val it = false : bool
+
+(* ---------------------------------------------------------------------------
+ * Two overloads, bool -> bool and int -> int. We call with string argument,
+   no match. *)
+let
+  over o2
+  val inst o2 = fn i: int => i
+  val inst o2 = fn b: bool => b
+in
+  o2 "a string"
+end;
+> 0.0-0.0 Error: Cannot deduce type: no valid overloads
+>   raised at: 0.0-0.0
+
+(* ---------------------------------------------------------------------------
+ * Two overloads, bool -> int and string -> bool list. We require that a_list
+   is a list, so working backwards, arg must be an string. *)
+fn arg =>
+  let
+    over o3
+    val inst o3 = fn b: bool => if b then 1 else 0
+    val inst o3 = fn s: string => [true]
+    val a_list = o3 arg
+  in
+    List.length a_list
+  end;
+> val it = fn : 'a -> int
+(* TODO Previous should be
+> val it = fn : string -> int
+*)
+
+(* ---------------------------------------------------------------------------
+ * Very simple case. 'o4', when applied to an option, yields a list of the
    same type; and, when applied to a list, returns whether the list is
    empty. *)
+let
+  over o4
+  val inst o4 = fn NONE => [] | SOME x => [x];
+  val inst o4 = fn a_list => List.null a_list;
+in
+  o4 (SOME 1)
+end;
+> val it = false : bool
+
+let
+  over o4
+  val inst o4 = fn NONE => [] | SOME x => [x];
+  val inst o4 = fn a_list => List.null a_list;
+in
+  o4 [["abc", "def"], []]
+end;
+> val it = false : bool
+
 over foo;
 > over foo
 val inst foo = fn NONE => [] | SOME x => [x];
