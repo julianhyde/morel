@@ -109,7 +109,8 @@ public abstract class Compiles {
     // Yes, if they wrote 'val x = 1 and y = 2' and
     // core became 'val it as (x, y) = (1, 2)'.
     // No, if they actually wrote 'val (x, y) = (1, 2)'.
-    final Core.NamedPat skipPat = getSkipPat(resolved.node, coreDecl0);
+    final Core.@Nullable NamedPat skipPat =
+        getSkipPat(resolved.node, coreDecl0);
 
     // Check for exhaustive and redundant patterns, and throw errors or
     // warnings.

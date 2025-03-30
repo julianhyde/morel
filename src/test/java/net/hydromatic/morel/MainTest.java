@@ -557,6 +557,20 @@ public class MainTest {
     final String ml =
         "let\n"
             + "  over foo\n"
+            + "  val inst foo = fn i: int => i\n"
+            + "  val inst foo = fn b: bool => b\n"
+            + "in\n"
+            + "  foo false\n"
+            + "end";
+    String expected = "bool";
+    ml(ml).assertType(expected);
+  }
+
+  @Test
+  void testOverload1() {
+    final String ml =
+        "let\n"
+            + "  over foo\n"
             + "  val inst foo = fn NONE => [] | SOME x => [x]\n"
             + "  val inst foo = fn list => List.null list\n"
             + "in\n"

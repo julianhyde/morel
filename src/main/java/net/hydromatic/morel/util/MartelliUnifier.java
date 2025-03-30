@@ -18,8 +18,12 @@
  */
 package net.hydromatic.morel.util;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
+
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
@@ -32,21 +36,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * (1978).
  */
 public class MartelliUnifier extends Unifier {
+  @Override
   public @NonNull Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
-      Map<Variable, List<Variable>> constraints,
+      List<Constraint> constraints,
       Tracer tracer) {
     final long start = System.nanoTime();
-
-    // Invert the constraints map. Fails if a variable appears in more than one
-    // constraint.
-    final ImmutableMap.Builder<Variable, Variable> b = ImmutableMap.builder();
-    constraints.forEach(
-        (key, values) -> {
-          values.forEach(value -> b.put(value, key));
-        });
-    final ImmutableMap<Variable, Variable> backConstraints = b.build();
 
     // delete: G u { t = t }
     //   => G
@@ -69,7 +65,7 @@ public class MartelliUnifier extends Unifier {
     //  => fail
     // if x in vars(f(s0, ..., sk))
 
-    final Work work = new Work(tracer, termPairs);
+    final Work work = new Work(tracer, termPairs, constraints);
     final Map<Variable, Term> result = new LinkedHashMap<>();
     for (int iteration = 0; ; iteration++) {
       // delete
@@ -113,16 +109,13 @@ public class MartelliUnifier extends Unifier {
         if (priorTerm != null && !priorTerm.equals(term)) {
           work.add(new TermTerm(priorTerm, term));
         }
-        Variable constrainedVariable = backConstraints.get(variable);
-        if (constrainedVariable != null) {
-          // TODO
-          //          Result result2 =
-          //              unify(ImmutableList.of(new TermTerm()))
-        }
         if (!termActions.isEmpty()) {
           act(variable, term, work, new Substitution(result), termActions, 0);
         }
-        work.substituteList(variable, term);
+        Failure failure = work.substituteList(variable, term);
+        if (failure != null) {
+          return failure;
+        }
         continue;
       }
 
@@ -197,10 +190,13 @@ public class MartelliUnifier extends Unifier {
     final ArrayQueue<TermTerm> deleteQueue = new ArrayQueue<>();
     final ArrayQueue<TermTerm> seqSeqQueue = new ArrayQueue<>();
     final ArrayQueue<TermTerm> varAnyQueue = new ArrayQueue<>();
+    final List<MutableConstraint> constraintQueue = new ArrayList<>();
 
-    Work(Tracer tracer, List<TermTerm> termPairs) {
+    Work(
+        Tracer tracer, List<TermTerm> termPairs, List<Constraint> constraints) {
       this.tracer = tracer;
       termPairs.forEach(this::add);
+      constraints.forEach(c -> constraintQueue.add(new MutableConstraint(c)));
     }
 
     @Override
@@ -210,7 +206,9 @@ public class MartelliUnifier extends Unifier {
           + " seqSeq "
           + seqSeqQueue
           + " varAny "
-          + varAnyQueue;
+          + varAnyQueue
+          + " constraints "
+          + constraintQueue;
     }
 
     void add(TermTerm pair) {
@@ -241,11 +239,14 @@ public class MartelliUnifier extends Unifier {
 
     /**
      * Applies a mapping to all term pairs in a list, modifying them in place.
+     *
+     * @return
      */
-    private void substituteList(Variable variable, Term term) {
+    private @Nullable Failure substituteList(Variable variable, Term term) {
       sub(variable, term, deleteQueue, Kind.DELETE);
       sub(variable, term, seqSeqQueue, Kind.SEQ_SEQ);
       sub(variable, term, varAnyQueue, Kind.VAR_ANY);
+      return subConstraint(variable, term);
     }
 
     private void sub(
@@ -272,6 +273,47 @@ public class MartelliUnifier extends Unifier {
         }
       }
     }
+
+    private @Nullable Failure subConstraint(Variable variable, Term term) {
+      for (MutableConstraint constraint : constraintQueue) {
+        final Term arg2 = constraint.arg.apply1(variable, term);
+        int changeCount = 0;
+        if (arg2 != constraint.arg) {
+          ++changeCount;
+          constraint.arg = arg2;
+          constraint
+              .argResults
+              .leftList()
+              .removeIf(arg1 -> !arg2.couldUnifyWith(arg1));
+        }
+        for (ListIterator<Term> iterator =
+                constraint.argResults.leftList().listIterator();
+            iterator.hasNext(); ) {
+          final Term subArg = iterator.next();
+          final Term subArg2 = subArg.apply1(variable, term);
+          if (subArg != subArg2) {
+            ++changeCount;
+            iterator.set(subArg2);
+            if (!arg2.couldUnifyWith(subArg2)) {
+              iterator.remove();
+            }
+          }
+        }
+        if (changeCount > 0) {
+          System.out.println(constraint);
+          switch (constraint.argResults.size()) {
+            case 0:
+              return failure("no valid overloads");
+            case 1:
+              add(
+                  new TermTerm(
+                      constraint.result, constraint.argResults.right(0)));
+              break;
+          }
+        }
+      }
+      return null;
+    }
   }
 
   private enum Kind {
@@ -295,6 +337,36 @@ public class MartelliUnifier extends Unifier {
         assert pair.left instanceof Variable;
         return VAR_ANY;
       }
+    }
+  }
+
+  /** As {@link Constraint}, but mutable. */
+  private static class MutableConstraint {
+    final Variable v;
+    Term arg;
+    Variable result;
+    final PairList<Term, Term> argResults;
+
+    /** Creates a MutableConstraint. */
+    MutableConstraint(
+        Variable arg, Variable result, PairList<Term, Term> argResults) {
+      this.v = requireNonNull(arg);
+      this.arg = requireNonNull(arg);
+      this.result = requireNonNull(result);
+      this.argResults = argResults;
+      checkArgument(!argResults.isEmpty());
+    }
+
+    MutableConstraint(Constraint constraint) {
+      this(
+          constraint.arg,
+          constraint.result,
+          PairList.copyOf(constraint.argResults));
+    }
+
+    @Override
+    public String toString() {
+      return format("{constraint %s = %s %s %s}", v, arg, result, argResults);
     }
   }
 }
