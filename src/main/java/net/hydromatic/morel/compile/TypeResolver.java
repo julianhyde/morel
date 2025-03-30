@@ -104,8 +104,7 @@ public class TypeResolver {
   private final PairList<Variable, PrimitiveType> preferredTypes =
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
-  private final Map<Unifier.Variable, List<Unifier.Variable>> constraints =
-      new HashMap<>();
+  private final List<Unifier.Constraint> constraints = new ArrayList<>();
 
   static final String TUPLE_TY_CON = "tuple";
   static final String OVERLOAD_TY_CON = "over";
@@ -310,10 +309,10 @@ public class TypeResolver {
    * terms.
    */
   private void constrain(
-      Unifier.Variable variable, List<Unifier.Variable> terms) {
-    requireNonNull(variable);
-    checkArgument(!terms.isEmpty());
-    constraints.put(variable, ImmutableList.copyOf(terms));
+      Unifier.Variable arg,
+      Unifier.Variable result,
+      PairList<Unifier.Term, Unifier.Term> argResults) {
+    constraints.add(unifier.constraint(arg, result, argResults));
   }
 
   /**
@@ -886,14 +885,14 @@ public class TypeResolver {
       final Ast.Id id = (Ast.Id) apply.fn;
       final List<Unifier.Variable> variables =
           env.instances(typeSystem, id.name);
-      final List<Unifier.Variable> args = new ArrayList<>();
+      final PairList<Unifier.Term, Unifier.Term> argResults = PairList.of();
       for (Inst inst : overloads) {
         if (inst.name.equals(id.name) && variables.contains(inst.vFn)) {
-          args.add(inst.vArg);
+          argResults.add(inst.vArg, inst.vResult);
         }
       }
-      checkArgument(variables.size() == args.size());
-      constrain(vArg, args);
+      checkArgument(variables.size() == argResults.size());
+      constrain(vArg, v, argResults);
       fn2 = reg(id, vFn);
     } else {
       fn2 = deduceType(env, apply.fn, vFn);
