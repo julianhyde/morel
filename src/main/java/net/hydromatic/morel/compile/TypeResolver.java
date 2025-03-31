@@ -69,7 +69,6 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.OverloadedType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -1123,7 +1122,9 @@ public class TypeResolver {
       Ast.OverDecl overDecl,
       PairList<Ast.IdPat, Unifier.Term> termMap) {
     map.put(overDecl, toTerm(PrimitiveType.UNIT));
-    termMap.add(overDecl.pat, toTerm(typeSystem.overloadedType(), Subst.EMPTY));
+    termMap.add(
+        overDecl.pat,
+        toTerm(typeSystem.lookup(BuiltIn.Datatype.OVERLOAD), Subst.EMPTY));
     return overDecl;
   }
 
@@ -1659,11 +1660,6 @@ public class TypeResolver {
         final FnType fnType = (FnType) type;
         return fnTerm(
             toTerm(fnType.paramType, subst), toTerm(fnType.resultType, subst));
-      case OVERLOADED_TYPE:
-        final OverloadedType overloadedType = (OverloadedType) type;
-        return unifier.apply(
-            OVERLOAD_TY_CON,
-            transform(overloadedType.types, type1 -> toTerm(type1, subst)));
       case TUPLE_TYPE:
         final TupleType tupleType = (TupleType) type;
         return tupleTerm(transform(tupleType.argTypes, t -> toTerm(t, subst)));
