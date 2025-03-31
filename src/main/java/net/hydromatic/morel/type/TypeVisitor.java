@@ -79,11 +79,6 @@ public class TypeVisitor<R> {
   public R visit(DummyType dummyType) {
     return null;
   }
-
-  /** Visits an {@link OverloadedType}. */
-  public R visit(OverloadedType overloadedType) {
-    return null;
-  }
 }
 
 // End TypeVisitor.java

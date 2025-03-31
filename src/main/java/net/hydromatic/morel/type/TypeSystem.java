@@ -342,11 +342,6 @@ public class TypeSystem {
     return (RecordLikeType) typeFor(Keys.record(Keys.toKeys(argNameTypes2)));
   }
 
-  /** Creates an overloaded type. */
-  public Type overloadedType() {
-    return new OverloadedType(ImmutableList.of());
-  }
-
   /** Returns whether the collection is ["1", "2", ... n]. */
   public static boolean areContiguousIntegers(Iterable<String> strings) {
     int i = 1;
