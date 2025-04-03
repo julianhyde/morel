@@ -171,19 +171,22 @@ public abstract class Environments {
     }
 
     @Override
-    public @Nullable Binding getOpt(String name) {
-      if (name.equals(binding.id.name)) {
-        return binding;
-      }
-      return parent.getOpt(name);
-    }
-
-    @Override
     public @Nullable Binding getOpt(Core.NamedPat id) {
       if (id.equals(binding.id)) {
         return binding;
       }
       return parent.getOpt(id);
+    }
+
+    @Override
+    public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
+      if (id.equals(binding.id)) {
+        // Send this binding to the consumer. It obscures all other bindings,
+        // so we're done.
+        consumer.accept(binding);
+        return;
+      }
+      parent.collect(id, consumer);
     }
 
     @Override
@@ -206,6 +209,7 @@ public abstract class Environments {
       return new Environments.SubEnvironment(env, binding);
     }
 
+    @Override
     void visit(Consumer<Binding> consumer) {
       consumer.accept(binding);
       parent.visit(consumer);
@@ -232,16 +236,17 @@ public abstract class Environments {
   private static class EmptyEnvironment extends Environment {
     static final EmptyEnvironment INSTANCE = new EmptyEnvironment();
 
-    void visit(Consumer<Binding> consumer) {}
-
     @Override
-    public @Nullable Binding getOpt(String name) {
-      return null;
-    }
+    void visit(Consumer<Binding> consumer) {}
 
     @Override
     public @Nullable Binding getOpt(Core.NamedPat id) {
       return null;
+    }
+
+    @Override
+    public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
+      // do nothing
     }
 
     @Override
@@ -266,25 +271,31 @@ public abstract class Environments {
       this.map = requireNonNull(map);
     }
 
+    @Override
     void visit(Consumer<Binding> consumer) {
       map.values().forEach(consumer);
       parent.visit(consumer);
     }
 
-    public @Nullable Binding getOpt(String name) {
-      for (Map.Entry<Core.NamedPat, Binding> entry : map.entrySet()) {
-        if (entry.getKey().name.equals(name)) {
-          return entry.getValue();
-        }
-      }
-      return parent.getOpt(name);
-    }
-
+    @Override
     public @Nullable Binding getOpt(Core.NamedPat id) {
       final Binding binding = map.get(id);
       return binding != null && binding.id.i == id.i
           ? binding
           : parent.getOpt(id);
+    }
+
+    @Override
+    public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
+      final Binding binding = map.get(id);
+      if (binding != null) {
+        // Send this binding to the consumer. It obscures all other
+        // bindings, so we're done.
+        consumer.accept(binding);
+        return;
+      }
+
+      parent.collect(id, consumer);
     }
 
     @Override
