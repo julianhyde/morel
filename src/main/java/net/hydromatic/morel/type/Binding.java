@@ -36,26 +36,33 @@ public class Binding {
   public final Object value;
   /** If true, the binding is ignored by inlining. */
   public final boolean parameter;
+  /** Distinguishes between regular and overloaded values. */
+  public final Kind kind;
 
   private Binding(
-      Core.NamedPat id, Core.Exp exp, Object value, boolean parameter) {
+      Core.NamedPat id,
+      Core.Exp exp,
+      Object value,
+      boolean parameter,
+      Kind kind) {
     this.id = requireNonNull(id);
     this.exp = exp;
     this.value = requireNonNull(value);
     assert !(value instanceof Core.IdPat);
     this.parameter = parameter;
+    this.kind = requireNonNull(kind);
   }
 
   public static Binding of(Core.NamedPat id) {
-    return new Binding(id, null, Unit.INSTANCE, false);
+    return new Binding(id, null, Unit.INSTANCE, false, Kind.VAL);
   }
 
   public static Binding of(Core.NamedPat id, Core.Exp exp) {
-    return new Binding(id, exp, Unit.INSTANCE, false);
+    return new Binding(id, exp, Unit.INSTANCE, false, Kind.VAL);
   }
 
   public static Binding of(Core.NamedPat id, Object value) {
-    return new Binding(id, null, value, false);
+    return new Binding(id, null, value, false, Kind.VAL);
   }
 
   /** Used by {@link Environment#renumber()}. */
@@ -82,7 +89,15 @@ public class Binding {
   }
 
   public Binding withParameter(boolean parameter) {
-    return new Binding(id, exp, value, parameter);
+    return parameter == this.parameter
+        ? this
+        : new Binding(id, exp, value, parameter, kind);
+  }
+
+  public Binding withKind(Kind kind) {
+    return kind == this.kind
+        ? this
+        : new Binding(id, exp, value, parameter, kind);
   }
 
   @Override
@@ -94,6 +109,16 @@ public class Binding {
     } else {
       return id + " = " + value + " : " + id.type.moniker();
     }
+  }
+
+  /** What kind of binding? */
+  public enum Kind {
+    /** Regular, non-overloaded binding ({@code val}). */
+    VAL,
+    /** Declaration that a name is overloaded ({@code over}). */
+    OVER,
+    /** Instance of an overloaded name ({@code val inst}). */
+    INST
   }
 }
 

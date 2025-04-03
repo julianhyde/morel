@@ -52,6 +52,7 @@ import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
+import net.hydromatic.morel.util.TriConsumer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -682,11 +683,6 @@ public class Extents {
     return Pair.of(
         core.union(typeSystem, extentFilters.leftList()),
         core.orElse(typeSystem, extentFilters.rightList()));
-  }
-
-  @FunctionalInterface
-  interface TriConsumer<R, S, T> {
-    void accept(R r, S s, T t);
   }
 
   static class ExtentMap {
