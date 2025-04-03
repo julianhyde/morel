@@ -278,7 +278,7 @@ public class Compiler {
   }
 
   private Code compileFieldName(Context cx, Core.NamedPat idPat) {
-    final Binding binding = cx.env.getOpt(idPat.name);
+    final Binding binding = cx.env.getOpt(idPat);
     if (binding != null && binding.value instanceof Code) {
       return (Code) binding.value;
     }
