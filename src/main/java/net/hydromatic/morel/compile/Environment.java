@@ -23,6 +23,7 @@ import static com.google.common.collect.Lists.reverse;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -72,10 +73,28 @@ public abstract class Environment {
   }
 
   /** Returns the binding of {@code name} if bound, null if not. */
-  public abstract @Nullable Binding getOpt(String name);
+  public final @Nullable Binding getOpt(String name) {
+    final Set<Core.NamedPat> idList = new LinkedHashSet<>();
+    visit(
+        binding -> {
+          if (binding.id.name.equals(name)) {
+            idList.add(binding.id);
+          }
+        });
+    for (Core.NamedPat id : idList) {
+      Binding binding = getOpt(id);
+      if (binding != null) {
+        return binding;
+      }
+    }
+    return null;
+  }
 
   /** Returns the binding of {@code id} if bound, null if not. */
   public abstract @Nullable Binding getOpt(Core.NamedPat id);
+
+  /** Calls a consumer for all bindings of {@code id}. */
+  public abstract void collect(Core.NamedPat id, Consumer<Binding> consumer);
 
   /**
    * Creates an environment that is the same as a given environment, plus one
