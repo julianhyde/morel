@@ -181,6 +181,7 @@ public class Resolver {
         core.nonRecValDecl(
             resolvedValDecl.patExps.get(0).pos,
             resolvedValDecl.pat,
+            valDecl.inst,
             resolvedValDecl.exp);
     return resolvedValDecl.rec
         ? core.recValDecl(ImmutableList.of(nonRecValDecl))
@@ -241,11 +242,13 @@ public class Resolver {
         valBind -> flatten(matches, composite, valBind.pat, valBind.exp));
 
     final List<PatExp> patExps = new ArrayList<>();
+    final Binding.Kind kind =
+        valDecl.inst ? Binding.Kind.INST : Binding.Kind.VAL;
     if (valDecl.rec) {
       final List<Core.Pat> pats = new ArrayList<>();
       matches.forEach((pat, exp) -> pats.add(toCore(pat)));
       pats.forEach(
-          p -> Compiles.acceptBinding(typeMap.typeSystem, p, bindings));
+          p -> Compiles.acceptBinding(typeMap.typeSystem, p, kind, bindings));
       final Resolver r = withEnv(bindings);
       final Iterator<Core.Pat> patIter = pats.iterator();
       matches.forEach(
@@ -259,7 +262,9 @@ public class Resolver {
               patExps.add(
                   new PatExp(toCore(pat), toCore(exp), pat.pos.plus(exp.pos))));
       patExps.forEach(
-          x -> Compiles.acceptBinding(typeMap.typeSystem, x.pat, bindings));
+          x ->
+              Compiles.acceptBinding(
+                  typeMap.typeSystem, x.pat, kind, bindings));
     }
 
     // Convert recursive to non-recursive if the bound variable is not
@@ -741,7 +746,7 @@ public class Resolver {
   private Core.Match toCore(Ast.Match match) {
     final Core.Pat pat = toCore(match.pat);
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.acceptBinding(typeMap.typeSystem, pat, bindings);
+    Compiles.acceptBinding(typeMap.typeSystem, pat, Binding.Kind.VAL, bindings);
     final Core.Exp exp = withEnv(bindings).toCore(match.exp);
     return core.match(match.pos, pat, exp);
   }
@@ -900,13 +905,14 @@ public class Resolver {
         patExps.forEach(
             x ->
                 valDecls.add(
-                    core.nonRecValDecl(x.pos, (Core.IdPat) x.pat, x.exp)));
+                    core.nonRecValDecl(
+                        x.pos, (Core.IdPat) x.pat, false, x.exp)));
         return core.let(core.recValDecl(valDecls), resultExp);
       }
       if (!composite && patExps.get(0).pat instanceof Core.IdPat) {
         final PatExp x = patExps.get(0);
         Core.NonRecValDecl valDecl =
-            core.nonRecValDecl(x.pos, (Core.IdPat) x.pat, x.exp);
+            core.nonRecValDecl(x.pos, (Core.IdPat) x.pat, false, x.exp);
         return core.let(valDecl, resultExp);
       } else {
         // This is a complex pattern. Allocate an intermediate variable.
@@ -915,7 +921,7 @@ public class Resolver {
         final Core.Id id = core.id(idPat);
         final Pos pos = patExps.get(0).pos;
         return core.let(
-            core.nonRecValDecl(pos, idPat, exp),
+            core.nonRecValDecl(pos, idPat, false, exp),
             core.caseOf(
                 pos,
                 resultExp.type,
@@ -1051,7 +1057,8 @@ public class Resolver {
       }
       final List<Binding> bindings2 =
           new ArrayList<>(fromBuilder.stepEnv().bindings);
-      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
+      Compiles.acceptBinding(
+          typeMap.typeSystem, corePat, Binding.Kind.VAL, bindings2);
       Core.Exp coreCondition =
           scan.condition == null
               ? core.boolLiteral(true)

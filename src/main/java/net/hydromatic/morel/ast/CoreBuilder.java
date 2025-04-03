@@ -359,8 +359,8 @@ public enum CoreBuilder {
   }
 
   public Core.NonRecValDecl nonRecValDecl(
-      Pos pos, Core.NamedPat pat, Core.Exp exp) {
-    return new Core.NonRecValDecl(pat, exp, pos);
+      Pos pos, Core.NamedPat pat, boolean inst, Core.Exp exp) {
+    return new Core.NonRecValDecl(pat, exp, inst, pos);
   }
 
   public Core.RecValDecl recValDecl(

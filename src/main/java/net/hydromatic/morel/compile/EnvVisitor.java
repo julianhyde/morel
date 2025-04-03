@@ -71,7 +71,7 @@ abstract class EnvVisitor extends Visitor {
   protected void visit(Core.Match match) {
     final List<Binding> bindings = new ArrayList<>();
     match.pat.accept(this);
-    Compiles.bindPattern(typeSystem, bindings, match.pat);
+    Compiles.bindPattern(typeSystem, bindings, Binding.Kind.VAL, match.pat);
     match.exp.accept(bind(bindings));
   }
 
@@ -94,7 +94,9 @@ abstract class EnvVisitor extends Visitor {
   protected void visit(Core.RecValDecl recValDecl) {
     final List<Binding> bindings = new ArrayList<>();
     recValDecl.list.forEach(
-        decl -> Compiles.bindPattern(typeSystem, bindings, decl.pat));
+        decl ->
+            Compiles.bindPattern(
+                typeSystem, bindings, Binding.Kind.VAL, decl.pat));
     final EnvVisitor v2 = bind(bindings);
     recValDecl.list.forEach(v2::accept);
   }
