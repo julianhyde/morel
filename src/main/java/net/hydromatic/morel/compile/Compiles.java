@@ -323,35 +323,37 @@ public abstract class Compiles {
     return decl.exp;
   }
 
-  static void bindPattern(
-      TypeSystem typeSystem,
-      List<Binding> bindings,
-      Core.DatatypeDecl datatypeDecl) {
-    datatypeDecl.accept(binding(typeSystem, bindings));
-  }
-
   /**
-   * Richer than {@link #bindPattern(TypeSystem, List, Core.Pat)} because we
-   * have the expression.
+   * Richer than {@link #bindPattern(TypeSystem, List, Binding.Kind, Core.Pat)}
+   * because we have the expression.
    */
   static void bindPattern(
       TypeSystem typeSystem, List<Binding> bindings, Core.ValDecl valDecl) {
     valDecl.forEachBinding(
         (pat, exp, pos) -> {
           if (pat instanceof Core.IdPat) {
-            bindings.add(Binding.of(pat, exp));
+            bindings.add(
+                Binding.of(pat, exp)
+                    .withKind(
+                        valDecl.inst ? Binding.Kind.INST : Binding.Kind.VAL));
           }
         });
   }
 
   static void bindPattern(
-      TypeSystem typeSystem, List<Binding> bindings, Core.Pat pat) {
-    pat.accept(binding(typeSystem, bindings));
+      TypeSystem typeSystem,
+      List<Binding> bindings,
+      Binding.Kind kind,
+      Core.Pat pat) {
+    pat.accept(binding(typeSystem, kind, bindings));
   }
 
   static void bindPattern(
-      TypeSystem typeSystem, List<Binding> bindings, Core.NamedPat namedPat) {
-    bindings.add(Binding.of(namedPat));
+      TypeSystem typeSystem,
+      List<Binding> bindings,
+      Binding.Kind kind,
+      Core.NamedPat namedPat) {
+    bindings.add(Binding.of(namedPat).withKind(kind));
   }
 
   public static void bindDataType(
@@ -362,8 +364,9 @@ public abstract class Compiles {
         .forEach(name -> bindings.add(typeSystem.bindTyCon(dataType, name)));
   }
 
-  static PatternBinder binding(TypeSystem typeSystem, List<Binding> bindings) {
-    return new PatternBinder(typeSystem, bindings);
+  static PatternBinder binding(
+      TypeSystem typeSystem, Binding.Kind kind, List<Binding> bindings) {
+    return new PatternBinder(typeSystem, kind, bindings);
   }
 
   /**
@@ -373,8 +376,11 @@ public abstract class Compiles {
    * use this method: just bind directly.
    */
   public static void acceptBinding(
-      TypeSystem typeSystem, Core.Pat pat, List<Binding> bindings) {
-    pat.accept(binding(typeSystem, bindings));
+      TypeSystem typeSystem,
+      Core.Pat pat,
+      Binding.Kind kind,
+      List<Binding> bindings) {
+    pat.accept(binding(typeSystem, kind, bindings));
   }
 
   /**
@@ -383,21 +389,24 @@ public abstract class Compiles {
    */
   private static class PatternBinder extends Visitor {
     private final TypeSystem typeSystem;
+    private final Binding.Kind kind;
     private final List<Binding> bindings;
 
-    PatternBinder(TypeSystem typeSystem, List<Binding> bindings) {
+    PatternBinder(
+        TypeSystem typeSystem, Binding.Kind kind, List<Binding> bindings) {
       this.typeSystem = typeSystem;
+      this.kind = kind;
       this.bindings = bindings;
     }
 
     @Override
     protected void visit(Core.IdPat idPat) {
-      bindPattern(typeSystem, bindings, idPat);
+      bindPattern(typeSystem, bindings, kind, idPat);
     }
 
     @Override
     protected void visit(Core.AsPat asPat) {
-      bindPattern(typeSystem, bindings, asPat);
+      bindPattern(typeSystem, bindings, kind, asPat);
       super.visit(asPat);
     }
 

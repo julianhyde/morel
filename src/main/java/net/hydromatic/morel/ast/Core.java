@@ -950,8 +950,11 @@ public class Core {
 
   /** Abstract (recursive or non-recursive) value declaration. */
   public abstract static class ValDecl extends Decl {
-    ValDecl(Pos pos, Op op) {
+    public final boolean inst;
+
+    ValDecl(Pos pos, Op op, boolean inst) {
       super(pos, op);
+      this.inst = inst;
     }
 
     @Override
@@ -975,8 +978,8 @@ public class Core {
     public final NamedPat pat;
     public final Exp exp;
 
-    NonRecValDecl(NamedPat pat, Exp exp, Pos pos) {
-      super(pos, Op.VAL_DECL);
+    NonRecValDecl(NamedPat pat, Exp exp, boolean inst, Pos pos) {
+      super(pos, Op.VAL_DECL, inst);
       this.pat = pat;
       this.exp = exp;
     }
@@ -1015,7 +1018,7 @@ public class Core {
     public NonRecValDecl copy(NamedPat pat, Exp exp) {
       return pat == this.pat && exp == this.exp
           ? this
-          : core.nonRecValDecl(pos, pat, exp);
+          : core.nonRecValDecl(pos, pat, inst, exp);
     }
 
     @Override
@@ -1029,7 +1032,7 @@ public class Core {
     public final ImmutableList<NonRecValDecl> list;
 
     RecValDecl(ImmutableList<NonRecValDecl> list) {
-      super(Pos.ZERO, Op.REC_VAL_DECL);
+      super(Pos.ZERO, Op.REC_VAL_DECL, false);
       this.list = requireNonNull(list);
     }
 

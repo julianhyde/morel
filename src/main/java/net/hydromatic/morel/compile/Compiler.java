@@ -59,7 +59,9 @@ import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.Binding.Kind;
 import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -494,11 +496,33 @@ public class Compiler {
         return toApplicable(cx, literal.unwrap(Object.class), argType, pos);
 
       case ID:
-        final Binding binding = cx.env.getOpt(((Core.Id) fn).idPat);
-        if (binding == null
-            || binding.value instanceof LinkCode
-            || binding.value == Unit.INSTANCE) {
-          return null;
+        final List<Binding> bindings = new ArrayList<>();
+        cx.env.collect(((Core.Id) fn).idPat, bindings::add);
+        Binding binding;
+        switch (bindings.size()) {
+          case 0:
+            return null;
+          case 1:
+            binding = bindings.get(0);
+            if (binding.value instanceof LinkCode
+                || binding.value == Unit.INSTANCE) {
+              return null;
+            }
+            break;
+          default:
+            final List<Binding> bindings2 = new ArrayList<>();
+            for (Binding instBinding : bindings) {
+              FnType fnType = (FnType) instBinding.id.type;
+              if (argType.canUnifyWith(fnType.paramType)) {
+                bindings2.add(instBinding);
+              }
+            }
+            if (bindings2.size() == 1) {
+              binding = bindings2.get(0);
+            } else {
+              throw new AssertionError(
+                  argType + " matches functions with arguments " + bindings2);
+            }
         }
         return toApplicable(cx, binding.value, argType, pos);
 
@@ -585,11 +609,7 @@ public class Compiler {
 
       case OVER_DECL:
         final Core.OverDecl overDecl = (Core.OverDecl) decl;
-        if (actions != null) {
-          actions.add(
-              (outLines, outBindings, evalEnv) ->
-                  outLines.accept("over " + overDecl.pat));
-        }
+        compileOverDecl(overDecl, bindings, actions);
         break;
 
       case DATATYPE_DECL:
@@ -599,6 +619,16 @@ public class Compiler {
 
       default:
         throw new AssertionError("unknown " + decl.op + " [" + decl + "]");
+    }
+  }
+
+  private void compileOverDecl(
+      Core.OverDecl overDecl, List<Binding> bindings, List<Action> actions) {
+    bindings.add(Binding.of(overDecl.pat).withKind(Kind.OVER));
+    if (actions != null) {
+      actions.add(
+          (outLines, outBindings, evalEnv) ->
+              outLines.accept("over " + overDecl.pat));
     }
   }
 
@@ -688,7 +718,7 @@ public class Compiler {
   private void compileMatch(
       Context cx, Core.Match match, BiConsumer<Core.Pat, Code> consumer) {
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.bindPattern(typeSystem, bindings, match.pat);
+    Compiles.bindPattern(typeSystem, bindings, Kind.VAL, match.pat);
     final Code code = compile(cx.bindAll(bindings), match.exp);
     consumer.accept(match.pat, code);
   }
@@ -714,6 +744,7 @@ public class Compiler {
     }
 
     final Context cx1 = cx.bindAll(newBindings);
+    final Kind kind = valDecl.inst ? Kind.INST : Kind.VAL;
     valDecl.forEachBinding(
         (pat, exp, pos) -> {
           // Using 'compileArg' rather than 'compile' encourages CalciteCompiler
@@ -747,7 +778,8 @@ public class Compiler {
                     }
                     pairs.forEach(
                         (pat2, o2) -> {
-                          outBindings.accept(Binding.of(pat2, o2));
+                          outBindings.accept(
+                              Binding.of(pat2, o2).withKind(kind));
                           if (pat2 != skipPat) {
                             int stringDepth =
                                 Prop.STRING_DEPTH.intValue(session.map);

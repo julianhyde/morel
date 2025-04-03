@@ -23,8 +23,9 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.SKIP;
 import static net.hydromatic.morel.util.Static.shorterThan;
 
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableMultimap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -143,13 +144,31 @@ public abstract class Environments {
     } else {
       // We assume that the set of bindings does not include two Core.IdPat
       // instances with the same name but different ordinals.
-      final ImmutableMap.Builder<Core.NamedPat, Binding> b =
+      //
+      // Instances (overloaded bindings) go in multimap, separate from the
+      // regular map for 'val' bindings, because there may be several instances
+      // with the same name.
+      final ImmutableMap.Builder<Core.NamedPat, Binding> builder =
           ImmutableMap.builder();
-      bindings.forEach(binding -> b.put(binding.id, binding));
-      final ImmutableMap<Core.NamedPat, Binding> map = b.build();
-      final ImmutableSet<Core.NamedPat> names = map.keySet();
-      env = env.nearestAncestorNotObscuredBy(names);
-      return new MapEnvironment(env, map);
+      final ImmutableMultimap.Builder<Core.NamedPat, Binding> instanceBuilder =
+          ImmutableMultimap.builder();
+      for (Binding binding : bindings) {
+        if (binding.kind == Binding.Kind.VAL) {
+          builder.put(binding.id, binding);
+        } else {
+          instanceBuilder.put(binding.id, binding);
+        }
+      }
+      final ImmutableMap<Core.NamedPat, Binding> map = builder.build();
+      final ImmutableMultimap<Core.NamedPat, Binding> instanceMap =
+          instanceBuilder.build();
+      if (instanceMap.isEmpty()) {
+        // Optimize by skipping ancestor environments that are completely
+        // obscured. If there are overloaded bindings, the optimization logic
+        // would be complicated, so don't even try.
+        env = env.nearestAncestorNotObscuredBy(map.keySet());
+      }
+      return new MapEnvironment(env, map, instanceMap);
     }
   }
 
@@ -181,10 +200,22 @@ public abstract class Environments {
     @Override
     public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
       if (id.equals(binding.id)) {
-        // Send this binding to the consumer. It obscures all other bindings,
-        // so we're done.
-        consumer.accept(binding);
-        return;
+        switch (binding.kind) {
+          case VAL:
+            // Send this binding to the consumer. It obscures all other
+            // bindings, so we're done.
+            consumer.accept(binding);
+            return;
+          case OVER:
+            // We have hit the 'over <id>' declaration. There are no more
+            // instances to see.
+            return;
+          case INST:
+            // Send this instance to the consumer, but carry on looking for
+            // more.
+            consumer.accept(binding);
+            break;
+        }
       }
       parent.collect(id, consumer);
     }
@@ -192,7 +223,8 @@ public abstract class Environments {
     @Override
     protected Environment bind(Binding binding) {
       Environment env;
-      if (this.binding.id.equals(binding.id)) {
+      if (this.binding.id.equals(binding.id)
+          && binding.kind == Binding.Kind.VAL) {
         // The new binding will obscure the current environment's binding,
         // because it binds a variable of the same name. Bind the parent
         // environment instead. This strategy is worthwhile because it tends to
@@ -264,16 +296,21 @@ public abstract class Environments {
   static class MapEnvironment extends Environment {
     private final Environment parent;
     private final Map<Core.NamedPat, Binding> map;
+    private final ImmutableMultimap<Core.NamedPat, Binding> instanceMap;
 
     MapEnvironment(
-        Environment parent, ImmutableMap<Core.NamedPat, Binding> map) {
+        Environment parent,
+        ImmutableMap<Core.NamedPat, Binding> map,
+        ImmutableMultimap<Core.NamedPat, Binding> instanceMap) {
       this.parent = requireNonNull(parent);
       this.map = requireNonNull(map);
+      this.instanceMap = requireNonNull(instanceMap);
     }
 
     @Override
     void visit(Consumer<Binding> consumer) {
       map.values().forEach(consumer);
+      instanceMap.values().forEach(consumer);
       parent.visit(consumer);
     }
 
@@ -288,13 +325,35 @@ public abstract class Environments {
     @Override
     public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
       final Binding binding = map.get(id);
+      final ImmutableCollection<Binding> instBindings = instanceMap.get(id);
       if (binding != null) {
         // Send this binding to the consumer. It obscures all other
         // bindings, so we're done.
+        if (!instBindings.isEmpty()) {
+          // We have not yet written the code to handle the case where a
+          // MapEnvironment contains VAL and INST bindings for the same id.
+          // It is not possible to figure out bindings came later.
+          throw new UnsupportedOperationException();
+        }
         consumer.accept(binding);
         return;
       }
 
+      // Traverse the instance bindings in reverse order, so that we see
+      // instances before overload declarations.
+      for (Binding instBinding : instBindings.asList().reverse()) {
+        switch (instBinding.kind) {
+          case OVER:
+            // We have hit the 'over <id>' declaration. There are no more
+            // instances to see.
+            return;
+          case INST:
+            // Send this instance to the consumer, but carry on looking for
+            // more.
+            consumer.accept(instBinding);
+            break;
+        }
+      }
       parent.collect(id, consumer);
     }
 
