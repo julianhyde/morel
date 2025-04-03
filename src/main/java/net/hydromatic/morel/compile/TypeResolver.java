@@ -63,6 +63,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.Binding.Kind;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
@@ -81,6 +82,7 @@ import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
 import net.hydromatic.morel.util.Tracers;
+import net.hydromatic.morel.util.TriConsumer;
 import net.hydromatic.morel.util.Unifier;
 import net.hydromatic.morel.util.Unifier.Action;
 import net.hydromatic.morel.util.Unifier.Result;
@@ -106,7 +108,7 @@ public class TypeResolver {
   private final List<Unifier.Constraint> constraints = new ArrayList<>();
 
   static final String TUPLE_TY_CON = "tuple";
-  static final String OVERLOAD_TY_CON = "over";
+  static final String OVERLOAD_TY_CON = BuiltIn.Datatype.OVERLOAD.mlName();
   static final String LIST_TY_CON = "list";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
@@ -149,14 +151,15 @@ public class TypeResolver {
         typeSystem,
         (builtIn, type) -> {
           if (builtIn.structure == null) {
-            typeEnvs.accept(builtIn.mlName, type);
+            typeEnvs.accept(builtIn.mlName, Kind.VAL, type);
           }
           if (builtIn.alias != null) {
-            typeEnvs.accept(builtIn.alias, type);
+            typeEnvs.accept(builtIn.alias, Kind.VAL, type);
           }
         });
     BuiltIn.forEachStructure(
-        typeSystem, (structure, type) -> typeEnvs.accept(structure.name, type));
+        typeSystem,
+        (structure, type) -> typeEnvs.accept(structure.name, Kind.VAL, type));
     env.forEachType(typeSystem, typeEnvs);
     final TypeEnv typeEnv = typeEnvs.typeEnv;
     final Ast.Decl node2 = deduceDeclType(typeEnv, decl, PairList.of());
@@ -882,8 +885,28 @@ public class TypeResolver {
       // To resolve overloading, we gather all known overloads, and apply
       // them as constraints to "vArg".
       final Ast.Id id = (Ast.Id) apply.fn;
-      final List<Unifier.Variable> variables =
-          env.instances(typeSystem, id.name);
+      final List<Unifier.Variable> variables = new ArrayList<>();
+      env.collectInstances(
+          typeSystem,
+          id.name,
+          term -> {
+            final Unifier.Variable variable = toVariable(term);
+            variables.add(variable);
+            if (term instanceof Unifier.Sequence) {
+              Unifier.Sequence sequence = (Unifier.Sequence) term;
+              if (sequence.operator.equals(FN_TY_CON)) {
+                assert sequence.terms.size() == 2;
+                Unifier.Term arg = sequence.terms.get(0);
+                Unifier.Term result = sequence.terms.get(1);
+                overloads.add(
+                    new Inst(
+                        id.name,
+                        variable,
+                        toVariable(arg),
+                        toVariable(result)));
+              }
+            }
+          });
       final PairList<Unifier.Term, Unifier.Term> argResults = PairList.of();
       for (Inst inst : overloads) {
         if (inst.name.equals(id.name) && variables.contains(inst.vFn)) {
@@ -1735,14 +1758,8 @@ public class TypeResolver {
         String name,
         Function<String, RuntimeException> exceptionFactory);
 
-    /** Returns a list of all terms that are instance of {@code name}. */
-    default List<Unifier.Variable> instances(
-        TypeSystem typeSystem, String name) {
-      final ImmutableList.Builder<Unifier.Variable> builder =
-          ImmutableList.builder();
-      collectInstances(
-          typeSystem, name, term -> builder.add((Unifier.Variable) term));
-      return builder.build();
+    default int count(String name) {
+      return 0;
     }
 
     /** Collects terms that are instance of {@code name}. */
@@ -1770,16 +1787,18 @@ public class TypeResolver {
     }
 
     default TypeEnv bind(String name, Term term) {
-      Kind kind;
-      if (term instanceof Sequence
-          && ((Sequence) term).operator.equals(OVERLOAD_TY_CON)) {
-        kind = Kind.OVER;
+      return bind(name, getKind(name, term), new SimpleTermFactory(term));
+    }
+
+    default Kind getKind(String name, Term term) {
+      if (term instanceof Unifier.Sequence
+          && ((Unifier.Sequence) term).operator.equals(OVERLOAD_TY_CON)) {
+        return Kind.OVER;
       } else if (hasOverloaded(name)) {
-        kind = Kind.INST;
+        return Kind.INST;
       } else {
-        kind = Kind.VAL;
+        return Kind.VAL;
       }
-      return bind(name, kind, new SimpleTermFactory(term));
     }
 
     /** Exception factory where a missing symbol is an internal error. */
@@ -1793,16 +1812,6 @@ public class TypeResolver {
           new CompileException(
               "unbound variable or constructor: " + name, false, id.pos);
     }
-  }
-
-  /** What kind of binding? */
-  enum Kind {
-    /** Regular, non-overloaded binding ({@code val}). */
-    VAL,
-    /** Declaration that a name is overloaded ({@code over}). */
-    OVER,
-    /** Instance of an overloaded name ({@code val inst}). */
-    INST
   }
 
   /** Factory that always returns a given {@link Term}. */
@@ -1858,6 +1867,19 @@ public class TypeResolver {
       this.kind = kind;
       this.termFactory = requireNonNull(termFactory);
       this.parent = requireNonNull(parent);
+    }
+
+    @Override
+    public int count(String name) {
+      int count = 0;
+      for (BindTypeEnv e = this; ; e = (BindTypeEnv) e.parent) {
+        if (e.definedName.equals(name)) {
+          ++count;
+        }
+        if (!(e.parent instanceof BindTypeEnv)) {
+          return count + e.parent.count(name);
+        }
+      }
     }
 
     @Override
@@ -1947,7 +1969,7 @@ public class TypeResolver {
    * Contains a {@link TypeEnv} and adds to it by calling {@link
    * TypeEnv#bind(String, Kind, Function)}.
    */
-  private class TypeEnvHolder implements BiConsumer<String, Type> {
+  private class TypeEnvHolder implements TriConsumer<String, Kind, Type> {
     private TypeEnv typeEnv;
 
     TypeEnvHolder(TypeEnv typeEnv) {
@@ -1955,22 +1977,27 @@ public class TypeResolver {
     }
 
     @Override
-    public void accept(String name, Type type) {
-      typeEnv =
-          typeEnv.bind(
-              name,
-              Kind.VAL,
-              new Function<TypeSystem, Term>() {
-                @Override
-                public Term apply(TypeSystem typeSystem_) {
-                  return TypeResolver.this.toTerm(type, Subst.EMPTY);
-                }
+    public void accept(String name, Kind kind, Type type) {
+      if (kind == Kind.INST && !typeEnv.hasOverloaded(name)) {
+        // If we're about to push a 'val inst', push an 'over' first.
+        Type overload = typeSystem.lookup(BuiltIn.Datatype.OVERLOAD);
+        typeEnv = typeEnv.bind(name, Kind.OVER, typeToTerm(overload));
+      }
+      typeEnv = typeEnv.bind(name, kind, typeToTerm(type));
+    }
 
-                @Override
-                public String toString() {
-                  return type.moniker();
-                }
-              });
+    private Function<TypeSystem, Unifier.Term> typeToTerm(Type type) {
+      return new Function<TypeSystem, Unifier.Term>() {
+        @Override
+        public Unifier.Term apply(TypeSystem typeSystem_) {
+          return TypeResolver.this.toTerm(type, Subst.EMPTY);
+        }
+
+        @Override
+        public String toString() {
+          return type.moniker();
+        }
+      };
     }
 
     public void bind(String name, Term term) {

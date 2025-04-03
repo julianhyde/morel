@@ -93,6 +93,16 @@ public interface Type {
     return false;
   }
 
+  /**
+   * Whether this type is the same as, or a specialization of, a given type.
+   *
+   * <p>For example, {@code bool} can unify with {@code bool} and {@code 'a} but
+   * not {@code int} or {@code ('a, 'b)}.
+   */
+  default boolean canUnifyWith(Type type) {
+    return false;
+  }
+
   /** Structural identifier of a type. */
   abstract class Key {
     public final Op op;

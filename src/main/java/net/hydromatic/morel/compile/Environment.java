@@ -36,6 +36,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
+import net.hydromatic.morel.util.TriConsumer;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -113,17 +114,20 @@ public abstract class Environment {
    * bindings.
    */
   public void forEachType(
-      TypeSystem typeSystem, BiConsumer<String, Type> consumer) {
+      TypeSystem typeSystem, TriConsumer<String, Binding.Kind, Type> consumer) {
     final Set<String> names = new HashSet<>();
     visit(
         binding -> {
-          if (names.add(binding.id.name)) {
-            final Type type =
-                binding.value instanceof TypedValue
-                    ? ((TypedValue) binding.value).typeKey().toType(typeSystem)
-                    : binding.id.type;
-            consumer.accept(binding.id.name, type);
+          if (binding.kind == Binding.Kind.VAL && !names.add(binding.id.name)) {
+            // This name has already been seen, and is not overloaded, so this
+            // binding is obscured.
+            return;
           }
+          final Type type =
+              binding.value instanceof TypedValue
+                  ? ((TypedValue) binding.value).typeKey().toType(typeSystem)
+                  : binding.id.type;
+          consumer.accept(binding.id.name, binding.kind, type);
         });
   }
 
