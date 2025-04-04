@@ -49,6 +49,15 @@ public class ListType extends BaseType {
         ? this
         : typeSystem.listType(elementType2);
   }
+
+  @Override
+  public boolean canUnifyWith(Type type) {
+    if (type instanceof ListType) {
+      final ListType listType = (ListType) type;
+      return elementType.canUnifyWith(listType.elementType);
+    }
+    return type instanceof TypeVar;
+  }
 }
 
 // End ListType.java

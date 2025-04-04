@@ -87,6 +87,7 @@ public class Resolver {
   private final NameGenerator nameGenerator;
   private final Environment env;
   private final @Nullable Session session;
+  private final Map<String, Core.IdPat> stringIdPatHashMap;
 
   /**
    * Contains variable declarations whose type at the point they are used is
@@ -106,11 +107,13 @@ public class Resolver {
       TypeMap typeMap,
       NameGenerator nameGenerator,
       Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
+      Map<String, Core.IdPat> stringIdPatHashMap,
       Environment env,
       @Nullable Session session) {
     this.typeMap = typeMap;
     this.nameGenerator = nameGenerator;
     this.variantIdMap = variantIdMap;
+    this.stringIdPatHashMap = stringIdPatHashMap;
     this.env = env;
     this.session = session;
   }
@@ -120,14 +123,21 @@ public class Resolver {
       TypeMap typeMap, Environment env, @Nullable Session session) {
     NameGenerator nameGenerator =
         session == null ? new NameGenerator() : session.nameGenerator;
-    return new Resolver(typeMap, nameGenerator, new HashMap<>(), env, session);
+    return new Resolver(
+        typeMap, nameGenerator, new HashMap<>(), new HashMap<>(), env, session);
   }
 
   /** Binds a Resolver to a new environment. */
   public Resolver withEnv(Environment env) {
     return env == this.env
         ? this
-        : new Resolver(typeMap, nameGenerator, variantIdMap, env, session);
+        : new Resolver(
+            typeMap,
+            nameGenerator,
+            variantIdMap,
+            stringIdPatHashMap,
+            env,
+            session);
   }
 
   /**
@@ -246,7 +256,7 @@ public class Resolver {
         valDecl.inst ? Binding.Kind.INST : Binding.Kind.VAL;
     if (valDecl.rec) {
       final List<Core.Pat> pats = new ArrayList<>();
-      matches.forEach((pat, exp) -> pats.add(toCore(pat)));
+      matches.forEach((pat, exp) -> pats.add(toCore(pat, kind)));
       pats.forEach(
           p -> Compiles.acceptBinding(typeMap.typeSystem, p, kind, bindings));
       final Resolver r = withEnv(bindings);
@@ -260,7 +270,8 @@ public class Resolver {
       matches.forEach(
           (pat, exp) ->
               patExps.add(
-                  new PatExp(toCore(pat), toCore(exp), pat.pos.plus(exp.pos))));
+                  new PatExp(
+                      toCore(pat, kind), toCore(exp), pat.pos.plus(exp.pos))));
       patExps.forEach(
           x ->
               Compiles.acceptBinding(
@@ -528,6 +539,23 @@ public class Resolver {
         // available now may be more precise than the deduced type.
         type = ((FnType) coreFn.type).resultType;
       }
+    } else if (apply.fn.op == Op.ID
+        && env.hasOverloaded(((Ast.Id) apply.fn).name)) {
+      final Type argType = typeMap.getType(apply.arg);
+      final Binding top = env.getTop(((Ast.Id) apply.fn).name);
+      final List<Binding> instBindings = new ArrayList<>();
+      env.collect(top.id, instBindings::add);
+      System.out.println(argType);
+      final List<Binding> matchingBindings = new ArrayList<>();
+      for (Binding instBinding : instBindings) {
+        if (instBinding.id.type.canCallArgOf(argType)) {
+          matchingBindings.add(instBinding);
+        }
+      }
+      if (matchingBindings.size() != 1) {
+        throw new AssertionError(matchingBindings);
+      }
+      coreFn = core.id(matchingBindings.get(0).id);
     } else {
       coreFn = toCore(apply.fn);
     }
@@ -649,7 +677,26 @@ public class Resolver {
   }
 
   private Core.Pat toCore(Ast.Pat pat) {
+    return toCore(pat, Binding.Kind.VAL);
+  }
+
+  /**
+   * Converts a pattern to Core, reusing an existing {@link Core.IdPat} if
+   * {@code kind} is {@link net.hydromatic.morel.type.Binding.Kind#INST}.
+   */
+  private Core.Pat toCore(Ast.Pat pat, Binding.Kind kind) {
     final Type type = typeMap.getType(pat);
+    if (kind == Binding.Kind.INST && pat.op == Op.ID_PAT) {
+      Ast.IdPat idPat = (Ast.IdPat) pat;
+      // If there's a Core.IdPat for this overload, create a new Core.IdPat
+      // with a different type but the same ordinal (coreIdPat.i).
+      return stringIdPatHashMap.compute(
+          idPat.name,
+          (name, coreIdPat) ->
+              coreIdPat == null
+                  ? core.idPat(type, name, nameGenerator::inc)
+                  : core.idPat(type, name, coreIdPat.i));
+    }
     return toCore(pat, type, type);
   }
 

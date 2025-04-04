@@ -74,6 +74,7 @@ in
 end;
 > val it = false : bool
 
+(* Same overloads as previous, call with int argument, get int result. *)
 let
   over o1
   val inst o1 = fn i: int => i
@@ -82,6 +83,17 @@ in
   o1 1
 end;
 > val it = 1 : int
+
+(* Same overloads as previous, call with string argument, get no match. *)
+let
+  over o1
+  val inst o1 = fn i: int => i
+  val inst o1 = fn b: bool => b
+in
+  o1 "a string"
+end;
+> 0.0-0.0 Error: Cannot deduce type: no valid overloads
+>   raised at: 0.0-0.0
 
 (* As previous, but at top level. *)
 over o1a;
@@ -94,23 +106,14 @@ o1a true;
 > val it = false : bool
 o1a 1;
 > val it = 18 : int
-
-(* ---------------------------------------------------------------------------
- * Two overloads, bool -> bool and int -> int. We call with string argument,
-   no match. *)
-let
-  over o2
-  val inst o2 = fn i: int => i
-  val inst o2 = fn b: bool => b
-in
-  o2 "a string"
-end;
+o1a "a string";
 > 0.0-0.0 Error: Cannot deduce type: no valid overloads
 >   raised at: 0.0-0.0
 
 (* ---------------------------------------------------------------------------
  * Two overloads, bool -> int and string -> bool list. We require that a_list
    is a list, so working backwards, arg must be an string. *)
+(* TODO
 fn arg =>
   let
     over o3
@@ -121,6 +124,7 @@ fn arg =>
     List.length a_list
   end;
 > val it = fn : 'a -> int
+*)
 (* TODO Previous should be
 > val it = fn : string -> int
 *)
@@ -147,6 +151,25 @@ in
 end;
 > val it = false : bool
 
+let
+  over o4
+  val inst o4 = fn NONE => [] | SOME x => [x];
+  val inst o4 = fn a_list => List.null a_list;
+in
+  o4 (SOME "abc")
+end;
+> val it = : string list
+
+let
+  over o4
+  val inst o4 = fn NONE => [] | SOME x => [x];
+  val inst o4 = fn a_list => List.null a_list;
+in
+  o4 (SOME (1, false))
+end;
+> val it = false : (int, bool) list
+
+(* As previous, but at top level. *)
 over o4a;
 > over o4a
 val inst o4a = fn NONE => [] | SOME x => [x];

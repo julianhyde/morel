@@ -73,6 +73,15 @@ public abstract class Environment {
     return b.toString();
   }
 
+  /**
+   * Returns the top binding of {@code name}.
+   *
+   * <p>If the top binding is overloaded, there may be other bindings. But at
+   * least it gives you a {@link Core.NamedPat} with which to call {@link
+   * #collect(Core.NamedPat, Consumer)}.
+   */
+  public abstract @Nullable Binding getTop(String name);
+
   /** Returns the binding of {@code name} if bound, null if not. */
   public final @Nullable Binding getOpt(String name) {
     final Set<Core.NamedPat> idList = new LinkedHashSet<>();
@@ -206,6 +215,18 @@ public abstract class Environment {
       return this;
     }
     return Environments.empty().bindAll(consumer.bindings);
+  }
+
+  /** Returns whether a given name is overloaded in this environment. */
+  public boolean hasOverloaded(String name) {
+    final List<Binding> bindings = new ArrayList<>();
+    visit(
+        binding -> {
+          if (binding.id.name.equals(name)) {
+            bindings.add(binding);
+          }
+        });
+    return !bindings.isEmpty() && bindings.get(0).kind != Binding.Kind.VAL;
   }
 }
 
