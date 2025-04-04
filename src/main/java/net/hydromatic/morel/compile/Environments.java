@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.SKIP;
+import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.shorterThan;
 
 import com.google.common.collect.ImmutableCollection;
@@ -190,6 +191,14 @@ public abstract class Environments {
     }
 
     @Override
+    public @Nullable Binding getTop(String name) {
+      if (binding.id.name.equals(name)) {
+        return binding;
+      }
+      return parent.getTop(name);
+    }
+
+    @Override
     public @Nullable Binding getOpt(Core.NamedPat id) {
       if (id.equals(binding.id)) {
         return binding;
@@ -272,6 +281,11 @@ public abstract class Environments {
     void visit(Consumer<Binding> consumer) {}
 
     @Override
+    public @Nullable Binding getTop(String name) {
+      return null;
+    }
+
+    @Override
     public @Nullable Binding getOpt(Core.NamedPat id) {
       return null;
     }
@@ -312,6 +326,23 @@ public abstract class Environments {
       map.values().forEach(consumer);
       instanceMap.values().forEach(consumer);
       parent.visit(consumer);
+    }
+
+    @Override
+    public @Nullable Binding getTop(String name) {
+      final List<Binding> bindings = new ArrayList<>();
+      Consumer<Binding> consumer =
+          binding -> {
+            if (binding.id.name.equals(name)) {
+              bindings.add(binding);
+            }
+          };
+      map.values().forEach(consumer);
+      instanceMap.values().forEach(consumer);
+      if (!bindings.isEmpty()) {
+        return last(bindings);
+      }
+      return parent.getTop(name);
     }
 
     @Override

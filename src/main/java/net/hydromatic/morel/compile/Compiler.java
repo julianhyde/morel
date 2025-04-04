@@ -61,7 +61,6 @@ import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Binding.Kind;
 import net.hydromatic.morel.type.DataType;
-import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -512,8 +511,7 @@ public class Compiler {
           default:
             final List<Binding> bindings2 = new ArrayList<>();
             for (Binding instBinding : bindings) {
-              FnType fnType = (FnType) instBinding.id.type;
-              if (argType.canUnifyWith(fnType.paramType)) {
+              if (instBinding.id.type.canCallArgOf(argType)) {
                 bindings2.add(instBinding);
               }
             }

@@ -19,6 +19,7 @@
 package net.hydromatic.morel.type;
 
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Static.transform;
 
 import com.google.common.collect.ImmutableList;
@@ -80,6 +81,15 @@ public class TupleType extends BaseType implements RecordLikeType {
       argTypes2.add(argType2);
     }
     return differenceCount == 0 ? this : new TupleType(argTypes2.build());
+  }
+
+  @Override
+  public boolean canUnifyWith(Type type) {
+    return type instanceof TupleType
+            && argTypes.size() == ((TupleType) type).argTypes.size()
+            && allMatch(
+                argTypes, ((TupleType) type).argTypes, Type::canUnifyWith)
+        || type instanceof TypeVar;
   }
 
   /**
