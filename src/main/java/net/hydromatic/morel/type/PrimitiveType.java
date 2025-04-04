@@ -72,11 +72,6 @@ public enum PrimitiveType implements RecordLikeType {
   }
 
   @Override
-  public boolean canUnifyWith(Type type) {
-    return type == this || type instanceof TypeVar;
-  }
-
-  @Override
   public PrimitiveType copy(
       TypeSystem typeSystem, UnaryOperator<Type> transform) {
     return this;
@@ -90,6 +85,11 @@ public enum PrimitiveType implements RecordLikeType {
   @Override
   public Type argType(int i) {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public boolean canUnifyWith(Type type) {
+    return type == this || type instanceof TypeVar;
   }
 }
 

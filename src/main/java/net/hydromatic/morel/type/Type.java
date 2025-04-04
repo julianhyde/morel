@@ -94,6 +94,24 @@ public interface Type {
   }
 
   /**
+   * Whether this type is a function that can call an argument of given type.
+   *
+   * <p>For example:
+   *
+   * <ul>
+   *   <li>{@code int} is not a function and therefore results {@code false} for
+   *       all argument types;
+   *   <li>{@code bool -> int} can call arguments of type {@code bool} and
+   *       {@code 'a} but not {@code int} or {@code ('a, 'b)};
+   *   <li>{@code forall 'a. 'a list -> bool} can call arguments of type {@code
+   *       int list} and {@code string list list} but not {@code int option}.
+   * </ul>
+   */
+  default boolean canCallArgOf(Type type) {
+    return false;
+  }
+
+  /**
    * Whether this type is the same as, or a specialization of, a given type.
    *
    * <p>For example, {@code bool} can unify with {@code bool} and {@code 'a} but
