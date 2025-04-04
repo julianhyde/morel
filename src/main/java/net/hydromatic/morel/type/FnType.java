@@ -48,6 +48,11 @@ public class FnType extends BaseType {
         ? this
         : typeSystem.fnType(paramType2, resultType2);
   }
+
+  @Override
+  public boolean canCallArgOf(Type type) {
+    return type.canUnifyWith(paramType);
+  }
 }
 
 // End FnType.java

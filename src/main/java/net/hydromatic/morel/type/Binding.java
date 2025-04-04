@@ -70,8 +70,8 @@ public class Binding {
     if (id.i == 0) {
       return this;
     }
-    return new Binding(
-        id.withName(id.name + '_' + id.i), exp, value, parameter);
+    Core.NamedPat id1 = id.withName(id.name + '_' + id.i);
+    return new Binding(id1, exp, value, parameter, kind);
   }
 
   @Override
