@@ -21,8 +21,10 @@ package net.hydromatic.morel.type;
 import static java.util.Objects.requireNonNull;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Type. */
 public interface Type {
@@ -114,11 +116,15 @@ public interface Type {
   /**
    * Whether this type is the same as, or a specialization of, a given type.
    *
-   * <p>For example, {@code bool} can unify with {@code bool} and {@code 'a} but
-   * not {@code int} or {@code ('a, 'b)}.
+   * <p>For example, {@code bool} specializes {@code bool} and {@code 'a} but
+   * does not specialize {@code int} or {@code ('a, 'b)}.
    */
-  default boolean canUnifyWith(Type type) {
+  default boolean specializes(Type type) {
     return false;
+  }
+
+  default @Nullable Map<Integer, Type> unifyWith(Type type) {
+    return TypeUnifier.unify(this, type);
   }
 
   /** Structural identifier of a type. */

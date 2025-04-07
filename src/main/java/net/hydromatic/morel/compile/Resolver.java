@@ -29,10 +29,12 @@ import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.intersects;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
@@ -86,7 +88,7 @@ public class Resolver {
   private final NameGenerator nameGenerator;
   private final Environment env;
   private final @Nullable Session session;
-  private final Map<String, Core.IdPat> stringIdPatHashMap;
+  private final Multimap<String, Core.IdPat> resolvedOverloads;
 
   /**
    * Contains variable declarations whose type at the point they are used is
@@ -106,13 +108,13 @@ public class Resolver {
       TypeMap typeMap,
       NameGenerator nameGenerator,
       Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
-      Map<String, Core.IdPat> stringIdPatHashMap,
+      Multimap<String, Core.IdPat> resolvedOverloads,
       Environment env,
       @Nullable Session session) {
     this.typeMap = typeMap;
     this.nameGenerator = nameGenerator;
     this.variantIdMap = variantIdMap;
-    this.stringIdPatHashMap = stringIdPatHashMap;
+    this.resolvedOverloads = resolvedOverloads;
     this.env = env;
     this.session = session;
   }
@@ -123,7 +125,12 @@ public class Resolver {
     NameGenerator nameGenerator =
         session == null ? new NameGenerator() : session.nameGenerator;
     return new Resolver(
-        typeMap, nameGenerator, new HashMap<>(), new HashMap<>(), env, session);
+        typeMap,
+        nameGenerator,
+        new HashMap<>(),
+        HashMultimap.create(),
+        env,
+        session);
   }
 
   /** Binds a Resolver to a new environment. */
@@ -134,7 +141,7 @@ public class Resolver {
             typeMap,
             nameGenerator,
             variantIdMap,
-            stringIdPatHashMap,
+            resolvedOverloads,
             env,
             session);
   }
@@ -523,22 +530,19 @@ public class Resolver {
         type = ((FnType) coreFn.type).resultType;
       }
     } else if (apply.fn.op == Op.ID
-        && env.hasOverloaded(((Ast.Id) apply.fn).name)) {
+        && resolvedOverloads.containsKey(((Ast.Id) apply.fn).name)) {
       final Type argType = typeMap.getType(apply.arg);
-      final Binding top = env.getTop(((Ast.Id) apply.fn).name);
-      final List<Binding> instBindings = new ArrayList<>();
-      env.collect(top.id, instBindings::add);
       System.out.println(argType);
-      final List<Binding> matchingBindings = new ArrayList<>();
-      for (Binding instBinding : instBindings) {
-        if (instBinding.id.type.canCallArgOf(argType)) {
-          matchingBindings.add(instBinding);
+      final List<Core.IdPat> matchingBindings = new ArrayList<>();
+      for (Core.IdPat idPat : resolvedOverloads.get(((Ast.Id) apply.fn).name)) {
+        if (idPat.type.canCallArgOf(argType)) {
+          matchingBindings.add(idPat);
         }
       }
       if (matchingBindings.size() != 1) {
         throw new AssertionError(matchingBindings);
       }
-      coreFn = core.id(matchingBindings.get(0).id);
+      coreFn = core.id(matchingBindings.get(0));
     } else {
       coreFn = toCore(apply.fn);
     }
@@ -671,14 +675,12 @@ public class Resolver {
     final Type type = typeMap.getType(pat);
     if (kind == Binding.Kind.INST && pat.op == Op.ID_PAT) {
       Ast.IdPat idPat = (Ast.IdPat) pat;
-      // If there's a Core.IdPat for this overload, create a new Core.IdPat
-      // with a different type but the same ordinal (coreIdPat.i).
-      return stringIdPatHashMap.compute(
-          idPat.name,
-          (name, coreIdPat) ->
-              coreIdPat == null
-                  ? core.idPat(type, name, nameGenerator::inc)
-                  : core.idPat(type, name, coreIdPat.i));
+      // This identifier is overloaded. Generate a new name for every
+      // occurrence.
+      Core.IdPat corePat =
+          core.idPat(type, () -> nameGenerator.getPrefixed(idPat.name));
+      resolvedOverloads.put(idPat.name, corePat);
+      return corePat;
     }
     return toCore(pat, type, type);
   }
