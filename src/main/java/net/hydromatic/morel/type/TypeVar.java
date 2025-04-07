@@ -119,7 +119,7 @@ public class TypeVar implements Type {
   }
 
   @Override
-  public boolean canUnifyWith(Type type) {
+  public boolean specializes(Type type) {
     return type instanceof TypeVar;
   }
 }

@@ -23,6 +23,6 @@ let
 in
   o4 (SOME (1, false))
 end;
-> val it = [(1, false)] : (int, bool) list
+> val it = [(1,false)] : (int * bool) list
 
 (*) End dummy.smli

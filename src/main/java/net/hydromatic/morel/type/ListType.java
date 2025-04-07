@@ -51,10 +51,10 @@ public class ListType extends BaseType {
   }
 
   @Override
-  public boolean canUnifyWith(Type type) {
+  public boolean specializes(Type type) {
     if (type instanceof ListType) {
       final ListType listType = (ListType) type;
-      return elementType.canUnifyWith(listType.elementType);
+      return elementType.specializes(listType.elementType);
     }
     return type instanceof TypeVar;
   }

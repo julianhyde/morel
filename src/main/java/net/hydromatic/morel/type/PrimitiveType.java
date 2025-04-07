@@ -88,7 +88,7 @@ public enum PrimitiveType implements RecordLikeType {
   }
 
   @Override
-  public boolean canUnifyWith(Type type) {
+  public boolean specializes(Type type) {
     return type == this || type instanceof TypeVar;
   }
 }

@@ -123,11 +123,11 @@ public class DataType extends ParameterizedType {
   }
 
   @Override
-  public boolean canUnifyWith(Type type) {
+  public boolean specializes(Type type) {
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
       return name.equals(dataType.name)
-          && allMatch(arguments, dataType.arguments, Type::canUnifyWith);
+          && allMatch(arguments, dataType.arguments, Type::specializes);
     }
     return type instanceof TypeVar;
   }
