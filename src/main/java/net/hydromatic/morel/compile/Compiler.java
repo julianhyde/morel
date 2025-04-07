@@ -35,7 +35,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -767,56 +766,59 @@ public class Compiler {
                   final List<String> outs = new ArrayList<>();
                   try {
                     final Object o = code.eval(evalEnv);
-                    final Map<Core.NamedPat, Object> pairs =
-                        new LinkedHashMap<>();
+                    final List<Binding> outBindings0 = new ArrayList<>();
                     if (!Closure.bindRecurse(
-                        pat.withType(type), o, pairs::put)) {
+                        pat.withType(type),
+                        o,
+                        (pat2, o2) -> {
+                          Binding binding = Binding.of(pat2, o2).withKind(kind);
+                          outBindings0.add(binding);
+                        })) {
                       throw new Codes.MorelRuntimeException(
                           Codes.BuiltInExn.BIND, pos);
                     }
-                    pairs.forEach(
-                        (pat2, o2) -> {
-                          outBindings.accept(
-                              Binding.of(pat2, o2).withKind(kind));
-                          if (pat2 != skipPat) {
-                            int stringDepth =
-                                Prop.STRING_DEPTH.intValue(session.map);
-                            int lineWidth =
-                                Prop.LINE_WIDTH.intValue(session.map);
-                            int printDepth =
-                                Prop.PRINT_DEPTH.intValue(session.map);
-                            int printLength =
-                                Prop.PRINT_LENGTH.intValue(session.map);
-                            Prop.Output output =
-                                Prop.OUTPUT.enumValue(
-                                    session.map, Prop.Output.class);
-                            final Pretty pretty =
-                                new Pretty(
-                                    typeSystem,
-                                    lineWidth,
-                                    output,
-                                    printLength,
-                                    printDepth,
-                                    stringDepth);
-                            final Pretty.TypedVal typedVal;
-                            if (o2 instanceof TypedValue) {
-                              TypedValue typedValue = (TypedValue) o2;
-                              typedVal =
-                                  new Pretty.TypedVal(
-                                      pat2.name,
-                                      typedValue.valueAs(Object.class),
-                                      Keys.toProgressive(pat2.type().key())
-                                          .toType(typeSystem));
-                            } else {
-                              typedVal =
-                                  new Pretty.TypedVal(pat2.name, o2, pat2.type);
-                            }
-                            pretty.pretty(buf, pat2.type, typedVal);
-                            final String line = str(buf);
-                            outs.add(line);
-                            outLines.accept(line);
-                          }
-                        });
+                    for (Binding binding : outBindings0) {
+                      outBindings.accept(binding.withKind(kind));
+                      if (binding.id != skipPat) {
+                        int stringDepth =
+                            Prop.STRING_DEPTH.intValue(session.map);
+                        int lineWidth = Prop.LINE_WIDTH.intValue(session.map);
+                        Prop.Output output =
+                            Prop.OUTPUT.enumValue(
+                                session.map, Prop.Output.class);
+                        int printDepth = Prop.PRINT_DEPTH.intValue(session.map);
+                        int printLength =
+                            Prop.PRINT_LENGTH.intValue(session.map);
+                        final Pretty pretty =
+                            new Pretty(
+                                typeSystem,
+                                lineWidth,
+                                output,
+                                printLength,
+                                printDepth,
+                                stringDepth);
+                        final Pretty.TypedVal typedVal;
+                        if (binding.value instanceof TypedValue) {
+                          TypedValue typedValue = (TypedValue) binding.value;
+                          typedVal =
+                              new Pretty.TypedVal(
+                                  binding.id.name,
+                                  typedValue.valueAs(Object.class),
+                                  Keys.toProgressive(binding.id.type().key())
+                                      .toType(typeSystem));
+                        } else {
+                          typedVal =
+                              new Pretty.TypedVal(
+                                  binding.id.name,
+                                  binding.value,
+                                  binding.id.type);
+                        }
+                        pretty.pretty(buf, binding.id.type, typedVal);
+                        final String line = str(buf);
+                        outs.add(line);
+                        outLines.accept(line);
+                      }
+                    }
                   } catch (Codes.MorelRuntimeException e) {
                     session.handle(e, buf);
                     final String line = str(buf);

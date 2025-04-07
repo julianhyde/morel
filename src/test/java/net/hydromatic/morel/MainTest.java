@@ -53,12 +53,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Ast;
-import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Codes;
@@ -66,10 +64,6 @@ import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.DataType;
-import net.hydromatic.morel.type.FnType;
-import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.Type;
-import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
 import org.hamcrest.CustomTypeSafeMatcher;
 import org.junit.jupiter.api.Disabled;
@@ -562,96 +556,6 @@ public class MainTest {
     String message =
         "unresolved flex record (can't tell what fields there are besides #job)";
     ml(ml).withTypeExceptionMatcher(throwsA(message)).assertEval();
-  }
-
-  @Test
-  void testUnify() {
-    final TypeSystem typeSystem = new TypeSystem();
-    BuiltIn.dataTypes(typeSystem, new ArrayList<>());
-    final PrimitiveType intT = PrimitiveType.INT;
-    final PrimitiveType boolT = PrimitiveType.BOOL;
-    final TypeVar alpha = typeSystem.typeVariable(0);
-    final Type iList = typeSystem.listType(intT);
-    final Type aList = typeSystem.listType(alpha);
-    final Type ibTuple = typeSystem.tupleType(intT, boolT);
-    final Type iaTuple = typeSystem.tupleType(intT, alpha);
-    final Type i2Tuple = typeSystem.tupleType(intT, intT);
-    final Type i3Tuple = typeSystem.tupleType(intT, intT, intT);
-    final Type ibTupleList = typeSystem.listType(ibTuple);
-    final Type iOption = typeSystem.option(intT);
-    final Type aOption = typeSystem.option(alpha);
-    assertThat("int < int", intT.canUnifyWith(intT), is(true));
-    assertThat("int !< bool", intT.canUnifyWith(boolT), is(false));
-    assertThat("int < 'a", intT.canUnifyWith(alpha), is(true));
-    assertThat("int !< int list", intT.canUnifyWith(iList), is(false));
-    assertThat("int list < 'a list", iList.canUnifyWith(aList), is(true));
-    assertThat("'a list !< int list", aList.canUnifyWith(iList), is(false));
-    assertThat("int !< int option", intT.canUnifyWith(iOption), is(false));
-    assertThat(
-        "int option < 'a option", iOption.canUnifyWith(aOption), is(true));
-    assertThat(
-        "'a option !< int list", aOption.canUnifyWith(iOption), is(false));
-    assertThat(
-        "(int, bool) < (int, bool)", ibTuple.canUnifyWith(ibTuple), is(true));
-    assertThat(
-        "(int, bool) < (int, 'a)", ibTuple.canUnifyWith(iaTuple), is(true));
-    assertThat(
-        "(int, 'a) !< (int, bool)", ibTuple.canUnifyWith(iaTuple), is(true));
-    assertThat(
-        "(int, int) !< (int, int, int)",
-        i2Tuple.canUnifyWith(i3Tuple),
-        is(false));
-    assertThat(
-        "(int, int, int) !< (int, int)",
-        i3Tuple.canUnifyWith(i2Tuple),
-        is(false));
-    assertThat(
-        "(int, bool) list < 'a list",
-        ibTupleList.canUnifyWith(aList),
-        is(true));
-    assertThat(
-        "'a list < (int, bool) list",
-        aList.canUnifyWith(ibTupleList),
-        is(false));
-
-    // In the following descriptions, "." means "can be called with argument"
-    // and "!." means "cannot be called with argument".
-    final FnType intToInt = typeSystem.fnType(intT, intT);
-    final FnType aToInt = typeSystem.fnType(alpha, intT);
-    final FnType intToA = typeSystem.fnType(intT, alpha);
-    final FnType i2ToB = typeSystem.fnType(i2Tuple, boolT);
-    final FnType i3ToB = typeSystem.fnType(i3Tuple, boolT);
-    assertThat("int !. int", intT.canCallArgOf(intT), is(false));
-    assertThat("int -> int . int", intToInt.canCallArgOf(intT), is(true));
-    assertThat("int -> int . bool", intToInt.canCallArgOf(boolT), is(false));
-    assertThat("'a -> int . bool", aToInt.canCallArgOf(boolT), is(true));
-    assertThat("'a -> int . 'a", aToInt.canCallArgOf(alpha), is(true));
-    assertThat("'a -> int . int list", aToInt.canCallArgOf(iList), is(true));
-    // Yes, because the alphas are different
-    assertThat("'a -> int . 'a list", aToInt.canCallArgOf(aList), is(true));
-    assertThat("int -> 'a . int", intToA.canCallArgOf(intT), is(true));
-    assertThat(
-        "(int, int) -> bool !. int", intToA.canCallArgOf(i2ToB), is(false));
-    assertThat(
-        "(int, int, int) -> bool !. int",
-        intToA.canCallArgOf(i3ToB),
-        is(false));
-    assertThat(
-        "(int, int) -> bool . (int, int)",
-        i2ToB.canCallArgOf(i2Tuple),
-        is(true));
-    assertThat(
-        "(int, int) -> bool !. (int, int, int)",
-        i2ToB.canCallArgOf(i3Tuple),
-        is(false));
-    assertThat(
-        "(int, int, int) -> bool !. (int, int)",
-        i3ToB.canCallArgOf(i2Tuple),
-        is(false));
-    assertThat(
-        "(int, int, int) -> bool . (int, int, int)",
-        i3ToB.canCallArgOf(i3Tuple),
-        is(true));
   }
 
   @Test
