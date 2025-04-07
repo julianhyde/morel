@@ -51,7 +51,7 @@ public class FnType extends BaseType {
 
   @Override
   public boolean canCallArgOf(Type type) {
-    return type.canUnifyWith(paramType);
+    return type.specializes(paramType);
   }
 }
 

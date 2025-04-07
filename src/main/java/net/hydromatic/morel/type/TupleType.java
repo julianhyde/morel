@@ -84,11 +84,11 @@ public class TupleType extends BaseType implements RecordLikeType {
   }
 
   @Override
-  public boolean canUnifyWith(Type type) {
+  public boolean specializes(Type type) {
     return type instanceof TupleType
             && argTypes.size() == ((TupleType) type).argTypes.size()
             && allMatch(
-                argTypes, ((TupleType) type).argTypes, Type::canUnifyWith)
+                argTypes, ((TupleType) type).argTypes, Type::specializes)
         || type instanceof TypeVar;
   }
 
