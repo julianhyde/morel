@@ -224,7 +224,10 @@ class PairLists {
 
         @Override
         public T remove(int index) {
-          return (T) list.remove(index * 2);
+          T t = (T) list.remove(index * 2);
+          @SuppressWarnings("unused")
+          U u = (U) list.remove(index * 2);
+          return t;
         }
       };
     }
@@ -250,7 +253,11 @@ class PairLists {
 
         @Override
         public U remove(int index) {
-          return (U) list.remove(index * 2 + 1);
+          @SuppressWarnings("unused")
+          T t = (T) list.remove(index * 2);
+          @SuppressWarnings("UnnecessaryLocalVariable")
+          U u = (U) list.remove(index * 2);
+          return u;
         }
       };
     }
