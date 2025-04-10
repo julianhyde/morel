@@ -34,7 +34,12 @@ public class NameGenerator {
 
   /** Generates a name that is unique in this program. */
   public String get() {
-    return "v" + id++;
+    return getPrefixed("v");
+  }
+
+  /** Generates a name that is unique in this program with a given prefix. */
+  public String getPrefixed(String prefix) {
+    return prefix + "$" + id++;
   }
 
   /** Returns the number of times that "name" has been used for a variable. */
