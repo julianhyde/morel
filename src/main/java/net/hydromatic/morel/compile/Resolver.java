@@ -117,8 +117,9 @@ public class Resolver {
   /** Creates a root Resolver. */
   public static Resolver of(
       TypeMap typeMap, Environment env, @Nullable Session session) {
-    return new Resolver(
-        typeMap, new NameGenerator(), new HashMap<>(), env, session);
+    NameGenerator nameGenerator =
+        session == null ? new NameGenerator() : session.nameGenerator;
+    return new Resolver(typeMap, nameGenerator, new HashMap<>(), env, session);
   }
 
   /** Binds a Resolver to a new environment. */
