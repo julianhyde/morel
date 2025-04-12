@@ -224,6 +224,11 @@ fun listToMultiset [] = MULTI_NIL
 over unsort;
 > over unsort
 
+val inst unsort = fn SOME x => [x] | NONE => [];
+> val unsort = fn : 'a option -> 'a list
+unsort (SOME 1);
+> val it = [1] : int list
+
 (* Declare an instance of 'unsort' that converts a list to a multiset. *)
 val inst unsort = fn aList => listToMultiset aList;
 > val unsort = fn : 'a list -> 'a multiset

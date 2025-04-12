@@ -20,7 +20,6 @@ package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static java.lang.String.format;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -577,23 +576,6 @@ public class Resolver {
             "zero or more than one matching bindings: " + matchingBindings);
       }
       coreFn = core.id(matchingBindings.get(0));
-
-      final FnType fnType;
-      for (Type t = coreFn.type; ; t = ((ForallType) t).type) {
-        if (!(t instanceof ForallType)) {
-          fnType = (FnType) t;
-          break;
-        }
-      }
-      @Nullable
-      Map<Integer, Type> sub = fnType.paramType.unifyWith(coreArg.type);
-      if (sub == null) {
-        throw new AssertionError(
-            format("cannot unify %s with %s", fnType, coreArg.type));
-      }
-      type =
-          fnType.resultType.substitute(
-              typeMap.typeSystem, ImmutableList.copyOf(sub.values()));
     } else {
       coreFn = toCore(apply.fn);
     }

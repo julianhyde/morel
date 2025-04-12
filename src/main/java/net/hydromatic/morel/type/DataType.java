@@ -73,7 +73,7 @@ public class DataType extends ParameterizedType {
   }
 
   @Override
-  public Key key() {
+  public Keys.DataTypeKey key() {
     return Keys.datatype(name, Keys.toKeys(arguments), typeConstructors);
   }
 
@@ -93,7 +93,8 @@ public class DataType extends ParameterizedType {
     if (arguments.equals(this.arguments)) {
       return this;
     }
-    return new DataType(name, moniker, arguments, typeConstructors);
+    return (DataType) key().substitute(arguments).toType(typeSystem);
+    //    return new DataType(name, moniker, arguments, typeConstructors);
   }
 
   /**
