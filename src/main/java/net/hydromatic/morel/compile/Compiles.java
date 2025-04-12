@@ -350,15 +350,15 @@ public abstract class Compiles {
 
   static PatternBinder binding(
       TypeSystem typeSystem, Binding.Kind kind, List<Binding> bindings) {
-    return new PatternBinder(typeSystem, kind, bindings);
+    return new PatternBinder(typeSystem, bindings);
   }
 
   /**
    * Visits a pattern, adding bindings to a list.
    *
    * <p>If the pattern is an {@link net.hydromatic.morel.ast.Core.IdPat}, don't
-   * use this method: just {@link #acceptBinding(TypeSystem, Core.NamedPat,
-   * Binding.Kind, List) bind directly}.
+   * use this method: just {@link #acceptBinding(Core.NamedPat, List) bind
+   * directly}.
    */
   public static void acceptBinding(
       TypeSystem typeSystem, Core.Pat pat, List<Binding> bindings) {
@@ -366,12 +366,8 @@ public abstract class Compiles {
   }
 
   public static void acceptBinding(
-      TypeSystem typeSystem,
-      Core.NamedPat namedPat,
-      Binding.Kind kind,
-      List<Binding> bindings) {
-    assert kind == Binding.Kind.VAL; // TODO
-    bindings.add(Binding.of(namedPat).withKind(kind));
+      Core.NamedPat namedPat, List<Binding> bindings) {
+    bindings.add(Binding.of(namedPat));
   }
 
   /**
@@ -380,24 +376,21 @@ public abstract class Compiles {
    */
   private static class PatternBinder extends Visitor {
     private final TypeSystem typeSystem;
-    private final Binding.Kind kind;
     private final List<Binding> bindings;
 
-    PatternBinder(
-        TypeSystem typeSystem, Binding.Kind kind, List<Binding> bindings) {
+    PatternBinder(TypeSystem typeSystem, List<Binding> bindings) {
       this.typeSystem = typeSystem;
-      this.kind = kind;
       this.bindings = bindings;
     }
 
     @Override
     protected void visit(Core.IdPat idPat) {
-      acceptBinding(typeSystem, idPat, kind, bindings);
+      acceptBinding(idPat, bindings);
     }
 
     @Override
     protected void visit(Core.AsPat asPat) {
-      acceptBinding(typeSystem, asPat, kind, bindings);
+      acceptBinding(asPat, bindings);
       super.visit(asPat);
     }
 

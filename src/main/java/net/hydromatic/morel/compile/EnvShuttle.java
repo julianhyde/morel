@@ -23,7 +23,6 @@ import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.Binding.Kind;
 import net.hydromatic.morel.type.TypeSystem;
 
 /** Shuttle that keeps an environment of what variables are in scope. */
@@ -87,9 +86,7 @@ abstract class EnvShuttle extends Shuttle {
   @Override
   protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
     final List<Binding> bindings = new ArrayList<>();
-    recValDecl.list.forEach(
-        decl ->
-            Compiles.acceptBinding(typeSystem, decl.pat, Kind.VAL, bindings));
+    recValDecl.list.forEach(decl -> Compiles.acceptBinding(decl.pat, bindings));
     return recValDecl.copy(bind(bindings).visitList(recValDecl.list));
   }
 
