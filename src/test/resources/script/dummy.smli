@@ -17,6 +17,31 @@
  * License.
  *)
 
+(* A type similar to the built-in 'bag', and a function to convert any list to
+   a multiset. *)
+datatype 'a multiset =
+    MULTI_NIL
+  | MULTI_CONS of ('a * 'a multiset);
+> datatype 'a multiset = MULTI_CONS of 'a * 'a multiset | MULTI_NIL
+fun listToMultiset [] = MULTI_NIL
+  | listToMultiset (h :: t) = MULTI_CONS (h, listToMultiset t);
+> val listToMultiset = fn : 'a list -> 'a multiset
+
+(* Declare that 'unsort' is overloaded. *)
+over unsort;
+> over unsort
+
+val inst unsort = fn SOME x => [x] | NONE => [];
+> val unsort = fn : 'a option -> 'a list
+unsort (SOME 1);
+> val it = [1] : int list
+
+(* Declare an instance of 'unsort' that converts a list to a multiset. *)
+val inst unsort = fn aList => listToMultiset aList;
+> val unsort = fn : 'a list -> 'a multiset
+unsort [1, 2];
+> val it = MULTI_CONS (1,MULTI_CONS (2,MULTI_NIL)) : int multiset
+
 (* Clear the environment. The number of variables in the environment
  * can cause subtle differences in behavior, so we eliminate that
  * source of variability. *)
