@@ -864,12 +864,7 @@ public class Core {
     public abstract Decl accept(Shuttle shuttle);
   }
 
-  /**
-   * Overloaded operator declaration.
-   *
-   * <p>TODO: Do we even need OverDecl in core? Didn't we resolve overloads to
-   * unique names during type resolution?
-   */
+  /** Overloaded operator declaration. */
   public static class OverDecl extends Decl {
     public final IdPat pat;
 
