@@ -23,6 +23,7 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.FnType;
@@ -39,6 +40,7 @@ public class TypeTest {
     BuiltIn.dataTypes(typeSystem, new ArrayList<>());
     final Type intT = PrimitiveType.INT;
     final Type boolT = PrimitiveType.BOOL;
+    final Type strT = PrimitiveType.STRING;
     final Type alpha = typeSystem.typeVariable(0);
     final Type iList = typeSystem.listType(intT);
     final Type aList = typeSystem.listType(alpha);
@@ -49,6 +51,10 @@ public class TypeTest {
     final Type ibTupleList = typeSystem.listType(ibTuple);
     final Type iOption = typeSystem.option(intT);
     final Type aOption = typeSystem.option(alpha);
+    final Type biRec =
+        typeSystem.recordType(ImmutableSortedMap.of("i", intT, "b", boolT));
+    final Type isRec =
+        typeSystem.recordType(ImmutableSortedMap.of("i", intT, "s", strT));
     assertEq("int", intT);
     assertCannotUnify("int # bool", intT, boolT);
     assertLt("int < 'a", intT, alpha);
@@ -64,6 +70,8 @@ public class TypeTest {
     assertLt("(int, 'a) !< (int, bool)", ibTuple, iaTuple);
     assertCannotUnify("(int, int) # (int, int, int)", i2Tuple, i3Tuple);
     assertLt("(int, bool) list < 'a list", ibTupleList, aList);
+    assertEq("{b, i}", biRec);
+    assertCannotUnify("{b, i} # {b, s}", biRec, isRec);
 
     // In the following descriptions, "." means "can be called with argument"
     // and "!." means "cannot be called with argument".
@@ -72,6 +80,7 @@ public class TypeTest {
     final FnType intToA = typeSystem.fnType(intT, alpha);
     final FnType i2ToB = typeSystem.fnType(i2Tuple, boolT);
     final FnType i3ToB = typeSystem.fnType(i3Tuple, boolT);
+    final FnType recToB = typeSystem.fnType(biRec, boolT);
     assertCannotCall("int !. int", intT, intT);
     assertCanCall("int -> int . int", intToInt, intT);
     assertCannotCall("int -> int . bool", intToInt, boolT);
@@ -87,6 +96,9 @@ public class TypeTest {
     assertCannotCall("(int, int) -> bool !. (int, int, int)", i2ToB, i3Tuple);
     assertCannotCall("(int, int, int) -> bool !. (int, int)", i3ToB, i2Tuple);
     assertCanCall("(int, int, int) -> bool . (int, int, int)", i3ToB, i3Tuple);
+    assertCanCall("{b, i} -> bool . {b, i}", recToB, biRec);
+    assertCannotCall("{b, i} -> bool . int", recToB, intT);
+    assertCannotCall("{b, i} -> bool . bool", recToB, boolT);
   }
 
   private static void assertEq(String message, Type type) {
