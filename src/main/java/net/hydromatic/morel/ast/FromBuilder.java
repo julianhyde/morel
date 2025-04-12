@@ -38,7 +38,6 @@ import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.RefChecker;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.Binding.Kind;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
@@ -217,7 +216,7 @@ public class FromBuilder {
       addAll(steps);
       return yield_(uselessIfLast, bindings, core.record(typeSystem, nameExps));
     }
-    Compiles.acceptBinding(typeSystem, pat, Kind.VAL, bindings);
+    Compiles.acceptBinding(typeSystem, pat, bindings);
     return addStep(core.scan(bindings, pat, exp, condition));
   }
 

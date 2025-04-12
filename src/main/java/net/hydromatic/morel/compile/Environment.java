@@ -19,7 +19,9 @@
 package net.hydromatic.morel.compile;
 
 import static com.google.common.collect.Lists.reverse;
+import static org.apache.calcite.util.Util.first;
 
+import com.google.common.collect.Lists;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -90,6 +92,10 @@ public abstract class Environment {
           if (binding.id.name.equals(name)) {
             idList.add(binding.id);
           }
+          if (binding.overloadId != null
+              && binding.overloadId.name.equals(name)) {
+            idList.add(binding.overloadId);
+          }
         });
     for (Core.NamedPat id : idList) {
       Binding binding = getOpt(id);
@@ -125,19 +131,119 @@ public abstract class Environment {
   public void forEachType(
       TypeSystem typeSystem, TriConsumer<String, Binding.Kind, Type> consumer) {
     final Set<String> names = new HashSet<>();
+    final List<Binding> bindings = new ArrayList<>();
+    visit(bindings::add);
     visit(
         binding -> {
-          if (binding.kind == Binding.Kind.VAL && !names.add(binding.id.name)) {
-            // This name has already been seen, and is not overloaded, so this
-            // binding is obscured.
-            return;
+          if (binding.kind == Binding.Kind.INST && names.add(binding.id.name)) {
+            bindings.add(Binding.over(binding.overloadId));
           }
-          final Type type =
-              binding.value instanceof TypedValue
-                  ? ((TypedValue) binding.value).typeKey().toType(typeSystem)
-                  : binding.id.type;
-          consumer.accept(binding.id.name, binding.kind, type);
         });
+    Lists.reverse(bindings)
+        .forEach(
+            binding -> {
+              if (binding.kind == Binding.Kind.VAL
+                  && !names.add(binding.id.name)) {
+                // This name has already been seen, and is not overloaded, so
+                // this
+                // binding is obscured.
+                return;
+              }
+              switch (3) {
+                case 1:
+                  {
+                    final Type type0 =
+                        binding.value instanceof TypedValue
+                            ? ((TypedValue) binding.value)
+                                .typeKey()
+                                .toType(typeSystem)
+                            : null;
+                    if (binding.overloadId != null) {
+                      consumer.accept(
+                          binding.overloadId.name,
+                          binding.kind,
+                          first(type0, binding.overloadId.type));
+                      consumer.accept(
+                          binding.id.name,
+                          Binding.Kind.OVER,
+                          first(type0, binding.id.type));
+                    } else {
+                      consumer.accept(
+                          binding.id.name,
+                          binding.kind,
+                          first(type0, binding.id.type));
+                    }
+                    break;
+                  }
+                case 2:
+                  {
+                    final Type type =
+                        binding.value instanceof TypedValue
+                            ? ((TypedValue) binding.value)
+                                .typeKey()
+                                .toType(typeSystem)
+                            : binding.id.type;
+                    consumer.accept(binding.id.name, binding.kind, type);
+                    break;
+                  }
+                case 3:
+                  {
+                    final Type type0 =
+                        binding.value instanceof TypedValue
+                            ? ((TypedValue) binding.value)
+                                .typeKey()
+                                .toType(typeSystem)
+                            : null;
+                    if (binding.kind == Binding.Kind.INST) {
+                      consumer.accept(
+                          binding.overloadId.name,
+                          binding.kind,
+                          first(type0, binding.id.type));
+                    } else {
+                      consumer.accept(
+                          binding.id.name,
+                          binding.kind,
+                          first(type0, binding.id.type));
+                    }
+                    break;
+                  }
+                case 5:
+                  {
+                    final Type type0 =
+                        binding.value instanceof TypedValue
+                            ? ((TypedValue) binding.value)
+                                .typeKey()
+                                .toType(typeSystem)
+                            : null;
+                    consumer.accept(
+                        binding.id.name,
+                        binding.kind,
+                        first(type0, binding.id.type));
+                    break;
+                  }
+                case 4:
+                  {
+                    final Type type0 =
+                        binding.value instanceof TypedValue
+                            ? ((TypedValue) binding.value)
+                                .typeKey()
+                                .toType(typeSystem)
+                            : null;
+                    if (binding.overloadId != null
+                        && !names.add(binding.overloadId.name)) {
+                      consumer.accept(
+                          binding.overloadId.name,
+                          Binding.Kind.OVER,
+                          typeSystem.lookup(BuiltIn.Datatype.OVERLOAD));
+                    }
+                    consumer.accept(
+                        binding.id.name,
+                        binding.kind,
+                        first(type0, binding.id.type));
+                    break;
+                  }
+              }
+            });
   }
 
   /**
@@ -222,11 +328,23 @@ public abstract class Environment {
     final List<Binding> bindings = new ArrayList<>();
     visit(
         binding -> {
-          if (binding.id.name.equals(name)) {
+          if (binding.overloadId != null
+              && binding.overloadId.name.equals(name)) {
             bindings.add(binding);
           }
         });
-    return !bindings.isEmpty() && bindings.get(0).kind != Binding.Kind.VAL;
+    return !bindings.isEmpty() && bindings.get(0).isInst();
+  }
+
+  public List<Core.IdPat> getOverloads(Core.IdPat id) {
+    final List<Core.IdPat> list = new ArrayList<>();
+    visit(
+        binding -> {
+          if (binding.overloadId != null && binding.overloadId.equals(id)) {
+            list.add((Core.IdPat) binding.id);
+          }
+        });
+    return list;
   }
 }
 

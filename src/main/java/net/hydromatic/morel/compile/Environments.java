@@ -25,6 +25,7 @@ import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.shorterThan;
 
 import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import java.util.ArrayList;
@@ -151,17 +152,17 @@ public abstract class Environments {
       // with the same name.
       final ImmutableMap.Builder<Core.NamedPat, Binding> builder =
           ImmutableMap.builder();
-      final ImmutableMultimap.Builder<Core.NamedPat, Binding> instanceBuilder =
+      final ImmutableMultimap.Builder<Core.IdPat, Binding> instanceBuilder =
           ImmutableMultimap.builder();
       for (Binding binding : bindings) {
-        if (binding.kind == Binding.Kind.VAL) {
-          builder.put(binding.id, binding);
+        if (binding.isInst()) {
+          instanceBuilder.put(binding.overloadId, binding);
         } else {
-          instanceBuilder.put(binding.id, binding);
+          builder.put(binding.id, binding);
         }
       }
       final ImmutableMap<Core.NamedPat, Binding> map = builder.build();
-      final ImmutableMultimap<Core.NamedPat, Binding> instanceMap =
+      final ImmutableMultimap<Core.IdPat, Binding> instanceMap =
           instanceBuilder.build();
       if (instanceMap.isEmpty()) {
         // Optimize by skipping ancestor environments that are completely
@@ -195,12 +196,18 @@ public abstract class Environments {
       if (binding.id.name.equals(name)) {
         return binding;
       }
+      if (binding.overloadId != null && binding.overloadId.name.equals(name)) {
+        return binding;
+      }
       return parent.getTop(name);
     }
 
     @Override
     public @Nullable Binding getOpt(Core.NamedPat id) {
-      if (id.equals(binding.id)) {
+      if (binding.id.equals(id)) {
+        return binding;
+      }
+      if (binding.overloadId != null && binding.overloadId.equals(id)) {
         return binding;
       }
       return parent.getOpt(id);
@@ -208,7 +215,7 @@ public abstract class Environments {
 
     @Override
     public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
-      if (id.equals(binding.id)) {
+      if (id.equals(binding.overloadId) || id.equals(binding.id)) { // TODO
         switch (binding.kind) {
           case VAL:
             // Send this binding to the consumer. It obscures all other
@@ -220,6 +227,7 @@ public abstract class Environments {
             // instances to see.
             return;
           case INST:
+          case INST2:
             // Send this instance to the consumer, but carry on looking for
             // more.
             consumer.accept(binding);
@@ -310,12 +318,12 @@ public abstract class Environments {
   static class MapEnvironment extends Environment {
     private final Environment parent;
     private final Map<Core.NamedPat, Binding> map;
-    private final ImmutableMultimap<Core.NamedPat, Binding> instanceMap;
+    private final ImmutableMultimap<Core.IdPat, Binding> instanceMap;
 
     MapEnvironment(
         Environment parent,
         ImmutableMap<Core.NamedPat, Binding> map,
-        ImmutableMultimap<Core.NamedPat, Binding> instanceMap) {
+        ImmutableMultimap<Core.IdPat, Binding> instanceMap) {
       this.parent = requireNonNull(parent);
       this.map = requireNonNull(map);
       this.instanceMap = requireNonNull(instanceMap);
@@ -331,14 +339,21 @@ public abstract class Environments {
     @Override
     public @Nullable Binding getTop(String name) {
       final List<Binding> bindings = new ArrayList<>();
-      Consumer<Binding> consumer =
-          binding -> {
-            if (binding.id.name.equals(name)) {
-              bindings.add(binding);
-            }
-          };
-      map.values().forEach(consumer);
-      instanceMap.values().forEach(consumer);
+      map.values()
+          .forEach(
+              binding -> {
+                if (binding.id.name.equals(name)) {
+                  bindings.add(binding);
+                }
+              });
+      instanceMap
+          .asMap()
+          .forEach(
+              (overloadId, bindings1) -> {
+                if (overloadId.name.equals(name)) {
+                  bindings.addAll(bindings1);
+                }
+              });
       if (!bindings.isEmpty()) {
         return last(bindings);
       }
@@ -356,7 +371,10 @@ public abstract class Environments {
     @Override
     public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
       final Binding binding = map.get(id);
-      final ImmutableCollection<Binding> instBindings = instanceMap.get(id);
+      final ImmutableCollection<Binding> instBindings =
+          id instanceof Core.IdPat
+              ? instanceMap.get((Core.IdPat) id)
+              : ImmutableList.of();
       if (binding != null) {
         // Send this binding to the consumer. It obscures all other
         // bindings, so we're done.
@@ -379,6 +397,7 @@ public abstract class Environments {
             // instances to see.
             return;
           case INST:
+          case INST2:
             // Send this instance to the consumer, but carry on looking for
             // more.
             consumer.accept(instBinding);

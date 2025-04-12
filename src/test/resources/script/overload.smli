@@ -84,6 +84,16 @@ in
 end;
 > val it = 1 : int
 
+(* All of the above. *)
+let
+  over o1
+  val inst o1 = fn i: int => i
+  val inst o1 = fn b: bool => b
+in
+  (o1 true, o1 2, o1 false)
+end;
+> val it = (true,2,false) : bool * int * bool
+
 (* Same overloads as previous, call with string argument, get no match. *)
 let
   over o1
@@ -109,6 +119,20 @@ o1a 1;
 o1a "a string";
 > 0.0-0.0 Error: Cannot deduce type: no valid overloads
 >   raised at: 0.0-0.0
+
+(* As previous, but with an empty environment. The number of variables in the
+ * environment can cause subtle differences in behavior, so we test it both
+ * ways. *)
+Sys.clearEnv ();
+> val it = () : unit
+over o0;
+> over o0
+val inst o0 = fn NONE => [] | SOME x => [x];
+> val o0 = fn : 'a option -> 'a list
+val inst o0 = fn list => List.null list;
+> val o0 = fn : 'a list -> bool
+(o0 (SOME 1), o0 "a", o0 2);
+> val it = [1] : int list
 
 (* ---------------------------------------------------------------------------
  * Two overloads, bool -> int and string -> bool list. We require that a_list
