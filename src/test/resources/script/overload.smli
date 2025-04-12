@@ -131,8 +131,8 @@ val inst o0 = fn NONE => [] | SOME x => [x];
 > val o0 = fn : 'a option -> 'a list
 val inst o0 = fn list => List.null list;
 > val o0 = fn : 'a list -> bool
-(o0 (SOME 1), o0 "a", o0 2);
-> val it = [1] : int list
+(o0 (SOME 1), o0 [2], o0 (SOME {i=3, b=true}));
+> val it = ([1],false,[{b=true,i=3}]) : int list * bool * {b:bool, i:int} list
 
 (* ---------------------------------------------------------------------------
  * Two overloads, bool -> int and string -> bool list. We require that a_list

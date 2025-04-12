@@ -44,6 +44,8 @@ public class TypeUnifier {
     final DataType dataType2;
     final TupleType tuple1;
     final TupleType tuple2;
+    final RecordType record1;
+    final RecordType record2;
     final ListType list1;
     final ListType list2;
     final PrimitiveType primitiveType1;
@@ -85,6 +87,25 @@ public class TypeUnifier {
             tuple2 = (TupleType) type2;
             return tuple1.argTypes.size() == tuple2.argTypes.size()
                 && allMatch(tuple1.argTypes, tuple2.argTypes, this::tryUnify);
+
+          default:
+            return false;
+        }
+
+      case RECORD_TYPE:
+        record1 = (RecordType) type1;
+        switch (type2.op()) {
+          case RECORD_TYPE:
+            record2 = (RecordType) type2;
+            return record1.argNameTypes.size() == record2.argNameTypes.size()
+                && record1
+                    .argNameTypes
+                    .keySet()
+                    .equals(record2.argNameTypes.keySet())
+                && allMatch(
+                    record1.argNameTypes.values(),
+                    record2.argNameTypes.values(),
+                    this::tryUnify);
 
           default:
             return false;
