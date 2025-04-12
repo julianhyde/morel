@@ -94,7 +94,10 @@ public class Inliner extends EnvShuttle {
         }
       }
       if (v != Unit.INSTANCE) {
-        switch (id.type.op()) {
+        // Trim "forall", so that "forall b. b list -> int" becomes
+        // "a list -> int" and is clearly a function type.
+        final Type type = typeSystem.unqualified(id.type);
+        switch (type.op()) {
           case ID:
             assert id.type instanceof PrimitiveType;
             return core.literal((PrimitiveType) id.type, v);
