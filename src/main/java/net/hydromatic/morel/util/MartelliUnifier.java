@@ -297,14 +297,13 @@ public class MartelliUnifier extends Unifier {
           }
         }
         if (changeCount > 0) {
-          System.out.println(constraint);
           switch (constraint.argResults.size()) {
             case 0:
               return failure("no valid overloads");
             case 1:
-              add(
-                  new TermTerm(
-                      constraint.result, constraint.argResults.right(0)));
+              Map.Entry<Term, Term> argResult = constraint.argResults.get(0);
+              add(new TermTerm(constraint.arg, argResult.getKey()));
+              add(new TermTerm(constraint.result, argResult.getValue()));
               break;
           }
         }

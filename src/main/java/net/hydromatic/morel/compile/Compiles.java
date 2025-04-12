@@ -324,36 +324,20 @@ public abstract class Compiles {
   }
 
   /**
-   * Richer than {@link #bindPattern(TypeSystem, List, Binding.Kind, Core.Pat)}
-   * because we have the expression.
+   * Richer than {@link #acceptBinding(TypeSystem, Core.Pat, List)} because we
+   * have the expression.
    */
   static void bindPattern(
       TypeSystem typeSystem, List<Binding> bindings, Core.ValDecl valDecl) {
     valDecl.forEachBinding(
-        (pat, exp, pos) -> {
+        (pat, exp, overloadPat, pos) -> {
           if (pat instanceof Core.IdPat) {
             bindings.add(
-                Binding.of(pat, exp)
-                    .withKind(
-                        valDecl.inst ? Binding.Kind.INST : Binding.Kind.VAL));
+                overloadPat == null
+                    ? Binding.of(pat, exp)
+                    : Binding.inst(pat, overloadPat, exp));
           }
         });
-  }
-
-  static void bindPattern(
-      TypeSystem typeSystem,
-      List<Binding> bindings,
-      Binding.Kind kind,
-      Core.Pat pat) {
-    pat.accept(binding(typeSystem, kind, bindings));
-  }
-
-  static void bindPattern(
-      TypeSystem typeSystem,
-      List<Binding> bindings,
-      Binding.Kind kind,
-      Core.NamedPat namedPat) {
-    bindings.add(Binding.of(namedPat).withKind(kind));
   }
 
   public static void bindDataType(
@@ -373,14 +357,21 @@ public abstract class Compiles {
    * Visits a pattern, adding bindings to a list.
    *
    * <p>If the pattern is an {@link net.hydromatic.morel.ast.Core.IdPat}, don't
-   * use this method: just bind directly.
+   * use this method: just {@link #acceptBinding(TypeSystem, Core.NamedPat,
+   * Binding.Kind, List) bind directly}.
    */
   public static void acceptBinding(
+      TypeSystem typeSystem, Core.Pat pat, List<Binding> bindings) {
+    pat.accept(binding(typeSystem, Binding.Kind.VAL, bindings));
+  }
+
+  public static void acceptBinding(
       TypeSystem typeSystem,
-      Core.Pat pat,
+      Core.NamedPat namedPat,
       Binding.Kind kind,
       List<Binding> bindings) {
-    pat.accept(binding(typeSystem, kind, bindings));
+    assert kind == Binding.Kind.VAL; // TODO
+    bindings.add(Binding.of(namedPat).withKind(kind));
   }
 
   /**
@@ -401,12 +392,12 @@ public abstract class Compiles {
 
     @Override
     protected void visit(Core.IdPat idPat) {
-      bindPattern(typeSystem, bindings, kind, idPat);
+      acceptBinding(typeSystem, idPat, kind, bindings);
     }
 
     @Override
     protected void visit(Core.AsPat asPat) {
-      bindPattern(typeSystem, bindings, kind, asPat);
+      acceptBinding(typeSystem, asPat, kind, bindings);
       super.visit(asPat);
     }
 

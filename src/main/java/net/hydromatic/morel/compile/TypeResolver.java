@@ -1861,7 +1861,7 @@ public class TypeResolver {
         // A variable is overloaded if any of its declarations are overloaded.
         // So, if this declaration matches name but is not overloaded, carry on
         // looking further up the stack.
-        if (e.definedName.equals(name) && e.kind == Kind.OVER) {
+        if (e.definedName.equals(name) && e.kind != Kind.VAL) {
           return true;
         }
         if (!(e.parent instanceof BindTypeEnv)) {
@@ -1926,6 +1926,9 @@ public class TypeResolver {
 
     @Override
     public void accept(String name, Kind kind, Type type) {
+      if (kind == Kind.INST2) {
+        kind = Kind.INST;
+      }
       if (kind == Kind.INST && !typeEnv.hasOverloaded(name)) {
         // If we're about to push a 'val inst', push an 'over' first.
         Type overload = typeSystem.lookup(BuiltIn.Datatype.OVERLOAD);
@@ -1981,7 +1984,7 @@ public class TypeResolver {
 
     public Ast.Exp exp() {
       if (node instanceof Ast.ValDecl) {
-        final Ast.ValDecl valDecl = (Ast.ValDecl) this.node;
+        final Ast.ValDecl valDecl = (Ast.ValDecl) node;
         if (valDecl.valBinds.size() == 1) {
           final Ast.ValBind valBind = valDecl.valBinds.get(0);
           return valBind.exp;

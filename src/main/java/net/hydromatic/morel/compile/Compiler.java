@@ -58,7 +58,6 @@ import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.Binding.Kind;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -494,32 +493,27 @@ public class Compiler {
         return toApplicable(cx, literal.unwrap(Object.class), argType, pos);
 
       case ID:
-        final List<Binding> bindings = new ArrayList<>();
-        cx.env.collect(((Core.Id) fn).idPat, bindings::add);
-        Binding binding;
-        switch (bindings.size()) {
-          case 0:
-            return null;
-          case 1:
+        Binding binding = cx.env.getOpt(((Core.Id) fn).idPat);
+        if (binding == null
+            || binding.value instanceof LinkCode
+            || binding.value == Unit.INSTANCE) {
+          return null;
+        }
+        if (binding.kind != Binding.Kind.VAL) {
+          final List<Binding> bindings = new ArrayList<>();
+          cx.env.collect(
+              ((Core.Id) fn).idPat,
+              instBinding -> {
+                if (instBinding.id.type.canCallArgOf(argType)) {
+                  bindings.add(instBinding);
+                }
+              });
+          if (bindings.size() == 1) {
             binding = bindings.get(0);
-            if (binding.value instanceof LinkCode
-                || binding.value == Unit.INSTANCE) {
-              return null;
-            }
-            break;
-          default:
-            final List<Binding> bindings2 = new ArrayList<>();
-            for (Binding instBinding : bindings) {
-              if (instBinding.id.type.canCallArgOf(argType)) {
-                bindings2.add(instBinding);
-              }
-            }
-            if (bindings2.size() == 1) {
-              binding = bindings2.get(0);
-            } else {
-              throw new AssertionError(
-                  argType + " matches functions with arguments " + bindings2);
-            }
+          } else {
+            throw new AssertionError(
+                argType + " matches functions with arguments " + bindings);
+          }
         }
         return toApplicable(cx, binding.value, argType, pos);
 
@@ -621,7 +615,7 @@ public class Compiler {
 
   private void compileOverDecl(
       Core.OverDecl overDecl, List<Binding> bindings, List<Action> actions) {
-    bindings.add(Binding.of(overDecl.pat).withKind(Kind.OVER));
+    bindings.add(Binding.over(overDecl.pat));
     if (actions != null) {
       actions.add(
           (outLines, outBindings, evalEnv) ->
@@ -715,7 +709,7 @@ public class Compiler {
   private void compileMatch(
       Context cx, Core.Match match, BiConsumer<Core.Pat, Code> consumer) {
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.bindPattern(typeSystem, bindings, Kind.VAL, match.pat);
+    Compiles.acceptBinding(typeSystem, match.pat, bindings);
     final Code code = compile(cx.bindAll(bindings), match.exp);
     consumer.accept(match.pat, code);
   }
@@ -733,7 +727,7 @@ public class Compiler {
     final Map<Core.NamedPat, LinkCode> linkCodes = new HashMap<>();
     if (valDecl.op == Op.REC_VAL_DECL) {
       valDecl.forEachBinding(
-          (pat, exp, pos) -> {
+          (pat, exp, overloadPat, pos) -> {
             final LinkCode linkCode = new LinkCode();
             linkCodes.put(pat, linkCode);
             bindings.add(Binding.of(pat, linkCode));
@@ -741,9 +735,9 @@ public class Compiler {
     }
 
     final Context cx1 = cx.bindAll(newBindings);
-    final Kind kind = valDecl.inst ? Kind.INST : Kind.VAL;
+    //    final Kind kind = valDecl.inst ? Kind.INST : Kind.VAL;
     valDecl.forEachBinding(
-        (pat, exp, pos) -> {
+        (pat, exp, overloadPat, pos) -> {
           // Using 'compileArg' rather than 'compile' encourages CalciteCompiler
           // to use a pure Calcite implementation if possible, and has no effect
           // in the basic Compiler.
@@ -770,10 +764,11 @@ public class Compiler {
                     if (!Closure.bindRecurse(
                         pat.withType(type),
                         o,
-                        (pat2, o2) -> {
-                          Binding binding = Binding.of(pat2, o2).withKind(kind);
-                          outBindings0.add(binding);
-                        })) {
+                        (pat2, o2) ->
+                            outBindings0.add(
+                                overloadPat == null
+                                    ? Binding.of(pat2, o2)
+                                    : Binding.inst(pat2, overloadPat, o2)))) {
                       throw new Codes.MorelRuntimeException(
                           Codes.BuiltInExn.BIND, pos);
                     }
@@ -794,20 +789,22 @@ public class Compiler {
                                 printDepth,
                                 stringDepth);
                         final Pretty.TypedVal typedVal;
+                        final Core.NamedPat id =
+                            binding.overloadId != null
+                                ? binding.overloadId
+                                : binding.id;
                         if (binding.value instanceof TypedValue) {
                           TypedValue typedValue = (TypedValue) binding.value;
                           typedVal =
                               new Pretty.TypedVal(
-                                  binding.id.name,
+                                  id.name,
                                   typedValue.valueAs(Object.class),
                                   Keys.toProgressive(binding.id.type().key())
                                       .toType(typeSystem));
                         } else {
                           typedVal =
                               new Pretty.TypedVal(
-                                  binding.id.name,
-                                  binding.value,
-                                  binding.id.type);
+                                  id.name, binding.value, binding.id.type);
                         }
                         pretty.pretty(buf, binding.id.type, typedVal);
                         final String line = str(buf);
