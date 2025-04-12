@@ -227,7 +227,6 @@ public abstract class Environments {
             // instances to see.
             return;
           case INST:
-          case INST2:
             // Send this instance to the consumer, but carry on looking for
             // more.
             consumer.accept(binding);
@@ -397,7 +396,6 @@ public abstract class Environments {
             // instances to see.
             return;
           case INST:
-          case INST2:
             // Send this instance to the consumer, but carry on looking for
             // more.
             consumer.accept(instBinding);
