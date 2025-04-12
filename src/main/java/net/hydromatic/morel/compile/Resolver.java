@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.lang.String.format;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.last;
@@ -29,12 +30,10 @@ import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.intersects;
 
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
@@ -88,7 +87,8 @@ public class Resolver {
   private final NameGenerator nameGenerator;
   private final Environment env;
   private final @Nullable Session session;
-  private final Multimap<String, Core.IdPat> resolvedOverloads;
+  private final Map<String, Pair<Core.IdPat, List<Core.IdPat>>>
+      resolvedOverloads;
 
   /**
    * Contains variable declarations whose type at the point they are used is
@@ -108,7 +108,7 @@ public class Resolver {
       TypeMap typeMap,
       NameGenerator nameGenerator,
       Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
-      Multimap<String, Core.IdPat> resolvedOverloads,
+      Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads,
       Environment env,
       @Nullable Session session) {
     this.typeMap = typeMap;
@@ -125,12 +125,7 @@ public class Resolver {
     NameGenerator nameGenerator =
         session == null ? new NameGenerator() : session.nameGenerator;
     return new Resolver(
-        typeMap,
-        nameGenerator,
-        new HashMap<>(),
-        HashMultimap.create(),
-        env,
-        session);
+        typeMap, nameGenerator, new HashMap<>(), new HashMap<>(), env, session);
   }
 
   /** Binds a Resolver to a new environment. */
@@ -171,10 +166,7 @@ public class Resolver {
     }
   }
 
-  /**
-   * Converts an {@link net.hydromatic.morel.ast.Ast.OverDecl} to a Core {@link
-   * net.hydromatic.morel.ast.Core.OverDecl}.
-   */
+  /** Converts an {@link Ast.OverDecl} to a Core {@link Core.OverDecl}. */
   public Core.Decl toCore(TypeSystem typeSystem, Ast.OverDecl overDecl) {
     Type overloadType = typeSystem.lookup(BuiltIn.Datatype.OVERLOAD);
     Core.IdPat idPat = core.idPat(overloadType, overDecl.pat.name, 0);
@@ -182,8 +174,8 @@ public class Resolver {
   }
 
   /**
-   * Converts a simple {@link net.hydromatic.morel.ast.Ast.ValDecl}, of the form
-   * {@code val v = e}, to a Core {@link net.hydromatic.morel.ast.Core.ValDecl}.
+   * Converts a simple {@link Ast.ValDecl}, of the form {@code val v = e}, to a
+   * Core {@link Core.ValDecl}.
    *
    * <p>Declarations such as {@code val (x, y) = (1, 2)} and {@code val emp ::
    * rest = emps} are considered complex, and are not handled by this method.
@@ -193,15 +185,26 @@ public class Resolver {
   public Core.ValDecl toCore(Ast.ValDecl valDecl) {
     final List<Binding> bindings = new ArrayList<>(); // discard
     final ResolvedValDecl resolvedValDecl = resolveValDecl(valDecl, bindings);
-    Core.NonRecValDecl nonRecValDecl =
+    final Core.NonRecValDecl nonRecValDecl =
         core.nonRecValDecl(
             resolvedValDecl.patExps.get(0).pos,
             resolvedValDecl.pat,
-            valDecl.inst,
+            valDecl.inst && resolvedValDecl.pat instanceof Core.IdPat
+                ? getOverload((Core.IdPat) resolvedValDecl.pat)
+                : null,
             resolvedValDecl.exp);
     return resolvedValDecl.rec
         ? core.recValDecl(ImmutableList.of(nonRecValDecl))
         : nonRecValDecl;
+  }
+
+  private Core.@Nullable IdPat getOverload(Core.IdPat pat) {
+    for (Pair<Core.IdPat, List<Core.IdPat>> pair : resolvedOverloads.values()) {
+      if (pair.right.contains(pat)) {
+        return pair.left;
+      }
+    }
+    throw new AssertionError("not found: " + pat);
   }
 
   public Core.DatatypeDecl toCore(Ast.DatatypeDecl datatypeDecl) {
@@ -258,13 +261,12 @@ public class Resolver {
         valBind -> flatten(matches, composite, valBind.pat, valBind.exp));
 
     final List<PatExp> patExps = new ArrayList<>();
-    final Binding.Kind kind =
-        valDecl.inst ? Binding.Kind.INST : Binding.Kind.VAL;
+    final boolean inst = valDecl.inst;
     if (valDecl.rec) {
       final List<Core.Pat> pats = new ArrayList<>();
-      matches.forEach((pat, exp) -> pats.add(toCore(pat, kind)));
+      matches.forEach((pat, exp) -> pats.add(toCore(pat, inst)));
       pats.forEach(
-          p -> Compiles.acceptBinding(typeMap.typeSystem, p, kind, bindings));
+          p -> Compiles.acceptBinding(typeMap.typeSystem, p, bindings));
       final Resolver r = withEnv(bindings);
       final Iterator<Core.Pat> patIter = pats.iterator();
       matches.forEach(
@@ -277,11 +279,9 @@ public class Resolver {
           (pat, exp) ->
               patExps.add(
                   new PatExp(
-                      toCore(pat, kind), toCore(exp), pat.pos.plus(exp.pos))));
+                      toCore(pat, inst), toCore(exp), pat.pos.plus(exp.pos))));
       patExps.forEach(
-          x ->
-              Compiles.acceptBinding(
-                  typeMap.typeSystem, x.pat, kind, bindings));
+          x -> Compiles.acceptBinding(typeMap.typeSystem, x.pat, bindings));
     }
 
     // Convert recursive to non-recursive if the bound variable is not
@@ -505,6 +505,9 @@ public class Resolver {
     Core.Exp coreArg = toCore(apply.arg);
     Type type = typeMap.getType(apply);
     Core.Exp coreFn;
+    @Nullable
+    Binding top =
+        apply.fn.op == Op.ID ? env.getTop(((Ast.Id) apply.fn).name) : null;
     if (apply.fn.op == Op.RECORD_SELECTOR) {
       final Ast.RecordSelector recordSelector = (Ast.RecordSelector) apply.fn;
       RecordLikeType recordType = (RecordLikeType) coreArg.type;
@@ -529,12 +532,13 @@ public class Resolver {
         // available now may be more precise than the deduced type.
         type = ((FnType) coreFn.type).resultType;
       }
-    } else if (apply.fn.op == Op.ID
+    } else if (apply.fn.op == Op.ID // TODO: change to 'top != null'
         && resolvedOverloads.containsKey(((Ast.Id) apply.fn).name)) {
       final Type argType = typeMap.getType(apply.arg);
-      System.out.println(argType);
       final List<Core.IdPat> matchingBindings = new ArrayList<>();
-      for (Core.IdPat idPat : resolvedOverloads.get(((Ast.Id) apply.fn).name)) {
+      Pair<Core.IdPat, List<Core.IdPat>> pair =
+          resolvedOverloads.get(((Ast.Id) apply.fn).name);
+      for (Core.IdPat idPat : pair.right) {
         if (idPat.type.canCallArgOf(argType)) {
           matchingBindings.add(idPat);
         }
@@ -543,6 +547,36 @@ public class Resolver {
         throw new AssertionError(matchingBindings);
       }
       coreFn = core.id(matchingBindings.get(0));
+    } else if (top != null && top.isInst()) {
+      final Type argType = typeMap.getType(apply.arg);
+      final List<Core.IdPat> matchingBindings = new ArrayList<>();
+      for (Core.IdPat idPat : env.getOverloads(top.overloadId)) {
+        if (idPat.type.canCallArgOf(argType)) {
+          matchingBindings.add(idPat);
+        }
+      }
+      if (matchingBindings.size() != 1) {
+        throw new AssertionError(
+            "zero or more than one matching bindings: " + matchingBindings);
+      }
+      coreFn = core.id(matchingBindings.get(0));
+
+      final FnType fnType;
+      for (Type t = coreFn.type; ; t = ((ForallType) t).type) {
+        if (!(t instanceof ForallType)) {
+          fnType = (FnType) t;
+          break;
+        }
+      }
+      @Nullable
+      Map<Integer, Type> sub = fnType.paramType.unifyWith(coreArg.type);
+      if (sub == null) {
+        throw new AssertionError(
+            format("cannot unify %s with %s", fnType, coreArg.type));
+      }
+      type =
+          fnType.resultType.substitute(
+              typeMap.typeSystem, ImmutableList.copyOf(sub.values()));
     } else {
       coreFn = toCore(apply.fn);
     }
@@ -664,22 +698,38 @@ public class Resolver {
   }
 
   private Core.Pat toCore(Ast.Pat pat) {
-    return toCore(pat, Binding.Kind.VAL);
+    return toCore(pat, false);
   }
 
   /**
    * Converts a pattern to Core, reusing an existing {@link Core.IdPat} if
-   * {@code kind} is {@link net.hydromatic.morel.type.Binding.Kind#INST}.
+   * {@code inst}.
    */
-  private Core.Pat toCore(Ast.Pat pat, Binding.Kind kind) {
+  private Core.Pat toCore(Ast.Pat pat, boolean inst) {
     final Type type = typeMap.getType(pat);
-    if (kind == Binding.Kind.INST && pat.op == Op.ID_PAT) {
+    if (inst && pat.op == Op.ID_PAT) {
       Ast.IdPat idPat = (Ast.IdPat) pat;
       // This identifier is overloaded. Generate a new name for every
       // occurrence.
+      Pair<Core.IdPat, List<Core.IdPat>> pair =
+          resolvedOverloads.computeIfAbsent(
+              idPat.name,
+              name -> {
+                final Binding top = env.getTop(idPat.name);
+                final List<Core.IdPat> coreIds = new ArrayList<>();
+                Core.IdPat coreOverloadId;
+                if (top != null) {
+                  coreOverloadId = top.overloadId;
+                  env.collect(
+                      top.overloadId, b -> coreIds.add((Core.IdPat) b.id));
+                } else {
+                  coreOverloadId = core.idPat(type, name, nameGenerator::inc);
+                }
+                return Pair.of(coreOverloadId, coreIds);
+              });
       Core.IdPat corePat =
           core.idPat(type, () -> nameGenerator.getPrefixed(idPat.name));
-      resolvedOverloads.put(idPat.name, corePat);
+      pair.right.add(corePat);
       return corePat;
     }
     return toCore(pat, type, type);
@@ -778,7 +828,7 @@ public class Resolver {
   private Core.Match toCore(Ast.Match match) {
     final Core.Pat pat = toCore(match.pat);
     final List<Binding> bindings = new ArrayList<>();
-    Compiles.acceptBinding(typeMap.typeSystem, pat, Binding.Kind.VAL, bindings);
+    Compiles.acceptBinding(typeMap.typeSystem, pat, bindings);
     final Core.Exp exp = withEnv(bindings).toCore(match.exp);
     return core.match(match.pos, pat, exp);
   }
@@ -905,8 +955,8 @@ public class Resolver {
   /**
    * Resolved declaration. It can be converted to an expression given a result
    * expression; depending on sub-type, that expression will either be a {@code
-   * let} (for a {@link net.hydromatic.morel.ast.Ast.ValDecl} or a {@code local}
-   * (for a {@link net.hydromatic.morel.ast.Ast.DatatypeDecl}.
+   * let} (for a {@link Ast.ValDecl} or a {@code local} (for a {@link
+   * Ast.DatatypeDecl}.
    */
   public abstract static class ResolvedDecl {
     /** Converts the declaration to a {@code let} or a {@code local}. */
@@ -941,13 +991,13 @@ public class Resolver {
             x ->
                 valDecls.add(
                     core.nonRecValDecl(
-                        x.pos, (Core.IdPat) x.pat, false, x.exp)));
+                        x.pos, (Core.IdPat) x.pat, null, x.exp)));
         return core.let(core.recValDecl(valDecls), resultExp);
       }
       if (!composite && patExps.get(0).pat instanceof Core.IdPat) {
         final PatExp x = patExps.get(0);
         Core.NonRecValDecl valDecl =
-            core.nonRecValDecl(x.pos, (Core.IdPat) x.pat, false, x.exp);
+            core.nonRecValDecl(x.pos, (Core.IdPat) x.pat, null, x.exp);
         return core.let(valDecl, resultExp);
       } else {
         // This is a complex pattern. Allocate an intermediate variable.
@@ -956,7 +1006,7 @@ public class Resolver {
         final Core.Id id = core.id(idPat);
         final Pos pos = patExps.get(0).pos;
         return core.let(
-            core.nonRecValDecl(pos, idPat, false, exp),
+            core.nonRecValDecl(pos, idPat, null, exp),
             core.caseOf(
                 pos,
                 resultExp.type,
@@ -1091,8 +1141,7 @@ public class Resolver {
         corePat = r.toCore(scan.pat, listType.elementType);
       }
       final List<Binding> bindings2 = new ArrayList<>(fromBuilder.bindings());
-      Compiles.acceptBinding(
-          typeMap.typeSystem, corePat, Binding.Kind.VAL, bindings2);
+      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
       Core.Exp coreCondition =
           scan.condition == null
               ? core.boolLiteral(true)

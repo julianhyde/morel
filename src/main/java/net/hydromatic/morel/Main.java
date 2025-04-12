@@ -407,12 +407,21 @@ public class Main {
         // previous bindings; ordinary bindings (VAL) replace previous bindings
         // of the same name.
         for (Binding binding : bindings) {
-          if (binding.kind != Binding.Kind.INST
-              && bindingMap.containsKey(binding.id.name)) {
-            bindingMap.replaceValues(
-                binding.id.name, ImmutableList.of(binding));
+          if (binding.overloadId == null) {
+            // This is not an instance of an overload, so if there was a
+            // previous value we must overwrite it, not append to it.
+            if (bindingMap.containsKey(binding.id.name)) {
+              bindingMap.replaceValues(
+                  binding.id.name, ImmutableList.of(binding));
+            } else {
+              bindingMap.put(binding.id.name, binding);
+            }
           } else {
-            bindingMap.put(binding.id.name, binding);
+            // This binding is an instance of an overloaded function. Use the
+            // overload name that the user typed (e.g. "foo") rather than the
+            // instance name (e.g. "foo$2").
+            Binding binding2 = binding.unload();
+            bindingMap.put(binding2.id.name, binding2);
           }
         }
       } catch (Codes.MorelRuntimeException e) {

@@ -376,7 +376,10 @@ public class Shuttle {
   }
 
   protected Core.NonRecValDecl visit(Core.NonRecValDecl valDecl) {
-    return valDecl.copy(valDecl.pat.accept(this), valDecl.exp.accept(this));
+    return valDecl.copy(
+        valDecl.pat.accept(this),
+        valDecl.exp.accept(this),
+        valDecl.overloadPat == null ? null : valDecl.overloadPat.accept(this));
   }
 
   protected Core.RecValDecl visit(Core.RecValDecl valDecl) {
