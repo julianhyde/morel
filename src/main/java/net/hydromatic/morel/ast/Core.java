@@ -948,11 +948,8 @@ public class Core {
 
   /** Abstract (recursive or non-recursive) value declaration. */
   public abstract static class ValDecl extends Decl {
-    public final boolean inst;
-
-    ValDecl(Pos pos, Op op, boolean inst) {
+    ValDecl(Pos pos, Op op) {
       super(pos, op);
-      this.inst = inst;
     }
 
     @Override
@@ -964,7 +961,7 @@ public class Core {
   /** Consumer of bindings. */
   @FunctionalInterface
   public interface BindingConsumer {
-    void accept(NamedPat namedPat, Exp exp, Pos pos);
+    void accept(NamedPat pat, Exp exp, @Nullable IdPat overloadPat, Pos pos);
   }
 
   /**
@@ -975,11 +972,14 @@ public class Core {
   public static class NonRecValDecl extends ValDecl {
     public final NamedPat pat;
     public final Exp exp;
+    /** If an 'inst', the overloaded name, otherwise null. */
+    public final Core.@Nullable IdPat overloadPat;
 
-    NonRecValDecl(NamedPat pat, Exp exp, boolean inst, Pos pos) {
-      super(pos, Op.VAL_DECL, inst);
+    NonRecValDecl(NamedPat pat, Exp exp, @Nullable IdPat overloadPat, Pos pos) {
+      super(pos, Op.VAL_DECL);
       this.pat = pat;
       this.exp = exp;
+      this.overloadPat = overloadPat;
     }
 
     @Override
@@ -1013,15 +1013,18 @@ public class Core {
       visitor.visit(this);
     }
 
-    public NonRecValDecl copy(NamedPat pat, Exp exp) {
-      return pat == this.pat && exp == this.exp
+    public NonRecValDecl copy(
+        NamedPat pat, Exp exp, @Nullable IdPat overloadPat) {
+      return pat == this.pat
+              && exp == this.exp
+              && overloadPat == this.overloadPat
           ? this
-          : core.nonRecValDecl(pos, pat, inst, exp);
+          : core.nonRecValDecl(pos, pat, overloadPat, exp);
     }
 
     @Override
     public void forEachBinding(BindingConsumer consumer) {
-      consumer.accept(pat, exp, pos);
+      consumer.accept(pat, exp, overloadPat, pos);
     }
   }
 
@@ -1030,7 +1033,7 @@ public class Core {
     public final ImmutableList<NonRecValDecl> list;
 
     RecValDecl(ImmutableList<NonRecValDecl> list) {
-      super(Pos.ZERO, Op.REC_VAL_DECL, false);
+      super(Pos.ZERO, Op.REC_VAL_DECL);
       this.list = requireNonNull(list);
     }
 
