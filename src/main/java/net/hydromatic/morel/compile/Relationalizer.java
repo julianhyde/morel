@@ -114,7 +114,7 @@ public class Relationalizer extends EnvShuttle {
       final Core.IdPat id =
           core.idPat(listType.elementType, name, typeSystem.nameGenerator::inc);
       final List<Binding> bindings = new ArrayList<>();
-      Compiles.acceptBinding(typeSystem, id, Binding.Kind.VAL, bindings);
+      Compiles.acceptBinding(id, bindings);
       final Core.Scan scan =
           core.scan(bindings, id, exp, core.boolLiteral(true));
       return core.from(typeSystem, ImmutableList.of(scan));
