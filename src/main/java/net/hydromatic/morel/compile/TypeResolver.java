@@ -1978,9 +1978,6 @@ public class TypeResolver {
 
     @Override
     public void accept(String name, Kind kind, Type type) {
-      if (kind == Kind.INST2) {
-        kind = Kind.INST;
-      }
       if (kind == Kind.INST && !typeEnv.hasOverloaded(name)) {
         // If we're about to push a 'val inst', push an 'over' first.
         Type overload = typeSystem.lookup(BuiltIn.Datatype.OVERLOAD);

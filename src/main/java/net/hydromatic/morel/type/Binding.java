@@ -123,7 +123,7 @@ public class Binding {
 
   /** Returns whether this binding is an instance of an overloaded name. */
   public boolean isInst() {
-    return kind == Kind.INST || kind == Kind.INST2;
+    return kind == Kind.INST;
   }
 
   @Override
@@ -137,15 +137,6 @@ public class Binding {
     }
   }
 
-  public Binding unload() {
-    checkArgument(kind == Kind.INST);
-    checkArgument(overloadId != null);
-    if (true) {
-      return this; // TODO
-    }
-    return new Binding(overloadId, null, exp, value, parameter, Kind.INST2);
-  }
-
   /** What kind of binding? */
   public enum Kind {
     /** Regular, non-overloaded binding ({@code val}). */
@@ -154,8 +145,6 @@ public class Binding {
     OVER,
     /** Instance of an overloaded name ({@code val inst}). */
     INST,
-    /** As INST, but has no overload name. */
-    INST2,
   }
 }
 
