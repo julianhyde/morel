@@ -105,6 +105,10 @@ public class MartelliUnifier extends Unifier {
           return failure("cycle: variable " + variable + " in " + term);
         }
         tracer.onVariable(variable, term);
+        if (term instanceof Variable && result.containsKey(term)) {
+          System.out.println(
+              "ignoring " + term + " (already equivalent to " + variable + ")");
+        }
         result.put(variable, term);
         if (!termActions.isEmpty()) {
           act(variable, term, work, new Substitution(result), termActions, 0);
