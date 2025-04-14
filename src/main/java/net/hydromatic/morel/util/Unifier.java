@@ -37,7 +37,6 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -121,17 +120,14 @@ public abstract class Unifier {
       Unifier.Variable arg,
       Unifier.Variable result,
       PairList<Unifier.Term, Unifier.Term> argResults) {
-    PairList<Term, Constraint.Action> termActions =
-        PairList.of();
+    PairList<Term, Constraint.Action> termActions = PairList.of();
     argResults.forEach(
         (arg0, result0) ->
             termActions.add(
                 arg0,
                 (actualArg, term, consumer) -> {
                   consumer.accept(actualArg, term);
-                  System.out.print(", ");
                   consumer.accept(result, result0);
-                  System.out.print(" ");
                 }));
     return constraint(arg, termActions);
   }
@@ -145,15 +141,12 @@ public abstract class Unifier {
    * consumer that accepts a pair of {@link Term} arguments.
    *
    * <pre>{@code
-   * Consumer<BiConsumer<Term, Term>> action1;
-   * Consumer<BiConsumer<Term, Term>> action2;
    * Constraint constraint =
    *   unifier.constraint(a, PairList.of(term1, action1, term2, action2));
    * }</pre>
    */
-  private static Constraint constraint(
-      Variable arg,
-      PairList<Term, Constraint.Action> termActions) {
+  public Constraint constraint(
+      Variable arg, PairList<Term, Constraint.Action> termActions) {
     return new Constraint(arg, termActions);
   }
 
@@ -662,9 +655,7 @@ public abstract class Unifier {
     public final PairList<Term, Action> termActions;
 
     /** Creates a Constraint. */
-    Constraint(
-        Variable arg,
-        PairList<Term, Action> termActions) {
+    Constraint(Variable arg, PairList<Term, Action> termActions) {
       this.arg = requireNonNull(arg);
       this.termActions = termActions.immutable();
       checkArgument(!termActions.isEmpty());
