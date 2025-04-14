@@ -37,6 +37,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -101,12 +102,59 @@ public abstract class Unifier {
     return atomMap.computeIfAbsent(name, Sequence::new);
   }
 
-  /** Creates a constraint. */
+  /**
+   * Creates a constraint arising from a call to an overloaded function.
+   *
+   * <p>Consider a call to an overloaded function with two overloads {@code c ->
+   * d} and {@code e -> f}. If the argument ({@code a}) unifies to {@code c}
+   * then the result ({@code b}) is {@code d}; if the argument unifies to {@code
+   * e} then the result is {@code f}.
+   *
+   * <p>This is created with the following call:
+   *
+   * <pre>{@code
+   * Constraint constraint =
+   *   unifier.constraint(a, b, PairList.of(c, d, e, f));
+   * }</pre>
+   */
   public Constraint constraint(
       Unifier.Variable arg,
       Unifier.Variable result,
       PairList<Unifier.Term, Unifier.Term> argResults) {
-    return new Constraint(arg, result, argResults);
+    PairList<Term, Constraint.Action> termActions =
+        PairList.of();
+    argResults.forEach(
+        (arg0, result0) ->
+            termActions.add(
+                arg0,
+                (actualArg, term, consumer) -> {
+                  consumer.accept(actualArg, term);
+                  System.out.print(", ");
+                  consumer.accept(result, result0);
+                  System.out.print(" ");
+                }));
+    return constraint(arg, termActions);
+  }
+
+  /**
+   * Creates a Constraint.
+   *
+   * <p>The following code creates a constraint where {@code a} is allowed to be
+   * either {@code term1} or {@code term2}. When the unifier has narrowed down
+   * the options to just {@code term2}, it will call {@code action2} with a
+   * consumer that accepts a pair of {@link Term} arguments.
+   *
+   * <pre>{@code
+   * Consumer<BiConsumer<Term, Term>> action1;
+   * Consumer<BiConsumer<Term, Term>> action2;
+   * Constraint constraint =
+   *   unifier.constraint(a, PairList.of(term1, action1, term2, action2));
+   * }</pre>
+   */
+  private static Constraint constraint(
+      Variable arg,
+      PairList<Term, Constraint.Action> termActions) {
+    return new Constraint(arg, termActions);
   }
 
   /** Creates an atom with a unique name. */
@@ -611,20 +659,25 @@ public abstract class Unifier {
    */
   public static final class Constraint {
     public final Variable arg;
-    public final Variable result;
-    public final PairList<Term, Term> argResults;
+    public final PairList<Term, Action> termActions;
 
     /** Creates a Constraint. */
-    Constraint(Variable arg, Variable result, PairList<Term, Term> argResults) {
+    Constraint(
+        Variable arg,
+        PairList<Term, Action> termActions) {
       this.arg = requireNonNull(arg);
-      this.result = requireNonNull(result);
-      this.argResults = argResults.immutable();
-      checkArgument(!argResults.isEmpty());
+      this.termActions = termActions.immutable();
+      checkArgument(!termActions.isEmpty());
     }
 
     @Override
     public String toString() {
-      return format("{constraint %s %s %s}", arg, result, argResults);
+      return format("{constraint %s %s}", arg, termActions.leftList());
+    }
+
+    /** Called when a constraint is narrowed down to one possibility. */
+    public interface Action {
+      void accept(Term actualArg, Term term, BiConsumer<Term, Term> consumer);
     }
   }
 

@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -287,13 +288,13 @@ public class MartelliUnifier extends Unifier {
           ++changeCount;
           constraint.arg = arg2;
           constraint
-              .argResults
+              .termActions
               .leftList()
               .removeIf(arg1 -> !arg2.couldUnifyWith(arg1));
         }
         for (ListIterator<Term> iterator =
-                constraint.argResults.leftList().listIterator();
-            iterator.hasNext(); ) {
+             constraint.termActions.leftList().listIterator();
+             iterator.hasNext(); ) {
           final Term subArg = iterator.next();
           final Term subArg2 = subArg.apply1(variable, term);
           if (subArg != subArg2) {
@@ -305,15 +306,14 @@ public class MartelliUnifier extends Unifier {
           }
         }
         if (changeCount > 0) {
-          switch (constraint.argResults.size()) {
+          switch (constraint.termActions.size()) {
             case 0:
               return failure("no valid overloads");
             case 1:
-              Map.Entry<Term, Term> argResult = constraint.argResults.get(0);
-              addPair(constraint.arg, argResult.getKey());
-              System.out.print(", ");
-              addPair(constraint.result, argResult.getValue());
-              System.out.println();
+              Term term1 = constraint.termActions.left(0);
+              Constraint.Action consumer =
+                  constraint.termActions.right(0);
+              consumer.accept(constraint.arg, term1, this::addPair);
               System.out.println(constraint);
               break;
           }
@@ -352,28 +352,25 @@ public class MartelliUnifier extends Unifier {
     final Variable v;
     Term arg;
     Variable result;
-    final PairList<Term, Term> argResults;
+    final PairList<Term, Constraint.Action> termActions;
 
     /** Creates a MutableConstraint. */
     MutableConstraint(
-        Variable arg, Variable result, PairList<Term, Term> argResults) {
+        Variable arg,
+        PairList<Term, Constraint.Action> termActions) {
       this.v = requireNonNull(arg);
       this.arg = requireNonNull(arg);
-      this.result = requireNonNull(result);
-      this.argResults = argResults;
-      checkArgument(!argResults.isEmpty());
+      this.termActions = termActions;
+      checkArgument(!termActions.isEmpty());
     }
 
     MutableConstraint(Constraint constraint) {
-      this(
-          constraint.arg,
-          constraint.result,
-          PairList.copyOf(constraint.argResults));
+      this(constraint.arg, PairList.copyOf(constraint.termActions));
     }
 
     @Override
     public String toString() {
-      return format("{constraint %s = %s %s %s}", v, arg, result, argResults);
+      return format("{constraint %s = %s %s %s}", v, arg, result, termActions);
     }
   }
 }
