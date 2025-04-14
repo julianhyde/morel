@@ -208,6 +208,11 @@ public class MartelliUnifier extends Unifier {
           + constraintQueue;
     }
 
+    void addPair(Term term0, Term term1) {
+      System.out.print("addPair(" + term0 + ", " + term1 + ")");
+      add(new TermTerm(term0, term1));
+    }
+
     void add(TermTerm pair) {
       switch (Kind.of(pair)) {
         case DELETE:
@@ -302,8 +307,11 @@ public class MartelliUnifier extends Unifier {
               return failure("no valid overloads");
             case 1:
               Map.Entry<Term, Term> argResult = constraint.argResults.get(0);
-              add(new TermTerm(constraint.arg, argResult.getKey()));
-              add(new TermTerm(constraint.result, argResult.getValue()));
+              addPair(constraint.arg, argResult.getKey());
+              System.out.print(", ");
+              addPair(constraint.result, argResult.getValue());
+              System.out.println();
+              System.out.println(constraint);
               break;
           }
         }
