@@ -141,13 +141,11 @@ public abstract class Unifier {
    * consumer that accepts a pair of {@link Term} arguments.
    *
    * <pre>{@code
-   * Consumer<BiConsumer<Term, Term>> action1;
-   * Consumer<BiConsumer<Term, Term>> action2;
    * Constraint constraint =
    *   unifier.constraint(a, PairList.of(term1, action1, term2, action2));
    * }</pre>
    */
-  private static Constraint constraint(
+  public Constraint constraint(
       Variable arg, PairList<Term, Constraint.Action> termActions) {
     return new Constraint(arg, termActions);
   }
