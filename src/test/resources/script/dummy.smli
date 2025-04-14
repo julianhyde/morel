@@ -114,7 +114,10 @@ from (i, j) in [(14, 3), (~14, 3), (14, ~3), (~14, ~3)]
  where (i div j) <> Int.`div` (i, j)
  orelse (i mod j) <> Int.`mod` (i, j);
 > val it = [] : {i:int, j:int} list
-(*)
+
+bag [1,2];
+> val it = [1,2] : int bag
+from i in bag [1,2];
 
 (* TODO
 List.length Bag.nil;

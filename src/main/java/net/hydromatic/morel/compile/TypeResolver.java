@@ -171,21 +171,8 @@ public class TypeResolver {
       final List<Unifier.TermTerm> termPairs = new ArrayList<>();
       terms.forEach(
           tv -> termPairs.add(new Unifier.TermTerm(tv.term, tv.variable)));
-      final Tracers.ConfigurableTracer tracer2;
-      if (!collectionMap.isEmpty()) {
-        tracer2 =
-            tracer.withConflictHandler(
-                (left, right) -> {
-                  tracer.onConflict(left, right);
-                  final String leftOp = collectionMap.get(left.operator);
-                  final String rightOp = collectionMap.get(right.operator);
-                  assert false;
-                });
-      } else {
-        tracer2 = tracer;
-      }
       final Unifier.Result result =
-          unifier.unify(termPairs, actionMap, constraints, tracer2);
+          unifier.unify(termPairs, actionMap, constraints, tracer);
       if (result instanceof Unifier.Retry) {
         final Unifier.Retry retry = (Unifier.Retry) result;
         retry.amend();
@@ -322,6 +309,57 @@ public class TypeResolver {
     equiv(term, variable);
     map.put(node, term);
     return node;
+  }
+
+  /**
+   * Registers a collection that may be ordered or unordered.
+   *
+   * @param node AST node
+   * @param variable Variable for the collection type (and node's type)
+   * @param variable2 Variable for the element type
+   */
+  private <E extends AstNode> E regCollection(
+      E node, Unifier.Variable variable, Unifier.Variable variable2) {
+    PairList<Unifier.Term, Unifier.Constraint.Action> termActions = PairList.of();
+    extracted(variable, variable2, termActions, LIST_TY_CON);
+    extracted(variable, variable2, termActions, BAG_TY_CON);
+    constraints.add(unifier.constraint(variable, termActions));
+    return reg(node, variable);
+  }
+
+  private void extracted(Unifier.Variable variable, Unifier.Variable variable2,
+      PairList<Unifier.Term, Unifier.Constraint.Action> termActions, String listTyCon) {
+    Unifier.Sequence collectionType = unifier.apply(listTyCon, variable2);
+    termActions.add(
+        collectionType,
+        (actualArg, term, consumer) ->
+        consumer.accept(variable, collectionType));
+  }
+
+  /**
+   * Registers a collection that must be ordered ({@code list}).
+   *
+   * @param node AST node
+   * @param variable Variable for the collection type (and node's type)
+   * @param variable2 Variable for the element type
+   */
+  private <E extends AstNode> E regList(
+      E node, Unifier.Variable variable, Unifier.Variable variable2) {
+    Unifier.Sequence term = unifier.apply(LIST_TY_CON, variable2);
+    return reg(node, variable, term);
+  }
+
+  /**
+   * Registers a collection that must be unordered ({@code bag}).
+   *
+   * @param node AST node
+   * @param variable Variable for the collection type (and node's type)
+   * @param variable2 Variable for the element type
+   */
+  private <E extends AstNode> E regBag(
+      E node, Unifier.Variable variable, Unifier.Variable variable2) {
+    Unifier.Sequence term = unifier.apply(BAG_TY_CON, variable2);
+    return reg(node, variable, term);
   }
 
   /**
@@ -572,7 +610,9 @@ public class TypeResolver {
         final PairList<Ast.IdPat, Unifier.Term> termMap1 = PairList.of();
         if (scan.exp == null) {
           scanExp3 = null;
-          ordered = true;
+          // If we're iterating over 'all values' of the type, we'd better not
+          // commit to doing it in order.
+          ordered = false;
         } else if (scan.exp.op == Op.FROM_EQ) {
           final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
           final Unifier.Variable v15 = unifier.variable();
@@ -584,11 +624,9 @@ public class TypeResolver {
           final Ast.Exp scanExp = scan.exp;
           final Unifier.Variable v15 = unifier.variable();
           scanExp3 = deduceType(triple.env, scanExp, v15);
-          // Assume bag (not ordered). If exp turns out to be a list, we will
-          // change our minds later.
-          ordered = false;
-          String name = defineOp(BAG_TY_CON);
-          reg(scanExp, v15, unifier.apply(name, v16));
+          // Source may be ordered (list) or unordered (bag).
+          ordered = true; // TODO remove
+          regCollection(scanExp, v15, v16);
         }
         final Ast.Pat pat2 =
             deducePatType(triple.env, scan.pat, termMap1, null, v16);
