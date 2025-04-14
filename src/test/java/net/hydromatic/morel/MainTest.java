@@ -1898,6 +1898,24 @@ public class MainTest {
   }
 
   @Test
+  void testFromIntegers() {
+    //    ml("from i in [1]")
+    //        .assertType("int list")
+    //        .assertEvalIter(equalsOrdered(1))
+    //    ;
+    ml("from i in [1] where i > 0")
+        .assertType("int list")
+        .assertEvalIter(equalsOrdered(1));
+    ml("from i in [1] yield i")
+        .assertType("int list")
+        .assertEvalIter(equalsOrdered(1));
+    //    ml("from i in bag [1]").assertType("int
+    // list").assertEvalIter(equalsOrdered(1));
+    //    ml("from i in bag [1] where i > 0").assertType("int
+    // list").assertEvalIter(equalsOrdered(1));
+  }
+
+  @Test
   void testParseFrom() {
     ml("from").assertParseSame();
     ml("from e in emps").assertParseSame();

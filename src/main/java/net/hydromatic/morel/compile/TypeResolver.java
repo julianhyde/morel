@@ -341,6 +341,61 @@ public class TypeResolver {
   }
 
   /**
+   * Registers a collection that may be ordered or unordered.
+   *
+   * @param node AST node
+   * @param variable Variable for the collection type (and node's type)
+   * @param variable2 Variable for the element type
+   */
+  private <E extends AstNode> E regCollection(
+      E node, Unifier.Variable variable, Unifier.Variable variable2) {
+    PairList<Unifier.Term, Unifier.Constraint.Action> termActions =
+        PairList.of();
+    extracted(variable, variable2, termActions, LIST_TY_CON);
+    extracted(variable, variable2, termActions, BAG_TY_CON);
+    constraints.add(unifier.constraint(variable, termActions));
+    return reg(node, variable);
+  }
+
+  private void extracted(
+      Unifier.Variable variable,
+      Unifier.Variable variable2,
+      PairList<Unifier.Term, Unifier.Constraint.Action> termActions,
+      String listTyCon) {
+    Unifier.Sequence collectionType = unifier.apply(listTyCon, variable2);
+    termActions.add(
+        collectionType,
+        (actualArg, term, consumer) ->
+            consumer.accept(variable, collectionType));
+  }
+
+  /**
+   * Registers a collection that must be ordered ({@code list}).
+   *
+   * @param node AST node
+   * @param variable Variable for the collection type (and node's type)
+   * @param variable2 Variable for the element type
+   */
+  private <E extends AstNode> E regList(
+      E node, Unifier.Variable variable, Unifier.Variable variable2) {
+    Unifier.Sequence term = unifier.apply(LIST_TY_CON, variable2);
+    return reg(node, variable, term);
+  }
+
+  /**
+   * Registers a collection that must be unordered ({@code bag}).
+   *
+   * @param node AST node
+   * @param variable Variable for the collection type (and node's type)
+   * @param variable2 Variable for the element type
+   */
+  private <E extends AstNode> E regBag(
+      E node, Unifier.Variable variable, Unifier.Variable variable2) {
+    Unifier.Sequence term = unifier.apply(BAG_TY_CON, variable2);
+    return reg(node, variable, term);
+  }
+
+  /**
    * Registers that a type variable is equivalent to at least one of a list of
    * terms.
    */
