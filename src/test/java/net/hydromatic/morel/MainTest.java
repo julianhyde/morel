@@ -681,6 +681,9 @@ public class MainTest {
   @SuppressWarnings("ConstantConditions")
   @Test
   void testDummy() {
+    ml("from i in bag [1]")
+        .assertType("int bag")
+        .assertEvalIter(equalsOrdered(1));
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int")
         .assertEval(is(1));
@@ -1888,18 +1891,6 @@ public class MainTest {
             + "  from e in emps yield #deptno e\n"
             + "end";
     ml(ml).assertEvalIter(equalsOrdered(10, 20, 30, 30));
-  }
-
-  @Test
-  void testFromIntegers() {
-//    ml("from i in [1]")
-//        .assertType("int list")
-//        .assertEvalIter(equalsOrdered(1))
-//    ;
-    ml("from i in [1] where i > 0").assertType("int list").assertEvalIter(equalsOrdered(1));
-    ml("from i in [1] yield i").assertType("int list").assertEvalIter(equalsOrdered(1));
-//    ml("from i in bag [1]").assertType("int list").assertEvalIter(equalsOrdered(1));
-//    ml("from i in bag [1] where i > 0").assertType("int list").assertEvalIter(equalsOrdered(1));
   }
 
   @Test
