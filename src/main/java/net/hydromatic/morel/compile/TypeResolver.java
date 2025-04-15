@@ -107,7 +107,6 @@ public class TypeResolver {
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
   private final List<Unifier.Constraint> constraints = new ArrayList<>();
-  private final Map<String, String> collectionMap = new HashMap<>();
 
   static final String BAG_TY_CON = BuiltIn.Eqtype.BAG.mlName();
   static final String TUPLE_TY_CON = "tuple";
@@ -180,29 +179,14 @@ public class TypeResolver {
     final Tracers.ConfigurableTracer tracer =
         debug ? Tracers.printTracer(System.out) : Tracers.nullTracer();
 
-    collectionMap.put("foo", "bar"); // TODO
-
     // Deduce types. The loop will retry, just once, if there are certain kinds
     // of errors.
     tryAgain:
     for (; ; ) {
       final List<TermTerm> termPairs = new ArrayList<>();
       terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
-      final Tracers.ConfigurableTracer tracer2;
-      if (!collectionMap.isEmpty()) {
-        tracer2 =
-            tracer.withConflictHandler(
-                (left, right) -> {
-                  tracer.onConflict(left, right);
-                  final String leftOp = collectionMap.get(left.operator);
-                  final String rightOp = collectionMap.get(right.operator);
-                  assert false;
-                });
-      } else {
-        tracer2 = tracer;
-      }
       final Result result =
-          unifier.unify(termPairs, actionMap, constraints, tracer2);
+          unifier.unify(termPairs, actionMap, constraints, tracer);
       if (result instanceof Unifier.Retry) {
         final Unifier.Retry retry = (Unifier.Retry) result;
         retry.amend();
@@ -378,7 +362,7 @@ public class TypeResolver {
    */
   private <E extends AstNode> E regList(
       E node, Unifier.Variable variable, Unifier.Variable variable2) {
-    Unifier.Sequence term = unifier.apply(LIST_TY_CON, variable2);
+    Unifier.Sequence term = listTerm(variable2);
     return reg(node, variable, term);
   }
 
@@ -391,7 +375,7 @@ public class TypeResolver {
    */
   private <E extends AstNode> E regBag(
       E node, Unifier.Variable variable, Unifier.Variable variable2) {
-    Unifier.Sequence term = unifier.apply(BAG_TY_CON, variable2);
+    Unifier.Sequence term = bagTerm(variable2);
     return reg(node, variable, term);
   }
 
@@ -646,9 +630,8 @@ public class TypeResolver {
       TypeEnv env,
       Ast.FromStep step,
       Triple p,
-      PairList<Ast.Id, Unifier.Variable> fieldVars,
+      PairList<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
-    final boolean ordered;
     switch (step.op) {
       case SCAN:
         return deduceScanStepType((Ast.Scan) step, p, fieldVars, fromSteps);
@@ -656,6 +639,7 @@ public class TypeResolver {
       case WHERE:
         final Ast.Where where = (Ast.Where) step;
         final Variable v5 = unifier.variable();
+
         final Ast.Exp filter2 = deduceType(p.env, where.exp, v5);
         equiv(v5, toTerm(PrimitiveType.BOOL));
         fromSteps.add(where.copy(filter2));
@@ -670,6 +654,7 @@ public class TypeResolver {
         return p;
 
       case DISTINCT:
+        // Output of "distinct" has same ordering and element type as input.
         final Ast.Distinct distinct = (Ast.Distinct) step;
         fromSteps.add(distinct);
         return p;
@@ -711,10 +696,18 @@ public class TypeResolver {
       case YIELD:
         final Ast.Yield yield = (Ast.Yield) step;
         final Variable v6 = unifier.variable();
-        final Variable c6 = toVariable(listTerm(v6));
         final Ast.Exp yieldExp2 = deduceYieldType(p.env, yield.exp, v6);
         fromSteps.add(yield.copy(yieldExp2));
         final TypeEnvHolder envs = new TypeEnvHolder(env);
+
+        // Output is ordered iff input is ordered. Just like an overloaded map:
+        //   map: 'a -> 'b -> 'a list -> 'b list
+        //   map: 'a -> 'b -> 'a bag -> 'b bag
+        final Unifier.Variable c6 = unifier.variable();
+        PairList<Unifier.Term, Unifier.Term> argResults =
+            copyOf(listTerm(p.v), listTerm(v6), bagTerm(p.v), bagTerm(v6));
+        constraints.add(unifier.constraint(p.c, c6, argResults));
+
         if (yieldExp2.op == Op.RECORD) {
           final Ast.Record record2 = (Ast.Record) yieldExp2;
           final List<Term> terms;
@@ -796,7 +789,8 @@ public class TypeResolver {
           fieldVars.add(
               ast.id(Pos.ZERO, e.getKey().name), (Variable) e.getValue());
         }
-        return Triple.of(env5, v18, toVariable(listTerm(v18)));
+        // Ordering is irrelevant because result is a singleton.
+        return Triple.singleton(env5, v18);
 
       default:
         throw new AssertionError("unknown step type " + step.op);
@@ -908,18 +902,6 @@ public class TypeResolver {
     }
   }
 
-  private String defineOp(String preferredTypeConstructor) {
-    for (int i = 0; ; ) {
-      final String key = preferredTypeConstructor + '$' + i;
-      if (collectionMap.containsKey(key)) {
-        ++i;
-        continue;
-      }
-      collectionMap.put(key, preferredTypeConstructor);
-      return key;
-    }
-  }
-
   /**
    * Validates a {@code Group}. Throws if there are duplicate names among the
    * keys and aggregates.
@@ -944,14 +926,17 @@ public class TypeResolver {
       default:
         final TreeMap<String, Variable> map = new TreeMap<>();
         fieldVars.forEach((k, v) -> map.put(k.name, v));
-        return toVariable(recordTerm(map));
+        Unifier.Term term = recordTerm(map);
+        return equiv(unifier.variable(), term);
     }
   }
 
-  private Ast.Apply deduceApplyType(TypeEnv env, Ast.Apply apply, Variable v) {
-    final Variable vFn = unifier.variable();
-    final Variable vArg = unifier.variable();
-    equiv(vFn, fnTerm(vArg, v));
+  private Ast.Apply deduceApplyType(
+      TypeEnv env, Ast.Apply apply, Unifier.Variable v) {
+    final Unifier.Variable vFn = unifier.variable();
+    final Unifier.Variable vArg = unifier.variable();
+    Unifier.Term term1 = fnTerm(vArg, v);
+    equiv(vFn, term1);
     final Ast.Exp arg2;
     if (apply.arg instanceof Ast.RecordSelector) {
       // "apply" is "f #field" and has type "v";
@@ -1149,7 +1134,8 @@ public class TypeResolver {
         final Unifier.Variable v2 = unifier.variable();
         final Unifier.Variable v3 = unifier.variable();
         overloads.add(new Inst(((Ast.IdPat) valBind2.pat).name, vPat, v2, v3));
-        equiv(unifier.apply(FN_TY_CON, v2, v3), vPat);
+        Unifier.Term term = fnTerm(v2, v3);
+        equiv(vPat, term);
       }
     }
     map.put(valBind2, toTerm(PrimitiveType.UNIT));
@@ -1632,11 +1618,12 @@ public class TypeResolver {
           // (therefore term is "tree(T8,T9)").
           // We can say that argTerm (T7) is equivalent to
           // the second type parameter (T9).
+          // It is sufficient to make vArg equivalent to T9.
           //
           // TODO: handle more complex types, e.g. "NODE (int * 'b)"
           final Sequence sequence = (Sequence) term;
           final TypeVar typeVar = (TypeVar) argType;
-          equiv(argTerm, sequence.terms.get(typeVar.ordinal));
+          equiv(vArg, sequence.terms.get(typeVar.ordinal));
         }
         return reg(pat, v, term);
 
@@ -1729,7 +1716,7 @@ public class TypeResolver {
   }
 
   private Sequence bagTerm(Term term) {
-    return unifier.apply(LIST_TY_CON, term); // TODO
+    return unifier.apply(BAG_TY_CON, term);
   }
 
   private Sequence fnTerm(Term arg, Term result) {
@@ -1774,7 +1761,7 @@ public class TypeResolver {
         final DataType dataType = (DataType) type;
         if (dataType.name.equals(BAG_TY_CON)) {
           assert dataType.arguments.size() == 1;
-          return unifier.apply(BAG_TY_CON, toTerm(dataType.arg(0), subst));
+          return bagTerm(toTerm(dataType.arg(0), subst));
         }
         return unifier.apply(
             dataType.name(), toTerms(dataType.arguments, subst));

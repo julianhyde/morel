@@ -1868,11 +1868,6 @@ public class Core {
     }
 
     @Override
-    public boolean isOrdered(boolean inputIsOrdered) {
-      return false;
-    }
-
-    @Override
     public Group accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
