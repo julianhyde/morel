@@ -17,6 +17,10 @@
  * License.
  *)
 
+(*) empty 'from' is ordered
+from;
+> val it = [()] : unit list
+
 (* A type similar to the built-in 'bag', and a function to convert any list to
    a multiset. *)
 datatype 'a multiset =

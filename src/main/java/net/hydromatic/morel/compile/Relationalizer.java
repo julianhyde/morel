@@ -64,7 +64,8 @@ public class Relationalizer extends EnvShuttle {
         switch (apply2.fn.op) {
           case FN_LITERAL:
             final Core.Literal literal = (Core.Literal) apply2.fn;
-            if (literal.value == BuiltIn.LIST_MAP) {
+            if (literal.value == BuiltIn.LIST_MAP
+                || literal.value == BuiltIn.BAG_MAP) {
               // List.map f list
               //  =>
               // from e in list yield (f e)
@@ -84,7 +85,8 @@ public class Relationalizer extends EnvShuttle {
                           core.implicitYieldExp(typeSystem, from.steps)));
               return core.from(typeSystem, append(from.steps, yieldStep));
             }
-            if (literal.value == BuiltIn.LIST_FILTER) {
+            if (literal.value == BuiltIn.LIST_FILTER
+                || literal.value == BuiltIn.BAG_FILTER) {
               // List.filter f list
               //  =>
               // from e in list where (f e)

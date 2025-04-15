@@ -690,6 +690,9 @@ public class MainTest {
   @SuppressWarnings("ConstantConditions")
   @Test
   void testDummy() {
+    ml("from i in bag [1]")
+        .assertType("int bag")
+        .assertEvalIter(equalsOrdered(1));
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int")
         .assertEval(is(1));
