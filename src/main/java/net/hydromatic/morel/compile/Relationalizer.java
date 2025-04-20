@@ -86,7 +86,7 @@ public class Relationalizer extends EnvShuttle {
               return core.from(typeSystem, append(from.steps, yieldStep));
             }
             if (literal.value == BuiltIn.LIST_FILTER
-            || literal.value == BuiltIn.BAG_FILTER) {
+                || literal.value == BuiltIn.BAG_FILTER) {
               // List.filter f list
               //  =>
               // from e in list where (f e)

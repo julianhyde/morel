@@ -17,6 +17,8 @@
  * License.
  *)
 
+from i in [1,2,1,3] group i compute count;
+
 (*) empty 'from' is ordered
 from;
 > val it = [()] : unit list

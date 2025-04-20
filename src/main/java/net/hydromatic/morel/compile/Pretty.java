@@ -188,41 +188,9 @@ class Pretty {
     }
     final List<Object> list;
     final int start;
-    String s;
     switch (type.op()) {
       case ID:
-        switch ((PrimitiveType) type) {
-          case UNIT:
-            return buf.append("()");
-          case CHAR:
-            s = ((Character) value).toString();
-            return buf.append('#')
-                .append('"')
-                .append(s.replace("\\", "\\\\").replace("\"", "\\\""))
-                .append('"');
-          case STRING:
-            s = (String) value;
-            if (stringDepth >= 0 && s.length() > stringDepth) {
-              s = s.substring(0, stringDepth) + "#";
-            }
-            return buf.append('"')
-                .append(s.replace("\\", "\\\\").replace("\"", "\\\""))
-                .append('"');
-          case INT:
-            int i = (Integer) value;
-            if (i < 0) {
-              if (i == Integer.MIN_VALUE) {
-                return buf.append("~2147483648");
-              }
-              buf.append('~');
-              i = -i;
-            }
-            return buf.append(i);
-          case REAL:
-            return Codes.appendFloat(buf, (Float) value);
-          default:
-            return buf.append(value);
-        }
+        return prettyPrimitive(buf, (PrimitiveType) type, value);
 
       case FUNCTION_TYPE:
         return buf.append("fn");
@@ -297,49 +265,95 @@ class Pretty {
             0);
 
       case DATA_TYPE:
-        final DataType dataType = (DataType) type;
-        list = toList(value);
-        if (dataType.name.equals("vector")) {
-          final Type argType = dataType.arg(0);
-          return printList(
-              buf.append('#'), indent, lineEnd, depth, argType, list);
-        }
-        if (dataType.name.equals("bag")) {
-          // A bag value is printed the same as a list, distinguishable only by
-          // its type, e.g.
-          //  val odds = [1,3,5] : int list
-          //  val evens = [0,2,4] : int bag
-          if (list instanceof RelList) {
-            // Do not attempt to print the elements of a foreign list. It might
-            // be huge.
-            return buf.append(RelList.RELATION);
-          }
-          final Type argType = dataType.arg(0);
-          return printList(buf, indent, lineEnd, depth, argType, list);
-        }
-        final String tyConName = (String) list.get(0);
-        buf.append(tyConName);
-        final Type typeConArgType =
-            dataType.typeConstructors(typeSystem).get(tyConName);
-        requireNonNull(typeConArgType);
-        if (list.size() == 2) {
-          final Object arg = list.get(1);
-          buf.append(' ');
-          final boolean needParentheses =
-              typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;
-          if (needParentheses) {
-            buf.append('(');
-          }
-          pretty2(buf, indent, lineEnd, depth + 1, typeConArgType, arg, 0, 0);
-          if (needParentheses) {
-            buf.append(')');
-          }
-        }
-        return buf;
+        return prettyDataType(
+            buf, indent, lineEnd, depth, (DataType) type, value);
 
       default:
         return buf.append(value);
     }
+  }
+
+  private StringBuilder prettyPrimitive(
+      StringBuilder buf, PrimitiveType primitiveType, Object value) {
+    switch (primitiveType) {
+      case UNIT:
+        return buf.append("()");
+      case CHAR:
+        Character c = (Character) value;
+        return buf.append('#')
+            .append('"')
+            .append(c == '\\' ? "\\\\" : c == '"' ? "\\\"" : c)
+            .append('"');
+      case STRING:
+        String s = (String) value;
+        if (stringDepth >= 0 && s.length() > stringDepth) {
+          s = s.substring(0, stringDepth) + "#";
+        }
+        return buf.append('"')
+            .append(s.replace("\\", "\\\\").replace("\"", "\\\""))
+            .append('"');
+      case INT:
+        int i = (Integer) value;
+        if (i < 0) {
+          if (i == Integer.MIN_VALUE) {
+            return buf.append("~2147483648");
+          }
+          buf.append('~');
+          i = -i;
+        }
+        return buf.append(i);
+      case REAL:
+        return Codes.appendFloat(buf, (Float) value);
+      default:
+        return buf.append(value);
+    }
+  }
+
+  private StringBuilder prettyDataType(
+      StringBuilder buf,
+      int indent,
+      int[] lineEnd,
+      int depth,
+      DataType dataType,
+      Object value) {
+    final List<Object> list;
+    list = toList(value);
+    if (dataType.name.equals("vector")) {
+      final Type argType = dataType.arg(0);
+      return printList(buf.append('#'), indent, lineEnd, depth, argType, list);
+    }
+    if (dataType.name.equals("bag")) {
+      // A bag value is printed the same as a list, distinguishable only by
+      // its type, e.g.
+      //  val odds = [1,3,5] : int list
+      //  val evens = [0,2,4] : int bag
+      if (list instanceof RelList) {
+        // Do not attempt to print the elements of a foreign list. It might
+        // be huge.
+        return buf.append(RelList.RELATION);
+      }
+      final Type argType = dataType.arg(0);
+      return printList(buf, indent, lineEnd, depth, argType, list);
+    }
+    final String tyConName = (String) list.get(0);
+    buf.append(tyConName);
+    final Type typeConArgType =
+        dataType.typeConstructors(typeSystem).get(tyConName);
+    requireNonNull(typeConArgType);
+    if (list.size() == 2) {
+      final Object arg = list.get(1);
+      buf.append(' ');
+      final boolean needParentheses =
+          typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;
+      if (needParentheses) {
+        buf.append('(');
+      }
+      pretty2(buf, indent, lineEnd, depth + 1, typeConArgType, arg, 0, 0);
+      if (needParentheses) {
+        buf.append(')');
+      }
+    }
+    return buf;
   }
 
   private StringBuilder prettyType(

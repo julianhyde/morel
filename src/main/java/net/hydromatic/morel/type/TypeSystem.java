@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.NameGenerator;
@@ -415,6 +416,11 @@ public class TypeSystem {
     return (ForallType) typeFor(key);
   }
 
+  /** Creates a multi-type. */
+  public MultiType multi(Type... types) {
+    return new MultiTypeImpl(ImmutableList.copyOf(types));
+  }
+
   static StringBuilder unparseList(
       StringBuilder builder,
       Op op,
@@ -618,6 +624,48 @@ public class TypeSystem {
     Type option(int i);
     /** Creates type <code>`i &rarr; bool</code>. */
     FnType predicate(int i);
+  }
+
+  /**
+   * Not really a type, just a way for a {@link BuiltIn#typeFunction} to
+   * indicate that it is overloaded.
+   */
+  public interface MultiType extends Type {
+    List<Type> types();
+  }
+
+  /** Implementation of {@link MultiType}. */
+  private static class MultiTypeImpl implements MultiType {
+    final List<Type> types;
+
+    MultiTypeImpl(Iterable<? extends Type> types) {
+      this.types = ImmutableList.copyOf(types);
+    }
+
+    @Override
+    public List<Type> types() {
+      return types;
+    }
+
+    @Override
+    public Key key() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Op op() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Type copy(TypeSystem typeSystem, UnaryOperator<Type> transform) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public <R> R accept(TypeVisitor<R> typeVisitor) {
+      throw new UnsupportedOperationException();
+    }
   }
 }
 
