@@ -635,7 +635,7 @@ public class AlgebraTest {
         ml ->
             ml.withBinding("scott", BuiltInDataSet.SCOTT)
                 .with(Prop.HYBRID, true)
-                .assertType("string list")
+                .assertType("string bag")
                 .assertPlan(isFullyCalcite())
                 .assertEvalIter(equalsUnordered("SALES", "OPERATIONS"));
 
@@ -680,7 +680,7 @@ public class AlgebraTest {
         ml ->
             ml.withBinding("scott", BuiltInDataSet.SCOTT)
                 .with(Prop.HYBRID, true)
-                .assertType("int list")
+                .assertType("int bag")
                 .assertPlan(isFullyCalcite())
                 .assertPlan(isCode(plan))
                 .assertEvalIter(equalsOrdered(10, 20, 30, 40));
@@ -725,7 +725,7 @@ public class AlgebraTest {
         ml ->
             ml.withBinding("scott", BuiltInDataSet.SCOTT)
                 .with(Prop.HYBRID, true)
-                .assertType("int list")
+                .assertType("int bag")
                 .assertPlan(isFullyCalcite())
                 .assertEvalIter(equalsOrdered(10, 20, 30, 40))
                 .assertPlan(isCode(plan));

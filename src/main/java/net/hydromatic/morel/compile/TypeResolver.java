@@ -323,24 +323,16 @@ public class TypeResolver {
    */
   private <E extends AstNode> E regCollection(
       E node, Unifier.Variable variable, Unifier.Variable variable2) {
-    PairList<Unifier.Term, Unifier.Constraint.Action> termActions =
-        PairList.of();
-    extracted(variable, variable2, termActions, LIST_TY_CON);
-    extracted(variable, variable2, termActions, BAG_TY_CON);
-    constraints.add(unifier.constraint(variable, termActions));
+    Unifier.Sequence list = listTerm(variable2);
+    Unifier.Sequence bag = bagTerm(variable2);
+    Unifier.Constraint.Action listAction =
+        (actualArg1, term1, consumer1) -> consumer1.accept(variable, list);
+    Unifier.Constraint.Action bagAction =
+        (actualArg, term, consumer) -> consumer.accept(variable, bag);
+    constraints.add(
+        unifier.constraint(
+            variable, PairList.copyOf(list, listAction, bag, bagAction)));
     return reg(node, variable);
-  }
-
-  private void extracted(
-      Unifier.Variable variable,
-      Unifier.Variable variable2,
-      PairList<Unifier.Term, Unifier.Constraint.Action> termActions,
-      String listTyCon) {
-    Unifier.Sequence collectionType = unifier.apply(listTyCon, variable2);
-    termActions.add(
-        collectionType,
-        (actualArg, term, consumer) ->
-            consumer.accept(variable, collectionType));
   }
 
   /**
@@ -636,7 +628,7 @@ public class TypeResolver {
         v,
         query.op == Op.EXISTS || query.op == Op.FORALL
             ? toTerm(PrimitiveType.BOOL)
-            : query.isCompute() || query.isInto() ? p.v : listTerm(p.v));
+            : query.isCompute() || query.isInto() ? p.v : p.c);
   }
 
   private Triple deduceStepType(

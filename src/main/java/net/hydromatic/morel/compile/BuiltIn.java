@@ -207,13 +207,19 @@ public enum BuiltIn {
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), BOOL))),
 
-  /** Infix operator "elem", of type "&alpha; * &alpha; bag &rarr; bool". */
+  /**
+   * Overloaded infix operator "elem", of type "&alpha; * &alpha; bag &rarr;
+   * bool" and "&alpha; * &alpha; list &rarr; bool".
+   */
   OP_ELEM(
       null,
       "op elem",
       ts ->
-          ts.forallType(
-              1, h -> ts.fnType(ts.tupleType(h.get(0), h.bag(0)), BOOL))),
+          ts.multi(
+              ts.forallType(
+                  1, h -> ts.fnType(ts.tupleType(h.get(0), h.bag(0)), BOOL)),
+              ts.forallType(
+                  1, h -> ts.fnType(ts.tupleType(h.get(0), h.list(0)), BOOL)))),
 
   /** Infix operator "notelem", of type "&alpha; * &alpha; bag &rarr; bool". */
   OP_NOT_ELEM(
@@ -3014,11 +3020,11 @@ public enum BuiltIn {
    * algebraic types, the extent is practically infinite. It will need to be
    * removed during planning.
    *
-   * <p>Its type is "unit &rarr; * &alpha; list". It would not be possible to
+   * <p>Its type is "unit &rarr; * &alpha; bag". It would not be possible to
    * derive the type if "extent" were used in code.
    */
   Z_EXTENT(
-      "$", "extent", ts -> ts.forallType(1, h -> ts.fnType(UNIT, h.get(0)))),
+      "$", "extent", ts -> ts.forallType(1, h -> ts.fnType(UNIT, h.bag(0)))),
 
   /**
    * Internal list constructor, e.g. "list (1 + 2, 3)" implements "[1 + 2, 3]".
@@ -3127,7 +3133,13 @@ public enum BuiltIn {
     }
     for (BuiltIn builtIn : values()) {
       final Type type = builtIn.typeFunction.apply(typeSystem);
-      consumer.accept(builtIn, type);
+      if (type instanceof TypeSystem.MultiType) {
+        ((TypeSystem.MultiType) type)
+            .types()
+            .forEach(t -> consumer.accept(builtIn, t));
+      } else {
+        consumer.accept(builtIn, type);
+      }
     }
   }
 

@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.Codes;
@@ -97,13 +98,39 @@ public abstract class Environments {
             }
             value = key.sessionValue.apply(session);
           }
-          if (key.structure == null) {
-            bindings.add(
-                Binding.of(core.idPat(type, key.mlName, nameGen), value));
-          }
-          if (key.alias != null) {
-            bindings.add(
-                Binding.of(core.idPat(type, key.alias, nameGen), value));
+          // If type is a MultiType, define several overloads.
+          if (type instanceof TypeSystem.MultiType) {
+            List<Type> types = ((TypeSystem.MultiType) type).types();
+            Core.IdPat overloadId =
+                core.idPat(types.get(0), key.mlName, nameGen);
+            final Supplier<String> nameGen2 =
+                () -> typeSystem.nameGenerator.getPrefixed(overloadId.name);
+            for (int i = 0; i < types.size(); i++) {
+              Type type1 = types.get(i);
+              if (key.structure == null) {
+                if (i == 0) {
+                  bindings.add(Binding.over(overloadId));
+                }
+                Core.IdPat id = core.idPat(type1, nameGen2);
+                bindings.add(Binding.inst(id, overloadId, value));
+              }
+              if (key.alias != null) {
+                if (i == 0) {
+                  bindings.add(Binding.over(overloadId));
+                }
+                Core.IdPat id = core.idPat(type1, nameGen2);
+                bindings.add(Binding.inst(id, overloadId, value));
+              }
+            }
+          } else {
+            if (key.structure == null) {
+              bindings.add(
+                  Binding.of(core.idPat(type, key.mlName, nameGen), value));
+            }
+            if (key.alias != null) {
+              bindings.add(
+                  Binding.of(core.idPat(type, key.alias, nameGen), value));
+            }
           }
         });
 

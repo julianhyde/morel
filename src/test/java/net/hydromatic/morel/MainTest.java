@@ -300,7 +300,10 @@ public class MainTest {
     ml("case {a = 1, b = 2} of {...} => 1").assertParseSame();
     ml("case {a = 1, b = 2} of {a = 3, ...} => 1")
         .assertParse("case {a = 1, b = 2} of {a = 3, ...} => 1");
+  }
 
+  @Test
+  void testParse2() {
     // fn
     ml("fn x => x + 1").assertParseSame();
     ml("fn x => x + (1 + 2)").assertParseSame();
@@ -690,12 +693,16 @@ public class MainTest {
   @SuppressWarnings("ConstantConditions")
   @Test
   void testDummy() {
-    ml("from i in bag [1]")
-        .assertType("int bag")
-        .assertEvalIter(equalsOrdered(1));
-    ml("from d in [{a=1,b=true}] yield d.a into sum")
-        .assertType("int")
-        .assertEval(is(1));
+    ml("from (i, j) in [(1, 1), (2, 3)]").assertType("{j:int, sum:int} bag");
+    // Theoretically a "group" without a "compute" can be followed by a
+    // "compute" step. So, the following is ambiguous. We treat it as a single
+    // "group ... compute" step. Under the two-step interpretation, the type
+    // would have been "int".
+    ml("from (i, j) in [(1, 1), (2, 3), (3, 4)]\n"
+            + "  group j = i mod 2\n"
+            + "  compute sum of j, count")
+        .assertType("{j:int, sum:int} bag")
+        .assertEvalIter(equalsUnordered(list(1, 5), list(0, 3)));
     switch (0) {
       case 0:
         ml("1").assertEval(is(1));
@@ -2016,14 +2023,11 @@ public class MainTest {
         .assertParse(
             "from e in emps order #empno e take 2 skip 3 skip 1 + 1 "
                 + "take 2");
-    ml("fn f => from i in [1, 2, 3] where f i")
-        .assertParseSame()
-        .assertType("(int -> bool) -> int list");
+    ml("fn f => from i in [1, 2, 3] where f i").assertParseSame();
     ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
         .assertParse(
             "fn f => from i in [1, 2, 3],"
-                + " j in [3, 4] on f (i, j) yield i + j")
-        .assertType("(int * int -> bool) -> int list");
+                + " j in [3, 4] on f (i, j) yield i + j");
 
     // In "from p in exp" and "from p = exp", p can be any pattern
     // but in "from v" v can only be an identifier.
@@ -2373,7 +2377,20 @@ public class MainTest {
   }
 
   @Test
-  void testFromYield() {
+  void testFromType() {
+    ml("from i in [1]").assertType("int list");
+    ml("from i in bag [1]").assertType("int bag");
+    ml("from i in [1] group i compute count")
+        .assertType("{count:int, i:int} list");
+    ml("from i in bag [1] group i compute count")
+        .assertType("{count:int, i:int} bag");
+    ml("from d in [{a=1,b=true}] yield d.a into sum")
+        .assertType("int")
+        .assertEval(is(1));
+    ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
+        .assertType("(int * int -> bool) -> int list");
+    ml("fn f => from i in [1, 2, 3] where f i")
+        .assertType("(int -> bool) -> int list");
     ml("from a in [1], b in [true]").assertType("{a:int, b:bool} list");
     ml("from a in [1], b in [true] yield a").assertType("int list");
     ml("from a in [1], b in [true] yield {a,b}")
@@ -2424,6 +2441,12 @@ public class MainTest {
         .assertType("{a:int, b:bool} list");
     ml("from d in [{a=1,b=true}], i in [2] yield d yield 3")
         .assertType("int list");
+    ml("from e in [{x=1,y=2},{x=3,y=4},{x=5,y=6}]\n"
+            + "  yield {z=e.x}\n"
+            + "  where z > 2\n"
+            + "  order z desc\n"
+            + "  yield {z=z}")
+        .assertType("{z:int} list");
     mlE("from d in [{a=1,b=true}] yield $d.x$")
         .assertTypeThrows(
             pos ->
@@ -2623,7 +2646,7 @@ public class MainTest {
             + "        argCode apply(fnValue $.extent, argCode constant(()))),\n"
             + "    sink collect(get(name j)))))";
     final List<Object> expected = list(); // TODO
-    ml(ml).withBinding("scott", BuiltInDataSet.SCOTT).assertType("string list");
+    ml(ml).withBinding("scott", BuiltInDataSet.SCOTT).assertType("string bag");
     //        .assertCore(-1, is(core))
     //        .assertPlan(isCode2(code))
     //        .assertEval(is(expected));
@@ -2640,7 +2663,7 @@ public class MainTest {
     final String core1 = "val it = from d in #depts scott";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{deptno:int, dname:string, loc:string} list")
+        .assertType("{deptno:int, dname:string, loc:string} bag")
         .assertCore(0, hasToString(core0))
         .assertCore(-1, hasToString(core1));
   }
@@ -2665,7 +2688,7 @@ public class MainTest {
             + "yield {deptno = deptno, loc = loc, name = name}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{deptno:int, loc:string, name:string} list")
+        .assertType("{deptno:int, loc:string, name:string} bag")
         .assertCore(-1, hasToString(core))
         .assertEval(
             is(
@@ -2702,7 +2725,7 @@ public class MainTest {
             + "yield {dno = dno, name = name}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{dno:int, name:string} list")
+        .assertType("{dno:int, name:string} bag")
         .assertCore(0, hasToString(core0))
         .assertCore(-1, hasToString(core1));
   }
@@ -2733,7 +2756,7 @@ public class MainTest {
             + "yield {dno = dno, name = name}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{dno:int, name:string} list")
+        .assertType("{dno:int, name:string} bag")
         .assertCore(0, hasToString(core0))
         .assertCore(-1, hasToString(core1));
   }
@@ -2771,7 +2794,7 @@ public class MainTest {
             + "yield {dno = #deptno v, name = #dname v}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{dno:int, name:string} list")
+        .assertType("{dno:int, name:string} bag")
         .assertCore(0, hasToString(core0))
         .assertCore(-1, hasToString(core1))
         .assertEval(is(list(list(30, "SALES"))));
@@ -2810,7 +2833,7 @@ public class MainTest {
             + "yield {dno = #deptno v, name = #dname v}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{dno:int, name:string} list")
+        .assertType("{dno:int, name:string} bag")
         .assertCore(0, hasToString(core0))
         .assertCore(-1, hasToString(core1))
         .assertEval(is(list(list(30, "SALES"))));
@@ -2847,7 +2870,7 @@ public class MainTest {
             + "yield #dname d_1";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("string list")
+        .assertType("string bag")
         .assertCore(0, hasToString(core0))
         .assertCore(-1, hasToString(core1));
   }
@@ -2896,7 +2919,7 @@ public class MainTest {
             + "yield #dname d_1";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("string list")
+        .assertType("string bag")
         .assertCore(0, hasToString(core0))
         .assertCore(-1, hasToString(core1));
   }
@@ -2948,7 +2971,7 @@ public class MainTest {
             + "          argCode apply(fnValue $.extent, argCode constant(()))),\n"
             + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
             + "          sink collect(tuple(get(name d), get(name n))))))";
-    ml(ml).assertType("{d:int, n:string} list");
+    ml(ml).assertType("{d:int, n:string} bag");
     //        .assertCore(-1, is(core))
     //        .assertPlan(isCode2(code))
     //        .assertEval(is(list()));
@@ -2969,7 +2992,7 @@ public class MainTest {
             + "from i in extent \"bool option\" "
             + "where #getOpt Option (i, false)";
     ml(ml)
-        .assertType("bool option list")
+        .assertType("bool option bag")
         .assertCore(-1, hasToString(core))
         .assertEval(is(list(list("SOME", true))));
   }
@@ -3121,7 +3144,7 @@ public class MainTest {
     // "{deptno = deptno}", because there is only one variable defined (the
     // "group" clause defines "deptno" and hides the "e" from the "from"
     // clause).
-    ml(ml).assertType("int bag").assertEvalIter(equalsUnordered(10, 20));
+    ml(ml).assertType("int list").assertEvalIter(equalsUnordered(10, 20));
   }
 
   /**
@@ -3140,7 +3163,7 @@ public class MainTest {
             + "  from e in emps group #deptno e, parity = e.id mod 2\n"
             + "end";
     ml(ml)
-        .assertType("{deptno:int, parity:int} bag")
+        .assertType("{deptno:int, parity:int} list")
         .assertEvalIter(equalsUnordered(list(10, 0), list(20, 1)));
   }
 
@@ -3177,7 +3200,7 @@ public class MainTest {
     ml("val x = " + ml)
         .assertParseDecl(Ast.ValDecl.class, "val x = " + expected);
     ml(ml)
-        .assertType("{deptno:int, sumId:int} bag")
+        .assertType("{deptno:int, sumId:int} list")
         .assertEvalIter(equalsUnordered(list(10, 202), list(20, 101)));
   }
 
@@ -3223,22 +3246,22 @@ public class MainTest {
             is("cannot derive label for expression fn x => x"));
     ml("from e in [{x = 1, y = 5}]\n" //
             + "  group compute sum of e.x")
-        .assertType(hasMoniker("int bag"));
+        .assertType(hasMoniker("int list"));
     ml("from e in [1, 2, 3]\n" //
             + "  group compute sum of e")
-        .assertType(hasMoniker("int bag"));
+        .assertType(hasMoniker("int list"));
   }
 
   @Test
   void testGroupSansOf() {
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
             + "  group compute c = count")
-        .assertType(hasMoniker("int bag"))
+        .assertType(hasMoniker("int list"))
         .assertEvalIter(equalsUnordered(3));
 
     ml("from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]\n"
             + "  group e.a compute rows = (fn x => x)")
-        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} bag} bag"))
+        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} bag} list"))
         .assertEvalIter(
             equalsUnordered(
                 list(1, list(list(1, 5), list(1, 1))),
@@ -3407,7 +3430,7 @@ public class MainTest {
             + " group c2 = a1 + b1 compute s2 = sum of a1";
     ml(ml)
         .assertParse(expected)
-        .assertType(hasMoniker("{c2:int, s2:int} bag"))
+        .assertType(hasMoniker("{c2:int, s2:int} list"))
         .assertEvalIter(equalsOrdered(list(5, 2)));
   }
 
@@ -3459,15 +3482,18 @@ public class MainTest {
     ml("from i in bag [1,2]").assertType(hasMoniker("int bag"));
     ml("from i in bag [1,2] where i > 1").assertType(hasMoniker("int bag"));
     ml("from i in bag [1,2] distinct").assertType(hasMoniker("int bag"));
-    ml("from i in [1,2] distinct").assertType(hasMoniker("int bag"));
+    ml("from i in [1,2] distinct").assertType(hasMoniker("int list"));
     ml("from i in [1,2] group i compute count")
-        .assertType(hasMoniker("{count:int, i:int} bag"));
+        .assertType(hasMoniker("{count:int, i:int} list"));
     ml("from i in bag [1,2] group i compute count")
         .assertType(hasMoniker("{count:int, i:int} bag"));
+    ml("from (i, j) in bag [(1, 1), (2, 3)]")
+        .assertType("{j:int, sum:int} bag");
   }
 
   @Test
   void testFromPattern() {
+    ml("from (i, j) in [(1, 1), (2, 3)]").assertType("{j:int, sum:int} list");
     ml("from (x, y) in [(1,2),(3,4),(3,0)] group sum = x + y")
         .assertParse(
             "from (x, y) in [(1, 2), (3, 4), (3, 0)] group sum = x + y")
