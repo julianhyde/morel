@@ -202,14 +202,9 @@ public class MartelliUnifier extends Unifier {
 
     @Override
     public String toString() {
-      return "delete "
-          + deleteQueue
-          + " seqSeq "
-          + seqSeqQueue
-          + " varAny "
-          + varAnyQueue
-          + " constraints "
-          + constraintQueue;
+      return format(
+          "delete %s seqSeq %s varAny %s constraints %s result %s",
+          deleteQueue, seqSeqQueue, varAnyQueue, constraintQueue, result);
     }
 
     void add2(Term left, Term right) {

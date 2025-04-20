@@ -44,6 +44,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
@@ -158,6 +159,29 @@ public enum CoreBuilder {
   /** Creates a function literal. */
   public Core.Literal functionLiteral(TypeSystem typeSystem, BuiltIn builtIn) {
     final Type type = builtIn.typeFunction.apply(typeSystem);
+    return new Core.Literal(Op.FN_LITERAL, type, builtIn);
+  }
+
+  /** Creates a function literal, possibly overloaded. */
+  public Core.Literal functionLiteral(
+      TypeSystem typeSystem, BuiltIn builtIn, List<Core.Exp> argList) {
+    Type type = builtIn.typeFunction.apply(typeSystem);
+    if (type instanceof TypeSystem.MultiType) {
+      final Type arg0Type =
+          typeSystem.tupleType(transform(argList, Core.Exp::type));
+      final List<Type> applicableTypes =
+          ((TypeSystem.MultiType) type)
+              .types().stream()
+                  .filter(t -> t.canCallArgOf(arg0Type))
+                  .collect(Collectors.toList());
+      checkArgument(
+          applicableTypes.size() == 1,
+          "expected one overload for arguments %s, got %s %s",
+          argList,
+          applicableTypes.size(),
+          applicableTypes);
+      type = applicableTypes.get(0);
+    }
     return new Core.Literal(Op.FN_LITERAL, type, builtIn);
   }
 
@@ -720,12 +744,12 @@ public enum CoreBuilder {
       TypeSystem typeSystem,
       Type type,
       Map<String, ImmutableRangeSet> rangeSetMap) {
-    final ListType listType = typeSystem.listType(type);
+    final Type bagType = typeSystem.bagType(type);
     // Store an ImmutableRangeSet value inside a literal of type 'unit'.
     // The value of such literals is usually Unit.INSTANCE, but we cheat.
     return core.apply(
         Pos.ZERO,
-        listType,
+        bagType,
         core.functionLiteral(typeSystem, BuiltIn.Z_EXTENT),
         core.internalLiteral(new RangeExtent(typeSystem, type, rangeSetMap)));
   }
@@ -900,7 +924,8 @@ public enum CoreBuilder {
       Type type,
       Pos pos,
       Core.Exp... args) {
-    final Core.Literal literal = functionLiteral(typeSystem, builtIn);
+    final Core.Literal literal =
+        functionLiteral(typeSystem, builtIn, ImmutableList.copyOf(args));
     final ForallType forallType = (ForallType) literal.type;
     final FnType fnType = (FnType) typeSystem.apply(forallType, type);
     return apply(pos, fnType.resultType, literal, args(fnType.paramType, args));
