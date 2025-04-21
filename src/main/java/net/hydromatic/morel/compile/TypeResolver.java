@@ -340,6 +340,8 @@ public class TypeResolver {
 
       case RECORD:
         final Ast.Record record = (Ast.Record) node;
+        final Ast.Exp with2 =
+            record.with == null ? null : deduceType(env, record.with, v);
         final NavigableMap<String, Unifier.Term> labelTypes = new TreeMap<>();
         final NavigableMap<String, Ast.Exp> map2 = new TreeMap<>();
         record.args.forEach(
@@ -349,7 +351,7 @@ public class TypeResolver {
               labelTypes.put(name, vArg);
               map2.put(name, e2);
             });
-        return reg(record.copy(map2), v, record(labelTypes));
+        return reg(record.copy(with2, map2), v, record(labelTypes));
 
       case LET:
         final Ast.Let let = (Ast.Let) node;

@@ -308,6 +308,12 @@ public class MainTest {
 
     // apply
     ml("(fn x => x + 1) 3").assertParseSame();
+
+    // with
+    ml("{e with deptno = 10}").assertParseSame();
+    ml("{e with deptno = 10, empno = 100}").assertParseSame();
+    ml("{hd scott.emps with deptno = 10, empno = 100}")
+        .assertParse("{hd (#emps scott) with deptno = 10, empno = 100}");
   }
 
   @Test
