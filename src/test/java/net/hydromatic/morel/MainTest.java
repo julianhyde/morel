@@ -492,6 +492,9 @@ public class MainTest {
     ml("SOME (SOME true)").assertType("bool option option");
     ml("SOME (SOME [1, 2])").assertType("int list option option");
     ml("SOME (SOME {a=1, b=true})").assertType("{a:int, b:bool} option option");
+
+    ml("{a=1,b=true}").assertType("{a:int, b:bool}");
+    ml("{{a=1,b=true} with b=false}").assertType("{a:int, b:bool}");
   }
 
   @Test
