@@ -1272,6 +1272,202 @@ from line in lines,
 >    {c=1,word="sat"},{c=2,word="skunk"},{c=3,word="stump"},{c=2,word="stunk"},
 >    {c=3,word="the"},{c=2,word="thunk"}] : {c:int, word:string} list
 
+Sys.unset "hybrid";
+> val it = () : unit
+
+(*) === DML in Morel ================================================
+val emps1 =
+  from e in scott.emp
+    yield {e.empno, sal = floor e.sal, e.ename, e.job, e.deptno};
+> val emps1 =
+>   [{deptno=20,empno=7369,ename="SMITH",job="CLERK",sal=800},
+>    {deptno=30,empno=7499,ename="ALLEN",job="SALESMAN",sal=1600},
+>    {deptno=30,empno=7521,ename="WARD",job="SALESMAN",sal=1250},
+>    {deptno=20,empno=7566,ename="JONES",job="MANAGER",sal=2975},
+>    {deptno=30,empno=7654,ename="MARTIN",job="SALESMAN",sal=1250},
+>    {deptno=30,empno=7698,ename="BLAKE",job="MANAGER",sal=2850},
+>    {deptno=10,empno=7782,ename="CLARK",job="MANAGER",sal=2450},
+>    {deptno=20,empno=7788,ename="SCOTT",job="ANALYST",sal=3000},
+>    {deptno=10,empno=7839,ename="KING",job="PRESIDENT",sal=5000},
+>    {deptno=30,empno=7844,ename="TURNER",job="SALESMAN",sal=1500},
+>    {deptno=20,empno=7876,ename="ADAMS",job="CLERK",sal=1100},
+>    {deptno=30,empno=7900,ename="JAMES",job="CLERK",sal=950},...]
+>   : {deptno:int, empno:int, ename:string, job:string, sal:int} list
+
+(* Delete employees who earn more than 1,000. *)
+val emps2 =
+  from e in emps1
+    where not (e.sal > 1000);
+> val emps2 =
+>   [{deptno=20,empno=7369,ename="SMITH",job="CLERK",sal=800},
+>    {deptno=30,empno=7900,ename="JAMES",job="CLERK",sal=950}]
+>   : {deptno:int, empno:int, ename:string, job:string, sal:int} list
+
+(* Add one employee. *)
+val emps3 = emps2 union
+  [{empno = 100, deptno = 20, ename = "HYDE", job = "ANALYST", sal = 1150}];
+> val emps3 =
+>   [{deptno=20,empno=7369,ename="SMITH",job="CLERK",sal=800},
+>    {deptno=30,empno=7900,ename="JAMES",job="CLERK",sal=950},
+>    {deptno=20,empno=100,ename="HYDE",job="ANALYST",sal=1150}]
+>   : {deptno:int, empno:int, ename:string, job:string, sal:int} list
+
+(* Double the salary of all managers. *)
+(* TODO implement 'with'
+val emps4 =
+  from e in emps3
+    yield if e.job = "MANAGER" then {e with sal = e.sal * 2} else e;
+*)
+val emps4 =
+  from e in emps3
+    yield if e.job = "MANAGER" then {e.empno, e.deptno, e.ename, e.job, sal = e.sal * 2} else e;
+> val emps4 =
+>   [{deptno=20,empno=7369,ename="SMITH",job="CLERK",sal=800},
+>    {deptno=30,empno=7900,ename="JAMES",job="CLERK",sal=950},
+>    {deptno=20,empno=100,ename="HYDE",job="ANALYST",sal=1150}]
+>   : {deptno:int, empno:int, ename:string, job:string, sal:int} list
+
+(* Commit. *)
+(* TODO
+commit {scott with emps = emps4};
+*)
+
+(*) === More than Query =============================================
+
+(*) Simplified wordle
+val words = from w in file.data.wordle.words yield w.word;
+> val words =
+>   ["aahed","aalii","aargh","aarti","abaca","abaci","aback","abacs","abaft",
+>    "abaka","abamp","aband",...] : string list
+
+fun mask (guess, answer) =
+  let
+    fun mask2 (m, i, [], answer) = m
+      | mask2 (m, i, letter :: rest, answer) =
+          mask2 ((m * 3
+            + (if String.sub (answer, i) = letter then 2
+             else if String.isSubstring (str letter) answer then 1
+             else 0)), i + 1, rest, answer)
+  in
+    mask2 (0, 0, explode guess, answer)
+  end;
+> val mask = fn : string * string -> int
+
+fun maskToString m =
+  let
+    fun maskToString2 (m, s, 0) = s
+      | maskToString2 (m, s, k) =
+        maskToString2 (m div 3,
+          (case (m mod 3) of 0 => "b" | 1 => "y" | 2 => "g") ^ s,
+          k - 1)
+  in
+    maskToString2 (m, "", 5)
+  end;
+> stdIn:7.12-7.60 Warning: match nonexhaustive
+>   raised at: stdIn:7.12-7.60
+> val maskToString = fn : int -> string
+
+fun maskCount (guess, remainingWords) =
+  from w in remainingWords
+    group m = mask (guess, w) compute c = count
+    compute count;
+> val maskCount = fn : string * string list -> int
+
+fun bestGuesses words =
+  from w in words,
+    maskCount = maskCount (w, words)
+    order maskCount desc;
+> val bestGuesses = fn : string list -> {maskCount:int, w:string} list
+
+fun remaining (words, []) = words
+  | remaining (words, (guess, m) :: rest) =
+      from w in (remaining (words, rest))
+        where maskToString (mask (guess, w)) = m;
+> val remaining = fn : string list * (string * string) list -> string list
+
+bestGuesses (remaining (words, [("aster", "ybbby")]));
+> val it =
+>   [{maskCount=54,w="marid"},{maskCount=54,w="moria"},{maskCount=51,w="daric"},
+>    {maskCount=51,w="moira"},{maskCount=50,w="caird"},{maskCount=50,w="coria"},
+>    {maskCount=49,w="carbo"},{maskCount=49,w="cardi"},{maskCount=49,w="coram"},
+>    {maskCount=49,w="darcy"},{maskCount=49,w="moral"},{maskCount=48,w="maria"},
+>    ...] : {maskCount:int, w:string} list
+
+(*) ------------------
+
+(* TODO allow anonymous record types in datatype
+datatype personnel_id =
+    EMPLOYEE of int
+  | CONTRACTOR of {ssid: string, agency: string};
+*)
+datatype personnel_id =
+    EMPLOYEE of int
+  | CONTRACTOR of string * string;
+> datatype personnel_id = CONTRACTOR of string * string | EMPLOYEE of int
+
+(* TODO allow type
+type member = {name: string, deptno: int, id: personnel_id};
+*)
+
+(* TODO allow datatype on record
+val members = [
+  {name = "Smith", deptno = 10, id = EMPLOYEE 100},
+  {name = "Jones", deptno = 20,
+   id = CONTRACTOR {ssid = "xxx-xx-xxxx", agency = "Cheap & cheerful contractors"}];
+*)
+val members = [
+  {name = "Smith", deptno = 10, id = EMPLOYEE 100},
+  {name = "Jones", deptno = 20,
+   id = CONTRACTOR ("xxx-xx-xxxx", "Cheap & cheerful contractors")}];
+> val members =
+>   [{deptno=10,id=EMPLOYEE 100,name="Smith"},
+>    {deptno=20,id=CONTRACTOR ("xxx-xx-xxxx","Cheap & cheerful contractors"),
+>     name="Jones"}] : {deptno:int, id:personnel_id, name:string} list
+
+val departments = scott.dept;
+> val departments = <relation> : {deptno:int, dname:string, loc:string} list
+
+val primes = [2, 3, 5, 7, 11];
+> val primes = [2,3,5,7,11] : int list
+
+val bands = [["john", "paul", "george", "ringo"], ["simon", "garfunkel"]];
+> val bands = [["john","paul","george","ringo"],["simon","garfunkel"]]
+>   : string list list
+
+(*) -------------
+1 + 2;
+> val it = 3 : int
+
+"Hello, " ^ "world!";
+> val it = "Hello, world!" : string
+
+val integers = [1, 2, 3, 4, 5, 6, 7, 8];
+> val integers = [1,2,3,4,5,6,7,8] : int list
+
+fun factorial n =
+  if n <= 1
+    then 1
+    else n * factorial (n - 1);
+> val factorial = fn : int -> int
+
+factorial 5;
+> val it = 120 : int
+
+fun map f [] = []
+  | map f (first :: rest) =
+      (f first) :: (map f rest);
+> val map = fn : ('a -> 'b) -> 'a list -> 'b list
+
+fun filter f [] = []
+  | filter f (first :: rest) =
+      if (f first)
+        then first :: (filter f rest)
+        else filter f rest;
+> val filter = fn : ('a -> bool) -> 'a list -> 'a list
+
+filter (fn i => i mod 2 = 0) integers;
+> val it = [2,4,6,8] : int list
+
 (*) === Coda ========================================================
 from message in ["the end"];
 > val it = ["the end"] : string list

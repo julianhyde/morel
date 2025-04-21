@@ -1415,11 +1415,12 @@ public class TypeResolver {
           // (therefore term is "tree(T8,T9)").
           // We can say that argTerm (T7) is equivalent to
           // the second type parameter (T9).
+          // It is sufficient to make vArg equivalent to T9.
           //
           // TODO: handle more complex types, e.g. "NODE (int * 'b)"
-          equiv(
-              argTerm,
-              ((Unifier.Sequence) term).terms.get(((TypeVar) argType).ordinal));
+          final Unifier.Sequence sequence = (Unifier.Sequence) term;
+          final TypeVar typeVar = (TypeVar) argType;
+          equiv(vArg, sequence.terms.get(typeVar.ordinal));
         }
         return reg(pat, v, term);
 
