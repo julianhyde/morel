@@ -3416,28 +3416,6 @@ Relational.empty [false];
 > val it = false : bool
 Sys.plan ();
 > val it = "apply(fnValue Relational.empty, argCode tuple(constant(false)))"
-=======
-Relational.exists (bag [1, 2, 3]);
-> val it = true : bool
-Relational.exists (bag []);
-> val it = false : bool
-Relational.exists (bag [false]);
-> val it = true : bool
-Sys.plan ();
-> val it =
->   "apply(fnValue Relational.exists, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false))))"
->   : string
-
-Relational.notExists (bag [1, 2, 3]);
-> val it = false : bool
-Relational.notExists (bag []);
-> val it = true : bool
-Relational.notExists (bag [false]);
-> val it = false : bool
-Sys.plan ();
-> val it =
->   "apply(fnValue Relational.notExists, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false))))"
->>>>>>> 7039f97 (Wip 12/27 (13 failures, 19 errors))
 >   : string
 
 val emps = [

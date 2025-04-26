@@ -787,7 +787,7 @@ public class AlgebraTest {
         ml ->
             ml.withBinding("scott", BuiltInDataSet.SCOTT)
                 .with(Prop.HYBRID, true)
-                .assertType("{deptno:int, dname:string, loc:string} list")
+                .assertType("{deptno:int, dname:string, loc:string} bag")
                 .assertPlan(isFullyCalcite())
                 .assertPlan(isCode(plan))
                 .assertEvalIter(
