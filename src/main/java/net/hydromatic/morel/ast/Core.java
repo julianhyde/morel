@@ -1467,9 +1467,12 @@ public class Core {
         throw new IllegalArgumentException(
             "scan expression must be list or bag: " + exp.type);
       }
-      if (!canAssign(exp.type.arg(0), pat.type)) {
-        throw new IllegalArgumentException(exp.type + " + " + pat.type);
-      }
+      // TODO
+      //  if (!canAssign(exp.type.arg(0), pat.type)) {
+      //        throw new IllegalArgumentException(
+      //            format("cannot assign elements of %s to %s", exp.type,
+      //                pat.type));
+      //  }
     }
 
     /**

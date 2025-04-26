@@ -303,8 +303,8 @@ public class MartelliUnifier extends Unifier {
               return failure("no valid overloads");
             case 1:
               Term term1 = constraint.termActions.left(0);
-              Constraint.Action consumer = constraint.termActions.right(0);
-              consumer.accept(constraint.arg, term1, this::add2);
+              Constraint.Action action = constraint.termActions.right(0);
+              action.accept(constraint.arg, term1, this::add2);
               break;
           }
         }
