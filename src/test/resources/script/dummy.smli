@@ -17,7 +17,20 @@
  * License.
  *)
 
+(* WORKS
+*)
+from {i, j} in [{i=1,j=2}];
+> val it = [{i=1,j=2}] : {i:int, j:int} list
+from (i, j) in [{i=1,j=2}];
+> 0.0-0.0 Error: Cannot deduce type: no valid overloads
+>   raised at: 0.0-0.0
+
+from (i, j) in [(1,2)];
+> val it = [{i=1,j=2}] : {i:int, j:int} list
+
+
 from i in [1,2,1,3] group i compute count;
+> val it = [{count=2,i=1},{count=1,i=2},{count=1,i=3}] : {count:int, i:int} list
 
 (*) empty 'from' is ordered
 from;
@@ -124,6 +137,7 @@ from (i, j) in [(14, 3), (~14, 3), (14, ~3), (~14, ~3)]
 bag [1,2];
 > val it = [1,2] : int bag
 from i in bag [1,2];
+> val it = [1,2] : int bag
 
 (* TODO
 List.length Bag.nil;

@@ -687,16 +687,6 @@ public class MainTest {
   @SuppressWarnings("ConstantConditions")
   @Test
   void testDummy() {
-    ml("from (i, j) in [(1, 1), (2, 3)]").assertType("{j:int, sum:int} bag");
-    // Theoretically a "group" without a "compute" can be followed by a
-    // "compute" step. So, the following is ambiguous. We treat it as a single
-    // "group ... compute" step. Under the two-step interpretation, the type
-    // would have been "int".
-    ml("from (i, j) in [(1, 1), (2, 3), (3, 4)]\n"
-            + "  group j = i mod 2\n"
-            + "  compute sum of j, count")
-        .assertType("{j:int, sum:int} bag")
-        .assertEvalIter(equalsUnordered(list(1, 5), list(0, 3)));
     switch (0) {
       case 0:
         ml("1").assertEval(is(1));
@@ -2377,8 +2367,26 @@ public class MainTest {
 
   @Test
   void testFromType() {
+    ml("from i in (from j in bag [1])").assertType("int bag");
+    ml("from i in (\n"
+            + "  from e in bag [{deptno=10}]\n"
+            + "  yield e.deptno)\n"
+            + "where i > 10\n"
+            + "yield i / 10")
+        .assertType("int bag");
     ml("from i in [1]").assertType("int list");
     ml("from i in bag [1]").assertType("int bag");
+    ml("from (i, j) in [(1, 1), (2, 3)]").assertType("{i:int, j:int} list");
+    ml("from (x, y) in [(1,2),(3,4),(3,0)] group sum = x + y")
+        .assertParse(
+            "from (x, y) in [(1, 2), (3, 4), (3, 0)] group sum = x + y")
+        .assertType(hasMoniker("int list"))
+        .assertEvalIter(equalsUnordered(3, 7));
+    ml("from {c, a, ...} in [{a=1.0,b=true,c=3},{a=1.5,b=true,c=4}]")
+        .assertParse(
+            "from {a = a, c = c, ...}"
+                + " in [{a = 1.0, b = true, c = 3}, {a = 1.5, b = true, c = 4}]")
+        .assertType("{a:real, c:int} list");
     ml("from i in [1] group i compute count")
         .assertType("{count:int, i:int} list");
     ml("from i in bag [1] group i compute count")
@@ -2966,7 +2974,7 @@ public class MainTest {
             + "from i in extent \"bool option\" "
             + "where #getOpt Option (i, false)";
     ml(ml)
-        .assertType("bool option bag")
+        .assertType("bool option list")
         .assertCore(-1, hasToString(core))
         .assertEval(is(list(list("SOME", true))));
   }
@@ -3451,23 +3459,7 @@ public class MainTest {
         .assertType(hasMoniker("{count:int, i:int} list"));
     ml("from i in bag [1,2] group i compute count")
         .assertType(hasMoniker("{count:int, i:int} bag"));
-    ml("from (i, j) in bag [(1, 1), (2, 3)]")
-        .assertType("{j:int, sum:int} bag");
-  }
-
-  @Test
-  void testFromPattern() {
-    ml("from (i, j) in [(1, 1), (2, 3)]").assertType("{j:int, sum:int} list");
-    ml("from (x, y) in [(1,2),(3,4),(3,0)] group sum = x + y")
-        .assertParse(
-            "from (x, y) in [(1, 2), (3, 4), (3, 0)] group sum = x + y")
-        .assertType(hasMoniker("int bag"))
-        .assertEvalIter(equalsUnordered(3, 7));
-    ml("from {c, a, ...} in [{a=1.0,b=true,c=3},{a=1.5,b=true,c=4}]")
-        .assertParse(
-            "from {a = a, c = c, ...}"
-                + " in [{a = 1.0, b = true, c = 3}, {a = 1.5, b = true, c = 4}]")
-        .assertType("{a:real, c:int} list");
+    ml("from (i, j) in bag [(1, 1), (2, 3)]").assertType("{i:int, j:int} bag");
   }
 
   @Test
