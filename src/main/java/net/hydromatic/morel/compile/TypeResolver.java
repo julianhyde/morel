@@ -803,9 +803,7 @@ public class TypeResolver {
     final TypeEnv env4 = typeEnvs.typeEnv;
 
     final Unifier.Variable v = fieldVar(fieldVars);
-    //    equiv(v, v16); // TODO remove, and restrict c0's scope
-    final Unifier.Variable c = unifier.variable();
-    /*
+    final Unifier.Variable c;
     switch (containerize) {
       case BAG:
         c = toVariable(bagTerm(v));
@@ -815,10 +813,8 @@ public class TypeResolver {
         break;
       default:
         c = unifier.variable();
-        mayBeBagOrList(v, c);
+        isListIfBothAreLists(p.c, c0, c, v);
     }
-*/
-    isListIfBothAreLists(p.c, c0, c, v);
 
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
@@ -829,8 +825,6 @@ public class TypeResolver {
       scanCondition2 = null;
     }
     fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
-//    equiv(v, p.v);
-//    equiv(c, p.c);
     return Triple.of(env4, v, c);
   }
 
@@ -852,16 +846,18 @@ public class TypeResolver {
    * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
    */
   private void isListIfBothAreLists(
-      Unifier.Term arg0, Unifier.Term arg1, Unifier.Variable c, Unifier.Variable v) {
+      Unifier.Term arg0,
+      Unifier.Term arg1,
+      Unifier.Variable c,
+      Unifier.Variable v) {
     final Unifier.Variable v0 = unifier.variable();
     final Unifier.Variable v1 = unifier.variable();
     final Unifier.Sequence list0 = listTerm(v0);
     final Unifier.Sequence list1 = listTerm(v1);
     final Unifier.Sequence bag0 = bagTerm(v0);
     final Unifier.Sequence bag1 = bagTerm(v1);
-    final Unifier.Variable vResult = unifier.variable();
-    final Unifier.Sequence listResult = listTerm(vResult);
-    final Unifier.Sequence bagResult = bagTerm(vResult);
+    final Unifier.Sequence listResult = listTerm(v);
+    final Unifier.Sequence bagResult = bagTerm(v);
     final Unifier.Constraint.Action listAction =
         (actualArg, term, consumer) -> consumer.accept(c, listResult);
     final Unifier.Constraint.Action bagAction =

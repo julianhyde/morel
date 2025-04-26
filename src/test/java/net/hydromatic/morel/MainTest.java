@@ -2335,8 +2335,8 @@ public class MainTest {
     ml("from i in (\n"
             + "  from e in bag [{deptno=10}]\n"
             + "  yield e.deptno)\n"
-                + "where i > 10\n"
-                + "yield i / 10")
+            + "where i > 10\n"
+            + "yield i / 10")
         .assertType("int bag");
     ml("from i in [1]").assertType("int list");
     ml("from i in bag [1]").assertType("int bag");
@@ -2963,7 +2963,7 @@ public class MainTest {
             + "from i in extent \"bool option\" "
             + "where #getOpt Option (i, false)";
     ml(ml)
-        .assertType("bool option list")
+        .assertType("bool option bag")
         .assertCore(-1, hasToString(core))
         .assertEval(is(list(list("SOME", true))));
   }
@@ -3374,7 +3374,7 @@ public class MainTest {
             + " compute s = sum of #empno e + #altitude d";
     ml(ml)
         .assertParse(expected)
-        .assertType("{deptno:int, s:int} bag")
+        .assertType("{deptno:int, s:int} list")
         .assertEvalIter(equalsOrdered(list(10, 3600)));
   }
 
@@ -3447,8 +3447,7 @@ public class MainTest {
         .assertType(hasMoniker("{count:int, i:int} list"));
     ml("from i in bag [1,2] group i compute count")
         .assertType(hasMoniker("{count:int, i:int} bag"));
-    ml("from (i, j) in bag [(1, 1), (2, 3)]")
-        .assertType("{i:int, j:int} bag");
+    ml("from (i, j) in bag [(1, 1), (2, 3)]").assertType("{i:int, j:int} bag");
   }
 
   @Test
