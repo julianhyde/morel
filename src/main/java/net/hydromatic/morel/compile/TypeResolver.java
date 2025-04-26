@@ -103,6 +103,7 @@ public class TypeResolver {
 
   static final String BAG_TY_CON = BuiltIn.Eqtype.BAG.mlName();
   static final String TUPLE_TY_CON = "tuple";
+  static final String ARG_TY_CON = "$arg";
   static final String OVERLOAD_TY_CON = BuiltIn.Datatype.OVERLOAD.mlName();
   static final String LIST_TY_CON = "list";
   static final String RECORD_TY_CON = "record";
@@ -780,27 +781,17 @@ public class TypeResolver {
       c0 = null;
     } else if (scan.exp.op == Op.FROM_EQ) {
       final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
-      final Unifier.Variable v15 = unifier.variable();
-      final Ast.Exp scanExp2 = deduceType(p.env, scanExp, v15);
+      final Ast.Exp scanExp2 = deduceType(p.env, scanExp, v16);
       scanExp3 = ast.fromEq(scanExp2);
       containerize = CollectionType.LIST; // ordered
       c0 = null;
-      reg(scanExp, v15, v16);
+      reg(scanExp, v16);
     } else {
-      final Ast.Exp scanExp = scan.exp;
       c0 = unifier.variable();
-      scanExp3 = deduceType(p.env, scanExp, c0);
+      scanExp3 = deduceType(p.env, scan.exp, c0);
+      reg(scan.exp, c0);
       containerize = CollectionType.BOTH; // retain source collection type
-      final Unifier.Sequence list = listTerm(v16);
-      final Unifier.Sequence bag = bagTerm(v16);
-      PairList<Unifier.Term, Unifier.Constraint.Action> termActions =
-          PairList.of();
-      termActions.add(
-          list, (actualArg, term, consumer) -> consumer.accept(c0, list));
-      termActions.add(
-          bag, (actualArg, term, consumer) -> consumer.accept(c0, bag));
-      constraints.add(unifier.constraint(c0, termActions));
-      reg(scanExp, c0);
+      mayBeBagOrList(v16, c0);
     }
     final Ast.Pat pat2 = deducePatType(p.env, scan.pat, termMap, null, v16);
     final TypeEnvHolder typeEnvs = new TypeEnvHolder(p.env);
@@ -812,7 +803,9 @@ public class TypeResolver {
     final TypeEnv env4 = typeEnvs.typeEnv;
 
     final Unifier.Variable v = fieldVar(fieldVars);
-    final Unifier.Variable c;
+    //    equiv(v, v16); // TODO remove, and restrict c0's scope
+    final Unifier.Variable c = unifier.variable();
+    /*
     switch (containerize) {
       case BAG:
         c = toVariable(bagTerm(v));
@@ -821,8 +814,11 @@ public class TypeResolver {
         c = toVariable(listTerm(v));
         break;
       default:
-        c = c0 != null ? c0 : unifier.variable();
+        c = unifier.variable();
+        mayBeBagOrList(v, c);
     }
+*/
+    isListIfBothAreLists(p.c, c0, c, v);
 
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
@@ -833,7 +829,55 @@ public class TypeResolver {
       scanCondition2 = null;
     }
     fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
+//    equiv(v, p.v);
+//    equiv(c, p.c);
     return Triple.of(env4, v, c);
+  }
+
+  /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
+  private void mayBeBagOrList(Unifier.Variable v, Unifier.Variable c) {
+    final Unifier.Sequence list = listTerm(v);
+    final Unifier.Constraint.Action listAction =
+        (actualArg, term, consumer) -> consumer.accept(c, list);
+    final Unifier.Sequence bag = bagTerm(v);
+    final Unifier.Constraint.Action bagAction =
+        (actualArg, term, consumer) -> consumer.accept(c, bag);
+    constraints.add(
+        unifier.constraint(c, copyOf(list, listAction, bag, bagAction)));
+  }
+
+  /**
+   * Adds a constraint that {@code arg0} is a bag or list (of something), and
+   * {@code arg1} is a bag or list (of something); if both are lists then {@code
+   * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
+   */
+  private void isListIfBothAreLists(
+      Unifier.Term arg0, Unifier.Term arg1, Unifier.Variable c, Unifier.Variable v) {
+    final Unifier.Variable v0 = unifier.variable();
+    final Unifier.Variable v1 = unifier.variable();
+    final Unifier.Sequence list0 = listTerm(v0);
+    final Unifier.Sequence list1 = listTerm(v1);
+    final Unifier.Sequence bag0 = bagTerm(v0);
+    final Unifier.Sequence bag1 = bagTerm(v1);
+    final Unifier.Variable vResult = unifier.variable();
+    final Unifier.Sequence listResult = listTerm(vResult);
+    final Unifier.Sequence bagResult = bagTerm(vResult);
+    final Unifier.Constraint.Action listAction =
+        (actualArg, term, consumer) -> consumer.accept(c, listResult);
+    final Unifier.Constraint.Action bagAction =
+        (actualArg, term, consumer) -> consumer.accept(c, bagResult);
+    final PairList<Unifier.Term, Unifier.Constraint.Action> termActions =
+        PairList.of();
+    termActions.add(argTerm(list0, list1), listAction);
+    termActions.add(argTerm(list0, bag1), bagAction);
+    termActions.add(argTerm(bag0, list1), bagAction);
+    termActions.add(argTerm(bag0, bag1), bagAction);
+    constraints.add(
+        unifier.constraint(toVariable(argTerm(arg0, arg1)), termActions));
+  }
+
+  private Unifier.Sequence argTerm(Unifier.Term... args) {
+    return unifier.apply(ARG_TY_CON, args);
   }
 
   private Triple deduceGroupStepType(

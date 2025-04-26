@@ -302,6 +302,24 @@ from x in [{a = {a = 1}}, {a = {a = 2}}]
   yield {x.a};
 > val it = [{a={a=1}},{a={a=2}}] : {a:{a:int}} list
 
+from (x, y) in [(1,2),(3,4),(3,0)]
+  group sum = x + y;
+> val it = [3,7] : int bag
+
+# Theoretically a "group" without a "compute" can be followed by a
+# "compute" step. So, the following is ambiguous. We treat it as a single
+# "group ... compute" step. Under the two-step interpretation, the type
+# would have been "int".
+from (i, j) in [(1, 1), (2, 3), (3, 4)]
+  group j = i mod 2
+  compute sum of j;
+> {1,5}, {0, 3} : {j:int, sum:int} list
+
+from (i, j) in [(1, 1), (2, 3), (3, 4)]
+  group j = i mod 2
+  compute sum of j, count;
+> {2,1,5}, {1,0, 3} : {i:int, j:int, sum:int} list
+
 from i in [1, 2, 3]
   yield {i = {i = i}};
 > val it = [{i={i=1}},{i={i=2}},{i={i=3}}] : {i:{i:int}} list
