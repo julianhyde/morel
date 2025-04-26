@@ -85,7 +85,10 @@ import net.hydromatic.morel.util.Tracers;
 import net.hydromatic.morel.util.TriConsumer;
 import net.hydromatic.morel.util.Unifier;
 import net.hydromatic.morel.util.Unifier.Action;
+import net.hydromatic.morel.util.Unifier.Constraint;
+import net.hydromatic.morel.util.Unifier.Failure;
 import net.hydromatic.morel.util.Unifier.Result;
+import net.hydromatic.morel.util.Unifier.Retry;
 import net.hydromatic.morel.util.Unifier.Sequence;
 import net.hydromatic.morel.util.Unifier.Substitution;
 import net.hydromatic.morel.util.Unifier.Term;
@@ -105,7 +108,7 @@ public class TypeResolver {
   private final PairList<Variable, PrimitiveType> preferredTypes =
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
-  private final List<Unifier.Constraint> constraints = new ArrayList<>();
+  private final List<Constraint> constraints = new ArrayList<>();
 
   static final String BAG_TY_CON = BuiltIn.Eqtype.BAG.mlName();
   static final String TUPLE_TY_CON = "tuple";
@@ -178,17 +181,17 @@ public class TypeResolver {
       terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
       final Result result =
           unifier.unify(termPairs, actionMap, constraints, tracer);
-      if (result instanceof Unifier.Retry) {
-        final Unifier.Retry retry = (Unifier.Retry) result;
+      if (result instanceof Retry) {
+        final Retry retry = (Retry) result;
         retry.amend();
         continue;
       }
-      if (result instanceof Unifier.Failure) {
+      if (result instanceof Failure) {
         final String extra =
             ";\n"
                 + " term pairs:\n"
                 + join("\n", transform(terms, Object::toString));
-        final Unifier.Failure failure = (Unifier.Failure) result;
+        final Failure failure = (Failure) result;
         throw new TypeException(
             "Cannot deduce type: " + failure.reason(), Pos.ZERO);
       }
@@ -323,12 +326,12 @@ public class TypeResolver {
    * @param variable2 Variable for the element type
    */
   private <E extends AstNode> E regCollection(
-      E node, Unifier.Variable variable, Unifier.Variable variable2) {
-    Unifier.Sequence list = listTerm(variable2);
-    Unifier.Sequence bag = bagTerm(variable2);
-    Unifier.Constraint.Action listAction =
+      E node, Variable variable, Variable variable2) {
+    Sequence list = listTerm(variable2);
+    Sequence bag = bagTerm(variable2);
+    Constraint.Action listAction =
         (actualArg1, term1, consumer1) -> consumer1.accept(variable, list);
-    Unifier.Constraint.Action bagAction =
+    Constraint.Action bagAction =
         (actualArg, term, consumer) -> consumer.accept(variable, bag);
     constraints.add(
         unifier.constraint(
@@ -344,8 +347,8 @@ public class TypeResolver {
    * @param variable2 Variable for the element type
    */
   private <E extends AstNode> E regList(
-      E node, Unifier.Variable variable, Unifier.Variable variable2) {
-    Unifier.Sequence term = listTerm(variable2);
+      E node, Variable variable, Variable variable2) {
+    Sequence term = listTerm(variable2);
     return reg(node, variable, term);
   }
 
@@ -357,8 +360,8 @@ public class TypeResolver {
    * @param variable2 Variable for the element type
    */
   private <E extends AstNode> E regBag(
-      E node, Unifier.Variable variable, Unifier.Variable variable2) {
-    Unifier.Sequence term = bagTerm(variable2);
+      E node, Variable variable, Variable variable2) {
+    Sequence term = bagTerm(variable2);
     return reg(node, variable, term);
   }
 
@@ -367,9 +370,7 @@ public class TypeResolver {
    * terms.
    */
   private void constrain(
-      Unifier.Variable arg,
-      Unifier.Variable result,
-      PairList<Unifier.Term, Unifier.Term> argResults) {
+      Variable arg, Variable result, PairList<Term, Term> argResults) {
     constraints.add(unifier.constraint(arg, result, argResults));
   }
 
@@ -645,7 +646,6 @@ public class TypeResolver {
       case WHERE:
         final Ast.Where where = (Ast.Where) step;
         final Variable v5 = unifier.variable();
-
         final Ast.Exp filter2 = deduceType(p.env, where.exp, v5);
         equiv(v5, toTerm(PrimitiveType.BOOL));
         fromSteps.add(where.copy(filter2));
@@ -697,8 +697,8 @@ public class TypeResolver {
         // Output is ordered iff input is ordered. Just like an overloaded map:
         //   map: 'a -> 'b -> 'a list -> 'b list
         //   map: 'a -> 'b -> 'a bag -> 'b bag
-        final Unifier.Variable c6 = unifier.variable();
-        PairList<Unifier.Term, Unifier.Term> argResults =
+        final Variable c6 = unifier.variable();
+        PairList<Term, Term> argResults =
             copyOf(listTerm(p.v), listTerm(v6), bagTerm(p.v), bagTerm(v6));
         constraints.add(unifier.constraint(p.c, c6, argResults));
 
@@ -744,7 +744,7 @@ public class TypeResolver {
         final Variable v13 = unifier.variable();
         final Variable v14 = unifier.variable();
         final Ast.Exp intoExp = deduceType(p.env, into.exp, v14);
-        Sequence fnType = fnTerm(listTerm(p.v), v13);
+        final Sequence fnType = fnTerm(bagTerm(p.v), v13);
         equiv(v14, fnType);
         fromSteps.add(into.copy(intoExp));
         // Ordering is irrelevant because result is a singleton.
@@ -846,12 +846,12 @@ public class TypeResolver {
   }
 
   /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
-  private void mayBeBagOrList(Unifier.Variable v, Unifier.Variable c) {
-    final Unifier.Sequence list = listTerm(v);
-    final Unifier.Constraint.Action listAction =
+  private void mayBeBagOrList(Variable v, Variable c) {
+    final Sequence list = listTerm(v);
+    final Constraint.Action listAction =
         (actualArg, term, consumer) -> consumer.accept(c, list);
-    final Unifier.Sequence bag = bagTerm(v);
-    final Unifier.Constraint.Action bagAction =
+    final Sequence bag = bagTerm(v);
+    final Constraint.Action bagAction =
         (actualArg, term, consumer) -> consumer.accept(c, bag);
     constraints.add(
         unifier.constraint(c, copyOf(list, listAction, bag, bagAction)));
@@ -863,24 +863,20 @@ public class TypeResolver {
    * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
    */
   private void isListIfBothAreLists(
-      Unifier.Term arg0,
-      Unifier.Term arg1,
-      Unifier.Variable c,
-      Unifier.Variable v) {
-    final Unifier.Variable v0 = unifier.variable();
-    final Unifier.Variable v1 = unifier.variable();
-    final Unifier.Sequence list0 = listTerm(v0);
-    final Unifier.Sequence list1 = listTerm(v1);
-    final Unifier.Sequence bag0 = bagTerm(v0);
-    final Unifier.Sequence bag1 = bagTerm(v1);
-    final Unifier.Sequence listResult = listTerm(v);
-    final Unifier.Sequence bagResult = bagTerm(v);
-    final Unifier.Constraint.Action listAction =
+      Term arg0, Term arg1, Variable c, Variable v) {
+    final Variable v0 = unifier.variable();
+    final Variable v1 = unifier.variable();
+    final Sequence list0 = listTerm(v0);
+    final Sequence list1 = listTerm(v1);
+    final Sequence bag0 = bagTerm(v0);
+    final Sequence bag1 = bagTerm(v1);
+    final Sequence listResult = listTerm(v);
+    final Sequence bagResult = bagTerm(v);
+    final Constraint.Action listAction =
         (actualArg, term, consumer) -> consumer.accept(c, listResult);
-    final Unifier.Constraint.Action bagAction =
+    final Constraint.Action bagAction =
         (actualArg, term, consumer) -> consumer.accept(c, bagResult);
-    final PairList<Unifier.Term, Unifier.Constraint.Action> termActions =
-        PairList.of();
+    final PairList<Term, Constraint.Action> termActions = PairList.of();
     termActions.add(argTerm(list0, list1), listAction);
     termActions.add(argTerm(list0, bag1), bagAction);
     termActions.add(argTerm(bag0, list1), bagAction);
@@ -889,7 +885,7 @@ public class TypeResolver {
         unifier.constraint(toVariable(argTerm(arg0, arg1)), termActions));
   }
 
-  private Unifier.Sequence argTerm(Unifier.Term... args) {
+  private Sequence argTerm(Term... args) {
     return unifier.apply(ARG_TY_CON, args);
   }
 
@@ -945,7 +941,7 @@ public class TypeResolver {
 
       // Output is ordered iff input is ordered.
       final Unifier.Variable c2 = unifier.variable();
-      PairList<Unifier.Term, Unifier.Term> argResults1 =
+      PairList<Term, Term> argResults1 =
           copyOf(listTerm(p.v), listTerm(v2), bagTerm(p.v), bagTerm(v2));
       constraints.add(unifier.constraint(p.c, c2, argResults1));
       return Triple.of(env3, v2, c2);
@@ -979,16 +975,15 @@ public class TypeResolver {
       default:
         final TreeMap<String, Variable> map = new TreeMap<>();
         fieldVars.forEach((k, v) -> map.put(k.name, v));
-        Unifier.Term term = recordTerm(map);
+        Term term = recordTerm(map);
         return equiv(unifier.variable(), term);
     }
   }
 
-  private Ast.Apply deduceApplyType(
-      TypeEnv env, Ast.Apply apply, Unifier.Variable v) {
-    final Unifier.Variable vFn = unifier.variable();
-    final Unifier.Variable vArg = unifier.variable();
-    Unifier.Term term1 = fnTerm(vArg, v);
+  private Ast.Apply deduceApplyType(TypeEnv env, Ast.Apply apply, Variable v) {
+    final Variable vFn = unifier.variable();
+    final Variable vArg = unifier.variable();
+    Term term1 = fnTerm(vArg, v);
     equiv(vFn, term1);
     final Ast.Exp arg2;
     if (apply.arg instanceof Ast.RecordSelector) {
@@ -1020,19 +1015,19 @@ public class TypeResolver {
       // To resolve overloading, we gather all known overloads, and apply
       // them as constraints to "vArg".
       final Ast.Id id = (Ast.Id) apply.fn;
-      final List<Unifier.Variable> variables = new ArrayList<>();
+      final List<Variable> variables = new ArrayList<>();
       env.collectInstances(
           typeSystem,
           id.name,
           term -> {
-            final Unifier.Variable variable = toVariable(term);
+            final Variable variable = toVariable(term);
             variables.add(variable);
-            if (term instanceof Unifier.Sequence) {
-              Unifier.Sequence sequence = (Unifier.Sequence) term;
+            if (term instanceof Sequence) {
+              Sequence sequence = (Sequence) term;
               if (sequence.operator.equals(FN_TY_CON)) {
                 assert sequence.terms.size() == 2;
-                Unifier.Term arg = sequence.terms.get(0);
-                Unifier.Term result = sequence.terms.get(1);
+                Term arg = sequence.terms.get(0);
+                Term result = sequence.terms.get(1);
                 overloads.add(
                     new Inst(
                         id.name,
@@ -1042,7 +1037,7 @@ public class TypeResolver {
               }
             }
           });
-      final PairList<Unifier.Term, Unifier.Term> argResults = PairList.of();
+      final PairList<Term, Term> argResults = PairList.of();
       for (Inst inst : overloads) {
         if (inst.name.equals(id.name) && variables.contains(inst.vFn)) {
           argResults.add(inst.vArg, inst.vResult);
@@ -1184,10 +1179,10 @@ public class TypeResolver {
         //   val inst foo = fn NONE => [] | SOME x => [x]
         // "inst foo" has function type "'a option -> 'a list" (vPat),
         // argument "'a option" (v2), result "'a list" (v3).
-        final Unifier.Variable v2 = unifier.variable();
-        final Unifier.Variable v3 = unifier.variable();
+        final Variable v2 = unifier.variable();
+        final Variable v3 = unifier.variable();
         overloads.add(new Inst(((Ast.IdPat) valBind2.pat).name, vPat, v2, v3));
-        Unifier.Term term = fnTerm(v2, v3);
+        Term term = fnTerm(v2, v3);
         equiv(vPat, term);
       }
     }
@@ -1275,9 +1270,7 @@ public class TypeResolver {
   }
 
   private Ast.Decl deduceOverDeclType(
-      TypeEnv env,
-      Ast.OverDecl overDecl,
-      PairList<Ast.IdPat, Unifier.Term> termMap) {
+      TypeEnv env, Ast.OverDecl overDecl, PairList<Ast.IdPat, Term> termMap) {
     map.put(overDecl, toTerm(PrimitiveType.UNIT));
     termMap.add(
         overDecl.pat,
@@ -1905,7 +1898,7 @@ public class TypeResolver {
 
     /** Collects terms that are instance of {@code name}. */
     default void collectInstances(
-        TypeSystem typeSystem, String name, Consumer<Unifier.Term> consumer) {}
+        TypeSystem typeSystem, String name, Consumer<Term> consumer) {}
 
     /**
      * Returns whether a variable of the given name is defined in this
@@ -1932,8 +1925,8 @@ public class TypeResolver {
     }
 
     default Kind getKind(String name, Term term) {
-      if (term instanceof Unifier.Sequence
-          && ((Unifier.Sequence) term).operator.equals(OVERLOAD_TY_CON)) {
+      if (term instanceof Sequence
+          && ((Sequence) term).operator.equals(OVERLOAD_TY_CON)) {
         return Kind.OVER;
       } else if (hasOverloaded(name)) {
         return Kind.INST;
@@ -2067,7 +2060,7 @@ public class TypeResolver {
 
     @Override
     public void collectInstances(
-        TypeSystem typeSystem, String name, Consumer<Unifier.Term> consumer) {
+        TypeSystem typeSystem, String name, Consumer<Term> consumer) {
       for (BindTypeEnv e = this; ; e = (BindTypeEnv) e.parent) {
         if (e.definedName.equals(name)) {
           if (e.kind == Kind.OVER) {
@@ -2127,10 +2120,10 @@ public class TypeResolver {
       typeEnv = typeEnv.bind(name, kind, typeToTerm(type));
     }
 
-    private Function<TypeSystem, Unifier.Term> typeToTerm(Type type) {
-      return new Function<TypeSystem, Unifier.Term>() {
+    private Function<TypeSystem, Term> typeToTerm(Type type) {
+      return new Function<TypeSystem, Term>() {
         @Override
-        public Unifier.Term apply(TypeSystem typeSystem_) {
+        public Term apply(TypeSystem typeSystem_) {
           return TypeResolver.this.toTerm(type, Subst.EMPTY);
         }
 
@@ -2348,15 +2341,11 @@ public class TypeResolver {
   /** Instance of an overloaded function. */
   private static class Inst {
     private final String name;
-    private final Unifier.Variable vFn;
-    private final Unifier.Variable vArg;
-    private final Unifier.Variable vResult;
+    private final Variable vFn;
+    private final Variable vArg;
+    private final Variable vResult;
 
-    Inst(
-        String name,
-        Unifier.Variable vFn,
-        Unifier.Variable vArg,
-        Unifier.Variable vResult) {
+    Inst(String name, Variable vFn, Variable vArg, Variable vResult) {
       this.name = name;
       this.vFn = vFn;
       this.vArg = vArg;
