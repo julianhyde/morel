@@ -17,6 +17,11 @@
  * License.
  *)
 
+1 elem [0,1,2];
+> val it = true : bool
+1 elem (bag [0,1,2]);
+> val it = true : bool
+
 (* WORKS
 *)
 from {i, j} in [{i=1,j=2}];

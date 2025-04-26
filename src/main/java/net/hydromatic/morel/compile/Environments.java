@@ -241,6 +241,17 @@ public abstract class Environments {
     }
 
     @Override
+    public @Nullable Binding getOpt2(Core.NamedPat id) {
+      if (binding.id.equals(id)) {
+        return binding;
+      }
+      if (binding.overloadId != null && binding.overloadId.equals(id)) {
+        return binding;
+      }
+      return parent.getOpt2(id);
+    }
+
+    @Override
     public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
       if (id.equals(binding.overloadId) || id.equals(binding.id)) { // TODO
         switch (binding.kind) {
@@ -325,6 +336,11 @@ public abstract class Environments {
     }
 
     @Override
+    public @Nullable Binding getOpt2(Core.NamedPat id) {
+      return null;
+    }
+
+    @Override
     public void collect(Core.NamedPat id, Consumer<Binding> consumer) {
       // do nothing
     }
@@ -389,9 +405,24 @@ public abstract class Environments {
     @Override
     public @Nullable Binding getOpt(Core.NamedPat id) {
       final Binding binding = map.get(id);
-      return binding != null && binding.id.i == id.i
-          ? binding
-          : parent.getOpt(id);
+      if (binding != null && binding.id.i == id.i) {
+        return binding;
+      }
+      for (Binding binding2 : instanceMap.values()) {
+        if (binding2.id.equals(id)) {
+          return binding2;
+        }
+      }
+      return parent.getOpt(id);
+    }
+
+    @Override
+    public @Nullable Binding getOpt2(Core.NamedPat id) {
+      final Binding binding = map.get(id);
+      if (binding != null && binding.id.i == id.i) {
+        return binding;
+      }
+      return parent.getOpt2(id);
     }
 
     @Override

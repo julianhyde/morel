@@ -24,32 +24,31 @@
 (* ------------------------------------------------------ *)
 (* Convert predicates into ranges. *)
 from i where i > 0 andalso i < 10;
-> val it = [1,2,3,4,5,6,7,8,9] : int list
+> val it = [1,2,3,4,5,6,7,8,9] : int bag
 from i where i > 0 andalso i < 4 yield {j = i + 1};
-> val it = [{j=2},{j=3},{j=4}] : {j:int} list
+> val it = [{j=2},{j=3},{j=4}] : {j:int} bag
 from i where i > 0 andalso i < 4 yield {j = i + 1} order j desc;
 > val it = [4,3,2] : int list
 from i where i > 0 andalso i < 10 andalso i mod 3 = 2;
-> val it = [2,5,8] : int list
+> val it = [2,5,8] : int bag
 from i where i = 0 orelse i = 12;
 > val it = [0,12] : int list
 from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
-> val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int list
+> val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int bag
 from i
 where i > 0 andalso i < 10
 join b
 where b = true;
 > val it =
 >   [{b=true,i=1},{b=true,i=2},{b=true,i=3},{b=true,i=4},{b=true,i=5},
->    {b=true,i=6},{b=true,i=7},{b=true,i=8},{b=true,i=9}] : {b:bool, i:int} list
+>    {b=true,i=6},{b=true,i=7},{b=true,i=8},{b=true,i=9}] : {b:bool, i:int} bag
 from i
 where i > 0 andalso i < 10
 join b
 where b = (i mod 2 = 0);
 > val it =
 >   [{b=false,i=1},{b=true,i=2},{b=false,i=3},{b=true,i=4},{b=false,i=5},
->    {b=true,i=6},{b=false,i=7},{b=true,i=8},{b=false,i=9}]
->   : {b:bool, i:int} list
+>    {b=true,i=6},{b=false,i=7},{b=true,i=8},{b=false,i=9}] : {b:bool, i:int} bag
 
 (*) Unbound variables in declared 'join';
 (*) condition on 'j' occurs after 'join'

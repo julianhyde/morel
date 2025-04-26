@@ -108,6 +108,9 @@ public abstract class Environment {
   /** Returns the binding of {@code id} if bound, null if not. */
   public abstract @Nullable Binding getOpt(Core.NamedPat id);
 
+  /** Alternative version of {@link #getOpt(Core.NamedPat)}. */
+  public abstract @Nullable Binding getOpt2(Core.NamedPat id);
+
   /** Calls a consumer for all bindings of {@code id}. */
   public abstract void collect(Core.NamedPat id, Consumer<Binding> consumer);
 
