@@ -818,7 +818,7 @@ public class TypeResolver {
     final TypeEnv env4 = typeEnvs.typeEnv;
 
     final Variable v = fieldVar(fieldVars);
-    final Variable c0 = null;
+    //    final Variable c0 = null;
     //    equiv(v, v16); // TODO remove, and restrict c0's scope
     final Variable c = unifier.variable();
     //      switch (containerize) {
@@ -830,9 +830,8 @@ public class TypeResolver {
     //          break;
     //        default:
     //          c = unifier.variable();
-    //          mayBeBagOrList(v, c);
+    //    isListIfBothAreLists(p.c, c0, c, v);
     //      }
-    isListIfBothAreLists(p.c, c0, c, v);
 
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
@@ -843,8 +842,6 @@ public class TypeResolver {
       scanCondition2 = null;
     }
     fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
-    //    equiv(v, p.v);
-    //    equiv(c, p.c);
     return Triple.of(env4, v, c);
   }
 
@@ -876,9 +873,8 @@ public class TypeResolver {
     final Unifier.Sequence list1 = listTerm(v1);
     final Unifier.Sequence bag0 = bagTerm(v0);
     final Unifier.Sequence bag1 = bagTerm(v1);
-    final Unifier.Variable vResult = unifier.variable();
-    final Unifier.Sequence listResult = listTerm(vResult);
-    final Unifier.Sequence bagResult = bagTerm(vResult);
+    final Unifier.Sequence listResult = listTerm(v);
+    final Unifier.Sequence bagResult = bagTerm(v);
     final Unifier.Constraint.Action listAction =
         (actualArg, term, consumer) -> consumer.accept(c, listResult);
     final Unifier.Constraint.Action bagAction =

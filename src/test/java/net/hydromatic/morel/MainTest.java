@@ -3000,7 +3000,7 @@ public class MainTest {
             + "from i in extent \"bool option\" "
             + "where #getOpt Option (i, false)";
     ml(ml)
-        .assertType("bool option list")
+        .assertType("bool option bag")
         .assertCore(-1, hasToString(core))
         .assertEval(is(list(list("SOME", true))));
   }
@@ -3422,7 +3422,7 @@ public class MainTest {
             + " compute s = sum of #empno e + #altitude d";
     ml(ml)
         .assertParse(expected)
-        .assertType("{deptno:int, s:int} bag")
+        .assertType("{deptno:int, s:int} list")
         .assertEvalIter(equalsOrdered(list(10, 3600)));
   }
 

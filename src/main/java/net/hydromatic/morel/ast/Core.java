@@ -19,6 +19,7 @@
 package net.hydromatic.morel.ast;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
@@ -1467,12 +1468,10 @@ public class Core {
         throw new IllegalArgumentException(
             "scan expression must be list or bag: " + exp.type);
       }
-      // TODO
-      //  if (!canAssign(exp.type.arg(0), pat.type)) {
-      //        throw new IllegalArgumentException(
-      //            format("cannot assign elements of %s to %s", exp.type,
-      //                pat.type));
-      //  }
+      if (!canAssign(exp.type.arg(0), pat.type)) {
+        throw new IllegalArgumentException(
+            format("cannot assign elements of %s to %s", exp.type, pat.type));
+      }
     }
 
     /**
