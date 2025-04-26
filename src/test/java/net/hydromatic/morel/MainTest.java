@@ -2630,7 +2630,7 @@ public class MainTest {
     final String core0 =
         "val it = "
             + "from d : {deptno:int, dname:string, loc:string} "
-            + "where d elem #dept scott";
+            + "where op elem$0 (d, #dept scott)";
     final String core1 = "val it = from d in #dept scott";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
@@ -2682,8 +2682,8 @@ public class MainTest {
         "val it = "
             + "from dno : int "
             + "join name : string "
-            + "where {deptno = dno, dname = name, loc = \"CHICAGO\"} "
-            + "elem #dept scott "
+            + "where op elem$0 "
+            + "({deptno = dno, dname = name, loc = \"CHICAGO\"}, #dept scott) "
             + "andalso dno > 20";
     final String core1 =
         "val it = "
@@ -2713,16 +2713,16 @@ public class MainTest {
         "val it = "
             + "from dno : int "
             + "join name : string "
-            + "where {deptno = dno, dname = name, loc = \"CHICAGO\"} "
-            + "elem #dept scott "
+            + "where op elem$0 "
+            + "({deptno = dno, dname = name, loc = \"CHICAGO\"}, #dept scott) "
             + "andalso dno > 20";
     final String core1 =
         "val it = "
             + "from v$0 in #dept scott "
             + "join dno in [#deptno v$0] "
             + "join name in [#dname v$0] "
-            + "where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"},"
-            + " #dept scott) "
+            + "where op elem "
+            + "({deptno = dno, dname = name, loc = \"CHICAGO\"}, #dept scott) "
             + "andalso dno > 20 "
             + "yield {dno = dno, name = name}";
     ml(ml)
@@ -2747,7 +2747,7 @@ public class MainTest {
             + "from dno : int "
             + "join name : string "
             + "join v : {deptno:int, dname:string, loc:string} "
-            + "where v elem #dept scott "
+            + "where op elem$0 (v, #dept scott) "
             + "where #deptno v = dno "
             + "where name = #dname v "
             + "where #loc v = \"CHICAGO\" "
@@ -2786,7 +2786,7 @@ public class MainTest {
             + "from dno : int "
             + "join name : string "
             + "join v : {deptno:int, dname:string, loc:string} "
-            + "where v elem #dept scott "
+            + "where op elem$0 (v, #dept scott) "
             + "where #deptno v = dno "
             + "where name = #dname v "
             + "where #loc v = \"CHICAGO\" "
@@ -2828,7 +2828,7 @@ public class MainTest {
     final String core0 =
         "val it = "
             + "let"
-            + " val isDept = fn d => d elem #dept scott "
+            + " val isDept = fn d => op elem$0 (d, #dept scott) "
             + "in"
             + " from d_1 : {deptno:int, dname:string, loc:string}"
             + " where isDept d_1 andalso #deptno d_1 = 20"
@@ -2866,10 +2866,10 @@ public class MainTest {
     final String core0 =
         "val it = "
             + "let"
-            + " val isDept = fn d => d elem #dept scott "
+            + " val isDept = fn d => op elem$0 (d, #dept scott) "
             + "in"
             + " let"
-            + " val isEmp = fn e => e elem #emp scott "
+            + " val isEmp = fn e => op elem$0 (e, #emp scott) "
             + "in"
             + " from d_1 : {deptno:int, dname:string, loc:string}"
             + " join e_1 : {comm:real, deptno:int, empno:int, ename:string, "

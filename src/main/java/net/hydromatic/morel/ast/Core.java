@@ -1520,7 +1520,7 @@ public class Core {
           .append(pat, 0, Op.EQ.left);
       if (Extents.isInfinite(exp)) {
         // Print "from x : int" rather "from x in extent 'int'"
-        w.append(" : ").append(((ListType) exp.type).elementType.moniker());
+        w.append(" : ").append(exp.type.arg(0).moniker());
       } else {
         w.append(" in ").append(exp, Op.EQ.right, 0);
       }
