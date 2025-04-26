@@ -520,7 +520,7 @@ public class Compiler {
         return toApplicable(cx, literal.unwrap(Object.class), argType, pos);
 
       case ID:
-        Binding binding = cx.env.getOpt(((Core.Id) fn).idPat);
+        Binding binding = cx.env.getOpt2(((Core.Id) fn).idPat);
         if (binding == null
             || binding.value instanceof LinkCode
             || binding.value == Unit.INSTANCE) {
