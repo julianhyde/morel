@@ -44,6 +44,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /** Prints values. */
@@ -133,9 +134,8 @@ class Pretty {
     if (value instanceof TypedVal) {
       final TypedVal typedVal = (TypedVal) value;
       final StringBuilder buf2 = new StringBuilder("val ");
-      appendId(buf2, typedVal.name).append(" = ");
+      appendId(buf2, typedVal.name);
       if (customPrint(buf, indent, lineEnd, depth, typedVal.type, typedVal.o)) {
-        buf2.append("<above>");
         lineEnd[0] = -1; // no limit
         pretty1(
             buf,
@@ -147,6 +147,7 @@ class Pretty {
             0,
             0);
       } else {
+        buf2.append(" = ");
         pretty1(
             buf,
             indent,
@@ -376,9 +377,7 @@ class Pretty {
       int depth,
       Type type,
       Object o) {
-    if (output != Prop.Output.CLASSIC
-        && type instanceof ListType
-        && ((ListType) type).elementType instanceof RecordType) {
+    if (output != Prop.Output.CLASSIC && canPrintTabular(type)) {
       final RecordType recordType = (RecordType) ((ListType) type).elementType;
       final List<List<String>> recordList = new ArrayList<>();
       final List<String> valueList = new ArrayList<>();
@@ -415,6 +414,19 @@ class Pretty {
       return true;
     }
     return false;
+  }
+
+  /** Can print a type in tabular format if it is a list of records. */
+  private static boolean canPrintTabular(Type type) {
+    return type instanceof ListType
+        && ((ListType) type).elementType instanceof RecordType
+        && canPrintTabular2((RecordType) ((ListType) type).elementType);
+  }
+
+  /** Can print a record in tabular format if its fields are all primitive. */
+  private static boolean canPrintTabular2(RecordType recordType) {
+    return PairList.viewOf(recordType.argNameTypes)
+        .allMatch((label, type) -> type instanceof PrimitiveType);
   }
 
   private void row(
