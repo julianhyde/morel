@@ -44,6 +44,78 @@ Contributors:
   Release 0.x.0
 -->
 
+## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.6.0">0.6.0</a> / 2024-04-30
+
+Release 0.6.0 generalizes queries with
+[universal and existential quantification](https://github.com/hydromatic/morel/issues/241)
+(`forall` and `exists`), ...
+
+Contributors:
+Julian Hyde
+
+### Features
+
+* [[MOREL-259](https://github.com/hydromatic/morel/issues/259)]
+  Tabular mode
+* [[MOREL-260](https://github.com/hydromatic/morel/issues/260)]
+  Add function `Sys.showAll ()`
+* [<a href="https://github.com/hydromatic/morel/issues/249">MOREL-249</a>]
+  Add `with` operator (functional update notation for record values)
+* [<a href="https://github.com/hydromatic/morel/issues/251">MOREL-251</a>]
+  Add function `Sys.clearEnv ()`
+* [<a href="https://github.com/hydromatic/morel/issues/246">MOREL-246</a>]
+  Tune unifier
+* [<a href="https://github.com/hydromatic/morel/issues/241">MOREL-241</a>]
+  Universal and existential quantification (`forall` and `exists`) and
+  implication (`implies`)
+
+### Bug-fixes and internal improvements
+
+* Add method `PairList.viewOf(Map)`
+* Allow `Sys` to be evaluated and printed in the shell
+* Refactor `NameGenerator`
+* [<a href="https://github.com/hydromatic/morel/issues/252">MOREL-252</a>]
+  When unparsing Morel, try to generate qualified identifiers less often
+* Refactor: Define built-in datatypes in an enum
+* Refactor: Omit declarations from type-unification
+* In `PairList`, add a static `copyOf` method, and enable `set` and `remove`
+  methods
+* The `toString` methods of `RelList` and `Binding` should not print the
+  contents of tables
+* [<a href="https://github.com/hydromatic/morel/issues/250">MOREL-250</a>]
+  Inliner generates invalid plan if dead code occurs in a nested `let`
+* [<a href="https://github.com/hydromatic/morel/issues/248">MOREL-248</a>]
+  Optimize method `Static.transformEager` for `List` and `Collection` arguments
+* [<a href="https://github.com/hydromatic/morel/issues/247">MOREL-247</a>]
+  Cannot translate an expression that contains type annotations
+* In `class Static`, add methods `last`, `skipLast`
+
+### Build and tests
+
+* Checkstyle should require that braces around blocks in `case:` are at the
+  start of the line
+* [<a href="https://github.com/hydromatic/morel/issues/245">MOREL-245</a>]
+  Enable google-java-format
+
+### Component upgrades
+
+* Bump calcite from 1.38 to 1.39
+* Bump checkstyle from 10.21.4 to 10.23.1
+* Bump guava from 33.4.0-jre to 33.4.5-jre,
+  and raise minimum from 21.0 to 23.1-jre
+* Bump guava from 33.4.5-jre to 33.4.8-jre
+* Bump jdk from 21 to 24;
+  we still support all Java versions JDK 8 and higher
+* Bump junit-jupiter from 5.12.0 to 5.12.2
+* Bump maven from 3.8.4 to 3.9.9
+* Bump maven-surefire-plugin from 3.5.2 to 3.5.3
+
+### Site and documentation
+
+* [<a href="https://github.com/hydromatic/morel/issues/261">MOREL-261</a>]
+  Release 0.6.0
+* In release notes, use the '0.x.0' format for releases
+
 ## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.5.0">0.5.0</a> / 2025-03-04
 
 Release 0.5.0 extends the syntax of the `from` expression
