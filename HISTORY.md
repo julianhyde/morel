@@ -48,7 +48,23 @@ Contributors:
 
 Release 0.6.0 generalizes queries with
 [universal and existential quantification](https://github.com/hydromatic/morel/issues/241)
-(`forall` and `exists`), ...
+(`forall` and `exists`) and adds a keyword for logical implication (`implies`).
+The new `with` keyword allows
+[functional update of record values](https://github.com/hydromatic/morel/issues/249).
+
+Usability of the shell is improved by
+[tabular mode](https://github.com/hydromatic/morel/issues/259),
+and
+[`showAll`](https://github.com/hydromatic/morel/issues/260)
+and
+[`clearEnv`](https://github.com/hydromatic/morel/issues/251)
+functions.
+
+In preparation for
+[operator overloading](https://github.com/hydromatic/morel/issues/237)
+we have
+[tuned the performance of the unifier](https://github.com/hydromatic/morel/issues/246)
+that powers Morel's type-inference.
 
 Contributors:
 Julian Hyde
@@ -57,10 +73,10 @@ Julian Hyde
 
 * [[MOREL-259](https://github.com/hydromatic/morel/issues/259)]
   Tabular mode
-* [[MOREL-260](https://github.com/hydromatic/morel/issues/260)]
-  Add function `Sys.showAll ()`
 * [[MOREL-249](https://github.com/hydromatic/morel/issues/249)]
   Add `with` operator (functional update notation for record values)
+* [[MOREL-260](https://github.com/hydromatic/morel/issues/260)]
+  Add function `Sys.showAll ()`
 * [[MOREL-251](https://github.com/hydromatic/morel/issues/251)]
   Add function `Sys.clearEnv ()`
 * [[MOREL-246](https://github.com/hydromatic/morel/issues/246)]
