@@ -29,38 +29,38 @@ scalar value such as a `bool` or a single record.
 For example, the following query returns the name and job title of all
 employees in department 10:
 
-```
-from e in scott.emps
-  where e.deptno = 10
-  yield {e.ename, e.sal};
-
+<pre>
+<b>from</b> e <b>in</b> scott.emps
+  <b>where</b> e.deptno = 10
+  <b>yield</b> {e.ename, e.sal};
+<i>
 ename  job
 ------ ---------
 CLARK  MANAGER
 KING   PRESIDENT
 MILLER CLERK
 
-val it : {ename:string, job:string} list
-```
+val it : {ename:string, job:string} list</i>
+</pre>
 
 (Notice how this result is printed as a table. Morel automatically
 uses tabular format if the value is a list of records or atomic
 values, provided that you have `set("output", "tabular");` in the
-current session; see [properties](reference.md#properties).
+current session; see [properties](reference.md#properties).)
 
 If you know SQL, you might have noticed that this looks similar to a
 SQL query:
 
-```sql
-SELECT e.ename, e.sal
-FROM scott.emps
-WHERE e.deptno = 10;
-```
+<pre>
+<b>SELECT</b> e.ename, e.sal
+<b>FROM</b> scott.emps <b>AS</b> e
+<b>WHERE</b> e.deptno = 10;
+</pre>
 
 There are deep similarities between Morel query expressions and SQL,
 which is expected, because both are based on relational algebra. Any
-SQL query has an equivalent in Morel, often with [similar
-syntax](#correspondence-between-sql-and-morel-query).
+SQL query has an equivalent in Morel, often with
+[similar syntax](#correspondence-between-sql-and-morel-query).
 
 ## Syntax
 
@@ -114,8 +114,9 @@ more *scans*, then followed by zero or more *steps*. (A `forall` query
 must end with a `require` step, and a `from` query may end with an
 `into` or `compute` terminal step.)
 
-In the previous query, `from e in scott.emps` is a scan, and `where
-e.deptno = 10` and `yield {e.ename, e.sal}` are steps.
+In the previous query, <code><b>from</b> e <b>in</b> scott.emps</code>
+is a scan, and <code><b>where</b> e.deptno = 10</code> and
+<code><b>yield</b> {e.ename, e.sal}</code> are steps.
 
 Now let's look at [scans](#scan) and [steps](#step) in more detail. We
 will focus on `from` for now, and will cover `forall` and `exists` in
@@ -133,110 +134,111 @@ The collection can have elements of any type. In SQL, the elements
 must be records, but in Morel they may be atomic values, lists, lists
 of lists, records that contain lists of records, or anything else.
 
-```
-(*) Query over a list of integers.
-from i in [1, 2, 3, 4, 5, 6]
-  where i mod 2 = 0;
-
+<pre>
+<i>(* Query over a list of integers. *)</i>
+<b>from</b> i <b>in</b> [1, 2, 3, 4, 5]
+  <b>where</b> i <b>mod</b> 2 = 0;
+<i>
 2
 4
-6
 
-> val it : int list
-```
+val it : int list</i>
+</pre>
 
 If the collection has a structured type, you can use a pattern to
 deconstruct it.
 
-```
-(*) Query over a list of (string, int) pairs.
-from (name, age) in [("shaggy", 17), ("scooby", 7)]
-  yield {s=name ^ " is " ^ Int.toString age ^ "."};
-
+<pre>
+<i>(* Query over a list of (string, int) pairs. *)</i>
+<b>from</b> (name, age) <b>in</b> [("shaggy", 17), ("scooby", 7)]
+  <b>yield</b> {s = name ^ " is " ^ Int.toString(age) ^ "."};
+<i>
 shaggy is 17.
 scooby is 7.
 
-val it : {s:string} list
-```
+val it : {s:string} list</i>
+</pre>
 
 ### Multiple scans
 
 If there are multiple scans, the query generates a cartesian product:
 
-```
-from i in [2, 3],
-  b in [false, true];
+<pre>
+<b>from</b> i <b>in</b> [2, 3],
+  s <b>in</b> ["ab", "cde"];
+<i>
+i s
+- ---
+2 ab
+2 cde
+3 ab
+3 cde
 
-b     i
------ -
-false 2
-true  2
-false 3
-true  3
-
-val it : {b:bool, i:int} list
-```
+val it : {i:int, s:string} list</i>
+</pre>
 
 If you want to add a join condition, you can append an `on` clause:
 
-```
-from e in scott.emps,
-    d in scott.depts on e.deptno = d.deptno
-  where e.job = "MANAGER"
-  yield {e.ename, d.dname};
-
+<pre>
+<b>from</b> e <b>in</b> scott.emps,
+    d <b>in</b> scott.depts <b>on</b> e.deptno = d.deptno
+  <b>where</b> e.job = "MANAGER"
+  <b>yield</b> {e.ename, d.dname};
+<i>
 dname      ename
 ---------- ------
 RESEARCH   JONES
 SALES      BLAKE
 ACCOUNTING CLARK
 
-val it : {dname:string, ename:string} list
-```
+val it : {dname:string, ename:string} list</i>
+</pre>
 
 (The `on` clause is not allowed on the first scan.)
 
 If you want scans later in a query, use the `join` step.
 
-```
-from c in clients
-  where c.city = "BOSTON"
-  join e in scott.emps on c.contact = e.empno,
-      d in scott.depts on e.deptno = d.deptno
-  yield {c.cname, e.ename, d.dname};
-
+<pre>
+<b>from</b> c <b>in</b> clients
+  <b>where</b> c.city = "BOSTON"
+  <b>join</b> e <b>in</b> scott.emps <b>on</b> c.contact = e.empno,
+      d <b>in</b> scott.depts <b>on</b> e.deptno = d.deptno
+  <b>yield</b> {c.cname, e.ename, d.dname};
+<i>
 cname  dname ename
 ------ ----- ------
 Apple  SALES MARTIN
 Disney SALES ALLEN
 Ford   SALES WARD
-IBM    SALES MARTIN
-```
+IBM    SALES MARTIN</i>
+</pre>
 
 ### Lateral scans and nested data
 
 Multiple scans are a convenient way of dealing with nested data.
 
-```
-(*) Each shipment has one or more nested items.
-val shipments =
+<pre>
+<i>(* Define the shipments data set; each shipment has one or
+ * more nested items. *)</i>
+<b>val</b> shipments =
   [{id=1, shipping=10.0, items=[{product="soda", quantity=12},
                                 {product="beer", quantity=3}],
    {id=2, shipping=7.5, items=[{product="cider",quantity=4}]}]}];
 
-(*) Flatten the data set by joining each shipment to its own items.
-from s in shipments,
-    i in s.items
-  yield {s.id, i.product, i.quantity};
-
+<i>(* Flatten the data set by joining each shipment to its own
+ * items. *)</i>
+<b>from</b> s <b>in</b> shipments,
+    i <b>in</b> s.items
+  <b>yield</b> {s.id, i.product, i.quantity};
+<i>
 id product quantity
 -- ------- --------
  1 soda          12
  1 beer           3
  2 cider          4
 
-val it : {id:int, product:string, quantity:int} list
-```
+val it : {id:int, product:string, quantity:int} list</i>
+</pre>
 
 Note that the second scan uses current row from the first scan (`s`
 appears in the expression `s.items`). SQL calls this a lateral join
@@ -249,14 +251,28 @@ concise in Morel.
 ### Single-row scan
 
 A scan with `=` syntax iterates over a single value. While `pat = exp`
-is just syntactic sugar for `pat in [exp]`, it is nevertheless a
-useful way to add a column to the current row.
+is just syntactic sugar for `pat <b>in</b> [exp]`, it is nevertheless
+a useful way to add a column to the current row.
 
-```
-(*) Iterate over a list of integers and compute whether they are odd
-from i in [1, 2, 3, 4, 5],
-    odd = (i mod 2 = 1);
+<pre>
+<i>(* Iterate over a list of integers and compute whether
+ * they are odd. *)</i>
+<b>from</b> i <b>in</b> [1, 2, 3, 4, 5],
+    odd = (i <b>mod</b> 2 = 1);
+<i>
+i odd
+- -----
+1 true
+2 false
+3 true
+4 false
+5 true</i>
 
+<i>(* Equivalent using "in" and a singleton list. *)</i>
+<b>val</b> it : {i:int, odd:bool} list
+<b>from</b> i <b>in</b> [1, 2, 3, 4, 5],
+    odd <b>in</b> [(i <b>mod</b> 2 = 1)];
+<i>
 i odd
 - -----
 1 true
@@ -265,45 +281,32 @@ i odd
 4 false
 5 true
 
-(*) Equivalent using "in" and a singleton list
-val it : {i:int, odd:bool} list
-from i in [1,2,3,4,5],
-    odd in [(i mod 2 = 1)];
-
-i odd
-- -----
-1 true
-2 false
-3 true
-4 false
-5 true
-
-val it : {i:int, odd:bool} list
-```
+val it : {i:int, odd:bool} list</i>
+</pre>
 
 ### Empty scan
 
 In case you are wondering, yes, a query with no scans is legal. It
 produces one row with zero fields.
 
-```
-from;
+<pre>
+<b>from</b>;
 
-val it = [()] : unit list
-```
+<it>val it = [()] : unit list</it>
+</pre>
 
 You can even feed that one row into a pipeline.
 
-```
-from
-  where true
-  yield {i = 1 + 2};
-i
--
+<pre>
+<b>from</b>
+  <b>where</b> true
+  <b>yield</b> 1 + 2;
+<i>
 3
 
-val it : {i:int} list
-```
+val it : {i:int} list</i>
+</pre>
+
 ## Step
 
 A query is a pipeline of data flowing through relational
@@ -318,10 +321,10 @@ with a set of scans, and each scan defines a number of variables
 The following query defines two fields: `deptno` of type `int` and
 `emp` with a record type.
 
-``` 
-from deptno in [10, 20],
-    emp in scott.emps on emp.deptno = deptno;
-```
+<pre>
+<b>from</b> deptno <b>in</b> [10, 20],
+    emp <b>in</b> scott.emps <b>on</b> emp.deptno = deptno;
+</pre>
 
 (Unlike SQL, the fields of a record are not automatically unnested. If
 you wish to access the `job` field of an employee record, then you
@@ -330,11 +333,11 @@ must write `emp.job`; the unqualified expression `job` is invalid.)
 The `deptno` and `emp` fields can be consumed in a following `yield`
 step, which produces fields `deptno`, `job`, `initial`:
 
-```
-from deptno in [10, 20],
-    emp in scott.emps on emp.deptno = deptno
-  yield {deptno, emp.job, initial = String.sub(emp.ename, 1);
-
+<pre>
+<b>from</b> deptno <b>in</b> [10, 20],
+    emp <b>in</b> scott.emps <b>on</b> emp.deptno = deptno
+  <b>yield</b> {deptno, emp.job, initial = String.sub(emp.ename, 1);
+<i>
 deptno initial job
 ------ ------- ---------
 10     L       MANAGER
@@ -346,8 +349,8 @@ deptno initial job
 20     D       CLERK
 20     O       ANALYST
 
-val it : {deptno:int, initial:char, job:string} list
-```
+val it : {deptno:int, initial:char, job:string} list</i>
+</pre>
 
 And so on. In the following sections, we define each of Morel's step
 types and how they map input fields to output fields.
