@@ -87,6 +87,8 @@ Julian Hyde
 
 ### Bug-fixes and internal improvements
 
+* [[MOREL-258](https://github.com/hydromatic/morel/issues/258)]
+  `skip` and `take` in query with unbounded variable give error
 * Add method `PairList.viewOf(Map)`
 * Allow `Sys` to be evaluated and printed in the shell
 * Refactor `NameGenerator`
