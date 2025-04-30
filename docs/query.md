@@ -24,13 +24,7 @@ License.
 Queries are a class of Morel expressions that operate on
 collections. A typical query takes one or more collections as input
 and returns a collection, but there are also variants that return a
-scalar value such as a `boolean` or a single record.
-
-A query is an expression, and always starts with the keyword `from`,
-`exists` or `forall`. Provided that its type is valid, you can use a
-query anywhere that an expression is valid, such as in a `case`
-expression, the body of a `fn` lambda, or the argument to a function
-call.
+scalar value such as a `bool` or a single record.
 
 For example, the following query returns the name and job title of all
 employees in department 10:
@@ -49,174 +43,42 @@ MILLER CLERK
 val it : {ename:string, job:string} list
 ```
 
+(Notice how this result is printed as a table. Morel automatically
+uses tabular format if the value is a list of records or atomic
+values, provided that you have `set("output", "tabular");` in the
+current session; see [properties](reference.md#properties).
+
 If you know SQL, you might have noticed that this looks similar to a
 SQL query:
+
 ```sql
 SELECT e.ename, e.sal
 FROM scott.emps
 WHERE e.deptno = 10;
 ```
-This is no accident. Morel query expressions are based on relational algebra, just like SQL.
 
-# Correspondence between SQL and Morel query
+There are deep similarities between Morel query expressions and SQL,
+which is expected, because both are based on relational algebra. Any
+SQL query has an equivalent in Morel, often with [similar
+syntax](#correspondence-between-sql-and-morel-query).
 
-| SQL      | Morel   | Remarks
-|----------|---------|---------
-| `SELECT` | `yield` | `SELECT` is always the first keyword of a query, but you may use `yield` at any point in the pipeline. It often occurs last, and you can omit it if the output record has the right shape.
-| `FROM`   | `from`  | Unlike SQL `FROM`, `from` is the first keyword in a Morel query.
-| `JOIN`   | `join`  | SQL `JOIN` is part of the `FROM` clause, but Morel `join` is a step.
-| `WHERE`  | `where` | Morel `where` is equivalent to SQL `WHERE`.
-| `HAVING` |         | Use a `where` after a `group`.
-| `DISTINCT` | `distinct` | SQL `DISTINCT` is part of the `SELECT` clause, but Morel `distinct` is a step, shorthand for `group`
-| `ORDER BY` | `order` | Morel `order` is equivalent to SQL `ORDER BY`.
-| `LIMIT` | `take`  | Morel `take` is equivalent to SQL `LIMIT`.
-| `OFFSET` | `skip` | Morel `skip` is equivalent to SQL `OFFSET`.
-| `UNION` | `union` | Morel `union` is equivalent to SQL `UNION ALL`.
-| `INTERSECT` | `intersect` | Morel `intersect` is equivalent to SQL `INTERSECT ALL`.
-| `EXCEPT` | `except` | Morel `except` is equivalent to SQL `EXCEPT ALL` (or `MINUS ALL` in some SQL dialects).
-| `EXISTS` | `exists` | SQL `EXISTS` is unary operator whose argument is a query, but Morel `exists` is a query that returns `true` if the query has at least one row.
-| no equivalent | `forall` | Morel `forall` is a query that returns `true` if a predicate is true for all rows.
+## Syntax
 
-## Grammar
-
-This reference is based on
-[Andreas Rossberg's grammar for Standard ML](https://people.mpi-sws.org/~rossberg/sml.html).
-While the files have a different [notation](#notation),
-they are similar enough to the two languages.
-
-### Differences between Morel and SML
-
-Morel aims to be compatible with Standard ML.
-It extends Standard ML in areas related to relational operations.
-Some of the features in Standard ML are missing,
-just because they take effort to build.
-Contributions are welcome!
-
-In Morel but not Standard ML:
-* `from` expression with `in`, `join`, `where`, `distinct`, `group`,
-  `compute`, `into`, `order`, `skip`, `take`, `through`, `yield` clauses
-* `elem`,
-  `except`,
-  `exists`,
-  `forall`,
-  `implies`,
-  `intersect`,
-  `notelem`,
-  `union` operators
-* "*lab* `=`" is optional in `exprow`
-* identifiers may be quoted
-  (for example, <code>\`an identifier\`</code>)
-
-In Standard ML but not in Morel:
-* `word` constant
-* `longid` identifier
-* references (`ref` and operators `!` and `:=`)
-* exceptions (`raise`, `handle`, `exception`)
-* `while` loop
-* data type replication (`type`)
-* `withtype` in `datatype` declaration
-* abstract type (`abstype`)
-* modules (`structure` and `signature`)
-* local declarations (`local`)
-* operator declarations (`nonfix`, `infix`, `infixr`)
-* `open`
-* `before` and `o` operators
-
-### Constants
+The formal syntax of queries is as follows.
 
 <pre>
-<i>con</i> <b>&rarr;</b> <i>int</i>                       integer
-    | <i>float</i>                     floating point
-    | <i>char</i>                      character
-    | <i>string</i>                    string
-<i>int</i> &rarr; [<b>~</b>]<i>num</i>                    decimal
-    | [<b>~</b>]<b>0x</b><i>hex</i>                  hexadecimal
-<i>float</i> &rarr; [<b>~</b>]<i>num</i><b>.</b><i>num</i>              floating point
-    | [<b>~</b>]<i>num</i>[<b>.</b><i>num</i>]<b>e</b>[<b>~</b>]<i>num</i>
-                                scientific
-<i>char</i> &rarr; <b>#"</b><i>ascii</i><b>"</b>                 character
-<i>string</i> &rarr; <b>"</b><i>ascii</i>*<b>"</b>               string
-<i>num</i> &rarr; <i>digit</i> <i>digit</i>*              number
-<i>hex</i> &rarr; (<i>digit</i> | <i>letter</i>) (<i>digit</i> | <i>letter</i>)*
-                                hexadecimal number (letters
-                                may only be in the range A-F)
-<i>ascii</i> &rarr; ...                     single non-" ASCII character
-                                or \-headed escape sequence
-</pre>
-
-## Identifiers
-
-<pre>
-<i>id</i> &rarr;  <i>letter</i> (<i>letter</i> | <i>digit</i> | ''' | <b>_</b>)*
-                                alphanumeric
-    | <i>symbol</i> <i>symbol</i>*            symbolic (not allowed for type
-                                variables or module language
-                                identifiers)
-<i>symbol</i> &rarr; <b>!</b>
-    | <b>%</b>
-    | <b>&amp;</b>
-    | <b>$</b>
-    | <b>#</b>
-    | <b>+</b>
-    | <b>-</b>
-    | <b>/</b>
-    | <b>:</b>
-    | <b>&lt;</b>
-    | <b>=</b>
-    | <b>&gt;</b>
-    | <b>?</b>
-    | <b>@</b>
-    | <b>\</b>
-    | <b>~</b>
-    | <b>`</b>
-    | <b>^</b>
-    | '<b>|</b>'
-    | '<b>*</b>'
-<i>var</i> &rarr; '''(<i>letter</i> | <i>digit</i> | ''' | <b>_</b>)*
-                                unconstrained
-      ''''(<i>letter</i> | <i>digit</i> | ''' | <b>_</b>⟩*
-                                equality
-<i>lab</i> &rarr; <i>id</i>                        identifier
-      <i>num</i>                       number (may not start with 0)
-</pre>
-
-### Expressions
-
-<pre>
-<i>exp</i> &rarr; <i>con</i>                       constant
-    | [ <b>op</b> ] <i>id</i>                 value or constructor identifier
-    | <i>exp<sub>1</sub></i> <i>exp<sub>2</sub></i>                 application
-    | <i>exp<sub>1</sub></i> <i>id</i> <i>exp<sub>2</sub></i>              infix application
-    | '<b>(</b>' <i>exp</i> '<b>)</b>'               parentheses
-    | '<b>(</b>' <i>exp<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>exp<sub>n</sub></i> '<b>)</b>' tuple (n &ne; 1)
-    | <b>{</b> [ <i>exprow</i> ] <b>}</b>            record
-    | <b>#</b><i>lab</i>                      record selector
-    | '<b>[</b>' <i>exp<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>exp<sub>n</sub></i> '<b>]</b>' list (n &ge; 0)
-    | '<b>(</b>' <i>exp<sub>1</sub></i> <b>;</b> ... <b>;</b> <i>exp<sub>n</sub></i> '<b>)</b>' sequence (n &ge; 2)
-    | <b>let</b> <i>dec</i> <b>in</b> <i>exp<sub>1</sub></i> ; ... ; <i>exp<sub>n</sub></i> <b>end</b>
-                                local declaration (n ≥ 1)
-    | <i>exp</i> <b>:</b> <i>type</i>                type annotation
-    | <i>exp<sub>1</sub></i> <b>andalso</b> <i>exp<sub>2</sub></i>         conjunction
-    | <i>exp<sub>1</sub></i> <b>orelse</b> <i>exp<sub>2</sub></i>          disjunction
-    | <b>if</b> <i>exp<sub>1</sub></i> <b>then</b> <i>exp<sub>2</sub></i> <b>else</b> <i>exp<sub>3</sub></i>
-                                conditional
-    | <b>case</b> <i>exp</i> <b>of</b> <i>match</i>         case analysis
-    | <b>fn</b> <i>match</i>                  function
+<i>exp</i> &rarr; (other expressions)
     | <b>from</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>* [ <i>terminalStep</i> ]
                                 relational expression (<i>s</i> &ge; 0)
     | <b>exists</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>*
                                 existential quantification (<i>s</i> &ge; 0)
     | <b>forall</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>* <b>require</b> <i>exp</i>
                                 universal quantification (<i>s</i> &ge; 0)
-<i>exprow</i> &rarr; [ <i>exp</i> <b>with</b> ] <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
-                                expression row
-<i>exprowItem</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i>
-<i>match</i> &rarr; <i>matchItem</i> [ '<b>|</b>' <i>matchItem</i> ]*
-                                match
-<i>matchItem</i> &rarr; <i>pat</i> <b>=&gt;</b> <i>exp</i>
+
 <i>scan</i> &rarr; <i>pat</i> <b>in</b> <i>exp</i> [ <b>on</b> <i>exp</i> ]    iteration
     | <i>pat</i> <b>=</b> <i>exp</i> [ <b>on</b> <i>exp</i> ]      single iteration
     | <i>var</i>                       unbounded variable
+
 <i>step</i> &rarr; <b>join</b> <i>scan<sub>1</sub></i> [ <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ]
                                 join clause
     | <b>where</b> <i>exp</i>                 filter clause
@@ -230,361 +92,327 @@ In Standard ML but not in Morel:
     | <b>take</b> <i>exp</i>                  take clause
     | <b>through</b> <i>pat</i> <b>in</b> <i>exp</i>        through clause
     | <b>yield</b> <i>exp</i>                 yield clause
+
 <i>terminalStep</i> &rarr; <b>into</b> <i>exp</i>         into clause
     | <b>compute</b> <i>agg<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>agg<sub>a</sub></i>  compute clause (<i>a</i> &gt; 1)
+
 <i>groupKey</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i>
+
 <i>agg</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i> [ <b>of</b> <i>exp</i> ]
+
 <i>orderItem</i> &rarr; <i>exp</i> [ <b>desc</b> ]
 </pre>
 
-### Patterns
+First, notice that a query is an expression. Provided that its type is
+valid, you can use a query anywhere in a Morel program that an
+expression is valid, such as in a `case` expression, the body of a
+`fn` lambda, or the argument to a function call. Or you can evaluate a
+query by typing it into the shell, just like any other expression.
 
-<pre>
-<i>pat</i> &rarr; <i>con</i>                       constant
-    | <b>_</b>                         wildcard
-    | [ <b>op</b> ] <i>id</i>                 variable
-    | [ <b>op</b> ] <i>id</i> [ <i>pat</i> ]         construction
-    | <i>pat<sub>1</sub></i> <i>id</i> <i>pat<sub>2</sub></i>              infix construction
-    | '<b>(</b>' <i>pat</i> '<b>)</b>'               parentheses
-    | '<b>(</b>' <i>pat<sub>1</sub></i> , ... , <i>pat<sub>n</sub></i> '<b>)</b>' tuple (n &ne; 1)
-    | <b>{</b> [ <i>patrow</i> ] <b>}</b>            record
-    | '<b>[</b>' <i>pat<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>pat<sub>n</sub></i> '<b>]</b>' list (n &ge; 0)
-    | <i>pat</i> <b>:</b> <i>type</i>                type annotation
-    | <i>id</i> <b>as</b> <i>pat</i>                 layered
-<i>patrow</i> &rarr; '<b>...</b>'                  wildcard
-    | <i>lab</i> <b>=</b> <i>pat</i> [<b>,</b> <i>patrow</i>]      pattern
-    | <i>id</i> [<b>,</b> <i>patrow</i>]             label as variable
-</pre>
+A query is a `from`, `exists` or `forall` keyword followed by one or
+more *scans*, then followed by zero or more *steps*. (A `forall` query
+must end with a `require` step, and a `from` query may end with an
+`into` or `compute` terminal step.)
 
-### Types
+In the previous query, `from e in scott.emps` is a scan, and `where
+e.deptno = 10` and `yield {e.ename, e.sal}` are steps.
 
-<pre>
-<i>typ</i> &rarr; <i>var</i>                       variable
-    | [ <i>typ</i> ] <i>id</i>                constructor
-    | '<b>(</b>' <i>typ</i> [<b>,</b> <i>typ</i> ]* '<b>)</b>' <i>id</i>  constructor
-    | '<b>(</b>' <i>typ</i> '<b>)</b>'               parentheses
-    | <i>typ<sub>1</sub></i> <b>-&gt;</b> <i>typ<sub>2</sub></i>              function
-    | <i>typ<sub>1</sub></i> '<b>*</b>' ... '<b>*</b>' <i>typ<sub>n</sub></i>     tuple (n &ge; 2)
-    | <b>{</b> [ <i>typrow</i> ] <b>}</b>            record
-<i>typrow</i> &rarr; <i>lab</i> : <i>typ</i> [, <i>typrow</i>]   type row
-</pre>
+Now let's look at [scans](#scan) and [steps](#step) in more detail. We
+will focus on `from` for now, and will cover `forall` and `exists` in
+[quantified queries](#quantified-queries).
 
-### Declarations
+## Scan
 
-<pre>
-<i>dec</i> &rarr; <i>vals</i> <i>valbind</i>              value
-    | <b>fun</b> <i>vars</i> <i>funbind</i>          function
-    | <b>datatype</b> <i>datbind</i>          data type
-    | <i>empty</i>
-    | <i>dec<sub>1</sub></i> [<b>;</b>] <i>dec<sub>2</sub></i>              sequence
-<i>valbind</i> &rarr; <i>pat</i> <b>=</b> <i>exp</i> [ <b>and</b> <i>valbind</i> ]*
-                                destructuring
-    | <b>rec</b> <i>valbind</i>               recursive
-<i>funbind</i> &rarr; <i>funmatch</i> [ <b>and</b> <i>funmatch</i> ]*
-                                clausal function
-<i>funmatch</i> &rarr; <i>funmatchItem</i> [ '<b>|</b>' funmatchItem ]*
-<i>funmatchItem</i> &rarr; [ <b>op</b> ] <i>id</i> <i>pat<sub>1</sub></i> ... <i>pat<sub>n</sub></i> [ <b>:</b> <i>type</i> ] <b>=</b> <i>exp</i>
-                                nonfix (n &ge; 1)
-    | <i>pat<sub>1</sub></i> <i>id</i> <i>pat<sub>2</sub></i> [ <b>:</b> <i>type</i> ] <b>=</b> <i>exp</i>        infix
-    | '<b>(</b>' <i>pat<sub>1</sub></i> <i>id</i> <i>pat<sub>2</sub></i> '<b>)</b>' <i>pat'<sub>1</sub></i> ... <i>pat'<sub>n</sub></i> [ <b>:</b> <i>type</i> ] = <i>exp</i>
-                                infix (n &ge; 0)
-<i>datbind</i> &rarr; <i>datbindItem</i> [ <b>and</b> <i>datbindItem</i> ]*
-                                data type
-<i>datbindItem</i> &rarr; <i>vars</i> <i>id</i> <b>=</b> <i>conbind</i>
-<i>conbind</i> &rarr; <i>conbindItem</i> [ '<b>|</b>' <i>conbindItem</i> ]*
-                                data constructor
-<i>conbindItem</i> &rarr; <i>id</i> [ <b>of</b> <i>typ</i> ]
-<i>vals</i> &rarr; <i>val</i>
-    | '<b>(</b>' <i>val</i> [<b>,</b> <i>val</i>]* '<b>)</b>'
-<i>vars</i> &rarr; <i>var</i>
-    | '<b>(</b>' <i>var</i> [<b>,</b> <i>var</i>]* '<b>)</b>'
-</pre>
+A **scan** is a source of rows. The most common form, "*id* `in`
+*collection*", assigns each element of *collection* to *id* in turn
+and then invokes the later steps in the pipeline.
 
-### Notation
+A scan is like a "for" loop in a language such as Java or Python.
 
-This grammar uses the following notation:
+The collection can have elements of any type. In SQL, the elements
+must be records, but in Morel they may be atomic values, lists, lists
+of lists, records that contain lists of records, or anything else.
 
-| Syntax      | Meaning |
-| ----------- | ------- |
-| *symbol*    | Grammar symbol (e.g. *con*) |
-| **keyword** | Morel keyword (e.g. **if**) and symbol (e.g. **~**, "**(**") |
-| \[ term \]  | Option: term may occur 0 or 1 times |
-| \[ term1 \| term2 \] | Alternative: term1 may occur, or term2 may occur, or neither |
-| term*       | Repetition: term may occur 0 or more times |
-| 's'         | Quotation: Symbols used in the grammar &mdash; ( ) \[ \] \| * ... &mdash; are quoted when they appear in Morel language |
+```
+(*) Query over a list of integers.
+from i in [1, 2, 3, 4, 5, 6]
+  where i mod 2 = 0;
 
-## Built-in operators
+2
+4
+6
 
-| Operator | Precedence | Meaning |
-| :------- | ---------: | :------ |
-| *        |    infix 7 | Multiplication |
-| /        |    infix 7 | Division |
-| div      |    infix 7 | Integer division |
-| mod      |    infix 7 | Modulo |
-| intersect |   infix 7 | List intersect |
-| +        |    infix 6 | Plus |
-| -        |    infix 6 | Minus |
-| ^        |    infix 6 | String concatenate |
-| union    |    infix 6 | List union |
-| except   |    infix 6 | List difference |
-| ~        |   prefix 6 | Negate |
-| ::       |   infixr 5 | List cons |
-| @        |   infixr 5 | List append |
-| &lt;=    |    infix 4 | Less than or equal |
-| &lt;     |    infix 4 | Less than |
-| &gt;=    |    infix 4 | Greater than or equal |
-| &gt;     |    infix 4 | Greater than |
-| =        |    infix 4 | Equal |
-| &lt;&gt; |    infix 4 | Not equal |
-| elem     |    infix 4 | Member of list |
-| notelem  |    infix 4 | Not member of list |
-| :=       |    infix 3 | Assign |
-| o        |    infix 3 | Compose |
-| andalso  |    infix 2 | Logical and |
-| orelse   |    infix 1 | Logical or |
-| implies  |    infix 0 | Logical implication |
+> val it : int list
+```
 
-## Built-in types
+If the collection has a structured type, you can use a pattern to
+deconstruct it.
 
-Primitive: `bool`, `char`, `int`, `real`, `string`, `unit`
+```
+(*) Query over a list of (string, int) pairs.
+from (name, age) in [("shaggy", 17), ("scooby", 7)]
+  yield {s=name ^ " is " ^ Int.toString age ^ "."};
 
-Datatype:
-* `datatype 'a list = nil | :: of 'a * 'a list` (in structure `List`)
-* `datatype 'a option = NONE | SOME of 'a` (in structure `Option`)
-* `datatype 'a order = LESS | EQUAL | GREATER` (in structure `General`)
+shaggy is 17.
+scooby is 7.
 
-Eqtype:
-* `eqtype 'a vector = 'a vector` (in structure `Vector`)
+val it : {s:string} list
+```
 
-Exception:
-* `Empty` (in structure `List`)
-* `Option` (in structure `Option`)
-* `Size` (in structure `General`)
-* `Subscript` (in structure `General`)
+### Multiple scans
 
-## Built-in functions
+If there are multiple scans, the query generates a cartesian product:
 
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| true | bool | Literal true. |
-| false | bool | Literal false. |
-| not | bool &rarr; bool | "not b" returns the logical inverse of `b`. |
-| abs | int &rarr; int | "abs n" returns the absolute value of `n`. |
-| General.ignore | &alpha; &rarr; unit | "ignore x" always returns `unit`. The function evaluates its argument but throws away the value. |
-| General.op o | (&beta; &rarr; &gamma;) (&alpha; &rarr; &beta;) &rarr; &alpha; &rarr; &gamma; | "f o g" is the function composition of `f` and `g`. Thus, `(f o g) a` is equivalent to `f (g a)`. |
-| Interact.use | string &rarr; unit | "use f" loads source text from the file named `f`. |
-| Interact.useSilently | string &rarr; unit | "useSilently f" loads source text from the file named `f`, without printing to stdout. |
-| Int op * | int * int &rarr; int | "i * j" is the product of `i` and `j`. It raises `Overflow` when the result is not representable. |
-| Int op + | int * int &rarr; int | "i + j" is the sum of `i` and `j`. It raises `Overflow` when the result is not representable. |
-| Int op - | int * int &rarr; int | "i - j" is the difference of `i` and `j`. It raises `Overflow` when the result is not representable. |
-| Int op div | int * int &rarr; int | "i div j" returns the greatest integer less than or equal to the quotient of i by j, i.e., `floor(i / j)`. It raises `Overflow` when the result is not representable, or Div when `j = 0`. Note that rounding is towards negative infinity, not zero. |
-| Int op mod | int * int &rarr; int | "i mod j" returns the remainder of the division of i by j. It raises `Div` when `j = 0`. When defined, `(i mod j)` has the same sign as `j`, and `(i div j) * j + (i mod j) = i`. |
-| Int op &lt; | int * int &rarr; bool | "i &lt; j" returns true if i is less than j. |
-| Int op &lt;= | int * int &rarr; bool | "i &lt; j" returns true if i is less than or equal to j. |
-| Int op &gt; | int * int &rarr; bool | "i &lt; j" returns true if i is greater than j. |
-| Int op &gt;= | int * int &rarr; bool | "i &lt; j" returns true if i is greater than or equal to j. |
-| Int op ~ | int &rarr; int | "~ i" returns the negation of `i`. |
-| Int.abs | int &rarr; int | "abs i" returns the absolute value of `i`. |
-| Int.compare | int * int &rarr; order | "compare (i, j)" returns `LESS`, `EQUAL`, or `GREATER` according to whether its first argument is less than, equal to, or greater than the second. |
-| Int.fromInt, int | int &rarr; int | "fromInt i" converts a value from type `int` to the default integer type. Raises `Overflow` if the value does not fit. |
-| Int.fromString | string &rarr; int option | "fromString s" scans a `int` value from a string. Returns `SOME (r)` if a `int` value can be scanned from a prefix of `s`, ignoring any initial whitespace; otherwise, it returns `NONE`. Equivalent to `StringCvt.scanString (scan StringCvt.DEC)`. |
-| Int.max | int * int &rarr; int | "max (i, j)" returns the larger of the arguments. |
-| Int.maxInt | int | "maxInt" is the maximal (most positive) integer representable by `int`. If a value is `NONE`, `int` can represent all positive integers, within the limits of the heap size. If `precision` is `SOME (n)`, then we have `maxInt` = 2<sup>(n-1)</sup> - 1. |
-| Int.min | int * int &rarr; int | "min (i, j)" returns the smaller of the arguments. |
-| Int.minInt | int | "minInt" is the minimal (most negative) integer representable by `int`. If a value is `NONE`, `int` can represent all negative integers, within the limits of the heap size. If `precision` is `SOME (n)`, then we have `minInt` = -2<sup>(n-1)</sup>. |
-| Int.mod | int * int &rarr; int | "mod (i, j)" returns the remainder of the division of `i` by `j`. It raises `Div` when `j = 0`. When defined, `(i mod j)` has the same sign as `j, and `(i div j) * j + (i mod j) = i`. |
-| Int.precision | int | "precision" is the precision. If `SOME (n)`, this denotes the number `n` of significant bits in type `int`, including the sign bit. If it is `NONE`, int has arbitrary precision. The precision need not necessarily be a power of two. |
-| Int.quot | int * int &rarr; int | "quot (i, j)" returns the truncated quotient of the division of `i` by `j`, i.e., it computes `(i / j)` and then drops any fractional part of the quotient. It raises `Overflow` when the result is not representable, or `Div` when `j = 0`. Note that unlike `div`, `quot` rounds towards zero. In addition, unlike `div` and `mod`, neither `quot` nor `rem` are infix by default; an appropriate infix declaration would be `infix 7 quot rem`. This is the semantics of most hardware divide instructions, so `quot` may be faster than `div`. |
-| Int.rem | int * int &rarr; int | "rem (i, j)" returns the remainder of the division of `i` by `j`. It raises `Div` when `j = 0`. `(i rem j)` has the same sign as i, and it holds that `(i quot j) * j + (i rem j) = i`. This is the semantics of most hardware divide instructions, so `rem` may be faster than `mod`. |
-| Int.sameSign | int * int &rarr; bool | "sameSign (i, j)" returns true if `i` and `j` have the same sign. It is equivalent to `(sign i = sign j)`. |
-| Int.sign | int &rarr; int | "sign i" returns ~1, 0, or 1 when `i` is less than, equal to, or greater than 0, respectively. |
-| Int.toInt | int &rarr; int | "toInt i" converts a value from the default integer type to type `int`. Raises `Overflow` if the value does not fit. |
-| Int.toString | int &rarr; string | "toString i" converts a `int` into a `string`; equivalent to `(fmt StringCvt.DEC r)`. |
-| List.nil | &alpha; list | "nil" is the empty list. |
-| List.null | &alpha; list &rarr; bool | "null l" returns `true` if the list `l` is empty. |
-| List.length | &alpha; list &rarr; int | "length l" returns the number of elements in the list `l`. |
-| List.op @ | &alpha; list * &alpha; list &rarr; &alpha; list | "l1 @ l2" returns the list that is the concatenation of `l1` and `l2`. |
-| List.at | &alpha; list * &alpha; list &rarr; &alpha; list | "at (l1, l2)" is equivalent to "l1 @ l2". |
-| List.hd | &alpha; list &rarr; &alpha; | "hd l" returns the first element of `l`. Raises `Empty` if `l` is `nil`. |
-| List.tl | &alpha; list &rarr; &alpha; list | "tl l" returns all but the first element of `l`. Raises `Empty` if `l` is `nil`. |
-| List.last | &alpha; list &rarr; &alpha; | "last l" returns the last element of `l`. Raises `Empty` if `l` is `nil`. |
-| List.getItem | &alpha; list &rarr; * (&alpha; * &alpha; list) option | "getItem l" returns `NONE` if the `list` is empty, and `SOME (hd l, tl l)` otherwise. This function is particularly useful for creating value readers from lists of characters. For example, `Int.scan StringCvt.DEC getItem` has the type `(int, char list) StringCvt.reader` and can be used to scan decimal integers from lists of characters. |
-| List.nth | &alpha; list * int &rarr; &alpha; | "nth (l, i)" returns the `i`(th) element of the list `l`, counting from 0. Raises `Subscript` if `i` &lt; 0 or `i` &ge; `length l`. We have `nth(l, 0)` = `hd l`, ignoring exceptions. |
-| List.take | &alpha; list * int &rarr; &alpha; list | "take (l, i)" returns the first `i` elements of the list `l`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`. We have `take(l, length l)` = `l`. |
-| List.drop | &alpha; list * int &rarr; &alpha; list | "drop (l, i)" returns what is left after dropping the first `i` elements of the list `l`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`.<br><br>It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le; `i` &le; `length l`. We also have `drop(l, length l)` = `[]`. |
-| List.rev | &alpha; list &rarr; &alpha; list | "rev l" returns a list consisting of `l`'s elements in reverse order. |
-| List.concat | &alpha; list list &rarr; &alpha; list | "concat l" returns the list that is the concatenation of all the lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln` |
-| List.revAppend | &alpha; list * &alpha; list &rarr; &alpha; list | "revAppend (l1, l2)" returns `(rev l1) @ l2`. |
-| List.app | (&alpha; &rarr; unit) &rarr; &alpha; list &rarr; unit | "app f l" applies `f` to the elements of `l`, from left to right. |
-| List.map | (&alpha; &rarr; &beta;) &rarr; &alpha; list &rarr; &beta; list | "map f l" applies `f` to each element of `l` from left to right, returning the list of results. |
-| List.mapPartial | (&alpha; &rarr; &beta; option) &rarr; &alpha; list &rarr; &beta; list | "mapPartial f l" applies `f` to each element of `l` from left to right, returning a list of results, with `SOME` stripped, where `f` was defined. `f` is not defined for an element of `l` if `f` applied to the element returns `NONE`. The above expression is equivalent to `((map valOf) o (filter isSome) o (map f)) l`. |
-| List.find | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; &alpha; option | "find f l" applies `f` to each element `x` of the list `l`, from left to right, until `f x` evaluates to `true`. It returns `SOME (x)` if such an `x` exists; otherwise it returns `NONE`. |
-| List.filter | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; &alpha; list | "filter f l" applies `f` to each element `x` of `l`, from left to right, and returns the list of those `x` for which `f x` evaluated to `true`, in the same order as they occurred in the argument list. |
-| List.partition | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; &alpha; list * &alpha; list | "partition f l" applies `f` to each element `x` of `l`, from left to right, and returns a pair `(pos, neg)` where `pos` is the list of those `x` for which `f x` evaluated to `true`, and `neg` is the list of those for which `f x` evaluated to `false`. The elements of `pos` and `neg` retain the same relative order they possessed in `l`. |
-| List.foldl | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; list &rarr; &beta; | "foldl f init \[x1, x2, ..., xn\]" returns `f(xn, ... , f(x2, f(x1, init))...)` or `init` if the list is empty. |
-| List.foldr | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; list &rarr; &beta; | "foldr f init \[x1, x2, ..., xn\]" returns `f(x1, f(x2, ..., f(xn, init)...))` or `init` if the list is empty. |
-| List.exists | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; bool | "exists f l" applies `f` to each element `x` of the list `l`, from left to right, until `f(x)` evaluates to `true`; it returns `true` if such an `x` exists and `false` otherwise. |
-| List.all | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; bool | "all f l" applies `f` to each element `x` of the list `l`, from left to right, `f(x)` evaluates to `false`; it returns `false` if such an `x` exists and `true` otherwise. It is equivalent to `not(exists (not o f) l))`. |
-| List.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; list | "tabulate (n, f)" returns a list of length `n` equal to `[f(0), f(1), ..., f(n-1)]`, created from left to right. Raises `Size` if `n` &lt; 0. |
-| List.collate | (&alpha; * &alpha; &rarr; order) &rarr; &alpha; list * &alpha; list &rarr; order | "collate f (l1, l2)" performs lexicographic comparison of the two lists using the given ordering `f` on the list elements. |
-| Math.acos | real &rarr; real | "acos x" returns the arc cosine of `x`. `acos` is the inverse of `cos`. Its result is guaranteed to be in the closed interval [0, pi]. If the magnitude of `x` exceeds 1.0, returns NaN. |
-| Math.asin | real &rarr; real | "asin x" returns the arc sine of `x`. `asin` is the inverse of `sin`. Its result is guaranteed to be in the closed interval [-pi / 2, pi / 2]. If the magnitude of `x` exceeds 1.0, returns NaN. |
-| Math.atan | real &rarr; real | "atan x" returns the arc tangent of `x`. `atan` is the inverse of `tan`. For finite arguments, the result is guaranteed to be in the open interval (-pi / 2, pi / 2). If `x` is +infinity, it returns pi / 2; if `x` is -infinity, it returns -pi / 2. |
-| Math.atan2 | real * real &rarr; real | "atan2 (y, x)" returns the arc tangent of `(y / x)` in the closed interval [-pi, pi], corresponding to angles within +-180 degrees. The quadrant of the resulting angle is determined using the signs of both `x` and `y`, and is the same as the quadrant of the point `(x, y)`. When `x` = 0, this corresponds to an angle of 90 degrees, and the result is `(real (sign y)) * pi / 2.0`. |
-| Math.cos | real &rarr; real | "cos x" returns the cosine of `x`, measured in radians. If `x` is an infinity, returns NaN. |
-| Math.cosh | real &rarr; real | "cosh x" returns the hyperbolic cosine of `x`, that is, `(e(x) + e(-x)) / 2`. Among its properties, cosh +-0 = 1, cosh +-infinity = +-infinity. |
-| Math.e | real | "e" is base e (2.718281828...) of the natural logarithm. |
-| Math.exp | real &rarr; real | "exp x" returns `e(x)`, i.e., `e` raised to the `x`<sup>th</sup> power. If `x` is +infinity, returns +infinity; if `x` is -infinity, returns 0. |
-| Math.ln | real &rarr; real | "ln x" returns the natural logarithm (base e) of `x`. If `x` &lt; 0, returns NaN; if `x` = 0, returns -infinity; if `x` is infinity, returns infinity. |
-| Math.log10 | real &rarr; real | "log10 x" returns the decimal logarithm (base 10) of `x`. If `x` &lt; 0, returns NaN; if `x` = 0, returns -infinity; if `x` is infinity, returns infinity. |
-| Math.pi | real | "pi" is the constant pi (3.141592653...). |
-| Math.pow | real * real &rarr; real | "pow (x, y)" returns `x(y)`, i.e., `x` raised to the `y`<sup>th</sup> power. For finite `x` and `y`, this is well-defined when `x` &gt; 0, or when `x` &lt; 0 and `y` is integral. |
-| Math.sin | real &rarr; real | "sin x" returns the sine of `x`, measured in radians. If `x` is an infinity, returns NaN. |
-| Math.sinh | real &rarr; real | "sinh x" returns the hyperbolic sine of `x`, that is, `(e(x) - e(-x)) / 2`. Among its properties, sinh +-0 = +-0, sinh +-infinity = +-infinity. |
-| Math.sqrt | real &rarr; real | "sqrt x" returns the square root of `x`. sqrt (~0.0) = ~0.0. If `x` &lt; 0, returns NaN. |
-| Math.tan | real &rarr; real | "tan x" returns the tangent of `x`, measured in radians. If `x` is an infinity, returns NaN. Produces infinities at various finite values, roughly corresponding to the singularities of the tangent function. |
-| Math.tanh | real &rarr; real | "tanh x" returns the hyperbolic tangent of `x`, that is, `(sinh x) / (cosh x)`. Among its properties, tanh +-0 = +-0, tanh +-infinity = +-1. |
-| Option.app | (&alpha; &rarr; unit) &rarr; &alpha; option &rarr; unit | "app f opt" applies the function `f` to the value `v` if `opt` is `SOME v`, and otherwise does nothing |
-| Option.compose | (&alpha; &rarr; &beta;) * (&gamma; &rarr; &alpha; option) &rarr; &gamma; &rarr; &beta; option | "compose (f, g) a" returns `NONE` if `g(a)` is `NONE`; otherwise, if `g(a)` is `SOME v`, it returns `SOME (f v)`. |
-| Option.composePartial | (&alpha; &rarr; &beta; option) * (&gamma; &rarr; &alpha; option) &rarr; &gamma; &rarr; &beta; option | "composePartial (f, g) a" returns `NONE` if `g(a)` is `NONE`; otherwise, if `g(a)` is `SOME v`, returns `f(v)`. |
-| Option.map | &alpha; &rarr; &beta;) &rarr; &alpha; option &rarr; &beta; option | "map f opt" maps `NONE` to `NONE` and `SOME v` to `SOME (f v)`. |
-| Option.mapPartial | &alpha; &rarr; &beta; option) &rarr; &alpha; option &rarr; &beta; option | "mapPartial f opt" maps `NONE` to `NONE` and `SOME v` to `f(v)`. |
-| Option.getOpt | &alpha; option * &alpha; &rarr; &alpha; | "getOpt (opt, a)" returns `v` if `opt` is `SOME (v)`; otherwise returns `a`. |
-| Option.isSome | &alpha; option &rarr; bool | "isSome opt" returns `true` if `opt` is `SOME v`; otherwise returns `false`. |
-| Option.filter | (&alpha; &rarr; bool) &rarr; &alpha; &rarr; &alpha; option | "filter f a" returns `SOME a` if `f(a)` is `true`, `NONE` otherwise. |
-| Option.join | &alpha; option option &rarr; &alpha; option | "join opt" maps `NONE` to `NONE` and `SOME v` to `v`. |
-| Option.valOf | &alpha; option &rarr; &alpha; | "valOf opt" returns `v` if `opt` is `SOME v`, otherwise raises `Option`. |
-| Real op * | real * real &rarr; real | "r1 * r2" is the product of `r1` and `r2`. The product of zero and an infinity produces NaN. Otherwise, if one argument is infinite, the result is infinite with the correct sign, e.g., -5 * (-infinity) = infinity, infinity * (-infinity) = -infinity. |
-| Real op + | real * real &rarr; real | "r1 + r2" is the sum of `r1` and `r2`. If one argument is finite and the other infinite, the result is infinite with the correct sign, e.g., 5 - (-infinity) = infinity. We also have infinity + infinity = infinity and (-infinity) + (-infinity) = (-infinity). Any other combination of two infinities produces NaN. |
-| Real op - | real * real &rarr; real | "r1 - r2" is the difference of `r1` and `r2`. If one argument is finite and the other infinite, the result is infinite with the correct sign, e.g., 5 - (-infinity) = infinity. We also have infinity + infinity = infinity and (-infinity) + (-infinity) = (-infinity). Any other combination of two infinities produces NaN. |
-| Real op / | real * real &rarr; real | "r1 / r2" is the quotient of `r1` and `r2`. We have 0 / 0 = NaN and +-infinity / +-infinity = NaN. Dividing a finite, non-zero number by a zero, or an infinity by a finite number produces an infinity with the correct sign. (Note that zeros are signed.) A finite number divided by an infinity is 0 with the correct sign. |
-| Real op &lt; | real * real &rarr; bool | "x &lt; y" returns true if x is less than y. Return false on unordered arguments, i.e., if either argument is NaN, so that the usual reversal of comparison under negation does not hold, e.g., `a &lt; b` is not the same as `not (a &gt;= b)`. |
-| Real op &lt;= | real * real &rarr; bool | As "&lt;" |
-| Real op &gt; | real * real &rarr; bool | As "&lt;" |
-| Real op &gt;= | real * real &rarr; bool | As "&lt;" |
-| Real op ~ | real &rarr; real | "~ r" returns the negation of `r`. |
-| Real.abs | real &rarr; real | "abs r" returns the absolute value of `r`. |
-| Real.ceil | real &rarr; int | "floor r" produces `ceil(r)`, the smallest int not less than `r`. |
-| Real.checkFloat | real &rarr; real | "checkFloat x" raises `Overflow` if x is an infinity, and raises `Div` if x is NaN. Otherwise, it returns its argument. |
-| Real.compare | real * real &rarr; order | "compare (x, y)" returns `LESS`, `EQUAL`, or `GREATER` according to whether its first argument is less than, equal to, or greater than the second. It raises `IEEEReal.Unordered` on unordered arguments. |
-| Real.copySign | real * real &rarr; real | "copySign (x, y)" returns `x` with the sign of `y`, even if `y` is NaN. |
-| Real.floor | real &rarr; int | "floor r" produces `floor(r)`, the largest int not larger than `r`. |
-| Real.fromInt, real | int &rarr; real | "fromInt i" converts the integer `i` to a `real` value. If the absolute value of `i` is larger than `maxFinite`, then the appropriate infinity is returned. If `i` cannot be exactly represented as a `real` value, uses current rounding mode to determine the resulting value. |
-| Real.fromManExp | {exp:int, man:real} &rarr; real | "fromManExp r" returns `{man, exp}`, where `man` and `exp` are the mantissa and exponent of r, respectively. |
-| Real.fromString | string &rarr; real option | "fromString s" scans a `real` value from a string. Returns `SOME (r)` if a `real` value can be scanned from a prefix of `s`, ignoring any initial whitespace; otherwise, it returns `NONE`. This function is equivalent to `StringCvt.scanString scan`. |
-| Real.isFinite | real &rarr; bool | "isFinite x" returns true if x is neither NaN nor an infinity. |
-| Real.isNan | real &rarr; bool | "isNan x" returns true if x NaN. |
-| Real.isNormal | real &rarr; bool | "isNormal x" returns true if x is normal, i.e., neither zero, subnormal, infinite nor NaN. |
-| Real.max | real * real &rarr; real | "max (x, y)" returns the larger of the arguments. If exactly one argument is NaN, returns the other argument. If both arguments are NaN, returns NaN. |
-| Real.maxFinite | real | "maxFinite" is the maximum finite number. |
-| Real.min | real * real &rarr; real | "min (x, y)" returns the smaller of the arguments. If exactly one argument is NaN, returns the other argument. If both arguments are NaN, returns NaN. |
-| Real.minNormalPos | real | "minNormalPos" is the minimum non-zero normalized number. |
-| Real.minPos | real | "minPos" is the minimum non-zero positive number. |
-| Real.negInf | real | "negInf" is the negative infinity value. |
-| Real.posInf | real | "posInf" is the positive infinity value. |
-| Real.precision | int | "precision" is the number of digits, each between 0 and `radix` - 1, in the mantissa. Note that the precision includes the implicit (or hidden) bit used in the IEEE representation (e.g., the value of Real64.precision is 53). |
-| Real.radix | int | "radix" is the base of the representation, e.g., 2 or 10 for IEEE floating point. |
-| Real.realCeil | real &rarr; real | "realCeil r" produces `ceil(r)`, the smallest integer not less than `r`. |
-| Real.realFloor | real &rarr; real | "realFloor r" produces `floor(r)`, the largest integer not larger than `r`. |
-| Real.realMod | real &rarr; real | "realMod r" returns the fractional parts of `r`; `realMod` is equivalent to `#frac o split`. |
-| Real.realRound | real &rarr; real | "realRound r" rounds to the integer-valued real value that is nearest to `r`. In the case of a tie, it rounds to the nearest even integer. |
-| Real.realTrunc | real &rarr; real | "realTrunc r" rounds `r` towards zero. |
-| Real.rem | real * real &rarr; real | "rem (x, y)" returns the remainder `x - n * y`, where `n` = `trunc (x / y)`. The result has the same sign as `x` and has absolute value less than the absolute value of `y`. If `x` is an infinity or `y` is 0, `rem` returns NaN. If `y` is an infinity, rem returns `x`. |
-| Real.round | real &rarr; int | "round r" yields the integer nearest to `r`. In the case of a tie, it rounds to the nearest even integer. |
-| Real.sameSign | real * real &rarr; bool | "sameSign (r1, r2)" returns true if and only if `signBit r1` equals `signBit r2`. |
-| Real.sign | real &rarr; int | "sign r" returns ~1 if r is negative, 0 if r is zero, or 1 if r is positive. An infinity returns its sign; a zero returns 0 regardless of its sign. It raises `Domain` on NaN. |
-| Real.signBit | real &rarr; bool | "signBit r" returns true if and only if the sign of `r` (infinities, zeros, and NaN, included) is negative. |
-| Real.split | real &rarr; {frac:real, whole:real} | "split r" returns `{frac, whole}`, where `frac` and `whole` are the fractional and integral parts of `r`, respectively. Specifically, `whole` is integral, and `abs frac` &lt; 1.0. |
-| Real.trunc | real &rarr; int | "trunc r" rounds r towards zero. |
-| Real.toManExp | real &rarr; {man:real, exp:int} | "toManExp r" returns `{man, exp}`, where `man` and `exp` are the mantissa and exponent of r, respectively. |
-| Real.toString | real &rarr; string | "toString r" converts a `real` into a `string`; equivalent to `(fmt (StringCvt.GEN NONE) r)` |
-| Real.unordered | real * real &rarr; bool | "unordered (x, y)" returns true if x and y are unordered, i.e., at least one of x and y is NaN. |
-| Relational.count, count | int list &rarr; int | "count list" returns the number of elements in `list`. Often used with `group`, for example `from e in emps group e.deptno compute countId = count`. |
-| Relational.empty, empty | &alpha; list &rarr; bool | "empty list" returns whether the list is empty, for example `from d in depts where empty (from e where e.deptno = d.deptno)`. |
-| Relational.max, max | &alpha; list &rarr; &alpha; | "max list" returns the greatest element of `list`. Often used with `group`, for example `from e in emps group e.deptno compute maxId = max of e.id`. |
-| Relational.min, min | &alpha; list &rarr; &alpha; | "min list" returns the least element of `list`. Often used with `group`, for example `from e in emps group e.deptno compute minId = min of e.id`. |
-| Relational.nonEmpty, nonEmpty | &alpha; list &rarr; bool | "nonEmpty list" returns whether the list has at least one element, for example `from d in depts where nonEmpty (from e where e.deptno = d.deptno)`. |
-| Relational.only, only | &alpha; list &rarr; &alpha; | "only list" returns the sole element of list, for example `from e in emps yield only (from d where d.deptno = e.deptno)`. |
-| Relational.sum, sum | int list &rarr; int | "sum list" returns the sum of the elements of `list`. Often used with `group`, for example `from e in emps group e.deptno compute sumId = sum of e.id`. |
-| String.concat | string list &rarr; string | "concat l" is the concatenation of all the strings in `l`. This raises `Size` if the sum of all the sizes is greater than `maxSize`. |
-| String.concatWith | string &rarr; string list &rarr; string | "concatWith s l" returns the concatenation of the strings in the list `l` using the string `s` as a separator. This raises `Size` if the size of the resulting string would be greater than `maxSize`. |
-| String.explode | string &rarr; char list | "explode s" is the list of characters in the string `s`. |
-| String.extract | string * int * int option &rarr; string | "extract (s, i, NONE)" and "extract (s, i, SOME j)" return substrings of `s`. The first returns the substring of `s` from the `i`(th) character to the end of the string, i.e., the string `s`\[`i`..\|`s`\|-1\]. This raises `Subscript` if `i` &lt; 0 or \|`s`\| &lt; `i`.<br><br>The second form returns the substring of size `j` starting at index `i`, i.e., the string `s`\[`i`..`i`+`j`-1\]. Raises `Subscript` if `i` &lt; 0 or `j` &lt; 0 or \|`s`\| &lt; `i` + `j`. Note that, if defined, `extract` returns the empty string when `i` = \|`s`\|. |
-| String.implode | char list &rarr; string | "implode l" generates the string containing the characters in the list `l`. This is equivalent to `concat (List.map str l)`. This raises `Size` if the resulting string would have size greater than `maxSize`. |
-| String.isPrefix | string &rarr; string &rarr; bool | "isPrefix s1 s2" returns `true` if the string `s1` is a prefix of the string `s2`. Note that the empty string is a prefix of any string, and that a string is a prefix of itself. |
-| String.isSubstring | string &rarr; string &rarr; bool | "isSubstring s1 s2" returns `true` if the string `s1` is a substring of the string `s2`. Note that the empty string is a substring of any string, and that a string is a substring of itself. |
-| String.isSuffix | string &rarr; string &rarr; bool | "isSuffix s1 s2" returns `true` if the string `s1` is a suffix of the string `s2`. Note that the empty string is a suffix of any string, and that a string is a suffix of itself. |
-| String.map | (char &rarr; char) &rarr; string &rarr; string | "map f s" applies `f` to each element of `s` from left to right, returning the resulting string. It is equivalent to `implode(List.map f (explode s))`. |
-| String.maxSize | int | The longest allowed size of a string. |
-| String.size | string &rarr; int | "size s" returns \|`s`\|, the number of characters in string `s`. |
-| String.str | char &rarr; string | "str c" is the string of size one containing the character `c`. |
-| String.sub | string * int &rarr; char | "sub (s, i)" returns the `i`(th) character of `s`, counting from zero. This raises `Subscript` if `i` &lt; 0 or \|`s`\| &le; `i`. |
-| String.substring | string * int * int &rarr; string | "substring (s, i, j)" returns the substring `s`\[`i`..`i`+`j`-1\], i.e., the substring of size `j` starting at index `i`. This is equivalent to `extract(s, i, SOME j)`. |
-| String.translate | (char &rarr; string) &rarr; string &rarr; string | "translate f s" returns the string generated from `s` by mapping each character in `s` by `f`. It is equivalent to `concat(List.map f (explode s))`. |
-| Sys.clearEnv | unit &rarr; unit | "clearEnv ()" restores the environment to the initial environment. |
-| Sys.env, env | unit &rarr; string list | "env ()" prints the environment. |
-| Sys.plan | unit &rarr; string | "plan ()" prints the plan of the most recently executed expression. |
-| Sys.set | string * &alpha; &rarr; unit | "set (property, value)" sets the value of `property` to `value`. (See [Properties](#properties) below.) |
-| Sys.show | string &rarr; string option | "show property" returns the current the value of `property`, as a string, or `NONE` if unset. |
-| Sys.showAll | unit &rarr; string * string option list | "showAll ()" returns a list of all properties and their current value as a string, or `NONE` if unset. |
-| Sys.unset | string &rarr; unit | "unset property" clears the current the value of `property`. |
-| Vector.all |
-| Vector.app | (&alpha; &rarr; unit) &rarr; &alpha; vector &rarr; unit | "app f vec" applies the function `f` to the elements of a vector in left to right order (i.e., in order of increasing indices) |
-| Vector.appi | (int * &alpha; &rarr; unit) &rarr; &alpha; vector &rarr; unit | "appi f vec" applies the function `f` to the elements of a vector in left to right order (i.e., in order of increasing indices) |
-| Vector.collate |
-| Vector.concat | &alpha; vector list &rarr; &alpha; vector | "concat l" returns the vector that is the concatenation of the vectors in the list `l`. Raises `Size` if the total length of these vectors exceeds `maxLen` |
-| Vector.exists |
-| Vector.find | (&alpha; &rarr; bool) &rarr; &alpha; vector &rarr; &alpha; option | "find f vec" applies `f` to each element `x` of the vector `vec`, from left to right, until `f(x)` evaluates to `true`. It returns `SOME (x)` if such an `x` exists; otherwise it returns `NONE`. |
-| Vector.findi | (int * &alpha; &rarr; bool) &rarr; &alpha; vector &rarr; (int * &alpha;) option | "findi f vec" applies `f` to each element `x` and element index `i` of the vector `vec`, from left to right, until `f(i, x)` evaluates to `true`. It returns `SOME (i, x)` if such an `x` exists; otherwise it returns `NONE`. |
-| Vector.foldl | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldl f init vec" folds the function `f` over all the elements of vector `vec`, left to right, using the initial value `init` |
-| Vector.foldli | (int * &alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldli f init vec" folds the function `f` over all the (index, element) pairs of vector `vec`, left to right, using the initial value `init` |
-| Vector.foldr | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldr f init vec" folds the function `f` over all the elements of vector `vec`, right to left, using the initial value `init` |
-| Vector.foldri | (int * &alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldri f init vec" folds the function `f` over all the (index, element) pairs of vector `vec`, right to left, using the initial value `init` |
-| Vector.fromList | &alpha; list &rarr; &alpha; vector | "fromList l" creates a new vector from `l`, whose length is `length l` and with the i<sup>th</sup> element of `l` used as the `i`<sup>th</sup> element of the vector. Raises `Size` if `maxLen` &lt; `n`. |
-| Vector.length | &alpha; vector &rarr; int | "length v" returns the number of elements in the vector `v`. |
-| Vector.map | (&alpha; &rarr; &beta;) &rarr; &alpha; vector &rarr; &beta; vector | "map f vec" applies the function `f` to the elements of the argument vector `vec` |
-| Vector.mapi | (int * &alpha; &rarr; &beta;) &rarr; &alpha; vector &rarr; &beta; vector | "mapi f vec" applies the function `f` to the elements of the argument vector `vec`, supplying the vector index and element as arguments to each call. |
-| Vector.maxLen | int | "maxLen" returns the maximum length of vectors supported in this implementation. |
-| Vector.sub | &alpha; vector * int &rarr; &alpha; | "sub (vec, i)" returns the `i`<sup>th</sup> element of vector `vec`. Raises `Subscript` if `i` &lt; 0 or `size vec` &le; `i`. |
-| Vector.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; vector | "tabulate (n, f)" returns a vector of length `n` equal to `[f(0), f(1), ..., f(n-1)]`, created from left to right. Raises `Size` if `n` &lt; 0 or `maxLen` &lt; `n`. |
-| Vector.update | &alpha; vector * int * &alpha; &rarr; &alpha; vector | "update (vec, i, x)" returns  a new vector, identical to `vec`, except the `i`<sup>th</sup> element of `vec` is set to `x`. Raises `Subscript` if `i` &lt; 0 or `size vec` &le; `i`. |
+```
+from i in [2, 3],
+  b in [false, true];
 
-Not yet implemented
+b     i
+----- -
+false 2
+true  2
+false 3
+true  3
 
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| Int.fmt | StringCvt.radix &rarr; int &rarr; string | "fmt radix i" returns a string containing a representation of i with #"~" used as the sign for negative numbers. Formats the string according to `radix`; the hexadecimal digits 10 through 15 are represented as #"A" through #"F", respectively. No prefix "0x" is generated for the hexadecimal representation. |
-| Int.scan | scan radix getc strm | Returns `SOME (i,rest)` if an integer in the format denoted by `radix` can be parsed from a prefix of the character stream `strm` after skipping initial whitespace, where `i` is the value of the integer parsed and `rest` is the rest of the character stream. `NONE` is returned otherwise. This function raises `Overflow` when an integer can be parsed, but is too large to be represented by type `int`. |
-| Real op != | real * real &rarr; bool | "x != y" is equivalent to `not o op ==` and the IEEE `?<>` operator. |
-| Real op *+ | real * real * real &rarr; real | "*+ (a, b, c)" returns `a * b + c`. Its behavior on infinities follows from the behaviors derived from addition and multiplication. |
-| Real op *- | real * real * real &rarr; real | "*- (a, b, c)" returns `a * b - c`. Its behavior on infinities follows from the behaviors derived from subtraction and multiplication. |
-| Real op == | real * real &rarr; bool | "x == y" returns true if and only if neither y nor x is NaN, and y and x are equal, ignoring signs on zeros. This is equivalent to the IEEE `=` operator. |
-| Real op ?= | real * real &rarr; bool | "?= (x, y)" returns true if either argument is NaN or if the arguments are bitwise equal, ignoring signs on zeros. It is equivalent to the IEEE `?=` operator. |
-| Real.class | real &rarr; IEEEReal.float_class | "class x" returns the `IEEEReal.float_class` to which x belongs. |
-| Real.compareReal | real * real &rarr; IEEEReal.real_order | "compareReal (x, y)" behaves similarly to `Real.compare` except that the values it returns have the extended type `IEEEReal.real_order` and it returns `IEEEReal.UNORDERED` on unordered arguments. |
-| Real.fmt | StringCvt.realfmt &rarr; real &rarr; string | "fmt spec r" converts a `real` into a `string` according to by `spec`; raises `Size` when `fmt spec` is evaluated if `spec` is an invalid precision |
-| Real.fromDecimal | IEEEReal.decimal_approx &rarr; real | "fromDecimal d" converts decimal approximation to a `real` |
-| Real.fromLarge | IEEEReal.rounding_mode &rarr; real &rarr; real | "toLarge r" converts a value of type `real` to type `LargeReal.real`. If `r` is too small or too large to be represented as a real, converts it to a zero or an infinity. |
-| Real.fromLargeInt | IntInf.int &rarr; real | See "fromInt" |
-| Real.nextAfter | real * real &rarr; real | "nextAfter (r, t)" returns the next representable real after `r` in the direction of `t`. Thus, if `t` is less than `r`, `nextAfter` returns the largest representable floating-point number less than `r`. |
-| Real.scan | (char,'a) StringCvt.reader &rarr; (real,'a) StringCvt.reader | "scan getc strm" scans a `real` value from character source. Reads from ARG/strm/ using reader `getc`, ignoring initial whitespace. It returns `SOME (r, rest)` if successful, where `r` is the scanned `real` value and `rest` is the unused portion of the character stream `strm`. Values of too large a magnitude are represented as infinities; values of too small a magnitude are represented as zeros. |
-| Real.toDecimal | real &rarr; IEEEReal.decimal_approx | "toDecimal r" converts a `real` to a decimal approximation |
-| Real.toInt | real &rarr; IEEEReal.rounding_mode &rarr; int | "toInt mode x" converts the argument `x` to an integral type using the specified rounding mode. It raises `Overflow` if the result is not representable, in particular, if `x` is an infinity. It raises `Domain` if the input real is NaN. |
-| Real.toLarge | real &rarr; real | "toLarge r" convert a value of type `real` to type `LargeReal.real`. |
-| Real.toLargeInt | real &rarr; IEEEReal.rounding_mode &rarr; IntInf.int | See "toInt" |
+val it : {b:bool, i:int} list
+```
 
-## Properties
+If you want to add a join condition, you can append an `on` clause:
 
-Each property is set using the function `Sys.set (name, value)`,
-displayed using `Sys.show name`,
-and unset using `Sys.unset name`.
+```
+from e in scott.emps,
+    d in scott.depts on e.deptno = d.deptno
+  where e.job = "MANAGER"
+  yield {e.ename, d.dname};
 
-| Name                 | Type | Default | Description |
-| -------------------- | ---- | ------- | ----------- |
-| hybrid               | bool | false   | Whether to try to create a hybrid execution plan that uses Apache Calcite relational algebra. |
-| inlinePassCount      | int  | 5       | Maximum number of inlining passes. |
-| lineWidth            | int  | 79      | When printing, the length at which lines are wrapped. |
-| matchCoverageEnabled | bool | true    | Whether to check whether patterns are exhaustive and/or redundant. |
-| printDepth           | int  | 5       | When printing, the depth of nesting of recursive data structure at which ellipsis begins. |
-| printLength          | int  | 12      | When printing, the length of lists at which ellipsis begins. |
-| stringDepth          | int  | 70      | When printing, the length of strings at which ellipsis begins. |
+dname      ename
+---------- ------
+RESEARCH   JONES
+SALES      BLAKE
+ACCOUNTING CLARK
+
+val it : {dname:string, ename:string} list
+```
+
+(The `on` clause is not allowed on the first scan.)
+
+If you want scans later in a query, use the `join` step.
+
+```
+from c in clients
+  where c.city = "BOSTON"
+  join e in scott.emps on c.contact = e.empno,
+      d in scott.depts on e.deptno = d.deptno
+  yield {c.cname, e.ename, d.dname};
+
+cname  dname ename
+------ ----- ------
+Apple  SALES MARTIN
+Disney SALES ALLEN
+Ford   SALES WARD
+IBM    SALES MARTIN
+```
+
+### Lateral scans and nested data
+
+Multiple scans are a convenient way of dealing with nested data.
+
+```
+(*) Each shipment has one or more nested items.
+val shipments =
+  [{id=1, shipping=10.0, items=[{product="soda", quantity=12},
+                                {product="beer", quantity=3}],
+   {id=2, shipping=7.5, items=[{product="cider",quantity=4}]}]}];
+
+(*) Flatten the data set by joining each shipment to its own items.
+from s in shipments,
+    i in s.items
+  yield {s.id, i.product, i.quantity};
+
+id product quantity
+-- ------- --------
+ 1 soda          12
+ 1 beer           3
+ 2 cider          4
+
+val it : {id:int, product:string, quantity:int} list
+```
+
+Note that the second scan uses current row from the first scan (`s`
+appears in the expression `s.items`). SQL calls this a lateral join
+(because lateral means "sideways" and one scan is looking "sideways"
+at the other scan). Lateral joins are only activated in SQL when you
+use the keywords `LATERAL` or `UNNEST`, but Morel's scans and joins
+are always lateral. As a result, queries over nested data are easy and
+concise in Morel.
+
+### Single-row scan
+
+A scan with `=` syntax iterates over a single value. While `pat = exp`
+is just syntactic sugar for `pat in [exp]`, it is nevertheless a
+useful way to add a column to the current row.
+
+```
+(*) Iterate over a list of integers and compute whether they are odd
+from i in [1, 2, 3, 4, 5],
+    odd = (i mod 2 = 1);
+
+i odd
+- -----
+1 true
+2 false
+3 true
+4 false
+5 true
+
+(*) Equivalent using "in" and a singleton list
+val it : {i:int, odd:bool} list
+from i in [1,2,3,4,5],
+    odd in [(i mod 2 = 1)];
+
+i odd
+- -----
+1 true
+2 false
+3 true
+4 false
+5 true
+
+val it : {i:int, odd:bool} list
+```
+
+### Empty scan
+
+In case you are wondering, yes, a query with no scans is legal. It
+produces one row with zero fields.
+
+```
+from;
+
+val it = [()] : unit list
+```
+
+You can even feed that one row into a pipeline.
+
+```
+from
+  where true
+  yield {i = 1 + 2};
+i
+-
+3
+
+val it : {i:int} list
+```
+## Step
+
+A query is a pipeline of data flowing through relational
+operators. The scans introduce rows into the pipeline, and the steps
+are the relational operators that these rows flow through.
+
+Each step has a contract with its preceding and following step: what
+fields does it consume, and what fields are produced. A query begins
+with a set of scans, and each scan defines a number of variables
+(usually one, unless the scan has a complex pattern).
+
+The following query defines two fields: `deptno` of type `int` and
+`emp` with a record type.
+
+``` 
+from deptno in [10, 20],
+    emp in scott.emps on emp.deptno = deptno;
+```
+
+(Unlike SQL, the fields of a record are not automatically unnested. If
+you wish to access the `job` field of an employee record, then you
+must write `emp.job`; the unqualified expression `job` is invalid.)
+
+The `deptno` and `emp` fields can be consumed in a following `yield`
+step, which produces fields `deptno`, `job`, `initial`:
+
+```
+from deptno in [10, 20],
+    emp in scott.emps on emp.deptno = deptno
+  yield {deptno, emp.job, initial = String.sub(emp.ename, 1);
+
+deptno initial job
+------ ------- ---------
+10     L       MANAGER
+10     I       PRESIDENT
+10     I       CLERK
+20     M       CLERK
+20     O       MANAGER
+20     C       ANALYST
+20     D       CLERK
+20     O       ANALYST
+
+val it : {deptno:int, initial:char, job:string} list
+```
+
+And so on. In the following sections, we define each of Morel's step
+types and how they map input fields to output fields.
+
+### Distinct step
+
+`distinct`
+
+### Group step
+
+`group`
+
+### Join step
+
+`join`
+
+### Skip step
+
+`skip`
+
+### Take step
+
+`take`
+
+### Through step
+
+`through`
+
+### Order step
+
+`order`
+
+### Where step
+
+`where`
+
+### Yield step
+
+`yield`
+
+## Quantified queries
+
+`forall` and `exists`
+
+## Correspondence between SQL and Morel query
+
+Many of the keywords in a SQL query have an equivalent in Morel.
+
+| SQL         | Morel       | Remarks
+|-------------|-------------|---------
+| `SELECT`    | `yield`     | `SELECT` is always the first keyword of a query, but you may use `yield` at any point in the pipeline. It often occurs last, and you can omit it if the output record has the right shape.
+| `FROM`      | `from`      | Unlike SQL `FROM`, `from` is the first keyword in a Morel query.
+| `JOIN`      | `join`      | SQL `JOIN` is part of the `FROM` clause, but Morel `join` is a step.
+| `WHERE`     | `where`     | Morel `where` is equivalent to SQL `WHERE`.
+| `HAVING`    |             | Use a `where` after a `group`.
+| `DISTINCT` | `distinct`   | SQL `DISTINCT` is part of the `SELECT` clause, but Morel `distinct` is a step, shorthand for `group`
+| `ORDER BY`  | `order`     | Morel `order` is equivalent to SQL `ORDER BY`.
+| `LIMIT`     | `take`      | Morel `take` is equivalent to SQL `LIMIT`.
+| `OFFSET`    | `skip`      | Morel `skip` is equivalent to SQL `OFFSET`.
+| `UNION`     | `union`     | Morel `union` is equivalent to SQL `UNION ALL`.
+| `INTERSECT` | `intersect` | Morel `intersect` is equivalent to SQL `INTERSECT ALL`.
+| `EXCEPT`    | `except`    | Morel `except` is equivalent to SQL `EXCEPT ALL` (or `MINUS ALL` in some SQL dialects).
+| `EXISTS`    | `exists`    | SQL `EXISTS` is unary operator whose operand is a query, but Morel `exists` is a query that returns `true` if the query has at least one row.
+| -           | `forall`    | Morel `forall` is a query that returns `true` if a predicate is true for all rows.
+| `IN`        | `elem`      | SQL `IN` is a binary operator whose right operand is either a query or a list (but not an array or multiset); Morel `elem` is the equivalent operator, and its right operand can be any collection, including a query.
+| `NOT IN`    | `notelem`   | Morel `notelem` is equivalent to SQL `NOT IN`, but without SQL's confusing [NULL-value semantics](https://community.snowflake.com/s/article/Behaviour-of-NOT-IN-with-NULL-values)).
+| -           | `yieldall`  | Morel `yieldall` evaluates a collection expression and outputs one row for each element of that collection.
+
