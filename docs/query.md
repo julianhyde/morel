@@ -16,6 +16,27 @@ software distributed under the License is distributed on an
 either express or implied.  See the License for the specific
 language governing permissions and limitations under the
 License.
+
+TODO:
+* test that query with negative skip gives error (consistent with sql)
+* test skip 0 is a no-op
+* test skip >N yields nothing
+* test that query with negative take gives error
+* val dice = [1, 2, 3, 4, 5, 6]
+* from i in dice, j in dice yield i + j distinct -- should  valid but has bug
+* from i in dice, j in dice yield i + j; -- works, int list
+* from i in dice, j in dice yield {x=i + j}; -- works, rec list
+* from i in dice, j in dice yield {x=i + j} order x; -- works, int list
+* from i in dice, j in dice yield {x=i + j} order x take 3;
+* from i in dice, j in dice yield {x=i + j} order x skip 3;
+* from i in dice, j in dice yield {x=i + j} order x skip 3 yield x;
+* from i in dice, j in dice yield {x=i + j} order x yield x;
+* from i in dice, j in dice yield {x=i + j} yield x; -- has bug
+* from i in dice, j in dice yield {x=i + j} skip 3 yield x; -- works
+* from i in dice, j in dice yield {x=i + j} distinct; -- works
+* test through with partially eval function, 'from i in dice through j in multiplesOf 3'
+* Char.toUpper and toLower, and test 'String.map Char.toUpper' etc.
+
 {% endcomment %}
 -->
 
@@ -68,12 +89,12 @@ The formal syntax of queries is as follows.
 
 <pre>
 <i>exp</i> &rarr; (other expressions)
-    | <b>from</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>* [ <i>terminalStep</i> ]
-                                relational expression (<i>s</i> &ge; 0)
-    | <b>exists</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>*
-                                existential quantification (<i>s</i> &ge; 0)
-    | <b>forall</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step</i>* <b>require</b> <i>exp</i>
-                                universal quantification (<i>s</i> &ge; 0)
+    | <b>from</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step<sub>1</sub></i> ... <i>step<sub>t</sub></i> [ <i>terminalStep</i> ]
+                                relational expression (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
+    | <b>exists</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step<sub>1</sub></i> ... <i>step<sub>t</sub></i>
+                                existential quantification (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
+    | <b>forall</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step<sub>1</sub></i> ... <i>step<sub>t</sub></i> <b>require</b> <i>exp</i>
+                                universal quantification (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
 
 <i>scan</i> &rarr; <i>pat</i> <b>in</b> <i>exp</i> [ <b>on</b> <i>exp</i> ]    iteration
     | <i>pat</i> <b>=</b> <i>exp</i> [ <b>on</b> <i>exp</i> ]      single iteration
@@ -103,24 +124,33 @@ The formal syntax of queries is as follows.
 <i>orderItem</i> &rarr; <i>exp</i> [ <b>desc</b> ]
 </pre>
 
-First, notice that a query is an expression. Provided that its type is
-valid, you can use a query anywhere in a Morel program that an
-expression is valid, such as in a `case` expression, the body of a
-`fn` lambda, or the argument to a function call. Or you can evaluate a
-query by typing it into the shell, just like any other expression.
-
 A query is a `from`, `exists` or `forall` keyword followed by one or
 more *scans*, then followed by zero or more *steps*. (A `forall` query
 must end with a `require` step, and a `from` query may end with an
 `into` or `compute` terminal step.)
 
-In the previous query, <code><b>from</b> e <b>in</b> scott.emps</code>
-is a scan, and <code><b>where</b> e.deptno = 10</code> and
-<code><b>yield</b> {e.ename, e.sal}</code> are steps.
+For example, the query
 
-Now let's look at [scans](#scan) and [steps](#step) in more detail. We
-will focus on `from` for now, and will cover `forall` and `exists` in
+<pre>
+<b>from</b> e <b>in</b> scott.emps,
+    d <b>in</b> scott.depts <b>on</b> e.deptno = d.deptno
+  <b>where</b> e.deptno = 10
+  <b>yield</b> {d.dname, e.ename, e.sal};
+</pre>
+
+has two scans (<code>e <b>in</b> scott.emps</code> and <code>d <b>in</b> scott.depts <b>on</b> e.deptno = d.deptno</code>) and two steps (<code><b>where</b> e.deptno = 10</code> and
+<code><b>yield</b> {e.ename, e.sal}</code>).
+
+In the following sections we will look at [scans](#scan) and [steps](#step) in more detail. We
+will focus on `from` for now, and will cover <code><b>exists</b></code> and <code><b>forall</b></code> in
 [quantified queries](#quantified-queries).
+
+Finally, remember that a query is an expression.
+You can evaluate a
+query by typing it into the shell, just like any other expression.
+Also, you can use a query anywhere in a Morel program that an
+expression is valid, such as in a `case` expression, the body of a
+`fn` lambda, or the argument to a function call. Because Morel is strongly typed, the type of the query expression has to match where it is being used. Most queries return a collection, but quantified queries (<code><b>exists</b></code> and <code><b>forall</b></code>) and queries with a terminal step (<code><b>compute</b></code> or <code><b>into</b></code>) return a scalar value, and therefore are particularly easy to use in expressions.
 
 ## Scan
 
@@ -250,9 +280,10 @@ concise in Morel.
 
 ### Single-row scan
 
-A scan with `=` syntax iterates over a single value. While `pat = exp`
-is just syntactic sugar for `pat <b>in</b> [exp]`, it is nevertheless
-a useful way to add a column to the current row.
+A scan with `=` syntax iterates over a single value. While <code>pat =
+exp</code> is just syntactic sugar for <code>pat <b>in</b>
+[exp]</code>, it is nevertheless a useful way to add a column to the
+current row.
 
 <pre>
 <i>(* Iterate over a list of integers and compute whether
@@ -352,48 +383,576 @@ deptno initial job
 val it : {deptno:int, initial:char, job:string} list</i>
 </pre>
 
-And so on. In the following sections, we define each of Morel's step
+In the following sections, we define each of Morel's step
 types and how they map input fields to output fields.
+
+### Step list
+
+| Name                                      | Summary                                                                                                               |
+|-------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| [<code><b>distinct</b></code>](#distinct) | Removes duplicate rows from the current collection.                                                                   |
+| [<code><b>group</b></code>](#group)       | Performs aggregation across groups of rows.                                                                           |
+| [<code><b>join</b></code>](#join)         | Joins one or more scans to the current collection.                                                                    |
+| [<code><b>order</b></code>](#order)       | Sorts the current collection by a list of expressions.                                                                |
+| [<code><b>skip</b></code>](#skip)         | Skips a given number of rows from the current collection.                                                             |
+| [<code><b>take</b></code>](#take)         | Limits the number of rows to return from the current collection.                                                      |
+| [<code><b>through</b></code>](#through)   | Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns. |
+| [<code><b>where</b></code>](#where)       | Emits rows of the current collection for which a given predicate evaluates to `true`.                                 |
+| [<code><b>yield</b></code>](#yield)       | For each row in the current collection, evaluates an expression and emits it as a row.                                |
+
+The following steps produce a single scalar or record value. Because the output is not a collection, no further steps are possible, and therefore they are called **terminal steps**.
+
+It can be unwieldy to use a query in an expression such as <code><b>if</b></code> or <code><b>case</b></code> if the query returns a collection. Queries with a terminal step, and <code><b>forall</b></code> and <code><b>exists</b></code> queries, are easy to embed in an expression.
+
+| Name                                     | Summary                                                                  |
+|------------------------------------------|--------------------------------------------------------------------------|
+| [<code><b>compute</b></code>](#compute)  | Applies aggregate functions to the current collection.                   |
+| [<code><b>into</b></code>](#into)        | Applies a function to the current collection.                            |
+| [<code><b>require</b></code>](#require) | Evaluates the predicate of a [<code><b>forall</b></code>](#forall) query. |
 
 ### Distinct step
 
-`distinct`
+<pre>
+<b>distinct</b>
+</pre>
+
+#### Description
+
+Removes duplicate rows from the current collection.
+
+The output fields are the same as the input fields.
+
+#### Example
+
+<pre>
+<i>(* Compute the set of distinct rolls of two dice. *)</i>
+<b>from</b> i <b>in</b> [1, 2, 3, 4, 5, 6],
+    j <b>in</b> [1, 2, 3, 4, 5, 6]
+  <b>yield</b> i + j
+  <b>distinct</b>;
+
+<i>val it = [2,3,4,5,6,7,8,9,10,11,12] : int list</i>
+</pre>
 
 ### Group step
 
-`group`
+<pre>
+<b>group</b> <i>groupKey<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>groupKey<sub>g</sub></i>
+  [ <b>compute</b> <i>agg<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>agg<sub>a</sub></i> ]       (<i>g</i> &ge; 0, <i>a</i> &ge; 1)
+
+<i>groupKey</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i>
+
+<i>agg</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i> [ <b>of</b> <i>exp</i> ]
+</pre>
+
+#### Description
+
+Performs aggregation across groups of rows.
+
+Groups the rows of the input collection by one or more group keys. If there is a <code><b>compute</b></code> clause, for each group, computes the aggregate expressions specified in <code><i>agg</i></code>.
+
+The output fields are the group key fields and the aggregate fields.
+
+Field names are derived similarly to record fields in the [<code><b>yield</b></code>](#yield-step) step. An explicit field name of a <code><i>groupKey</i></code> or <code><i>agg</i></code> can be specified using an <code><i>id</i> =</code> prefix. The explicit field name of a <code><i>groupKey</i></code> can be omitted if an implicit field name can be derived: if the expression is <code><i>id</i></code> then the implicit field name is <code><i>id</i></code>; if the expression is <code><i>record</i>.<i>field</i></code> then the implicit field name is <code><i>field</i></code>. The explicit field name of an <code><i>agg</i></code> can be omitted if an implicit field name can be derived: if the aggregate function is <code><i>id</i></code> then the implicit field name is <code><i>id</i></code>; if the aggregate function is <code><i>record</i>.<i>field</i></code> then the implicit field name is <code><i>field</i></code>.
+
+The <code><b>of</b></code> clause in an aggregate specifies the expression to aggregate; if omitted, the aggregate function is applied to the entire row.
+
+#### Example
+
+<pre>
+<i>(* Count employees and compute average salary for each
+   department. *)</i>
+<b>from</b> e <b>in</b> scott.emps
+  <b>group</b> e.deptno <b>compute</b> count, avgSal = avg <b>of</b> e.sal;
+<i>
+deptno count  avgSal
+------ ----- -------
+    10     3 2916.67
+    20     5 2175.00
+    30     6 1566.67
+
+val it : {deptno:int, count:int, avgSal:real} list</i>
+</pre>
 
 ### Join step
 
-`join`
+<pre>
+<b>join</b> <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i>   (<i>s</i> &ge; 1)
 
-### Skip step
+<i>scan</i> &rarr; <i>pat</i> <b>in</b> <i>exp</i> [ <b>on</b> <i>exp</i> ]
+    | <i>pat</i> <b>=</b> <i>exp</i> [ <b>on</b> <i>exp</i> ]
+    | <i>var</i>
+</pre>
 
-`skip`
+#### Description
 
-### Take step
+Joins one or more scans to the current collection.
 
-`take`
+The output fields are the input fields plus the identifiers in the <code><i>pat</i></code> and <code><i>var</i></code> of each of the scans. Field names must be unique.
 
-### Through step
+If any scan has an <code><b>on</b></code> clause, the expression must be of type <b>bool</b> and may reference any variable in the environment, including the output fields of the previous step, and fields defined by any preceding scans in this <code><b>join</b></code>.
 
-`through`
+Morel does not yet implement [outer join](https://github.com/hydromatic/morel/issues/75).
+
+#### Example
+
+<pre>
+<i>(* Find the name of each department and the name of all
+   employees in those departments. *)</i>
+<b>from</b> d <b>in</b> scott.depts
+  <b>join</b> e <b>in</b> scott.emps <b>on</b> e.deptno = d.deptno
+  <b>yield</b> {d.dname, e.ename};
+<i>
+dname      ename
+---------- ------
+ACCOUNTING CLARK
+ACCOUNTING KING
+ACCOUNTING MILLER
+RESEARCH   SMITH
+RESEARCH   JONES
+RESEARCH   SCOTT
+RESEARCH   ADAMS
+RESEARCH   FORD
+SALES      ALLEN
+SALES      WARD
+SALES      MARTIN
+SALES      BLAKE
+SALES      TURNER
+SALES      JAMES
+
+val it : {dname:string, ename:string} list</i>
+</pre>
 
 ### Order step
 
-`order`
+<pre>
+<b>order</b> <i>orderItem<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>orderItem<sub>o</sub></i>   (<i>o</i> &ge; 1)
+
+<i>orderItem</i> &rarr; <i>exp</i> [ <b>desc</b> ]
+</pre>
+
+#### Description
+
+Sorts the current collection by a list of expressions.
+
+Each expression in <code><i>orderItem</i></code> specifies a sort key. By default, rows are ordered in ascending order of each expression; if <code><b>desc</b></code> is specified, that expression is sorted in descending order.
+
+The output fields are the same as the input fields.
+
+#### Example
+
+<pre>
+<i>(* List employees ordered by salary (descending) then
+   name. *)</i>
+<b>from</b> e <b>in</b> scott.emps
+  <b>order</b> e.sal <b>desc</b>, e.ename
+  <b>yield</b> {e.ename, e.job, e.sal};
+<i>
+ename  job       sal
+------ --------- ------
+KING   PRESIDENT 5000.0
+FORD   ANALYST   3000.0
+SCOTT  ANALYST   3000.0
+JONES  MANAGER   2975.0
+BLAKE  MANAGER   2850.0
+CLARK  MANAGER   2450.0
+ALLEN  SALESMAN  1600.0
+TURNER SALESMAN  1500.0
+MILLER CLERK     1300.0
+MARTIN SALESMAN  1250.0
+WARD   SALESMAN  1250.0
+ADAMS  CLERK     1100.0
+JAMES  CLERK      950.0
+SMITH  CLERK      800.0
+
+val it : {ename:string, job:string, sal:real} list</i>
+</pre>
+
+### Skip step
+
+<pre>
+<b>skip</b> <i>exp</i>
+</pre>
+
+#### Description
+
+Skips a given number of rows from the current collection.
+
+The expression <code><i>exp</i></code> must evaluate to an integer, which specifies the number of rows to skip from the beginning of the current collection. It is an error if the value is negative. If the value exceeds the number of rows in the collection, no rows are returned.
+
+The output fields are the same as the input fields.
+
+#### Example
+
+<pre>
+<i>(* Skip the first 3 rows of a collection. *)</i>
+<b>from</b> i <b>in</b> [1, 2, 3, 4, 5, 6, 7]
+  <b>skip</b> 3;
+<i>
+4
+5
+6
+7
+
+val it : int list</i>
+</pre>
+
+### Take step
+
+<pre>
+<b>take</b> <i>exp</i>
+</pre>
+
+#### Description
+
+Limits the number of rows to return from the current collection.
+
+The expression <code><i>exp</i></code> must evaluate to an integer, which specifies the maximum number of rows to return from the current collection. If the value is zero, no rows are returned. It is an error if the value is negative.
+
+The output fields are the same as the input fields.
+
+#### Example
+
+<pre>
+<i>(* Return only the first 3 rows of a collection. *)</i>
+<b>from</b> i <b>in</b> [1, 2, 3, 4, 5, 6, 7]
+  <b>take</b> 3;
+<i>
+1
+2
+3
+
+val it : int list</i>
+</pre>
+
+### Through step
+
+<pre>
+<b>through</b> <i>pat</i> <b>in</b> <i>exp</i>
+</pre>
+
+#### Description
+
+Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns.
+
+The expression <code><i>exp</i></code> must evaluate to a function that takes the current collection as an argument and returns a new collection. The pattern <code><i>pat</i></code> is bound to each element of the returned collection.
+
+The output fields are the fields defined by the pattern <code><i>pat</i></code>.
+
+#### Example
+
+<pre>
+<i>(* Define a table function that returns the even numbers
+   from a collection. *)</i>
+<b>fun</b> evenNumbers(xs) = 
+  <b>from</b> x <b>in</b> xs
+    <b>where</b> x <b>mod</b> 2 = 0;
+
+<i>(* Use the table function in a query. *)</i>
+<b>from</b> i <b>in</b> [1, 2, 3, 4, 5, 6, 7]
+  <b>through</b> j <b>in</b> evenNumbers;
+<i>
+2
+4
+6
+
+val it : {j:int} list</i>
+</pre>
+
+We can generalize the previous example to find multiples of a given number.
+The table function now takes multiple arguments, and we provide the first
+argument in the <code><b>through</b></code> clause; the input collection becomes the second argument.
+
+<pre>
+<i>(* Define a table function that returns the numbers from
+   a collection that are multiples of base. *)</i>
+<b>fun</b> multiplesOf base xs =
+  <b>from</b> x <b>in</b> xs
+    <b>where</b> x <b>mod</b> base = 0;
+
+<i>(* Use the table function to find multiples of 3. *)</i>
+<b>from</b> i <b>in</b> [1, 2, 3, 4, 5, 6, 7]
+  <b>through</b> j <b>in</b> multiplesOf 3;
+<i>
+3
+6
+
+val it : {j:int} list</i>
+</pre>
+
+#### Description
+
+Calls a table function, with the current collection as an argument,
+and starts a scan over the collection it returns.
 
 ### Where step
 
-`where`
+<pre>
+<b>where</b> <i>exp</i>
+</pre>
+
+#### Description
+
+Emits rows of the current collection for which a given predicate
+evaluates to `true`.
+
+The expression <code><i>exp</i></code> must evaluate to a boolean value. Only rows for which the expression evaluates to `true` are emitted to the output.
+
+The output fields are the same as the input fields.
+
+#### Example
+
+<pre>
+<i>(* Find employees who work in department 20. *)</i>
+<b>from</b> e <b>in</b> scott.emps
+  <b>where</b> e.deptno = 20
+  <b>yield</b> {e.ename, e.job};
+<i>
+ename job
+----- -------
+SMITH CLERK
+JONES MANAGER
+SCOTT ANALYST
+ADAMS CLERK
+FORD  ANALYST
+
+val it : {ename:string, job:string} list</i>
+</pre>
 
 ### Yield step
 
-`yield`
+<pre>
+<b>yield</b> <i>exp</i>
+</pre>
+
+#### Description
+
+For each row in the current collection, evaluates an expression and
+emits it as a row.
+
+The expression <code><i>exp</i></code> defines the output fields. If `exp` is a record expression, its field names become the output field names.
+
+If this is the last step in the query, the expression may be a non-record type. In this case, there are no output fields, and the result of the query is a collection of that non-record type.
+
+#### Example
+
+<pre>
+<i>(* Create a new record from each employee with modified
+   fields. *)</i>
+<b>from</b> e <b>in</b> scott.emps
+  <b>yield</b> {name = String.map Char.toUpper e.ename, 
+      position = String.map Char.toLower e.job,
+      annualSalary = e.sal * 12.0};
+<i>
+name   position  annualSalary
+------ --------- ------------
+SMITH  clerk          9600.00
+ALLEN  salesman      19200.00
+WARD   salesman      15000.00
+JONES  manager       35700.00
+MARTIN salesman      15000.00
+BLAKE  manager       34200.00
+CLARK  manager       29400.00
+SCOTT  analyst       36000.00
+KING   president     60000.00
+TURNER salesman      18000.00
+ADAMS  clerk         13200.00
+JAMES  clerk         11400.00
+FORD   analyst       36000.00
+MILLER clerk         15600.00
+
+val it : {name:string, position:string, annualSalary:real} list</i>
+</pre>
+
+<pre>
+<i>(* Return a list of strings describing each employee in
+   department 20. *)</i>
+<b>from</b> e <b>in</b> scott.emps
+  <b>where</b> e.deptno = 20
+  <b>yield</b> e.ename ^ " is a " ^ e.job;
+<i>
+SMITH is a CLERK
+JONES is a MANAGER
+SCOTT is a ANALYST
+ADAMS is a CLERK
+FORD is a ANALYST
+
+val it : string list</i>
+</pre>
+
+### Compute terminal step
+
+<pre>
+<b>compute</b> <i>agg<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>agg<sub>a</sub></i>   (<i>a</i> &ge; 1)
+
+<i>agg</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i> [ <b>of</b> <i>exp</i> ]
+</pre>
+
+#### Description
+
+Applies aggregate functions to the current collection.
+
+Unlike the [<code><b>group</b></code>](#group-step) step, which groups rows and computes aggregates for each group, the <code><b>compute</b></code> terminal step computes aggregates across the entire collection and returns a single record or scalar value.
+
+The output is a scalar value if there is one aggregate, or a record if there is more than one. That value becomes the result of the query expression.
+
+Field names are derived in the same way as the <code><b>group</b></code> step. An explicit field name of an <code><i>agg</i></code> can be specified using an <code><i>id</i> =</code> prefix. The explicit field name can be omitted if an implicit field name can be derived: if the aggregate function is <code><i>id</i></code> then the implicit field name is <code><i>id</i></code>; if the aggregate function is <code><i>record</i>.<i>field</i></code> then the implicit field name is <code><i>field</i></code>.
+
+#### Example
+
+<pre>
+<i>(* Compute total number of employees and average salary. *)</i>
+<b>from</b> e <b>in</b> scott.emps
+  <b>compute</b> total = count,
+           avgSal = avg <b>of</b> e.sal,
+           minSal = min <b>of</b> e.sal,
+           maxSal = max <b>of</b> e.sal;
+<i>
+total avgSal  minSal  maxSal
+----- ------- ------- -------
+14    2073.21 800.00  5000.00
+
+val it : {total:int, avgSal:real, minSal:real, maxSal:real}</i>
+</pre>
+
+<pre>
+<i>(* Compute total number of employees. *)</i>
+<b>from</b> e <b>in</b> scott.emps
+  <b>compute</b> count;
+<i>val it = 14 : int</i>
+</pre>
+
+### Into terminal step
+
+<pre>
+<b>into</b> <i>exp</i>
+</pre>
+
+#### Description
+
+Applies a function to the current collection.
+
+The expression <code><i>exp</i></code> must evaluate to a function that takes the current collection as an argument. The result of the query is the result of applying that function to the collection.
+
+#### Example
+
+<pre>
+<i>(* Apply a custom function to the query results. *)</i>
+<b>fun</b> analyzeResults (emps: {deptno: int, sal: real} list) =
+  <b>let</b>
+    <b>val</b> {count, sumSal} =
+      <b>from</b> e <b>in</b> emps
+        <b>compute</b> count, sumSal = sum <b>of</b> e.sal
+    <b>val</b> avgSal = sumSal / real count
+  <b>in</b>
+    {employeeCount = count,
+      averageSalary = avgSal,
+      classification = <b>if</b> avgSal > 2000.0 <b>then</b> "High" <b>else</b> "Low"}
+  <b>end</b>;
+
+<b>from</b> e <b>in</b> scott.emps
+  <b>where</b> e.deptno = 10
+  <b>yield</b> {e.deptno, e.sal}
+  <b>into</b> analyzeResults;
+<i>
+val it = {employeeCount=3, averageSalary=2916.67, classification="High"}
+  : {employeeCount:int, averageSalary:real, classification:string}</i>
+</pre>
+
+### Require terminal step
+
+<pre>
+<b>require</b> <i>exp</i>
+</pre>
+
+#### Description
+
+Evaluates the predicate of a <code><b>forall</b></code> query.
+
+This step is only valid as the last step of a <code><b>forall</b></code> query. The expression <code><i>exp</i></code> must evaluate to a boolean value. The result of query is `true` if the predicate evaluates to `true` for every row in the collection, or if the collection is empty.
+
+#### Example
+
+<pre>
+<i>(* Check whether all employees earn more than $2000. *)</i>
+<b>forall</b> e <b>in</b> scott.emps
+  <b>require</b> e.sal > 2000.0;
+<i>
+val it = false : bool</i>
+</pre>
+
+<pre>
+<i>(* Check whether all managers earn more than $2000. *)</i>
+<b>forall</b> e <b>in</b> scott.emps
+  <b>where</b> e.job = "MANAGER"
+  <b>require</b> e.sal > 2000.0;
+<i>
+val it = true : bool</i>
+</pre>
 
 ## Quantified queries
 
-`forall` and `exists`
+Morel provides query forms for existential and universal quantification:
+* `exists` returns whether at least one row in the query satisfies the critera (existential quantification);
+* `forall` returns whether all rows in the query satisfy the criteria (universal quantification).
+
+### Exists query
+
+<pre>
+<b>exists</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step<sub>1</sub></i> ... <i>step<sub>t</sub></i>   (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
+</pre>
+
+
+An `exists` query returns `true` if the query returns at least one row, and `false` otherwise.
+
+#### Example
+
+<pre>
+<i>(* Do any employees earn more than $3,000? *)</i>
+<b>exists</b> e <b>in</b> scott.emps
+  <b>where</b> e.sal > 3000.0;
+
+<i>val it = true : bool</i>
+</pre>
+
+### Forall query
+
+<pre>
+<b>forall</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step<sub>1</sub></i> ... <i>step<sub>t</sub></i>   (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
+  <b>require</b> <i>exp</i>
+</pre>
+
+A <code><b>forall</b></code> query returns `true` if the predicate specified in the <code><b>require</b></code> step evaluates to `true` for every row that reaches that step, or no rows reach that step. It returns `false` if the predicate evaluates to `false` for at least one row.
+
+Rows that are eliminated by previous steps (such as <code><b>where</b></code>) and do not reach the <code><b>require</b></code> step do not count as evaluations of the predicate.
+
+#### Example
+
+<pre>
+<i>(* Do all employees have a job title of clerk, manager or
+   president? *)</i>
+<b>forall</b> e <b>in</b> scott.emps
+  <b>require</b> e.job <b>elem</b> ["CLERK", "MANAGER", "PRESIDENT"];
+<i>val it = false : bool</i>
+</pre>
+
+<pre>
+<i>(* Do all employees in department 10 have a job title of
+   clerk, manager or president? *)</i>
+<b>forall</b> e <b>in</b> scott.emps
+  <b>where</b> e.deptno = 10
+  <b>require</b> e.job <b>elem</b> ["CLERK", "MANAGER", "PRESIDENT"];
+<i>val it = true : bool</i>
+</pre>
+
+<pre>
+<i>(* Are all employees in department 10 and have a job
+   title of clerk, manager or president? *)</i>
+<b>forall</b> e <b>in</b> scott.emps
+  <b>require</b> e.deptno = 10
+    <b>andalso</b> e.job <b>elem</b> ["CLERK", "MANAGER", "PRESIDENT"];
+<i>val it = false : bool</i>
+</pre>
 
 ## Correspondence between SQL and Morel query
 
