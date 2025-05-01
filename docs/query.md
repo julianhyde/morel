@@ -138,19 +138,26 @@ For example, the query
   <b>yield</b> {d.dname, e.ename, e.sal};
 </pre>
 
-has two scans (<code>e <b>in</b> scott.emps</code> and <code>d <b>in</b> scott.depts <b>on</b> e.deptno = d.deptno</code>) and two steps (<code><b>where</b> e.deptno = 10</code> and
-<code><b>yield</b> {e.ename, e.sal}</code>).
+has two scans (<code>e <b>in</b> scott.emps</code> and <code>d
+<b>in</b> scott.depts <b>on</b> e.deptno = d.deptno</code>) and two
+steps (<code><b>where</b> e.deptno = 10</code> and <code><b>yield</b>
+{e.ename, e.sal}</code>).
 
-In the following sections we will look at [scans](#scan) and [steps](#step) in more detail. We
-will focus on `from` for now, and will cover <code><b>exists</b></code> and <code><b>forall</b></code> in
+In the following sections we will look at [scans](#scan) and
+[steps](#step) in more detail. We will focus on `from` for now, and
+will cover `exists` and `forall` in
 [quantified queries](#quantified-queries).
 
-Finally, remember that a query is an expression.
-You can evaluate a
+Finally, remember that a query is an expression.  You can evaluate a
 query by typing it into the shell, just like any other expression.
 Also, you can use a query anywhere in a Morel program that an
 expression is valid, such as in a `case` expression, the body of a
-`fn` lambda, or the argument to a function call. Because Morel is strongly typed, the type of the query expression has to match where it is being used. Most queries return a collection, but quantified queries (<code><b>exists</b></code> and <code><b>forall</b></code>) and queries with a terminal step (<code><b>compute</b></code> or <code><b>into</b></code>) return a scalar value, and therefore are particularly easy to use in expressions.
+`fn` lambda, or the argument to a function call. Because Morel is
+strongly typed, the type of the query expression has to match where it
+is being used. Most queries return a collection, but quantified
+queries (`exists` and `forall`) and queries with a terminal step
+(`compute` or `into`) return a scalar value, and therefore are
+particularly easy to use in expressions.
 
 ## Scan
 
@@ -249,14 +256,14 @@ Multiple scans are a convenient way of dealing with nested data.
 
 <pre>
 <i>(* Define the shipments data set; each shipment has one or
- * more nested items. *)</i>
+   more nested items. *)</i>
 <b>val</b> shipments =
   [{id=1, shipping=10.0, items=[{product="soda", quantity=12},
                                 {product="beer", quantity=3}],
    {id=2, shipping=7.5, items=[{product="cider",quantity=4}]}]}];
 
 <i>(* Flatten the data set by joining each shipment to its own
- * items. *)</i>
+   items. *)</i>
 <b>from</b> s <b>in</b> shipments,
     i <b>in</b> s.items
   <b>yield</b> {s.id, i.product, i.quantity};
@@ -287,7 +294,7 @@ current row.
 
 <pre>
 <i>(* Iterate over a list of integers and compute whether
- * they are odd. *)</i>
+   they are odd. *)</i>
 <b>from</b> i <b>in</b> [1, 2, 3, 4, 5],
     odd = (i <b>mod</b> 2 = 1);
 <i>
@@ -388,27 +395,32 @@ types and how they map input fields to output fields.
 
 ### Step list
 
-| Name                                      | Summary                                                                                                               |
-|-------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| [<code><b>distinct</b></code>](#distinct) | Removes duplicate rows from the current collection.                                                                   |
-| [<code><b>group</b></code>](#group)       | Performs aggregation across groups of rows.                                                                           |
-| [<code><b>join</b></code>](#join)         | Joins one or more scans to the current collection.                                                                    |
-| [<code><b>order</b></code>](#order)       | Sorts the current collection by a list of expressions.                                                                |
-| [<code><b>skip</b></code>](#skip)         | Skips a given number of rows from the current collection.                                                             |
-| [<code><b>take</b></code>](#take)         | Limits the number of rows to return from the current collection.                                                      |
-| [<code><b>through</b></code>](#through)   | Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns. |
-| [<code><b>where</b></code>](#where)       | Emits rows of the current collection for which a given predicate evaluates to `true`.                                 |
-| [<code><b>yield</b></code>](#yield)       | For each row in the current collection, evaluates an expression and emits it as a row.                                |
+| Name                    | Summary                                                                                                              |
+|-------------------------|----------------------------------------------------------------------------------------------------------------------|
+| [`distinct`](#distinct) | Removes duplicate rows from the current collection.                                                                  |
+| [`group`](#group)       | Performs aggregation across groups of rows.                                                                          |
+| [`join`](#join)         | Joins one or more scans to the current collection.                                                                   |
+| [`order`](#order)       | Sorts the current collection by a list of expressions.                                                               |
+| [`skip`](#skip)         | Skips a given number of rows from the current collection.                                                            |
+| [`take`](#take)         | Limits the number of rows to return from the current collection.                                                     |
+| [`through`](#through)   | Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns. |
+| [`where`](#where)       | Emits rows of the current collection for which a given predicate evaluates to `true`.                                |
+| [`yield`](#yield)       | For each row in the current collection, evaluates an expression and emits it as a row.                               |
 
-The following steps produce a single scalar or record value. Because the output is not a collection, no further steps are possible, and therefore they are called **terminal steps**.
+The following steps produce a single scalar or record value. Because
+the output is not a collection, no further steps are possible, and
+therefore they are called **terminal steps**.
 
-It can be unwieldy to use a query in an expression such as <code><b>if</b></code> or <code><b>case</b></code> if the query returns a collection. Queries with a terminal step, and <code><b>forall</b></code> and <code><b>exists</b></code> queries, are easy to embed in an expression.
+It can be unwieldy to use a query in an expression such as `if` or
+`case` if the query returns a collection. Queries with a terminal
+step, and `forall` and `exists` queries, are easy to embed in an
+expression.
 
-| Name                                     | Summary                                                                  |
-|------------------------------------------|--------------------------------------------------------------------------|
-| [<code><b>compute</b></code>](#compute)  | Applies aggregate functions to the current collection.                   |
-| [<code><b>into</b></code>](#into)        | Applies a function to the current collection.                            |
-| [<code><b>require</b></code>](#require) | Evaluates the predicate of a [<code><b>forall</b></code>](#forall) query. |
+| Name                  | Summary                                                 |
+|-----------------------|---------------------------------------------------------|
+| [`compute`](#compute) | Applies aggregate functions to the current collection.  |
+| [`into`](#into)       | Applies a function to the current collection.           |
+| [`require`](#require) | Evaluates the predicate of a [`forall`](#forall) query. |
 
 ### Distinct step
 
@@ -449,13 +461,30 @@ The output fields are the same as the input fields.
 
 Performs aggregation across groups of rows.
 
-Groups the rows of the input collection by one or more group keys. If there is a <code><b>compute</b></code> clause, for each group, computes the aggregate expressions specified in <code><i>agg</i></code>.
+Groups the rows of the input collection by one or more group keys. If
+there is a `compute` clause, for each group, computes the aggregate
+expressions specified in <code><i>agg</i></code>.
 
 The output fields are the group key fields and the aggregate fields.
 
-Field names are derived similarly to record fields in the [<code><b>yield</b></code>](#yield-step) step. An explicit field name of a <code><i>groupKey</i></code> or <code><i>agg</i></code> can be specified using an <code><i>id</i> =</code> prefix. The explicit field name of a <code><i>groupKey</i></code> can be omitted if an implicit field name can be derived: if the expression is <code><i>id</i></code> then the implicit field name is <code><i>id</i></code>; if the expression is <code><i>record</i>.<i>field</i></code> then the implicit field name is <code><i>field</i></code>. The explicit field name of an <code><i>agg</i></code> can be omitted if an implicit field name can be derived: if the aggregate function is <code><i>id</i></code> then the implicit field name is <code><i>id</i></code>; if the aggregate function is <code><i>record</i>.<i>field</i></code> then the implicit field name is <code><i>field</i></code>.
+Field names are derived similarly to record fields in the
+[`yield`](#yield-step) step. An explicit field name of a
+<code><i>groupKey</i></code> or <code><i>agg</i></code> can be
+specified using an <code><i>id</i> =</code> prefix. The explicit field
+name of a <code><i>groupKey</i></code> can be omitted if an implicit
+field name can be derived: if the expression is <code><i>id</i></code>
+then the implicit field name is <code><i>id</i></code>; if the
+expression is <code><i>record</i>.<i>field</i></code> then the
+implicit field name is <code><i>field</i></code>. The explicit field
+name of an <code><i>agg</i></code> can be omitted if an implicit field
+name can be derived: if the aggregate function is
+<code><i>id</i></code> then the implicit field name is
+<code><i>id</i></code>; if the aggregate function is
+<code><i>record</i>.<i>field</i></code> then the implicit field name
+is <code><i>field</i></code>.
 
-The <code><b>of</b></code> clause in an aggregate specifies the expression to aggregate; if omitted, the aggregate function is applied to the entire row.
+The `of` clause in an aggregate specifies the expression to aggregate;
+if omitted, the aggregate function is applied to the entire row.
 
 #### Example
 
@@ -488,9 +517,14 @@ val it : {deptno:int, count:int, avgSal:real} list</i>
 
 Joins one or more scans to the current collection.
 
-The output fields are the input fields plus the identifiers in the <code><i>pat</i></code> and <code><i>var</i></code> of each of the scans. Field names must be unique.
+The output fields are the input fields plus the identifiers in the
+<code><i>pat</i></code> and <code><i>var</i></code> of each of the
+scans. Field names must be unique.
 
-If any scan has an <code><b>on</b></code> clause, the expression must be of type <b>bool</b> and may reference any variable in the environment, including the output fields of the previous step, and fields defined by any preceding scans in this <code><b>join</b></code>.
+If any scan has an `on` clause, the expression must be of type
+<b>bool</b> and may reference any variable in the environment,
+including the output fields of the previous step, and fields defined
+by any preceding scans in this `join`.
 
 Morel does not yet implement [outer join](https://github.com/hydromatic/morel/issues/75).
 
@@ -535,7 +569,10 @@ val it : {dname:string, ename:string} list</i>
 
 Sorts the current collection by a list of expressions.
 
-Each expression in <code><i>orderItem</i></code> specifies a sort key. By default, rows are ordered in ascending order of each expression; if <code><b>desc</b></code> is specified, that expression is sorted in descending order.
+Each expression in <code><i>orderItem</i></code> specifies a sort
+key. By default, rows are ordered in ascending order of each
+expression; if `desc` is specified, that expression is sorted in
+descending order.
 
 The output fields are the same as the input fields.
 
@@ -578,7 +615,11 @@ val it : {ename:string, job:string, sal:real} list</i>
 
 Skips a given number of rows from the current collection.
 
-The expression <code><i>exp</i></code> must evaluate to an integer, which specifies the number of rows to skip from the beginning of the current collection. It is an error if the value is negative. If the value exceeds the number of rows in the collection, no rows are returned.
+The expression <code><i>exp</i></code> must evaluate to an integer,
+which specifies the number of rows to skip from the beginning of the
+current collection. It is an error if the value is negative. If the
+value exceeds the number of rows in the collection, no rows are
+returned.
 
 The output fields are the same as the input fields.
 
@@ -607,7 +648,10 @@ val it : int list</i>
 
 Limits the number of rows to return from the current collection.
 
-The expression <code><i>exp</i></code> must evaluate to an integer, which specifies the maximum number of rows to return from the current collection. If the value is zero, no rows are returned. It is an error if the value is negative.
+The expression <code><i>exp</i></code> must evaluate to an integer,
+which specifies the maximum number of rows to return from the current
+collection. If the value is zero, no rows are returned. It is an error
+if the value is negative.
 
 The output fields are the same as the input fields.
 
@@ -633,11 +677,16 @@ val it : int list</i>
 
 #### Description
 
-Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns.
+Calls a table function, with the current collection as an argument,
+and starts a scan over the collection it returns.
 
-The expression <code><i>exp</i></code> must evaluate to a function that takes the current collection as an argument and returns a new collection. The pattern <code><i>pat</i></code> is bound to each element of the returned collection.
+The expression <code><i>exp</i></code> must evaluate to a function
+that takes the current collection as an argument and returns a new
+collection. The pattern <code><i>pat</i></code> is bound to each
+element of the returned collection.
 
-The output fields are the fields defined by the pattern <code><i>pat</i></code>.
+The output fields are the fields defined by the pattern
+<code><i>pat</i></code>.
 
 #### Example
 
@@ -659,9 +708,10 @@ The output fields are the fields defined by the pattern <code><i>pat</i></code>.
 val it : {j:int} list</i>
 </pre>
 
-We can generalize the previous example to find multiples of a given number.
-The table function now takes multiple arguments, and we provide the first
-argument in the <code><b>through</b></code> clause; the input collection becomes the second argument.
+The previous example can be generalized to find multiples of any given
+number.  The table function now takes two arguments, and we provide
+the first argument in the `through` clause; the input collection
+becomes the second argument.
 
 <pre>
 <i>(* Define a table function that returns the numbers from
@@ -696,7 +746,9 @@ and starts a scan over the collection it returns.
 Emits rows of the current collection for which a given predicate
 evaluates to `true`.
 
-The expression <code><i>exp</i></code> must evaluate to a boolean value. Only rows for which the expression evaluates to `true` are emitted to the output.
+The expression <code><i>exp</i></code> must evaluate to a boolean
+value. Only rows for which the expression evaluates to `true` are
+emitted to the output.
 
 The output fields are the same as the input fields.
 
@@ -730,9 +782,13 @@ val it : {ename:string, job:string} list</i>
 For each row in the current collection, evaluates an expression and
 emits it as a row.
 
-The expression <code><i>exp</i></code> defines the output fields. If `exp` is a record expression, its field names become the output field names.
+The expression <code><i>exp</i></code> defines the output fields. If
+<code><i>exp</i></code> is a record expression, its field names become
+the output field names.
 
-If this is the last step in the query, the expression may be a non-record type. In this case, there are no output fields, and the result of the query is a collection of that non-record type.
+If this is the last step in the query, the expression may be a
+non-record type. In this case, there are no output fields, and the
+result of the query is a collection of that non-record type.
 
 #### Example
 
@@ -792,11 +848,23 @@ val it : string list</i>
 
 Applies aggregate functions to the current collection.
 
-Unlike the [<code><b>group</b></code>](#group-step) step, which groups rows and computes aggregates for each group, the <code><b>compute</b></code> terminal step computes aggregates across the entire collection and returns a single record or scalar value.
+Unlike the [`group`](#group-step) step, which groups rows and computes
+aggregates for each group, the `compute` terminal step computes
+aggregates across the entire collection and returns a single record or
+scalar value.
 
-The output is a scalar value if there is one aggregate, or a record if there is more than one. That value becomes the result of the query expression.
+The output is a scalar value if there is one aggregate, or a record if
+there is more than one. That value becomes the result of the query
+expression.
 
-Field names are derived in the same way as the <code><b>group</b></code> step. An explicit field name of an <code><i>agg</i></code> can be specified using an <code><i>id</i> =</code> prefix. The explicit field name can be omitted if an implicit field name can be derived: if the aggregate function is <code><i>id</i></code> then the implicit field name is <code><i>id</i></code>; if the aggregate function is <code><i>record</i>.<i>field</i></code> then the implicit field name is <code><i>field</i></code>.
+Field names are derived in the same way as the `group` step. An
+explicit field name of an <code><i>agg</i></code> can be specified
+using an <code><i>id</i> =</code> prefix. The explicit field name can
+be omitted if an implicit field name can be derived: if the aggregate
+function is <code><i>id</i></code> then the implicit field name is
+<code><i>id</i></code>; if the aggregate function is
+<code><i>record</i>.<i>field</i></code> then the implicit field name
+is <code><i>field</i></code>.
 
 #### Example
 
@@ -832,7 +900,9 @@ val it : {total:int, avgSal:real, minSal:real, maxSal:real}</i>
 
 Applies a function to the current collection.
 
-The expression <code><i>exp</i></code> must evaluate to a function that takes the current collection as an argument. The result of the query is the result of applying that function to the collection.
+The expression <code><i>exp</i></code> must evaluate to a function
+that takes the current collection as an argument. The result of the
+query is the result of applying that function to the collection.
 
 #### Example
 
@@ -867,9 +937,12 @@ val it = {employeeCount=3, averageSalary=2916.67, classification="High"}
 
 #### Description
 
-Evaluates the predicate of a <code><b>forall</b></code> query.
+Evaluates the predicate of a `forall` query.
 
-This step is only valid as the last step of a <code><b>forall</b></code> query. The expression <code><i>exp</i></code> must evaluate to a boolean value. The result of query is `true` if the predicate evaluates to `true` for every row in the collection, or if the collection is empty.
+This step is only valid as the last step of a `forall` query. The
+expression <code><i>exp</i></code> must evaluate to a boolean
+value. The result of query is `true` if the predicate evaluates to
+`true` for every row in the collection, or if the collection is empty.
 
 #### Example
 
@@ -892,9 +965,12 @@ val it = true : bool</i>
 
 ## Quantified queries
 
-Morel provides query forms for existential and universal quantification:
-* `exists` returns whether at least one row in the query satisfies the critera (existential quantification);
-* `forall` returns whether all rows in the query satisfy the criteria (universal quantification).
+Morel provides query forms for existential and universal
+quantification:
+* `exists` returns whether at least one row in the query satisfies the
+  critera (existential quantification);
+* `forall` returns whether all rows in the query satisfy the criteria
+  (universal quantification).
 
 ### Exists query
 
@@ -903,7 +979,8 @@ Morel provides query forms for existential and universal quantification:
 </pre>
 
 
-An `exists` query returns `true` if the query returns at least one row, and `false` otherwise.
+An `exists` query returns `true` if the query returns at least one
+row, and `false` otherwise.
 
 #### Example
 
@@ -922,9 +999,14 @@ An `exists` query returns `true` if the query returns at least one row, and `fal
   <b>require</b> <i>exp</i>
 </pre>
 
-A <code><b>forall</b></code> query returns `true` if the predicate specified in the <code><b>require</b></code> step evaluates to `true` for every row that reaches that step, or no rows reach that step. It returns `false` if the predicate evaluates to `false` for at least one row.
+A `forall` query returns `true` if the predicate specified in the
+`require` step evaluates to `true` for every row that reaches that
+step, or no rows reach that step. It returns `false` if the predicate
+evaluates to `false` for at least one row.
 
-Rows that are eliminated by previous steps (such as <code><b>where</b></code>) and do not reach the <code><b>require</b></code> step do not count as evaluations of the predicate.
+Rows that are eliminated by previous steps (such as `where`) and do
+not reach the `require` step do not count as evaluations of the
+predicate.
 
 #### Example
 
@@ -958,23 +1040,22 @@ Rows that are eliminated by previous steps (such as <code><b>where</b></code>) a
 
 Many of the keywords in a SQL query have an equivalent in Morel.
 
-| SQL         | Morel       | Remarks
-|-------------|-------------|---------
-| `SELECT`    | `yield`     | `SELECT` is always the first keyword of a query, but you may use `yield` at any point in the pipeline. It often occurs last, and you can omit it if the output record has the right shape.
-| `FROM`      | `from`      | Unlike SQL `FROM`, `from` is the first keyword in a Morel query.
-| `JOIN`      | `join`      | SQL `JOIN` is part of the `FROM` clause, but Morel `join` is a step.
-| `WHERE`     | `where`     | Morel `where` is equivalent to SQL `WHERE`.
-| `HAVING`    |             | Use a `where` after a `group`.
-| `DISTINCT` | `distinct`   | SQL `DISTINCT` is part of the `SELECT` clause, but Morel `distinct` is a step, shorthand for `group`
-| `ORDER BY`  | `order`     | Morel `order` is equivalent to SQL `ORDER BY`.
-| `LIMIT`     | `take`      | Morel `take` is equivalent to SQL `LIMIT`.
-| `OFFSET`    | `skip`      | Morel `skip` is equivalent to SQL `OFFSET`.
-| `UNION`     | `union`     | Morel `union` is equivalent to SQL `UNION ALL`.
-| `INTERSECT` | `intersect` | Morel `intersect` is equivalent to SQL `INTERSECT ALL`.
-| `EXCEPT`    | `except`    | Morel `except` is equivalent to SQL `EXCEPT ALL` (or `MINUS ALL` in some SQL dialects).
-| `EXISTS`    | `exists`    | SQL `EXISTS` is unary operator whose operand is a query, but Morel `exists` is a query that returns `true` if the query has at least one row.
-| -           | `forall`    | Morel `forall` is a query that returns `true` if a predicate is true for all rows.
-| `IN`        | `elem`      | SQL `IN` is a binary operator whose right operand is either a query or a list (but not an array or multiset); Morel `elem` is the equivalent operator, and its right operand can be any collection, including a query.
-| `NOT IN`    | `notelem`   | Morel `notelem` is equivalent to SQL `NOT IN`, but without SQL's confusing [NULL-value semantics](https://community.snowflake.com/s/article/Behaviour-of-NOT-IN-with-NULL-values)).
-| -           | `yieldall`  | Morel `yieldall` evaluates a collection expression and outputs one row for each element of that collection.
-
+| SQL         | Morel       | Remarks                                                                                                                                                                                                                |
+|-------------|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `SELECT`    | `yield`     | While `SELECT` must be the first keyword of a SQL query, you may use `yield` at any point in a Morel pipeline. It often occurs last, and you can omit it if the output record already has the right shape.             |
+| `FROM`      | `from`      | Unlike SQL `FROM`, `from` is the first keyword in a Morel query.                                                                                                                                                       |
+| `JOIN`      | `join`      | SQL `JOIN` is part of the `FROM` clause, but Morel `join` is a step.                                                                                                                                                   |
+| `WHERE`     | `where`     | Morel `where` is equivalent to SQL `WHERE`.                                                                                                                                                                            |
+| `HAVING`    |             | Use a `where` after a `group`.                                                                                                                                                                                         |
+| `DISTINCT`  | `distinct`  | SQL `DISTINCT` is part of the `SELECT` clause, but Morel `distinct` is a step, shorthand for `group`                                                                                                                   |
+| `ORDER BY`  | `order`     | Morel `order` is equivalent to SQL `ORDER BY`.                                                                                                                                                                         |
+| `LIMIT`     | `take`      | Morel `take` is equivalent to SQL `LIMIT`.                                                                                                                                                                             |
+| `OFFSET`    | `skip`      | Morel `skip` is equivalent to SQL `OFFSET`.                                                                                                                                                                            |
+| `UNION`     | `union`     | Morel `union` is equivalent to SQL `UNION ALL`.                                                                                                                                                                        |
+| `INTERSECT` | `intersect` | Morel `intersect` is equivalent to SQL `INTERSECT ALL`.                                                                                                                                                                |
+| `EXCEPT`    | `except`    | Morel `except` is equivalent to SQL `EXCEPT ALL` (or `MINUS ALL` in some SQL dialects).                                                                                                                                |
+| `EXISTS`    | `exists`    | SQL `EXISTS` is unary operator whose operand is a query, but Morel `exists` is a query that returns `true` if the query has at least one row.                                                                          |
+| -           | `forall`    | Morel `forall` is a query that returns `true` if a predicate is true for all rows.                                                                                                                                     |
+| `IN`        | `elem`      | SQL `IN` is a binary operator whose right operand is either a query or a list (but not an array or multiset); Morel `elem` is the equivalent operator, and its right operand can be any collection, including a query. |
+| `NOT IN`    | `notelem`   | Morel `notelem` is equivalent to SQL `NOT IN`, but without SQL's confusing [NULL-value semantics](https://community.snowflake.com/s/article/Behaviour-of-NOT-IN-with-NULL-values).                                     |
+| -           | `yieldall`  | Morel `yieldall` evaluates a collection expression and outputs one row for each element of that collection.                                                                                                            |
