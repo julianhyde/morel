@@ -4,7 +4,7 @@ type char = char
 
 val minChar : char
 val maxChar : char
-val maxOrd  : int       
+val maxOrd  : int
 
 val chr     : int  -> char       (* May raise Chr *)
 val ord     : char -> int
@@ -19,7 +19,7 @@ val isHexDigit  : char -> bool   (* isDigit orelse contains "abcdefABCDEF" *)
 val isAlphaNum  : char -> bool   (* isAlpha orelse isDigit                 *)
 val isPrint     : char -> bool   (* any printable character (incl. #" ")   *)
 val isSpace     : char -> bool   (* contains " \t\r\n\v\f"                 *)
-val isPunct     : char -> bool   (* printable, not space or alphanumeric   *) 
+val isPunct     : char -> bool   (* printable, not space or alphanumeric   *)
 val isGraph     : char -> bool   (* (not isSpace) andalso isPrint          *)
 val isAscii     : char -> bool   (* ord c < 128                            *)
 val isCntrl     : char -> bool   (* control character                      *)
@@ -42,8 +42,8 @@ val >       : char * char -> bool
 val >=      : char * char -> bool
 val compare : char * char -> order
 
-(* 
-   [char] is the type of characters.  
+(*
+   [char] is the type of characters.
 
    [minChar] is the least character in the ordering <.
 
@@ -70,7 +70,7 @@ val compare : char * char -> order
 
    [isAlpha c] returns true if c is a letter (lowercase or uppercase).
 
-   [isHexDigit c] returns true if c is a hexadecimal digit (0 to 9 or 
+   [isHexDigit c] returns true if c is a hexadecimal digit (0 to 9 or
    a to f or A to F).
 
    [isAlphaNum c] returns true if c is alphanumeric (a letter or a
@@ -84,7 +84,7 @@ val compare : char * char -> order
    [isGraph c] returns true if c is a graphical character, that is,
    it is printable and not a whitespace character.
 
-   [isPunct c] returns true if c is a punctuation character, that is, 
+   [isPunct c] returns true if c is a punctuation character, that is,
    graphical but not alphanumeric.
 
    [isCntrl c] returns true if c is a control character, that is, if
@@ -102,7 +102,7 @@ val compare : char * char -> order
    false otherwise.  The function, when applied to s, builds a table
    and returns a function which uses table lookup to decide whether a
    given character is in the string or not.  Hence it is relatively
-   expensive to compute  val p = contains s  but very fast to compute 
+   expensive to compute  val p = contains s  but very fast to compute
    p(c) for any given character.
 
    [notContains s c] returns true if character c does not occur in the
@@ -121,11 +121,11 @@ val compare : char * char -> order
    "\\n", "\\v", "\\f", and "\\r"; other characters with code less
    than 32 are mapped to three-character strings of the form "\\^Z",
    and characters with codes 127 through 255 are mapped to
-   four-character strings of the form "\\ddd", where ddd are three decimal 
+   four-character strings of the form "\\ddd", where ddd are three decimal
    digits representing the character code.  For instance,
-             toString #"A"      equals "A" 
-             toString #"\\"     equals "\\\\" 
-             toString #"\""     equals "\\\"" 
+             toString #"A"      equals "A"
+             toString #"\\"     equals "\\\\"
+             toString #"\""     equals "\\\""
              toString (chr   0) equals "\\^@"
              toString (chr   1) equals "\\^A"
              toString (chr   6) equals "\\^F"
@@ -149,13 +149,13 @@ val compare : char * char -> order
    printable character is mapped to a one-character string; bell,
    backspace, tab, newline, vertical tab, form feed, and carriage
    return are mapped to the two-character strings "\\a", "\\b", "\\t",
-   "\\n", "\\v", "\\f", and "\\r"; other characters are mapped to 
-   four-character strings of the form "\\ooo", where ooo are three 
+   "\\n", "\\v", "\\f", and "\\r"; other characters are mapped to
+   four-character strings of the form "\\ooo", where ooo are three
    octal digits representing the character code.  For instance,
-             toString #"A"      equals "A" 
-             toString #"A"      equals "A" 
-             toString #"\\"     equals "\\\\" 
-             toString #"\""     equals "\\\"" 
+             toString #"A"      equals "A"
+             toString #"A"      equals "A"
+             toString #"\\"     equals "\\\\"
+             toString #"\""     equals "\\\""
              toString (chr   0) equals "\\000"
              toString (chr   1) equals "\\001"
              toString (chr   6) equals "\\006"
@@ -170,11 +170,11 @@ val compare : char * char -> order
              toString (chr 127) equals "\\177"
              toString (chr 128) equals "\\200"
 
-   [<] 
+   [<]
    [<=]
    [>]
-   [>=] compares character codes.  For instance, c1 < c2 returns true 
-   if ord(c1) < ord(c2), and similarly for <=, >, >=.  
+   [>=] compares character codes.  For instance, c1 < c2 returns true
+   if ord(c1) < ord(c2), and similarly for <=, >, >=.
 
    [compare(c1, c2)] returns LESS, EQUAL, or GREATER, according as c1 is
    precedes, equals, or follows c2 in the ordering Char.< .

@@ -320,10 +320,103 @@ public enum BuiltIn {
    */
 
   /** Function "Char.chr" of type "int &rarr; char". */
-  CHAR_CHR("Char", "chr", ts -> ts.fnType(INT, CHAR)),
+  CHAR_CHR("Char", "chr", "chr", ts -> ts.fnType(INT, CHAR)),
+
+  /** Function "Char.compare" of type "char * char &rarr; order". */
+  CHAR_COMPARE(
+      "Char", "compare", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), ts.order())),
+
+  /** Function "Char.contains" of type "string &rarr; char &rarr; bool". */
+  CHAR_CONTAINS("Char", "contains", ts -> ts.fnType(STRING, CHAR, BOOL)),
+
+  /** Function "Char.fromCString" of type "string &rarr; char option". */
+  CHAR_FROM_CSTRING(
+      "Char", "fromCString", ts -> ts.fnType(STRING, ts.option(CHAR))),
+
+  /** Function "Char.fromString" of type "string &rarr; char option". */
+  CHAR_FROM_STRING(
+      "Char", "fromString", ts -> ts.fnType(STRING, ts.option(CHAR))),
+
+  /** Constant "Char.maxChar", of type "char". */
+  CHAR_MAX_CHAR("Char", "maxChar", ts -> CHAR),
+
+  /** Constant "Char.maxOrd", of type "int". */
+  CHAR_MAX_ORD("Char", "maxOrd", ts -> INT),
+
+  /** Constant "Char.minChar", of type "char". */
+  CHAR_MIN_CHAR("Char", "minChar", ts -> CHAR),
+
+  /** Function "Char.notContains" of type "string &rarr; char &rarr; bool". */
+  CHAR_NOT_CONTAINS("Char", "notContains", ts -> ts.fnType(STRING, CHAR, BOOL)),
 
   /** Function "Char.ord" of type "char &rarr; int". */
   CHAR_ORD("Char", "ord", ts -> ts.fnType(CHAR, INT)),
+
+  /** Operator "Char.op <", of type "char * char &rarr; bool". */
+  CHAR_OP_LT("Char", "op <", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), BOOL)),
+
+  /** Operator "Char.op <=", of type "char * char &rarr; bool". */
+  CHAR_OP_LE("Char", "op <=", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), BOOL)),
+
+  /** Operator "Char.op >", of type "char * char &rarr; bool". */
+  CHAR_OP_GT("Char", "op >", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), BOOL)),
+
+  /** Operator "Char.op >=", of type "char * char &rarr; bool". */
+  CHAR_OP_GE("Char", "op >=", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), BOOL)),
+
+  /** Function "Char.pred" of type "char &rarr; char". */
+  CHAR_PRED("Char", "pred", ts -> ts.fnType(CHAR, CHAR)),
+
+  /** Function "Char.succ" of type "char &rarr; char". */
+  CHAR_SUCC("Char", "succ", ts -> ts.fnType(CHAR, CHAR)),
+
+  /** Function "Char.toCString" of type "char &rarr; string". */
+  CHAR_TO_CSTRING("Char", "toCString", ts -> ts.fnType(CHAR, STRING)),
+
+  /** Function "Char.toLower" of type "char &rarr; char". */
+  CHAR_TO_LOWER("Char", "toLower", ts -> ts.fnType(CHAR, CHAR)),
+
+  /** Function "Char.toString" of type "char &rarr; string". */
+  CHAR_TO_STRING("Char", "toString", ts -> ts.fnType(CHAR, STRING)),
+
+  /** Function "Char.toUpper" of type "char &rarr; char". */
+  CHAR_TO_UPPER("Char", "toUpper", ts -> ts.fnType(CHAR, CHAR)),
+
+  /** Function "Char.isAlpha" of type "char &rarr; bool". */
+  CHAR_IS_ALPHA("Char", "isAlpha", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isAlphaNum" of type "char &rarr; bool". */
+  CHAR_IS_ALPHA_NUM("Char", "isAlphaNum", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isAscii" of type "char &rarr; bool". */
+  CHAR_IS_ASCII("Char", "isAscii", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isCntrl" of type "char &rarr; bool". */
+  CHAR_IS_CNTRL("Char", "isCntrl", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isDigit" of type "char &rarr; bool". */
+  CHAR_IS_DIGIT("Char", "isDigit", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isGraph" of type "char &rarr; bool". */
+  CHAR_IS_GRAPH("Char", "isGraph", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isHexDigit" of type "char &rarr; bool". */
+  CHAR_IS_HEX_DIGIT("Char", "isHexDigit", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isLower" of type "char &rarr; bool". */
+  CHAR_IS_LOWER("Char", "isLower", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isPrint" of type "char &rarr; bool". */
+  CHAR_IS_PRINT("Char", "isPrint", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isPunct" of type "char &rarr; bool". */
+  CHAR_IS_PUNCT("Char", "isPunct", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isSpace" of type "char &rarr; bool". */
+  CHAR_IS_SPACE("Char", "isSpace", ts -> ts.fnType(CHAR, BOOL)),
+
+  /** Function "Char.isUpper" of type "char &rarr; bool". */
+  CHAR_IS_UPPER("Char", "isUpper", ts -> ts.fnType(CHAR, BOOL)),
 
   /** Function "Int.abs" of type "int &rarr; int". */
   INT_ABS("Int", "abs", ts -> ts.fnType(INT, INT)),

@@ -363,7 +363,6 @@ public abstract class Codes {
           };
         }
       };
-
   /** @see BuiltIn#CHAR_CHR */
   private static final Applicable CHAR_CHR =
       new ApplicableImpl(BuiltIn.CHAR_CHR) {
@@ -373,12 +372,265 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#CHAR_COMPARE */
+  private static final Applicable CHAR_COMPARE =
+      new Applicable2<Integer, Character, Character>(BuiltIn.CHAR_COMPARE) {
+        @Override
+        public Integer apply(Character a0, Character a1) {
+          return a0.compareTo(a1);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_CONTAINS */
+  private static final Applicable CHAR_CONTAINS =
+      new Applicable2<Boolean, String, String>(BuiltIn.CHAR_CONTAINS) {
+        @Override
+        public Boolean apply(String a0, String a1) {
+          return a0.contains(a1);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_FROM_CSTRING */
+  private static final Applicable CHAR_FROM_CSTRING =
+      new ApplicableImpl(BuiltIn.CHAR_FROM_CSTRING) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("CHAR_FROM_CSTRING");
+        }
+      };
+
+  /** @see BuiltIn#CHAR_FROM_STRING */
+  private static final Applicable CHAR_FROM_STRING =
+      new ApplicableImpl(BuiltIn.CHAR_FROM_STRING) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("CHAR_FROM_STRING");
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_ALPHA */
+  private static final Applicable CHAR_IS_ALPHA =
+      new ApplicableImpl(BuiltIn.CHAR_IS_ALPHA) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isAlphabetic((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_ALPHA_NUM */
+  private static final Applicable CHAR_IS_ALPHA_NUM =
+      new ApplicableImpl(BuiltIn.CHAR_IS_ALPHA_NUM) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isAlphabetic((char) arg)
+              || Character.isDigit((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_ASCII */
+  private static final Applicable CHAR_IS_ASCII =
+      new ApplicableImpl(BuiltIn.CHAR_IS_ASCII) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("CHAR_IS_ASCII");
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_CNTRL */
+  private static final Applicable CHAR_IS_CNTRL =
+      new ApplicableImpl(BuiltIn.CHAR_IS_CNTRL) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isISOControl((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_DIGIT */
+  private static final Applicable CHAR_IS_DIGIT =
+      new ApplicableImpl(BuiltIn.CHAR_IS_DIGIT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isDigit((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_GRAPH */
+  private static final Applicable CHAR_IS_GRAPH =
+      new ApplicableImpl(BuiltIn.CHAR_IS_GRAPH) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isDefined((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_HEX_DIGIT */
+  private static final Applicable CHAR_IS_HEX_DIGIT =
+      new ApplicableImpl(BuiltIn.CHAR_IS_HEX_DIGIT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.digit((char) arg, 16) != -1;
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_LOWER */
+  private static final Applicable CHAR_IS_LOWER =
+      new ApplicableImpl(BuiltIn.CHAR_IS_LOWER) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isLowerCase((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_PRINT */
+  private static final Applicable CHAR_IS_PRINT =
+      new ApplicableImpl(BuiltIn.CHAR_IS_PRINT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isDefined((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_PUNCT */
+  private static final Applicable CHAR_IS_PUNCT =
+      new ApplicableImpl(BuiltIn.CHAR_IS_PUNCT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isLetterOrDigit((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_SPACE */
+  private static final Applicable CHAR_IS_SPACE =
+      new ApplicableImpl(BuiltIn.CHAR_IS_SPACE) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isWhitespace((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_IS_UPPER */
+  private static final Applicable CHAR_IS_UPPER =
+      new ApplicableImpl(BuiltIn.CHAR_IS_UPPER) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.isUpperCase((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_MAX_CHAR */
+  private static final Character CHAR_MAX_CHAR = 255;
+
+  /** @see BuiltIn#CHAR_MAX_ORD */
+  private static final Integer CHAR_MAX_ORD = 255;
+
+  /** @see BuiltIn#CHAR_MIN_CHAR */
+  private static final Character CHAR_MIN_CHAR = Character.MIN_VALUE;
+
+  /** @see BuiltIn#CHAR_NOT_CONTAINS */
+  private static final Applicable CHAR_NOT_CONTAINS =
+      new Applicable2<Boolean, String, String>(BuiltIn.CHAR_NOT_CONTAINS) {
+        @Override
+        public Boolean apply(String a0, String a1) {
+          return !a0.contains(a1);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_OP_GE */
+  private static final Applicable CHAR_OP_GE =
+      new Applicable2<Boolean, Character, Character>(BuiltIn.CHAR_OP_GE) {
+        @Override
+        public Boolean apply(Character a0, Character a1) {
+          return a0 >= a1;
+        }
+      };
+
+  /** @see BuiltIn#CHAR_OP_GT */
+  private static final Applicable CHAR_OP_GT =
+      new Applicable2<Boolean, Character, Character>(BuiltIn.CHAR_OP_GT) {
+        @Override
+        public Boolean apply(Character a0, Character a1) {
+          return a0 > a1;
+        }
+      };
+
+  /** @see BuiltIn#CHAR_OP_LE */
+  private static final Applicable CHAR_OP_LE =
+      new Applicable2<Boolean, Character, Character>(BuiltIn.CHAR_OP_LE) {
+        @Override
+        public Boolean apply(Character a0, Character a1) {
+          return a0 <= a1;
+        }
+      };
+
+  /** @see BuiltIn#CHAR_OP_LT */
+  private static final Applicable CHAR_OP_LT =
+      new Applicable2<Boolean, Character, Character>(BuiltIn.CHAR_OP_LT) {
+        @Override
+        public Boolean apply(Character a0, Character a1) {
+          return a0 < a1;
+        }
+      };
+
   /** @see BuiltIn#CHAR_ORD */
   private static final Applicable CHAR_ORD =
       new ApplicableImpl(BuiltIn.CHAR_ORD) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
           return (int) ((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_PRED */
+  private static final Applicable CHAR_PRED =
+      new ApplicableImpl(BuiltIn.CHAR_PRED) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return (char) ((char) arg - 1);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_SUCC */
+  private static final Applicable CHAR_SUCC =
+      new ApplicableImpl(BuiltIn.CHAR_SUCC) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return (char) ((char) arg + 1);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_TO_CSTRING */
+  private static final Applicable CHAR_TO_CSTRING =
+      new ApplicableImpl(BuiltIn.CHAR_TO_CSTRING) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("CHAR_TO_CSTRING");
+        }
+      };
+
+  /** @see BuiltIn#CHAR_TO_LOWER */
+  private static final Applicable CHAR_TO_LOWER =
+      new ApplicableImpl(BuiltIn.CHAR_TO_LOWER) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.toLowerCase((char) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_TO_STRING */
+  private static final Applicable CHAR_TO_STRING =
+      new ApplicableImpl(BuiltIn.CHAR_TO_STRING) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("CHAR_TO_STRING");
+        }
+      };
+
+  /** @see BuiltIn#CHAR_TO_UPPER */
+  private static final Applicable CHAR_TO_UPPER =
+      new ApplicableImpl(BuiltIn.CHAR_TO_UPPER) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return Character.toUpperCase((char) arg);
         }
       };
 
@@ -3242,6 +3494,36 @@ public abstract class Codes {
           .put(BuiltIn.GENERAL_OP_O, GENERAL_OP_O)
           .put(BuiltIn.CHAR_CHR, CHAR_CHR)
           .put(BuiltIn.CHAR_ORD, CHAR_ORD)
+          .put(BuiltIn.CHAR_MIN_CHAR, CHAR_MIN_CHAR)
+          .put(BuiltIn.CHAR_MAX_CHAR, CHAR_MAX_CHAR)
+          .put(BuiltIn.CHAR_MAX_ORD, CHAR_MAX_ORD)
+          .put(BuiltIn.CHAR_SUCC, CHAR_SUCC)
+          .put(BuiltIn.CHAR_PRED, CHAR_PRED)
+          .put(BuiltIn.CHAR_IS_LOWER, CHAR_IS_LOWER)
+          .put(BuiltIn.CHAR_IS_UPPER, CHAR_IS_UPPER)
+          .put(BuiltIn.CHAR_IS_DIGIT, CHAR_IS_DIGIT)
+          .put(BuiltIn.CHAR_IS_ALPHA, CHAR_IS_ALPHA)
+          .put(BuiltIn.CHAR_IS_HEX_DIGIT, CHAR_IS_HEX_DIGIT)
+          .put(BuiltIn.CHAR_IS_ALPHA_NUM, CHAR_IS_ALPHA_NUM)
+          .put(BuiltIn.CHAR_IS_PRINT, CHAR_IS_PRINT)
+          .put(BuiltIn.CHAR_IS_SPACE, CHAR_IS_SPACE)
+          .put(BuiltIn.CHAR_IS_PUNCT, CHAR_IS_PUNCT)
+          .put(BuiltIn.CHAR_IS_GRAPH, CHAR_IS_GRAPH)
+          .put(BuiltIn.CHAR_IS_ASCII, CHAR_IS_ASCII)
+          .put(BuiltIn.CHAR_IS_CNTRL, CHAR_IS_CNTRL)
+          .put(BuiltIn.CHAR_TO_LOWER, CHAR_TO_LOWER)
+          .put(BuiltIn.CHAR_TO_UPPER, CHAR_TO_UPPER)
+          .put(BuiltIn.CHAR_FROM_STRING, CHAR_FROM_STRING)
+          .put(BuiltIn.CHAR_FROM_CSTRING, CHAR_FROM_CSTRING)
+          .put(BuiltIn.CHAR_TO_CSTRING, CHAR_TO_CSTRING)
+          .put(BuiltIn.CHAR_TO_STRING, CHAR_TO_STRING)
+          .put(BuiltIn.CHAR_CONTAINS, CHAR_CONTAINS)
+          .put(BuiltIn.CHAR_NOT_CONTAINS, CHAR_NOT_CONTAINS)
+          .put(BuiltIn.CHAR_OP_GE, CHAR_OP_GE)
+          .put(BuiltIn.CHAR_OP_GT, CHAR_OP_GT)
+          .put(BuiltIn.CHAR_OP_LE, CHAR_OP_LE)
+          .put(BuiltIn.CHAR_OP_LT, CHAR_OP_LT)
+          .put(BuiltIn.CHAR_COMPARE, CHAR_COMPARE)
           .put(BuiltIn.INT_ABS, INT_ABS)
           .put(BuiltIn.INT_COMPARE, INT_COMPARE)
           .put(BuiltIn.INT_DIV, INT_DIV)
