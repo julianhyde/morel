@@ -344,6 +344,8 @@ Exception:
 | false | bool | Literal false. |
 | not | bool &rarr; bool | "not b" returns the logical inverse of `b`. |
 | abs | int &rarr; int | "abs n" returns the absolute value of `n`. |
+| Char.chr | int &rarr; char | "chr i" returns the character whose code is `i`. Raises `Chr` if `i` < 0 or `i` > `maxOrd`. |
+| Char.ord | char &rarr; int | "ord c" returns the code of character `c`. |
 | General.ignore | &alpha; &rarr; unit | "ignore x" always returns `unit`. The function evaluates its argument but throws away the value. |
 | General.op o | (&beta; &rarr; &gamma;) (&alpha; &rarr; &beta;) &rarr; &alpha; &rarr; &gamma; | "f o g" is the function composition of `f` and `g`. Thus, `(f o g) a` is equivalent to `f (g a)`. |
 | Interact.use | string &rarr; unit | "use f" loads source text from the file named `f`. |

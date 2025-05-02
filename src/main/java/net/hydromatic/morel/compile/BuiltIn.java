@@ -319,6 +319,12 @@ public enum BuiltIn {
   val <= : int * int -> bool
    */
 
+  /** Function "Char.chr" of type "int &rarr; char". */
+  CHAR_CHR("Char", "chr", ts -> ts.fnType(INT, CHAR)),
+
+  /** Function "Char.ord" of type "char &rarr; int". */
+  CHAR_ORD("Char", "ord", ts -> ts.fnType(CHAR, INT)),
+
   /** Function "Int.abs" of type "int &rarr; int". */
   INT_ABS("Int", "abs", ts -> ts.fnType(INT, INT)),
 

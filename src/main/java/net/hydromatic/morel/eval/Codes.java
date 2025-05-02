@@ -364,6 +364,24 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#CHAR_CHR */
+  private static final Applicable CHAR_CHR =
+      new ApplicableImpl(BuiltIn.CHAR_CHR) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return (char) ((int) arg);
+        }
+      };
+
+  /** @see BuiltIn#CHAR_ORD */
+  private static final Applicable CHAR_ORD =
+      new ApplicableImpl(BuiltIn.CHAR_ORD) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return (int) ((char) arg);
+        }
+      };
+
   /** @see BuiltIn#INT_ABS */
   private static final Applicable INT_ABS =
       new ApplicableImpl(BuiltIn.INT_ABS) {
@@ -3222,6 +3240,8 @@ public abstract class Codes {
           .put(BuiltIn.ABS, ABS)
           .put(BuiltIn.IGNORE, IGNORE)
           .put(BuiltIn.GENERAL_OP_O, GENERAL_OP_O)
+          .put(BuiltIn.CHAR_CHR, CHAR_CHR)
+          .put(BuiltIn.CHAR_ORD, CHAR_ORD)
           .put(BuiltIn.INT_ABS, INT_ABS)
           .put(BuiltIn.INT_COMPARE, INT_COMPARE)
           .put(BuiltIn.INT_DIV, INT_DIV)

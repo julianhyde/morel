@@ -27,6 +27,7 @@ Sys.set ("stringDepth", ~1);
 General;
 > val it = {ignore=fn,`op o`=fn}
 >   : {ignore:'a -> unit, `op o`:('b -> 'c) * ('d -> 'b) -> 'd -> 'c}
+Char;
 Int;
 > val it =
 >   {abs=fn,compare=fn,div=fn,fromInt=fn,fromLarge=fn,fromString=fn,max=fn,
@@ -1471,6 +1472,12 @@ Sys.plan ();
 > val it =
 >   "apply(fnCode apply(fnValue Option.composePartial, argCode tuple(match(i, apply(fnCode match(true, constant([NONE]), _, apply(fnValue tyCon, argCode get(name i))), argCode apply2(fnValue =, get(name i), constant(0)))), match(s, apply(fnCode match(true, constant([NONE]), _, apply(fnValue tyCon, argCode apply(fnValue String.size, argCode get(name s)))), argCode apply2(fnValue =, get(name s), constant()))))), argCode constant())"
 >   : string
+
+(* Char -------------------------------------------------------- *)
+Char.chr;
+> val it = fn : int -> char
+Char.ord;
+> val it = fn : char -> int
 
 (* Int --------------------------------------------------------- *)
 Int.abs;
