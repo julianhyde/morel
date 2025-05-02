@@ -1584,7 +1584,7 @@ AstNode statementEof() :
     [ " ","\t","\n","\r","\f" ]
     >
     |
-    < QUOTED_STRING: <DOUBLE_QUOTE> ( (~["\"", "\\"]) | ("\\" "\"") | ("\\" "\\") )* <DOUBLE_QUOTE> >
+    < QUOTED_STRING: <DOUBLE_QUOTE> ( (~["\"", "\\"]) | ("\\" ("n" | "t" | "v" | "f" | "\"" | "\\")) )* <DOUBLE_QUOTE> >
     |
     < CHAR_LITERAL: ("#") <QUOTED_STRING> >
 }

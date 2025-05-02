@@ -432,7 +432,7 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.CHAR_IS_ASCII) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException("CHAR_IS_ASCII");
+          return (int) (char) (Character) arg <= 127;
         }
       };
 
@@ -621,9 +621,44 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.CHAR_TO_STRING) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException("CHAR_TO_STRING");
+          return charToString((Character) arg).replace("\\", "\\\\");
         }
       };
+
+  /**
+   * Converts a character to how it appears in a character literal.
+   *
+   * <p>For example, '{@code a}' becomes '{@code #"a"}' and therefore {@code
+   * charToString('a')} returns "a". Character 0 becomes {@code "\\^@"}.
+   * Character 255 becomes {@code "\\255"}. Character 9 becomes {@code "\t"}.
+   */
+  public static String charToString(char c) {
+    if (c < 32) {
+      switch (c) {
+        case 7:
+          return "\\a";
+        case 8:
+          return "\\b";
+        case 9:
+          return "\\t";
+        case 10:
+          return "\\n";
+        case 11:
+          return "\\v";
+        case 12:
+          return "\\f";
+        case 13:
+          return "\\r";
+        default:
+          // chr(0) = "\\^@", chr(1) = "\\^A", etc.
+          return "\\^" + (char) (c + 64);
+      }
+    } else if (c >= 127 && c < 256) {
+      return "\\" + (int) c;
+    } else {
+      return String.valueOf(c);
+    }
+  }
 
   /** @see BuiltIn#CHAR_TO_UPPER */
   private static final Applicable CHAR_TO_UPPER =

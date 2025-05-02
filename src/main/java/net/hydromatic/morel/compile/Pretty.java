@@ -25,12 +25,10 @@ import static net.hydromatic.morel.util.Pair.forEachIndexed;
 import static net.hydromatic.morel.util.Static.endsWith;
 
 import com.google.common.collect.ImmutableList;
-Progrimport com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
@@ -59,26 +57,6 @@ class Pretty {
   private final int printDepth;
   private final int stringDepth;
   private final char newline;
-
-  private static final Map<Character, String> MAP =
-      ImmutableMap.<Character, String>builder()
-          .put('\0', "\\^@")
-          .put('\1', "\\^A")
-          .put('\2', "\\^B")
-          .put('\3', "\\^C")
-          .put('\4', "\\^D")
-          .put('\5', "\\^E")
-          .put('\6', "\\^F")
-          .put('\7', "\\^a")
-          .put('\n', "\\n")
-          .put('\r', "\\r")
-          .put('\t', "\\t")
-          .put('\b', "\\b")
-          .put('\f', "\\f")
-          .put('\\', "\\\\")
-          .put('\"', "\\\"")
-          .put((char) 255, "\\255")
-          .build();
 
   Pretty(
       TypeSystem typeSystem,
@@ -251,7 +229,7 @@ class Pretty {
             return buf.append("()");
           case CHAR:
             Character c = (Character) value;
-            s = MAP.getOrDefault(c, c.toString());
+            s = Codes.charToString(c);
             return buf.append('#').append('"').append(s).append('"');
           case STRING:
             s = (String) value;
