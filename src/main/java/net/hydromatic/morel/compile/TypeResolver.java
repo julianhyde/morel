@@ -433,6 +433,17 @@ public class TypeResolver {
                     message, false, query.steps.get(step.i + 1).pos);
               }
               break;
+
+          case YIELD:
+            if (((Ast.Yield) step.e).exp.op != Op.RECORD
+            && step.i != query.steps.size() - 1) {
+              String message =
+                  String.format(
+                      "'%s' step that is not record must be last in '%s'",
+                      step.e.op.lowerName(), query.op.lowerName());
+              throw new CompileException(
+                  message, false, step.e.pos);
+            }
           }
           env3 = p.left;
           v3 = p.right;

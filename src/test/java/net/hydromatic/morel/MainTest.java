@@ -56,7 +56,10 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+
 import net.hydromatic.morel.ast.Ast;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Codes;
@@ -66,6 +69,7 @@ import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.TypeVar;
 import org.hamcrest.CustomTypeSafeMatcher;
+import org.hamcrest.Matcher;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -2330,36 +2334,33 @@ public class MainTest {
         .assertType("(bool * int) list");
     ml("from a in [1], b in [true] yield (b)").assertType("bool list");
     ml("from a in [1], b in [true] yield {b,a} yield a").assertType("int list");
-    String value =
-        "'yield' step that is not last in 'from' must be a record "
-            + "expression";
-    ml("from a in [1], b in [true] yield (b,a) where b")
+    ml("from a in [1], b in [true] yield {b,a} where b")
         .assertType("{a:int, b:bool} list");
-    mlE("from a in [1], b in [true] yield (b,a) where $c$")
+    ml("from a in [1], b in [true] yield {b,a,c=\"c\"} where b")
+        .assertType("{a:int, b:bool, c:string} list");
+    Function<Pos, Matcher<CompileException>> yieldNonRecord = pos ->
+        throwsA(
+            CompileException.class,
+            "'yield' step that is not record must be last in 'from'",
+            pos);
+    mlE("from a in [1], b in [true] $yield (b,a)$ where true")
+        .assertCompileException(yieldNonRecord);
+    mlE("from a in [1], b in [true] $yield (b,a)$ where b")
         .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "unbound variable or constructor: c",
-                    pos));
+            yieldNonRecord);
     ml("from a in [1], b in [true] yield {b,a} where b")
         .assertType("{a:int, b:bool} list")
         .assertEval(is(list(list(1, true))));
     ml("from d in [{a=1,b=true}], i in [2] yield i").assertType("int list");
     // Note that 'd' has record type but is not a record expression
-    mlE("from d in [{a=1,b=true}], i in [2] yield d yield $a$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "unbound variable or constructor: a",
-                    pos));
+    mlE("from d in [{a=1,b=true}], i in [2] $yield d$ yield a")
+        .assertCompileException(yieldNonRecord);
     ml("from d in [{a=1,b=true}], i in [2] yield {d.a,d.b} yield a")
         .assertType("int list");
-    ml("from d in [{a=1,b=true}], i in [2] yield d where true")
-        .assertType("{d:{a:int, b:bool}, i:int} list");
-    ml("from d in [{a=1,b=true}], i in [2] yield i yield 3")
-        .assertType("int list");
+    mlE("from d in [{a=1,b=true}], i in [2] $yield d$ where true")
+        .assertCompileException(yieldNonRecord);
+    mlE("from d in [{a=1,b=true}], i in [2] $yield i$ yield 3")
+        .assertCompileException(yieldNonRecord);
     ml("from d in [{a=1,b=true}], i in [2] yield d")
         .assertType("{a:int, b:bool} list");
     ml("from d in [{a=1,b=true}], i in [2] yield d yield 3")

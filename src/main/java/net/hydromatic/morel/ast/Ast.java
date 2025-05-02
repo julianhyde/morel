@@ -19,13 +19,13 @@
 package net.hydromatic.morel.ast;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.collect.Iterables.getLast;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
+import static net.hydromatic.morel.util.Static.last;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -1683,7 +1683,7 @@ public class Ast {
 
     static @Nullable Exp implicitYieldExp(Pos pos, List<FromStep> steps) {
       if (!steps.isEmpty()) {
-        final FromStep lastStep = getLast(steps);
+        final FromStep lastStep = last(steps);
         if (lastStep.op == Op.YIELD || lastStep.op == Op.INTO) {
           // No implicit yield is needed; the last step is an explicit yield
           return null;
@@ -1750,8 +1750,8 @@ public class Ast {
 
       if (fields.size() == 1
           && (steps.isEmpty()
-              || getLast(steps).op != Op.YIELD
-              || ((Yield) getLast(steps)).exp.op != Op.RECORD)) {
+              || last(steps).op != Op.YIELD
+              || ((Yield) last(steps)).exp.op != Op.RECORD)) {
         return Iterables.getOnlyElement(fields);
       } else {
         final SortedMap<String, Ast.Exp> map = mutableMap();
