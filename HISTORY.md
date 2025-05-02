@@ -44,7 +44,7 @@ Contributors:
   Release 0.x.0
 -->
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.6.0">0.6.0</a> / 2024-04-30
+## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.6.0">0.6.0</a> / 2024-05-02
 
 Release 0.6.0 generalizes queries with
 [universal and existential quantification](https://github.com/hydromatic/morel/issues/241)
@@ -87,6 +87,9 @@ Julian Hyde
 
 ### Bug-fixes and internal improvements
 
+* [[MOREL-253](https://github.com/hydromatic/morel/issues/253)]
+  Scalar `yield` after singleton record `yield` throws
+  "Conversion to core did not preserve type"
 * [[MOREL-258](https://github.com/hydromatic/morel/issues/258)]
   `skip` and `take` in query with unbounded variable give error
 * Add method `PairList.viewOf(Map)`
@@ -110,6 +113,7 @@ Julian Hyde
 
 ### Build and tests
 
+* Reduce CI timeout
 * Checkstyle should require that braces around blocks in `case:` are at the
   start of the line
 * [[MOREL-245](https://github.com/hydromatic/morel/issues/245)]
@@ -132,6 +136,7 @@ Julian Hyde
 
 * [[MOREL-261](https://github.com/hydromatic/morel/issues/261)]
   Release 0.6.0
+* [Document query expressions](docs/query.md)
 * In release notes, use the '0.x.0' format for releases
 
 ## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.5.0">0.5.0</a> / 2025-03-04
