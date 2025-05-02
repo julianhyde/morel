@@ -16,7 +16,17 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
+(*) anonymous 'yield' followed by 'distinct'
+from i in [1, 2, 3],
+    j in [1, 2, 3]
+  yield i + j
+  distinct;
+
+(*) singleton record 'yield' followed by 'yield'
+from i in [1, 2, 3],
+    j in [1, 2, 3]
+  yield {x = i + j}
+  yield x;
+> val it = [2,3,4,3,4,5,4,5,6] : int list
 
 (*) End dummy.smli
