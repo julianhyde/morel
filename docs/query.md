@@ -693,7 +693,7 @@ The output fields are the fields defined by the pattern
 <pre>
 <i>(* Define a table function that returns the even numbers
    from a collection. *)</i>
-<b>fun</b> evenNumbers(xs) = 
+<b>fun</b> evenNumbers(xs) =
   <b>from</b> x <b>in</b> xs
     <b>where</b> x <b>mod</b> 2 = 0;
 
@@ -796,7 +796,7 @@ result of the query is a collection of that non-record type.
 <i>(* Create a new record from each employee with modified
    fields. *)</i>
 <b>from</b> e <b>in</b> scott.emps
-  <b>yield</b> {name = String.map Char.toUpper e.ename, 
+  <b>yield</b> {name = String.map Char.toUpper e.ename,
       position = String.map Char.toLower e.job,
       annualSalary = e.sal * 12.0};
 <i>
