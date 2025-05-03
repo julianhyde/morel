@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -58,6 +59,7 @@ import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.foreign.RelList;
+import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -374,21 +376,39 @@ public abstract class Codes {
 
   /** @see BuiltIn#CHAR_COMPARE */
   private static final Applicable CHAR_COMPARE =
-      new Applicable2<Integer, Character, Character>(BuiltIn.CHAR_COMPARE) {
+      new Applicable2<List, Character, Character>(BuiltIn.CHAR_COMPARE) {
         @Override
-        public Integer apply(Character a0, Character a1) {
-          return a0.compareTo(a1);
+        public List apply(Character a0, Character a1) {
+          if (a0 < a1) {
+            return ORDER_LESS;
+          }
+          if (a0 > a1) {
+            return ORDER_GREATER;
+          }
+          return ORDER_EQUAL;
         }
       };
 
   /** @see BuiltIn#CHAR_CONTAINS */
   private static final Applicable CHAR_CONTAINS =
-      new Applicable2<Boolean, String, String>(BuiltIn.CHAR_CONTAINS) {
+      new ApplicableImpl(BuiltIn.CHAR_CONTAINS) {
         @Override
-        public Boolean apply(String a0, String a1) {
-          return a0.contains(a1);
+        public Object apply(EvalEnv env, Object argValue) {
+          final String s = (String) argValue;
+          return charContains(s, false);
         }
       };
+
+  /** Implement {@link #CHAR_CONTAINS} and {@link #CHAR_NOT_CONTAINS}. */
+  private static ApplicableImpl charContains(String s, boolean negate) {
+    return new ApplicableImpl("contains") {
+      @Override
+      public Object apply(EvalEnv env, Object argValue) {
+        final Character c = (Character) argValue;
+        return s.indexOf(c) >= 0 ^ negate;
+      }
+    };
+  }
 
   /** @see BuiltIn#CHAR_FROM_CSTRING */
   private static final Applicable CHAR_FROM_CSTRING =
@@ -404,118 +424,59 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.CHAR_FROM_STRING) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException("CHAR_FROM_STRING");
+          String s = (String) arg;
+          Character c = Parsers.fromString(s);
+          return c == null ? OPTION_NONE : optionSome(c);
         }
       };
 
   /** @see BuiltIn#CHAR_IS_ALPHA */
   private static final Applicable CHAR_IS_ALPHA =
-      new ApplicableImpl(BuiltIn.CHAR_IS_ALPHA) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isAlphabetic((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_ALPHA, CharPredicate::isAlpha);
 
   /** @see BuiltIn#CHAR_IS_ALPHA_NUM */
   private static final Applicable CHAR_IS_ALPHA_NUM =
-      new ApplicableImpl(BuiltIn.CHAR_IS_ALPHA_NUM) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isAlphabetic((char) arg)
-              || Character.isDigit((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_ALPHA_NUM, CharPredicate::isAlphaNum);
 
   /** @see BuiltIn#CHAR_IS_ASCII */
   private static final Applicable CHAR_IS_ASCII =
-      new ApplicableImpl(BuiltIn.CHAR_IS_ASCII) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (int) (char) (Character) arg <= 127;
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_ASCII, CharPredicate::isAscii);
 
   /** @see BuiltIn#CHAR_IS_CNTRL */
   private static final Applicable CHAR_IS_CNTRL =
-      new ApplicableImpl(BuiltIn.CHAR_IS_CNTRL) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isISOControl((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_CNTRL, CharPredicate::isCntrl);
 
   /** @see BuiltIn#CHAR_IS_DIGIT */
   private static final Applicable CHAR_IS_DIGIT =
-      new ApplicableImpl(BuiltIn.CHAR_IS_DIGIT) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isDigit((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_DIGIT, CharPredicate::isDigit);
 
   /** @see BuiltIn#CHAR_IS_GRAPH */
   private static final Applicable CHAR_IS_GRAPH =
-      new ApplicableImpl(BuiltIn.CHAR_IS_GRAPH) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isDefined((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_GRAPH, CharPredicate::isGraph);
 
   /** @see BuiltIn#CHAR_IS_HEX_DIGIT */
   private static final Applicable CHAR_IS_HEX_DIGIT =
-      new ApplicableImpl(BuiltIn.CHAR_IS_HEX_DIGIT) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.digit((char) arg, 16) != -1;
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_HEX_DIGIT, CharPredicate::isHexDigit);
 
   /** @see BuiltIn#CHAR_IS_LOWER */
   private static final Applicable CHAR_IS_LOWER =
-      new ApplicableImpl(BuiltIn.CHAR_IS_LOWER) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isLowerCase((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_LOWER, CharPredicate::isLower);
 
   /** @see BuiltIn#CHAR_IS_PRINT */
   private static final Applicable CHAR_IS_PRINT =
-      new ApplicableImpl(BuiltIn.CHAR_IS_PRINT) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isDefined((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_PRINT, CharPredicate::isPrint);
 
   /** @see BuiltIn#CHAR_IS_PUNCT */
   private static final Applicable CHAR_IS_PUNCT =
-      new ApplicableImpl(BuiltIn.CHAR_IS_PUNCT) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isLetterOrDigit((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_PUNCT, CharPredicate::isPunct);
 
   /** @see BuiltIn#CHAR_IS_SPACE */
   private static final Applicable CHAR_IS_SPACE =
-      new ApplicableImpl(BuiltIn.CHAR_IS_SPACE) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isWhitespace((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_SPACE, CharPredicate::isSpace);
 
   /** @see BuiltIn#CHAR_IS_UPPER */
   private static final Applicable CHAR_IS_UPPER =
-      new ApplicableImpl(BuiltIn.CHAR_IS_UPPER) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.isUpperCase((char) arg);
-        }
-      };
+      new CharPredicate(BuiltIn.CHAR_IS_UPPER, CharPredicate::isUpper);
 
   /** @see BuiltIn#CHAR_MAX_CHAR */
   private static final Character CHAR_MAX_CHAR = 255;
@@ -528,10 +489,11 @@ public abstract class Codes {
 
   /** @see BuiltIn#CHAR_NOT_CONTAINS */
   private static final Applicable CHAR_NOT_CONTAINS =
-      new Applicable2<Boolean, String, String>(BuiltIn.CHAR_NOT_CONTAINS) {
+      new ApplicableImpl(BuiltIn.CHAR_CONTAINS) {
         @Override
-        public Boolean apply(String a0, String a1) {
-          return !a0.contains(a1);
+        public Object apply(EvalEnv env, Object argValue) {
+          final String s = (String) argValue;
+          return charContains(s, true);
         }
       };
 
@@ -621,44 +583,9 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.CHAR_TO_STRING) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          return charToString((Character) arg).replace("\\", "\\\\");
+          return Parsers.charToString((Character) arg);
         }
       };
-
-  /**
-   * Converts a character to how it appears in a character literal.
-   *
-   * <p>For example, '{@code a}' becomes '{@code #"a"}' and therefore {@code
-   * charToString('a')} returns "a". Character 0 becomes {@code "\\^@"}.
-   * Character 255 becomes {@code "\\255"}. Character 9 becomes {@code "\t"}.
-   */
-  public static String charToString(char c) {
-    if (c < 32) {
-      switch (c) {
-        case 7:
-          return "\\a";
-        case 8:
-          return "\\b";
-        case 9:
-          return "\\t";
-        case 10:
-          return "\\n";
-        case 11:
-          return "\\v";
-        case 12:
-          return "\\f";
-        case 13:
-          return "\\r";
-        default:
-          // chr(0) = "\\^@", chr(1) = "\\^A", etc.
-          return "\\^" + (char) (c + 64);
-      }
-    } else if (c >= 127 && c < 256) {
-      return "\\" + (int) c;
-    } else {
-      return String.valueOf(c);
-    }
-  }
 
   /** @see BuiltIn#CHAR_TO_UPPER */
   private static final Applicable CHAR_TO_UPPER =
@@ -683,13 +610,7 @@ public abstract class Codes {
       new Applicable2<List, Integer, Integer>(BuiltIn.INT_COMPARE) {
         @Override
         public List apply(Integer a0, Integer a1) {
-          if (a0 < a1) {
-            return ORDER_LESS;
-          }
-          if (a0 > a1) {
-            return ORDER_GREATER;
-          }
-          return ORDER_EQUAL;
+          return order(Integer.compare(a0, a1));
         }
       };
 
@@ -2013,7 +1934,7 @@ public abstract class Codes {
             return compare;
           }
         }
-        return n0 < n1 ? ORDER_LESS : n0 == n1 ? ORDER_EQUAL : ORDER_GREATER;
+        return order(Integer.compare(n0, n1));
       }
     };
   }
@@ -3093,6 +3014,20 @@ public abstract class Codes {
           return Unit.INSTANCE;
         }
       };
+
+  /**
+   * Converts the result of {@link Comparable#compareTo(Object)} to an {@code
+   * Order} value.
+   */
+  private static List order(int c) {
+    if (c < 0) {
+      return ORDER_LESS;
+    }
+    if (c > 0) {
+      return ORDER_GREATER;
+    }
+    return ORDER_EQUAL;
+  }
 
   private static final List ORDER_LESS = ImmutableList.of("LESS");
   private static final List ORDER_EQUAL = ImmutableList.of("EQUAL");
@@ -4668,6 +4603,69 @@ public abstract class Codes {
    */
   public interface Positioned extends Applicable {
     Applicable withPos(Pos pos);
+  }
+
+  /** Implementation of {@link Applicable} that has a single char argument. */
+  private static class CharPredicate extends ApplicableImpl {
+    private final Predicate<Character> predicate;
+
+    CharPredicate(BuiltIn builtIn, Predicate<Character> predicate) {
+      super(builtIn);
+      this.predicate = predicate;
+    }
+
+    @Override
+    public Object apply(EvalEnv env, Object arg) {
+      return predicate.test((Character) arg);
+    }
+
+    static boolean isGraph(char c) {
+      return c >= '!' && c <= '~';
+    }
+
+    static boolean isPrint(char c) {
+      return isGraph(c) || c == ' ';
+    }
+
+    static boolean isCntrl(char c) {
+      return isAscii(c) && !isPrint(c);
+    }
+
+    static boolean isSpace(char c) {
+      return c >= '\t' && c <= '\r' || c == ' ';
+    }
+
+    static boolean isAscii(char c) {
+      return c <= 127;
+    }
+
+    static boolean isUpper(char c) {
+      return 'A' <= c && c <= 'Z';
+    }
+
+    static boolean isLower(char c) {
+      return 'a' <= c && c <= 'z';
+    }
+
+    static boolean isDigit(char c) {
+      return '0' <= c && c <= '9';
+    }
+
+    static boolean isAlpha(char c) {
+      return isUpper(c) || isLower(c);
+    }
+
+    static boolean isAlphaNum(char c) {
+      return isAlpha(c) || isDigit(c);
+    }
+
+    static boolean isHexDigit(char c) {
+      return isDigit(c) || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F';
+    }
+
+    static boolean isPunct(char c) {
+      return isGraph(c) && !isAlphaNum(c);
+    }
   }
 }
 

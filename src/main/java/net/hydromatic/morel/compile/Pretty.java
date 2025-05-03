@@ -33,6 +33,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.RelList;
+import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
@@ -229,7 +230,7 @@ class Pretty {
             return buf.append("()");
           case CHAR:
             Character c = (Character) value;
-            s = Codes.charToString(c);
+            s = Parsers.charToString(c);
             return buf.append('#').append('"').append(s).append('"');
           case STRING:
             s = (String) value;
