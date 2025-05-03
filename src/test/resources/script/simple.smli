@@ -156,6 +156,10 @@ String.size "\v";
 String.size "\^@";
 > val it = 1 : int
 
+(* A string with non-printable characters. *)
+String.implode [#"\t", #"a", #"\128", #"b"];
+> val it = "\ta\128b" : string
+
 (*) Identifiers
 val x = 1
 and x' = 2

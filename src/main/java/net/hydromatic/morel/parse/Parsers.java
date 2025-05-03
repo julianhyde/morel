@@ -135,6 +135,38 @@ public final class Parsers {
     }
   }
 
+  /**
+   * Converts an internal string to a string using Standard ML escapes,
+   * appending to a builder.
+   */
+  public static void stringToString(String s, StringBuilder b) {
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      b.append(charToString(c));
+    }
+  }
+
+  /** Converts an internal string to a string using Standard ML escapes. */
+  public static String stringToString(String s) {
+    if (!requiresEscape(s)) {
+      return s;
+    }
+    final StringBuilder b = new StringBuilder();
+    stringToString(s, b);
+    return b.toString();
+  }
+
+  private static boolean requiresEscape(String s) {
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      if (c < 32 || c == '"' || c == '\\' || c > 127) {
+        // Control characters, double-quote, backslash, non-ASCII require escape
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Appends an identifier. Encloses it in back-ticks if necessary. */
   public static StringBuilder appendId(StringBuilder buf, String id) {
     if (id.contains("`")) {

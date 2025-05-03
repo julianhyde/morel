@@ -222,7 +222,7 @@ class Pretty {
     }
     final List<Object> list;
     final int start;
-    String s;
+    final String s;
     switch (type.op()) {
       case ID:
         switch ((PrimitiveType) type) {
@@ -234,12 +234,14 @@ class Pretty {
             return buf.append('#').append('"').append(s).append('"');
           case STRING:
             s = (String) value;
+            buf.append('"');
             if (stringDepth >= 0 && s.length() > stringDepth) {
-              s = s.substring(0, stringDepth) + "#";
+              Parsers.stringToString(s.substring(0, stringDepth), buf);
+              buf.append('#');
+            } else {
+              Parsers.stringToString(s, buf);
             }
-            return buf.append('"')
-                .append(s.replace("\\", "\\\\").replace("\"", "\\\""))
-                .append('"');
+            return buf.append('"');
           case INT:
             int i = (Integer) value;
             if (i < 0) {
