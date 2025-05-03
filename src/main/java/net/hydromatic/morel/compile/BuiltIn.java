@@ -352,16 +352,16 @@ public enum BuiltIn {
   /** Function "Char.ord" of type "char &rarr; int". */
   CHAR_ORD("Char", "ord", ts -> ts.fnType(CHAR, INT)),
 
-  /** Operator "Char.op <", of type "char * char &rarr; bool". */
+  /** Operator "Char.op &lt;", of type "char * char &rarr; bool". */
   CHAR_OP_LT("Char", "op <", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), BOOL)),
 
-  /** Operator "Char.op <=", of type "char * char &rarr; bool". */
+  /** Operator "Char.op &lt;=", of type "char * char &rarr; bool". */
   CHAR_OP_LE("Char", "op <=", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), BOOL)),
 
-  /** Operator "Char.op >", of type "char * char &rarr; bool". */
+  /** Operator "Char.op &gt;", of type "char * char &rarr; bool". */
   CHAR_OP_GT("Char", "op >", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), BOOL)),
 
-  /** Operator "Char.op >=", of type "char * char &rarr; bool". */
+  /** Operator "Char.op &gt;=", of type "char * char &rarr; bool". */
   CHAR_OP_GE("Char", "op >=", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), BOOL)),
 
   /** Function "Char.pred" of type "char &rarr; char". */
