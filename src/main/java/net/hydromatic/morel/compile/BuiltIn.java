@@ -305,26 +305,11 @@ public enum BuiltIn {
                           ts.fnType(h.get(0), h.get(1))),
                       ts.fnType(h.get(0), h.get(2))))),
 
-  /* TODO:
-  val ~ : int -> int
-  val * : int * int -> int
-  val div : int * int -> int
-  val mod : int * int -> int
-  val quot : int * int -> int
-  val rem : int * int -> int
-  val + : int * int -> int
-  val - : int * int -> int
-  val > : int * int -> bool
-  val >= : int * int -> bool
-  val < : int * int -> bool
-  val <= : int * int -> bool
-   */
-
   /**
    * Function "Char.chr" of type "int &rarr; char".
    *
    * <p>"chr i" returns the character whose code is {@code i}. Raises {@link
-   * BuiltInExn#CHR} if {@code i} &lt; 0 or {@code i} &gt; maxOrd.
+   * BuiltInExn#CHR Chr} if {@code i < 0 or i > maxOrd}.
    */
   CHAR_CHR("Char", "chr", "chr", ts -> ts.fnType(INT, CHAR)),
 
@@ -354,8 +339,8 @@ public enum BuiltIn {
    * Function "Char.fromCString" of type "string &rarr; char option".
    *
    * <p>"fromCString s" attempts to scan a character or C escape sequence from
-   * the string s. Does not skip leading whitespace. For instance, fromString
-   * "\\065" equals #"A".
+   * the string {@code s}. Does not skip leading whitespace. For instance,
+   * {@code fromString "\\065"} equals {@code #"A"}.
    */
   CHAR_FROM_CSTRING(
       "Char", "fromCString", ts -> ts.fnType(STRING, ts.option(CHAR))),
@@ -363,9 +348,9 @@ public enum BuiltIn {
   /**
    * Function "Char.fromString" of type "string &rarr; char option".
    *
-   * <p>[fromString s] attempts to scan a character or ML escape sequence from
-   * the string s. Does not skip leading whitespace. For instance, {@code
-   * fromString "\\065"} equals {@code #"A"}.
+   * <p>"fromString s" attempts to scan a character or ML escape sequence from
+   * the string {@code s}. Does not skip leading whitespace. For instance,
+   * {@code fromString "\\065"} equals {@code #"A"}.
    */
   CHAR_FROM_STRING(
       "Char", "fromString", ts -> ts.fnType(STRING, ts.option(CHAR))),
@@ -439,7 +424,7 @@ public enum BuiltIn {
    * Function "Char.pred" of type "char &rarr; char".
    *
    * <p>"pred c" returns the character immediately preceding {@code c}, or
-   * raises {@link BuiltInExn#CHR} if {@code c} = minChar.
+   * raises {@link BuiltInExn#CHR Chr} if {@code c = minChar}.
    */
   CHAR_PRED("Char", "pred", ts -> ts.fnType(CHAR, CHAR)),
 
@@ -447,7 +432,7 @@ public enum BuiltIn {
    * Function "Char.succ" of type "char &rarr; char".
    *
    * <p>"succ c" returns the character immediately following {@code c} in the
-   * ordering, or raises {@link BuiltInExn#CHR} if {@code c} = maxChar. When
+   * ordering, or raises {@link BuiltInExn#CHR Chr} if {@code c = maxChar}. When
    * defined, {@code succ c} is equivalent to {@code chr(ord c + 1)}.
    */
   CHAR_SUCC("Char", "succ", ts -> ts.fnType(CHAR, CHAR)),
@@ -628,6 +613,21 @@ public enum BuiltIn {
    */
   CHAR_IS_UPPER("Char", "isUpper", ts -> ts.fnType(CHAR, BOOL)),
 
+  /* TODO:
+  val ~ : int -> int
+  val * : int * int -> int
+  val div : int * int -> int
+  val mod : int * int -> int
+  val quot : int * int -> int
+  val rem : int * int -> int
+  val + : int * int -> int
+  val - : int * int -> int
+  val > : int * int -> bool
+  val >= : int * int -> bool
+  val < : int * int -> bool
+  val <= : int * int -> bool
+   */
+
   /** Function "Int.abs" of type "int &rarr; int". */
   INT_ABS("Int", "abs", ts -> ts.fnType(INT, INT)),
 
@@ -671,16 +671,16 @@ public enum BuiltIn {
   /**
    * Function "Int.max", of type "int * int &rarr; int".
    *
-   * <p>Returns the returns the larger of the arguments. If exactly one argument
-   * is NaN, returns the other argument. If both arguments are NaN, returns NaN.
+   * <p>Returns the larger of the arguments. If exactly one argument is NaN,
+   * returns the other argument. If both arguments are NaN, returns NaN.
    */
   INT_MAX("Int", "max", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /**
    * Function "Int.min", of type "int * int &rarr; int".
    *
-   * <p>Returns the returns the larger of the arguments. If exactly one argument
-   * is NaN, returns the other argument. If both arguments are NaN, returns NaN.
+   * <p>Returns the smaller of the arguments. If exactly one argument is NaN,
+   * returns the other argument. If both arguments are NaN, returns NaN.
    */
   INT_MIN("Int", "min", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
@@ -993,7 +993,7 @@ public enum BuiltIn {
    * Function "List.tl", of type "&alpha; list &rarr; &alpha; list".
    *
    * <p>"tl l" returns all but the first element of l. It raises {@link
-   * BuiltInExn#EMPTY empty} if l is nil.
+   * BuiltInExn#EMPTY Empty} if l is nil.
    */
   LIST_TL(
       "List",
@@ -1005,7 +1005,7 @@ public enum BuiltIn {
    * Function "List.last", of type "&alpha; list &rarr; &alpha;".
    *
    * <p>"last l" returns the last element of l. It raises {@link
-   * BuiltInExn#EMPTY empty} if l is nil.
+   * BuiltInExn#EMPTY Empty} if l is nil.
    */
   LIST_LAST(
       "List",
