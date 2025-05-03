@@ -370,7 +370,11 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.CHAR_CHR) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          return (char) ((int) arg);
+          int ord = (int) arg;
+          if (ord < 0 || ord > 255) {
+            throw new MorelRuntimeException(BuiltInExn.CHR, pos);
+          }
+          return (char) ord;
         }
       };
 
@@ -485,7 +489,7 @@ public abstract class Codes {
   private static final Integer CHAR_MAX_ORD = 255;
 
   /** @see BuiltIn#CHAR_MIN_CHAR */
-  private static final Character CHAR_MIN_CHAR = Character.MIN_VALUE;
+  private static final Character CHAR_MIN_CHAR = 0;
 
   /** @see BuiltIn#CHAR_NOT_CONTAINS */
   private static final Applicable CHAR_NOT_CONTAINS =
@@ -547,7 +551,11 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.CHAR_PRED) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          return (char) ((char) arg - 1);
+          char c = (char) arg;
+          if (c == CHAR_MIN_CHAR) {
+            throw new MorelRuntimeException(BuiltInExn.CHR, pos);
+          }
+          return (char) (c - 1);
         }
       };
 
@@ -556,7 +564,11 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.CHAR_SUCC) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          return (char) ((char) arg + 1);
+          char c = (char) arg;
+          if (c == CHAR_MAX_CHAR) {
+            throw new MorelRuntimeException(BuiltInExn.CHR, pos);
+          }
+          return (char) (c + 1);
         }
       };
 
@@ -4295,6 +4307,7 @@ public abstract class Codes {
   public enum BuiltInExn {
     EMPTY("List", "Empty"),
     BIND("General", "Bind"),
+    CHR("General", "Chr"),
     DIV("General", "Div"),
     DOMAIN("General", "Domain"),
     OPTION("Option", "Option"),

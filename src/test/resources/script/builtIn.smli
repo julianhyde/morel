@@ -1504,9 +1504,6 @@ fun testChar (p: char -> bool) =
     yield (b, concat);
 > val testChar = fn : (char -> bool) -> (bool * string) list
 
-Char.chr;
-> val it = fn : int -> char
-
 Char.ord;
 > val it = fn : char -> int
 
@@ -1528,6 +1525,15 @@ Char.chr;
 > val it = fn : int -> char
 Char.chr 65;
 > val it = #"A" : char
+Char.chr ~1;
+> uncaught exception Chr
+>   raised at: 0.0-0.0
+Char.chr 256;
+> uncaught exception Chr
+>   raised at: 0.0-0.0
+Char.chr 12345678;
+> uncaught exception Chr
+>   raised at: 0.0-0.0
 
 (* [ord c] returns the code of character c. *)
 Char.ord;
@@ -1541,8 +1547,11 @@ Char.succ;
 > val it = fn : char -> char
 Char.succ #"A";
 > val it = #"B" : char
+Char.succ (chr 254);
+> val it = #"\255" : char
 Char.succ (chr 255);
-> val it = #"Ā" : char
+> uncaught exception Chr
+>   raised at: 0.0-0.0
 
 (* [pred c] returns the character immediately preceding c, or raises
    Chr if c = minChar. *)
@@ -1551,7 +1560,8 @@ Char.pred;
 Char.pred #"B";
 > val it = #"A" : char
 Char.pred (chr 0);
-> val it = #"￿" : char
+> uncaught exception Chr
+>   raised at: 0.0-0.0
 
 (* [isAscii c] returns true if c is an ASCII character (0 to 127). *)
 Char.isAscii;
