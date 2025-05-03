@@ -1500,6 +1500,7 @@ fun testChar (p: char -> bool) =
   from c in String.explode "Abz0! \t\128\255"
     yield {b = p c, s = Char.toString c}
     group b compute concat of s
+    order b
     yield (b, concat);
 > val testChar = fn : (char -> bool) -> (bool * string) list
 
