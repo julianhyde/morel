@@ -18,7 +18,10 @@
  */
 package net.hydromatic.morel;
 
+import static java.util.Objects.requireNonNull;
+
 import java.util.AbstractMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +31,7 @@ import javax.sql.DataSource;
 import net.hydromatic.foodmart.data.hsqldb.FoodmartHsqldb;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.CalciteForeignValue;
+import net.hydromatic.morel.foreign.CalciteForeignValue.NameConverter;
 import net.hydromatic.morel.foreign.DataSet;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.scott.data.hsqldb.ScottHsqldb;
@@ -44,12 +48,14 @@ enum BuiltInDataSet implements DataSet {
    *
    * <ul>
    *   <li>{@code bonus} - Bonus table
+   *   <li>{@code customer} - Customers table
+   *   <li>{@code customer_sales_fact} - Customer sales fact table
    *   <li>{@code dept} - Departments table
    *   <li>{@code emp} - Employees table
    *   <li>{@code salgrade} - Salary grade table
    * </ul>
    */
-  FOODMART {
+  FOODMART("foodmart", NameConverter.TO_LOWER) {
     SchemaPlus schema(SchemaPlus rootSchema) {
       final DataSource dataSource =
           JdbcSchema.dataSource(
@@ -57,10 +63,11 @@ enum BuiltInDataSet implements DataSet {
               null,
               FoodmartHsqldb.USER,
               FoodmartHsqldb.PASSWORD);
-      final String name = "foodmart";
+      String hsqldbSchema = "foodmart";
       final JdbcSchema schema =
-          JdbcSchema.create(rootSchema, name, dataSource, null, "foodmart");
-      return rootSchema.add(name, schema);
+          JdbcSchema.create(
+              rootSchema, schemaName, dataSource, null, hsqldbSchema);
+      return rootSchema.add(schemaName, schema);
     }
   },
 
@@ -70,21 +77,22 @@ enum BuiltInDataSet implements DataSet {
    * <p>It is a record with fields for the following tables:
    *
    * <ul>
-   *   <li>{@code bonus} - Bonus table
-   *   <li>{@code dept} - Departments table
-   *   <li>{@code emp} - Employees table
-   *   <li>{@code salgrade} - Salary grade table
+   *   <li>{@code bonuses} - Bonus table
+   *   <li>{@code depts} - Departments table
+   *   <li>{@code emps} - Employees table
+   *   <li>{@code salgrades} - Salary grade table
    * </ul>
    */
-  SCOTT {
+  SCOTT("scott", BuiltInDataSet::scottNameConverter) {
     SchemaPlus schema(SchemaPlus rootSchema) {
       final DataSource dataSource =
           JdbcSchema.dataSource(
               ScottHsqldb.URI, null, ScottHsqldb.USER, ScottHsqldb.PASSWORD);
-      final String name = "scott";
+      final String hsqldbSchema = "SCOTT";
       final JdbcSchema schema =
-          JdbcSchema.create(rootSchema, name, dataSource, null, "SCOTT");
-      return rootSchema.add(name, schema);
+          JdbcSchema.create(
+              rootSchema, schemaName, dataSource, null, hsqldbSchema);
+      return rootSchema.add(schemaName, schema);
     }
   };
 
@@ -98,12 +106,37 @@ enum BuiltInDataSet implements DataSet {
           .collect(
               Collectors.toMap(d -> d.name().toLowerCase(Locale.ROOT), d -> d));
 
+  final String schemaName;
+  final NameConverter nameConverter;
+
+  BuiltInDataSet(String schemaName, NameConverter nameConverter) {
+    this.schemaName = requireNonNull(schemaName);
+    this.nameConverter = requireNonNull(nameConverter);
+  }
+
   /** Returns the Calcite schema of this data set. */
   abstract SchemaPlus schema(SchemaPlus rootSchema);
 
   @Override
   public ForeignValue foreignValue(Calcite calcite) {
-    return new CalciteForeignValue(calcite, schema(calcite.rootSchema), true);
+    SchemaPlus schema = schema(calcite.rootSchema);
+    return new CalciteForeignValue(calcite, schema, nameConverter);
+  }
+
+  /** Creates a {@link NameConverter} for the "scott" database. */
+  private static String scottNameConverter(List<String> path, String name) {
+    switch (name) {
+      case "EMP":
+        return "emps";
+      case "DEPT":
+        return "depts";
+      case "BONUS":
+        return "bonuses";
+      case "SALGRADE":
+        return "salgrades";
+      default:
+        return name.toLowerCase(Locale.ROOT);
+    }
   }
 
   /**
