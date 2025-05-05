@@ -134,7 +134,7 @@ public class TypeResolver {
 
   /** Converts a type AST to a type key. */
   public static Type.Key toTypeKey(Ast.Type type) {
-    return new Foo().toTypeKey(type);
+    return new KeyBuilder().toTypeKey(type);
   }
 
   private Resolved deduceType_(Environment env, Ast.Decl decl) {
@@ -980,15 +980,17 @@ public class TypeResolver {
       Map<Ast.IdPat, Term> termMap) {
     final List<Keys.DataTypeKey> keys = new ArrayList<>();
     for (Ast.DatatypeBind bind : datatypeDecl.binds) {
-      final Foo foo = new Foo();
-      bind.tyVars.forEach(foo::toTypeKey);
+      final KeyBuilder keyBuilder = new KeyBuilder();
+      bind.tyVars.forEach(keyBuilder::toTypeKey);
 
       final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
       deduceDatatypeBindType(bind, tyCons);
 
       keys.add(
           Keys.datatype(
-              bind.name.name, Keys.ordinals(foo.tyVarMap.size()), tyCons));
+              bind.name.name,
+              Keys.ordinals(keyBuilder.tyVarMap.size()),
+              tyCons));
     }
     final List<Type> types = typeSystem.dataTypes(keys);
 
@@ -1053,16 +1055,16 @@ public class TypeResolver {
 
   private void deduceDatatypeBindType(
       Ast.DatatypeBind datatypeBind, SortedMap<String, Type.Key> tyCons) {
-    Foo foo = new Foo();
+    KeyBuilder keyBuilder = new KeyBuilder();
     for (Ast.TyCon tyCon : datatypeBind.tyCons) {
       tyCons.put(
           tyCon.id.name,
-          tyCon.type == null ? Keys.dummy() : foo.toTypeKey(tyCon.type));
+          tyCon.type == null ? Keys.dummy() : keyBuilder.toTypeKey(tyCon.type));
     }
   }
 
   /** Workspace for converting types to keys. */
-  private static class Foo {
+  private static class KeyBuilder {
     final Map<String, Integer> tyVarMap = new HashMap<>();
 
     /** Converts an AST type into a type key. */
