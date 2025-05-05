@@ -561,10 +561,10 @@ public class AlgebraTest {
   @Test
   void testUnion() {
     final String ml =
-        "from x in (\n"
+        "from x in\n"
             + "(from e in scott.emps where e.job = \"CLERK\" yield e.deptno)\n"
             + "union\n"
-            + "(from d in scott.depts yield d.deptno))\n";
+            + "(from d in scott.depts yield d.deptno)\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
@@ -577,10 +577,10 @@ public class AlgebraTest {
   @Test
   void testExcept() {
     final String ml =
-        "from x in (\n"
+        "from x in\n"
             + "(from d in scott.depts yield d.deptno)"
             + "except\n"
-            + "(from e in scott.emps where e.job = \"CLERK\" yield e.deptno))\n";
+            + "(from e in scott.emps where e.job = \"CLERK\" yield e.deptno)\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
@@ -593,10 +593,10 @@ public class AlgebraTest {
   @Test
   void testIntersect() {
     final String ml =
-        "from x in (\n"
+        "from x in\n"
             + "(from e in scott.emps where e.job = \"CLERK\" yield e.deptno)\n"
             + "intersect\n"
-            + "(from d in scott.depts yield d.deptno))\n";
+            + "(from d in scott.depts yield d.deptno)\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
@@ -859,7 +859,8 @@ public class AlgebraTest {
             + "    if List.null newDescendants then\n"
             + "      descendants\n"
             + "    else\n"
-            + "      descendants2 (descendants union newDescendants)\n"
+            + "      descendants2\n"
+            + "          (from d in descendants union newDescendants)\n"
             + "          (from d in newDescendants,\n"
             + "              e in scott.emps\n"
             + "            where e.mgr = d.e.empno\n"

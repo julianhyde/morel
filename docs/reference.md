@@ -295,12 +295,9 @@ This grammar uses the following notation:
 | /        |    infix 7 | Division |
 | div      |    infix 7 | Integer division |
 | mod      |    infix 7 | Modulo |
-| intersect |   infix 7 | List intersect |
 | +        |    infix 6 | Plus |
 | -        |    infix 6 | Minus |
 | ^        |    infix 6 | String concatenate |
-| union    |    infix 6 | List union |
-| except   |    infix 6 | List difference |
 | ~        |   prefix 6 | Negate |
 | ::       |   infixr 5 | List cons |
 | @        |   infixr 5 | List append |
@@ -331,10 +328,17 @@ Eqtype:
 * `eqtype 'a vector = 'a vector` (in structure `Vector`)
 
 Exception:
+* `Bind` (in structure `General`)
+* `Chr` (in structure `General`)
+* `Div` (in structure `General`)
+* `Domain` (in structure `General`)
 * `Empty` (in structure `List`)
+* `Error` (in structure `Interact`)
 * `Option` (in structure `Option`)
+* `Overflow` (in structure `Option`)
 * `Size` (in structure `General`)
 * `Subscript` (in structure `General`)
+* `Unordered` (in structure `IEEEReal`)
 
 ## Built-in functions
 
@@ -418,6 +422,8 @@ Exception:
 | List.drop | &alpha; list * int &rarr; &alpha; list | "drop (l, i)" returns what is left after dropping the first `i` elements of the list `l`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`.<br><br>It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le; `i` &le; `length l`. We also have `drop(l, length l)` = `[]`. |
 | List.rev | &alpha; list &rarr; &alpha; list | "rev l" returns a list consisting of `l`'s elements in reverse order. |
 | List.concat | &alpha; list list &rarr; &alpha; list | "concat l" returns the list that is the concatenation of all the lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln` |
+| List.except | &alpha; list list &rarr; &alpha; list | "except l" returns the list that is the concatenation of all the lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln` |
+| List.intersect | &alpha; list list &rarr; &alpha; list | "intersect l" returns the list that is the concatenation of all the lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln` |
 | List.revAppend | &alpha; list * &alpha; list &rarr; &alpha; list | "revAppend (l1, l2)" returns `(rev l1) @ l2`. |
 | List.app | (&alpha; &rarr; unit) &rarr; &alpha; list &rarr; unit | "app f l" applies `f` to the elements of `l`, from left to right. |
 | List.map | (&alpha; &rarr; &beta;) &rarr; &alpha; list &rarr; &beta; list | "map f l" applies `f` to each element of `l` from left to right, returning the list of results. |
