@@ -17,6 +17,41 @@
  * License.
  *)
 
+let
+  val records = from r in bag [1,2]
+in
+  from r2 in records
+end;
+> val it = [{i=1,j=2}] : {i:int,j:int} bag
+
+(* TODO
+let
+  val evenEmp =
+    from e in scott.emp
+in
+  from e in evenEmp
+end;
+*)
+(* TODO
+let
+  val evenEmp =
+    from e in scott.emp
+in
+  from e in evenEmp
+end;
+*)
+(* TODO
+let
+  fun evenEmp x =
+    from e in scott.emp
+    where e.empno mod 2 = 0
+in
+  from e in (evenEmp 1)
+  where e.deptno = 10
+  yield e.ename
+end;
+*)
+
 1 elem [0,1,2];
 > val it = true : bool
 1 elem (bag [0,1,2]);
@@ -149,6 +184,15 @@ List.length Bag.nil;
 > val it = 0 : int
 from i in (bag [1,2,3]) group i compute count;
 > val it = [1,2,3] : int bag
+(*) Allow applying bag function (op elem: ('a * 'bag) -> bool) to list
+from i in [1,2]
+where i elem [2,3];
+
+from i in [1,2,3]
+group i compute x = (fn a => a);
+> val it = [{i=1,x=[1]},{i=2,x=[2]},{i=3,x=[3]}] : {i:int, x:int bag} bag
+
+2 elem [2,3];
 *)
 
 (*) End dummy.smli

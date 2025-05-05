@@ -37,6 +37,7 @@ import static org.apache.calcite.util.Util.firstDuplicate;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
 import java.util.ArrayDeque;
@@ -384,6 +385,58 @@ public class TypeResolver {
     constraints.add(unifier.constraint(arg, result, argResults));
   }
 
+  /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
+  private void mayBeBagOrList(Variable c, Variable v) {
+    final Sequence list = listTerm(v);
+    final Constraint.Action listAction =
+        (actualArg, term, consumer) -> consumer.accept(c, list);
+    final Sequence bag = bagTerm(v);
+    final Constraint.Action bagAction =
+        (actualArg, term, consumer) -> consumer.accept(c, bag);
+    constraints.add(
+        unifier.constraint(c, copyOf(list, listAction, bag, bagAction)));
+  }
+
+  /**
+   * Adds a constraint that {@code argC} is a bag or list of {@code argV}; if it
+   * is a list then {@code c} is a list of {@code v}, otherwise {@code c} is a
+   * bag of {@code v}.
+   */
+  private void isListOrBagMatchingInput(
+      Variable c, Variable v, Variable argC, Variable argV) {
+    PairList<Term, Term> argResults =
+        copyOf(listTerm(argV), listTerm(v), bagTerm(argV), bagTerm(v));
+    constraints.add(unifier.constraint(argC, c, argResults));
+  }
+
+  /**
+   * Adds a constraint that {@code arg0} is a bag or list (of something), and
+   * {@code arg1} is a bag or list (of something); if both are lists then {@code
+   * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
+   */
+  private void isListIfBothAreLists(
+      Term arg0, Term arg1, Variable c, Variable v) {
+    final Variable v0 = unifier.variable();
+    final Variable v1 = unifier.variable();
+    final Sequence list0 = listTerm(v0);
+    final Sequence list1 = listTerm(v1);
+    final Sequence bag0 = bagTerm(v0);
+    final Sequence bag1 = bagTerm(v1);
+    final Sequence listResult = listTerm(v);
+    final Sequence bagResult = bagTerm(v);
+    final Constraint.Action listAction =
+        (actualArg, term, consumer) -> consumer.accept(c, listResult);
+    final Constraint.Action bagAction =
+        (actualArg, term, consumer) -> consumer.accept(c, bagResult);
+    final PairList<Term, Constraint.Action> termActions = PairList.of();
+    termActions.add(argTerm(list0, list1), listAction);
+    termActions.add(argTerm(list0, bag1), bagAction);
+    termActions.add(argTerm(bag0, list1), bagAction);
+    termActions.add(argTerm(bag0, bag1), bagAction);
+    constraints.add(
+        unifier.constraint(toVariable(argTerm(arg0, arg1)), termActions));
+  }
+
   /**
    * Deduces a {@code yield} expression's type.
    *
@@ -393,6 +446,21 @@ public class TypeResolver {
    * namespace.
    */
   private Ast.Exp deduceYieldType(TypeEnv env, Ast.Exp node, Variable v) {
+    if (node.op == Op.RECORD) {
+      final Ast.Record record = (Ast.Record) node;
+      if (record.args.size() == 1 && record.with == null) {
+        Map.Entry<String, Ast.Exp> arg =
+            record.args.entrySet().iterator().next();
+        Ast.Exp node2 = deduceType(env, arg.getValue(), v);
+        if ("nonEmpty".isEmpty()) {
+          return reg(node2, v);
+        } else {
+          Ast.Record record2 =
+              record.copy(null, ImmutableMap.of(arg.getKey(), node2));
+          return reg(record2, v);
+        }
+      }
+    }
     return deduceType(env, node, v);
   }
 
@@ -693,13 +761,12 @@ public class TypeResolver {
         fromSteps.add(yield.copy(yieldExp2));
         final TypeEnvHolder envs = new TypeEnvHolder(env);
 
-        // Output is ordered iff input is ordered. Just like an overloaded map:
+        // Output is ordered iff input is ordered. Yield behaves just like a
+        // 'map' function with these overloaded forms:
         //   map: 'a -> 'b -> 'a list -> 'b list
         //   map: 'a -> 'b -> 'a bag -> 'b bag
         final Variable c6 = unifier.variable();
-        PairList<Term, Term> argResults =
-            copyOf(listTerm(p.v), listTerm(v6), bagTerm(p.v), bagTerm(v6));
-        constraints.add(unifier.constraint(p.c, c6, argResults));
+        isListOrBagMatchingInput(c6, v6, p.c, p.v);
 
         if (yieldExp2.op == Op.RECORD) {
           final Ast.Record record2 = (Ast.Record) yieldExp2;
@@ -820,20 +887,7 @@ public class TypeResolver {
     final TypeEnv env4 = typeEnvs.typeEnv;
 
     final Variable v = fieldVar(fieldVars);
-    //    final Variable c0 = null;
-    //    equiv(v, v16); // TODO remove, and restrict c0's scope
     final Variable c = unifier.variable();
-    //      switch (containerize) {
-    //        case BAG:
-    //          c = toVariable(bagTerm(v));
-    //          break;
-    //        case LIST:
-    //          c = toVariable(listTerm(v));
-    //          break;
-    //        default:
-    //          c = unifier.variable();
-    //    isListIfBothAreLists(p.c, c0, c, v);
-    //      }
 
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
@@ -845,46 +899,6 @@ public class TypeResolver {
     }
     fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
     return Triple.of(env4, v, c);
-  }
-
-  /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
-  private void mayBeBagOrList(Variable v, Variable c) {
-    final Sequence list = listTerm(v);
-    final Constraint.Action listAction =
-        (actualArg, term, consumer) -> consumer.accept(c, list);
-    final Sequence bag = bagTerm(v);
-    final Constraint.Action bagAction =
-        (actualArg, term, consumer) -> consumer.accept(c, bag);
-    constraints.add(
-        unifier.constraint(c, copyOf(list, listAction, bag, bagAction)));
-  }
-
-  /**
-   * Adds a constraint that {@code arg0} is a bag or list (of something), and
-   * {@code arg1} is a bag or list (of something); if both are lists then {@code
-   * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
-   */
-  private void isListIfBothAreLists(
-      Term arg0, Term arg1, Variable c, Variable v) {
-    final Variable v0 = unifier.variable();
-    final Variable v1 = unifier.variable();
-    final Sequence list0 = listTerm(v0);
-    final Sequence list1 = listTerm(v1);
-    final Sequence bag0 = bagTerm(v0);
-    final Sequence bag1 = bagTerm(v1);
-    final Sequence listResult = listTerm(v);
-    final Sequence bagResult = bagTerm(v);
-    final Constraint.Action listAction =
-        (actualArg, term, consumer) -> consumer.accept(c, listResult);
-    final Constraint.Action bagAction =
-        (actualArg, term, consumer) -> consumer.accept(c, bagResult);
-    final PairList<Term, Constraint.Action> termActions = PairList.of();
-    termActions.add(argTerm(list0, list1), listAction);
-    termActions.add(argTerm(list0, bag1), bagAction);
-    termActions.add(argTerm(bag0, list1), bagAction);
-    termActions.add(argTerm(bag0, bag1), bagAction);
-    constraints.add(
-        unifier.constraint(toVariable(argTerm(arg0, arg1)), termActions));
   }
 
   private Sequence argTerm(Term... args) {
@@ -946,6 +960,7 @@ public class TypeResolver {
       PairList<Term, Term> argResults1 =
           copyOf(listTerm(p.v), listTerm(v2), bagTerm(p.v), bagTerm(v2));
       constraints.add(unifier.constraint(p.c, c2, argResults1));
+      isListOrBagMatchingInput(c2, v2, p.c, p.v);
       return Triple.of(env3, v2, c2);
     } else {
       fromSteps.add(((Ast.Compute) group).copy(aggregates));

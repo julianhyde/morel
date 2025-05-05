@@ -1084,6 +1084,10 @@ public class Core {
 
     Tuple(RecordLikeType type, ImmutableList<Exp> args) {
       super(Pos.ZERO, Op.TUPLE, type);
+      checkArgument(
+          !(type instanceof PrimitiveType) || type == PrimitiveType.UNIT,
+          "primitive type '%s' is not a tuple",
+          type);
       this.args = ImmutableList.copyOf(args);
     }
 
