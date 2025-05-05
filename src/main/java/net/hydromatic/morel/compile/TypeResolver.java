@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.String.format;
 import static java.lang.String.join;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
@@ -297,6 +298,19 @@ public class TypeResolver {
     return node;
   }
 
+  /**
+   * Deduces a {@code yield} expression's type.
+   *
+   * <p>Singleton records are treated specially. The type of {@code yield {x =
+   * y}} is not a record type but the type of {@code y}. The step has the same
+   * effect as {@code yield y}, except that it introduces {@code x} into the
+   * namespace.
+   */
+  private Ast.Exp deduceYieldType(
+      TypeEnv env, Ast.Exp node, boolean lastStep, Variable v) {
+    return deduceType(env, node, v);
+  }
+
   private Ast.Exp deduceType(TypeEnv env, Ast.Exp node, Variable v) {
     final List<Ast.Exp> args2;
     final Variable v2;
@@ -418,64 +432,7 @@ public class TypeResolver {
         //  [where filterExp: v5] [yield yieldExp: v4]): v" (v boolean)
         // "(forall exp: v50 as id: v60 [, exp: v51 as id: v61]...
         //   require requireExp: v21): v" (v boolean)
-        final Ast.Query query = (Ast.Query) node;
-        Variable v3 = unifier.variable();
-        TypeEnv env3 = env;
-        final Map<Ast.Id, Variable> fieldVars = new LinkedHashMap<>();
-        final List<Ast.FromStep> fromSteps = new ArrayList<>();
-        for (Ord<Ast.FromStep> step : Ord.zip(query.steps)) {
-          Pair<TypeEnv, Variable> p =
-              deduceStepType(env, step.e, v3, env3, fieldVars, fromSteps);
-          switch (step.e.op) {
-            case COMPUTE:
-            case INTO:
-            case REQUIRE:
-              if (step.e.op == Op.REQUIRE && query.op != Op.FORALL
-                  || step.e.op == Op.COMPUTE && query.op != Op.FROM
-                  || step.e.op == Op.INTO && query.op != Op.FROM) {
-                String message =
-                    String.format(
-                        "'%s' step must not occur in '%s'",
-                        step.e.op.lowerName(), query.op.lowerName());
-                throw new CompileException(message, false, step.e.pos);
-              }
-              if (step.i != query.steps.size() - 1) {
-                String message =
-                    String.format(
-                        "'%s' step must be last in '%s'",
-                        step.e.op.lowerName(), query.op.lowerName());
-                throw new CompileException(
-                    message, false, query.steps.get(step.i + 1).pos);
-              }
-              break;
-          }
-          env3 = p.left;
-          v3 = p.right;
-        }
-        if (query.op == Op.FORALL) {
-          AstNode step = query.steps.isEmpty() ? query : last(query.steps);
-          if (step.op != Op.REQUIRE) {
-            throw new CompileException(
-                "last step of 'forall' must be 'require'", false, step.pos);
-          }
-        }
-        final Ast.Exp yieldExp2;
-        if (query.implicitYieldExp != null) {
-          v3 = unifier.variable();
-          yieldExp2 = deduceType(env3, query.implicitYieldExp, v3);
-        } else {
-          requireNonNull(v3);
-          yieldExp2 = null;
-        }
-        final Ast.Query query2 = query.copy(fromSteps, yieldExp2);
-        return reg(
-            query2,
-            v,
-            node.op == Op.EXISTS
-                ? toTerm(PrimitiveType.BOOL)
-                : node.op == Op.FORALL
-                    ? toTerm(PrimitiveType.BOOL)
-                    : query.isCompute() || query.isInto() ? v3 : listTerm(v3));
+        return deduceQueryType(env, (Ast.Query) node, v);
 
       case ID:
         final Ast.Id id = (Ast.Id) node;
@@ -536,11 +493,73 @@ public class TypeResolver {
     }
   }
 
+  private Ast.Query deduceQueryType(TypeEnv env, Ast.Query query, Variable v) {
+    Variable v3 = unifier.variable();
+    TypeEnv env3 = env;
+    final Map<Ast.Id, Variable> fieldVars = new LinkedHashMap<>();
+    final List<Ast.FromStep> fromSteps = new ArrayList<>();
+    for (Ord<Ast.FromStep> step : Ord.zip(query.steps)) {
+      // Whether this is the last step. (The synthetic "yield" counts as a last
+      // step.)
+      final boolean lastStep = step.i == query.steps.size() - 1;
+      Pair<TypeEnv, Variable> p =
+          deduceStepType(env, step.e, v3, env3, lastStep, fieldVars, fromSteps);
+      switch (step.e.op) {
+        case COMPUTE:
+        case INTO:
+        case REQUIRE:
+          if (step.e.op == Op.REQUIRE && query.op != Op.FORALL
+              || step.e.op == Op.COMPUTE && query.op != Op.FROM
+              || step.e.op == Op.INTO && query.op != Op.FROM) {
+            String message =
+                format(
+                    "'%s' step must not occur in '%s'",
+                    step.e.op.lowerName(), query.op.lowerName());
+            throw new CompileException(message, false, step.e.pos);
+          }
+          if (!lastStep) {
+            String message =
+                format(
+                    "'%s' step must be last in '%s'",
+                    step.e.op.lowerName(), query.op.lowerName());
+            throw new CompileException(
+                message, false, query.steps.get(step.i + 1).pos);
+          }
+          break;
+      }
+      env3 = p.left;
+      v3 = p.right;
+    }
+    if (query.op == Op.FORALL) {
+      AstNode step = query.steps.isEmpty() ? query : last(query.steps);
+      if (step.op != Op.REQUIRE) {
+        throw new CompileException(
+            "last step of 'forall' must be 'require'", false, step.pos);
+      }
+    }
+    final Ast.Exp yieldExp2;
+    if (query.implicitYieldExp != null) {
+      v3 = unifier.variable();
+      yieldExp2 = deduceType(env3, query.implicitYieldExp, v3);
+    } else {
+      requireNonNull(v3);
+      yieldExp2 = null;
+    }
+    final Ast.Query query2 = query.copy(fromSteps, yieldExp2);
+    return reg(
+        query2,
+        v,
+        query.op == Op.EXISTS || query.op == Op.FORALL
+            ? toTerm(PrimitiveType.BOOL)
+            : query.isCompute() || query.isInto() ? v3 : listTerm(v3));
+  }
+
   private Pair<TypeEnv, Variable> deduceStepType(
       TypeEnv env,
       Ast.FromStep step,
       Variable v,
       final TypeEnv env2,
+      boolean lastStep,
       Map<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
     requireNonNull(v);
@@ -630,7 +649,8 @@ public class TypeResolver {
         final Ast.Yield yield = (Ast.Yield) step;
         final Variable v6 = unifier.variable();
         v = v6;
-        final Ast.Exp yieldExp2 = deduceType(env2, yield.exp, v6);
+        final Ast.Exp yieldExp2 =
+            deduceYieldType(env2, yield.exp, lastStep, v6);
         fromSteps.add(yield.copy(yieldExp2));
         if (yieldExp2.op == Op.RECORD
             && ((Ast.Record) yieldExp2).with == null) {
@@ -774,13 +794,13 @@ public class TypeResolver {
   private Variable fieldVar(Map<Ast.Id, Variable> fieldVars) {
     switch (fieldVars.size()) {
       case 0:
-        return equiv(unifier.variable(), toTerm(PrimitiveType.UNIT));
+        return toVariable(toTerm(PrimitiveType.UNIT));
       case 1:
         return Iterables.getOnlyElement(fieldVars.values());
       default:
         final TreeMap<String, Variable> map = new TreeMap<>();
         fieldVars.forEach((k, v) -> map.put(k.name, v));
-        return equiv(unifier.variable(), recordTerm(map));
+        return toVariable(recordTerm(map));
     }
   }
 
@@ -1467,6 +1487,14 @@ public class TypeResolver {
         env, ast.apply(ast.id(Pos.ZERO, call.op.opName), call.a), v);
   }
 
+  /** Converts a term to a variable. */
+  private Variable toVariable(Term term) {
+    if (term instanceof Variable) {
+      return (Variable) term;
+    }
+    return equiv(unifier.variable(), term);
+  }
+
   /** Declares that a term is equivalent to a variable. */
   private Variable equiv(Variable v, Term term) {
     if (!v.equals(term)) {
@@ -1549,19 +1577,15 @@ public class TypeResolver {
           argNameTypes.put(PROGRESSIVE_LABEL, PrimitiveType.UNIT);
         }
         @SuppressWarnings({"rawtypes", "unchecked"})
-        final NavigableSet<String> labelNames =
+        final NavigableSet<String> labels =
             (NavigableSet) argNameTypes.keySet();
         final String result;
-        if (labelNames.isEmpty()) {
+        if (labels.isEmpty()) {
           result = PrimitiveType.UNIT.name();
-        } else if (TypeSystem.areContiguousIntegers(labelNames)) {
+        } else if (TypeSystem.areContiguousIntegers(labels)) {
           result = TUPLE_TY_CON;
         } else {
-          final StringBuilder b = new StringBuilder(RECORD_TY_CON);
-          for (String label : labelNames) {
-            b.append(':').append(label);
-          }
-          result = b.toString();
+          result = recordLabel(labels);
         }
         final List<Term> args = toTerms(argNameTypes.values(), subst);
         return unifier.apply(result, args);
