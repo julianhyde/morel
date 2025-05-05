@@ -1576,6 +1576,124 @@ public class Core {
     }
   }
 
+  /** Base class of {@link Except}, {@link Intersect}, {@link Union}. */
+  public abstract static class SetStep extends FromStep {
+    public final boolean distinct;
+    public final ImmutableList<Exp> args;
+
+    SetStep(
+        Op op,
+        ImmutableList<Binding> bindings,
+        boolean distinct,
+        ImmutableList<Exp> args) {
+      super(op, bindings);
+      this.distinct = distinct;
+      this.args = requireNonNull(args, "args");
+    }
+
+    @Override
+    protected AstWriter unparse(
+        AstWriter w, From from, int ordinal, int left, int right) {
+      forEachIndexed(
+          args,
+          (arg, i) -> w.append(i == 0 ? op.padded : ", ").append(arg, 0, 0));
+      return w;
+    }
+
+    public abstract SetStep copy(
+        boolean distinct, List<Exp> args, List<Binding> bindings);
+  }
+
+  /** An {@code except} clause in a {@code from} expression. */
+  public static class Except extends SetStep {
+    Except(
+        ImmutableList<Binding> bindings,
+        boolean distinct,
+        ImmutableList<Exp> args) {
+      super(Op.EXCEPT, bindings, distinct, args);
+    }
+
+    @Override
+    public Except accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Except copy(
+        boolean distinct, List<Exp> args, List<Binding> bindings) {
+      return distinct == this.distinct
+              && args.equals(this.args)
+              && bindings.equals(this.bindings)
+          ? this
+          : core.except(bindings, distinct, args);
+    }
+  }
+
+  /** An {@code intersect} clause in a {@code from} expression. */
+  public static class Intersect extends SetStep {
+    Intersect(
+        ImmutableList<Binding> bindings,
+        boolean distinct,
+        ImmutableList<Exp> args) {
+      super(Op.INTERSECT, bindings, distinct, args);
+    }
+
+    @Override
+    public Intersect accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Intersect copy(
+        boolean distinct, List<Exp> args, List<Binding> bindings) {
+      return distinct == this.distinct
+              && args.equals(this.args)
+              && bindings.equals(this.bindings)
+          ? this
+          : core.intersect(bindings, distinct, args);
+    }
+  }
+
+  /** An {@code union} clause in a {@code from} expression. */
+  public static class Union extends SetStep {
+    Union(
+        ImmutableList<Binding> bindings,
+        boolean distinct,
+        ImmutableList<Exp> args) {
+      super(Op.UNION, bindings, distinct, args);
+    }
+
+    @Override
+    public Union accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Union copy(
+        boolean distinct, List<Exp> args, List<Binding> bindings) {
+      return distinct == this.distinct
+              && args.equals(this.args)
+              && bindings.equals(this.bindings)
+          ? this
+          : core.union(bindings, distinct, args);
+    }
+  }
+
   /** An {@code order} clause in a {@code from} expression. */
   public static class Order extends FromStep {
     public final ImmutableList<OrderItem> orderItems;

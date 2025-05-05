@@ -22,6 +22,7 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
+import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.transform;
 
 import com.google.common.collect.ImmutableList;
@@ -574,6 +575,30 @@ public enum CoreBuilder {
     return new Core.Take(ImmutableList.copyOf(bindings), exp);
   }
 
+  public Core.Except except(
+      List<Binding> bindings,
+      boolean distinct,
+      Iterable<? extends Core.Exp> args) {
+    return new Core.Except(
+        ImmutableList.copyOf(bindings), distinct, ImmutableList.copyOf(args));
+  }
+
+  public Core.Intersect intersect(
+      List<Binding> bindings,
+      boolean distinct,
+      Iterable<? extends Core.Exp> args) {
+    return new Core.Intersect(
+        ImmutableList.copyOf(bindings), distinct, ImmutableList.copyOf(args));
+  }
+
+  public Core.Union union(
+      List<Binding> bindings,
+      boolean distinct,
+      Iterable<? extends Core.Exp> args) {
+    return new Core.Union(
+        ImmutableList.copyOf(bindings), distinct, ImmutableList.copyOf(args));
+  }
+
   public Core.Yield yield_(List<Binding> bindings, Core.Exp exp) {
     return new Core.Yield(ImmutableList.copyOf(bindings), exp);
   }
@@ -701,10 +726,11 @@ public enum CoreBuilder {
         Map<String, ImmutableRangeSet> rangeSetMap =
             Extents.intersect((List) rangeSetMaps);
         Core.Exp exp =
-            core.extent(typeSystem, listType.elementType, rangeSetMap);
-        for (Core.Exp remainingExp : remainingExps) {
-          exp = core.intersect(typeSystem, exp, remainingExp);
-        }
+            core.listIntersect(
+                typeSystem,
+                plus(
+                    core.extent(typeSystem, listType.elementType, rangeSetMap),
+                    remainingExps));
         return Pair.of(exp, remainingExps);
     }
   }
@@ -738,10 +764,11 @@ public enum CoreBuilder {
         Map<String, ImmutableRangeSet> rangeSetMap =
             Extents.union((List) rangeSetMaps);
         Core.Exp exp =
-            core.extent(typeSystem, listType.elementType, rangeSetMap);
-        for (Core.Exp remainingExp : remainingExps) {
-          exp = core.union(typeSystem, exp, remainingExp);
-        }
+            core.listConcat(
+                typeSystem,
+                plus(
+                    core.extent(typeSystem, listType.elementType, rangeSetMap),
+                    remainingExps));
         return Pair.of(exp, remainingExps);
     }
   }
@@ -774,7 +801,7 @@ public enum CoreBuilder {
         if (!simplifiedArgs.equals(apply.arg)) {
           apply = apply.copy(apply.fn, simplifiedArgs);
         }
-        if (apply.isCallTo(BuiltIn.OP_UNION)) {
+        if (apply.isCallTo(BuiltIn.LIST_CONCAT)) {
           if (apply.args().stream()
               .allMatch(exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
             Pair<Core.Exp, List<Core.Exp>> pair =
@@ -784,7 +811,7 @@ public enum CoreBuilder {
             }
           }
         }
-        if (apply.isCallTo(BuiltIn.OP_INTERSECT)) {
+        if (apply.isCallTo(BuiltIn.LIST_INTERSECT)) {
           if (apply.args().stream()
               .allMatch(exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
             Pair<Core.Exp, List<Core.Exp>> pair =
@@ -940,34 +967,62 @@ public enum CoreBuilder {
         typeSystem, BuiltIn.RELATIONAL_EMPTY, PrimitiveType.BOOL, pos, a0);
   }
 
-  public Core.Exp union(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
-    return call(
-        typeSystem,
-        BuiltIn.OP_UNION,
-        ((ListType) a0.type).elementType,
-        Pos.ZERO,
-        a0,
-        a1);
+  /**
+   * Creates a list concatenation expression.
+   *
+   * <p>For example, {@code listConcat([1, 2, 3], [3, 4])} becomes {@code
+   * List.concat [[1, 2, 3], [3, 4]]}. Note that this has a single argument, and
+   * that argument is a call to {@link BuiltIn#Z_LIST}.
+   */
+  public Core.Exp listConcat(TypeSystem typeSystem, List<Core.Exp> args) {
+    switch (args.size()) {
+      case 0:
+        throw new IllegalArgumentException("union of nothing");
+      case 1:
+        return args.get(0);
+    }
+    final Type listType = args.get(0).type;
+    final ListType listListType = typeSystem.listType(listType);
+
+    // Make a call 'list (arg0, arg1, ...)'
+    final Core.Literal listFnLiteral =
+        functionLiteral(typeSystem, BuiltIn.Z_LIST);
+    Core.Tuple tuple = core.tuple(typeSystem, null, args);
+    Core.Apply arg = apply(Pos.ZERO, listListType, listFnLiteral, tuple);
+
+    // Make a call 'List.concat [arg0, arg1, ...]'
+    final Core.Literal concatFnLiteral =
+        functionLiteral(typeSystem, BuiltIn.LIST_CONCAT);
+    return apply(Pos.ZERO, listType, concatFnLiteral, arg);
   }
 
-  public Core.Exp union(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
-    return foldRight(
-        ImmutableList.copyOf(exps), (e1, e2) -> union(typeSystem, e1, e2));
-  }
+  /**
+   * Creates a list intersection expression.
+   *
+   * <p>For example, {@code intersect([1, 2], [3, 4])} becomes {@code
+   * List.intersect [[1, 2], [3, 4]]}. Note that this has a single argument, and
+   * that argument is a call to {@link BuiltIn#Z_LIST}.
+   */
+  public Core.Exp listIntersect(TypeSystem typeSystem, List<Core.Exp> args) {
+    switch (args.size()) {
+      case 0:
+        throw new IllegalArgumentException("intersection of nothing");
+      case 1:
+        return args.get(0);
+    }
+    final Type listType = args.get(0).type;
+    final ListType listListType = typeSystem.listType(listType);
 
-  public Core.Exp intersect(TypeSystem typeSystem, Core.Exp a0, Core.Exp a1) {
-    return call(
-        typeSystem,
-        BuiltIn.OP_INTERSECT,
-        ((ListType) a0.type).elementType,
-        Pos.ZERO,
-        a0,
-        a1);
-  }
+    // Make a call 'list (arg0, arg1, ...)'
+    final Core.Literal listFnLiteral =
+        functionLiteral(typeSystem, BuiltIn.Z_LIST);
+    Core.Tuple tuple = core.tuple(typeSystem, null, args);
+    Core.Apply arg = apply(Pos.ZERO, listListType, listFnLiteral, tuple);
 
-  public Core.Exp intersect(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
-    return foldRight(
-        ImmutableList.copyOf(exps), (e1, e2) -> intersect(typeSystem, e1, e2));
+    // Make a call 'List.concat [arg0, arg1, ...]'
+    final Core.Literal concatFnLiteral =
+        functionLiteral(typeSystem, BuiltIn.LIST_CONCAT);
+    return apply(Pos.ZERO, listType, concatFnLiteral, arg);
   }
 
   /**

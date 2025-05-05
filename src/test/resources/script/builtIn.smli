@@ -3242,19 +3242,19 @@ Sys.plan ();
 >   "apply2(fnValue except, apply2(fnValue except, tuple(constant(a), constant(b)), tuple(constant(a), constant(c))), tuple(constant(a)))"
 >   : string
 
-[1, 2] intersect [2] intersect [0, 2, 4];
+List.`intersect` [[1, 2], [2], [0, 2, 4]];
 > val it = [2] : int list
-[1, 2] intersect [];
+List.`intersect` [[1, 2], []];
 > val it = [] : int list
-[] intersect [1, 2];
+List.`intersect` [[], [1, 2]];
 > val it = [] : int list
-["a", "b", "a"] intersect ["b", "a"];
+List.`intersect` [["a", "b", "a"], ["b", "a"]];
 > val it = ["a","b","a"] : string list
-[(1, 2), (2, 3)] intersect [(2, 4), (1, 2)];
+List.`intersect` [[(1, 2), (2, 3)], [(2, 4), (1, 2)]];
 > val it = [(1,2)] : (int * int) list
-[1, 2, 3] intersect [2, 3, 4] except [1, 3, 5];
+List.`except` [List.`intersect` [[1, 2, 3], [2, 3, 4]], [1, 3, 5]];
 > val it = [2] : int list
-[1, 2, 3] except [1, 3, 5] intersect [2, 3, 4];
+List.`intersect` [List.`except` [[1, 2, 3], [1, 3, 5]], [2, 3, 4]];
 > val it = [1,2] : int list
 Sys.plan ();
 > val it =

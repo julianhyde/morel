@@ -345,6 +345,8 @@ public class Compiler {
     final Core.FromStep firstStep = steps.get(0);
     final Supplier<Codes.RowSink> nextFactory =
         createRowSinkFactory(cx, firstStep.bindings, skip(steps), elementType);
+    final ImmutableList<Code> inputCodes;
+    final ImmutableList<String> outNames;
     switch (firstStep.op) {
       case SCAN:
         final Core.Scan scan = (Core.Scan) firstStep;
@@ -368,6 +370,26 @@ public class Compiler {
         final Core.Take take = (Core.Take) firstStep;
         final Code takeCode = compile(cx, take.exp);
         return () -> Codes.takeRowSink(takeCode, nextFactory.get());
+
+      case EXCEPT:
+        final Core.Except except = (Core.Except) firstStep;
+        inputCodes = transformEager(except.args, arg -> compile(cx, arg));
+        return () ->
+            Codes.exceptRowSink(except.distinct, inputCodes, nextFactory.get());
+
+      case INTERSECT:
+        final Core.Intersect intersect = (Core.Intersect) firstStep;
+        inputCodes = transformEager(intersect.args, arg -> compile(cx, arg));
+        return () ->
+            Codes.exceptRowSink(
+                intersect.distinct, inputCodes, nextFactory.get());
+
+      case UNION:
+        final Core.Union union = (Core.Union) firstStep;
+        inputCodes = transformEager(union.args, arg -> compile(cx, arg));
+        outNames = bindingNames(bindings);
+        return () ->
+            Codes.unionRowSink(union.distinct, inputCodes, outNames, nextFactory.get());
 
       case YIELD:
         final Core.Yield yield = (Core.Yield) firstStep;
@@ -399,7 +421,9 @@ public class Compiler {
         final PairList<Code, Boolean> codes = PairList.of();
         order.orderItems.forEach(
             e -> codes.add(compile(cx, e.exp), e.direction == DESC));
-        return () -> Codes.orderRowSink(codes, bindings, nextFactory.get());
+        final ImmutablePairList<Code, Boolean> codes2 = codes.immutable();
+        outNames = bindingNames(bindings);
+        return () -> Codes.orderRowSink(codes2, outNames, nextFactory.get());
 
       case GROUP:
         final Core.Group group = (Core.Group) firstStep;
@@ -448,7 +472,7 @@ public class Compiler {
         final Code keyCode = Codes.tuple(groupCodes);
         final ImmutableList<Applicable> aggregateCodes =
             aggregateCodesB.build();
-        final ImmutableList<String> outNames = bindingNames(firstStep.bindings);
+        outNames = bindingNames(firstStep.bindings);
         final ImmutableList<String> keyNames =
             outNames.subList(0, group.groupExps.size());
         return () ->

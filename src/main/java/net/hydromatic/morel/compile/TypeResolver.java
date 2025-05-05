@@ -509,9 +509,6 @@ public class TypeResolver {
       case ELEM:
       case NOT_ELEM:
       case CONS:
-      case UNION:
-      case INTERSECT:
-      case EXCEPT:
         return infix(env, (Ast.InfixCall) node, v);
 
       case NEGATE:
@@ -611,6 +608,19 @@ public class TypeResolver {
         final Ast.Exp takeCount = deduceType(env2, take.exp, v12);
         equiv(v12, toTerm(PrimitiveType.INT));
         fromSteps.add(take.copy(takeCount));
+        return Pair.of(env2, v);
+
+      case UNION:
+      case EXCEPT:
+      case INTERSECT:
+        final Ast.SetStep setStep = (Ast.SetStep) step;
+        final List<Ast.Exp> args2 = new ArrayList<>();
+        final Unifier.Term listTerm = unifier.apply(LIST_TY_CON, v);
+        final Unifier.Variable v4 = toVariable(listTerm);
+        for (Ast.Exp arg : setStep.args) {
+          args2.add(deduceType(env2, arg, v4));
+        }
+        fromSteps.add(setStep.copy(setStep.distinct, args2));
         return Pair.of(env2, v);
 
       case YIELD:
@@ -1478,11 +1488,21 @@ public class TypeResolver {
         env, ast.apply(ast.id(Pos.ZERO, call.op.opName), call.a), v);
   }
 
+  /** Converts a term to a variable. */
+  private Unifier.Variable toVariable(Unifier.Term term) {
+    if (term instanceof Unifier.Variable) {
+      return (Unifier.Variable) term;
+    }
+    return equiv(term, unifier.variable());
+  }
+
+  /** Declares that a term is equivalent to a variable. */
   private Unifier.Variable equiv(Unifier.Term term, Unifier.Variable v) {
     terms.add(new TermVariable(term, v));
     return v;
   }
 
+  /** Declares that two terms are equivalent. */
   private void equiv(Unifier.Term term, Unifier.Term term2) {
     if (term2 instanceof Unifier.Variable) {
       equiv(term, (Unifier.Variable) term2);

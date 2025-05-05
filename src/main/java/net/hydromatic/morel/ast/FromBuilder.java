@@ -247,6 +247,18 @@ public class FromBuilder {
     return addStep(core.take(bindings, count));
   }
 
+  public FromBuilder except(boolean distinct, List<Core.Exp> args) {
+    return addStep(core.except(bindings, distinct, args));
+  }
+
+  public FromBuilder intersect(boolean distinct, List<Core.Exp> args) {
+    return addStep(core.intersect(bindings, distinct, args));
+  }
+
+  public FromBuilder union(boolean distinct, List<Core.Exp> args) {
+    return addStep(core.union(bindings, distinct, args));
+  }
+
   public FromBuilder distinct() {
     final ImmutableSortedMap.Builder<Core.IdPat, Core.Exp> groupExpsB =
         ImmutableSortedMap.naturalOrder();
@@ -419,8 +431,18 @@ public class FromBuilder {
   /** Calls the method to re-register a step. */
   private class StepHandler extends Visitor {
     @Override
+    protected void visit(Core.Except except) {
+      except(except.distinct, except.args);
+    }
+
+    @Override
     protected void visit(Core.Group group) {
       group(group.groupExps, group.aggregates);
+    }
+
+    @Override
+    protected void visit(Core.Intersect intersect) {
+      intersect(intersect.distinct, intersect.args);
     }
 
     @Override
@@ -446,6 +468,11 @@ public class FromBuilder {
     @Override
     protected void visit(Core.Take take) {
       take(take.exp);
+    }
+
+    @Override
+    protected void visit(Core.Union union) {
+      union(union.distinct, union.args);
     }
 
     @Override

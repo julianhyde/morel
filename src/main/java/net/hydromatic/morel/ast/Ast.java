@@ -1945,7 +1945,7 @@ public class Ast {
     }
   }
 
-  /** A {@code distinct} clause in a {@code from} expression. */
+  /** A {@code distinct} step in a {@code from} expression. */
   public static class Distinct extends FromStep {
     Distinct(Pos pos) {
       super(pos, Op.DISTINCT);
@@ -1967,7 +1967,123 @@ public class Ast {
     }
   }
 
-  /** A {@code where} clause in a {@code from} expression. */
+  /**
+   * Base class for a step that is a set operation ({@code union}, {@code
+   * intersect}, {@code except}).
+   */
+  public abstract static class SetStep extends FromStep {
+    public final ImmutableList<Exp> args;
+    public final boolean distinct;
+
+    SetStep(Pos pos, Op op, boolean distinct, ImmutableList<Exp> args) {
+      super(pos, op);
+      this.distinct = distinct;
+      checkArgument(op == Op.UNION || op == Op.INTERSECT || op == Op.EXCEPT);
+      checkArgument(!args.isEmpty());
+      this.args = args;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(op, distinct, args);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj == this
+          || obj instanceof SetStep
+              && this.op == ((SetStep) obj).op
+              && this.distinct == ((SetStep) obj).distinct
+              && this.args.equals(((SetStep) obj).args);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      forEachIndexed(
+          args,
+          (exp, i) ->
+              w.append(i == 0 ? op.padded : ", ")
+                  .append(distinct ? "distinct " : "")
+                  .append(exp, op.right, op.left));
+      return w;
+    }
+
+    public abstract SetStep copy(boolean distinct, List<Exp> args);
+  }
+
+  /** An {@code except} step in a {@code from} expression. */
+  public static class Except extends SetStep {
+    Except(Pos pos, boolean distinct, ImmutableList<Exp> args) {
+      super(pos, Op.EXCEPT, distinct, args);
+    }
+
+    @Override
+    public AstNode accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Except copy(boolean distinct, List<Exp> args) {
+      return this.distinct && distinct && this.args.equals(args)
+          ? this
+          : ast.except(pos, distinct, args);
+    }
+  }
+
+  /** An {@code intersect} step in a {@code from} expression. */
+  public static class Intersect extends SetStep {
+    Intersect(Pos pos, boolean distinct, ImmutableList<Exp> args) {
+      super(pos, Op.INTERSECT, distinct, args);
+    }
+
+    @Override
+    public AstNode accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Intersect copy(boolean distinct, List<Exp> args) {
+      return this.distinct && distinct && this.args.equals(args)
+          ? this
+          : ast.intersect(pos, distinct, args);
+    }
+  }
+
+  /** A {@code union} step in a {@code from} expression. */
+  public static class Union extends SetStep {
+    Union(Pos pos, boolean distinct, ImmutableList<Exp> args) {
+      super(pos, Op.UNION, distinct, args);
+    }
+
+    @Override
+    public AstNode accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Union copy(boolean distinct, List<Exp> args) {
+      return this.distinct && distinct && this.args.equals(args)
+          ? this
+          : ast.union(pos, distinct, args);
+    }
+  }
+
+  /** A {@code where} step in a {@code from} expression. */
   public static class Where extends FromStep {
     public final Exp exp;
 
@@ -1996,7 +2112,7 @@ public class Ast {
     }
   }
 
-  /** A {@code require} clause in a {@code forall} expression. */
+  /** A {@code require} step in a {@code forall} expression. */
   public static class Require extends FromStep {
     public final Exp exp;
 
@@ -2025,7 +2141,7 @@ public class Ast {
     }
   }
 
-  /** A {@code skip} clause in a {@code from} expression. */
+  /** A {@code skip} step in a {@code from} expression. */
   public static class Skip extends FromStep {
     public final Exp exp;
 
@@ -2054,7 +2170,7 @@ public class Ast {
     }
   }
 
-  /** A {@code take} clause in a {@code from} expression. */
+  /** A {@code take} step in a {@code from} expression. */
   public static class Take extends FromStep {
     public final Exp exp;
 
@@ -2083,7 +2199,7 @@ public class Ast {
     }
   }
 
-  /** A {@code yield} clause in a {@code from} expression. */
+  /** A {@code yield} step in a {@code from} expression. */
   public static class Yield extends FromStep {
     public final Exp exp;
 
@@ -2112,7 +2228,7 @@ public class Ast {
     }
   }
 
-  /** An {@code into} clause in a {@code from} expression. */
+  /** An {@code into} step in a {@code from} expression. */
   public static class Into extends FromStep {
     public final Exp exp;
 
@@ -2141,7 +2257,7 @@ public class Ast {
     }
   }
 
-  /** An {@code through} clause in a {@code from} expression. */
+  /** An {@code through} step in a {@code from} expression. */
   public static class Through extends FromStep {
     public final Pat pat;
     public final Exp exp;
@@ -2177,7 +2293,7 @@ public class Ast {
     }
   }
 
-  /** An {@code order} clause in a {@code from} expression. */
+  /** An {@code order} step in a {@code from} expression. */
   public static class Order extends FromStep {
     public final ImmutableList<OrderItem> orderItems;
 
@@ -2246,7 +2362,7 @@ public class Ast {
     DESC
   }
 
-  /** A {@code group} clause in a {@code from} expression. */
+  /** A {@code group} step in a {@code from} expression. */
   public static class Group extends FromStep {
     public final ImmutablePairList<Id, Exp> groupExps;
     public final ImmutableList<Aggregate> aggregates;
@@ -2300,7 +2416,7 @@ public class Ast {
   }
 
   /**
-   * A {@code compute} clause in a {@code from} expression.
+   * A {@code compute} step in a {@code from} expression.
    *
    * <p>Because {@code compute} and {@code group} are structurally similar, this
    * is a sub-class of {@link Group}, with an empty list of group keys. But
