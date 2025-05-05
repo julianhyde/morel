@@ -181,7 +181,7 @@ public class TypeResolver {
         final Type type =
             typeMap.termToType(typeMap.substitution.resultMap.get(x.getKey()));
         if (type instanceof TypeVar) {
-          equiv(toTerm(x.getValue()), x.getKey());
+          equiv(x.getKey(), toTerm(x.getValue()));
           continue tryAgain;
         }
       }
@@ -276,13 +276,24 @@ public class TypeResolver {
         });
   }
 
-  private <E extends AstNode> E reg(E node, Variable variable, Term term) {
+  /** Registers that an AST node maps to a type term. */
+  private <E extends AstNode> E reg(E node, Term term) {
     requireNonNull(node);
     requireNonNull(term);
     map.put(node, term);
-    if (variable != null) {
-      equiv(term, variable);
-    }
+    return node;
+  }
+
+  /**
+   * Registers that an AST node maps to a type term and is equivalent to a
+   * variable.
+   */
+  private <E extends AstNode> E reg(E node, Variable variable, Term term) {
+    requireNonNull(node);
+    requireNonNull(variable);
+    requireNonNull(term);
+    equiv(variable, term);
+    map.put(node, term);
     return node;
   }
 
@@ -373,7 +384,7 @@ public class TypeResolver {
         }
         final Ast.Exp e2 = deduceType(env2, let.exp, v);
         final Ast.Let let2 = let.copy(decls, e2);
-        return reg(let2, null, v);
+        return reg(let2, v);
 
       case RECORD_SELECTOR:
         final Ast.RecordSelector recordSelector = (Ast.RecordSelector) node;
@@ -393,7 +404,7 @@ public class TypeResolver {
         final Ast.Exp ifTrue2 = deduceType(env, if_.ifTrue, v);
         final Ast.Exp ifFalse2 = deduceType(env, if_.ifFalse, v);
         final Ast.If if2 = if_.copy(condition2, ifTrue2, ifFalse2);
-        return reg(if2, null, v);
+        return reg(if2, v);
 
       case CASE:
         return deduceCaseType(env, (Ast.Case) node, v);
@@ -490,7 +501,7 @@ public class TypeResolver {
               deduceMatchType(env, match, new HashMap<>(), v, resultVariable));
         }
         final Ast.Fn fn2b = fn.copy(matchList);
-        return reg(fn2b, null, v);
+        return reg(fn2b, v);
 
       case APPLY:
         return deduceApplyType(env, (Ast.Apply) node, v);
@@ -660,7 +671,7 @@ public class TypeResolver {
           final Ast.Exp exp = groupExp.getValue();
           final Variable v7 = unifier.variable();
           final Ast.Exp exp2 = deduceType(env2, exp, v7);
-          reg(id, null, v7);
+          reg(id, v7);
           env3 = env3.bind(id.name, v7);
           fieldVars.put(id, v7);
           groupExps.add(id, exp2);
@@ -669,7 +680,7 @@ public class TypeResolver {
         for (Ast.Aggregate aggregate : group.aggregates) {
           final Ast.Id id = aggregate.id;
           final Variable v8 = unifier.variable();
-          reg(id, null, v8);
+          reg(id, v8);
           final Variable v9 = unifier.variable();
           final Ast.Exp aggregateFn2 =
               deduceType(env2, aggregate.aggregate, v9);
@@ -682,16 +693,16 @@ public class TypeResolver {
             v10 = unifier.variable();
             arg2 = deduceType(env2, aggregate.argument, v10);
           }
-          reg(aggregate.aggregate, null, v9);
+          reg(aggregate.aggregate, v9);
           equiv(
-              unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, v10), v8),
-              v9);
+              v9,
+              unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, v10), v8));
           env3 = env3.bind(id.name, v8);
           fieldVars.put(id, v8);
           final Ast.Aggregate aggregate2 =
               aggregate.copy(aggregateFn2, arg2, aggregate.id);
           aggregates.add(aggregate2);
-          reg(aggregate2, null, v8);
+          reg(aggregate2, v8);
         }
         fromSteps.add(
             step.op == Op.GROUP
@@ -708,7 +719,7 @@ public class TypeResolver {
         final Variable v14 = unifier.variable();
         final Ast.Exp intoExp = deduceType(env2, into.exp, v14);
         equiv(
-            unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, v), v13), v14);
+            v14, unifier.apply(FN_TY_CON, unifier.apply(LIST_TY_CON, v), v13));
         fromSteps.add(into.copy(intoExp));
         return Pair.of(EmptyTypeEnv.INSTANCE, v13);
 
@@ -726,14 +737,14 @@ public class TypeResolver {
         final Variable v18 = unifier.variable();
         final Variable v19 = unifier.variable();
         final Variable v20 = unifier.variable();
-        equiv(unifier.apply(LIST_TY_CON, v), v20);
+        equiv(v20, unifier.apply(LIST_TY_CON, v));
 
         final Map<Ast.IdPat, Term> termMap = new HashMap<>();
         final Ast.Pat throughPat =
             deducePatType(env, through.pat, termMap, null, v18);
         final Ast.Exp throughExp = deduceType(env2, through.exp, v17);
-        equiv(unifier.apply(LIST_TY_CON, v18), v19);
-        equiv(unifier.apply(FN_TY_CON, v20, v19), v17);
+        equiv(v19, unifier.apply(LIST_TY_CON, v18));
+        equiv(v17, unifier.apply(FN_TY_CON, v20, v19));
         fromSteps.add(through.copy(throughPat, throughExp));
         TypeEnv env5 = env;
         fieldVars.clear();
@@ -767,13 +778,13 @@ public class TypeResolver {
   private Variable fieldVar(Map<Ast.Id, Variable> fieldVars) {
     switch (fieldVars.size()) {
       case 0:
-        return equiv(toTerm(PrimitiveType.UNIT), unifier.variable());
+        return equiv(unifier.variable(), toTerm(PrimitiveType.UNIT));
       case 1:
         return Iterables.getOnlyElement(fieldVars.values());
       default:
         final TreeMap<String, Variable> map = new TreeMap<>();
         fieldVars.forEach((k, v) -> map.put(k.name, v));
-        return equiv(record(map), unifier.variable());
+        return equiv(unifier.variable(), record(map));
     }
   }
 
@@ -803,7 +814,7 @@ public class TypeResolver {
   private Ast.Apply deduceApplyType(TypeEnv env, Ast.Apply apply, Variable v) {
     final Variable vFn = unifier.variable();
     final Variable vArg = unifier.variable();
-    equiv(unifier.apply(FN_TY_CON, vArg, v), vFn);
+    equiv(vFn, unifier.apply(FN_TY_CON, vArg, v));
     final Ast.Exp arg2;
     if (apply.arg instanceof Ast.RecordSelector) {
       // node is "f #field" and has type "v"
@@ -835,7 +846,7 @@ public class TypeResolver {
         builtIn.prefer(t -> preferredTypes.add(v, t));
       }
     }
-    return reg(apply.copy(fn2, arg2), null, v);
+    return reg(apply.copy(fn2, arg2), v);
   }
 
   private Ast.RecordSelector deduceRecordSelectorType(
@@ -932,7 +943,7 @@ public class TypeResolver {
     }
     final List<Ast.Match> matchList2 =
         deduceMatchListType(env, case_.matchList, labelNames, v2, v);
-    return reg(case_.copy(e2b, matchList2), null, v);
+    return reg(case_.copy(e2b, matchList2), v);
   }
 
   private AstNode deduceValBindType(
@@ -1305,13 +1316,13 @@ public class TypeResolver {
         // fall through
 
       case WILDCARD_PAT:
-        return reg(pat, null, v);
+        return reg(pat, v);
 
       case AS_PAT:
         final Ast.AsPat asPat = (Ast.AsPat) pat;
         termMap.put(asPat.id, v);
         deducePatType(env, asPat.pat, termMap, null, v);
-        return reg(pat, null, v);
+        return reg(pat, v);
 
       case ANNOTATED_PAT:
         final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) pat;
@@ -1362,7 +1373,7 @@ public class TypeResolver {
           return reg(recordPat2, v, record);
         }
         final Variable v2 = unifier.variable();
-        equiv(record, v2);
+        equiv(v2, record);
         actionMap.put(
             v,
             (v3, t, substitution, termPairs) -> {
@@ -1388,7 +1399,7 @@ public class TypeResolver {
                 }
               }
             });
-        return reg(recordPat2, null, record);
+        return reg(recordPat2, record);
 
       case CON_PAT:
         final Ast.ConPat conPat = (Ast.ConPat) pat;
@@ -1475,20 +1486,20 @@ public class TypeResolver {
         env, ast.apply(ast.id(Pos.ZERO, call.op.opName), call.a), v);
   }
 
-  private Variable equiv(Term term, Variable v) {
+  private Variable equiv(Variable v, Term term) {
     terms.add(new TermVariable(term, v));
     return v;
   }
 
   private void equiv(Term term, Term term2) {
     if (term2 instanceof Variable) {
-      equiv(term, (Variable) term2);
+      equiv((Variable) term2, term);
     } else if (term instanceof Variable) {
-      equiv(term2, (Variable) term);
+      equiv((Variable) term, term2);
     } else {
       final Variable variable = unifier.variable();
-      equiv(term, variable);
-      equiv(term2, variable);
+      equiv(variable, term);
+      equiv(variable, term2);
     }
   }
 
