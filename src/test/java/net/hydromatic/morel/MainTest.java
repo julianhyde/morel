@@ -2415,12 +2415,13 @@ public class MainTest {
         .assertType("(bool * int) list");
     ml("from a in [1], b in [true] yield (b)").assertType("bool list");
     ml("from a in [1], b in [true] yield {b,a} yield a").assertType("int list");
-    String value =
-        "'yield' step that is not last in 'from' must be a record "
-            + "expression";
-    //    ml("from a in [1], b in [true] yield (b,a) where b")
-    //        .assertType("{a:int, b:bool} list");
-    mlE("from a in [1], b in [true] yield (b,a) where $c$")
+    final String message =
+        "'yield' step that is not last in 'from' must be a record expression";
+    mlE("from a in [1], b in [true] yield $(b,a)$ where b")
+        .assertTypeThrows(throwsA(CompileException.class, is(message)));
+    ml("from a in [1], b in [true] yield {b,a} where b")
+        .assertType("{a:int, b:bool} list");
+    mlE("from a in [1], b in [true] yield {b,a} where $c$")
         .assertCompileException(
             pos ->
                 throwsA(
@@ -2432,7 +2433,9 @@ public class MainTest {
         .assertEval(is(list(list(1, true))));
     ml("from d in [{a=1,b=true}], i in [2] yield i").assertType("int list");
     // Note that 'd' has record type but is not a record expression
-    mlE("from d in [{a=1,b=true}], i in [2] yield d yield $a$")
+    ml("from d in [{a=1,b=true}], i in [2] yield {d} where true")
+        .assertType("{a:int, b:bool} list");
+    mlE("from d in [{a=1,b=true}], i in [2] yield {d} yield $a$")
         .assertCompileException(
             pos ->
                 throwsA(
@@ -2441,8 +2444,8 @@ public class MainTest {
                     pos));
     ml("from d in [{a=1,b=true}], i in [2] yield {d.a,d.b} yield a")
         .assertType("int list");
-    //    ml("from d in [{a=1,b=true}], i in [2] yield d where true")
-    //        .assertType("{d:{a:int, b:bool}, i:int} list");
+    ml("from d in [{a=1,b=true}], i in [2] yield {d} where true")
+        .assertType("{d:{a:int, b:bool}, i:int} list");
     ml("from d in [{a=1,b=true}], i in [2] yield i yield 3")
         .assertType("int list");
     ml("from d in [{a=1,b=true}], i in [2] yield d")
@@ -2510,6 +2513,20 @@ public class MainTest {
                     CompileException.class,
                     "last step of 'forall' must be 'require'",
                     pos));
+
+    // let
+    ml("let\n"
+            + "  val records = from r in bag [1,2]\n"
+            + "in\n"
+            + "  from r2 in records\n"
+            + "end")
+        .assertType("int bag");
+    ml("let\n"
+            + "  val records = from r in [{i=1,j=2}]\n"
+            + "in\n"
+            + "  from r2 in records\n"
+            + "end")
+        .assertType("{i:int, j:int} list");
 
     // "map String.size" has type "string list -> int list",
     // and therefore the type of "j" is "int"
