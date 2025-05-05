@@ -276,9 +276,9 @@ public class CalciteCompiler extends Compiler {
                 }
                 return true;
 
-              case OP_UNION:
-              case OP_EXCEPT:
-              case OP_INTERSECT:
+              case LIST_CONCAT:
+              case LIST_EXCEPT:
+              case LIST_INTERSECT:
                 // For example, '[1, 2, 3] union (from scott.depts yield
                 // deptno)'
                 final Core.Tuple tuple = (Core.Tuple) apply.arg;
@@ -289,13 +289,13 @@ public class CalciteCompiler extends Compiler {
                 }
                 harmonizeRowTypes(cx.relBuilder, tuple.args.size());
                 switch (builtIn) {
-                  case OP_UNION:
+                  case LIST_CONCAT:
                     cx.relBuilder.union(true, tuple.args.size());
                     return true;
-                  case OP_EXCEPT:
+                  case LIST_EXCEPT:
                     cx.relBuilder.minus(false, tuple.args.size());
                     return true;
-                  case OP_INTERSECT:
+                  case LIST_INTERSECT:
                     cx.relBuilder.intersect(false, tuple.args.size());
                     return true;
                   default:
