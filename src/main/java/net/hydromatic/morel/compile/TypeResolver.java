@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 import static java.lang.String.join;
 import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.joining;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.ImmutablePairList.copyOf;
@@ -36,6 +37,7 @@ import static org.apache.calcite.util.Util.firstDuplicate;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import java.util.ArrayDeque;
@@ -374,6 +376,86 @@ public class TypeResolver {
     constraints.add(unifier.constraint(arg, result, argResults));
   }
 
+  /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
+  private void mayBeBagOrList(Variable c, Variable v) {
+    final Sequence list = listTerm(v);
+    final Constraint.Action listAction =
+        (actualArg, term, consumer) -> consumer.accept(c, list);
+    final Sequence bag = bagTerm(v);
+    final Constraint.Action bagAction =
+        (actualArg, term, consumer) -> consumer.accept(c, bag);
+    constraints.add(
+        unifier.constraint(c, copyOf(list, listAction, bag, bagAction)));
+  }
+
+  /**
+   * Adds a constraint that {@code argC} is a bag or list of {@code argV}; if it
+   * is a list then {@code c} is a list of {@code v}, otherwise {@code c} is a
+   * bag of {@code v}.
+   */
+  private void isListOrBagMatchingInput(
+      Variable c, Variable v, Variable argC, Variable argV) {
+    PairList<Term, Term> argResults =
+        copyOf(listTerm(argV), listTerm(v), bagTerm(argV), bagTerm(v));
+    constraints.add(unifier.constraint(argC, c, argResults));
+  }
+
+  /**
+   * Adds a constraint that {@code arg0} is a bag or list (of something), and
+   * {@code arg1} is a bag or list (of something); if both are lists then {@code
+   * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
+   */
+  private void isListIfBothAreLists(
+      Term arg0, Term arg1, Variable c, Variable v) {
+    final Variable v0 = unifier.variable();
+    final Variable v1 = unifier.variable();
+    final Sequence list0 = listTerm(v0);
+    final Sequence list1 = listTerm(v1);
+    final Sequence bag0 = bagTerm(v0);
+    final Sequence bag1 = bagTerm(v1);
+    final Sequence listResult = listTerm(v);
+    final Sequence bagResult = bagTerm(v);
+    final Constraint.Action listAction =
+        (actualArg, term, consumer) -> consumer.accept(c, listResult);
+    final Constraint.Action bagAction =
+        (actualArg, term, consumer) -> consumer.accept(c, bagResult);
+    final PairList<Term, Constraint.Action> termActions = PairList.of();
+    termActions.add(argTerm(list0, list1), listAction);
+    termActions.add(argTerm(list0, bag1), bagAction);
+    termActions.add(argTerm(bag0, list1), bagAction);
+    termActions.add(argTerm(bag0, bag1), bagAction);
+    constraints.add(
+        unifier.constraint(toVariable(argTerm(arg0, arg1)), termActions));
+  }
+
+  /**
+   * Deduces a {@code yield} expression's type.
+   *
+   * <p>Singleton records are treated specially. The type of {@code yield {x =
+   * y}} is not a record type but the type of {@code y}. The step has the same
+   * effect as {@code yield y}, except that it introduces {@code x} into the
+   * namespace.
+   */
+  private Ast.Exp deduceYieldType(
+      TypeEnv env, Ast.Exp node, boolean lastStep, Variable v) {
+    if (node.op == Op.RECORD) {
+      final Ast.Record record = (Ast.Record) node;
+      if (record.args.size() == 1) {
+        Map.Entry<String, Ast.Exp> arg =
+            record.args.entrySet().iterator().next();
+        Ast.Exp node2 = deduceType(env, arg.getValue(), v);
+        if ("nonEmpty".isEmpty()) {
+          return reg(node2, v);
+        } else {
+          Ast.Record record2 =
+              record.copy(ImmutableMap.of(arg.getKey(), node2));
+          return reg(record2, v);
+        }
+      }
+    }
+    return deduceType(env, node, v);
+  }
+
   private Ast.Exp deduceType(TypeEnv env, Ast.Exp node, Variable v) {
     final List<Ast.Exp> args2;
     final Variable v2;
@@ -558,8 +640,13 @@ public class TypeResolver {
     final Variable v11 = unifier.variable();
     final Sequence c11 = listTerm(v11);
     Triple p = Triple.of(env, v11, toVariable(c11));
+    Triple prevP = p;
     for (Ord<Ast.FromStep> step : Ord.zip(extendedSteps)) {
-      p = deduceStepType(env, step.e, p, fieldVars, fromSteps);
+      // Whether this is the last step. (The synthetic "yield" counts as a last
+      // step.)
+      final boolean lastStep = step.i == extendedSteps.size() - 1;
+      prevP = p;
+      p = deduceStepType(env, step.e, p, lastStep, fieldVars, fromSteps);
       switch (step.e.op) {
         case COMPUTE:
         case INTO:
@@ -573,7 +660,7 @@ public class TypeResolver {
                     step.e.op.lowerName(), query.op.lowerName());
             throw new CompileException(message, false, step.e.pos);
           }
-          if (step.i != query.steps.size() - 1) {
+          if (!lastStep) {
             String message =
                 format(
                     "'%s' step must be last in '%s'",
@@ -582,6 +669,17 @@ public class TypeResolver {
                 message, false, query.steps.get(step.i + 1).pos);
           }
           break;
+
+        case YIELD:
+          Ast.Yield yield = (Ast.Yield) step.e;
+          if (yield.exp.op != Op.RECORD
+              && !lastStep
+              && last(extendedSteps).op != Op.INTO) {
+            String message =
+                "'yield' step that is not last in 'from'"
+                    + " must be a record expression";
+            throw new CompileException(message, false, yield.exp.pos);
+          }
       }
     }
     if (query.op == Op.FORALL) {
@@ -597,6 +695,8 @@ public class TypeResolver {
     if (query.implicitYieldExp != null) {
       Ast.FromStep yield = fromSteps.remove(fromSteps.size() - 1);
       yieldExp2 = ((Ast.Yield) yield).exp;
+      equiv(prevP.v, p.v);
+      equiv(prevP.c, p.c);
     } else {
       yieldExp2 = null;
     }
@@ -614,6 +714,7 @@ public class TypeResolver {
       TypeEnv env,
       Ast.FromStep step,
       Triple p,
+      boolean lastStep,
       Map<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
     switch (step.op) {
@@ -667,25 +768,32 @@ public class TypeResolver {
       case YIELD:
         final Ast.Yield yield = (Ast.Yield) step;
         final Variable v6 = unifier.variable();
-        final Ast.Exp yieldExp2 = deduceType(p.env, yield.exp, v6);
+        final Ast.Exp yieldExp2 =
+            deduceYieldType(p.env, yield.exp, lastStep, v6);
         fromSteps.add(yield.copy(yieldExp2));
 
-        // Output is ordered iff input is ordered. Just like an overloaded map:
+        // Output is ordered iff input is ordered. Yield behaves just like a
+        // 'map' function with these overloaded forms:
         //   map: 'a -> 'b -> 'a list -> 'b list
         //   map: 'a -> 'b -> 'a bag -> 'b bag
         final Variable c6 = unifier.variable();
-        PairList<Term, Term> argResults =
-            copyOf(listTerm(p.v), listTerm(v6), bagTerm(p.v), bagTerm(v6));
-        constraints.add(unifier.constraint(p.c, c6, argResults));
+        isListOrBagMatchingInput(c6, v6, p.c, p.v);
 
         if (yieldExp2.op == Op.RECORD) {
-          final Sequence sequence = (Sequence) map.get(yieldExp2);
           final Ast.Record record2 = (Ast.Record) yieldExp2;
           final TypeEnv[] envs = {env};
+          final List<Term> terms;
+          Term term = map.get(yieldExp2);
+          if (term instanceof Sequence) {
+            final Sequence sequence = (Sequence) term;
+            terms = sequence.terms;
+          } else {
+            terms = ImmutableList.of(v6);
+          }
           forEach(
               record2.args.keySet(),
-              sequence.terms,
-              (name, term) -> envs[0] = envs[0].bind(name, term));
+              terms,
+              (name, term2) -> envs[0] = envs[0].bind(name, term2));
           return Triple.of(envs[0], v6, c6, p.ordered);
         } else {
           return Triple.of(p.env, v6, c6, p.ordered);
@@ -792,7 +900,7 @@ public class TypeResolver {
       scanExp3 = deduceType(p.env, scan.exp, c0);
       reg(scan.exp, c0);
       containerize = CollectionType.BOTH; // retain source collection type
-      mayBeBagOrList(v16, c0);
+      mayBeBagOrList(c0, v16);
     }
     final Ast.Pat pat2 = deducePatType(p.env, scan.pat, termMap, null, v16);
     final TypeEnvHolder typeEnvs = new TypeEnvHolder(p.env);
@@ -813,8 +921,13 @@ public class TypeResolver {
         c = toVariable(listTerm(v));
         break;
       default:
-        c = unifier.variable();
-        isListIfBothAreLists(p.c, c0, c, v);
+        if (fromSteps.isEmpty()) {
+          mayBeBagOrList(c0, v);
+          c = c0;
+        } else {
+          c = unifier.variable();
+          isListIfBothAreLists(p.c, c0, c, v);
+        }
     }
 
     final Ast.Exp scanCondition2;
@@ -827,46 +940,6 @@ public class TypeResolver {
     }
     fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
     return Triple.of(env4, v, c);
-  }
-
-  /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
-  private void mayBeBagOrList(Variable v, Variable c) {
-    final Sequence list = listTerm(v);
-    final Constraint.Action listAction =
-        (actualArg, term, consumer) -> consumer.accept(c, list);
-    final Sequence bag = bagTerm(v);
-    final Constraint.Action bagAction =
-        (actualArg, term, consumer) -> consumer.accept(c, bag);
-    constraints.add(
-        unifier.constraint(c, copyOf(list, listAction, bag, bagAction)));
-  }
-
-  /**
-   * Adds a constraint that {@code arg0} is a bag or list (of something), and
-   * {@code arg1} is a bag or list (of something); if both are lists then {@code
-   * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
-   */
-  private void isListIfBothAreLists(
-      Term arg0, Term arg1, Variable c, Variable v) {
-    final Variable v0 = unifier.variable();
-    final Variable v1 = unifier.variable();
-    final Sequence list0 = listTerm(v0);
-    final Sequence list1 = listTerm(v1);
-    final Sequence bag0 = bagTerm(v0);
-    final Sequence bag1 = bagTerm(v1);
-    final Sequence listResult = listTerm(v);
-    final Sequence bagResult = bagTerm(v);
-    final Constraint.Action listAction =
-        (actualArg, term, consumer) -> consumer.accept(c, listResult);
-    final Constraint.Action bagAction =
-        (actualArg, term, consumer) -> consumer.accept(c, bagResult);
-    final PairList<Term, Constraint.Action> termActions = PairList.of();
-    termActions.add(argTerm(list0, list1), listAction);
-    termActions.add(argTerm(list0, bag1), bagAction);
-    termActions.add(argTerm(bag0, list1), bagAction);
-    termActions.add(argTerm(bag0, bag1), bagAction);
-    constraints.add(
-        unifier.constraint(toVariable(argTerm(arg0, arg1)), termActions));
   }
 
   private Sequence argTerm(Term... args) {
@@ -925,9 +998,7 @@ public class TypeResolver {
       // Output is ordered iff input is ordered.
       final Variable c2 = unifier.variable();
       final Variable v2 = fieldVar(fieldVars);
-      PairList<Term, Term> argResults1 =
-          copyOf(listTerm(p.v), listTerm(v2), bagTerm(p.v), bagTerm(v2));
-      constraints.add(unifier.constraint(p.c, c2, argResults1));
+      isListOrBagMatchingInput(c2, v2, p.c, p.v);
       return Triple.of(env3, v2, c2);
     } else {
       fromSteps.add(((Ast.Compute) group).copy(aggregates));
@@ -1074,6 +1145,7 @@ public class TypeResolver {
     return recordSelector;
   }
 
+  /** Inverse of {@link #recordLabel(NavigableSet)}. */
   static List<String> fieldList(final Sequence sequence) {
     if (sequence.operator.equals(RECORD_TY_CON)) {
       return ImmutableList.of();
@@ -1086,6 +1158,11 @@ public class TypeResolver {
     } else {
       return null;
     }
+  }
+
+  /** Inverse of {@link #fieldList(Sequence)}. */
+  static String recordLabel(NavigableSet<String> labels) {
+    return labels.stream().collect(joining(":", RECORD_TY_CON + ":", ""));
   }
 
   private Ast.Match deduceMatchType(
@@ -1751,15 +1828,11 @@ public class TypeResolver {
   }
 
   private Term recordTerm(NavigableMap<String, ? extends Term> labelTypes) {
-    if (TypeSystem.areContiguousIntegers(labelTypes.navigableKeySet())
-        && labelTypes.size() != 1) {
+    final NavigableSet<String> labels = labelTypes.navigableKeySet();
+    if (TypeSystem.areContiguousIntegers(labels) && labelTypes.size() != 1) {
       return tupleTerm(labelTypes.values());
     }
-    final StringBuilder b = new StringBuilder(RECORD_TY_CON);
-    for (String label : labelTypes.navigableKeySet()) {
-      b.append(':').append(label);
-    }
-    return unifier.apply(b.toString(), labelTypes.values());
+    return unifier.apply(recordLabel(labels), labelTypes.values());
   }
 
   private Term tupleTerm(Collection<? extends Term> types) {
@@ -1811,19 +1884,15 @@ public class TypeResolver {
           argNameTypes.put(PROGRESSIVE_LABEL, PrimitiveType.UNIT);
         }
         @SuppressWarnings({"rawtypes", "unchecked"})
-        final NavigableSet<String> labelNames =
+        final NavigableSet<String> labels =
             (NavigableSet) argNameTypes.keySet();
         final String result;
-        if (labelNames.isEmpty()) {
+        if (labels.isEmpty()) {
           result = PrimitiveType.UNIT.name();
-        } else if (TypeSystem.areContiguousIntegers(labelNames)) {
+        } else if (TypeSystem.areContiguousIntegers(labels)) {
           result = TUPLE_TY_CON;
         } else {
-          final StringBuilder b = new StringBuilder(RECORD_TY_CON);
-          for (String label : labelNames) {
-            b.append(':').append(label);
-          }
-          result = b.toString();
+          result = recordLabel(labels);
         }
         final List<Term> args = toTerms(argNameTypes.values(), subst);
         return unifier.apply(result, args);

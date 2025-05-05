@@ -1765,6 +1765,56 @@ from list in [[1,2,3],[2,3,4],[3,4,5]]
   through list3 in pivot;
 > val it = [[1,3],[2,4],[3,5]] : int list list
 
+(* let ------------------------------------- *)
+
+(*) let bag-query in query
+let
+  val records = from r in bag [1,2]
+in
+  from r in records
+end;
+> val it = [1,2] : int bag
+
+(*) let list-query in query
+let
+  val records = from r in bag [1,2]
+in
+  from r in records
+end;
+> val it = [1,2] : int list
+
+(*) let record-bag in query
+let
+  val records = bag [{i=1,j=2}]
+in
+  from r in records
+end;
+> val it = [{i=1,j=2}] : {i:int,j:int} bag
+
+(*) let bag-query in variable
+let
+  val records = from r in bag [{i=1,j=2}]
+in
+  records
+end;
+> val it = [{i=1,j=2}] : {i:int,j:int} bag
+
+(*) let query in query, same variable name
+let
+  val records = from r in bag [{i=1,j=2}]
+in
+  from r in records
+end;
+> val it = [{i=1,j=2}] : {i:int,j:int} bag
+
+(*) let query-function in query
+let
+  fun records x = from r in bag [{i=x,j=2}]
+in
+  from r in (records 3)
+end;
+> val it = [{i=3,j=2}] : {i:int,j:int} bag
+
 (*) dummy
 from message in ["the end"];
 > val it = ["the end"] : string list
