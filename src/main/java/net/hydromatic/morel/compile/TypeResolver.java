@@ -27,6 +27,7 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transform;
@@ -494,16 +495,28 @@ public class TypeResolver {
   }
 
   private Ast.Query deduceQueryType(TypeEnv env, Ast.Query query, Variable v) {
-    Variable v3 = unifier.variable();
-    TypeEnv env3 = env;
     final Map<Ast.Id, Variable> fieldVars = new LinkedHashMap<>();
     final List<Ast.FromStep> fromSteps = new ArrayList<>();
-    for (Ord<Ast.FromStep> step : Ord.zip(query.steps)) {
+
+    final List<Ast.FromStep> extendedSteps;
+    if (query.implicitYieldExp != null) {
+      extendedSteps =
+          append(query.steps, ast.yield(Pos.ZERO, query.implicitYieldExp));
+    } else {
+      extendedSteps = query.steps;
+    }
+
+    // An empty "from" is "unit list". Ordered.
+    final Variable v11 = unifier.variable();
+    final Sequence c11 = listTerm(v11);
+    Triple p = Triple.of(env, v11, toVariable(c11));
+    Triple prevP = p;
+    for (Ord<Ast.FromStep> step : Ord.zip(extendedSteps)) {
       // Whether this is the last step. (The synthetic "yield" counts as a last
       // step.)
-      final boolean lastStep = step.i == query.steps.size() - 1;
-      Pair<TypeEnv, Variable> p =
-          deduceStepType(env, step.e, v3, env3, lastStep, fieldVars, fromSteps);
+      final boolean lastStep = step.i == extendedSteps.size() - 1;
+      prevP = p;
+      p = deduceStepType(env, step.e, p, lastStep, fieldVars, fromSteps);
       switch (step.e.op) {
         case COMPUTE:
         case INTO:
@@ -523,12 +536,10 @@ public class TypeResolver {
                     "'%s' step must be last in '%s'",
                     step.e.op.lowerName(), query.op.lowerName());
             throw new CompileException(
-                message, false, query.steps.get(step.i + 1).pos);
+                message, false, extendedSteps.get(step.i + 1).pos);
           }
           break;
       }
-      env3 = p.left;
-      v3 = p.right;
     }
     if (query.op == Op.FORALL) {
       AstNode step = query.steps.isEmpty() ? query : last(query.steps);
@@ -537,12 +548,14 @@ public class TypeResolver {
             "last step of 'forall' must be 'require'", false, step.pos);
       }
     }
+
+    // Remove the phantom last step.
     final Ast.Exp yieldExp2;
     if (query.implicitYieldExp != null) {
-      v3 = unifier.variable();
-      yieldExp2 = deduceType(env3, query.implicitYieldExp, v3);
+      Ast.FromStep yield = fromSteps.remove(fromSteps.size() - 1);
+      yieldExp2 = ((Ast.Yield) yield).exp;
+      equiv(prevP.v, p.v);
     } else {
-      requireNonNull(v3);
       yieldExp2 = null;
     }
     final Ast.Query query2 = query.copy(fromSteps, yieldExp2);
@@ -551,120 +564,81 @@ public class TypeResolver {
         v,
         query.op == Op.EXISTS || query.op == Op.FORALL
             ? toTerm(PrimitiveType.BOOL)
-            : query.isCompute() || query.isInto() ? v3 : listTerm(v3));
+            : query.isCompute() || query.isInto() ? p.v : listTerm(p.v));
   }
 
-  private Pair<TypeEnv, Variable> deduceStepType(
+  private Triple deduceStepType(
       TypeEnv env,
       Ast.FromStep step,
-      Variable v,
-      final TypeEnv env2,
+      Triple p,
       boolean lastStep,
       Map<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
-    requireNonNull(v);
     switch (step.op) {
       case SCAN:
-        final Ast.Scan scan = (Ast.Scan) step;
-        final Ast.Exp scanExp;
-        final boolean eq;
-        final Ast.Exp scanExp3;
-        final Variable v15 = unifier.variable();
-        final Variable v16 = unifier.variable();
-        final PairList<Ast.IdPat, Term> termMap1 = PairList.of();
-        if (scan.exp == null) {
-          scanExp = null;
-          eq = false;
-          scanExp3 = null;
-        } else if (scan.exp.op == Op.FROM_EQ) {
-          scanExp = ((Ast.PrefixCall) scan.exp).a;
-          eq = true;
-          final Ast.Exp scanExp2 = deduceType(env2, scanExp, v15);
-          scanExp3 = ast.fromEq(scanExp2);
-        } else {
-          scanExp = scan.exp;
-          eq = false;
-          scanExp3 = deduceType(env2, scanExp, v15);
-        }
-        final Ast.Pat pat2 = deducePatType(env2, scan.pat, termMap1, null, v16);
-        if (scanExp != null) {
-          reg(scanExp, v15, eq ? v16 : listTerm(v16));
-        }
-        TypeEnv env4 = env2;
-        for (Map.Entry<Ast.IdPat, Term> e : termMap1) {
-          env4 = env4.bind(e.getKey().name, e.getValue());
-          fieldVars.put(
-              ast.id(Pos.ZERO, e.getKey().name), (Variable) e.getValue());
-        }
-        v = fieldVar(fieldVars);
-        final Ast.Exp scanCondition2;
-        if (scan.condition != null) {
-          final Variable v5 = unifier.variable();
-          scanCondition2 = deduceType(env4, scan.condition, v5);
-          equiv(v5, toTerm(PrimitiveType.BOOL));
-        } else {
-          scanCondition2 = null;
-        }
-        fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
-        return Pair.of(env4, v);
+        return deduceScanStepType((Ast.Scan) step, p, fieldVars, fromSteps);
 
       case WHERE:
         final Ast.Where where = (Ast.Where) step;
         final Variable v5 = unifier.variable();
-        final Ast.Exp filter2 = deduceType(env2, where.exp, v5);
+        final Ast.Exp filter2 = deduceType(p.env, where.exp, v5);
         equiv(v5, toTerm(PrimitiveType.BOOL));
         fromSteps.add(where.copy(filter2));
-        return Pair.of(env2, v);
+        return p;
 
       case REQUIRE:
         final Ast.Require require = (Ast.Require) step;
         final Variable v21 = unifier.variable();
-        final Ast.Exp filter3 = deduceType(env2, require.exp, v21);
+        final Ast.Exp filter3 = deduceType(p.env, require.exp, v21);
         equiv(v21, toTerm(PrimitiveType.BOOL));
         fromSteps.add(require.copy(filter3));
-        return Pair.of(env2, v);
+        return p;
 
       case DISTINCT:
         final Ast.Distinct distinct = (Ast.Distinct) step;
         fromSteps.add(distinct);
-        return Pair.of(env2, v);
+        return p;
 
       case SKIP:
         final Ast.Skip skip = (Ast.Skip) step;
         final Variable v11 = unifier.variable();
-        final Ast.Exp skipCount = deduceType(env2, skip.exp, v11);
+        final Ast.Exp skipCount = deduceType(p.env, skip.exp, v11);
         equiv(v11, toTerm(PrimitiveType.INT));
         fromSteps.add(skip.copy(skipCount));
-        return Pair.of(env2, v);
+        return p;
 
       case TAKE:
         final Ast.Take take = (Ast.Take) step;
         final Variable v12 = unifier.variable();
-        final Ast.Exp takeCount = deduceType(env2, take.exp, v12);
+        final Ast.Exp takeCount = deduceType(p.env, take.exp, v12);
         equiv(v12, toTerm(PrimitiveType.INT));
         fromSteps.add(take.copy(takeCount));
-        return Pair.of(env2, v);
+        return p;
 
       case YIELD:
         final Ast.Yield yield = (Ast.Yield) step;
         final Variable v6 = unifier.variable();
-        v = v6;
+        final Variable c6 = toVariable(listTerm(v6));
         final Ast.Exp yieldExp2 =
-            deduceYieldType(env2, yield.exp, lastStep, v6);
+            deduceYieldType(p.env, yield.exp, lastStep, v6);
         fromSteps.add(yield.copy(yieldExp2));
+        final TypeEnvHolder envs = new TypeEnvHolder(env);
         if (yieldExp2.op == Op.RECORD
             && ((Ast.Record) yieldExp2).with == null) {
-          final Sequence sequence = (Sequence) map.get(yieldExp2);
           final Ast.Record record2 = (Ast.Record) yieldExp2;
-          final TypeEnv[] envs = {env};
-          forEach(
-              record2.args.keySet(),
-              sequence.terms,
-              (name, term) -> envs[0] = envs[0].bind(name, term));
-          return Pair.of(envs[0], v);
+          final List<Term> terms;
+          Term term = map.get(yieldExp2);
+          if (term instanceof Sequence) {
+            final Sequence sequence = (Sequence) term;
+            terms = sequence.terms;
+          } else {
+            terms = ImmutableList.of(v6);
+          }
+          forEach(record2.args.keySet(), terms, envs::bind);
         } else {
-          return Pair.of(env2, v);
+          envs.bind("current", v6);
         }
+        return Triple.of(envs.typeEnv, v6, c6);
 
       case ORDER:
         final Ast.Order order = (Ast.Order) step;
@@ -672,60 +646,16 @@ public class TypeResolver {
         for (Ast.OrderItem orderItem : order.orderItems) {
           orderItems.add(
               orderItem.copy(
-                  deduceType(env2, orderItem.exp, unifier.variable()),
+                  deduceType(p.env, orderItem.exp, unifier.variable()),
                   orderItem.direction));
         }
         fromSteps.add(order.copy(orderItems));
-        return Pair.of(env2, v);
+        return Triple.of(p.env, p.v, toVariable(listTerm(p.v)));
 
       case GROUP:
       case COMPUTE:
-        final Ast.Group group = (Ast.Group) step;
-        validateGroup(group);
-        TypeEnv env3 = env;
-        fieldVars.clear();
-        final PairList<Ast.Id, Ast.Exp> groupExps = PairList.of();
-        for (Map.Entry<Ast.Id, Ast.Exp> groupExp : group.groupExps) {
-          final Ast.Id id = groupExp.getKey();
-          final Ast.Exp exp = groupExp.getValue();
-          final Variable v7 = unifier.variable();
-          final Ast.Exp exp2 = deduceType(env2, exp, v7);
-          reg(id, v7);
-          env3 = env3.bind(id.name, v7);
-          fieldVars.put(id, v7);
-          groupExps.add(id, exp2);
-        }
-        final List<Ast.Aggregate> aggregates = new ArrayList<>();
-        for (Ast.Aggregate aggregate : group.aggregates) {
-          final Ast.Id id = aggregate.id;
-          final Variable v8 = unifier.variable();
-          reg(id, v8);
-          final Variable v9 = unifier.variable();
-          final Ast.Exp aggregateFn2 =
-              deduceType(env2, aggregate.aggregate, v9);
-          final Ast.Exp arg2;
-          final Variable v10;
-          if (aggregate.argument == null) {
-            arg2 = null;
-            v10 = v;
-          } else {
-            v10 = unifier.variable();
-            arg2 = deduceType(env2, aggregate.argument, v10);
-          }
-          reg(aggregate.aggregate, v9);
-          equiv(v9, fnTerm(listTerm(v10), v8));
-          env3 = env3.bind(id.name, v8);
-          fieldVars.put(id, v8);
-          final Ast.Aggregate aggregate2 =
-              aggregate.copy(aggregateFn2, arg2, aggregate.id);
-          aggregates.add(aggregate2);
-          reg(aggregate2, v8);
-        }
-        fromSteps.add(
-            step.op == Op.GROUP
-                ? group.copy(groupExps, aggregates)
-                : ((Ast.Compute) step).copy(aggregates));
-        return Pair.of(env3, v);
+        return deduceGroupStepType(
+            env, (Ast.Group) step, p, fieldVars, fromSteps);
 
       case INTO:
         // from i in [1,2,3] into f
@@ -734,10 +664,12 @@ public class TypeResolver {
         final Ast.Into into = (Ast.Into) step;
         final Variable v13 = unifier.variable();
         final Variable v14 = unifier.variable();
-        final Ast.Exp intoExp = deduceType(env2, into.exp, v14);
-        equiv(v14, fnTerm(listTerm(v), v13));
+        final Ast.Exp intoExp = deduceType(p.env, into.exp, v14);
+        Sequence fnType = fnTerm(listTerm(p.v), v13);
+        equiv(v14, fnType);
         fromSteps.add(into.copy(intoExp));
-        return Pair.of(EmptyTypeEnv.INSTANCE, v13);
+        // Ordering is irrelevant because result is a singleton.
+        return Triple.singleton(EmptyTypeEnv.INSTANCE, v13);
 
       case THROUGH:
         // from i in [1,2,3] through p in f
@@ -753,12 +685,12 @@ public class TypeResolver {
         final Variable v18 = unifier.variable();
         final Variable v19 = unifier.variable();
         final Variable v20 = unifier.variable();
-        equiv(v20, listTerm(v));
+        equiv(v20, listTerm(p.v));
 
         final PairList<Ast.IdPat, Term> termMap = PairList.of();
         final Ast.Pat throughPat =
             deducePatType(env, through.pat, termMap, null, v18);
-        final Ast.Exp throughExp = deduceType(env2, through.exp, v17);
+        final Ast.Exp throughExp = deduceType(p.env, through.exp, v17);
         equiv(v19, listTerm(v18));
         equiv(v17, fnTerm(v20, v19));
         fromSteps.add(through.copy(throughPat, throughExp));
@@ -769,10 +701,109 @@ public class TypeResolver {
           fieldVars.put(
               ast.id(Pos.ZERO, e.getKey().name), (Variable) e.getValue());
         }
-        return Pair.of(env5, v18);
+        return Triple.of(env5, v18, toVariable(listTerm(v18)));
 
       default:
         throw new AssertionError("unknown step type " + step.op);
+    }
+  }
+
+  private Triple deduceScanStepType(
+      Ast.Scan scan,
+      Triple p,
+      Map<Ast.Id, Variable> fieldVars,
+      List<Ast.FromStep> fromSteps) {
+    final Ast.Exp scanExp3;
+    final Variable v16 = unifier.variable();
+    final Variable v15 = toVariable(listTerm(v16));
+    final PairList<Ast.IdPat, Term> termMap = PairList.of();
+    if (scan.exp == null) {
+      scanExp3 = null;
+    } else if (scan.exp.op == Op.FROM_EQ) {
+      final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
+      final Ast.Exp scanExp2 = deduceType(p.env, scanExp, v16);
+      scanExp3 = ast.fromEq(scanExp2);
+      reg(scanExp, v16);
+    } else {
+      scanExp3 = deduceType(p.env, scan.exp, v15);
+      reg(scan.exp, v15);
+    }
+    final Ast.Pat pat2 = deducePatType(p.env, scan.pat, termMap, null, v16);
+    final TypeEnvHolder typeEnvs = new TypeEnvHolder(p.env);
+    termMap.forEach(
+        (id, term) -> {
+          typeEnvs.bind(id.name, term);
+          fieldVars.put(ast.id(Pos.ZERO, id.name), (Variable) term);
+        });
+    final TypeEnv env4 = typeEnvs.typeEnv;
+
+    final Variable v = fieldVar(fieldVars);
+    final Variable c = toVariable(listTerm(v));
+    final Ast.Exp scanCondition2;
+    if (scan.condition != null) {
+      final Variable v5 = unifier.variable();
+      scanCondition2 = deduceType(env4, scan.condition, v5);
+      equiv(v5, toTerm(PrimitiveType.BOOL));
+    } else {
+      scanCondition2 = null;
+    }
+    fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
+    return Triple.of(env4, v, c);
+  }
+
+  private Triple deduceGroupStepType(
+      TypeEnv env,
+      Ast.Group group,
+      Triple p,
+      Map<Ast.Id, Variable> fieldVars,
+      List<Ast.FromStep> fromSteps) {
+    validateGroup(group);
+    TypeEnv env3 = env;
+    fieldVars.clear();
+    final PairList<Ast.Id, Ast.Exp> groupExps = PairList.of();
+    for (Map.Entry<Ast.Id, Ast.Exp> groupExp : group.groupExps) {
+      final Ast.Id id = groupExp.getKey();
+      final Ast.Exp exp = groupExp.getValue();
+      final Variable v7 = unifier.variable();
+      final Ast.Exp exp2 = deduceType(p.env, exp, v7);
+      reg(id, v7);
+      env3 = env3.bind(id.name, v7);
+      fieldVars.put(id, v7);
+      groupExps.add(id, exp2);
+    }
+    final List<Ast.Aggregate> aggregates = new ArrayList<>();
+    for (Ast.Aggregate aggregate : group.aggregates) {
+      final Ast.Id id = aggregate.id;
+      final Variable v8 = unifier.variable();
+      reg(id, v8);
+      final Variable v9 = unifier.variable();
+      final Ast.Exp aggregateFn2 = deduceType(p.env, aggregate.aggregate, v9);
+      final Ast.Exp arg2;
+      final Variable v10;
+      if (aggregate.argument == null) {
+        arg2 = null;
+        v10 = p.v;
+      } else {
+        v10 = unifier.variable();
+        arg2 = deduceType(p.env, aggregate.argument, v10);
+      }
+      reg(aggregate.aggregate, v9);
+      Sequence fnType = fnTerm(listTerm(v10), v8);
+      equiv(v9, fnType);
+      env3 = env3.bind(id.name, v8);
+      fieldVars.put(id, v8);
+      final Ast.Aggregate aggregate2 =
+          aggregate.copy(aggregateFn2, arg2, aggregate.id);
+      aggregates.add(aggregate2);
+      reg(aggregate2, v8);
+    }
+    final Variable v2 = fieldVar(fieldVars);
+    if (group.op == Op.GROUP) {
+      fromSteps.add(group.copy(groupExps, aggregates));
+      return Triple.of(env3, v2, toVariable(listTerm(v2)));
+    } else {
+      fromSteps.add(((Ast.Compute) group).copy(aggregates));
+      return Triple.singleton(env3, v2);
     }
   }
 
@@ -810,9 +841,9 @@ public class TypeResolver {
     equiv(vFn, fnTerm(vArg, v));
     final Ast.Exp arg2;
     if (apply.arg instanceof Ast.RecordSelector) {
-      // node is "f #field" and has type "v"
-      // "f" has type "vArg -> v" and also "vFn"
-      // "#field" has type "vArg" and also "vRec -> vField"
+      // "apply" is "f #field" and has type "v";
+      // "f" has type "vArg -> v" and also "vFn";
+      // "#field" has type "vArg" and also "vRec -> vField".
       // When we resolve "vRec" we can then deduce "vField".
       final Variable vRec = unifier.variable();
       final Variable vField = unifier.variable();
@@ -824,9 +855,9 @@ public class TypeResolver {
     }
     final Ast.Exp fn2;
     if (apply.fn instanceof Ast.RecordSelector) {
-      // node is "#field arg" and has type "v"
-      // "#field" has type "vArg -> v"
-      // "arg" has type "vArg"
+      // "apply" is "#field arg" and has type "v";
+      // "#field" has type "vArg -> v";
+      // "arg" has type "vArg".
       // When we resolve "vArg" we can then deduce "v".
       fn2 =
           deduceRecordSelectorType(env, v, vArg, (Ast.RecordSelector) apply.fn);
@@ -1634,11 +1665,18 @@ public class TypeResolver {
 
   /** Type environment. */
   interface TypeEnv {
+    /**
+     * Returns a term for the variable with a given name, creating if necessary.
+     */
     Term get(
         TypeSystem typeSystem,
         String name,
         Function<String, RuntimeException> exceptionFactory);
 
+    /**
+     * Returns whether a variable of the given name is defined in this
+     * environment.
+     */
     boolean has(String name);
 
     TypeEnv bind(String name, Function<TypeSystem, Term> termFactory);
@@ -1759,6 +1797,10 @@ public class TypeResolver {
                   return type.moniker();
                 }
               });
+    }
+
+    public void bind(String name, Term term) {
+      typeEnv = typeEnv.bind(name, term);
     }
   }
 
@@ -1924,6 +1966,40 @@ public class TypeResolver {
         default:
           return null;
       }
+    }
+  }
+
+  /**
+   * Output of the type resolution of a {@code from} step, and input to the next
+   * step.
+   */
+  private static class Triple {
+    final TypeEnv env;
+    final Variable v;
+    /** Collection (list or bag) type; null if not a collection. */
+    final @Nullable Variable c;
+
+    private Triple(TypeEnv env, Variable v, Variable c) {
+      this.env = requireNonNull(env);
+      this.v = requireNonNull(v);
+      this.c = c;
+    }
+
+    /** Represents a singleton, not a collection. */
+    static Triple singleton(TypeEnv env, Variable v) {
+      return new Triple(env, v, null);
+    }
+
+    static Triple of(TypeEnv env, Variable v, Variable c) {
+      return new Triple(env, v, c);
+    }
+
+    Triple withV(Variable v) {
+      return v == this.v ? this : new Triple(env, v, c);
+    }
+
+    Triple withEnv(TypeEnv env) {
+      return env == this.env ? this : new Triple(env, v, c);
     }
   }
 }
