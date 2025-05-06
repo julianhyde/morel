@@ -56,9 +56,7 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import net.hydromatic.morel.ast.Ast;
-import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Codes;
@@ -68,13 +66,11 @@ import net.hydromatic.morel.parse.ParseException;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.TypeVar;
 import org.hamcrest.CustomTypeSafeMatcher;
-import org.hamcrest.Matcher;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /** Kick the tires. */
 public class MainTest {
-
   @Test
   void testEmptyRepl() {
     final List<String> argList = ImmutableList.of();
@@ -417,12 +413,7 @@ public class MainTest {
   @Test
   void testParseErrorPosition() {
     mlE("let val x = 1 and y = $x$ + 2 in x + y end")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "unbound variable or constructor: x",
-                    pos));
+        .assertCompileException("unbound variable or constructor: x");
   }
 
   @Test
@@ -2343,47 +2334,46 @@ public class MainTest {
     //    ml("from a in [1], b in [true] yield (b,a) where b")
     //        .assertType("{a:int, b:bool} list");
     mlE("from a in [1], b in [true] yield (b,a) where $c$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "unbound variable or constructor: c",
-                    pos));
+        .assertCompileException("unbound variable or constructor: c");
     ml("from a in [1], b in [true] yield {b,a} where b")
         .assertType("{a:int, b:bool} list");
     ml("from a in [1], b in [true] yield {b,a,c=\"c\"} where b")
         .assertType("{a:int, b:bool, c:string} list");
-    Function<Pos, Matcher<CompileException>> yieldNonRecord =
-        pos ->
-            throwsA(
-                CompileException.class,
-                "'yield' step that is not record must be last in 'from'",
-                pos);
-    mlE("from a in [1], b in [true] $yield (b,a)$ where true")
-        .assertCompileException(yieldNonRecord);
-    mlE("from a in [1], b in [true] $yield (b,a)$ where b")
-        .assertCompileException(yieldNonRecord);
+    ml("from a in [1], b in [true] yield (b,a) where true")
+        .assertType("(bool * int) list");
+    mlE("from a in [1], b in [true] yield (b,a) where $b$")
+        .assertCompileException("unbound variable or constructor: b");
     ml("from a in [1], b in [true] yield {b,a} where b")
         .assertType("{a:int, b:bool} list")
         .assertEval(is(list(list(1, true))));
     ml("from d in [{a=1,b=true}], i in [2] yield i").assertType("int list");
-    // Note that 'd' has record type but is not a record expression
-    mlE("from d in [{a=1,b=true}], i in [2] $yield d$ yield a")
-        .assertCompileException(yieldNonRecord);
-    ml("from d in [{a=1,b=true}], i in [2] yield {d.a,d.b} yield a")
-        .assertType("int list");
-    //    ml("from d in [{a=1,b=true}], i in [2] yield d where true")
-    //        .assertType("{d:{a:int, b:bool}, i:int} list");
-    ml("from d in [{a=1,b=true}], i in [2] yield i yield 3")
-        .assertType("int list");
-    mlE("from d in [{a=1,b=true}], i in [2] $yield d$ where true")
-        .assertCompileException(yieldNonRecord);
-    mlE("from d in [{a=1,b=true}], i in [2] $yield i$ yield 3")
-        .assertCompileException(yieldNonRecord);
     ml("from d in [{a=1,b=true}], i in [2] yield d")
         .assertType("{a:int, b:bool} list");
-    ml("from d in [{a=1,b=true}], i in [2] yield d yield 3")
+    mlE("from d in [{a=1,b=true}], i in [2] yield d yield $a$")
+        .assertCompileException("unbound variable or constructor: a");
+    ml("from d in [{a=1,b=true}], i in [2] yield {d.a,d.b} yield a")
         .assertType("int list");
+    ml("from d in [{a=1,b=true}], i in [2] yield {d.a,d.b} order a")
+        .assertType("{a:int, b:bool} list");
+    ml("from d in [{a=1,b=true}], i in [2] yield d where true")
+        .assertType("{a:int, b:bool} list");
+    ml("from d in [{a=1,b=true}], i in [2] yield d distinct")
+        .assertType("{a:int, b:bool} list");
+    ml("from d in [{a=1,b=true}], i in [2] yield d yield d.a")
+        .assertType("int list");
+    ml("from d in [{a=1,b=true}], i in [2] yield d order d.a")
+        .assertType("{a:int, b:bool} list");
+    ml("from d in [{a=1,b=true}], i in [2] yield i yield 3.0")
+        .assertType("real list");
+    ml("from d in [{a=1,b=true}], i in [2] yield {d with b=false}")
+        .assertType("{a:int, b:bool} list");
+    if (false) {
+      // Type inference with "with" is just too hard.
+      ml("from d in [{a=1,b=true}], i in [2] yield {d with b=false} where b")
+          .assertType("{a:int, b:bool} list");
+      ml("from d in [{a=1,b=true}], i in [2] yield {d with b=false} order b")
+          .assertType("{a:int, b:bool} list");
+    }
     mlE("from d in [{a=1,b=true}] yield $d.x$")
         .assertTypeThrows(
             pos ->
@@ -2397,48 +2387,18 @@ public class MainTest {
     ml("exists d in [{a=1,b=true}] where d.a = 0").assertType("bool");
     ml("forall d in [{a=1,b=true}] require d.a = 0").assertType("bool");
     mlE("from d in [{a=1,b=true}] yield d.a into sum $yield \"a\"$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "'into' step must be last in 'from'",
-                    pos));
+        .assertCompileException("'into' step must be last in 'from'");
     mlE("exists d in [{a=1,b=true}] yield d.a $into sum$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "'into' step must not occur in 'exists'",
-                    pos));
+        .assertCompileException("'into' step must not occur in 'exists'");
 
     mlE("forall d in [{a=1,b=true}] yield d.a $into sum$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "'into' step must not occur in 'forall'",
-                    pos));
+        .assertCompileException("'into' step must not occur in 'forall'");
     mlE("forall d in [{a=1,b=true}] yield d.a $compute sum$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "'compute' step must not occur in 'forall'",
-                    pos));
+        .assertCompileException("'compute' step must not occur in 'forall'");
     mlE("forall d in [{a=1,b=true}] $yield d.a$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "last step of 'forall' must be 'require'",
-                    pos));
+        .assertCompileException("last step of 'forall' must be 'require'");
     mlE("forall $d in [{a=1,b=true}]$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "last step of 'forall' must be 'require'",
-                    pos));
+        .assertCompileException("last step of 'forall' must be 'require'");
 
     // "map String.size" has type "string list -> int list",
     // and therefore the type of "j" is "int"
@@ -3288,12 +3248,7 @@ public class MainTest {
 
     // "compute" must not be followed by other steps
     mlE("from i in [1, 2, 3] compute s = sum of i $yield s + 2$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "'compute' step must be last in 'from'",
-                    pos));
+        .assertCompileException("'compute' step must be last in 'from'");
     // similar, but valid
     ml("(from i in [1, 2, 3] compute s = sum of i) + 2")
         .assertType(hasMoniker("int"))
@@ -3301,12 +3256,7 @@ public class MainTest {
 
     // "compute" must not occur in "exists"
     mlE("exists i in [1, 2, 3] $compute s = sum of i$")
-        .assertCompileException(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "'compute' step must not occur in 'exists'",
-                    pos));
+        .assertCompileException("'compute' step must not occur in 'exists'");
   }
 
   @Test

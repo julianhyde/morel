@@ -1678,7 +1678,7 @@ public class Ast {
         @Nullable Exp implicitYieldExp) {
       super(pos, op);
       this.steps = requireNonNull(steps);
-      this.implicitYieldExp = implicitYieldExp;
+      this.implicitYieldExp = null; // implicitYieldExp;
     }
 
     static @Nullable Exp implicitYieldExp(Pos pos, List<FromStep> steps) {
