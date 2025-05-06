@@ -32,10 +32,13 @@ import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
+import static org.apache.calcite.util.Util.first;
 import static org.apache.calcite.util.Util.firstDuplicate;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import java.util.ArrayDeque;
@@ -90,6 +93,7 @@ import net.hydromatic.morel.util.Unifier.Term;
 import net.hydromatic.morel.util.Unifier.TermTerm;
 import net.hydromatic.morel.util.Unifier.Variable;
 import org.apache.calcite.util.Holder;
+import org.apache.calcite.util.ImmutableNullableMap;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Resolves the type of an expression. */
@@ -110,6 +114,15 @@ public class TypeResolver {
 
   /** A field of this name indicates that a record type is progressive. */
   static final String PROGRESSIVE_LABEL = "z$dummy";
+
+  /**
+   * The keyword with which to reference the current row in a step of a query.
+   * Also, the name of the sole field returned by an atom yield (e.g. {@code
+   * yield x + 2}) with an expression for which {@link
+   * net.hydromatic.morel.ast.AstBuilder#implicitLabelOpt(Ast.Exp)} cannot
+   * derive a label.
+   */
+  public static final String CURRENT = "current";
 
   private TypeResolver(TypeSystem typeSystem) {
     this.typeSystem = requireNonNull(typeSystem);
@@ -382,9 +395,8 @@ public class TypeResolver {
         if (record.with == null) {
           return reg(record.copy(null, map2), v, recordTerm(labelTypes));
         } else {
-          final Variable v3 = unifier.variable();
-          final Ast.Exp with2 = deduceType(env, record.with, v3);
-          return reg(record.copy(with2, map2), v, v3);
+          final Ast.Exp with2 = deduceType(env, record.with, v);
+          return reg(record.copy(with2, map2), v);
         }
 
       case LET:
@@ -507,7 +519,7 @@ public class TypeResolver {
     }
 
     // An empty "from" is "unit list". Ordered.
-    final Variable v11 = unifier.variable();
+    final Variable v11 = toVariable(recordTerm(ImmutableSortedMap.of()));
     final Sequence c11 = listTerm(v11);
     Triple p = Triple.of(env, v11, toVariable(c11));
     Triple prevP = p;
@@ -623,20 +635,23 @@ public class TypeResolver {
             deduceYieldType(p.env, yield.exp, lastStep, v6);
         fromSteps.add(yield.copy(yieldExp2));
         final TypeEnvHolder envs = new TypeEnvHolder(env);
-        if (yieldExp2.op == Op.RECORD
-            && ((Ast.Record) yieldExp2).with == null) {
+        if (yieldExp2.op == Op.RECORD) {
           final Ast.Record record2 = (Ast.Record) yieldExp2;
           final List<Term> terms;
           Term term = map.get(yieldExp2);
+          if (record2.with != null) {
+            term = map.get(record2.with);
+          }
           if (term instanceof Sequence) {
             final Sequence sequence = (Sequence) term;
             terms = sequence.terms;
+            forEach(record2.args.keySet(), terms, envs::bind);
           } else {
             terms = ImmutableList.of(v6);
           }
-          forEach(record2.args.keySet(), terms, envs::bind);
         } else {
-          envs.bind("current", v6);
+          String label = first(ast.implicitLabelOpt(yield.exp), CURRENT);
+          envs.bind(label, v6);
         }
         return Triple.of(envs.typeEnv, v6, c6);
 
