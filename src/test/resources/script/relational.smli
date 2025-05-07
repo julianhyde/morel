@@ -1205,22 +1205,33 @@ from e in emps
   compute si = sum of e.id, c = count, si1 = sum of e.id + 1;
 > val it = {c=4,si=406,si1=410} : {c:int, si:int, si1:int}
 
-(*) Primitive 'yield' followed by composite 'compute';
-(*) fine as long as it doesn't reference fields
+(*) Primitive 'yield' followed by composite 'compute'
 from e in emps
   yield e.deptno
   compute sum, count;
 > val it = {count=4,sum=90} : {count:int, sum:int}
 
+(* Row is an atom (type 'int', not a record) but can be referenced via 'deptno'. *)
 from e in emps
   yield e.deptno
   compute sum of deptno;
-> stdIn:4.18-4.24 Error: unbound variable or constructor: deptno
->   raised at: stdIn:4.18-4.24
+> val it = 90 : int
+
+(* Reference to 'deptno' is not valid after it has been renamed to 'x'. *)
+from e in emps
+  yield {x = e.deptno}
+  compute sum of deptno;
+> stdIn:5.18-5.24 Error: unbound variable or constructor: deptno
+>   raised at: stdIn:5.18-5.24
 
 from e in emps
   yield {e.deptno}
   compute sum of deptno;
+> val it = 90 : int
+
+from e in emps
+  yield {x = e.deptno}
+  compute sum of x;
 > val it = 90 : int
 
 from e in emps

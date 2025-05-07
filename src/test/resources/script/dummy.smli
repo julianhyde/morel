@@ -31,7 +31,6 @@ val emps = [
 from e in emps
   yield e.deptno
   compute sum of deptno;
-> stdIn:4.18-4.24 Error: unbound variable or constructor: deptno
->   raised at: stdIn:4.18-4.24
+> val it = 110 : int
 
 (*) End dummy.smli

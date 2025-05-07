@@ -613,6 +613,16 @@ public enum CoreBuilder {
         return id.idPat;
       }
     }
+
+    // If the expression is "#deptno e" (also written as "e.deptno"), use
+    // "deptno" as the name.
+    if (name == null && exp instanceof Core.Apply) {
+      Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn instanceof Core.RecordSelector) {
+        name = ((Core.RecordSelector) apply.fn).fieldName();
+      }
+    }
+
     if (name == null) {
       return idPat(exp.type, typeSystem.nameGenerator::get);
     } else {
