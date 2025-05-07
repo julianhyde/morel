@@ -2470,17 +2470,15 @@ public class MainTest {
             + "end";
     final String code =
         "from(sink\n"
-            + "  join(pat v$0,\n"
-            + "  exp from(\n"
-            + "    sink join(pat e, exp tuple(\n"
+            + "  join(pat e, exp tuple(\n"
             + "  tuple(constant(10), constant(100), constant(Fred)),\n"
             + "  tuple(constant(20), constant(101), constant(Velma)),\n"
             + "  tuple(constant(30), constant(102), constant(Shaggy)),\n"
             + "  tuple(constant(30), constant(103), constant(Scooby))),\n"
-            + " sink collect(tuple(apply(fnValue nth:2, argCode get(name e)), "
-            + "apply(fnValue nth:0, argCode get(name e)))))), "
+            + " sink yield(codes [tuple(apply(fnValue nth:2, argCode get(name e)), "
+            + "apply(fnValue nth:0, argCode get(name e)))], "
             + "sink join(pat n_1, exp tuple(\n"
-            + " apply(fnValue nth:0, argCode get(name v$0))), "
+            + " apply(fnValue nth:0, argCode get(name v$1))), "
             + "sink join(pat d_1, exp tuple(constant(30)), "
             + "sink where(condition apply2(fnValue elem,\n"
             + "                            tuple(get(name n), get(name d)), "
@@ -2492,7 +2490,7 @@ public class MainTest {
             + " sink collect(tuple(apply(fnValue nth:2, argCode get(name e)), "
             + "apply(fnValue nth:0, argCode get(name e))))))),\n"
             + "        sink where(condition apply2(fnValue =, get(name d), constant(30)),\n"
-            + "          sink collect(tuple(get(name d), get(name n)))))))))";
+            + "          sink collect(tuple(get(name d), get(name n))))))))))";
     final List<Object> expected = list(list(30, "Shaggy"), list(30, "Scooby"));
     ml(ml)
         .assertType("{d:int, n:string} list")
