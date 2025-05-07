@@ -19,15 +19,16 @@
 package net.hydromatic.morel.type;
 
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.transform;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
-import java.util.AbstractList;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.util.MapList;
 
 /** The type of a tuple value. */
 public class TupleType extends BaseType implements RecordLikeType {
@@ -46,8 +47,13 @@ public class TupleType extends BaseType implements RecordLikeType {
   public SortedMap<String, Type> argNameTypes() {
     final ImmutableSortedMap.Builder<String, Type> map =
         ImmutableSortedMap.orderedBy(RecordType.ORDERING);
-    forEachIndexed(argTypes, (t, i) -> map.put(Integer.toString(i + 1), t));
+    forEach(argNames(), argTypes, map::put);
     return map.build();
+  }
+
+  @Override
+  public List<String> argNames() {
+    return ordinalNames(argTypes.size());
   }
 
   @Override
@@ -92,17 +98,13 @@ public class TupleType extends BaseType implements RecordLikeType {
         : Integer.toString(i);
   }
 
+  private static String strOnePlus(int i) {
+    return str(i + 1);
+  }
+
   /** Returns a list of strings ["1", ..., "size"]. */
   public static List<String> ordinalNames(int size) {
-    return new AbstractList<String>() {
-      public int size() {
-        return size;
-      }
-
-      public String get(int index) {
-        return str(index + 1);
-      }
-    };
+    return MapList.of(size, TupleType::strOnePlus);
   }
 
   /**
