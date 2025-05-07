@@ -1647,7 +1647,7 @@ end;
 > val it = ["Shaggy","Scooby"] : string list
 Sys.plan();
 > val it =
->   "from(sink join(pat e140, exp constant([[10, 100, Fred], [20, 101, Velma], [30, 102, Shaggy], [30, 103, Scooby]]), sink where(condition apply2(fnValue =, apply(fnValue nth:0, argCode get(name e140)), constant(30)), sink yield(codes [get(e140)], sink collect(apply(fnValue nth:2, argCode get(name e142)))))))"
+>   "from(sink join(pat e140, exp constant([[10, 100, Fred], [20, 101, Velma], [30, 102, Shaggy], [30, 103, Scooby]]), sink where(condition apply2(fnValue =, apply(fnValue nth:0, argCode get(name e140)), constant(30)), sink yield(codes [get(name e140)], sink collect(apply(fnValue nth:2, argCode get(name e142)))))))"
 >   : string
 
 (*) into and through
