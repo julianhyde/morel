@@ -27,7 +27,6 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
-import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transform;
@@ -508,23 +507,15 @@ public class TypeResolver {
     final Map<Ast.Id, Variable> fieldVars = new LinkedHashMap<>();
     final List<Ast.FromStep> fromSteps = new ArrayList<>();
 
-    final List<Ast.FromStep> extendedSteps;
-    if (query.implicitYieldExp != null) {
-      extendedSteps =
-          append(query.steps, ast.yield(Pos.ZERO, query.implicitYieldExp));
-    } else {
-      extendedSteps = query.steps;
-    }
-
     // An empty "from" is "unit list". Ordered.
     final Variable v11 = toVariable(recordTerm(ImmutableSortedMap.of()));
     final Sequence c11 = listTerm(v11);
     Triple p = Triple.of(env, v11, toVariable(c11));
     Triple prevP = p;
-    for (Ord<Ast.FromStep> step : Ord.zip(extendedSteps)) {
+    for (Ord<Ast.FromStep> step : Ord.zip(query.steps)) {
       // Whether this is the last step. (The synthetic "yield" counts as a last
       // step.)
-      final boolean lastStep = step.i == extendedSteps.size() - 1;
+      final boolean lastStep = step.i == query.steps.size() - 1;
       prevP = p;
       p = deduceStepType(env, step.e, p, lastStep, fieldVars, fromSteps);
       switch (step.e.op) {
@@ -546,7 +537,7 @@ public class TypeResolver {
                     "'%s' step must be last in '%s'",
                     step.e.op.lowerName(), query.op.lowerName());
             throw new CompileException(
-                message, false, extendedSteps.get(step.i + 1).pos);
+                message, false, query.steps.get(step.i + 1).pos);
           }
           break;
       }
@@ -559,22 +550,11 @@ public class TypeResolver {
       }
     }
 
-    // Remove the phantom last step.
-    final Ast.Exp yieldExp2;
-    if (query.implicitYieldExp != null) {
-      Ast.FromStep yield = fromSteps.remove(fromSteps.size() - 1);
-      yieldExp2 = ((Ast.Yield) yield).exp;
-      equiv(prevP.v, p.v);
-    } else {
-      yieldExp2 = null;
-    }
-    final Ast.Query query2 = query.copy(fromSteps, yieldExp2);
-    return reg(
-        query2,
-        v,
+    Term term =
         query.op == Op.EXISTS || query.op == Op.FORALL
             ? toTerm(PrimitiveType.BOOL)
-            : query.isCompute() || query.isInto() ? p.v : listTerm(p.v));
+            : query.isCompute() || query.isInto() ? p.v : listTerm(p.v);
+    return reg(query.copy(fromSteps), v, term);
   }
 
   private Triple deduceStepType(

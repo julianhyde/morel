@@ -374,13 +374,7 @@ public enum AstBuilder {
   }
 
   public Ast.From from(Pos pos, List<Ast.FromStep> steps) {
-    final Ast.Exp implicitYieldExp = Ast.From.implicitYieldExp(pos, steps);
-    return from(pos, ImmutableList.copyOf(steps), implicitYieldExp);
-  }
-
-  public Ast.From from(
-      Pos pos, List<Ast.FromStep> steps, Ast.@Nullable Exp implicitYieldExp) {
-    return new Ast.From(pos, ImmutableList.copyOf(steps), implicitYieldExp);
+    return new Ast.From(pos, ImmutableList.copyOf(steps));
   }
 
   /** Wraps an expression to distinguish "from x = e" from "from x in e". */
