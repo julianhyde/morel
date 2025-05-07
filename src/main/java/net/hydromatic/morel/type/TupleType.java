@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.type;
 
+import static java.lang.String.format;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.transform;
@@ -28,13 +29,10 @@ import java.util.List;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
-import net.hydromatic.morel.util.MapList;
 
 /** The type of a tuple value. */
 public class TupleType extends BaseType implements RecordLikeType {
-  private static final String[] INT_STRINGS = {
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"
-  };
+  private static final IntStringCache INT_STRING_CACHE = new IntStringCache();
 
   public final List<Type> argTypes;
 
@@ -88,23 +86,9 @@ public class TupleType extends BaseType implements RecordLikeType {
     return differenceCount == 0 ? this : new TupleType(argTypes2.build());
   }
 
-  /**
-   * Converts an integer to its string representation, using a cached value if
-   * possible.
-   */
-  private static String str(int i) {
-    return i >= 0 && i < INT_STRINGS.length
-        ? INT_STRINGS[i]
-        : Integer.toString(i);
-  }
-
-  private static String strOnePlus(int i) {
-    return str(i + 1);
-  }
-
   /** Returns a list of strings ["1", ..., "size"]. */
   public static List<String> ordinalNames(int size) {
-    return MapList.of(size, TupleType::strOnePlus);
+    return INT_STRING_CACHE.subList(1, size + 1);
   }
 
   /**
@@ -126,6 +110,50 @@ public class TupleType extends BaseType implements RecordLikeType {
   static ImmutableSortedMap<String, Type.Key> toArgNameTypeKeys(
       List<? extends Type> argTypes) {
     return recordMap(transform(argTypes, Type::key));
+  }
+
+  /**
+   * Cache of the string representations of integers.
+   *
+   * <p>Ensures that we do not continually re-compute the strings, and provides
+   * lists of the first N integers (0-based or 1-based) as needed.
+   */
+  private static class IntStringCache {
+    /** Marked volatile to ensure that the cache is not optimized away. */
+    volatile ImmutableList<String> list =
+        ImmutableList.of(
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12",
+            "13", "14", "15");
+
+    /** Returns a list of strings that is at least {@code minimumSize} long. */
+    ImmutableList<String> ensure(int minimumSize) {
+      ImmutableList<String> newList = list;
+      for (; ; ) {
+        if (newList.size() >= minimumSize) {
+          return newList;
+        }
+        // Resize to a power of 2 that is at least 8 larger than the current
+        // size, and at least minimumSize. Since current size is a power of 2,
+        // it will typically double each time.
+        final int minimumSize2 = Math.max(newList.size() + 8, minimumSize);
+        final int newSize = Integer.highestOneBit(minimumSize2 * 2 - 1);
+        assert newSize > newList.size()
+            : format(
+                "newSize = %d, newList.size() = %d, minimumSize2 = %d",
+                newSize, newList.size(), minimumSize2);
+        ImmutableList.Builder<String> b =
+            ImmutableList.builderWithExpectedSize(newSize);
+        b.addAll(newList);
+        for (int i = newList.size(); i < newSize; i++) {
+          b.add(Integer.toString(i));
+        }
+        newList = list = b.build();
+      }
+    }
+
+    List<String> subList(int start, int end) {
+      return ensure(end).subList(start, end);
+    }
   }
 }
 
