@@ -4169,44 +4169,6 @@ public abstract class Codes {
 
     @Override
     public void accept(EvalEnv env) {
-      add(env);
-    }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
-      for (Code code : codes) {
-        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-        for (Object element : elements) {
-          mutableEvalEnv.set(element);
-          remove(mutableEvalEnv);
-        }
-      }
-      // Output any elements remaining in the collection.
-      if (!map.isEmpty()) {
-        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
-        map.keySet()
-            .forEach(
-                element -> {
-                  mutableEvalEnv2.set(element);
-                  rowSink.accept(mutableEvalEnv2);
-                });
-      }
-      return rowSink.result(env);
-    }
-  }
-
-  /** Implementation of {@link RowSink} for a distinct {@code except} step. */
-  static class ExceptDistinctRowSink extends SetRowSink {
-    ExceptDistinctRowSink(
-        ImmutableList<Code> codes,
-        ImmutableList<String> names,
-        RowSink rowSink) {
-      super(Op.EXCEPT, true, codes, names, rowSink);
-    }
-
-    @Override
-    public void accept(EvalEnv env) {
       inc(env);
     }
 
@@ -4239,9 +4201,134 @@ public abstract class Codes {
     }
   }
 
+  /** Implementation of {@link RowSink} for a distinct {@code except} step. */
+  static class ExceptDistinctRowSink extends SetRowSink {
+    ExceptDistinctRowSink(
+        ImmutableList<Code> codes,
+        ImmutableList<String> names,
+        RowSink rowSink) {
+      super(Op.EXCEPT, true, codes, names, rowSink);
+    }
+
+    @Override
+    public void accept(EvalEnv env) {
+      add(env);
+    }
+
+    @Override
+    public List<Object> result(EvalEnv env) {
+      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          remove(mutableEvalEnv);
+        }
+      }
+      // Output any elements remaining in the collection.
+      if (!map.isEmpty()) {
+        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
+        map.keySet()
+            .forEach(
+                element -> {
+                  mutableEvalEnv2.set(element);
+                  rowSink.accept(mutableEvalEnv2);
+                });
+      }
+      return rowSink.result(env);
+    }
+  }
+
   /**
    * Implementation of {@link RowSink} for a non-distinct {@code intersect}
    * step.
+   *
+   * <p>The algorithm is as follows:
+   *
+   * <ol>
+   *   <li>Populate the map with (k, 1, 0) for each key k from input 0, and
+   *       increment the count each time a key repeats.
+   *   <li>Read input 1, and populate the second count field.
+   *   <li>If there is another input, pass over the map, replacing each entry
+   *       (k, x, y) with (k, min(x, y), 0), and removing all entries (k, x, 0).
+   *       Then repeat from step 1.
+   *   <li>Output all keys min(x, y) times.
+   * </ol>
+   */
+  static class IntersectAllRowSink extends SetRowSink {
+    IntersectAllRowSink(
+        ImmutableList<Code> codes,
+        ImmutableList<String> names,
+        RowSink rowSink) {
+      super(Op.INTERSECT, false, codes, names, rowSink);
+    }
+
+    @Override
+    public void accept(EvalEnv env) {
+      // Initialize each key to 1, and increment the count each time the key
+      // repeats.
+      compute(
+          env,
+          (k, v) -> {
+            if (v == null) {
+              return new int[] {1, 0};
+            }
+            ++v[0];
+            return v;
+          });
+    }
+
+    @Override
+    public List<Object> result(EvalEnv env) {
+      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
+      int pass = 0;
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
+        if (pass++ > 0) {
+          // If there was a previous input, remove all keys whose most recent
+          // count#1 is 0, set count#0 to the minimum of the two counts, and
+          // zero count#1.
+          map.entrySet().removeIf(e -> e.getValue()[1] == 0);
+          map.values()
+              .forEach(
+                  v -> {
+                    v[0] = Math.min(v[0], v[1]);
+                    v[1] = 0;
+                  });
+        }
+        // Increment count#1 of each key from the new input, ignoring keys not
+        // present.
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          computeIfPresent(
+              mutableEvalEnv,
+              (k, v) -> {
+                ++v[1];
+                return v;
+              });
+        }
+      }
+      // Output any elements remaining in the collection.
+      if (!map.isEmpty()) {
+        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
+        map.forEach(
+            (k, v) -> {
+              int v2 = Math.min(v[0], v[1]);
+              if (v2 > 0) {
+                mutableEvalEnv2.set(k);
+                for (int i = 0; i < v2; i++) {
+                  // Output the element several times.
+                  rowSink.accept(mutableEvalEnv2);
+                }
+              }
+            });
+      }
+      return rowSink.result(env);
+    }
+  }
+
+  /**
+   * Implementation of {@link RowSink} for a distinct {@code intersect} step.
    *
    * <p>The algorithm is as follows:
    *
@@ -4253,12 +4340,12 @@ public abstract class Codes {
    *   <li>Output all keys that have count greater than 0 from the last pass.
    * </ol>
    */
-  static class IntersectAllRowSink extends SetRowSink {
-    IntersectAllRowSink(
+  static class IntersectDistinctRowSink extends SetRowSink {
+    IntersectDistinctRowSink(
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         RowSink rowSink) {
-      super(Op.INTERSECT, false, codes, names, rowSink);
+      super(Op.INTERSECT, true, codes, names, rowSink);
     }
 
     @Override
@@ -4300,87 +4387,6 @@ public abstract class Codes {
               if (v[0] > 0) {
                 mutableEvalEnv2.set(k);
                 rowSink.accept(mutableEvalEnv2);
-              }
-            });
-      }
-      return rowSink.result(env);
-    }
-  }
-
-  /**
-   * Implementation of {@link RowSink} for a distinct {@code intersect} step.
-   *
-   * <p>The algorithm is as follows:
-   *
-   * <ol>
-   *   <li>Populate the map with (k, 1, 0) for each key k from input 0, and
-   *       increment the count each time a key repeats.
-   *   <li>Read input 1, and populate the second count field.
-   *   <li>If there is another input, pass over the map, replacing each entry
-   *       (k, x, y) with (k, min(x, y), 0), and removing all entries (k, x, 0).
-   *       Then repeat from step 1.
-   *   <li>Output all keys min(x, y) times.
-   * </ol>
-   */
-  static class IntersectDistinctRowSink extends SetRowSink {
-    IntersectDistinctRowSink(
-        ImmutableList<Code> codes,
-        ImmutableList<String> names,
-        RowSink rowSink) {
-      super(Op.INTERSECT, true, codes, names, rowSink);
-    }
-
-    @Override
-    public void accept(EvalEnv env) {
-      // Initialize each key to 1, and increment the count each time the key
-      // repeats.
-      compute(
-          env,
-          (k, v) -> {
-            if (v == null) {
-              return new int[] {1, 0};
-            }
-            ++v[0];
-            return v;
-          });
-    }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
-      int pass = 0;
-      for (Code code : codes) {
-        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-        if (pass++ > 0) {
-          // If there was a previous input, remove all keys whose most recent
-          // count#1 is 0, and set count#0 to the minimum of the two counts.
-          map.entrySet().removeIf(e -> e.getValue()[1] == 0);
-          map.values().forEach(v -> v[0] = Math.min(v[0], v[1]));
-        }
-        // Increment count#1 of each key from the new input, ignoring keys not
-        // present.
-        for (Object element : elements) {
-          mutableEvalEnv.set(element);
-          computeIfPresent(
-              mutableEvalEnv,
-              (k, v) -> {
-                ++v[1];
-                return v;
-              });
-        }
-      }
-      // Output any elements remaining in the collection.
-      if (!map.isEmpty()) {
-        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
-        map.forEach(
-            (k, v) -> {
-              int v2 = Math.min(v[0], v[1]);
-              if (v2 > 0) {
-                mutableEvalEnv2.set(k);
-                for (int i = 0; i < v2; i++) {
-                  // Output the element several times.
-                  rowSink.accept(mutableEvalEnv2);
-                }
               }
             });
       }
