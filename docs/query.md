@@ -400,20 +400,20 @@ types and how they map input fields to output fields.
 
 ### Step list
 
-| Name                      | Summary                                                                                                               |
-|---------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| [`distinct`](#distinct)   | Removes duplicate rows from the current collection.                                                                   |
-| [`except`](#except)       | Returns the set (or multiset) difference between the current collection and one or more argument collections.         |
-| [`group`](#group)         | Performs aggregation across groups of rows.                                                                           |
-| [`intersect`](#intersect) | Returns the set (or multiset) intersection between the current collection and one or more argument collections.       |
-| [`join`](#join)           | Joins one or more scans to the current collection.                                                                    |
-| [`order`](#order)         | Sorts the current collection by a list of expressions.                                                                |
-| [`skip`](#skip)           | Skips a given number of rows from the current collection.                                                             |
-| [`take`](#take)           | Limits the number of rows to return from the current collection.                                                      |
-| [`through`](#through)     | Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns. |
-| [`union`](#union)         | Returns the set (or multiset) union between the current collection and one or more argument collections.              |
-| [`where`](#where)         | Emits rows of the current collection for which a given predicate evaluates to `true`.                                 |
-| [`yield`](#yield)         | For each row in the current collection, evaluates an expression and emits it as a row.                                |
+| Name                           | Summary                                                                                                               |
+|--------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| [`distinct`](#distinct-step)   | Removes duplicate rows from the current collection.                                                                   |
+| [`except`](#except-step)       | Returns the set (or multiset) difference between the current collection and one or more argument collections.         |
+| [`group`](#group-step)         | Performs aggregation across groups of rows.                                                                           |
+| [`intersect`](#intersect-step) | Returns the set (or multiset) intersection between the current collection and one or more argument collections.       |
+| [`join`](#join-step)           | Joins one or more scans to the current collection.                                                                    |
+| [`order`](#order-step)         | Sorts the current collection by a list of expressions.                                                                |
+| [`skip`](#skip-step)           | Skips a given number of rows from the current collection.                                                             |
+| [`take`](#take-step)           | Limits the number of rows to return from the current collection.                                                      |
+| [`through`](#through-step)     | Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns. |
+| [`union`](#union-step)         | Returns the set (or multiset) union between the current collection and one or more argument collections.              |
+| [`where`](#where-step)         | Emits rows of the current collection for which a given predicate evaluates to `true`.                                 |
+| [`yield`](#yield-step)         | For each row in the current collection, evaluates an expression and emits it as a row.                                |
 
 The following steps produce a single scalar or record value. Because
 the output is not a collection, no further steps are possible, and
@@ -424,11 +424,11 @@ It can be unwieldy to use a query in an expression such as `if` or
 step, and `forall` and `exists` queries, are easy to embed in an
 expression.
 
-| Name                  | Summary                                                 |
-|-----------------------|---------------------------------------------------------|
-| [`compute`](#compute) | Applies aggregate functions to the current collection.  |
-| [`into`](#into)       | Applies a function to the current collection.           |
-| [`require`](#require) | Evaluates the predicate of a [`forall`](#forall) query. |
+| Name                       | Summary                                                       |
+|----------------------------|---------------------------------------------------------------|
+| [`compute`](#compute-step) | Applies aggregate functions to the current collection.        |
+| [`into`](#into-step)       | Applies a function to the current collection.                 |
+| [`require`](#require-step) | Evaluates the predicate of a [`forall`](#forall-query) query. |
 
 ### Distinct step
 
