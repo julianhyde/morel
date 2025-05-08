@@ -1888,7 +1888,7 @@ public class Ast {
     public boolean equals(Object obj) {
       return obj == this
           || obj instanceof SetStep
-          && this.getClass() == obj.getClass()
+              && this.getClass() == obj.getClass()
               && this.op == ((SetStep) obj).op
               && this.distinct == ((SetStep) obj).distinct
               && this.args.equals(((SetStep) obj).args);

@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -940,42 +941,48 @@ public abstract class Codes {
     };
   }
 
-  /** Creates a {@link RowSink} for a {@code join} clause. */
+  /** Creates a {@link RowSink} for a {@code join} step. */
   public static RowSink scanRowSink(
       Op op, Core.Pat pat, Code code, Code conditionCode, RowSink rowSink) {
     return new ScanRowSink(op, pat, code, conditionCode, rowSink);
   }
 
-  /** Creates a {@link RowSink} for a {@code where} clause. */
+  /** Creates a {@link RowSink} for a {@code where} step. */
   public static RowSink whereRowSink(Code filterCode, RowSink rowSink) {
     return new WhereRowSink(filterCode, rowSink);
   }
 
-  /** Creates a {@link RowSink} for a {@code skip} clause. */
+  /** Creates a {@link RowSink} for a {@code skip} step. */
   public static RowSink skipRowSink(Code skipCode, RowSink rowSink) {
     return new SkipRowSink(skipCode, rowSink);
   }
 
-  /** Creates a {@link RowSink} for a {@code take} clause. */
+  /** Creates a {@link RowSink} for a {@code take} step. */
   public static RowSink takeRowSink(Code takeCode, RowSink rowSink) {
     return new TakeRowSink(takeCode, rowSink);
   }
 
-  /** Creates a {@link RowSink} for an {@code except} clause. */
+  /** Creates a {@link RowSink} for an {@code except} step. */
   public static RowSink exceptRowSink(
-      boolean distinct, List<Code> codes, RowSink rowSink) {
-    return new ExceptRowSink(distinct, ImmutableList.copyOf(codes), rowSink);
+      boolean distinct,
+      ImmutableList<Code> codes,
+      ImmutableList<String> names,
+      RowSink rowSink) {
+    return new ExceptRowSink(distinct, codes, names, rowSink);
   }
 
-  /** Creates a {@link RowSink} for an {@code intersect} clause. */
+  /** Creates a {@link RowSink} for an {@code intersect} step. */
   public static RowSink intersectRowSink(
-      boolean distinct, List<Code> codes, RowSink rowSink) {
-    return new IntersectRowSink(distinct, ImmutableList.copyOf(codes), rowSink);
+      boolean distinct,
+      ImmutableList<Code> codes,
+      ImmutableList<String> names,
+      RowSink rowSink) {
+    return new IntersectRowSink(distinct, codes, names, rowSink);
   }
 
   /**
    * Creates a {@link RowSink} for an {@code except}, {@code intersect} or
-   * {@code union} clause.
+   * {@code union} step.
    */
   public static RowSink unionRowSink(
       boolean distinct,
@@ -985,7 +992,7 @@ public abstract class Codes {
     return new UnionRowSink(distinct, codes, names, rowSink);
   }
 
-  /** Creates a {@link RowSink} for an {@code order} clause. */
+  /** Creates a {@link RowSink} for an {@code order} step. */
   public static RowSink orderRowSink(
       ImmutablePairList<Code, Boolean> codes,
       Core.StepEnv env,
@@ -994,7 +1001,7 @@ public abstract class Codes {
         codes, transformEager(env.bindings, b -> b.id.name), rowSink);
   }
 
-  /** Creates a {@link RowSink} for a {@code group} clause. */
+  /** Creates a {@link RowSink} for a {@code group} step. */
   public static RowSink groupRowSink(
       Code keyCode,
       ImmutableList<Applicable> aggregateCodes,
@@ -3837,7 +3844,7 @@ public abstract class Codes {
     }
   }
 
-  /** Accepts rows produced by a supplier as part of a {@code from} clause. */
+  /** Accepts rows produced by a supplier as part of a {@code from} step. */
   public interface RowSink extends Describable {
     void start(EvalEnv env);
 
@@ -3870,7 +3877,7 @@ public abstract class Codes {
     }
   }
 
-  /** Implementation of {@link RowSink} for a {@code join} clause. */
+  /** Implementation of {@link RowSink} for a {@code join} step. */
   static class ScanRowSink extends BaseRowSink {
     final Op op; // inner, left, right, full
     private final Core.Pat pat;
@@ -3920,7 +3927,7 @@ public abstract class Codes {
     }
   }
 
-  /** Implementation of {@link RowSink} for a {@code where} clause. */
+  /** Implementation of {@link RowSink} for a {@code where} step. */
   static class WhereRowSink extends BaseRowSink {
     final Code filterCode;
 
@@ -3943,7 +3950,7 @@ public abstract class Codes {
     }
   }
 
-  /** Implementation of {@link RowSink} for a {@code skip} clause. */
+  /** Implementation of {@link RowSink} for a {@code skip} step. */
   static class SkipRowSink extends BaseRowSink {
     final Code skipCode;
     int skip;
@@ -3975,7 +3982,7 @@ public abstract class Codes {
     }
   }
 
-  /** Implementation of {@link RowSink} for a {@code take} clause. */
+  /** Implementation of {@link RowSink} for a {@code take} step. */
   static class TakeRowSink extends BaseRowSink {
     final Code takeCode;
     int take;
@@ -4008,15 +4015,24 @@ public abstract class Codes {
 
   /**
    * Implementation of {@link RowSink} for an {@code except}, {@code intersect},
-   * or {@code union} clause.
+   * or {@code union} step.
    */
   abstract static class SetRowSink extends BaseRowSink {
+    private static final int[] ZERO = {};
+
     final Op op;
     final boolean distinct;
     final ImmutableList<Code> codes;
+    final ImmutableList<String> names;
+    final Map<Object, int[]> set = new HashMap<>();
+    final Object[] values;
 
     SetRowSink(
-        Op op, boolean distinct, ImmutableList<Code> codes, RowSink rowSink) {
+        Op op,
+        boolean distinct,
+        ImmutableList<Code> codes,
+        ImmutableList<String> names,
+        RowSink rowSink) {
       super(rowSink);
       checkArgument(
           op == Op.EXCEPT || op == Op.INTERSECT || op == Op.UNION,
@@ -4025,6 +4041,8 @@ public abstract class Codes {
       this.op = op;
       this.distinct = distinct;
       this.codes = requireNonNull(codes);
+      this.names = requireNonNull(names);
+      this.values = new Object[names.size()];
     }
 
     @Override
@@ -4038,49 +4056,311 @@ public abstract class Codes {
           });
     }
 
-    @Override
-    public void accept(EvalEnv env) {
-      rowSink.accept(env);
+    /**
+     * Adds the current element to the collection, and returns whether it was
+     * added.
+     */
+    boolean add(EvalEnv env) {
+      if (names.size() == 1) {
+        Object value = env.getOpt(names.get(0));
+        return set.put(value, ZERO) == null;
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = env.getOpt(names.get(i));
+        }
+        return set.put(ImmutableList.copyOf(values), ZERO) == null;
+      }
+    }
+
+    /** Removes the current element from the collection. */
+    void remove(EvalEnv env) {
+      if (names.size() == 1) {
+        Object value = env.getOpt(names.get(0));
+        set.remove(value);
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = env.getOpt(names.get(i));
+        }
+        set.remove(ImmutableList.copyOf(values));
+      }
+    }
+
+    /** Increments the count of the current element in the collection. */
+    void inc(EvalEnv env) {
+      compute(
+          env,
+          (k, v) -> {
+            if (v == null) {
+              return new int[] {1};
+            }
+            ++v[0];
+            return v;
+          });
+    }
+
+    /**
+     * Decrements the count of the current element in the collection, if it is
+     * present.
+     */
+    void dec(EvalEnv env) {
+      computeIfPresent(
+          env,
+          (k, v) -> {
+            --v[0];
+            return v;
+          });
+    }
+
+    /** Does something to the count of the current element in the collection. */
+    void compute(EvalEnv env, BiFunction<Object, int[], int[]> fn) {
+      Object value;
+      if (names.size() == 1) {
+        value = env.getOpt(names.get(0));
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = env.getOpt(names.get(i));
+        }
+        value = ImmutableList.copyOf(values);
+      }
+      set.compute(value, fn);
+    }
+
+    /** Does something to the count of the current element in the collection. */
+    void computeIfPresent(EvalEnv env, BiFunction<Object, int[], int[]> fn) {
+      Object value;
+      if (names.size() == 1) {
+        value = env.getOpt(names.get(0));
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = env.getOpt(names.get(i));
+        }
+        value = ImmutableList.copyOf(values);
+      }
+      set.computeIfPresent(value, fn);
+    }
+
+    /** Does something to the count of the current element in the collection. */
+    void computeIfAbsent(EvalEnv env, Function<Object, int[]> fn) {
+      Object value;
+      if (names.size() == 1) {
+        value = env.getOpt(names.get(0));
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = env.getOpt(names.get(i));
+        }
+        value = ImmutableList.copyOf(values);
+      }
+      set.computeIfAbsent(value, fn);
     }
   }
 
   /** Implementation of {@link RowSink} for a {@code except} step. */
   static class ExceptRowSink extends SetRowSink {
     ExceptRowSink(
-        boolean distinct, ImmutableList<Code> codes, RowSink rowSink) {
-      super(Op.EXCEPT, distinct, codes, rowSink);
+        boolean distinct,
+        ImmutableList<Code> codes,
+        ImmutableList<String> names,
+        RowSink rowSink) {
+      super(Op.EXCEPT, distinct, codes, names, rowSink);
     }
 
     @Override
     public void accept(EvalEnv env) {
-      rowSink.accept(env);
+      if (distinct) {
+        inc(env);
+      } else {
+        add(env);
+      }
+    }
+
+    @Override
+    public List<Object> result(EvalEnv env) {
+      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
+        if (distinct) {
+          for (Object element : elements) {
+            mutableEvalEnv.set(element);
+            dec(mutableEvalEnv);
+          }
+        } else {
+          for (Object element : elements) {
+            mutableEvalEnv.set(element);
+            remove(mutableEvalEnv);
+          }
+        }
+      }
+      // Output any elements remaining in the collection.
+      if (!set.isEmpty()) {
+        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
+        if (distinct) {
+          set.forEach(
+              (k, v) -> {
+                int v2 = v[0];
+                if (v2 > 0) {
+                  mutableEvalEnv2.set(k);
+                  for (int i = 0; i < v2; i++) {
+                    // Output the element several times.
+                    rowSink.accept(mutableEvalEnv2);
+                  }
+                }
+              });
+        } else {
+          set.keySet()
+              .forEach(
+                  element -> {
+                    mutableEvalEnv2.set(element);
+                    rowSink.accept(mutableEvalEnv2);
+                  });
+        }
+      }
+      return rowSink.result(env);
     }
   }
 
-  /** Implementation of {@link RowSink} for an {@code intersect} step. */
+  /**
+   * Implementation of {@link RowSink} for an {@code intersect} step.
+   *
+   * <p>For all (non-distinct), the algorithm is as follows:
+   *
+   * <ol>
+   *   <li>Populate the map with (k, 0) for each key k from input 0;
+   *   <li>Read input 1, and for each key increments the count.
+   *   <li>If there is another input, first remove each key with count zero, and
+   *       sets other keys' count to zero. Then repeat from step 1.
+   *   <li>Output all keys that have count greater than 0 from the last pass.
+   * </ol>
+   *
+   * <p>For distinct, the algorithm is as follows:
+   *
+   * <ol>
+   *   <li>Populate the map with (k, 1, 0) for each key k from input 0, and
+   *       increment the count each time a key repeats.
+   *   <li>Read input 1, and populate the second count field.
+   *   <li>If there is another input, pass over the map, replacing each entry
+   *       (k, x, y) with (k, min(x, y), 0), and removing all entries (k, x, 0).
+   *       Then repeat from step 1.
+   *   <li>Output all keys min(x, y) times.
+   * </ol>
+   */
   static class IntersectRowSink extends SetRowSink {
     IntersectRowSink(
-        boolean distinct, ImmutableList<Code> codes, RowSink rowSink) {
-      super(Op.INTERSECT, distinct, codes, rowSink);
+        boolean distinct,
+        ImmutableList<Code> codes,
+        ImmutableList<String> names,
+        RowSink rowSink) {
+      super(Op.INTERSECT, distinct, codes, names, rowSink);
     }
 
     @Override
     public void accept(EvalEnv env) {
-      rowSink.accept(env);
+      if (distinct) {
+        // Initialize each distinct key to 1, and increment the count each time
+        // the key repeats.
+        compute(
+            env,
+            (k, v) -> {
+              if (v == null) {
+                return new int[] {1, 0};
+              }
+              ++v[0];
+              return v;
+            });
+      } else {
+        // Initialize each distinct key to 0.
+        computeIfAbsent(env, k -> new int[] {0});
+      }
+    }
+
+    @Override
+    public List<Object> result(EvalEnv env) {
+      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
+      int pass = 0;
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
+        if (distinct) {
+          if (pass++ > 0) {
+            // If there was a previous input, remove all keys whose most recent
+            // count#1 is 0, and set count#0 to the minimum of the two counts.
+            set.entrySet().removeIf(e -> e.getValue()[1] == 0);
+            set.values().forEach(v -> v[0] = Math.min(v[0], v[1]));
+          }
+          // Increment count#1 of each key from the new input, ignoring keys not
+          // present.
+          for (Object element : elements) {
+            mutableEvalEnv.set(element);
+            computeIfPresent(
+                mutableEvalEnv,
+                (k, v) -> {
+                  ++v[1];
+                  return v;
+                });
+          }
+        } else {
+          // If there was a previous step, remove all keys with count 0, and
+          // zero the counts of the other keys.
+          if (pass++ > 0) {
+            set.entrySet().removeIf(e -> e.getValue()[0] == 0);
+            set.forEach((k, v) -> v[0] = 0);
+          }
+
+          // Increment the count of each key; ignore keys not present.
+          for (Object element : elements) {
+            mutableEvalEnv.set(element);
+            computeIfPresent(
+                mutableEvalEnv,
+                (k, v) -> {
+                  ++v[0];
+                  return v;
+                });
+          }
+        }
+      }
+      // Output any elements remaining in the collection.
+      if (!set.isEmpty()) {
+        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
+        if (distinct) {
+          set.forEach(
+              (k, v) -> {
+                int v2 = Math.min(v[0], v[1]);
+                if (v2 > 0) {
+                  mutableEvalEnv2.set(k);
+                  for (int i = 0; i < v2; i++) {
+                    // Output the element several times.
+                    rowSink.accept(mutableEvalEnv2);
+                  }
+                }
+              });
+        } else {
+          // Output keys that have a positive count than 0 from the last pass.
+          set.forEach(
+              (k, v) -> {
+                if (v[0] > 0) {
+                  mutableEvalEnv2.set(k);
+                  rowSink.accept(mutableEvalEnv2);
+                }
+              });
+        }
+      }
+      return rowSink.result(env);
     }
   }
 
   /** Implementation of {@link RowSink} for a {@code union} step. */
   static class UnionRowSink extends SetRowSink {
-    private final ImmutableList<String> names;
-
     UnionRowSink(
         boolean distinct,
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         RowSink rowSink) {
-      super(Op.UNION, distinct, codes, rowSink);
-      this.names = names;
+      super(Op.UNION, distinct, codes, names, rowSink);
+    }
+
+    @Override
+    public void accept(EvalEnv env) {
+      if (!distinct || add(env)) {
+        rowSink.accept(env);
+      }
     }
 
     @Override
@@ -4090,14 +4370,16 @@ public abstract class Codes {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
         for (Object element : elements) {
           mutableEvalEnv.set(element);
-          rowSink.accept(mutableEvalEnv);
+          if (!distinct || add(mutableEvalEnv)) {
+            rowSink.accept(mutableEvalEnv);
+          }
         }
       }
       return rowSink.result(env);
     }
   }
 
-  /** Implementation of {@link RowSink} for a {@code group} clause. */
+  /** Implementation of {@link RowSink} for a {@code group} step. */
   private static class GroupRowSink extends BaseRowSink {
     final Code keyCode;
     final ImmutableList<String> inNames;
@@ -4195,7 +4477,7 @@ public abstract class Codes {
     }
   }
 
-  /** Implementation of {@link RowSink} for an {@code order} clause. */
+  /** Implementation of {@link RowSink} for an {@code order} step. */
   static class OrderRowSink extends BaseRowSink {
     final ImmutablePairList<Code, Boolean> codes;
     final ImmutableList<String> names;
