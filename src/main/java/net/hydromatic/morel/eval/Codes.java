@@ -968,7 +968,9 @@ public abstract class Codes {
       ImmutableList<Code> codes,
       ImmutableList<String> names,
       RowSink rowSink) {
-    return new ExceptRowSink(distinct, codes, names, rowSink);
+    return distinct
+        ? new ExceptDistinctRowSink(codes, names, rowSink)
+        : new ExceptAllRowSink(codes, names, rowSink);
   }
 
   /** Creates a {@link RowSink} for an {@code intersect} step. */
@@ -4156,23 +4158,18 @@ public abstract class Codes {
     }
   }
 
-  /** Implementation of {@link RowSink} for a {@code except} step. */
-  static class ExceptRowSink extends SetRowSink {
-    ExceptRowSink(
-        boolean distinct,
+  /** Implementation of {@link RowSink} for non-distinct {@code except} step. */
+  static class ExceptAllRowSink extends SetRowSink {
+    ExceptAllRowSink(
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         RowSink rowSink) {
-      super(Op.EXCEPT, distinct, codes, names, rowSink);
+      super(Op.EXCEPT, false, codes, names, rowSink);
     }
 
     @Override
     public void accept(EvalEnv env) {
-      if (distinct) {
-        inc(env);
-      } else {
-        add(env);
-      }
+      add(env);
     }
 
     @Override
@@ -4180,41 +4177,63 @@ public abstract class Codes {
       final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-        if (distinct) {
-          for (Object element : elements) {
-            mutableEvalEnv.set(element);
-            dec(mutableEvalEnv);
-          }
-        } else {
-          for (Object element : elements) {
-            mutableEvalEnv.set(element);
-            remove(mutableEvalEnv);
-          }
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          remove(mutableEvalEnv);
         }
       }
       // Output any elements remaining in the collection.
       if (!map.isEmpty()) {
         final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
-        if (distinct) {
-          map.forEach(
-              (k, v) -> {
-                int v2 = v[0];
-                if (v2 > 0) {
-                  mutableEvalEnv2.set(k);
-                  for (int i = 0; i < v2; i++) {
-                    // Output the element several times.
-                    rowSink.accept(mutableEvalEnv2);
-                  }
-                }
-              });
-        } else {
-          map.keySet()
-              .forEach(
-                  element -> {
-                    mutableEvalEnv2.set(element);
-                    rowSink.accept(mutableEvalEnv2);
-                  });
+        map.keySet()
+            .forEach(
+                element -> {
+                  mutableEvalEnv2.set(element);
+                  rowSink.accept(mutableEvalEnv2);
+                });
+      }
+      return rowSink.result(env);
+    }
+  }
+
+  /** Implementation of {@link RowSink} for a distinct {@code except} step. */
+  static class ExceptDistinctRowSink extends SetRowSink {
+    ExceptDistinctRowSink(
+        ImmutableList<Code> codes,
+        ImmutableList<String> names,
+        RowSink rowSink) {
+      super(Op.EXCEPT, true, codes, names, rowSink);
+    }
+
+    @Override
+    public void accept(EvalEnv env) {
+      inc(env);
+    }
+
+    @Override
+    public List<Object> result(EvalEnv env) {
+      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          dec(mutableEvalEnv);
         }
+      }
+      // Output any elements remaining in the collection.
+      if (!map.isEmpty()) {
+        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
+        map.forEach(
+            (k, v) -> {
+              int v2 = v[0];
+              if (v2 > 0) {
+                mutableEvalEnv2.set(k);
+                for (int i = 0; i < v2; i++) {
+                  // Output the element several times.
+                  rowSink.accept(mutableEvalEnv2);
+                }
+              }
+            });
       }
       return rowSink.result(env);
     }
