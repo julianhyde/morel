@@ -1888,6 +1888,7 @@ public class Ast {
     public boolean equals(Object obj) {
       return obj == this
           || obj instanceof SetStep
+          && this.getClass() == obj.getClass()
               && this.op == ((SetStep) obj).op
               && this.distinct == ((SetStep) obj).distinct
               && this.args.equals(((SetStep) obj).args);
@@ -1900,7 +1901,7 @@ public class Ast {
           (exp, i) ->
               w.append(i == 0 ? op.padded : ", ")
                   .append(distinct ? "distinct " : "")
-                  .append(exp, op.right, op.left));
+                  .append(exp, Op.EQ.right, 0));
       return w;
     }
 
