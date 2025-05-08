@@ -806,21 +806,25 @@ public enum CoreBuilder {
         if (!simplifiedArgs.equals(apply.arg)) {
           apply = apply.copy(apply.fn, simplifiedArgs);
         }
-        if (apply.isCallTo(BuiltIn.LIST_CONCAT)) {
-          if (apply.args().stream()
+        if (apply.isCallTo(BuiltIn.LIST_CONCAT)
+            && apply.arg.isCallTo(BuiltIn.Z_LIST)) {
+          final Core.Apply apply2 = (Core.Apply) apply.arg;
+          if (apply2.args().stream()
               .allMatch(exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
             Pair<Core.Exp, List<Core.Exp>> pair =
-                unionExtents(typeSystem, apply.args());
+                unionExtents(typeSystem, apply2.args());
             if (pair.right.isEmpty()) {
               return pair.left;
             }
           }
         }
-        if (apply.isCallTo(BuiltIn.LIST_INTERSECT)) {
-          if (apply.args().stream()
+        if (apply.isCallTo(BuiltIn.LIST_INTERSECT)
+            && apply.arg.isCallTo(BuiltIn.Z_LIST)) {
+          final Core.Apply apply2 = (Core.Apply) apply.arg;
+          if (apply2.args().stream()
               .allMatch(exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
             Pair<Core.Exp, List<Core.Exp>> pair =
-                intersectExtents(typeSystem, apply.args());
+                intersectExtents(typeSystem, apply2.args());
             if (pair.right.isEmpty()) {
               return pair.left;
             }
