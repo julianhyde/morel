@@ -37,7 +37,6 @@ import static org.apache.calcite.util.Util.firstDuplicate;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -504,7 +503,7 @@ public class TypeResolver {
   }
 
   private Ast.Query deduceQueryType(TypeEnv env, Ast.Query query, Variable v) {
-    final Map<Ast.Id, Variable> fieldVars = new LinkedHashMap<>();
+    final PairList<Ast.Id, Variable> fieldVars = PairList.of();
     final List<Ast.FromStep> fromSteps = new ArrayList<>();
 
     // An empty "from" is "unit list". Ordered.
@@ -562,7 +561,7 @@ public class TypeResolver {
       Ast.FromStep step,
       Triple p,
       boolean lastStep,
-      Map<Ast.Id, Variable> fieldVars,
+      PairList<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
     switch (step.op) {
       case SCAN:
@@ -691,7 +690,7 @@ public class TypeResolver {
         fieldVars.clear();
         for (Map.Entry<Ast.IdPat, Term> e : termMap) {
           env5 = env5.bind(e.getKey().name, e.getValue());
-          fieldVars.put(
+          fieldVars.add(
               ast.id(Pos.ZERO, e.getKey().name), (Variable) e.getValue());
         }
         return Triple.of(env5, v18, toVariable(listTerm(v18)));
@@ -704,7 +703,7 @@ public class TypeResolver {
   private Triple deduceScanStepType(
       Ast.Scan scan,
       Triple p,
-      Map<Ast.Id, Variable> fieldVars,
+      PairList<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
     final Ast.Exp scanExp3;
     final Variable v16 = unifier.variable();
@@ -726,7 +725,7 @@ public class TypeResolver {
     termMap.forEach(
         (id, term) -> {
           typeEnvs.bind(id.name, term);
-          fieldVars.put(ast.id(Pos.ZERO, id.name), (Variable) term);
+          fieldVars.add(ast.id(Pos.ZERO, id.name), (Variable) term);
         });
     final TypeEnv env4 = typeEnvs.typeEnv;
 
@@ -748,7 +747,7 @@ public class TypeResolver {
       TypeEnv env,
       Ast.Group group,
       Triple p,
-      Map<Ast.Id, Variable> fieldVars,
+      PairList<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
     validateGroup(group);
     TypeEnv env3 = env;
@@ -761,7 +760,7 @@ public class TypeResolver {
       final Ast.Exp exp2 = deduceType(p.env, exp, v7);
       reg(id, v7);
       env3 = env3.bind(id.name, v7);
-      fieldVars.put(id, v7);
+      fieldVars.add(id, v7);
       groupExps.add(id, exp2);
     }
     final List<Ast.Aggregate> aggregates = new ArrayList<>();
@@ -784,7 +783,7 @@ public class TypeResolver {
       Sequence fnType = fnTerm(listTerm(v10), v8);
       equiv(v9, fnType);
       env3 = env3.bind(id.name, v8);
-      fieldVars.put(id, v8);
+      fieldVars.add(id, v8);
       final Ast.Aggregate aggregate2 =
           aggregate.copy(aggregateFn2, arg2, aggregate.id);
       aggregates.add(aggregate2);
@@ -815,12 +814,12 @@ public class TypeResolver {
     }
   }
 
-  private Variable fieldVar(Map<Ast.Id, Variable> fieldVars) {
+  private Variable fieldVar(PairList<Ast.Id, Variable> fieldVars) {
     switch (fieldVars.size()) {
       case 0:
         return toVariable(toTerm(PrimitiveType.UNIT));
       case 1:
-        return Iterables.getOnlyElement(fieldVars.values());
+        return fieldVars.right(0);
       default:
         final TreeMap<String, Variable> map = new TreeMap<>();
         fieldVars.forEach((k, v) -> map.put(k.name, v));
@@ -1206,7 +1205,7 @@ public class TypeResolver {
       final List<String> varNames =
           MapList.of(
               funBind.matchList.get(0).patList.size(), index -> "v" + index);
-      vars = Lists.transform(varNames, v -> ast.idPat(Pos.ZERO, v));
+      vars = transformEager(varNames, v -> ast.idPat(Pos.ZERO, v));
       final List<Ast.Match> matchList = new ArrayList<>();
       Pos prevReturnTypePos = null;
       for (Ast.FunMatch funMatch : funBind.matchList) {
