@@ -608,7 +608,7 @@ public class TypeResolver {
         final List<Ast.Exp> args2 = new ArrayList<>();
         final Unifier.Variable v4 = toVariable(listTerm(p.v));
         for (Ast.Exp arg : setStep.args) {
-          args2.add(deduceType(p.env, arg, v4));
+          args2.add(deduceType(env, arg, v4));
         }
         fromSteps.add(setStep.copy(setStep.distinct, args2));
         return p;
