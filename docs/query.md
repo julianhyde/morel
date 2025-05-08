@@ -100,19 +100,24 @@ The formal syntax of queries is as follows.
     | <i>pat</i> <b>=</b> <i>exp</i> [ <b>on</b> <i>exp</i> ]      single iteration
     | <i>var</i>                       unbounded variable
 
-<i>step</i> &rarr; <b>join</b> <i>scan<sub>1</sub></i> [ <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ]
-                                join clause
-    | <b>where</b> <i>exp</i>                 filter clause
-    | <b>distinct</b>                  distinct clause
+<i>step</i> &rarr; <b>distinct</b>                 distinct step
+    | <b>except</b> [ <b>distinct</b> ] <i>exp<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>exp<sub>e</sub></i>
+                                except step (<i>e</i> &ge; 1)
     | <b>group</b> <i>groupKey<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>groupKey<sub>g</sub></i>
       [ <b>compute</b> <i>agg<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>agg<sub>a</sub></i> ]
-                                group clause (<i>g</i> &ge; 0, <i>a</i> &ge; 1)
+                                group step (<i>g</i> &ge; 0, <i>a</i> &ge; 1)
+    | <b>intersect</b> [ <b>distinct</b> ] <i>exp<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>exp<sub>i</sub></i>
+                                intersect step (<i>i</i> &ge; 1)
+    | <b>join</b> <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i>  join step (<i>s</i> &ge; 1)
     | <b>order</b> <i>orderItem<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>orderItem<sub>o</sub></i>
-                                order clause (<i>o</i> &ge; 1)
-    | <b>skip</b> <i>exp</i>                  skip clause
-    | <b>take</b> <i>exp</i>                  take clause
-    | <b>through</b> <i>pat</i> <b>in</b> <i>exp</i>        through clause
-    | <b>yield</b> <i>exp</i>                 yield clause
+                                order step (<i>o</i> &ge; 1)
+    | <b>skip</b> <i>exp</i>                  skip step
+    | <b>take</b> <i>exp</i>                  take step
+    | <b>through</b> <i>pat</i> <b>in</b> <i>exp</i>        through step
+    | <b>union</b> [ <b>distinct</b> ] <i>exp<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>exp<sub>u</sub></i>
+                                union step (<i>u</i> &ge; 1)
+    | <b>where</b> <i>exp</i>                 filter step
+    | <b>yield</b> <i>exp</i>                 yield step
 
 <i>terminalStep</i> &rarr; <b>into</b> <i>exp</i>         into clause
     | <b>compute</b> <i>agg<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>agg<sub>a</sub></i>  compute clause (<i>a</i> &gt; 1)
