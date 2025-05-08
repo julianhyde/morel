@@ -4240,7 +4240,8 @@ public abstract class Codes {
   }
 
   /**
-   * Implementation of {@link RowSink} for a non-distinct {@code intersect} step.
+   * Implementation of {@link RowSink} for a non-distinct {@code intersect}
+   * step.
    *
    * <p>The algorithm is as follows:
    *
@@ -4288,10 +4289,12 @@ public abstract class Codes {
           // count#1 is 0, set count#0 to the minimum of the two counts, and
           // zero count#1.
           map.entrySet().removeIf(e -> e.getValue()[1] == 0);
-          map.values().forEach(v -> {
-            v[0] = Math.min(v[0], v[1]);
-            v[1] = 0;
-          });
+          map.values()
+              .forEach(
+                  v -> {
+                    v[0] = Math.min(v[0], v[1]);
+                    v[1] = 0;
+                  });
         }
         // Increment count#1 of each key from the new input, ignoring keys not
         // present.

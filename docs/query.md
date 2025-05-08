@@ -590,8 +590,7 @@ multiple times.  If an element occurs *x* times in the input
 collection, <code>y<sub>1</sub></code> times in argument collection 1,
 <code>y<sub>2</sub></code> times in argument collection 2, and so
 forth, the step will emit it *z* times, where *z* is
-<code>min(<i>x</i>, <i>y<sub>1</sub></i>, ...,
-<i>y<sub>i</sub></i>)</code>.
+<code>min(<i>x</i>, <i>y<sub>1</sub></i>, ..., <i>y<sub>i</sub></i>)</code>.
 
 `intersect` is equivalent to SQL `INTERSECT ALL`; `intersect distinct`
 is equivalent to SQL `INTERSECT` or `INTERSECT DISTINCT`.
@@ -881,8 +880,7 @@ multiple times.  If an element occurs *x* times in the input
 collection, <code>y<sub>1</sub></code> times in argument collection 1,
 <code>y<sub>2</sub></code> times in argument collection 2, and so
 forth, the step will emit it *z* times, where *z* is
-<code><i>x</i> + <i>y<sub>1</sub></i> + ... +
-<i>y<sub>u</sub></i>)</code>.
+<code><i>x</i> + <i>y<sub>1</sub></i> + ... + <i>y<sub>u</sub></i>)</code>.
 
 `union` is equivalent to SQL `UNION ALL`; `union distinct`
 is equivalent to SQL `UNION` or `UNION DISTINCT`.
