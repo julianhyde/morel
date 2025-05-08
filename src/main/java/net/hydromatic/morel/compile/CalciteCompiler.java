@@ -293,10 +293,10 @@ public class CalciteCompiler extends Compiler {
                     cx.relBuilder.union(true, tuple.args.size());
                     return true;
                   case LIST_EXCEPT:
-                    cx.relBuilder.minus(false, tuple.args.size());
+                    cx.relBuilder.minus(true, tuple.args.size());
                     return true;
                   case LIST_INTERSECT:
-                    cx.relBuilder.intersect(false, tuple.args.size());
+                    cx.relBuilder.intersect(true, tuple.args.size());
                     return true;
                   default:
                     throw new AssertionError(builtIn);
@@ -432,18 +432,24 @@ public class CalciteCompiler extends Compiler {
 
       private RelContext step(RelContext cx, int i, Core.FromStep fromStep) {
         switch (fromStep.op) {
+          case EXCEPT:
+            return setStep(cx, (Core.Except) fromStep);
+          case GROUP:
+            return group(cx, (Core.Group) fromStep);
+          case INTERSECT:
+            return setStep(cx, (Core.Intersect) fromStep);
+          case ORDER:
+            return order(cx, (Core.Order) fromStep);
           case SCAN:
             return join(cx, i, (Core.Scan) fromStep);
-          case WHERE:
-            return where(cx, (Core.Where) fromStep);
           case SKIP:
             return skip(cx, (Core.Skip) fromStep);
           case TAKE:
             return take(cx, (Core.Take) fromStep);
-          case ORDER:
-            return order(cx, (Core.Order) fromStep);
-          case GROUP:
-            return group(cx, (Core.Group) fromStep);
+          case UNION:
+            return setStep(cx, (Core.Union) fromStep);
+          case WHERE:
+            return where(cx, (Core.Where) fromStep);
           case YIELD:
             return yield_(cx, (Core.Yield) fromStep);
           default:
@@ -762,6 +768,34 @@ public class CalciteCompiler extends Compiler {
     int offset = 0;
     int fetch = ((Core.Literal) take.exp).unwrap(Integer.class);
     cx.relBuilder.limit(offset, fetch);
+    return cx;
+  }
+
+  private RelContext setStep(RelContext cx, Core.SetStep setStep) {
+    int n = 1;
+    for (Core.Exp arg : setStep.args) {
+      if (!toRel3(cx, arg, true)) {
+        // One of the args could not be converted. Clean up the stack.
+        while (n-- > 1) {
+          cx.relBuilder.build();
+        }
+        return null;
+      }
+      ++n;
+    }
+    switch (setStep.op) {
+      case EXCEPT:
+        cx.relBuilder.minus(!setStep.distinct, n);
+        break;
+      case INTERSECT:
+        cx.relBuilder.intersect(!setStep.distinct, n);
+        break;
+      case UNION:
+        cx.relBuilder.union(!setStep.distinct, n);
+        break;
+      default:
+        throw new AssertionError(setStep);
+    }
     return cx;
   }
 

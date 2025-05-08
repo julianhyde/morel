@@ -977,7 +977,9 @@ public abstract class Codes {
       ImmutableList<Code> codes,
       ImmutableList<String> names,
       RowSink rowSink) {
-    return new IntersectRowSink(distinct, codes, names, rowSink);
+    return distinct
+        ? new IntersectDistinctRowSink(codes, names, rowSink)
+        : new IntersectAllRowSink(codes, names, rowSink);
   }
 
   /**
@@ -4024,7 +4026,7 @@ public abstract class Codes {
     final boolean distinct;
     final ImmutableList<Code> codes;
     final ImmutableList<String> names;
-    final Map<Object, int[]> set = new HashMap<>();
+    final Map<Object, int[]> map = new HashMap<>();
     final Object[] values;
 
     SetRowSink(
@@ -4063,12 +4065,12 @@ public abstract class Codes {
     boolean add(EvalEnv env) {
       if (names.size() == 1) {
         Object value = env.getOpt(names.get(0));
-        return set.put(value, ZERO) == null;
+        return map.put(value, ZERO) == null;
       } else {
         for (int i = 0; i < names.size(); i++) {
           values[i] = env.getOpt(names.get(i));
         }
-        return set.put(ImmutableList.copyOf(values), ZERO) == null;
+        return map.put(ImmutableList.copyOf(values), ZERO) == null;
       }
     }
 
@@ -4076,12 +4078,12 @@ public abstract class Codes {
     void remove(EvalEnv env) {
       if (names.size() == 1) {
         Object value = env.getOpt(names.get(0));
-        set.remove(value);
+        map.remove(value);
       } else {
         for (int i = 0; i < names.size(); i++) {
           values[i] = env.getOpt(names.get(i));
         }
-        set.remove(ImmutableList.copyOf(values));
+        map.remove(ImmutableList.copyOf(values));
       }
     }
 
@@ -4122,7 +4124,7 @@ public abstract class Codes {
         }
         value = ImmutableList.copyOf(values);
       }
-      set.compute(value, fn);
+      map.compute(value, fn);
     }
 
     /** Does something to the count of the current element in the collection. */
@@ -4136,7 +4138,7 @@ public abstract class Codes {
         }
         value = ImmutableList.copyOf(values);
       }
-      set.computeIfPresent(value, fn);
+      map.computeIfPresent(value, fn);
     }
 
     /** Does something to the count of the current element in the collection. */
@@ -4150,7 +4152,7 @@ public abstract class Codes {
         }
         value = ImmutableList.copyOf(values);
       }
-      set.computeIfAbsent(value, fn);
+      map.computeIfAbsent(value, fn);
     }
   }
 
@@ -4191,10 +4193,10 @@ public abstract class Codes {
         }
       }
       // Output any elements remaining in the collection.
-      if (!set.isEmpty()) {
+      if (!map.isEmpty()) {
         final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
         if (distinct) {
-          set.forEach(
+          map.forEach(
               (k, v) -> {
                 int v2 = v[0];
                 if (v2 > 0) {
@@ -4206,7 +4208,7 @@ public abstract class Codes {
                 }
               });
         } else {
-          set.keySet()
+          map.keySet()
               .forEach(
                   element -> {
                     mutableEvalEnv2.set(element);
@@ -4219,9 +4221,10 @@ public abstract class Codes {
   }
 
   /**
-   * Implementation of {@link RowSink} for an {@code intersect} step.
+   * Implementation of {@link RowSink} for a non-distinct {@code intersect}
+   * step.
    *
-   * <p>For all (non-distinct), the algorithm is as follows:
+   * <p>The algorithm is as follows:
    *
    * <ol>
    *   <li>Populate the map with (k, 0) for each key k from input 0;
@@ -4230,8 +4233,65 @@ public abstract class Codes {
    *       sets other keys' count to zero. Then repeat from step 1.
    *   <li>Output all keys that have count greater than 0 from the last pass.
    * </ol>
+   */
+  static class IntersectAllRowSink extends SetRowSink {
+    IntersectAllRowSink(
+        ImmutableList<Code> codes,
+        ImmutableList<String> names,
+        RowSink rowSink) {
+      super(Op.INTERSECT, false, codes, names, rowSink);
+    }
+
+    @Override
+    public void accept(EvalEnv env) {
+      // Initialize each distinct key to 0.
+      computeIfAbsent(env, k -> new int[] {0});
+    }
+
+    @Override
+    public List<Object> result(EvalEnv env) {
+      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
+      int pass = 0;
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
+        // If there was a previous step, remove all keys with count 0, and
+        // zero the counts of the other keys.
+        if (pass++ > 0) {
+          map.entrySet().removeIf(e -> e.getValue()[0] == 0);
+          map.forEach((k, v) -> v[0] = 0);
+        }
+
+        // Increment the count of each key; ignore keys not present.
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          computeIfPresent(
+              mutableEvalEnv,
+              (k, v) -> {
+                ++v[0];
+                return v;
+              });
+        }
+      }
+      // Output any elements remaining in the collection.
+      if (!map.isEmpty()) {
+        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
+        // Output keys that have a positive count than 0 from the last pass.
+        map.forEach(
+            (k, v) -> {
+              if (v[0] > 0) {
+                mutableEvalEnv2.set(k);
+                rowSink.accept(mutableEvalEnv2);
+              }
+            });
+      }
+      return rowSink.result(env);
+    }
+  }
+
+  /**
+   * Implementation of {@link RowSink} for a distinct {@code intersect} step.
    *
-   * <p>For distinct, the algorithm is as follows:
+   * <p>The algorithm is as follows:
    *
    * <ol>
    *   <li>Populate the map with (k, 1, 0) for each key k from input 0, and
@@ -4243,33 +4303,27 @@ public abstract class Codes {
    *   <li>Output all keys min(x, y) times.
    * </ol>
    */
-  static class IntersectRowSink extends SetRowSink {
-    IntersectRowSink(
-        boolean distinct,
+  static class IntersectDistinctRowSink extends SetRowSink {
+    IntersectDistinctRowSink(
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         RowSink rowSink) {
-      super(Op.INTERSECT, distinct, codes, names, rowSink);
+      super(Op.INTERSECT, true, codes, names, rowSink);
     }
 
     @Override
     public void accept(EvalEnv env) {
-      if (distinct) {
-        // Initialize each distinct key to 1, and increment the count each time
-        // the key repeats.
-        compute(
-            env,
-            (k, v) -> {
-              if (v == null) {
-                return new int[] {1, 0};
-              }
-              ++v[0];
-              return v;
-            });
-      } else {
-        // Initialize each distinct key to 0.
-        computeIfAbsent(env, k -> new int[] {0});
-      }
+      // Initialize each key to 1, and increment the count each time the key
+      // repeats.
+      compute(
+          env,
+          (k, v) -> {
+            if (v == null) {
+              return new int[] {1, 0};
+            }
+            ++v[0];
+            return v;
+          });
     }
 
     @Override
@@ -4278,69 +4332,38 @@ public abstract class Codes {
       int pass = 0;
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-        if (distinct) {
-          if (pass++ > 0) {
-            // If there was a previous input, remove all keys whose most recent
-            // count#1 is 0, and set count#0 to the minimum of the two counts.
-            set.entrySet().removeIf(e -> e.getValue()[1] == 0);
-            set.values().forEach(v -> v[0] = Math.min(v[0], v[1]));
-          }
-          // Increment count#1 of each key from the new input, ignoring keys not
-          // present.
-          for (Object element : elements) {
-            mutableEvalEnv.set(element);
-            computeIfPresent(
-                mutableEvalEnv,
-                (k, v) -> {
-                  ++v[1];
-                  return v;
-                });
-          }
-        } else {
-          // If there was a previous step, remove all keys with count 0, and
-          // zero the counts of the other keys.
-          if (pass++ > 0) {
-            set.entrySet().removeIf(e -> e.getValue()[0] == 0);
-            set.forEach((k, v) -> v[0] = 0);
-          }
-
-          // Increment the count of each key; ignore keys not present.
-          for (Object element : elements) {
-            mutableEvalEnv.set(element);
-            computeIfPresent(
-                mutableEvalEnv,
-                (k, v) -> {
-                  ++v[0];
-                  return v;
-                });
-          }
+        if (pass++ > 0) {
+          // If there was a previous input, remove all keys whose most recent
+          // count#1 is 0, and set count#0 to the minimum of the two counts.
+          map.entrySet().removeIf(e -> e.getValue()[1] == 0);
+          map.values().forEach(v -> v[0] = Math.min(v[0], v[1]));
+        }
+        // Increment count#1 of each key from the new input, ignoring keys not
+        // present.
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          computeIfPresent(
+              mutableEvalEnv,
+              (k, v) -> {
+                ++v[1];
+                return v;
+              });
         }
       }
       // Output any elements remaining in the collection.
-      if (!set.isEmpty()) {
+      if (!map.isEmpty()) {
         final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
-        if (distinct) {
-          set.forEach(
-              (k, v) -> {
-                int v2 = Math.min(v[0], v[1]);
-                if (v2 > 0) {
-                  mutableEvalEnv2.set(k);
-                  for (int i = 0; i < v2; i++) {
-                    // Output the element several times.
-                    rowSink.accept(mutableEvalEnv2);
-                  }
-                }
-              });
-        } else {
-          // Output keys that have a positive count than 0 from the last pass.
-          set.forEach(
-              (k, v) -> {
-                if (v[0] > 0) {
-                  mutableEvalEnv2.set(k);
+        map.forEach(
+            (k, v) -> {
+              int v2 = Math.min(v[0], v[1]);
+              if (v2 > 0) {
+                mutableEvalEnv2.set(k);
+                for (int i = 0; i < v2; i++) {
+                  // Output the element several times.
                   rowSink.accept(mutableEvalEnv2);
                 }
-              });
-        }
+              }
+            });
       }
       return rowSink.result(env);
     }
