@@ -373,15 +373,18 @@ public class Compiler {
       case EXCEPT:
         final Core.Except except = (Core.Except) firstStep;
         inputCodes = transformEager(except.args, arg -> compile(cx, arg));
+        outNames = bindingNames(stepEnv.bindings);
         return () ->
-            Codes.exceptRowSink(except.distinct, inputCodes, nextFactory.get());
+            Codes.exceptRowSink(
+                except.distinct, inputCodes, outNames, nextFactory.get());
 
       case INTERSECT:
         final Core.Intersect intersect = (Core.Intersect) firstStep;
         inputCodes = transformEager(intersect.args, arg -> compile(cx, arg));
+        outNames = bindingNames(stepEnv.bindings);
         return () ->
-            Codes.exceptRowSink(
-                intersect.distinct, inputCodes, nextFactory.get());
+            Codes.intersectRowSink(
+                intersect.distinct, inputCodes, outNames, nextFactory.get());
 
       case UNION:
         final Core.Union union = (Core.Union) firstStep;
