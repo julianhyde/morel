@@ -2367,6 +2367,7 @@ public class MainTest {
 
   @Test
   void testFromType() {
+    ml("from i in bag [1]").assertType("int bag");
     ml("from i in (from j in bag [1])").assertType("int bag");
     ml("from i in (\n"
             + "  from e in bag [{deptno=10}]\n"

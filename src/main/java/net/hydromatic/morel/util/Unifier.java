@@ -607,15 +607,6 @@ public abstract class Unifier {
       }
     }
 
-    /**
-     * Compares whether two sequences have the same terms. Compares addresses,
-     * not contents, to avoid hitting cycles if any of the terms are cyclic
-     * (e.g. "X = f(X)").
-     */
-    private boolean equalsShallow(Sequence sequence) {
-      return this == sequence || listEqual(terms, sequence.terms);
-    }
-
     private static <E> boolean listEqual(List<E> list0, List<E> list1) {
       if (list0.size() != list1.size()) {
         return false;
@@ -667,9 +658,14 @@ public abstract class Unifier {
       checkArgument(!termActions.isEmpty());
     }
 
+    /** Returns an {@link Action} that marks two terms as equivalent. */
+    public static Action equiv(Term term1, Term term2) {
+      return new EquivAction(term1, term2);
+    }
+
     @Override
     public String toString() {
-      return format("{constraint %s %s}", arg, termActions.leftList());
+      return format("{constraint %s %s}", arg, termActions);
     }
 
     /** Called when a constraint is narrowed down to one possibility. */
@@ -693,6 +689,28 @@ public abstract class Unifier {
     void onVariable(Variable variable, Term term);
 
     void onSubstitute(Term left, Term right, Term left2, Term right2);
+  }
+
+  /** An action that, when executed, marks two terms as equivalent. */
+  private static class EquivAction implements Constraint.Action {
+    private final Term term1;
+    private final Term term2;
+
+    EquivAction(Term term1, Term term2) {
+      this.term1 = term1;
+      this.term2 = term2;
+    }
+
+    @Override
+    public String toString() {
+      return "equiv(" + term1 + ", " + term2 + ")";
+    }
+
+    @Override
+    public void accept(
+        Term actualArg, Term actualTerm, BiConsumer<Term, Term> consumer) {
+      consumer.accept(term1, term2);
+    }
   }
 }
 

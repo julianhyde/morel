@@ -37,7 +37,6 @@ import static org.apache.calcite.util.Util.firstDuplicate;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
 import java.util.ArrayDeque;
@@ -330,53 +329,6 @@ public class TypeResolver {
   }
 
   /**
-   * Registers a collection that may be ordered or unordered.
-   *
-   * @param node AST node
-   * @param variable Variable for the collection type (and node's type)
-   * @param variable2 Variable for the element type
-   */
-  private <E extends AstNode> E regCollection(
-      E node, Variable variable, Variable variable2) {
-    Sequence list = listTerm(variable2);
-    Sequence bag = bagTerm(variable2);
-    Constraint.Action listAction =
-        (actualArg1, term1, consumer1) -> consumer1.accept(variable, list);
-    Constraint.Action bagAction =
-        (actualArg, term, consumer) -> consumer.accept(variable, bag);
-    constraints.add(
-        unifier.constraint(
-            variable, PairList.copyOf(list, listAction, bag, bagAction)));
-    return reg(node, variable);
-  }
-
-  /**
-   * Registers a collection that must be ordered ({@code list}).
-   *
-   * @param node AST node
-   * @param variable Variable for the collection type (and node's type)
-   * @param variable2 Variable for the element type
-   */
-  private <E extends AstNode> E regList(
-      E node, Variable variable, Variable variable2) {
-    Sequence term = listTerm(variable2);
-    return reg(node, variable, term);
-  }
-
-  /**
-   * Registers a collection that must be unordered ({@code bag}).
-   *
-   * @param node AST node
-   * @param variable Variable for the collection type (and node's type)
-   * @param variable2 Variable for the element type
-   */
-  private <E extends AstNode> E regBag(
-      E node, Variable variable, Variable variable2) {
-    Sequence term = bagTerm(variable2);
-    return reg(node, variable, term);
-  }
-
-  /**
    * Registers that a type variable is equivalent to at least one of a list of
    * terms.
    */
@@ -388,13 +340,10 @@ public class TypeResolver {
   /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
   private void mayBeBagOrList(Variable c, Variable v) {
     final Sequence list = listTerm(v);
-    final Constraint.Action listAction =
-        (actualArg, term, consumer) -> consumer.accept(c, list);
     final Sequence bag = bagTerm(v);
-    final Constraint.Action bagAction =
-        (actualArg, term, consumer) -> consumer.accept(c, bag);
-    constraints.add(
-        unifier.constraint(c, copyOf(list, listAction, bag, bagAction)));
+    PairList<Term, Constraint.Action> termActions =
+        copyOf(list, Constraint.equiv(c, list), bag, Constraint.equiv(c, bag));
+    constraints.add(unifier.constraint(c, termActions));
   }
 
   /**
@@ -424,10 +373,8 @@ public class TypeResolver {
     final Sequence bag1 = bagTerm(v1);
     final Sequence listResult = listTerm(v);
     final Sequence bagResult = bagTerm(v);
-    final Constraint.Action listAction =
-        (actualArg, term, consumer) -> consumer.accept(c, listResult);
-    final Constraint.Action bagAction =
-        (actualArg, term, consumer) -> consumer.accept(c, bagResult);
+    final Constraint.Action listAction = Constraint.equiv(c, listResult);
+    final Constraint.Action bagAction = Constraint.equiv(c, bagResult);
     final PairList<Term, Constraint.Action> termActions = PairList.of();
     termActions.add(argTerm(list0, list1), listAction);
     termActions.add(argTerm(list0, bag1), bagAction);
@@ -446,21 +393,6 @@ public class TypeResolver {
    * namespace.
    */
   private Ast.Exp deduceYieldType(TypeEnv env, Ast.Exp node, Variable v) {
-    if (node.op == Op.RECORD) {
-      final Ast.Record record = (Ast.Record) node;
-      if (record.args.size() == 1 && record.with == null) {
-        Map.Entry<String, Ast.Exp> arg =
-            record.args.entrySet().iterator().next();
-        Ast.Exp node2 = deduceType(env, arg.getValue(), v);
-        if ("nonEmpty".isEmpty()) {
-          return reg(node2, v);
-        } else {
-          Ast.Record record2 =
-              record.copy(null, ImmutableMap.of(arg.getKey(), node2));
-          return reg(record2, v);
-        }
-      }
-    }
     return deduceType(env, node, v);
   }
 
