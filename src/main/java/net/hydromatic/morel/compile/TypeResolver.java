@@ -864,18 +864,28 @@ public class TypeResolver {
       List<Ast.FromStep> fromSteps) {
     final Ast.Exp scanExp3;
     final Variable v16 = unifier.variable();
-    final Variable v15 = toVariable(listTerm(v16));
     final PairList<Ast.IdPat, Term> termMap = PairList.of();
+    final CollectionType containerize;
+    final Variable c0;
     if (scan.exp == null) {
       scanExp3 = null;
+      // If we're iterating over 'all values' of the type, we'd better not
+      // commit to doing it in order.
+      containerize = CollectionType.BAG; // unordered
+      c0 = null;
     } else if (scan.exp.op == Op.FROM_EQ) {
       final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
       final Ast.Exp scanExp2 = deduceType(p.env, scanExp, v16);
       scanExp3 = ast.fromEq(scanExp2);
+      containerize = CollectionType.LIST; // ordered
+      c0 = null;
       reg(scanExp, v16);
     } else {
-      scanExp3 = deduceType(p.env, scan.exp, v15);
-      reg(scan.exp, v15);
+      c0 = unifier.variable();
+      scanExp3 = deduceType(p.env, scan.exp, c0);
+      reg(scan.exp, c0);
+      containerize = CollectionType.BOTH; // retain source collection type
+      mayBeBagOrList(c0, v16);
     }
     final Ast.Pat pat2 = deducePatType(p.env, scan.pat, termMap, null, v16);
     final TypeEnvHolder typeEnvs = new TypeEnvHolder(p.env);
@@ -887,7 +897,23 @@ public class TypeResolver {
     final TypeEnv env4 = typeEnvs.typeEnv;
 
     final Variable v = fieldVar(fieldVars);
-    final Variable c = unifier.variable();
+    final Variable c;
+    switch (containerize) {
+      case BAG:
+        c = toVariable(bagTerm(v));
+        break;
+      case LIST:
+        c = toVariable(listTerm(v));
+        break;
+      default:
+        if (fromSteps.isEmpty()) {
+          mayBeBagOrList(c0, v);
+          c = c0;
+        } else {
+          c = unifier.variable();
+          isListIfBothAreLists(p.c, c0, c, v);
+        }
+    }
 
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
@@ -957,9 +983,6 @@ public class TypeResolver {
 
       // Output is ordered iff input is ordered.
       final Unifier.Variable c2 = unifier.variable();
-      PairList<Term, Term> argResults1 =
-          copyOf(listTerm(p.v), listTerm(v2), bagTerm(p.v), bagTerm(v2));
-      constraints.add(unifier.constraint(p.c, c2, argResults1));
       isListOrBagMatchingInput(c2, v2, p.c, p.v);
       return Triple.of(env3, v2, c2);
     } else {
@@ -2373,6 +2396,12 @@ public class TypeResolver {
     public String toString() {
       return format("overload '%s' %s = %s -> %s", name, vFn, vArg, vResult);
     }
+  }
+
+  private enum CollectionType {
+    BAG,
+    LIST,
+    BOTH
   }
 }
 

@@ -322,7 +322,7 @@ class Pretty {
       Type type,
       Object o) {
     if (output != Prop.Output.CLASSIC && canPrintTabular(type)) {
-      final RecordType recordType = (RecordType) ((ListType) type).elementType;
+      final RecordType recordType = (RecordType) type.arg(0);
       final List<List<String>> recordList = new ArrayList<>();
       final List<String> valueList = new ArrayList<>();
       for (List<?> record : (List<List<?>>) o) {
@@ -362,9 +362,9 @@ class Pretty {
 
   /** Can print a type in tabular format if it is a list of records. */
   private static boolean canPrintTabular(Type type) {
-    return type instanceof ListType
-        && ((ListType) type).elementType instanceof RecordType
-        && canPrintTabular2((RecordType) ((ListType) type).elementType);
+    return type.isCollection()
+        && type.arg(0) instanceof RecordType
+        && canPrintTabular2((RecordType) type.arg(0));
   }
 
   /** Can print a record in tabular format if its fields are all primitive. */
