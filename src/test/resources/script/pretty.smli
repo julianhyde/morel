@@ -34,7 +34,7 @@ from e in scott.depts;
 > 30     SALES      CHICAGO
 > 40     OPERATIONS BOSTON
 >
-> val it : {deptno:int, dname:string, loc:string} list
+> val it : {deptno:int, dname:string, loc:string} bag
 
 Sys.unset "output";
 > val it = () : unit
@@ -45,7 +45,7 @@ from e in scott.depts;
 >    {deptno=20,dname="RESEARCH",loc="DALLAS"},
 >    {deptno=30,dname="SALES",loc="CHICAGO"},
 >    {deptno=40,dname="OPERATIONS",loc="BOSTON"}]
->   : {deptno:int, dname:string, loc:string} list
+>   : {deptno:int, dname:string, loc:string} bag
 
 Sys.set ("output", "tabular");
 > val it = () : unit
