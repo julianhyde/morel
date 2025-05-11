@@ -75,7 +75,9 @@ After testing, publish the release:
 Wait a couple of hours for the artifacts to appear on Maven central,
 and announce the release.
 
-Update the [github release list](https://github.com/hydromatic/morel/releases).
+Update the [GitHub release list](https://github.com/hydromatic/morel/releases).
+
+[Sync javadoc](https://javadoc.io/task/sync_latest/net.hydromatic/morel).
 
 ## Cleaning up after a failed release attempt (for committers)
 
