@@ -173,13 +173,19 @@ public enum BuiltIn {
               ts.forallType(
                   1, h -> ts.fnType(ts.tupleType(h.get(0), h.list(0)), BOOL)))),
 
-  /** Infix operator "notelem", of type "&alpha; * &alpha; bag &rarr; bool". */
+  /**
+   * Overloaded infix operator "notelem", of type "&alpha; * &alpha; bag &rarr;
+   * bool". and "&alpha; * &alpha; list &rarr; bool".
+   */
   OP_NOT_ELEM(
       null,
       "op notelem",
       ts ->
-          ts.forallType(
-              1, h -> ts.fnType(ts.tupleType(h.get(0), h.bag(0)), BOOL))),
+          ts.multi(
+              ts.forallType(
+                  1, h -> ts.fnType(ts.tupleType(h.get(0), h.bag(0)), BOOL)),
+              ts.forallType(
+                  1, h -> ts.fnType(ts.tupleType(h.get(0), h.list(0)), BOOL)))),
 
   /**
    * Infix operator "-", of type "&alpha; * &alpha; &rarr; &alpha;" (where

@@ -3562,6 +3562,14 @@ Sys.plan ();
 > val it = false : bool
 [] elem [[0], [], [1, 2]];
 > val it = true : bool
+[1, 2] elem [[0], [], [1, 2]];
+> val it = true : bool
+bag [] elem [bag [0], bag [1, 2]];
+> val it = false : bool
+bag [] elem [bag [0], bag [], bag [1, 2]];
+> val it = true : bool
+bag [1, 2] elem [bag [0], bag [], bag [1, 2]];
+> val it = true : bool
 (1, 2) elem [(0, 1), (1, 2)];
 > val it = true : bool
 (1, 2) elem [(0, 1), (2, 3)];
@@ -3570,6 +3578,24 @@ Sys.plan ();
 > val it =
 >   "apply2(fnValue elem, tuple(constant(1), constant(2)), tuple(tuple(constant(0), constant(1)), tuple(constant(2), constant(3))))"
 >   : string
+
+(* Repeat the above tests for the bag version of elem. *)
+1 elem bag [1, 2, 3];
+> val it = true : bool
+1 elem bag [2, 3, 4];
+> val it = false : bool
+1 elem bag [];
+> val it = false : bool
+[] elem bag [[0], [1, 2]];
+> val it = false : bool
+[] elem bag [[0], [], [1, 2]];
+> val it = true : bool
+bag [] elem bag [bag [0], bag [], bag [1, 2]];
+> val it = true : bool
+(1, 2) elem bag [(0, 1), (1, 2)];
+> val it = true : bool
+(1, 2) elem bag [(0, 1), (2, 3)];
+> val it = false : bool
 
 1 notelem [1, 2, 3];
 > val it = false : bool
@@ -3589,6 +3615,22 @@ Sys.plan ();
 > val it =
 >   "apply2(fnValue notelem, tuple(constant(1), constant(2)), tuple(tuple(constant(0), constant(1)), tuple(constant(2), constant(3))))"
 >   : string
+
+(* Repeat the above tests for the bag version of notelem. *)
+1 notelem bag [1, 2, 3];
+> val it = false : bool
+1 notelem bag [2, 3, 4];
+> val it = true : bool
+1 notelem bag [];
+> val it = true : bool
+[] notelem bag [[0], [1, 2]];
+> val it = true : bool
+[] notelem bag [[0], [], [1, 2]];
+> val it = false : bool
+(1, 2) notelem bag [(0, 1), (1, 2)];
+> val it = false : bool
+(1, 2) notelem bag [(0, 1), (2, 3)];
+> val it = true : bool
 
 (* Sys --------------------------------------------------------- *)
 
