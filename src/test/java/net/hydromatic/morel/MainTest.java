@@ -2611,7 +2611,7 @@ public class MainTest {
             + "          sink collect(tuple(get(name d), get(name n))))))))))";
     final List<Object> expected = list(list(30, "Shaggy"), list(30, "Scooby"));
     ml(ml)
-        .assertType("{d:int, n:string} list")
+        .assertType("{d:int, n:string} bag")
         .assertPlan(isCode2(code))
         .assertEval(is(expected));
   }

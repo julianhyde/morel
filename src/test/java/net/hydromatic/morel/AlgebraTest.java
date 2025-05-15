@@ -609,7 +609,7 @@ public class AlgebraTest {
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
-        .assertType("int list")
+        .assertType("int bag")
         .assertPlan(isFullyCalcite())
         .assertEvalIter(equalsUnordered(10, 20, 30));
   }

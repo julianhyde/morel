@@ -385,6 +385,26 @@ public class TypeResolver {
   }
 
   /**
+   * Adds a constraint that the terms in {@code args} are all a bag or list (of
+   * {@code v}); if all are lists then {@code c} is a list of {@code v},
+   * otherwise {@code c} is a bag of {@code v}.
+   */
+  private void isListIfAllAreLists(List<Term> args, Variable c, Variable v) {
+    switch (args.size()) {
+      case 0:
+        throw new IllegalArgumentException("no args");
+      case 1:
+        isListOrBagMatchingInput(toVariable(args.get(0)), v, c, v);
+        return;
+      default:
+        isListIfBothAreLists(args.get(0), args.get(1), c, v);
+        if (args.size() > 2) {
+          isListIfAllAreLists(skip(args), c, v);
+        }
+    }
+  }
+
+  /**
    * Deduces a {@code yield} expression's type.
    *
    * <p>Singleton records are treated specially. The type of {@code yield {x =
@@ -626,6 +646,7 @@ public class TypeResolver {
       Triple p,
       PairList<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
+    final List<Term> terms;
     switch (step.op) {
       case SCAN:
         return deduceScanStepType((Ast.Scan) step, p, fieldVars, fromSteps);
@@ -679,12 +700,17 @@ public class TypeResolver {
       case INTERSECT:
         final Ast.SetStep setStep = (Ast.SetStep) step;
         final List<Ast.Exp> args2 = new ArrayList<>();
-        final Unifier.Variable v4 = toVariable(listTerm(p.v));
+        terms = new ArrayList<>();
+        terms.add(p.c);
         for (Ast.Exp arg : setStep.args) {
-          args2.add(deduceType(env, arg, v4));
+          final Unifier.Variable v15 = unifier.variable();
+          terms.add(v15);
+          args2.add(deduceType(env, arg, v15));
         }
+        final Unifier.Variable v4 = unifier.variable();
+        isListIfAllAreLists(terms, v4, p.v);
         fromSteps.add(setStep.copy(setStep.distinct, args2));
-        return p;
+        return new Triple(env, p.v, v4);
 
       case YIELD:
         final Ast.Yield yield = (Ast.Yield) step;
@@ -702,7 +728,6 @@ public class TypeResolver {
 
         if (yieldExp2.op == Op.RECORD) {
           final Ast.Record record2 = (Ast.Record) yieldExp2;
-          final List<Term> terms;
           Term term = map.get(yieldExp2);
           if (record2.with != null) {
             term = map.get(record2.with);
