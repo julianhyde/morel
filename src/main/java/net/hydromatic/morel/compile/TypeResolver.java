@@ -780,24 +780,25 @@ public class TypeResolver {
         // from i in [1,2,3] through p in f
         //   f: int list -> string list
         //   expression: string list
-        // v: int (i)
-        // v20: int list
+        // p.v: int (i)
+        // p.c: int list
         // v17: int list -> string list (f)
         // v18: string (p)
-        // v19: string list (from i in [1,2,3] through p in f)
+        // c18: string list (from i in [1,2,3] through p in f)
         final Ast.Through through = (Ast.Through) step;
-        final Variable v17 = unifier.variable();
         final Variable v18 = unifier.variable();
-        final Variable v19 = unifier.variable();
-        final Variable v20 = unifier.variable();
-        equiv(v20, listTerm(p.v));
+        final Variable c18 = unifier.variable();
+        reg(through, c18);
+
+        // Input collection (p.c) is either a bag of p.v or a list of p.v.
+        mayBeBagOrList(p.c, p.v);
 
         final PairList<Ast.IdPat, Term> termMap = PairList.of();
         final Ast.Pat throughPat =
             deducePatType(env, through.pat, termMap, null, v18);
+        final Variable v17 = toVariable(fnTerm(p.c, c18));
         final Ast.Exp throughExp = deduceType(p.env, through.exp, v17);
-        equiv(v19, listTerm(v18));
-        equiv(v17, fnTerm(v20, v19));
+        mayBeBagOrList(c18, v18);
         fromSteps.add(through.copy(throughPat, throughExp));
         TypeEnv env5 = env;
         fieldVars.clear();
@@ -806,8 +807,7 @@ public class TypeResolver {
           fieldVars.add(
               ast.id(Pos.ZERO, e.getKey().name), (Variable) e.getValue());
         }
-        // Ordering is irrelevant because result is a singleton.
-        return Triple.singleton(env5, v18);
+        return Triple.of(env5, v18, c18);
 
       default:
         throw new AssertionError("unknown step type " + step.op);

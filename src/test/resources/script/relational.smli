@@ -346,10 +346,10 @@ from (x, y) in [(1,2),(3,4),(3,0)]
   group sum = x + y;
 > val it = [3,7] : int bag
 
-# Theoretically a "group" without a "compute" can be followed by a
-# "compute" step. So, the following is ambiguous. We treat it as a single
-# "group ... compute" step. Under the two-step interpretation, the type
-# would have been "int".
+(* Theoretically a "group" without a "compute" can be followed by a
+ * "compute" step. So, the following is ambiguous. We treat it as a single
+ * "group ... compute" step. Under the two-step interpretation, the type
+ * would have been "int". *)
 from (i, j) in [(1, 1), (2, 3), (3, 4)]
   group j = i mod 2
   compute sum of j;
@@ -1734,6 +1734,45 @@ in
   pipeline scott.emps
 end;
 > val it = [{i=13},{i=24},{i=35}] : {i:int} list
+
+(*) "threes" is a function that groups a list into sublists of 3
+(* (or fewer) elements each. *)
+fun threes list =
+  let
+    fun f result [] = result
+      | f ([a] :: result) (h :: t) = f ([a,h] :: result) t
+      | f ([a,b] :: result) (h :: t) = f ([a,b,h] :: result) t
+      | f ([a,b,c] :: result) (h :: t) = f ([h] :: [a,b,c] :: result) t
+      | f result (h :: t) = f ([h] :: result) t
+  in
+   f [] list
+  end;
+> val threes = fn : 'a list -> 'a list list
+threes [1];
+> val it = [[1]] : int list list
+threes [1,2];
+> val it = [[1,2]] : int list list
+threes [1,2,3];
+> val it = [[1,2,3]] : int list list
+threes [1,2,3,4];
+> val it = [[4],[1,2,3]] : int list list
+threes [1,2,3,4,5];
+> val it = [[4,5],[1,2,3]] : int list list
+
+from i in [0,1,2,3,4,5,6,7,8,9,10]
+  through j in threes;
+> val it = [[9,10],[6,7,8],[3,4,5],[0,1,2]] : int list list
+
+(* As "threes", but returns a bag. *)
+fun threeBag list = bag (threes list);
+> val threeBag = fn : 'a list -> 'a list bag
+
+(* When we switch the query to use "threeBag" rather than "threes",
+   the input still must be a list, but the output changes from
+   "list list" to "list bag". *)
+from i in [0,1,2,3,4,5,6,7,8,9,10]
+  through j in threeBag;
+> val it = [[9,10],[6,7,8],[3,4,5],[0,1,2]] : int list bag
 
 let
   fun clean emps =

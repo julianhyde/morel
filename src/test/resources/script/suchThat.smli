@@ -102,32 +102,10 @@ from i
   take 5;
 > val it = [20,19,18,17,16] : int list
 
-fun threes list =
-  let
-    fun f result [] = result
-      | f ([a] :: result) (h :: t) = f ([a,h] :: result) t
-      | f ([a,b] :: result) (h :: t) = f ([a,b,h] :: result) t
-      | f ([a,b,c] :: result) (h :: t) = f ([h] :: [a,b,c] :: result) t
-      | f result (h :: t) = f ([h] :: result) t
-  in
-   f [] list
-  end;
-> val threes = fn : 'a list -> 'a list list
-threes [1];
-> val it = [[1]] : int list list
-threes [1,2];
-> val it = [[1,2]] : int list list
-threes [1,2,3];
-> val it = [[1,2,3]] : int list list
-threes [1,2,3,4];
-> val it = [[4],[1,2,3]] : int list list
-threes [1,2,3,4,5];
-> val it = [[4,5],[1,2,3]] : int list list
-
 from i
   where i >= 0 andalso i <= 10
-  through j in threes;
-> val it = [[9,10],[6,7,8],[3,4,5],[0,1,2]] : int list list
+  through j in (fn bag => Bag.`take` (bag, 3));
+> val it = [0,1,2] : int bag
 
 exists i
   where i >= 0 andalso i <= 100;

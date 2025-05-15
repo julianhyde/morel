@@ -1213,7 +1213,7 @@ public class Resolver {
       fromBuilder.clear();
       final Core.Exp exp = toCore(through.exp);
       final Core.Pat pat = toCore(through.pat);
-      final Type type = typeMap.typeSystem.bagType(pat.type);
+      final Type type = typeMap.getType(through);
       fromBuilder.scan(pat, core.apply(through.pos, type, exp, from));
     }
 
