@@ -3494,6 +3494,8 @@ public class MainTest {
     ml("from i in bag [1,2] group i compute count")
         .assertType(hasMoniker("{count:int, i:int} bag"));
     ml("from (i, j) in bag [(1, 1), (2, 3)]").assertType("{i:int, j:int} bag");
+    ml("from i in bag [1], j in bag [true]").assertType("{i:int, j:bool} bag");
+    ml("from i in bag [1], j in bag [true] group j").assertType("bool bag");
   }
 
   @Test

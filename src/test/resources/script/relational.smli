@@ -350,7 +350,7 @@ from x in [{a = {a = 1}}, {a = {a = 2}}]
 
 from (x, y) in [(1,2),(3,4),(3,0)]
   group sum = x + y;
-> val it = [3,7] : int bag
+> val it = [3,7] : int list
 
 (* Theoretically a "group" without a "compute" can be followed by a
  * "compute" step. So, the following is ambiguous. We treat it as a single
@@ -359,12 +359,13 @@ from (x, y) in [(1,2),(3,4),(3,0)]
 from (i, j) in [(1, 1), (2, 3), (3, 4)]
   group j = i mod 2
   compute sum of j;
-> {1,5}, {0, 3} : {j:int, sum:int} list
+> val it = [{j=1,sum=5},{j=0,sum=3}] : {j:int, sum:int} list
 
 from (i, j) in [(1, 1), (2, 3), (3, 4)]
   group j = i mod 2
   compute sum of j, count;
-> {2,1,5}, {1,0, 3} : {i:int, j:int, sum:int} list
+> val it = [{count=2,j=1,sum=5},{count=1,j=0,sum=3}]
+>   : {count:int, j:int, sum:int} list
 
 from i in [1, 2, 3]
   yield {i = {i = i}};
@@ -391,7 +392,7 @@ from e in scott.emps
 >   [{deptno=20,job="ANALYST"},{deptno=10,job="CLERK"},{deptno=20,job="CLERK"},
 >    {deptno=30,job="CLERK"},{deptno=10,job="MANAGER"},{deptno=20,job="MANAGER"},
 >    {deptno=30,job="MANAGER"},{deptno=10,job="PRESIDENT"},
->    {deptno=30,job="SALESMAN"}] : {deptno:int, job:string} bag
+>    {deptno=30,job="SALESMAN"}] : {deptno:int, job:string} list
 
 (*) Query 2, using `group` with no aggregate functions, equivalent to query 1
 (*) (The 'order' clause is for deterministic results.)
@@ -403,7 +404,7 @@ from e in scott.emps
 >   [{deptno=20,job="ANALYST"},{deptno=10,job="CLERK"},{deptno=20,job="CLERK"},
 >    {deptno=30,job="CLERK"},{deptno=10,job="MANAGER"},{deptno=20,job="MANAGER"},
 >    {deptno=30,job="MANAGER"},{deptno=10,job="PRESIDENT"},
->    {deptno=30,job="SALESMAN"}] : {deptno:int, job:string} bag
+>    {deptno=30,job="SALESMAN"}] : {deptno:int, job:string} list
 
 
 (*) Function defined inside query
@@ -559,12 +560,12 @@ from e in emps, d in depts
 (*) join group where neither variable is referenced
 from e in emps, d in depts
   group compute count = sum of 1;
-> val it = [16] : int bag
+> val it = [16] : int list
 
 (*) as above, without 'of'
 from e in emps, d in depts
   group compute count = count;
-> val it = [16] : int bag
+> val it = [16] : int list
 
 (*) join group where right variable is not referenced
 from e in emps, d in depts
@@ -612,7 +613,7 @@ from e in emps
 >    {d={deptno=20,name="HR"},e={deptno=20,id=101,name="Velma"}},
 >    {d={deptno=30,name="Engineering"},e={deptno=30,id=102,name="Shaggy"}},
 >    {d={deptno=30,name="Engineering"},e={deptno=30,id=103,name="Scooby"}}]
->   : {d:{deptno:int, name:string}, e:{deptno:int, id:int, name:string}} bag
+>   : {d:{deptno:int, name:string}, e:{deptno:int, id:int, name:string}} list
 
 (*) exists (defining the "exists" function ourselves)
 (*) and correlated sub-query
@@ -694,7 +695,7 @@ from d in depts
 from e in emps
   yield e.deptno
   except distinct (from d in depts where d.deptno <> 20 yield d.deptno);
-> val it = [20] : int bag
+> val it = [20] : int list
 
 (*) intersect (matches SQL's INTERSECT ALL)
 from e in emps
@@ -863,19 +864,19 @@ order deptno;
 (*) 'group' with empty key produces one output row
 from e in emps
 group compute count, sid = sum of e.id;
-> val it = [{count=4,sid=406}] : {count:int, sid:int} bag
+> val it = [{count=4,sid=406}] : {count:int, sid:int} list
 
 (*) 'group' with empty key produces one output row even if input is empty
 from e in emps
 where false
 group compute count;
-> val it = [0] : int bag
+> val it = [0] : int list
 
 (*) 'group' with empty key, empty input, no aggregate functions
 from e in emps
 where false
 group;
-> val it = [()] : unit bag
+> val it = [()] : unit list
 
 (*) 'group' with 'where' and complex argument to 'sum'
 from e in emps
@@ -942,7 +943,7 @@ where e.deptno = d.deptno
 group d;
 > val it =
 >   [{deptno=20,name="HR"},{deptno=30,name="Engineering"},
->    {deptno=10,name="Sales"}] : {deptno:int, name:string} bag
+>    {deptno=10,name="Sales"}] : {deptno:int, name:string} list
 
 (*) Yield a variable whose value is a record.
 from e in emps, d in depts
@@ -967,12 +968,12 @@ yield {e, d};
 (*) empty 'group'
 from e in emps
 group compute sumId = sum of e.id;
-> val it = [406] : int bag
+> val it = [406] : int list
 
 (*) 'group' with aggregate function that references the key
 from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
 group k compute x = (fn vs => k + (sum vs)) of v;
-> val it = [{k=1,x=12},{k=2,x=19}] : {k:int, x:int} bag
+> val it = [{k=1,x=12},{k=2,x=19}] : {k:int, x:int} list
 
 from (x, y, z) in [("a", "p", "e"), ("m", "a", "n"), ("a", "l", "e"), ("a", "w", "e")]
   group x compute z = (fn ys => concat (x :: ys)) of y;
@@ -1129,7 +1130,8 @@ from e in emps
   group parity
     compute sumSumId = sum of sumId,
       c = count;
-> val it = [{c=3,parity=0,sumSumId=406}] : {c:int, parity:int, sumSumId:int} bag
+> val it = [{c=3,parity=0,sumSumId=406}]
+>   : {c:int, parity:int, sumSumId:int} list
 
 (*) Group followed by group followed by yield
 from e in emps
@@ -1138,7 +1140,7 @@ from e in emps
   group parity
     compute sumSumId = sum of sumId
   yield sumSumId * parity;
-> val it = [0] : int bag
+> val it = [0] : int list
 
 (*) Join followed by composite group
 from e in emps,
@@ -1225,7 +1227,7 @@ from e in emps
 (*) Single-row aggregates using 'only' function and 'compute' clause
 from e in emps
   group compute si = sum of e.id, c = count, si1 = sum of e.id + 1;
-> val it = [{c=4,si=406,si1=410}] : {c:int, si:int, si1:int} bag
+> val it = [{c=4,si=406,si1=410}] : {c:int, si:int, si1:int} list
 (*) similar to previous, but the 'only' function converts a singleton set to a record
 only (
   from e in emps
@@ -1327,12 +1329,12 @@ end;
 (*) Empty from with empty group
 from
   group;
-> val it = [()] : unit bag
+> val it = [()] : unit list
 
 (*) Empty from with empty group and one aggregate function
 from
   group compute c = count of "a";
-> val it = [1] : int bag
+> val it = [1] : int list
 
 (*) Empty from with group
 let
@@ -1342,22 +1344,22 @@ in
   from
     group ten compute sumEleven = sum of eleven
 end;
-> val it = [{sumEleven=11,ten=10}] : {sumEleven:int, ten:int} bag
+> val it = [{sumEleven=11,ten=10}] : {sumEleven:int, ten:int} list
 
 (*) Empty from with composite group
 from
   group x = "a", y = 6;
-> val it = [{x="a",y=6}] : {x:string, y:int} bag
+> val it = [{x="a",y=6}] : {x:string, y:int} list
 
 from
   group z = "a", y = 6;
-> val it = [{y=6,z="a"}] : {y:int, z:string} bag
+> val it = [{y=6,z="a"}] : {y:int, z:string} list
 
 (*) Empty from with group and yield
 from
   group one = 1 compute two = sum of 2, three = sum of 3
   yield {c1 = one, c5 = two + three};
-> val it = [{c1=1,c5=5}] : {c1:int, c5:int} bag
+> val it = [{c1=1,c5=5}] : {c1:int, c5:int} list
 
 (*) Patterns left of 'in'
 fun sumPairs pairs =
@@ -1400,7 +1402,7 @@ from {a = a, b = true, c = c} in [{a=1,b=true,c=3}];
 from {a = c, b = true, c = a} in [{a=1,b=true,c=3}];
 > val it = [{a=3,c=1}] : {a:int, c:int} list
 from {a = c, b = true, c = a} in [{a=1,b=true,c=3},{a=1,b=true,c=4}] group c compute sum of a;
-> val it = [{c=1,sum=7}] : {c:int, sum:int} bag
+> val it = [{c=1,sum=7}] : {c:int, sum:int} list
 from {a = a, b = b, c = _} in [{a=1,b=true,c=3},{a=1,b=true,c=4}];
 > val it = [{a=1,b=true},{a=1,b=true}] : {a:int, b:bool} list
 from {a = a, b = b, c = _} in [{a=1,b=true,c=3},{a=1,b=true,c=4}], d in ["a", "b"];
@@ -1492,7 +1494,7 @@ from x in [1, 2],
     z = y + 2
   group x, y, z compute c = count;
 > val it = [{c=1,x=1,y=2,z=4},{c=1,x=2,y=3,z=5}]
->   : {c:int, x:int, y:int, z:int} bag
+>   : {c:int, x:int, y:int, z:int} list
 
 (*) Temporary functions
 let
@@ -1866,7 +1868,7 @@ let
 in
   from r in records
 end;
-> val it = [1,2] : int list
+> val it = [1,2] : int bag
 
 (*) let record-bag in query
 let
@@ -1874,7 +1876,7 @@ let
 in
   from r in records
 end;
-> val it = [{i=1,j=2}] : {i:int,j:int} bag
+> val it = [{i=1,j=2}] : {i:int, j:int} bag
 
 (*) let bag-query in variable
 let
@@ -1882,7 +1884,7 @@ let
 in
   records
 end;
-> val it = [{i=1,j=2}] : {i:int,j:int} bag
+> val it = [{i=1,j=2}] : {i:int, j:int} bag
 
 (*) let query in query, same variable name
 let
@@ -1890,7 +1892,7 @@ let
 in
   from r in records
 end;
-> val it = [{i=1,j=2}] : {i:int,j:int} bag
+> val it = [{i=1,j=2}] : {i:int, j:int} bag
 
 (*) let query-function in query
 let

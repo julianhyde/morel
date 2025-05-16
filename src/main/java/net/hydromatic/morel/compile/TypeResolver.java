@@ -716,7 +716,7 @@ public class TypeResolver {
         final Unifier.Variable v4 = unifier.variable();
         isListIfAllAreLists(terms, v4, p.v);
         fromSteps.add(setStep.copy(setStep.distinct, args2));
-        return new Triple(env, p.v, v4);
+        return new Triple(p.env, p.v, v4);
 
       case YIELD:
         final Ast.Yield yield = (Ast.Yield) step;
