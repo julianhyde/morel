@@ -16,13 +16,15 @@
  * language governing permissions and limitations under the
  * License.
  *)
+from (i, j) in [(1,2)];
+> val it = [{i=1,j=2}] : {i:int, j:int} list
 
 let
   val records = from r in bag [1,2]
 in
   from r2 in records
 end;
-> val it = [{i=1,j=2}] : {i:int,j:int} bag
+> val it = [1,2] : int bag
 
 (* TODO
 let
@@ -57,8 +59,6 @@ end;
 1 elem (bag [0,1,2]);
 > val it = true : bool
 
-(* WORKS
-*)
 from {i, j} in [{i=1,j=2}];
 > val it = [{i=1,j=2}] : {i:int, j:int} list
 from (i, j) in [{i=1,j=2}];
@@ -182,17 +182,26 @@ from i in bag [1,2];
 (* TODO
 List.length Bag.nil;
 > val it = 0 : int
+*)
+Bag.length Bag.nil;
+> val it = 0 : int
+
 from i in (bag [1,2,3]) group i compute count;
-> val it = [1,2,3] : int bag
+> val it = [{count=1,i=1},{count=1,i=2},{count=1,i=3}] : {count:int, i:int} bag
+
 (*) Allow applying bag function (op elem: ('a * 'bag) -> bool) to list
 from i in [1,2]
 where i elem [2,3];
+> val it = [2] : int list
 
 from i in [1,2,3]
 group i compute x = (fn a => a);
-> val it = [{i=1,x=[1]},{i=2,x=[2]},{i=3,x=[3]}] : {i:int, x:int bag} bag
+> val it = [{i=1,x=[1]},{i=2,x=[2]},{i=3,x=[3]}] : {i:int, x:int bag} list
 
 2 elem [2,3];
-*)
+> val it = true : bool
+
+2 elem (bag [2,3]);
+> val it = true : bool
 
 (*) End dummy.smli

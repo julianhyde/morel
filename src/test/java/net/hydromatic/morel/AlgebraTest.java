@@ -314,7 +314,7 @@ public class AlgebraTest {
   @Test
   void testHybridCalciteToMorel() {
     final String ml =
-        "List.filter\n"
+        "Bag.filter\n"
             + "  (fn x => x.empno < 7500)\n"
             + "  (from e in scott.emps\n"
             + "  where e.job = \"CLERK\"\n"
@@ -322,7 +322,7 @@ public class AlgebraTest {
     String plan =
         ""
             + "apply("
-            + "fnCode apply(fnValue List.filter, "
+            + "fnCode apply(fnValue Bag.filter, "
             + "argCode match(x, apply2(fnValue <, "
             + "apply(fnValue nth:2, argCode get(name x)),"
             + " constant(7500)))), "

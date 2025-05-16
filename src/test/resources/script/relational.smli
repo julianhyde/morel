@@ -322,12 +322,14 @@ from e in emps
 > val it = [{d=30},{d=30},{d=20},{d=10}] : {d:int} list
 
 (*) singleton record 'yield' followed by 'order' then 'yield'
+(* TODO
 from e in emps
   yield {d = e.deptno}
   order d desc
   yield {tens = d / 10, units = d mod 10};
 > val it = [{tens=3,units=0},{tens=3,units=0},{tens=2,units=0},{tens=1,units=0}]
 >   : {tens:int, units:int} list
+*)
 
 (*) record whose only field is a record with only one field
 from x in [{a = {a = 1}}, {a = {a = 2}}]

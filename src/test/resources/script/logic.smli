@@ -34,8 +34,8 @@ exists e in emps
   where e.sal < 900.0;
 > val it = true : bool
 
-(* Answer to Q1 using 'from' and 'List.null'. *)
-not (List.null (from e in emps where e.sal < 900.0));
+(* Answer to Q1 using 'from' and 'Bag.null'. *)
+not (Bag.null (from e in emps where e.sal < 900.0));
 > val it = true : bool
 
 (* Answer to Q1 using 'from' and 'compute'. *)
@@ -54,8 +54,8 @@ not (exists e in emps
   where not (e.sal > 1000.0));
 > val it = false : bool
 
-(* Answer to Q2 using 'from' and 'List.null'. *)
-List.null (from e in emps where not (e.sal > 1000.0));
+(* Answer to Q2 using 'from' and 'Bag.null'. *)
+Bag.null (from e in emps where not (e.sal > 1000.0));
 > val it = false : bool
 
 (* Q3. Do all employees in department 10 earn over 1,000? *)

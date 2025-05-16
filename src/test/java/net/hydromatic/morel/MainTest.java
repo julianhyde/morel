@@ -2367,6 +2367,7 @@ public class MainTest {
 
   @Test
   void testFromType() {
+    ml("from i in [1]").assertType("int list");
     ml("from i in bag [1]").assertType("int bag");
     ml("from i in (from j in bag [1])").assertType("int bag");
     ml("from i in (\n"
@@ -2375,8 +2376,7 @@ public class MainTest {
             + "where i > 10\n"
             + "yield i / 10")
         .assertType("int bag");
-    ml("from i in [1]").assertType("int list");
-    ml("from i in bag [1]").assertType("int bag");
+    ml("from (i, j) in [(\"a\", 1)]").assertType("{i:string, j:int} list");
     ml("from (i, j) in [(1, 1), (2, 3)]").assertType("{i:int, j:int} list");
     ml("from (x, y) in [(1,2),(3,4),(3,0)] group sum = x + y")
         .assertParse(
@@ -2429,9 +2429,10 @@ public class MainTest {
         .assertType("{a:int, b:bool} list")
         .assertEval(is(list(list(1, true))));
     ml("from d in [{a=1,b=true}], i in [2] yield i").assertType("int list");
-    // Note that 'd' has record type but is not a record expression
+    ml("from d in [{a=1,b=true}], i in [2] yield {d}")
+        .assertType("{d:{a:int, b:bool}} list");
     ml("from d in [{a=1,b=true}], i in [2] yield {d} where true")
-        .assertType("{a:int, b:bool} list");
+        .assertType("{d:{a:int, b:bool}} list");
     mlE("from d in [{a=1,b=true}], i in [2] yield {d} yield $a$")
         .assertCompileException(
             pos ->
@@ -2441,8 +2442,6 @@ public class MainTest {
                     pos));
     ml("from d in [{a=1,b=true}], i in [2] yield {d.a,d.b} yield a")
         .assertType("int list");
-    ml("from d in [{a=1,b=true}], i in [2] yield {d} where true")
-        .assertType("{d:{a:int, b:bool}, i:int} list");
     ml("from d in [{a=1,b=true}], i in [2] yield i yield 3")
         .assertType("int list");
     ml("from d in [{a=1,b=true}], i in [2] yield d")
@@ -2521,9 +2520,13 @@ public class MainTest {
     // "map String.size" has type "string list -> int list",
     // and therefore the type of "j" is "int"
     ml("from s in [\"ab\",\"c\"]\n" //
-            + " through j in (Bag.map String.size)")
+            + " through j in (map String.size)")
         .assertType("int list");
     ml("from s in [\"ab\",\"c\"]\n"
+            + " through j in (map String.size)\n"
+            + " yield j + 2")
+        .assertType("int list");
+    ml("from s in bag [\"ab\",\"c\"]\n"
             + " through j in (Bag.map String.size)\n"
             + " yield j + 2")
         .assertType("int bag");
@@ -2531,7 +2534,7 @@ public class MainTest {
             + " yield d.a\n"
             + " through s in (fn ints =>\n"
             + "   from i in ints yield substring (\"abc\", 0, i))")
-        .assertType("string bag")
+        .assertType("string list")
         .assertEval(is(list("a", "ab")));
   }
 
@@ -3364,7 +3367,7 @@ public class MainTest {
     ml("from (i, j) in [(1, 1), (2, 3), (3, 4)]\n"
             + "  group j = i mod 2\n"
             + "  compute sum of j")
-        .assertType("{j:int, sum:int} bag")
+        .assertType("{j:int, sum:int} list")
         .assertEvalIter(equalsUnordered(list(1, 5), list(0, 3)));
 
     // "compute" must not be followed by other steps

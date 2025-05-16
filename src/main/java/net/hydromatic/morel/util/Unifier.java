@@ -125,9 +125,20 @@ public abstract class Unifier {
         (arg0, result0) ->
             termActions.add(
                 arg0,
-                (actualArg, term, consumer) -> {
-                  consumer.accept(actualArg, term);
-                  consumer.accept(result, result0);
+                new Constraint.Action() {
+                  @Override
+                  public void accept(
+                      Term actualArg,
+                      Term term,
+                      BiConsumer<Term, Term> consumer) {
+                    consumer.accept(actualArg, term);
+                    consumer.accept(result, result0);
+                  }
+
+                  @Override
+                  public String toString() {
+                    return "equiv(" + result + ", " + result0 + ")";
+                  }
                 }));
     return constraint(arg, termActions);
   }
