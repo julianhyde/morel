@@ -101,11 +101,29 @@ public class MartelliUnifier extends Unifier {
       if (!work.varAnyQueue.isEmpty()) {
         TermTerm pair = work.varAnyQueue.remove(0);
         final Variable variable = (Variable) pair.left;
-        final Term term = pair.right;
+        Term term = pair.right;
+
+        // Occurs check
         if (term.contains(variable)) {
           tracer.onCycle(variable, term);
           return failure("cycle: variable " + variable + " in " + term);
         }
+
+        // If 'term' is already in the table, map 'variable' to its ultimate
+        // target.
+        while (term instanceof Variable) {
+          final Term term2 = result.get(term);
+          if (term2 == null) {
+            break;
+          }
+          term = term2;
+        }
+
+        if (term.equals(variable)) {
+          // We already knew that 'pair.left' and 'pair.right' were equivalent.
+          continue;
+        }
+
         tracer.onVariable(variable, term);
         final Term priorTerm = result.put(variable, term);
         if (priorTerm != null && !priorTerm.equals(term)) {
