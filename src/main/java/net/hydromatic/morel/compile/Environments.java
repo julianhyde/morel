@@ -109,14 +109,14 @@ public abstract class Environments {
               Type type1 = types.get(i);
               if (key.structure == null) {
                 if (i == 0) {
-                  bindings.add(Binding.over(overloadId));
+                  bindings.add(Binding.over(overloadId, value));
                 }
                 Core.IdPat id = core.idPat(type1, nameGen2);
                 bindings.add(Binding.inst(id, overloadId, value));
               }
               if (key.alias != null) {
                 if (i == 0) {
-                  bindings.add(Binding.over(overloadId));
+                  bindings.add(Binding.over(overloadId, value));
                 }
                 Core.IdPat id = core.idPat(type1, nameGen2);
                 bindings.add(Binding.inst(id, overloadId, value));

@@ -1701,6 +1701,13 @@ public class Core {
     }
 
     public abstract SetStep copy(boolean distinct, List<Exp> args, StepEnv env);
+
+    @Override
+    public boolean isOrdered(boolean inputIsOrdered) {
+      // The output is ordered if input and all arguments are ordered.
+      return inputIsOrdered
+          && args.stream().allMatch(arg -> arg.type instanceof ListType);
+    }
   }
 
   /** An {@code except} clause in a {@code from} expression. */
@@ -1755,7 +1762,7 @@ public class Core {
     }
   }
 
-  /** An {@code union} clause in a {@code from} expression. */
+  /** A {@code union} clause in a {@code from} expression. */
   public static class Union extends SetStep {
     Union(StepEnv env, boolean distinct, ImmutableList<Exp> args) {
       super(Op.UNION, env, distinct, args);

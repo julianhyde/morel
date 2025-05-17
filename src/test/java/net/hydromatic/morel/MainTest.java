@@ -687,6 +687,9 @@ public class MainTest {
   @SuppressWarnings("ConstantConditions")
   @Test
   void testDummy() {
+    ml("from d in [{a=1,b=true}] yield d.a into sum")
+        .assertType("int")
+        .assertEval(is(1));
     switch (0) {
       case 0:
         ml("1").assertEval(is(1));
@@ -2462,6 +2465,8 @@ public class MainTest {
         .assertType("{a:int, b:bool} list");
     ml("from d in [{a=1,b=true}], i in [2] yield i yield 3.0")
         .assertType("real list");
+
+    // with
     ml("from d in [{a=1,b=true}], i in [2] yield {d with b=false}")
         .assertType("{a:int, b:bool} list");
     if (false) {
@@ -2471,6 +2476,7 @@ public class MainTest {
       ml("from d in [{a=1,b=true}], i in [2] yield {d with b=false} order b")
           .assertType("{a:int, b:bool} list");
     }
+
     ml("from e in [{x=1,y=2},{x=3,y=4},{x=5,y=6}]\n"
             + "  yield {z=e.x}\n"
             + "  where z > 2\n"
@@ -2483,17 +2489,24 @@ public class MainTest {
                 throwsA(
                     TypeResolver.TypeException.class,
                     is("no field 'x' in type '{a:int, b:bool}'")));
-    ml("from d in [{a=1,b=true}] yield d.a into Bag.length").assertType("int");
+
+    // into
+    ml("from d in [{a=1,b=true}] yield d.a into List.length").assertType("int");
+    ml("from d in bag [{a=1,b=true}] yield d.a into Bag.length")
+        .assertType("int");
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int")
         .assertEval(is(1));
+
+    // exists, forall
     ml("exists d in [{a=1,b=true}] where d.a = 0").assertType("bool");
     ml("forall d in [{a=1,b=true}] require d.a = 0").assertType("bool");
+
+    // invalid last step
     mlE("from d in [{a=1,b=true}] yield d.a into sum $yield \"a\"$")
         .assertCompileException("'into' step must be last in 'from'");
     mlE("exists d in [{a=1,b=true}] yield d.a $into sum$")
         .assertCompileException("'into' step must not occur in 'exists'");
-
     mlE("forall d in [{a=1,b=true}] yield d.a $into sum$")
         .assertCompileException("'into' step must not occur in 'forall'");
     mlE("forall d in [{a=1,b=true}] yield d.a $compute sum$")
@@ -3277,7 +3290,7 @@ public class MainTest {
 
     ml("from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]\n"
             + "  group e.a compute rows = (fn x => x)")
-        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} bag} list"))
+        .assertType(hasMoniker("{a:int, rows:{a:int, b:int} list} list"))
         .assertEvalIter(
             equalsUnordered(
                 list(1, list(list(1, 5), list(1, 1))),

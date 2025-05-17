@@ -637,7 +637,8 @@ public class TypeSystem {
   }
 
   /** Implementation of {@link MultiType}. */
-  private static class MultiTypeImpl implements MultiType {
+  // TODO: make MultiType top-level and merge with MultiTypeImpl
+  static class MultiTypeImpl implements MultiType {
     final List<Type> types;
 
     MultiTypeImpl(Iterable<? extends Type> types) {
@@ -651,12 +652,12 @@ public class TypeSystem {
 
     @Override
     public Key key() {
-      throw new UnsupportedOperationException();
+      return Keys.multi(transformEager(types, Type::key));
     }
 
     @Override
     public Op op() {
-      throw new UnsupportedOperationException();
+      return Op.MULTI_TYPE;
     }
 
     @Override

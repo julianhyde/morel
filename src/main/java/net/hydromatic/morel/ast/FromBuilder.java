@@ -84,6 +84,7 @@ public class FromBuilder {
    * Whether the result of this "from" expression has deterministic order. The
    * result will be a {@code list} if true, a {@code bag} if false.
    */
+  // TODO: remove this field. It is not used.
   private boolean ordered = true;
 
   /** Use {@link net.hydromatic.morel.ast.CoreBuilder#fromBuilder}. */

@@ -2354,7 +2354,10 @@ public enum BuiltIn {
       "Relational",
       "count",
       "count",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), INT))),
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), INT)),
+              ts.forallType(1, h -> ts.fnType(h.list(0), INT)))),
 
   /**
    * Function "Relational.nonEmpty", of type "&alpha; bag &rarr; bool".
@@ -2475,7 +2478,10 @@ public enum BuiltIn {
       "Relational",
       "sum",
       "sum",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
+              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
 
   /**
    * Function "Relational.max", aka "max", of type "&alpha; bag &rarr; &alpha;"
@@ -2485,7 +2491,10 @@ public enum BuiltIn {
       "Relational",
       "max",
       "max",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
+              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
 
   /**
    * Function "Relational.min", aka "min", of type "&alpha; bag &rarr; &alpha;"
@@ -2495,7 +2504,10 @@ public enum BuiltIn {
       "Relational",
       "min",
       "min",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
+              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
 
   /** Function "Sys.clearEnv", of type "unit &rarr; unit". */
   SYS_CLEAR_ENV("Sys", "clearEnv", ts -> ts.fnType(UNIT, UNIT)),
@@ -3117,6 +3129,10 @@ public enum BuiltIn {
     for (BuiltIn builtIn : values()) {
       final Type type = builtIn.typeFunction.apply(typeSystem);
       if (type instanceof TypeSystem.MultiType) {
+        if (true) {
+          consumer.accept(builtIn, type);
+          continue;
+        }
         ((TypeSystem.MultiType) type)
             .types()
             .forEach(t -> consumer.accept(builtIn, t));

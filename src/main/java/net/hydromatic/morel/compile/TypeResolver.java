@@ -166,11 +166,12 @@ public class TypeResolver {
     BuiltIn.forEach(
         typeSystem,
         (builtIn, type) -> {
+          Kind val = type.op() == Op.MULTI_TYPE ? Kind.INST : Kind.VAL;
           if (builtIn.structure == null) {
-            typeEnvs.accept(builtIn.mlName, Kind.VAL, type);
+            typeEnvs.accept(builtIn.mlName, val, type);
           }
           if (builtIn.alias != null) {
-            typeEnvs.accept(builtIn.alias, Kind.VAL, type);
+            typeEnvs.accept(builtIn.alias, val, type);
           }
         });
     BuiltIn.forEachStructure(
@@ -600,12 +601,10 @@ public class TypeResolver {
     final Variable v11 = toVariable(recordTerm(ImmutableSortedMap.of()));
     final Sequence c11 = listTerm(v11);
     Triple p = Triple.of(env, v11, toVariable(c11));
-    Triple prevP = p;
     for (Ord<Ast.FromStep> step : Ord.zip(query.steps)) {
       // Whether this is the last step. (The synthetic "yield" counts as a last
       // step.)
       final boolean lastStep = step.i == query.steps.size() - 1;
-      prevP = p;
       p = deduceStepType(env, step.e, p, fieldVars, fromSteps);
       switch (step.e.op) {
         case COMPUTE:
@@ -652,7 +651,6 @@ public class TypeResolver {
       Triple p,
       PairList<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
-    final List<Term> terms;
     switch (step.op) {
       case SCAN:
         return deduceScanStepType((Ast.Scan) step, p, fieldVars, fromSteps);
@@ -706,7 +704,7 @@ public class TypeResolver {
       case INTERSECT:
         final Ast.SetStep setStep = (Ast.SetStep) step;
         final List<Ast.Exp> args2 = new ArrayList<>();
-        terms = new ArrayList<>();
+        final List<Term> terms = new ArrayList<>();
         terms.add(p.c);
         for (Ast.Exp arg : setStep.args) {
           final Unifier.Variable v15 = unifier.variable();
@@ -740,10 +738,7 @@ public class TypeResolver {
           }
           if (term instanceof Sequence) {
             final Sequence sequence = (Sequence) term;
-            terms = sequence.terms;
-            forEach(record2.args.keySet(), terms, envs::bind);
-          } else {
-            terms = ImmutableList.of(v6);
+            forEach(record2.args.keySet(), sequence.terms, envs::bind);
           }
         } else {
           String label = first(ast.implicitLabelOpt(yield.exp), CURRENT);
@@ -776,7 +771,7 @@ public class TypeResolver {
         final Variable v13 = unifier.variable();
         final Variable v14 = unifier.variable();
         final Ast.Exp intoExp = deduceType(p.env, into.exp, v14);
-        final Sequence fnType = fnTerm(bagTerm(p.v), v13);
+        final Sequence fnType = fnTerm(p.c, v13);
         equiv(v14, fnType);
         fromSteps.add(into.copy(intoExp));
         // Ordering is irrelevant because result is a singleton.
@@ -993,18 +988,24 @@ public class TypeResolver {
       final Variable v8 = unifier.variable();
       reg(id, v8);
       final Variable v9 = unifier.variable();
-      final Ast.Exp aggregateFn2 = deduceType(p.env, aggregate.aggregate, v9);
+      final Ast.Exp aggregateFn2;
       final Ast.Exp arg2;
-      final Variable v10;
+      final Variable c10;
       if (aggregate.argument == null) {
+        c10 = p.c;
         arg2 = null;
-        v10 = p.v;
       } else {
-        v10 = unifier.variable();
+        // The collection that is the input to the aggregate function is ordered
+        // iff the input is ordered.
+        final Variable v10 = unifier.variable();
+        c10 = unifier.variable();
+        isListOrBagMatchingInput(c10, v10, p.c, p.v);
         arg2 = deduceType(p.env, aggregate.argument, v10);
       }
+      aggregateFn2 = deduceApplyFnType(p.env, aggregate.aggregate, v9, c10, v8);
       reg(aggregate.aggregate, v9);
-      Sequence fnType = fnTerm(bagTerm(v10), v8);
+
+      final Sequence fnType = fnTerm(c10, v8);
       equiv(v9, fnType);
       env3 = env3.bind(id.name, v8);
       fieldVars.add(id, v8);
@@ -1070,11 +1071,12 @@ public class TypeResolver {
       final Variable vRec = unifier.variable();
       final Variable vField = unifier.variable();
       deduceRecordSelectorType(
-          env, vField, vRec, (Ast.RecordSelector) apply.arg);
+          env, (Ast.RecordSelector) apply.arg, vRec, vField);
       arg2 = reg(apply.arg, vArg, fnTerm(vRec, vField));
     } else {
       arg2 = deduceType(env, apply.arg, vArg);
     }
+
     final Ast.Exp fn2;
     if (apply.fn instanceof Ast.RecordSelector) {
       // "apply" is "#field arg" and has type "v";
@@ -1082,49 +1084,11 @@ public class TypeResolver {
       // "arg" has type "vArg".
       // When we resolve "vArg" we can then deduce "v".
       fn2 =
-          deduceRecordSelectorType(env, v, vArg, (Ast.RecordSelector) apply.fn);
-    } else if (apply.fn instanceof Ast.Id
-        && env.hasOverloaded(((Ast.Id) apply.fn).name)) {
-      // "apply" is "f arg" and has type "v";
-      // "f" is an overloaded name, and has type "vArg -> v";
-      // "arg" has type "vArg".
-      // To resolve overloading, we gather all known overloads, and apply
-      // them as constraints to "vArg".
-      final Ast.Id id = (Ast.Id) apply.fn;
-      final List<Variable> variables = new ArrayList<>();
-      env.collectInstances(
-          typeSystem,
-          id.name,
-          term -> {
-            final Variable variable = toVariable(term);
-            variables.add(variable);
-            if (term instanceof Sequence) {
-              Sequence sequence = (Sequence) term;
-              if (sequence.operator.equals(FN_TY_CON)) {
-                assert sequence.terms.size() == 2;
-                Term arg = sequence.terms.get(0);
-                Term result = sequence.terms.get(1);
-                overloads.add(
-                    new Inst(
-                        id.name,
-                        variable,
-                        toVariable(arg),
-                        toVariable(result)));
-              }
-            }
-          });
-      final PairList<Term, Term> argResults = PairList.of();
-      for (Inst inst : overloads) {
-        if (inst.name.equals(id.name) && variables.contains(inst.vFn)) {
-          argResults.add(inst.vArg, inst.vResult);
-        }
-      }
-      checkArgument(variables.size() == argResults.size());
-      constrain(vArg, v, argResults);
-      fn2 = reg(id, vFn);
+          deduceRecordSelectorType(env, (Ast.RecordSelector) apply.fn, vArg, v);
     } else {
-      fn2 = deduceType(env, apply.fn, vFn);
+      fn2 = deduceApplyFnType(env, apply.fn, vFn, vArg, v);
     }
+
     if (fn2 instanceof Ast.Id) {
       final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(((Ast.Id) fn2).name);
       if (builtIn != null) {
@@ -1134,11 +1098,65 @@ public class TypeResolver {
     return reg(apply.copy(fn2, arg2), v);
   }
 
+  /**
+   * Deduces the datatype of a function being applied to an argument. If the
+   * function is overloaded, the argument will help us resolve the overloading.
+   *
+   * @param env Compile-time environment
+   * @param fn Function expression (often an identifier)
+   * @param vFn Variable for the function type
+   * @param vArg Variable for the argument type
+   * @param vResult Variable for the result type
+   * @return the function expression with its type deduced
+   */
+  private Ast.Exp deduceApplyFnType(
+      TypeEnv env, Ast.Exp fn, Variable vFn, Variable vArg, Variable vResult) {
+    if (!(fn instanceof Ast.Id)) {
+      return deduceType(env, fn, vFn);
+    }
+    final Ast.Id id = (Ast.Id) fn;
+    if (!env.hasOverloaded(id.name)) {
+      return deduceType(env, fn, vFn);
+    }
+    // "apply" is "f arg" and has type "v";
+    // "f" is an overloaded name, and has type "vArg -> v";
+    // "arg" has type "vArg".
+    // To resolve overloading, we gather all known overloads, and apply
+    // them as constraints to "vArg".
+    final List<Variable> variables = new ArrayList<>();
+    env.collectInstances(
+        typeSystem,
+        id.name,
+        term -> {
+          final Variable variable = toVariable(term);
+          variables.add(variable);
+          if (term instanceof Sequence) {
+            Sequence sequence = (Sequence) term;
+            if (sequence.operator.equals(FN_TY_CON)) {
+              assert sequence.terms.size() == 2;
+              Term arg = sequence.terms.get(0);
+              Term result = sequence.terms.get(1);
+              overloads.add(
+                  new Inst(
+                      id.name, variable, toVariable(arg), toVariable(result)));
+            }
+          }
+        });
+    final PairList<Term, Term> argResults = PairList.of();
+    for (Inst inst : overloads) {
+      if (inst.name.equals(id.name) && variables.contains(inst.vFn)) {
+        argResults.add(inst.vArg, inst.vResult);
+      }
+    }
+    constrain(vArg, vResult, argResults);
+    return reg(id, vFn);
+  }
+
   private Ast.RecordSelector deduceRecordSelectorType(
       TypeEnv env,
-      Variable vResult,
+      Ast.RecordSelector recordSelector,
       Variable vArg,
-      Ast.RecordSelector recordSelector) {
+      Variable vResult) {
     final String fieldName = recordSelector.name;
     actionMap.put(
         vArg,
@@ -1944,6 +1962,13 @@ public class TypeResolver {
           subst2 = subst2.plus(typeSystem.typeVariable(i), unifier.variable());
         }
         return toTerm(forallType.type, subst2);
+      case MULTI_TYPE:
+        // We cannot convert an overloaded type into a term; it would have to
+        // be a term plus constraint(s). Luckily, this method is called only
+        // to generate a plausible type for a record such as the Relational
+        // structure, so it works if we just return the first type.
+        final TypeSystem.MultiType multiType = (TypeSystem.MultiType) type;
+        return toTerm(multiType.types().get(0), subst);
       default:
         throw new AssertionError("unknown type: " + type.moniker());
     }

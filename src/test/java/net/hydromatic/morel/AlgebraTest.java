@@ -274,8 +274,8 @@ public class AlgebraTest {
           + "  where e.deptno = thirty\n"
           + "  yield e.empno\n"
           + "end",
-      "map (fn e => (#empno e))\n"
-          + "  (List.filter (fn e => (#deptno e) = 30) (#emps scott))",
+      "Bag.map (fn e => (#empno e))\n"
+          + "  (Bag.filter (fn e => (#deptno e) = 30) (#emps scott))",
     };
     Stream.of(queries)
         .filter(q -> !q.startsWith("#"))

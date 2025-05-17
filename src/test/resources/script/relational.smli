@@ -757,6 +757,22 @@ from i in [2, 1, 2, 2, 2, 3] except [2, 2, 4], [2];
 from i in [2, 1, 2, 2, 2, 3] except [2, 2, 4], [2, 2, 2];
 > val it = [1,3] : int list
 
+(*) Hybrid union/intersect/except (list and bag) yields bag
+from d in scott.depts yield d.deptno;
+> val it = [10,20,30,40] : int bag
+from i in [10, 15, 20] union (from d in scott.depts yield d.deptno);
+> val it = [10,15,20,10,20,30,40] : int bag
+from i in [10, 15, 20] intersect (from d in scott.depts yield d.deptno);
+> val it = [20,10] : int bag
+from i in [10, 15, 20] except (from d in scott.depts yield d.deptno);
+> val it = [15] : int bag
+from d in scott.depts yield d.deptno union [10, 15, 20];
+> val it = [10,20,30,40,10,15,20] : int bag
+from d in scott.depts yield d.deptno intersect [10, 15, 20];
+> val it = [20,10] : int bag
+from d in scott.depts yield d.deptno except [10, 15, 20];
+> val it = [40,30] : int bag
+
 (*) Set operators are not "lateral". They can't see the "current row".
 val orders = [{id=1, items=["beer"]}, {id=2, items=[]}];
 > val orders = [{id=1,items=["beer"]},{id=2,items=[]}]
@@ -977,23 +993,23 @@ group k compute x = (fn vs => k + (sum vs)) of v;
 
 from (x, y, z) in [("a", "p", "e"), ("m", "a", "n"), ("a", "l", "e"), ("a", "w", "e")]
   group x compute z = (fn ys => concat (x :: ys)) of y;
-> val it = [{x="a",z="aplw"},{x="m",z="ma"}] : {x:string, z:string} bag
+> val it = [{x="a",z="aplw"},{x="m",z="ma"}] : {x:string, z:string} list
 
 (*) similar, but with composite key
 from (x, y, z) in [("a", "p", "e"), ("m", "a", "n"), ("a", "l", "e"), ("a", "w", "e")]
   group x, z compute a = (fn ys => x ^ ":" ^ z ^ ":" ^ (concat ys)) of y;
 > val it = [{a="m:n:a",x="m",z="n"},{a="a:e:plw",x="a",z="e"}]
->   : {a:string, x:string, z:string} bag
+>   : {a:string, x:string, z:string} list
 
 (*) similar, but aggregate does not reference key
 from (x, y, z) in [("a", "p", "e"), ("m", "a", "n"), ("a", "l", "e"), ("a", "w", "e")]
   group x compute z = (fn ys => concat ys) of y;
-> val it = [{x="a",z="plw"},{x="m",z="a"}] : {x:string, z:string} bag
+> val it = [{x="a",z="plw"},{x="m",z="a"}] : {x:string, z:string} list
 
 (*) equivalent to previous
 from (x, y, z) in [("a", "p", "e"), ("m", "a", "n"), ("a", "l", "e"), ("a", "w", "e")]
   group x compute z = concat of y;
-> val it = [{x="a",z="plw"},{x="m",z="a"}] : {x:string, z:string} bag
+> val it = [{x="a",z="plw"},{x="m",z="a"}] : {x:string, z:string} list
 
 (*) user-defined aggregate function
 let
@@ -1900,7 +1916,7 @@ let
 in
   from r in (records 3)
 end;
-> val it = [{i=3,j=2}] : {i:int,j:int} bag
+> val it = [{i=3,j=2}] : {i:int, j:int} bag
 
 (*) dummy
 from message in ["the end"];
