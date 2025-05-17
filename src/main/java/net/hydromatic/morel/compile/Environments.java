@@ -41,6 +41,7 @@ import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.MultiType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -99,8 +100,8 @@ public abstract class Environments {
             value = key.sessionValue.apply(session);
           }
           // If type is a MultiType, define several overloads.
-          if (type instanceof TypeSystem.MultiType) {
-            List<Type> types = ((TypeSystem.MultiType) type).types();
+          if (type instanceof MultiType) {
+            List<Type> types = ((MultiType) type).types;
             Core.IdPat overloadId =
                 core.idPat(types.get(0), key.mlName, nameGen);
             final Supplier<String> nameGen2 =

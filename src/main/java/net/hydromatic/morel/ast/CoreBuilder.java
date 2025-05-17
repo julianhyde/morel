@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.allMatch;
+import static net.hydromatic.morel.util.Static.filterEager;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.transform;
@@ -45,7 +46,6 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
-import java.util.stream.Collectors;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
@@ -56,6 +56,7 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.MultiType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -167,14 +168,11 @@ public enum CoreBuilder {
   public Core.Literal functionLiteral(
       TypeSystem typeSystem, BuiltIn builtIn, List<Core.Exp> argList) {
     Type type = builtIn.typeFunction.apply(typeSystem);
-    if (type instanceof TypeSystem.MultiType) {
+    if (type instanceof MultiType) {
       final Type arg0Type =
           typeSystem.tupleType(transform(argList, Core.Exp::type));
       final List<Type> applicableTypes =
-          ((TypeSystem.MultiType) type)
-              .types().stream()
-                  .filter(t -> t.canCallArgOf(arg0Type))
-                  .collect(Collectors.toList());
+          filterEager(((MultiType) type).types, t -> t.canCallArgOf(arg0Type));
       checkArgument(
           applicableTypes.size() == 1,
           "expected one overload for arguments %s, got %s %s",

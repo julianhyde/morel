@@ -71,6 +71,7 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.MultiType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -1967,8 +1968,8 @@ public class TypeResolver {
         // be a term plus constraint(s). Luckily, this method is called only
         // to generate a plausible type for a record such as the Relational
         // structure, so it works if we just return the first type.
-        final TypeSystem.MultiType multiType = (TypeSystem.MultiType) type;
-        return toTerm(multiType.types().get(0), subst);
+        final MultiType multiType = (MultiType) type;
+        return toTerm(multiType.types.get(0), subst);
       default:
         throw new AssertionError("unknown type: " + type.moniker());
     }

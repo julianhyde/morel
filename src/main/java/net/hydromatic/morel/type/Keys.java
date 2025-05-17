@@ -131,7 +131,7 @@ public class Keys {
     return new DataTypeKey(name, arguments, typeConstructors);
   }
 
-  /** Returns a key that identifies a {@link TypeSystem.MultiType}. */
+  /** Returns a key that identifies a {@link MultiType}. */
   public static Type.Key multi(List<? extends Type.Key> keys) {
     return new MultiTypeKey(ImmutableList.copyOf(keys));
   }
@@ -513,7 +513,7 @@ public class Keys {
     }
   }
 
-  /** Key that identifies a {@link TypeSystem.MultiType}. */
+  /** Key that identifies a {@link MultiType}. */
   private static class MultiTypeKey extends Type.Key {
     private final List<Type.Key> args;
 
@@ -531,7 +531,7 @@ public class Keys {
 
     @Override
     public Type toType(TypeSystem typeSystem) {
-      return new TypeSystem.MultiTypeImpl(typeSystem.typesFor(args));
+      return new MultiType(typeSystem.typesFor(args));
     }
   }
 

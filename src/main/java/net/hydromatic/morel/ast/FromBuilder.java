@@ -81,13 +81,6 @@ public class FromBuilder {
    */
   private int removeIfLastIndex = Integer.MIN_VALUE;
 
-  /**
-   * Whether the result of this "from" expression has deterministic order. The
-   * result will be a {@code list} if true, a {@code bag} if false.
-   */
-  // TODO: remove this field. It is not used.
-  private boolean ordered = true;
-
   /** Use {@link net.hydromatic.morel.ast.CoreBuilder#fromBuilder}. */
   FromBuilder(TypeSystem typeSystem, @Nullable Environment env) {
     this.typeSystem = typeSystem;
@@ -118,7 +111,6 @@ public class FromBuilder {
       RefChecker.of(typeSystem, env.bindAll(bindings))
           .visitStep(step, stepEnv());
     }
-    ordered = step.isOrdered(ordered);
     if (removeIfNotLastIndex == steps.size() - 1) {
       // A trivial record yield with a single yield, e.g. 'yield {i = i}', has
       // a purpose only if it is the last step. (It forces the return to be a

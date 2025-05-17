@@ -3128,17 +3128,7 @@ public enum BuiltIn {
     }
     for (BuiltIn builtIn : values()) {
       final Type type = builtIn.typeFunction.apply(typeSystem);
-      if (type instanceof TypeSystem.MultiType) {
-        if (true) {
-          consumer.accept(builtIn, type);
-          continue;
-        }
-        ((TypeSystem.MultiType) type)
-            .types()
-            .forEach(t -> consumer.accept(builtIn, t));
-      } else {
-        consumer.accept(builtIn, type);
-      }
+      consumer.accept(builtIn, type);
     }
   }
 
