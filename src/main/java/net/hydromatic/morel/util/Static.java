@@ -33,7 +33,6 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Collector;
 
 /** Utilities. */
 public class Static {
@@ -65,30 +64,6 @@ public class Static {
     return low.equals("true") || low.equals("1") || low.isEmpty()
         ? true
         : low.equals("false") || low.equals("0") ? false : defaultVal;
-  }
-
-  /**
-   * Returns a {@code Collector} that accumulates the input elements into a
-   * Guava {@link ImmutableList} via a {@link ImmutableList.Builder}.
-   *
-   * <p>It will be obsolete when we move to Guava 21.0, which has {@code
-   * ImmutableList.toImmutableList()}.
-   *
-   * @param <T> Type of the input elements
-   * @return a {@code Collector} that collects all the input elements into an
-   *     {@link ImmutableList}, in encounter order
-   */
-  public static <T>
-      Collector<T, ImmutableList.Builder<T>, ImmutableList<T>>
-          toImmutableList() {
-    return Collector.of(
-        ImmutableList::builder,
-        ImmutableList.Builder::add,
-        (t, u) -> {
-          t.addAll(u.build());
-          return t;
-        },
-        ImmutableList.Builder::build);
   }
 
   /**
@@ -187,6 +162,39 @@ public class Static {
   public static int nextPowerOfTwo(int n) {
     final int p = Integer.numberOfLeadingZeros(n);
     return 1 << (Integer.SIZE - p);
+  }
+
+  /** Returns whether a predicate is true for all elements of a list. */
+  public static <E> boolean allMatch(
+      Iterable<? extends E> iterable, Predicate<E> predicate) {
+    for (E e : iterable) {
+      if (!predicate.test(e)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Returns whether a predicate is true for at least one element of a list. */
+  public static <E> boolean anyMatch(
+      Iterable<? extends E> iterable, Predicate<E> predicate) {
+    for (E e : iterable) {
+      if (predicate.test(e)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Returns whether a predicate is not true for any element of a list. */
+  public static <E> boolean noneMatch(
+      Iterable<? extends E> iterable, Predicate<E> predicate) {
+    for (E e : iterable) {
+      if (predicate.test(e)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Lazily transforms a list, applying a mapping function to each element. */
