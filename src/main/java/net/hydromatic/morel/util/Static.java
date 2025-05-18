@@ -269,6 +269,38 @@ public class Static {
     }
   }
 
+  /**
+   * Eagerly converts a List to an ImmutableList, keeping elements that pass a
+   * predicate.
+   */
+  public static <E> ImmutableList<E> filterEager(
+      List<? extends E> elements, Predicate<E> predicate) {
+    // Do all the elements match?
+    for (int i = 0; i < elements.size(); i++) {
+      E element = elements.get(i);
+      if (predicate.test(element)) {
+        continue;
+      }
+      // Optimize by making the builder the same size as the collection.
+      final ImmutableList.Builder<E> b =
+          ImmutableList.builderWithExpectedSize(elements.size());
+      // Add all elements before the first non-matching element.
+      for (int j = 0; j < i; j++) {
+        b.add(elements.get(j));
+      }
+      // Test and add all elements after the first non-matching element.
+      for (int j = i + 1; j < elements.size(); j++) {
+        E e = elements.get(j);
+        if (predicate.test(e)) {
+          b.add(e);
+        }
+      }
+      return b.build();
+    }
+    // All elements match. We can just return the original list.
+    return ImmutableList.copyOf(elements);
+  }
+
   /** Returns the first index in a list where a predicate is true, or -1. */
   public static <E> int find(List<? extends E> list, Predicate<E> predicate) {
     if (list instanceof RandomAccess) {
