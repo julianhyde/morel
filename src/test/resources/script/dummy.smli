@@ -16,6 +16,12 @@
  * language governing permissions and limitations under the
  * License.
  *)
+(*) 'group' with aggregate function that references the key
+from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
+group k compute x = (fn vs => k + (sum vs)) of v;
+> val it = [{k=1,x=12},{k=2,x=19}] : {k:int, x:int} list
+
+
 (* As previous, but at top level. *)
 over o1a;
 > over o1a
