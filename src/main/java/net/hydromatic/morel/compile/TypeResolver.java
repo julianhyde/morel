@@ -61,6 +61,7 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
@@ -144,8 +145,7 @@ public class TypeResolver {
     int attempt = 0;
     for (; ; ) {
       int original = typeSystem.expandCount.get();
-      final TypeResolver.Resolved resolved =
-          typeResolver.deduceType_(env, decl);
+      final Resolved resolved = typeResolver.deduceType_(env, decl);
       if (typeSystem.expandCount.get() == original || attempt++ > 1) {
         return resolved;
       }
@@ -163,22 +163,10 @@ public class TypeResolver {
   }
 
   private Resolved deduceType_(Environment env, Ast.Decl decl) {
-    final TypeEnvHolder typeEnvs = new TypeEnvHolder(EmptyTypeEnv.INSTANCE);
-    BuiltIn.forEach(
-        typeSystem,
-        (builtIn, type) -> {
-          Kind val = type.op() == Op.MULTI_TYPE ? Kind.INST : Kind.VAL;
-          if (builtIn.structure == null) {
-            typeEnvs.accept(builtIn.mlName, val, type);
-          }
-          if (builtIn.alias != null) {
-            typeEnvs.accept(builtIn.alias, val, type);
-          }
-        });
-    BuiltIn.forEachStructure(
-        typeSystem,
-        (structure, type) -> typeEnvs.accept(structure.name, Kind.VAL, type));
+    final TypeEnvHolder typeEnvs =
+        new TypeEnvHolder(new EnvironmentTypeEnv(env, EmptyTypeEnv.INSTANCE));
     env.forEachType(typeSystem, typeEnvs);
+
     final TypeEnv typeEnv = typeEnvs.typeEnv;
     final Ast.Decl node2 = deduceDeclType(typeEnv, decl, PairList.of());
     final boolean debug = false;
@@ -708,11 +696,11 @@ public class TypeResolver {
         final List<Term> terms = new ArrayList<>();
         terms.add(p.c);
         for (Ast.Exp arg : setStep.args) {
-          final Unifier.Variable v15 = unifier.variable();
+          final Variable v15 = unifier.variable();
           terms.add(v15);
           args2.add(deduceType(env, arg, v15));
         }
-        final Unifier.Variable v4 = unifier.variable();
+        final Variable v4 = unifier.variable();
         isListIfAllAreLists(terms, v4, p.v);
         fromSteps.add(setStep.copy(setStep.distinct, args2));
         return new Triple(p.env, p.v, v4);
@@ -922,47 +910,6 @@ public class TypeResolver {
     return unifier.apply(ARG_TY_CON, args);
   }
 
-  private class FieldDefiner implements Unifier.Action {
-    private final PairList<Ast.Id, Variable> fieldVars;
-    private final List<PatTerm> termMap;
-
-    FieldDefiner(PairList<Ast.Id, Variable> fieldVars, List<PatTerm> termMap) {
-      this.fieldVars = fieldVars.immutable();
-      this.termMap = ImmutableList.copyOf(termMap);
-    }
-
-    @Override
-    public void accept(
-        Variable variable,
-        Term term,
-        Substitution substitution,
-        BiConsumer<Term, Term> termPairs) {
-      checkArgument(term instanceof Sequence);
-      Sequence sequence = (Sequence) term;
-      checkArgument(sequence.operator.equals("list"));
-      checkArgument(sequence.terms.size() == 1);
-      Term arg = sequence.terms.get(0);
-      List<Term> args;
-      if (arg instanceof Sequence) {
-        args = ((Sequence) arg).terms;
-      } else {
-        args = ImmutableList.of(arg);
-      }
-      for (PatTerm patTerm : termMap) {
-        Term apply = patTerm.accessor.apply(arg);
-        System.out.printf(
-            "id [%s] term [%s] apply [%s] %n", patTerm.id, patTerm.term, apply);
-        // if (t instanceof Record) {
-        //   final Record record = (Record) t;
-        //   for (Map.Entry<String, Term> entry : record.map.entrySet()) {
-        //     fieldVars.add(ast.id(Pos.ZERO, entry.getKey()),
-        // entry.getValue());
-        //   }
-        // }
-      }
-    }
-  }
-
   private Triple deduceGroupStepType(
       TypeEnv env,
       Ast.Group group,
@@ -1020,7 +967,7 @@ public class TypeResolver {
       fromSteps.add(group.copy(groupExps, aggregates));
 
       // Output is ordered iff input is ordered.
-      final Unifier.Variable c2 = unifier.variable();
+      final Variable c2 = unifier.variable();
       isListOrBagMatchingInput(c2, v2, p.c, p.v);
       return Triple.of(env3, v2, c2);
     } else {
@@ -1112,6 +1059,26 @@ public class TypeResolver {
    */
   private Ast.Exp deduceApplyFnType(
       TypeEnv env, Ast.Exp fn, Variable vFn, Variable vArg, Variable vResult) {
+    @Nullable Type type = getType(env, fn);
+    if (type instanceof MultiType) {
+      final MultiType multiType = (MultiType) type;
+      final PairList<Term, Term> argResults = PairList.of();
+      for (Type type1 : multiType.types) {
+        Subst subst = Subst.EMPTY;
+        if (type1 instanceof ForallType) {
+          for (int i = 0; i < ((ForallType) type1).parameterCount; i++) {
+            subst = subst.plus(typeSystem.typeVariable(i), unifier.variable());
+          }
+          type1 = typeSystem.unqualified(type1);
+        }
+        FnType fnType = (FnType) type1;
+        argResults.add(
+            toTerm(fnType.paramType, subst), toTerm(fnType.resultType, subst));
+      }
+      constrain(vArg, vResult, argResults);
+      return reg(fn, vFn);
+    }
+
     if (!(fn instanceof Ast.Id)) {
       return deduceType(env, fn, vFn);
     }
@@ -1151,6 +1118,43 @@ public class TypeResolver {
     }
     constrain(vArg, vResult, argResults);
     return reg(id, vFn);
+  }
+
+  private @Nullable Type getType(TypeEnv env, Ast.Exp exp) {
+    switch (exp.op) {
+      case BOOL_LITERAL:
+        return PrimitiveType.BOOL;
+      case CHAR_LITERAL:
+        return PrimitiveType.CHAR;
+      case INT_LITERAL:
+        return PrimitiveType.INT;
+      case REAL_LITERAL:
+        return PrimitiveType.REAL;
+      case STRING_LITERAL:
+        return PrimitiveType.STRING;
+      case UNIT_LITERAL:
+        return PrimitiveType.UNIT;
+      case ID:
+        final Ast.Id id = (Ast.Id) exp;
+        Type type = env.getTypeOpt(id.name);
+        if (type != null) {
+          reg(exp, toTerm(type, Subst.EMPTY));
+        }
+        return type;
+      case APPLY:
+        final Ast.Apply apply = (Ast.Apply) exp;
+        if (apply.fn.op == Op.RECORD_SELECTOR) {
+          Type argType = getType(env, apply.arg);
+          if (argType instanceof RecordType) {
+            final Ast.RecordSelector recordSelector =
+                (Ast.RecordSelector) apply.fn;
+            return ((RecordType) argType).argNameTypes.get(recordSelector.name);
+          }
+        }
+        // fall through
+      default:
+        return null;
+    }
   }
 
   private Ast.RecordSelector deduceRecordSelectorType(
@@ -1702,11 +1706,11 @@ public class TypeResolver {
         //
         // we cannot deduce whether a 'c' field is allowed.
         final Ast.RecordPat recordPat = (Ast.RecordPat) pat;
-        final NavigableMap<String, Term> labelTerms = RecordType.mutableMap();
+        final NavigableMap<String, Term> labelTerms = mutableMap();
         if (labelNames == null) {
           labelNames = new TreeSet<>(recordPat.args.keySet());
         }
-        final SortedMap<String, Ast.Pat> args = RecordType.mutableMap();
+        final SortedMap<String, Ast.Pat> args = mutableMap();
         forEachIndexed(
             labelNames,
             (labelName, i) -> {
@@ -1739,8 +1743,7 @@ public class TypeResolver {
                 final Sequence sequence = (Sequence) t;
                 final List<String> fieldList = fieldList(sequence);
                 if (fieldList != null) {
-                  final NavigableMap<String, Term> labelTerms2 =
-                      RecordType.mutableMap();
+                  final NavigableMap<String, Term> labelTerms2 = mutableMap();
                   forEachIndexed(
                       fieldList,
                       (fieldName, i) -> {
@@ -1993,9 +1996,8 @@ public class TypeResolver {
     }
 
     @Override
-    public TypeEnv bind(
-        String name, Kind kind, Function<TypeSystem, Term> termFactory) {
-      return new BindTypeEnv(name, kind, termFactory, this);
+    public @Nullable Type getTypeOpt(String name) {
+      return null;
     }
 
     @Override
@@ -2014,6 +2016,16 @@ public class TypeResolver {
         String name,
         Function<String, RuntimeException> exceptionFactory);
 
+    /**
+     * Returns the datatype of a variable, or null if no type is known.
+     *
+     * <p>Generally, type is known for built-in values but not for values in
+     * this compilation unit.
+     */
+    @Nullable
+    Type getTypeOpt(String name);
+
+    /** Returns the number of times a name is bound. */
     default int count(String name) {
       return 0;
     }
@@ -2026,17 +2038,17 @@ public class TypeResolver {
      * Returns whether a variable of the given name is defined in this
      * environment.
      */
-    default boolean has(String name) {
-      return false;
-    }
+    boolean has(String name);
 
     /** Returns whether a given name is overloaded in this environment. */
     default boolean hasOverloaded(String name) {
       return false;
     }
 
-    TypeEnv bind(
-        String name, Kind kind, Function<TypeSystem, Term> termFactory);
+    default TypeEnv bind(
+        String name, Kind kind, Function<TypeSystem, Term> termFactory) {
+      return new BindTypeEnv(name, kind, termFactory, this);
+    }
 
     default TypeEnv bind(String name, Kind kind, Term term) {
       return bind(name, kind, new SimpleTermFactory(term));
@@ -2067,6 +2079,57 @@ public class TypeResolver {
       return name ->
           new CompileException(
               "unbound variable or constructor: " + name, false, id.pos);
+    }
+  }
+
+  /** Type environment based on an {@link Environment}. */
+  private class EnvironmentTypeEnv implements TypeEnv {
+    private final Environment env;
+    private final TypeEnv parent;
+
+    EnvironmentTypeEnv(Environment env, TypeEnv parent) {
+      this.env = requireNonNull(env);
+      this.parent = requireNonNull(parent);
+    }
+
+    @Override
+    public Term get(
+        TypeSystem typeSystem,
+        String name,
+        Function<String, RuntimeException> exceptionFactory) {
+      Binding binding = env.getOpt(name);
+      if (binding != null) {
+        return toTerm(binding.id.type, Subst.EMPTY);
+      }
+      return parent.get(typeSystem, name, exceptionFactory);
+    }
+
+    @Override
+    public boolean has(String name) {
+      return env.getOpt(name) != null || parent.has(name);
+    }
+
+    @Override
+    public boolean hasOverloaded(String name) {
+      Binding binding = env.getOpt(name);
+      if (binding != null) {
+        return binding.kind != Kind.VAL;
+      }
+      return parent.hasOverloaded(name);
+    }
+
+    @Override
+    public @Nullable Type getTypeOpt(String name) {
+      Binding binding = env.getTop(name);
+      if (binding != null) {
+        if (binding.kind == Kind.VAL) {
+          return binding.id.type;
+        }
+        return typeSystem.multi(
+            transformEager(
+                env.getOverloads(binding.overloadId), Core.Pat::type));
+      }
+      return parent.getTypeOpt(name);
     }
   }
 
@@ -2154,6 +2217,23 @@ public class TypeResolver {
     }
 
     @Override
+    public @Nullable Type getTypeOpt(String name) {
+      return getAncestor().getTypeOpt(name);
+    }
+
+    /**
+     * Returns the nearest ancestor of this environment that is not a {@link
+     * BindTypeEnv}.
+     */
+    private TypeEnv getAncestor() {
+      BindTypeEnv e = this;
+      while (e.parent instanceof BindTypeEnv) {
+        e = (BindTypeEnv) e.parent;
+      }
+      return e.parent;
+    }
+
+    @Override
     public boolean has(String name) {
       for (BindTypeEnv e = this; ; e = (BindTypeEnv) e.parent) {
         if (e.definedName.equals(name)) {
@@ -2199,12 +2279,6 @@ public class TypeResolver {
           break;
         }
       }
-    }
-
-    @Override
-    public TypeEnv bind(
-        String name, Kind kind, Function<TypeSystem, Term> termFactory) {
-      return new BindTypeEnv(name, kind, termFactory, this);
     }
 
     @Override

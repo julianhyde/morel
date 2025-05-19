@@ -2385,7 +2385,10 @@ public enum BuiltIn {
       "Relational",
       "nonEmpty",
       "nonEmpty",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL)),
+              ts.forallType(1, h -> ts.fnType(h.list(0), BOOL)))),
 
   /**
    * Function "Relational.empty", aka "empty", of type "&alpha; bag &rarr;
@@ -2417,7 +2420,10 @@ public enum BuiltIn {
       "Relational",
       "empty",
       "empty",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL)),
+              ts.forallType(1, h -> ts.fnType(h.list(0), BOOL)))),
 
   /**
    * Function "Relational.only", aka "only", of type "&alpha; bag &rarr;
@@ -2440,7 +2446,10 @@ public enum BuiltIn {
       "Relational",
       "only",
       "only",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
+              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
 
   /**
    * Function "Relational.iterate", aka "iterate", of type "&alpha; bag &rarr;
@@ -2454,13 +2463,22 @@ public enum BuiltIn {
       "iterate",
       "iterate",
       ts ->
-          ts.forallType(
-              1,
-              h ->
-                  ts.fnType(
-                      h.bag(0),
-                      ts.fnType(ts.tupleType(h.bag(0), h.bag(0)), h.bag(0)),
-                      h.bag(0)))),
+          ts.multi(
+              ts.forallType(
+                  1,
+                  h ->
+                      ts.fnType(
+                          h.bag(0),
+                          ts.fnType(ts.tupleType(h.bag(0), h.bag(0)), h.bag(0)),
+                          h.bag(0))),
+              ts.forallType(
+                  1,
+                  h ->
+                      ts.fnType(
+                          h.list(0),
+                          ts.fnType(
+                              ts.tupleType(h.list(0), h.list(0)), h.list(0)),
+                          h.list(0))))),
 
   /**
    * Function "Relational.sum", aka "sum", of type "&alpha; bag &rarr; &alpha;"

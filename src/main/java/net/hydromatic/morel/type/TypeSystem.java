@@ -417,8 +417,13 @@ public class TypeSystem {
     return (ForallType) typeFor(key);
   }
 
-  /** Creates a multi-type. */
+  /** Creates a multi-type from an array of types. */
   public MultiType multi(Type... types) {
+    return multi(ImmutableList.copyOf(types));
+  }
+
+  /** Creates a multi-type. */
+  public MultiType multi(List<? extends Type> types) {
     return new MultiType(ImmutableList.copyOf(types));
   }
 

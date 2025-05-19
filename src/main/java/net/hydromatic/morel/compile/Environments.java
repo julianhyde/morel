@@ -433,7 +433,7 @@ public abstract class Environments {
           id instanceof Core.IdPat
               ? instanceMap.get((Core.IdPat) id)
               : ImmutableList.of();
-      if (binding != null) {
+      if (binding != null && binding.kind != Binding.Kind.OVER) {
         // Send this binding to the consumer. It obscures all other
         // bindings, so we're done.
         if (!instBindings.isEmpty()) {

@@ -3017,7 +3017,7 @@ public abstract class Codes {
     final TupleType stringPairType =
         typeSystem.tupleType(PrimitiveType.STRING, PrimitiveType.STRING);
     final List<Core.Tuple> args =
-        env.getValueMap().entrySet().stream()
+        env.getValueMap(true).entrySet().stream()
             .sorted(Map.Entry.comparingByKey())
             .map(
                 entry ->

@@ -687,9 +687,6 @@ public class MainTest {
   @SuppressWarnings("ConstantConditions")
   @Test
   void testDummy() {
-    ml("from d in [{a=1,b=true}] yield d.a into sum")
-        .assertType("int")
-        .assertEval(is(1));
     switch (0) {
       case 0:
         ml("1").assertEval(is(1));
@@ -1724,9 +1721,9 @@ public class MainTest {
   void testFunTwoArgs() {
     final String ml =
         "let\n" //
-            + "  fun sum x y = x + y\n"
+            + "  fun plus x y = x + y\n"
             + "in\n"
-            + "  sum 5 3\n"
+            + "  plus 5 3\n"
             + "end";
     ml(ml).assertEval(is(8));
   }

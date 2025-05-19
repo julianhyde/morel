@@ -256,4 +256,11 @@ val inst scan = fn aList: 'a list => aList;
 scan (bag [1]);
 > val it = [1] : int bag
 
+(* ---------------------------------------------------------------------------
+ * The built-in 'Relational.nonEmpty' function works on both lists and bags. *)
+Relational.nonEmpty (bag [1]);
+> val it = true : bool
+Relational.nonEmpty [1];
+> val it = true : bool
+
 (*) End overload.smli

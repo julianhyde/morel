@@ -170,7 +170,9 @@ public enum CoreBuilder {
     Type type = builtIn.typeFunction.apply(typeSystem);
     if (type instanceof MultiType) {
       final Type arg0Type =
-          typeSystem.tupleType(transform(argList, Core.Exp::type));
+          argList.size() == 1
+              ? argList.get(0).type
+              : typeSystem.tupleType(transform(argList, Core.Exp::type));
       final List<Type> applicableTypes =
           filterEager(((MultiType) type).types, t -> t.canCallArgOf(arg0Type));
       checkArgument(

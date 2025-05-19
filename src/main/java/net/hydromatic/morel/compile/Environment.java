@@ -70,7 +70,7 @@ public abstract class Environment {
    */
   public String asString() {
     final StringBuilder b = new StringBuilder();
-    getValueMap().forEach((k, v) -> b.append(v).append("\n"));
+    getValueMap(false).forEach((k, v) -> b.append(v).append("\n"));
     return b.toString();
   }
 
@@ -176,9 +176,15 @@ public abstract class Environment {
   }
 
   /** Returns a map of the values and bindings. */
-  public final Map<String, Binding> getValueMap() {
+  public final Map<String, Binding> getValueMap(boolean skipOverloads) {
     final Map<String, Binding> valueMap = new HashMap<>();
-    visit(binding -> valueMap.putIfAbsent(binding.id.name, binding));
+    visit(
+        binding -> {
+          if (skipOverloads && binding.kind == Binding.Kind.INST) {
+            return;
+          }
+          valueMap.putIfAbsent(binding.id.name, binding);
+        });
     return valueMap;
   }
 

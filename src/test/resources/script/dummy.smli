@@ -16,6 +16,20 @@
  * language governing permissions and limitations under the
  * License.
  *)
+(* As previous, but at top level. *)
+over o1a;
+> over o1a
+val inst o1a = fn i: int => i + 17;
+> val o1a = fn : int -> int
+val inst o1a = fn b: bool => not b;
+> val o1a = fn : bool -> bool
+(*
+o1a true;
+> val it = false : bool
+*)
+o1a 1;
+> val it = 18 : int
+
 from i in [10, 15, 20] union (from d in scott.depts yield d.deptno);
 > val it = [10,15,20,10,20,30,40] : int bag
 
