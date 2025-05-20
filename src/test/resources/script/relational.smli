@@ -674,6 +674,12 @@ from e in emps
 yield e.name;
 > val it = ["Fred","Velma"] : string list
 
+(* Set operations (union, intersect, except) ------------------ *)
+
+(* Workaround for [MOREL-270] Ambiguous collection types. *)
+fun mustBeList (list: 'a list) = list;
+> val mustBeList = fn : 'a list -> 'a list
+
 (*) union (matches SQL's UNION ALL)
 from e in emps
   yield e.deptno
@@ -1379,7 +1385,7 @@ from
 
 (*) Patterns left of 'in'
 fun sumPairs pairs =
-  from (l, r) in pairs
+  from (l, r) in mustBeList pairs
   yield l + r;
 > val sumPairs = fn : (int * int) list -> int list
 sumPairs [];
@@ -1444,7 +1450,7 @@ from {a = x, ...} in [{a=1,b=2,c=3}];
 from {a = x, b = y, ...} in [{a=1,b=2,c=3}];
 > val it = [{x=1,y=2}] : {x:int, y:int} list
 
-fun listHeads lists =
+fun listHeads (lists: 'a list) =
   from hd :: tl in lists
   yield hd + 1;
 > val listHeads = fn : int list list -> int list
@@ -1453,7 +1459,7 @@ listHeads [];
 listHeads [[1, 2], [3], [4, 5, 6]];
 > val it = [2,4,5] : int list
 
-fun listFields lists =
+fun listFields (lists: 'a list) =
   from {a = x, b = y} in lists
   yield x + 1;
 > val listFields = fn : {a:int, b:'a} list -> int list
@@ -1463,7 +1469,7 @@ listFields [{a = 1, b = 2}, {a = 3, b = 0}, {a = 4, b = 5}];
 > val it = [2,4,5] : int list
 
 (*) As above, using abbreviated record pattern
-fun listFields2 lists =
+fun listFields2 (lists: 'a list) =
   from {a, b} in lists
   yield a + 1;
 > val listFields2 = fn : {a:int, b:'a} list -> int list
@@ -1473,7 +1479,7 @@ listFields [{a = 1, b = 2}, {a = 3, b = 0}, {a = 4, b = 5}];
 > val it = [2,4,5] : int list
 
 (*) Layered patterns
-fun listHeads2 lists =
+fun listHeads2 (lists: 'a list) =
   from list as (hd :: tl) in lists
   yield hd + 1 + (length list);
 > val listHeads2 = fn : int list list -> int list
@@ -1482,7 +1488,7 @@ listHeads2 [];
 listHeads2 [[1, 2], [3], [4, 5, 6]];
 > val it = [4,5,8] : int list
 
-fun sumPairs2 pairs =
+fun sumPairs2 (pairs: 'a list) =
   from p as (l, r) in pairs
   yield (#1 p) + l + r;
 > val sumPairs2 = fn : (int * int) list -> int list
@@ -1820,13 +1826,13 @@ end;
 >    {count=5,deptno=30,sum=8450.0}] : {count:int, deptno:int, sum:real} list
 
 from d in scott.depts
-  through i2 in (map (fn x => [x]));
+  through i2 in (Bag.map (fn x => [x]));
 > val it =
 >   [[{deptno=10,dname="ACCOUNTING",loc="NEW YORK"}],
 >    [{deptno=20,dname="RESEARCH",loc="DALLAS"}],
 >    [{deptno=30,dname="SALES",loc="CHICAGO"}],
 >    [{deptno=40,dname="OPERATIONS",loc="BOSTON"}]]
->   : {deptno:int, dname:string, loc:string} list list
+>   : {deptno:int, dname:string, loc:string} list bag
 
 (*) through a pivot function
 

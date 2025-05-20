@@ -862,7 +862,7 @@ public class AlgebraTest {
     final String ml =
         "let\n"
             + "  fun descendants2 descendants newDescendants =\n"
-            + "    if List.null newDescendants then\n"
+            + "    if Bag.null newDescendants then\n"
             + "      descendants\n"
             + "    else\n"
             + "      descendants2\n"
@@ -872,7 +872,7 @@ public class AlgebraTest {
             + "            where e.mgr = d.e.empno\n"
             + "            yield {e, level = d.level + 1})\n"
             + "in\n"
-            + "  from d in descendants2 []\n"
+            + "  from d in descendants2 Bag.nil\n"
             + "      (from e in scott.emps\n"
             + "        where e.mgr = 0\n"
             + "        yield {e, level = 0})\n"
@@ -880,7 +880,7 @@ public class AlgebraTest {
             + "end";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
-        .assertType("{empno:int, ename:string, level:int, mgr:int} list")
+        .assertType("{empno:int, ename:string, level:int, mgr:int} bag")
         .assertEvalIter(
             equalsOrdered(
                 list(7839, "KING", 0, 0),

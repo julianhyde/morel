@@ -2499,6 +2499,18 @@ public class MainTest {
     ml("exists d in [{a=1,b=true}] where d.a = 0").assertType("bool");
     ml("forall d in [{a=1,b=true}] require d.a = 0").assertType("bool");
 
+    // functions based on set operators
+
+    // TODO when [MOREL-270] is fixed, we can deduce that the type is
+    // constrained, e.g. "multi (int list * int bag -> int bag, int list * int
+    // list -> int list)"
+    ml("fn (a: int list, b) => from i in a union b")
+        .assertType("int list * 'a -> 'b");
+    ml("fn (a: int list, b) => from i in a intersect b")
+        .assertType("int list * 'a -> 'b");
+    ml("fn (a: int list, b) => from i in a except b")
+        .assertType("int list * 'a -> 'b");
+
     // invalid last step
     mlE("from d in [{a=1,b=true}] yield d.a into sum $yield \"a\"$")
         .assertCompileException("'into' step must be last in 'from'");

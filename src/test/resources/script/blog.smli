@@ -662,7 +662,7 @@ from line in lines,
 >    {count=2,word="thunk"}] : {count:int, word:string} list
 
 (*) A more complete solution
-fun wordCount lines =
+fun wordCount (lines: 'a list) =
   let
     fun split0 [] word words = word :: words
       | split0 (#" " :: s) word words = split0 s "" (word :: words)
@@ -673,7 +673,7 @@ fun wordCount lines =
         word in split line
     group word compute count
   end;
-> val wordCount = fn : string list -> {count:int, word:string} bag
+> val wordCount = fn : string list -> {count:int, word:string} list
 from p in wordCount lines order p.word;
 > val it =
 >   [{count=2,word="a"},{count=1,word="and"},{count=1,word="but"},
@@ -728,10 +728,11 @@ from e in emps,
 let
   fun my_sum [] = 0
     | my_sum (head :: tail) = head + (my_sum tail)
+  fun my_bag_sum bag = my_sum (Bag.toList bag)
 in
   from e in emps
     group e.deptno
-    compute sumEmpno = my_sum of e.empno
+    compute sumEmpno = my_bag_sum of e.empno
     order deptno
 end;
 > val it =
@@ -747,7 +748,7 @@ from e in emps
 >   [{deptno=10,names=["CLARK","KING","MILLER"]},
 >    {deptno=20,names=["SMITH","JONES","SCOTT","ADAMS","FORD"]},
 >    {deptno=30,names=["ALLEN","WARD","MARTIN","BLAKE","TURNER","JAMES"]}]
->   : {deptno:int, names:string list} list
+>   : {deptno:int, names:string bag} list
 
 (*) === StrangeLoop 2021 talk =======================================
 (*) Standard ML: values
@@ -969,14 +970,14 @@ from e in emps
   where nameLength > 4
   group deptno compute c = count, s = sum of nameLength;
 > val it = [{c=1,deptno=20,s=5},{c=2,deptno=30,s=12}]
->   : {c:int, deptno:int, s:int} bag
+>   : {c:int, deptno:int, s:int} list
 from e in emps
   order e.deptno, e.id desc
   yield {e.name, nameLength = String.size e.name, e.id, e.deptno}
   where nameLength > 4
   group deptno compute c = count, s = sum of nameLength
   where s > 10;
-> val it = [{c=2,deptno=30,s=12}] : {c:int, deptno:int, s:int} bag
+> val it = [{c=2,deptno=30,s=12}] : {c:int, deptno:int, s:int} list
 from e in emps
   order e.deptno, e.id desc
   yield {e.name, nameLength = String.size e.name, e.id, e.deptno}
@@ -984,7 +985,7 @@ from e in emps
   group deptno compute c = count, s = sum of nameLength
   where s > 10
   yield c + s;
-> val it = [14] : int bag
+> val it = [14] : int list
 
 (*) Integration with Apache Calcite - schemas
 foodmart;
@@ -1215,6 +1216,10 @@ Sys.plan();
 >   "calcite(plan LogicalProject(deptno=[$0], dname=[$1], loc=[$2])\n  LogicalFilter(condition=[IS NULL($4)])\n    LogicalJoin(condition=[=($0, $3)], joinType=[left])\n      LogicalProject(deptno=[$0], dname=[$1], loc=[$2])\n        JdbcTableScan(table=[[scott, DEPT]])\n      LogicalProject(deptno=[$0], $f1=[true])\n        LogicalAggregate(group=[{0}])\n          LogicalProject(deptno=[$1])\n            LogicalFilter(condition=[AND(=($5, 'CLERK'), IS NOT NULL($1))])\n              LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n                JdbcTableScan(table=[[scott, EMP]])\n)"
 >   : string
 
+(* Workaround for [MOREL-270] Ambiguous collection types. *)
+fun mustBeList (list: 'a list) = list;
+> val mustBeList = fn : 'a list -> 'a list
+
 (*) Functional programming <=> relational programming
 fun squareList [] = []
   | squareList (x :: xs) = x * x :: squareList xs;
@@ -1226,7 +1231,7 @@ fun squareList xs = List.map (fn x => x * 2) xs;
 squareList [1, 2, 3];
 > val it = [2,4,6] : int list
 fun squareList xs =
-  from x in xs
+  from x in mustBeList xs
     yield x * x;
 > val squareList = fn : int list -> int list
 squareList [1, 2, 3];
@@ -1234,12 +1239,12 @@ squareList [1, 2, 3];
 
 (*) wordCount again
 fun mapReduce mapper reducer list =
-  from e in list,
-      (k, v) in mapper e
+  from e in mustBeList list,
+      (k, v) in mustBeList (mapper e)
     group k compute c = (fn vs => reducer (k, vs)) of v;
 > val mapReduce = fn
 >   : ('a -> ('b * 'c) list)
->     -> ('b * 'c list -> 'd) -> 'a list -> {c:'d, k:'b} bag
+>     -> ('b * 'c list -> 'd) -> 'a list -> {c:'d, k:'b} list
 fun wc_mapper line =
   List.map (fn w => (w, 1)) (split line);
 > val wc_mapper = fn : string -> (string * int) list
@@ -1247,7 +1252,7 @@ fun wc_reducer (key, values) =
   List.foldl (fn (x, y) => x + y) 0 values;
 > val wc_reducer = fn : 'a * int list -> int
 val wordCount = mapReduce wc_mapper wc_reducer;
-> val wordCount = fn : string list -> {c:int, k:string} bag
+> val wordCount = fn : string list -> {c:int, k:string} list
 from p in wordCount lines order p.k;
 > val it =
 >   [{c=2,k="a"},{c=1,k="and"},{c=1,k="but"},{c=1,k="on"},{c=1,k="sat"},

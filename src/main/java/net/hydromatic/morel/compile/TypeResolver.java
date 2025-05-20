@@ -338,9 +338,9 @@ public class TypeResolver {
   }
 
   /**
-   * Adds a constraint that {@code argC} is a bag or list of {@code argV}; if it
-   * is a list then {@code c} is a list of {@code v}, otherwise {@code c} is a
-   * bag of {@code v}.
+   * Adds a constraint that {@code c1} is a bag or list of {@code v1}; if it is
+   * a list then {@code c2} is a list of {@code v2}, otherwise {@code c2} is a
+   * bag of {@code v2}.
    */
   private void isListOrBagMatchingInput(
       Variable c1, Variable v1, Variable c2, Variable v2) {
@@ -355,14 +355,12 @@ public class TypeResolver {
   }
 
   /**
-   * Adds a constraint that {@code arg0} is a bag or list (of something), and
-   * {@code arg1} is a bag or list (of something); if both are lists then {@code
+   * Adds a constraint that {@code c0} is a bag or list (of {@code v0}), and
+   * {@code c1} is a bag or list (of {@code v1}); if both are lists then {@code
    * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
    */
   private void isListIfBothAreLists(
-      Term arg0, Term arg1, Variable c, Variable v) {
-    final Variable v0 = unifier.variable();
-    final Variable v1 = unifier.variable();
+      Term c0, Variable v0, Term c1, Variable v1, Variable c, Variable v) {
     final Sequence list0 = listTerm(v0);
     final Sequence list1 = listTerm(v1);
     final Sequence bag0 = bagTerm(v0);
@@ -377,7 +375,7 @@ public class TypeResolver {
     termActions.add(argTerm(bag0, list1), bagAction);
     termActions.add(argTerm(bag0, bag1), bagAction);
     constraints.add(
-        unifier.constraint(toVariable(argTerm(arg0, arg1)), termActions));
+        unifier.constraint(toVariable(argTerm(c0, c1)), termActions));
   }
 
   /**
@@ -386,17 +384,15 @@ public class TypeResolver {
    * otherwise {@code c} is a bag of {@code v}.
    */
   private void isListIfAllAreLists(List<Term> args, Variable c, Variable v) {
-    switch (args.size()) {
-      case 0:
-        throw new IllegalArgumentException("no args");
-      case 1:
-        isListOrBagMatchingInput(toVariable(args.get(0)), v, c, v);
-        return;
-      default:
-        isListIfBothAreLists(args.get(0), args.get(1), c, v);
-        if (args.size() > 2) {
-          isListIfAllAreLists(skip(args), c, v);
-        }
+    if (args.isEmpty()) {
+      throw new IllegalArgumentException("no args");
+    }
+    Term arg0 = args.get(0);
+    mayBeBagOrList(toVariable(arg0), v);
+    mayBeBagOrList(c, v);
+    for (Term arg : skip(args)) {
+      mayBeBagOrList(toVariable(arg), v);
+      isListIfBothAreLists(arg0, v, arg, v, c, v);
     }
   }
 
@@ -700,10 +696,10 @@ public class TypeResolver {
           terms.add(v15);
           args2.add(deduceType(env, arg, v15));
         }
-        final Variable v4 = unifier.variable();
-        isListIfAllAreLists(terms, v4, p.v);
+        final Variable c4 = unifier.variable();
+        isListIfAllAreLists(terms, c4, p.v);
         fromSteps.add(setStep.copy(setStep.distinct, args2));
-        return new Triple(p.env, p.v, v4);
+        return new Triple(p.env, p.v, c4);
 
       case YIELD:
         final Ast.Yield yield = (Ast.Yield) step;
@@ -884,7 +880,8 @@ public class TypeResolver {
           //   * c is a list if and p.c and c0 are both lists, otherwise bag
           //   * c0 matches the type deduced for "[true, false]"
           //   * v is a record type composed of the fields "{i, j}"
-          isListIfBothAreLists(p.c, c0, c, v);
+          isListIfBothAreLists(
+              p.c, unifier.variable(), c0, unifier.variable(), c, v);
           mayBeBagOrList(c0, v0);
         }
     }
