@@ -44,20 +44,6 @@ from i in (bag [1,2,3]) group i compute sum of i;
 from i in (bag [1,2,3]) group i compute count;
 > val it = [{count=1,i=1},{count=1,i=2},{count=1,i=3}] : {count:int, i:int} bag
 
-from e in [{deptno=10,ename="a"},
-            {deptno=20,ename="b"},
-            {deptno=10,ename="c"}]
-group e.deptno compute names = (fn i => i) of e.ename;
-> val it = [{deptno=20,names=["b"]},{deptno=10,names=["a","c"]}]
->   : {deptno:int, names:string list} list
-
-from e in bag [{deptno=10,ename="a"},
-            {deptno=20,ename="b"},
-            {deptno=10,ename="c"}]
-group e.deptno compute names = (fn i => i) of e.ename;
-> val it = [{deptno=20,names=["b"]},{deptno=10,names=["a","c"]}]
->   : {deptno:int, names:string bag} bag
-
 from (i, j) in [(1,2)];
 > val it = [{i=1,j=2}] : {i:int, j:int} list
 
