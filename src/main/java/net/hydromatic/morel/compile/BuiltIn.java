@@ -884,7 +884,7 @@ public enum BuiltIn {
   /**
    * Function "Bag.null", of type "&alpha; bag &rarr; bool".
    *
-   * <p>"null l" returns true if the bag l is empty.
+   * <p>"null b" returns true if the bag {@code b} is empty.
    */
   BAG_NULL(
       "Bag", "null", ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
@@ -892,7 +892,7 @@ public enum BuiltIn {
   /**
    * Function "Bag.length", of type "&alpha; bag &rarr; int".
    *
-   * <p>"length l" returns the number of elements in the bag l.
+   * <p>"length b" returns the number of elements in the bag {@code b}.
    */
   BAG_LENGTH(
       "Bag", "length", ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), INT))),
@@ -926,8 +926,9 @@ public enum BuiltIn {
   /**
    * Function "Bag.hd", of type "&alpha; bag &rarr; &alpha;".
    *
-   * <p>"hd l" returns the first element of l. It raises {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY Empty} if l is nil.
+   * <p>"hd b" returns the first element of {@code b}. It raises {@link
+   * net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY Empty} if {@code b} is
+   * nil. Results are nondeterministic because bag elements are unordered.
    */
   BAG_HD(
       "Bag", "hd", ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
@@ -935,8 +936,9 @@ public enum BuiltIn {
   /**
    * Function "Bag.tl", of type "&alpha; bag &rarr; &alpha; bag".
    *
-   * <p>"tl l" returns all but the first element of l. It raises {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY empty} if l is nil.
+   * <p>"tl b" returns all but the first element of {@code b}. It raises {@link
+   * net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY empty} if b is nil.
+   * Results are nondeterministic because bag elements are unordered.
    */
   BAG_TL(
       "Bag", "tl", ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.bag(0)))),
@@ -980,9 +982,10 @@ public enum BuiltIn {
   /**
    * Function "Bag.take", of type "&alpha; bag * int &rarr; &alpha; bag".
    *
-   * <p>"take (l, i)" returns the first i elements of the bag l. It raises
-   * {@link net.hydromatic.morel.eval.Codes.BuiltInExn#SUBSCRIPT Subscript} if i
-   * &lt; 0 or i &gt; length l. We have {@code take(l, length l) = l}.
+   * <p>"take (b, i)" returns the first i elements of the bag {@code b}. It
+   * raises {@link net.hydromatic.morel.eval.Codes.BuiltInExn#SUBSCRIPT
+   * Subscript} if i &lt; 0 or i &gt; length {@code b}. We have {@code take(l,
+   * length b) = b}.
    */
   BAG_TAKE(
       "Bag",
@@ -994,16 +997,16 @@ public enum BuiltIn {
   /**
    * Function "Bag.drop", of type "&alpha; bag * int &rarr; &alpha; bag".
    *
-   * <p>"drop (l, i)" returns what is left after dropping the first i elements
-   * of the bag l.
+   * <p>"drop (b, i)" returns what is left after dropping the first {@code i}
+   * elements of the bag {@code b}.
    *
    * <p>It raises {@link net.hydromatic.morel.eval.Codes.BuiltInExn#SUBSCRIPT
-   * Subscript} if i &lt; 0 or i &gt; length l.
+   * Subscript} if i &lt; 0 or i &gt; length {@code b}.
    *
-   * <p>It holds that {@code take(l, i) @ drop(l, i) = l} when 0 &le; i &le;
-   * length l.
+   * <p>It holds that {@code take(b, i) @ drop(b, i) = l} when 0 &le; i &le;
+   * length b.
    *
-   * <p>We also have {@code drop(l, length l) = []}.
+   * <p>We also have {@code drop(b, length b) = []}.
    */
   BAG_DROP(
       "Bag",
@@ -1016,7 +1019,7 @@ public enum BuiltIn {
    * Function "Bag.concat", of type "&alpha; bag list &rarr; &alpha; bag".
    *
    * <p>"concat l" returns the bag that is the concatenation of all the bags in
-   * l in order. {@code concat[l1,l2,...ln] = l1 @ l2 @ ... @ ln}
+   * l in order. {@code concat[b1,b2,...bn] = b1 @ b2 @ ... @ bn}
    */
   BAG_CONCAT(
       "Bag",
@@ -1040,8 +1043,8 @@ public enum BuiltIn {
    * Function "Bag.map", of type "(&alpha; &rarr; &beta;) &rarr; &alpha; bag
    * &rarr; &beta; bag".
    *
-   * <p>"map f l" applies f to each element of l from left to right, returning
-   * the bag of results.
+   * <p>"map f b" applies f to each element of {@code b} from left to right,
+   * returning the bag of results.
    */
   BAG_MAP(
       "Bag",
@@ -1057,11 +1060,11 @@ public enum BuiltIn {
    * Function "Bag.mapPartial", of type "(&alpha; &rarr; &beta; option) &rarr;
    * &alpha; bag &rarr; &beta; bag".
    *
-   * <p>"mapPartial f l" applies f to each element of l from left to right,
-   * returning a bag of results, with SOME stripped, where f was defined. f is
-   * not defined for an element of l if f applied to the element returns NONE.
-   * The above expression is equivalent to: {@code ((map valOf) o (filter
-   * isSome) o (map f)) l}
+   * <p>"mapPartial f b" applies f to each element of {@code b} from left to
+   * right, returning a bag of results, with SOME stripped, where f was defined.
+   * f is not defined for an element of b if f applied to the element returns
+   * NONE. The above expression is equivalent to: {@code ((map valOf) o (filter
+   * isSome) o (map f)) b}
    */
   BAG_MAP_PARTIAL(
       "Bag",
@@ -1077,9 +1080,9 @@ public enum BuiltIn {
    * Function "Bag.find", of type "(&alpha; &rarr; bool) &rarr; &alpha; bag
    * &rarr; &alpha; option".
    *
-   * <p>"find f l" applies f to each element x of the bag l, from left to right,
-   * until {@code f x} evaluates to true. It returns SOME(x) if such an x
-   * exists; otherwise it returns NONE.
+   * <p>"find f b" applies {@code f} to each element {@code x} of the bag {@code
+   * b}, from left to right, until {@code f x} evaluates to true. It returns
+   * SOME(x) if such an x exists; otherwise it returns NONE.
    */
   BAG_FIND(
       "Bag",
@@ -1092,9 +1095,10 @@ public enum BuiltIn {
    * Function "Bag.filter", of type "(&alpha; &rarr; bool) &rarr; &alpha; bag
    * &rarr; &alpha; bag".
    *
-   * <p>"filter f l" applies f to each element x of l, from left to right, and
-   * returns the bag of those x for which {@code f x} evaluated to true, in the
-   * same order as they occurred in the argument bag.
+   * <p>"filter f b" applies {@code f} to each element {@code x} of {@code b},
+   * from left to right, and returns the bag of those {@code x} for which {@code
+   * f x} evaluated to true, in the same order as they occurred in the argument
+   * bag.
    */
   BAG_FILTER(
       "Bag",
@@ -1106,11 +1110,11 @@ public enum BuiltIn {
    * Function "Bag.partition", of type "(&alpha; &rarr; bool) &rarr; &alpha; bag
    * &rarr; &alpha; bag * &alpha; bag".
    *
-   * <p>"partition f l" applies f to each element x of l, from left to right,
-   * and returns a pair (pos, neg) where pos is the bag of those x for which
-   * {@code f x} evaluated to true, and neg is the bag of those for which {@code
-   * f x} evaluated to false. The elements of pos and neg retain the same
-   * relative order they possessed in l.
+   * <p>"partition f b" applies {@code f} to each element {@code x} of bag
+   * {@code b}, from left to right, and returns a pair (pos, neg) where pos is
+   * the bag of those x for which {@code f x} evaluated to true, and neg is the
+   * bag of those for which {@code f x} evaluated to false. The elements of pos
+   * and neg retain the same relative order they possessed in {@code b}.
    */
   BAG_PARTITION(
       "Bag",
@@ -1148,8 +1152,8 @@ public enum BuiltIn {
    * Function "Bag.exists", of type "(&alpha; &rarr; bool) &rarr; &alpha; bag
    * &rarr; bool".
    *
-   * <p>"exists f l" applies f to each element x of the bag l, from left to
-   * right, until {@code f x} evaluates to true; it returns true if such an x
+   * <p>"exists f b" applies f to each element x of the bag {@code b}, from left
+   * to right, until {@code f x} evaluates to true; it returns true if such an x
    * exists and false otherwise.
    */
   BAG_EXISTS(
@@ -1161,9 +1165,9 @@ public enum BuiltIn {
    * Function "Bag.all", of type "(&alpha; &rarr; bool) &rarr; &alpha; bag
    * &rarr; bool".
    *
-   * <p>"all f l" applies f to each element x of the bag l, from left to right,
+   * <p>"all f b" applies f to each element x of the bag b, from left to right,
    * until {@code f x} evaluates to false; it returns false if such an x exists
-   * and true otherwise. It is equivalent to not(exists (not o f) l)).
+   * and true otherwise. It is equivalent to not(exists (not o f) b)).
    */
   BAG_ALL(
       "Bag",
@@ -1171,12 +1175,12 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.predicate(0), h.bag(0), BOOL))),
 
   /**
-   * Function "Bag.fromList" of type "&alpha; list &rarr; &alpha; vector".
+   * Function "Bag.fromList" of type "&alpha; list &rarr; &alpha; bag".
    *
-   * <p>{@code fromList l} creates a new vector from {@code l}, whose length is
+   * <p>{@code fromList l} creates a new bag from {@code l}, whose length is
    * {@code length l} and with the {@code i}<sup>th</sup> element of {@code l}
-   * used as the {@code i}<sup>th</sup> element of the vector. If the length of
-   * the list is greater than {@code maxLen}, then the {@link
+   * used as the {@code i}<sup>th</sup> element of the bag. If the length of the
+   * list is greater than {@code maxLen}, then the {@link
    * net.hydromatic.morel.eval.Codes.BuiltInExn#SIZE Size} exception is raised.
    */
   BAG_FROM_LIST(
@@ -1184,6 +1188,22 @@ public enum BuiltIn {
       "fromList",
       "bag",
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.bag(0)))),
+
+  /**
+   * Function "Bag.toList" of type "&alpha; bag &rarr; &alpha; list".
+   *
+   * <p>{@code toList b} creates a new list from {@code b}, whose length is
+   * {@code length b} and with the {@code i}<sup>th</sup> element of {@code b}
+   * used as the {@code i}<sup>th</sup> element of the list. If the length of
+   * the bag is greater than {@code maxLen}, then the {@link
+   * net.hydromatic.morel.eval.Codes.BuiltInExn#SIZE Size} exception is raised.
+   * The order of the list is nondeterministic because bag elements are
+   * unordered.
+   */
+  BAG_TO_LIST(
+      "Bag",
+      "toList",
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.list(0)))),
 
   /**
    * Function "Bag.tabulate", of type "int * (int &rarr; &alpha;) &rarr; &alpha;

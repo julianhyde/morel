@@ -3483,6 +3483,9 @@ public abstract class Codes {
   private static final Applicable BAG_FROM_LIST =
       identity(BuiltIn.BAG_FROM_LIST);
 
+  /** @see BuiltIn#BAG_TO_LIST */
+  private static final Applicable BAG_TO_LIST = identity(BuiltIn.BAG_TO_LIST);
+
   /** @see BuiltIn#BAG_TABULATE */
   private static final Applicable BAG_TABULATE =
       new ListTabulate(BuiltIn.BAG_TABULATE, Pos.ZERO);
@@ -3645,6 +3648,7 @@ public abstract class Codes {
           .put(BuiltIn.BAG_EXISTS, BAG_EXISTS)
           .put(BuiltIn.BAG_ALL, BAG_ALL)
           .put(BuiltIn.BAG_FROM_LIST, BAG_FROM_LIST)
+          .put(BuiltIn.BAG_TO_LIST, BAG_TO_LIST)
           .put(BuiltIn.BAG_TABULATE, BAG_TABULATE)
           .put(BuiltIn.CHAR_CHR, CHAR_CHR)
           .put(BuiltIn.CHAR_ORD, CHAR_ORD)
