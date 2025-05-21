@@ -505,8 +505,6 @@ public class TypeResolver {
                 + ")");
 
       case IF:
-        // TODO: check that condition has type boolean
-        // TODO: check that ifTrue has same type as ifFalse
         final Ast.If if_ = (Ast.If) node;
         v2 = unifier.variable();
         final Ast.Exp condition2 = deduceType(env, if_.condition, v2);
@@ -780,12 +778,11 @@ public class TypeResolver {
         mayBeBagOrList(p.c, p.v);
 
         final List<PatTerm> termMap = new ArrayList<>();
-        final Ast.Pat throughPat =
-            deducePatType(env, through.pat, termMap::add, null, v18, t -> t);
+        deducePatType(env, through.pat, termMap::add, null, v18, t -> t);
         final Variable v17 = toVariable(fnTerm(p.c, c18));
         final Ast.Exp throughExp = deduceType(p.env, through.exp, v17);
         mayBeBagOrList(c18, v18);
-        fromSteps.add(through.copy(throughPat, throughExp));
+        fromSteps.add(through.copy(through.pat, throughExp));
         TypeEnv env5 = env;
         fieldVars.clear();
         for (PatTerm e : termMap) {
@@ -828,8 +825,7 @@ public class TypeResolver {
       reg(scan.exp, c0);
       containerize = CollectionType.BOTH; // retain source collection type
     }
-    final Ast.Pat pat2 =
-        deducePatType(p.env, scan.pat, termMap::add, null, v0, t -> t);
+    deducePatType(p.env, scan.pat, termMap::add, null, v0, t -> t);
     final TypeEnvHolder typeEnvs = new TypeEnvHolder(p.env);
     for (PatTerm patTerm : termMap) {
       typeEnvs.bind(patTerm.id.name, patTerm.term);
@@ -894,7 +890,7 @@ public class TypeResolver {
     } else {
       scanCondition2 = null;
     }
-    fromSteps.add(scan.copy(pat2, scanExp3, scanCondition2));
+    fromSteps.add(scan.copy(scan.pat, scanExp3, scanCondition2));
     return Triple.of(env4, v, c);
   }
 
@@ -1207,11 +1203,11 @@ public class TypeResolver {
     final Variable vPat = unifier.variable();
     final PairList<Ast.IdPat, Term> termMap1 = PairList.of();
     final Consumer<PatTerm> consumer = p -> termMap1.add(p.id, p.term);
-    Ast.Pat pat2 = deducePatType(env, match.pat, consumer, null, vPat, t -> t);
+    deducePatType(env, match.pat, consumer, null, vPat, t -> t);
     termMap1.forEach(termMap);
     TypeEnv env2 = bindAll(env, termMap1);
-    Ast.Exp e2 = deduceType(env2, match.exp, resultVariable);
-    Ast.Match match2 = match.copy(pat2, e2);
+    Ast.Exp exp2 = deduceType(env2, match.exp, resultVariable);
+    Ast.Match match2 = match.copy(match.pat, exp2);
     return reg(match2, argVariable, fnTerm(vPat, resultVariable));
   }
 
@@ -1230,12 +1226,10 @@ public class TypeResolver {
     for (Ast.Match match : matchList) {
       final PairList<Ast.IdPat, Term> termMap = PairList.of();
       final Consumer<PatTerm> consumer = p -> termMap.add(p.id, p.term);
-      final Ast.Pat pat2 =
-          deducePatType(
-              env, match.pat, consumer, labelNames, argVariable, t -> t);
+      deducePatType(env, match.pat, consumer, labelNames, argVariable, t -> t);
       final TypeEnv env2 = bindAll(env, termMap);
-      final Ast.Exp e2 = deduceType(env2, match.exp, resultVariable);
-      matchList2.add(match.copy(pat2, e2));
+      final Ast.Exp exp2 = deduceType(env2, match.exp, resultVariable);
+      matchList2.add(match.copy(match.pat, exp2));
     }
     return matchList2;
   }
@@ -1262,11 +1256,9 @@ public class TypeResolver {
       PairList<Ast.IdPat, Term> termMap,
       Variable vPat) {
     final Consumer<PatTerm> consumer = p -> termMap.add(p.id, p.term);
-    final Ast.Pat pat2 =
-        deducePatType(env, valBind.pat, consumer, null, vPat, t -> t);
+    deducePatType(env, valBind.pat, consumer, null, vPat, t -> t);
     final Ast.Exp e2 = deduceType(env, valBind.exp, vPat);
     final Ast.ValBind valBind2 = valBind.copy(valBind.pat, e2);
-    // TODO: Better? final Ast.ValBind valBind2 = valBind.copy(pat2, e2);
     if (valBind2.pat instanceof Ast.IdPat) {
       if (env.hasOverloaded(((Ast.IdPat) valBind2.pat).name)) {
         // We are assigning to an overloaded name. Morel only allows overloads
@@ -1610,6 +1602,9 @@ public class TypeResolver {
    * Derives a type term for a pattern, collecting the names of pattern
    * variables.
    *
+   * <p>Unlike {@link #deduceType(TypeEnv, Ast.Exp, Variable)}, return is {@code
+   * void}, because the pattern is never modified.
+   *
    * @param env Compile-time environment
    * @param pat Pattern AST
    * @param termMap Map from names to bound terms, populated by this method
@@ -1621,7 +1616,7 @@ public class TypeResolver {
    *     expression that this pattern is applied to, returns the type of this
    *     sub-pattern
    */
-  private Ast.Pat deducePatType(
+  private void deducePatType(
       TypeEnv env,
       Ast.Pat pat,
       Consumer<PatTerm> termMap,
@@ -1630,19 +1625,24 @@ public class TypeResolver {
       UnaryOperator<Term> accessor) {
     switch (pat.op) {
       case BOOL_LITERAL_PAT:
-        return reg(pat, v, toTerm(PrimitiveType.BOOL));
+        reg(pat, v, toTerm(PrimitiveType.BOOL));
+        return;
 
       case CHAR_LITERAL_PAT:
-        return reg(pat, v, toTerm(PrimitiveType.CHAR));
+        reg(pat, v, toTerm(PrimitiveType.CHAR));
+        return;
 
       case INT_LITERAL_PAT:
-        return reg(pat, v, toTerm(PrimitiveType.INT));
+        reg(pat, v, toTerm(PrimitiveType.INT));
+        return;
 
       case REAL_LITERAL_PAT:
-        return reg(pat, v, toTerm(PrimitiveType.REAL));
+        reg(pat, v, toTerm(PrimitiveType.REAL));
+        return;
 
       case STRING_LITERAL_PAT:
-        return reg(pat, v, toTerm(PrimitiveType.STRING));
+        reg(pat, v, toTerm(PrimitiveType.STRING));
+        return;
 
       case ID_PAT:
         final Ast.IdPat idPat = (Ast.IdPat) pat;
@@ -1652,25 +1652,29 @@ public class TypeResolver {
           // It is a zero argument constructor, e.g. the LESS constructor of the
           // 'order' type.
           final DataType dataType0 = pair1.left;
-          return reg(pat, v, toTerm(dataType0, Subst.EMPTY));
+          reg(pat, v, toTerm(dataType0, Subst.EMPTY));
+          return;
         }
         termMap.accept(new PatTerm(idPat, v, accessor));
         // fall through
 
       case WILDCARD_PAT:
-        return reg(pat, v);
+        reg(pat, v);
+        return;
 
       case AS_PAT:
         final Ast.AsPat asPat = (Ast.AsPat) pat;
         termMap.accept(new PatTerm(asPat.id, v, accessor));
         deducePatType(env, asPat.pat, termMap, null, v, accessor);
-        return reg(pat, v);
+        reg(pat, v);
+        return;
 
       case ANNOTATED_PAT:
         final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) pat;
         final Type type = toType(annotatedPat.type, typeSystem);
         deducePatType(env, annotatedPat.pat, termMap, null, v, accessor);
-        return reg(pat, v, toTerm(type, Subst.EMPTY));
+        reg(pat, v, toTerm(type, Subst.EMPTY));
+        return;
 
       case TUPLE_PAT:
         final List<Term> typeTerms = new ArrayList<>();
@@ -1684,7 +1688,8 @@ public class TypeResolver {
               deducePatType(env, arg, termMap, null, vArg, accessor2);
               typeTerms.add(vArg);
             });
-        return reg(pat, v, tupleTerm(typeTerms));
+        reg(pat, v, tupleTerm(typeTerms));
+        return;
 
       case RECORD_PAT:
         // First, determine the set of field names.
@@ -1712,16 +1717,14 @@ public class TypeResolver {
               if (argPat != null) {
                 final UnaryOperator<Term> accessor2 =
                     term -> ((Sequence) accessor.apply(term)).terms.get(i);
-                Ast.Pat argPat2 =
-                    deducePatType(env, argPat, termMap, null, vArg, accessor2);
-                args.put(labelName, argPat2);
+                deducePatType(env, argPat, termMap, null, vArg, accessor2);
+                args.put(labelName, argPat);
               }
             });
         final Term record = recordTerm(labelTerms);
-        final Ast.RecordPat recordPat2 =
-            recordPat.copy(recordPat.ellipsis, args);
         if (!recordPat.ellipsis) {
-          return reg(recordPat2, v, record);
+          reg(recordPat, v, record);
+          return;
         }
         final Variable v2 = unifier.variable();
         equiv(v2, record);
@@ -1749,7 +1752,8 @@ public class TypeResolver {
                 }
               }
             });
-        return reg(recordPat2, record);
+        reg(recordPat, record);
+        return;
 
       case CON_PAT:
         final Ast.ConPat conPat = (Ast.ConPat) pat;
@@ -1780,7 +1784,8 @@ public class TypeResolver {
           final TypeVar typeVar = (TypeVar) argType;
           equiv(vArg, sequence.terms.get(typeVar.ordinal));
         }
-        return reg(pat, v, term);
+        reg(pat, v, term);
+        return;
 
       case CON0_PAT:
         final Ast.Con0Pat con0Pat = (Ast.Con0Pat) pat;
@@ -1790,7 +1795,8 @@ public class TypeResolver {
           throw new AssertionError();
         }
         final DataType dataType0 = pair0.left;
-        return reg(pat, v, toTerm(dataType0, Subst.EMPTY));
+        reg(pat, v, toTerm(dataType0, Subst.EMPTY));
+        return;
 
       case LIST_PAT:
         final Ast.ListPat list = (Ast.ListPat) pat;
@@ -1798,7 +1804,8 @@ public class TypeResolver {
         for (Ast.Pat arg : list.args) {
           deducePatType(env, arg, termMap, null, vArg2, t -> vArg2);
         }
-        return reg(list, v, listTerm(vArg2));
+        reg(list, v, listTerm(vArg2));
+        return;
 
       case CONS_PAT:
         final Variable elementType = unifier.variable();
@@ -1806,7 +1813,8 @@ public class TypeResolver {
         deducePatType(
             env, call.p0, termMap, null, elementType, t -> elementType);
         deducePatType(env, call.p1, termMap, null, v, accessor);
-        return reg(call, v, listTerm(elementType));
+        reg(call, v, listTerm(elementType));
+        return;
 
       default:
         throw new AssertionError("cannot deduce type for pattern " + pat.op);
@@ -1852,19 +1860,6 @@ public class TypeResolver {
       terms.add(new TermVariable(term, v));
     }
     return v;
-  }
-
-  /** Declares that two terms are equivalent. */
-  private Variable equiv(Term term, Term term2) {
-    if (term2 instanceof Variable) {
-      return equiv((Variable) term2, term);
-    } else if (term instanceof Variable) {
-      return equiv((Variable) term, term2);
-    } else {
-      final Variable variable = unifier.variable();
-      equiv(variable, term);
-      return equiv(variable, term2);
-    }
   }
 
   private Sequence listTerm(Term term) {
