@@ -79,6 +79,7 @@ In Morel but not Standard ML:
   <code>#<i>lab</i> <i>record</i></code>
 * identifiers may be quoted
   (for example, <code>\`an identifier\`</code>)
+* `with` functional update for record values
 * overloaded functions may be declared using `over` and `inst`
 
 In Standard ML but not in Morel:
