@@ -886,11 +886,6 @@ public class TypeResolver {
         }
     }
 
-    //    if (fromSteps.size() > 0) {
-    //      FieldDefiner fieldDefiner = new FieldDefiner(fieldVars, termMap);
-    //      actionMap.put(c0, fieldDefiner);
-    //    }
-
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
       final Variable v5 = unifier.variable();

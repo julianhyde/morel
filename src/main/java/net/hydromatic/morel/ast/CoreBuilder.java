@@ -425,7 +425,7 @@ public enum CoreBuilder {
   }
 
   /**
-   * Returns the datatype of an element a {@link Core.From} with the given
+   * Returns the datatype of an element of a {@link Core.From} with the given
    * steps.
    */
   private Type fromElementType(
