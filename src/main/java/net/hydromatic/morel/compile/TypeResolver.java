@@ -527,7 +527,7 @@ public class TypeResolver {
       case CURRENT:
         final Ast.Current current = (Ast.Current) node;
         final Term term2 =
-            env.get(typeSystem, "current", TypeEnv.oops(current));
+            env.get(typeSystem, "current", TypeEnv.onlyValidInQuery(current));
         return reg(current, v, term2);
 
       case FN:
@@ -663,7 +663,7 @@ public class TypeResolver {
         // same type as the input. The skip expression must be an int.
         final Ast.Skip skip = (Ast.Skip) step;
         final Variable v11 = unifier.variable();
-        final Ast.Exp skipCount = deduceType(p.env, skip.exp, v11);
+        final Ast.Exp skipCount = deduceType(env, skip.exp, v11);
         equiv(v11, toTerm(PrimitiveType.INT));
         fromSteps.add(skip.copy(skipCount));
         return p;
@@ -674,7 +674,7 @@ public class TypeResolver {
         // same type as the input. The take expression must be an int.
         final Ast.Take take = (Ast.Take) step;
         final Variable v12 = unifier.variable();
-        final Ast.Exp takeCount = deduceType(p.env, take.exp, v12);
+        final Ast.Exp takeCount = deduceType(env, take.exp, v12);
         equiv(v12, toTerm(PrimitiveType.INT));
         fromSteps.add(take.copy(takeCount));
         return p;
@@ -2057,6 +2057,16 @@ public class TypeResolver {
     /** Exception factory where a missing symbol is an internal error. */
     static Function<String, RuntimeException> oops(AstNode node) {
       return name -> new RuntimeException("oops, should have " + node);
+    }
+
+    /**
+     * Exception factory where a missing symbol is because we are not in a
+     * query.
+     */
+    static Function<String, RuntimeException> onlyValidInQuery(AstNode node) {
+      return name ->
+          new CompileException(
+              "'" + node + "' is only valid in a query", false, node.pos);
     }
 
     /** Exception factory where a missing symbol is a user error. */

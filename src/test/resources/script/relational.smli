@@ -239,6 +239,11 @@ from e in emps,
   where current mod 2 = 1;
 > val it = [121,133] : int list
 
+from i in [1,2,3]
+  yield current + 2
+  yield current + 3;
+> val it = [6,7,8] : int list
+
 from e in emps,
     d in depts on e.deptno = d.deptno
   yield e.id + d.deptno
@@ -251,6 +256,47 @@ from e in emps,
   order current mod 2, current;
 > val it = [110,132,121,133] : int list
 
+(*) "current" is not available in "skip", "take", "union", "intersect", "minus"
+1 + current;
+> stdIn:3.5-3.12 Error: 'current' is only valid in a query
+>   raised at: stdIn:3.5-3.12
+
+from i in [1,2,3,4,5]
+  skip current;
+> stdIn:4.8-4.15 Error: 'current' is only valid in a query
+>   raised at: stdIn:4.8-4.15
+
+from i in [1,2,3,4,5]
+  take current;
+> stdIn:4.8-4.15 Error: 'current' is only valid in a query
+>   raised at: stdIn:4.8-4.15
+
+from i in [1,2,3,4,5]
+  union [current + 10];
+> stdIn:4.8-4.15 Error: 'current' is only valid in a query
+>   raised at: stdIn:4.8-4.15
+
+from i in [1,2,3,4,5]
+  intersect [current + 1];
+> stdIn:4.8-4.15 Error: 'current' is only valid in a query
+>   raised at: stdIn:4.8-4.15
+
+from i in [1,2,3,4,5]
+  except [current + 1];
+> stdIn:4.8-4.15 Error: 'current' is only valid in a query
+>   raised at: stdIn:4.8-4.15
+
+(*) But "current" is available in a subquery
+from i in [1,2,3,4,5],
+  j in (from j in ["a","b","c"] take current);
+from i in [1,2,3,4,5],
+  j in (from j in ["a","b","c"] skip current);
+from i in [1,2,3,4,5]
+  yield (from j in ["a","b","ccc","dd"] where size(j) = i skip current);
+from i in [1,2,3,4,5]
+  where not (exists j in ["a","b","ccc","dd"] skip current);
+
+(* Combinations of steps -------------------------------------- *)
 (*) 'yield' followed by 'order'
 from e in emps
   yield {e.deptno, x = e.deptno, e.name}
