@@ -358,6 +358,36 @@ public class Static {
     final int i = buf.length() - s.length();
     return i >= 0 && buf.indexOf(s, i) == i;
   }
+
+  /**
+   * Returns a counter.
+   *
+   * <p>Whenever you call {@link Runnable#run()}, it increments
+   * the counter and prints to stdout.
+   *
+   * <p>Use it as follows:
+   *
+   * <pre>{@code
+   * class MyClass {
+   *   static final Runnable COUNTER = Static.counter("MyClass");
+   *
+   *   void foo() {
+   *     // Print "MyClass: <n>" each time this method is called.
+   *     COUNTER.run();
+   *   }
+   * }}
+   * </pre>
+   */
+  public static Runnable counter(String name) {
+    return new Runnable() {
+      int i = 0;
+
+      @Override
+      public void run() {
+        System.out.printf("%s: %d%n", name, i++);
+      }
+    };
+  }
 }
 
 // End Static.java

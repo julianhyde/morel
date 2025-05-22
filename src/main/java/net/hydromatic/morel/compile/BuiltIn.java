@@ -25,7 +25,6 @@ import static net.hydromatic.morel.type.PrimitiveType.INT;
 import static net.hydromatic.morel.type.PrimitiveType.REAL;
 import static net.hydromatic.morel.type.PrimitiveType.STRING;
 import static net.hydromatic.morel.type.PrimitiveType.UNIT;
-import static net.hydromatic.morel.util.Static.SKIP;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
@@ -3161,9 +3160,6 @@ public enum BuiltIn {
   /** Calls a consumer once per value. */
   public static void forEach(
       TypeSystem typeSystem, BiConsumer<BuiltIn, Type> consumer) {
-    if (SKIP) {
-      return;
-    }
     for (BuiltIn builtIn : values()) {
       final Type type = builtIn.typeFunction.apply(typeSystem);
       consumer.accept(builtIn, type);
@@ -3173,9 +3169,6 @@ public enum BuiltIn {
   /** Calls a consumer once per structure. */
   public static void forEachStructure(
       TypeSystem typeSystem, BiConsumer<Structure, Type> consumer) {
-    if (SKIP) {
-      return;
-    }
     final PairList<String, Type> nameTypes = PairList.of();
     BY_STRUCTURE
         .values()

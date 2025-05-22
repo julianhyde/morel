@@ -56,7 +56,8 @@ public abstract class Compiles {
       Map<String, ForeignValue> valueMap) {
     final TypeSystem typeSystem = new TypeSystem();
     final Session session = new Session(propMap);
-    final Environment env = Environments.env(typeSystem, session, valueMap);
+    final Environment env =
+        Environments.envFromCache(typeSystem, session, valueMap);
     return TypeResolver.deduceType(env, toDecl(statement), typeSystem);
   }
 

@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import static net.hydromatic.morel.util.Static.counter;
 import static net.hydromatic.morel.util.Static.str;
 
 import com.google.common.collect.ArrayListMultimap;
@@ -70,6 +71,7 @@ public class Main {
   final TypeSystem typeSystem = new TypeSystem();
   final boolean idempotent;
   final Session session;
+  static final Runnable COUNTER = counter("main");
 
   /**
    * Command-line entry point.
@@ -122,6 +124,8 @@ public class Main {
     this.valueMap = ImmutableMap.copyOf(valueMap);
     this.session = new Session(propMap);
     this.idempotent = idempotent;
+
+    COUNTER.run();
   }
 
   private static void readerToString(Reader r, StringBuilder b) {
@@ -222,7 +226,7 @@ public class Main {
   }
 
   public void run() {
-    Environment env = Environments.env(typeSystem, session, valueMap);
+    Environment env = Environments.envFromCache(typeSystem, session, valueMap);
     final Consumer<String> echoLines = out::println;
     final Consumer<String> outLines =
         idempotent ? x -> out.println(prefixLines(x)) : echoLines;

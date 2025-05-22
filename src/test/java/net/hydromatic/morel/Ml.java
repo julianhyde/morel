@@ -388,7 +388,7 @@ class Ml {
 
     final Session session = null;
     final Environment env =
-        Environments.env(typeSystem, session, ImmutableMap.of());
+        Environments.envFromCache(typeSystem, session, ImmutableMap.of());
     final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
     final TypeResolver.Resolved resolved =
         TypeResolver.deduceType(env, valDecl, typeSystem);

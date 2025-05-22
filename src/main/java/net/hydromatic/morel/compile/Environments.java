@@ -18,12 +18,16 @@
  */
 package net.hydromatic.morel.compile;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.SKIP;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.shorterThan;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -31,6 +35,7 @@ import com.google.common.collect.ImmutableMultimap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -45,6 +50,7 @@ import net.hydromatic.morel.type.MultiType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Helpers for {@link Environment}. */
@@ -56,6 +62,13 @@ public abstract class Environments {
           .bind(core.idPat(PrimitiveType.BOOL, "true", 0), true)
           .bind(core.idPat(PrimitiveType.BOOL, "false", 0), false);
 
+  /** Cache of environments. */
+  @SuppressWarnings("DataFlowIssue")
+  private static final LoadingCache<Key, Environment> CACHE =
+      CacheBuilder.newBuilder()
+          .maximumSize(1000)
+          .build(CacheLoader.from(Environments::fromKey));
+
   private Environments() {}
 
   /** Creates an empty environment. */
@@ -63,14 +76,59 @@ public abstract class Environments {
     return BASIC_ENVIRONMENT;
   }
 
+  /** Returns an environment, using one from cache if possible. */
+  public static Environment envFromCache(
+      TypeSystem typeSystem,
+      @Nullable Session session,
+      Map<String, ForeignValue> valueMap) {
+    return envFromCache(typeSystem, session, valueMap, !SKIP);
+  }
+
+  /**
+   * Returns an environment, optionally including built-in values, using one
+   * from cache if possible.
+   */
+  public static Environment envFromCache(
+      TypeSystem typeSystem,
+      @Nullable Session session,
+      Map<String, ForeignValue> valueMap,
+      boolean includeBuiltIns) {
+    Key key = Key.create(typeSystem, session, valueMap, includeBuiltIns);
+    return CACHE.getUnchecked(key);
+  }
+
+  /** Creates an environment from a key. */
+  private static @NonNull Environment fromKey(Key key) {
+    if (key.session == null) {
+      return env(
+          EmptyEnvironment.INSTANCE,
+          key.typeSystem,
+          null,
+          key.valueMap,
+          false,
+          key.includeBuiltIns);
+    }
+    Environment environment = CACHE.getUnchecked(key.withSession(null));
+    return env(
+        environment,
+        key.typeSystem,
+        key.session,
+        key.valueMap,
+        false,
+        key.includeBuiltIns);
+  }
+
   /**
    * Creates an environment containing built-ins and the given foreign values.
+   *
+   * <p>You should probably call {@link #envFromCache} instead.
    */
   public static Environment env(
       TypeSystem typeSystem,
       @Nullable Session session,
       Map<String, ForeignValue> valueMap) {
-    return env(EmptyEnvironment.INSTANCE, typeSystem, session, valueMap);
+    return env(
+        EmptyEnvironment.INSTANCE, typeSystem, session, valueMap, !SKIP, !SKIP);
   }
 
   /**
@@ -80,71 +138,86 @@ public abstract class Environments {
       Environment environment,
       TypeSystem typeSystem,
       @Nullable Session session,
-      Map<String, ForeignValue> valueMap) {
-    if (SKIP) {
-      return environment;
-    }
+      Map<String, ForeignValue> valueMap,
+      boolean includeNonSessionBuiltIns,
+      boolean includeSessionBuiltIns) {
+    checkArgument(
+        session == null || !includeSessionBuiltIns,
+        "Can't include session built-ins in a non-session environment");
+
     final List<Binding> bindings = new ArrayList<>();
-    BuiltIn.dataTypes(typeSystem, bindings);
     final ToIntFunction<String> nameGen = typeSystem.nameGenerator::inc;
-    Codes.BUILT_IN_VALUES.forEach(
-        (key, value) -> {
-          if ("$".equals(key.structure)) {
-            return; // ignore Z_ANDALSO, Z_LIST, etc.
-          }
-          final Type type = key.typeFunction.apply(typeSystem);
-          if (key.sessionValue != null) {
-            if (session == null) {
-              return;
+    if (includeNonSessionBuiltIns) {
+      BuiltIn.dataTypes(typeSystem, bindings);
+    }
+    if (includeNonSessionBuiltIns || includeSessionBuiltIns) {
+      Codes.BUILT_IN_VALUES.forEach(
+          (key, value) -> {
+            if ("$".equals(key.structure)) {
+              return; // ignore Z_ANDALSO, Z_LIST, etc.
             }
-            value = key.sessionValue.apply(session);
-          }
-          // If type is a MultiType, define several overloads.
-          if (type instanceof MultiType) {
-            List<Type> types = ((MultiType) type).types;
-            Core.IdPat overloadId =
-                core.idPat(types.get(0), key.mlName, nameGen);
-            final Supplier<String> nameGen2 =
-                () -> typeSystem.nameGenerator.getPrefixed(overloadId.name);
-            for (int i = 0; i < types.size(); i++) {
-              Type type1 = types.get(i);
-              if (key.structure == null) {
-                if (i == 0) {
-                  bindings.add(Binding.over(overloadId, value));
+            final Type type = key.typeFunction.apply(typeSystem);
+            if (key.sessionValue != null) {
+              if (!includeSessionBuiltIns || session == null) {
+                return;
+              }
+              value = key.sessionValue.apply(session);
+            } else {
+              if (!includeNonSessionBuiltIns) {
+                return;
+              }
+            }
+            // If type is a MultiType, define several overloads.
+            if (type instanceof MultiType) {
+              List<Type> types = ((MultiType) type).types;
+              Core.IdPat overloadId =
+                  core.idPat(types.get(0), key.mlName, nameGen);
+              final Supplier<String> nameGen2 =
+                  () -> typeSystem.nameGenerator.getPrefixed(overloadId.name);
+              for (int i = 0; i < types.size(); i++) {
+                Type type1 = types.get(i);
+                if (key.structure == null) {
+                  if (i == 0) {
+                    bindings.add(Binding.over(overloadId, value));
+                  }
+                  Core.IdPat id = core.idPat(type1, nameGen2);
+                  bindings.add(Binding.inst(id, overloadId, value));
                 }
-                Core.IdPat id = core.idPat(type1, nameGen2);
-                bindings.add(Binding.inst(id, overloadId, value));
+                if (key.alias != null) {
+                  if (i == 0) {
+                    bindings.add(Binding.over(overloadId, value));
+                  }
+                  Core.IdPat id = core.idPat(type1, nameGen2);
+                  bindings.add(Binding.inst(id, overloadId, value));
+                }
+              }
+            } else {
+              if (key.structure == null) {
+                bindings.add(
+                    Binding.of(core.idPat(type, key.mlName, nameGen), value));
               }
               if (key.alias != null) {
-                if (i == 0) {
-                  bindings.add(Binding.over(overloadId, value));
-                }
-                Core.IdPat id = core.idPat(type1, nameGen2);
-                bindings.add(Binding.inst(id, overloadId, value));
+                bindings.add(
+                    Binding.of(core.idPat(type, key.alias, nameGen), value));
               }
             }
-          } else {
-            if (key.structure == null) {
-              bindings.add(
-                  Binding.of(core.idPat(type, key.mlName, nameGen), value));
-            }
-            if (key.alias != null) {
-              bindings.add(
-                  Binding.of(core.idPat(type, key.alias, nameGen), value));
-            }
-          }
-        });
+          });
+    }
 
-    final EvalEnv emptyEnv = Codes.emptyEnv();
-    BuiltIn.forEachStructure(
-        typeSystem,
-        (structure, type) ->
-            bindings.add(
-                Binding.of(
-                    core.idPat(type, structure.name, nameGen),
-                    emptyEnv.getOpt(structure.name))));
+    if (includeNonSessionBuiltIns) {
+      final EvalEnv emptyEnv = Codes.emptyEnv();
+      BuiltIn.forEachStructure(
+          typeSystem,
+          (structure, type) ->
+              bindings.add(
+                  Binding.of(
+                      core.idPat(type, structure.name, nameGen),
+                      emptyEnv.getOpt(structure.name))));
+    }
 
-    foreignBindings(typeSystem, valueMap, bindings);
+    if (includeNonSessionBuiltIns) {
+      foreignBindings(typeSystem, valueMap, bindings);
+    }
     return bind(environment, bindings);
   }
 
@@ -490,6 +563,63 @@ public abstract class Environments {
         ++i;
       }
       return -1;
+    }
+  }
+
+  /** Cache key for environment. */
+  private static class Key {
+    private final TypeSystem typeSystem;
+    private final @Nullable Session session;
+    private final Map<String, ForeignValue> valueMap;
+    private final boolean includeBuiltIns;
+
+    Key(
+        TypeSystem typeSystem,
+        @Nullable Session session,
+        Map<String, ForeignValue> valueMap,
+        boolean includeBuiltIns) {
+      this.typeSystem = requireNonNull(typeSystem);
+      this.session = session;
+      this.valueMap = ImmutableMap.copyOf(valueMap);
+      this.includeBuiltIns = includeBuiltIns;
+    }
+
+    public static Key create(
+        TypeSystem typeSystem,
+        @Nullable Session session,
+        Map<String, ForeignValue> valueMap,
+        boolean includeBuiltIns) {
+      return new Key(
+          typeSystem,
+          session,
+          valueMap,
+          includeBuiltIns);
+    }
+
+    private Key withSession(@Nullable Session session) {
+      if (session == this.session) {
+        return this;
+      }
+      return new Key(
+          typeSystem,
+          session,
+          valueMap,
+          includeBuiltIns);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(typeSystem, session, valueMap, includeBuiltIns);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o == this
+          || o instanceof Key
+              && this.typeSystem == ((Key) o).typeSystem
+              && Objects.equals(this.session, ((Key) o).session)
+              && this.valueMap.equals(((Key) o).valueMap)
+              && this.includeBuiltIns == ((Key) o).includeBuiltIns;
     }
   }
 }

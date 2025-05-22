@@ -285,7 +285,8 @@ public class Shell {
     Prop.DIRECTORY.set(map, config.directory);
     Prop.SCRIPT_DIRECTORY.set(map, config.directory);
     final Session session = new Session(map);
-    Environment env = Environments.env(typeSystem, session, config.valueMap);
+    final Environment env =
+        Environments.envFromCache(typeSystem, session, config.valueMap);
     final LineFn lineFn =
         new TerminalLineFn(minusPrompt, equalsPrompt, lineReader);
     final SubShell subShell =
