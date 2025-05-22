@@ -527,7 +527,10 @@ public class TypeResolver {
       case CURRENT:
         final Ast.Current current = (Ast.Current) node;
         final Term term2 =
-            env.get(typeSystem, "current", TypeEnv.onlyValidInQuery(current));
+            env.get(
+                typeSystem,
+                BuiltIn.Z_CURRENT.mlName,
+                TypeEnv.onlyValidInQuery(current));
         return reg(current, v, term2);
 
       case FN:
@@ -2517,7 +2520,7 @@ public class TypeResolver {
     }
 
     static Triple of(TypeEnv env, Variable v, Variable c) {
-      return new Triple(env.bind("current", v), v, c);
+      return new Triple(env.bind(BuiltIn.Z_CURRENT.mlName, v), v, c);
     }
 
     Triple withV(Variable v) {

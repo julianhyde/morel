@@ -61,7 +61,6 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
-import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -85,10 +84,6 @@ public class Resolver {
    */
   public static final ImmutableMap<BuiltIn, Op> BUILT_IN_OP_MAP =
       Init.INSTANCE.builtInOpMap;
-
-  /** Reference to the "current" variable. */
-  private static final Core.IdPat CURRENT_PAT =
-      core.idPat(PrimitiveType.UNIT, "$current", 0);
 
   final TypeMap typeMap;
   private final NameGenerator nameGenerator;

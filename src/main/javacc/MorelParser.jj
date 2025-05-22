@@ -204,7 +204,7 @@ Id identifier() : {}
   }
 }
 
-/** Parses the "current" keyword. */
+/** Parses the {@code current} keyword. */
 Current current() : {}
 {
   <CURRENT> {
