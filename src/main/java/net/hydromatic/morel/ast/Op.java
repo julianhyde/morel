@@ -28,7 +28,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum Op {
   // identifiers
   ID(true),
-  CURRENT(" current "),
+  CURRENT(" current ", 99, 99),
   RECORD_SELECTOR(true),
 
   // literals

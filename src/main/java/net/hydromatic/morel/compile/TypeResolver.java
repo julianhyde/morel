@@ -526,7 +526,8 @@ public class TypeResolver {
 
       case CURRENT:
         final Ast.Current current = (Ast.Current) node;
-        final Term term2 = env.get(typeSystem, "current", TypeEnv.oops(current));
+        final Term term2 =
+            env.get(typeSystem, "current", TypeEnv.oops(current));
         return reg(current, v, term2);
 
       case FN:

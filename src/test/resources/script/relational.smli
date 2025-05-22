@@ -172,14 +172,7 @@ from e in emps
   yield x + y;
 > val it = [202] : int list
 
-from e in emps
-  where current.deptno = 10;
-
-from e in emps,
-    d in depts on e.deptno = d.deptno
-  yield e.id + d.deptno
-  where current mod 2 = 1;
-
+(* Order ------------------------------------------------------ *)
 from e in emps
   yield {e.deptno, e.name}
   order deptno desc;
@@ -234,6 +227,30 @@ end;
 >    [{deptno=20,id=101},{deptno=30,id=102},{deptno=30,id=103}])
 >   : {deptno:int, id:int} list * {deptno:int, id:int} list
 
+(* Current ---------------------------------------------------- *)
+from e in emps
+  where current.deptno = 10;
+> val it = [{deptno=10,id=100,name="Fred"}]
+>   : {deptno:int, id:int, name:string} list
+
+from e in emps,
+    d in depts on e.deptno = d.deptno
+  yield e.id + d.deptno
+  where current mod 2 = 1;
+> val it = [121,133] : int list
+
+from e in emps,
+    d in depts on e.deptno = d.deptno
+  yield e.id + d.deptno
+  yield current + 1000;
+> val it = [1110,1121,1132,1133] : int list
+
+from e in emps,
+    d in depts on e.deptno = d.deptno
+  yield e.id + d.deptno
+  order current mod 2, current;
+> val it = [110,132,121,133] : int list
+
 (*) 'yield' followed by 'order'
 from e in emps
   yield {e.deptno, x = e.deptno, e.name}
@@ -259,6 +276,24 @@ from e in emps
   yield {d = e.deptno}
   where d > 10;
 > val it = [{d=20},{d=30},{d=30}] : {d:int} list
+
+(*) same as previous, using 'current'
+from e in emps
+  yield {d = e.deptno}
+  where current.d > 10;
+> val it = [{d=20},{d=30},{d=30}] : {d:int} list
+
+(*) similar to previous, but an atom named 'deptno'
+from e in emps
+  yield e.deptno
+  where deptno > 10;
+> val it = [20,30,30] : int list
+
+(*) similar to previous, but an anonymous atom, so must use 'current'
+from e in emps
+  yield 0 + e.deptno
+  where current > 10;
+> val it = [20,30,30] : int list
 
 (*) singleton record 'yield' followed by 'where' followed by 'yield'
 from e in emps
