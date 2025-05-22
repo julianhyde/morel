@@ -16,8 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  *)
-from i in [1,2,3,4,5]
-  skip current;
-> val it = [6,7,8] : int list
+"this is a simple script; modify it for debugging test cases";
+> val it = "this is a simple script; modify it for debugging test cases" : string
 
 (*) End dummy.smli

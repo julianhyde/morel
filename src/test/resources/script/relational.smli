@@ -258,43 +258,55 @@ from e in emps,
 
 (*) "current" is not available in "skip", "take", "union", "intersect", "minus"
 1 + current;
-> stdIn:3.5-3.12 Error: 'current' is only valid in a query
->   raised at: stdIn:3.5-3.12
+> stdIn:1.5-1.12 Error: 'current' is only valid in a query
+>   raised at: stdIn:1.5-1.12
 
 from i in [1,2,3,4,5]
   skip current;
-> stdIn:4.8-4.15 Error: 'current' is only valid in a query
->   raised at: stdIn:4.8-4.15
+> stdIn:2.8-2.15 Error: 'current' is only valid in a query
+>   raised at: stdIn:2.8-2.15
 
 from i in [1,2,3,4,5]
   take current;
-> stdIn:4.8-4.15 Error: 'current' is only valid in a query
->   raised at: stdIn:4.8-4.15
+> stdIn:2.8-2.15 Error: 'current' is only valid in a query
+>   raised at: stdIn:2.8-2.15
 
 from i in [1,2,3,4,5]
   union [current + 10];
-> stdIn:4.8-4.15 Error: 'current' is only valid in a query
->   raised at: stdIn:4.8-4.15
+> stdIn:2.10-2.17 Error: 'current' is only valid in a query
+>   raised at: stdIn:2.10-2.17
 
 from i in [1,2,3,4,5]
   intersect [current + 1];
-> stdIn:4.8-4.15 Error: 'current' is only valid in a query
->   raised at: stdIn:4.8-4.15
+> stdIn:2.14-2.21 Error: 'current' is only valid in a query
+>   raised at: stdIn:2.14-2.21
 
 from i in [1,2,3,4,5]
   except [current + 1];
-> stdIn:4.8-4.15 Error: 'current' is only valid in a query
->   raised at: stdIn:4.8-4.15
+> stdIn:2.11-2.18 Error: 'current' is only valid in a query
+>   raised at: stdIn:2.11-2.18
 
 (*) But "current" is available in a subquery
-from i in [1,2,3,4,5],
-  j in (from j in ["a","b","c"] take current);
-from i in [1,2,3,4,5],
-  j in (from j in ["a","b","c"] skip current);
+from i in [1,2,3,4,5]
+  yield {i, js = (from j in ["a","b","c"] take current)};
+> val it =
+>   [{i=1,js=["a"]},{i=2,js=["a","b"]},{i=3,js=["a","b","c"]},
+>    {i=4,js=["a","b","c"]},{i=5,js=["a","b","c"]}]
+>   : {i:int, js:string list} list
+
+from i in [1,2,3,4,5]
+  yield {i, js = (from j in ["a","b","c"] skip current)};
+> val it =
+>   [{i=1,js=["b","c"]},{i=2,js=["c"]},{i=3,js=[]},{i=4,js=[]},{i=5,js=[]}]
+>   : {i:int, js:string list} list
+
 from i in [1,2,3,4,5]
   yield (from j in ["a","b","ccc","dd"] where size(j) = i skip current);
+> val it = [["b"],[],[],[],[]] : string list list
+
 from i in [1,2,3,4,5]
   where not (exists j in ["a","b","ccc","dd"] skip current);
+> val it = [4,5] : int list
 
 (* Combinations of steps -------------------------------------- *)
 (*) 'yield' followed by 'order'

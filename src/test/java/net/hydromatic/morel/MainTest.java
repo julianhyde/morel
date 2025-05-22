@@ -2470,6 +2470,14 @@ public class MainTest {
         .assertType("{a:int, b:bool} list");
     ml("from d in [{a=1,b=true}], i in [2] yield i yield 3.0")
         .assertType("real list");
+  }
+
+  @Test
+  void testFromType2() {
+    mlE("from i in [1,2,3,4,5] take $current$")
+        .assertCompileException("'current' is only valid in a query");
+    ml("from i in [1,2,3,4,5] yield substring(\"hello\", 1, current)")
+        .assertType("string list");
 
     // with
     ml("from d in [{a=1,b=true}], i in [2] yield {d with b=false}")
