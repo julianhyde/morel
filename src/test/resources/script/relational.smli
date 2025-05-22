@@ -173,6 +173,14 @@ from e in emps
 > val it = [202] : int list
 
 from e in emps
+  where current.deptno = 10;
+
+from e in emps,
+    d in depts on e.deptno = d.deptno
+  yield e.id + d.deptno
+  where current mod 2 = 1;
+
+from e in emps
   yield {e.deptno, e.name}
   order deptno desc;
 > val it =

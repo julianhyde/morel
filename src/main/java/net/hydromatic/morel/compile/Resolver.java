@@ -401,6 +401,8 @@ public class Resolver {
         return toCore(((Ast.AnnotatedExp) exp).exp);
       case ID:
         return toCore((Ast.Id) exp);
+      case CURRENT:
+        return toCore((Ast.Id) exp);
       case ANDALSO:
       case ORELSE:
         return toCore((Ast.InfixCall) exp);

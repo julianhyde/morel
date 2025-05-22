@@ -125,15 +125,6 @@ public class TypeResolver {
   /** A field of this name indicates that a record type is progressive. */
   static final String PROGRESSIVE_LABEL = "z$dummy";
 
-  /**
-   * The keyword with which to reference the current row in a step of a query.
-   * Also, the name of the sole field returned by an atom yield (e.g. {@code
-   * yield x + 2}) with an expression for which {@link
-   * net.hydromatic.morel.ast.AstBuilder#implicitLabelOpt(Ast.Exp)} cannot
-   * derive a label.
-   */
-  public static final String CURRENT = "current";
-
   private TypeResolver(TypeSystem typeSystem) {
     this.typeSystem = requireNonNull(typeSystem);
   }
@@ -533,6 +524,11 @@ public class TypeResolver {
         final Term term = env.get(typeSystem, id.name, TypeEnv.unbound(id));
         return reg(id, v, term);
 
+      case CURRENT:
+        final Ast.Current current = (Ast.Current) node;
+        final Term term2 = env.get(typeSystem, "current", TypeEnv.oops(current));
+        return reg(current, v, term2);
+
       case FN:
         final Ast.Fn fn = (Ast.Fn) node;
         final Variable resultVariable = unifier.variable();
@@ -724,7 +720,8 @@ public class TypeResolver {
             forEach(record2.args.keySet(), sequence.terms, envs::bind);
           }
         } else {
-          String label = first(ast.implicitLabelOpt(yield.exp), CURRENT);
+          String label =
+              first(ast.implicitLabelOpt(yield.exp), Op.CURRENT.opName);
           envs.bind(label, v6);
         }
         return Triple.of(envs.typeEnv, v6, c6);
@@ -2057,8 +2054,8 @@ public class TypeResolver {
     }
 
     /** Exception factory where a missing symbol is an internal error. */
-    static Function<String, RuntimeException> oops(Ast.IdPat idPat) {
-      return name -> new RuntimeException("oops, should have " + idPat.name);
+    static Function<String, RuntimeException> oops(AstNode node) {
+      return name -> new RuntimeException("oops, should have " + node);
     }
 
     /** Exception factory where a missing symbol is a user error. */
@@ -2509,7 +2506,7 @@ public class TypeResolver {
     }
 
     static Triple of(TypeEnv env, Variable v, Variable c) {
-      return new Triple(env, v, c);
+      return new Triple(env.bind("current", v), v, c);
     }
 
     Triple withV(Variable v) {
