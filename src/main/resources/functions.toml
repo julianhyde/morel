@@ -1,0 +1,2472 @@
+# Licensed to Julian Hyde under one or more contributor license
+# agreements.  See the NOTICE file distributed with this work
+# for additional information regarding copyright ownership.
+# Julian Hyde licenses this file to you under the Apache
+# License, Version 2.0 (the "License"); you may not use this
+# file except in compliance with the License.  You may obtain a
+# copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+# either express or implied.  See the License for the specific
+# language governing permissions and limitations under the
+# License.
+#
+# Standard ML Library Functions
+#
+# Format:
+#  * name (string) is the name of the function.
+#  * ordinal (optional int) contains the order of the function in the
+#    original reference.md table.
+#  * structure (string) is the name of the structure.
+#  * type (string) is the Standard ML type signature.
+#  * description (string) is the description. Multi-line string
+#    wrapped at 70. Identifiers are enclosed in backticks.
+#  * syntax (optional string, default "function", may also be
+#    "prefix", "infix") is the syntax of the function or operator.
+
+[[values]]
+structure = "Bool"
+ordinal = 0
+name = "true"
+type = "bool"
+description = """
+Literal true.
+"""
+
+[[values]]
+structure = "Bool"
+ordinal = 1
+name = "false"
+type = "bool"
+description = """
+Literal false.
+"""
+
+[[functions]]
+ordinal = 23
+name = "Bag.all"
+type = "(α → bool) → α bag → bool"
+description = """
+"all f b" applies `f` to each element `x` of the bag `b`, in arbitrary
+order, until `f(x)` evaluates to `false`; it returns `false` if such
+an `x` exists and `true` otherwise. It is equivalent to `not(exists
+(not o f) b))`.
+"""
+
+[[functions]]
+ordinal = 15
+name = "Bag.app"
+type = "(α → unit) → α bag → unit"
+description = """
+"app f b" applies `f` to the elements of `b`.
+"""
+
+[[functions]]
+ordinal = 8
+name = "Bag.at"
+type = "α bag * α bag → α bag"
+description = """
+"at (b1, b2)" returns the bag that is the concatenation of `b1` and
+`b2`.
+"""
+
+[[functions]]
+ordinal = 25
+name = "Bag.collate"
+type = "(α * α → order) → α bag * α bag → order"
+description = """
+"collate f (l1, l2)" performs lexicographic comparison of the two bags
+using the given ordering `f` on the bag elements.
+"""
+
+[[functions]]
+ordinal = 14
+name = "Bag.concat"
+type = "α bag bag → α bag"
+description = """
+"concat b" returns the bag that is the concatenation of all the bags
+in `b`.
+"""
+
+[[functions]]
+ordinal = 13
+name = "Bag.drop"
+type = "α bag * int → α bag"
+description = """
+"drop (b, i)" returns what is left after dropping an arbitrary `i`
+elements of the bag `b`. Raises `Subscript` if `i` < 0 or `i` >
+`length l`.
+
+<br><br>We have `drop(b, length b)` = `[]`.
+"""
+
+[[functions]]
+ordinal = 22
+name = "Bag.exists"
+type = "(α → bool) → α bag → bool"
+description = """
+"exists f b" applies `f` to each element `x` of the bag `b`, in
+arbitrary order, until `f(x)` evaluates to `true`; it returns `true`
+if such an `x` exists and `false` otherwise.
+"""
+
+[[functions]]
+ordinal = 19
+name = "Bag.filter"
+type = "(α → bool) → α bag → α bag"
+description = """
+"filter f b" applies `f` to each element `x` of `b` and returns the
+bag of those `x` for which `f x` evaluated to `true`.
+"""
+
+[[functions]]
+ordinal = 18
+name = "Bag.find"
+type = "(α → bool) → α bag → α option"
+description = """
+"find f b" applies `f` to each element `x` of the bag `b`, in
+arbitrary order, until `f x` evaluates to `true`. It returns `SOME
+(x)` if such an `x` exists; otherwise it returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 21
+name = "Bag.fold"
+type = "(α * β → β) → β → α bag → β"
+description = """
+"fold f init (bag [x1, x2, ..., xn])" returns `f(xn, ... , f(x2,
+f(x1, init))...)` (for some arbitrary reordering of the elements `xi`)
+or `init` if the bag is empty.
+"""
+
+[[functions]]
+ordinal = 5
+name = "Bag.fromList"
+type = "α list → α bag"
+description = """
+"fromList l" creates a new bag from `l`, whose length is `length l`
+and whose elements are the same as those of `l`. Raises `Size` if
+`maxLen` < `n`.
+"""
+
+[[functions]]
+ordinal = 11
+name = "Bag.getItem"
+type = "α bag → * (α * α bag) option"
+description = """
+"getItem b" returns `NONE` if the bag `b` is empty, and `SOME (hd b,
+tl b)` otherwise (applying `hd` and `tl` simultaneously so that they
+choose/remove the same arbitrary element).
+"""
+
+[[functions]]
+ordinal = 9
+name = "Bag.hd"
+type = "α bag → α"
+description = """
+"hd b" returns an arbitrary element of bag `b`. Raises `Empty` if `b`
+is `nil`.
+"""
+
+[[functions]]
+ordinal = 7
+name = "Bag.length"
+type = "α bag → int"
+description = """
+"length b" returns the number of elements in the bag `b`.
+"""
+
+[[functions]]
+ordinal = 16
+name = "Bag.map"
+type = "(α → β) → α bag → β bag"
+description = """
+"map f b" applies `f` to each element of `b`, returning the bag of
+results.
+"""
+
+[[functions]]
+ordinal = 17
+name = "Bag.mapPartial"
+type = "(α → β option) → α bag → β bag"
+description = """
+"mapPartial f b" applies `f` to each element of `b`, returning a bag
+of results, with `SOME` stripped, where `f` was defined. `f` is not
+defined for an element of `b` if `f` applied to the element returns
+`NONE`. The above expression is equivalent to `((map valOf) o (filter
+isSome) o (map f)) b`.
+"""
+
+[[functions]]
+ordinal = 3
+name = "Bag.nil"
+type = "α bag"
+description = """
+"nil" is the empty bag.
+"""
+
+[[functions]]
+ordinal = 4
+name = "Bag.null"
+type = "α bag → bool"
+description = """
+"null b" returns `true` if the bag `b` is empty.
+"""
+
+[[functions]]
+ordinal = 20
+name = "Bag.partition"
+type = "(α → bool) → α bag → α bag * α bag"
+description = """
+"partition f b" applies `f` to each element `x` of `b`, in arbitrary
+order, and returns a pair `(pos, neg)` where `pos` is the bag of those
+`x` for which `f x` evaluated to `true`, and `neg` is the bag of those
+for which `f x` evaluated to `false`.
+"""
+
+[[functions]]
+ordinal = 24
+name = "Bag.tabulate"
+type = "int * (int → α) → α bag"
+description = """
+"tabulate (n, f)" returns a bag of length `n` equal to `[f(0), f(1),
+..., f(n-1)]`. Raises `Size` if `n` < 0.
+"""
+
+[[functions]]
+ordinal = 12
+name = "Bag.take"
+type = "α bag * int → α bag"
+description = """
+"take (b, i)" returns an arbitrary `i` elements of the bag `b`. Raises
+`Subscript` if `i` < 0 or `i` > `length l`. We have `take(b, length
+b)` = `b`.
+"""
+
+[[functions]]
+ordinal = 10
+name = "Bag.tl"
+type = "α bag → α bag"
+description = """
+"tl b" returns all but one arbitrary element of bag `b`. Raises
+`Empty` if `b` is `nil`.
+"""
+
+[[functions]]
+ordinal = 6
+name = "Bag.toList"
+type = "α bag → α list"
+description = """
+"toList b" creates a new bag from `b`, whose length is `length b` and
+whose elements are the same as those of `b`. Raises `Size` if `maxLen`
+< `n`.
+"""
+
+[[functions]]
+structure = "Bool"
+syntax = "prefix"
+name = "Bool.not"
+type = "bool → bool"
+description = """
+"not b" returns the logical inverse of `b`.
+"""
+
+[[functions]]
+ordinal = 26
+name = "Char.chr"
+type = "int → char"
+description = """
+"chr i" returns the character whose code is `i`. Raises `Chr` if `i` <
+0 or `i` > `maxOrd`.
+"""
+
+[[functions]]
+ordinal = 27
+name = "Char.compare"
+type = "char * char → order"
+description = """
+"compare (c1, c2)" returns `LESS`, `EQUAL`, or `GREATER` according to
+whether its first argument is less than, equal to, or greater than the
+second.
+"""
+
+[[functions]]
+ordinal = 28
+name = "Char.contains"
+type = "char → string → bool"
+description = """
+"contains s c" returns true if character `c` occurs in the string `s`;
+false otherwise. The function, when applied to `s`, builds a table and
+returns a function which uses table lookup to decide whether a given
+character is in the string or not. Hence it is relatively expensive to
+compute `val p = contains s` but very fast to compute `p(c)` for any
+given character.
+"""
+
+[[functions]]
+ordinal = 29
+name = "Char.fromCString"
+type = "string → char option"
+description = """
+"fromCString s" scans a `char` value from a string. Returns `SOME (r)`
+if a `char` value can be scanned from a prefix of `s`, ignoring any
+initial whitespace; otherwise, it returns `NONE`. Equivalent to
+`StringCvt.scanString (scan StringCvt.ORD)`.
+"""
+
+[[functions]]
+ordinal = 30
+name = "Char.fromInt"
+type = "int → char option"
+description = """
+"fromInt i" converts an `int` into a `char`. Raises `Chr` if `i` < 0
+or `i` > `maxOrd`.
+"""
+
+[[functions]]
+ordinal = 31
+name = "Char.fromString"
+type = "string → char option"
+description = """
+"fromString s" attempts to scan a character or ML escape sequence from
+the string `s`. Does not skip leading whitespace. For instance,
+`fromString "\\\\065"` equals `#"A"`.
+"""
+
+[[functions]]
+ordinal = 32
+name = "Char.isAlpha"
+type = "char → bool"
+description = """
+"isAlpha c" returns true if `c` is a letter (lowercase or uppercase).
+"""
+
+[[functions]]
+ordinal = 33
+name = "Char.isAlphaNum"
+type = "char → bool"
+description = """
+"isAlphaNum c" returns true if `c` is alphanumeric (a letter or a
+decimal digit).
+"""
+
+[[functions]]
+ordinal = 34
+name = "Char.isAscii"
+type = "char → bool"
+description = """
+"isAscii c" returns true if 0 ≤ `ord c` ≤ 127 `c`.
+"""
+
+[[functions]]
+ordinal = 35
+name = "Char.isCntrl"
+type = "char → bool"
+description = """
+"isCntrl c" returns true if `c` is a control character, that is, if
+`not (isPrint c)`.
+"""
+
+[[functions]]
+ordinal = 36
+name = "Char.isDigit"
+type = "char → bool"
+description = """
+"isDigit c" returns true if `c` is a decimal digit (0 to 9).
+"""
+
+[[functions]]
+ordinal = 37
+name = "Char.isGraph"
+type = "char → bool"
+description = """
+"isGraph c" returns true if `c` is a graphical character, that is, it
+is printable and not a whitespace character.
+"""
+
+[[functions]]
+ordinal = 38
+name = "Char.isHexDigit"
+type = "char → bool"
+description = """
+"isHexDigit c" returns true if `c` is a hexadecimal digit.
+"""
+
+[[functions]]
+ordinal = 39
+name = "Char.isLower"
+type = "char → bool"
+description = """
+"isLower c" returns true if `c` is a hexadecimal digit (0 to 9 or a to
+f or A to F).
+"""
+
+[[functions]]
+ordinal = 40
+name = "Char.isOctDigit"
+type = "char → bool"
+description = """
+"isOctDigit c" returns true if `c` is an octal digit.
+"""
+
+[[functions]]
+ordinal = 41
+name = "Char.isPrint"
+type = "char → bool"
+description = """
+"isPrint c" returns true if `c` is a printable character (space or
+visible).
+"""
+
+[[functions]]
+ordinal = 42
+name = "Char.isPunct"
+type = "char → bool"
+description = """
+"isPunct c" returns true if `c` is a punctuation character, that is,
+graphical but not alphanumeric.
+"""
+
+[[functions]]
+ordinal = 43
+name = "Char.isSpace"
+type = "char → bool"
+description = """
+"isSpace c" returns true if `c` is a whitespace character (blank,
+newline, tab, vertical tab, new page).
+"""
+
+[[functions]]
+ordinal = 44
+name = "Char.isUpper"
+type = "char → bool"
+description = """
+"isUpper c" returns true if `c` is an uppercase letter (A to Z).
+"""
+
+[[functions]]
+ordinal = 47
+name = "Char.maxChar"
+type = "int"
+description = """
+"maxChar" is the greatest character in the ordering `<`.
+"""
+
+[[functions]]
+ordinal = 45
+name = "Char.maxOrd"
+type = "int"
+description = """
+"maxOrd" is the greatest character code; it equals `ord maxChar`.
+"""
+
+[[functions]]
+ordinal = 48
+name = "Char.minChar"
+type = "char"
+description = """
+"minChar" is the minimal (most negative) character representable by
+`char`. If a value is `NONE`, `char` can represent all negative
+integers, within the limits of the heap size. If `precision` is `SOME
+(n)`, then we have `minChar` = -2<sup>(n-1)</sup>.
+"""
+
+[[functions]]
+ordinal = 49
+name = "Char.notContains"
+type = "char → string → bool"
+description = """
+"notContains s c" returns true if character `c` does not occur in the
+string `s`; false otherwise. Works by construction of a lookup table
+in the same way as `Char.contains`.
+"""
+
+[[functions]]
+ordinal = 50
+name = "Char.ord"
+type = "char → int"
+description = """
+"ord c" returns the code of character `c`.
+"""
+
+[[functions]]
+ordinal = 50
+name = "Char.pred"
+type = "char → char"
+description = """
+"pred c" returns the predecessor of `c`. Raises `Subscript` if `c` is
+`minOrd`.
+"""
+
+[[functions]]
+ordinal = 51
+name = "Char.succ"
+type = "char → char"
+description = """
+"succ c" returns the character immediately following `c`, or raises
+`Chr` if `c` = `maxChar`
+"""
+
+[[functions]]
+ordinal = 52
+name = "Char.toCString"
+type = "char → string"
+description = """
+"toCString c" converts a `char` into a `string`; equivalent to `(fmt
+StringCvt.ORD r)`.
+"""
+
+[[functions]]
+ordinal = 53
+name = "Char.toLower"
+type = "char → char"
+description = """
+"toLower c" returns the lowercase letter corresponding to `c`, if `c`
+is a letter (a to z or A to Z); otherwise returns `c`.
+"""
+
+[[functions]]
+ordinal = 54
+name = "Char.toString"
+type = "char → string"
+description = """
+"toString c" converts a `char` into a `string`; equivalent to `(fmt
+StringCvt.ORD r)`.
+"""
+
+[[functions]]
+ordinal = 55
+name = "Char.toUpper"
+type = "char → char"
+description = """
+"toUpper c" returns the uppercase letter corresponding to `c`, if `c`
+is a letter (a to z or A to Z); otherwise returns `c`.
+"""
+
+[[functions]]
+ordinal = 56
+name = "General.ignore"
+type = "α → unit"
+description = """
+"ignore x" always returns `unit`. The function evaluates its argument
+but throws away the value.
+"""
+
+[[functions]]
+ordinal = 57
+name = "General.op o"
+type = "(β → γ) (α → β) → α → γ"
+description = """
+"f o g" is the function composition of `f` and `g`. Thus, `(f o g) a`
+is equivalent to `f (g a)`.
+"""
+
+[[functions]]
+ordinal = 60
+name = "Int.op *"
+type = "int * int → int"
+description = """
+"i * j" is the product of `i` and `j`. It raises `Overflow` when the
+result is not representable.
+"""
+
+[[functions]]
+ordinal = 61
+name = "Int.op +"
+type = "int * int → int"
+description = """
+"i + j" is the sum of `i` and `j`. It raises `Overflow` when the
+result is not representable.
+"""
+
+[[functions]]
+ordinal = 62
+name = "Int.op -"
+type = "int * int → int"
+description = """
+"i - j" is the difference of `i` and `j`. It raises `Overflow` when
+the result is not representable.
+"""
+
+[[functions]]
+ordinal = 63
+name = "Int.op div"
+type = "int * int → int"
+description = """
+"i div j" returns the greatest integer less than or equal to the
+quotient of i by j, i.e., `floor(i / j)`. It raises `Overflow` when
+the result is not representable, or Div when `j = 0`. Note that
+rounding is towards negative infinity, not zero.
+"""
+
+[[functions]]
+ordinal = 64
+name = "Int.op mod"
+type = "int * int → int"
+description = """
+"i mod j" returns the remainder of the division of i by j. It raises
+`Div` when `j = 0`. When defined, `(i mod j)` has the same sign as
+`j`, and `(i div j) * j + (i mod j) = i`.
+"""
+
+[[functions]]
+ordinal = 65
+name = "Int.op <"
+type = "int * int → bool"
+description = """
+"i < j" returns true if i is less than j.
+"""
+
+[[functions]]
+ordinal = 66
+name = "Int.op <="
+type = "int * int → bool"
+description = """
+"i < j" returns true if i is less than or equal to j.
+"""
+
+[[functions]]
+ordinal = 67
+name = "Int.op >"
+type = "int * int → bool"
+description = """
+"i < j" returns true if i is greater than j.
+"""
+
+[[functions]]
+ordinal = 68
+name = "Int.op >="
+type = "int * int → bool"
+description = """
+"i < j" returns true if i is greater than or equal to j.
+"""
+
+[[functions]]
+ordinal = 69
+name = "Int.op ~"
+type = "int → int"
+description = """
+"~ i" returns the negation of `i`.
+"""
+
+[[functions]]
+ordinal = 70
+name = "Int.abs"
+type = "int → int"
+description = """
+"abs i" returns the absolute value of `i`.
+"""
+
+[[functions]]
+ordinal = 71
+name = "Int.compare"
+type = "int * int → order"
+description = """
+"compare (i, j)" returns `LESS`, `EQUAL`, or `GREATER` according to
+whether its first argument is less than, equal to, or greater than the
+second.
+"""
+
+[[functions]]
+ordinal = 72
+name = "Int.fromInt, int"
+type = "int → int"
+description = """
+"fromInt i" converts a value from type `int` to the default integer
+type. Raises `Overflow` if the value does not fit.
+"""
+
+[[functions]]
+ordinal = 73
+name = "Int.fromString"
+type = "string → int option"
+description = """
+"fromString s" scans a `int` value from a string. Returns `SOME (r)`
+if a `int` value can be scanned from a prefix of `s`, ignoring any
+initial whitespace; otherwise, it returns `NONE`. Equivalent to
+`StringCvt.scanString (scan StringCvt.DEC)`.
+"""
+
+[[functions]]
+ordinal = 74
+name = "Int.max"
+type = "int * int → int"
+description = """
+"max (i, j)" returns the larger of the arguments.
+"""
+
+[[functions]]
+ordinal = 75
+name = "Int.maxInt"
+type = "int"
+description = """
+"maxInt" is the maximal (most positive) integer representable by
+`int`. If a value is `NONE`, `int` can represent all positive
+integers, within the limits of the heap size. If `precision` is `SOME
+(n)`, then we have `maxInt` = 2<sup>(n-1)</sup> - 1.
+"""
+
+[[functions]]
+ordinal = 76
+name = "Int.min"
+type = "int * int → int"
+description = """
+"min (i, j)" returns the smaller of the arguments.
+"""
+
+[[functions]]
+ordinal = 77
+name = "Int.minInt"
+type = "int"
+description = """
+"minInt" is the minimal (most negative) integer representable by
+`int`. If a value is `NONE`, `int` can represent all negative
+integers, within the limits of the heap size. If `precision` is `SOME
+(n)`, then we have `minInt` = -2<sup>(n-1)</sup>.
+"""
+
+[[functions]]
+ordinal = 78
+name = "Int.mod"
+type = "int * int → int"
+description = """
+"mod (i, j)" returns the remainder of the division of `i` by `j`. It
+raises `Div` when `j = 0`. When defined, `(i mod j)` has the same sign
+as `j`, and `(i div j) * j + (i mod j) = i`.
+"""
+
+[[functions]]
+ordinal = 79
+name = "Int.precision"
+type = "int"
+description = """
+"precision" is the precision. If `SOME (n)`, this denotes the number
+`n` of significant bits in type `int`, including the sign bit. If it
+is `NONE`, int has arbitrary precision. The precision need not
+necessarily be a power of two.
+"""
+
+[[functions]]
+ordinal = 80
+name = "Int.quot"
+type = "int * int → int"
+description = """
+"quot (i, j)" returns the truncated quotient of the division of `i` by
+`j`, i.e., it computes `(i / j)` and then drops any fractional part of
+the quotient. It raises `Overflow` when the result is not
+representable, or `Div` when `j = 0`. Note that unlike `div`, `quot`
+rounds towards zero. In addition, unlike `div` and `mod`, neither
+`quot` nor `rem` are infix by default; an appropriate infix
+declaration would be `infix 7 quot rem`. This is the semantics of most
+hardware divide instructions, so `quot` may be faster than `div`.
+"""
+
+[[functions]]
+ordinal = 81
+name = "Int.rem"
+type = "int * int → int"
+description = """
+"rem (i, j)" returns the remainder of the division of `i` by `j`. It
+raises `Div` when `j = 0`. `(i rem j)` has the same sign as i, and it
+holds that `(i quot j) * j + (i rem j) = i`. This is the semantics of
+most hardware divide instructions, so `rem` may be faster than `mod`.
+"""
+
+[[functions]]
+ordinal = 82
+name = "Int.sameSign"
+type = "int * int → bool"
+description = """
+"sameSign (i, j)" returns true if `i` and `j` have the same sign. It
+is equivalent to `(sign i = sign j)`.
+"""
+
+[[functions]]
+ordinal = 83
+name = "Int.sign"
+type = "int → int"
+description = """
+"sign i" returns ~1, 0, or 1 when `i` is less than, equal to, or
+greater than 0, respectively.
+"""
+
+[[functions]]
+ordinal = 84
+name = "Int.toInt"
+type = "int → int"
+description = """
+"toInt i" converts a value from the default integer type to type
+`int`. Raises `Overflow` if the value does not fit.
+"""
+
+[[functions]]
+ordinal = 85
+name = "Int.toString"
+type = "int → string"
+description = """
+"toString i" converts a `int` into a `string`; equivalent to `(fmt
+StringCvt.DEC r)`.
+"""
+
+[[functions]]
+ordinal = 58
+name = "Interact.use"
+type = "string → unit"
+description = """
+"use f" loads source text from the file named `f`.
+"""
+
+[[functions]]
+ordinal = 59
+name = "Interact.useSilently"
+type = "string → unit"
+description = """
+"useSilently f" loads source text from the file named `f`, without
+printing to stdout.
+"""
+
+[[functions]]
+ordinal = 86
+name = "List.nil"
+type = "α list"
+description = """
+"nil" is the empty list.
+"""
+
+[[functions]]
+ordinal = 87
+name = "List.null"
+type = "α list → bool"
+description = """
+"null l" returns `true` if the list `l` is empty.
+"""
+
+[[functions]]
+ordinal = 88
+name = "List.length"
+type = "α list → int"
+description = """
+"length l" returns the number of elements in the list `l`.
+"""
+
+[[functions]]
+ordinal = 89
+name = "List.op @"
+type = "α list * α list → α list"
+description = """
+"l1 @ l2" returns the list that is the concatenation of `l1` and `l2`.
+"""
+
+[[functions]]
+ordinal = 90
+name = "List.at"
+type = "α list * α list → α list"
+description = """
+"at (l1, l2)" is equivalent to "l1 @ l2".
+"""
+
+[[functions]]
+ordinal = 91
+name = "List.hd"
+type = "α list → α"
+description = """
+"hd l" returns the first element of `l`. Raises `Empty` if `l` is
+`nil`.
+"""
+
+[[functions]]
+ordinal = 92
+name = "List.tl"
+type = "α list → α list"
+description = """
+"tl l" returns all but the first element of `l`. Raises `Empty` if `l`
+is `nil`.
+"""
+
+[[functions]]
+ordinal = 93
+name = "List.last"
+type = "α list → α"
+description = """
+"last l" returns the last element of `l`. Raises `Empty` if `l` is
+`nil`.
+"""
+
+[[functions]]
+ordinal = 94
+name = "List.getItem"
+type = "α list → * (α * α list) option"
+description = """
+"getItem l" returns `NONE` if the `list` is empty, and `SOME (hd l, tl
+l)` otherwise. This function is particularly useful for creating value
+readers from lists of characters. For example, `Int.scan StringCvt.DEC
+getItem` has the type `(int, char list) StringCvt.reader` and can be
+used to scan decimal integers from lists of characters.
+"""
+
+[[functions]]
+ordinal = 95
+name = "List.nth"
+type = "α list * int → α"
+description = """
+"nth (l, i)" returns the `i`(th) element of the list `l`, counting
+from 0. Raises `Subscript` if `i` < 0 or `i` &ge; `length l`. We have
+`nth(l, 0)` = `hd l`, ignoring exceptions.
+"""
+
+[[functions]]
+ordinal = 96
+name = "List.take"
+type = "α list * int → α list"
+description = """
+"take (l, i)" returns the first `i` elements of the list `l`. Raises
+`Subscript` if `i` < 0 or `i` > `length l`. We have `take(l, length
+l)` = `l`.
+"""
+
+[[functions]]
+ordinal = 97
+name = "List.drop"
+type = "α list * int → α list"
+description = """
+"drop (l, i)" returns what is left after dropping the first `i`
+elements of the list `l`. Raises `Subscript` if `i` < 0 or `i` >
+`length l`.
+
+<br><br>It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le;
+`i` &le; `length l`. We also have `drop(l, length l)` = `[]`.
+"""
+
+[[functions]]
+ordinal = 98
+name = "List.rev"
+type = "α list → α list"
+description = """
+"rev l" returns a list consisting of `l`'s elements in reverse order.
+"""
+
+[[functions]]
+ordinal = 99
+name = "List.concat"
+type = "α list list → α list"
+description = """
+"concat l" returns the list that is the concatenation of all the lists
+in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
+"""
+
+[[functions]]
+ordinal = 100
+name = "List.except"
+type = "α list list → α list"
+description = """
+"except l" returns the list that is the concatenation of all the lists
+in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
+"""
+
+[[functions]]
+ordinal = 101
+name = "List.intersect"
+type = "α list list → α list"
+description = """
+"intersect l" returns the list that is the concatenation of all the
+lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @
+ln`
+"""
+
+[[functions]]
+ordinal = 102
+name = "List.revAppend"
+type = "α list * α list → α list"
+description = """
+"revAppend (l1, l2)" returns `(rev l1) @ l2`.
+"""
+
+[[functions]]
+ordinal = 103
+name = "List.app"
+type = "(α → unit) → α list → unit"
+description = """
+"app f l" applies `f` to the elements of `l`, from left to right.
+"""
+
+[[functions]]
+ordinal = 104
+name = "List.map"
+type = "(α → β) → α list → β list"
+description = """
+"map f l" applies `f` to each element of `l` from left to right,
+returning the list of results.
+"""
+
+[[functions]]
+ordinal = 105
+name = "List.mapi"
+type = "(int * α → β) → α vector → β vector"
+description = """
+"mapi f l" applies the function `f` to the elements of the argument
+list `l`, supplying the list index and element as arguments to each
+call.
+"""
+
+[[functions]]
+ordinal = 106
+name = "List.mapPartial"
+type = "(α → β option) → α list → β list"
+description = """
+"mapPartial f l" applies `f` to each element of `l` from left to
+right, returning a list of results, with `SOME` stripped, where `f`
+was defined. `f` is not defined for an element of `l` if `f` applied
+to the element returns `NONE`. The above expression is equivalent to
+`((map valOf) o (filter isSome) o (map f)) l`.
+"""
+
+[[functions]]
+ordinal = 107
+name = "List.find"
+type = "(α → bool) → α list → α option"
+description = """
+"find f l" applies `f` to each element `x` of the list `l`, from left
+to right, until `f x` evaluates to `true`. It returns `SOME (x)` if
+such an `x` exists; otherwise it returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 108
+name = "List.filter"
+type = "(α → bool) → α list → α list"
+description = """
+"filter f l" applies `f` to each element `x` of `l`, from left to
+right, and returns the list of those `x` for which `f x` evaluated to
+`true`, in the same order as they occurred in the argument list.
+"""
+
+[[functions]]
+ordinal = 109
+name = "List.partition"
+type = "(α → bool) → α list → α list * α list"
+description = """
+"partition f l" applies `f` to each element `x` of `l`, from left to
+right, and returns a pair `(pos, neg)` where `pos` is the list of
+those `x` for which `f x` evaluated to `true`, and `neg` is the list
+of those for which `f x` evaluated to `false`. The elements of `pos`
+and `neg` retain the same relative order they possessed in `l`.
+"""
+
+[[functions]]
+ordinal = 110
+name = "List.foldl"
+type = "(α * β → β) → β → α list → β"
+description = """
+"foldl f init [x1, x2, ..., xn]" returns `f(xn, ... , f(x2, f(x1,
+init))...)` or `init` if the list is empty.
+"""
+
+[[functions]]
+ordinal = 111
+name = "List.foldr"
+type = "(α * β → β) → β → α list → β"
+description = """
+"foldr f init [x1, x2, ..., xn]" returns `f(x1, f(x2, ..., f(xn,
+init)...))` or `init` if the list is empty.
+"""
+
+[[functions]]
+ordinal = 112
+name = "List.exists"
+type = "(α → bool) → α list → bool"
+description = """
+"exists f l" applies `f` to each element `x` of the list `l`, from
+left to right, until `f(x)` evaluates to `true`; it returns `true` if
+such an `x` exists and `false` otherwise.
+"""
+
+[[functions]]
+ordinal = 113
+name = "List.all"
+type = "(α → bool) → α list → bool"
+description = """
+"all f l" applies `f` to each element `x` of the list `l`, from left
+to right, until `f(x)` evaluates to `false`; it returns `false` if
+such an `x` exists and `true` otherwise. It is equivalent to
+`not(exists (not o f) l))`.
+"""
+
+[[functions]]
+ordinal = 114
+name = "List.tabulate"
+type = "int * (int → α) → α list"
+description = """
+"tabulate (n, f)" returns a list of length `n` equal to `[f(0), f(1),
+..., f(n-1)]`, created from left to right. Raises `Size` if `n` < 0.
+"""
+
+[[functions]]
+ordinal = 115
+name = "List.collate"
+type = "(α * α → order) → α list * α list → order"
+description = """
+"collate f (l1, l2)" performs lexicographic comparison of the two
+lists using the given ordering `f` on the list elements.
+"""
+
+[[functions]]
+ordinal = 116
+name = "Math.acos"
+type = "real → real"
+description = """
+"acos x" returns the arc cosine of `x`. `acos` is the inverse of
+`cos`. Its result is guaranteed to be in the closed interval [0,
+pi]. If the magnitude of `x` exceeds 1.0, returns NaN.
+"""
+
+[[functions]]
+ordinal = 117
+name = "Math.asin"
+type = "real → real"
+description = """
+"asin x" returns the arc sine of `x`. `asin` is the inverse of
+`sin`. Its result is guaranteed to be in the closed interval [-pi / 2,
+pi / 2]. If the magnitude of `x` exceeds 1.0, returns NaN.
+"""
+
+[[functions]]
+ordinal = 118
+name = "Math.atan"
+type = "real → real"
+description = """
+"atan x" returns the arc tangent of `x`. `atan` is the inverse of
+`tan`. For finite arguments, the result is guaranteed to be in the
+open interval (-pi / 2, pi / 2). If `x` is +infinity, it returns pi /
+2; if `x` is -infinity, it returns -pi / 2.
+"""
+
+[[functions]]
+ordinal = 119
+name = "Math.atan2"
+type = "real * real → real"
+description = """
+"atan2 (y, x)" returns the arc tangent of `(y / x)` in the closed
+interval [-pi, pi], corresponding to angles within +-180 degrees. The
+quadrant of the resulting angle is determined using the signs of both
+`x` and `y`, and is the same as the quadrant of the point `(x,
+y)`. When `x` = 0, this corresponds to an angle of 90 degrees, and the
+result is `(real (sign y)) * pi / 2.0`.
+"""
+
+[[functions]]
+ordinal = 120
+name = "Math.cos"
+type = "real → real"
+description = """
+"cos x" returns the cosine of `x`, measured in radians. If `x` is an
+infinity, returns NaN.
+"""
+
+[[functions]]
+ordinal = 121
+name = "Math.cosh"
+type = "real → real"
+description = """
+"cosh x" returns the hyperbolic cosine of `x`, that is, `(e(x) +
+e(-x)) / 2`. Among its properties, cosh +-0 = 1, cosh +-infinity =
++-infinity.
+"""
+
+[[functions]]
+ordinal = 122
+name = "Math.e"
+type = "real"
+description = """
+"e" is base e (2.718281828...) of the natural logarithm.
+"""
+
+[[functions]]
+ordinal = 123
+name = "Math.exp"
+type = "real → real"
+description = """
+"exp x" returns `e(x)`, i.e., `e` raised to the `x`<sup>th</sup>
+power. If `x` is +infinity, returns +infinity; if `x` is -infinity,
+returns 0.
+"""
+
+[[functions]]
+ordinal = 124
+name = "Math.ln"
+type = "real → real"
+description = """
+"ln x" returns the natural logarithm (base e) of `x`. If `x` < 0,
+returns NaN; if `x` = 0, returns -infinity; if `x` is infinity,
+returns infinity.
+"""
+
+[[functions]]
+ordinal = 125
+name = "Math.log10"
+type = "real → real"
+description = """
+"log10 x" returns the decimal logarithm (base 10) of `x`. If `x` < 0,
+returns NaN; if `x` = 0, returns -infinity; if `x` is infinity,
+returns infinity.
+"""
+
+[[functions]]
+ordinal = 126
+name = "Math.pi"
+type = "real"
+description = """
+"pi" is the constant pi (3.141592653...).
+"""
+
+[[functions]]
+ordinal = 127
+name = "Math.pow"
+type = "real * real → real"
+description = """
+"pow (x, y)" returns `x(y)`, i.e., `x` raised to the `y`<sup>th</sup>
+power. For finite `x` and `y`, this is well-defined when `x` > 0, or
+when `x` < 0 and `y` is integral.
+"""
+
+[[functions]]
+ordinal = 128
+name = "Math.sin"
+type = "real → real"
+description = """
+"sin x" returns the sine of `x`, measured in radians. If `x` is an
+infinity, returns NaN.
+"""
+
+[[functions]]
+ordinal = 129
+name = "Math.sinh"
+type = "real → real"
+description = """
+"sinh x" returns the hyperbolic sine of `x`, that is, `(e(x) - e(-x))
+/ 2`. Among its properties, sinh +-0 = +-0, sinh +-infinity =
++-infinity.
+"""
+
+[[functions]]
+ordinal = 130
+name = "Math.sqrt"
+type = "real → real"
+description = """
+"sqrt x" returns the square root of `x`. sqrt (~0.0) = ~0.0. If `x` <
+0, returns NaN.
+"""
+
+[[functions]]
+ordinal = 131
+name = "Math.tan"
+type = "real → real"
+description = """
+"tan x" returns the tangent of `x`, measured in radians. If `x` is an
+infinity, returns NaN. Produces infinities at various finite values,
+roughly corresponding to the singularities of the tangent function.
+"""
+
+[[functions]]
+ordinal = 132
+name = "Math.tanh"
+type = "real → real"
+description = """
+"tanh x" returns the hyperbolic tangent of `x`, that is, `(sinh x) /
+(cosh x)`. Among its properties, tanh +-0 = +-0, tanh +-infinity =
++-1.
+"""
+
+[[functions]]
+ordinal = 133
+name = "Option.app"
+type = "(α → unit) → α option → unit"
+description = """
+"app f opt" applies the function `f` to the value `v` if `opt` is
+`SOME v`, and otherwise does nothing
+"""
+
+[[functions]]
+ordinal = 134
+name = "Option.compose"
+type = "(α → β) * (γ → α option) → γ → β option"
+description = """
+"compose (f, g) a" returns `NONE` if `g(a)` is `NONE`; otherwise, if
+`g(a)` is `SOME v`, it returns `SOME (f v)`.
+"""
+
+[[functions]]
+ordinal = 135
+name = "Option.composePartial"
+type = "(α → β option) * (γ → α option) → γ → β option"
+description = """
+"composePartial (f, g) a" returns `NONE` if `g(a)` is `NONE`;
+otherwise, if `g(a)` is `SOME v`, returns `f(v)`.
+"""
+
+[[functions]]
+ordinal = 136
+name = "Option.map"
+type = "α → β) → α option → β option"
+description = """
+"map f opt" maps `NONE` to `NONE` and `SOME v` to `SOME (f v)`.
+"""
+
+[[functions]]
+ordinal = 137
+name = "Option.mapPartial"
+type = "α → β option) → α option → β option"
+description = """
+"mapPartial f opt" maps `NONE` to `NONE` and `SOME v` to `f(v)`.
+"""
+
+[[functions]]
+ordinal = 138
+name = "Option.getOpt"
+type = "α option * α → α"
+description = """
+"getOpt (opt, a)" returns `v` if `opt` is `SOME (v)`; otherwise
+returns `a`.
+"""
+
+[[functions]]
+ordinal = 139
+name = "Option.isSome"
+type = "α option → bool"
+description = """
+"isSome opt" returns `true` if `opt` is `SOME v`; otherwise returns
+`false`.
+"""
+
+[[functions]]
+ordinal = 140
+name = "Option.filter"
+type = "(α → bool) → α → α option"
+description = """
+"filter f a" returns `SOME a` if `f(a)` is `true`, `NONE` otherwise.
+"""
+
+[[functions]]
+ordinal = 141
+name = "Option.join"
+type = "α option option → α option"
+description = """
+"join opt" maps `NONE` to `NONE` and `SOME v` to `v`.
+"""
+
+[[functions]]
+ordinal = 142
+name = "Option.valOf"
+type = "α option → α"
+description = """
+"valOf opt" returns `v` if `opt` is `SOME v`, otherwise raises
+`Option`.
+"""
+
+[[functions]]
+ordinal = 143
+name = "Real.op *"
+type = "real * real → real"
+description = """
+"r1 * r2" is the product of `r1` and `r2`. The product of zero and an
+infinity produces NaN. Otherwise, if one argument is infinite, the
+result is infinite with the correct sign, e.g., -5 * (-infinity) =
+infinity, infinity * (-infinity) = -infinity.
+"""
+
+[[functions]]
+ordinal = 144
+name = "Real.op +"
+type = "real * real → real"
+description = """
+"r1 + r2" is the sum of `r1` and `r2`. If one argument is finite and
+the other infinite, the result is infinite with the correct sign,
+e.g., 5 - (-infinity) = infinity. We also have infinity + infinity =
+infinity and (-infinity) + (-infinity) = (-infinity). Any other
+combination of two infinities produces NaN.
+"""
+
+[[functions]]
+ordinal = 145
+name = "Real.op -"
+type = "real * real → real"
+description = """
+"r1 - r2" is the difference of `r1` and `r2`. If one argument is
+finite and the other infinite, the result is infinite with the correct
+sign, e.g., 5 - (-infinity) = infinity. We also have infinity +
+infinity = infinity and (-infinity) + (-infinity) = (-infinity). Any
+other combination of two infinities produces NaN.
+"""
+
+[[functions]]
+ordinal = 146
+name = "Real.op /"
+type = "real * real → real"
+description = """
+"r1 / r2" is the quotient of `r1` and `r2`. We have 0 / 0 = NaN and
++-infinity / +-infinity = NaN. Dividing a finite, non-zero number by a
+zero, or an infinity by a finite number produces an infinity with the
+correct sign. (Note that zeros are signed.) A finite number divided by
+an infinity is 0 with the correct sign.
+"""
+
+[[functions]]
+ordinal = 147
+name = "Real.op <"
+type = "real * real → bool"
+description = """
+"x < y" returns true if x is less than y. Return false on unordered
+arguments, i.e., if either argument is NaN, so that the usual reversal
+of comparison under negation does not hold, e.g., `a < b` is not the
+same as `not (a >= b)`.
+"""
+
+[[functions]]
+ordinal = 148
+name = "Real.op <="
+type = "real * real → bool"
+description = """
+As "<"
+"""
+
+[[functions]]
+ordinal = 149
+name = "Real.op >"
+type = "real * real → bool"
+description = """
+As "<"
+"""
+
+[[functions]]
+ordinal = 150
+name = "Real.op >="
+type = "real * real → bool"
+description = """
+As "<"
+"""
+
+[[functions]]
+ordinal = 151
+name = "Real.op ~"
+type = "real → real"
+description = """
+"~ r" returns the negation of `r`.
+"""
+
+[[functions]]
+ordinal = 152
+name = "Real.abs"
+type = "real → real"
+description = """
+"abs r" returns the absolute value of `r`.
+"""
+
+[[functions]]
+ordinal = 153
+name = "Real.ceil"
+type = "real → int"
+description = """
+"floor r" produces `ceil(r)`, the smallest int not less than `r`.
+"""
+
+[[functions]]
+ordinal = 154
+name = "Real.checkFloat"
+type = "real → real"
+description = """
+"checkFloat x" raises `Overflow` if x is an infinity, and raises `Div`
+if x is NaN. Otherwise, it returns its argument.
+"""
+
+[[functions]]
+ordinal = 155
+name = "Real.compare"
+type = "real * real → order"
+description = """
+"compare (x, y)" returns `LESS`, `EQUAL`, or `GREATER` according to
+whether its first argument is less than, equal to, or greater than the
+second. It raises `IEEEReal.Unordered` on unordered arguments.
+"""
+
+[[functions]]
+ordinal = 156
+name = "Real.copySign"
+type = "real * real → real"
+description = """
+"copySign (x, y)" returns `x` with the sign of `y`, even if `y` is
+NaN.
+"""
+
+[[functions]]
+ordinal = 157
+name = "Real.floor"
+type = "real → int"
+description = """
+"floor r" produces `floor(r)`, the largest int not larger than `r`.
+"""
+
+[[functions]]
+ordinal = 158
+name = "Real.fromInt, real"
+type = "int → real"
+description = """
+"fromInt i" converts the integer `i` to a `real` value. If the
+absolute value of `i` is larger than `maxFinite`, then the appropriate
+infinity is returned. If `i` cannot be exactly represented as a `real`
+value, uses current rounding mode to determine the resulting value.
+"""
+
+[[functions]]
+ordinal = 159
+name = "Real.fromManExp"
+type = "{exp:int, man:real} → real"
+description = """
+"fromManExp r" returns `{man, exp}`, where `man` and `exp` are the
+mantissa and exponent of r, respectively.
+"""
+
+[[functions]]
+ordinal = 160
+name = "Real.fromString"
+type = "string → real option"
+description = """
+"fromString s" scans a `real` value from a string. Returns `SOME (r)`
+if a `real` value can be scanned from a prefix of `s`, ignoring any
+initial whitespace; otherwise, it returns `NONE`. This function is
+equivalent to `StringCvt.scanString scan`.
+"""
+
+[[functions]]
+ordinal = 161
+name = "Real.isFinite"
+type = "real → bool"
+description = """
+"isFinite x" returns true if x is neither NaN nor an infinity.
+"""
+
+[[functions]]
+ordinal = 162
+name = "Real.isNan"
+type = "real → bool"
+description = """
+"isNan x" returns true if x NaN.
+"""
+
+[[functions]]
+ordinal = 163
+name = "Real.isNormal"
+type = "real → bool"
+description = """
+"isNormal x" returns true if x is normal, i.e., neither zero,
+subnormal, infinite nor NaN.
+"""
+
+[[functions]]
+ordinal = 164
+name = "Real.max"
+type = "real * real → real"
+description = """
+"max (x, y)" returns the larger of the arguments. If exactly one
+argument is NaN, returns the other argument. If both arguments are
+NaN, returns NaN.
+"""
+
+[[functions]]
+ordinal = 165
+name = "Real.maxFinite"
+type = "real"
+description = """
+"maxFinite" is the maximum finite number.
+"""
+
+[[functions]]
+ordinal = 166
+name = "Real.min"
+type = "real * real → real"
+description = """
+"min (x, y)" returns the smaller of the arguments. If exactly one
+argument is NaN, returns the other argument. If both arguments are
+NaN, returns NaN.
+"""
+
+[[functions]]
+ordinal = 167
+name = "Real.minNormalPos"
+type = "real"
+description = """
+"minNormalPos" is the minimum non-zero normalized number.
+"""
+
+[[functions]]
+ordinal = 168
+name = "Real.minPos"
+type = "real"
+description = """
+"minPos" is the minimum non-zero positive number.
+"""
+
+[[functions]]
+ordinal = 169
+name = "Real.negInf"
+type = "real"
+description = """
+"negInf" is the negative infinity value.
+"""
+
+[[functions]]
+ordinal = 170
+name = "Real.posInf"
+type = "real"
+description = """
+"posInf" is the positive infinity value.
+"""
+
+[[functions]]
+ordinal = 171
+name = "Real.precision"
+type = "int"
+description = """
+"precision" is the number of digits, each between 0 and `radix` - 1,
+in the mantissa. Note that the precision includes the implicit (or
+hidden) bit used in the IEEE representation (e.g., the value of
+Real64.precision is 53).
+"""
+
+[[functions]]
+ordinal = 172
+name = "Real.radix"
+type = "int"
+description = """
+"radix" is the base of the representation, e.g., 2 or 10 for IEEE
+floating point.
+"""
+
+[[functions]]
+ordinal = 173
+name = "Real.realCeil"
+type = "real → real"
+description = """
+"realCeil r" produces `ceil(r)`, the smallest integer not less than
+`r`.
+"""
+
+[[functions]]
+ordinal = 174
+name = "Real.realFloor"
+type = "real → real"
+description = """
+"realFloor r" produces `floor(r)`, the largest integer not larger than
+`r`.
+"""
+
+[[functions]]
+ordinal = 175
+name = "Real.realMod"
+type = "real → real"
+description = """
+"realMod r" returns the fractional parts of `r`; `realMod` is
+equivalent to `#frac o split`.
+"""
+
+[[functions]]
+ordinal = 176
+name = "Real.realRound"
+type = "real → real"
+description = """
+"realRound r" rounds to the integer-valued real value that is nearest
+to `r`. In the case of a tie, it rounds to the nearest even integer.
+"""
+
+[[functions]]
+ordinal = 177
+name = "Real.realTrunc"
+type = "real → real"
+description = """
+"realTrunc r" rounds `r` towards zero.
+"""
+
+[[functions]]
+ordinal = 178
+name = "Real.rem"
+type = "real * real → real"
+description = """
+"rem (x, y)" returns the remainder `x - n * y`, where `n` = `trunc (x
+/ y)`. The result has the same sign as `x` and has absolute value less
+than the absolute value of `y`. If `x` is an infinity or `y` is 0,
+`rem` returns NaN. If `y` is an infinity, rem returns `x`.
+"""
+
+[[functions]]
+ordinal = 179
+name = "Real.round"
+type = "real → int"
+description = """
+"round r" yields the integer nearest to `r`. In the case of a tie, it
+rounds to the nearest even integer.
+"""
+
+[[functions]]
+ordinal = 180
+name = "Real.sameSign"
+type = "real * real → bool"
+description = """
+"sameSign (r1, r2)" returns true if and only if `signBit r1` equals
+`signBit r2`.
+"""
+
+[[functions]]
+ordinal = 181
+name = "Real.sign"
+type = "real → int"
+description = """
+"sign r" returns ~1 if r is negative, 0 if r is zero, or 1 if r is
+positive. An infinity returns its sign; a zero returns 0 regardless of
+its sign. It raises `Domain` on NaN.
+"""
+
+[[functions]]
+ordinal = 182
+name = "Real.signBit"
+type = "real → bool"
+description = """
+"signBit r" returns true if and only if the sign of `r` (infinities,
+zeros, and NaN, included) is negative.
+"""
+
+[[functions]]
+ordinal = 183
+name = "Real.split"
+type = "real → {frac:real, whole:real}"
+description = """
+"split r" returns `{frac, whole}`, where `frac` and `whole` are the
+fractional and integral parts of `r`, respectively. Specifically,
+`whole` is integral, and `abs frac` < 1.0.
+"""
+
+[[functions]]
+ordinal = 184
+name = "Real.trunc"
+type = "real → int"
+description = """
+"trunc r" rounds r towards zero.
+"""
+
+[[functions]]
+ordinal = 185
+name = "Real.toManExp"
+type = "real → {man:real, exp:int}"
+description = """
+"toManExp r" returns `{man, exp}`, where `man` and `exp` are the
+mantissa and exponent of r, respectively.
+"""
+
+[[functions]]
+ordinal = 186
+name = "Real.toString"
+type = "real → string"
+description = """
+"toString r" converts a `real` into a `string`; equivalent to `(fmt
+(StringCvt.GEN NONE) r)`
+"""
+
+[[functions]]
+ordinal = 187
+name = "Real.unordered"
+type = "real * real → bool"
+description = """
+"unordered (x, y)" returns true if x and y are unordered, i.e., at
+least one of x and y is NaN.
+"""
+
+[[functions]]
+ordinal = 188
+name = "Relational.count, count"
+type = "int list → int"
+description = """
+"count list" returns the number of elements in `list`. Often used with
+`group`, for example `from e in emps group e.deptno compute countId =
+count`.
+"""
+
+[[functions]]
+ordinal = 189
+name = "Relational.empty, empty"
+type = "α list → bool"
+description = """
+"empty list" returns whether the list is empty, for example `from d in
+depts where empty (from e where e.deptno = d.deptno)`.
+"""
+
+[[functions]]
+ordinal = 190
+name = "Relational.max, max"
+type = "α list → α"
+description = """
+"max list" returns the greatest element of `list`. Often used with
+`group`, for example `from e in emps group e.deptno compute maxId =
+max of e.id`.
+"""
+
+[[functions]]
+ordinal = 191
+name = "Relational.min, min"
+type = "α list → α"
+description = """
+"min list" returns the least element of `list`. Often used with
+`group`, for example `from e in emps group e.deptno compute minId =
+min of e.id`.
+"""
+
+[[functions]]
+ordinal = 192
+name = "Relational.nonEmpty, nonEmpty"
+type = "α list → bool"
+description = """
+"nonEmpty list" returns whether the list has at least one element, for
+example `from d in depts where nonEmpty (from e where e.deptno =
+d.deptno)`.
+"""
+
+[[functions]]
+ordinal = 193
+name = "Relational.only, only"
+type = "α list → α"
+description = """
+"only list" returns the sole element of list, for example `from e in
+emps yield only (from d where d.deptno = e.deptno)`.
+"""
+
+[[functions]]
+ordinal = 194
+name = "Relational.op elem"
+type = "α * α bag → bool, α * α list → bool"
+description = """
+"e elem collection" returns whether `e` is a member of `collection`.
+"""
+
+[[functions]]
+ordinal = 195
+name = "Relational.op notelem"
+type = "α * α bag → bool, α * α list → bool"
+description = """
+"e notelem collection" returns whether `e` is not a member of
+`collection`.
+"""
+
+[[functions]]
+ordinal = 196
+name = "Relational.sum, sum"
+type = "int list → int"
+description = """
+"sum list" returns the sum of the elements of `list`. Often used with
+`group`, for example `from e in emps group e.deptno compute sumId =
+sum of e.id`.
+"""
+
+[[functions]]
+ordinal = 197
+name = "String.concat"
+type = "string list → string"
+description = """
+"concat l" is the concatenation of all the strings in `l`. This raises
+`Size` if the sum of all the sizes is greater than `maxSize`.
+"""
+
+[[functions]]
+ordinal = 198
+name = "String.concatWith"
+type = "string → string list → string"
+description = """
+"concatWith s l" returns the concatenation of the strings in the list
+`l` using the string `s` as a separator. This raises `Size` if the
+size of the resulting string would be greater than `maxSize`.
+"""
+
+[[functions]]
+ordinal = 199
+name = "String.explode"
+type = "string → char list"
+description = """
+"explode s" is the list of characters in the string `s`.
+"""
+
+[[functions]]
+ordinal = 200
+name = "String.extract"
+type = "string * int * int option → string"
+description = """
+"extract (s, i, NONE)" and "extract (s, i, SOME j)" return substrings
+of `s`. The first returns the substring of `s` from the `i`(th)
+character to the end of the string, i.e., the string
+`s`[`i`..|`s`|-1]. This raises `Subscript` if `i` < 0 or |`s`| < `i`.
+
+<br><br>The second form returns the substring of size `j` starting at
+index `i`, i.e., the string `s`[`i`..`i`+`j`-1]. Raises `Subscript` if
+`i` < 0 or `j` < 0 or |`s`| < `i` + `j`. Note that, if defined,
+`extract` returns the empty string when `i` = |`s`|.
+"""
+
+[[functions]]
+ordinal = 201
+name = "String.implode"
+type = "char list → string"
+description = """
+"implode l" generates the string containing the characters in the list
+`l`. This is equivalent to `concat (List.map str l)`. This raises
+`Size` if the resulting string would have size greater than `maxSize`.
+"""
+
+[[functions]]
+ordinal = 202
+name = "String.isPrefix"
+type = "string → string → bool"
+description = """
+"isPrefix s1 s2" returns `true` if the string `s1` is a prefix of the
+string `s2`. Note that the empty string is a prefix of any string, and
+that a string is a prefix of itself.
+"""
+
+[[functions]]
+ordinal = 203
+name = "String.isSubstring"
+type = "string → string → bool"
+description = """
+"isSubstring s1 s2" returns `true` if the string `s1` is a substring
+of the string `s2`. Note that the empty string is a substring of any
+string, and that a string is a substring of itself.
+"""
+
+[[functions]]
+ordinal = 204
+name = "String.isSuffix"
+type = "string → string → bool"
+description = """
+"isSuffix s1 s2" returns `true` if the string `s1` is a suffix of the
+string `s2`. Note that the empty string is a suffix of any string, and
+that a string is a suffix of itself.
+"""
+
+[[functions]]
+ordinal = 205
+name = "String.map"
+type = "(char → char) → string → string"
+description = """
+"map f s" applies `f` to each element of `s` from left to right,
+returning the resulting string. It is equivalent to `implode(List.map
+f (explode s))`.
+"""
+
+[[functions]]
+ordinal = 206
+name = "String.maxSize"
+type = "int"
+description = """
+The longest allowed size of a string.
+"""
+
+[[functions]]
+ordinal = 207
+name = "String.size"
+type = "string → int"
+description = """
+"size s" returns |`s`|, the number of characters in string `s`.
+"""
+
+[[functions]]
+ordinal = 208
+name = "String.str"
+type = "char → string"
+description = """
+"str c" is the string of size one containing the character `c`.
+"""
+
+[[functions]]
+ordinal = 209
+name = "String.sub"
+type = "string * int → char"
+description = """
+"sub (s, i)" returns the `i`(th) character of `s`, counting from
+zero. This raises `Subscript` if `i` < 0 or |`s`| &le; `i`.
+"""
+
+[[functions]]
+ordinal = 210
+name = "String.substring"
+type = "string * int * int → string"
+description = """
+"substring (s, i, j)" returns the substring `s`[`i`..`i`+`j`-1], i.e.,
+the substring of size `j` starting at index `i`. This is equivalent to
+`extract(s, i, SOME j)`.
+"""
+
+[[functions]]
+ordinal = 211
+name = "String.translate"
+type = "(char → string) → string → string"
+description = """
+"translate f s" returns the string generated from `s` by mapping each
+character in `s` by `f`. It is equivalent to `concat(List.map f
+(explode s))`.
+"""
+
+[[functions]]
+ordinal = 212
+name = "Sys.clearEnv"
+type = "unit → unit"
+description = """
+"clearEnv ()" restores the environment to the initial environment.
+"""
+
+[[functions]]
+ordinal = 213
+name = "Sys.env, env"
+type = "unit → string list"
+description = """
+"env ()" prints the environment.
+"""
+
+[[functions]]
+ordinal = 214
+name = "Sys.plan"
+type = "unit → string"
+description = """
+"plan ()" prints the plan of the most recently executed expression.
+"""
+
+[[functions]]
+ordinal = 215
+name = "Sys.set"
+type = "string * α → unit"
+description = """
+"set (property, value)" sets the value of `property` to `value`.
+"""
+extra = """
+(See [Properties](#properties) below.)
+"""
+
+[[functions]]
+ordinal = 216
+name = "Sys.show"
+type = "string → string option"
+description = """
+"show property" returns the current the value of `property`, as a
+string, or `NONE` if unset.
+"""
+
+[[functions]]
+ordinal = 217
+name = "Sys.showAll"
+type = "unit → string * string option list"
+description = """
+"showAll ()" returns a list of all properties and their current value
+as a string, or `NONE` if unset.
+"""
+
+[[functions]]
+ordinal = 218
+name = "Sys.unset"
+type = "string → unit"
+description = """
+"unset property" clears the current the value of `property`.
+"""
+
+[[functions]]
+ordinal = 219
+name = "Vector.all"
+type = "(α → bool) → α vector → bool"
+description = """
+"all f vec" applies `f` to each element `x` of the vector `vec`, from
+left to right, until `f(x)` evaluates to `false`. It returns `false`
+if such an `x` exists; otherwise it returns `true`. It is equivalent
+to `not(exists (not o f) vec)`.
+"""
+
+[[functions]]
+ordinal = 220
+name = "Vector.app"
+type = "(α → unit) → α vector → unit"
+description = """
+"app f vec" applies the function `f` to the elements of a vector in
+left to right order (i.e., in order of increasing indices)
+"""
+
+[[functions]]
+ordinal = 221
+name = "Vector.appi"
+type = "(int * α → unit) → α vector → unit"
+description = """
+"appi f vec" applies the function `f` to the elements of a vector in
+left to right order (i.e., in order of increasing indices)
+"""
+
+[[functions]]
+ordinal = 222
+name = "Vector.collate"
+type = ""
+description = """
+"collate f (v1, v2)" performs lexicographic comparison of the two
+vectors using the given ordering `f` on elements.
+"""
+
+[[functions]]
+ordinal = 223
+name = "Vector.concat"
+type = "α vector list → α vector"
+description = """
+"concat l" returns the vector that is the concatenation of the vectors
+in the list `l`.  Raises `Size` if the total length of these vectors
+exceeds `maxLen`
+"""
+
+[[functions]]
+ordinal = 224
+name = "Vector.exists"
+type = ""
+description = """
+"exists f vec" applies `f` to each element `x` of the vector `vec`,
+from left to right (i.e., increasing indices), until `f(x)` evaluates
+to `true`; it returns `true` if such an `x` exists and `false`
+otherwise.
+"""
+
+[[functions]]
+ordinal = 225
+name = "Vector.find"
+type = "(α → bool) → α vector → α option"
+description = """
+"find f vec" applies `f` to each element `x` of the vector `vec`, from
+left to right, until `f(x)` evaluates to `true`. It returns `SOME (x)`
+if such an `x` exists; otherwise it returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 226
+name = "Vector.findi"
+type = "(int * α → bool) → α vector → (int * α) option"
+description = """
+"findi f vec" applies `f` to each element `x` and element index `i` of
+the vector `vec`, from left to right, until `f(i, x)` evaluates to
+`true`. It returns `SOME (i, x)` if such an `x` exists; otherwise it
+returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 227
+name = "Vector.foldl"
+type = "(α * β → β) → β → α vector → β"
+description = """
+"foldl f init vec" folds the function `f` over all the elements of
+vector `vec`, left to right, using the initial value `init`
+"""
+
+[[functions]]
+ordinal = 228
+name = "Vector.foldli"
+type = "(int * α * β → β) → β → α vector → β"
+description = """
+"foldli f init vec" folds the function `f` over all the (index,
+element) pairs of vector `vec`, left to right, using the initial value
+`init`
+"""
+
+[[functions]]
+ordinal = 229
+name = "Vector.foldr"
+type = "(α * β → β) → β → α vector → β"
+description = """
+"foldr f init vec" folds the function `f` over all the elements of
+vector `vec`, right to left, using the initial value `init`
+"""
+
+[[functions]]
+ordinal = 230
+name = "Vector.foldri"
+type = "(int * α * β → β) → β → α vector → β"
+description = """
+"foldri f init vec" folds the function `f` over all the (index,
+element) pairs of vector `vec`, right to left, using the initial value
+`init`
+"""
+
+[[functions]]
+ordinal = 231
+name = "Vector.fromList"
+type = "α list → α vector"
+description = """
+"fromList l" creates a new vector from `l`, whose length is `length l`
+and with the `i`<sup>th</sup> element of `l` used as the
+`i`<sup>th</sup> element of the vector. Raises `Size` if `maxLen` <
+`n`.
+"""
+
+[[functions]]
+ordinal = 232
+name = "Vector.length"
+type = "α vector → int"
+description = """
+"length v" returns the number of elements in the vector `v`.
+"""
+
+[[functions]]
+ordinal = 233
+name = "Vector.map"
+type = "(α → β) → α vector → β vector"
+description = """
+"map f vec" applies the function `f` to the elements of the argument
+vector `vec`
+"""
+
+[[functions]]
+ordinal = 234
+name = "Vector.mapi"
+type = "(int * α → β) → α vector → β vector"
+description = """
+"mapi f vec" applies the function `f` to the elements of the argument
+vector `vec`, supplying the vector index and element as arguments to
+each call.
+"""
+
+[[functions]]
+ordinal = 235
+name = "Vector.maxLen"
+type = "int"
+description = """
+"maxLen" returns the maximum length of vectors supported in this
+implementation.
+"""
+
+[[functions]]
+ordinal = 236
+name = "Vector.sub"
+type = "α vector * int → α"
+description = """
+"sub (vec, i)" returns the `i`<sup>th</sup> element of vector `vec`.
+Raises `Subscript` if `i` < 0 or `size vec` &le; `i`.
+"""
+
+[[functions]]
+ordinal = 237
+name = "Vector.tabulate"
+type = "int * (int → α) → α vector"
+description = """
+"tabulate (n, f)" returns a vector of length `n` equal to `[f(0),
+f(1), ..., f(n-1)]`, created from left to right. Raises `Size` if `n`
+< 0 or `maxLen` < `n`.
+"""
+
+[[functions]]
+ordinal = 238
+name = "Vector.update"
+type = "α vector * int * α → α vector"
+description = """
+"update (vec, i, x)" returns a new vector, identical to `vec`, except
+the `i`<sup>th</sup> element of `vec` is set to `x`. Raises
+`Subscript` if `i` < 0 or `size vec` &le; `i`.
+"""
+
+[[functions]]
+ordinal = 239
+name = "Int.fmt"
+type = "StringCvt.radix → int → string"
+implemented = false
+description = """
+"fmt radix i" returns a string containing a representation of i with
+#"~" used as the sign for negative numbers. Formats the string
+according to `radix`; the hexadecimal digits 10 through 15 are
+represented as #"A" through #"F", respectively. No prefix "0x" is
+generated for the hexadecimal representation.
+"""
+
+[[functions]]
+ordinal = 240
+name = "Int.scan"
+type = "scan radix getc strm"
+implemented = false
+description = """
+Returns `SOME (i,rest)` if an integer in the format denoted by `radix`
+can be parsed from a prefix of the character stream `strm` after
+skipping initial whitespace, where `i` is the value of the integer
+parsed and `rest` is the rest of the character stream. `NONE` is
+returned otherwise. This function raises `Overflow` when an integer
+can be parsed, but is too large to be represented by type `int`.
+"""
+
+[[functions]]
+ordinal = 241
+name = "Real.op !="
+type = "real * real → bool"
+implemented = false
+description = """
+"x != y" is equivalent to `not o op ==` and the IEEE `?<>` operator.
+"""
+
+[[functions]]
+ordinal = 242
+name = "Real.op *+"
+type = "real * real * real → real"
+implemented = false
+description = """
+"*+ (a, b, c)" returns `a * b + c`. Its behavior on infinities follows
+from the behaviors derived from addition and multiplication.
+"""
+
+[[functions]]
+ordinal = 243
+name = "Real.op *-"
+type = "real * real * real → real"
+implemented = false
+description = """
+"*- (a, b, c)" returns `a * b - c`. Its behavior on infinities follows
+from the behaviors derived from subtraction and multiplication.
+"""
+
+[[functions]]
+ordinal = 244
+name = "Real.op =="
+type = "real * real → bool"
+implemented = false
+description = """
+"x == y" returns true if and only if neither y nor x is NaN, and y and
+x are equal, ignoring signs on zeros. This is equivalent to the IEEE
+`=` operator.
+"""
+
+[[functions]]
+ordinal = 245
+name = "Real.op ?="
+type = "real * real → bool"
+implemented = false
+description = """
+"?= (x, y)" returns true if either argument is NaN or if the arguments
+are bitwise equal, ignoring signs on zeros. It is equivalent to the
+IEEE `?=` operator.
+"""
+
+[[functions]]
+ordinal = 246
+name = "Real.class"
+type = "real → IEEEReal.float_class"
+implemented = false
+description = """
+"class x" returns the `IEEEReal.float_class` to which x belongs.
+"""
+
+[[functions]]
+ordinal = 247
+name = "Real.compareReal"
+type = "real * real → IEEEReal.real_order"
+implemented = false
+description = """
+"compareReal (x, y)" behaves similarly to `Real.compare` except that
+the values it returns have the extended type `IEEEReal.real_order` and
+it returns `IEEEReal.UNORDERED` on unordered arguments.
+"""
+
+[[functions]]
+ordinal = 248
+name = "Real.fmt"
+type = "StringCvt.realfmt → real → string"
+implemented = false
+description = """
+"fmt spec r" converts a `real` into a `string` according to by `spec`;
+raises `Size` when `fmt spec` is evaluated if `spec` is an invalid
+precision
+"""
+
+[[functions]]
+ordinal = 249
+name = "Real.fromDecimal"
+type = "IEEEReal.decimal_approx → real"
+implemented = false
+description = """
+"fromDecimal d" converts decimal approximation to a `real`
+"""
+
+[[functions]]
+ordinal = 250
+name = "Real.fromLarge"
+type = "IEEEReal.rounding_mode → real → real"
+implemented = false
+description = """
+"toLarge r" converts a value of type `real` to type
+`LargeReal.real`. If `r` is too small or too large to be represented
+as a real, converts it to a zero or an infinity.
+"""
+
+[[functions]]
+ordinal = 251
+name = "Real.fromLargeInt"
+type = "IntInf.int → real"
+implemented = false
+description = """
+See "fromInt"
+"""
+
+[[functions]]
+ordinal = 252
+name = "Real.nextAfter"
+type = "real * real → real"
+implemented = false
+description = """
+"nextAfter (r, t)" returns the next representable real after `r` in
+the direction of `t`. Thus, if `t` is less than `r`, `nextAfter`
+returns the largest representable floating-point number less than `r`.
+"""
+
+[[functions]]
+ordinal = 253
+name = "Real.scan"
+type = "(char,'a) StringCvt.reader → (real,'a) StringCvt.reader"
+implemented = false
+description = """
+"scan getc strm" scans a `real` value from character source. Reads
+from ARG/strm/ using reader `getc`, ignoring initial whitespace. It
+returns `SOME (r, rest)` if successful, where `r` is the scanned
+`real` value and `rest` is the unused portion of the character stream
+`strm`. Values of too large a magnitude are represented as infinities;
+values of too small a magnitude are represented as zeros.
+"""
+
+[[functions]]
+ordinal = 254
+name = "Real.toDecimal"
+type = "real → IEEEReal.decimal_approx"
+implemented = false
+description = """
+"toDecimal r" converts a `real` to a decimal approximation
+"""
+
+[[functions]]
+ordinal = 255
+name = "Real.toInt"
+type = "real → IEEEReal.rounding_mode → int"
+implemented = false
+description = """
+"toInt mode x" converts the argument `x` to an integral type using the
+specified rounding mode. It raises `Overflow` if the result is not
+representable, in particular, if `x` is an infinity. It raises
+`Domain` if the input real is NaN.
+"""
+
+[[functions]]
+ordinal = 256
+name = "Real.toLarge"
+type = "real → real"
+implemented = false
+description = """
+"toLarge r" convert a value of type `real` to type `LargeReal.real`.
+"""
+
+[[functions]]
+ordinal = 257
+name = "Real.toLargeInt"
+type = "real → IEEEReal.rounding_mode → IntInf.int"
+implemented = false
+description = """
+See "toInt"
+"""
+
+# End functions.toml

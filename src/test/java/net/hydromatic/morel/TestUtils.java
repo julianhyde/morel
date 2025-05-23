@@ -118,6 +118,13 @@ class TestUtils {
     return urlToFile(inUrl);
   }
 
+  /** Returns the root directory of production resources. */
+  static File resourceDirectory() {
+    final URL inUrl = Main.class.getResource("/");
+    assertThat(inUrl, notNullValue());
+    return urlToFile(inUrl);
+  }
+
   @SuppressWarnings("unused")
   public static void discard(boolean value) {}
 
