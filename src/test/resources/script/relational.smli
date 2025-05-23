@@ -256,10 +256,20 @@ from e in emps,
   order current mod 2, current;
 > val it = [110,132,121,133] : int list
 
-(*) "current" is not available in "skip", "take", "union", "intersect", "minus"
+(*) "current" is not available in "skip", "take", "union", "intersect", "except"
 1 + current;
 > stdIn:1.5-1.12 Error: 'current' is only valid in a query
 >   raised at: stdIn:1.5-1.12
+
+(*) "current" can't be used in the first step of a query
+from i in [current + 1, current + 2, current + 3];
+> stdIn:1.12-1.19 Error: 'current' is only valid in a query
+>   raised at: stdIn:1.12-1.19
+
+(*) ... but it can be used in the second
+from i in [1, 2],
+  j in [current + 10, current + 20];
+> val it = [{i=1,j=11},{i=1,j=21},{i=2,j=12},{i=2,j=22}] : {i:int, j:int} list
 
 from i in [1,2,3,4,5]
   skip current;

@@ -583,7 +583,7 @@ public class TypeResolver {
     // An empty "from" is "unit list". Ordered.
     final Variable v11 = toVariable(recordTerm(ImmutableSortedMap.of()));
     final Sequence c11 = listTerm(v11);
-    Triple p = Triple.of(env, v11, toVariable(c11));
+    Triple p = new Triple(env, v11, toVariable(c11));
     for (Ord<Ast.FromStep> step : Ord.zip(query.steps)) {
       // Whether this is the last step. (The synthetic "yield" counts as a last
       // step.)
