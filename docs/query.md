@@ -426,8 +426,8 @@ expression.
 
 | Name                       | Summary                                                       |
 |----------------------------|---------------------------------------------------------------|
-| [`compute`](#compute-step) | Applies aggregate fnDefs to the current collection.        |
-| [`into`](#into-step)       | Applies a fnDef to the current collection.                 |
+| [`compute`](#compute-step) | Applies aggregate functions to the current collection.        |
+| [`into`](#into-step)       | Applies a function to the current collection.                 |
 | [`require`](#require-step) | Evaluates the predicate of a [`forall`](#forall-query) query. |
 
 ### Distinct step
