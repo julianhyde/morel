@@ -16,7 +16,17 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
+(*
+from i in [1,2,3,4] unorder;
+> val it = [2,3] : int bag
+*)
+from i in [1,2,3,4] where i > 1 unorder;
+> val it = [2,3] : int bag
+(*
+from i in [1,2,3,4] where i > 1 unorder where i < 4;
+> val it = [2,3] : int bag
+from i in [1,2,3,4] where i > 1 unorder where i < 4 unorder;
+> val it = [2,3] : int bag
+*)
 
 (*) End dummy.smli

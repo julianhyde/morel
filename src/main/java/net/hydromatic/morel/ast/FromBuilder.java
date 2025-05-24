@@ -273,6 +273,10 @@ public class FromBuilder {
     return addStep(core.union(stepEnv(), distinct, args));
   }
 
+  public FromBuilder unorder() {
+    return addStep(core.unorder(stepEnv()));
+  }
+
   public FromBuilder distinct() {
     // Do not call group(); it never creates atomic rows, but distinct() needs
     // to propagate row type.

@@ -227,6 +227,22 @@ end;
 >    [{deptno=20,id=101},{deptno=30,id=102},{deptno=30,id=103}])
 >   : {deptno:int, id:int} list * {deptno:int, id:int} list
 
+(* Unorder ---------------------------------------------------- *)
+from i in [1,2] unorder;
+> val it = [1,2] : int bag
+
+from i in bag [1,2] unorder;
+> val it = [1,2] : int bag
+
+from i in [1,2] unorder unorder;
+> val it = [1,2] : int bag
+
+from i in [1,2,3,4] where i > 1 unorder where i < 4 unorder;
+> val it = [2,3] : int bag
+
+from i in [1,2,3,4] where i > 1 unorder where i < 4 order i desc;
+> val it = [3,2] : int list
+
 (* Current ---------------------------------------------------- *)
 from e in emps
   where current.deptno = 10;
