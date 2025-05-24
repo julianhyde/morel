@@ -18,19 +18,12 @@
  */
 package net.hydromatic.morel;
 
-import static com.google.common.collect.ImmutableList.sortedCopyOf;
-import static net.hydromatic.morel.util.Static.filterEager;
-import static org.apache.calcite.util.Util.first;
-import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.fasterxml.jackson.databind.MappingIterator;
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
-import com.google.common.collect.Ordering;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -40,12 +33,10 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
+import net.hydromatic.morel.util.Generation;
 import org.apache.calcite.util.Puffin;
 import org.apache.calcite.util.Source;
 import org.apache.calcite.util.Sources;
@@ -406,7 +397,7 @@ public class LintTest {
   /** Parses the "reference.md" file. */
   @Test
   void testFunctionTable() throws IOException {
-    File baseDir = TestUtil.getBaseDir(TestUtils.class);
+    File baseDir = TestUtils.getBaseDir(TestUtils.class);
     final File file = new File(baseDir, "docs/reference.md");
     final File genFile = new File(baseDir, "target/reference.md");
     final List<String> names = new ArrayList<>();
@@ -428,7 +419,7 @@ public class LintTest {
         }
         if (line.equals("{% comment %}START TABLE{% endcomment %}")) {
           emit = false;
-          generateFunctionTable(pw, names);
+          Generation.generateFunctionTable(pw, names);
         }
       }
     }
@@ -443,111 +434,6 @@ public class LintTest {
               + "\n" //
               + diff);
     }
-  }
-
-  /**
-   * Reads the "functions.toml" file and generates a table of function
-   * definitions.
-   */
-  @SuppressWarnings("unchecked")
-  void generateFunctionTable(PrintWriter pw, List<String> names)
-      throws IOException {
-    final URL inUrl = Main.class.getResource("/functions.toml");
-    assertThat(inUrl, notNullValue());
-    final File file = TestUtils.urlToFile(inUrl);
-
-    final TomlMapper mapper = new TomlMapper();
-    try (MappingIterator<Object> it =
-        mapper.readerForMapOf(Object.class).readValues(file)) {
-      while (it.hasNextValue()) {
-        Map<String, Object> row = (Map<String, Object>) it.nextValue();
-        List<Map<String, Object>> functions =
-            (List<Map<String, Object>>) row.get("functions");
-
-        for (Map<String, Object> function : functions) {
-          names.add((String) function.get("name"));
-        }
-        if (!Ordering.natural().isOrdered(names) && "x".isEmpty()) {
-          fail(
-              "Names are not sorted\n"
-                  + TestUtils.diffLines(names, sortedCopyOf(names)));
-        }
-
-        functions.sort(LintTest::compare);
-        Predicate<Map<String, Object>> isImplemented = LintTest::isImplemented;
-        List<Map<String, Object>> implemented =
-            filterEager(functions, isImplemented);
-        generateTable(pw, implemented);
-
-        List<Map<String, Object>> notImplemented =
-            filterEager(functions, isImplemented.negate());
-        if (!notImplemented.isEmpty()) {
-          pw.printf("Not yet implemented%n");
-          generateTable(pw, notImplemented);
-        }
-      }
-    }
-  }
-
-  private static boolean isImplemented(Map<String, Object> o) {
-    return first((Boolean) o.get("implemented"), true);
-  }
-
-  private static boolean isNotImplemented(Map<String, Object> o) {
-    return !isImplemented(o);
-  }
-
-  private static void generateTable(
-      PrintWriter pw, List<Map<String, Object>> functions) {
-    pw.printf("%n");
-    pw.printf("| Name | Type | Description |%n");
-    pw.printf("| ---- | ---- | ----------- |%n");
-    for (Map<String, Object> function : functions) {
-      String name = (String) function.get("name");
-      String type = (String) function.get("type");
-      String description = (String) function.get("description");
-      String extra = (String) function.get("extra");
-      pw.printf(
-          "| %s | %s | %s |\n",
-          munge(name),
-          munge(type),
-          munge(description) + (extra == null ? "" : " " + extra.trim()));
-    }
-    pw.printf("%n");
-  }
-
-  private static int compare(Map<String, Object> f1, Map<String, Object> f2) {
-    Integer o1 = (Integer) f1.get("ordinal");
-    Integer o2 = (Integer) f2.get("ordinal");
-    if (o1 != null && o2 != null) {
-      int c = o1.compareTo(o2);
-      if (c != 0) {
-        return c;
-      }
-    }
-    String n1 = (String) f1.get("name");
-    String n2 = (String) f2.get("name");
-    return n1.compareTo(n2);
-  }
-
-  private static String munge(String s) {
-    return s.trim()
-        .replace("α", "&alpha;")
-        .replace("β", "&beta;")
-        .replace("γ", "&gamma;")
-        .replace("→", "&rarr;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("≤", "&le;")
-        .replace("≥", "&ge;")
-        .replace("&lt;br&gt;", "<br>")
-        .replace("&lt;sup&gt;", "<sup>")
-        .replace("&lt;/sup&gt;", "</sup>")
-        .replace("[", "\\[")
-        .replace("]", "\\]")
-        .replace("|", "\\|")
-        .replace("\n", " ")
-        .replaceAll(" *<br>", "<br>");
   }
 
   /** Warning that code is not as it should be. */
