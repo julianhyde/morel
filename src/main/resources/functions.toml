@@ -677,6 +677,340 @@ description = """
 is a letter (a to z or A to Z); otherwise returns `c`.
 """
 
+# === Date structure =================================================
+
+[[datatypes]]
+name = "weekday"
+structure = "Date"
+values = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+specified = "basis"
+
+[[datatypes]]
+name = "month"
+structure = "Date"
+specified = "basis"
+values = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+[[functions]]
+ordinal = 315
+name = "compare"
+structure = "Date"
+specified = "basis"
+type = "date * date → order"
+description = """
+"compare (date1, date2)" returns `LESS`, `EQUAL`, or `GREATER`,
+according as `date1` precedes, equals, or follows `date2` in time.  It
+lexicographically compares the dates, using the year, month, day,
+hour, minute, and second information, but ignoring the offset and
+daylight savings time information.  It does not detect invalid dates.
+
+<br><br>In order to compare dates in two different time zones, the
+user would have to handle the normalization.
+"""
+
+[[types]]
+name = "date"
+structure = "Date"
+specified = "basis"
+description = """
+An abstract type whose values represents an instant in a specific time zone.
+"""
+
+[[exceptions]]
+name = "Date"
+structure = "Date"
+specified = "basis"
+
+[[functions]]
+ordinal = 300
+name = "date"
+structure = "Date"
+type = "{year : int, month : month, day : int, hour : int, minute : int, second : int, offset : Time.time option} → date"
+description = """
+"date {year, month, day, hour, minute, second, offset}" creates a
+canonical date from the given date information. If the resulting date
+is outside the range supported by the implementation, the `Date`
+exception is raised.  Seconds outside the range \\[0,59\\] are
+converted to the equivalent minutes and added to the minutes argument.
+Similar conversions are performed for minutes to hours, hours to days,
+days to months, and months to years.  Negative values are similarly
+translated into a canonical range, with the extra borrowed from the
+next larger unit.  Thus, `minute = 10, second = ~140` becomes `minute
+= 7, second = 40`.
+
+The `offset` argument provides time zone information. A value of
+`NONE` represents the local time zone.  A value of `SOME(t)`
+corresponds to time *t* west of UTC. In particular,
+`SOME(Time.zeroTime)` is UTC.  Negative offsets denote time zones to
+the east of UTC, as is traditional.  Offsets are taken modulo 24
+hours. That is, we express *t*, in hours, as *sgn(t)(24*d + r)*, where
+*d* and *r* are non-negative, *d* is integral, and *r* < 24. The
+offset then becomes *sgn(t)*r* and *sgn(t)(24*d)* is added to the
+hours (before converting hours to days).
+
+Leap years follow the Gregorian calendar. Leap seconds may or may not
+be ignored. In an implementation that takes account of leap seconds,
+the second function may return 60 or 61 in the rare cases that this is
+appropriate.
+"""
+
+[[functions]]
+ordinal = 303
+name = "day"
+structure = "Date"
+specified = "basis"
+type = "date → int"
+description = """
+"day d" extracts the day attribute of a date value.
+"""
+
+[[functions]]
+ordinal = 316
+name = "fmt"
+structure = "Date"
+specified = "basis"
+type = "string → date → string"
+description = """
+"fmt s date" returns a string representation of the date `date`
+formatted according to the format string `s`, following the semantics
+of the ISO C function `strftime`. In particular, `fmt` is
+locale-dependent.  The allowed formats are:
+
+<br>`%a` locale's abbreviated weekday name
+<br>`%A` locale's full weekday name
+<br>`%b` locale's abbreviated month name
+<br>`%B` locale's full month name
+<br>`%c` locale's date and time representation (*e.g.*, `"Dec 2 06:55:15 1979"`)
+<br>`%d` day of month \\[01-31\\]
+<br>`%H` hour \\[00-23\\]
+<br>`%I` hour \\[01-12\\]
+<br>`%j` day of year \\[001-366\\]
+<br>`%m` month number \\[01-12\\]
+<br>`%M` minutes \\[00-59\\]
+<br>`%p` locale's equivalent of the AM/PM designation
+<br>`%S` seconds \\[00-61\\]
+<br>`%U` week number of year \\[00-53\\], with the first Sunday as the first day of week 01
+<br>`%w` day of week \\[0-6\\], with 0 representing Sunday
+<br>`%W` week number of year \\[00-53\\], with the first Monday as the first day of week 01
+<br>`%x` locale's appropriate date representation
+<br>`%X` locale's appropriate time representation
+<br>`%y` year of century \\[00-99\\]
+<br>`%Y` year including century (*e.g.*, 1997)
+<br>`%Z` time zone name or abbreviation, or the empty string if no time zone information exists
+<br>`%%` the percent character
+<br>`%c` the character *c*, if *c* is not one of the format characters listed above
+
+<br><br>For instance, `fmt "%A" date` returns the full name of the
+weekday specified by *date* (e.g., "Monday").  For a full description
+of the format-string syntax, consult a description of `strftime`.
+Note, however, that unlike `strftime`, the behavior of `fmt` is
+defined for the directive *%c* for any character *c*.
+
+<br><br>The result may be wrong if the date is outside the
+representable `Time.time` range.  It raises `Date` if the given date
+is invalid.
+"""
+
+[[functions]]
+ordinal = 319
+name = "fromString"
+structure = "Date"
+specified = "basis"
+type = "string → date option"
+description = """
+"fromString s" scans a 24-character date from a string after ignoring
+possible initial whitespace.  It takes a character stream reader
+`getc` and a stream `strm`.  In case of success, it returns
+`SOME(date, rest)`, where `date` is the scanned date and `rest` is the
+remainder of the stream.
+
+<br><br>It takes a string `s` as its source of characters.  It is
+equivalent to `StringCvt.scanString scan`.
+"""
+
+[[functions]]
+ordinal = 312
+name = "fromTimeLocal"
+structure = "Date"
+specified = "basis"
+type = "Time.time → date"
+description = """
+"fromTimeLocal t" converts the (UTC) time `t` into a corresponding
+date in the local time zone; it is the analogue of the ISO C function
+`localtime`. The returned date will have `offset=NONE`.
+"""
+
+[[functions]]
+ordinal = 313
+name = "fromTimeUniv"
+structure = "Date"
+specified = "basis"
+type = "Time.time → date"
+description = """
+"fromTimeUniv t" converts the (UTC) time `t` into a corresponding date
+in the UTC time zone; it is the analogue of the ISO C function
+`gmtime`. The returned date will have `offset=SOME(0)`.
+
+If `fromTimeLocal` and `fromTimeUniv` are applied to the same time
+value, the resulting dates will differ by the offset of the local time
+zone from UTC.
+"""
+
+[[functions]]
+ordinal = 304
+name = "hour"
+structure = "Date"
+specified = "basis"
+type = "date → int"
+description = """
+"hour d" extracts the hour attribute of a date value.
+"""
+
+[[functions]]
+ordinal = 310
+name = "isDst"
+structure = "Date"
+specified = "basis"
+type = "date → bool option"
+description = """
+"isDst d" returns `NONE` if the system has no information concerning
+daylight savings time.  Otherwise, it returns `SOME(dst)` where `dst`
+is `true` if daylight savings time is in effect.
+"""
+
+[[functions]]
+ordinal = 311
+name = "localOffset"
+structure = "Date"
+specified = "basis"
+type = "unit → Time.time"
+description = """
+"localOffset ()" returns the offset from UTC for the local time zone.
+"""
+
+[[functions]]
+ordinal = 305
+name = "minute"
+structure = "Date"
+specified = "basis"
+type = "date → int"
+description = """
+"minute d" extracts the minute attribute of a date value.
+"""
+
+[[functions]]
+ordinal = 302
+name = "month"
+structure = "Date"
+specified = "basis"
+type = "date → month"
+description = """
+"month d" extracts the month attribute of a date value.
+"""
+
+[[functions]]
+ordinal = 309
+name = "offset"
+structure = "Date"
+specified = "basis"
+type = "date → Time.time option"
+description = """
+"offset d" extracts the time zone information of a date value as the
+amount of time west of UTC.  A value of `NONE` represents the local
+time zone.
+"""
+
+[[functions]]
+ordinal = 318
+name = "scan"
+structure = "Date"
+specified = "basis"
+type = "(char, α) StringCvt.reader → (date, α) StringCvt.reader"
+description = """
+"scan getc strm" scans a 24-character date from a character source
+after ignoring possible initial whitespace.  It takes a character
+stream reader `getc` and a stream `strm`.  In case of success, it
+returns `SOME(date, rest)`, where `date` is the scanned date and
+`rest` is the remainder of the stream.
+
+<br><br>The format of the string must be precisely as produced by
+`toString`.  In particular, it does not parse time zone abbreviations.
+No check of the consistency of the date (weekday, date in the month,
+...) is performed. If the scanning fails, `NONE` is returned.
+"""
+
+[[functions]]
+ordinal = 306
+name = "second"
+structure = "Date"
+specified = "basis"
+type = "date → int"
+description = """
+"second d" extracts the second attribute of a date value.
+"""
+
+[[functions]]
+ordinal = 317
+name = "toString"
+structure = "Date"
+specified = "basis"
+type = "date → string"
+description = """
+"toString date" returns a 24-character string representing the date
+`date` in the following format: `"Wed Mar 08 19:06:45 1995"`.  The
+function is equivalent to `Date.fmt "%a %b %d %H:%M:%S %Y" date`.
+
+<br><br>The result may be wrong if the date is outside the
+representable `Time.time` range.  It raises `Date` if the given date
+is invalid.
+"""
+
+[[functions]]
+ordinal = 314
+name = "toTime"
+structure = "Date"
+specified = "basis"
+type = "date → Time.time"
+description = """
+"toTime date" returns the (UTC) time corresponding to the date
+`date`. It raises `Date` if the date `date` cannot be represented as a
+`Time.time` value.  It is the analogue of the ISO C function `mktime`.
+"""
+
+[[functions]]
+ordinal = 307
+name = "weekDay"
+structure = "Date"
+specified = "basis"
+type = "date → weekday"
+description = """
+"weekDay d" extracts the weekday attribute of a date value.
+"""
+
+[[functions]]
+ordinal = 301
+name = "year"
+structure = "Date"
+specified = "basis"
+type = "date → int"
+description = """
+"year d" extracts the year attribute of a date value. The year
+returned uses year 0 as its base.  Thus, the date Robin Milner
+received the Turing award would have year 1991.
+"""
+
+[[functions]]
+ordinal = 308
+name = "yearDay"
+structure = "Date"
+specified = "basis"
+type = "date → int"
+description = """
+"yearDay d" extracts the day of the year, starting from 0, *i.e.*, 1
+January is day 0.
+"""
+
 # === General structure ==============================================
 
 [[functions]]
