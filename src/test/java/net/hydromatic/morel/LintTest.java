@@ -400,7 +400,6 @@ public class LintTest {
     File baseDir = TestUtils.getBaseDir(TestUtils.class);
     final File file = new File(baseDir, "docs/reference.md");
     final File genFile = new File(baseDir, "target/reference.md");
-    final List<String> names = new ArrayList<>();
     try (Reader r = new FileReader(file);
         BufferedReader br = new BufferedReader(r);
         Writer w = new FileWriter(genFile);
@@ -419,7 +418,7 @@ public class LintTest {
         }
         if (line.equals("{% comment %}START TABLE{% endcomment %}")) {
           emit = false;
-          Generation.generateFunctionTable(pw, names);
+          Generation.generateFunctionTable(pw);
         }
       }
     }

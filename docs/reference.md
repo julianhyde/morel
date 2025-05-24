@@ -367,7 +367,7 @@ Exception:
 | Bag.tl | &alpha; bag &rarr; &alpha; bag | "tl b" returns all but one arbitrary element of bag `b`. Raises `Empty` if `b` is `nil`. |
 | Bag.getItem | &alpha; bag &rarr; * (&alpha; * &alpha; bag) option | "getItem b" returns `NONE` if the bag `b` is empty, and `SOME (hd b, tl b)` otherwise (applying `hd` and `tl` simultaneously so that they choose/remove the same arbitrary element). |
 | Bag.take | &alpha; bag * int &rarr; &alpha; bag | "take (b, i)" returns an arbitrary `i` elements of the bag `b`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`. We have `take(b, length b)` = `b`. |
-| Bag.drop | &alpha; bag * int &rarr; &alpha; bag | "drop (b, i)" returns what is left after dropping an arbitrary `i` elements of the bag `b`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`.<br><br>We have `drop(b, length b)` = `\[\]`. |
+| Bag.drop | &alpha; bag * int &rarr; &alpha; bag | "drop (b, i)" returns what is left after dropping an arbitrary `i` elements of the bag `b`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`.<br><br>We have `drop(b, length b)` = `[]`. |
 | Bag.concat | &alpha; bag bag &rarr; &alpha; bag | "concat b" returns the bag that is the concatenation of all the bags in `b`. |
 | Bag.app | (&alpha; &rarr; unit) &rarr; &alpha; bag &rarr; unit | "app f b" applies `f` to the elements of `b`. |
 | Bag.map | (&alpha; &rarr; &beta;) &rarr; &alpha; bag &rarr; &beta; bag | "map f b" applies `f` to each element of `b`, returning the bag of results. |
@@ -378,12 +378,13 @@ Exception:
 | Bag.fold | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; bag &rarr; &beta; | "fold f init (bag \[x1, x2, ..., xn\])" returns `f(xn, ... , f(x2, f(x1, init))...)` (for some arbitrary reordering of the elements `xi`) or `init` if the bag is empty. |
 | Bag.exists | (&alpha; &rarr; bool) &rarr; &alpha; bag &rarr; bool | "exists f b" applies `f` to each element `x` of the bag `b`, in arbitrary order, until `f(x)` evaluates to `true`; it returns `true` if such an `x` exists and `false` otherwise. |
 | Bag.all | (&alpha; &rarr; bool) &rarr; &alpha; bag &rarr; bool | "all f b" applies `f` to each element `x` of the bag `b`, in arbitrary order, until `f(x)` evaluates to `false`; it returns `false` if such an `x` exists and `true` otherwise. It is equivalent to `not(exists (not o f) b))`. |
-| Bag.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; bag | "tabulate (n, f)" returns a bag of length `n` equal to `\[f(0), f(1), ..., f(n-1)\]`. Raises `Size` if `n` &lt; 0. |
+| Bag.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; bag | "tabulate (n, f)" returns a bag of length `n` equal to `[f(0), f(1), ..., f(n-1)]`. Raises `Size` if `n` &lt; 0. |
 | Bag.collate | (&alpha; * &alpha; &rarr; order) &rarr; &alpha; bag * &alpha; bag &rarr; order | "collate f (l1, l2)" performs lexicographic comparison of the two bags using the given ordering `f` on the bag elements. |
 | Bool.not | bool &rarr; bool | "not b" returns the logical inverse of `b`. |
+| Bool.op implies | bool * bool &rarr; bool | "b1 implies b2" returns `true` if `b1` is `false` or `b2` is `true`. |
 | Char.chr | int &rarr; char | "chr i" returns the character whose code is `i`. Raises `Chr` if `i` &lt; 0 or `i` &gt; `maxOrd`. |
 | Char.compare | char * char &rarr; order | "compare (c1, c2)" returns `LESS`, `EQUAL`, or `GREATER` according to whether its first argument is less than, equal to, or greater than the second. |
-| Char.contains | char &rarr; string &rarr; bool | "contains s c" returns true if character `c` occurs in the string `s`; false otherwise. The function, when applied to `s`, builds a table and returns a function which uses table lookup to decide whether a given character is in the string or not. Hence it is relatively expensive to compute `val p = contains s` but very fast to compute `p(c)` for any given character. |
+| Char.contains | char &rarr; string &rarr; bool | "contains s c" returns true if character `c` occurs in the string `s`; false otherwise. The fnDef, when applied to `s`, builds a table and returns a fnDef which uses table lookup to decide whether a given character is in the string or not. Hence it is relatively expensive to compute `val p = contains s` but very fast to compute `p(c)` for any given character. |
 | Char.fromCString | string &rarr; char option | "fromCString s" scans a `char` value from a string. Returns `SOME (r)` if a `char` value can be scanned from a prefix of `s`, ignoring any initial whitespace; otherwise, it returns `NONE`. Equivalent to `StringCvt.scanString (scan StringCvt.ORD)`. |
 | Char.fromInt | int &rarr; char option | "fromInt i" converts an `int` into a `char`. Raises `Chr` if `i` &lt; 0 or `i` &gt; `maxOrd`. |
 | Char.fromString | string &rarr; char option | "fromString s" attempts to scan a character or ML escape sequence from the string `s`. Does not skip leading whitespace. For instance, `fromString "\\065"` equals `#"A"`. |
@@ -411,8 +412,8 @@ Exception:
 | Char.toLower | char &rarr; char | "toLower c" returns the lowercase letter corresponding to `c`, if `c` is a letter (a to z or A to Z); otherwise returns `c`. |
 | Char.toString | char &rarr; string | "toString c" converts a `char` into a `string`; equivalent to `(fmt StringCvt.ORD r)`. |
 | Char.toUpper | char &rarr; char | "toUpper c" returns the uppercase letter corresponding to `c`, if `c` is a letter (a to z or A to Z); otherwise returns `c`. |
-| General.ignore | &alpha; &rarr; unit | "ignore x" always returns `unit`. The function evaluates its argument but throws away the value. |
-| General.op o | (&beta; &rarr; &gamma;) (&alpha; &rarr; &beta;) &rarr; &alpha; &rarr; &gamma; | "f o g" is the function composition of `f` and `g`. Thus, `(f o g) a` is equivalent to `f (g a)`. |
+| General.ignore | &alpha; &rarr; unit | "ignore x" always returns `unit`. The fnDef evaluates its argument but throws away the value. |
+| General.op o | (&beta; &rarr; &gamma;) (&alpha; &rarr; &beta;) &rarr; &alpha; &rarr; &gamma; | "f o g" is the fnDef composition of `f` and `g`. Thus, `(f o g) a` is equivalent to `f (g a)`. |
 | Interact.use | string &rarr; unit | "use f" loads source text from the file named `f`. |
 | Interact.useSilently | string &rarr; unit | "useSilently f" loads source text from the file named `f`, without printing to stdout. |
 | Int.op * | int * int &rarr; int | "i * j" is the product of `i` and `j`. It raises `Overflow` when the result is not representable. |
@@ -449,18 +450,18 @@ Exception:
 | List.hd | &alpha; list &rarr; &alpha; | "hd l" returns the first element of `l`. Raises `Empty` if `l` is `nil`. |
 | List.tl | &alpha; list &rarr; &alpha; list | "tl l" returns all but the first element of `l`. Raises `Empty` if `l` is `nil`. |
 | List.last | &alpha; list &rarr; &alpha; | "last l" returns the last element of `l`. Raises `Empty` if `l` is `nil`. |
-| List.getItem | &alpha; list &rarr; * (&alpha; * &alpha; list) option | "getItem l" returns `NONE` if the `list` is empty, and `SOME (hd l, tl l)` otherwise. This function is particularly useful for creating value readers from lists of characters. For example, `Int.scan StringCvt.DEC getItem` has the type `(int, char list) StringCvt.reader` and can be used to scan decimal integers from lists of characters. |
+| List.getItem | &alpha; list &rarr; * (&alpha; * &alpha; list) option | "getItem l" returns `NONE` if the `list` is empty, and `SOME (hd l, tl l)` otherwise. This fnDef is particularly useful for creating value readers from lists of characters. For example, `Int.scan StringCvt.DEC getItem` has the type `(int, char list) StringCvt.reader` and can be used to scan decimal integers from lists of characters. |
 | List.nth | &alpha; list * int &rarr; &alpha; | "nth (l, i)" returns the `i`(th) element of the list `l`, counting from 0. Raises `Subscript` if `i` &lt; 0 or `i` &ge; `length l`. We have `nth(l, 0)` = `hd l`, ignoring exceptions. |
 | List.take | &alpha; list * int &rarr; &alpha; list | "take (l, i)" returns the first `i` elements of the list `l`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`. We have `take(l, length l)` = `l`. |
-| List.drop | &alpha; list * int &rarr; &alpha; list | "drop (l, i)" returns what is left after dropping the first `i` elements of the list `l`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`.<br><br>It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le; `i` &le; `length l`. We also have `drop(l, length l)` = `\[\]`. |
+| List.drop | &alpha; list * int &rarr; &alpha; list | "drop (l, i)" returns what is left after dropping the first `i` elements of the list `l`. Raises `Subscript` if `i` &lt; 0 or `i` &gt; `length l`.<br><br>It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le; `i` &le; `length l`. We also have `drop(l, length l)` = `[]`. |
 | List.rev | &alpha; list &rarr; &alpha; list | "rev l" returns a list consisting of `l`'s elements in reverse order. |
-| List.concat | &alpha; list list &rarr; &alpha; list | "concat l" returns the list that is the concatenation of all the lists in `l` in order. `concat \[l1, l2, ... ln\]` = `l1 @ l2 @ ... @ ln` |
-| List.except | &alpha; list list &rarr; &alpha; list | "except l" returns the list that is the concatenation of all the lists in `l` in order. `concat \[l1, l2, ... ln\]` = `l1 @ l2 @ ... @ ln` |
-| List.intersect | &alpha; list list &rarr; &alpha; list | "intersect l" returns the list that is the concatenation of all the lists in `l` in order. `concat \[l1, l2, ... ln\]` = `l1 @ l2 @ ... @ ln` |
+| List.concat | &alpha; list list &rarr; &alpha; list | "concat l" returns the list that is the concatenation of all the lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln` |
+| List.except | &alpha; list list &rarr; &alpha; list | "except l" returns the list that is the concatenation of all the lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln` |
+| List.intersect | &alpha; list list &rarr; &alpha; list | "intersect l" returns the list that is the concatenation of all the lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln` |
 | List.revAppend | &alpha; list * &alpha; list &rarr; &alpha; list | "revAppend (l1, l2)" returns `(rev l1) @ l2`. |
 | List.app | (&alpha; &rarr; unit) &rarr; &alpha; list &rarr; unit | "app f l" applies `f` to the elements of `l`, from left to right. |
 | List.map | (&alpha; &rarr; &beta;) &rarr; &alpha; list &rarr; &beta; list | "map f l" applies `f` to each element of `l` from left to right, returning the list of results. |
-| List.mapi | (int * &alpha; &rarr; &beta;) &rarr; &alpha; vector &rarr; &beta; vector | "mapi f l" applies the function `f` to the elements of the argument list `l`, supplying the list index and element as arguments to each call. |
+| List.mapi | (int * &alpha; &rarr; &beta;) &rarr; &alpha; vector &rarr; &beta; vector | "mapi f l" applies the fnDef `f` to the elements of the argument list `l`, supplying the list index and element as arguments to each call. |
 | List.mapPartial | (&alpha; &rarr; &beta; option) &rarr; &alpha; list &rarr; &beta; list | "mapPartial f l" applies `f` to each element of `l` from left to right, returning a list of results, with `SOME` stripped, where `f` was defined. `f` is not defined for an element of `l` if `f` applied to the element returns `NONE`. The above expression is equivalent to `((map valOf) o (filter isSome) o (map f)) l`. |
 | List.find | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; &alpha; option | "find f l" applies `f` to each element `x` of the list `l`, from left to right, until `f x` evaluates to `true`. It returns `SOME (x)` if such an `x` exists; otherwise it returns `NONE`. |
 | List.filter | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; &alpha; list | "filter f l" applies `f` to each element `x` of `l`, from left to right, and returns the list of those `x` for which `f x` evaluated to `true`, in the same order as they occurred in the argument list. |
@@ -469,7 +470,7 @@ Exception:
 | List.foldr | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; list &rarr; &beta; | "foldr f init \[x1, x2, ..., xn\]" returns `f(x1, f(x2, ..., f(xn, init)...))` or `init` if the list is empty. |
 | List.exists | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; bool | "exists f l" applies `f` to each element `x` of the list `l`, from left to right, until `f(x)` evaluates to `true`; it returns `true` if such an `x` exists and `false` otherwise. |
 | List.all | (&alpha; &rarr; bool) &rarr; &alpha; list &rarr; bool | "all f l" applies `f` to each element `x` of the list `l`, from left to right, until `f(x)` evaluates to `false`; it returns `false` if such an `x` exists and `true` otherwise. It is equivalent to `not(exists (not o f) l))`. |
-| List.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; list | "tabulate (n, f)" returns a list of length `n` equal to `\[f(0), f(1), ..., f(n-1)\]`, created from left to right. Raises `Size` if `n` &lt; 0. |
+| List.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; list | "tabulate (n, f)" returns a list of length `n` equal to `[f(0), f(1), ..., f(n-1)]`, created from left to right. Raises `Size` if `n` &lt; 0. |
 | List.collate | (&alpha; * &alpha; &rarr; order) &rarr; &alpha; list * &alpha; list &rarr; order | "collate f (l1, l2)" performs lexicographic comparison of the two lists using the given ordering `f` on the list elements. |
 | Math.acos | real &rarr; real | "acos x" returns the arc cosine of `x`. `acos` is the inverse of `cos`. Its result is guaranteed to be in the closed interval \[0, pi\]. If the magnitude of `x` exceeds 1.0, returns NaN. |
 | Math.asin | real &rarr; real | "asin x" returns the arc sine of `x`. `asin` is the inverse of `sin`. Its result is guaranteed to be in the closed interval \[-pi / 2, pi / 2\]. If the magnitude of `x` exceeds 1.0, returns NaN. |
@@ -486,9 +487,9 @@ Exception:
 | Math.sin | real &rarr; real | "sin x" returns the sine of `x`, measured in radians. If `x` is an infinity, returns NaN. |
 | Math.sinh | real &rarr; real | "sinh x" returns the hyperbolic sine of `x`, that is, `(e(x) - e(-x)) / 2`. Among its properties, sinh +-0 = +-0, sinh +-infinity = +-infinity. |
 | Math.sqrt | real &rarr; real | "sqrt x" returns the square root of `x`. sqrt (~0.0) = ~0.0. If `x` &lt; 0, returns NaN. |
-| Math.tan | real &rarr; real | "tan x" returns the tangent of `x`, measured in radians. If `x` is an infinity, returns NaN. Produces infinities at various finite values, roughly corresponding to the singularities of the tangent function. |
+| Math.tan | real &rarr; real | "tan x" returns the tangent of `x`, measured in radians. If `x` is an infinity, returns NaN. Produces infinities at various finite values, roughly corresponding to the singularities of the tangent fnDef. |
 | Math.tanh | real &rarr; real | "tanh x" returns the hyperbolic tangent of `x`, that is, `(sinh x) / (cosh x)`. Among its properties, tanh +-0 = +-0, tanh +-infinity = +-1. |
-| Option.app | (&alpha; &rarr; unit) &rarr; &alpha; option &rarr; unit | "app f opt" applies the function `f` to the value `v` if `opt` is `SOME v`, and otherwise does nothing |
+| Option.app | (&alpha; &rarr; unit) &rarr; &alpha; option &rarr; unit | "app f opt" applies the fnDef `f` to the value `v` if `opt` is `SOME v`, and otherwise does nothing |
 | Option.compose | (&alpha; &rarr; &beta;) * (&gamma; &rarr; &alpha; option) &rarr; &gamma; &rarr; &beta; option | "compose (f, g) a" returns `NONE` if `g(a)` is `NONE`; otherwise, if `g(a)` is `SOME v`, it returns `SOME (f v)`. |
 | Option.composePartial | (&alpha; &rarr; &beta; option) * (&gamma; &rarr; &alpha; option) &rarr; &gamma; &rarr; &beta; option | "composePartial (f, g) a" returns `NONE` if `g(a)` is `NONE`; otherwise, if `g(a)` is `SOME v`, returns `f(v)`. |
 | Option.map | &alpha; &rarr; &beta;) &rarr; &alpha; option &rarr; &beta; option | "map f opt" maps `NONE` to `NONE` and `SOME v` to `SOME (f v)`. |
@@ -515,7 +516,7 @@ Exception:
 | Real.floor | real &rarr; int | "floor r" produces `floor(r)`, the largest int not larger than `r`. |
 | Real.fromInt, real | int &rarr; real | "fromInt i" converts the integer `i` to a `real` value. If the absolute value of `i` is larger than `maxFinite`, then the appropriate infinity is returned. If `i` cannot be exactly represented as a `real` value, uses current rounding mode to determine the resulting value. |
 | Real.fromManExp | {exp:int, man:real} &rarr; real | "fromManExp r" returns `{man, exp}`, where `man` and `exp` are the mantissa and exponent of r, respectively. |
-| Real.fromString | string &rarr; real option | "fromString s" scans a `real` value from a string. Returns `SOME (r)` if a `real` value can be scanned from a prefix of `s`, ignoring any initial whitespace; otherwise, it returns `NONE`. This function is equivalent to `StringCvt.scanString scan`. |
+| Real.fromString | string &rarr; real option | "fromString s" scans a `real` value from a string. Returns `SOME (r)` if a `real` value can be scanned from a prefix of `s`, ignoring any initial whitespace; otherwise, it returns `NONE`. This fnDef is equivalent to `StringCvt.scanString scan`. |
 | Real.isFinite | real &rarr; bool | "isFinite x" returns true if x is neither NaN nor an infinity. |
 | Real.isNan | real &rarr; bool | "isNan x" returns true if x NaN. |
 | Real.isNormal | real &rarr; bool | "isNormal x" returns true if x is normal, i.e., neither zero, subnormal, infinite nor NaN. |
@@ -555,7 +556,7 @@ Exception:
 | String.concat | string list &rarr; string | "concat l" is the concatenation of all the strings in `l`. This raises `Size` if the sum of all the sizes is greater than `maxSize`. |
 | String.concatWith | string &rarr; string list &rarr; string | "concatWith s l" returns the concatenation of the strings in the list `l` using the string `s` as a separator. This raises `Size` if the size of the resulting string would be greater than `maxSize`. |
 | String.explode | string &rarr; char list | "explode s" is the list of characters in the string `s`. |
-| String.extract | string * int * int option &rarr; string | "extract (s, i, NONE)" and "extract (s, i, SOME j)" return substrings of `s`. The first returns the substring of `s` from the `i`(th) character to the end of the string, i.e., the string `s`\[`i`..\|`s`\|-1\]. This raises `Subscript` if `i` &lt; 0 or \|`s`\| &lt; `i`.<br><br>The second form returns the substring of size `j` starting at index `i`, i.e., the string `s`\[`i`..`i`+`j`-1\]. Raises `Subscript` if `i` &lt; 0 or `j` &lt; 0 or \|`s`\| &lt; `i` + `j`. Note that, if defined, `extract` returns the empty string when `i` = \|`s`\|. |
+| String.extract | string * int * int option &rarr; string | "extract (s, i, NONE)" and "extract (s, i, SOME j)" return substrings of `s`. The first returns the substring of `s` from the `i`(th) character to the end of the string, i.e., the string `s`[`i`..\|`s`\|-1]. This raises `Subscript` if `i` &lt; 0 or \|`s`\| &lt; `i`.<br><br>The second form returns the substring of size `j` starting at index `i`, i.e., the string `s`[`i`..`i`+`j`-1]. Raises `Subscript` if `i` &lt; 0 or `j` &lt; 0 or \|`s`\| &lt; `i` + `j`. Note that, if defined, `extract` returns the empty string when `i` = \|`s`\|. |
 | String.implode | char list &rarr; string | "implode l" generates the string containing the characters in the list `l`. This is equivalent to `concat (List.map str l)`. This raises `Size` if the resulting string would have size greater than `maxSize`. |
 | String.isPrefix | string &rarr; string &rarr; bool | "isPrefix s1 s2" returns `true` if the string `s1` is a prefix of the string `s2`. Note that the empty string is a prefix of any string, and that a string is a prefix of itself. |
 | String.isSubstring | string &rarr; string &rarr; bool | "isSubstring s1 s2" returns `true` if the string `s1` is a substring of the string `s2`. Note that the empty string is a substring of any string, and that a string is a substring of itself. |
@@ -565,7 +566,7 @@ Exception:
 | String.size | string &rarr; int | "size s" returns \|`s`\|, the number of characters in string `s`. |
 | String.str | char &rarr; string | "str c" is the string of size one containing the character `c`. |
 | String.sub | string * int &rarr; char | "sub (s, i)" returns the `i`(th) character of `s`, counting from zero. This raises `Subscript` if `i` &lt; 0 or \|`s`\| &le; `i`. |
-| String.substring | string * int * int &rarr; string | "substring (s, i, j)" returns the substring `s`\[`i`..`i`+`j`-1\], i.e., the substring of size `j` starting at index `i`. This is equivalent to `extract(s, i, SOME j)`. |
+| String.substring | string * int * int &rarr; string | "substring (s, i, j)" returns the substring `s`[`i`..`i`+`j`-1], i.e., the substring of size `j` starting at index `i`. This is equivalent to `extract(s, i, SOME j)`. |
 | String.translate | (char &rarr; string) &rarr; string &rarr; string | "translate f s" returns the string generated from `s` by mapping each character in `s` by `f`. It is equivalent to `concat(List.map f (explode s))`. |
 | Sys.clearEnv | unit &rarr; unit | "clearEnv ()" restores the environment to the initial environment. |
 | Sys.env, env | unit &rarr; string list | "env ()" prints the environment. |
@@ -575,24 +576,24 @@ Exception:
 | Sys.showAll | unit &rarr; string * string option list | "showAll ()" returns a list of all properties and their current value as a string, or `NONE` if unset. |
 | Sys.unset | string &rarr; unit | "unset property" clears the current the value of `property`. |
 | Vector.all | (&alpha; &rarr; bool) &rarr; &alpha; vector &rarr; bool | "all f vec" applies `f` to each element `x` of the vector `vec`, from left to right, until `f(x)` evaluates to `false`. It returns `false` if such an `x` exists; otherwise it returns `true`. It is equivalent to `not(exists (not o f) vec)`. |
-| Vector.app | (&alpha; &rarr; unit) &rarr; &alpha; vector &rarr; unit | "app f vec" applies the function `f` to the elements of a vector in left to right order (i.e., in order of increasing indices) |
-| Vector.appi | (int * &alpha; &rarr; unit) &rarr; &alpha; vector &rarr; unit | "appi f vec" applies the function `f` to the elements of a vector in left to right order (i.e., in order of increasing indices) |
+| Vector.app | (&alpha; &rarr; unit) &rarr; &alpha; vector &rarr; unit | "app f vec" applies the fnDef `f` to the elements of a vector in left to right order (i.e., in order of increasing indices) |
+| Vector.appi | (int * &alpha; &rarr; unit) &rarr; &alpha; vector &rarr; unit | "appi f vec" applies the fnDef `f` to the elements of a vector in left to right order (i.e., in order of increasing indices) |
 | Vector.collate |  | "collate f (v1, v2)" performs lexicographic comparison of the two vectors using the given ordering `f` on elements. |
 | Vector.concat | &alpha; vector list &rarr; &alpha; vector | "concat l" returns the vector that is the concatenation of the vectors in the list `l`.  Raises `Size` if the total length of these vectors exceeds `maxLen` |
 | Vector.exists |  | "exists f vec" applies `f` to each element `x` of the vector `vec`, from left to right (i.e., increasing indices), until `f(x)` evaluates to `true`; it returns `true` if such an `x` exists and `false` otherwise. |
 | Vector.find | (&alpha; &rarr; bool) &rarr; &alpha; vector &rarr; &alpha; option | "find f vec" applies `f` to each element `x` of the vector `vec`, from left to right, until `f(x)` evaluates to `true`. It returns `SOME (x)` if such an `x` exists; otherwise it returns `NONE`. |
 | Vector.findi | (int * &alpha; &rarr; bool) &rarr; &alpha; vector &rarr; (int * &alpha;) option | "findi f vec" applies `f` to each element `x` and element index `i` of the vector `vec`, from left to right, until `f(i, x)` evaluates to `true`. It returns `SOME (i, x)` if such an `x` exists; otherwise it returns `NONE`. |
-| Vector.foldl | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldl f init vec" folds the function `f` over all the elements of vector `vec`, left to right, using the initial value `init` |
-| Vector.foldli | (int * &alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldli f init vec" folds the function `f` over all the (index, element) pairs of vector `vec`, left to right, using the initial value `init` |
-| Vector.foldr | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldr f init vec" folds the function `f` over all the elements of vector `vec`, right to left, using the initial value `init` |
-| Vector.foldri | (int * &alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldri f init vec" folds the function `f` over all the (index, element) pairs of vector `vec`, right to left, using the initial value `init` |
+| Vector.foldl | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldl f init vec" folds the fnDef `f` over all the elements of vector `vec`, left to right, using the initial value `init` |
+| Vector.foldli | (int * &alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldli f init vec" folds the fnDef `f` over all the (index, element) pairs of vector `vec`, left to right, using the initial value `init` |
+| Vector.foldr | (&alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldr f init vec" folds the fnDef `f` over all the elements of vector `vec`, right to left, using the initial value `init` |
+| Vector.foldri | (int * &alpha; * &beta; &rarr; &beta;) &rarr; &beta; &rarr; &alpha; vector &rarr; &beta; | "foldri f init vec" folds the fnDef `f` over all the (index, element) pairs of vector `vec`, right to left, using the initial value `init` |
 | Vector.fromList | &alpha; list &rarr; &alpha; vector | "fromList l" creates a new vector from `l`, whose length is `length l` and with the `i`<sup>th</sup> element of `l` used as the `i`<sup>th</sup> element of the vector. Raises `Size` if `maxLen` &lt; `n`. |
 | Vector.length | &alpha; vector &rarr; int | "length v" returns the number of elements in the vector `v`. |
-| Vector.map | (&alpha; &rarr; &beta;) &rarr; &alpha; vector &rarr; &beta; vector | "map f vec" applies the function `f` to the elements of the argument vector `vec` |
-| Vector.mapi | (int * &alpha; &rarr; &beta;) &rarr; &alpha; vector &rarr; &beta; vector | "mapi f vec" applies the function `f` to the elements of the argument vector `vec`, supplying the vector index and element as arguments to each call. |
+| Vector.map | (&alpha; &rarr; &beta;) &rarr; &alpha; vector &rarr; &beta; vector | "map f vec" applies the fnDef `f` to the elements of the argument vector `vec` |
+| Vector.mapi | (int * &alpha; &rarr; &beta;) &rarr; &alpha; vector &rarr; &beta; vector | "mapi f vec" applies the fnDef `f` to the elements of the argument vector `vec`, supplying the vector index and element as arguments to each call. |
 | Vector.maxLen | int | "maxLen" returns the maximum length of vectors supported in this implementation. |
 | Vector.sub | &alpha; vector * int &rarr; &alpha; | "sub (vec, i)" returns the `i`<sup>th</sup> element of vector `vec`. Raises `Subscript` if `i` &lt; 0 or `size vec` &le; `i`. |
-| Vector.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; vector | "tabulate (n, f)" returns a vector of length `n` equal to `\[f(0), f(1), ..., f(n-1)\]`, created from left to right. Raises `Size` if `n` &lt; 0 or `maxLen` &lt; `n`. |
+| Vector.tabulate | int * (int &rarr; &alpha;) &rarr; &alpha; vector | "tabulate (n, f)" returns a vector of length `n` equal to `[f(0), f(1), ..., f(n-1)]`, created from left to right. Raises `Size` if `n` &lt; 0 or `maxLen` &lt; `n`. |
 | Vector.update | &alpha; vector * int * &alpha; &rarr; &alpha; vector | "update (vec, i, x)" returns a new vector, identical to `vec`, except the `i`<sup>th</sup> element of `vec` is set to `x`. Raises `Subscript` if `i` &lt; 0 or `size vec` &le; `i`. |
 
 Not yet implemented
@@ -600,7 +601,7 @@ Not yet implemented
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | Int.fmt | StringCvt.radix &rarr; int &rarr; string | "fmt radix i" returns a string containing a representation of i with #"~" used as the sign for negative numbers. Formats the string according to `radix`; the hexadecimal digits 10 through 15 are represented as #"A" through #"F", respectively. No prefix "0x" is generated for the hexadecimal representation. |
-| Int.scan | scan radix getc strm | Returns `SOME (i,rest)` if an integer in the format denoted by `radix` can be parsed from a prefix of the character stream `strm` after skipping initial whitespace, where `i` is the value of the integer parsed and `rest` is the rest of the character stream. `NONE` is returned otherwise. This function raises `Overflow` when an integer can be parsed, but is too large to be represented by type `int`. |
+| Int.scan | scan radix getc strm | Returns `SOME (i,rest)` if an integer in the format denoted by `radix` can be parsed from a prefix of the character stream `strm` after skipping initial whitespace, where `i` is the value of the integer parsed and `rest` is the rest of the character stream. `NONE` is returned otherwise. This fnDef raises `Overflow` when an integer can be parsed, but is too large to be represented by type `int`. |
 | Real.op != | real * real &rarr; bool | "x != y" is equivalent to `not o op ==` and the IEEE `?&lt;&gt;` operator. |
 | Real.op *+ | real * real * real &rarr; real | "*+ (a, b, c)" returns `a * b + c`. Its behavior on infinities follows from the behaviors derived from addition and multiplication. |
 | Real.op *- | real * real * real &rarr; real | "*- (a, b, c)" returns `a * b - c`. Its behavior on infinities follows from the behaviors derived from subtraction and multiplication. |

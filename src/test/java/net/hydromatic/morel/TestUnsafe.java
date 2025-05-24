@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel;
 
+import static net.hydromatic.morel.TestUtils.getBaseDir;
+
 import com.google.common.collect.ImmutableList;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -35,8 +37,6 @@ import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
-
-import static net.hydromatic.morel.TestUtils.getBaseDir;
 
 /**
  * Unsafe methods to be used by tests.

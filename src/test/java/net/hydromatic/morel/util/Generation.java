@@ -19,7 +19,9 @@
 package net.hydromatic.morel.util;
 
 import static com.google.common.collect.ImmutableList.sortedCopyOf;
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.filterEager;
+import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.first;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -32,11 +34,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 import net.hydromatic.morel.Main;
 import net.hydromatic.morel.TestUtils;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Generates code from metadata. */
 public class Generation {
@@ -47,8 +52,7 @@ public class Generation {
    * definitions into {@code reference.md}.
    */
   @SuppressWarnings("unchecked")
-  public static void generateFunctionTable(PrintWriter pw, List<String> names)
-      throws IOException {
+  public static void generateFunctionTable(PrintWriter pw) throws IOException {
     final URL inUrl = Main.class.getResource("/functions.toml");
     assertThat(inUrl, notNullValue());
     final File file = TestUtils.urlToFile(inUrl);
@@ -57,12 +61,17 @@ public class Generation {
     try (MappingIterator<Object> it =
         mapper.readerForMapOf(Object.class).readValues(file)) {
       while (it.hasNextValue()) {
-        Map<String, Object> row = (Map<String, Object>) it.nextValue();
-        List<Map<String, Object>> functions =
-            (List<Map<String, Object>>) row.get("functions");
+        final Map<String, Object> row = (Map<String, Object>) it.nextValue();
+        final List<FnDef> fnDefs =
+            transformEager(
+                (List<Map<String, Object>>) row.get("functions"),
+                FnDef::create);
 
-        for (Map<String, Object> function : functions) {
-          names.add((String) function.get("name"));
+        // The functions in the toml file must be sorted by name.
+        // This reduces the chance of merge conflicts.
+        final List<String> names = new ArrayList<>();
+        for (FnDef fnDef : fnDefs) {
+          names.add(fnDef.name);
         }
         if (!Ordering.natural().isOrdered(names)) {
           fail(
@@ -70,15 +79,29 @@ public class Generation {
                   + TestUtils.diffLines(names, sortedCopyOf(names)));
         }
 
-        functions.sort(Generation::compare);
-        Predicate<Map<String, Object>> isImplemented =
-            Generation::isImplemented;
-        List<Map<String, Object>> implemented =
-            filterEager(functions, isImplemented);
+        // Build sorted list of functions. First add the ones with ordinals,
+        // sorted by ordinal. Then add the rest, sorted by name.
+        final List<FnDef> sortedFnDefs = new ArrayList<>();
+        for (FnDef fnDef : fnDefs) {
+          if (fnDef.ordinal >= 0) {
+            sortedFnDefs.add(fnDef);
+          }
+        }
+        sortedFnDefs.sort(Comparator.comparingInt(f -> f.ordinal));
+        for (FnDef fnDef : fnDefs) {
+          if (fnDef.ordinal <= 0) {
+            int i =
+                findMax(sortedFnDefs, f -> f.name.compareTo(fnDef.name) < 0);
+            sortedFnDefs.add(i, fnDef);
+          }
+        }
+
+        List<FnDef> implemented =
+            filterEager(sortedFnDefs, fn -> fn.implemented);
         generateTable(pw, implemented);
 
-        List<Map<String, Object>> notImplemented =
-            filterEager(functions, isImplemented.negate());
+        List<FnDef> notImplemented =
+            filterEager(sortedFnDefs, fn -> !fn.implemented);
         if (!notImplemented.isEmpty()) {
           pw.printf("Not yet implemented%n");
           generateTable(pw, notImplemented);
@@ -87,25 +110,27 @@ public class Generation {
     }
   }
 
-  private static boolean isImplemented(Map<String, Object> o) {
-    return first((Boolean) o.get("implemented"), true);
+  /** Returns the first index of the list where the predicate is false. */
+  private static <E> int findMax(List<E> list, Predicate<E> predicate) {
+    for (int i = 0; i < list.size(); i++) {
+      E e = list.get(i);
+      if (!predicate.test(e)) {
+        return i;
+      }
+    }
+    return -1;
   }
 
-  private static void generateTable(
-      PrintWriter pw, List<Map<String, Object>> functions) {
+  private static void generateTable(PrintWriter pw, List<FnDef> functions) {
     pw.printf("%n");
     row(pw, "Name", "Type", "Description");
     row(pw, "----", "----", "-----------");
-    for (Map<String, Object> function : functions) {
-      String name = (String) function.get("name");
-      String type = (String) function.get("type");
-      String description = (String) function.get("description");
-      String extra = (String) function.get("extra");
-      String name2 = munge(name);
-      String type2 = munge(type);
-      String description2 = munge(description);
-      if (extra != null) {
-        description2 += " " + extra.trim();
+    for (FnDef function : functions) {
+      String name2 = munge(function.name);
+      String type2 = munge(function.type);
+      String description2 = munge(function.description);
+      if (function.extra != null) {
+        description2 += " " + function.extra.trim();
       }
       row(pw, name2, type2, description2);
     }
@@ -115,20 +140,6 @@ public class Generation {
   private static void row(
       PrintWriter pw, String name, String type, String description) {
     pw.printf("| %s | %s | %s |\n", name, type, description);
-  }
-
-  private static int compare(Map<String, Object> f1, Map<String, Object> f2) {
-    Integer o1 = (Integer) f1.get("ordinal");
-    Integer o2 = (Integer) f2.get("ordinal");
-    if (o1 != null && o2 != null) {
-      int c = o1.compareTo(o2);
-      if (c != 0) {
-        return c;
-      }
-    }
-    String n1 = (String) f1.get("name");
-    String n2 = (String) f2.get("name");
-    return n1.compareTo(n2);
   }
 
   private static String munge(String s) {
@@ -144,11 +155,44 @@ public class Generation {
         .replace("&lt;br&gt;", "<br>")
         .replace("&lt;sup&gt;", "<sup>")
         .replace("&lt;/sup&gt;", "</sup>")
-        .replace("[", "\\[")
-        .replace("]", "\\]")
         .replace("|", "\\|")
         .replace("\n", " ")
         .replaceAll(" *<br>", "<br>");
+  }
+
+  /** Function definition. */
+  private static class FnDef {
+    final String name;
+    final String type;
+    final String description;
+    final @Nullable String extra;
+    final boolean implemented;
+    final int ordinal;
+
+    FnDef(
+        String name,
+        String type,
+        String description,
+        String extra,
+        boolean implemented,
+        int ordinal) {
+      this.name = requireNonNull(name);
+      this.type = requireNonNull(type);
+      this.description = requireNonNull(description);
+      this.extra = extra;
+      this.implemented = implemented;
+      this.ordinal = ordinal;
+    }
+
+    static FnDef create(Map<String, Object> map) {
+      return new FnDef(
+          (String) map.get("name"),
+          (String) map.get("type"),
+          (String) map.get("description"),
+          (String) map.get("extra"),
+          first((Boolean) map.get("implemented"), true),
+          map.containsKey("ordinal") ? (Integer) map.get("ordinal") : -1);
+    }
   }
 }
 
