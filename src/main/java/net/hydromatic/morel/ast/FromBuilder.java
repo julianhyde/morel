@@ -501,6 +501,11 @@ public class FromBuilder {
     }
 
     @Override
+    protected void visit(Core.Unorder unorder) {
+      unorder();
+    }
+
+    @Override
     protected void visit(Core.Yield yield) {
       yield_(false, yield.env, yield.exp, yield.env.atom);
     }
