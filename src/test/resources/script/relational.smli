@@ -243,6 +243,18 @@ from i in [1,2,3,4] where i > 1 unorder where i < 4 unorder;
 from i in [1,2,3,4] where i > 1 unorder where i < 4 order i desc;
 > val it = [3,2] : int list
 
+exists i in [1,2,3,4] unorder where i > 3;
+> val it = true : bool
+
+exists i in [] unorder;
+> val it = false : bool
+
+forall i in [1,2,3,4] unorder require i > 3;
+> val it = false : bool
+
+forall i in [] unorder require false;
+> val it = true : bool
+
 (* Current ---------------------------------------------------- *)
 from e in emps
   where current.deptno = 10;
