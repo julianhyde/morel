@@ -34,7 +34,7 @@ TODO:
 * from i in dice, j in dice yield {x=i + j} yield x; -- has bug
 * from i in dice, j in dice yield {x=i + j} skip 3 yield x; -- works
 * from i in dice, j in dice yield {x=i + j} distinct; -- works
-* test through with partially eval fnDef, 'from i in dice through j in multiplesOf 3'
+* test through with partially eval function, 'from i in dice through j in multiplesOf 3'
 * Char.toUpper and toLower, and test 'String.map Char.toUpper' etc.
 
 {% endcomment %}
@@ -157,7 +157,7 @@ Finally, remember that a query is an expression.  You can evaluate a
 query by typing it into the shell, just like any other expression.
 Also, you can use a query anywhere in a Morel program that an
 expression is valid, such as in a `case` expression, the body of a
-`fn` lambda, or the argument to a fnDef call. Because Morel is
+`fn` lambda, or the argument to a function call. Because Morel is
 strongly typed, the type of the query expression has to match where it
 is being used. Most queries return a collection, but quantified
 queries (`exists` and `forall`) and queries with a terminal step
@@ -410,7 +410,7 @@ types and how they map input fields to output fields.
 | [`order`](#order-step)         | Sorts the current collection by a list of expressions.                                                                |
 | [`skip`](#skip-step)           | Skips a given number of rows from the current collection.                                                             |
 | [`take`](#take-step)           | Limits the number of rows to return from the current collection.                                                      |
-| [`through`](#through-step)     | Calls a table fnDef, with the current collection as an argument, and starts a scan over the collection it returns. |
+| [`through`](#through-step)     | Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns. |
 | [`union`](#union-step)         | Returns the set (or multiset) union between the current collection and one or more argument collections.              |
 | [`where`](#where-step)         | Emits rows of the current collection for which a given predicate evaluates to `true`.                                 |
 | [`yield`](#yield-step)         | For each row in the current collection, evaluates an expression and emits it as a row.                                |
@@ -426,8 +426,8 @@ expression.
 
 | Name                       | Summary                                                       |
 |----------------------------|---------------------------------------------------------------|
-| [`compute`](#compute-step) | Applies aggregate fnDefs to the current collection.        |
-| [`into`](#into-step)       | Applies a fnDef to the current collection.                 |
+| [`compute`](#compute-step) | Applies aggregate functions to the current collection.        |
+| [`into`](#into-step)       | Applies a function to the current collection.                 |
 | [`require`](#require-step) | Evaluates the predicate of a [`forall`](#forall-query) query. |
 
 ### Distinct step
@@ -542,14 +542,14 @@ then the implicit field name is <code><i>id</i></code>; if the
 expression is <code><i>record</i>.<i>field</i></code> then the
 implicit field name is <code><i>field</i></code>. The explicit field
 name of an <code><i>agg</i></code> can be omitted if an implicit field
-name can be derived: if the aggregate fnDef is
+name can be derived: if the aggregate function is
 <code><i>id</i></code> then the implicit field name is
-<code><i>id</i></code>; if the aggregate fnDef is
+<code><i>id</i></code>; if the aggregate function is
 <code><i>record</i>.<i>field</i></code> then the implicit field name
 is <code><i>field</i></code>.
 
 The `of` clause in an aggregate specifies the expression to aggregate;
-if omitted, the aggregate fnDef is applied to the entire row.
+if omitted, the aggregate function is applied to the entire row.
 
 #### Example
 
@@ -801,10 +801,10 @@ val it : int list</i>
 
 #### Description
 
-Calls a table fnDef, with the current collection as an argument,
+Calls a table function, with the current collection as an argument,
 and starts a scan over the collection it returns.
 
-The expression <code><i>exp</i></code> must evaluate to a fnDef
+The expression <code><i>exp</i></code> must evaluate to a function
 that takes the current collection as an argument and returns a new
 collection. The pattern <code><i>pat</i></code> is bound to each
 element of the returned collection.
@@ -815,13 +815,13 @@ The output fields are the fields defined by the pattern
 #### Example
 
 <pre>
-<i>(* Define a table fnDef that returns the even numbers
+<i>(* Define a table function that returns the even numbers
    from a collection. *)</i>
 <b>fun</b> evenNumbers(xs) =
   <b>from</b> x <b>in</b> xs
     <b>where</b> x <b>mod</b> 2 = 0;
 
-<i>(* Use the table fnDef in a query. *)</i>
+<i>(* Use the table function in a query. *)</i>
 <b>from</b> i <b>in</b> [1, 2, 3, 4, 5, 6, 7]
   <b>through</b> j <b>in</b> evenNumbers;
 <i>
@@ -833,18 +833,18 @@ val it : {j:int} list</i>
 </pre>
 
 The previous example can be generalized to find multiples of any given
-number.  The table fnDef now takes two arguments, and we provide
+number.  The table function now takes two arguments, and we provide
 the first argument in the `through` clause; the input collection
 becomes the second argument.
 
 <pre>
-<i>(* Define a table fnDef that returns the numbers from
+<i>(* Define a table function that returns the numbers from
    a collection that are multiples of base. *)</i>
 <b>fun</b> multiplesOf base xs =
   <b>from</b> x <b>in</b> xs
     <b>where</b> x <b>mod</b> base = 0;
 
-<i>(* Use the table fnDef to find multiples of 3. *)</i>
+<i>(* Use the table function to find multiples of 3. *)</i>
 <b>from</b> i <b>in</b> [1, 2, 3, 4, 5, 6, 7]
   <b>through</b> j <b>in</b> multiplesOf 3;
 <i>
@@ -856,7 +856,7 @@ val it : {j:int} list</i>
 
 #### Description
 
-Calls a table fnDef, with the current collection as an argument,
+Calls a table function, with the current collection as an argument,
 and starts a scan over the collection it returns.
 
 ### Union step
@@ -1030,7 +1030,7 @@ val it : string list</i>
 
 #### Description
 
-Applies aggregate fnDefs to the current collection.
+Applies aggregate functions to the current collection.
 
 Unlike the [`group`](#group-step) step, which groups rows and computes
 aggregates for each group, the `compute` terminal step computes
@@ -1045,8 +1045,8 @@ Field names are derived in the same way as the `group` step. An
 explicit field name of an <code><i>agg</i></code> can be specified
 using an <code><i>id</i> =</code> prefix. The explicit field name can
 be omitted if an implicit field name can be derived: if the aggregate
-fnDef is <code><i>id</i></code> then the implicit field name is
-<code><i>id</i></code>; if the aggregate fnDef is
+function is <code><i>id</i></code> then the implicit field name is
+<code><i>id</i></code>; if the aggregate function is
 <code><i>record</i>.<i>field</i></code> then the implicit field name
 is <code><i>field</i></code>.
 
@@ -1082,16 +1082,16 @@ val it : {total:int, avgSal:real, minSal:real, maxSal:real}</i>
 
 #### Description
 
-Applies a fnDef to the current collection.
+Applies a function to the current collection.
 
-The expression <code><i>exp</i></code> must evaluate to a fnDef
+The expression <code><i>exp</i></code> must evaluate to a function
 that takes the current collection as an argument. The result of the
-query is the result of applying that fnDef to the collection.
+query is the result of applying that function to the collection.
 
 #### Example
 
 <pre>
-<i>(* Apply a custom fnDef to the query results. *)</i>
+<i>(* Apply a custom function to the query results. *)</i>
 <b>fun</b> analyzeResults (emps: {deptno: int, sal: real} list) =
   <b>let</b>
     <b>val</b> {count, sumSal} =

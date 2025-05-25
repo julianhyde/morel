@@ -71,7 +71,7 @@ public class Generation {
         // This reduces the chance of merge conflicts.
         final List<String> names = new ArrayList<>();
         for (FnDef fnDef : fnDefs) {
-          names.add(fnDef.name);
+          names.add(fnDef.structure + '.' + fnDef.name);
         }
         if (!Ordering.natural().isOrdered(names)) {
           fail(
@@ -87,11 +87,16 @@ public class Generation {
             sortedFnDefs.add(fnDef);
           }
         }
-        sortedFnDefs.sort(Comparator.comparingInt(f -> f.ordinal));
+        sortedFnDefs.sort(
+            Comparator.<FnDef, String>comparing(f -> f.structure)
+                .thenComparingInt(f -> f.ordinal));
         for (FnDef fnDef : fnDefs) {
           if (fnDef.ordinal <= 0) {
             int i =
-                findMax(sortedFnDefs, f -> f.name.compareTo(fnDef.name) < 0);
+                findMax(
+                    sortedFnDefs,
+                    f ->
+                        f.qualifiedName().compareTo(fnDef.qualifiedName()) < 0);
             sortedFnDefs.add(i, fnDef);
           }
         }
@@ -126,7 +131,7 @@ public class Generation {
     row(pw, "Name", "Type", "Description");
     row(pw, "----", "----", "-----------");
     for (FnDef function : functions) {
-      String name2 = munge(function.name);
+      String name2 = munge(function.structure + '.' + function.name);
       String type2 = munge(function.type);
       String description2 = munge(function.description);
       if (function.extra != null) {
@@ -153,8 +158,11 @@ public class Generation {
         .replace("≤", "&le;")
         .replace("≥", "&ge;")
         .replace("&lt;br&gt;", "<br>")
+        .replace("&lt;p&gt;", "<br><br>")
         .replace("&lt;sup&gt;", "<sup>")
         .replace("&lt;/sup&gt;", "</sup>")
+        .replace("&lt;pre&gt;", "<pre>")
+        .replace("&lt;/pre&gt;", "</pre>")
         .replace("|", "\\|")
         .replace("\n", " ")
         .replaceAll(" *<br>", "<br>");
@@ -162,6 +170,7 @@ public class Generation {
 
   /** Function definition. */
   private static class FnDef {
+    final String structure;
     final String name;
     final String type;
     final String description;
@@ -170,12 +179,14 @@ public class Generation {
     final int ordinal;
 
     FnDef(
+        String structure,
         String name,
         String type,
         String description,
         String extra,
         boolean implemented,
         int ordinal) {
+      this.structure = requireNonNull(structure);
       this.name = requireNonNull(name);
       this.type = requireNonNull(type);
       this.description = requireNonNull(description);
@@ -184,8 +195,13 @@ public class Generation {
       this.ordinal = ordinal;
     }
 
+    String qualifiedName() {
+      return structure + '.' + name;
+    }
+
     static FnDef create(Map<String, Object> map) {
       return new FnDef(
+          (String) map.get("structure"),
           (String) map.get("name"),
           (String) map.get("type"),
           (String) map.get("description"),

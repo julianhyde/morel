@@ -18,8 +18,8 @@
 # Standard ML Library Functions
 #
 # Format:
-#  * name (string) is the name of the fnDef.
-#  * ordinal (optional int) contains the order of the fnDef in the
+#  * name (string) is the name of the function.
+#  * ordinal (optional int) contains the order of the function in the
 #    original reference.md table.
 #  * structure (string) is the name of the structure.
 #  * type (string) is the Standard ML type signature.
@@ -32,6 +32,283 @@
 #  * specified (optional string, default "basis") indicates whether
 #    the function is defined in the Standard ML basis library or is a
 #    Morel extension.
+
+# === Bag structure ==================================================
+
+[[functions]]
+ordinal = 23
+structure = "Bag"
+name = "all"
+specified = "morel"
+type = "(α → bool) → α bag → bool"
+description = """
+"all f b" applies `f` to each element `x` of the bag `b`, in arbitrary
+order, until `f(x)` evaluates to `false`; it returns `false` if such
+an `x` exists and `true` otherwise. It is equivalent to `not(exists
+(not o f) b))`.
+"""
+
+[[functions]]
+ordinal = 15
+structure = "Bag"
+name = "app"
+specified = "morel"
+type = "(α → unit) → α bag → unit"
+description = """
+"app f b" applies `f` to the elements of `b`.
+"""
+
+[[functions]]
+ordinal = 8
+structure = "Bag"
+name = "at"
+specified = "morel"
+type = "α bag * α bag → α bag"
+description = """
+"at (b1, b2)" returns the bag that is the concatenation of `b1` and
+`b2`.
+"""
+
+[[functions]]
+ordinal = 25
+structure = "Bag"
+name = "collate"
+specified = "morel"
+type = "(α * α → order) → α bag * α bag → order"
+description = """
+"collate f (l1, l2)" performs lexicographic comparison of the two bags
+using the given ordering `f` on the bag elements.
+"""
+
+[[functions]]
+ordinal = 14
+structure = "Bag"
+name = "concat"
+specified = "morel"
+type = "α bag bag → α bag"
+description = """
+"concat b" returns the bag that is the concatenation of all the bags
+in `b`.
+"""
+
+[[functions]]
+ordinal = 13
+structure = "Bag"
+name = "drop"
+specified = "morel"
+type = "α bag * int → α bag"
+description = """
+"drop (b, i)" returns what is left after dropping an arbitrary `i`
+elements of the bag `b`. Raises `Subscript` if `i` < 0 or `i` >
+`length l`.
+
+<p>We have `drop(b, length b)` = `[]`.
+"""
+
+[[functions]]
+ordinal = 22
+structure = "Bag"
+name = "exists"
+specified = "morel"
+type = "(α → bool) → α bag → bool"
+description = """
+"exists f b" applies `f` to each element `x` of the bag `b`, in
+arbitrary order, until `f(x)` evaluates to `true`; it returns `true`
+if such an `x` exists and `false` otherwise.
+"""
+
+[[functions]]
+ordinal = 19
+structure = "Bag"
+name = "filter"
+specified = "morel"
+type = "(α → bool) → α bag → α bag"
+description = """
+"filter f b" applies `f` to each element `x` of `b` and returns the
+bag of those `x` for which `f x` evaluated to `true`.
+"""
+
+[[functions]]
+ordinal = 18
+structure = "Bag"
+name = "find"
+specified = "morel"
+type = "(α → bool) → α bag → α option"
+description = """
+"find f b" applies `f` to each element `x` of the bag `b`, in
+arbitrary order, until `f x` evaluates to `true`. It returns `SOME
+(x)` if such an `x` exists; otherwise it returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 21
+structure = "Bag"
+name = "fold"
+specified = "morel"
+type = "(α * β → β) → β → α bag → β"
+description = """
+"fold f init (bag \\[x1, x2, ..., xn\\])" returns `f(xn, ... , f(x2,
+f(x1, init))...)` (for some arbitrary reordering of the elements `xi`)
+or `init` if the bag is empty.
+"""
+
+[[functions]]
+ordinal = 5
+structure = "Bag"
+name = "fromList"
+specified = "morel"
+type = "α list → α bag"
+description = """
+"fromList l" creates a new bag from `l`, whose length is `length l`
+and whose elements are the same as those of `l`. Raises `Size` if
+`maxLen` < `n`.
+"""
+
+[[functions]]
+ordinal = 11
+structure = "Bag"
+name = "getItem"
+specified = "morel"
+type = "α bag → * (α * α bag) option"
+description = """
+"getItem b" returns `NONE` if the bag `b` is empty, and `SOME (hd b,
+tl b)` otherwise (applying `hd` and `tl` simultaneously so that they
+choose/remove the same arbitrary element).
+"""
+
+[[functions]]
+ordinal = 9
+structure = "Bag"
+name = "hd"
+specified = "morel"
+type = "α bag → α"
+description = """
+"hd b" returns an arbitrary element of bag `b`. Raises `Empty` if `b`
+is `nil`.
+"""
+
+[[functions]]
+ordinal = 7
+structure = "Bag"
+name = "length"
+specified = "morel"
+type = "α bag → int"
+description = """
+"length b" returns the number of elements in the bag `b`.
+"""
+
+[[functions]]
+ordinal = 16
+structure = "Bag"
+name = "map"
+specified = "morel"
+type = "(α → β) → α bag → β bag"
+description = """
+"map f b" applies `f` to each element of `b`, returning the bag of
+results. This is equivalent to:
+
+<pre>fromList (List.map f (foldr (fn (a,l) => a::l) [] b))</pre>
+"""
+
+[[functions]]
+ordinal = 17
+structure = "Bag"
+name = "mapPartial"
+specified = "morel"
+type = "(α → β option) → α bag → β bag"
+description = """
+"mapPartial f b" applies `f` to each element of `b`, returning a bag
+of results, with `SOME` stripped, where `f` was defined. `f` is not
+defined for an element of `b` if `f` applied to the element returns
+`NONE`. The above expression is equivalent to:
+
+<pre>((map valOf) o (filter isSome) o (map f)) b`</pre>
+"""
+
+[[functions]]
+ordinal = 3
+structure = "Bag"
+name = "nil"
+specified = "morel"
+type = "α bag"
+description = """
+"nil" is the empty bag.
+"""
+
+[[functions]]
+ordinal = 4
+structure = "Bag"
+name = "null"
+specified = "morel"
+type = "α bag → bool"
+description = """
+"null b" returns `true` if the bag `b` is empty.
+"""
+
+[[functions]]
+ordinal = 20
+structure = "Bag"
+name = "partition"
+specified = "morel"
+type = "(α → bool) → α bag → α bag * α bag"
+description = """
+"partition f b" applies `f` to each element `x` of `b`, in arbitrary
+order, and returns a pair `(pos, neg)` where `pos` is the bag of those
+`x` for which `f x` evaluated to `true`, and `neg` is the bag of those
+for which `f x` evaluated to `false`.
+"""
+
+[[functions]]
+ordinal = 24
+structure = "Bag"
+name = "tabulate"
+specified = "morel"
+type = "int * (int → α) → α bag"
+description = """
+"tabulate (n, f)" returns a bag of length `n` equal to `[f(0), f(1),
+..., f(n-1)]`. This is equivalent to the expression:
+
+<pre>fromList (List.tabulate (n, f))</pre>
+
+Raises `Size` if `n` < 0.
+"""
+
+[[functions]]
+ordinal = 12
+structure = "Bag"
+name = "take"
+specified = "morel"
+type = "α bag * int → α bag"
+description = """
+"take (b, i)" returns an arbitrary `i` elements of the bag `b`. Raises
+`Subscript` if `i` < 0 or `i` > `length l`. We have `take(b, length
+b)` = `b`.
+"""
+
+[[functions]]
+ordinal = 10
+structure = "Bag"
+name = "tl"
+specified = "morel"
+type = "α bag → α bag"
+description = """
+"tl b" returns all but one arbitrary element of bag `b`. Raises
+`Empty` if `b` is `nil`.
+"""
+
+[[functions]]
+ordinal = 6
+structure = "Bag"
+name = "toList"
+specified = "morel"
+type = "α bag → α list"
+description = """
+"toList b" creates a new bag from `b`, whose length is `length b` and
+whose elements are the same as those of `b`. Raises `Size` if `maxLen`
+< `n`.
+"""
+
+# === Bool structure =================================================
 
 [[values]]
 structure = "Bool"
@@ -54,252 +331,9 @@ Literal false.
 """
 
 [[functions]]
-ordinal = 23
-name = "Bag.all"
-specified = "morel"
-type = "(α → bool) → α bag → bool"
-description = """
-"all f b" applies `f` to each element `x` of the bag `b`, in arbitrary
-order, until `f(x)` evaluates to `false`; it returns `false` if such
-an `x` exists and `true` otherwise. It is equivalent to `not(exists
-(not o f) b))`.
-"""
-
-[[functions]]
-ordinal = 15
-name = "Bag.app"
-specified = "morel"
-type = "(α → unit) → α bag → unit"
-description = """
-"app f b" applies `f` to the elements of `b`.
-"""
-
-[[functions]]
-ordinal = 8
-name = "Bag.at"
-specified = "morel"
-type = "α bag * α bag → α bag"
-description = """
-"at (b1, b2)" returns the bag that is the concatenation of `b1` and
-`b2`.
-"""
-
-[[functions]]
-ordinal = 25
-name = "Bag.collate"
-specified = "morel"
-type = "(α * α → order) → α bag * α bag → order"
-description = """
-"collate f (l1, l2)" performs lexicographic comparison of the two bags
-using the given ordering `f` on the bag elements.
-"""
-
-[[functions]]
-ordinal = 14
-name = "Bag.concat"
-specified = "morel"
-type = "α bag bag → α bag"
-description = """
-"concat b" returns the bag that is the concatenation of all the bags
-in `b`.
-"""
-
-[[functions]]
-ordinal = 13
-name = "Bag.drop"
-specified = "morel"
-type = "α bag * int → α bag"
-description = """
-"drop (b, i)" returns what is left after dropping an arbitrary `i`
-elements of the bag `b`. Raises `Subscript` if `i` < 0 or `i` >
-`length l`.
-
-<br><br>We have `drop(b, length b)` = `[]`.
-"""
-
-[[functions]]
-ordinal = 22
-name = "Bag.exists"
-specified = "morel"
-type = "(α → bool) → α bag → bool"
-description = """
-"exists f b" applies `f` to each element `x` of the bag `b`, in
-arbitrary order, until `f(x)` evaluates to `true`; it returns `true`
-if such an `x` exists and `false` otherwise.
-"""
-
-[[functions]]
-ordinal = 19
-name = "Bag.filter"
-specified = "morel"
-type = "(α → bool) → α bag → α bag"
-description = """
-"filter f b" applies `f` to each element `x` of `b` and returns the
-bag of those `x` for which `f x` evaluated to `true`.
-"""
-
-[[functions]]
-ordinal = 18
-name = "Bag.find"
-specified = "morel"
-type = "(α → bool) → α bag → α option"
-description = """
-"find f b" applies `f` to each element `x` of the bag `b`, in
-arbitrary order, until `f x` evaluates to `true`. It returns `SOME
-(x)` if such an `x` exists; otherwise it returns `NONE`.
-"""
-
-[[functions]]
-ordinal = 21
-name = "Bag.fold"
-specified = "morel"
-type = "(α * β → β) → β → α bag → β"
-description = """
-"fold f init (bag \\[x1, x2, ..., xn\\])" returns `f(xn, ... , f(x2,
-f(x1, init))...)` (for some arbitrary reordering of the elements `xi`)
-or `init` if the bag is empty.
-"""
-
-[[functions]]
-ordinal = 5
-name = "Bag.fromList"
-specified = "morel"
-type = "α list → α bag"
-description = """
-"fromList l" creates a new bag from `l`, whose length is `length l`
-and whose elements are the same as those of `l`. Raises `Size` if
-`maxLen` < `n`.
-"""
-
-[[functions]]
-ordinal = 11
-name = "Bag.getItem"
-specified = "morel"
-type = "α bag → * (α * α bag) option"
-description = """
-"getItem b" returns `NONE` if the bag `b` is empty, and `SOME (hd b,
-tl b)` otherwise (applying `hd` and `tl` simultaneously so that they
-choose/remove the same arbitrary element).
-"""
-
-[[functions]]
-ordinal = 9
-name = "Bag.hd"
-specified = "morel"
-type = "α bag → α"
-description = """
-"hd b" returns an arbitrary element of bag `b`. Raises `Empty` if `b`
-is `nil`.
-"""
-
-[[functions]]
-ordinal = 7
-name = "Bag.length"
-specified = "morel"
-type = "α bag → int"
-description = """
-"length b" returns the number of elements in the bag `b`.
-"""
-
-[[functions]]
-ordinal = 16
-name = "Bag.map"
-specified = "morel"
-type = "(α → β) → α bag → β bag"
-description = """
-"map f b" applies `f` to each element of `b`, returning the bag of
-results.
-"""
-
-[[functions]]
-ordinal = 17
-name = "Bag.mapPartial"
-specified = "morel"
-type = "(α → β option) → α bag → β bag"
-description = """
-"mapPartial f b" applies `f` to each element of `b`, returning a bag
-of results, with `SOME` stripped, where `f` was defined. `f` is not
-defined for an element of `b` if `f` applied to the element returns
-`NONE`. The above expression is equivalent to `((map valOf) o (filter
-isSome) o (map f)) b`.
-"""
-
-[[functions]]
-ordinal = 3
-name = "Bag.nil"
-specified = "morel"
-type = "α bag"
-description = """
-"nil" is the empty bag.
-"""
-
-[[functions]]
-ordinal = 4
-name = "Bag.null"
-specified = "morel"
-type = "α bag → bool"
-description = """
-"null b" returns `true` if the bag `b` is empty.
-"""
-
-[[functions]]
-ordinal = 20
-name = "Bag.partition"
-specified = "morel"
-type = "(α → bool) → α bag → α bag * α bag"
-description = """
-"partition f b" applies `f` to each element `x` of `b`, in arbitrary
-order, and returns a pair `(pos, neg)` where `pos` is the bag of those
-`x` for which `f x` evaluated to `true`, and `neg` is the bag of those
-for which `f x` evaluated to `false`.
-"""
-
-[[functions]]
-ordinal = 24
-name = "Bag.tabulate"
-specified = "morel"
-type = "int * (int → α) → α bag"
-description = """
-"tabulate (n, f)" returns a bag of length `n` equal to `[f(0), f(1),
-..., f(n-1)]`. Raises `Size` if `n` < 0.
-"""
-
-[[functions]]
-ordinal = 12
-name = "Bag.take"
-specified = "morel"
-type = "α bag * int → α bag"
-description = """
-"take (b, i)" returns an arbitrary `i` elements of the bag `b`. Raises
-`Subscript` if `i` < 0 or `i` > `length l`. We have `take(b, length
-b)` = `b`.
-"""
-
-[[functions]]
-ordinal = 10
-name = "Bag.tl"
-specified = "morel"
-type = "α bag → α bag"
-description = """
-"tl b" returns all but one arbitrary element of bag `b`. Raises
-`Empty` if `b` is `nil`.
-"""
-
-[[functions]]
-ordinal = 6
-name = "Bag.toList"
-specified = "morel"
-type = "α bag → α list"
-description = """
-"toList b" creates a new bag from `b`, whose length is `length b` and
-whose elements are the same as those of `b`. Raises `Size` if `maxLen`
-< `n`.
-"""
-
-[[functions]]
 structure = "Bool"
 syntax = "prefix"
-name = "Bool.not"
+name = "not"
 specified = "basis"
 type = "bool → bool"
 description = """
@@ -307,7 +341,8 @@ description = """
 """
 
 [[functions]]
-name = "Bool.op implies"
+structure = "Bool"
+name = "op implies"
 syntax = "binary"
 specified = "morel"
 type = "bool * bool → bool"
@@ -315,9 +350,12 @@ description = """
 "b1 implies b2" returns `true` if `b1` is `false` or `b2` is `true`.
 """
 
+# === Char structure =================================================
+
 [[functions]]
 ordinal = 26
-name = "Char.chr"
+structure = "Char"
+name = "chr"
 specified = "basis"
 type = "int → char"
 description = """
@@ -327,7 +365,8 @@ description = """
 
 [[functions]]
 ordinal = 27
-name = "Char.compare"
+structure = "Char"
+name = "compare"
 specified = "basis"
 type = "char * char → order"
 description = """
@@ -338,13 +377,14 @@ second.
 
 [[functions]]
 ordinal = 28
-name = "Char.contains"
+structure = "Char"
+name = "contains"
 specified = "basis"
 type = "char → string → bool"
 description = """
 "contains s c" returns true if character `c` occurs in the string `s`;
-false otherwise. The fnDef, when applied to `s`, builds a table and
-returns a fnDef which uses table lookup to decide whether a given
+false otherwise. The function, when applied to `s`, builds a table and
+returns a function which uses table lookup to decide whether a given
 character is in the string or not. Hence it is relatively expensive to
 compute `val p = contains s` but very fast to compute `p(c)` for any
 given character.
@@ -352,7 +392,8 @@ given character.
 
 [[functions]]
 ordinal = 29
-name = "Char.fromCString"
+structure = "Char"
+name = "fromCString"
 specified = "basis"
 type = "string → char option"
 description = """
@@ -364,7 +405,8 @@ initial whitespace; otherwise, it returns `NONE`. Equivalent to
 
 [[functions]]
 ordinal = 30
-name = "Char.fromInt"
+structure = "Char"
+name = "fromInt"
 specified = "basis"
 type = "int → char option"
 description = """
@@ -374,7 +416,8 @@ or `i` > `maxOrd`.
 
 [[functions]]
 ordinal = 31
-name = "Char.fromString"
+structure = "Char"
+name = "fromString"
 specified = "basis"
 type = "string → char option"
 description = """
@@ -385,7 +428,8 @@ the string `s`. Does not skip leading whitespace. For instance,
 
 [[functions]]
 ordinal = 32
-name = "Char.isAlpha"
+structure = "Char"
+name = "isAlpha"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -394,7 +438,8 @@ description = """
 
 [[functions]]
 ordinal = 33
-name = "Char.isAlphaNum"
+structure = "Char"
+name = "isAlphaNum"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -404,7 +449,8 @@ decimal digit).
 
 [[functions]]
 ordinal = 34
-name = "Char.isAscii"
+structure = "Char"
+name = "isAscii"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -413,7 +459,8 @@ description = """
 
 [[functions]]
 ordinal = 35
-name = "Char.isCntrl"
+structure = "Char"
+name = "isCntrl"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -423,7 +470,8 @@ description = """
 
 [[functions]]
 ordinal = 36
-name = "Char.isDigit"
+structure = "Char"
+name = "isDigit"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -432,7 +480,8 @@ description = """
 
 [[functions]]
 ordinal = 37
-name = "Char.isGraph"
+structure = "Char"
+name = "isGraph"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -442,7 +491,8 @@ is printable and not a whitespace character.
 
 [[functions]]
 ordinal = 38
-name = "Char.isHexDigit"
+structure = "Char"
+name = "isHexDigit"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -451,7 +501,8 @@ description = """
 
 [[functions]]
 ordinal = 39
-name = "Char.isLower"
+structure = "Char"
+name = "isLower"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -461,7 +512,8 @@ f or A to F).
 
 [[functions]]
 ordinal = 40
-name = "Char.isOctDigit"
+structure = "Char"
+name = "isOctDigit"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -470,7 +522,8 @@ description = """
 
 [[functions]]
 ordinal = 41
-name = "Char.isPrint"
+structure = "Char"
+name = "isPrint"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -480,7 +533,8 @@ visible).
 
 [[functions]]
 ordinal = 42
-name = "Char.isPunct"
+structure = "Char"
+name = "isPunct"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -490,7 +544,8 @@ graphical but not alphanumeric.
 
 [[functions]]
 ordinal = 43
-name = "Char.isSpace"
+structure = "Char"
+name = "isSpace"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -500,7 +555,8 @@ newline, tab, vertical tab, new page).
 
 [[functions]]
 ordinal = 44
-name = "Char.isUpper"
+structure = "Char"
+name = "isUpper"
 specified = "basis"
 type = "char → bool"
 description = """
@@ -509,7 +565,8 @@ description = """
 
 [[functions]]
 ordinal = 47
-name = "Char.maxChar"
+structure = "Char"
+name = "maxChar"
 specified = "basis"
 type = "int"
 description = """
@@ -518,7 +575,8 @@ description = """
 
 [[functions]]
 ordinal = 45
-name = "Char.maxOrd"
+structure = "Char"
+name = "maxOrd"
 specified = "basis"
 type = "int"
 description = """
@@ -527,7 +585,8 @@ description = """
 
 [[functions]]
 ordinal = 48
-name = "Char.minChar"
+structure = "Char"
+name = "minChar"
 specified = "basis"
 type = "char"
 description = """
@@ -539,7 +598,8 @@ integers, within the limits of the heap size. If `precision` is `SOME
 
 [[functions]]
 ordinal = 49
-name = "Char.notContains"
+structure = "Char"
+name = "notContains"
 specified = "basis"
 type = "char → string → bool"
 description = """
@@ -550,7 +610,8 @@ in the same way as `Char.contains`.
 
 [[functions]]
 ordinal = 50
-name = "Char.ord"
+structure = "Char"
+name = "ord"
 specified = "basis"
 type = "char → int"
 description = """
@@ -559,7 +620,8 @@ description = """
 
 [[functions]]
 ordinal = 50
-name = "Char.pred"
+structure = "Char"
+name = "pred"
 specified = "basis"
 type = "char → char"
 description = """
@@ -569,7 +631,8 @@ description = """
 
 [[functions]]
 ordinal = 51
-name = "Char.succ"
+structure = "Char"
+name = "succ"
 specified = "basis"
 type = "char → char"
 description = """
@@ -579,7 +642,8 @@ description = """
 
 [[functions]]
 ordinal = 52
-name = "Char.toCString"
+structure = "Char"
+name = "toCString"
 specified = "basis"
 type = "char → string"
 description = """
@@ -589,7 +653,8 @@ StringCvt.ORD r)`.
 
 [[functions]]
 ordinal = 53
-name = "Char.toLower"
+structure = "Char"
+name = "toLower"
 specified = "basis"
 type = "char → char"
 description = """
@@ -599,7 +664,8 @@ is a letter (a to z or A to Z); otherwise returns `c`.
 
 [[functions]]
 ordinal = 54
-name = "Char.toString"
+structure = "Char"
+name = "toString"
 specified = "basis"
 type = "char → string"
 description = """
@@ -609,7 +675,8 @@ StringCvt.ORD r)`.
 
 [[functions]]
 ordinal = 55
-name = "Char.toUpper"
+structure = "Char"
+name = "toUpper"
 specified = "basis"
 type = "char → char"
 description = """
@@ -617,29 +684,36 @@ description = """
 is a letter (a to z or A to Z); otherwise returns `c`.
 """
 
+# === General structure ==============================================
+
 [[functions]]
 ordinal = 56
-name = "General.ignore"
+structure = "General"
+name = "ignore"
 specified = "basis"
 type = "α → unit"
 description = """
-"ignore x" always returns `unit`. The fnDef evaluates its argument
+"ignore x" always returns `unit`. The function evaluates its argument
 but throws away the value.
 """
 
 [[functions]]
 ordinal = 57
-name = "General.op o"
+structure = "General"
+name = "op o"
 specified = "basis"
 type = "(β → γ) (α → β) → α → γ"
 description = """
-"f o g" is the fnDef composition of `f` and `g`. Thus, `(f o g) a`
+"f o g" is the function composition of `f` and `g`. Thus, `(f o g) a`
 is equivalent to `f (g a)`.
 """
 
+# === Int structure ==================================================
+
 [[functions]]
 ordinal = 70
-name = "Int.abs"
+structure = "Int"
+name = "abs"
 specified = "basis"
 type = "int → int"
 description = """
@@ -648,7 +722,8 @@ description = """
 
 [[functions]]
 ordinal = 71
-name = "Int.compare"
+structure = "Int"
+name = "compare"
 specified = "basis"
 type = "int * int → order"
 description = """
@@ -659,7 +734,8 @@ second.
 
 [[functions]]
 ordinal = 239
-name = "Int.fmt"
+structure = "Int"
+name = "fmt"
 specified = "basis"
 type = "StringCvt.radix → int → string"
 implemented = false
@@ -673,7 +749,8 @@ generated for the hexadecimal representation.
 
 [[functions]]
 ordinal = 72
-name = "Int.fromInt, int"
+structure = "Int"
+name = "fromInt, int"
 specified = "basis"
 type = "int → int"
 description = """
@@ -683,7 +760,8 @@ type. Raises `Overflow` if the value does not fit.
 
 [[functions]]
 ordinal = 73
-name = "Int.fromString"
+structure = "Int"
+name = "fromString"
 specified = "basis"
 type = "string → int option"
 description = """
@@ -695,7 +773,8 @@ initial whitespace; otherwise, it returns `NONE`. Equivalent to
 
 [[functions]]
 ordinal = 74
-name = "Int.max"
+structure = "Int"
+name = "max"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -704,7 +783,8 @@ description = """
 
 [[functions]]
 ordinal = 75
-name = "Int.maxInt"
+structure = "Int"
+name = "maxInt"
 specified = "basis"
 type = "int"
 description = """
@@ -716,7 +796,8 @@ integers, within the limits of the heap size. If `precision` is `SOME
 
 [[functions]]
 ordinal = 76
-name = "Int.min"
+structure = "Int"
+name = "min"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -725,7 +806,8 @@ description = """
 
 [[functions]]
 ordinal = 77
-name = "Int.minInt"
+structure = "Int"
+name = "minInt"
 specified = "basis"
 type = "int"
 description = """
@@ -737,7 +819,8 @@ integers, within the limits of the heap size. If `precision` is `SOME
 
 [[functions]]
 ordinal = 78
-name = "Int.mod"
+structure = "Int"
+name = "mod"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -748,7 +831,8 @@ as `j`, and `(i div j) * j + (i mod j) = i`.
 
 [[functions]]
 ordinal = 60
-name = "Int.op *"
+structure = "Int"
+name = "op *"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -758,7 +842,8 @@ result is not representable.
 
 [[functions]]
 ordinal = 61
-name = "Int.op +"
+structure = "Int"
+name = "op +"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -768,7 +853,8 @@ result is not representable.
 
 [[functions]]
 ordinal = 62
-name = "Int.op -"
+structure = "Int"
+name = "op -"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -778,7 +864,8 @@ the result is not representable.
 
 [[functions]]
 ordinal = 65
-name = "Int.op <"
+structure = "Int"
+name = "op <"
 specified = "basis"
 type = "int * int → bool"
 description = """
@@ -787,7 +874,8 @@ description = """
 
 [[functions]]
 ordinal = 66
-name = "Int.op <="
+structure = "Int"
+name = "op <="
 specified = "basis"
 type = "int * int → bool"
 description = """
@@ -796,7 +884,8 @@ description = """
 
 [[functions]]
 ordinal = 67
-name = "Int.op >"
+structure = "Int"
+name = "op >"
 specified = "basis"
 type = "int * int → bool"
 description = """
@@ -805,7 +894,8 @@ description = """
 
 [[functions]]
 ordinal = 68
-name = "Int.op >="
+structure = "Int"
+name = "op >="
 specified = "basis"
 type = "int * int → bool"
 description = """
@@ -814,7 +904,8 @@ description = """
 
 [[functions]]
 ordinal = 63
-name = "Int.op div"
+structure = "Int"
+name = "op div"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -826,7 +917,8 @@ rounding is towards negative infinity, not zero.
 
 [[functions]]
 ordinal = 64
-name = "Int.op mod"
+structure = "Int"
+name = "op mod"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -837,7 +929,8 @@ description = """
 
 [[functions]]
 ordinal = 69
-name = "Int.op ~"
+structure = "Int"
+name = "op ~"
 specified = "basis"
 type = "int → int"
 description = """
@@ -846,7 +939,8 @@ description = """
 
 [[functions]]
 ordinal = 79
-name = "Int.precision"
+structure = "Int"
+name = "precision"
 specified = "basis"
 type = "int"
 description = """
@@ -858,7 +952,8 @@ necessarily be a power of two.
 
 [[functions]]
 ordinal = 80
-name = "Int.quot"
+structure = "Int"
+name = "quot"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -874,7 +969,8 @@ hardware divide instructions, so `quot` may be faster than `div`.
 
 [[functions]]
 ordinal = 81
-name = "Int.rem"
+structure = "Int"
+name = "rem"
 specified = "basis"
 type = "int * int → int"
 description = """
@@ -886,7 +982,8 @@ most hardware divide instructions, so `rem` may be faster than `mod`.
 
 [[functions]]
 ordinal = 82
-name = "Int.sameSign"
+structure = "Int"
+name = "sameSign"
 specified = "basis"
 type = "int * int → bool"
 description = """
@@ -896,7 +993,8 @@ is equivalent to `(sign i = sign j)`.
 
 [[functions]]
 ordinal = 240
-name = "Int.scan"
+structure = "Int"
+name = "scan"
 specified = "basis"
 type = "scan radix getc strm"
 implemented = false
@@ -905,13 +1003,14 @@ Returns `SOME (i,rest)` if an integer in the format denoted by `radix`
 can be parsed from a prefix of the character stream `strm` after
 skipping initial whitespace, where `i` is the value of the integer
 parsed and `rest` is the rest of the character stream. `NONE` is
-returned otherwise. This fnDef raises `Overflow` when an integer
+returned otherwise. This function raises `Overflow` when an integer
 can be parsed, but is too large to be represented by type `int`.
 """
 
 [[functions]]
 ordinal = 83
-name = "Int.sign"
+structure = "Int"
+name = "sign"
 specified = "basis"
 type = "int → int"
 description = """
@@ -921,7 +1020,8 @@ greater than 0, respectively.
 
 [[functions]]
 ordinal = 84
-name = "Int.toInt"
+structure = "Int"
+name = "toInt"
 specified = "basis"
 type = "int → int"
 description = """
@@ -931,7 +1031,8 @@ description = """
 
 [[functions]]
 ordinal = 85
-name = "Int.toString"
+structure = "Int"
+name = "toString"
 specified = "basis"
 type = "int → string"
 description = """
@@ -939,9 +1040,12 @@ description = """
 StringCvt.DEC r)`.
 """
 
+# === Interact structure =============================================
+
 [[functions]]
 ordinal = 58
-name = "Interact.use"
+structure = "Interact"
+name = "use"
 specified = "morel"
 type = "string → unit"
 description = """
@@ -950,7 +1054,8 @@ description = """
 
 [[functions]]
 ordinal = 59
-name = "Interact.useSilently"
+structure = "Interact"
+name = "useSilently"
 specified = "morel"
 type = "string → unit"
 description = """
@@ -958,9 +1063,12 @@ description = """
 printing to stdout.
 """
 
+# === List structure =================================================
+
 [[functions]]
 ordinal = 113
-name = "List.all"
+structure = "List"
+name = "all"
 specified = "basis"
 type = "(α → bool) → α list → bool"
 description = """
@@ -972,7 +1080,8 @@ such an `x` exists and `true` otherwise. It is equivalent to
 
 [[functions]]
 ordinal = 103
-name = "List.app"
+structure = "List"
+name = "app"
 specified = "basis"
 type = "(α → unit) → α list → unit"
 description = """
@@ -981,7 +1090,8 @@ description = """
 
 [[functions]]
 ordinal = 90
-name = "List.at"
+structure = "List"
+name = "at"
 specified = "basis"
 type = "α list * α list → α list"
 description = """
@@ -990,7 +1100,8 @@ description = """
 
 [[functions]]
 ordinal = 115
-name = "List.collate"
+structure = "List"
+name = "collate"
 specified = "basis"
 type = "(α * α → order) → α list * α list → order"
 description = """
@@ -1000,7 +1111,8 @@ lists using the given ordering `f` on the list elements.
 
 [[functions]]
 ordinal = 99
-name = "List.concat"
+structure = "List"
+name = "concat"
 specified = "basis"
 type = "α list list → α list"
 description = """
@@ -1010,7 +1122,8 @@ in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
 
 [[functions]]
 ordinal = 97
-name = "List.drop"
+structure = "List"
+name = "drop"
 specified = "basis"
 type = "α list * int → α list"
 description = """
@@ -1018,13 +1131,14 @@ description = """
 elements of the list `l`. Raises `Subscript` if `i` < 0 or `i` >
 `length l`.
 
-<br><br>It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le;
+<p>It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le;
 `i` &le; `length l`. We also have `drop(l, length l)` = `[]`.
 """
 
 [[functions]]
 ordinal = 100
-name = "List.except"
+structure = "List"
+name = "except"
 specified = "morel"
 type = "α list list → α list"
 description = """
@@ -1034,7 +1148,8 @@ in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
 
 [[functions]]
 ordinal = 112
-name = "List.exists"
+structure = "List"
+name = "exists"
 specified = "basis"
 type = "(α → bool) → α list → bool"
 description = """
@@ -1045,7 +1160,8 @@ such an `x` exists and `false` otherwise.
 
 [[functions]]
 ordinal = 108
-name = "List.filter"
+structure = "List"
+name = "filter"
 specified = "basis"
 type = "(α → bool) → α list → α list"
 description = """
@@ -1056,7 +1172,8 @@ right, and returns the list of those `x` for which `f x` evaluated to
 
 [[functions]]
 ordinal = 107
-name = "List.find"
+structure = "List"
+name = "find"
 specified = "basis"
 type = "(α → bool) → α list → α option"
 description = """
@@ -1067,7 +1184,8 @@ such an `x` exists; otherwise it returns `NONE`.
 
 [[functions]]
 ordinal = 110
-name = "List.foldl"
+structure = "List"
+name = "foldl"
 specified = "basis"
 type = "(α * β → β) → β → α list → β"
 description = """
@@ -1077,7 +1195,8 @@ init))...)` or `init` if the list is empty.
 
 [[functions]]
 ordinal = 111
-name = "List.foldr"
+structure = "List"
+name = "foldr"
 specified = "basis"
 type = "(α * β → β) → β → α list → β"
 description = """
@@ -1087,12 +1206,13 @@ init)...))` or `init` if the list is empty.
 
 [[functions]]
 ordinal = 94
-name = "List.getItem"
+structure = "List"
+name = "getItem"
 specified = "basis"
 type = "α list → * (α * α list) option"
 description = """
 "getItem l" returns `NONE` if the `list` is empty, and `SOME (hd l, tl
-l)` otherwise. This fnDef is particularly useful for creating value
+l)` otherwise. This function is particularly useful for creating value
 readers from lists of characters. For example, `Int.scan StringCvt.DEC
 getItem` has the type `(int, char list) StringCvt.reader` and can be
 used to scan decimal integers from lists of characters.
@@ -1100,7 +1220,8 @@ used to scan decimal integers from lists of characters.
 
 [[functions]]
 ordinal = 91
-name = "List.hd"
+structure = "List"
+name = "hd"
 specified = "basis"
 type = "α list → α"
 description = """
@@ -1110,7 +1231,8 @@ description = """
 
 [[functions]]
 ordinal = 101
-name = "List.intersect"
+structure = "List"
+name = "intersect"
 specified = "morel"
 type = "α list list → α list"
 description = """
@@ -1121,7 +1243,8 @@ ln`
 
 [[functions]]
 ordinal = 93
-name = "List.last"
+structure = "List"
+name = "last"
 specified = "basis"
 type = "α list → α"
 description = """
@@ -1131,7 +1254,8 @@ description = """
 
 [[functions]]
 ordinal = 88
-name = "List.length"
+structure = "List"
+name = "length"
 specified = "basis"
 type = "α list → int"
 description = """
@@ -1140,7 +1264,8 @@ description = """
 
 [[functions]]
 ordinal = 104
-name = "List.map"
+structure = "List"
+name = "map"
 specified = "basis"
 type = "(α → β) → α list → β list"
 description = """
@@ -1150,31 +1275,35 @@ returning the list of results.
 
 [[functions]]
 ordinal = 106
-name = "List.mapPartial"
+structure = "List"
+name = "mapPartial"
 specified = "basis"
 type = "(α → β option) → α list → β list"
 description = """
 "mapPartial f l" applies `f` to each element of `l` from left to
 right, returning a list of results, with `SOME` stripped, where `f`
 was defined. `f` is not defined for an element of `l` if `f` applied
-to the element returns `NONE`. The above expression is equivalent to
-`((map valOf) o (filter isSome) o (map f)) l`.
+to the element returns `NONE`. The above expression is equivalent to:
+
+<pre>((map valOf) o (filter isSome) o (map f)) b`</pre>
 """
 
 [[functions]]
 ordinal = 105
-name = "List.mapi"
+structure = "List"
+name = "mapi"
 specified = "basis"
-type = "(int * α → β) → α vector → β vector"
+type = "(int * α → β) → α list → β list"
 description = """
-"mapi f l" applies the fnDef `f` to the elements of the argument
+"mapi f l" applies the function `f` to the elements of the argument
 list `l`, supplying the list index and element as arguments to each
 call.
 """
 
 [[functions]]
 ordinal = 86
-name = "List.nil"
+structure = "List"
+name = "nil"
 specified = "basis"
 type = "α list"
 description = """
@@ -1183,7 +1312,8 @@ description = """
 
 [[functions]]
 ordinal = 95
-name = "List.nth"
+structure = "List"
+name = "nth"
 specified = "basis"
 type = "α list * int → α"
 description = """
@@ -1194,7 +1324,8 @@ from 0. Raises `Subscript` if `i` < 0 or `i` &ge; `length l`. We have
 
 [[functions]]
 ordinal = 87
-name = "List.null"
+structure = "List"
+name = "null"
 specified = "basis"
 type = "α list → bool"
 description = """
@@ -1203,7 +1334,8 @@ description = """
 
 [[functions]]
 ordinal = 89
-name = "List.op @"
+structure = "List"
+name = "op @"
 specified = "basis"
 type = "α list * α list → α list"
 description = """
@@ -1212,7 +1344,8 @@ description = """
 
 [[functions]]
 ordinal = 109
-name = "List.partition"
+structure = "List"
+name = "partition"
 specified = "basis"
 type = "(α → bool) → α list → α list * α list"
 description = """
@@ -1225,7 +1358,8 @@ and `neg` retain the same relative order they possessed in `l`.
 
 [[functions]]
 ordinal = 98
-name = "List.rev"
+structure = "List"
+name = "rev"
 specified = "basis"
 type = "α list → α list"
 description = """
@@ -1234,7 +1368,8 @@ description = """
 
 [[functions]]
 ordinal = 102
-name = "List.revAppend"
+structure = "List"
+name = "revAppend"
 specified = "basis"
 type = "α list * α list → α list"
 description = """
@@ -1243,7 +1378,8 @@ description = """
 
 [[functions]]
 ordinal = 114
-name = "List.tabulate"
+structure = "List"
+name = "tabulate"
 specified = "basis"
 type = "int * (int → α) → α list"
 description = """
@@ -1253,7 +1389,8 @@ description = """
 
 [[functions]]
 ordinal = 96
-name = "List.take"
+structure = "List"
+name = "take"
 specified = "basis"
 type = "α list * int → α list"
 description = """
@@ -1264,7 +1401,8 @@ l)` = `l`.
 
 [[functions]]
 ordinal = 92
-name = "List.tl"
+structure = "List"
+name = "tl"
 specified = "basis"
 type = "α list → α list"
 description = """
@@ -1272,9 +1410,12 @@ description = """
 is `nil`.
 """
 
+# === Math structure =================================================
+
 [[functions]]
 ordinal = 116
-name = "Math.acos"
+structure = "Math"
+name = "acos"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1285,7 +1426,8 @@ pi\\]. If the magnitude of `x` exceeds 1.0, returns NaN.
 
 [[functions]]
 ordinal = 117
-name = "Math.asin"
+structure = "Math"
+name = "asin"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1296,7 +1438,8 @@ pi / 2\\]. If the magnitude of `x` exceeds 1.0, returns NaN.
 
 [[functions]]
 ordinal = 118
-name = "Math.atan"
+structure = "Math"
+name = "atan"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1308,7 +1451,8 @@ open interval (-pi / 2, pi / 2). If `x` is +infinity, it returns pi /
 
 [[functions]]
 ordinal = 119
-name = "Math.atan2"
+structure = "Math"
+name = "atan2"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1322,7 +1466,8 @@ result is `(real (sign y)) * pi / 2.0`.
 
 [[functions]]
 ordinal = 120
-name = "Math.cos"
+structure = "Math"
+name = "cos"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1332,7 +1477,8 @@ infinity, returns NaN.
 
 [[functions]]
 ordinal = 121
-name = "Math.cosh"
+structure = "Math"
+name = "cosh"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1343,7 +1489,8 @@ e(-x)) / 2`. Among its properties, cosh +-0 = 1, cosh +-infinity =
 
 [[functions]]
 ordinal = 122
-name = "Math.e"
+structure = "Math"
+name = "e"
 specified = "basis"
 type = "real"
 description = """
@@ -1352,7 +1499,8 @@ description = """
 
 [[functions]]
 ordinal = 123
-name = "Math.exp"
+structure = "Math"
+name = "exp"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1363,7 +1511,8 @@ returns 0.
 
 [[functions]]
 ordinal = 124
-name = "Math.ln"
+structure = "Math"
+name = "ln"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1374,7 +1523,8 @@ returns infinity.
 
 [[functions]]
 ordinal = 125
-name = "Math.log10"
+structure = "Math"
+name = "log10"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1385,7 +1535,8 @@ returns infinity.
 
 [[functions]]
 ordinal = 126
-name = "Math.pi"
+structure = "Math"
+name = "pi"
 specified = "basis"
 type = "real"
 description = """
@@ -1394,7 +1545,8 @@ description = """
 
 [[functions]]
 ordinal = 127
-name = "Math.pow"
+structure = "Math"
+name = "pow"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1405,7 +1557,8 @@ when `x` < 0 and `y` is integral.
 
 [[functions]]
 ordinal = 128
-name = "Math.sin"
+structure = "Math"
+name = "sin"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1415,7 +1568,8 @@ infinity, returns NaN.
 
 [[functions]]
 ordinal = 129
-name = "Math.sinh"
+structure = "Math"
+name = "sinh"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1426,7 +1580,8 @@ description = """
 
 [[functions]]
 ordinal = 130
-name = "Math.sqrt"
+structure = "Math"
+name = "sqrt"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1436,18 +1591,20 @@ description = """
 
 [[functions]]
 ordinal = 131
-name = "Math.tan"
+structure = "Math"
+name = "tan"
 specified = "basis"
 type = "real → real"
 description = """
 "tan x" returns the tangent of `x`, measured in radians. If `x` is an
 infinity, returns NaN. Produces infinities at various finite values,
-roughly corresponding to the singularities of the tangent fnDef.
+roughly corresponding to the singularities of the tangent function.
 """
 
 [[functions]]
 ordinal = 132
-name = "Math.tanh"
+structure = "Math"
+name = "tanh"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1456,19 +1613,23 @@ description = """
 +-1.
 """
 
+# === Option structure ===============================================
+
 [[functions]]
 ordinal = 133
-name = "Option.app"
+structure = "Option"
+name = "app"
 specified = "basis"
 type = "(α → unit) → α option → unit"
 description = """
-"app f opt" applies the fnDef `f` to the value `v` if `opt` is
-`SOME v`, and otherwise does nothing
+"app f opt" applies the function `f` to the value `v` if `opt` is
+`SOME v`, and otherwise does nothing.
 """
 
 [[functions]]
 ordinal = 134
-name = "Option.compose"
+structure = "Option"
+name = "compose"
 specified = "basis"
 type = "(α → β) * (γ → α option) → γ → β option"
 description = """
@@ -1478,7 +1639,8 @@ description = """
 
 [[functions]]
 ordinal = 135
-name = "Option.composePartial"
+structure = "Option"
+name = "composePartial"
 specified = "basis"
 type = "(α → β option) * (γ → α option) → γ → β option"
 description = """
@@ -1488,7 +1650,8 @@ otherwise, if `g(a)` is `SOME v`, returns `f(v)`.
 
 [[functions]]
 ordinal = 140
-name = "Option.filter"
+structure = "Option"
+name = "filter"
 specified = "basis"
 type = "(α → bool) → α → α option"
 description = """
@@ -1497,7 +1660,8 @@ description = """
 
 [[functions]]
 ordinal = 138
-name = "Option.getOpt"
+structure = "Option"
+name = "getOpt"
 specified = "basis"
 type = "α option * α → α"
 description = """
@@ -1507,7 +1671,8 @@ returns `a`.
 
 [[functions]]
 ordinal = 139
-name = "Option.isSome"
+structure = "Option"
+name = "isSome"
 specified = "basis"
 type = "α option → bool"
 description = """
@@ -1517,7 +1682,8 @@ description = """
 
 [[functions]]
 ordinal = 141
-name = "Option.join"
+structure = "Option"
+name = "join"
 specified = "basis"
 type = "α option option → α option"
 description = """
@@ -1526,7 +1692,8 @@ description = """
 
 [[functions]]
 ordinal = 136
-name = "Option.map"
+structure = "Option"
+name = "map"
 specified = "basis"
 type = "α → β) → α option → β option"
 description = """
@@ -1535,7 +1702,8 @@ description = """
 
 [[functions]]
 ordinal = 137
-name = "Option.mapPartial"
+structure = "Option"
+name = "mapPartial"
 specified = "basis"
 type = "α → β option) → α option → β option"
 description = """
@@ -1544,7 +1712,8 @@ description = """
 
 [[functions]]
 ordinal = 142
-name = "Option.valOf"
+structure = "Option"
+name = "valOf"
 specified = "basis"
 type = "α option → α"
 description = """
@@ -1552,9 +1721,12 @@ description = """
 `Option`.
 """
 
+# === Real structure =================================================
+
 [[functions]]
 ordinal = 152
-name = "Real.abs"
+structure = "Real"
+name = "abs"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1563,7 +1735,8 @@ description = """
 
 [[functions]]
 ordinal = 153
-name = "Real.ceil"
+structure = "Real"
+name = "ceil"
 specified = "basis"
 type = "real → int"
 description = """
@@ -1572,7 +1745,8 @@ description = """
 
 [[functions]]
 ordinal = 154
-name = "Real.checkFloat"
+structure = "Real"
+name = "checkFloat"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1582,7 +1756,8 @@ if x is NaN. Otherwise, it returns its argument.
 
 [[functions]]
 ordinal = 246
-name = "Real.class"
+structure = "Real"
+name = "class"
 specified = "basis"
 type = "real → IEEEReal.float_class"
 implemented = false
@@ -1592,7 +1767,8 @@ description = """
 
 [[functions]]
 ordinal = 155
-name = "Real.compare"
+structure = "Real"
+name = "compare"
 specified = "basis"
 type = "real * real → order"
 description = """
@@ -1603,7 +1779,8 @@ second. It raises `IEEEReal.Unordered` on unordered arguments.
 
 [[functions]]
 ordinal = 247
-name = "Real.compareReal"
+structure = "Real"
+name = "compareReal"
 specified = "basis"
 type = "real * real → IEEEReal.real_order"
 implemented = false
@@ -1615,7 +1792,8 @@ it returns `IEEEReal.UNORDERED` on unordered arguments.
 
 [[functions]]
 ordinal = 156
-name = "Real.copySign"
+structure = "Real"
+name = "copySign"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1625,7 +1803,8 @@ NaN.
 
 [[functions]]
 ordinal = 157
-name = "Real.floor"
+structure = "Real"
+name = "floor"
 specified = "basis"
 type = "real → int"
 description = """
@@ -1634,7 +1813,8 @@ description = """
 
 [[functions]]
 ordinal = 248
-name = "Real.fmt"
+structure = "Real"
+name = "fmt"
 specified = "basis"
 type = "StringCvt.realfmt → real → string"
 implemented = false
@@ -1646,7 +1826,8 @@ precision
 
 [[functions]]
 ordinal = 249
-name = "Real.fromDecimal"
+structure = "Real"
+name = "fromDecimal"
 specified = "basis"
 type = "IEEEReal.decimal_approx → real"
 implemented = false
@@ -1656,7 +1837,8 @@ description = """
 
 [[functions]]
 ordinal = 158
-name = "Real.fromInt, real"
+structure = "Real"
+name = "fromInt, real"
 specified = "basis"
 type = "int → real"
 description = """
@@ -1668,7 +1850,8 @@ value, uses current rounding mode to determine the resulting value.
 
 [[functions]]
 ordinal = 250
-name = "Real.fromLarge"
+structure = "Real"
+name = "fromLarge"
 specified = "basis"
 type = "IEEEReal.rounding_mode → real → real"
 implemented = false
@@ -1680,7 +1863,8 @@ as a real, converts it to a zero or an infinity.
 
 [[functions]]
 ordinal = 251
-name = "Real.fromLargeInt"
+structure = "Real"
+name = "fromLargeInt"
 specified = "basis"
 type = "IntInf.int → real"
 implemented = false
@@ -1690,7 +1874,8 @@ See "fromInt"
 
 [[functions]]
 ordinal = 159
-name = "Real.fromManExp"
+structure = "Real"
+name = "fromManExp"
 specified = "basis"
 type = "{exp:int, man:real} → real"
 description = """
@@ -1700,19 +1885,21 @@ mantissa and exponent of r, respectively.
 
 [[functions]]
 ordinal = 160
-name = "Real.fromString"
+structure = "Real"
+name = "fromString"
 specified = "basis"
 type = "string → real option"
 description = """
 "fromString s" scans a `real` value from a string. Returns `SOME (r)`
 if a `real` value can be scanned from a prefix of `s`, ignoring any
-initial whitespace; otherwise, it returns `NONE`. This fnDef is
+initial whitespace; otherwise, it returns `NONE`. This function is
 equivalent to `StringCvt.scanString scan`.
 """
 
 [[functions]]
 ordinal = 161
-name = "Real.isFinite"
+structure = "Real"
+name = "isFinite"
 specified = "basis"
 type = "real → bool"
 description = """
@@ -1721,7 +1908,8 @@ description = """
 
 [[functions]]
 ordinal = 162
-name = "Real.isNan"
+structure = "Real"
+name = "isNan"
 specified = "basis"
 type = "real → bool"
 description = """
@@ -1730,7 +1918,8 @@ description = """
 
 [[functions]]
 ordinal = 163
-name = "Real.isNormal"
+structure = "Real"
+name = "isNormal"
 specified = "basis"
 type = "real → bool"
 description = """
@@ -1740,7 +1929,8 @@ subnormal, infinite nor NaN.
 
 [[functions]]
 ordinal = 164
-name = "Real.max"
+structure = "Real"
+name = "max"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1751,7 +1941,8 @@ NaN, returns NaN.
 
 [[functions]]
 ordinal = 165
-name = "Real.maxFinite"
+structure = "Real"
+name = "maxFinite"
 specified = "basis"
 type = "real"
 description = """
@@ -1760,7 +1951,8 @@ description = """
 
 [[functions]]
 ordinal = 166
-name = "Real.min"
+structure = "Real"
+name = "min"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1771,7 +1963,8 @@ NaN, returns NaN.
 
 [[functions]]
 ordinal = 167
-name = "Real.minNormalPos"
+structure = "Real"
+name = "minNormalPos"
 specified = "basis"
 type = "real"
 description = """
@@ -1780,7 +1973,8 @@ description = """
 
 [[functions]]
 ordinal = 168
-name = "Real.minPos"
+structure = "Real"
+name = "minPos"
 specified = "basis"
 type = "real"
 description = """
@@ -1789,7 +1983,8 @@ description = """
 
 [[functions]]
 ordinal = 169
-name = "Real.negInf"
+structure = "Real"
+name = "negInf"
 specified = "basis"
 type = "real"
 description = """
@@ -1798,7 +1993,8 @@ description = """
 
 [[functions]]
 ordinal = 252
-name = "Real.nextAfter"
+structure = "Real"
+name = "nextAfter"
 specified = "basis"
 type = "real * real → real"
 implemented = false
@@ -1810,7 +2006,8 @@ returns the largest representable floating-point number less than `r`.
 
 [[functions]]
 ordinal = 241
-name = "Real.op !="
+structure = "Real"
+name = "op !="
 specified = "basis"
 type = "real * real → bool"
 implemented = false
@@ -1820,7 +2017,8 @@ description = """
 
 [[functions]]
 ordinal = 143
-name = "Real.op *"
+structure = "Real"
+name = "op *"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1832,7 +2030,8 @@ infinity, infinity * (-infinity) = -infinity.
 
 [[functions]]
 ordinal = 242
-name = "Real.op *+"
+structure = "Real"
+name = "op *+"
 specified = "basis"
 type = "real * real * real → real"
 implemented = false
@@ -1843,7 +2042,8 @@ from the behaviors derived from addition and multiplication.
 
 [[functions]]
 ordinal = 243
-name = "Real.op *-"
+structure = "Real"
+name = "op *-"
 specified = "basis"
 type = "real * real * real → real"
 implemented = false
@@ -1854,7 +2054,8 @@ from the behaviors derived from subtraction and multiplication.
 
 [[functions]]
 ordinal = 144
-name = "Real.op +"
+structure = "Real"
+name = "op +"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1867,7 +2068,8 @@ combination of two infinities produces NaN.
 
 [[functions]]
 ordinal = 145
-name = "Real.op -"
+structure = "Real"
+name = "op -"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1880,7 +2082,8 @@ other combination of two infinities produces NaN.
 
 [[functions]]
 ordinal = 146
-name = "Real.op /"
+structure = "Real"
+name = "op /"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -1893,7 +2096,8 @@ an infinity is 0 with the correct sign.
 
 [[functions]]
 ordinal = 147
-name = "Real.op <"
+structure = "Real"
+name = "op <"
 specified = "basis"
 type = "real * real → bool"
 description = """
@@ -1905,7 +2109,8 @@ same as `not (a >= b)`.
 
 [[functions]]
 ordinal = 148
-name = "Real.op <="
+structure = "Real"
+name = "op <="
 specified = "basis"
 type = "real * real → bool"
 description = """
@@ -1914,7 +2119,8 @@ As "<"
 
 [[functions]]
 ordinal = 244
-name = "Real.op =="
+structure = "Real"
+name = "op =="
 specified = "basis"
 type = "real * real → bool"
 implemented = false
@@ -1926,7 +2132,8 @@ x are equal, ignoring signs on zeros. This is equivalent to the IEEE
 
 [[functions]]
 ordinal = 149
-name = "Real.op >"
+structure = "Real"
+name = "op >"
 specified = "basis"
 type = "real * real → bool"
 description = """
@@ -1935,7 +2142,8 @@ As "<"
 
 [[functions]]
 ordinal = 150
-name = "Real.op >="
+structure = "Real"
+name = "op >="
 specified = "basis"
 type = "real * real → bool"
 description = """
@@ -1944,7 +2152,8 @@ As "<"
 
 [[functions]]
 ordinal = 245
-name = "Real.op ?="
+structure = "Real"
+name = "op ?="
 specified = "basis"
 type = "real * real → bool"
 implemented = false
@@ -1956,7 +2165,8 @@ IEEE `?=` operator.
 
 [[functions]]
 ordinal = 151
-name = "Real.op ~"
+structure = "Real"
+name = "op ~"
 specified = "basis"
 type = "real → real"
 description = """
@@ -1965,7 +2175,8 @@ description = """
 
 [[functions]]
 ordinal = 170
-name = "Real.posInf"
+structure = "Real"
+name = "posInf"
 specified = "basis"
 type = "real"
 description = """
@@ -1974,7 +2185,8 @@ description = """
 
 [[functions]]
 ordinal = 171
-name = "Real.precision"
+structure = "Real"
+name = "precision"
 specified = "basis"
 type = "int"
 description = """
@@ -1986,7 +2198,8 @@ Real64.precision is 53).
 
 [[functions]]
 ordinal = 172
-name = "Real.radix"
+structure = "Real"
+name = "radix"
 specified = "basis"
 type = "int"
 description = """
@@ -1996,7 +2209,8 @@ floating point.
 
 [[functions]]
 ordinal = 173
-name = "Real.realCeil"
+structure = "Real"
+name = "realCeil"
 specified = "basis"
 type = "real → real"
 description = """
@@ -2006,7 +2220,8 @@ description = """
 
 [[functions]]
 ordinal = 174
-name = "Real.realFloor"
+structure = "Real"
+name = "realFloor"
 specified = "basis"
 type = "real → real"
 description = """
@@ -2016,7 +2231,8 @@ description = """
 
 [[functions]]
 ordinal = 175
-name = "Real.realMod"
+structure = "Real"
+name = "realMod"
 specified = "basis"
 type = "real → real"
 description = """
@@ -2026,7 +2242,8 @@ equivalent to `#frac o split`.
 
 [[functions]]
 ordinal = 176
-name = "Real.realRound"
+structure = "Real"
+name = "realRound"
 specified = "basis"
 type = "real → real"
 description = """
@@ -2036,7 +2253,8 @@ to `r`. In the case of a tie, it rounds to the nearest even integer.
 
 [[functions]]
 ordinal = 177
-name = "Real.realTrunc"
+structure = "Real"
+name = "realTrunc"
 specified = "basis"
 type = "real → real"
 description = """
@@ -2045,7 +2263,8 @@ description = """
 
 [[functions]]
 ordinal = 178
-name = "Real.rem"
+structure = "Real"
+name = "rem"
 specified = "basis"
 type = "real * real → real"
 description = """
@@ -2057,7 +2276,8 @@ than the absolute value of `y`. If `x` is an infinity or `y` is 0,
 
 [[functions]]
 ordinal = 179
-name = "Real.round"
+structure = "Real"
+name = "round"
 specified = "basis"
 type = "real → int"
 description = """
@@ -2067,7 +2287,8 @@ rounds to the nearest even integer.
 
 [[functions]]
 ordinal = 180
-name = "Real.sameSign"
+structure = "Real"
+name = "sameSign"
 specified = "basis"
 type = "real * real → bool"
 description = """
@@ -2077,7 +2298,8 @@ description = """
 
 [[functions]]
 ordinal = 253
-name = "Real.scan"
+structure = "Real"
+name = "scan"
 specified = "basis"
 type = "(char,'a) StringCvt.reader → (real,'a) StringCvt.reader"
 implemented = false
@@ -2092,7 +2314,8 @@ values of too small a magnitude are represented as zeros.
 
 [[functions]]
 ordinal = 181
-name = "Real.sign"
+structure = "Real"
+name = "sign"
 specified = "basis"
 type = "real → int"
 description = """
@@ -2103,7 +2326,8 @@ its sign. It raises `Domain` on NaN.
 
 [[functions]]
 ordinal = 182
-name = "Real.signBit"
+structure = "Real"
+name = "signBit"
 specified = "basis"
 type = "real → bool"
 description = """
@@ -2113,7 +2337,8 @@ zeros, and NaN, included) is negative.
 
 [[functions]]
 ordinal = 183
-name = "Real.split"
+structure = "Real"
+name = "split"
 specified = "basis"
 type = "real → {frac:real, whole:real}"
 description = """
@@ -2124,7 +2349,8 @@ fractional and integral parts of `r`, respectively. Specifically,
 
 [[functions]]
 ordinal = 254
-name = "Real.toDecimal"
+structure = "Real"
+name = "toDecimal"
 specified = "basis"
 type = "real → IEEEReal.decimal_approx"
 implemented = false
@@ -2134,7 +2360,8 @@ description = """
 
 [[functions]]
 ordinal = 255
-name = "Real.toInt"
+structure = "Real"
+name = "toInt"
 specified = "basis"
 type = "real → IEEEReal.rounding_mode → int"
 implemented = false
@@ -2147,7 +2374,8 @@ representable, in particular, if `x` is an infinity. It raises
 
 [[functions]]
 ordinal = 256
-name = "Real.toLarge"
+structure = "Real"
+name = "toLarge"
 specified = "basis"
 type = "real → real"
 implemented = false
@@ -2157,7 +2385,8 @@ description = """
 
 [[functions]]
 ordinal = 257
-name = "Real.toLargeInt"
+structure = "Real"
+name = "toLargeInt"
 specified = "basis"
 type = "real → IEEEReal.rounding_mode → IntInf.int"
 implemented = false
@@ -2167,7 +2396,8 @@ See "toInt"
 
 [[functions]]
 ordinal = 185
-name = "Real.toManExp"
+structure = "Real"
+name = "toManExp"
 specified = "basis"
 type = "real → {man:real, exp:int}"
 description = """
@@ -2177,7 +2407,8 @@ mantissa and exponent of r, respectively.
 
 [[functions]]
 ordinal = 186
-name = "Real.toString"
+structure = "Real"
+name = "toString"
 specified = "basis"
 type = "real → string"
 description = """
@@ -2187,7 +2418,8 @@ description = """
 
 [[functions]]
 ordinal = 184
-name = "Real.trunc"
+structure = "Real"
+name = "trunc"
 specified = "basis"
 type = "real → int"
 description = """
@@ -2196,7 +2428,8 @@ description = """
 
 [[functions]]
 ordinal = 187
-name = "Real.unordered"
+structure = "Real"
+name = "unordered"
 specified = "basis"
 type = "real * real → bool"
 description = """
@@ -2204,9 +2437,12 @@ description = """
 least one of x and y is NaN.
 """
 
+# === Relational structure ===========================================
+
 [[functions]]
 ordinal = 188
-name = "Relational.count, count"
+structure = "Relational"
+name = "count, count"
 specified = "morel"
 type = "int list → int"
 description = """
@@ -2217,7 +2453,8 @@ count`.
 
 [[functions]]
 ordinal = 189
-name = "Relational.empty, empty"
+structure = "Relational"
+name = "empty, empty"
 specified = "morel"
 type = "α list → bool"
 description = """
@@ -2227,7 +2464,8 @@ depts where empty (from e where e.deptno = d.deptno)`.
 
 [[functions]]
 ordinal = 190
-name = "Relational.max, max"
+structure = "Relational"
+name = "max, max"
 specified = "morel"
 type = "α list → α"
 description = """
@@ -2238,7 +2476,8 @@ max of e.id`.
 
 [[functions]]
 ordinal = 191
-name = "Relational.min, min"
+structure = "Relational"
+name = "min, min"
 specified = "morel"
 type = "α list → α"
 description = """
@@ -2249,7 +2488,8 @@ min of e.id`.
 
 [[functions]]
 ordinal = 192
-name = "Relational.nonEmpty, nonEmpty"
+structure = "Relational"
+name = "nonEmpty, nonEmpty"
 specified = "morel"
 type = "α list → bool"
 description = """
@@ -2260,7 +2500,8 @@ d.deptno)`.
 
 [[functions]]
 ordinal = 193
-name = "Relational.only, only"
+structure = "Relational"
+name = "only, only"
 specified = "morel"
 type = "α list → α"
 description = """
@@ -2270,7 +2511,8 @@ emps yield only (from d where d.deptno = e.deptno)`.
 
 [[functions]]
 ordinal = 194
-name = "Relational.op elem"
+structure = "Relational"
+name = "op elem"
 specified = "morel"
 type = "α * α bag → bool, α * α list → bool"
 description = """
@@ -2279,7 +2521,8 @@ description = """
 
 [[functions]]
 ordinal = 195
-name = "Relational.op notelem"
+structure = "Relational"
+name = "op notelem"
 specified = "morel"
 type = "α * α bag → bool, α * α list → bool"
 description = """
@@ -2289,7 +2532,8 @@ description = """
 
 [[functions]]
 ordinal = 196
-name = "Relational.sum, sum"
+structure = "Relational"
+name = "sum, sum"
 specified = "morel"
 type = "int list → int"
 description = """
@@ -2298,9 +2542,12 @@ description = """
 sum of e.id`.
 """
 
+# === String structure ===============================================
+
 [[functions]]
 ordinal = 197
-name = "String.concat"
+structure = "String"
+name = "concat"
 specified = "basis"
 type = "string list → string"
 description = """
@@ -2310,7 +2557,8 @@ description = """
 
 [[functions]]
 ordinal = 198
-name = "String.concatWith"
+structure = "String"
+name = "concatWith"
 specified = "basis"
 type = "string → string list → string"
 description = """
@@ -2321,7 +2569,8 @@ size of the resulting string would be greater than `maxSize`.
 
 [[functions]]
 ordinal = 199
-name = "String.explode"
+structure = "String"
+name = "explode"
 specified = "basis"
 type = "string → char list"
 description = """
@@ -2330,7 +2579,8 @@ description = """
 
 [[functions]]
 ordinal = 200
-name = "String.extract"
+structure = "String"
+name = "extract"
 specified = "basis"
 type = "string * int * int option → string"
 description = """
@@ -2339,7 +2589,7 @@ of `s`. The first returns the substring of `s` from the `i`(th)
 character to the end of the string, i.e., the string
 `s`[`i`..|`s`|-1]. This raises `Subscript` if `i` < 0 or |`s`| < `i`.
 
-<br><br>The second form returns the substring of size `j` starting at
+<p>The second form returns the substring of size `j` starting at
 index `i`, i.e., the string `s`[`i`..`i`+`j`-1]. Raises `Subscript` if
 `i` < 0 or `j` < 0 or |`s`| < `i` + `j`. Note that, if defined,
 `extract` returns the empty string when `i` = |`s`|.
@@ -2347,7 +2597,8 @@ index `i`, i.e., the string `s`[`i`..`i`+`j`-1]. Raises `Subscript` if
 
 [[functions]]
 ordinal = 201
-name = "String.implode"
+structure = "String"
+name = "implode"
 specified = "basis"
 type = "char list → string"
 description = """
@@ -2358,7 +2609,8 @@ description = """
 
 [[functions]]
 ordinal = 202
-name = "String.isPrefix"
+structure = "String"
+name = "isPrefix"
 specified = "basis"
 type = "string → string → bool"
 description = """
@@ -2369,7 +2621,8 @@ that a string is a prefix of itself.
 
 [[functions]]
 ordinal = 203
-name = "String.isSubstring"
+structure = "String"
+name = "isSubstring"
 specified = "basis"
 type = "string → string → bool"
 description = """
@@ -2380,7 +2633,8 @@ string, and that a string is a substring of itself.
 
 [[functions]]
 ordinal = 204
-name = "String.isSuffix"
+structure = "String"
+name = "isSuffix"
 specified = "basis"
 type = "string → string → bool"
 description = """
@@ -2391,7 +2645,8 @@ that a string is a suffix of itself.
 
 [[functions]]
 ordinal = 205
-name = "String.map"
+structure = "String"
+name = "map"
 specified = "basis"
 type = "(char → char) → string → string"
 description = """
@@ -2402,7 +2657,8 @@ f (explode s))`.
 
 [[functions]]
 ordinal = 206
-name = "String.maxSize"
+structure = "String"
+name = "maxSize"
 specified = "basis"
 type = "int"
 description = """
@@ -2411,7 +2667,8 @@ The longest allowed size of a string.
 
 [[functions]]
 ordinal = 207
-name = "String.size"
+structure = "String"
+name = "size"
 specified = "basis"
 type = "string → int"
 description = """
@@ -2420,7 +2677,8 @@ description = """
 
 [[functions]]
 ordinal = 208
-name = "String.str"
+structure = "String"
+name = "str"
 specified = "basis"
 type = "char → string"
 description = """
@@ -2429,7 +2687,8 @@ description = """
 
 [[functions]]
 ordinal = 209
-name = "String.sub"
+structure = "String"
+name = "sub"
 specified = "basis"
 type = "string * int → char"
 description = """
@@ -2439,7 +2698,8 @@ zero. This raises `Subscript` if `i` < 0 or |`s`| &le; `i`.
 
 [[functions]]
 ordinal = 210
-name = "String.substring"
+structure = "String"
+name = "substring"
 specified = "basis"
 type = "string * int * int → string"
 description = """
@@ -2450,7 +2710,8 @@ the substring of size `j` starting at index `i`. This is equivalent to
 
 [[functions]]
 ordinal = 211
-name = "String.translate"
+structure = "String"
+name = "translate"
 specified = "basis"
 type = "(char → string) → string → string"
 description = """
@@ -2459,9 +2720,12 @@ character in `s` by `f`. It is equivalent to `concat(List.map f
 (explode s))`.
 """
 
+# === Sys structure ==================================================
+
 [[functions]]
 ordinal = 212
-name = "Sys.clearEnv"
+structure = "Sys"
+name = "clearEnv"
 specified = "morel"
 type = "unit → unit"
 description = """
@@ -2470,7 +2734,8 @@ description = """
 
 [[functions]]
 ordinal = 213
-name = "Sys.env, env"
+structure = "Sys"
+name = "env, env"
 specified = "morel"
 type = "unit → string list"
 description = """
@@ -2479,7 +2744,8 @@ description = """
 
 [[functions]]
 ordinal = 214
-name = "Sys.plan"
+structure = "Sys"
+name = "plan"
 specified = "morel"
 type = "unit → string"
 description = """
@@ -2488,7 +2754,8 @@ description = """
 
 [[functions]]
 ordinal = 215
-name = "Sys.set"
+structure = "Sys"
+name = "set"
 specified = "morel"
 type = "string * α → unit"
 description = """
@@ -2500,7 +2767,8 @@ extra = """
 
 [[functions]]
 ordinal = 216
-name = "Sys.show"
+structure = "Sys"
+name = "show"
 specified = "morel"
 type = "string → string option"
 description = """
@@ -2510,7 +2778,8 @@ string, or `NONE` if unset.
 
 [[functions]]
 ordinal = 217
-name = "Sys.showAll"
+structure = "Sys"
+name = "showAll"
 specified = "morel"
 type = "unit → string * string option list"
 description = """
@@ -2520,16 +2789,20 @@ as a string, or `NONE` if unset.
 
 [[functions]]
 ordinal = 218
-name = "Sys.unset"
+structure = "Sys"
+name = "unset"
 specified = "morel"
 type = "string → unit"
 description = """
 "unset property" clears the current the value of `property`.
 """
 
+# === Vector structure ===============================================
+
 [[functions]]
 ordinal = 219
-name = "Vector.all"
+structure = "Vector"
+name = "all"
 specified = "basis"
 type = "(α → bool) → α vector → bool"
 description = """
@@ -2541,27 +2814,36 @@ to `not(exists (not o f) vec)`.
 
 [[functions]]
 ordinal = 220
-name = "Vector.app"
+structure = "Vector"
+name = "app"
 specified = "basis"
 type = "(α → unit) → α vector → unit"
 description = """
-"app f vec" applies the fnDef `f` to the elements of a vector in
-left to right order (i.e., in order of increasing indices)
+"app f vec" applies the function `f` to the elements of a vector in
+left to right order (i.e., in order of increasing indices).
+
+<p>It is equivalent to
+<pre>List.app f (foldr (fn (a,l) => a::l) [] vec)</pre>
 """
 
 [[functions]]
 ordinal = 221
-name = "Vector.appi"
+structure = "Vector"
+name = "appi"
 specified = "basis"
 type = "(int * α → unit) → α vector → unit"
 description = """
-"appi f vec" applies the fnDef `f` to the elements of a vector in
-left to right order (i.e., in order of increasing indices)
+"appi f vec" applies the function `f` to the elements of a vector in
+left to right order (i.e., in order of increasing indices).
+
+<p>It is equivalent to
+<pre>List.app f (foldri (fn (i,a,l) => (i,a)::l) [] vec)</pre>
 """
 
 [[functions]]
 ordinal = 222
-name = "Vector.collate"
+structure = "Vector"
+name = "collate"
 specified = "basis"
 type = ""
 description = """
@@ -2571,7 +2853,8 @@ vectors using the given ordering `f` on elements.
 
 [[functions]]
 ordinal = 223
-name = "Vector.concat"
+structure = "Vector"
+name = "concat"
 specified = "basis"
 type = "α vector list → α vector"
 description = """
@@ -2582,7 +2865,8 @@ exceeds `maxLen`
 
 [[functions]]
 ordinal = 224
-name = "Vector.exists"
+structure = "Vector"
+name = "exists"
 specified = "basis"
 type = ""
 description = """
@@ -2594,7 +2878,8 @@ otherwise.
 
 [[functions]]
 ordinal = 225
-name = "Vector.find"
+structure = "Vector"
+name = "find"
 specified = "basis"
 type = "(α → bool) → α vector → α option"
 description = """
@@ -2605,7 +2890,8 @@ if such an `x` exists; otherwise it returns `NONE`.
 
 [[functions]]
 ordinal = 226
-name = "Vector.findi"
+structure = "Vector"
+name = "findi"
 specified = "basis"
 type = "(int * α → bool) → α vector → (int * α) option"
 description = """
@@ -2617,49 +2903,54 @@ returns `NONE`.
 
 [[functions]]
 ordinal = 227
-name = "Vector.foldl"
+structure = "Vector"
+name = "foldl"
 specified = "basis"
 type = "(α * β → β) → β → α vector → β"
 description = """
-"foldl f init vec" folds the fnDef `f` over all the elements of
-vector `vec`, left to right, using the initial value `init`
+"foldl f init vec" folds the function `f` over all the elements of
+vector `vec`, left to right, using the initial value `init`.
 """
 
 [[functions]]
 ordinal = 228
-name = "Vector.foldli"
+structure = "Vector"
+name = "foldli"
 specified = "basis"
 type = "(int * α * β → β) → β → α vector → β"
 description = """
-"foldli f init vec" folds the fnDef `f` over all the (index,
+"foldli f init vec" folds the function `f` over all the (index,
 element) pairs of vector `vec`, left to right, using the initial value
-`init`
+`init`.
 """
 
 [[functions]]
 ordinal = 229
-name = "Vector.foldr"
+structure = "Vector"
+name = "foldr"
 specified = "basis"
 type = "(α * β → β) → β → α vector → β"
 description = """
-"foldr f init vec" folds the fnDef `f` over all the elements of
-vector `vec`, right to left, using the initial value `init`
+"foldr f init vec" folds the function `f` over all the elements of
+vector `vec`, right to left, using the initial value `init`.
 """
 
 [[functions]]
 ordinal = 230
-name = "Vector.foldri"
+structure = "Vector"
+name = "foldri"
 specified = "basis"
 type = "(int * α * β → β) → β → α vector → β"
 description = """
-"foldri f init vec" folds the fnDef `f` over all the (index,
+"foldri f init vec" folds the function `f` over all the (index,
 element) pairs of vector `vec`, right to left, using the initial value
-`init`
+`init`.
 """
 
 [[functions]]
 ordinal = 231
-name = "Vector.fromList"
+structure = "Vector"
+name = "fromList"
 specified = "basis"
 type = "α list → α vector"
 description = """
@@ -2671,7 +2962,8 @@ and with the `i`<sup>th</sup> element of `l` used as the
 
 [[functions]]
 ordinal = 232
-name = "Vector.length"
+structure = "Vector"
+name = "length"
 specified = "basis"
 type = "α vector → int"
 description = """
@@ -2680,28 +2972,37 @@ description = """
 
 [[functions]]
 ordinal = 233
-name = "Vector.map"
+structure = "Vector"
+name = "map"
 specified = "basis"
 type = "(α → β) → α vector → β vector"
 description = """
-"map f vec" applies the fnDef `f` to the elements of the argument
-vector `vec`
+"map f vec" applies the function `f` to the elements of the argument
+vector `vec`.
+
+<p>It is equivalent to
+<pre>fromList (List.map f (foldr (fn (a,l) => a::l) [] vec))</pre>
 """
 
 [[functions]]
 ordinal = 234
-name = "Vector.mapi"
+structure = "Vector"
+name = "mapi"
 specified = "basis"
 type = "(int * α → β) → α vector → β vector"
 description = """
-"mapi f vec" applies the fnDef `f` to the elements of the argument
+"mapi f vec" applies the function `f` to the elements of the argument
 vector `vec`, supplying the vector index and element as arguments to
 each call.
+
+<p>It is equivalent to
+<pre>fromList (List.map f (foldri (fn (i,a,l) => (i,a)::l) [] vec))</pre>
 """
 
 [[functions]]
 ordinal = 235
-name = "Vector.maxLen"
+structure = "Vector"
+name = "maxLen"
 specified = "basis"
 type = "int"
 description = """
@@ -2711,7 +3012,8 @@ implementation.
 
 [[functions]]
 ordinal = 236
-name = "Vector.sub"
+structure = "Vector"
+name = "sub"
 specified = "basis"
 type = "α vector * int → α"
 description = """
@@ -2721,18 +3023,24 @@ Raises `Subscript` if `i` < 0 or `size vec` &le; `i`.
 
 [[functions]]
 ordinal = 237
-name = "Vector.tabulate"
+structure = "Vector"
+name = "tabulate"
 specified = "basis"
 type = "int * (int → α) → α vector"
 description = """
 "tabulate (n, f)" returns a vector of length `n` equal to `[f(0),
-f(1), ..., f(n-1)]`, created from left to right. Raises `Size` if `n`
-< 0 or `maxLen` < `n`.
+f(1), ..., f(n-1)]`, created from left to right. This is equivalent
+to the expression
+
+<pre>fromList (List.tabulate (n, f))</pre>
+
+Raises `Size` if `n` < 0 or `maxLen` < `n`.
 """
 
 [[functions]]
 ordinal = 238
-name = "Vector.update"
+structure = "Vector"
+name = "update"
 specified = "basis"
 type = "α vector * int * α → α vector"
 description = """
@@ -2741,4 +3049,4 @@ the `i`<sup>th</sup> element of `vec` is set to `x`. Raises
 `Subscript` if `i` < 0 or `size vec` &le; `i`.
 """
 
-# End fnDefs.toml
+# End functions.toml
