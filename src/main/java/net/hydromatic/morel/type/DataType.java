@@ -55,17 +55,7 @@ public class DataType extends ParameterizedType {
       String moniker,
       List<? extends Type> arguments,
       SortedMap<String, Key> typeConstructors) {
-    this(Op.DATA_TYPE, name, moniker, arguments, typeConstructors);
-  }
-
-  /** Called only from DataType constructor. */
-  protected DataType(
-      Op op,
-      String name,
-      String moniker,
-      List<? extends Type> arguments,
-      SortedMap<String, Key> typeConstructors) {
-    super(op, name, moniker, arguments.size());
+    super(Op.DATA_TYPE, name, moniker, arguments.size());
     this.arguments = ImmutableList.copyOf(arguments);
     this.typeConstructors = ImmutableSortedMap.copyOf(typeConstructors);
     checkArgument(

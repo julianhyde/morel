@@ -2360,6 +2360,33 @@ public enum BuiltIn {
       "Real", "unordered", ts -> ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
 
   /**
+   * Function "Relational.compare", of type "&alpha; * &alpha; &rarr; order".
+   *
+   * <p>Returns the result of comparing the two values. Comparison is defined
+   * based on the structure of the types:
+   *
+   * <ul>
+   *   <li>Primitive types compare as usual;
+   *   <li>The {@code descending} type compares in the opposite direction to its
+   *       wrapped type;
+   *   <li>Tuple types compare lexicographically;
+   *   <li>Record types compare lexicographically based on their fields in
+   *       alphabetical order;
+   *   <li>The {@code option} type compares with {@code NONE} being greater than
+   *       all {@code SOME} values, and {@code SOME} values comparing according
+   *       to their wrapped type;
+   *   <li>{@code list} types compare lexicographically.
+   * </ul>
+   */
+  RELATIONAL_COMPARE(
+      "Relational",
+      "compare",
+      "compare",
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), ts.order()))),
+
+  /**
    * Function "Relational.count", aka "count", of type "int bag &rarr; int".
    *
    * <p>Often used with {@code group}:
@@ -3006,6 +3033,25 @@ public enum BuiltIn {
   /** Internal operator "orelse", of type "bool * bool &rarr; bool". */
   Z_ORELSE("$", "orelse", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
+  /** Internal operator that compares comparable values. */
+  Z_COMPARE(
+      "$",
+      "compare",
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), ts.order()))),
+
+  /** Internal operator that compares comparable values. */
+  Z_COMPARE3(
+      "$",
+      "compare3",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      STRING, ts.tupleType(h.get(0), h.get(0)), ts.order()))),
+
   /**
    * Internal value "$current", of type "unit". It is used to implement the
    * {@code current} keyword and its type is not necessarily {@code unit}. This
@@ -3316,7 +3362,13 @@ public enum BuiltIn {
   /**
    * Built-in datatype.
    *
-   * <p>{@code order} and {@code option} are non-internal.
+   * <p>The following datatypes are non-internal:
+   *
+   * <pre>{@code
+   * datatype descending = DESC of 'a;
+   * datatype order = LESS | EQUAL | GREATER;
+   * datatype option 'a = NONE | SOME of 'a;
+   * }</pre>
    *
    * <p>The three internal datatypes,
    *
@@ -3329,6 +3381,8 @@ public enum BuiltIn {
    * <p>are not available from within programs but used for internal purposes.
    */
   public enum Datatype implements BuiltInType {
+    DESCENDING("descending", false, 1, h -> h.tyCon("DESC", h.get(0))),
+
     ORDER(
         "order",
         false,

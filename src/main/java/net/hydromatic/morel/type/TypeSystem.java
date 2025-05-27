@@ -268,7 +268,7 @@ public class TypeSystem {
       SortedMap<String, Key> tyCons) {
     final String moniker = DataType.computeMoniker(name, argumentTypes);
     final DataType dataType =
-        new DataType(Op.DATA_TYPE, name, moniker, argumentTypes, tyCons);
+        new DataType(name, moniker, argumentTypes, tyCons);
     if (argumentTypes.isEmpty()) {
       // There are no type parameters, therefore there will be no ForallType to
       // register its type constructors, so this DataType needs to register.
@@ -392,7 +392,7 @@ public class TypeSystem {
           }
 
           public Type bag(int i) {
-            return TypeSystem.this.bag(get(i));
+            return bagType(get(i));
           }
 
           public Type vector(int i) {
