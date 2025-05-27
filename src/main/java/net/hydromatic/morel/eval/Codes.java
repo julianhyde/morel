@@ -2865,46 +2865,6 @@ public abstract class Codes {
   private static final Applicable RELATIONAL_COMPARE =
       new Comparer(PrimitiveType.UNIT);
 
-  /**
-   * Implements {@link BuiltIn#RELATIONAL_COMPARE} for all types that are
-   * comparable or lists.
-   *
-   * <p>This strategy is possible only if the type is known not to contain
-   * {@code Descending} or {@code Option}; if that is not the case, use {@link
-   * #Z_COMPARE3}.
-   */
-  private static final Applicable Z_COMPARE =
-      new Applicable2<List, Object, Object>(BuiltIn.RELATIONAL_COMPARE) {
-
-        @Override
-        public List apply(Object o1, Object o2) {
-          return order(apply_(o1, o2));
-        }
-
-        private int apply_(Object o1, Object o2) {
-          if (o1 instanceof Comparable) {
-            Comparable c1 = (Comparable) o1;
-            Comparable c2 = (Comparable) o2;
-            return c1.compareTo(c2);
-          } else {
-            List list1 = (List) o1;
-            List list2 = (List) o2;
-            final int n1 = list1.size();
-            final int n2 = list2.size();
-            final int n = Math.min(n1, n2);
-            for (int i = 0; i < n; i++) {
-              final Object element0 = list1.get(i);
-              final Object element1 = list2.get(i);
-              final int c = apply_(element0, element1);
-              if (c != 0) {
-                return c;
-              }
-            }
-            return Integer.compare(n1, n2);
-          }
-        }
-      };
-
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
       length(BuiltIn.RELATIONAL_COUNT);
@@ -3940,7 +3900,6 @@ public abstract class Codes {
           .put(BuiltIn.Z_ANDALSO, Unit.INSTANCE)
           .put(BuiltIn.Z_ORELSE, Unit.INSTANCE)
           .put(BuiltIn.Z_CURRENT, Unit.INSTANCE)
-          .put(BuiltIn.Z_COMPARE, Z_COMPARE)
           .put(BuiltIn.Z_ORDINAL, 0)
           .put(BuiltIn.Z_NEGATE_INT, Z_NEGATE_INT)
           .put(BuiltIn.Z_NEGATE_REAL, Z_NEGATE_REAL)

@@ -3033,14 +3033,6 @@ public enum BuiltIn {
   /** Internal operator "orelse", of type "bool * bool &rarr; bool". */
   Z_ORELSE("$", "orelse", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
-  /** Internal operator that compares comparable values. */
-  Z_COMPARE(
-      "$",
-      "compare",
-      ts ->
-          ts.forallType(
-              1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), ts.order()))),
-
   /**
    * Internal value "$current", of type "unit". It is used to implement the
    * {@code current} keyword and its type is not necessarily {@code unit}. This
