@@ -3100,17 +3100,6 @@ public enum BuiltIn {
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), ts.order()))),
 
-  /** Internal operator that compares comparable values. */
-  Z_COMPARE3(
-      "$",
-      "compare3",
-      ts ->
-          ts.forallType(
-              1,
-              h ->
-                  ts.fnType(
-                      STRING, ts.tupleType(h.get(0), h.get(0)), ts.order()))),
-
   /**
    * Internal value "$current", of type "unit". It is used to implement the
    * {@code current} keyword and its type is not necessarily {@code unit}. This
