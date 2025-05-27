@@ -2993,6 +2993,85 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#RELATIONAL_COMPARE */
+  private static final Applicable RELATIONAL_COMPARE =
+      new Comparer(PrimitiveType.UNIT);
+
+  /**
+   * Implements {@link BuiltIn#RELATIONAL_COMPARE} for all types that are
+   * comparable or lists.
+   *
+   * <p>This strategy is possible only if the type is known not to contain
+   * {@code Descending} or {@code Option}; if that is not the case, use {@link
+   * #Z_COMPARE3}.
+   */
+  private static final Applicable Z_COMPARE =
+      new Applicable2<List, Object, Object>(BuiltIn.RELATIONAL_COMPARE) {
+
+        @Override
+        public List apply(Object o1, Object o2) {
+          return order(apply_(o1, o2));
+        }
+
+        private int apply_(Object o1, Object o2) {
+          if (o1 instanceof Comparable) {
+            Comparable c1 = (Comparable) o1;
+            Comparable c2 = (Comparable) o2;
+            return c1.compareTo(c2);
+          } else {
+            List list1 = (List) o1;
+            List list2 = (List) o2;
+            final int n1 = list1.size();
+            final int n2 = list2.size();
+            final int n = Math.min(n1, n2);
+            for (int i = 0; i < n; i++) {
+              final Object element0 = list1.get(i);
+              final Object element1 = list2.get(i);
+              final int c = apply_(element0, element1);
+              if (c != 0) {
+                return c;
+              }
+            }
+            return Integer.compare(n1, n2);
+          }
+        }
+      };
+
+  /**
+   * Implements {@link BuiltIn#RELATIONAL_COMPARE} that compares two values of
+   * the same type, guided by the type of those values.
+   */
+  private static final Applicable Z_COMPARE3 =
+      new Applicable3<List, Object, Object, Object>(BuiltIn.Z_COMPARE3) {
+        @Override
+        public List apply(Object o1, Object o2, Object o3) {
+          return order(apply_((Type) o1, o2, o3));
+        }
+
+        private int apply_(Type type, Object o1, Object o2) {
+          if (o1 instanceof Comparable) {
+            Comparable c1 = (Comparable) o1;
+            Comparable c2 = (Comparable) o2;
+            return c1.compareTo(c2);
+          } else {
+            List list1 = (List) o1;
+            List list2 = (List) o2;
+            final int n1 = list1.size();
+            final int n2 = list2.size();
+            final int n = Math.min(n1, n2);
+            for (int i = 0; i < n; i++) {
+              final Object element0 = list1.get(i);
+              final Object element1 = list2.get(i);
+              final int c = apply_(type, element0, element1);
+              if (c != 0) {
+                return c;
+              }
+            }
+            return Integer.compare(n1, n2);
+          }
+        }
+      };
+
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
       length(BuiltIn.RELATIONAL_COUNT);
@@ -3255,7 +3334,7 @@ public abstract class Codes {
    * Converts the result of {@link Comparable#compareTo(Object)} to an {@code
    * Order} value.
    */
-  private static List order(int c) {
+  static List order(int c) {
     if (c < 0) {
       return ORDER_LESS;
     }
@@ -3995,6 +4074,7 @@ public abstract class Codes {
           .put(BuiltIn.REAL_TO_STRING, REAL_TO_STRING)
           .put(BuiltIn.REAL_TRUNC, REAL_TRUNC)
           .put(BuiltIn.REAL_UNORDERED, REAL_UNORDERED)
+          .put(BuiltIn.RELATIONAL_COMPARE, RELATIONAL_COMPARE)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY)
           .put(BuiltIn.RELATIONAL_ITERATE, RELATIONAL_ITERATE)
@@ -4036,6 +4116,8 @@ public abstract class Codes {
           .put(BuiltIn.Z_ANDALSO, Unit.INSTANCE)
           .put(BuiltIn.Z_ORELSE, Unit.INSTANCE)
           .put(BuiltIn.Z_CURRENT, Unit.INSTANCE)
+          .put(BuiltIn.Z_COMPARE, Z_COMPARE)
+          .put(BuiltIn.Z_COMPARE3, Z_COMPARE3)
           .put(BuiltIn.Z_ORDINAL, 0)
           .put(BuiltIn.Z_NEGATE_INT, Z_NEGATE_INT)
           .put(BuiltIn.Z_NEGATE_REAL, Z_NEGATE_REAL)
@@ -5416,6 +5498,15 @@ public abstract class Codes {
    */
   public interface Positioned extends Applicable {
     Applicable withPos(Pos pos);
+  }
+
+  /**
+   * An {@link Applicable} whose type may be specified.
+   *
+   * <p>This is useful for instances where the behavior depends on the type.
+   */
+  public interface Typed extends Applicable {
+    Applicable withType(Type type);
   }
 
   /**

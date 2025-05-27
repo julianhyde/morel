@@ -737,13 +737,14 @@ public class Compiler {
         ordinalSlots[0]++; // signal that we are using an ordinal
         return Codes.ordinalGet(ordinalSlots);
       default:
-        final Object o0 = Codes.BUILT_IN_VALUES.get(builtIn);
-        final Object o;
+        Object o0 = Codes.BUILT_IN_VALUES.get(builtIn);
         if (o0 instanceof Codes.Positioned) {
-          o = ((Codes.Positioned) o0).withPos(pos);
-        } else {
-          o = o0;
+          o0 = ((Codes.Positioned) o0).withPos(pos);
         }
+        if (o0 instanceof Codes.Typed) {
+          o0 = ((Codes.Typed) o0).withType(arg.type);
+        }
+        final Object o = o0;
         if (o instanceof Applicable) {
           final Code argCode = compile(cx, arg);
           if (argCode instanceof Codes.TupleCode) {
