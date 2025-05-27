@@ -2905,41 +2905,6 @@ public abstract class Codes {
         }
       };
 
-  /**
-   * Implements {@link BuiltIn#RELATIONAL_COMPARE} that compares two values of
-   * the same type, guided by the type of those values.
-   */
-  private static final Applicable Z_COMPARE3 =
-      new Applicable3<List, Object, Object, Object>(BuiltIn.Z_COMPARE3) {
-        @Override
-        public List apply(Object o1, Object o2, Object o3) {
-          return order(apply_((Type) o1, o2, o3));
-        }
-
-        private int apply_(Type type, Object o1, Object o2) {
-          if (o1 instanceof Comparable) {
-            Comparable c1 = (Comparable) o1;
-            Comparable c2 = (Comparable) o2;
-            return c1.compareTo(c2);
-          } else {
-            List list1 = (List) o1;
-            List list2 = (List) o2;
-            final int n1 = list1.size();
-            final int n2 = list2.size();
-            final int n = Math.min(n1, n2);
-            for (int i = 0; i < n; i++) {
-              final Object element0 = list1.get(i);
-              final Object element1 = list2.get(i);
-              final int c = apply_(type, element0, element1);
-              if (c != 0) {
-                return c;
-              }
-            }
-            return Integer.compare(n1, n2);
-          }
-        }
-      };
-
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
       length(BuiltIn.RELATIONAL_COUNT);
@@ -3976,7 +3941,6 @@ public abstract class Codes {
           .put(BuiltIn.Z_ORELSE, Unit.INSTANCE)
           .put(BuiltIn.Z_CURRENT, Unit.INSTANCE)
           .put(BuiltIn.Z_COMPARE, Z_COMPARE)
-          .put(BuiltIn.Z_COMPARE3, Z_COMPARE3)
           .put(BuiltIn.Z_ORDINAL, 0)
           .put(BuiltIn.Z_NEGATE_INT, Z_NEGATE_INT)
           .put(BuiltIn.Z_NEGATE_REAL, Z_NEGATE_REAL)
