@@ -83,9 +83,9 @@ public class DataType extends ParameterizedType {
   }
 
   public SortedMap<String, Type> typeConstructors(TypeSystem typeSystem) {
+    final Keys.Shuttle shuttle = Keys.substitute(Keys.toKeys(arguments));
     return Maps.transformValues(
-        typeConstructors,
-        k -> k.copy(t -> t.substitute(arguments)).toType(typeSystem));
+        typeConstructors, k -> k.accept(shuttle).toType(typeSystem));
   }
 
   @Override
@@ -95,7 +95,6 @@ public class DataType extends ParameterizedType {
       return this;
     }
     return (DataType) key().substitute(arguments).toType(typeSystem);
-    //    return new DataType(name, moniker, arguments, typeConstructors);
   }
 
   /**
