@@ -3249,7 +3249,7 @@ public enum BuiltIn {
     for (int i = 0; i < builtInType.varCount(); i++) {
       tyVars.add(ts.typeVariable(i));
     }
-    final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
+    final PairList<String, Type.Key> tyCons = PairList.of();
     UnaryOperator<DataTypeHelper> transform =
         builtInType instanceof Datatype
             ? ((Datatype) builtInType).transform
@@ -3259,7 +3259,7 @@ public enum BuiltIn {
           @Override
           public DataTypeHelper tyCon(Constructor constructor) {
             Type.Key typeKey = constructor.typeFunction.apply(this);
-            tyCons.put(constructor.constructor, typeKey);
+            tyCons.add(constructor.constructor, typeKey);
             return this;
           }
 
@@ -3267,13 +3267,15 @@ public enum BuiltIn {
             return tyVars.get(i).key();
           }
         });
-    final Type type = ts.dataTypeScheme(builtInType.mlName(), tyVars, tyCons);
+    final Type type =
+        ts.dataTypeScheme(
+            builtInType.mlName(), tyVars, tyCons.toImmutableMap());
     final DataType dataType =
         (DataType) (type instanceof DataType ? type : ((ForallType) type).type);
     ts.setBuiltIn(builtInType);
     if (!builtInType.isInternal()) {
       tyCons
-          .keySet()
+          .leftList()
           .forEach(
               tyConName -> bindings.add(ts.bindTyCon(dataType, tyConName)));
     }
@@ -3331,10 +3333,6 @@ public enum BuiltIn {
 
     int varCount();
 
-    default UnaryOperator<DataTypeHelper> transform() {
-      return UnaryOperator.identity();
-    }
-
     default boolean isInternal() {
       return false;
     }
@@ -3362,7 +3360,8 @@ public enum BuiltIn {
    * <p>are not available from within programs but used for internal purposes.
    */
   public enum Datatype implements BuiltInType {
-    DESCENDING("descending", false, 1, h -> h.tyCon("DESC", h.get(0))),
+    DESCENDING(
+        "descending", false, 1, h -> h.tyCon(Constructor.DESCENDING_DESC)),
 
     ORDER(
         "order",
@@ -3434,11 +3433,6 @@ public enum BuiltIn {
     }
 
     @Override
-    public UnaryOperator<DataTypeHelper> transform() {
-      return transform;
-    }
-
-    @Override
     public boolean isInternal() {
       return internal;
     }
@@ -3473,6 +3467,7 @@ public enum BuiltIn {
   public enum Constructor {
     BOOL_FALSE(Datatype.PSEUDO_BOOL, "FALSE"),
     BOOL_TRUE(Datatype.PSEUDO_BOOL, "TRUE"),
+    DESCENDING_DESC(Datatype.DESCENDING, "DESC", h -> h.get(0)),
     LIST_NIL(Datatype.PSEUDO_LIST, "NIL"),
     LIST_CONS(Datatype.PSEUDO_LIST, "CONS", h -> h.get(0)),
     OPTION_SOME(Datatype.OPTION, "SOME", h -> h.get(0)),

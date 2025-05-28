@@ -27,8 +27,10 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import static net.hydromatic.morel.util.Static.transformValuesEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.AbstractList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
@@ -123,12 +125,21 @@ public class Keys {
     return new ForallKey(type, parameterCount);
   }
 
-  /** Returns a key that identifies a {@link DataType}. */
+  /**
+   * Returns a key that identifies a {@link DataType}.
+   *
+   * <p>Iteration order of the type constructors ({@code typeConstructors}) is
+   * significant. We recommend that you use a sequenced map such as {@link
+   * ImmutableMap} or {@link LinkedHashMap}.
+   */
   public static DataTypeKey datatype(
       String name,
       List<? extends Type.Key> arguments,
-      SortedMap<String, Type.Key> typeConstructors) {
-    return new DataTypeKey(name, arguments, typeConstructors);
+      Map<String, Type.Key> typeConstructors) {
+    return new DataTypeKey(
+        name,
+        ImmutableList.copyOf(arguments),
+        ImmutableMap.copyOf(typeConstructors));
   }
 
   /** Returns a key that identifies a {@link MultiType}. */
@@ -556,17 +567,17 @@ public class Keys {
      */
     private final String name;
 
-    private final List<? extends Type.Key> arguments;
-    private final SortedMap<String, Type.Key> typeConstructors;
+    private final ImmutableList<Type.Key> arguments;
+    private final ImmutableMap<String, Type.Key> typeConstructors;
 
     DataTypeKey(
         String name,
-        List<? extends Type.Key> arguments,
-        SortedMap<String, Type.Key> typeConstructors) {
+        ImmutableList<Type.Key> arguments,
+        ImmutableMap<String, Type.Key> typeConstructors) {
       super(Op.DATA_TYPE);
       this.name = requireNonNull(name);
-      this.arguments = ImmutableList.copyOf(arguments);
-      this.typeConstructors = ImmutableSortedMap.copyOfSorted(typeConstructors);
+      this.arguments = requireNonNull(arguments);
+      this.typeConstructors = requireNonNull(typeConstructors);
     }
 
     @Override
@@ -587,7 +598,7 @@ public class Keys {
     Type.Key substitute(List<? extends Type> types) {
       ImmutableList<Type.Key> arguments =
           transformEager(this.arguments, arg -> arg.substitute(types));
-      ImmutableSortedMap<String, Type.Key> typeConstructors =
+      ImmutableMap<String, Type.Key> typeConstructors =
           transformValuesEager(
               this.typeConstructors, arg -> arg.substitute(types));
       if (arguments.equals(this.arguments)
@@ -643,7 +654,9 @@ public class Keys {
     @Override
     public DataType toType(TypeSystem typeSystem) {
       return typeSystem.dataType(
-          name, typeSystem.typesFor(arguments), typeConstructors);
+          name,
+          ImmutableList.copyOf(typeSystem.typesFor(arguments)),
+          typeConstructors);
     }
   }
 }

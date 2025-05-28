@@ -21,10 +21,10 @@ package net.hydromatic.morel.eval;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.transformEager;
-import static net.hydromatic.morel.util.Static.transformValuesEager;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
+import com.google.common.collect.ImmutableMap;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +37,8 @@ import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.PairList;
 
 @SuppressWarnings("rawtypes")
 class Comparer extends Applicable2<List, Object, Object>
@@ -162,47 +164,41 @@ class Comparer extends Applicable2<List, Object, Object>
             case "descending":
               Comparator<Object> objectComparator =
                   comparatorFor(dataType.arg(0));
+              // Pass arguments in reverse order, to reverse comparison order.
               return (Comparator<List>)
                   (list1, list2) ->
                       objectComparator.compare(list2.get(1), list1.get(1));
-
-            case "option":
-              // The option type is represented as a list of size 1 or 2.
-              final Comparator someComparator = comparatorFor(dataType.arg(0));
-              return (Comparator<List>)
-                  (list1, list2) -> {
-                    if (list1.size() == 2 && list2.size() == 2) {
-                      // We have (SOME v1, SOME v2). Now compare (v1, v2).
-                      return someComparator.compare(list1.get(1), list2.get(1));
-                    }
-                    // One or both are NONE, and NONE compares like
-                    // +infinity.
-                    //  (NONE, NONE) => 0
-                    //  (SOME _, NONE) => -1
-                    //  (NONE, SOME _) => 1
-                    return -Integer.compare(list1.size(), list2.size());
-                  };
           }
-          final Map<String, Comparator> constructorComparators =
-              transformValuesEager(
-                  dataType.typeConstructors(typeSystem), this::comparatorFor);
+          final PairList<String, Ord<Comparator>> b = PairList.of();
+          dataType
+              .typeConstructors(typeSystem)
+              .forEach(
+                  (name, t) -> b.add(name, Ord.of(b.size(), comparatorFor(t))));
+          final ImmutableMap<String, Ord<Comparator>> constructorComparators =
+              b.toImmutableMap();
           return (Comparator<List>)
               (list1, list2) -> {
-                String s1 = (String) list1.get(0);
-                String s2 = (String) list2.get(0);
-                int c = s1.compareTo(s2);
-                if (c != 0) {
-                  return c;
+                final String s1 = (String) list1.get(0);
+                final String s2 = (String) list2.get(0);
+                if (s1.equals(s2)) {
+                  // Same constructor.
+                  if (list1.size() == 1) {
+                    // Constructor has no arguments. We're done.
+                    return 0;
+                  } else {
+                    // Same constructor. Compare the values.
+                    final Ord<Comparator> comparator =
+                        requireNonNull(constructorComparators.get(s1));
+                    return comparator.e.compare(list1.get(1), list2.get(1));
+                  }
+                } else {
+                  // Different constructors. Compare based on their ordinals.
+                  final Ord<Comparator> comparator1 =
+                      requireNonNull(constructorComparators.get(s1));
+                  final Ord<Comparator> comparator2 =
+                      requireNonNull(constructorComparators.get(s2));
+                  return Integer.compare(comparator1.i, comparator2.i);
                 }
-                if (list1.size() == 1) {
-                  // These are instances of the same no-argument type
-                  // constructor.
-                  return 0;
-                }
-                Comparator constructorComparator =
-                    requireNonNull(constructorComparators.get(s1));
-                return constructorComparator.compare(
-                    list1.get(1), list2.get(1));
               };
 
         default:

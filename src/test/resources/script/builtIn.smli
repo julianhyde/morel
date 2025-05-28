@@ -3700,17 +3700,22 @@ Relational.compare ({a=1, b=2.0}, {a=2, b=1.0});
 > val it = LESS : order
 Relational.compare ({c=1, b=2.0}, {c=2, b=1.0});
 > val it = GREATER : order
-(*) Option compares with NONE greater than any value.
+(*) Option compares with NONE less than any value.
 Relational.compare (SOME 1, NONE);
-> val it = LESS : order
+> val it = GREATER : order
 Relational.compare (SOME 1, SOME "a");
 > 0.0-0.0 Error: Cannot deduce type: conflict: int vs string
 >   raised at: 0.0-0.0
 Relational.compare (SOME ~1, NONE);
-> val it = LESS : order
+> val it = GREATER : order
 Relational.compare (NONE, NONE);
 > val it = EQUAL : order
 Relational.compare (SOME (SOME 1), SOME (SOME 2));
+> val it = LESS : order
+(*) "Order" compares with LESS < EQUAL < GREATER.
+Relational.compare (LESS, EQUAL);
+> val it = LESS : order
+Relational.compare (EQUAL, GREATER);
 > val it = LESS : order
 (*) "Descending" reverses the order of comparison.
 Relational.compare (DESC 1, DESC 2);
@@ -3723,12 +3728,17 @@ Relational.compare ((1, DESC "b"), (1, DESC "a"));
 Relational.compare ([], [1, 2]);
 > val it = LESS : order
 Relational.compare ([SOME 1, NONE], [SOME 1, SOME 2, SOME 3, NONE]);
-> val it = GREATER : order
+> val it = LESS : order
 
+(*) Use Relational.compare as comparator for List.collate and Vector.collate.
 List.collate Relational.compare ([1,2,3],[1,2,4]);
 > val it = LESS : order
-List.collate Relational.compare ([SOME 1, NONE, SOME 2], [SOME 1, SOME 0, SOME 2]);
+List.collate Relational.compare ([SOME 1, SOME 0, SOME 2], [SOME 1, NONE, SOME 2]);
 > val it = GREATER : order
+List.collate Relational.compare ([NONE, SOME 1], [NONE, SOME 1, NONE]);
+> val it = LESS : order
+Vector.collate Relational.compare (Vector.fromList [1,2,3], Vector.fromList [1,2,4]);
+> val it = LESS : order
 
 (* Sys --------------------------------------------------------- *)
 
