@@ -19,21 +19,21 @@
 package net.hydromatic.morel.type;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.Maps.transformValues;
 import static java.util.Objects.hash;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.parse.Parsers.appendId;
-import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Maps;
 import java.util.AbstractList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Type keys. */
 public class Keys {
@@ -110,12 +110,12 @@ public class Keys {
 
   /** Returns a key that identifies a {@link FnType}. */
   public static Type.Key fn(Type.Key paramType, Type.Key resultType) {
-    return new OpKey(Op.FN, ImmutableList.of(paramType, resultType));
+    return new FnKey(paramType, resultType);
   }
 
   /** Returns a key that identifies a {@link ListType}. */
   public static Type.Key list(Type.Key elementType) {
-    return new OpKey(Op.LIST, ImmutableList.of(elementType));
+    return new ListKey(elementType);
   }
 
   /** Returns a key that identifies a {@link ForallType}. */
@@ -199,6 +199,16 @@ public class Keys {
     return key;
   }
 
+  /** Returns a shuttle that substitutes type variables in keys. */
+  public static Shuttle substitute(List<Type.Key> arguments) {
+    return new Keys.Shuttle() {
+      @Override
+      Type.Key visit(Keys.OrdinalKey key) {
+        return arguments.get(key.ordinal);
+      }
+    };
+  }
+
   /** Key that identifies a type by name. */
   private static class NameKey extends Type.Key {
     private final String name;
@@ -229,6 +239,12 @@ public class Keys {
           || obj instanceof NameKey && ((NameKey) obj).name.equals(name);
     }
 
+    @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
     public Type toType(TypeSystem typeSystem) {
       if (name.isEmpty()) {
         return DummyType.INSTANCE;
@@ -265,6 +281,11 @@ public class Keys {
     public boolean equals(Object obj) {
       return obj == this
           || obj instanceof OrdinalKey && ((OrdinalKey) obj).ordinal == ordinal;
+    }
+
+    @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
 
     @Override
@@ -313,6 +334,11 @@ public class Keys {
     }
 
     @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
     public Type toType(TypeSystem typeSystem) {
       final Type type = key.toType(typeSystem);
       if (type instanceof ForallType) {
@@ -333,7 +359,7 @@ public class Keys {
    * Key of a type that applies a built-in type constructor to specific type
    * arguments.
    */
-  private static class OpKey extends Type.Key {
+  private abstract static class OpKey extends Type.Key {
     final ImmutableList<Type.Key> args;
 
     OpKey(Op op, List<Type.Key> args) {
@@ -343,13 +369,7 @@ public class Keys {
 
     @Override
     public StringBuilder describe(StringBuilder buf, int left, int right) {
-      switch (op) {
-        case LIST:
-          return TypeSystem.unparse(buf, args.get(0), 0, Op.LIST.right)
-              .append(" list");
-        default:
-          return TypeSystem.unparseList(buf, op, left, right, args);
-      }
+      return TypeSystem.unparseList(buf, op, left, right, args);
     }
 
     @Override
@@ -364,24 +384,52 @@ public class Keys {
               && ((OpKey) obj).op.equals(op)
               && ((OpKey) obj).args.equals(args);
     }
+  }
 
-    public Type toType(TypeSystem typeSystem) {
-      switch (op) {
-        case FN:
-          assert args.size() == 2;
-          return new FnType(
-              typeSystem.typeFor(args.get(0)), typeSystem.typeFor(args.get(1)));
-        case LIST:
-          assert args.size() == 1;
-          return new ListType(typeSystem.typeFor(args.get(0)));
-        default:
-          throw new AssertionError(op);
-      }
+  /** Key of a list type. */
+  private static class ListKey extends OpKey {
+    ListKey(Type.Key arg) {
+      super(Op.LIST, ImmutableList.of(arg));
     }
 
     @Override
-    public Type.Key copy(UnaryOperator<Type.Key> transform) {
-      return new OpKey(op, transform(args, arg -> arg.copy(transform)));
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public StringBuilder describe(StringBuilder buf, int left, int right) {
+      return TypeSystem.unparse(buf, args.get(0), 0, Op.LIST.right)
+          .append(" list");
+    }
+
+    @Override
+    Type.Key copy(UnaryOperator<Type.Key> transform) {
+      return super.copy(transform);
+    }
+
+    @Override
+    public Type toType(TypeSystem typeSystem) {
+      return new ListType(typeSystem.typeFor(args.get(0)));
+    }
+  }
+
+  /** Key of a function type. */
+  private static class FnKey extends OpKey {
+    FnKey(Type.Key paramType, Type.Key resultType) {
+      super(Op.FN, ImmutableList.of(paramType, resultType));
+      checkArgument(args.size() == 2);
+    }
+
+    @Override
+    public Type toType(TypeSystem typeSystem) {
+      return new FnType(
+          typeSystem.typeFor(args.get(0)), typeSystem.typeFor(args.get(1)));
+    }
+
+    @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
   }
 
@@ -408,6 +456,11 @@ public class Keys {
           || obj instanceof ForallKey
               && ((ForallKey) obj).type.equals(type)
               && ((ForallKey) obj).parameterCount == parameterCount;
+    }
+
+    @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
 
     @Override
@@ -440,7 +493,7 @@ public class Keys {
 
     @Override
     public Type.Key copy(UnaryOperator<Type.Key> transform) {
-      return record(Maps.transformValues(argNameTypes, transform::apply));
+      return record(transformValues(argNameTypes, transform::apply));
     }
 
     @Override
@@ -458,6 +511,11 @@ public class Keys {
       return obj == this
           || obj instanceof RecordKey
               && ((RecordKey) obj).argNameTypes.equals(argNameTypes);
+    }
+
+    @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
 
     public Type toType(TypeSystem typeSystem) {
@@ -486,8 +544,7 @@ public class Keys {
 
     @Override
     public Type.Key copy(UnaryOperator<Type.Key> transform) {
-      return progressiveRecord(
-          Maps.transformValues(argNameTypes, transform::apply));
+      return progressiveRecord(transformValues(argNameTypes, transform::apply));
     }
 
     @Override
@@ -508,6 +565,11 @@ public class Keys {
     }
 
     @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
     public Type toType(TypeSystem typeSystem) {
       return new ProgressiveRecordType(typeSystem.typesFor(this.argNameTypes));
     }
@@ -520,6 +582,11 @@ public class Keys {
     MultiTypeKey(ImmutableList<Type.Key> args) {
       super(Op.MULTI_TYPE);
       this.args = requireNonNull(args);
+    }
+
+    @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
     }
 
     @Override
@@ -571,6 +638,11 @@ public class Keys {
               && ((DataTypeKey) obj).typeConstructors.equals(typeConstructors);
     }
 
+    @Override
+    Type.Key accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
     /**
      * {@inheritDoc}
      *
@@ -618,6 +690,60 @@ public class Keys {
     public DataType toType(TypeSystem typeSystem) {
       return typeSystem.dataType(
           name, typeSystem.typesFor(arguments), typeConstructors);
+    }
+  }
+
+  /** Shuttle for keys. */
+  public abstract static class Shuttle {
+    private Type.Key apply(Type.@Nullable Key k) {
+      return k == null ? null : k.accept(this);
+    }
+
+    Type.Key visit(DataTypeKey key) {
+      return datatype(
+          key.name,
+          transformEager(key.arguments, this::apply),
+          transformValues(key.typeConstructors, this::apply));
+    }
+
+    Type.Key visit(ForallKey key) {
+      return key;
+    }
+
+    Type.Key visit(ApplyKey applyKey) {
+      return new ApplyKey(
+          applyKey.key.accept(this),
+          transformEager(applyKey.args, this::apply));
+    }
+
+    Type.Key visit(RecordKey key) {
+      return record(transformValues(key.argNameTypes, this::apply));
+    }
+
+    Type.Key visit(ProgressiveRecordKey key) {
+      return progressiveRecord(transformValues(key.argNameTypes, this::apply));
+    }
+
+    Type.Key visit(MultiTypeKey key) {
+      return multi(transformEager(key.args, this::apply));
+    }
+
+    Type.Key visit(NameKey key) {
+      return key;
+    }
+
+    Type.Key visit(OrdinalKey key) {
+      return key;
+    }
+
+    Type.Key visit(FnKey fnKey) {
+      ImmutableList<Type.Key> args = transformEager(fnKey.args, this::apply);
+      return fn(args.get(0), args.get(1));
+    }
+
+    Type.Key visit(ListKey key) {
+      ImmutableList<Type.Key> args = transformEager(key.args, this::apply);
+      return list(args.get(0));
     }
   }
 }
