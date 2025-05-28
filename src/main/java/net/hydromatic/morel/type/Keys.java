@@ -24,6 +24,7 @@ import static java.util.Objects.hash;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.parse.Parsers.appendId;
 import static net.hydromatic.morel.util.Static.transformEager;
+import static net.hydromatic.morel.util.Static.transformValuesEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
@@ -641,6 +642,20 @@ public class Keys {
     @Override
     Type.Key accept(Shuttle shuttle) {
       return shuttle.visit(this);
+    }
+
+    @Override
+    Type.Key substitute(List<? extends Type> types) {
+      ImmutableList<Type.Key> arguments =
+          transformEager(this.arguments, arg -> arg.substitute(types));
+      ImmutableSortedMap<String, Type.Key> typeConstructors =
+          transformValuesEager(
+              this.typeConstructors, arg -> arg.substitute(types));
+      if (arguments.equals(this.arguments)
+          && typeConstructors.equals(this.typeConstructors)) {
+        return this;
+      }
+      return new DataTypeKey(name, arguments, typeConstructors);
     }
 
     /**

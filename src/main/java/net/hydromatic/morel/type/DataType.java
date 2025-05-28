@@ -50,7 +50,7 @@ public class DataType extends ParameterizedType {
    * <p>During replacement, if a type matches {@code placeholderType} it is
    * replaced with {@code this}. This allows cyclic graphs to be copied.
    */
-  DataType(
+  protected DataType(
       String name,
       String moniker,
       List<? extends Type> arguments,

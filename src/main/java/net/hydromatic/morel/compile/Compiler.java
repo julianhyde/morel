@@ -742,7 +742,7 @@ public class Compiler {
           o0 = ((Codes.Positioned) o0).withPos(pos);
         }
         if (o0 instanceof Codes.Typed) {
-          o0 = ((Codes.Typed) o0).withType(arg.type);
+          o0 = ((Codes.Typed) o0).withType(typeSystem, arg.type);
         }
         final Object o = o0;
         if (o instanceof Applicable) {

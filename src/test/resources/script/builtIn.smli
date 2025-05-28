@@ -3695,6 +3695,9 @@ Relational.compare ({c=1, b=2.0}, {c=2, b=1.0});
 (*) Option compares with NONE greater than any value.
 Relational.compare (SOME 1, NONE);
 > val it = LESS : order
+Relational.compare (SOME 1, SOME "a");
+> 0.0-0.0 Error: Cannot deduce type: conflict: int vs string
+>   raised at: 0.0-0.0
 Relational.compare (SOME ~1, NONE);
 > val it = LESS : order
 Relational.compare (NONE, NONE);
@@ -3743,18 +3746,19 @@ Sys.env ();
 >    ("Char",
 >     "{chr:int -> char, compare:char * char -> order, contains:string -> char -> bool, fromCString:string -> char option, fromString:string -> char option, isAlpha:char -> bool, isAlphaNum:char -> bool, isAscii:char -> bool, isCntrl:char -> bool, isDigit:char -> bool, isGraph:char -> bool, isHexDigit:char -> bool, isLower:char -> bool, isPrint:char -> bool, isPunct:char -> bool, isSpace:char -> bool, isUpper:char -> bool, maxChar:char, maxOrd:int, minChar:char, notContains:string -> char -> bool, `op <`:char * char -> bool, `op <=`:char * char -> bool, `op >`:char * char -> bool, `op >=`:char * char -> bool, ord:char -> int, pred:char -> char, succ:char -> char, toCString:char -> string, toLower:char -> char, toString:char -> string, toUpper:char -> char}"),
 >    ("DESC","forall 'a. 'a -> 'a descending"),("EQUAL","order"),
->    ("GREATER","order"),
+>    ("Empty","'a tree"),("GREATER","order"),
 >    ("General",
 >     "{ignore:forall 'a. 'a -> unit, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
 >    ("Int",
 >     "{abs:int -> int, compare:int * int -> order, div:int * int -> int, fromInt:int -> int, fromLarge:int -> int, fromString:string -> int option, max:int * int -> int, maxInt:int option, min:int * int -> int, minInt:int option, mod:int * int -> int, precision:int option, quot:int * int -> int, rem:int * int -> int, sameSign:int * int -> bool, sign:int -> int, toInt:int -> int, toLarge:int -> int, toString:int -> string}"),
 >    ("Interact","{use:string -> unit, useSilently:string -> unit}"),
->    ("LESS","order"),
+>    ("LESS","order"),("Leaf","forall 'a. 'a -> 'a tree"),
 >    ("List",
 >     "{all:forall 'a. ('a -> bool) -> 'a list -> bool, app:forall 'a. ('a -> unit) -> 'a list -> unit, at:forall 'a. 'a list * 'a list -> 'a list, collate:forall 'a. ('a * 'a -> order) -> 'a list * 'a list -> order, concat:forall 'a. 'a list list -> 'a list, drop:forall 'a. 'a list * int -> 'a list, except:forall 'a. 'a list list -> 'a list, exists:forall 'a. ('a -> bool) -> 'a list -> bool, filter:forall 'a. ('a -> bool) -> 'a list -> 'a list, find:forall 'a. ('a -> bool) -> 'a list -> 'a option, foldl:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b, foldr:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b, getItem:forall 'a. 'a list -> ('a * 'a list) option, hd:forall 'a. 'a list -> 'a, intersect:forall 'a. 'a list list -> 'a list, last:forall 'a. 'a list -> 'a, length:forall 'a. 'a list -> int, map:forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a list -> 'b list, mapi:forall 'a 'b. (int * 'a -> 'b) -> 'a list -> 'b list, nil:forall 'a. 'a list, nth:forall 'a. 'a list * int -> 'a, null:forall 'a. 'a list -> bool, `op @`:forall 'a. 'a list * 'a list -> 'a list, partition:forall 'a. ('a -> bool) -> 'a list -> 'a list * 'a list, rev:forall 'a. 'a list -> 'a list, revAppend:forall 'a. 'a list * 'a list -> 'a list, tabulate:forall 'a. int * (int -> 'a) -> 'a list, take:forall 'a. 'a list * int -> 'a list, tl:forall 'a. 'a list -> 'a list}"),
 >    ("Math",
 >     "{acos:real -> real, asin:real -> real, atan:real -> real, atan2:real * real -> real, cos:real -> real, cosh:real -> real, e:real, exp:real -> real, ln:real -> real, log10:real -> real, pi:real, pow:real * real -> real, sin:real -> real, sinh:real -> real, sqrt:real -> real, tan:real -> real, tanh:real -> real}"),
 >    ("NONE","'a option"),
+>    ("Node","forall 'a. 'a * 'a tree * 'a tree -> 'a tree"),
 >    ("Option",
 >     "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, join:forall 'a. 'a option option -> 'a option, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
 >    ("Real",
@@ -3829,18 +3833,19 @@ env ();
 >    ("Char",
 >     "{chr:int -> char, compare:char * char -> order, contains:string -> char -> bool, fromCString:string -> char option, fromString:string -> char option, isAlpha:char -> bool, isAlphaNum:char -> bool, isAscii:char -> bool, isCntrl:char -> bool, isDigit:char -> bool, isGraph:char -> bool, isHexDigit:char -> bool, isLower:char -> bool, isPrint:char -> bool, isPunct:char -> bool, isSpace:char -> bool, isUpper:char -> bool, maxChar:char, maxOrd:int, minChar:char, notContains:string -> char -> bool, `op <`:char * char -> bool, `op <=`:char * char -> bool, `op >`:char * char -> bool, `op >=`:char * char -> bool, ord:char -> int, pred:char -> char, succ:char -> char, toCString:char -> string, toLower:char -> char, toString:char -> string, toUpper:char -> char}"),
 >    ("DESC","forall 'a. 'a -> 'a descending"),("EQUAL","order"),
->    ("GREATER","order"),
+>    ("Empty","'a tree"),("GREATER","order"),
 >    ("General",
 >     "{ignore:forall 'a. 'a -> unit, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
 >    ("Int",
 >     "{abs:int -> int, compare:int * int -> order, div:int * int -> int, fromInt:int -> int, fromLarge:int -> int, fromString:string -> int option, max:int * int -> int, maxInt:int option, min:int * int -> int, minInt:int option, mod:int * int -> int, precision:int option, quot:int * int -> int, rem:int * int -> int, sameSign:int * int -> bool, sign:int -> int, toInt:int -> int, toLarge:int -> int, toString:int -> string}"),
 >    ("Interact","{use:string -> unit, useSilently:string -> unit}"),
->    ("LESS","order"),
+>    ("LESS","order"),("Leaf","forall 'a. 'a -> 'a tree"),
 >    ("List",
 >     "{all:forall 'a. ('a -> bool) -> 'a list -> bool, app:forall 'a. ('a -> unit) -> 'a list -> unit, at:forall 'a. 'a list * 'a list -> 'a list, collate:forall 'a. ('a * 'a -> order) -> 'a list * 'a list -> order, concat:forall 'a. 'a list list -> 'a list, drop:forall 'a. 'a list * int -> 'a list, except:forall 'a. 'a list list -> 'a list, exists:forall 'a. ('a -> bool) -> 'a list -> bool, filter:forall 'a. ('a -> bool) -> 'a list -> 'a list, find:forall 'a. ('a -> bool) -> 'a list -> 'a option, foldl:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b, foldr:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b, getItem:forall 'a. 'a list -> ('a * 'a list) option, hd:forall 'a. 'a list -> 'a, intersect:forall 'a. 'a list list -> 'a list, last:forall 'a. 'a list -> 'a, length:forall 'a. 'a list -> int, map:forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a list -> 'b list, mapi:forall 'a 'b. (int * 'a -> 'b) -> 'a list -> 'b list, nil:forall 'a. 'a list, nth:forall 'a. 'a list * int -> 'a, null:forall 'a. 'a list -> bool, `op @`:forall 'a. 'a list * 'a list -> 'a list, partition:forall 'a. ('a -> bool) -> 'a list -> 'a list * 'a list, rev:forall 'a. 'a list -> 'a list, revAppend:forall 'a. 'a list * 'a list -> 'a list, tabulate:forall 'a. int * (int -> 'a) -> 'a list, take:forall 'a. 'a list * int -> 'a list, tl:forall 'a. 'a list -> 'a list}"),
 >    ("Math",
 >     "{acos:real -> real, asin:real -> real, atan:real -> real, atan2:real * real -> real, cos:real -> real, cosh:real -> real, e:real, exp:real -> real, ln:real -> real, log10:real -> real, pi:real, pow:real * real -> real, sin:real -> real, sinh:real -> real, sqrt:real -> real, tan:real -> real, tanh:real -> real}"),
 >    ("NONE","'a option"),
+>    ("Node","forall 'a. 'a * 'a tree * 'a tree -> 'a tree"),
 >    ("Option",
 >     "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, join:forall 'a. 'a option option -> 'a option, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
 >    ("Real",
