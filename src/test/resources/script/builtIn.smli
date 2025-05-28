@@ -3782,6 +3782,9 @@ Relational.compare ({c=1, b=2.0}, {c=2, b=1.0});
 (*) Option compares with NONE greater than any value.
 Relational.compare (SOME 1, NONE);
 > val it = LESS : order
+Relational.compare (SOME 1, SOME "a");
+> 0.0-0.0 Error: Cannot deduce type: conflict: int vs string
+>   raised at: 0.0-0.0
 Relational.compare (SOME ~1, NONE);
 > val it = LESS : order
 Relational.compare (NONE, NONE);

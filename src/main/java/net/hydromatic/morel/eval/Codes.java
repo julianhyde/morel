@@ -2995,7 +2995,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_COMPARE */
   private static final Applicable RELATIONAL_COMPARE =
-      new Comparer(PrimitiveType.UNIT);
+      new Comparer((o1, o2) -> ((Comparable) o1).compareTo((Comparable) o2));
 
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
@@ -5429,7 +5429,7 @@ public abstract class Codes {
    * <p>This is useful for instances where the behavior depends on the type.
    */
   public interface Typed extends Applicable {
-    Applicable withType(Type type);
+    Applicable withType(TypeSystem typeSystem, Type type);
   }
 
   /**
