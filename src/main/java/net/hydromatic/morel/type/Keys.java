@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Type keys. */
 public class Keys {
@@ -200,16 +199,6 @@ public class Keys {
     return key;
   }
 
-  /** Returns a shuttle that substitutes type variables in keys. */
-  public static Shuttle substitute(List<Type.Key> arguments) {
-    return new Keys.Shuttle() {
-      @Override
-      Type.Key visit(Keys.OrdinalKey key) {
-        return arguments.get(key.ordinal);
-      }
-    };
-  }
-
   /** Key that identifies a type by name. */
   private static class NameKey extends Type.Key {
     private final String name;
@@ -238,11 +227,6 @@ public class Keys {
     public boolean equals(Object obj) {
       return obj == this
           || obj instanceof NameKey && ((NameKey) obj).name.equals(name);
-    }
-
-    @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
     }
 
     @Override
@@ -282,11 +266,6 @@ public class Keys {
     public boolean equals(Object obj) {
       return obj == this
           || obj instanceof OrdinalKey && ((OrdinalKey) obj).ordinal == ordinal;
-    }
-
-    @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
     }
 
     @Override
@@ -332,11 +311,6 @@ public class Keys {
           || obj instanceof ApplyKey
               && ((ApplyKey) obj).key.equals(key)
               && ((ApplyKey) obj).args.equals(args);
-    }
-
-    @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
     }
 
     @Override
@@ -394,11 +368,6 @@ public class Keys {
     }
 
     @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
-
-    @Override
     public StringBuilder describe(StringBuilder buf, int left, int right) {
       return TypeSystem.unparse(buf, args.get(0), 0, Op.LIST.right)
           .append(" list");
@@ -427,11 +396,6 @@ public class Keys {
       return new FnType(
           typeSystem.typeFor(args.get(0)), typeSystem.typeFor(args.get(1)));
     }
-
-    @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
   }
 
   /** Key of a forall type. */
@@ -457,11 +421,6 @@ public class Keys {
           || obj instanceof ForallKey
               && ((ForallKey) obj).type.equals(type)
               && ((ForallKey) obj).parameterCount == parameterCount;
-    }
-
-    @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
     }
 
     @Override
@@ -514,11 +473,6 @@ public class Keys {
               && ((RecordKey) obj).argNameTypes.equals(argNameTypes);
     }
 
-    @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
-
     public Type toType(TypeSystem typeSystem) {
       switch (argNameTypes.size()) {
         case 0:
@@ -566,11 +520,6 @@ public class Keys {
     }
 
     @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
-
-    @Override
     public Type toType(TypeSystem typeSystem) {
       return new ProgressiveRecordType(typeSystem.typesFor(this.argNameTypes));
     }
@@ -583,11 +532,6 @@ public class Keys {
     MultiTypeKey(ImmutableList<Type.Key> args) {
       super(Op.MULTI_TYPE);
       this.args = requireNonNull(args);
-    }
-
-    @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
     }
 
     @Override
@@ -637,11 +581,6 @@ public class Keys {
               && ((DataTypeKey) obj).name.equals(name)
               && ((DataTypeKey) obj).arguments.equals(arguments)
               && ((DataTypeKey) obj).typeConstructors.equals(typeConstructors);
-    }
-
-    @Override
-    Type.Key accept(Shuttle shuttle) {
-      return shuttle.visit(this);
     }
 
     @Override
@@ -705,60 +644,6 @@ public class Keys {
     public DataType toType(TypeSystem typeSystem) {
       return typeSystem.dataType(
           name, typeSystem.typesFor(arguments), typeConstructors);
-    }
-  }
-
-  /** Shuttle for keys. */
-  public abstract static class Shuttle {
-    private Type.Key apply(Type.@Nullable Key k) {
-      return k == null ? null : k.accept(this);
-    }
-
-    Type.Key visit(DataTypeKey key) {
-      return datatype(
-          key.name,
-          transformEager(key.arguments, this::apply),
-          transformValues(key.typeConstructors, this::apply));
-    }
-
-    Type.Key visit(ForallKey key) {
-      return key;
-    }
-
-    Type.Key visit(ApplyKey applyKey) {
-      return new ApplyKey(
-          applyKey.key.accept(this),
-          transformEager(applyKey.args, this::apply));
-    }
-
-    Type.Key visit(RecordKey key) {
-      return record(transformValues(key.argNameTypes, this::apply));
-    }
-
-    Type.Key visit(ProgressiveRecordKey key) {
-      return progressiveRecord(transformValues(key.argNameTypes, this::apply));
-    }
-
-    Type.Key visit(MultiTypeKey key) {
-      return multi(transformEager(key.args, this::apply));
-    }
-
-    Type.Key visit(NameKey key) {
-      return key;
-    }
-
-    Type.Key visit(OrdinalKey key) {
-      return key;
-    }
-
-    Type.Key visit(FnKey fnKey) {
-      ImmutableList<Type.Key> args = transformEager(fnKey.args, this::apply);
-      return fn(args.get(0), args.get(1));
-    }
-
-    Type.Key visit(ListKey key) {
-      ImmutableList<Type.Key> args = transformEager(key.args, this::apply);
-      return list(args.get(0));
     }
   }
 }

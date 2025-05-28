@@ -2863,7 +2863,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_COMPARE */
   private static final Applicable RELATIONAL_COMPARE =
-      new Comparer((o1, o2) -> ((Comparable) o1).compareTo((Comparable) o2));
+      new Comparer((o1, o2) -> ((Comparable) o1).compareTo(o2));
 
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =

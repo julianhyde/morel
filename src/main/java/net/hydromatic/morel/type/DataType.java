@@ -21,10 +21,10 @@ package net.hydromatic.morel.type;
 import static com.google.common.base.Preconditions.checkArgument;
 import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Static.transformEager;
+import static net.hydromatic.morel.util.Static.transformValuesEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import java.util.List;
 import java.util.SortedMap;
@@ -83,9 +83,9 @@ public class DataType extends ParameterizedType {
   }
 
   public SortedMap<String, Type> typeConstructors(TypeSystem typeSystem) {
-    final Keys.Shuttle shuttle = Keys.substitute(Keys.toKeys(arguments));
-    return Maps.transformValues(
-        typeConstructors, k -> k.accept(shuttle).toType(typeSystem));
+    return transformValuesEager(
+        typeConstructors,
+        k -> k.copy(t -> t.substitute(arguments)).toType(typeSystem));
   }
 
   @Override
