@@ -186,8 +186,6 @@ public interface Type {
     Key copy(UnaryOperator<Key> transform) {
       return this;
     }
-
-    abstract Key accept(Keys.Shuttle shuttle);
   }
 }
 
