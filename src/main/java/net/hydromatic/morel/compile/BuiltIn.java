@@ -3308,7 +3308,7 @@ public enum BuiltIn {
     for (int i = 0; i < builtInType.varCount(); i++) {
       tyVars.add(ts.typeVariable(i));
     }
-    final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
+    final PairList<String, Type.Key> tyCons = PairList.of();
     UnaryOperator<DataTypeHelper> transform =
         builtInType instanceof Datatype
             ? ((Datatype) builtInType).transform
@@ -3318,7 +3318,7 @@ public enum BuiltIn {
           @Override
           public DataTypeHelper tyCon(Constructor constructor) {
             Type.Key typeKey = constructor.typeFunction.apply(this);
-            tyCons.put(constructor.constructor, typeKey);
+            tyCons.add(constructor.constructor, typeKey);
             return this;
           }
 
@@ -3326,13 +3326,15 @@ public enum BuiltIn {
             return tyVars.get(i).key();
           }
         });
-    final Type type = ts.dataTypeScheme(builtInType.mlName(), tyVars, tyCons);
+    final Type type =
+        ts.dataTypeScheme(
+            builtInType.mlName(), tyVars, tyCons.toImmutableMap());
     final DataType dataType =
         (DataType) (type instanceof DataType ? type : ((ForallType) type).type);
     ts.setBuiltIn(builtInType);
     if (!builtInType.isInternal()) {
       tyCons
-          .keySet()
+          .leftList()
           .forEach(
               tyConName -> bindings.add(ts.bindTyCon(dataType, tyConName)));
     }
@@ -3389,10 +3391,6 @@ public enum BuiltIn {
     String mlName();
 
     int varCount();
-
-    default UnaryOperator<DataTypeHelper> transform() {
-      return UnaryOperator.identity();
-    }
 
     default boolean isInternal() {
       return false;
@@ -3491,11 +3489,6 @@ public enum BuiltIn {
     @Override
     public int varCount() {
       return varCount;
-    }
-
-    @Override
-    public UnaryOperator<DataTypeHelper> transform() {
-      return transform;
     }
 
     @Override

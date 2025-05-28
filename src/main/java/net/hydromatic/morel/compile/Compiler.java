@@ -557,7 +557,8 @@ public class Compiler {
     switch (fn.op) {
       case FN_LITERAL:
         literal = (Core.Literal) fn;
-        return toApplicable(cx, literal.toBuiltIn(typeSystem, null), argType, pos);
+        return toApplicable(
+            cx, literal.toBuiltIn(typeSystem, null), argType, pos);
 
       case VALUE_LITERAL:
         literal = (Core.Literal) fn;

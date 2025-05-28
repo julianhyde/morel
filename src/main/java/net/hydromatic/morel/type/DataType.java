@@ -18,16 +18,15 @@
  */
 package net.hydromatic.morel.type;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Static.transformEager;
 import static net.hydromatic.morel.util.Static.transformValuesEager;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Ordering;
+import com.google.common.collect.ImmutableMap;
 import java.util.List;
-import java.util.SortedMap;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -35,7 +34,7 @@ import net.hydromatic.morel.compile.BuiltIn;
 /** Algebraic type. */
 public class DataType extends ParameterizedType {
   public final List<Type> arguments;
-  public final SortedMap<String, Key> typeConstructors;
+  public final Map<String, Key> typeConstructors;
 
   /**
    * Creates a DataType.
@@ -53,19 +52,17 @@ public class DataType extends ParameterizedType {
   protected DataType(
       String name,
       String moniker,
-      List<? extends Type> arguments,
-      SortedMap<String, Key> typeConstructors) {
+      ImmutableList<Type> arguments,
+      ImmutableMap<String, Key> typeConstructors) {
     super(Op.DATA_TYPE, name, moniker, arguments.size());
-    this.arguments = ImmutableList.copyOf(arguments);
-    this.typeConstructors = ImmutableSortedMap.copyOf(typeConstructors);
-    checkArgument(
-        typeConstructors.comparator() == null
-            || typeConstructors.comparator() == Ordering.natural());
+    this.arguments = requireNonNull(arguments);
+    this.typeConstructors = requireNonNull(typeConstructors);
   }
 
   @Override
   public Keys.DataTypeKey key() {
-    return Keys.datatype(name, Keys.toKeys(arguments), typeConstructors);
+    return Keys.datatype(
+        name, Keys.toKeys(arguments), ImmutableMap.copyOf(typeConstructors));
   }
 
   @Override
@@ -82,7 +79,7 @@ public class DataType extends ParameterizedType {
     return typeVisitor.visit(this);
   }
 
-  public SortedMap<String, Type> typeConstructors(TypeSystem typeSystem) {
+  public Map<String, Type> typeConstructors(TypeSystem typeSystem) {
     return transformValuesEager(
         typeConstructors,
         k -> k.copy(t -> t.substitute(arguments)).toType(typeSystem));
