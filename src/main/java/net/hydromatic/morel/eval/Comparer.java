@@ -32,6 +32,7 @@ import java.util.Map;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.DummyType;
+import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
@@ -53,7 +54,9 @@ class Comparer extends Applicable2<List, Object, Object>
   }
 
   @Override
-  public Applicable withType(TypeSystem typeSystem, Type argType) {
+  public Applicable withType(TypeSystem typeSystem, Type type) {
+    checkArgument(type instanceof FnType);
+    Type argType = ((FnType) type).paramType;
     checkArgument(argType instanceof TupleType);
     List<Type> argTypes = ((TupleType) argType).argTypes;
     checkArgument(argTypes.size() == 2);
