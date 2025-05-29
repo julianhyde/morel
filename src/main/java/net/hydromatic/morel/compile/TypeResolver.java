@@ -783,14 +783,8 @@ public class TypeResolver {
 
       case ORDER:
         final Ast.Order order = (Ast.Order) step;
-        final List<Ast.OrderItem> orderItems = new ArrayList<>();
-        for (Ast.OrderItem orderItem : order.orderItems) {
-          orderItems.add(
-              orderItem.copy(
-                  deduceType(p.env, orderItem.exp, unifier.variable()),
-                  orderItem.direction));
-        }
-        fromSteps.add(order.copy(orderItems));
+        final Ast.Exp exp = deduceType(p.env, order.exp, unifier.variable());
+        fromSteps.add(order.copy(exp));
         return Triple.of(p.env, p.v, toVariable(listTerm(p.v)));
 
       case UNORDER:

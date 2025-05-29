@@ -608,13 +608,8 @@ public enum CoreBuilder {
     return new Core.Aggregate(type, aggregate, argument);
   }
 
-  public Core.Order order(
-      Core.StepEnv env, Iterable<Core.OrderItem> orderItems) {
-    return new Core.Order(env, ImmutableList.copyOf(orderItems));
-  }
-
-  public Core.OrderItem orderItem(Core.Exp exp, Ast.Direction direction) {
-    return new Core.OrderItem(exp, direction);
+  public Core.Order order(Core.StepEnv env, Core.Exp exp) {
+    return new Core.Order(env, exp);
   }
 
   public Core.Group group(
