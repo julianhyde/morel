@@ -18,7 +18,6 @@
  */
 package net.hydromatic.morel.eval;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.transformEager;
 
@@ -29,56 +28,30 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.DummyType;
-import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.RecordLikeType;
-import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
 
 @SuppressWarnings("rawtypes")
-class Comparer extends Applicable2<List, Object, Object>
-    implements Codes.Typed {
-  private final Comparator comparator;
+public class Comparators {
+  private Comparators() {}
 
-  Comparer(Comparator comparator) {
-    super(BuiltIn.RELATIONAL_COMPARE);
-    this.comparator = requireNonNull(comparator);
+  /** Returns a comparator for a given type. */
+  public static Comparator comparatorFor(TypeSystem typeSystem, Type type) {
+    return new ComparatorBuilder(typeSystem).comparatorFor(type);
   }
 
-  /** Creates a Comparer that can compare values of a given value type. */
-  public static Comparer create(TypeSystem typeSystem, Type type) {
-    return new Comparer(new ComparatorBuilder(typeSystem).comparatorFor(type));
-  }
-
-  @Override
-  public Applicable withType(TypeSystem typeSystem, Type type) {
-    checkArgument(type instanceof FnType);
-    Type argType = ((FnType) type).paramType;
-    checkArgument(argType instanceof TupleType);
-    List<Type> argTypes = ((TupleType) argType).argTypes;
-    checkArgument(argTypes.size() == 2);
-    Type argType0 = argTypes.get(0);
-    Type argType1 = argTypes.get(1);
-    checkArgument(argType0.equals(argType1));
-    return create(typeSystem, argType0);
-  }
-
+  /** Compares two objects using their natural order. */
   @SuppressWarnings("unchecked")
-  @Override
-  public List apply(Object o1, Object o2) {
-    return Codes.order(comparator.compare(o1, o2));
-  }
-
-  @SuppressWarnings("unchecked")
-  private static int compare(Object o1, Object o2) {
+  public static int compare(Object o1, Object o2) {
     return ((Comparable) o1).compareTo(o2);
   }
 
+  /** Sentinel value. */
   private enum Dummy implements Comparator {
     INSTANCE;
 
@@ -88,6 +61,7 @@ class Comparer extends Applicable2<List, Object, Object>
     }
   }
 
+  /** Contains shared state while building comparators for various types. */
   static class ComparatorBuilder {
     private final TypeSystem typeSystem;
     private final Map<Type.Key, Comparator> cache = new HashMap<>();
@@ -133,7 +107,7 @@ class Comparer extends Applicable2<List, Object, Object>
         case ID:
         case TY_VAR:
           // Primitive types are compared using their natural order.
-          return Comparer::compare;
+          return Comparators::compare;
 
         case TUPLE_TYPE:
         case RECORD_TYPE:
@@ -250,4 +224,4 @@ class Comparer extends Applicable2<List, Object, Object>
   }
 }
 
-// End Comparer.java
+// End Comparators.java

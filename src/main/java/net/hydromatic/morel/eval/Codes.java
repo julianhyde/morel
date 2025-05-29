@@ -39,6 +39,7 @@ import com.google.common.primitives.Chars;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -61,6 +62,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
+import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
@@ -2994,8 +2996,7 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#RELATIONAL_COMPARE */
-  private static final Applicable RELATIONAL_COMPARE =
-      new Comparer((o1, o2) -> ((Comparable) o1).compareTo(o2));
+  private static final Applicable RELATIONAL_COMPARE = Comparer.INITIAL;
 
   /** @see BuiltIn#RELATIONAL_COUNT */
   private static final Applicable RELATIONAL_COUNT =
@@ -5561,6 +5562,39 @@ public abstract class Codes {
 
     private void resetOrdinal() {
       ordinalSlots[0] = -1;
+    }
+  }
+
+  /** Implementation of {@link #RELATIONAL_COMPARE}. */
+  @SuppressWarnings("rawtypes")
+  static class Comparer extends Applicable2<List, Object, Object>
+      implements Codes.Typed {
+    static final Applicable INITIAL = new Comparer(Comparators::compare);
+
+    private final Comparator comparator;
+
+    Comparer(Comparator comparator) {
+      super(BuiltIn.RELATIONAL_COMPARE);
+      this.comparator = requireNonNull(comparator);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      checkArgument(type instanceof FnType);
+      Type argType = ((FnType) type).paramType;
+      checkArgument(argType instanceof TupleType);
+      List<Type> argTypes = ((TupleType) argType).argTypes;
+      checkArgument(argTypes.size() == 2);
+      Type argType0 = argTypes.get(0);
+      Type argType1 = argTypes.get(1);
+      checkArgument(argType0.equals(argType1));
+      return new Comparer(Comparators.comparatorFor(typeSystem, argType0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public List apply(Object o1, Object o2) {
+      return Codes.order(comparator.compare(o1, o2));
     }
   }
 }
