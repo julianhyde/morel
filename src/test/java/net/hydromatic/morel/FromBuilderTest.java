@@ -142,7 +142,7 @@ public class FromBuilderTest {
 
   @Test
   void testWhereOrder() {
-    // from i in [1, 2] where i < 2 order i desc
+    // from i in [1, 2] where i < 2 order DESC i
     //  ==>
     // from i in [1, 2]
     final Fixture f = new Fixture();
