@@ -109,8 +109,7 @@ The formal syntax of queries is as follows.
     | <b>intersect</b> [ <b>distinct</b> ] <i>exp<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>exp<sub>i</sub></i>
                                 intersect step (<i>i</i> &ge; 1)
     | <b>join</b> <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i>  join step (<i>s</i> &ge; 1)
-    | <b>order</b> <i>orderItem<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>orderItem<sub>o</sub></i>
-                                order step (<i>o</i> &ge; 1)
+    | <b>order</b> <i>exp</i>                 order step
     | <b>skip</b> <i>exp</i>                  skip step
     | <b>take</b> <i>exp</i>                  take step
     | <b>through</b> <i>pat</i> <b>in</b> <i>exp</i>        through step
@@ -125,8 +124,6 @@ The formal syntax of queries is as follows.
 <i>groupKey</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i>
 
 <i>agg</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i> [ <b>of</b> <i>exp</i> ]
-
-<i>orderItem</i> &rarr; <i>exp</i> [ <b>desc</b> ]
 </pre>
 
 A query is a `from`, `exists` or `forall` keyword followed by one or
@@ -479,7 +476,7 @@ row, starting at 0.
 <pre>
 (* Print the top 5 employees by salary, and their rank. *)
 <b>from</b> e <b>in</b> scott.emps
-  <b>order</b> e.sal <b>desc</b>
+  <b>order</b> <b>DESC</b> e.sal
   <b>take</b> 5
   <b>yield</b> {e.ename, e.sal, rank = <b>ordinal</b> + 1};
 <i>
@@ -513,7 +510,7 @@ whose input is ordered.
 | [`group`](#group-step)         | Performs aggregation across groups of rows.                                                                           |
 | [`intersect`](#intersect-step) | Returns the set (or multiset) intersection between the current collection and one or more argument collections.       |
 | [`join`](#join-step)           | Joins one or more scans to the current collection.                                                                    |
-| [`order`](#order-step)         | Sorts the current collection by a list of expressions.                                                                |
+| [`order`](#order-step)         | Sorts the current collection by an expression.                                                               |
 | [`skip`](#skip-step)           | Skips a given number of rows from the current collection.                                                             |
 | [`take`](#take-step)           | Limits the number of rows to return from the current collection.                                                      |
 | [`through`](#through-step)     | Calls a table function, with the current collection as an argument, and starts a scan over the collection it returns. |
@@ -791,9 +788,7 @@ val it : {dname:string, ename:string} list</i>
 ### Order step
 
 <pre>
-<b>order</b> <i>orderItem<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>orderItem<sub>o</sub></i>   (<i>o</i> &ge; 1)
-
-<i>orderItem</i> &rarr; <i>exp</i> [ <b>desc</b> ]
+<b>order</b> <i>exp</i>
 </pre>
 
 #### Description
@@ -819,7 +814,7 @@ secondary sort key.)
 <i>(* List employees ordered by salary (descending) then
    name. *)</i>
 <b>from</b> e <b>in</b> scott.emps
-  <b>order</b> e.sal <b>desc</b>, e.ename
+  <b>order</b> (<b>DESC</b> e.sal, e.ename)
   <b>yield</b> {e.ename, e.job, e.sal};
 <i>
 ename  job       sal
@@ -1071,7 +1066,7 @@ if that is more efficient.
 <i>(* Find the top 3 employees by salary, as an unordered
    collection. *)</i>
 <b>from</b> e <b>in</b> scott.emps
-  <b>order</b> e.sal <b>desc</b>
+  <b>order</b> <b>DESC</b> e.sal
   <b>take</b> 3
   <b>unorder</b>
   <b>yield</b> {e.ename, e.job, e.sal};

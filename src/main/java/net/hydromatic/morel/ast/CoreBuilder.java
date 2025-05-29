@@ -204,7 +204,7 @@ public enum CoreBuilder {
         Op.INTERNAL_LITERAL, exp.type, Core.Literal.wrap(exp, value));
   }
 
-  /** Wraps an expression in "desc". */
+  /** Wraps an expression in "DESC". */
   public Core.Exp desc(TypeSystem typeSystem, Core.Exp exp) {
     Core.Id desc = constructor(typeSystem, BuiltIn.Constructor.DESCENDING_DESC);
     return apply(Pos.ZERO, desc.type, desc, exp);
