@@ -542,6 +542,11 @@ public class TypeSystem {
     return (TypeVar) typeFor(Keys.ordinal(ordinal));
   }
 
+  /** Returns the "descending" built-in data type. */
+  public Type descending() {
+    return lookup(BuiltIn.Datatype.DESCENDING);
+  }
+
   /** Returns the "order" built-in data type. */
   public Type order() {
     return lookup(BuiltIn.Datatype.ORDER);
