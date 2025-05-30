@@ -1267,6 +1267,41 @@ from line in lines,
 >    {c=1,word="sat"},{c=2,word="skunk"},{c=3,word="stump"},{c=2,word="stunk"},
 >    {c=3,word="the"},{c=2,word="thunk"}] : {c:int, word:string} list
 
+(*) === Order =======================================================
+Sys.set ("hybrid", false);
+> val it = () : unit
+
+fun compareInt (x: int, y: int) =
+    if x < y then LESS
+    else if x > y then GREATER
+    else EQUAL;
+> val compareInt = fn : int * int -> order
+
+(*) Most data types have a built-in `compare` function
+Int.compare;
+> val it = fn : int * int -> order
+
+String.compare;
+> val it = fn : string * string -> order
+
+(*) Compare (string, real) pairs, the string first, then the real descending.
+fun compareStringAscRealDesc ((s1, r1), (s2, r2)) =
+    case String.compare (s1, s2) of
+        EQUAL => Real.compare (r2, r1)
+      | result => result;
+> val compareStringAscRealDesc = fn : string * real * (string * real) -> order
+
+from i in [SOME 1, SOME ~100, NONE]
+  order i;
+> val it = [NONE,SOME ~100,SOME 1] : int option list
+
+from i in [SOME 1, SOME ~100, NONE]
+  order DESC i;
+> val it = [SOME 1,SOME ~100,NONE] : int option list
+
+datatype 'a noneLast = NONE_LAST of 'a;
+> datatype 'a noneLast = NONE_LAST of 'a
+
 (*) === Coda ========================================================
 from message in ["the end"];
 > val it = ["the end"] : string list
