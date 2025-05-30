@@ -554,6 +554,7 @@ Exception:
 | Relational.op notelem | &alpha; * &alpha; bag &rarr; bool, &alpha; * &alpha; list &rarr; bool | "e notelem collection" returns whether `e` is not a member of `collection`. |
 | Relational.sum, sum | int list &rarr; int | "sum list" returns the sum of the elements of `list`. Often used with `group`, for example `from e in emps group e.deptno compute sumId = sum of e.id`. |
 | String.compare | string * string &rarr; order | "compare (s, t)" does a lexicographic comparison of the two strings using the ordering `Char.compare` on the characters. It returns `LESS`, `EQUAL`, or `GREATER`, if `s` is less than, equal to, or greater than `t`, respectively. |
+| String.op ^ | string * string &rarr; string | "s ^ t" is the concatenation of the strings `s` and `t`. This raises `Size` if `\|s\| + \|t\| &gt; maxSize`. |
 | String.concat | string list &rarr; string | "concat l" is the concatenation of all the strings in `l`. This raises `Size` if the sum of all the sizes is greater than `maxSize`. |
 | String.concatWith | string &rarr; string list &rarr; string | "concatWith s l" returns the concatenation of the strings in the list `l` using the string `s` as a separator. This raises `Size` if the size of the resulting string would be greater than `maxSize`. |
 | String.explode | string &rarr; char list | "explode s" is the list of characters in the string `s`. |
