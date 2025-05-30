@@ -2545,6 +2545,19 @@ sum of e.id`.
 # === String structure ===============================================
 
 [[functions]]
+ordinal = 196
+structure = "String"
+name = "compare"
+specified = "basis"
+type = "string * string → order"
+description = """
+"compare (s, t)" does a lexicographic comparison of the two strings
+using the ordering `Char.compare` on the characters. It returns
+`LESS`, `EQUAL`, or `GREATER`, if `s` is less than, equal to, or
+greater than `t`, respectively.
+"""
+
+[[functions]]
 ordinal = 197
 structure = "String"
 name = "concat"

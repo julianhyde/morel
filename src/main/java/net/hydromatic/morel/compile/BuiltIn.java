@@ -730,6 +730,12 @@ public enum BuiltIn {
    */
   STRING_SUB("String", "sub", ts -> ts.fnType(ts.tupleType(STRING, INT), CHAR)),
 
+  /** Function "String.compare", of type "string * string &rarr; order". */
+  STRING_COMPARE(
+      "String",
+      "compare",
+      ts -> ts.fnType(ts.tupleType(STRING, STRING), ts.order())),
+
   /**
    * Function "String.extract", of type "string * int * int option &rarr;
    * string".
