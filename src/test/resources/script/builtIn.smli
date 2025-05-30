@@ -118,16 +118,16 @@ Option.compose;
 > val it = fn : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option
 String;
 > val it =
->   {concat=fn,concatWith=fn,explode=fn,extract=fn,implode=fn,isPrefix=fn,
->    isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,size=fn,str=fn,sub=fn,
->    substring=fn,translate=fn}
->   : {concat:string list -> string, concatWith:string -> string list -> string,
->      explode:string -> char list, extract:string * int * int option -> string,
->      implode:char list -> string, isPrefix:string -> string -> bool,
->      isSubstring:string -> string -> bool, isSuffix:string -> string -> bool,
->      map:(char -> char) -> string -> string, maxSize:int, size:string -> int,
->      str:char -> string, sub:string * int -> char,
->      substring:string * int * int -> string,
+>   {compare=fn,concat=fn,concatWith=fn,explode=fn,extract=fn,implode=fn,
+>    isPrefix=fn,isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,size=fn,
+>    str=fn,sub=fn,substring=fn,translate=fn}
+>   : {compare:string * string -> order, concat:string list -> string,
+>      concatWith:string -> string list -> string, explode:string -> char list,
+>      extract:string * int * int option -> string, implode:char list -> string,
+>      isPrefix:string -> string -> bool, isSubstring:string -> string -> bool,
+>      isSuffix:string -> string -> bool, map:(char -> char) -> string -> string,
+>      maxSize:int, size:string -> int, str:char -> string,
+>      sub:string * int -> char, substring:string * int * int -> string,
 >      translate:(char -> string) -> string -> string}
 Real;
 > val it =
@@ -253,6 +253,13 @@ ceil;
 (* "val chr : int -> char" maps to "Char.chr" *)
 chr;
 > val it = fn : int -> char
+(* "val compare : 'a * 'a -> order" maps to "String.compare" *)
+String.compare;
+> val it = fn : string * string -> order
+String.compare ("abc", "xyz");
+> val it = LESS : order
+String.compare ("abc", "");
+> val it = GREATER : order
 (* "val concat : string list -> string" maps to "String.concat" *)
 concat;
 > val it = fn : string list -> string
@@ -3773,7 +3780,7 @@ Sys.env ();
 >     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
->     "{concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
+>     "{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
 >    ("Vector",
@@ -3859,7 +3866,7 @@ env ();
 >     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
->     "{concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
+>     "{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
 >    ("Vector",

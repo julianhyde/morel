@@ -1170,6 +1170,15 @@ public abstract class Codes {
     }
   }
 
+  /** @see BuiltIn#STRING_COMPARE */
+  private static final Applicable STRING_COMPARE =
+      new Applicable2<List, String, String>(BuiltIn.STRING_COMPARE) {
+        @Override
+        public List apply(String a0, String a1) {
+          return order(a0.compareTo(a1));
+        }
+      };
+
   /** @see BuiltIn#STRING_EXTRACT */
   private static final Applicable STRING_EXTRACT = new StringExtract(Pos.ZERO);
 
@@ -3748,6 +3757,7 @@ public abstract class Codes {
           .put(BuiltIn.OP_NOT_ELEM, OP_NOT_ELEM)
           .put(BuiltIn.OP_PLUS, OP_PLUS)
           .put(BuiltIn.OP_TIMES, OP_TIMES)
+          .put(BuiltIn.STRING_COMPARE, STRING_COMPARE)
           .put(BuiltIn.STRING_MAX_SIZE, STRING_MAX_SIZE)
           .put(BuiltIn.STRING_SIZE, STRING_SIZE)
           .put(BuiltIn.STRING_SUB, STRING_SUB)
