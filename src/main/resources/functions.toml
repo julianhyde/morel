@@ -2545,7 +2545,7 @@ sum of e.id`.
 # === String structure ===============================================
 
 [[functions]]
-ordinal = 196
+ordinal = 195
 structure = "String"
 name = "compare"
 specified = "basis"
@@ -2676,6 +2676,17 @@ specified = "basis"
 type = "int"
 description = """
 The longest allowed size of a string.
+"""
+
+[[functions]]
+ordinal = 196
+structure = "String"
+name = "op ^"
+specified = "basis"
+type = "string * string → string"
+description = """
+"s ^ t" is the concatenation of the strings `s` and `t`. This raises
+`Size` if `|s| + |t| > maxSize`.
 """
 
 [[functions]]
