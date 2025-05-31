@@ -1302,6 +1302,46 @@ from i in [SOME 1, SOME ~100, NONE]
 datatype 'a noneLast = NONE_LAST of 'a;
 > datatype 'a noneLast = NONE_LAST of 'a
 
+(*) === GCD and LCM =================================================
+fun factorize n =
+  let
+    fun factorize' n d =
+      if n < d then [] else
+      if n mod d = 0 then d :: (factorize' (n div d) d)
+      else factorize' n (d + 1)
+  in
+    factorize' n 2
+  end;
+> val factorize = fn : int -> int list
+
+fun product [] = 1
+  | product (x :: xs) = x * product xs;
+> val product = fn : int list -> int
+product (factorize 12);
+> val it = 12 : int
+
+factorize 24;
+> val it = [2,2,2,3] : int list
+factorize 40;
+> val it = [2,2,2,5] : int list
+
+(*) Greatest Common Divisor (GCD)
+fun gcd (m, n) =
+  from i in factorize m
+    intersect (factorize n)
+    compute product;
+> val gcd = fn : int * int -> int
+
+(*) Least Common Multiple (LCM)
+fun lcm (m, n) =
+  m * n div gcd (m, n);
+> val lcm = fn : int * int -> int
+
+lcm (24, 40);
+> val it = 120 : int
+gcd (28, 120);
+> val it = 4 : int
+
 (*) === Coda ========================================================
 from message in ["the end"];
 > val it = ["the end"] : string list

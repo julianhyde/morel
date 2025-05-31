@@ -212,3 +212,120 @@ of code — but we could provide a complex type that match that And
 we have created `Relational.compare`. (It is a somewhat strange function
 because its type is an implicit argument.)
 
+<hr>
+
+# Fraction arithmetic using multiset functions
+
+Have you ever noticed that people frequently use `UNION ALL` in SQL
+but rarely use `INTERSECT ALL` or `EXCEPT ALL`? These are the multiset
+variants of the set operations `UNION`, `INTERSECT`, and `EXCEPT`.
+
+It's hard to find a good example of `INTERSECT ALL`, but I think
+I've found one.
+
+Since Morel just added set and multiset operations (coming soon in release 0.7),
+and since Morel queries can operate over integer values.
+I've found the perfect example.
+
+## LCM and GCD
+
+Remember how -- probably in middle school -- you learned how to add
+two fractions, and to reduce a fraction to its lowest terms?
+
+Suppose you need to add 5/24 and 1/40. First, you find the least
+common multiple (LCM) of their denominators. The LCM of 24 and 40 is
+120, so you convert the fractions to have the LCM as their denominator:
+
+```
+  5      1        25      3         28
+---- + ----  =  ----- + -----  =  -----
+ 24     40       120     120       120
+```
+
+Next, you need to reduce the fraction 28/120 to its lowest terms.
+You fins the greatest common divisor (GCD) of 28 and 120, which is 4,
+and divide both the numerator and denominator by the GCD:
+
+```
+  28        (28/4)        7
+-----  =  ---------  =  ----
+ 120       (120/4)       30
+```
+
+## Using Morel to compute LCM and GCD
+
+LCM and GCD are computed from the prime factors of the two numbers,
+so first we need a `factorize` function:
+
+```
+fun factorize n =
+  let
+    fun factorize' n d =
+      if n < d then [] else
+      if n mod d = 0 then d :: (factorize' (n div d) d)
+      else factorize' n (d + 1)
+  in
+    factorize' n 2
+  end;
+> val factorize = fn : int -> int list
+```
+
+and a `product` function:
+
+```
+fun product [] = 1
+  | product (x::xs) = x * (product xs);
+> val product = fn : int list -> int
+```
+
+Let's test them.
+```
+factorize 24;
+> val it = [2, 2, 2, 3] : int list
+factorize 40;
+> val it = [2, 2, 2, 5] : int list
+product (factorize 24);
+> val it = 24 : int
+```
+
+GCD is the product of the common prime factors. If one factor occurs
+more than once in the prime factorization of both numbers, the GCD will
+contain that factor the minimum number of times.
+
+That happens to be exactly that `intersect` does for multisets:
+```
+from i in [2, 2, 2, 3]
+  intersect [2, 2, 5];
+> val it = [2, 2] : int list
+```
+
+So, we can compute GCD like this:
+
+```
+fun gcd (m, n) =
+  from f in factorize m
+    intersect factorize n
+    compute product;
+> val gcd = fn : int * int -> int
+```
+
+The last step uses `compute` because `product` fulfills Morel's only
+criterion to be an aggregate function: its argument is a collection
+of values. (At least one SQL dialect agrees with us, and has a
+[PRODUCT](https://duckdb.org/docs/stable/sql/functions/aggregates#productarg)
+aggregate function.)
+
+LCM can be computed from GCD:
+```
+fun lcm (m, n) =
+  (m * n) div gcd (m, n);
+```
+
+Let's test them:
+
+```
+lcm (24, 40);
+> val it = 120 : int
+gcd (28, 120);
+> val it = 4 : int
+```
