@@ -116,20 +116,23 @@ Option;
 >      valOf:'p option -> 'p}
 String;
 > val it =
->   {compare=fn,concat=fn,concatWith=fn,explode=fn,extract=fn,implode=fn,
->    isPrefix=fn,isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,`op <`=fn,
->    `op <=`=fn,`op >`=fn,`op >=`=fn,`op ^`=fn,size=fn,str=fn,sub=fn,
->    substring=fn,translate=fn}
->   : {compare:string * string -> order, concat:string list -> string,
+>   {collate=fn,compare=fn,concat=fn,concatWith=fn,explode=fn,extract=fn,
+>    fields=fn,implode=fn,isPrefix=fn,isSubstring=fn,isSuffix=fn,map=fn,
+>    maxSize=2147483647,`op <`=fn,`op <=`=fn,`op >`=fn,`op >=`=fn,`op ^`=fn,
+>    size=fn,str=fn,sub=fn,substring=fn,tokens=fn,translate=fn}
+>   : {collate:(char * char -> order) -> string * string -> order,
+>      compare:string * string -> order, concat:string list -> string,
 >      concatWith:string -> string list -> string, explode:string -> char list,
->      extract:string * int * int option -> string, implode:char list -> string,
->      isPrefix:string -> string -> bool, isSubstring:string -> string -> bool,
->      isSuffix:string -> string -> bool, map:(char -> char) -> string -> string,
->      maxSize:int, `op <`:string * string -> bool,
->      `op <=`:string * string -> bool, `op >`:string * string -> bool,
->      `op >=`:string * string -> bool, `op ^`:string * string -> string,
->      size:string -> int, str:char -> string, sub:string * int -> char,
->      substring:string * int * int -> string,
+>      extract:string * int * int option -> string,
+>      fields:(char -> bool) -> string -> string list,
+>      implode:char list -> string, isPrefix:string -> string -> bool,
+>      isSubstring:string -> string -> bool, isSuffix:string -> string -> bool,
+>      map:(char -> char) -> string -> string, maxSize:int,
+>      `op <`:string * string -> bool, `op <=`:string * string -> bool,
+>      `op >`:string * string -> bool, `op >=`:string * string -> bool,
+>      `op ^`:string * string -> string, size:string -> int, str:char -> string,
+>      sub:string * int -> char, substring:string * int * int -> string,
+>      tokens:(char -> bool) -> string -> string list,
 >      translate:(char -> string) -> string -> string}
 Real;
 > val it =
@@ -863,31 +866,23 @@ Sys.plan ();
 
 (*) val tokens : (char -> bool) -> string -> string list
 String.tokens;
-> stdIn:1.1-1.7 Error: no field 'tokens' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = fn : (char -> bool) -> string -> string list
 String.tokens (fn c => c = #"|") "|ab||cd";
-> stdIn:1.1-1.7 Error: no field 'tokens' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = ["ab","cd"] : string list
 String.tokens (fn c => c = #"|") "a|b||";
-> stdIn:1.1-1.7 Error: no field 'tokens' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = ["a","b"] : string list
 String.tokens (fn c => c = #"|") "";
-> stdIn:1.1-1.7 Error: no field 'tokens' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = [] : string list
 
 (*) val fields : (char -> bool) -> string -> string list
 String.fields;
-> stdIn:1.1-1.7 Error: no field 'fields' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = fn : (char -> bool) -> string -> string list
 String.fields (fn c => c = #"|") "|ab||cd";
-> stdIn:1.1-1.7 Error: no field 'fields' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = ["","ab","","cd"] : string list
 String.fields (fn c => c = #"|") "a|b||";
-> stdIn:1.1-1.7 Error: no field 'fields' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = ["a","b","",""] : string list
 String.fields (fn c => c = #"|") "";
-> stdIn:1.1-1.7 Error: no field 'fields' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = [""] : string list
 
 (*) val isPrefix    : string -> string -> bool
 String.isPrefix;
@@ -963,27 +958,23 @@ String.compare ("abc", "ab");
 
 (*) val collate : (char * char -> order) -> string * string -> order
 String.collate;
-> stdIn:1.1-1.7 Error: no field 'collate' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = fn : (char * char -> order) -> string * string -> order
 let
   fun charCompareIgnoreCase (c1, c2) =
       Char.compare (Char.toLower c1, Char.toLower c2)
 in
   String.collate charCompareIgnoreCase ("Hello", "hello")
 end;
-> stdIn:5.3-5.9 Error: no field 'collate' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:5.3-5.9
+> val it = EQUAL : order
 String.collate Char.compare ("Hello", "hello");
-> stdIn:1.1-1.7 Error: no field 'collate' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = LESS : order
 let
   fun charCompareIgnoreCase (c1, c2) =
       Char.compare (Char.toLower c1, Char.toLower c2)
 in
   String.collate charCompareIgnoreCase ("Apple", "BANANA")
 end;
-> stdIn:5.3-5.9 Error: no field 'collate' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:5.3-5.9
+> val it = LESS : order
 
 (*) val <  : string * string -> bool
 String.`op <`;
@@ -3791,12 +3782,10 @@ String.translate;
 > val it = fn : (char -> string) -> string -> string
 (*) val tokens : (char -> bool) -> string -> string list
 String.tokens;
-> stdIn:1.1-1.7 Error: no field 'tokens' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = fn : (char -> bool) -> string -> string list
 (*) val fields : (char -> bool) -> string -> string list
 String.fields;
-> stdIn:1.1-1.7 Error: no field 'fields' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = fn : (char -> bool) -> string -> string list
 (*) val isPrefix    : string -> string -> bool
 String.isPrefix;
 > val it = fn : string -> string -> bool
@@ -3811,8 +3800,7 @@ String.compare;
 > val it = fn : string * string -> order
 (*) val collate : (char * char -> order) -> string * string -> order
 String.collate;
-> stdIn:1.1-1.7 Error: no field 'collate' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
+> val it = fn : (char * char -> order) -> string * string -> order
 (*) val <  : string * string -> bool
 String.`op <`;
 > val it = fn : string * string -> bool
@@ -3827,23 +3815,23 @@ String.`op >=`;
 > val it = fn : string * string -> bool
 (*) val toString : string -> String.string
 String.toString;
-> stdIn:1.1-1.7 Error: no field 'toString' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
+> stdIn:1.1-1.7 Error: no field 'toString' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
 >   raised at: stdIn:1.1-1.7
 (*) val scan : (char, 'a) StringCvt.reader -> (string, 'a) StringCvt.reader
 String.scan;
-> stdIn:1.1-1.7 Error: no field 'scan' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
+> stdIn:1.1-1.7 Error: no field 'scan' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
 >   raised at: stdIn:1.1-1.7
 (*) val fromString : String.string -> string option
 String.fromString;
-> stdIn:1.1-1.7 Error: no field 'fromString' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
+> stdIn:1.1-1.7 Error: no field 'fromString' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
 >   raised at: stdIn:1.1-1.7
 (*) val toCString : string -> String.string
 String.toCString;
-> stdIn:1.1-1.7 Error: no field 'toCString' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
+> stdIn:1.1-1.7 Error: no field 'toCString' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
 >   raised at: stdIn:1.1-1.7
 (*) val fromCString : String.string -> string option
 String.fromCString;
-> stdIn:1.1-1.7 Error: no field 'fromCString' in type '{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}'
+> stdIn:1.1-1.7 Error: no field 'fromCString' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
 >   raised at: stdIn:1.1-1.7
 
 (* Sys --------------------------------------------------------- *)
@@ -3878,7 +3866,7 @@ Sys.env ();
 >     "{count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
->     "{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
+>     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
 >    ("Vector",
@@ -3890,7 +3878,8 @@ Sys.env ();
 >    ("emps","{empno:int, ename:string, mgr:int} list"),
 >    ("empty","forall 'a. 'a bag -> bool"),
 >    ("env","unit -> (string * string) list"),("explode","string -> char list"),
->    ("f","real -> int * int * int * int"),("false","bool"),("file","{...}"),
+>    ("f","real -> int * int * int * int"),("false","bool"),
+>    ("fields","(char -> bool) -> string -> string list"),("file","{...}"),
 >    ("floor","real -> int"),
 >    ("foldl","forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b"),
 >    ("foldr","forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b"),
@@ -3913,8 +3902,8 @@ Sys.env ();
 >    ("op <>","forall 'a. 'a * 'a -> bool"),
 >    ("op =","forall 'a. 'a * 'a -> bool"),("op >","forall 'a. 'a * 'a -> bool"),
 >    ("op >=","forall 'a. 'a * 'a -> bool"),
->    ("op @","forall 'a. 'a list * 'a list -> 'a list"),
->    ("op ^","string * string -> string"),...] : (string * string) list
+>    ("op @","forall 'a. 'a list * 'a list -> 'a list"),...]
+>   : (string * string) list
 
 env;
 > val it = fn : unit -> (string * string) list
@@ -3945,7 +3934,7 @@ env ();
 >     "{count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
->     "{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
+>     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
 >    ("Vector",
@@ -3957,7 +3946,8 @@ env ();
 >    ("emps","{empno:int, ename:string, mgr:int} list"),
 >    ("empty","forall 'a. 'a bag -> bool"),
 >    ("env","unit -> (string * string) list"),("explode","string -> char list"),
->    ("f","real -> int * int * int * int"),("false","bool"),("file","{...}"),
+>    ("f","real -> int * int * int * int"),("false","bool"),
+>    ("fields","(char -> bool) -> string -> string list"),("file","{...}"),
 >    ("floor","real -> int"),
 >    ("foldl","forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b"),
 >    ("foldr","forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b"),
@@ -3980,8 +3970,8 @@ env ();
 >    ("op <>","forall 'a. 'a * 'a -> bool"),
 >    ("op =","forall 'a. 'a * 'a -> bool"),("op >","forall 'a. 'a * 'a -> bool"),
 >    ("op >=","forall 'a. 'a * 'a -> bool"),
->    ("op @","forall 'a. 'a list * 'a list -> 'a list"),
->    ("op ^","string * string -> string"),...] : (string * string) list
+>    ("op @","forall 'a. 'a list * 'a list -> 'a list"),...]
+>   : (string * string) list
 
 (*) val plan : unit -> string
 Sys.plan;

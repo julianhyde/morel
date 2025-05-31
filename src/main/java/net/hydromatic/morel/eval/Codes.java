@@ -1216,6 +1216,39 @@ public abstract class Codes {
     }
   }
 
+  /** @see BuiltIn#STRING_COLLATE */
+  private static final Applicable STRING_COLLATE =
+      new ApplicableImpl(BuiltIn.STRING_COLLATE) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          return stringCollate((Applicable) arg);
+        }
+      };
+
+  private static Applicable stringCollate(Applicable comparator) {
+    return new ApplicableImpl("String.collate$comparator") {
+      @Override
+      public Object apply(EvalEnv env, Object arg) {
+        final List tuple = (List) arg;
+        final String string0 = (String) tuple.get(0);
+        final String string1 = (String) tuple.get(1);
+        final int n0 = string0.length();
+        final int n1 = string1.length();
+        final int n = Math.min(n0, n1);
+        for (int i = 0; i < n; i++) {
+          final char char0 = string0.charAt(i);
+          final char char1 = string1.charAt(i);
+          final List compare =
+              (List) comparator.apply(env, ImmutableList.of(char0, char1));
+          if (!compare.get(0).equals("EQUAL")) {
+            return compare;
+          }
+        }
+        return order(Integer.compare(n0, n1));
+      }
+    };
+  }
+
   /** @see BuiltIn#STRING_COMPARE */
   private static final Applicable STRING_COMPARE =
       new Applicable2<List, String, String>(BuiltIn.STRING_COMPARE) {
@@ -1227,6 +1260,51 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_EXTRACT */
   private static final Applicable STRING_EXTRACT = new StringExtract(Pos.ZERO);
+
+  /** @see BuiltIn#STRING_FIELDS */
+  private static final Applicable STRING_FIELDS =
+      fieldsTokens(BuiltIn.STRING_FIELDS);
+
+  /** @see BuiltIn#STRING_TOKENS */
+  private static final Applicable STRING_TOKENS =
+      fieldsTokens(BuiltIn.STRING_TOKENS);
+
+  private static Applicable fieldsTokens(BuiltIn builtIn) {
+    return new ApplicableImpl(builtIn) {
+      @Override
+      public Object apply(EvalEnv env, Object argValue) {
+        return fieldsTokens2(builtIn, (Applicable) argValue);
+      }
+    };
+  }
+
+  private static Applicable fieldsTokens2(
+      BuiltIn builtIn, Applicable applicable) {
+    return new ApplicableImpl(builtIn) {
+      @Override
+      public Object apply(EvalEnv env, Object argValue) {
+        String s = (String) argValue;
+        List<String> result = new ArrayList<>();
+        int h = 0;
+        for (int i = 0; i < s.length(); i++) {
+          char c = s.charAt(i);
+          Boolean b = (Boolean) applicable.apply(env, c);
+          if (b) {
+            if (builtIn == BuiltIn.STRING_FIELDS || i > h) {
+              // String.tokens only adds fields if they are non-empty.
+              result.add(s.substring(h, i));
+            }
+            h = i + 1;
+          }
+        }
+        if (builtIn == BuiltIn.STRING_FIELDS || s.length() > h) {
+          // String.tokens only adds fields if they are non-empty.
+          result.add(s.substring(h));
+        }
+        return result;
+      }
+    };
+  }
 
   /** Implements {@link BuiltIn#STRING_SUB}. */
   private static class StringExtract
@@ -3800,11 +3878,14 @@ public abstract class Codes {
           .put(BuiltIn.OP_NOT_ELEM, OP_NOT_ELEM)
           .put(BuiltIn.OP_PLUS, OP_PLUS)
           .put(BuiltIn.OP_TIMES, OP_TIMES)
+          .put(BuiltIn.STRING_COLLATE, STRING_COLLATE)
           .put(BuiltIn.STRING_COMPARE, STRING_COMPARE)
           .put(BuiltIn.STRING_MAX_SIZE, STRING_MAX_SIZE)
           .put(BuiltIn.STRING_SIZE, STRING_SIZE)
           .put(BuiltIn.STRING_SUB, STRING_SUB)
           .put(BuiltIn.STRING_EXTRACT, STRING_EXTRACT)
+          .put(BuiltIn.STRING_FIELDS, STRING_FIELDS)
+          .put(BuiltIn.STRING_TOKENS, STRING_TOKENS)
           .put(BuiltIn.STRING_SUBSTRING, STRING_SUBSTRING)
           .put(BuiltIn.STRING_CONCAT, STRING_CONCAT)
           .put(BuiltIn.STRING_CONCAT_WITH, STRING_CONCAT_WITH)

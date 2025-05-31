@@ -757,6 +757,19 @@ public enum BuiltIn {
       ts -> ts.fnType(ts.tupleType(STRING, STRING), ts.order())),
 
   /**
+   * Function "String.collate", of type "(char * char &rarr; order) &rarr;
+   * string * string &rarr; order".
+   */
+  STRING_COLLATE(
+      "String",
+      "collate",
+      ts ->
+          ts.fnType(
+              ts.fnType(ts.tupleType(CHAR, CHAR), ts.order()),
+              ts.tupleType(STRING, STRING),
+              ts.order())),
+
+  /**
    * Function "String.extract", of type "string * int * int option &rarr;
    * string".
    *
@@ -776,6 +789,26 @@ public enum BuiltIn {
       "String",
       "extract",
       ts -> ts.fnType(ts.tupleType(STRING, INT, ts.option(INT)), STRING)),
+
+  /**
+   * Function "String.fields", of type "(char &rarr; bool) &rarr; string &rarr;
+   * string list".
+   */
+  STRING_FIELDS(
+      "String",
+      "fields",
+      "fields",
+      ts -> ts.fnType(ts.fnType(CHAR, BOOL), STRING, ts.listType(STRING))),
+
+  /**
+   * Function "String.tokens", of type "(char &rarr; bool) &rarr; string &rarr;
+   * string list".
+   */
+  STRING_TOKENS(
+      "String",
+      "tokens",
+      "tokens",
+      ts -> ts.fnType(ts.fnType(CHAR, BOOL), STRING, ts.listType(STRING))),
 
   /**
    * Function "String.substring", of type "string * int * int &rarr; string".
