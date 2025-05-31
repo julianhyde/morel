@@ -1139,6 +1139,51 @@ public abstract class Codes {
   /** @see BuiltIn#STRING_MAX_SIZE */
   private static final Integer STRING_MAX_SIZE = Integer.MAX_VALUE;
 
+  /** @see BuiltIn#STRING_OP_CARET */
+  private static final Applicable STRING_OP_CARET =
+      new Applicable2<String, String, String>(BuiltIn.STRING_OP_CARET) {
+        @Override
+        public String apply(String a0, String a1) {
+          return a0 + a1;
+        }
+      };
+
+  /** @see BuiltIn#STRING_OP_GE */
+  private static final Applicable STRING_OP_GE =
+      new Applicable2<Boolean, String, String>(BuiltIn.STRING_OP_GE) {
+        @Override
+        public Boolean apply(String a0, String a1) {
+          return a0.compareTo(a1) >= 0;
+        }
+      };
+
+  /** @see BuiltIn#STRING_OP_GT */
+  private static final Applicable STRING_OP_GT =
+      new Applicable2<Boolean, String, String>(BuiltIn.STRING_OP_GT) {
+        @Override
+        public Boolean apply(String a0, String a1) {
+          return a0.compareTo(a1) > 0;
+        }
+      };
+
+  /** @see BuiltIn#STRING_OP_LE */
+  private static final Applicable STRING_OP_LE =
+      new Applicable2<Boolean, String, String>(BuiltIn.STRING_OP_LE) {
+        @Override
+        public Boolean apply(String a0, String a1) {
+          return a0.compareTo(a1) <= 0;
+        }
+      };
+
+  /** @see BuiltIn#STRING_OP_LT */
+  private static final Applicable STRING_OP_LT =
+      new Applicable2<Boolean, String, String>(BuiltIn.STRING_OP_LT) {
+        @Override
+        public Boolean apply(String a0, String a1) {
+          return a0.compareTo(a1) < 0;
+        }
+      };
+
   /** @see BuiltIn#STRING_SIZE */
   private static final Applicable STRING_SIZE =
       new ApplicableImpl(BuiltIn.STRING_SIZE) {
@@ -3767,6 +3812,11 @@ public abstract class Codes {
           .put(BuiltIn.STRING_IMPLODE, STRING_IMPLODE)
           .put(BuiltIn.STRING_EXPLODE, STRING_EXPLODE)
           .put(BuiltIn.STRING_MAP, STRING_MAP)
+          .put(BuiltIn.STRING_OP_CARET, STRING_OP_CARET)
+          .put(BuiltIn.STRING_OP_GE, STRING_OP_GE)
+          .put(BuiltIn.STRING_OP_GT, STRING_OP_GT)
+          .put(BuiltIn.STRING_OP_LE, STRING_OP_LE)
+          .put(BuiltIn.STRING_OP_LT, STRING_OP_LT)
           .put(BuiltIn.STRING_TRANSLATE, STRING_TRANSLATE)
           .put(BuiltIn.STRING_IS_PREFIX, STRING_IS_PREFIX)
           .put(BuiltIn.STRING_IS_SUBSTRING, STRING_IS_SUBSTRING)

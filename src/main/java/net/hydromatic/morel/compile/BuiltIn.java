@@ -714,6 +714,26 @@ public enum BuiltIn {
    */
   STRING_MAX_SIZE("String", "maxSize", ts -> INT),
 
+  /** Operator "String.op ^", of type "string * string &rarr; string". */
+  STRING_OP_CARET(
+      "String", "op ^", ts -> ts.fnType(ts.tupleType(STRING, STRING), STRING)),
+
+  /** Operator "String.op &lt;", of type "string * string &rarr; bool". */
+  STRING_OP_LT(
+      "String", "op <", ts -> ts.fnType(ts.tupleType(STRING, STRING), BOOL)),
+
+  /** Operator "String.op &lt;=", of type "string * string &rarr; bool". */
+  STRING_OP_LE(
+      "String", "op <=", ts -> ts.fnType(ts.tupleType(STRING, STRING), BOOL)),
+
+  /** Operator "String.op &gt;", of type "string * string &rarr; bool". */
+  STRING_OP_GT(
+      "String", "op >", ts -> ts.fnType(ts.tupleType(STRING, STRING), BOOL)),
+
+  /** Operator "String.op &gt;=", of type "string * string &rarr; bool". */
+  STRING_OP_GE(
+      "String", "op >=", ts -> ts.fnType(ts.tupleType(STRING, STRING), BOOL)),
+
   /**
    * Function "String.size", of type "string &rarr; int".
    *
