@@ -116,16 +116,23 @@ Option;
 >      valOf:'p option -> 'p}
 String;
 > val it =
->   {compare=fn,concat=fn,concatWith=fn,explode=fn,extract=fn,implode=fn,
->    isPrefix=fn,isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,size=fn,
->    str=fn,sub=fn,substring=fn,translate=fn}
->   : {compare:string * string -> order, concat:string list -> string,
+>   {collate=fn,compare=fn,concat=fn,concatWith=fn,explode=fn,extract=fn,
+>    fields=fn,implode=fn,isPrefix=fn,isSubstring=fn,isSuffix=fn,map=fn,
+>    maxSize=2147483647,`op <`=fn,`op <=`=fn,`op >`=fn,`op >=`=fn,`op ^`=fn,
+>    size=fn,str=fn,sub=fn,substring=fn,tokens=fn,translate=fn}
+>   : {collate:(char * char -> order) -> string * string -> order,
+>      compare:string * string -> order, concat:string list -> string,
 >      concatWith:string -> string list -> string, explode:string -> char list,
->      extract:string * int * int option -> string, implode:char list -> string,
->      isPrefix:string -> string -> bool, isSubstring:string -> string -> bool,
->      isSuffix:string -> string -> bool, map:(char -> char) -> string -> string,
->      maxSize:int, size:string -> int, str:char -> string,
+>      extract:string * int * int option -> string,
+>      fields:(char -> bool) -> string -> string list,
+>      implode:char list -> string, isPrefix:string -> string -> bool,
+>      isSubstring:string -> string -> bool, isSuffix:string -> string -> bool,
+>      map:(char -> char) -> string -> string, maxSize:int,
+>      `op <`:string * string -> bool, `op <=`:string * string -> bool,
+>      `op >`:string * string -> bool, `op >=`:string * string -> bool,
+>      `op ^`:string * string -> string, size:string -> int, str:char -> string,
 >      sub:string * int -> char, substring:string * int * int -> string,
+>      tokens:(char -> bool) -> string -> string list,
 >      translate:(char -> string) -> string -> string}
 Real;
 > val it =
@@ -779,6 +786,8 @@ Sys.plan ();
 >   : string
 
 (*) val ^ : string * string -> string
+String.`op ^`;
+> val it = fn : string * string -> string
 "a" ^ "bc";
 > val it = "abc" : string
 "a" ^ "";
@@ -871,7 +880,25 @@ Sys.plan ();
 >   : string
 
 (*) val tokens : (char -> bool) -> string -> string list
+String.tokens;
+> val it = fn : (char -> bool) -> string -> string list
+String.tokens (fn c => c = #"|") "|ab||cd";
+> val it = ["ab","cd"] : string list
+String.tokens (fn c => c = #"|") "a|b||";
+> val it = ["a","b"] : string list
+String.tokens (fn c => c = #"|") "";
+> val it = [] : string list
+
 (*) val fields : (char -> bool) -> string -> string list
+String.fields;
+> val it = fn : (char -> bool) -> string -> string list
+String.fields (fn c => c = #"|") "|ab||cd";
+> val it = ["","ab","","cd"] : string list
+String.fields (fn c => c = #"|") "a|b||";
+> val it = ["a","b","",""] : string list
+String.fields (fn c => c = #"|") "";
+> val it = [""] : string list
+
 (*) val isPrefix    : string -> string -> bool
 String.isPrefix;
 > val it = fn : string -> string -> bool
@@ -939,14 +966,67 @@ Sys.plan ();
 >   : string
 
 (*) val compare : string * string -> order
-(*) val collate : (char * char -> order) -> string * string -> order
-(*) val <  : string * string -> bool
-(*) val <= : string * string -> bool
-(*) val >  : string * string -> bool
-(*) val >= : string * string -> bool
+String.compare;
+> val it = fn : string * string -> order
+String.compare ("abc", "ab");
+> val it = GREATER : order
 
+(*) val collate : (char * char -> order) -> string * string -> order
+String.collate;
+> val it = fn : (char * char -> order) -> string * string -> order
+let
+  fun charCompareIgnoreCase (c1, c2) =
+      Char.compare (Char.toLower c1, Char.toLower c2)
+in
+  String.collate charCompareIgnoreCase ("Hello", "hello")
+end;
+> val it = EQUAL : order
+String.collate Char.compare ("Hello", "hello");
+> val it = LESS : order
+let
+  fun charCompareIgnoreCase (c1, c2) =
+      Char.compare (Char.toLower c1, Char.toLower c2)
+in
+  String.collate charCompareIgnoreCase ("Apple", "BANANA")
+end;
+> val it = LESS : order
+
+(*) val <  : string * string -> bool
+String.`op <`;
+> val it = fn : string * string -> bool
+"abc" < "ab";
+> val it = false : bool
+"ab" < "ab";
+> val it = false : bool
+
+(*) val <= : string * string -> bool
+String.`op <=`;
+> val it = fn : string * string -> bool
+"abc" <= "ab";
+> val it = false : bool
+"ab" <= "ab";
+> val it = true : bool
+
+(*) val >  : string * string -> bool
+String.`op >`;
+> val it = fn : string * string -> bool
+"abc" > "ab";
+> val it = true : bool
+"ab" > "ab";
+> val it = false : bool
+
+(*) val >= : string * string -> bool
+String.`op >=`;
+> val it = fn : string * string -> bool
+"abc" >= "ab";
+> val it = true : bool
+"ab" >= "ab";
+> val it = true : bool
+
+(*) val toString : string -> String.string
 (*) val scan       : (char, 'a) StringCvt.reader
 (*)                    -> (string, 'a) StringCvt.reader
+(*) val fromString : String.string -> string option
 (*) val toCString : string -> String.string
 (*) val fromCString : String.string -> string option
 
@@ -3747,78 +3827,6 @@ List.collate Relational.compare ([NONE, SOME 1], [NONE, SOME 1, NONE]);
 Vector.collate Relational.compare (Vector.fromList [1,2,3], Vector.fromList [1,2,4]);
 > val it = LESS : order
 
-(* String ------------------------------------------------------ *)
-
-(*) val maxSize : int
-String.maxSize;
-> val it = 2147483647 : int
-
-(*) val size : string -> int
-String.size;
-> val it = fn : string -> int
-
-(*) val sub : string * int -> char
-String.sub;
-> val it = fn : string * int -> char
-
-(*) val extract : string * int * int option -> string
-String.extract;
-> val it = fn : string * int * int option -> string
-
-(*) val substring : string * int * int -> string
-String.substring;
-> val it = fn : string * int * int -> string
-
-(*) val ^ : string * string -> string
-String.`op ^`;
-
-(*) val concat : string list -> string
-String.concat;
-(*) val concatWith : string -> string list -> string
-String.concatWith;
-(*) val str : char -> string
-String.str;
-(*) val implode : char list -> string
-String.implode;
-(*) val explode : string -> char list
-String.explode;
-(*) val map : (char -> char) -> string -> string
-String.map;
-(*) val translate : (char -> string) -> string -> string
-String.translate;
-(*) val tokens : (char -> bool) -> string -> string list
-String.tokens;
-(*) val fields : (char -> bool) -> string -> string list
-String.fields;
-(*) val isPrefix    : string -> string -> bool
-String.isPrefix;
-(*) val isSubstring : string -> string -> bool
-String.isSubstring;
-(*) val isSuffix    : string -> string -> bool
-String.isSuffix;
-(*) val compare : string * string -> order
-String.compare;
-(*) val collate : (char * char -> order) -> string * string -> order
-String.collate;
-(*) val <  : string * string -> bool
-String.`op <`;
-(*) val <= : string * string -> bool
-String.`op <=`;
-(*) val >  : string * string -> bool
-String.`op >`;
-(*) val >= : string * string -> bool
-String.`op >=`;
-(*) val toString : string -> String.string
-String.toString;
-(*) val scan : (char, 'a) StringCvt.reader -> (string, 'a) StringCvt.reader
-String.scan;
-(*) val fromString : String.string -> string option
-String.fromString;
-(*) val toCString : string -> String.string
-String.toCString;
-(*) val fromCString : String.string -> string option
-String.fromCString;
-
 (* Sys --------------------------------------------------------- *)
 
 (*) val env : unit -> string list
@@ -3852,7 +3860,7 @@ Sys.env ();
 >     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
->     "{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
+>     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
 >    ("Vector",
@@ -3864,7 +3872,8 @@ Sys.env ();
 >    ("emps","{empno:int, ename:string, mgr:int} list"),
 >    ("empty","forall 'a. 'a bag -> bool"),
 >    ("env","unit -> (string * string) list"),("explode","string -> char list"),
->    ("f","real -> int * int * int * int"),("false","bool"),("file","{...}"),
+>    ("f","real -> int * int * int * int"),("false","bool"),
+>    ("fields","(char -> bool) -> string -> string list"),("file","{...}"),
 >    ("floor","real -> int"),
 >    ("foldl","forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b"),
 >    ("foldr","forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b"),
@@ -3903,9 +3912,9 @@ Sys.env ();
 >    ("sum","forall 'a. 'a bag -> 'a"),
 >    ("testChar","(char -> bool) -> (bool * string) list"),
 >    ("timesTwo","int -> int"),("tl","forall 'a. 'a list -> 'a list"),
->    ("true","bool"),("trunc","real -> int"),("unset","string -> unit"),
->    ("use","string -> unit"),("useSilently","string -> unit"),
->    ("valOf","forall 'a. 'a option -> 'a"),
+>    ("tokens","(char -> bool) -> string -> string list"),("true","bool"),
+>    ("trunc","real -> int"),("unset","string -> unit"),("use","string -> unit"),
+>    ("useSilently","string -> unit"),("valOf","forall 'a. 'a option -> 'a"),
 >    ("vector","forall 'a. 'a list -> 'a vector")] : (string * string) list
 
 env;
@@ -3938,7 +3947,7 @@ env ();
 >     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
->     "{compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, translate:(char -> string) -> string -> string}"),
+>     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
 >    ("Vector",
@@ -3950,7 +3959,8 @@ env ();
 >    ("emps","{empno:int, ename:string, mgr:int} list"),
 >    ("empty","forall 'a. 'a bag -> bool"),
 >    ("env","unit -> (string * string) list"),("explode","string -> char list"),
->    ("f","real -> int * int * int * int"),("false","bool"),("file","{...}"),
+>    ("f","real -> int * int * int * int"),("false","bool"),
+>    ("fields","(char -> bool) -> string -> string list"),("file","{...}"),
 >    ("floor","real -> int"),
 >    ("foldl","forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b"),
 >    ("foldr","forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a list -> 'b"),
@@ -3989,9 +3999,9 @@ env ();
 >    ("sum","forall 'a. 'a bag -> 'a"),
 >    ("testChar","(char -> bool) -> (bool * string) list"),
 >    ("timesTwo","int -> int"),("tl","forall 'a. 'a list -> 'a list"),
->    ("true","bool"),("trunc","real -> int"),("unset","string -> unit"),
->    ("use","string -> unit"),("useSilently","string -> unit"),
->    ("valOf","forall 'a. 'a option -> 'a"),
+>    ("tokens","(char -> bool) -> string -> string list"),("true","bool"),
+>    ("trunc","real -> int"),("unset","string -> unit"),("use","string -> unit"),
+>    ("useSilently","string -> unit"),("valOf","forall 'a. 'a option -> 'a"),
 >    ("vector","forall 'a. 'a list -> 'a vector")] : (string * string) list
 
 (*) val plan : unit -> string
