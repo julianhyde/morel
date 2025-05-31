@@ -114,8 +114,6 @@ Option;
 >      map:('l -> 'm) -> 'l option -> 'm option,
 >      mapPartial:('n -> 'o option) -> 'n option -> 'o option,
 >      valOf:'p option -> 'p}
-Option.compose;
-> val it = fn : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option
 String;
 > val it =
 >   {compare=fn,concat=fn,concatWith=fn,explode=fn,extract=fn,implode=fn,
@@ -1785,6 +1783,8 @@ Sys.plan ();
 >   : string
 
 (*) val compose : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option
+Option.compose;
+> val it = fn : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option
 Option.compose (String.size,
                 (fn s => if s = "" then NONE
                  else SOME (String.substring (s, 1, String.size s))))
@@ -3746,6 +3746,78 @@ List.collate Relational.compare ([NONE, SOME 1], [NONE, SOME 1, NONE]);
 > val it = LESS : order
 Vector.collate Relational.compare (Vector.fromList [1,2,3], Vector.fromList [1,2,4]);
 > val it = LESS : order
+
+(* String ------------------------------------------------------ *)
+
+(*) val maxSize : int
+String.maxSize;
+> val it = 2147483647 : int
+
+(*) val size : string -> int
+String.size;
+> val it = fn : string -> int
+
+(*) val sub : string * int -> char
+String.sub;
+> val it = fn : string * int -> char
+
+(*) val extract : string * int * int option -> string
+String.extract;
+> val it = fn : string * int * int option -> string
+
+(*) val substring : string * int * int -> string
+String.substring;
+> val it = fn : string * int * int -> string
+
+(*) val ^ : string * string -> string
+String.`op ^`;
+
+(*) val concat : string list -> string
+String.concat;
+(*) val concatWith : string -> string list -> string
+String.concatWith;
+(*) val str : char -> string
+String.str;
+(*) val implode : char list -> string
+String.implode;
+(*) val explode : string -> char list
+String.explode;
+(*) val map : (char -> char) -> string -> string
+String.map;
+(*) val translate : (char -> string) -> string -> string
+String.translate;
+(*) val tokens : (char -> bool) -> string -> string list
+String.tokens;
+(*) val fields : (char -> bool) -> string -> string list
+String.fields;
+(*) val isPrefix    : string -> string -> bool
+String.isPrefix;
+(*) val isSubstring : string -> string -> bool
+String.isSubstring;
+(*) val isSuffix    : string -> string -> bool
+String.isSuffix;
+(*) val compare : string * string -> order
+String.compare;
+(*) val collate : (char * char -> order) -> string * string -> order
+String.collate;
+(*) val <  : string * string -> bool
+String.`op <`;
+(*) val <= : string * string -> bool
+String.`op <=`;
+(*) val >  : string * string -> bool
+String.`op >`;
+(*) val >= : string * string -> bool
+String.`op >=`;
+(*) val toString : string -> String.string
+String.toString;
+(*) val scan : (char, 'a) StringCvt.reader -> (string, 'a) StringCvt.reader
+String.scan;
+(*) val fromString : String.string -> string option
+String.fromString;
+(*) val toCString : string -> String.string
+String.toCString;
+(*) val fromCString : String.string -> string option
+String.fromCString;
 
 (* Sys --------------------------------------------------------- *)
 
