@@ -114,8 +114,6 @@ Option;
 >      map:('l -> 'm) -> 'l option -> 'm option,
 >      mapPartial:('n -> 'o option) -> 'n option -> 'o option,
 >      valOf:'p option -> 'p}
-Option.compose;
-> val it = fn : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option
 String;
 > val it =
 >   {concat=fn,concatWith=fn,explode=fn,extract=fn,implode=fn,isPrefix=fn,
@@ -238,6 +236,13 @@ ceil;
 (* "val chr : int -> char" maps to "Char.chr" *)
 chr;
 > val it = fn : int -> char
+(* "val compare : 'a * 'a -> order" maps to "String.compare" *)
+String.compare;
+> val it = fn : string * string -> order
+String.compare ("abc", "xyz");
+> val it = LESS : order
+String.compare ("abc", "");
+> val it = GREATER : order
 (* "val concat : string list -> string" maps to "String.concat" *)
 concat;
 > val it = fn : string list -> string
@@ -759,6 +764,8 @@ Sys.plan ();
 >   : string
 
 (*) val ^ : string * string -> string
+String.`op ^`;
+> val it = fn : string * string -> string
 "a" ^ "bc";
 > val it = "abc" : string
 "a" ^ "";
@@ -851,7 +858,25 @@ Sys.plan ();
 >   : string
 
 (*) val tokens : (char -> bool) -> string -> string list
+String.tokens;
+> val it = fn : (char -> bool) -> string -> string list
+String.tokens (fn c => c = #"|") "|ab||cd";
+> val it = ["ab","cd"] : string list
+String.tokens (fn c => c = #"|") "a|b||";
+> val it = ["a","b"] : string list
+String.tokens (fn c => c = #"|") "";
+> val it = [] : string list
+
 (*) val fields : (char -> bool) -> string -> string list
+String.fields;
+> val it = fn : (char -> bool) -> string -> string list
+String.fields (fn c => c = #"|") "|ab||cd";
+> val it = ["","ab","","cd"] : string list
+String.fields (fn c => c = #"|") "a|b||";
+> val it = ["a","b","",""] : string list
+String.fields (fn c => c = #"|") "";
+> val it = [""] : string list
+
 (*) val isPrefix    : string -> string -> bool
 String.isPrefix;
 > val it = fn : string -> string -> bool
@@ -919,14 +944,67 @@ Sys.plan ();
 >   : string
 
 (*) val compare : string * string -> order
-(*) val collate : (char * char -> order) -> string * string -> order
-(*) val <  : string * string -> bool
-(*) val <= : string * string -> bool
-(*) val >  : string * string -> bool
-(*) val >= : string * string -> bool
+String.compare;
+> val it = fn : string * string -> order
+String.compare ("abc", "ab");
+> val it = GREATER : order
 
+(*) val collate : (char * char -> order) -> string * string -> order
+String.collate;
+> val it = fn : (char * char -> order) -> string * string -> order
+let
+  fun charCompareIgnoreCase (c1, c2) =
+      Char.compare (Char.toLower c1, Char.toLower c2)
+in
+  String.collate charCompareIgnoreCase ("Hello", "hello")
+end;
+> val it = EQUAL : order
+String.collate Char.compare ("Hello", "hello");
+> val it = LESS : order
+let
+  fun charCompareIgnoreCase (c1, c2) =
+      Char.compare (Char.toLower c1, Char.toLower c2)
+in
+  String.collate charCompareIgnoreCase ("Apple", "BANANA")
+end;
+> val it = LESS : order
+
+(*) val <  : string * string -> bool
+String.`op <`;
+> val it = fn : string * string -> bool
+"abc" < "ab";
+> val it = false : bool
+"ab" < "ab";
+> val it = false : bool
+
+(*) val <= : string * string -> bool
+String.`op <=`;
+> val it = fn : string * string -> bool
+"abc" <= "ab";
+> val it = false : bool
+"ab" <= "ab";
+> val it = true : bool
+
+(*) val >  : string * string -> bool
+String.`op >`;
+> val it = fn : string * string -> bool
+"abc" > "ab";
+> val it = true : bool
+"ab" > "ab";
+> val it = false : bool
+
+(*) val >= : string * string -> bool
+String.`op >=`;
+> val it = fn : string * string -> bool
+"abc" >= "ab";
+> val it = true : bool
+"ab" >= "ab";
+> val it = true : bool
+
+(*) val toString : string -> String.string
 (*) val scan       : (char, 'a) StringCvt.reader
 (*)                    -> (string, 'a) StringCvt.reader
+(*) val fromString : String.string -> string option
 (*) val toCString : string -> String.string
 (*) val fromCString : String.string -> string option
 
@@ -1763,6 +1841,8 @@ Sys.plan ();
 >   : string
 
 (*) val compose : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option
+Option.compose;
+> val it = fn : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option
 Option.compose (String.size,
                 (fn s => if s = "" then NONE
                  else SOME (String.substring (s, 1, String.size s))))
