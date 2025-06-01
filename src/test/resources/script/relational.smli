@@ -198,6 +198,34 @@ from e in emps
   skip 1;
 > val it = [{deptno=30},{deptno=20},{deptno=10}] : {deptno:int} list
 
+(*) Composite order
+from e in emps
+  order (e.name, e.deptno);
+> val it =
+>   [{deptno=10,id=100,name="Fred"},{deptno=30,id=103,name="Scooby"},
+>    {deptno=30,id=102,name="Shaggy"},{deptno=20,id=101,name="Velma"}]
+>   : {deptno:int, id:int, name:string} list
+
+(* Composite order using record may not have the intended effect,
+   because record fields are sorted alphabetically. Note that data
+   is sorted first by deptno then by name. *)
+from e in emps
+  order {e.name, e.deptno};
+> stdIn:2.9-2.27 Warning: Sorting on a record whose fields are not in alphabetical order. Sort order may not be what you expect.
+>   raised at: stdIn:2.9-2.27
+> val it =
+>   [{deptno=10,id=100,name="Fred"},{deptno=20,id=101,name="Velma"},
+>    {deptno=30,id=103,name="Scooby"},{deptno=30,id=102,name="Shaggy"}]
+>   : {deptno:int, id:int, name:string} list
+
+(* Same semantics as previous. *)
+from e in emps
+  order {e.deptno, e.name};
+> val it =
+>   [{deptno=10,id=100,name="Fred"},{deptno=20,id=101,name="Velma"},
+>    {deptno=30,id=103,name="Scooby"},{deptno=30,id=102,name="Shaggy"}]
+>   : {deptno:int, id:int, name:string} list
+
 from e in emps
   yield {e.deptno}
   order DESC deptno
