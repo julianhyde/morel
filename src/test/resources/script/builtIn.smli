@@ -18,7 +18,7 @@
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
-Sys.set ("printLength", 65);
+Sys.set ("printLength", 999);
 > val it = () : unit
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
@@ -3733,107 +3733,6 @@ Sys.plan ();
 (1, 2) notelem bag [(0, 1), (2, 3)];
 > val it = true : bool
 
-(* String ------------------------------------------------------ *)
-
-(*) val maxSize : int
-String.maxSize;
-> val it = 2147483647 : int
-
-(*) val size : string -> int
-String.size;
-> val it = fn : string -> int
-
-(*) val sub : string * int -> char
-String.sub;
-> val it = fn : string * int -> char
-
-(*) val extract : string * int * int option -> string
-String.extract;
-> val it = fn : string * int * int option -> string
-
-(*) val substring : string * int * int -> string
-String.substring;
-> val it = fn : string * int * int -> string
-
-(*) val ^ : string * string -> string
-String.`op ^`;
-> val it = fn : string * string -> string
-
-(*) val concat : string list -> string
-String.concat;
-> val it = fn : string list -> string
-(*) val concatWith : string -> string list -> string
-String.concatWith;
-> val it = fn : string -> string list -> string
-(*) val str : char -> string
-String.str;
-> val it = fn : char -> string
-(*) val implode : char list -> string
-String.implode;
-> val it = fn : char list -> string
-(*) val explode : string -> char list
-String.explode;
-> val it = fn : string -> char list
-(*) val map : (char -> char) -> string -> string
-String.map;
-> val it = fn : (char -> char) -> string -> string
-(*) val translate : (char -> string) -> string -> string
-String.translate;
-> val it = fn : (char -> string) -> string -> string
-(*) val tokens : (char -> bool) -> string -> string list
-String.tokens;
-> val it = fn : (char -> bool) -> string -> string list
-(*) val fields : (char -> bool) -> string -> string list
-String.fields;
-> val it = fn : (char -> bool) -> string -> string list
-(*) val isPrefix    : string -> string -> bool
-String.isPrefix;
-> val it = fn : string -> string -> bool
-(*) val isSubstring : string -> string -> bool
-String.isSubstring;
-> val it = fn : string -> string -> bool
-(*) val isSuffix    : string -> string -> bool
-String.isSuffix;
-> val it = fn : string -> string -> bool
-(*) val compare : string * string -> order
-String.compare;
-> val it = fn : string * string -> order
-(*) val collate : (char * char -> order) -> string * string -> order
-String.collate;
-> val it = fn : (char * char -> order) -> string * string -> order
-(*) val <  : string * string -> bool
-String.`op <`;
-> val it = fn : string * string -> bool
-(*) val <= : string * string -> bool
-String.`op <=`;
-> val it = fn : string * string -> bool
-(*) val >  : string * string -> bool
-String.`op >`;
-> val it = fn : string * string -> bool
-(*) val >= : string * string -> bool
-String.`op >=`;
-> val it = fn : string * string -> bool
-(*) val toString : string -> String.string
-String.toString;
-> stdIn:1.1-1.7 Error: no field 'toString' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
-(*) val scan : (char, 'a) StringCvt.reader -> (string, 'a) StringCvt.reader
-String.scan;
-> stdIn:1.1-1.7 Error: no field 'scan' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
-(*) val fromString : String.string -> string option
-String.fromString;
-> stdIn:1.1-1.7 Error: no field 'fromString' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
-(*) val toCString : string -> String.string
-String.toCString;
-> stdIn:1.1-1.7 Error: no field 'toCString' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
-(*) val fromCString : String.string -> string option
-String.fromCString;
-> stdIn:1.1-1.7 Error: no field 'fromCString' in type '{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}'
->   raised at: stdIn:1.1-1.7
-
 (* Sys --------------------------------------------------------- *)
 
 (*) val env : unit -> string list
@@ -3902,8 +3801,26 @@ Sys.env ();
 >    ("op <>","forall 'a. 'a * 'a -> bool"),
 >    ("op =","forall 'a. 'a * 'a -> bool"),("op >","forall 'a. 'a * 'a -> bool"),
 >    ("op >=","forall 'a. 'a * 'a -> bool"),
->    ("op @","forall 'a. 'a list * 'a list -> 'a list"),...]
->   : (string * string) list
+>    ("op @","forall 'a. 'a list * 'a list -> 'a list"),
+>    ("op ^","string * string -> string"),("op div","int * int -> int"),
+>    ("op elem","forall 'a. 'a * 'a bag -> bool"),("op mod","int * int -> int"),
+>    ("op notelem","forall 'a. 'a * 'a bag -> bool"),
+>    ("op o","forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c"),
+>    ("op ~","forall 'a. 'a -> 'a"),("p","char -> bool"),
+>    ("plan","unit -> string"),("plusOne","int -> int"),
+>    ("plusThree","int -> int"),("real","int -> real"),
+>    ("rev","forall 'a. 'a list -> 'a list"),("round","real -> int"),
+>    ("set","forall 'a. string * 'a -> unit"),("show","string -> string option"),
+>    ("showAll","unit -> (string * string option) list"),
+>    ("size","string -> int"),("str","char -> string"),
+>    ("substring","string * int * int -> string"),
+>    ("sum","forall 'a. 'a bag -> 'a"),
+>    ("testChar","(char -> bool) -> (bool * string) list"),
+>    ("timesTwo","int -> int"),("tl","forall 'a. 'a list -> 'a list"),
+>    ("tokens","(char -> bool) -> string -> string list"),("true","bool"),
+>    ("trunc","real -> int"),("unset","string -> unit"),("use","string -> unit"),
+>    ("useSilently","string -> unit"),("valOf","forall 'a. 'a option -> 'a"),
+>    ("vector","forall 'a. 'a list -> 'a vector")] : (string * string) list
 
 env;
 > val it = fn : unit -> (string * string) list
@@ -3970,8 +3887,26 @@ env ();
 >    ("op <>","forall 'a. 'a * 'a -> bool"),
 >    ("op =","forall 'a. 'a * 'a -> bool"),("op >","forall 'a. 'a * 'a -> bool"),
 >    ("op >=","forall 'a. 'a * 'a -> bool"),
->    ("op @","forall 'a. 'a list * 'a list -> 'a list"),...]
->   : (string * string) list
+>    ("op @","forall 'a. 'a list * 'a list -> 'a list"),
+>    ("op ^","string * string -> string"),("op div","int * int -> int"),
+>    ("op elem","forall 'a. 'a * 'a bag -> bool"),("op mod","int * int -> int"),
+>    ("op notelem","forall 'a. 'a * 'a bag -> bool"),
+>    ("op o","forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c"),
+>    ("op ~","forall 'a. 'a -> 'a"),("p","char -> bool"),
+>    ("plan","unit -> string"),("plusOne","int -> int"),
+>    ("plusThree","int -> int"),("real","int -> real"),
+>    ("rev","forall 'a. 'a list -> 'a list"),("round","real -> int"),
+>    ("set","forall 'a. string * 'a -> unit"),("show","string -> string option"),
+>    ("showAll","unit -> (string * string option) list"),
+>    ("size","string -> int"),("str","char -> string"),
+>    ("substring","string * int * int -> string"),
+>    ("sum","forall 'a. 'a bag -> 'a"),
+>    ("testChar","(char -> bool) -> (bool * string) list"),
+>    ("timesTwo","int -> int"),("tl","forall 'a. 'a list -> 'a list"),
+>    ("tokens","(char -> bool) -> string -> string list"),("true","bool"),
+>    ("trunc","real -> int"),("unset","string -> unit"),("use","string -> unit"),
+>    ("useSilently","string -> unit"),("valOf","forall 'a. 'a option -> 'a"),
+>    ("vector","forall 'a. 'a list -> 'a vector")] : (string * string) list
 
 (*) val plan : unit -> string
 Sys.plan;
@@ -4020,7 +3955,7 @@ map
 >   [("directory",SOME "?"),("hybrid",SOME "true"),("inlinePassCount",SOME "5"),
 >    ("lineWidth",SOME "78"),("matchCoverageEnabled",SOME "true"),
 >    ("optionalInt",NONE),("output",SOME "CLASSIC"),("printDepth",SOME "5"),
->    ("printLength",SOME "65"),("relationalize",SOME "false"),
+>    ("printLength",SOME "999"),("relationalize",SOME "false"),
 >    ("scriptDirectory",SOME "?"),("stringDepth",SOME "-1")]
 >   : (string * string option) list
 List.length (Sys.showAll ());
