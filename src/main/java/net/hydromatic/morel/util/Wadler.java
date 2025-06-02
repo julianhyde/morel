@@ -183,22 +183,30 @@ public class Wadler {
       // Try the flat version first.
       final int start = b.length();
       left.render(b, width);
-      String flatResult = b.substring(start);
-      if (!fits(flatResult, width)) {
+      if (!fits(b, start, width)) {
         // It doesn't fit. Use the broken version.
         b.setLength(start);
         right.render(b, width);
       }
     }
 
-    private boolean fits(String text, int width) {
-      String[] lines = text.split("\n");
-      for (String line : lines) {
-        if (line.length() > width) {
+    /**
+     * Returns false if any line in a StringBuilder after {@code start} exceeds
+     * the given width.
+     */
+    private boolean fits(StringBuilder b, int start, int width) {
+      for (; ; ) {
+        int next = b.indexOf("\n", start);
+        if (next < 0) {
+          int lineLength = b.length() - start;
+          return lineLength <= width;
+        }
+        int lineLength = next - start;
+        if (lineLength > width) {
           return false;
         }
+        start = next + 1; // Move to start of next line
       }
-      return true;
     }
 
     @Override
