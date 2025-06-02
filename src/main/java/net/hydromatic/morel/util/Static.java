@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -391,6 +392,34 @@ public class Static {
   public static boolean endsWith(StringBuilder buf, String s) {
     final int i = buf.length() - s.length();
     return i >= 0 && buf.indexOf(s, i) == i;
+  }
+
+  /** Returns a string with a given number of spaces. */
+  public static String spaces(int n) {
+    switch (n) {
+      case 0:
+        return "";
+      case 1:
+        return " ";
+      case 2:
+        return "  ";
+      case 3:
+        return "   ";
+      case 4:
+        return "    ";
+      case 5:
+        return "     ";
+      case 6:
+        return "      ";
+      case 7:
+        return "       ";
+      case 8:
+        return "        ";
+      default:
+        char[] chars = new char[n];
+        Arrays.fill(chars, ' ');
+        return String.copyValueOf(chars);
+    }
   }
 }
 
