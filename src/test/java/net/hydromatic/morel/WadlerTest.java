@@ -100,7 +100,8 @@ public class WadlerTest {
         renderNanos += endTime - endGenerateTime;
       }
 
-      final double generateMicros = generateNanos / (double) iterations / 1_000.0;
+      final double generateMicros =
+          generateNanos / (double) iterations / 1_000.0;
       final double renderMicros = renderNanos / (double) iterations / 1_000.0;
       out.printf(
           "Complexity %d, generate %.2f us, render %.2f us per iteration%n",

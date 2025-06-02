@@ -18,8 +18,10 @@
  */
 package net.hydromatic.morel.util;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static net.hydromatic.morel.util.Static.spaces;
 
+import com.google.common.collect.ImmutableList;
 import java.util.*;
 
 /**
@@ -55,7 +57,22 @@ public class Wadler {
 
     /** Converts all line breaks to spaces. */
     Doc flatten() {
-      return this;
+      final List<Doc> flatDocs = new ArrayList<>();
+      flattenTo(flatDocs);
+      return concat(flatDocs);
+    }
+
+    /**
+     * Appends this document to a list of documents where all line breaks have
+     * been converted to spaces.
+     */
+    void flattenTo(List<Doc> flatDocs) {
+      flatDocs.add(this);
+    }
+
+    /** Appends all documents inside this document to a list. */
+    void collect(List<Doc> docs) {
+      docs.add(this);
     }
   }
 
@@ -70,6 +87,11 @@ public class Wadler {
     @Override
     void render(StringBuilder b, int width) {
       b.append(text);
+    }
+
+    @Override
+    Doc flatten() {
+      return this;
     }
 
     @Override
@@ -91,6 +113,11 @@ public class Wadler {
     }
 
     @Override
+    void flattenTo(List<Doc> flatDocs) {
+      flatDocs.add(SPACE);
+    }
+
+    @Override
     public String toString() {
       return "Line";
     }
@@ -98,28 +125,49 @@ public class Wadler {
 
   /** Document that concatenates two documents. */
   static class Concat extends Doc {
-    private final Doc left;
-    private final Doc right;
+    private final List<Doc> docs;
 
-    Concat(Doc left, Doc right) {
-      this.left = left;
-      this.right = right;
+    Concat(List<Doc> docs) {
+      this.docs = ImmutableList.copyOf(docs);
+      checkArgument(docs.size() >= 2);
     }
 
     @Override
     void render(StringBuilder b, int width) {
-      left.render(b, width);
-      right.render(b, width);
+      for (Doc doc : docs) {
+        doc.render(b, width);
+      }
     }
 
     @Override
     Doc flatten() {
-      return new Concat(left.flatten(), right.flatten());
+      // Slightly more efficient than base method. After flattening, checks
+      // whether the flattened list is the same as the original list, and if so,
+      // avoids the cost of creating a new Concat. We don't need to check
+      // whether flatDocs has 0 or 1 element, because this is not possible.
+      final List<Doc> flatDocs = new ArrayList<>();
+      flattenTo(flatDocs);
+      if (flatDocs.equals(docs)) {
+        return this;
+      }
+      return new Concat(flatDocs);
+    }
+
+    @Override
+    void flattenTo(List<Doc> flatDocs) {
+      for (Doc doc : docs) {
+        doc.flattenTo(flatDocs);
+      }
     }
 
     @Override
     public String toString() {
-      return "Concat(" + left + ", " + right + ")";
+      return "Concat" + docs;
+    }
+
+    @Override
+    void collect(List<Doc> docs) {
+      this.docs.forEach(d -> d.collect(docs));
     }
   }
 
@@ -143,8 +191,8 @@ public class Wadler {
     }
 
     @Override
-    Doc flatten() {
-      return doc.flatten();
+    void flattenTo(List<Doc> flatDocs) {
+      doc.flattenTo(flatDocs);
     }
 
     private String addIndentation(String text, int indent) {
@@ -173,9 +221,9 @@ public class Wadler {
     }
 
     @Override
-    Doc flatten() {
+    void flattenTo(List<Doc> flatDocs) {
       // No need to flatten the left side, as it is already flat.
-      return left;
+      left.collect(flatDocs);
     }
 
     @Override
@@ -232,15 +280,18 @@ public class Wadler {
 
   /** Concatenates a list of multiple documents into one. */
   public static Doc concat(List<Doc> docs) {
-    if (docs.isEmpty()) {
-      return EMPTY_TEXT;
+    switch (docs.size()) {
+      case 0:
+        return EMPTY_TEXT;
+      case 1:
+        return docs.get(0);
+      default:
+        List<Doc> flattened = new ArrayList<>();
+        for (Doc doc : docs) {
+          doc.collect(flattened);
+        }
+        return new Concat(flattened);
     }
-
-    Doc result = docs.get(0);
-    for (int i = 1; i < docs.size(); i++) {
-      result = new Concat(result, docs.get(i));
-    }
-    return result;
   }
 
   /** Creates a document that represents a line break with indentation. */
