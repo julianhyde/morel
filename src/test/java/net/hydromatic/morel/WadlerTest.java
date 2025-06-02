@@ -73,24 +73,38 @@ public class WadlerTest {
 
   static void benchmarkPerformance(
       StressTestGenerator generator, PrintWriter out) {
-    int[] complexities = {5, 10, 15, 20};
-    int iterations = 10;
+    final int[] complexities = {5, 10, 20, 50};
+    final int iterations = 100;
+    final int warmupIterations = 50;
+    final int width = 80;
+
+    for (int i = 0; i < warmupIterations; i++) {
+      for (int complexity : complexities) {
+        Doc doc = generator.generate(complexity);
+        doc.render(width);
+      }
+    }
 
     for (int complexity : complexities) {
-      long totalNanos = 0;
+      long generateNanos = 0;
+      long renderNanos = 0;
 
       for (int i = 0; i < iterations; i++) {
-        Doc doc = generator.generate(complexity);
+        final long startTime = System.nanoTime();
+        final Doc doc = generator.generate(complexity);
+        final long endGenerateTime = System.nanoTime();
+        doc.render(width);
+        final long endTime = System.nanoTime();
 
-        long startTime = System.nanoTime();
-        doc.render(40);
-        long endTime = System.nanoTime();
-
-        totalNanos += endTime - startTime;
+        generateNanos += endGenerateTime - startTime;
+        renderNanos += endTime - endGenerateTime;
       }
 
-      double avgMicros = totalNanos / (double) iterations / 1_000.0;
-      out.printf("Complexity %d: %.2f us average%n", complexity, avgMicros);
+      final double generateMicros = generateNanos / (double) iterations / 1_000.0;
+      final double renderMicros = renderNanos / (double) iterations / 1_000.0;
+      out.printf(
+          "Complexity %d, generate %.2f us, render %.2f us per iteration%n",
+          complexity, generateMicros, renderMicros);
     }
   }
 
