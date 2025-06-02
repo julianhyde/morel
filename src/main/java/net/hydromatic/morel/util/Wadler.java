@@ -29,9 +29,29 @@ import java.util.*;
 public class Wadler {
   private Wadler() {}
 
+  /** Singleton instance of a line break document. */
+  private static final Line LINE = new Line();
+
+  /** The empty document. */
+  private static final Doc EMPTY_TEXT = new Text("");
+
+  /** A document that is a single space. */
+  private static final Doc SPACE = new Text(" ");
+
   /** Abstract representation of a document. */
   public abstract static class Doc {
-    public abstract String render(int width);
+    /** Outputs this document a string where no line exceeds the given width. */
+    public final String render(int width) {
+      final StringBuilder b = new StringBuilder();
+      render(b, width);
+      return b.toString();
+    }
+
+    /**
+     * Outputs this document to a StringBuilder, with no line exceeding the
+     * given width.
+     */
+    abstract void render(StringBuilder b, int width);
 
     /** Converts all line breaks to spaces. */
     Doc flatten() {
@@ -48,8 +68,8 @@ public class Wadler {
     }
 
     @Override
-    public String render(int width) {
-      return text;
+    void render(StringBuilder b, int width) {
+      b.append(text);
     }
 
     @Override
@@ -61,13 +81,13 @@ public class Wadler {
   /** Document that is a line break. */
   static class Line extends Doc {
     @Override
-    public String render(int width) {
-      return "\n";
+    void render(StringBuilder b, int width) {
+      b.append("\n");
     }
 
     @Override
     Doc flatten() {
-      return text(" ");
+      return SPACE;
     }
 
     @Override
@@ -87,8 +107,9 @@ public class Wadler {
     }
 
     @Override
-    public String render(int width) {
-      return left.render(width) + right.render(width);
+    void render(StringBuilder b, int width) {
+      left.render(b, width);
+      right.render(b, width);
     }
 
     @Override
@@ -113,8 +134,12 @@ public class Wadler {
     }
 
     @Override
-    public String render(int width) {
-      return addIndentation(doc.render(width), indent);
+    void render(StringBuilder b, int width) {
+      final int start = b.length();
+      doc.render(b, width);
+      final String s = b.substring(start);
+      final String s2 = addIndentation(s, indent);
+      b.replace(start, b.length(), s2);
     }
 
     @Override
@@ -154,13 +179,15 @@ public class Wadler {
     }
 
     @Override
-    public String render(int width) {
-      // Try the flat version first
-      String flatResult = left.render(width);
-      if (fits(flatResult, width)) {
-        return flatResult;
-      } else {
-        return right.render(width);
+    void render(StringBuilder b, int width) {
+      // Try the flat version first.
+      final int start = b.length();
+      left.render(b, width);
+      String flatResult = b.substring(start);
+      if (!fits(flatResult, width)) {
+        // It doesn't fit. Use the broken version.
+        b.setLength(start);
+        right.render(b, width);
       }
     }
 
@@ -187,7 +214,7 @@ public class Wadler {
 
   /** Creates a document that is a line break. */
   public static Doc line() {
-    return new Line();
+    return LINE;
   }
 
   /** Concatenates multiple documents into one. */
@@ -198,7 +225,7 @@ public class Wadler {
   /** Concatenates a list of multiple documents into one. */
   public static Doc concat(List<Doc> docs) {
     if (docs.isEmpty()) {
-      return text("");
+      return EMPTY_TEXT;
     }
 
     Doc result = docs.get(0);
@@ -226,7 +253,7 @@ public class Wadler {
   /** Joins a list of documents with separators. */
   public static Doc join(Doc separator, List<Doc> docs) {
     if (docs.isEmpty()) {
-      return text("");
+      return EMPTY_TEXT;
     }
     if (docs.size() == 1) {
       return docs.get(0);
