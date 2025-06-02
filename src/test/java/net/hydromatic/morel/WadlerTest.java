@@ -35,7 +35,6 @@ public class WadlerTest {
   /** Simple function call. */
   @Test
   void testExample1() {
-    System.out.println("=== Example 1: Function Call ===");
     Wadler.Doc funcCall =
         group(
             concat(
@@ -52,10 +51,15 @@ public class WadlerTest {
                 line(),
                 text(")")));
 
+    assertThat(funcCall.render(30), is("function( arg1, arg2, arg3 )"));
     assertThat(
-        funcCall.render(20), is("function(\n  arg1,\n  arg2,\n  arg3\n)"));
-    assertThat(
-        funcCall.render(10), is("function(\n  arg1,\n  arg2,\n  arg3\n)"));
+        funcCall.render(10),
+        is(
+            "function(\n" //
+                + "  arg1,\n"
+                + "  arg2,\n"
+                + "  arg3\n"
+                + ")"));
   }
 
   /** Nested structure with various elements. */
@@ -98,13 +102,25 @@ public class WadlerTest {
         "width 40",
         nestedObj.render(40),
         is(
-            "{\n  key1: \"value1\",\n  key2: [ 1, 2, 3 ],\n  key3: \"value3\"\n}"));
+            "{\n"
+                + "  key1: \"value1\",\n"
+                + "  key2: [ 1, 2, 3 ],\n"
+                + "  key3: \"value3\"\n"
+                + "}"));
 
     assertThat(
-        "width 15",
-        nestedObj.render(15),
+        "width 10",
+        nestedObj.render(10),
         is(
-            "{\n  key1: \"value1\",\n  key2: [ 1, 2, 3 ],\n  key3: \"value3\"\n}"));
+            "{\n"
+                + "  key1: \"value1\",\n"
+                + "  key2: [\n"
+                + "    1,\n"
+                + "    2,\n"
+                + "    3\n"
+                + "  ],\n"
+                + "  key3: \"value3\"\n"
+                + "}"));
   }
 
   /** Code-like structure with nested elements. */
@@ -138,12 +154,21 @@ public class WadlerTest {
     assertThat(
         "width 50",
         codeBlock.render(50),
-        is("if (condition) {\n    doSomething( param1, param2, param3 );\n}"));
+        is(
+            "if (condition) {\n"
+                + "    doSomething( param1, param2, param3 );\n"
+                + "}"));
     assertThat(
         "width 20",
         codeBlock.render(20),
         is(
-            "if (condition) {\n    doSomething(\n        param1,\n        param2,\n        param3\n    );\n}"));
+            "if (condition) {\n"
+                + "    doSomething(\n"
+                + "        param1,\n"
+                + "        param2,\n"
+                + "        param3\n"
+                + "    );\n"
+                + "}"));
   }
 }
 

@@ -29,16 +29,16 @@ import java.util.*;
 public class Wadler {
   private Wadler() {}
 
-  // Document representation - the intermediate representation (IR)
+  /** Abstract representation of a document. */
   public abstract static class Doc {
     public abstract String render(int width);
   }
 
-  // Text literal
-  public static class Text extends Doc {
+  /** Document that is a constant piece of text. */
+  static class Text extends Doc {
     private final String text;
 
-    public Text(String text) {
+    Text(String text) {
       this.text = text;
     }
 
@@ -53,8 +53,8 @@ public class Wadler {
     }
   }
 
-  // Line break
-  public static class Line extends Doc {
+  /** Document that is a line break. */
+  static class Line extends Doc {
     @Override
     public String render(int width) {
       return "\n";
@@ -66,12 +66,12 @@ public class Wadler {
     }
   }
 
-  // Concatenation of two documents
-  public static class Concat extends Doc {
+  /** Document that concatenates two documents. */
+  static class Concat extends Doc {
     private final Doc left;
     private final Doc right;
 
-    public Concat(Doc left, Doc right) {
+    Concat(Doc left, Doc right) {
       this.left = left;
       this.right = right;
     }
@@ -87,12 +87,12 @@ public class Wadler {
     }
   }
 
-  // Nesting (indentation)
-  public static class Nest extends Doc {
+  /** Document that represents a line break with indentation. */
+  static class Nest extends Doc {
     private final int indent;
     private final Doc doc;
 
-    public Nest(int indent, Doc doc) {
+    Nest(int indent, Doc doc) {
       this.indent = indent;
       this.doc = doc;
     }
@@ -113,12 +113,16 @@ public class Wadler {
     }
   }
 
-  // Union of two alternative layouts - key to Wadler's algorithm
-  public static class Union extends Doc {
+  /**
+   * Document that represents a union of two alternative layouts.
+   *
+   * <p>Key to Wadler's algorithm.
+   */
+  static class Union extends Doc {
     private final Doc left; // "flat" version
     private final Doc right; // "broken" version
 
-    public Union(Doc left, Doc right) {
+    Union(Doc left, Doc right) {
       this.left = left;
       this.right = right;
     }
@@ -150,11 +154,12 @@ public class Wadler {
     }
   }
 
-  // Builder methods for convenience
+  /** Creates a document that is a constant piece of text. */
   public static Doc text(String s) {
     return new Text(s);
   }
 
+  /** Creates a document that is a line break. */
   public static Doc line() {
     return new Line();
   }
@@ -164,7 +169,7 @@ public class Wadler {
     return concat(Arrays.asList(docs));
   }
 
-  /** Concatenates multiple documents into one. */
+  /** Concatenates a list of multiple documents into one. */
   public static Doc concat(List<Doc> docs) {
     if (docs.isEmpty()) {
       return text("");
@@ -177,11 +182,12 @@ public class Wadler {
     return result;
   }
 
+  /** Creates a document that represents a line break with indentation. */
   public static Doc nest(int indent, Doc doc) {
     return new Nest(indent, doc);
   }
 
-  // Group - creates a union between flat and broken versions
+  /** Creates a union between flat and broken versions of a document. */
   public static Doc group(Doc doc) {
     return new Union(flatten(doc), doc);
   }
