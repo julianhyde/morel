@@ -421,6 +421,21 @@ public class Static {
         return String.copyValueOf(chars);
     }
   }
+
+  /** Returns a string repeated a given number of tabs. */
+  public static String repeat(String s, int n) {
+    if (n <= 0 || s.isEmpty()) {
+      return "";
+    }
+    if (n == 1) {
+      return s;
+    }
+    final StringBuilder b = new StringBuilder(n * s.length());
+    for (int i = 0; i < n; i++) {
+      b.append(s);
+    }
+    return b.toString();
+  }
 }
 
 // End Static.java
