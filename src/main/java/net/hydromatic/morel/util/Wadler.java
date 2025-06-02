@@ -32,6 +32,11 @@ public class Wadler {
   /** Abstract representation of a document. */
   public abstract static class Doc {
     public abstract String render(int width);
+
+    /** Converts all line breaks to spaces. */
+    Doc flatten() {
+      return this;
+    }
   }
 
   /** Document that is a constant piece of text. */
@@ -61,6 +66,11 @@ public class Wadler {
     }
 
     @Override
+    Doc flatten() {
+      return text(" ");
+    }
+
+    @Override
     public String toString() {
       return "Line";
     }
@@ -82,6 +92,11 @@ public class Wadler {
     }
 
     @Override
+    Doc flatten() {
+      return new Concat(left.flatten(), right.flatten());
+    }
+
+    @Override
     public String toString() {
       return "Concat(" + left + ", " + right + ")";
     }
@@ -100,6 +115,11 @@ public class Wadler {
     @Override
     public String render(int width) {
       return addIndentation(doc.render(width), indent);
+    }
+
+    @Override
+    Doc flatten() {
+      return doc.flatten();
     }
 
     private String addIndentation(String text, int indent) {
@@ -125,6 +145,12 @@ public class Wadler {
     Union(Doc left, Doc right) {
       this.left = left;
       this.right = right;
+    }
+
+    @Override
+    Doc flatten() {
+      // No need to flatten the left side, as it is already flat.
+      return left;
     }
 
     @Override
@@ -189,26 +215,7 @@ public class Wadler {
 
   /** Creates a union between flat and broken versions of a document. */
   public static Doc group(Doc doc) {
-    return new Union(flatten(doc), doc);
-  }
-
-  /** Converts all line breaks to spaces. */
-  private static Doc flatten(Doc doc) {
-    if (doc instanceof Text) {
-      return doc;
-    } else if (doc instanceof Line) {
-      return text(" ");
-    } else if (doc instanceof Concat) {
-      Concat c = (Concat) doc;
-      return new Concat(flatten(c.left), flatten(c.right));
-    } else if (doc instanceof Nest) {
-      Nest n = (Nest) doc;
-      return flatten(n.doc);
-    } else if (doc instanceof Union) {
-      Union u = (Union) doc;
-      return flatten(u.left);
-    }
-    return doc;
+    return new Union(doc.flatten(), doc);
   }
 
   /** Joins documents with separators. */
