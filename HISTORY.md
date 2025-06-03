@@ -107,6 +107,10 @@ Julian Hyde
 
 ### Component upgrades
 
+* Bump calcite from 1.39 to 1.40
+* Bump checkstyle from 10.23.1 to 10.25.0
+* Bump junit-jupiter from 5.12.2 to 5.13.0
+
 ### Site and documentation
 
 * [[MOREL-284](https://github.com/hydromatic/morel/issues/284)]
