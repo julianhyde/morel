@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -35,6 +34,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /** Utilities. */
 public class Static {
@@ -394,32 +394,34 @@ public class Static {
     return i >= 0 && buf.indexOf(s, i) == i;
   }
 
-  /** Returns a string with a given number of spaces. */
-  public static String spaces(int n) {
-    switch (n) {
-      case 0:
-        return "";
-      case 1:
-        return " ";
-      case 2:
-        return "  ";
-      case 3:
-        return "   ";
-      case 4:
-        return "    ";
-      case 5:
-        return "     ";
-      case 6:
-        return "      ";
-      case 7:
-        return "       ";
-      case 8:
-        return "        ";
-      default:
-        char[] chars = new char[n];
-        Arrays.fill(chars, ' ');
-        return String.copyValueOf(chars);
-    }
+  /**
+   * Returns a character sequence with a given number of spaces.
+   *
+   * <p>It works correctly if you pass it to {@link
+   * StringBuilder#append(CharSequence, int, int)}.
+   */
+  public static CharSequence spaces(final int length) {
+    return new CharSequence() {
+      @Override
+      public @NonNull String toString() {
+        return "spaces:" + length;
+      }
+
+      @Override
+      public int length() {
+        return length;
+      }
+
+      @Override
+      public char charAt(int index) {
+        return ' ';
+      }
+
+      @Override
+      public @NonNull CharSequence subSequence(int start, int end) {
+        return spaces(end - start);
+      }
+    };
   }
 
   /** Returns a string repeated a given number of tabs. */

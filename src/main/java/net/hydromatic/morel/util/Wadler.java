@@ -19,6 +19,7 @@
 package net.hydromatic.morel.util;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static net.hydromatic.morel.util.Static.noneMatch;
 import static net.hydromatic.morel.util.Static.spaces;
 
 import com.google.common.collect.ImmutableList;
@@ -40,20 +41,24 @@ public class Wadler {
   /** A document that is a single space. */
   private static final Doc SPACE = new Text(" ");
 
+  /** A very large string. */
+  private static final CharSequence VERY_LARGE_STRING =
+      spaces(Integer.MAX_VALUE);
+
   /** Abstract representation of a document. */
   public abstract static class Doc {
     /** Outputs this document a string where no line exceeds the given width. */
     public final String render(int width) {
       final StringBuilder b = new StringBuilder();
-      render(b, width);
+      render(b, 0, width);
       return b.toString();
     }
 
     /**
-     * Outputs this document to a StringBuilder, with no line exceeding the
-     * given width.
+     * Outputs this document to a {@link StringBuilder}, with a given number of
+     * spaces as indentation, with no line exceeding the given width.
      */
-    abstract void render(StringBuilder b, int width);
+    abstract void render(StringBuilder b, int indent, int width);
 
     /** Converts all line breaks to spaces. */
     Doc flatten() {
@@ -85,7 +90,7 @@ public class Wadler {
     }
 
     @Override
-    void render(StringBuilder b, int width) {
+    void render(StringBuilder b, int indent, int width) {
       b.append(text);
     }
 
@@ -103,8 +108,9 @@ public class Wadler {
   /** Document that is a line break. */
   static class Line extends Doc {
     @Override
-    void render(StringBuilder b, int width) {
+    void render(StringBuilder b, int indent, int width) {
       b.append("\n");
+      b.append(VERY_LARGE_STRING, 0, indent);
     }
 
     @Override
@@ -133,9 +139,9 @@ public class Wadler {
     }
 
     @Override
-    void render(StringBuilder b, int width) {
+    void render(StringBuilder b, int indent, int width) {
       for (Doc doc : docs) {
-        doc.render(b, width);
+        doc.render(b, indent, width);
       }
     }
 
@@ -182,22 +188,13 @@ public class Wadler {
     }
 
     @Override
-    void render(StringBuilder b, int width) {
-      final int start = b.length();
-      doc.render(b, width);
-      final String s = b.substring(start);
-      final String s2 = addIndentation(s, indent);
-      b.replace(start, b.length(), s2);
+    void render(StringBuilder b, int indent, int width) {
+      doc.render(b, this.indent + indent, width);
     }
 
     @Override
     void flattenTo(List<Doc> flatDocs) {
       doc.flattenTo(flatDocs);
-    }
-
-    private String addIndentation(String text, int indent) {
-      String indentStr = spaces(indent);
-      return text.replaceAll("\n", "\n" + indentStr);
     }
 
     @Override
@@ -227,14 +224,14 @@ public class Wadler {
     }
 
     @Override
-    void render(StringBuilder b, int width) {
+    void render(StringBuilder b, int indent, int width) {
       // Try the flat version first.
       final int start = b.length();
-      left.render(b, width);
+      left.render(b, indent, width);
       if (!fits(b, start, width)) {
         // It doesn't fit. Use the broken version.
         b.setLength(start);
-        right.render(b, width);
+        right.render(b, indent, width);
       }
     }
 
@@ -275,7 +272,7 @@ public class Wadler {
 
   /** Concatenates multiple documents into one. */
   public static Doc concat(Doc... docs) {
-    return concat(Arrays.asList(docs));
+    return concat(ImmutableList.copyOf(docs));
   }
 
   /** Concatenates a list of multiple documents into one. */
@@ -286,11 +283,16 @@ public class Wadler {
       case 1:
         return docs.get(0);
       default:
-        List<Doc> flattened = new ArrayList<>();
-        for (Doc doc : docs) {
-          doc.collect(flattened);
+        if (noneMatch(docs, doc -> doc instanceof Concat)) {
+          // If there are no Concat documents, the list is already flat.
+          return new Concat(docs);
+        } else {
+          final List<Doc> flatDocs = new ArrayList<>();
+          for (Doc doc : docs) {
+            doc.collect(flatDocs);
+          }
+          return new Concat(flatDocs);
         }
-        return new Concat(flattened);
     }
   }
 
@@ -318,14 +320,14 @@ public class Wadler {
       return docs.get(0);
     }
 
-    final List<Doc> result = new ArrayList<>();
-    for (Doc doc : docs) {
-      if (!result.isEmpty()) {
-        result.add(separator);
-      }
-      result.add(doc);
+    final ImmutableList.Builder<Doc> list =
+        ImmutableList.builderWithExpectedSize(docs.size() * 2 + 1);
+    list.add(docs.get(0));
+    for (int i = 1; i < docs.size(); i++) {
+      list.add(separator);
+      list.add(docs.get(i));
     }
-    return concat(result);
+    return new Concat(list.build());
   }
 }
 
