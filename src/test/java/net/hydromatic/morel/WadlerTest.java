@@ -71,41 +71,12 @@ public class WadlerTest {
     }
   }
 
-  static void benchmarkPerformance(
-      StressTestGenerator generator, PrintWriter out) {
-    final int[] complexities = {5, 10, 20, 50};
-    final int iterations = 100;
-    final int warmupIterations = 50;
+  static void benchmark(int seed, int complexity, boolean render) {
+    StressTestGenerator generator = new StressTestGenerator(seed);
     final int width = 80;
-
-    for (int i = 0; i < warmupIterations; i++) {
-      for (int complexity : complexities) {
-        Doc doc = generator.generate(complexity);
-        doc.render(width);
-      }
-    }
-
-    for (int complexity : complexities) {
-      long generateNanos = 0;
-      long renderNanos = 0;
-
-      for (int i = 0; i < iterations; i++) {
-        final long startTime = System.nanoTime();
-        final Doc doc = generator.generate(complexity);
-        final long endGenerateTime = System.nanoTime();
-        doc.render(width);
-        final long endTime = System.nanoTime();
-
-        generateNanos += endGenerateTime - startTime;
-        renderNanos += endTime - endGenerateTime;
-      }
-
-      final double generateMicros =
-          generateNanos / (double) iterations / 1_000.0;
-      final double renderMicros = renderNanos / (double) iterations / 1_000.0;
-      out.printf(
-          "Complexity %d, generate %.2f us, render %.2f us per iteration%n",
-          complexity, generateMicros, renderMicros);
+    final Doc doc = generator.generate(complexity);
+    if (render) {
+      doc.render(width);
     }
   }
 
@@ -272,11 +243,21 @@ public class WadlerTest {
     checkDocument(doc);
   }
 
-  /** Stress test with deep nesting. */
+  /**
+   * Stress test with deep nesting.
+   *
+   * @see Benchmarks.WadlerBenchmark
+   */
   @Test
   void testBenchmark() {
-    StressTestGenerator generator = new StressTestGenerator(12345);
-    benchmarkPerformance(generator, out);
+    int seed = 12345;
+    int[] complexities = {5, 10, 50};
+    boolean[] booleans = {false, true};
+    for (int complexity : complexities) {
+      for (boolean render : booleans) {
+        benchmark(seed, complexity, render);
+      }
+    }
   }
 
   /**
