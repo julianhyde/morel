@@ -44,6 +44,77 @@ Contributors:
   Release 0.x.0
 -->
 
+## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.7.0">0.7.0</a> / 2025-06-07
+
+Release 0.7.0 is a huge release.
+
+Contributors:
+Julian Hyde
+
+### Features
+
+* [[MOREL-244](https://github.com/hydromatic/morel/issues/244)]
+  Simplify the syntax of the `order` step, and remove the `desc` keyword
+* [[MOREL-282](https://github.com/hydromatic/morel/issues/282)]
+  Add built-in datatype `Descending`, and method `Relational.compare`, for
+  type-based orderings
+* [[MOREL-279](https://github.com/hydromatic/morel/issues/279)]
+  `String` structure
+* [[MOREL-277](https://github.com/hydromatic/morel/issues/277)]
+  `unorder` step
+* [[MOREL-276](https://github.com/hydromatic/morel/issues/276)]
+  `ordinal` expression
+* [[MOREL-265](https://github.com/hydromatic/morel/issues/265)]
+  Add `current` keyword, representing the current row in a query
+* [[MOREL-273](https://github.com/hydromatic/morel/issues/273)]
+  Ordered and unordered queries
+* [[MOREL-237](https://github.com/hydromatic/morel/issues/237)]
+  Operator overloading (`over` and `inst` keywords)
+* [[MOREL-235](https://github.com/hydromatic/morel/issues/235)]
+  Add a `bag` type, and `Bag` structure, to represent unordered collections
+  with duplicates allowed
+* [[MOREL-253](https://github.com/hydromatic/morel/issues/253)]
+  Allow set operators (`union`, `intersect`, `except`) as steps in a pipeline
+* [[MOREL-262](https://github.com/hydromatic/morel/issues/262)]
+  Allow atomic `yield` steps at any point in the pipeline
+* [[MOREL-255](https://github.com/hydromatic/morel/issues/255)]
+  In the `scott` sample database, map the `EMP` table to `emps` (and pluralize
+  other table names)
+* [[MOREL-264](https://github.com/hydromatic/morel/issues/264)]
+  `Char` structure
+
+### Bug-fixes and internal improvements
+
+* Refactor: Add `enum BuiltIn.Constructor`
+* Derived type is incorrect if `join` follows record `yield`
+* In unifier, use working set rather than depth to prevent infinite recursion
+* Tune method `TypeSystem.unqualified(Type)`
+* In `Static`, add methods `filterEager`, `allMatch`, `anyMatch`, `noneMatch`
+* Unifier should not overwrite previously resolved variables
+* Refactor `TypeResolver`
+
+### Build and tests
+
+* Refactor: Make tests for exceptions more concise
+* [[MOREL-274](https://github.com/hydromatic/morel/issues/274)]
+  Test scripts should report errors relative to first token after whitespace
+  and comments
+* Lint: Break up large method
+* Lint: Check for `<code> ... </code>` spread over multiple lines
+* When printing plans, handle list values better
+* In `interface RecordLikeType`, add method `List<String> argNames()`
+* Lint: Disallow string literals that are broken or contain newline
+
+### Component upgrades
+
+### Site and documentation
+
+* [[MOREL-284](https://github.com/hydromatic/morel/issues/284)]
+  Release 0.7.0
+* [[MOREL-269](https://github.com/hydromatic/morel/issues/269)]
+  Decompose the documentation for built-in functions and structures
+* Typos in query reference
+
 ## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.6.0">0.6.0</a> / 2024-05-02
 
 Release 0.6.0 generalizes queries with
