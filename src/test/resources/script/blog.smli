@@ -1327,17 +1327,32 @@ product (factorize 120);
 
 (*) Greatest Common Divisor (GCD)
 fun gcd (m, n) =
-  from i in factorize m
+  from f in factorize m
     intersect (factorize n)
     compute product;
 > val gcd = fn : int * int -> int
 
 (*) Least Common Multiple (LCM)
 fun lcm (m, n) =
-  m * n div gcd (m, n);
+  let
+    val m_factors = factorize m
+    val n_factors = factorize n
+  in
+    from f in m_factors
+      union (n_factors)
+      except (from f in m_factors
+        intersect n_factors)
+    compute product
+  end;
 > val lcm = fn : int * int -> int
 
+fun lcm' (m, n) =
+  m * n div gcd (m, n);
+> val lcm' = fn : int * int -> int
+
 lcm (36, 120);
+> val it = 360 : int
+lcm' (36, 120);
 > val it = 360 : int
 gcd (36, 120);
 > val it = 12 : int

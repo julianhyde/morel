@@ -214,63 +214,53 @@ because its type is an implicit argument.)
 
 <hr>
 
-# `INTERSECT ALL` and the arithmetic of fractions
+# `INTERSECT ALL`, `EXCEPT ALL`, and the arithmetic of fractions
 
-Have you ever used `INTERSECT ALL` in SQL? Can you even think of a
-problem where it would be useful? I confess that I don't use it often,
-but I've found an example that you'll recognize from your middle
-school math class.
+`INTERSECT ALL` and `EXCEPT ALL` in SQL rarely get attention, but they
+elegantly solve a classic problem from middle school math. The problem
+is computing the **greatest common divisor (GCD)** and **least common
+multiple (LCM)** of two integers, using the prime factors of those
+integers.  In this post we show how to do this using `intersect` and
+`except`, Morel's equivalent of `INTERSECT ALL` and `EXCEPT ALL`.
 
 SQL's set operators (`UNION`, `INTERSECT`, and `EXCEPT`) have set and
 multiset variants.  The multiset variants retain duplicates and use
 the `ALL` keyword; the set variants discard duplicates, and you can
 use the optional `DISTINCT` keyword if you want to be explicit.
 
-Morel has had `concat`, `intersect` and `except` functions for some
-time, but we have
-[only just added](https://github.com/hydromatic/morel/issues/253)
-`union`, `intersect` and `except` as query steps, to achieve parity
-with standard SQL and
+Morel has [just added](https://github.com/hydromatic/morel/issues/253)
+`union`, `intersect` and `except` query steps, achieving parity
+with both Standard SQL and
 [GoogleSQL's pipe syntax](https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#union_pipe_operator).
 
-(The
-[`union`, `intersect` and `except` steps](https://github.com/hydromatic/morel/blob/main/docs/query.md#step-list)
-retain duplicates by default; to eliminate duplicates, add the
-`distinct` keyword.  Like the in GoogleSQL, they accept multiple
-arguments.
-[Ordered and unordered](https://github.com/hydromatic/morel/issues/273)
-collections are a major theme of release 0.7, and of course these
-steps work in both modes.)
+Using these steps, we can compute GCD and LCM. The queries are even more
+concise because Morel queries over integer values do not require
+column names.
 
-What better way to celebrate than with a concise example?
-The example uses the `intersect` in its duplicate-retention mode,
-and also showcases how Morel queries can operate integer values,
-without the need for column names.
-
-## LCM and GCD
+## Adding fractions
 
 Remember how -- probably in middle school -- you learned how to add
 two fractions, and to reduce a fraction to its lowest terms?
 
-Suppose you need to add 5/24 and 1/40. First, you find the **least
-common multiple (LCM)** of their denominators. The LCM of 24 and 40 is
-120, so you convert the fractions to have the LCM as their denominator:
+Suppose you need to add 5/36 and 7/120. First, find the **Least
+Common Multiple (LCM)** of their denominators (36 and 120).
+
+Next, convert each fraction to an equivalent fraction with the LCM
+(360) as the denominator.
+* For 5/36: Multiply the numerator and denominator by 10
+  (since 36 * 10 = 360).
+* For 7/120: Multiply the numerator and denominator by 3
+  (since 120 * 3 = 360).
+
+Last, add the fractions.
 
 ```
-  5      1        25      3         28
----- + ----  =  ----- + -----  =  -----
- 24     40       120     120       120
+  5      7        5 * 10    7 * 3        50      21       71
+---- + -----  =  ------- + -------  =  ----- + -----  =  -----
+ 36     120      36 * 10   120 * 3      360     360       360
 ```
 
-Next, you need to reduce the fraction 28/120 to its lowest terms.  You
-find **the greatest common divisor (GCD)** of 28 and 120, which is 4,
-and divide both the numerator and denominator by the GCD:
-
-```
-  28        (28/4)        7
------  =  ---------  =  ----
- 120       (120/4)       30
-```
+## Computing GCD and LCM
 
 To compute the GCD of two numbers, you start by finding their prime
 factors.  Prime factors can be repeated, so these are multisets, not
@@ -279,18 +269,20 @@ sets.  Let's find the GCD of 36 and 120.
 * 36 is 2<sup>2</sup> * 3<sup>2</sup>, so has factors [2, 2, 3, 3]
 * 120 is 2<sup>3</sup> * 3 * 5, so has factors [2, 2, 2, 3, 5]
 
-Where there are factors in common, we take the lower repetition count:
- * 36 has two 2s and 120 has three 2s, so the GCD will have two 2s;
- * 36 has two 3s and 120 has one 3, so the GCD will have one 3;
- * 36 has no 5s and 120 has one 5, so the GCD will have no 5s.
-
-The GCD has factors [2, 2, 3], and 2<sup>2</sup> * 3 is 12.
+Where there are factors in common, we take the lower repetition count.
+Taking the minimum count for each common factor -- two 2s, one 3, and
+no 5s -- the GCD is therefore 2<sup>2</sup> * 3, which is 12.
 
 The crucial step of the algorithm is to combine two multisets and take
 the minimum repetition count; that is exactly what `intersect` does.
 
-The LCM of two numbers is their product divided by their GCD,
-and therefore the LCM of 36 and 120 is (36 * 120) / 12 = 360.
+The LCM is similar, but takes the higher repetition count.
+This can be achieved by taking the union of both factor multisets,
+then subtracting their intersection. Here's why: The union gives us
+all factors from both numbers, but it adds the counts together. Since
+we want the maximum count (not the sum), we subtract the intersection,
+which contains the overlapping factors we double-counted.
+The LCM is therefore 2<sup>3</sup> * 3<sup>2</sup> * 5, which is 360.
 
 ## Using Morel to compute LCM and GCD
 
@@ -319,7 +311,7 @@ fun product [] = 1
 > val product = fn : int list -> int
 ```
 
-Let's test them.
+Here's how they work:
 ```
 factorize 120;
 > val it = [2, 2, 2, 3, 5] : int list
@@ -347,6 +339,24 @@ LCM can be computed from GCD:
 ```
 fun lcm (m, n) =
   (m * n) div gcd (m, n);
+> val lcm = fn : int * int -> int
+```
+
+But it can also be computed directly using `union` and `except`:
+
+```
+fun lcm' (m, n) =
+  let
+    val m_factors = factorize m
+    val n_factors = factorize n
+  in
+    from f in m_factors
+      union (n_factors)
+      except (from f in m_factors
+        intersect n_factors)
+    compute product
+  end;
+> val lcm' = fn : int * int -> int
 ```
 
 Let's test them:
@@ -355,7 +365,9 @@ Let's test them:
 gcd (36, 120);
 > val it = 12 : int
 lcm (36, 120);
-> val it = 120 : int
+> val it = 360 : int
+lcm' (36, 120);
+> val it = 360 : int
 ```
 
 ## Conclusion
