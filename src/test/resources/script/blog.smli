@@ -1317,13 +1317,13 @@ fun factorize n =
 fun product [] = 1
   | product (x :: xs) = x * product xs;
 > val product = fn : int list -> int
-product (factorize 12);
+product [2, 3, 2];
 > val it = 12 : int
 
-factorize 24;
-> val it = [2,2,2,3] : int list
-factorize 40;
-> val it = [2,2,2,5] : int list
+factorize 120;
+> val it = [2,2,2,3,5] : int list
+product (factorize 120);
+> val it = 120 : int
 
 (*) Greatest Common Divisor (GCD)
 fun gcd (m, n) =
@@ -1337,10 +1337,10 @@ fun lcm (m, n) =
   m * n div gcd (m, n);
 > val lcm = fn : int * int -> int
 
-lcm (24, 40);
-> val it = 120 : int
-gcd (28, 120);
-> val it = 4 : int
+lcm (36, 120);
+> val it = 360 : int
+gcd (36, 120);
+> val it = 12 : int
 
 (*) === Coda ========================================================
 from message in ["the end"];
