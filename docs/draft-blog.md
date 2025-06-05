@@ -212,3 +212,52 @@ of code — but we could provide a complex type that match that And
 we have created `Relational.compare`. (It is a somewhat strange function
 because its type is an implicit argument.)
 
+# Ordered and unordered data
+
+The relational model proposes that unordered data sets -- sets of records,
+called relations -- are  sufficient to express all data. We beg to differ.
+
+In this post, we will explore the idea that ordered collections are often
+more convenient. We extend Morel's query operators to work on both ordered
+and unordered collections, and convert from one to the other.
+
+First, let's define what we mean by ordered and unordered collections.
+
+## Ordered and unordered collections
+
+Definitions:
+ * a *bag* is an unordered collection of elements;
+ * a *list* is an ordered collection of elements.
+
+Note that a bag and a list may both contain duplicates,
+and the elements may be of any type.
+
+If a list has N elements, the elements can accessed by indexes `0` ... `N-1`.
+
+People often confuse a *sorted* collection with an *ordered* collection,
+but they are not the same. A sorted collection is an ordered collection that
+has a comparator (ordering function) and an instance that collection is valid
+only if its elements obey an ordering constraint, as follows.
+
+A collection `C` with elements <code>C<sub>1</sub></code> ...
+<code>C<sub>N</sub></code> is *sorted* with respect to comparator `<` if:
+
+> &forall; i&isin;[1,N], j&isin;[1,N]. C<sub>i</sub> < C<sub>j</sub> &rArr; i < j
+
+Depending on the comparator,
+the ordering may or may not be unique.
+If we have a bag of integers:
+```
+[3, 1, 4, 1, 5, 9, 2, 6, 5]
+```
+and a comparator that puts even numbers before odd numbers, then
+the following orders are both consistent with the comparator:
+```
+[2, 4, 6, 1, 1, 3, 5, 5, 9]
+[4, 2, 6, 9, 5, 5, 1, 3, 1]
+```
+
+In a list, on the other hand, the position of each element is fully determined.
+If you consider the information content of a list and a bag, the bag just contains the elements,
+but the list keeps a few extra bits, to denote which of the N! permutations of those elements it is.
+
