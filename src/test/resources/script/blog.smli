@@ -477,7 +477,7 @@ fun even n = n mod 2 = 0;
 filter even [1, 2, 3, 4];
 > val it = [2,4] : int list
 
-(* Let’s start by defining emps and depts relations as lists of
+(* Let's start by defining emps and depts relations as lists of
    records. *)
 
 val emps =
@@ -1581,7 +1581,7 @@ fun ancestors () =
       yield (x, z));
 > java.lang.UnsupportedOperationException
 
-(* Morel “forwards” relation *)
+(* Morel "forwards" relation *)
 (* Relation defined using algebra. *)
 fun clerks () =
   from e in scott.emps
@@ -1599,7 +1599,7 @@ from e in clerks (),
   yield e.ename;
 > val it = ["SMITH","ADAMS"] : string bag
 
-(* Morel “backwards” relation *)
+(* Morel "backwards" relation *)
 (* Relation defined using a predicate. *)
 (* TODO enable when we have record types.
 fun isClerk e =
@@ -1626,13 +1626,13 @@ from a
   where isAncestor(a, "arwen");
 > stdIn:2.9-2.19 Error: unbound variable or constructor: isAncestor
 >   raised at: stdIn:2.9-2.19
-(*) TODO should return [“earendil”, “elrond”] : string list
+(*) TODO should return ["earendil", "elrond"] : string list
 
 from d
   where isAncestor("earendil", d);
 > stdIn:2.9-2.19 Error: unbound variable or constructor: isAncestor
 >   raised at: stdIn:2.9-2.19
-(*) TODO should return [“elrond”, “arwen”, “elladan”, “elrohir”] : string list
+(*) TODO should return ["elrond", "arwen", "elladan", "elrohir"] : string list
 
 (*) Recipe optimization
 from b, c

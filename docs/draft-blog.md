@@ -1,9 +1,9 @@
 # Sorting on expressions
 
-In Morel’s query syntax, almost everything is an expression. The
-‘yield’ step has an expression (whereas SQL’s SELECT has a list of
-expressions with optional aliases); the scan in a ‘join’ step is over
-an expression, not necessarily a query; in the ‘group’ step, an
+In Morel's query syntax, almost everything is an expression. The
+`yield` step has an expression (whereas SQL's SELECT has a list of
+expressions with optional aliases); the scan in a `join` step is over
+an expression, not necessarily a query; in the `group` step, an
 aggregate function may be a (function-valued) expression.
 
 Making everything an expression pays dividends. Queries can return a
@@ -38,11 +38,11 @@ agg → [ id = ] exp [ of exp ]
 
 [ github com hydromatic/morel/blob/main/docs/query.md#syntax ]
 
-The ‘order’ step is a stubborn holdout. Its argument is a list of
-‘orderIitem’ s, each of which is an expression with an optional ‘desc’
+The `order` step is a stubborn holdout. Its argument is a list of
+`orderItem` s, each of which is an expression with an optional `desc`
 keyword.
 
-We can’t just get rid of the ‘desc’ keyword and covert the list to a
+We can't just get rid of the `desc` keyword and covert the list to a
 singleton. Real queries require complex sorting behaviors like
 composite keys, descending keys, and nulls-first or nulls-last. So,
 how can we put all that complexity in a single expression?
@@ -54,8 +54,8 @@ comparator function.
 
 In Standard ML, a comparator function is any function that takes a
 pair of arguments of the same type and returns a value of the `order`
-enum (‘LESS’, ‘EQUAL’, ‘GREATER’). Its type is ‘alpha * alpha ->
-order’.
+enum (`LESS`, `EQUAL`, `GREATER`). Its type is
+`alpha * alpha -> order`.
 
 For int, I can write a simple function:
 
@@ -103,10 +103,10 @@ from e in scott.emps
 ```
 
 But this is much longer than the equivalent in SQL. Comparator
-functions are clearly powerful, but we are not living up to the ‘Make
-simple things simple, make hard things possible’ principle.
+functions are clearly powerful, but we are not living up to the "Make
+simple things simple, make hard things possible" principle.
 
-Let’s abandon comparator functions and go back to sorting values.
+Let's abandon comparator functions and go back to sorting values.
 
 ## Structured values for complex orderings
 
@@ -199,15 +199,15 @@ A syntax <code>order using *comparator*</code>.
 Now the `order` step takes an expression, what we can we do? We can
 pass the expression as an argument to a function.
 
-What about the ‘order using’ syntax and comparator functions? We still
-might go there (especially for the ‘Make hard things possible’). We
+What about the `order using` syntax and comparator functions? We still
+might go there (especially for the "Make hard things possible"). We
 are still using comparator functions — the `Relational.compare`
 function is generating a comparator at compile time based on the type
 of the query.
 
 Are structured values strictly less powerful than comparator
-functions? It’s an interesting theoretical question, and I honestly
-don’t know. A comparator function can be an arbitrarily complex piece
+functions? It's an interesting theoretical question, and I honestly
+don't know. A comparator function can be an arbitrarily complex piece
 of code — but we could provide a complex type that match that And
 we have created `Relational.compare`. (It is a somewhat strange function
 because its type is an implicit argument.)
