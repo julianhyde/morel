@@ -87,7 +87,8 @@ fun compareIntStringPair ((i1, s1), (i2, s2)) =
     case String.compare (s1, s2) of
         EQUAL => Int.compare (i1, i2)
       | result => result;
-> val compareIntStringPair = fn : int * string * (int * string) -> order
+> val compareIntStringPair =
+>   fn : int * string * (int * string) -> order
 ```
 
 If we were to add comparators to Morel, we could add `order using`
@@ -217,7 +218,7 @@ because its type is an implicit argument.)
 Despite what the relational model says, some data is *ordered*.
 
 I'm not talking about *sorted* data. If you sort a collection,
-applying some comparator function to its elements, then have no
+applying a comparator function to its elements, then you have no
 more information than you had before.
 
 No, the integer list
@@ -244,9 +245,9 @@ order. Such a guarantee would seriously limit the database's
 scalability.
 
 This post is about how we allow ordered and unordered data to coexist
-in Morel.
+in [Morel](https://github.com/hydromatic/morel).
 
-Recent additions, to appear soon in release 0.7, includes
+We achieved this with a collection of new features, including
 [adding a `bag` type](https://github.com/hydromatic/morel/issues/235),
 the
 [ordered relational operators](https://github.com/hydromatic/morel/issues/273),
@@ -254,6 +255,7 @@ the
 [`ordinal` keyword](https://github.com/hydromatic/morel/issues/276),
 and a new
 [`unorder` step](https://github.com/hydromatic/morel/issues/277).
+All of these features will appear shortly in Morel release 0.7.
 
 ## List and bag types
 
@@ -265,9 +267,9 @@ of records.  (Though curiously, modern SQL allows columns to contain
 "nested tables", which can be either of the ordered `ARRAY` type or
 the unordered `MULTISET` type.)
 
-Functional programming languages' fundamental type is the
-list. Functional programs are often defined by structural induction on
-lists.  For example, the function
+Functional programming languages' fundamental type is the list, an
+ordered type. Functional programs are often defined by structural
+induction on lists.  For example, the function
 
 ```sml
 fun allPositive [] = true
@@ -281,15 +283,20 @@ empty, or if its first element is positive and the rest of the list is
 distinction between the first element of a list and the rest of the
 list, a distinction that is not present in an unordered collection.
 
-In earlier versions of Morel, we papered over the difference between
-ordered and unordered data. All collections had type `list`, even the
-unordered collections backed by database tables. Morel's relational
-operators produced results in deterministic order if you applied them
-to in-memory collections using the in-process interpreter, but order
-was not guaranteed when "hybrid mode" converted the query to SQL.
+So, Morel needs to support both ordered and unordered collections.
 
-The first step was to add a `bag` type as the unordered counterpart to
-the ordered `list` type, and with similar operations.
+Earlier versions of Morel papered over the difference. All collections
+had type `list`, even the unordered collections backed by database
+tables. Morel's relational operators produced results in deterministic
+order if you applied them to in-memory collections using the
+in-process interpreter, but order was not guaranteed when Morel
+converted the query to SQL for execution in a DBMS.
+
+To fix the problem, the first step was to add a `bag` type.  (Bag is a
+synonym for [multiset](https://en.wikipedia.org/wiki/Multiset),
+implying a given element may occur more than once, but iteration order
+is not defined.) `bag` is the unordered counterpart to the ordered
+`list` type, and has similar operations.
 
 ```sml
 val b = bag [3, 1, 4, 1, 5];
@@ -302,9 +309,9 @@ Bag.fromList [3, 1, 4, 1, 5];
 > val it = [3,1,4,1,5] : int bag
 ```
 
-Order-dependent operations from `list`, such as `hd` and `drop`, are
-defined for bags, but they are not guaranteed to return the same
-result every time you call them.
+Order-dependent operations from the `list` type, such as `hd` and
+`drop`, are defined for `bag` instances, but they are not guaranteed
+to return the same result every time you call them.
 
 ```sml
 Bag.hd b;
@@ -329,8 +336,8 @@ from e in scott.depts;
 table of the `SCOTT` JDBC data source, has changed its name as well
 as its type. It used to be called `scott.dept`. Morel collection names
 should be plural and lower-case, and improvements to the
-[name mapping](https://github.com/hydromatic/morel/issues/255)
-make it easier to provide those names.)
+[name mapping system](https://github.com/hydromatic/morel/issues/255)
+make it easier to derive proper collection names.)
 
 Next, we provide relational operators to convert between `list` and
 `bag`.
@@ -366,7 +373,7 @@ effect.)
 
 As we said above, a `bag` contains less information than its
 corresponding `list`. If you plan to convert the `bag` to a `list`
-at a later stage, you need store the ordering in an extra field.
+at a later stage, you need to store the ordering in an extra field.
 The new `ordinal` expression lets us do this:
 
 ```sml
@@ -450,12 +457,30 @@ sort, or it might replace `ordinal` with the previous sort key
 
 ## Ordered relational operators
 
-The relational model specifies the relational operators over
-(unordered) sets; the SQL standard specifies the relational operators
-of unordered multisets (the `bag` type). We now need to specify the
-relational operators over ordered multisets (the `list` type).
+We need to define the semantics of the relational operators
+over all types of collection.
 
-Semantics of steps when applied to an ordered collection:
+Part of the job has been done already:
+* The relational model defines the semantics of operators over
+  **sets** (unordered collections without duplicates).
+* The SQL standard specifies the relational operators
+  over **tables** (unordered collections with duplicates).
+* Previous versions of Morel defined semantics for (and implemented)
+  relational operators over **multisets** (unordered collections with
+  duplicates).  While the collection type was at the time called
+  `list`, we were actually defining the current `bag` type.  Unlike
+  SQL, elements need not be records.
+
+What remains is to define the semantics of queries over **lists**
+(ordered collections with duplicates), and for hybrid queries that
+combine lists and multisets. (We define hybrid semantics in the [next
+section](#hybrid-relational-operators).)
+
+Because a
+[query](https://github.com/hydromatic/morel/blob/main/docs/query.md)
+consists of a sequence of steps, each corresponding to a relational
+operator, we define the semantics of each step over input that is a
+`list`:
 
 * The first step in a query -- <code>from *pat* in *exp*</code>,
   <code>forall *pat* in *exp*</code>, or
@@ -483,7 +508,7 @@ Semantics of steps when applied to an ordered collection:
   <code>*agg<sub>i</sub>*</code> is invoked with a list of the input
   elements that belong to that group, in arrival order.
 * <code>compute *agg<sub>1</sub>*, ..., *agg<sub>a</sub>*</code>
-  behaves as a `group` step where all inputs elements are in the same
+  behaves as a `group` step where all input elements are in the same
   group.
 * <code>union [ distinct ] *exp<sub>1</sub>*, ...,
   *exp<sub>n</sub>*</code> outputs the elements of the input in order,
@@ -552,7 +577,7 @@ from deptno in [10, 20, 30]
 > val it : {deptno:int, ename:string} bag
 ```
 
-## Type inference
+## Type inference challenges
 
 This feature was challenging to implement because it required
 major changes to Morel's type inference algorithm. (We mention this

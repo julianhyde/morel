@@ -1740,6 +1740,149 @@ lcm' (36, 120);
 gcd (36, 120);
 > val it = 12 : int
 
+(*) === Ordered and unordered =======================================
+Sys.set ("lineWidth", 60);
+> val it = () : unit
+Sys.set ("printLength", 27);
+> val it = () : unit
+set ("output", "tabular");
+> val it = () : unit
+
+[3, 1, 4, 1, 5, 9, 2, 6, 5, 3];
+> val it = [3,1,4,1,5,9,2,6,5,3] : int list
+
+["Shall I compare thee to a summer's day?",
+  "Thou art more lovely and more temperate",
+  "Rough winds do shake the darling buds of May",
+  "And summer's lease hath all too short a date"];
+> val it =
+>   ["Shall I compare thee to a summer's day?",
+>    "Thou art more lovely and more temperate",
+>    "Rough winds do shake the darling buds of May",
+>    "And summer's lease hath all too short a date"]
+>   : string list
+
+fun allPositive [] = true
+  | allPositive (x::xs) = x > 0 andalso allPositive xs;
+> val allPositive = fn : int list -> bool
+
+val b = bag [3, 1, 4, 1, 5];
+> val b = [3,1,4,1,5] : int bag
+Bag.length b;
+> val it = 5 : int
+Bag.toList b;
+> val it = [3,1,4,1,5] : int list
+Bag.fromList [3, 1, 4, 1, 5];
+> val it = [3,1,4,1,5] : int bag
+Bag.hd b;
+> val it = 3 : int
+Bag.drop (b, 2);
+> val it = [4,1,5] : int bag
+
+from e in scott.depts;
+> deptno dname      loc
+> ------ ---------- --------
+> 10     ACCOUNTING NEW YORK
+> 20     RESEARCH   DALLAS
+> 30     SALES      CHICAGO
+> 40     OPERATIONS BOSTON
+>
+> val it : {deptno:int, dname:string, loc:string} bag
+
+from i in [3, 1, 4, 1, 5]
+  order DESC i;
+> val it = [5,4,3,1,1] : int list
+from i in bag [3, 1, 4, 1, 5]
+  order DESC i;
+> val it = [5,4,3,1,1] : int list
+from i in [3, 1, 4, 1, 5]
+  unorder;
+> val it = [3,1,4,1,5] : int bag
+
+from i in [3, 1, 4, 1, 5]
+  yield {i, j = ordinal}
+  unorder
+  order j
+  yield i;
+> val it = [3,1,4,1,5] : int list
+
+from e in scott.emps
+  order DESC e.sal
+  yield {e, rank = 1 + ordinal}
+  where e.job = "CLERK"
+  yield {e.ename, rank};
+> ename  rank
+> ------ ----
+> MILLER 9
+> ADAMS  12
+> JAMES  13
+> SMITH  14
+>
+> val it : {ename:string, rank:int} list
+
+from e in scott.emps
+  order DESC e.sal
+  where e.deptno <> 20
+  order (e.job, ordinal)
+  yield {e.ename, e.job, e.sal};
+> ename  job       sal
+> ------ --------- ------
+> MILLER CLERK     1300.0
+> JAMES  CLERK     950.0
+> BLAKE  MANAGER   2850.0
+> CLARK  MANAGER   2450.0
+> KING   PRESIDENT 5000.0
+> ALLEN  SALESMAN  1600.0
+> TURNER SALESMAN  1500.0
+> WARD   SALESMAN  1250.0
+> MARTIN SALESMAN  1250.0
+>
+> val it : {ename:string, job:string, sal:real} list
+
+from hundreds in [100, 200, 300],
+    tens in [10, 20, 30]
+  join units in [1, 2, 3]
+  yield hundreds + tens + units;
+> val it =
+>   [111,112,113,121,122,123,131,132,133,211,212,213,221,222,
+>    223,231,232,233,311,312,313,321,322,323,331,332,333]
+>   : int list
+
+from i in [3, 1, 4, 1, 5, 9, 2, 6]
+  union [2, 7, 1, 8, 2, 8, 1, 8];
+> val it = [3,1,4,1,5,9,2,6,2,7,1,8,2,8,1,8] : int list
+from i in [3, 1, 4, 1, 5, 9, 2, 6]
+  intersect [2, 7, 1, 8, 2, 8, 1, 8];
+> val it = [1,1,2] : int list
+from i in [3, 1, 4, 1, 5, 9, 2, 6]
+  except [2, 7, 1, 8, 2, 8, 1, 8];
+> val it = [3,4,5,6,9] : int list
+
+from deptno in [10, 20, 30]
+  join e in scott.emps on e.deptno = deptno
+  where e.job elem ["CLERK", "MANAGER"]
+  yield {deptno, e.ename};
+> deptno ename
+> ------ ------
+> 10     CLARK
+> 10     MILLER
+> 20     SMITH
+> 20     JONES
+> 20     ADAMS
+> 30     BLAKE
+> 30     JAMES
+>
+> val it : {deptno:int, ename:string} bag
+
+let
+  fun f (xs, ys) =
+    from i in xs
+      intersect ys
+in
+  f ((from e in scott.emps yield e.empno), [7521, 7782, 8000])
+end;
+> val it = [7521,7782] : int bag
+
 (*) === Coda ========================================================
 from message in ["the end"];
 > val it = ["the end"] : string list
