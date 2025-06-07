@@ -611,6 +611,12 @@ from _ in ["a"],
 from () in [()],
     () in [(), ()];
 > val it = [(),()] : unit list
+from {} in ["a"],
+  {} in [true];
+> val it = [()] : unit list
+from {} in ["a","b","c"],
+  {} in [true,false];
+> val it = [(),(),(),(),(),()] : unit list
 
 (*) Unit join atom
 from _ in [()],
