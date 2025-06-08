@@ -85,6 +85,11 @@ Julian Hyde
 
 ### Bug-fixes and internal improvements
 
+* [[MOREL-287](https://github.com/hydromatic/morel/issues/287)]
+  Degenerate joins
+* [[MOREL-286](https://github.com/hydromatic/morel/issues/286)]
+  Conversion of SQL `DATE`, `TIME`, `TIMESTAMP` values to Morel strings should
+  not depend on locale
 * Refactor: Add `enum BuiltIn.Constructor`
 * Derived type is incorrect if `join` follows record `yield`
 * In unifier, use working set rather than depth to prevent infinite recursion
@@ -95,6 +100,8 @@ Julian Hyde
 
 ### Build and tests
 
+* Lint: Check version in `README` and `README.md`
+* Lint: Ban smart quotes
 * Refactor: Make tests for exceptions more concise
 * [[MOREL-274](https://github.com/hydromatic/morel/issues/274)]
   Test scripts should report errors relative to first token after whitespace
