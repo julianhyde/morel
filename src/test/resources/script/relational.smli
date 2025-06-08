@@ -540,26 +540,34 @@ from i in [1,2]
 (*) Join atom to list of units
 from i in [1,2,3],
   () in [()];
+> val it = [1,2,3] : int list
 from i in [1,2,3]
   join () in [()];
+> val it = [1,2,3] : int list
 from i in [1,2,3],
   _ in [()];
+> val it = [1,2,3] : int list
 from i in [1,2,3],
   {} in [()];
+> val it = [1,2,3] : int list
 from i in [1,2,3]
   join _ in [()];
+> val it = [1,2,3] : int list
 
 (*) Single record, but wildcard ignores its value
 from i in [1,2,3],
   _ in ["a"];
+> val it = [1,2,3] : int list
 
 (*) Two records, but wildcard ignores its value
 from i in [1,2,3],
   _ in ["a", "b"];
+> val it = [1,1,2,2,3,3] : int list
 
 (*) Join atom to bag of units (desugared 'unorder')
 from i in [1,2,3]
   join _ in bag [()];
+> val it = [1,2,3] : int bag
 
 (*) Composite join with wildcard
 from (i, j) in [(1, 2), (3, 4)],
@@ -607,30 +615,56 @@ from _ in ["a"],
 > val it = [()] : unit list
 from _ in ["a"],
     _ in bag [true];
-> val it = [()] : unit list
+> val it = [()] : unit bag
 from () in [()],
     () in [(), ()];
 > val it = [(),()] : unit list
-from {} in ["a"],
-  {} in [true];
+from {} in [()],
+  {} in [()];
 > val it = [()] : unit list
-from {} in ["a","b","c"],
-  {} in [true,false];
+from _ in ["a","b","c"],
+  _ in [true,false];
 > val it = [(),(),(),(),(),()] : unit list
 
 (*) Unit join atom
 from _ in [()],
   i in [1,2,3];
+> val it = [1,2,3] : int list
 from {} in [()],
   i in [1,2,3];
+> val it = [1,2,3] : int list
 from _ in [()],
   i in bag [1,2,3];
+> val it = [1,2,3] : int bag
 from {} in [()],
   i in bag [1,2,3];
+> val it = [1,2,3] : int bag
 from {} in bag [()],
   i in bag [1,2,3];
+> val it = [1,2,3] : int bag
 from {} in bag [()],
   i in [1,2,3];
+> val it = [1,2,3] : int bag
+
+(*) Variations of the above with '='
+from i in [1,2,3],
+  _ = true;
+> val it = [1,2,3] : int list
+from i in [1,2,3],
+  _ = ();
+> val it = [1,2,3] : int list
+from i in bag [1,2,3],
+  _ = ();
+> val it = [1,2,3] : int bag
+from i in [1,2,3],
+  () = ();
+> val it = [1,2,3] : int list
+from () in [()],
+  () = ();
+> val it = [()] : unit list
+from _ = "a",
+  _ = 1;
+> val it = [()] : unit list
 
 (* Combinations of steps -------------------------------------- *)
 (*) 'yield' followed by 'order'
