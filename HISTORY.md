@@ -46,7 +46,38 @@ Contributors:
 
 ## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.7.0">0.7.0</a> / 2025-06-07
 
-Release 0.7.0 is a huge release.
+Release 0.7.0 is a huge release with major changes to query syntax and
+semantics.
+
+The largest change is queries over
+[ordered and unordered collections](https://github.com/hydromatic/morel/issues/273).
+For this, we introduced a
+[`bag` type for unordered collections](https://github.com/hydromatic/morel/issues/235)
+(complementing the existing `list` type), a new
+[`unorder` step](https://github.com/hydromatic/morel/issues/277), and an
+[`ordinal` expression](https://github.com/hydromatic/morel/issues/276).
+
+These query changes required a type inference algorithm that can solve type
+constraints, which in turn allows
+[operator overloading](https://github.com/hydromatic/morel/issues/237) (with
+new `over` and `inst` keywords).
+
+Other changes to query syntax were
+[set operators (`union`, `intersect`, `except`) as steps](https://github.com/hydromatic/morel/issues/253),
+[atomic `yield` steps](https://github.com/hydromatic/morel/issues/262), the
+[`current` keyword](https://github.com/hydromatic/morel/issues/265) for
+referencing the current row, and
+[simplified syntax for the `order` step](https://github.com/hydromatic/morel/issues/244).
+
+We have implemented the
+[`Char`](https://github.com/hydromatic/morel/issues/264) and
+[`String`](https://github.com/hydromatic/morel/issues/279) structures as
+defined by the
+[Standard ML Basis Library](https://smlfamily.github.io/Basis/manpages.html).
+
+The `scott` sample database now uses
+[pluralized table names](https://github.com/hydromatic/morel/issues/255)
+like `emps` instead of `EMP`.
 
 Contributors:
 Julian Hyde
