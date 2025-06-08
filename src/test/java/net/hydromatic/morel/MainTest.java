@@ -1579,9 +1579,10 @@ public class MainTest {
     ml(ml)
         .assertMatchCoverage(NON_EXHAUSTIVE)
         .assertEvalWarnings(
-            new CustomTypeSafeMatcher<List<Throwable>>("two warnings") {
+            new CustomTypeSafeMatcher<List<? extends Throwable>>(
+                "two warnings") {
               @Override
-              protected boolean matchesSafely(List<Throwable> list) {
+              protected boolean matchesSafely(List<? extends Throwable> list) {
                 return list.size() == 2
                     && list.get(0) instanceof CompileException
                     && list.get(0).getMessage().equals("match nonexhaustive")
@@ -1758,7 +1759,7 @@ public class MainTest {
         .assertType(
             instanceOfAnd(
                 DataType.class,
-                hasTypeConstructors("{LEAF='a, NODE='a tree * 'a tree}")))
+                hasTypeConstructors("{NODE='a tree * 'a tree, LEAF='a}")))
         .assertEval(is(node(leaf(1), node(leaf(2), leaf(3)))));
   }
 
@@ -2408,6 +2409,12 @@ public class MainTest {
     ml("fn f => from i in [1, 2, 3] where f i")
         .assertType("(int -> bool) -> int list");
     ml("from a in [1], b in [true]").assertType("{a:int, b:bool} list");
+    ml("from a in [1], b in [()]").assertType("{a:int, b:unit} list");
+    ml("from a in [1], _ in [true]").assertType("int list");
+    ml("from a in [1], _ in bag [true]").assertType("int bag");
+    ml("from a in [1], _ = ()").assertType("int list");
+    ml("from a in bag [1], _ = ()").assertType("int bag");
+
     ml("from a in [1], b in [true] yield a").assertType("int list");
     ml("from a in [1], b in [true] yield {a,b}")
         .assertType("{a:int, b:bool} list");
@@ -2474,6 +2481,26 @@ public class MainTest {
         .assertType("{a:int, b:bool} list");
     ml("from d in [{a=1,b=true}], i in [2] yield i yield 3.0")
         .assertType("real list");
+
+    // order
+    ml("from e in [{empno=1,deptno=10,name=\"Fred\"},\n"
+            + "        {empno=2,deptno=10,name=\"Jane\"}]\n"
+            + "  order (e.empno, e.deptno)")
+        .assertType("{deptno:int, empno:int, name:string} list");
+    ml("from e in [{empno=1,deptno=10,name=\"Fred\"},\n"
+            + "        {empno=2,deptno=10,name=\"Jane\"}]\n"
+            + "  order {e.deptno, e.empno}")
+        .assertType("{deptno:int, empno:int, name:string} list");
+    mlE("from e in [{empno=1,deptno=10,name=\"Fred\"},\n"
+            + "         ${$empno=2,deptno=10,name=\"Jane\"}]\n"
+            + "  order {e.empno, e.deptno}")
+        .withWarningsMatcher(
+            hasToString(
+                "[net.hydromatic.morel.compile.CompileException: "
+                    + "Sorting on a record whose fields are not in alphabetical "
+                    + "order. Sort order may not be what you expect. "
+                    + "at stdIn:3.9-3.28]"))
+        .assertType("{deptno:int, empno:int, name:string} list");
 
     // unorder
     ml("from d in [{a=1,b=true}], i in [2] unorder")

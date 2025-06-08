@@ -793,12 +793,48 @@ val it : {dname:string, ename:string} list</i>
 
 #### Description
 
-Sorts the current collection by a list of expressions.
+Sorts the current collection by an expression.
 
-Each expression in <code><i>orderItem</i></code> specifies a sort
-key. By default, rows are ordered in ascending order of each
-expression; if `desc` is specified, that expression is sorted in
-descending order.
+Ordering is determined by the data type, and is defined not just for
+scalar expressions like `int` and `string`, but structured types like
+tuples, records, lists, and sum types. The rules are as follows:
+
+* Primitive types
+  * `bool` orders `false` < `true`;
+  * `char` orders as defined by `Char.compare`;
+  * `int` orders as defined by `Int.compare`;
+  * `real` orders as defined by `Real.compare`;
+  * `string` orders as defined by `String.compare`;
+  * `unit` has only value, `()`, which compares equal to itself.
+* Lists are ordered lexicographically,
+  e.g. `[]` < `[3]` < `[3, 1]` < `[3, 2]` < `[4]`.
+* Tuples are ordered lexicographically on fields left-to-right,
+  e.g. `(1, "b")` < `(1, "c")` < `(2, "a")`.
+* Records are ordered lexicographically on fields in alphabetical order,
+  e.g. `{x=1, y="b"}` < `{x=1, y="c"}` < `{x=2, y="a"}`.
+* Sum types are ordered by the label in declaration order, then by
+  values. For example, a sum type `foo` declared as
+  <pre>datatype foo =
+      EMPTY
+    | SINGLE of int
+    | PAIR of int * string</pre>
+  orders `EMPTY` < `SINGLE 1` < `SINGLE 2` < `PAIR (1, "b")` < `PAIR (2, "a")`.
+* `Option` is declared as a sum type
+  <pre>datatype 'a Option =
+      NONE
+    | SOME of 'a</pre>
+  and follows the usual rules for sum types,
+  therefore `NONE` < `SOME 1` < `SOME 2`.
+  (Since `NONE` is Morel's equivalent of SQL's null value,
+  this ordering corresponds to SQL `NULLS FIRST`.)
+* `Descending` is declared as a sum type
+  <pre>datatype 'a Descending = DESC of 'a</pre>
+  but has special ordering semantics, reversing the value's order.
+  Thus `DESC 3` < `DESC 2` < `DESC 1`.
+
+Common sort specifications can be achieved using tuple types and/or
+`DESC`. For example, the equivalent of SQL `ORDER BY e.job, e.sal DESC`
+is `order (e.job, DESC e.sal)`.
 
 The output fields are the same as the input fields.
 
@@ -835,6 +871,41 @@ JAMES  CLERK      950.0
 SMITH  CLERK      800.0
 
 val it : {ename:string, job:string, sal:real} list</i>
+</pre>
+
+If you sort by a record whose fields do not appear in alphabetical
+order, Morel gives a warning.
+
+<pre><i>(* Record expressions are sorted lexicographically on field
+   name, that is, by job then by salary. Morel gives a
+   warning, in case you were expecting to sort on salary
+   first. *)</i>
+<b>from</b> e <b>in</b> scott.emps
+  <b>order</b> {e.sal, e.job}
+  <b>yield</b> {e.ename, e.job, e.sal};
+<i>
+ename  job       sal
+------ --------- ------
+SCOTT  ANALYST   3000.0
+FORD   ANALYST   3000.0
+SMITH  CLERK     800.0
+JAMES  CLERK     950.0
+ADAMS  CLERK     1100.0
+MILLER CLERK     1300.0
+CLARK  MANAGER   2450.0
+BLAKE  MANAGER   2850.0
+JONES  MANAGER   2975.0
+KING   PRESIDENT 5000.0
+WARD   SALESMAN  1250.0
+MARTIN SALESMAN  1250.0
+TURNER SALESMAN  1500.0
+ALLEN  SALESMAN  1600.0
+
+val it : {ename:string, job:string, sal:real} list
+
+Warning: Sorting on a record whose fields are not in
+alphabetical order. Sort order may not be what you expect.
+  raised at: stdIn:2.9-2.23</i>
 </pre>
 
 ### Skip step

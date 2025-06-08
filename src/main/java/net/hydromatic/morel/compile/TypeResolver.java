@@ -39,6 +39,7 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Ordering;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -105,6 +106,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 // @SuppressWarnings("StaticPseudoFunctionalStyleMethod")
 public class TypeResolver {
   private final TypeSystem typeSystem;
+  private final Consumer<CompileException> warningConsumer;
   private final PairList<Ast.FromStep, Triple> stepStack = PairList.of();
   private final List<Consumer<Resolved>> validations = new ArrayList<>();
   private final Unifier unifier = new MartelliUnifier();
@@ -127,14 +129,20 @@ public class TypeResolver {
   /** A field of this name indicates that a record type is progressive. */
   static final String PROGRESSIVE_LABEL = "z$dummy";
 
-  private TypeResolver(TypeSystem typeSystem) {
+  private TypeResolver(
+      TypeSystem typeSystem, Consumer<CompileException> warningConsumer) {
     this.typeSystem = requireNonNull(typeSystem);
+    this.warningConsumer = requireNonNull(warningConsumer);
   }
 
   /** Deduces the datatype of a declaration. */
   public static Resolved deduceType(
-      Environment env, Ast.Decl decl, TypeSystem typeSystem) {
-    final TypeResolver typeResolver = new TypeResolver(typeSystem);
+      Environment env,
+      Ast.Decl decl,
+      TypeSystem typeSystem,
+      Consumer<CompileException> warningConsumer) {
+    final TypeResolver typeResolver =
+        new TypeResolver(typeSystem, warningConsumer);
     Resolved resolved =
         typeResolver.deduceTypeWithRetries(env, decl, typeSystem);
     typeResolver.validations.forEach(v -> v.accept(resolved));
@@ -783,6 +791,7 @@ public class TypeResolver {
 
       case ORDER:
         final Ast.Order order = (Ast.Order) step;
+        validateOrder(order);
         final Ast.Exp exp = deduceType(p.env, order.exp, unifier.variable());
         fromSteps.add(order.copy(exp));
         return Triple.of(p.env, p.v, toVariable(listTerm(p.v)));
@@ -867,7 +876,7 @@ public class TypeResolver {
       final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
       final Ast.Exp scanExp2 = deduceType(p.env, scanExp, v0);
       scanExp3 = ast.fromEq(scanExp2);
-      containerize = CollectionType.LIST; // ordered
+      containerize = CollectionType.INHERIT; // retain source collection type
       c0 = null;
       reg(scanExp, v0);
     } else {
@@ -892,8 +901,16 @@ public class TypeResolver {
       case BAG:
         c = toVariable(bagTerm(v));
         break;
-      case LIST:
-        c = toVariable(listTerm(v));
+      case INHERIT:
+        // Consider "from ... yield {i=1} join b = false".
+        // p.c is "int list" or "int bag" - collection type from previous step
+        // p.v is "int" - the element type of the input
+        // c0 is null - the input is a list, but we don't care
+        // v0 is "bool" - the element type of the input
+        // c is "{i:int, b:bool} list" or "bag" - collection type of the query
+        // v is "{i:int, b:bool}" - the element type of the query
+        c = unifier.variable();
+        isListOrBagMatchingInput(p.c, p.v, c, v);
         break;
       default:
         c = unifier.variable();
@@ -1028,6 +1045,29 @@ public class TypeResolver {
       throw new RuntimeException(
           "Duplicate field name '" + names.get(duplicate) + "' in group");
     }
+  }
+
+  /**
+   * Validates an {@code Order}. Warns if asked so sort on a record expression
+   * where the fields are not in alphabetical order.
+   */
+  private void validateOrder(Ast.Order order) {
+    order.exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.Record record) {
+            final List<Pos> positions =
+                transformEager(record.args.values(), e -> e.pos);
+            if (!Ordering.from(Pos::compare).isOrdered(positions)) {
+              String message =
+                  "Sorting on a record whose fields are not in alphabetical "
+                      + "order. Sort order may not be what you expect.";
+              warningConsumer.accept(
+                  new CompileException(message, true, record.pos));
+            }
+            super.visit(record);
+          }
+        });
   }
 
   private Variable fieldVar(PairList<Ast.Id, Variable> fieldVars) {
@@ -1371,14 +1411,14 @@ public class TypeResolver {
       final KeyBuilder keyBuilder = new KeyBuilder();
       bind.tyVars.forEach(keyBuilder::toTypeKey);
 
-      final SortedMap<String, Type.Key> tyCons = new TreeMap<>();
+      final PairList<String, Type.Key> tyCons = PairList.of();
       deduceDatatypeBindType(bind, tyCons);
 
       keys.add(
           Keys.datatype(
               bind.name.name,
               Keys.ordinals(keyBuilder.tyVarMap.size()),
-              tyCons));
+              tyCons.toImmutableMap()));
     }
     final List<Type> types = typeSystem.dataTypes(keys);
 
@@ -1451,10 +1491,10 @@ public class TypeResolver {
   }
 
   private void deduceDatatypeBindType(
-      Ast.DatatypeBind datatypeBind, SortedMap<String, Type.Key> tyCons) {
+      Ast.DatatypeBind datatypeBind, PairList<String, Type.Key> tyCons) {
     KeyBuilder keyBuilder = new KeyBuilder();
     for (Ast.TyCon tyCon : datatypeBind.tyCons) {
-      tyCons.put(
+      tyCons.add(
           tyCon.id.name,
           tyCon.type == null ? Keys.dummy() : keyBuilder.toTypeKey(tyCon.type));
     }
@@ -2604,7 +2644,7 @@ public class TypeResolver {
 
   private enum CollectionType {
     BAG,
-    LIST,
+    INHERIT,
     BOTH
   }
 
