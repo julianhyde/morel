@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -1282,11 +1283,12 @@ public class Resolver {
           ImmutableSortedMap.naturalOrder();
       final ImmutableSortedMap.Builder<Core.IdPat, Core.Aggregate> aggregates =
           ImmutableSortedMap.naturalOrder();
+      final Ast.Record record = ast.toRecord(group.groupExp);
       forEach(
-          group.groupExps,
+          record.args,
           (id, exp) -> groupExpsB.put(toCorePat(id), r.toCore(exp)));
       final SortedMap<Core.IdPat, Core.Exp> groupExps = groupExpsB.build();
-      group.aggregates.forEach(
+      group.aggregate.forEach(
           aggregate ->
               aggregates.put(
                   toCorePat(aggregate.id),
