@@ -2344,35 +2344,32 @@ public class Ast {
 
   /** A {@code group} step in a {@code from} expression. */
   public static class Group extends FromStep {
-    public final ImmutablePairList<Id, Exp> groupExps;
-    public final ImmutableList<Aggregate> aggregates;
+    public final Exp groupExp;
+    public final Exp aggregate;
 
     Group(
         Pos pos,
         Op op,
-        ImmutablePairList<Id, Exp> groupExps,
-        ImmutableList<Aggregate> aggregates) {
+        Exp groupExp,
+        Exp aggregate) {
       super(pos, op);
-      this.groupExps = groupExps;
-      this.aggregates = aggregates;
+      this.groupExp = groupExp;
+      this.aggregate = aggregate;
+      checkArgument(op != Op.GROUP || groupExp != null);
+      checkArgument(op != Op.COMPUTE || aggregate != null);
+      checkArgument(op == Op.GROUP || op == Op.COMPUTE);
     }
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
       if (op == Op.GROUP) {
         w.append(" group");
+        w.append(groupExp, 0, 0);
       }
-      forEachIndexed(
-          groupExps,
-          (i, id, exp) ->
-              w.append(i == 0 ? " " : ", ")
-                  .append(id, 0, 0)
-                  .append(" = ")
-                  .append(exp, 0, 0));
-      forEachIndexed(
-          aggregates,
-          (aggregate, i) ->
-              w.append(i == 0 ? " compute " : ", ").append(aggregate, 0, 0));
+      if (aggregate != null) {
+        w.append(" compute");
+        w.append(aggregate, 0, 0);
+      }
       return w;
     }
 
@@ -2386,12 +2383,12 @@ public class Ast {
       visitor.visit(this);
     }
 
-    public Group copy(PairList<Id, Exp> groupExps, List<Aggregate> aggregates) {
+    public Group copy(Exp groupExp, Exp aggregate) {
       checkArgument(op == Op.GROUP, "use Compute.copy instead?");
-      return this.groupExps.equals(groupExps)
-              && this.aggregates.equals(aggregates)
+      return this.groupExp.equals(groupExp)
+              && Objects.equals(this.aggregate, aggregate)
           ? this
-          : ast.group(pos, groupExps, aggregates);
+          : ast.group(pos, groupExp, aggregate);
     }
   }
 
@@ -2403,8 +2400,8 @@ public class Ast {
    * remember that the type derivation rules are different.
    */
   public static class Compute extends Group {
-    Compute(Pos pos, ImmutableList<Aggregate> aggregates) {
-      super(pos, Op.COMPUTE, ImmutablePairList.of(), aggregates);
+    Compute(Pos pos, Exp aggregate) {
+      super(pos, Op.COMPUTE, null, aggregate);
     }
 
     @Override
@@ -2418,7 +2415,7 @@ public class Ast {
     }
 
     public Compute copy(List<Aggregate> aggregates) {
-      return this.aggregates.equals(aggregates)
+      return this.aggregate.equals(aggregates)
           ? this
           : ast.compute(pos, aggregates);
     }
@@ -2457,29 +2454,28 @@ public class Ast {
   }
 
   /**
-   * Call to an aggregate function in a {@code compute} clause.
+   * Call to an aggregate function. It is an expression but may only occur in a
+   * {@code compute} step or a {@code compute} clause of a {@code group} step.
    *
-   * <p>For example, in {@code compute sumId = sum of #id e}, {@code aggregate}
+   * <p>For example, in {@code compute {sumId = 2 * sum of (#id e - 1)}},
+   * the aggregate is "sum of (#id e - 1)", with
+   * {@code aggregate}
    * is "sum", {@code argument} is "#id e", and {@code id} is "sumId".
    */
   public static class Aggregate extends AstNode {
     public final Exp aggregate;
     public final Exp argument;
-    public final Id id;
 
-    Aggregate(Pos pos, Exp aggregate, @Nullable Exp argument, Id id) {
+    Aggregate(Pos pos, Exp aggregate, Exp argument) {
       super(pos, Op.AGGREGATE);
       this.aggregate = requireNonNull(aggregate);
-      this.argument = argument;
-      this.id = requireNonNull(id);
+      this.argument = requireNonNull(argument);
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      w.id(id.name).append(" = ").append(aggregate, 0, 0);
-      if (argument != null) {
-        w.append(" of ").append(argument, 0, 0);
-      }
-      return w;
+      return w.append(aggregate, 0, 0)
+          .append(" of ")
+          .append(argument, 0, 0);
     }
 
     public AstNode accept(Shuttle shuttle) {
@@ -2493,8 +2489,7 @@ public class Ast {
 
     public Aggregate copy(Exp aggregate, Exp argument, Id id) {
       return this.aggregate.equals(aggregate)
-              && Objects.equals(this.argument, argument)
-              && this.id.equals(id)
+              && this.argument.equals(argument)
           ? this
           : ast.aggregate(pos, aggregate, argument, id);
     }

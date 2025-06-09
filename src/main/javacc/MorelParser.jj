@@ -441,9 +441,9 @@ void fromStep(List<FromStep> steps) :
   final Exp takeExp;
   final Exp requireExp;
   final Exp yieldExp;
-  final PairList<Id, Exp> groupExps;
+  final Exp groupExp;
   final Pat pat;
-  final List<Aggregate> aggregates;
+  final Exp aggregate;
   final Exp orderExp;
   final List<Exp> exps;
   final boolean distinct;
@@ -464,18 +464,14 @@ void fromStep(List<FromStep> steps) :
   }
 |
   <GROUP> { span = Span.of(pos()); }
+  groupExp = expression()
   (
-    groupExps = namedExpressionCommaList()
+    <COMPUTE> aggregate = expression()
   |
-    { groupExps = ImmutablePairList.of(); }
-  )
-  (
-    <COMPUTE> aggregates = aggregateCommaList()
-  |
-    { aggregates = ImmutableList.of(); }
+    { aggregate = null; }
   )
   {
-    steps.add(ast.group(span.end(this), groupExps, aggregates));
+    steps.add(ast.group(span.end(this), groupExp, aggregate));
   }
 |
   <COMPUTE> { span = Span.of(pos()); } aggregates = aggregateCommaList() {

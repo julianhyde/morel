@@ -87,6 +87,15 @@ public enum AstBuilder {
         "cannot derive label for expression " + exp);
   }
 
+  /** Converts an expression to record. (If it is not a record, returns a
+   * singleton record, deriving a label, and throws if no label can be derived.) */
+  public Ast.Record toRecord(Ast.Exp exp) {
+    if (exp instanceof Ast.Record) {
+      return (Ast.Record) exp;
+    }
+    return ast.record(Pos.ZERO, null, PairList.of(implicitLabel(exp), exp));
+  }
+
   /** Creates a call to an infix operator. */
   private Ast.InfixCall infix(Op op, Ast.Exp a0, Ast.Exp a1) {
     return new Ast.InfixCall(a0.pos.plus(a1.pos), op, a0, a1);
@@ -520,10 +529,9 @@ public enum AstBuilder {
 
   public Ast.Group group(
       Pos pos,
-      PairList<Ast.Id, Ast.Exp> groupExps,
-      List<Ast.Aggregate> aggregates) {
-    return new Ast.Group(
-        pos, Op.GROUP, groupExps.immutable(), ImmutableList.copyOf(aggregates));
+      Ast.Exp groupExp,
+      Ast.Exp aggregate) {
+    return new Ast.Group(pos, Op.GROUP, groupExp, aggregate);
   }
 
   public Ast.FromStep where(Pos pos, Ast.Exp exp) {
