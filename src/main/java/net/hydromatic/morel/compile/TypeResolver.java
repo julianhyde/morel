@@ -1102,7 +1102,7 @@ public class TypeResolver {
     TypeEnv env3 = env;
     fieldVars.clear();
     final PairList<Ast.Id, Ast.Exp> groupExps = PairList.of();
-    for (Map.Entry<Ast.Id, Ast.Exp> groupExp : group.groupExps) {
+    for (Map.Entry<Ast.Id, Ast.Exp> groupExp : group.groupExp) {
       final Ast.Id id = groupExp.getKey();
       final Ast.Exp exp = groupExp.getValue();
       final Variable v7 = unifier.variable();
@@ -1113,7 +1113,7 @@ public class TypeResolver {
       groupExps.add(id, exp2);
     }
     final List<Ast.Aggregate> aggregates = new ArrayList<>();
-    for (Ast.Aggregate aggregate : group.aggregates) {
+    for (Ast.Aggregate aggregate : group.aggregate) {
       final Ast.Id id = aggregate.id;
       final Variable v8 = unifier.variable();
       reg(id, v8);
@@ -1242,8 +1242,8 @@ public class TypeResolver {
    */
   private void validateGroup(Ast.Group group) {
     final List<String> names = new ArrayList<>();
-    group.groupExps.leftList().forEach(id -> names.add(id.name));
-    group.aggregates.forEach(aggregate -> names.add(aggregate.id.name));
+    group.groupExp.leftList().forEach(id -> names.add(id.name));
+    group.aggregate.forEach(aggregate -> names.add(aggregate.id.name));
     int duplicate = firstDuplicate(names);
     if (duplicate >= 0) {
       throw new RuntimeException(

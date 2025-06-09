@@ -2153,6 +2153,15 @@ public class MainTest {
         .assertParseSame();
   }
 
+  /** Tests parsing "from ... group". */
+  @Test
+  void testParseFromGroup() {
+    ml("from e in emps " + "group {e.deptno, e.job}").assertParseSame();
+    ml(
+        "from e in emps "
+            + "group {e.deptno, e.job} compute {sumSal = sum of e.sal}");
+  }
+
   /**
    * This test is a copy of {@link #testParseFrom()}, replacing "from" with
    * "exists".

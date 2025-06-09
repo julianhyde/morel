@@ -250,24 +250,19 @@ public class Visitor {
   }
 
   protected void visit(Ast.Compute compute) {
-    compute.aggregates.forEach(this::accept);
+    compute.aggregate.accept(this);
   }
 
   protected void visit(Ast.Group group) {
-    group.groupExps.forEach(
-        (id, exp) -> {
-          id.accept(this);
-          exp.accept(this);
-        });
-    group.aggregates.forEach(this::accept);
+    group.groupExp.accept(this);
+    if (group.aggregate != null) {
+      group.aggregate.accept(this);
+    }
   }
 
   protected void visit(Ast.Aggregate aggregate) {
     aggregate.aggregate.accept(this);
-    if (aggregate.argument != null) {
       aggregate.argument.accept(this);
-    }
-    aggregate.id.accept(this);
   }
 
   protected void visit(Ast.TypeDecl typeDecl) {
