@@ -37,9 +37,7 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
-import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
-import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Various sub-classes of AST nodes. */
@@ -2355,16 +2353,10 @@ public class Ast {
     public final Exp groupExp;
     public final Exp aggregate;
 
-    Group(
-        Pos pos,
-        Op op,
-        Exp groupExp,
-        Exp aggregate) {
+    Group(Pos pos, Op op, Exp groupExp, Exp aggregate) {
       super(pos, op);
-      this.groupExp = groupExp;
-      this.aggregate = aggregate;
-      checkArgument(op != Op.GROUP || groupExp != null);
-      checkArgument(op != Op.COMPUTE || aggregate != null);
+      this.groupExp = requireNonNull(groupExp);
+      this.aggregate = requireNonNull(aggregate);
       checkArgument(op == Op.GROUP || op == Op.COMPUTE);
     }
 
@@ -2404,12 +2396,13 @@ public class Ast {
    * A {@code compute} step in a {@code from} expression.
    *
    * <p>Because {@code compute} and {@code group} are structurally similar, this
-   * is a sub-class of {@link Group}, with an empty list of group keys. But
-   * remember that the type derivation rules are different.
+   * is a subclass of {@link Group}, with a group key that is always the empty
+   * tuple. But remember that the type derivation rules are different.
    */
   public static class Compute extends Group {
     Compute(Pos pos, Exp aggregate) {
-      super(pos, Op.COMPUTE, null, aggregate);
+      super(pos, Op.COMPUTE, ast.unitLiteral(Pos.ZERO), aggregate);
+      requireNonNull(aggregate);
     }
 
     @Override
@@ -2422,10 +2415,10 @@ public class Ast {
       visitor.visit(this);
     }
 
-    public Compute copy(List<Aggregate> aggregates) {
-      return this.aggregate.equals(aggregates)
+    public Compute copy(Exp aggregate) {
+      return this.aggregate.equals(aggregate)
           ? this
-          : ast.compute(pos, aggregates);
+          : ast.compute(pos, aggregate);
     }
   }
 
@@ -2465,10 +2458,9 @@ public class Ast {
    * Call to an aggregate function. It is an expression but may only occur in a
    * {@code compute} step or a {@code compute} clause of a {@code group} step.
    *
-   * <p>For example, in {@code compute {sumId = 2 * sum of (#id e - 1)}},
-   * the aggregate is "sum of (#id e - 1)", with
-   * {@code aggregate}
-   * is "sum", {@code argument} is "#id e", and {@code id} is "sumId".
+   * <p>For example, in {@code compute {sumId = 2 * sum of (#id e - 1)}}, the
+   * aggregate is "sum of (#id e - 1)", with {@code aggregate} is "sum", {@code
+   * argument} is "#id e", and {@code id} is "sumId".
    */
   public static class Aggregate extends AstNode {
     public final Exp aggregate;
@@ -2481,9 +2473,7 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(aggregate, 0, 0)
-          .append(" of ")
-          .append(argument, 0, 0);
+      return w.append(aggregate, 0, 0).append(" of ").append(argument, 0, 0);
     }
 
     public AstNode accept(Shuttle shuttle) {
@@ -2495,11 +2485,10 @@ public class Ast {
       visitor.visit(this);
     }
 
-    public Aggregate copy(Exp aggregate, Exp argument, Id id) {
-      return this.aggregate.equals(aggregate)
-              && this.argument.equals(argument)
+    public Aggregate copy(Exp aggregate, Exp argument) {
+      return this.aggregate.equals(aggregate) && this.argument.equals(argument)
           ? this
-          : ast.aggregate(pos, aggregate, argument, id);
+          : ast.aggregate(pos, aggregate, argument);
     }
   }
 }
