@@ -334,7 +334,7 @@ public class Shuttle {
 
   protected AstNode visit(Ast.Aggregate aggregate) {
     return ast.aggregate(
-        aggregate.pos, aggregate.aggregate, aggregate.argument, aggregate.id);
+        aggregate.pos, aggregate.aggregate, aggregate.argument);
   }
 
   protected Ast.DatatypeDecl visit(Ast.DatatypeDecl datatypeDecl) {

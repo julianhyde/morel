@@ -262,7 +262,7 @@ public class Visitor {
 
   protected void visit(Ast.Aggregate aggregate) {
     aggregate.aggregate.accept(this);
-      aggregate.argument.accept(this);
+    aggregate.argument.accept(this);
   }
 
   protected void visit(Ast.DatatypeDecl datatypeDecl) {
