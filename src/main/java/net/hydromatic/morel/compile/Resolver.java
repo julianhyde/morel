@@ -50,6 +50,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.function.BiConsumer;
+
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
@@ -177,6 +179,31 @@ public class Resolver {
         env,
         session,
         current);
+  }
+
+  /** Creates a Resolver that is able to translate a {@code compute} clause.
+   *
+   * <p>The challenge is to split expressions such as
+   * "{@code e0 = 1 + avg of e.salary * 2.0}". It is split as follows:
+   *
+   * <ul>
+   *   <li>{@code e.salary * 2.0} is the pre-expression, and becomes {@code p0}
+   *   <li>{@code avg of p0} is the aggregate, and becomes {@code a0}
+   *   <li>{@code 1 + a0} is the post-expression, and becomes {@code e0}
+   * </ul>
+   *
+   * <p>If the pre- and post-expressions are non-trivial we end up with a
+   * {@link Core.Yield} on a {@link Core.Group} on a {@link Core.Yield}. */
+  public Resolver withAggregateResolver(Collection<? extends Core.IdPat> groupKeys) {
+    return new ComputeResolver(
+        typeMap,
+        nameGenerator,
+        variantIdMap,
+        resolvedOverloads,
+        env,
+        session,
+        current,
+        withEnv(transform(groupKeys, Binding::of)));
   }
 
   public Core.Decl toCore(Ast.Decl node) {
@@ -430,7 +457,7 @@ public class Resolver {
     }
   }
 
-  private Core.Exp toCore(Ast.Exp exp) {
+  Core.Exp toCore(Ast.Exp exp) {
     switch (exp.op) {
       case BOOL_LITERAL:
         return core.boolLiteral((Boolean) ((Ast.Literal) exp).value);
@@ -960,15 +987,6 @@ public class Resolver {
     }
   }
 
-  private Core.Aggregate aggToCore(
-      Ast.Exp exp, Collection<? extends Core.IdPat> groupKeys) {
-    final Resolver resolver = withEnv(transform(groupKeys, Binding::of));
-    return core.aggregate(
-        typeMap.getType(aggregate),
-        resolver.toCore(aggregate.aggregate),
-        aggregate.argument == null ? null : toCore(aggregate.argument));
-  }
-
   /** Helper for initialization. */
   private enum Init {
     INSTANCE;
@@ -1313,12 +1331,16 @@ public class Resolver {
       groupRecord.args.forEach(
           (id, exp) -> groupExpsB.put(toCorePat(id), r.toCore(exp)));
       final SortedMap<Core.IdPat, Core.Exp> groupExps = groupExpsB.build();
+
+      Resolver aggregateResolver = r.withAggregateResolver(groupExps.keySet(), aggregates);
       final Ast.Record aggregateRecord = ast.toRecord(group.aggregate);
       aggregateRecord.args.forEach(
-          (id, exp) ->
-              aggregates.put(
-                  toCorePat(id),
-                  r.toCore(exp, groupExps.keySet())));
+          (id, exp) -> {
+            Core.IdPat corePat = toCorePat(id);
+            aggregates.put(
+                corePat,
+                aggregateResolver.toCore(exp, groupExps.keySet()));
+          });
       fromBuilder.group(atom, groupExps, aggregates.build());
     }
 
@@ -1326,6 +1348,45 @@ public class Resolver {
     protected void visit(Ast.Distinct distinct) {
       fromBuilder.distinct();
     }
+  }
+
+  private static class ComputeResolver extends Resolver {
+    /** Resolver to be used when encountering an {@link Ast.Aggregate}.
+     * Non-null when in the "outer" expressions of a {@code compute} clause,
+     * null when in an "inner" expression of a {@code compute} clause, or in
+     * any other step. */
+    private final Resolver aggregateResolver;
+
+    private final PairList<Core.IdPat, Core.Aggregate> aggregates =
+        PairList.of();
+
+    ComputeResolver(
+        TypeMap typeMap,
+        NameGenerator nameGenerator,
+        Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
+        Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads,
+        Environment env,
+        @Nullable Session session,
+        Core.@Nullable Exp current,
+        Resolver aggregateResolver) {
+      super(typeMap, nameGenerator, variantIdMap, resolvedOverloads, env,
+          session, current);
+      this.aggregateResolver = aggregateResolver;
+    }
+
+    private Core.Aggregate toCore(
+        Ast.Aggregate aggregate) {
+    }
+
+    private Core.Aggregate toCore(
+        Ast.Aggregate aggregate, Ast.@Nullable IdPat ) {
+      Core.Aggregate coreAggregate = core.aggregate(
+          typeMap.getType(aggregate),
+          requireNonNull(aggregateResolver).toCore(aggregate.aggregate),
+          aggregate.argument == null ? null : toCore(aggregate.argument));
+      aggregates.add(coreAggregate);
+    }
+
   }
 }
 
