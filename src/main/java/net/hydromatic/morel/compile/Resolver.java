@@ -960,8 +960,8 @@ public class Resolver {
     }
   }
 
-  private Core.Aggregate toCore(
-      Ast.Aggregate aggregate, Collection<? extends Core.IdPat> groupKeys) {
+  private Core.Aggregate aggToCore(
+      Ast.Exp exp, Collection<? extends Core.IdPat> groupKeys) {
     final Resolver resolver = withEnv(transform(groupKeys, Binding::of));
     return core.aggregate(
         typeMap.getType(aggregate),
@@ -1309,16 +1309,16 @@ public class Resolver {
           ImmutableSortedMap.naturalOrder();
       final ImmutableSortedMap.Builder<Core.IdPat, Core.Aggregate> aggregates =
           ImmutableSortedMap.naturalOrder();
-      final Ast.Record record = ast.toRecord(group.groupExp);
-      forEach(
-          record.args,
+      final Ast.Record groupRecord = ast.toRecord(group.groupExp);
+      groupRecord.args.forEach(
           (id, exp) -> groupExpsB.put(toCorePat(id), r.toCore(exp)));
       final SortedMap<Core.IdPat, Core.Exp> groupExps = groupExpsB.build();
-      group.aggregate.forEach(
-          aggregate ->
+      final Ast.Record aggregateRecord = ast.toRecord(group.aggregate);
+      aggregateRecord.args.forEach(
+          (id, exp) ->
               aggregates.put(
-                  toCorePat(aggregate.id),
-                  r.toCore(aggregate, groupExps.keySet())));
+                  toCorePat(id),
+                  r.toCore(exp, groupExps.keySet())));
       fromBuilder.group(atom, groupExps, aggregates.build());
     }
 

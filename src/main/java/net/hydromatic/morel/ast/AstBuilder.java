@@ -88,8 +88,10 @@ public enum AstBuilder {
         "cannot derive label for expression " + exp);
   }
 
-  /** Converts an expression to record. (If it is not a record, returns a
-   * singleton record, deriving a label, and throws if no label can be derived.) */
+  /**
+   * Converts an expression to record. (If it is not a record, returns a
+   * singleton record, deriving a label, and throws if no label can be derived.)
+   */
   public Ast.Record toRecord(Ast.Exp exp) {
     if (exp instanceof Ast.Record) {
       return (Ast.Record) exp;
@@ -507,9 +509,8 @@ public enum AstBuilder {
     return e;
   }
 
-  public Ast.Aggregate aggregate(
-      Pos pos, Ast.Exp aggregate, Ast.Exp argument, Ast.Id id) {
-    return new Ast.Aggregate(pos, aggregate, argument, id);
+  public Ast.Aggregate aggregate(Pos pos, Ast.Exp aggregate, Ast.Exp argument) {
+    return new Ast.Aggregate(pos, aggregate, argument);
   }
 
   /**
@@ -537,14 +538,11 @@ public enum AstBuilder {
     return new Ast.Order(pos, exp);
   }
 
-  public Ast.Compute compute(Pos pos, List<Ast.Aggregate> aggregates) {
-    return new Ast.Compute(pos, ImmutableList.copyOf(aggregates));
+  public Ast.Compute compute(Pos pos, Ast.Exp aggregate) {
+    return new Ast.Compute(pos, aggregate);
   }
 
-  public Ast.Group group(
-      Pos pos,
-      Ast.Exp groupExp,
-      Ast.Exp aggregate) {
+  public Ast.Group group(Pos pos, Ast.Exp groupExp, Ast.Exp aggregate) {
     return new Ast.Group(pos, Op.GROUP, groupExp, aggregate);
   }
 
