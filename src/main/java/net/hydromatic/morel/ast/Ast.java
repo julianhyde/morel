@@ -38,7 +38,9 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
+import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Various sub-classes of AST nodes. */
@@ -1565,10 +1567,14 @@ public class Ast {
     public final Ast.@Nullable Exp with;
     public final PairList<Id, Exp> args;
 
+    /** The empty record expression, {@code {}}. */
+    public static final Record EMPTY =
+        new Record(Pos.ZERO, null, ImmutablePairList.of());
+
     Record(
         Pos pos,
         @Nullable Exp with,
-        Iterable<? extends Map.Entry<Id, Exp>> args) {
+        Iterable<? extends Map.Entry<Id, ? extends Exp>> args) {
       super(pos, Op.RECORD);
       this.with = with;
       this.args = ImmutablePairList.copyOf(args);
@@ -2508,24 +2514,39 @@ public class Ast {
 
   /** A {@code group} step in a {@code from} expression. */
   public static class Group extends FromStep {
-    public final Exp groupExp;
-    public final Exp aggregate;
+    public final Exp group;
 
-    Group(Pos pos, Op op, Exp groupExp, Exp aggregate) {
+    /** The {@code compute} clause, or null if there is none. */
+    public final @Nullable Exp aggregate;
+
+    Group(Pos pos, Op op, Exp group, Exp aggregate) {
       super(pos, op);
-      this.groupExp = requireNonNull(groupExp);
-      this.aggregate = requireNonNull(aggregate);
+      this.group = requireNonNull(group);
+      this.aggregate = aggregate;
       checkArgument(op == Op.GROUP || op == Op.COMPUTE);
+    }
+
+    /** Returns the group key as a record expression. */
+    public Record key() {
+      return ast.toRecord(group);
+    }
+
+    /** Returns the compute expression as a record. May be empty, never null. */
+    public Record compute() {
+      if (aggregate == null) {
+        return Record.EMPTY;
+      }
+      return ast.toRecord(aggregate);
     }
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
       if (op == Op.GROUP) {
-        w.append(" group");
-        w.append(groupExp, 0, 0);
+        w.append(" group ");
+        w.append(group, 0, 0);
       }
       if (aggregate != null) {
-        w.append(" compute");
+        w.append(" compute ");
         w.append(aggregate, 0, 0);
       }
       return w;
@@ -2543,15 +2564,10 @@ public class Ast {
 
     public Group copy(Exp groupExp, Exp aggregate) {
       checkArgument(op == Op.GROUP, "use Compute.copy instead?");
-      return this.groupExp.equals(groupExp)
+      return this.group.equals(groupExp)
               && Objects.equals(this.aggregate, aggregate)
           ? this
           : ast.group(pos, groupExp, aggregate);
-    }
-
-    /** Returns whether this {@code group} step is an atom. */
-    public boolean isAtom() {
-      return groupExps.size() + aggregates.size() == 1;
     }
   }
 
@@ -2564,8 +2580,7 @@ public class Ast {
    */
   public static class Compute extends Group {
     Compute(Pos pos, Exp aggregate) {
-      super(pos, Op.COMPUTE, ast.unitLiteral(Pos.ZERO), aggregate);
-      requireNonNull(aggregate);
+      super(pos, Op.COMPUTE, Record.EMPTY, requireNonNull(aggregate));
     }
 
     @Override
@@ -2579,7 +2594,7 @@ public class Ast {
     }
 
     public Compute copy(Exp aggregate) {
-      return this.aggregate.equals(aggregate)
+      return requireNonNull(this.aggregate).equals(aggregate)
           ? this
           : ast.compute(pos, aggregate);
     }
@@ -2625,7 +2640,7 @@ public class Ast {
    * aggregate is "sum of (#id e - 1)", with {@code aggregate} is "sum", {@code
    * argument} is "#id e", and {@code id} is "sumId".
    */
-  public static class Aggregate extends AstNode {
+  public static class Aggregate extends Exp {
     public final Exp aggregate;
     public final Exp argument;
 
@@ -2636,10 +2651,10 @@ public class Ast {
     }
 
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(aggregate, 0, 0).append(" of ").append(argument, 0, 0);
+      return w.append(aggregate, 0, 0).append(" over ").append(argument, 0, 0);
     }
 
-    public AstNode accept(Shuttle shuttle) {
+    public Aggregate accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 

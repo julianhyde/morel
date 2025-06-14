@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.ast;
 
+import static java.util.Objects.requireNonNull;
+
 /** Visits syntax trees. */
 public class Visitor {
 
@@ -250,11 +252,11 @@ public class Visitor {
   }
 
   protected void visit(Ast.Compute compute) {
-    compute.aggregate.accept(this);
+    requireNonNull(compute.aggregate).accept(this);
   }
 
   protected void visit(Ast.Group group) {
-    group.groupExp.accept(this);
+    group.group.accept(this);
     if (group.aggregate != null) {
       group.aggregate.accept(this);
     }

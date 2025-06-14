@@ -814,10 +814,11 @@ public class AlgebraTest {
   void testCorrelatedListSubQuery() {
     final String ml =
         "from d in scott.depts\n"
-            + "yield {d.dname, empCount = (from e in scott.emps\n"
-            + "                            group e.deptno compute c = count\n"
-            + "                            where deptno = d.deptno\n"
-            + "                            yield c)}";
+            + "yield {d.dname,\n"
+            + "       empCount = (from e in scott.emps\n"
+            + "                   group e.deptno compute {c = count over e}\n"
+            + "                   where deptno = d.deptno\n"
+            + "                   yield c)}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         // TODO: enable in hybrid; will require new method RexSubQuery.array
@@ -838,7 +839,7 @@ public class AlgebraTest {
             + "yield {d.dname, empCount =\n"
             + "    only (from e in scott.emps\n"
             + "          where e.deptno = d.deptno\n"
-            + "          group compute count)}";
+            + "          group {} compute count over ())}";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .with(Prop.HYBRID, true)
