@@ -613,12 +613,13 @@ public enum CoreBuilder {
   }
 
   public Core.Group group(
+      boolean atom,
       SortedMap<Core.IdPat, Core.Exp> groupExps,
       SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
     final List<Binding> bindings = new ArrayList<>();
     groupExps.keySet().forEach(id -> bindings.add(Binding.of(id)));
     aggregates.keySet().forEach(id -> bindings.add(Binding.of(id)));
-    boolean atom = bindings.size() == 1;
+    checkArgument(!atom || bindings.size() == 1);
     return new Core.Group(
         Core.StepEnv.of(bindings, atom),
         ImmutableSortedMap.copyOfSorted(groupExps),

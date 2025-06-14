@@ -312,9 +312,10 @@ public class FromBuilder {
   }
 
   public FromBuilder group(
+      boolean atom,
       SortedMap<Core.IdPat, Core.Exp> groupExps,
       SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
-    return addStep(core.group(groupExps, aggregates));
+    return addStep(core.group(atom, groupExps, aggregates));
   }
 
   public FromBuilder order(Core.Exp exp) {
@@ -481,7 +482,7 @@ public class FromBuilder {
 
     @Override
     protected void visit(Core.Group group) {
-      group(group.groupExps, group.aggregates);
+      group(group.env.atom, group.groupExps, group.aggregates);
     }
 
     @Override

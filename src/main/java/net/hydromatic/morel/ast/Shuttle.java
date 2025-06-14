@@ -329,10 +329,10 @@ public class Shuttle {
   }
 
   protected AstNode visit(Ast.Group group) {
-    return ast.group(group.pos, group.groupExp, group.aggregate);
+    return ast.group(group.pos, group.group, group.aggregate);
   }
 
-  protected AstNode visit(Ast.Aggregate aggregate) {
+  protected Ast.Aggregate visit(Ast.Aggregate aggregate) {
     return ast.aggregate(
         aggregate.pos, aggregate.aggregate, aggregate.argument);
   }
