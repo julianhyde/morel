@@ -474,8 +474,8 @@ void fromStep(List<FromStep> steps) :
     steps.add(ast.group(span.end(this), groupExp, aggregate));
   }
 |
-  <COMPUTE> { span = Span.of(pos()); } aggregates = aggregateCommaList() {
-    steps.add(ast.compute(span.end(this), aggregates));
+  <COMPUTE> { span = Span.of(pos()); } aggregate = expression() {
+    steps.add(ast.compute(span.end(this), aggregate));
   }
 |
   <INTERSECT> { span = Span.of(pos()); }
@@ -557,38 +557,6 @@ Pair<Pat, Exp> fromSource() :
   )
 }
 
-List<Aggregate> aggregateCommaList() :
-{
-  final List<Aggregate> list = new ArrayList<>();
-  Aggregate e;
-}
-{
-  e = aggregate() { list.add(e); }
-  (
-    <COMMA> e = aggregate() { list.add(e); }
-  )*
-  { return list; }
-}
-
-Aggregate aggregate() :
-{
-  final PairList<Id, Exp> aggregateIds = PairList.of();
-  final Exp argument;
-}
-{
-  namedExpression(aggregateIds)
-  (
-    <OF> argument = expression()
-  |
-    { argument = null; }
-  )
-  {
-    final Id id = aggregateIds.get(0).getKey();
-    final Exp aggregate = aggregateIds.get(0).getValue();
-    return ast.aggregate(id.pos.plus(pos()), aggregate, argument, id);
-  }
-}
-
 /** Returns true if {@code distinct} is present, otherwise false. */
 boolean distinctOrFalse() : {}
 {
@@ -648,7 +616,10 @@ Match match() :
  * <li>infixr 5 {@code :: @}
  * <li>infix 4 {@code = <> > >= < <=}
  * <li>infix 3 {@code := o}
- * <li>infix 0 {@code before}
+ * <li>infix 2 {@code andalso}
+ * <li>infix 1 {@code orelse}
+ * <li>infix 0 {@code before implies}
+ * <li>infix -1 {@code over}
  * </ul>
  */
 Exp expression9() :
@@ -863,13 +834,29 @@ Exp expression0() :
   { return e; }
 }
 
+/** Parses an expression of precedence level -1 ({@code over}). */
+Exp expression00() :
+{
+  final Exp e;
+  final Exp e2;
+}
+{
+  e = expression0()
+  [
+    <OVER> e2 = expression0() {
+      return ast.aggregate(e.pos.plus(e2.pos), e, e2);
+    }
+  ]
+  { return e; }
+}
+
 Exp expression() :
 {
   Exp e;
   Type t;
 }
 {
-  e = expression0()
+  e = expression00()
   (
     <COLON> t = type() {
       e = ast.annotatedExp(e.pos.plus(t.pos), e, t);

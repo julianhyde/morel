@@ -973,62 +973,83 @@ public class TypeResolver {
       PairList<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
     validateGroup(group);
-    TypeEnv env3 = env;
+    final TypeEnv[] env3 = {env};
     fieldVars.clear();
-    final PairList<Ast.Id, Ast.Exp> groupExps = PairList.of();
-    for (Map.Entry<Ast.Id, Ast.Exp> groupExp : group.groupExp) {
-      final Ast.Id id = groupExp.getKey();
-      final Ast.Exp exp = groupExp.getValue();
-      final Variable v7 = unifier.variable();
-      final Ast.Exp exp2 = deduceType(p.env, exp, v7);
-      reg(id, v7);
-      env3 = env3.bind(id.name, v7);
-      fieldVars.add(id, v7);
-      groupExps.add(id, exp2);
-    }
-    final List<Ast.Aggregate> aggregates = new ArrayList<>();
-    for (Ast.Aggregate aggregate : group.aggregate) {
-      final Ast.Id id = aggregate.id;
-      final Variable v8 = unifier.variable();
-      reg(id, v8);
-      final Variable v9 = unifier.variable();
-      final Ast.Exp aggregateFn2;
-      final Ast.Exp arg2;
-      final Variable c10;
-      if (aggregate.argument == null) {
-        c10 = p.c;
-        arg2 = null;
-      } else {
-        // The collection that is the input to the aggregate function is ordered
-        // iff the input is ordered.
-        final Variable v10 = unifier.variable();
-        c10 = unifier.variable();
-        isListOrBagMatchingInput(c10, v10, p.c, p.v);
-        arg2 = deduceType(p.env, aggregate.argument, v10);
-      }
-      aggregateFn2 = deduceApplyFnType(p.env, aggregate.aggregate, v9, c10, v8);
-      reg(aggregate.aggregate, v9);
 
-      final Sequence fnType = fnTerm(c10, v8);
-      equiv(v9, fnType);
-      env3 = env3.bind(id.name, v8);
-      fieldVars.add(id, v8);
-      final Ast.Aggregate aggregate2 =
-          aggregate.copy(aggregateFn2, arg2, aggregate.id);
-      aggregates.add(aggregate2);
-      reg(aggregate2, v8);
-    }
+    final Ast.Exp groupExp3;
+    Ast.Record key = group.key();
+    final PairList<Ast.Id, Ast.Exp> groupExps = PairList.of();
+    key.args.forEach(
+        (id, exp) -> {
+          final Variable v7 = unifier.variable();
+          final Ast.Exp exp2 = deduceType(p.env, exp, v7);
+          reg(id, v7);
+          env3[0] = env3[0].bind(id.name, v7);
+          fieldVars.add(id, v7);
+          groupExps.add(id, exp2);
+        });
+    groupExp3 =
+        ast.record(key.pos, key.with, ImmutableSortedMap.copyOf(groupExps));
+
+    final Ast.Record compute = group.compute();
+    final boolean computeIsAtom =
+        compute.args.size() == 1 && compute != group.aggregate;
+    final PairList<Ast.Id, Ast.Aggregate> args2 = PairList.of();
+    compute.args.forEach(
+        (id, exp) -> {
+          if (exp instanceof Ast.Aggregate) {
+            Ast.Aggregate aggregate = (Ast.Aggregate) exp;
+            final Variable v8 = unifier.variable();
+            reg(id, v8);
+            final Variable v9 = unifier.variable();
+            final Ast.Exp aggregateFn2;
+            final Ast.Exp arg2;
+            final Variable c10;
+            if (aggregate.argument == null) {
+              c10 = p.c;
+              arg2 = null;
+            } else {
+              // The collection that is the input to the aggregate function is
+              // ordered
+              // iff the input is ordered.
+              final Variable v10 = unifier.variable();
+              c10 = unifier.variable();
+              isListOrBagMatchingInput(c10, v10, p.c, p.v);
+              arg2 = deduceType(p.env, aggregate.argument, v10);
+            }
+            aggregateFn2 =
+                deduceApplyFnType(p.env, aggregate.aggregate, v9, c10, v8);
+            reg(aggregate.aggregate, v9);
+
+            final Sequence fnType = fnTerm(c10, v8);
+            equiv(v9, fnType);
+            env3[0] = env3[0].bind(id.name, v8);
+            fieldVars.add(id, v8);
+            final Ast.Aggregate aggregate2 = aggregate.copy(aggregateFn2, arg2);
+            args2.add(id, aggregate2);
+            reg(aggregate2, v8);
+          } else {
+            throw new AssertionError("TODO");
+          }
+        });
+
+    final Ast.Exp compute2 =
+        computeIsAtom
+            ? args2.right(0)
+            : ast.record(
+                compute.pos, compute.with, ImmutableSortedMap.copyOf(args2));
+
     final Variable v2 = fieldVar(fieldVars);
     if (group.op == Op.GROUP) {
-      fromSteps.add(group.copy(groupExps, aggregates));
+      fromSteps.add(group.copy(groupExp3, compute2));
 
       // Output is ordered iff input is ordered.
       final Variable c2 = unifier.variable();
       isListOrBagMatchingInput(c2, v2, p.c, p.v);
-      return Triple.of(env3, v2, c2);
+      return Triple.of(env3[0], v2, c2);
     } else {
-      fromSteps.add(((Ast.Compute) group).copy(aggregates));
-      return Triple.singleton(env3, v2);
+      fromSteps.add(((Ast.Compute) group).copy(compute2));
+      return Triple.singleton(env3[0], v2);
     }
   }
 
@@ -1038,8 +1059,10 @@ public class TypeResolver {
    */
   private void validateGroup(Ast.Group group) {
     final List<String> names = new ArrayList<>();
-    group.groupExp.leftList().forEach(id -> names.add(id.name));
-    group.aggregate.forEach(aggregate -> names.add(aggregate.id.name));
+    final Ast.Record groupRecord = group.key();
+    final Ast.Record aggregateRecord = group.compute();
+    groupRecord.args.keySet().forEach(id -> names.add(id.name));
+    aggregateRecord.args.keySet().forEach(id -> names.add(id.name));
     int duplicate = firstDuplicate(names);
     if (duplicate >= 0) {
       throw new RuntimeException(

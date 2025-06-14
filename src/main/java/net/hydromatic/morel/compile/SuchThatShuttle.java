@@ -148,7 +148,8 @@ class SuchThatShuttle extends Shuttle {
             final Core.Group group = (Core.Group) step;
             killTemporaryScans(idPats);
             deferredScans.flush(fromBuilder);
-            fromBuilder.group(group.groupExps, group.aggregates);
+            fromBuilder.group(
+                group.env.atom, group.groupExps, group.aggregates);
             break;
 
           case ORDER:
