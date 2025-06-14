@@ -66,6 +66,9 @@ public enum AstBuilder {
         return "ordinal";
       case ID:
         return ((Ast.Id) exp).name;
+      case AGGREGATE:
+        final Ast.Aggregate aggregate = (Ast.Aggregate) exp;
+        return implicitLabelOpt(aggregate.aggregate);
       case APPLY:
         final Ast.Apply apply = (Ast.Apply) exp;
         if (apply.fn instanceof Ast.RecordSelector) {
