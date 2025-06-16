@@ -35,7 +35,6 @@ import static org.apache.calcite.util.Util.intersects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
@@ -1298,31 +1297,42 @@ public class Resolver {
 
     @Override
     protected void visit(Ast.Group group) {
+      final boolean atom = group.isAtom();
       final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      final ImmutableSortedMap.Builder<Core.IdPat, Core.Exp> groupExpsB =
-          ImmutableSortedMap.naturalOrder();
-      group
-          .key()
-          .args
-          .forEach((id, exp) -> groupExpsB.put(toCorePat(id), r.toCore(exp)));
-      final SortedMap<Core.IdPat, Core.Exp> groupExps = groupExpsB.build();
-
-      final ComputeResolver aggregateResolver =
-          r.withAggregateResolver(groupExps.keySet());
+      final PairList<Core.IdPat, Core.Exp> groupExps = PairList.of();
+      final ComputeResolver aggregateResolver;
       final PairList<String, Core.Exp> postExps = PairList.of();
-      groupExps.forEach((id, exp) -> postExps.add(id.name, exp));
-      group
-          .compute()
-          .args
-          .forEach(
-              (id, exp) ->
-                  postExps.add(id.name, aggregateResolver.toCore(exp, id)));
+      if (atom) {
+        aggregateResolver = r.withAggregateResolver(ImmutableList.of());
+        Core.Exp exp;
+        if (group.group != Ast.Record.EMPTY) {
+          exp = r.toCore(group.group);
+        } else {
+          exp = aggregateResolver.toCore(group.aggregate, null);
+        }
+        Core.IdPat id =
+            core.idPat(exp.type, typeMap.typeSystem.nameGenerator::get);
+        groupExps.add(id, exp);
+        postExps.add(id.name, core.id(id));
+      } else {
+        group
+            .key()
+            .args
+            .forEach((id, exp) -> groupExps.add(toCorePat(id), r.toCore(exp)));
 
-      boolean atom =
-          !(group.group instanceof Ast.Record)
-              || ((Ast.Record) group.group).args.isEmpty()
-                  && !(group.aggregate instanceof Ast.Record);
-      fromBuilder.group(atom, groupExps, aggregateResolver.aggregates());
+        aggregateResolver = r.withAggregateResolver(groupExps.leftList());
+        groupExps.forEach((id, exp) -> postExps.add(id.name, core.id(id)));
+        group
+            .compute()
+            .args
+            .forEach(
+                (id, exp) ->
+                    postExps.add(id.name, aggregateResolver.toCore(exp, id)));
+      }
+      fromBuilder.group(
+          atom,
+          groupExps.toImmutableSortedMap(),
+          aggregateResolver.aggregates());
 
       final Core.Exp yieldExp;
       if (atom) {
@@ -1410,7 +1420,7 @@ public class Resolver {
     }
 
     public SortedMap<Core.IdPat, Core.Aggregate> aggregates() {
-      return ImmutableSortedMap.copyOf(aggregates);
+      return aggregates.toImmutableSortedMap();
     }
   }
 }
