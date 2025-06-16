@@ -2361,7 +2361,7 @@ public class Ast {
     /** The {@code compute} clause, or null if there is none. */
     public final @Nullable Exp aggregate;
 
-    Group(Pos pos, Op op, Exp group, Exp aggregate) {
+    Group(Pos pos, Op op, Exp group, @Nullable Exp aggregate) {
       super(pos, op);
       this.group = requireNonNull(group);
       this.aggregate = aggregate;
@@ -2370,7 +2370,7 @@ public class Ast {
 
     /** Returns the group key as a record expression. */
     public Record key() {
-      return ast.toRecord(group);
+      return ast.toRecord(group, "_key");
     }
 
     /** Returns the compute expression as a record. May be empty, never null. */
@@ -2378,7 +2378,7 @@ public class Ast {
       if (aggregate == null) {
         return Record.EMPTY;
       }
-      return ast.toRecord(aggregate);
+      return ast.toRecord(aggregate, "_compute");
     }
 
     @Override
@@ -2410,6 +2410,40 @@ public class Ast {
               && Objects.equals(this.aggregate, aggregate)
           ? this
           : ast.group(pos, groupExp, aggregate);
+    }
+
+    /**
+     * Returns whether this {@code group} step is an atom.
+     *
+     * <p>Examples:
+     *
+     * <ul>
+     *   <li>{@code group {} compute count of e} is atom (1 field)
+     *   <li>{@code group {} compute {c = count of e}} is not atom (1 field, but
+     *       aliased in a singleton record)
+     *   <li>{@code group e.deptno compute count of e} is not atom (2 fields)
+     *   <li>{@code group e.deptno compute {}} is atom (1 field)
+     *   <li>{@code compute count over e} is atom (1 field)
+     *   <li>{@code compute {c =count over e}} is not atom (1 field, but aliased
+     *       in a singleton record)
+     *   <li>{@code compute {c = count over e, sum over e.sal}} is not atom (2
+     *       fields)
+     * </ul>
+     */
+    public boolean isAtom() {
+      return fieldCount(group) + fieldCount(aggregate) == 1
+          && !isSingletonRecord(group)
+          && !isSingletonRecord(aggregate);
+    }
+
+    private boolean isSingletonRecord(Ast.Exp exp) {
+      return exp instanceof Ast.Record && ((Ast.Record) exp).args.size() == 1;
+    }
+
+    private int fieldCount(@Nullable Exp exp) {
+      return exp == null
+          ? 0
+          : exp instanceof Ast.Record ? ((Ast.Record) exp).args.size() : 1;
     }
   }
 
