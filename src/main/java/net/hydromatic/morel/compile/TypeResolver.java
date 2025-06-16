@@ -900,7 +900,7 @@ public class TypeResolver {
     }
     final TypeEnv env4 = typeEnvs.typeEnv;
 
-    final Variable v = fieldVar(fieldVars);
+    final Variable v = fieldVar(fieldVars, true);
     final Variable c;
     switch (containerize) {
       case BAG:
@@ -981,7 +981,6 @@ public class TypeResolver {
     final TypeEnv[] env3 = {env};
     fieldVars.clear();
 
-    final Ast.Exp groupExp3;
     Ast.Record key = group.key();
     final PairList<Ast.Id, Ast.Exp> groupExps = PairList.of();
     key.args.forEach(
@@ -993,11 +992,8 @@ public class TypeResolver {
           fieldVars.add(id, v7);
           groupExps.add(id, exp2);
         });
-    groupExp3 = ast.record(key.pos, key.with, groupExps);
 
     final Ast.Record compute = group.compute();
-    final boolean computeIsAtom =
-        compute.args.size() == 1 && compute != group.aggregate;
     final PairList<Ast.Id, Ast.Aggregate> args2 = PairList.of();
     compute.args.forEach(
         (id, exp) -> {
@@ -1014,8 +1010,7 @@ public class TypeResolver {
               arg2 = null;
             } else {
               // The collection that is the input to the aggregate function is
-              // ordered
-              // iff the input is ordered.
+              // ordered iff the input is ordered.
               final Variable v10 = unifier.variable();
               c10 = unifier.variable();
               isListOrBagMatchingInput(c10, v10, p.c, p.v);
@@ -1037,15 +1032,19 @@ public class TypeResolver {
           }
         });
 
+    final Ast.Exp group2 =
+        groupExps.size() == 1 && group.isAtom()
+            ? groupExps.right(0)
+            : ast.record(key.pos, key.with, groupExps);
     final Ast.Exp compute2 =
-        computeIsAtom
+        args2.size() == 1 && group.isAtom()
             ? args2.right(0)
             : ast.record(
                 compute.pos, compute.with, ImmutablePairList.copyOf(args2));
 
-    final Variable v2 = fieldVar(fieldVars);
+    final Variable v2 = fieldVar(fieldVars, group.isAtom());
     if (group.op == Op.GROUP) {
-      fromSteps.add(group.copy(groupExp3, compute2));
+      fromSteps.add(group.copy(group2, compute2));
 
       // Output is ordered iff input is ordered.
       final Variable c2 = unifier.variable();
@@ -1075,14 +1074,16 @@ public class TypeResolver {
    */
   private void validateGroup(Ast.Group group) {
     final List<String> names = new ArrayList<>();
-    final Ast.Record groupRecord = group.key();
-    final Ast.Record aggregateRecord = group.compute();
-    groupRecord.args.forEach((id, e) -> names.add(id.name));
-    aggregateRecord.args.forEach((id, e) -> names.add(id.name));
-    int duplicate = firstDuplicate(names);
-    if (duplicate >= 0) {
-      throw new RuntimeException(
-          "Duplicate field name '" + names.get(duplicate) + "' in group");
+    if (!group.isAtom()) {
+      final Ast.Record groupRecord = group.key();
+      final Ast.Record aggregateRecord = group.compute();
+      groupRecord.args.forEach((id, e) -> names.add(id.name));
+      aggregateRecord.args.forEach((id, e) -> names.add(id.name));
+      int duplicate = firstDuplicate(names);
+      if (duplicate >= 0) {
+        throw new RuntimeException(
+            "Duplicate field name '" + names.get(duplicate) + "' in group");
+      }
     }
   }
 
@@ -1110,12 +1111,16 @@ public class TypeResolver {
         });
   }
 
-  private Variable fieldVar(PairList<Ast.Id, Variable> fieldVars) {
+  private Variable fieldVar(
+      PairList<Ast.Id, Variable> fieldVars, boolean atom) {
     switch (fieldVars.size()) {
       case 0:
         return toVariable(toTerm(PrimitiveType.UNIT));
       case 1:
-        return fieldVars.right(0);
+        if (atom) {
+          return fieldVars.right(0);
+        }
+        // fall through
       default:
         final TreeMap<String, Variable> map = new TreeMap<>();
         fieldVars.forEach((k, v) -> map.put(k.name, v));
