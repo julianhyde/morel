@@ -83,9 +83,17 @@ public enum AstBuilder {
 
   /** Returns an expression's implicit label, or throws. */
   public Ast.Id implicitLabel(Ast.Exp exp) {
+    return implicitLabel(exp, null);
+  }
+
+  /** Returns an expression's implicit label, or uses a default. */
+  public Ast.Id implicitLabel(Ast.Exp exp, @Nullable String defaultLabel) {
     String value = implicitLabelOpt(exp);
     if (value != null) {
       return id(exp.pos, value);
+    }
+    if (defaultLabel != null) {
+      return id(exp.pos, defaultLabel);
     }
     throw new IllegalArgumentException(
         "cannot derive label for expression " + exp);
@@ -93,13 +101,14 @@ public enum AstBuilder {
 
   /**
    * Converts an expression to record. (If it is not a record, returns a
-   * singleton record, deriving a label, and throws if no label can be derived.)
+   * singleton record, deriving a label, if using the given default label.)
    */
-  public Ast.Record toRecord(Ast.Exp exp) {
+  public Ast.Record toRecord(Ast.Exp exp, String defaultLabel) {
     if (exp instanceof Ast.Record) {
       return (Ast.Record) exp;
     }
-    return ast.record(Pos.ZERO, null, PairList.of(implicitLabel(exp), exp));
+    final Ast.Id label = implicitLabel(exp, defaultLabel);
+    return ast.record(Pos.ZERO, null, ImmutablePairList.of(label, exp));
   }
 
   /** Creates a call to an infix operator. */

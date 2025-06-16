@@ -2442,19 +2442,23 @@ public class MainTest {
         .assertType("int bag");
     ml("from (i, j) in [(\"a\", 1)]").assertType("{i:string, j:int} list");
     ml("from (i, j) in [(1, 1), (2, 3)]").assertType("{i:int, j:int} list");
+    ml("from (x, y) in [(1,2),(3,4),(3,0)] group x + y")
+        .assertParse("from (x, y) in [(1, 2), (3, 4), (3, 0)] group x + y")
+        .assertType(hasMoniker("int list"))
+        .assertEvalIter(equalsUnordered(3, 7));
     ml("from (x, y) in [(1,2),(3,4),(3,0)] group {sum = x + y}")
         .assertParse(
             "from (x, y) in [(1, 2), (3, 4), (3, 0)] group {sum = x + y}")
-        .assertType(hasMoniker("int list"))
-        .assertEvalIter(equalsUnordered(3, 7));
+        .assertType(hasMoniker("{sum:int} list"))
+        .assertEvalIter(equalsUnordered(list(3), list(7)));
     ml("from {c, a, ...} in [{a=1.0,b=true,c=3},{a=1.5,b=true,c=4}]")
         .assertParse(
             "from {a = a, c = c, ...}"
                 + " in [{a = 1.0, b = true, c = 3}, {a = 1.5, b = true, c = 4}]")
         .assertType("{a:real, c:int} list");
-    ml("from i in [1] group i compute count")
+    ml("from i in [1] group i compute count over i")
         .assertType("{count:int, i:int} list");
-    ml("from i in bag [1] group i compute count")
+    ml("from i in bag [1] group i compute count over i")
         .assertType("{count:int, i:int} bag");
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int")
@@ -3395,13 +3399,13 @@ public class MainTest {
     ml("from e in emps group {1}")
         .assertParseThrowsIllegalArgumentException(
             is("cannot derive label for expression 1"));
-    ml("from e in emps group e.deptno compute (fn x => x) over e.job")
+    ml("from e in emps group e.deptno compute {(fn x => x) over e.job}")
         .assertParseThrowsIllegalArgumentException(
-            is("cannot derive label for expression fn x => x"));
+            is("cannot derive label for expression fn x => x over #job e"));
     // Require that we can derive a name for the expression even though there
     // is only one, and therefore we would not use the name.
     // (We could revisit this requirement.)
-    ml("from e in emps group compute (fn x => x) of e.job")
+    ml("from e in emps group {} compute (fn x => x) of e.job")
         .assertParseThrowsIllegalArgumentException(
             is("cannot derive label for expression fn x => x"));
     ml("from e in [{x = 1, y = 5}]\n" //
@@ -3440,16 +3444,25 @@ public class MainTest {
   @Test
   void testGroupDuplicates() {
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group {a = e.x}")
+            + "group e.x")
+        .assertType("int list")
         .assertEvalIter(equalsUnordered(0, 1));
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group a = e.x, b = e.x")
+            + "group {e.x}")
+        .assertType("{x:int} list")
+        .assertEvalIter(equalsUnordered(list(0), list(1)));
+    ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
+            + "group {a = e.x}")
+        .assertType("{a:int} list")
+        .assertEvalIter(equalsUnordered(list(0), list(1)));
+    ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
+            + "group {a = e.x, b = e.x}")
         .assertEvalIter(equalsUnordered(list(0, 0), list(1, 1)));
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group a = e.x, a = e.y")
+            + "group {a = e.x, a = e.y}")
         .assertTypeThrowsRuntimeException("Duplicate field name 'a' in group");
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group e.x, x = e.y")
+            + "group {e.x, x = e.y}")
         .assertTypeThrowsRuntimeException("Duplicate field name 'x' in group");
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
             + "group a = e.x\n"
