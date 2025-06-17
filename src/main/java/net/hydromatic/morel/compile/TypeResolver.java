@@ -1075,6 +1075,27 @@ public class TypeResolver {
   private void validateGroup(Ast.Group group) {
     final List<String> names = new ArrayList<>();
     if (!group.isAtom()) {
+      // If either group or compute is an atom, check that a label can be
+      // derived.
+      if (!(group.group instanceof Ast.Record)) {
+        @Nullable String label = ast.implicitLabelOpt(group.group);
+        if (label == null) {
+          throw new TypeException(
+              "cannot deduce label for group expression", group.group.pos);
+        }
+      }
+      if (group.aggregate != null && !(group.aggregate instanceof Ast.Record)) {
+        @Nullable String label = ast.implicitLabelOpt(group.aggregate);
+        if (label == null) {
+          throw new TypeException(
+              "cannot deduce label for compute expression",
+              group.aggregate.pos);
+        }
+      }
+
+      // Having checked that atom expressions can derive labels, we can call
+      // group.key() and group.compute() and be assured that they are the
+      // synthetic "_group" and "_compute" labels will not appear.
       final Ast.Record groupRecord = group.key();
       final Ast.Record aggregateRecord = group.compute();
       groupRecord.args.forEach((id, e) -> names.add(id.name));

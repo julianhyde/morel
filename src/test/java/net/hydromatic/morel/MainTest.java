@@ -261,8 +261,6 @@ public class MainTest {
     ml("let val rec x = 2 and y = 3 in x + y end").assertParseSame();
     mlE("let val x = 2 and $rec$ y = 3 in x + y end")
         .assertParseThrowsParseException("Encountered \" \"rec\" \"rec \"\"");
-    mlE("let val x = 2 and $rec$ y = 3 in x + y end")
-        .assertParseThrowsParseException("Encountered \" \"rec\" \"rec \"\"");
 
     ml("let val inst first = fn (x, y) => x in x + y end").assertParseSame();
 
@@ -3303,17 +3301,28 @@ public class MainTest {
     ml("from e in emps group e.deptno compute {(fn x => x) over e.job}")
         .assertParseThrowsIllegalArgumentException(
             is("cannot derive label for expression fn x => x over #job e"));
-    // Require that we can derive a name for the expression even though there
-    // is only one, and therefore we would not use the name.
-    // (We could revisit this requirement.)
-    ml("from e in emps group {} compute (fn x => x) of e.job")
-        .assertParseThrowsIllegalArgumentException(
-            is("cannot derive label for expression fn x => x"));
+    // If there is only one expression in the group, we do not require that it
+    // we can derive a name for the expression.
+    ml("from e in emps group {} compute (fn x => x) over e.job")
+        .assertParse("from e in emps group {} compute fn x => x over #job e");
+    // But if we add a group key, now there are two expressions, and the compute
+    // expression must have a derivable name.
+    mlE("from e in [{empno=1,deptno=10,job=\"Analyst\"},\n"
+            + "        {empno=2,deptno=10,job=\"Manager\"}]\n"
+            + "group e.deptno compute ($fn x => x) over e.job$")
+        .assertTypeThrowsTypeException(
+            "cannot deduce label for compute expression");
+    // And vice versa.
+    mlE("from e in [{empno=1,deptno=10,job=\"Analyst\"},\n"
+            + "        {empno=2,deptno=10,job=\"Manager\"}]\n"
+            + "group $1 + e.deptno$ compute sum over e.empno")
+        .assertTypeThrowsTypeException(
+            "cannot deduce label for group expression");
     ml("from e in [{x = 1, y = 5}]\n" //
-            + "  group compute sum of e.x")
+            + "  group {} compute sum over e.x")
         .assertType(hasMoniker("int list"));
     ml("from e in [1, 2, 3]\n" //
-            + "  group compute sum of e")
+            + "  group {} compute sum over e")
         .assertType(hasMoniker("int list"));
   }
 
@@ -3366,25 +3375,25 @@ public class MainTest {
             + "group {e.x, x = e.y}")
         .assertTypeThrowsRuntimeException("Duplicate field name 'x' in group");
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group a = e.x\n"
-            + "compute b = sum of e.y")
+            + "group {a = e.x}\n"
+            + "compute {b = sum over e.y}")
         .assertEvalIter(equalsUnordered(list(0, 1), list(1, 6)));
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group a = e.x\n"
-            + "compute a = sum of e.y")
+            + "group {a = e.x}\n"
+            + "compute {a = sum over e.y}")
         .assertTypeThrowsRuntimeException("Duplicate field name 'a' in group");
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group sum = e.x\n"
-            + "compute sum of e.y")
+            + "group {sum = e.x}\n"
+            + "compute sum over e.y")
         .assertTypeThrowsRuntimeException(
             "Duplicate field name 'sum' in group");
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group a = e.x\n"
-            + "compute b = sum of e.y, c = sum of e.x")
+            + "group {a = e.x}\n"
+            + "compute {b = sum over e.y, c = sum over e.x}")
         .assertEvalIter(equalsUnordered(list(0, 1, 0), list(1, 6, 2)));
     ml("from e in [{x = 1, y = 5}, {x = 0, y = 1}, {x = 1, y = 1}]\n"
-            + "group a = e.x\n"
-            + "compute c = sum of e.y, c = sum of e.x")
+            + "group {a = e.x}\n"
+            + "compute {c = sum over e.y, c = sum over e.x}")
         .assertTypeThrowsRuntimeException("Duplicate field name 'c' in group");
   }
 
