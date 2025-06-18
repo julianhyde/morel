@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -1304,22 +1305,28 @@ public class Resolver {
       final PairList<String, Core.Exp> postExps = PairList.of();
       if (atom) {
         aggregateResolver = r.withAggregateResolver(ImmutableList.of());
-        Core.Exp exp;
-        boolean emptyKey =
+        final boolean emptyKey =
             group.group instanceof Ast.Record
                 && ((Ast.Record) group.group).args.isEmpty();
+        final Core.Exp exp;
+        final String label;
         if (emptyKey) {
           // No group keys. Since this is atom, compute must be a singleton.
           exp = aggregateResolver.toCore(group.aggregate, null);
+          label = ast.implicitLabelOpt(requireNonNull(group.aggregate));
         } else {
           // One group key. Since this is an atom, compute must be empty.
           exp = r.toCore(group.group);
+          label = ast.implicitLabelOpt(requireNonNull(group.group));
         }
         Core.Id id;
         Core.IdPat idPat;
         if (exp instanceof Core.Id) {
           id = (Core.Id) exp;
           idPat = (Core.IdPat) id.idPat;
+        } else if (label != null) {
+          idPat = core.idPat(exp.type, label, 0);
+          id = core.id(idPat);
         } else {
           idPat = core.idPat(exp.type, typeMap.typeSystem.nameGenerator::get);
           id = core.id(idPat);

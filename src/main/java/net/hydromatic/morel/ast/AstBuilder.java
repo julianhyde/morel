@@ -111,6 +111,24 @@ public enum AstBuilder {
     return ast.record(Pos.ZERO, null, ImmutablePairList.of(label, exp));
   }
 
+  /** Returns whether an expression is a record with one field. */
+  @SuppressWarnings("BooleanMethodIsAlwaysInverted")
+  public boolean isSingletonRecord(Ast.Exp exp) {
+    return exp instanceof Ast.Record && ((Ast.Record) exp).args.size() == 1;
+  }
+
+  /** Returns whether an expression is a record with no fields. */
+  public boolean isEmptyRecord(AstNode exp) {
+    return exp instanceof Ast.Record && ((Ast.Record) exp).args.isEmpty();
+  }
+
+  /** Returns the number of fields emitted by an expression. */
+  public int fieldCount(Ast.@Nullable Exp exp) {
+    return exp == null
+        ? 0
+        : exp instanceof Ast.Record ? ((Ast.Record) exp).args.size() : 1;
+  }
+
   /** Creates a call to an infix operator. */
   private Ast.InfixCall infix(Op op, Ast.Exp a0, Ast.Exp a1) {
     return new Ast.InfixCall(a0.pos.plus(a1.pos), op, a0, a1);
