@@ -1968,17 +1968,17 @@ public class MainTest {
         .assertParse("from e in emps where #id e = 101 join d in depts");
     // after 'group', you have to use 'join' not ','
     mlE("(from e in emps\n"
-            + " group e.id compute count,\n"
+            + " group e.id compute count over (),\n"
             + " d $in$ depts\n"
             + " where false)")
         .assertParseThrowsParseException("Encountered \" \"in\" \"in \"\"");
     ml("(from e in emps\n"
-            + " group e.id compute count\n"
+            + " group e.id compute count over ()\n"
             + " join d in depts\n"
             + " where false)")
         .assertParse(
             "from e in emps"
-                + " group #id e compute count"
+                + " group #id e compute count over ()"
                 + " join d in depts where false");
     ml("from e in emps skip 1 take 2").assertParseSame();
     ml("from e in emps order (DESC e.empno, e.deptno)")
@@ -2132,17 +2132,17 @@ public class MainTest {
         .assertParse("exists e in emps where #id e = 101 join d in depts");
     // after 'group', you have to use 'join' not ','
     mlE("(exists e in emps\n"
-            + " group e.id compute count,\n"
+            + " group e.id compute count over (),\n"
             + " d $in$ depts\n"
             + " where false)")
         .assertParseThrowsParseException("Encountered \" \"in\" \"in \"\"");
     ml("(exists e in emps\n"
-            + " group e.id compute count\n"
+            + " group e.id compute count over ()\n"
             + " join d in depts\n"
             + " where false)")
         .assertParse(
             "exists e in emps"
-                + " group #id e compute count"
+                + " group #id e compute count over ()"
                 + " join d in depts where false");
     ml("exists e in emps skip 1 take 2").assertParseSame();
     ml("exists e in emps order e.empno take 2")
@@ -2265,17 +2265,17 @@ public class MainTest {
         .assertParse("forall e in emps where #id e = 101 join d in depts");
     // after 'group', you have to use 'join' not ','
     mlE("(forall e in emps\n"
-            + " group e.id compute count,\n"
+            + " group e.id compute count over (),\n"
             + " d $in$ depts\n"
             + " where false)")
         .assertParseThrowsParseException("Encountered \" \"in\" \"in \"\"");
     ml("(forall e in emps\n"
-            + " group e.id compute count\n"
+            + " group e.id compute count over ()\n"
             + " join d in depts\n"
             + " where false)")
         .assertParse(
             "forall e in emps"
-                + " group #id e compute count"
+                + " group #id e compute count over ()"
                 + " join d in depts where false");
     ml("forall e in emps skip 1 take 2").assertParseSame();
     ml("forall e in emps order e.empno take 2")

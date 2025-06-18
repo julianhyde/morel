@@ -72,16 +72,16 @@ where j > 4 andalso j < 7
 from i
   where i >= 0 andalso i <= 100 andalso i mod 6 <> 0
   yield {i, odd = i mod 2 = 1}
-  group odd compute count
+  group odd compute count over ()
   order odd;
 > val it = [{count=34,odd=false},{count=50,odd=true}]
 >   : {count:int, odd:bool} list
 
 from i
   where i >= 0 andalso i <= 100
-  yield {j = i mod 3}
+  yield i mod 3
   distinct
-  order DESC j;
+  order DESC current;
 > val it = [2,1,0] : int list
 
 (* [MOREL-258] `take` in query with unbounded variable gives error *)
