@@ -2058,9 +2058,17 @@ public class MainTest {
   void testParseFromGroup() {
     ml("from e in emps group {e.deptno, e.job}")
         .assertParse("from e in emps group {#deptno e, #job e}");
-    ml(
-        "from e in emps "
-            + "group {e.deptno, e.job} compute {sumSal = sum of e.sal}");
+    ml("from e in emps\n"
+            + "group {e.deptno, e.job}\n"
+            + "  compute {sumSal = sum over e.sal}")
+        .assertParse(
+            "from e in emps "
+                + "group {#deptno e, #job e}"
+                + " compute {sumSal = sum over #sal e}");
+    ml("from e in emps\n" //
+            + "group {} compute 1 + sum over 2 * e.sal")
+        .assertParse(
+            "from e in emps group {} compute 1 + (sum over 2 * #sal e)");
   }
 
   /**

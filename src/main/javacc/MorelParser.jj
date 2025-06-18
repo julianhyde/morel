@@ -739,21 +739,21 @@ Exp expression7() :
 {
   <TILDE> e = expression7() { return ast.negate(pos(), e); }
 |
-  e = expression8()
+  e = expression7b()
   (
-    <STAR> e2 = expression8() {
+    <STAR> e2 = expression7b() {
       e = ast.times(e, e2);
     }
   |
-    <SLASH> e2 = expression8() {
+    <SLASH> e2 = expression7b() {
       e = ast.divide(e, e2);
     }
   |
-    <DIV> e2 = expression8() {
+    <DIV> e2 = expression7b() {
       e = ast.div(e, e2);
     }
   |
-    <MOD> e2 = expression8() {
+    <MOD> e2 = expression7b() {
       e = ast.mod(e, e2);
     }
   )*
@@ -910,14 +910,14 @@ Exp expression0() :
   { return e; }
 }
 
-/** Parses an expression of precedence level -1 ({@code over}). */
-Exp expression00() :
+/** Parses an expression of precedence level 7.5 ({@code over}). */
+Exp expression7b() :
 {
   final Exp e;
   final Exp e2;
 }
 {
-  e = expression0()
+  e = expression8()
   [
     <OVER> e2 = expression0() {
       return ast.aggregate(e.pos.plus(e2.pos), e, e2);
@@ -932,7 +932,7 @@ Exp expression() :
   Type t;
 }
 {
-  e = expression00()
+  e = expression0()
   (
     <COLON> t = type() {
       e = ast.annotatedExp(e.pos.plus(t.pos), e, t);
