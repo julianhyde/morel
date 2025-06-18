@@ -1154,15 +1154,17 @@ public class TypeResolver {
           }
         });
 
-    final Ast.Exp group2 =
-        groupExps.size() == 1 && group.isAtom()
-            ? groupExps.right(0)
-            : ast.record(key.pos, key.with, groupExps);
+    final Ast.Exp group2;
+    if (groupExps.size() == 1 && group.isAtom()) {
+      group2 = groupExps.right(0);
+    } else {
+      group2 = key.copy(key.with, groupExps);
+      Variable v = fieldVar(fieldVars.first(groupExps.size()), false);
+    }
     final Ast.Exp compute2 =
         args2.size() == 1 && group.isAtom()
             ? args2.right(0)
-            : ast.record(
-                compute.pos, compute.with, ImmutablePairList.copyOf(args2));
+            : compute.copy(compute.with, ImmutablePairList.copyOf(args2));
 
     final Variable v2 = fieldVar(fieldVars, group.isAtom());
     if (group.op == Op.GROUP) {
@@ -1269,14 +1271,14 @@ public class TypeResolver {
         @Nullable String label = ast.implicitLabelOpt(group.group);
         if (label == null) {
           throw new TypeException(
-              "cannot deduce label for group expression", group.group.pos);
+              "cannot derive label for group expression", group.group.pos);
         }
       }
       if (group.aggregate != null && !(group.aggregate instanceof Ast.Record)) {
         @Nullable String label = ast.implicitLabelOpt(group.aggregate);
         if (label == null) {
           throw new TypeException(
-              "cannot deduce label for compute expression",
+              "cannot derive label for compute expression",
               group.aggregate.pos);
         }
       }

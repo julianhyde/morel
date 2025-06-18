@@ -3410,13 +3410,13 @@ public class MainTest {
             + "        {empno=2,deptno=10,job=\"Manager\"}]\n"
             + "group e.deptno compute ($fn x => x) over e.job$")
         .assertTypeThrowsTypeException(
-            "cannot deduce label for compute expression");
+            "cannot derive label for compute expression");
     // And vice versa.
     mlE("from e in [{empno=1,deptno=10,job=\"Analyst\"},\n"
             + "        {empno=2,deptno=10,job=\"Manager\"}]\n"
             + "group $1 + e.deptno$ compute sum over e.empno")
         .assertTypeThrowsTypeException(
-            "cannot deduce label for group expression");
+            "cannot derive label for group expression");
     ml("from e in [{x = 1, y = 5}]\n" //
             + "  group {} compute sum over e.x")
         .assertType(hasMoniker("int list"));
@@ -3441,9 +3441,9 @@ public class MainTest {
                 list(0, list(list(0, 1)))));
 
     mlE("from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]\n"
-            + "  group e.a compute rows = (fn x => x)")
-        .assertTypeThrowsRuntimeException(
-            "cannot derive label for expression rows = fn x => x");
+            + "  group e.a compute ($fn x => x) over e$")
+        .assertTypeThrowsTypeException(
+            "cannot derive label for compute expression");
   }
 
   /**
@@ -3525,15 +3525,15 @@ public class MainTest {
         .assertEvalIter(equalsUnordered(list(1, 5), list(0, 3)));
 
     // "compute" must not be followed by other steps
-    mlE("from i in [1, 2, 3] compute s = sum of i $yield s + 2$")
+    mlE("from i in [1, 2, 3] compute sum over i $yield s + 2$")
         .assertCompileException("'compute' step must be last in 'from'");
     // similar, but valid
-    ml("(from i in [1, 2, 3] compute s = sum of i) + 2")
+    ml("(from i in [1, 2, 3] compute sum over i) + 2")
         .assertType(hasMoniker("int"))
         .assertEval(is(8));
 
     // "compute" must not occur in "exists"
-    mlE("exists i in [1, 2, 3] $compute s = sum of i$")
+    mlE("exists i in [1, 2, 3] $compute sum over i$")
         .assertCompileException("'compute' step must not occur in 'exists'");
   }
 

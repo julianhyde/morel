@@ -1330,15 +1330,29 @@ public class Resolver {
       if (atom) {
         aggregateResolver = r.withAggregateResolver(ImmutableList.of());
         Core.Exp exp;
-        if (group.group != Ast.Record.EMPTY) {
-          exp = r.toCore(group.group);
-        } else {
+        boolean emptyKey =
+            group.group instanceof Ast.Record
+                && ((Ast.Record) group.group).args.isEmpty();
+        if (emptyKey) {
+          // No group keys. Since this is atom, compute must be a singleton.
           exp = aggregateResolver.toCore(group.aggregate, null);
+        } else {
+          // One group key. Since this is an atom, compute must be empty.
+          exp = r.toCore(group.group);
         }
-        Core.IdPat id =
-            core.idPat(exp.type, typeMap.typeSystem.nameGenerator::get);
-        groupExps.add(id, exp);
-        postExps.add(id.name, core.id(id));
+        Core.Id id;
+        Core.IdPat idPat;
+        if (exp instanceof Core.Id) {
+          id = (Core.Id) exp;
+          idPat = (Core.IdPat) id.idPat;
+        } else {
+          idPat = core.idPat(exp.type, typeMap.typeSystem.nameGenerator::get);
+          id = core.id(idPat);
+        }
+        if (!emptyKey) {
+          groupExps.add(idPat, exp);
+        }
+        postExps.add(idPat.name, id);
       } else {
         group
             .key()
