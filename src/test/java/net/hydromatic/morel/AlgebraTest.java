@@ -182,16 +182,16 @@ public class AlgebraTest {
       "from r in [{a=2,b=3},{a=2,b=1},{a=1,b=1}]\n" //
           + "  group r.a",
       "from r in [{a=2,b=3},{a=2,b=1},{a=1,b=1}]\n"
-          + "  group compute sb = sum of r.b",
+          + "  group {} compute sum over r.b",
       "from r in [{a=2,b=3},{a=2,b=1},{a=1,b=1}]\n"
           + "  group r.a\n"
           + "  yield a",
       "from r in [{a=2,b=3}]\n"
-          + "group r.b compute sb = sum of r.b,\n"
-          + "    mb = min of r.b, a = count",
+          + "group r.b compute {sb = sum over r.b,\n"
+          + "    mb = min over r.b, a = count over ()}",
       "from r in [{a=2,b=3}]\n"
-          + "group r.b compute sb = sum of r.b,\n"
-          + "    mb = min of r.b, a = count\n"
+          + "group r.b compute {sb = sum over r.b,\n"
+          + "    mb = min over r.b, a = count over ()}\n"
           + "yield {a, a2 = a + b, sb}",
       "from e in scott.emps\n" //
           + "yield {e.ename, x = e.deptno * 2}",
@@ -237,12 +237,12 @@ public class AlgebraTest {
           + "where e.sal >= g.losal\n"
           + "  andalso e.sal < g.hisal\n"
           + "  andalso d.deptno = e.deptno\n"
-          + "group g.grade compute c = count",
+          + "group g.grade compute {c = count over ()}",
       "from x in (from e in scott.emps yield {e.deptno, z = 1})\n"
           + "  union (from d in scott.depts yield {d.deptno, z = 2})",
       "from x in (from e in scott.emps yield e.deptno)\n"
           + "  union (from d in scott.depts yield d.deptno)\n"
-          + "group x compute c = count",
+          + "group x compute {c = count over ()}",
       "from i in [1, 2, 3] union [2, 5, 4]",
       "from i in [1, 2, 3] union [2, 5, 4], [2, 1, 7]",
       "from i in [1, 2, 3] intersect [2, 5, 4]",
