@@ -47,24 +47,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class Ast {
   private Ast() {}
 
-  /** Returns whether an expression is a record with one field. */
-  @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-  public static boolean isSingletonRecord(Ast.Exp exp) {
-    return exp instanceof Ast.Record && ((Ast.Record) exp).args.size() == 1;
-  }
-
-  /** Returns whether an expression is a record with no fields. */
-  public static boolean isEmptyRecord(AstNode exp) {
-    return exp instanceof Ast.Record && ((Record) exp).args.isEmpty();
-  }
-
-  /** Returns the number of fields emitted by an expression. */
-  public static int fieldCount(@Nullable Exp exp) {
-    return exp == null
-        ? 0
-        : exp instanceof Ast.Record ? ((Ast.Record) exp).args.size() : 1;
-  }
-
   /**
    * Base class for a pattern.
    *
@@ -2613,9 +2595,9 @@ public class Ast {
      * </ul>
      */
     public boolean isAtom() {
-      return fieldCount(group) + fieldCount(aggregate) == 1
-          && !isSingletonRecord(group)
-          && !isSingletonRecord(aggregate);
+      return ast.fieldCount(group) + ast.fieldCount(aggregate) == 1
+          && !ast.isSingletonRecord(group)
+          && !ast.isSingletonRecord(aggregate);
     }
   }
 
