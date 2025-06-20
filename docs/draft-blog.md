@@ -1,10 +1,53 @@
 # Sorting on expressions
 
-In Morel's query syntax, almost everything is an expression. The
-`yield` step has an expression (whereas SQL's SELECT has a list of
-expressions with optional aliases); the scan in a `join` step is over
-an expression, not necessarily a query; in the `group` step, an
-aggregate function may be a (function-valued) expression.
+Morel's design philosophy of "everything is an expression" has
+transformed how we think about queries, making them more composable
+and flexible than traditional SQL.  One stubborn holdout was the
+`order` step, which required a special syntax with comma-separated
+order-items rather than a single expression. In this post, we describe
+how we
+[evolved `order` syntax](https://github.com/hydromatic/morel/issues/244)
+in Morel release 0.7, and the benefits of this change.
+
+## Why expressions?
+
+As of Morel release 0.6,
+[query syntax](https://github.com/hydromatic/morel/blob/main/docs/query.md#syntax)
+(a little simplified) looked like this:
+
+<pre><code><i>query</i> &rarr; <b>from</b> <i>scan</i> , ... , <i>scan</i> <i>step</i> , ... <i>step</i>
+
+<i>step</i> &rarr; <b>distinct</b>
+    | <b>except</b> [ <b>distinct</b> ] <i>exp</i> , ... , <i>exp</i>
+    | <b>group</b> <i>groupKey</i> , ... , <i>groupKey</i> [ <b>compute</b> <i>agg</i> , ... , <i>agg</i> ]
+    | <b>intersect</b> [ <b>distinct</b> ] <i>exp</i> , ... , <i>exp</i>
+    | <b>join</b> <i>scan</i> , ... , <i>scan</i>
+    | <b>order</b> <i>orderItem</i> , ... , <i>orderItem</i>
+    | <b>skip</b> <i>exp</i>
+    | <b>take</b> <i>exp</i>
+    | <b>union</b> [ <b>distinct</b> ] <i>exp</i> , ... , <i>exp</i>
+    | <b>where</b> <i>exp</i>
+    | <b>yield</b> <i>exp</i>
+
+<i>scan</i> &rarr; pat <b>in</b> <i>exp</i> [ <b>on</b> <i>exp</i> ]
+
+<i>orderItem</i> &rarr; <i>exp</i> [ <b>desc</b> ]
+
+<i>groupKey</i> &rarr; [ <i>id</i> = ] <i>exp</i>
+
+<i>agg</i> &rarr; [ <i>id</i> = ] <i>exp</i> [ <b>of</b> <i>exp</i> ]</code></pre>
+
+Almost everything is an expression. The argument to the `yield` step
+is an expression (whereas SQL's `SELECT` has a list of expressions
+with optional `AS` aliases); the scan in a `from` query or `join` step
+is over an expression (which, unlike SQL, is not necessarily a query);
+the arguments to the `where`, `skip`, `take`, `union`, `intersect`,
+and `union` steps are also expressions.
+
+(The *groupKey* and *agg* items in `group` and `compute` have some way
+to go, and we will be looking at those for Morel 0.8, but at least the
+aggregate function (before <b>`of`</b>) may be a (function-valued)
+expression.)
 
 Making everything an expression pays dividends. Queries can return a
 collection of any value, not just records. You can easily join a
@@ -13,42 +56,40 @@ order-lines). If you need a custom aggregate function, you can roll
 your own. And each of these expressions can be made into function
 arguments, so that you can parameterize your query.
 
+## The `order` step
 
-```
-step → distinct
-    | except [ distinct ] exp , ... , exp
-    | group groupKey1 , ... , groupKeyg [ compute agg1 , ... , agga ]
-    | intersect [ distinct ] exp , ... , exp
-    | join scan , … scan
-    | order orderItem , ... , orderItem
-    | skip exp
-    | take exp
-    | union [ distinct ] exp1 , ... , expu
-    | where exp
-    | yield exp
+The `order` step is a stubborn holdout. Its argument is a
+comma-separated list of order-items, each of which is an expression
+with an optional `desc` keyword.
 
-scan → pat in exp [ on exp ]
+One problem is the commas. In the expression
 
-orderItem → exp [ desc ]
-
-groupKey → [ id = ] exp
-
-agg → [ id = ] exp [ of exp ]
+```sml
+let
+  val pairs = [(1, "a"), (2, "b"), (1, "c")];
+in
+  foo (from (i, j) in pairs order i desc, j)
+end;
 ```
 
-[ github com hydromatic/morel/blob/main/docs/query.md#syntax ]
+it is not immediately clear whether `j` is a second argument for the
+call to the function `foo` or the second item in the `order` clause.
 
-The `order` step is a stubborn holdout. Its argument is a list of
-`orderItem` s, each of which is an expression with an optional `desc`
-keyword.
+Another problem was the fact that the `order` clause could not be
+empty. The
+[ordered and unordered collections](https://github.com/hydromatic/morel/issues/273)
+feature introduced an `unorder` step to convert a `list` to a `bag`,
+and we need the opposite of that, a trivial sort whose
+key has the same value for every element.
 
 We can't just get rid of the `desc` keyword and covert the list to a
 singleton. Real queries require complex sorting behaviors like
-composite keys, descending keys, and nulls-first or nulls-last. So,
-how can we put all that complexity in a single expression?
+composite keys, descending keys, and nulls-first or nulls-last
+specifications. So, how can we put all that complexity in a single
+expression?
 
 One approach is to do what many programming languages do, and use a
-comparator function.
+comparator function. Let's see how that would pan out.
 
 ## Comparator functions
 
@@ -59,7 +100,7 @@ enum (`LESS`, `EQUAL`, `GREATER`). Its type is
 
 For int, I can write a simple function:
 
-```
+```sml
 fun compareInt (x: int, y: int) : order =
     if x < y then LESS
     else if x > y then GREATER
@@ -70,7 +111,7 @@ val compareInt: (int * int) -> order;
 
 In fact, most data types have a built-in `compare` function:
 
-```
+```sml
 Int.compare;
 val it = fn : int * int -> order
 
@@ -80,9 +121,10 @@ val it = fn : string * string -> order
 
 For more complex orderings, I can write a comparator that combines
 other comparators. For example, this function compares a list of
-(string, real) pairs, the string first, then the real descending:
+(`string`, `real`) pairs, the `string` first, then the `real`
+descending:
 
-```
+```sml
 fun compareIntStringPair ((i1, s1), (i2, s2)) =
     case String.compare (s1, s2) of
         EQUAL => Int.compare (i1, i2)
@@ -94,7 +136,7 @@ fun compareIntStringPair ((i1, s1), (i2, s2)) =
 If we were to add comparators to Morel, we could add `order using`
 syntax like this:
 
-```
+```sml
 (* Sort employees by job, and then by descending salary. *)
 from e in scott.emps
   order using fn (emp1, emp2) =>
@@ -104,33 +146,70 @@ from e in scott.emps
 ```
 
 But this is much longer than the equivalent in SQL. Comparator
-functions are clearly powerful, but we are not living up to the "Make
-simple things simple, make hard things possible" principle.
+functions are clearly powerful, but they fail the "make simple things
+simple" test -- forcing developers to write complex code for common
+sorting patterns.
 
-Let's abandon comparator functions and go back to sorting values.
+Let's look instead at value-based sorting, which is simpler, but
+provides most of the flexibility of comparator functions.
 
 ## Structured values for complex orderings
 
-The idea is that two values of the same type can be compared - and
-that comparison is determined by the type. For complex sorting
-behaviors, you use complex types.
+The idea behind value-based sorting is that any values of the same
+type can be compared, and that the Morel system generates comparison
+logic for any type. If you require a complex sorting behavior, you can
+construct an expression with a complex type.
 
-For a composite ordering, you use a tuple type. Morel compares the
-values lexicographically.
+Previously, if you wanted a composite ordering, with one of the keys
+descending, you would write something like this:
 
-For a descending ordering, you wrap the value in the `descending` data
-type using its `DESC` constructor. Morel compares the values in the
-usual way, then reverses the direction.
-
-Two tricks. First, Morel is effectively generating a comparator
-function at compile time based on the type of the query.
-
-Second, for all the common orderings, sort expressions are virtual.
-If the query
+```sml
+(* Old syntax *)
+from e in scott.emps
+  order e.job, e.sal desc;
 ```
+
+As of Morel 0.7, you can write the same query using a single
+expression:
+
+```sml
+(* New syntax *)
 from e in scott.emps
   order (e.job, DESC e.sal);
 ```
+
+Note that:
+ * For a composite ordering, we use a tuple type. Morel compares the
+   values lexicographically.
+ * For a descending ordering, we wrap the value in the `descending`
+   data type using its `DESC` constructor. Morel compares the values
+   in the usual way, then reverses the direction.
+
+Sorting is defined for all other data types, including tuples,
+records, sum-types such as `Option` and `Descending`, lists, bags, and
+any combination thereof.
+
+Morel's compiler has two tricks to make this powerful and efficient.
+
+First, Morel is effectively generating a comparator function at
+compile time based on the type of the `order` expression.  This makes
+value-based sorting as powerful as comparator functions, but with less
+code for the user to write.
+
+(The change included a new library function, `Relational.compare`,
+that allows you to compare any two values of the same type, even if
+you are not performing a sort. This is a somewhat strange function,
+part macro and metaprogramming, because it introspects the type of its
+arguments, and because its type is an implicit argument.)
+
+Second, the `order` clause uses a form of lazy evaluation. If the
+query
+
+```sml
+from e in scott.emps
+  order (e.job, DESC e.sal);
+```
+
 created a tuple `(e.job, DESC(e.sal))` for every element, we would
 worry about the impact on performance, but those tuples are never
 constructed. Morel operates on the employee records `e` directly,
@@ -150,12 +229,13 @@ optional values, but the same requirement exists.
 Currently, the behavior is the same as SQL's `NULLS FIRST`.
 `option` is a datatype declared as follows:
 
-```
+```sml
 datatype option 'a = NONE | SOME 'a;
 ```
 
 Therefore `NONE` will sort lower than all `SOME` values:
-```
+
+```sml
 from i in [SOME 1, SOME ~100, NONE]
   order i;
 > val it = [NONE, SOME ~100, SOME 1] : int option list
@@ -164,13 +244,13 @@ from i in [SOME 1, SOME ~100, NONE]
 We haven't yet figured out how to express the equivalent of `NULLS
 LAST`.  One idea is to add a `noneLast` datatype
 
-```
+```sml
 datatype 'a noneLast = NONE_LAST of 'a;
 ```
 
 and use it in a query like this:
 
-```
+```sml
 from i in [SOME 1, SOME ~100, NONE]
   order NONE_LAST i;
 > val it = [SOME ~100, SOME 1, NONE] : int option list
@@ -178,7 +258,7 @@ from i in [SOME 1, SOME ~100, NONE]
 
 When we use `NONE_LAST` and `DESC` together in a query
 
-```
+```sml
 from i in [SOME 1, SOME ~100, NONE]
   order DESC (NONE_LAST i);
 > val it = [NONE, SOME 1, SOME ~100] : int option list
@@ -193,74 +273,63 @@ solution for `NULLS LAST` yet.
 
 ### Comparator functions
 
-A syntax <code>order using *comparator*</code>.
+Under the "make hard things possible" principle, we might still want
+to support comparator functions at some point. The syntax could be as
+follows:
 
-## Conclusion
+<pre><code><i>step</i> &rarr; ...
+  | <b>order</b> <i>exp</i>
+  | <b>order using</b> <i>comparator</i></code></pre>
 
-Now the `order` step takes an expression, what we can we do? We can
-pass the expression as an argument to a function.
-
-What about the `order using` syntax and comparator functions? We still
-might go there (especially for the "Make hard things possible"). We
-are still using comparator functions — the `Relational.compare`
-function is generating a comparator at compile time based on the type
-of the query.
-
-Are structured values strictly less powerful than comparator
+Is value-based sorting strictly less powerful than comparator
 functions? It's an interesting theoretical question, and I honestly
 don't know. A comparator function can be an arbitrarily complex piece
-of code — but we could provide a complex type that match that And we
-have created `Relational.compare`. (It is a somewhat strange function
-because its type is an implicit argument.)
+of code — but perhaps it is always possible to create a value that
+matches the structure of the code.
 
-## Appendix: Sorting on expressions
+### Aggregation syntax
 
-There are only a few places in Morel syntax where you do not use an
-expression, and the `order` step used to be one of them.  Previously,
-`order` was followed by a list of "order items", each an expression
-optionally followed by `desc`. The items were separated by commas, and
-the list could not be empty.
+The syntax for `group` and `compute` steps is still not an expression.
+For Morel 0.8 and beyond, we will at looking at
+[several improvements](https://github.com/hydromatic/morel/issues/288).
 
-The commas were a problem. In the expression
+First, making the group-key and compute-items an expression, with
+field aliasing provided via record syntax, as in the current `yield`
+step.
 
-```sml
-foo (from i in [1, 2, 3] order i desc, j);
-```
+Second, allowing complex compute expressions with expressions both
+inside and outside the aggregate function, as in the SQL expression
+"`1 + AVG(sal * 2)`". This will mean the `of` keyword, which is
+currently part of the *agg* syntax, will be transitioned to a new
+keyword that is part of the expression syntax, possibly `over`.
 
-it is not clear whether `j` is a second argument for the call to the
-function `foo` or the second item in the `order` clause.
+Third, further explore the relationship between the argument to an
+aggregate function and a query. Noting that SQL aggregate function
+syntax by now includes most relational operators (`FILTER`,
+`DISTINCT`, `WITHIN DISTINCT`, `ORDER BY`) consider making the
+argument (the `over` keyword just mentioned) a kind of query
+expression.
 
-Another problem was the fact that the `order` clause could not be
-empty. The
-[ordered and unordered collections](#1-ordered-and-unordered-collections)
-feature introduced an `unorder` step to convert a `list` to a `bag`,
-and we need the opposite of that, a trivial sort whose
-key has the same value for every element.
+## Benefits of sorting on expressions
 
-The answer was to
-[make the argument to `order` an expression](https://github.com/hydromatic/morel/issues/244).
-A composite sort specification is now a tuple, still separated by
-commas, but now enclosed in parentheses.  If a sort key is descending,
-you now wrap it in the `Descending` data type by preceding it with the
-`DESC`.  Thus:
+Now the `order` step takes an expression, what is now possible that
+wasn't before?
+
+We can pass the expression as an argument to a function, like this:
 
 ```sml
-(* Old syntax *)
-from e in scott.emps
-  order e.job, e.sal desc;
-
-(* New syntax *)
-from e in scott.emps
-  order (e.job, DESC e.sal);
+fun rankedEmployees extractKey =
+  from e in scott.emps
+    order extractKey e;
+    
+rankedEmployee (fn e => e.ename);
+rankedEmployee (fn e => (e.job,  DESC e.sal));
 ```
 
-You can now sort by any data type, including tuples, records,
-sum-types such as `Option` and `Descending`, lists, bags, and any
-combination thereof.
-
-To achieve the trivial sort, you can sort by any constant value, such
-as the integer `0` or the `Option` constructor `NONE`, but
-conventionally you would sort by the empty tuple `()`:
+We can also achieve the trivial sort required to convert a `bag` to a
+`list`. You can sort by any constant value, such as the integer `0` or
+the `Option` constructor `NONE`, but the norm would be to sort by the
+empty tuple `()`:
 
 ```sml
 from e in scott.emps
@@ -272,7 +341,8 @@ from e in scott.emps
 >   : string list
 ```
 
-The key thing is that the result is a `list`.  The elements are in
+Note that result is a `list`, even though `scott.emps` (a relational
+database table) is a `bag`.  The elements are in
 arbitrary order (because any order is consistent with the empty sort
 key) but in converting the collection to a `list` the arbitrary order
 has become frozen and repeatable.
