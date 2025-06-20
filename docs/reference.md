@@ -83,6 +83,10 @@ In Morel but not Standard ML:
   (for example, <code>\`an identifier\`</code>)
 * `with` functional update for record values
 * overloaded functions may be declared using `over` and `inst`
+* all types have a default order (used by `Relational.compare` and the
+  `order` step)
+* the constructors of a sum type (`datatype`) are ordered in
+  declaration order, not alphabetical order
 
 In Standard ML but not in Morel:
 * `word` constant

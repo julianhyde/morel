@@ -89,7 +89,7 @@ specifications. So, how can we put all that complexity in a single
 expression?
 
 One approach is to do what many programming languages do, and use a
-comparator function. Let's see how that would pan out.
+comparator function. Let's explore this approach.
 
 ## Comparator functions
 
@@ -98,15 +98,14 @@ pair of arguments of the same type and returns a value of the `order`
 enum (`LESS`, `EQUAL`, `GREATER`). Its type is
 `alpha * alpha -> order`.
 
-For int, I can write a simple function:
+For `int`, I can write a simple function:
 
 ```sml
-fun compareInt (x: int, y: int) : order =
+fun compareInt (x: int, y: int) =
     if x < y then LESS
     else if x > y then GREATER
     else EQUAL;
-
-val compareInt: (int * int) -> order;
+> val compareInt = fn : int * int -> order
 ```
 
 In fact, most data types have a built-in `compare` function:
@@ -115,22 +114,25 @@ In fact, most data types have a built-in `compare` function:
 Int.compare;
 val it = fn : int * int -> order
 
+Real.compare;
+val it = fn : real * real -> order
+
 String.compare;
 val it = fn : string * string -> order
 ```
 
 For more complex orderings, I can write a comparator that combines
 other comparators. For example, this function compares a list of
-(`string`, `real`) pairs, the `string` first, then the `real`
+`string * real` pairs, the `string` first, then the `real`
 descending:
 
 ```sml
-fun compareIntStringPair ((i1, s1), (i2, s2)) =
+fun compareStringRealPair ((s1, r1), (s2, r2)) =
     case String.compare (s1, s2) of
-        EQUAL => Int.compare (i1, i2)
+        EQUAL => Real.compare (r2, r1)
       | result => result;
-> val compareIntStringPair =
->   fn : int * string * (int * string) -> order
+> val compareStringRealPair = fn
+>   : string * real * (string * real) -> order
 ```
 
 If we were to add comparators to Morel, we could add `order using`
@@ -144,6 +146,10 @@ from e in scott.emps
        EQUAL => Real.compare (emp2.sal, emp1.sal)
      | result => result;
 ```
+
+(The comparator expression in this query is basically an inline
+version of the `compareStringRealPair` function, but working on `emp`
+records rather than `string * real` pairs.)
 
 But this is much longer than the equivalent in SQL. Comparator
 functions are clearly powerful, but they fail the "make simple things
@@ -199,8 +205,8 @@ code for the user to write.
 (The change included a new library function, `Relational.compare`,
 that allows you to compare any two values of the same type, even if
 you are not performing a sort. This is a somewhat strange function,
-part macro and metaprogramming, because it introspects the type of its
-arguments, and because its type is an implicit argument.)
+because it takes the type as an implicit argument, then drives its
+behavior by introspecting that type.)
 
 Second, the `order` clause uses a form of lazy evaluation. If the
 query
@@ -216,24 +222,68 @@ constructed. Morel operates on the employee records `e` directly,
 and the performance is the same as if we had specified the ordering
 using a list of order-items or a comparator function.
 
+## Benefits of sorting on expressions
+
+Now the `order` step takes an expression, what is now possible that
+wasn't before?
+
+We can pass the expression as an argument to a function, like this:
+
+```sml
+fun rankedEmployees extractKey =
+  from e in scott.emps
+    order extractKey e;
+    
+rankedEmployee (fn e => e.ename);
+rankedEmployee (fn e => (e.job,  DESC e.sal));
+```
+
+We can also achieve the trivial sort required to convert a `bag` to a
+`list`. You can sort by any constant value, such as the integer `0` or
+the `Option` constructor `NONE`, but the norm would be to sort by the
+empty tuple `()`:
+
+```sml
+from e in scott.emps
+  yield e.ename
+  order ();
+> val it =
+>   ["SMITH","ALLEN","WARD","JONES","MARTIN","BLAKE","CLARK",
+>    "SCOTT","KING","TURNER","ADAMS","JAMES","FORD","MILLER"]
+>   : string list
+```
+
+Note that result is a `list`, even though `scott.emps` (a relational
+database table) is a `bag`.  The elements are in
+arbitrary order (because any order is consistent with the empty sort
+key) but in converting the collection to a `list` the arbitrary order
+has become frozen and repeatable.
+
 ## Future work
 
-There are a few things to be solved in the future.
+Several challenges remain to be addressed.
 
 ### NULLS FIRST and NULLS LAST
 
-SQL has `NULLS FIRST` and `NULLS LAST` keywords to control how nulls
-are sorted. Morel uses the `option` type rather than `NULL` represent
-optional values, but the same requirement exists.
+Real-world data sets often contain null values, and at various times
+you wish to sort nulls low (as if they were zero or negative infinity)
+or high (as if they were positive infinity). Morel uses the `option`
+type rather than `NULL` to represent optional values, but the same
+requirement exists.
 
-Currently, the behavior is the same as SQL's `NULLS FIRST`.
-`option` is a datatype declared as follows:
+SQL has `NULLS FIRST` and `NULLS LAST` keywords to control how nulls
+are sorted, but Morel does not have an equivalent syntax.
+
+Currently, the behavior is the same as SQL's `NULLS FIRST`.  This
+happens because Morel sorts datatype values based on the declaration
+order of their constructors. The `option` type is declared as:
 
 ```sml
-datatype option 'a = NONE | SOME 'a;
+datatype option 'a = NONE | SOME of 'a;
 ```
 
-Therefore `NONE` will sort lower than all `SOME` values:
+Since `NONE` appears before `SOME` in this declaration, the `NONE`
+value sorts lower than all `SOME` values:
 
 ```sml
 from i in [SOME 1, SOME ~100, NONE]
@@ -290,7 +340,7 @@ matches the structure of the code.
 ### Aggregation syntax
 
 The syntax for `group` and `compute` steps is still not an expression.
-For Morel 0.8 and beyond, we will at looking at
+For Morel 0.8 and beyond, we will be looking at
 [several improvements](https://github.com/hydromatic/morel/issues/288).
 
 First, making the group-key and compute-items an expression, with
@@ -309,43 +359,6 @@ syntax by now includes most relational operators (`FILTER`,
 `DISTINCT`, `WITHIN DISTINCT`, `ORDER BY`) consider making the
 argument (the `over` keyword just mentioned) a kind of query
 expression.
-
-## Benefits of sorting on expressions
-
-Now the `order` step takes an expression, what is now possible that
-wasn't before?
-
-We can pass the expression as an argument to a function, like this:
-
-```sml
-fun rankedEmployees extractKey =
-  from e in scott.emps
-    order extractKey e;
-    
-rankedEmployee (fn e => e.ename);
-rankedEmployee (fn e => (e.job,  DESC e.sal));
-```
-
-We can also achieve the trivial sort required to convert a `bag` to a
-`list`. You can sort by any constant value, such as the integer `0` or
-the `Option` constructor `NONE`, but the norm would be to sort by the
-empty tuple `()`:
-
-```sml
-from e in scott.emps
-  yield e.ename
-  order ();
-> val it =
->   ["SMITH","ALLEN","WARD","JONES","MARTIN","BLAKE","CLARK",
->    "SCOTT","KING","TURNER","ADAMS","JAMES","FORD","MILLER"]
->   : string list
-```
-
-Note that result is a `list`, even though `scott.emps` (a relational
-database table) is a `bag`.  The elements are in
-arbitrary order (because any order is consistent with the empty sort
-key) but in converting the collection to a `list` the arbitrary order
-has become frozen and repeatable.
 
 ## Conclusion
 

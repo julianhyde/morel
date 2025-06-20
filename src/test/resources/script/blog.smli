@@ -2110,6 +2110,160 @@ Char.toUpper #"a";
 String.map Char.toUpper "hello";
 > val it = "HELLO" : string
 
+(*) === Sorting on expressions ======================================
+(* Old syntax for composite sort
+let
+  fun foo (list, j) = List.length list + String.size j
+  val pairs = [(1, "a"), (2, "b"), (1, "c")];
+in
+  foo (from (i, j) in pairs order i desc, j)
+end;
+*)
+let
+  fun foo (list, j) = List.length list + String.size j
+  val pairs = [(1, "a"), (2, "b"), (1, "c")];
+in
+  foo (from (i, j) in pairs order DESC i, j)
+end;
+> val it = 4 : int
+
+fun compareInt (x: int, y: int) =
+    if x < y then LESS
+    else if x > y then GREATER
+    else EQUAL;
+> val compareInt = fn : int * int -> order
+
+Int.compare;
+> val it = fn : int * int -> order
+
+Real.compare;
+> val it = fn : real * real -> order
+
+String.compare;
+> val it = fn : string * string -> order
+
+fun compareStringRealPair ((s1, r1), (s2, r2)) =
+    case String.compare (s1, s2) of
+        EQUAL => Real.compare (r2, r1)
+      | result => result;
+> val compareStringRealPair = fn
+>   : string * real * (string * real) -> order
+
+compareStringRealPair (("a", 1.0), ("b", 2.0));
+> val it = LESS : order
+
+(* Sort employees by job, and then by descending salary. *)
+(* Proposed syntax
+from e in scott.emps
+  order using fn (emp1, emp2) =>
+    case String.compare (emp1.job, emp2.job) of
+       EQUAL => Real.compare (emp2.sal, emp1.sal)
+     | result => result;
+*)
+
+(* Old syntax
+from e in scott.emps
+  order e.job, e.sal desc;
+*)
+
+(* New syntax *)
+from e in scott.emps
+  order (e.job, DESC e.sal);
+> comm   deptno empno ename  hiredate   job       mgr  sal
+> ------ ------ ----- ------ ---------- --------- ---- ------
+> 0.0    20     7788  SCOTT  1987-04-19 ANALYST   7566 3000.0
+> 0.0    20     7902  FORD   1981-12-03 ANALYST   7566 3000.0
+> 0.0    10     7934  MILLER 1982-01-23 CLERK     7782 1300.0
+> 0.0    20     7876  ADAMS  1987-05-23 CLERK     7788 1100.0
+> 0.0    30     7900  JAMES  1981-12-03 CLERK     7698 950.0
+> 0.0    20     7369  SMITH  1980-12-17 CLERK     7902 800.0
+> 0.0    20     7566  JONES  1981-02-04 MANAGER   7839 2975.0
+> 0.0    30     7698  BLAKE  1981-01-05 MANAGER   7839 2850.0
+> 0.0    10     7782  CLARK  1981-06-09 MANAGER   7839 2450.0
+> 0.0    10     7839  KING   1981-11-17 PRESIDENT 0    5000.0
+> 300.0  30     7499  ALLEN  1981-02-20 SALESMAN  7698 1600.0
+> 0.0    30     7844  TURNER 1981-09-08 SALESMAN  7698 1500.0
+> 500.0  30     7521  WARD   1981-02-22 SALESMAN  7698 1250.0
+> 1400.0 30     7654  MARTIN 1981-09-28 SALESMAN  7698 1250.0
+>
+> val it : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
+
+from i in [SOME 1, SOME ~100, NONE]
+  order i;
+> val it = [NONE,SOME ~100,SOME 1] : int option list
+
+datatype 'a noneLast = NONE_LAST of 'a;
+> datatype 'a noneLast = NONE_LAST of 'a
+
+from i in [SOME 1, SOME ~100, NONE]
+  order NONE_LAST i;
+> val it = [NONE,SOME ~100,SOME 1] : int option list
+
+from i in [SOME 1, SOME ~100, NONE]
+  order DESC (NONE_LAST i);
+> val it = [SOME 1,SOME ~100,NONE] : int option list
+
+fun rankedEmployees extractKey =
+  from e in scott.emps
+    order extractKey e;
+> val rankedEmployees = fn
+>   :
+>     (
+>     {comm:real, deptno:int, empno:int, ename:string,
+>      hiredate:string, job:string, mgr:int, sal:real} -> 'a)
+>     ->
+>        {comm:real, deptno:int, empno:int, ename:string,
+>         hiredate:string, job:string, mgr:int, sal:real} list
+
+rankedEmployees (fn e => e.ename);
+> comm   deptno empno ename  hiredate   job       mgr  sal
+> ------ ------ ----- ------ ---------- --------- ---- ------
+> 0.0    20     7876  ADAMS  1987-05-23 CLERK     7788 1100.0
+> 300.0  30     7499  ALLEN  1981-02-20 SALESMAN  7698 1600.0
+> 0.0    30     7698  BLAKE  1981-01-05 MANAGER   7839 2850.0
+> 0.0    10     7782  CLARK  1981-06-09 MANAGER   7839 2450.0
+> 0.0    20     7902  FORD   1981-12-03 ANALYST   7566 3000.0
+> 0.0    30     7900  JAMES  1981-12-03 CLERK     7698 950.0
+> 0.0    20     7566  JONES  1981-02-04 MANAGER   7839 2975.0
+> 0.0    10     7839  KING   1981-11-17 PRESIDENT 0    5000.0
+> 1400.0 30     7654  MARTIN 1981-09-28 SALESMAN  7698 1250.0
+> 0.0    10     7934  MILLER 1982-01-23 CLERK     7782 1300.0
+> 0.0    20     7788  SCOTT  1987-04-19 ANALYST   7566 3000.0
+> 0.0    20     7369  SMITH  1980-12-17 CLERK     7902 800.0
+> 0.0    30     7844  TURNER 1981-09-08 SALESMAN  7698 1500.0
+> 500.0  30     7521  WARD   1981-02-22 SALESMAN  7698 1250.0
+>
+> val it : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
+(* TODO
+rankedEmployees (fn e => (e.job,  DESC e.sal));
+> comm   deptno empno ename  hiredate   job       mgr  sal
+> ------ ------ ----- ------ ---------- --------- ---- ------
+> 0.0    20     7876  ADAMS  1987-05-23 CLERK     7788 1100.0
+> 300.0  30     7499  ALLEN  1981-02-20 SALESMAN  7698 1600.0
+> 0.0    30     7698  BLAKE  1981-01-05 MANAGER   7839 2850.0
+> 0.0    10     7782  CLARK  1981-06-09 MANAGER   7839 2450.0
+> 0.0    20     7902  FORD   1981-12-03 ANALYST   7566 3000.0
+> 0.0    30     7900  JAMES  1981-12-03 CLERK     7698 950.0
+> 0.0    20     7566  JONES  1981-02-04 MANAGER   7839 2975.0
+> 0.0    10     7839  KING   1981-11-17 PRESIDENT 0    5000.0
+> 1400.0 30     7654  MARTIN 1981-09-28 SALESMAN  7698 1250.0
+> 0.0    10     7934  MILLER 1982-01-23 CLERK     7782 1300.0
+> 0.0    20     7788  SCOTT  1987-04-19 ANALYST   7566 3000.0
+> 0.0    20     7369  SMITH  1980-12-17 CLERK     7902 800.0
+> 0.0    30     7844  TURNER 1981-09-08 SALESMAN  7698 1500.0
+> 500.0  30     7521  WARD   1981-02-22 SALESMAN  7698 1250.0
+>
+> val it : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
+*)
+
+from e in scott.emps
+  yield e.ename
+  order ();
+> val it =
+>   ["SMITH","ALLEN","WARD","JONES","MARTIN","BLAKE","CLARK",
+>    "SCOTT","KING","TURNER","ADAMS","JAMES","FORD","MILLER"]
+>   : string list
+
 (*) === Coda ========================================================
 from message in ["the end"];
 > val it = ["the end"] : string list
