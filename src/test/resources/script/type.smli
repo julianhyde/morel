@@ -877,4 +877,27 @@ let  val i0 = 0; val i1 = 1; val i2 = 2; val i3 = 3; val i4 = i2 * i2; val i5 = 
 >      * int * int * int * int * int * int * int * int * int * int * int * int *
 >     int * int * int * int * int
 
+(* [MOREL-290] Polymorphic `order` and `Relational.compare`
+  If the bug is present, the second query throws
+  "java.lang.ClassCastException: class java.util.Arrays$ArrayList
+  cannot be cast to class java.lang.Comparable". *)
+fun rankedEmployees extractKey =
+  from e in emps
+    order extractKey e;
+> val rankedEmployees = fn
+>   : ({deptno:int, id:int, name:string} -> 'a)
+>     -> {deptno:int, id:int, name:string} list
+rankedEmployees (fn e => e.name);
+> val it =
+>   [{deptno=10,id=100,name="Fred"},{deptno=30,id=103,name="Scooby"},
+>    {deptno=30,id=102,name="Shaggy"},{deptno=20,id=101,name="Velma"}]
+>   : {deptno:int, id:int, name:string} list
+rankedEmployees (fn e => (DESC e.deptno, e.name));
+> val it =
+>   [{deptno=30,id=103,name="Scooby"},
+>    {deptno=30,id=102,name="Shaggy"},
+>    {deptno=20,id=101,name="Velma"},
+>    {deptno=10,id=100,name="Fred"}]
+>   : {deptno:int, id:int, name:string} list
+
 (*) End type.smli
