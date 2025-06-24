@@ -964,7 +964,7 @@ public class TypeResolver {
       PairList<Ast.Id, Variable> fieldVars,
       List<Ast.FromStep> fromSteps) {
     validateGroup(group);
-    final PairList<String, Term> env3 = PairList.of();
+    final PairList<String, Term> bindings = PairList.of();
     fieldVars.clear();
 
     Ast.Record key = group.key();
@@ -974,26 +974,26 @@ public class TypeResolver {
           final Variable v7 = unifier.variable();
           final Ast.Exp exp2 = deduceType(p.env, exp, v7);
           reg(id, v7);
-          env3.add(id.name, v7);
+          bindings.add(id.name, v7);
           fieldVars.add(id, v7);
           groupExps.add(id, exp2);
         });
 
     final Ast.Record compute = group.compute();
     final PairList<Ast.Id, Ast.Exp> args2 = PairList.of();
-    final TypeEnv groupEnv = env.bindAll(env3);
+    final TypeEnv groupEnv = env.bindAll(bindings);
     compute.args.forEach(
         (id, exp) -> {
           final Variable v8 = unifier.variable();
           reg(id, v8);
           final Ast.Exp exp2;
           try {
-            aggregateTripleStack.push(p.withEnv(p.env.bindAll(env3)));
+            aggregateTripleStack.push(p.withEnv(p.env.bindAll(bindings)));
             exp2 = deduceType(groupEnv, exp, v8);
           } finally {
             aggregateTripleStack.pop();
           }
-          env3.add(id.name, v8);
+          bindings.add(id.name, v8);
           fieldVars.add(id, v8);
           args2.add(id, exp2);
           reg(exp2, v8);
@@ -1018,10 +1018,10 @@ public class TypeResolver {
       // Output is ordered iff input is ordered.
       final Variable c2 = unifier.variable();
       isListOrBagMatchingInput(c2, v2, p.c, p.v);
-      return Triple.of(env.bindAll(env3), v2, c2);
+      return Triple.of(env.bindAll(bindings), v2, c2);
     } else {
       fromSteps.add(((Ast.Compute) group).copy(compute2));
-      return Triple.singleton(env.bindAll(env3), v2);
+      return Triple.singleton(env.bindAll(bindings), v2);
     }
   }
 

@@ -90,7 +90,6 @@ public class Resolver {
 
   final TypeMap typeMap;
   final NameGenerator nameGenerator;
-  final Environment baseEnv;
   final Environment env;
   final @Nullable Session session;
   final Core.Exp current;
@@ -115,7 +114,6 @@ public class Resolver {
       NameGenerator nameGenerator,
       Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
       Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads,
-      Environment baseEnv,
       Environment env,
       @Nullable Session session,
       Core.@Nullable Exp current) {
@@ -123,7 +121,6 @@ public class Resolver {
     this.nameGenerator = nameGenerator;
     this.variantIdMap = variantIdMap;
     this.resolvedOverloads = resolvedOverloads;
-    this.baseEnv = baseEnv;
     this.env = env;
     this.session = session;
     this.current = current;
@@ -140,7 +137,6 @@ public class Resolver {
         new HashMap<>(),
         new HashMap<>(),
         env,
-        env,
         session,
         null);
   }
@@ -155,7 +151,6 @@ public class Resolver {
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
-        baseEnv,
         env,
         session,
         current);
@@ -178,7 +173,6 @@ public class Resolver {
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
-        baseEnv,
         env,
         session,
         current);
@@ -218,7 +212,6 @@ public class Resolver {
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
-        baseEnv,
         outerEnv,
         session,
         current,
@@ -1417,7 +1410,6 @@ public class Resolver {
         NameGenerator nameGenerator,
         Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
         Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads,
-        Environment baseEnv,
         Environment env,
         @Nullable Session session,
         Core.@Nullable Exp current,
@@ -1428,7 +1420,6 @@ public class Resolver {
           nameGenerator,
           variantIdMap,
           resolvedOverloads,
-          baseEnv,
           env,
           session,
           current);
