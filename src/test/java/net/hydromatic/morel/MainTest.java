@@ -2376,9 +2376,11 @@ public class MainTest {
             + "                   y = 0,\n"
             + "                   z = concat over s}")
         .assertType("{r:real, x:int, y:int, z:string} list");
-    ml("from p in [{r=1.0, s=\"a\"}]\n" + "  group p.r compute {x = r}")
+    ml("from p in [{r=1.0, s=\"a\"}]\n" //
+            + "  group p.r compute {x = r}")
         .assertType("{r:real, x:real} list");
-    mlE("from p in [{r=1.0, s=\"a\"}]\n" + "  group p.r compute {x = $p$.r}")
+    mlE("from p in [{r=1.0, s=\"a\"}]\n" //
+            + "  group p.r compute {x = $p$.r}")
         .assertTypeThrowsCompileException("unbound variable or constructor: p");
     ml("from d in [{a=1,b=true}] yield d.a into sum")
         .assertType("int")

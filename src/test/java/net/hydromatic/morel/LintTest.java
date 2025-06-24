@@ -169,6 +169,14 @@ public class LintTest {
                 && isJava(line.filename()),
         line -> line.state().message("broken string", line));
 
+    // Broken string, "yoyo\n" + "string", should be on separate lines.
+    b.add(
+        line ->
+            line.matches(".*[^\\\\][\\\\]n[\"] *\\+ *[\"].*")
+                && !line.contains("//")
+                && isJava(line.filename()),
+        line -> line.state().message("broken string", line));
+
     // Newline should be at end of string literal, not in the middle
     b.add(
         line ->
@@ -407,6 +415,8 @@ public class LintTest {
             + "  }\n"
             + "  String bad = \"broken\" + \"string\";\n"
             + "  String bad2 = \"string with\\nembedded newline\";\n"
+            + "  String bad3 = \"string with\\n"
+            + " embedded newline\";\n"
             + "  String good = \"string with newline\\n\"\n"
             + "      \"at end of line\";\n"
             + "  // A comment with <code>on one line and\n"
@@ -442,9 +452,11 @@ public class LintTest {
             + "broken string\n"
             + "GuavaCharSource{memory}:29:"
             + "newline should be at end of string literal\n"
-            + "GuavaCharSource{memory}:32:"
-            + "<code> and </code> must be on same line\n"
+            + "GuavaCharSource{memory}:30:"
+            + "newline should be at end of string literal\n"
             + "GuavaCharSource{memory}:33:"
+            + "<code> and </code> must be on same line\n"
+            + "GuavaCharSource{memory}:34:"
             + "<code> and </code> must be on same line\n";
     final Puffin.Program<GlobalState> program = makeProgram();
     final StringWriter sw = new StringWriter();

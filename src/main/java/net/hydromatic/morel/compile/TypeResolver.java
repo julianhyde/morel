@@ -1402,29 +1402,29 @@ public class TypeResolver {
 
   private Ast.Aggregate deduceAggregateType(
       Triple p, Ast.Aggregate aggregate, Variable v) {
-    final Variable v9 = unifier.variable();
-    final Ast.Exp aggregateFn2;
     final Ast.Exp arg2;
-    final Variable c10;
+    final Variable c;
     if (aggregate.argument == null) {
-      c10 = p.c;
+      c = p.c;
       arg2 = null;
     } else {
       // The collection that is the input to the aggregate function is
       // ordered iff the input is ordered.
       final Variable v10 = unifier.variable();
-      c10 = unifier.variable();
-      isListOrBagMatchingInput(c10, v10, p.c, p.v);
+      c = unifier.variable();
+      isListOrBagMatchingInput(c, v10, p.c, p.v);
       arg2 = deduceType(p.env, aggregate.argument, v10);
     }
-    aggregateFn2 = deduceApplyFnType(p.env, aggregate.aggregate, v9, c10, v);
-    reg(aggregate.aggregate, v9);
 
-    final Sequence fnType = fnTerm(c10, v);
-    equiv(v9, fnType);
+    final Variable vAgg = unifier.variable();
+    final Ast.Exp aggregateFn2 =
+        deduceApplyFnType(p.env, aggregate.aggregate, vAgg, c, v);
+    reg(aggregate.aggregate, vAgg);
+
+    final Sequence fnType = fnTerm(c, v);
+    equiv(vAgg, fnType);
     final Ast.Aggregate aggregate2 = aggregate.copy(aggregateFn2, arg2);
-    reg(aggregate2, v);
-    return aggregate2;
+    return reg(aggregate2, v);
   }
 
   private AstNode deduceValBindType(
