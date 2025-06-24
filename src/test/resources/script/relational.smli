@@ -828,6 +828,12 @@ from (i, j) in [(1, 1), (2, 3), (3, 4)]
   compute sum over j;
 > val it = [{j=1,sum=5},{j=0,sum=3}] : {j:int, sum:int} list
 
+(*) Equivalent to previous, renaming "j" to "k" so it doesn't shadow the other "j".
+from (i, j) in [(1, 1), (2, 3), (3, 4)]
+  group {k = i mod 2}
+  compute sum over j;
+> val it = [{k=1,sum=5},{k=0,sum=3}] : {k:int, sum:int} list
+
 from (i, j) in [(1, 1), (2, 3), (3, 4)]
   group {j = i mod 2}
   compute {sum over j, count over ()};
@@ -1415,6 +1421,26 @@ order deptno;
 >   [{deptno=10,sumId=100,sumIdPlusDeptno=110},
 >    {deptno=20,sumId=101,sumIdPlusDeptno=121}]
 >   : {deptno:int, sumId:int, sumIdPlusDeptno:int} list
+
+(*) 'group' with complex expression in 'compute'
+from e in emps
+  group e.deptno compute {x = 1 + sum over e.id * 2}
+  order deptno;
+> val it = [{deptno=10,x=201},{deptno=20,x=203},{deptno=30,x=411}]
+>   : {deptno:int, x:int} list
+
+(*) 'group' with complex expressions in 'compute'
+from e in emps
+  group e.deptno compute {x = 1 + sum over e.id * 2, y = 2, z = deptno + 3}
+  order deptno;
+> val it =
+>   [{deptno=10,x=201,y=2,z=13},{deptno=20,x=203,y=2,z=23},
+>    {deptno=30,x=411,y=2,z=33}] : {deptno:int, x:int, y:int, z:int} list
+
+from (i, j) in [(1, 2), (2, 3), (1, 8), (1, 7)]
+  group {k = i + 2}
+  compute {x = (fn list => List.length list + k) over i + j + k};
+> val it = [{k=3,x=6},{k=4,x=5}] : {k:int, x:int} list
 
 (*) 'group' with 'nonEmpty' and 'empty' as aggregate functions
 from e in emps

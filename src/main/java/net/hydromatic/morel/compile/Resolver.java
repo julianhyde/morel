@@ -90,6 +90,7 @@ public class Resolver {
 
   final TypeMap typeMap;
   final NameGenerator nameGenerator;
+  final Environment baseEnv;
   final Environment env;
   final @Nullable Session session;
   final Core.Exp current;
@@ -114,6 +115,7 @@ public class Resolver {
       NameGenerator nameGenerator,
       Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
       Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads,
+      Environment baseEnv,
       Environment env,
       @Nullable Session session,
       Core.@Nullable Exp current) {
@@ -121,6 +123,7 @@ public class Resolver {
     this.nameGenerator = nameGenerator;
     this.variantIdMap = variantIdMap;
     this.resolvedOverloads = resolvedOverloads;
+    this.baseEnv = baseEnv;
     this.env = env;
     this.session = session;
     this.current = current;
@@ -137,6 +140,7 @@ public class Resolver {
         new HashMap<>(),
         new HashMap<>(),
         env,
+        env,
         session,
         null);
   }
@@ -151,6 +155,7 @@ public class Resolver {
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
+        baseEnv,
         env,
         session,
         current);
@@ -173,6 +178,7 @@ public class Resolver {
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
+        baseEnv,
         env,
         session,
         current);
@@ -181,7 +187,7 @@ public class Resolver {
   /**
    * Creates a Resolver that is able to translate a {@code compute} clause.
    *
-   * <p>The challenge is to split expressions such as "{@code e0 = 1 + avg of
+   * <p>The challenge is to split expressions such as "{@code e0 = 1 + avg over
    * e.salary * 2.0}". It is split as follows:
    *
    * <ul>
@@ -192,18 +198,31 @@ public class Resolver {
    *
    * <p>If the pre- and post-expressions are non-trivial we end up with a {@link
    * Core.Yield} on a {@link Core.Group} on a {@link Core.Yield}.
+   *
+   * <p>What is the environment? If the query is "{@code from e in emps group
+   * e.deptno compute sum over e.salary * 2.0}", then this resolver (used for
+   * resolving the outer expressions) has an environment that includes the group
+   * key, {@code deptno}. The aggregate resolver has environment that includes
+   * the group key, {@code deptno}, and the input variables, in this case {@code
+   * e}.
    */
-  public ComputeResolver withAggregateResolver(
+  ComputeResolver withAggregateResolver(
+      Environment baseEnv,
+      Core.StepEnv stepEnv,
       Collection<? extends Core.IdPat> groupKeys) {
+    final Environment outerEnv =
+        Environments.bind(baseEnv, transform(groupKeys, Binding::of));
+    final Environment innerEnv = Environments.bind(outerEnv, stepEnv.bindings);
     return new ComputeResolver(
         typeMap,
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
-        env,
+        baseEnv,
+        outerEnv,
         session,
         current,
-        withEnv(transform(groupKeys, Binding::of)),
+        withEnv(innerEnv),
         groupKeys);
   }
 
@@ -410,6 +429,10 @@ public class Resolver {
         : (DataType) type;
   }
 
+  protected Core.Exp toCore(Ast.Aggregate aggregate, Ast.@Nullable Id id) {
+    throw new UnsupportedOperationException("toCore(aggregate, id)");
+  }
+
   /**
    * Visitor that finds all references to unbound variables in an expression.
    */
@@ -471,6 +494,8 @@ public class Resolver {
             ((Ast.InfixCall) exp).a0, ((Ast.InfixCall) exp).a1);
       case APPLY:
         return toCore((Ast.Apply) exp);
+      case AGGREGATE:
+        return toCore((Ast.Aggregate) exp, null);
       case FN:
         return toCore((Ast.Fn) exp);
       case IF:
@@ -1304,7 +1329,9 @@ public class Resolver {
       final ComputeResolver aggregateResolver;
       final PairList<String, Core.Exp> postExps = PairList.of();
       if (atom) {
-        aggregateResolver = r.withAggregateResolver(ImmutableList.of());
+        aggregateResolver =
+            r.withAggregateResolver(
+                env, fromBuilder.stepEnv(), ImmutableList.of());
         final boolean emptyKey =
             group.group instanceof Ast.Record
                 && ((Ast.Record) group.group).args.isEmpty();
@@ -1341,7 +1368,9 @@ public class Resolver {
             .args
             .forEach((id, exp) -> groupExps.add(toCorePat(id), r.toCore(exp)));
 
-        aggregateResolver = r.withAggregateResolver(groupExps.leftList());
+        aggregateResolver =
+            r.withAggregateResolver(
+                env, fromBuilder.stepEnv(), groupExps.leftList());
         groupExps.forEach((id, exp) -> postExps.add(id.name, core.id(id)));
         group
             .compute()
@@ -1388,6 +1417,7 @@ public class Resolver {
         NameGenerator nameGenerator,
         Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
         Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads,
+        Environment baseEnv,
         Environment env,
         @Nullable Session session,
         Core.@Nullable Exp current,
@@ -1398,6 +1428,7 @@ public class Resolver {
           nameGenerator,
           variantIdMap,
           resolvedOverloads,
+          baseEnv,
           env,
           session,
           current);
@@ -1423,12 +1454,13 @@ public class Resolver {
       return name;
     }
 
-    private Core.Exp toCore(Ast.Aggregate aggregate, Ast.@Nullable Id id) {
+    @Override
+    protected Core.Exp toCore(Ast.Aggregate aggregate, Ast.@Nullable Id id) {
       final Core.Aggregate coreAggregate =
           core.aggregate(
               typeMap.getType(aggregate),
-              aggregateResolver.toCore(aggregate.aggregate),
-              toCore(aggregate.argument));
+              toCore(aggregate.aggregate),
+              aggregateResolver.toCore(aggregate.argument));
       final String name =
           generateName(
               id != null ? id.name : "aggregate",
