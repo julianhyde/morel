@@ -125,7 +125,10 @@ public class MainTest {
     // true and false are variables, not actually literals
     ml("true").assertParseStmt(Ast.Id.class, "true");
     ml("false").assertParseStmt(Ast.Id.class, "false");
+  }
 
+  @Test
+  void testParseDecl() {
     ml("val x = 5").assertParseDecl(Ast.ValDecl.class, "val x = 5");
     ml("val `x` = 5").assertParseDecl(Ast.ValDecl.class, "val x = 5");
     ml("val x : int = 5").assertParseDecl(Ast.ValDecl.class, "val x : int = 5");
@@ -146,7 +149,11 @@ public class MainTest {
 
     ml("fun plus x y = x + y")
         .assertParseDecl(Ast.FunDecl.class, "fun plus x y = x + y");
+  }
 
+  /** Tests parsing types (including declarations). */
+  @Test
+  void testParseType() {
     ml("over x").assertParseDecl(Ast.OverDecl.class, "over x");
 
     ml("datatype 'a option = NONE | SOME of 'a")
@@ -202,6 +209,31 @@ public class MainTest {
     ml("datatype ('a, 'b, 'c) foo = Triple of ('a * 'b) * 'c")
         .assertParseSame();
 
+    // various types as annotations
+    ml("fn x : int => 0").assertParseSame();
+    ml("fn x : boolean => 0").assertParseSame();
+    ml("fn x : string => 0").assertParseSame();
+    ml("fn x : unit => 0").assertParseSame();
+    ml("fn x : int * string => 0").assertParseSame();
+    ml("fn x : int * int -> string => 0").assertParseSame();
+    ml("fn x : int * (int -> string) => 0").assertParseSame();
+    ml("fn x : (int * int) -> string => 0")
+        .assertParse("fn x : int * int -> string => 0");
+    ml("fn x : {} => 0").assertParseSame();
+    ml("fn x : int list => 0").assertParseSame();
+    ml("fn x : int * string list option => 0").assertParseSame();
+    ml("fn x : int * (string list) option => 0")
+        .assertParse("fn x : int * string list option => 0");
+    ml("fn x : ((int * string) list) option => 0")
+        .assertParse("fn x : (int * string) list option => 0");
+    ml("fn x : (int * string) list option => 0").assertParseSame();
+    ml("fn x : {a: int} => 0").assertParseSame();
+    ml("fn x : {a: int, b: boolean} => 0").assertParseSame();
+    ml("fn x : {a: int list * unit, b: boolean} => 0").assertParseSame();
+  }
+
+  @Test
+  void testParse1b() {
     // parentheses creating left precedence, which is the natural precedence for
     // '+', can be removed
     ml("((1 + 2) + 3) + 4").assertParse("1 + 2 + 3 + 4");
