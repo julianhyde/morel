@@ -232,6 +232,38 @@ public class MainTest {
     ml("fn x : {a: int} => 0").assertParseSame();
     ml("fn x : {a: int, b: boolean} => 0").assertParseSame();
     ml("fn x : {a: int list * unit, b: boolean} => 0").assertParseSame();
+    ml("fn x : typeof 1 => 0").assertParseSame();
+    ml("fn x : typeof 1 + 2 => 0").assertParseSame();
+
+    // case has lower precedence than over typeof
+    ml("fn x : typeof (case x of 0 => true | _ => false) => ()")
+        .assertParseEquivalent(
+            "fn x : typeof case x of 0 => true | _ => false => ()");
+
+    ml("fn x : typeof {a = 1, b = bool} => ()").assertParseSame();
+    mlE("fn x : typeof ${a: int}$ => ()")
+        .assertParseThrowsIllegalArgumentException(
+            is("cannot derive label for expression a : int"));
+    ml("fn x : typeof [1, 2, 3] => ()").assertParseSame();
+    ml("let val (v : typeof hd ([1, 2, 3])) = 0 in v + 1 end")
+        .assertParseEquivalent(
+            "let val v : typeof hd [1, 2, 3] = 0 in v + 1 end")
+        .assertParseEquivalent(
+            "let val v : typeof (hd [1, 2, 3]) = 0 in v + 1 end");
+
+    ml("let val (v : typeof x) = (y = 0) in v + 1 end")
+        .assertParseEquivalent("let val v : typeof x = y = 0 in v + 1 end");
+
+    // '=' has lower precedence than 'typeof'
+    ml("let val (v : typeof (x = y)) = false in v orelse true end")
+        .assertParseEquivalent(
+            "let val v : typeof (x = y) = false in v orelse true end");
+
+    ml("let val (v : typeof x) = (y = false) in v orelse true end")
+        .assertParseEquivalent(
+            "let val v : typeof x = (y = false) in v orelse true end")
+        .assertParseEquivalent(
+            "let val v : typeof x = y = false in v orelse true end");
   }
 
   @Test
@@ -404,7 +436,8 @@ public class MainTest {
     ml("#c (#b a)").assertParseEquivalent("a . b . c");
     ml("#b a + #d c").assertParseEquivalent("a . b + c . d");
     ml("#b a + #d c").assertParseEquivalent("a.b+c.d");
-    ml("#h (#b a + #d c * #g (#f e))").assertParseEquivalent("(a.b+c.d*e.f.g).h");
+    ml("#h (#b a + #d c * #g (#f e))")
+        .assertParseEquivalent("(a.b+c.d*e.f.g).h");
     ml("a b").assertParseEquivalent("a(b)");
     ml("a (#c b)").assertParseEquivalent("a b.c");
     ml("#b a (#d c) (#f e)").assertParseEquivalent("a.b c.d e.f");
@@ -424,7 +457,8 @@ public class MainTest {
     ml("{a, #b e, #c e, #d (e + 1), e = f + g}")
         .assertParseEquivalent("{a, e.b, #c e, #d (e + 1), e = f + g}");
     ml("{v = a, w = #b e, x = #c e, y = #d (e + 1), z = #f 2}")
-        .assertParseEquivalent("{v = a, w = e.b, x = #c e, y = #d (e + 1), z = (#f 2)}");
+        .assertParseEquivalent(
+            "{v = a, w = e.b, x = #c e, y = #d (e + 1), z = (#f 2)}");
     ml("{w = a = b + c, a = b + c}").assertParseSame();
     ml("{1}")
         .assertParseThrowsIllegalArgumentException(
