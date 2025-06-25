@@ -62,6 +62,10 @@
 > val it = 1 : int
 (2, true): int * bool;
 > val it = (2,true) : int * bool
+[(2, true)]: (int * bool) list;
+> val it = [(2,true)] : (int * bool) list
+(2, [true]): int * (bool list);
+> val it = (2,[true]) : int * bool list
 []: int list;
 > val it = [] : int list
 []: {a: int, b: string} list;
