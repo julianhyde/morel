@@ -131,7 +131,10 @@ public class MainTest {
   void testParseDecl() {
     ml("val x = 5").assertParseDecl(Ast.ValDecl.class, "val x = 5");
     ml("val `x` = 5").assertParseDecl(Ast.ValDecl.class, "val x = 5");
-    ml("val x : int = 5").assertParseDecl(Ast.ValDecl.class, "val x : int = 5");
+    ml("val x : int = 5")
+        .assertParseDecl(Ast.ValDecl.class, "val (x : int) = 5");
+    ml("val (x : int) = 5")
+        .assertParseDecl(Ast.ValDecl.class, "val (x : int) = 5");
 
     // other valid identifiers
     ml("val x' = 5").assertParseDecl(Ast.ValDecl.class, "val x' = 5");
@@ -172,7 +175,7 @@ public class MainTest {
                 + "and 'a forest = Nil"
                 + " | Cons of 'a tree * 'a forest");
 
-    final String ml =
+    String ml =
         "datatype ('a, 'b) choice ="
             + " NEITHER"
             + " | LEFT of 'a"
@@ -230,6 +233,39 @@ public class MainTest {
     ml("fn x : {a: int} => 0").assertParseSame();
     ml("fn x : {a: int, b: boolean} => 0").assertParseSame();
     ml("fn x : {a: int list * unit, b: boolean} => 0").assertParseSame();
+    ml("fn x : typeof 1 => 0").assertParseSame();
+    ml("fn x : typeof 1 + 2 => 0").assertParseSame();
+
+    // case has lower precedence than over typeof
+    ml = "fn x : typeof (case x of 0 => true | _ => false) => ()";
+    ml(ml).assertParseSame();
+    ml("fn x : typeof case x of 0 => true | _ => false => ()").assertParse(ml);
+
+    ml("fn x : typeof {a = 1, b = bool} => ()").assertParseSame();
+    mlE("fn x : typeof ${a: int}$ => ()")
+        .assertParseThrowsIllegalArgumentException(
+            is("cannot derive label for expression a : int"));
+    ml("fn x : typeof [1, 2, 3] => ()").assertParseSame();
+    ml = "let val (v : typeof hd ([1, 2, 3])) = 0 in v + 1 end";
+    ml(ml).assertParseSame();
+    ml("let val v : typeof hd [1, 2, 3] = 0 in v + 1 end").assertParse(ml);
+    ml("let val v : typeof (hd [1, 2, 3]) = 0 in v + 1 end").assertParse(ml);
+
+    ml = "let val (v : typeof x) = (y = 0) in v + 1 end";
+    ml(ml).assertParseSame();
+    ml("let val v : typeof x = y = 0 in v + 1 end").assertParse(ml);
+
+    // '=' has lower precedence than 'typeof'
+    ml = "let val (v : typeof (x = y)) = false in v orelse true end";
+    ml(ml).assertParseSame();
+    ml("let val v : typeof (x = y) = false in v orelse true end")
+        .assertParse(ml);
+
+    ml = "let val (v : typeof x) = (y = false) in v orelse true end";
+    ml(ml).assertParseSame();
+    ml("let val v : typeof x = (y = false) in v orelse true end")
+        .assertParse(ml);
+    ml("let val v : typeof x = y = false in v orelse true end").assertParse(ml);
   }
 
   @Test
@@ -307,8 +343,10 @@ public class MainTest {
 
     // pattern
     ml("let val (x, y) = (1, 2) in x + y end").assertParseSame();
+    String ml = "let val (w as (x, y)) = (1, 2) in #1 w + #2 w + x + y end";
+    ml(ml).assertParseSame();
     ml("let val w as (x, y) = (1, 2) in #1 w + #2 w + x + y end")
-        .assertParseSame();
+        .assertParse(ml);
 
     // record
     ml("{a = 1}").assertParseSame();
@@ -3220,7 +3258,7 @@ public class MainTest {
             + " group deptno = #deptno e "
             + "end";
     ml("val x = " + ml)
-        .assertParseDecl(Ast.ValDecl.class, "val x = " + expected);
+        .assertParseDecl(Ast.ValDecl.class, "val x = (" + expected + ")");
     // The implicit yield expression is "deptno". It is not a record,
     // "{deptno = deptno}", because there is only one variable defined (the
     // "group" clause defines "deptno" and hides the "e" from the "from"
@@ -3279,7 +3317,7 @@ public class MainTest {
             + " compute sumId = sum of #id e "
             + "end";
     ml("val x = " + ml)
-        .assertParseDecl(Ast.ValDecl.class, "val x = " + expected);
+        .assertParseDecl(Ast.ValDecl.class, "val x = (" + expected + ")");
     ml(ml)
         .assertType("{deptno:int, sumId:int} list")
         .assertEvalIter(equalsUnordered(list(10, 202), list(20, 101)));

@@ -99,6 +99,7 @@ public enum Op {
   COMPOSITE_TYPE,
   FUNCTION_TYPE(" -> ", 6, false),
   NAMED_TYPE(" ", 8),
+  EXPRESSION_TYPE("typeof ", 5),
   FORALL_TYPE,
   MULTI_TYPE,
 
