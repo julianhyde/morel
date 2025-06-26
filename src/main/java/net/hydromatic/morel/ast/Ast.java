@@ -795,6 +795,10 @@ public class Ast {
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.append(op.padded).append(exp, op.right, right);
     }
+
+    public Type copy(Exp exp) {
+      return exp == this.exp ? this : ast.expressionType(pos, exp);
+    }
   }
 
   /**
