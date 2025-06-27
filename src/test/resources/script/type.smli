@@ -195,7 +195,7 @@ end;
 let
   val r = {empno = 100, isMgr = true, name = "Fred"};
 in
-  fn x: {a: string, b: (typeof r.empno) list, c: typeof r.name ^ "!"} => ()
+  fn x: {a: string, b: typeof r.empno list, c: typeof (r.name ^ "!")} => ()
 end;
 > val it = fn : {a:string, b:int list, c:string} -> unit
 
