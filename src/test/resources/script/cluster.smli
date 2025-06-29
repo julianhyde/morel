@@ -1,0 +1,170 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * K-Means clustering.
+ *)
+
+(* ------------------------------------------------------ *)
+(* K-Means Clustering Algorithm in Standard ML *)
+
+(* Data structures *)
+type point = real list
+type cluster = point list
+type centroid = point
+
+(* Utility functions *)
+fun distance (p1: point) (p2: point) : real =
+    let
+        fun squaredDiff (x, y) = (x - y) * (x - y)
+        val diffs = ListPair.map squaredDiff (p1, p2)
+    in
+        Math.sqrt (foldl op+ 0.0 diffs)
+    end
+
+fun vectorAdd (v1: point) (v2: point) : point =
+    ListPair.map op+ (v1, v2)
+
+fun scalarDiv (v: point) (s: real) : point =
+    map (fn x => x / s) v
+
+fun calculateCentroid (points: point list) : centroid =
+    let
+        val n = Real.fromInt (length points)
+        val sum = foldl vectorAdd (hd points |> map (fn _ => 0.0)) points
+    in
+        scalarDiv sum n
+    end
+
+(* Find closest centroid to a point *)
+fun closestCentroid (point: point) (centroids: centroid list) : int =
+    let
+        val distances = map (distance point) centroids
+        fun findMinIndex ([], _, _, minIdx) = minIdx
+          | findMinIndex (d::ds, idx, minDist, minIdx) =
+            if d < minDist then
+                findMinIndex (ds, idx + 1, d, idx)
+            else
+                findMinIndex (ds, idx + 1, minDist, minIdx)
+    in
+        case distances of
+            [] => 0
+          | d::ds => findMinIndex (ds, 1, d, 0)
+    end
+
+(* Assign points to clusters based on closest centroid *)
+fun assignToClusters (points: point list) (centroids: centroid list) : cluster list =
+    let
+        val k = length centroids
+        val emptyClusters = List.tabulate (k, fn _ => [])
+
+        fun assignPoint (point, clusters) =
+            let
+                val clusterIdx = closestCentroid point centroids
+                fun updateCluster ([], _, _) = []
+                  | updateCluster (c::cs, 0, p) = (p::c)::cs
+                  | updateCluster (c::cs, i, p) = c::(updateCluster (cs, i-1, p))
+            in
+                updateCluster (clusters, clusterIdx, point)
+            end
+    in
+        foldl assignPoint emptyClusters points
+    end
+
+(* Update centroids based on current clusters *)
+fun updateCentroids (clusters: cluster list) : centroid list =
+    let
+        fun safeCentroid [] = [0.0] (* Default centroid for empty cluster *)
+          | safeCentroid points = calculateCentroid points
+    in
+        map safeCentroid clusters
+    end
+
+(* Check if centroids have converged *)
+fun hasConverged (oldCentroids: centroid list) (newCentroids: centroid list) (tolerance: real) : bool =
+    let
+        val distances = ListPair.map distance (oldCentroids, newCentroids)
+    in
+        List.all (fn d => d < tolerance) distances
+    end
+
+(* Main k-means algorithm *)
+fun kmeans (points: point list) (k: int) (maxIterations: int) (tolerance: real) : cluster list * centroid list =
+    let
+        (* Initialize centroids randomly (simplified: take first k points) *)
+        val initialCentroids = List.take (points, k)
+
+        fun iterate (centroids, iteration) =
+            if iteration >= maxIterations then
+                let
+                    val finalClusters = assignToClusters points centroids
+                in
+                    (finalClusters, centroids)
+                end
+            else
+                let
+                    val clusters = assignToClusters points centroids
+                    val newCentroids = updateCentroids clusters
+                in
+                    if hasConverged centroids newCentroids tolerance then
+                        (clusters, newCentroids)
+                    else
+                        iterate (newCentroids, iteration + 1)
+                end
+    in
+        iterate (initialCentroids, 0)
+    end
+
+(* Utility function to print results *)
+fun printPoint (p: point) : unit =
+    let
+        val pointStr = String.concatWith ", " (map Real.toString p)
+    in
+        print ("(" ^ pointStr ^ ")")
+    end
+
+fun printCluster (cluster: cluster) (clusterNum: int) : unit =
+    (
+        print ("Cluster " ^ Int.toString clusterNum ^ ": ");
+        app (fn p => (printPoint p; print " ")) cluster;
+        print "\n"
+    )
+
+fun printResults (clusters: cluster list) (centroids: centroid list) : unit =
+    (
+        print "=== K-Means Results ===\n";
+        List.appi printCluster clusters;
+        print "\nCentroids:\n";
+        List.appi (fn (i, c) => (print ("Centroid " ^ Int.toString i ^ ": "); printPoint c; print "\n")) centroids
+    )
+
+(* Example usage *)
+val samplePoints = [
+    [1.0, 1.0], [1.5, 2.0], [3.0, 4.0], [5.0, 7.0],
+    [3.5, 5.0], [4.5, 5.0], [3.5, 4.5], [2.0, 2.0],
+    [8.0, 8.0], [7.0, 9.0], [9.0, 8.5], [8.5, 7.5]
+]
+
+val k = 3
+val maxIter = 100
+val tolerance = 0.01
+
+val (resultClusters, resultCentroids) = kmeans samplePoints k maxIter tolerance
+
+val _ = printResults resultClusters resultCentroids
+
+(*) End cluster.smli
