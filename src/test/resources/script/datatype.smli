@@ -121,27 +121,24 @@ end;
 (*) Type alias
 type myInt = int;
 > type myInt = int
-(* TODO
 val x: myInt = 5;
-> val x = 5 : myInt
-*)
+> val x = 5 : int
+(* TODO previous line should be myInt *)
 type intPair = int * int;
 > type intPair = int * int
-(* TODO
 val x: intPair = (4, 5);
-> val x = (4,5) : intPair
-val x = (4, 5): intPair;
-> val x = (4,5) : intPair
-ELSE *)
-val x = (4, 5);
 > val x = (4,5) : int * int
-(* END *)
+(* TODO previous line should be intPair *)
+val x2 = (4, 5): intPair;
+> val x2 = (4,5) : int * int
+(* TODO previous line should be intPair *)
+val x3 = (4, 5);
+> val x3 = (4,5) : int * int
 val y: int * int = x;
 > val y = (4,5) : int * int
-(* TODO
 val z: intPair = y;
-> val z = (4,5) : intPair
-*)
+> val z = (4,5) : int * int
+(* TODO previous line should be intPair *)
 
 (*) Define two aliases at once
 type myInt = int and myRealList = real list;
