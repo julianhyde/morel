@@ -66,6 +66,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Binding.Kind;
 import net.hydromatic.morel.type.DataType;
@@ -2082,6 +2083,9 @@ public class TypeResolver {
       case TY_VAR:
         final Variable variable = subst.get((TypeVar) type);
         return variable != null ? variable : unifier.variable();
+      case ALIAS_TYPE:
+        final AliasType aliasType = (AliasType) type;
+        return toTerm(aliasType.type, subst);
       case DATA_TYPE:
         final DataType dataType = (DataType) type;
         if (dataType.name.equals(BAG_TY_CON)) {
