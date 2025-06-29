@@ -51,6 +51,11 @@ public class Keys {
     return name("");
   }
 
+  /** Returns a key that gives a name to an existing type. */
+  public static Type.Key alias(String name, Type.Key key) {
+    return new AliasKey(name, key);
+  }
+
   /**
    * Returns a key that identifies types (especially {@link TypeVar type
    * variables}) by ordinal.
@@ -246,6 +251,46 @@ public class Keys {
         return DummyType.INSTANCE;
       }
       return typeSystem.lookup(name);
+    }
+  }
+
+  /** Key that gives a new alias to an existing type. */
+  private static class AliasKey extends Type.Key {
+    private final String name;
+    private final Type.Key key;
+
+    AliasKey(String name, Type.Key key) {
+      super(Op.ALIAS_TYPE);
+      this.name = requireNonNull(name);
+      this.key = key;
+    }
+
+    @Override
+    public String toString() {
+      return name;
+    }
+
+    @Override
+    public StringBuilder describe(StringBuilder buf, int left, int right) {
+      return buf.append(name);
+    }
+
+    @Override
+    public int hashCode() {
+      return name.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj == this
+          || obj instanceof AliasKey
+              && ((AliasKey) obj).name.equals(name)
+              && ((AliasKey) obj).key.equals(key);
+    }
+
+    @Override
+    public Type toType(TypeSystem typeSystem) {
+      return typeSystem.aliasType(name, key.toType(typeSystem));
     }
   }
 

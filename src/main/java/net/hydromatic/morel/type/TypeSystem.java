@@ -280,6 +280,14 @@ public class TypeSystem {
     return dataType;
   }
 
+  /** Creates a type that is an alias for another type. */
+  Type aliasType(String name, Type type) {
+    final String moniker = type.moniker();
+    final AliasType aliasType = new AliasType(name, moniker, type);
+    typeByName.put(name, aliasType);
+    return aliasType;
+  }
+
   /**
    * Converts a regular type to an internal type. Throws if the type is not
    * known.

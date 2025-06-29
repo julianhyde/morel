@@ -15,6 +15,8 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Algebraic types ("datatype") and type aliases ("type").
  *)
 Sys.set ("printDepth", ~1);
 > val it = () : unit
@@ -115,6 +117,36 @@ in
   (r.a "x", r.b)
 end;
 > val it = ("x",2) : string * int
+
+(*) Type alias
+type myInt = int;
+> type myInt = int
+(* TODO
+val x: myInt = 5;
+> val x = 5 : myInt
+*)
+type intPair = int * int;
+> type intPair = int * int
+(* TODO
+val x: intPair = (4, 5);
+> val x = (4,5) : intPair
+val x = (4, 5): intPair;
+> val x = (4,5) : intPair
+ELSE *)
+val x = (4, 5);
+> val x = (4,5) : int * int
+(* END *)
+val y: int * int = x;
+> val y = (4,5) : int * int
+(* TODO
+val z: intPair = y;
+> val z = (4,5) : intPair
+*)
+
+(*) Define two aliases at once
+type myInt = int and myRealList = real list;
+> type myInt = int
+> type myRealList = real list
 
 (*) A datatype whose constructor overwrites another datatype's constructor
 datatype foo = W | X | Y of int;

@@ -1456,6 +1456,10 @@ public class TypeResolver {
         final Ast.ValDecl valDecl = toValDecl(env, (Ast.FunDecl) node);
         return deduceValDeclType(env, valDecl, termMap);
 
+      case TYPE_DECL:
+        final Ast.TypeDecl typeDecl = (Ast.TypeDecl) node;
+        return deduceTypeDeclType(env, typeDecl, termMap);
+
       case DATATYPE_DECL:
         final Ast.DatatypeDecl datatypeDecl = (Ast.DatatypeDecl) node;
         return deduceDataTypeDeclType(env, datatypeDecl, termMap);
@@ -1464,6 +1468,21 @@ public class TypeResolver {
         throw new AssertionError(
             "cannot deduce type for " + node.op + " [" + node + "]");
     }
+  }
+
+  private Ast.Decl deduceTypeDeclType(
+      TypeEnv env, Ast.TypeDecl typeDecl, PairList<Ast.IdPat, Term> termMap) {
+    final List<Type.Key> keys = new ArrayList<>();
+    for (Ast.TypeBind bind : typeDecl.binds) {
+      final KeyBuilder keyBuilder = new KeyBuilder();
+      bind.tyVars.forEach(keyBuilder::toTypeKey);
+
+      keys.add(Keys.alias(bind.name.name, toTypeKey(bind.type)));
+    }
+    final List<Type> types = typeSystem.typesFor(keys);
+
+    map.put(typeDecl, toTerm(PrimitiveType.UNIT));
+    return typeDecl;
   }
 
   private Ast.Decl deduceDataTypeDeclType(
