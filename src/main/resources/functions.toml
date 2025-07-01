@@ -3280,6 +3280,288 @@ description = """
 "unset property" clears the current the value of `property`.
 """
 
+# === TextIO structure ===============================================
+
+# (* TextIO ------------------------------------------------------ *)
+# (* This structure provides input/output functions on text streams.
+#    The functions are state-based: reading from or writing to a stream
+#    changes the state of the stream.  The streams are buffered: output
+#    to a stream may not immediately affect the underlying file or
+#    device.
+# 
+#    Note that under DOS, Windows, OS/2, and MacOS, text streams will be
+#    `translated' by converting (e.g.) the double newline CRLF to a
+#    single newline character \n.
+# 
+#    [instream] is the type of state-based character input streams.
+# 
+#    [outstream] is the type of state-based character output streams.
+# 
+#    [elem] is the type char of characters.
+# 
+#    [vector] is the type of character vectors, that is, strings.
+# *)
+# 
+# TextIO;
+# 
+
+[[functions]]
+ordinal = 501
+structure = "TextIO"
+name = "closeIn"
+specified = "basis"
+type = "instream → unit"
+description = """
+"closeIn istr" closes stream `istr`. Has no effect if `istr` is closed
+already. Further operations on `istr` will behave as if `istr` is at
+end of stream (that is, will return `""` or `NONE` or `true`).
+"""
+
+[[functions]]
+ordinal = 514
+structure = "TextIO"
+name = "closeOut"
+specified = "basis"
+type = "outstream → unit"
+description = """
+"closeOut ostr" closes stream `ostr`; further operations on `ostr`
+(except for additional close operations) will raise exception `Io.Io`.
+"""
+
+[[functions]]
+ordinal = 508
+structure = "TextIO"
+name = "endOfStream"
+specified = "basis"
+type = "instream → bool"
+description = """
+"endOfStream istr" returns `false` if any elements are available in
+`istr`; returns `true` if `istr` is at end of stream or closed;
+blocks if necessary until one of these conditions holds.
+"""
+
+[[functions]]
+ordinal = 517
+structure = "TextIO"
+name = "flushOut"
+specified = "basis"
+type = "outstream → unit"
+description = """
+"flushOut ostr" flushes the outstream `ostr`, so that all data
+written to `ostr` becomes available to the underlying file or device.
+"""
+
+[[functions]]
+ordinal = 502
+structure = "TextIO"
+name = "input"
+specified = "basis"
+type = "instream → vector"
+description = """
+"input istr" reads some elements from `istr`, returning a vector `v` of
+those elements. The vector will be empty (size `v` = 0) if and only
+if `istr` is at end of stream or is closed. May block (not return
+until data are available in the external world).
+"""
+
+[[functions]]
+ordinal = 505
+structure = "TextIO"
+name = "input1"
+specified = "basis"
+type = "instream → elem option"
+description = """
+"input1 istr" returns `SOME(e)` if at least one element `e` of `istr` is
+available; returns `NONE` if `istr` is at end of stream or is closed;
+blocks if necessary until one of these conditions holds.
+"""
+
+[[functions]]
+ordinal = 503
+structure = "TextIO"
+name = "inputAll"
+specified = "basis"
+type = "instream → vector"
+description = """
+"inputAll istr" reads and returns the string `v` of all characters
+remaining in `istr` up to end of stream.
+"""
+
+[[functions]]
+ordinal = 507
+structure = "TextIO"
+name = "inputLine"
+specified = "basis"
+type = "instream → string option"
+description = """
+"inputLine istr" returns `SOME ln`, where `ln` is one line of text,
+including the terminating newline character. If end of stream is
+reached before a newline character, then the remaining part of the
+stream is returned, with a newline character added. If `istr` is at
+end of stream or is closed, then `NONE` is returned.
+"""
+
+[[functions]]
+ordinal = 506
+structure = "TextIO"
+name = "inputN"
+specified = "basis"
+type = "instream * int → vector"
+description = """
+"inputN(istr, n)" returns the next `n` characters from `istr`
+as a string, if that many are available; returns all remaining
+characters if end of stream is reached before `n` characters are
+available; blocks if necessary until one of these conditions holds.
+(This is the behaviour of the 'input' function prescribed in the
+1990 Definition of Standard ML).
+"""
+
+[[functions]]
+ordinal = 504
+structure = "TextIO"
+name = "inputNoBlock"
+specified = "basis"
+type = "instream → vector option"
+description = """
+"inputNoBlock istr" returns `SOME(v)` if some elements `v` can be read
+without blocking; returns `SOME("")` if it can be determined without
+blocking that `istr` is at end of stream; returns `NONE` otherwise. If
+`istr` does not support non-blocking input, raises
+`Io.NonblockingNotSupported`.
+"""
+
+[[functions]]
+ordinal = 509
+structure = "TextIO"
+name = "lookahead"
+specified = "basis"
+type = "instream → elem option"
+description = """
+"lookahead istr" returns `SOME(e)` where `e` is the next element in the
+stream; returns `NONE` if `istr` is at end of stream or is closed;
+blocks if necessary until one of these conditions holds. Does not
+advance the stream.
+"""
+
+[[functions]]
+ordinal = 513
+structure = "TextIO"
+name = "openAppend"
+specified = "basis"
+type = "string → outstream"
+description = """
+"openAppend s" creates a new outstream associated with the file named `s`.
+If file `s` does not exist, and the directory exists and is
+writable, then a new file is created. If file `s` exists, any
+existing contents are retained, and output goes at the end of the
+file.
+"""
+
+[[functions]]
+ordinal = 500
+structure = "TextIO"
+name = "openIn"
+specified = "basis"
+type = "string → instream"
+description = """
+"openIn s" creates a new instream associated with the file named `s`.
+Raises `Io.Io` if file `s` does not exist or is not accessible.
+"""
+
+[[functions]]
+ordinal = 512
+structure = "TextIO"
+name = "openOut"
+specified = "basis"
+type = "string → outstream"
+description = """
+"openOut s" creates a new outstream associated with the file named `s`.
+If file `s` does not exist, and the directory exists and is
+writable, then a new file is created. If file `s` exists, it is
+truncated (any existing contents are lost).
+"""
+
+[[functions]]
+ordinal = 515
+structure = "TextIO"
+name = "output"
+specified = "basis"
+type = "outstream * vector → unit"
+description = """
+"output(ostr, v)" writes the string `v` on outstream `ostr`.
+"""
+
+[[functions]]
+ordinal = 516
+structure = "TextIO"
+name = "output1"
+specified = "basis"
+type = "outstream * elem → unit"
+description = """
+"output1(ostr, e)" writes the character `e` on outstream `ostr`.
+"""
+
+[[functions]]
+ordinal = 520
+structure = "TextIO"
+name = "print"
+specified = "basis"
+type = "string → unit"
+description = """
+"print s" outputs `s` to `stdOut` and flushes immediately.
+"""
+
+[[functions]]
+ordinal = 511
+structure = "TextIO"
+name = "scanStream"
+specified = "basis"
+type = "(char, cs) StringCvt.reader → (α, cs) StringCvt.reader → instream → α option"
+description = """
+"scanStream scan istr" turns the instream `istr` into a character
+source and applies the scanner `scan` to that source. See
+`StringCvt` for more on character sources and scanners. (A particular
+implementation may be only able to backtrack a limited number of
+characters, say 512, and raises `Fail` if the scanner backtracks
+further than that.)
+"""
+
+[[functions]]
+ordinal = 519
+structure = "TextIO"
+name = "stdErr"
+specified = "basis"
+type = "outstream"
+description = """
+"stdErr" is the unbuffered state-based standard error stream. That
+is, it is always kept flushed, so `flushOut(stdErr)` is redundant.
+"""
+
+[[functions]]
+ordinal = 510
+structure = "TextIO"
+name = "stdIn"
+specified = "basis"
+type = "instream"
+description = """
+"stdIn" is the buffered state-based standard input stream.
+"""
+
+
+#
+# (* [stdOut] is the buffered state-based standard output stream. *)
+# TextIO.stdOut;
+# > val stdOut = outstream
+[[functions]]
+ordinal = 518
+structure = "TextIO"
+name = "stdOut"
+specified = "basis"
+type = "outstream"
+description = """
+"stdOut" is the buffered state-based standard output stream.
+"""
+
 # === Vector structure ===============================================
 
 [[functions]]

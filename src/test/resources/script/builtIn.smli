@@ -4334,6 +4334,159 @@ Sys.unset "optionalInt";
 Sys.plan ();
 > val it = "apply(fnValue Sys.unset, argCode constant(optionalInt))" : string
 
+(* TextIO ------------------------------------------------------ *)
+(* This structure provides input/output functions on text streams.
+   The functions are state-based: reading from or writing to a stream
+   changes the state of the stream.  The streams are buffered: output
+   to a stream may not immediately affect the underlying file or
+   device.
+
+   Note that under DOS, Windows, OS/2, and MacOS, text streams will be
+   `translated' by converting (e.g.) the double newline CRLF to a
+   single newline character \n.
+
+   [instream] is the type of state-based character input streams.
+
+   [outstream] is the type of state-based character output streams.
+
+   [elem] is the type char of characters.
+
+   [vector] is the type of character vectors, that is, strings.
+*)
+
+TextIO;
+
+(* [openIn s] creates a new instream associated with the file named s.
+   Raises Io.Io is file s does not exist or is not accessible. *)
+TextIO.openIn;
+> val openIn = fn : string -> instream
+
+(* [closeIn istr] closes stream istr.  Has no effect if istr is closed
+   already.  Further operations on istr will behave as if istr is at
+   end of stream (that is, will return "" or NONE or true). *)
+TextIO.closeIn;
+> val closeIn = fn : instream -> unit
+
+(* [input istr] reads some elements from istr, returning a vector v of
+   those elements.  The vector will be empty (size v = 0) if and only
+   if istr is at end of stream or is closed.  May block (not return
+   until data are available in the external world). *)
+TextIO.input;
+> val input = fn : instream -> vector
+
+(* [inputAll istr] reads and returns the string v of all characters
+   remaining in istr up to end of stream. *)
+TextIO.inputAll;
+> val inputAll = fn : instream -> vector
+
+(* [inputNoBlock istr] returns SOME(v) if some elements v can be read
+   without blocking; returns SOME("") if it can be determined without
+   blocking that istr is at end of stream; returns NONE otherwise.  If
+   istr does not support non-blocking input, raises
+   Io.NonblockingNotSupported. *)
+TextIO.inputNoBlock;
+> val inputNoBlock = fn : instream -> vector option
+
+(* [input1 istr] returns SOME(e) if at least one element e of istr is
+   available; returns NONE if istr is at end of stream or is closed;
+   blocks if necessary until one of these conditions holds. *)
+TextIO.input1;
+> val input1 = fn : instream -> elem option
+
+(* [inputN(istr, n)] returns the next n characters from istr as a
+   string, if that many are available; returns all remaining
+   characters if end of stream is reached before n characters are
+   available; blocks if necessary until one of these conditions holds.
+   (This is the behaviour of the `input' function prescribed in the
+   1990 Definition of Standard ML). *)
+TextIO.inputN;
+> val inputN = fn : instream * int -> vector
+
+(* [inputLine istr] returns SOME ln, where ln is one line of text,
+   including the terminating newline character.  If end of stream is
+   reached before a newline character, then the remaining part of the
+   stream is returned, with a newline character added.  If istr is at
+   end of stream or is closed, then NONE is returned. *)
+TextIO.inputLine;
+> val inputLine = fn : instream -> string option
+
+(* [endOfStream istr] returns false if any elements are available in
+   istr; returns true if istr is at end of stream or closed; blocks if
+   necessary until one of these conditions holds. *)
+TextIO.endOfStream;
+> val endOfStream = fn : instream -> bool
+
+(* [lookahead istr] returns SOME(e) where e is the next element in the
+   stream; returns NONE if istr is at end of stream or is closed;
+   blocks if necessary until one of these conditions holds.  Does not
+   advance the stream. *)
+TextIO.lookahead;
+> val lookahead = fn : instream -> elem option
+
+(* [stdIn] is the buffered state-based standard input stream. *)
+TextIO.stdIn;
+> val stdIn = instream
+
+(* [scanStream scan istr] turns the instream istr into a character
+   source and applies the scanner `scan' to that source.  See
+   StringCvt for more on character sources and scanners.  The Moscow
+   ML implementation currently can backtrack only 512 characters, and
+   raises Fail if the scanner backtracks further than that. *)
+TextIO.scanStream;
+>  val scanStream = fn : ((char, cs) StringCvt.reader -> ('a, cs) StringCvt.reader)
+>                      -> instream -> 'a option
+
+(*) Text output
+
+(* [openOut s] creates a new outstream associated with the file named
+   s.  If file s does not exist, and the directory exists and is
+   writable, then a new file is created.  If file s exists, it is
+   truncated (any existing contents are lost). *)
+TextIO.openOut;
+> val openOut = fn : string -> outstream
+
+(* [openAppend s] creates a new outstream associated with the file
+   named s.  If file s does not exist, and the directory exists and is
+   writable, then a new file is created.  If file s exists, any
+   existing contents are retained, and output goes at the end of the
+   file. *)
+TextIO.openAppend;
+> val openAppend = fn : string -> outstream
+
+(* [closeOut ostr] closes stream ostr; further operations on ostr
+   (except for additional close operations) will raise exception Io.Io. *)
+TextIO.closeOut;
+> val closeOut = fn : outstream -> unit
+
+(* [output(ostr, v)] writes the string v on outstream ostr. *)
+TextIO.output;
+> val output = fn : outstream * vector -> unit
+
+(* [output1(ostr, e)] writes the character e on outstream ostr. *)
+TextIO.output1;
+> val output1 = fn : outstream * elem -> unit
+
+TextIO.outputSubstr;
+> val outputSubstr = fn : outstream * substring -> unit
+
+(* [flushOut ostr] flushes the outstream ostr, so that all data
+   written to ostr becomes available to the underlying file or device. *)
+TextIO.flushOut;
+> val flushOut = fn : outstream -> unit
+
+(* [stdOut] is the buffered state-based standard output stream. *)
+TextIO.stdOut;
+> val stdOut = outstream
+
+(* [stdErr] is the unbuffered state-based standard error stream.  That
+   is, it is always kept flushed, so flushOut(stdErr) is redundant. *)
+TextIO.stdErr;
+> val stdErr = outstream
+
+(* [print s] outputs s to stdOut and flushes immediately.
+TextIO.print;
+> val print = fn : string -> unit
+
 (* Vector ------------------------------------------------------ *)
 
 (*) Vector.fromList : 'a list -> 'a vector
