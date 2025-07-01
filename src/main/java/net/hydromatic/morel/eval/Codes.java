@@ -37,6 +37,9 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
+import java.io.PrintWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -3557,8 +3560,16 @@ public abstract class Codes {
               ImmutableList.builder();
           for (Prop prop : Prop.BY_CAMEL_NAME) {
             final Object value = prop.get(session.map);
-            List option =
-                value == null ? OPTION_NONE : optionSome(value.toString());
+            final List option;
+            if (value == null) {
+              option = OPTION_NONE;
+            } else if (value instanceof Reader) {
+              option = optionSome("java.io.Reader");
+            } else if (value instanceof Writer) {
+              option = optionSome("java.io.Writer");
+            } else {
+              option = optionSome(value.toString());
+            }
             list.add((List) ImmutableList.of(prop.camelName, option));
           }
           return list.build();
@@ -3604,6 +3615,253 @@ public abstract class Codes {
   /** @see BuiltIn.Constructor#ORDER_GREATER */
   private static final List ORDER_GREATER =
       ImmutableList.of(BuiltIn.Constructor.ORDER_GREATER.constructor);
+
+  // TextIO.openIn | string &rarr; instream | "openIn s" creates a new instream
+  // associated with the file named `s`. Raises `Io.Io` if file `s` does not
+  // exist or is not accessible. |
+  /** @see BuiltIn#TEXT_IO_OPEN_IN */
+  private static final Applicable TEXT_IO_OPEN_IN =
+      new ApplicableImpl(BuiltIn.TEXT_IO_OPEN_IN) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.openIn");
+        }
+      };
+
+  // TextIO.closeIn | instream &rarr; unit | "closeIn istr" closes stream
+  // `istr`. Has no effect if `istr` is closed already. Further operations on
+  // `istr` will behave as if `istr` is at end of stream (that is, will return
+  // `""` or `NONE` or `true`). |
+  /** @see BuiltIn#TEXT_IO_CLOSE_IN */
+  private static final Applicable TEXT_IO_CLOSE_IN =
+      new ApplicableImpl(BuiltIn.TEXT_IO_CLOSE_IN) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.closeIn");
+        }
+      };
+
+  // TextIO.input | instream &rarr; string | "input istr" reads some elements
+  // from `istr`, returning a vector `v` of those elements. The vector will be
+  // empty (size `v` = 0) if and only if `istr` is at end of stream or is
+  // closed. May block (not return until data are available in the external
+  // world). |
+  /** @see BuiltIn#TEXT_IO_INPUT */
+  private static final Applicable TEXT_IO_INPUT =
+      new ApplicableImpl(BuiltIn.TEXT_IO_INPUT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.input");
+        }
+      };
+
+  // TextIO.inputAll | instream &rarr; string | "inputAll istr" reads and
+  // returns the string `v` of all characters remaining in `istr` up to end of
+  // stream. |
+  /** @see BuiltIn#TEXT_IO_INPUT_ALL */
+  private static final Applicable TEXT_IO_INPUT_ALL =
+      new ApplicableImpl(BuiltIn.TEXT_IO_INPUT_ALL) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.inputAll");
+        }
+      };
+
+  // TextIO.inputNoBlock | instream &rarr; string option | "inputNoBlock istr"
+  // returns `SOME(v)` if some elements `v` can be read without blocking;
+  // returns `SOME("")` if it can be determined without blocking that `istr` is
+  // at end of stream; returns `NONE` otherwise. If `istr` does not support
+  // non-blocking input, raises `Io.NonblockingNotSupported`. |
+  /** @see BuiltIn#TEXT_IO_INPUT_NO_BLOCK */
+  private static final Applicable TEXT_IO_INPUT_NO_BLOCK =
+      new ApplicableImpl(BuiltIn.TEXT_IO_INPUT_NO_BLOCK) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.inputNoBlock");
+        }
+      };
+
+  // TextIO.input1 | instream &rarr; char option | "input1 istr" returns
+  // `SOME(e)` if at least one element `e` of `istr` is available; returns
+  // `NONE` if `istr` is at end of stream or is closed; blocks if necessary
+  // until one of these conditions holds. |
+  /** @see BuiltIn#TEXT_IO_INPUT1 */
+  private static final Applicable TEXT_IO_INPUT1 =
+      new ApplicableImpl(BuiltIn.TEXT_IO_INPUT1) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.input1");
+        }
+      };
+
+  // TextIO.inputN | instream * int &rarr; string | "inputN(istr, n)" returns
+  // the next `n` characters from `istr` as a string, if that many are
+  // available; returns all remaining characters if end of stream is reached
+  // before `n` characters are available; blocks if necessary until one of these
+  // conditions holds. (This is the behaviour of the 'input' function prescribed
+  // in the 1990 Definition of Standard ML). |
+  /** @see BuiltIn#TEXT_IO_INPUT_N */
+  private static final Applicable TEXT_IO_INPUT_N =
+      new ApplicableImpl(BuiltIn.TEXT_IO_INPUT_N) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.inputN");
+        }
+      };
+
+  // TextIO.inputLine | instream &rarr; string option | "inputLine istr" returns
+  // `SOME ln`, where `ln` is one line of text, including the terminating
+  // newline character. If end of stream is reached before a newline character,
+  // then the remaining part of the stream is returned, with a newline character
+  // added. If `istr` is at end of stream or is closed, then `NONE` is returned.
+  // |
+  /** @see BuiltIn#TEXT_IO_INPUT_LINE */
+  private static final Applicable TEXT_IO_INPUT_LINE =
+      new ApplicableImpl(BuiltIn.TEXT_IO_INPUT_LINE) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.inputLine");
+        }
+      };
+
+  // TextIO.endOfStream | instream &rarr; bool | "endOfStream istr" returns
+  // `false` if any elements are available in `istr`; returns `true` if `istr`
+  // is at end of stream or closed; blocks if necessary until one of these
+  // conditions holds. |
+  /** @see BuiltIn#TEXT_IO_END_OF_STREAM */
+  private static final Applicable TEXT_IO_END_OF_STREAM =
+      new ApplicableImpl(BuiltIn.TEXT_IO_END_OF_STREAM) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.endOfStream");
+        }
+      };
+
+  // TextIO.lookahead | instream &rarr; char option | "lookahead istr" returns
+  // `SOME(e)` where `e` is the next element in the stream; returns `NONE` if
+  // `istr` is at end of stream or is closed; blocks if necessary until one of
+  // these conditions holds. Does not advance the stream. |
+  /** @see BuiltIn#TEXT_IO_LOOKAHEAD */
+  private static final Applicable TEXT_IO_LOOKAHEAD =
+      new ApplicableImpl(BuiltIn.TEXT_IO_LOOKAHEAD) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.lookahead");
+        }
+      };
+
+  // TextIO.stdIn | instream | "stdIn" is the buffered state-based standard
+  // input stream. |
+  /** @see BuiltIn#TEXT_IO_STD_IN */
+  private static final Applicable TEXT_IO_STD_IN =
+      new ApplicableImpl(BuiltIn.TEXT_IO_STD_IN) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.stdIn");
+        }
+      };
+
+  // TextIO.openOut | string &rarr; outstream | "openOut s" creates a new
+  // outstream associated with the file named `s`. If file `s` does not exist,
+  // and the directory exists and is writable, then a new file is created. If
+  // file `s` exists, it is truncated (any existing contents are lost). |
+  /** @see BuiltIn#TEXT_IO_OPEN_OUT */
+  private static final Applicable TEXT_IO_OPEN_OUT =
+      new ApplicableImpl(BuiltIn.TEXT_IO_OPEN_OUT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.openOut");
+        }
+      };
+
+  // TextIO.openAppend | string &rarr; outstream | "openAppend s" creates a new
+  // outstream associated with the file named `s`. If file `s` does not exist,
+  // and the directory exists and is writable, then a new file is created. If
+  // file `s` exists, any existing contents are retained, and output goes at the
+  // end of the file. |
+  /** @see BuiltIn#TEXT_IO_OPEN_APPEND */
+  private static final Applicable TEXT_IO_OPEN_APPEND =
+      new ApplicableImpl(BuiltIn.TEXT_IO_OPEN_APPEND) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.openAppend");
+        }
+      };
+
+  // TextIO.closeOut | outstream &rarr; unit | "closeOut ostr" closes stream
+  // `ostr`; further operations on `ostr` (except for additional close
+  // operations) will raise exception `Io.Io`. |
+  /** @see BuiltIn#TEXT_IO_CLOSE_OUT */
+  private static final Applicable TEXT_IO_CLOSE_OUT =
+      new ApplicableImpl(BuiltIn.TEXT_IO_CLOSE_OUT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.closeOut");
+        }
+      };
+
+  // TextIO.output | outstream * string &rarr; unit | "output(ostr, v)" writes
+  // the string `v` on outstream `ostr`. |
+  /** @see BuiltIn#TEXT_IO_OUTPUT */
+  private static final Applicable TEXT_IO_OUTPUT =
+      new ApplicableImpl(BuiltIn.TEXT_IO_OUTPUT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.output");
+        }
+      };
+
+  // TextIO.output1 | outstream * char &rarr; unit | "output1(ostr, e)" writes
+  // the character `e` on outstream `ostr`. |
+  /** @see BuiltIn#TEXT_IO_OUTPUT1 */
+  private static final Applicable TEXT_IO_OUTPUT1 =
+      new ApplicableImpl(BuiltIn.TEXT_IO_OUTPUT1) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.output1");
+        }
+      };
+
+  // TextIO.flushOut | outstream &rarr; unit | "flushOut ostr" flushes the
+  // outstream `ostr`, so that all data written to `ostr` becomes available to
+  // the underlying file or device. |
+  /** @see BuiltIn#TEXT_IO_FLUSH_OUT */
+  private static final Applicable TEXT_IO_FLUSH_OUT =
+      new ApplicableImpl(BuiltIn.TEXT_IO_FLUSH_OUT) {
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException("TextIO.flushOut");
+        }
+      };
+
+  // TextIO.stdOut | outstream | "stdOut" is the buffered state-based standard
+  // output stream. |
+  /** @see BuiltIn#TEXT_IO_STD_OUT */
+  private static final PrintWriter TEXT_IO_STD_OUT =
+      new PrintWriter(System.out);
+
+  // TextIO.stdErr | outstream | "stdErr" is the unbuffered state-based standard
+  // error stream. That is, it is always kept flushed, so `flushOut(stdErr)` is
+  // redundant. |
+  /** @see BuiltIn#TEXT_IO_STD_ERR */
+  private static final PrintWriter TEXT_IO_STD_ERR =
+      new PrintWriter(System.err, true);
+
+  // TextIO.print | string &rarr; unit | "print s" outputs `s` to `stdOut` and
+  // flushes immediately. |
+  /** @see BuiltIn#TEXT_IO_PRINT */
+  private static final Applicable TEXT_IO_PRINT =
+      new ApplicableImpl(BuiltIn.TEXT_IO_PRINT) {
+        @Override
+        public Unit apply(EvalEnv env, Object arg) {
+          final String s = (String) arg;
+          final Session session = (Session) env.getOpt(EvalEnv.SESSION);
+          PrintWriter stdOut = session.stdOut;
+          stdOut.print(s);
+          stdOut.flush();
+          return Unit.INSTANCE;
+        }
+      };
 
   /** @see BuiltIn#VECTOR_MAX_LEN */
   private static final int VECTOR_MAX_LEN = (1 << 24) - 1;
@@ -4356,6 +4614,26 @@ public abstract class Codes {
           .put(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL)
           .put(BuiltIn.SYS_SHOW, SYS_SHOW)
           .put(BuiltIn.SYS_UNSET, SYS_UNSET)
+          .put(BuiltIn.TEXT_IO_CLOSE_IN, TEXT_IO_CLOSE_IN)
+          .put(BuiltIn.TEXT_IO_CLOSE_OUT, TEXT_IO_CLOSE_OUT)
+          .put(BuiltIn.TEXT_IO_END_OF_STREAM, TEXT_IO_END_OF_STREAM)
+          .put(BuiltIn.TEXT_IO_FLUSH_OUT, TEXT_IO_FLUSH_OUT)
+          .put(BuiltIn.TEXT_IO_INPUT_ALL, TEXT_IO_INPUT_ALL)
+          .put(BuiltIn.TEXT_IO_INPUT_LINE, TEXT_IO_INPUT_LINE)
+          .put(BuiltIn.TEXT_IO_INPUT_N, TEXT_IO_INPUT_N)
+          .put(BuiltIn.TEXT_IO_INPUT_NO_BLOCK, TEXT_IO_INPUT_NO_BLOCK)
+          .put(BuiltIn.TEXT_IO_INPUT, TEXT_IO_INPUT)
+          .put(BuiltIn.TEXT_IO_INPUT1, TEXT_IO_INPUT1)
+          .put(BuiltIn.TEXT_IO_LOOKAHEAD, TEXT_IO_LOOKAHEAD)
+          .put(BuiltIn.TEXT_IO_OPEN_APPEND, TEXT_IO_OPEN_APPEND)
+          .put(BuiltIn.TEXT_IO_OPEN_IN, TEXT_IO_OPEN_IN)
+          .put(BuiltIn.TEXT_IO_OPEN_OUT, TEXT_IO_OPEN_OUT)
+          .put(BuiltIn.TEXT_IO_OUTPUT, TEXT_IO_OUTPUT)
+          .put(BuiltIn.TEXT_IO_OUTPUT1, TEXT_IO_OUTPUT1)
+          .put(BuiltIn.TEXT_IO_PRINT, TEXT_IO_PRINT)
+          .put(BuiltIn.TEXT_IO_STD_ERR, TEXT_IO_STD_ERR)
+          .put(BuiltIn.TEXT_IO_STD_IN, TEXT_IO_STD_IN)
+          .put(BuiltIn.TEXT_IO_STD_OUT, TEXT_IO_STD_OUT)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_APP, VECTOR_APP)
           .put(BuiltIn.VECTOR_APPI, VECTOR_APPI)
@@ -5444,6 +5722,8 @@ public abstract class Codes {
     CHR("General", "Chr"),
     DIV("General", "Div"),
     DOMAIN("General", "Domain"),
+    IO("IO", "Io"),
+    NON_BLOCKING_NOT_SUPPORTED("IO", "NonBlockingNotSupported"),
     OPTION("Option", "Option"),
     OVERFLOW("General", "Overflow"),
     ERROR("Interact", "Error"), // not in standard basis

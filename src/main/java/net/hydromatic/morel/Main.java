@@ -120,7 +120,10 @@ public class Main {
     this.out = buffer(out);
     this.echo = argList.contains("--echo");
     this.valueMap = ImmutableMap.copyOf(valueMap);
-    this.session = new Session(propMap);
+    final Map<Prop, Object> propMap2 = new LinkedHashMap<>(propMap);
+    propMap2.put(Prop.STD_IN, this.in);
+    propMap2.put(Prop.STD_OUT, this.out);
+    this.session = new Session(propMap2);
     this.idempotent = idempotent;
   }
 
@@ -408,6 +411,7 @@ public class Main {
                 tracer);
         final List<Binding> bindings = new ArrayList<>();
         compiled.eval(main.session, env, outLines, bindings::add);
+        main.session.stdOut.flush();
 
         // Add the new bindings to the map. Overloaded bindings (INST) add to
         // previous bindings; ordinary bindings (VAL) replace previous bindings

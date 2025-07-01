@@ -3511,6 +3511,7 @@ ordinal = 511
 structure = "TextIO"
 name = "scanStream"
 specified = "basis"
+implemented = false
 type = "(char, cs) StringCvt.reader → (α, cs) StringCvt.reader → instream → α option"
 description = """
 "scanStream scan istr" turns the instream `istr` into a character

@@ -4115,6 +4115,8 @@ Sys.env ();
 >     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
+>    ("TextIO",
+>     "{closeIn:instream -> unit, closeOut:outstream -> unit, endOfStream:instream -> bool, flushOut:outstream -> unit, input:instream -> string, input1:instream -> char option, inputAll:instream -> string, inputLine:instream -> string option, inputN:instream * int -> string, inputNoBlock:instream -> string option, lookahead:instream -> char option, openAppend:string -> outstream, openIn:string -> instream, openOut:string -> outstream, output:outstream * string -> unit, output1:outstream * char -> unit, print:string -> unit, stdErr:outstream, stdIn:instream, stdOut:outstream}"),
 >    ("Vector",
 >     "{all:forall 'a. ('a -> bool) -> 'a vector -> bool, app:forall 'a. ('a -> unit) -> 'a vector -> unit, appi:forall 'a. (int * 'a -> unit) -> 'a vector -> unit, collate:forall 'a. ('a * 'a -> order) -> 'a vector * 'a vector -> order, concat:forall 'a. 'a vector list -> 'a vector, exists:forall 'a. ('a -> bool) -> 'a vector -> bool, find:forall 'a. ('a -> bool) -> 'a vector -> 'a option, findi:forall 'a 'b. (int * 'a -> bool) -> 'a vector -> (int * 'a) option, foldl:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b, foldli:forall 'a 'b. (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b, foldr:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b, foldri:forall 'a 'b. (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b, fromList:forall 'a. 'a list -> 'a vector, length:forall 'a. 'a vector -> int, map:forall 'a 'b. ('a -> 'b) -> 'a vector -> 'b vector, mapi:forall 'a 'b. (int * 'a -> 'b) -> 'a vector -> 'b vector, maxLen:int, sub:forall 'a. 'a vector * int -> 'a, tabulate:forall 'a. int * (int -> 'a) -> 'a vector, update:forall 'a. 'a vector * int * 'a -> 'a vector}"),
 >    ("abs","int -> int"),("app","forall 'a. ('a -> unit) -> 'a list -> unit"),
@@ -4205,6 +4207,8 @@ env ();
 >     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
+>    ("TextIO",
+>     "{closeIn:instream -> unit, closeOut:outstream -> unit, endOfStream:instream -> bool, flushOut:outstream -> unit, input:instream -> string, input1:instream -> char option, inputAll:instream -> string, inputLine:instream -> string option, inputN:instream * int -> string, inputNoBlock:instream -> string option, lookahead:instream -> char option, openAppend:string -> outstream, openIn:string -> instream, openOut:string -> outstream, output:outstream * string -> unit, output1:outstream * char -> unit, print:string -> unit, stdErr:outstream, stdIn:instream, stdOut:outstream}"),
 >    ("Vector",
 >     "{all:forall 'a. ('a -> bool) -> 'a vector -> bool, app:forall 'a. ('a -> unit) -> 'a vector -> unit, appi:forall 'a. (int * 'a -> unit) -> 'a vector -> unit, collate:forall 'a. ('a * 'a -> order) -> 'a vector * 'a vector -> order, concat:forall 'a. 'a vector list -> 'a vector, exists:forall 'a. ('a -> bool) -> 'a vector -> bool, find:forall 'a. ('a -> bool) -> 'a vector -> 'a option, findi:forall 'a 'b. (int * 'a -> bool) -> 'a vector -> (int * 'a) option, foldl:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b, foldli:forall 'a 'b. (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b, foldr:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b, foldri:forall 'a 'b. (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b, fromList:forall 'a. 'a list -> 'a vector, length:forall 'a. 'a vector -> int, map:forall 'a 'b. ('a -> 'b) -> 'a vector -> 'b vector, mapi:forall 'a 'b. (int * 'a -> 'b) -> 'a vector -> 'b vector, maxLen:int, sub:forall 'a. 'a vector * int -> 'a, tabulate:forall 'a. int * (int -> 'a) -> 'a vector, update:forall 'a. 'a vector * int * 'a -> 'a vector}"),
 >    ("abs","int -> int"),("app","forall 'a. ('a -> unit) -> 'a list -> unit"),
@@ -4308,12 +4312,13 @@ map
 >    ("lineWidth",SOME "78"),("matchCoverageEnabled",SOME "true"),
 >    ("optionalInt",NONE),("output",SOME "CLASSIC"),("printDepth",SOME "5"),
 >    ("printLength",SOME "999"),("relationalize",SOME "false"),
->    ("scriptDirectory",SOME "?"),("stringDepth",SOME "-1")]
->   : (string * string option) list
+>    ("scriptDirectory",SOME "?"),("stdErr",SOME "java.io.Writer"),
+>    ("stdIn",SOME "java.io.Reader"),("stdOut",SOME "java.io.Writer"),
+>    ("stringDepth",SOME "-1")] : (string * string option) list
 List.length (Sys.showAll ());
-> val it = 12 : int
+> val it = 15 : int
 List.length (showAll ());
-> val it = 12 : int
+> val it = 15 : int
 Sys.plan ();
 > val it =
 >   "apply(fnValue List.length, argCode apply(fnValue Sys.showAll, argCode constant([])))"
@@ -4355,29 +4360,43 @@ Sys.plan ();
 *)
 
 TextIO;
+> val it =
+>   {closeIn=fn,closeOut=fn,endOfStream=fn,flushOut=fn,input=fn,input1=fn,
+>    inputAll=fn,inputLine=fn,inputN=fn,inputNoBlock=fn,lookahead=fn,
+>    openAppend=fn,openIn=fn,openOut=fn,output=fn,output1=fn,print=fn,
+>    stdErr=outstream,stdIn=instream,stdOut=outstream}
+>   : {closeIn:instream -> unit, closeOut:outstream -> unit,
+>      endOfStream:instream -> bool, flushOut:outstream -> unit,
+>      input:instream -> string, input1:instream -> char option,
+>      inputAll:instream -> string, inputLine:instream -> string option,
+>      inputN:instream * int -> string, inputNoBlock:instream -> string option,
+>      lookahead:instream -> char option, openAppend:string -> outstream,
+>      openIn:string -> instream, openOut:string -> outstream,
+>      output:outstream * string -> unit, output1:outstream * char -> unit,
+>      print:string -> unit, stdErr:outstream, stdIn:instream, stdOut:outstream}
 
 (* [openIn s] creates a new instream associated with the file named s.
    Raises Io.Io is file s does not exist or is not accessible. *)
 TextIO.openIn;
-> val openIn = fn : string -> instream
+> val it = fn : string -> instream
 
 (* [closeIn istr] closes stream istr.  Has no effect if istr is closed
    already.  Further operations on istr will behave as if istr is at
    end of stream (that is, will return "" or NONE or true). *)
 TextIO.closeIn;
-> val closeIn = fn : instream -> unit
+> val it = fn : instream -> unit
 
 (* [input istr] reads some elements from istr, returning a vector v of
    those elements.  The vector will be empty (size v = 0) if and only
    if istr is at end of stream or is closed.  May block (not return
    until data are available in the external world). *)
 TextIO.input;
-> val input = fn : instream -> vector
+> val it = fn : instream -> string
 
 (* [inputAll istr] reads and returns the string v of all characters
    remaining in istr up to end of stream. *)
 TextIO.inputAll;
-> val inputAll = fn : instream -> vector
+> val it = fn : instream -> string
 
 (* [inputNoBlock istr] returns SOME(v) if some elements v can be read
    without blocking; returns SOME("") if it can be determined without
@@ -4385,13 +4404,13 @@ TextIO.inputAll;
    istr does not support non-blocking input, raises
    Io.NonblockingNotSupported. *)
 TextIO.inputNoBlock;
-> val inputNoBlock = fn : instream -> vector option
+> val it = fn : instream -> string option
 
 (* [input1 istr] returns SOME(e) if at least one element e of istr is
    available; returns NONE if istr is at end of stream or is closed;
    blocks if necessary until one of these conditions holds. *)
 TextIO.input1;
-> val input1 = fn : instream -> elem option
+> val it = fn : instream -> char option
 
 (* [inputN(istr, n)] returns the next n characters from istr as a
    string, if that many are available; returns all remaining
@@ -4400,7 +4419,7 @@ TextIO.input1;
    (This is the behaviour of the `input' function prescribed in the
    1990 Definition of Standard ML). *)
 TextIO.inputN;
-> val inputN = fn : instream * int -> vector
+> val it = fn : instream * int -> string
 
 (* [inputLine istr] returns SOME ln, where ln is one line of text,
    including the terminating newline character.  If end of stream is
@@ -4408,33 +4427,36 @@ TextIO.inputN;
    stream is returned, with a newline character added.  If istr is at
    end of stream or is closed, then NONE is returned. *)
 TextIO.inputLine;
-> val inputLine = fn : instream -> string option
+> val it = fn : instream -> string option
 
 (* [endOfStream istr] returns false if any elements are available in
    istr; returns true if istr is at end of stream or closed; blocks if
    necessary until one of these conditions holds. *)
 TextIO.endOfStream;
-> val endOfStream = fn : instream -> bool
+> val it = fn : instream -> bool
 
 (* [lookahead istr] returns SOME(e) where e is the next element in the
    stream; returns NONE if istr is at end of stream or is closed;
    blocks if necessary until one of these conditions holds.  Does not
    advance the stream. *)
 TextIO.lookahead;
-> val lookahead = fn : instream -> elem option
+> val it = fn : instream -> char option
 
 (* [stdIn] is the buffered state-based standard input stream. *)
 TextIO.stdIn;
-> val stdIn = instream
+> val it = instream : instream
 
 (* [scanStream scan istr] turns the instream istr into a character
    source and applies the scanner `scan' to that source.  See
    StringCvt for more on character sources and scanners.  The Moscow
    ML implementation currently can backtrack only 512 characters, and
-   raises Fail if the scanner backtracks further than that. *)
+   raises Fail if the scanner backtracks further than that.
+
+   Not implemented.
 TextIO.scanStream;
 >  val scanStream = fn : ((char, cs) StringCvt.reader -> ('a, cs) StringCvt.reader)
 >                      -> instream -> 'a option
+*)
 
 (*) Text output
 
@@ -4443,7 +4465,7 @@ TextIO.scanStream;
    writable, then a new file is created.  If file s exists, it is
    truncated (any existing contents are lost). *)
 TextIO.openOut;
-> val openOut = fn : string -> outstream
+> val it = fn : string -> outstream
 
 (* [openAppend s] creates a new outstream associated with the file
    named s.  If file s does not exist, and the directory exists and is
@@ -4451,41 +4473,43 @@ TextIO.openOut;
    existing contents are retained, and output goes at the end of the
    file. *)
 TextIO.openAppend;
-> val openAppend = fn : string -> outstream
+> val it = fn : string -> outstream
 
 (* [closeOut ostr] closes stream ostr; further operations on ostr
    (except for additional close operations) will raise exception Io.Io. *)
 TextIO.closeOut;
-> val closeOut = fn : outstream -> unit
+> val it = fn : outstream -> unit
 
 (* [output(ostr, v)] writes the string v on outstream ostr. *)
 TextIO.output;
-> val output = fn : outstream * vector -> unit
+> val it = fn : outstream * string -> unit
 
 (* [output1(ostr, e)] writes the character e on outstream ostr. *)
 TextIO.output1;
-> val output1 = fn : outstream * elem -> unit
-
-TextIO.outputSubstr;
-> val outputSubstr = fn : outstream * substring -> unit
+> val it = fn : outstream * char -> unit
 
 (* [flushOut ostr] flushes the outstream ostr, so that all data
    written to ostr becomes available to the underlying file or device. *)
 TextIO.flushOut;
-> val flushOut = fn : outstream -> unit
+> val it = fn : outstream -> unit
 
 (* [stdOut] is the buffered state-based standard output stream. *)
 TextIO.stdOut;
-> val stdOut = outstream
+> val it = outstream : outstream
 
 (* [stdErr] is the unbuffered state-based standard error stream.  That
    is, it is always kept flushed, so flushOut(stdErr) is redundant. *)
 TextIO.stdErr;
-> val stdErr = outstream
+> val it = outstream : outstream
 
-(* [print s] outputs s to stdOut and flushes immediately.
+(* [print s] outputs s to stdOut and flushes immediately. *)
 TextIO.print;
-> val print = fn : string -> unit
+> val it = fn : string -> unit
+
+(*) The SMLI runner splices text sent to stdOut into the output stream.
+TextIO.print "Hello, world!\n";
+> Hello, world!
+> val it = () : unit
 
 (* Vector ------------------------------------------------------ *)
 

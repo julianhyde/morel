@@ -25,7 +25,10 @@ import com.google.common.base.Enums;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -132,7 +135,20 @@ public enum Prop {
    * href="https://www.smlnj.org/doc/Compiler/pages/printcontrol.html">PRINTCONTROL
    * signature</a> of the Standard Basis Library. Default is 79.
    */
-  LINE_WIDTH("lineWidth", Integer.class, true, 79);
+  LINE_WIDTH("lineWidth", Integer.class, true, 79),
+
+  /** BufferedReader property "stdIn" is the standard input stream. */
+  STD_IN(
+      "stdIn",
+      BufferedReader.class,
+      true,
+      new BufferedReader(new InputStreamReader(System.in))),
+
+  /** PrintWriter property "stdOut" is the standard output stream. */
+  STD_OUT("stdOut", PrintWriter.class, true, new PrintWriter(System.out)),
+
+  /** PrintWriter property "stdErr" is the standard error stream. */
+  STD_ERR("stdErr", PrintWriter.class, true, new PrintWriter(System.err, true));
 
   public final String camelName;
   private final Class<?> type;
@@ -181,8 +197,10 @@ public enum Prop {
 
   private boolean validValue(Class<?> type, Object value) {
     if (type == Boolean.class
+        || type == BufferedReader.class
         || type == File.class
         || type == Integer.class
+        || type == PrintWriter.class
         || type == String.class
         || type.isEnum()) {
       return type.isInstance(value);

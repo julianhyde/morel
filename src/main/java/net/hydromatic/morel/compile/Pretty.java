@@ -445,44 +445,56 @@ class Pretty {
       int depth,
       DataType dataType,
       Object value) {
+    final Type argType;
     final List<Object> list;
-    list = toList(value);
-    if (dataType.name.equals("vector")) {
-      final Type argType = dataType.arg(0);
-      return printList(buf.append('#'), indent, lineEnd, depth, argType, list);
+    switch (dataType.name) {
+      case "bag":
+        // A bag value is printed the same as a list, distinguishable only by
+        // its type, e.g.
+        //  val odds = [1,3,5] : int list
+        //  val evens = [0,2,4] : int bag
+        list = toList(value);
+        if (list instanceof RelList) {
+          // Do not attempt to print the elements of a foreign list. It might
+          // be huge.
+          return buf.append(RelList.RELATION);
+        }
+        argType = dataType.arg(0);
+        return printList(buf, indent, lineEnd, depth, argType, list);
+
+      case "instream":
+      case "outstream":
+        // Cannot print these types, so just print the type, just like "fn".
+        return buf.append(dataType.name);
+
+      case "vector":
+        argType = dataType.arg(0);
+        list = toList(value);
+        return printList(
+            buf.append('#'), indent, lineEnd, depth, argType, list);
+
+      default:
+        list = toList(value);
+        final String tyConName = (String) list.get(0);
+        buf.append(tyConName);
+        final Type typeConArgType =
+            dataType.typeConstructors(typeSystem).get(tyConName);
+        requireNonNull(typeConArgType);
+        if (list.size() == 2) {
+          final Object arg = list.get(1);
+          buf.append(' ');
+          final boolean needParentheses =
+              typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;
+          if (needParentheses) {
+            buf.append('(');
+          }
+          pretty2(buf, indent, lineEnd, depth + 1, typeConArgType, arg, 0, 0);
+          if (needParentheses) {
+            buf.append(')');
+          }
+        }
+        return buf;
     }
-    if (dataType.name.equals("bag")) {
-      // A bag value is printed the same as a list, distinguishable only by
-      // its type, e.g.
-      //  val odds = [1,3,5] : int list
-      //  val evens = [0,2,4] : int bag
-      if (list instanceof RelList) {
-        // Do not attempt to print the elements of a foreign list. It might
-        // be huge.
-        return buf.append(RelList.RELATION);
-      }
-      final Type argType = dataType.arg(0);
-      return printList(buf, indent, lineEnd, depth, argType, list);
-    }
-    final String tyConName = (String) list.get(0);
-    buf.append(tyConName);
-    final Type typeConArgType =
-        dataType.typeConstructors(typeSystem).get(tyConName);
-    requireNonNull(typeConArgType);
-    if (list.size() == 2) {
-      final Object arg = list.get(1);
-      buf.append(' ');
-      final boolean needParentheses =
-          typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;
-      if (needParentheses) {
-        buf.append('(');
-      }
-      pretty2(buf, indent, lineEnd, depth + 1, typeConArgType, arg, 0, 0);
-      if (needParentheses) {
-        buf.append(')');
-      }
-    }
-    return buf;
   }
 
   private StringBuilder prettyType(

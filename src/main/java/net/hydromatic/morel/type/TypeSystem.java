@@ -562,6 +562,16 @@ public class TypeSystem {
     return apply(bagType, type);
   }
 
+  /** Returns the "instream" built-in type. */
+  public Type instream() {
+    return lookup(BuiltIn.Eqtype.INSTREAM);
+  }
+
+  /** Returns the "outstream" built-in type. */
+  public Type outstream() {
+    return lookup(BuiltIn.Eqtype.OUTSTREAM);
+  }
+
   /**
    * Creates an "option" type.
    *

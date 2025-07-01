@@ -21,12 +21,15 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.Suppliers;
+import java.io.BufferedReader;
+import java.io.PrintWriter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.util.MorelException;
@@ -59,6 +62,30 @@ public class Session {
    */
   public final NameGenerator nameGenerator = new NameGenerator();
 
+  /**
+   * Standard input stream.
+   *
+   * @see BuiltIn#TEXT_IO_STD_IN
+   * @see Prop#STD_IN
+   */
+  public final BufferedReader stdIn;
+
+  /**
+   * Standard output stream.
+   *
+   * @see BuiltIn#TEXT_IO_STD_OUT
+   * @see Prop#STD_OUT
+   */
+  public final PrintWriter stdOut;
+
+  /**
+   * Standard error stream.
+   *
+   * @see BuiltIn#TEXT_IO_STD_ERR
+   * @see Prop#STD_ERR
+   */
+  public final PrintWriter stdErr;
+
   /** Implementation of "use". */
   private Shell shell = Shells.INSTANCE;
 
@@ -77,6 +104,9 @@ public class Session {
     this.file =
         Suppliers.memoize(
             () -> Files.create(Prop.DIRECTORY.fileValue(this.map)));
+    this.stdIn = requireNonNull((BufferedReader) Prop.STD_IN.get(this.map));
+    this.stdOut = requireNonNull((PrintWriter) Prop.STD_OUT.get(this.map));
+    this.stdErr = requireNonNull((PrintWriter) Prop.STD_ERR.get(this.map));
   }
 
   /** Calls some code with a new value of {@link Shell}. */

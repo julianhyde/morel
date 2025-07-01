@@ -3035,6 +3035,209 @@ public enum BuiltIn {
   SYS_UNSET("Sys", "unset", "unset", ts -> ts.fnType(STRING, UNIT)),
 
   /**
+   * Function "TextIO.openIn", of type "string &rarr; instream".
+   *
+   * <p>"openIn s" creates a new instream associated with the file named {@code
+   * s}. Raises {@link BuiltInExn#IO Io} if file {@code s} does not exist or is
+   * not accessible.
+   */
+  TEXT_IO_OPEN_IN("TextIO", "openIn", ts -> ts.fnType(STRING, ts.instream())),
+
+  /**
+   * Function "TextIO.closeIn", of type "instream &rarr; unit".
+   *
+   * <p>"closeIn istr" closes stream {@code istr}. Has no effect if {@code istr}
+   * is closed already. Further operations on {@code istr} will behave as if
+   * {@code istr} is at end of stream (that is, will return {@code ""} or {@code
+   * NONE} or {@code true}).
+   */
+  TEXT_IO_CLOSE_IN("TextIO", "closeIn", ts -> ts.fnType(ts.instream(), UNIT)),
+
+  /**
+   * Function "TextIO.input", of type "instream &rarr; string".
+   *
+   * <p>"input istr" reads some elements from {@code istr}, returning a string
+   * {@code v} of those elements. The string will be empty (size {@code v} = 0)
+   * if and only if {@code istr} is at end of stream or is closed. May block
+   * (not return until data are available in the external world).
+   */
+  TEXT_IO_INPUT("TextIO", "input", ts -> ts.fnType(ts.instream(), STRING)),
+
+  /**
+   * Function "TextIO.inputAll", of type "instream &rarr; string".
+   *
+   * <p>"inputAll istr" reads and returns the string {@code v} of all characters
+   * remaining in {@code istr} up to end of stream.
+   */
+  TEXT_IO_INPUT_ALL(
+      "TextIO", "inputAll", ts -> ts.fnType(ts.instream(), STRING)),
+
+  /**
+   * Function "TextIO.inputNoBlock", of type "instream &rarr; string option".
+   *
+   * <p>"inputNoBlock istr" returns {@code SOME(v)} if some elements {@code v}
+   * can be read without blocking; returns {@code SOME("")} if it can be
+   * determined without blocking that {@code istr} is at end of stream; returns
+   * {@code NONE} otherwise. If {@code istr} does not support non-blocking
+   * input, raises {@link BuiltInExn#NON_BLOCKING_NOT_SUPPORTED
+   * NonblockingNotSupported}.
+   */
+  TEXT_IO_INPUT_NO_BLOCK(
+      "TextIO",
+      "inputNoBlock",
+      ts -> ts.fnType(ts.instream(), ts.option(STRING))),
+
+  /**
+   * Function "TextIO.input1", of type "instream &rarr; char option".
+   *
+   * <p>"input1 istr" returns {@code SOME(e)} if at least one element {@code e}
+   * of {@code istr} is available; returns {@code NONE} if {@code istr} is at
+   * end of stream or is closed; blocks if necessary until one of these
+   * conditions holds.
+   */
+  TEXT_IO_INPUT1(
+      "TextIO", "input1", ts -> ts.fnType(ts.instream(), ts.option(CHAR))),
+
+  /**
+   * Function "TextIO.inputN", of type "instream * int &rarr; string".
+   *
+   * <p>"inputN(istr, n)" returns the next {@code n} characters from {@code
+   * istr} as a string, if that many are available; returns all remaining
+   * characters if end of stream is reached before {@code n} characters are
+   * available; blocks if necessary until one of these conditions holds. (This
+   * is the behaviour of the 'input' function prescribed in the 1990 Definition
+   * of Standard ML).
+   */
+  TEXT_IO_INPUT_N(
+      "TextIO",
+      "inputN",
+      ts -> ts.fnType(ts.tupleType(ts.instream(), INT), STRING)),
+
+  /**
+   * Function "TextIO.inputLine", of type "instream &rarr; string option".
+   *
+   * <p>"inputLine istr" returns {@code SOME ln}, where {@code ln} is one line
+   * of text, including the terminating newline character. If end of stream is
+   * reached before a newline character, then the remaining part of the stream
+   * is returned, with a newline character added. If {@code istr} is at end of
+   * stream or is closed, then {@code NONE} is returned.
+   */
+  TEXT_IO_INPUT_LINE(
+      "TextIO", "inputLine", ts -> ts.fnType(ts.instream(), ts.option(STRING))),
+
+  /**
+   * Function "TextIO.endOfStream", of type "instream &rarr; bool".
+   *
+   * <p>"endOfStream istr" returns {@code false} if any elements are available
+   * in {@code istr}; returns {@code true} if {@code istr} is at end of stream
+   * or closed; blocks if necessary until one of these conditions holds.
+   */
+  TEXT_IO_END_OF_STREAM(
+      "TextIO", "endOfStream", ts -> ts.fnType(ts.instream(), BOOL)),
+
+  /**
+   * Function "TextIO.lookahead", of type "instream &rarr; char option".
+   *
+   * <p>"lookahead istr" returns {@code SOME(e)} where {@code e} is the next
+   * element in the stream; returns {@code NONE} if {@code istr} is at end of
+   * stream or is closed; blocks if necessary until one of these conditions
+   * holds. Does not advance the stream.
+   */
+  TEXT_IO_LOOKAHEAD(
+      "TextIO", "lookahead", ts -> ts.fnType(ts.instream(), ts.option(CHAR))),
+
+  /**
+   * Function "TextIO.stdIn", of type "instream".
+   *
+   * <p>"stdIn" is the buffered state-based standard input stream.
+   */
+  TEXT_IO_STD_IN("TextIO", "stdIn", TypeSystem::instream),
+
+  /**
+   * Function "TextIO.openOut", of type "string &rarr; outstream".
+   *
+   * <p>"openOut s" creates a new outstream associated with the file named
+   * {@code s}. If file {@code s} does not exist, and the directory exists and
+   * is writable, then a new file is created. If file {@code s} exists, it is
+   * truncated (any existing contents are lost).
+   */
+  TEXT_IO_OPEN_OUT(
+      "TextIO", "openOut", ts -> ts.fnType(STRING, ts.outstream())),
+
+  /**
+   * Function "TextIO.openAppend", of type "string &rarr; outstream".
+   *
+   * <p>"openAppend s" creates a new outstream associated with the file named
+   * {@code s}. If file {@code s} does not exist, and the directory exists and
+   * is writable, then a new file is created. If file {@code s} exists, any
+   * existing contents are retained, and output goes at the end of the file.
+   */
+  TEXT_IO_OPEN_APPEND(
+      "TextIO", "openAppend", ts -> ts.fnType(STRING, ts.outstream())),
+
+  /**
+   * Function "TextIO.closeOut", of type "outstream &rarr; unit".
+   *
+   * <p>"closeOut ostr" closes stream {@code ostr}; further operations on {@code
+   * ostr} (except for additional close operations) will raise exception {@link
+   * BuiltInExn#IO Io}.
+   */
+  TEXT_IO_CLOSE_OUT(
+      "TextIO", "closeOut", ts -> ts.fnType(ts.outstream(), UNIT)),
+
+  /**
+   * Function "TextIO.output", of type "outstream * string &rarr; unit".
+   *
+   * <p>"output(ostr, v)" writes the string {@code v} on outstream {@code ostr}.
+   */
+  TEXT_IO_OUTPUT(
+      "TextIO",
+      "output",
+      ts -> ts.fnType(ts.tupleType(ts.outstream(), STRING), UNIT)),
+
+  /**
+   * Function "TextIO.output1", of type "outstream * char &rarr; unit".
+   *
+   * <p>"output1(ostr, e)" writes the character {@code e} on outstream {@code
+   * ostr}.
+   */
+  TEXT_IO_OUTPUT1(
+      "TextIO",
+      "output1",
+      ts -> ts.fnType(ts.tupleType(ts.outstream(), CHAR), UNIT)),
+
+  /**
+   * Function "TextIO.flushOut", of type "outstream &rarr; unit".
+   *
+   * <p>"flushOut ostr" flushes the outstream {@code ostr}, so that all data
+   * written to {@code ostr} becomes available to the underlying file or device.
+   */
+  TEXT_IO_FLUSH_OUT(
+      "TextIO", "flushOut", ts -> ts.fnType(ts.outstream(), UNIT)),
+
+  /**
+   * Function "TextIO.stdOut", of type "outstream".
+   *
+   * <p>"stdOut" is the buffered state-based standard output stream.
+   */
+  TEXT_IO_STD_OUT("TextIO", "stdOut", TypeSystem::outstream),
+
+  /**
+   * Function "TextIO.stdErr", of type "outstream".
+   *
+   * <p>"stdErr" is the unbuffered state-based standard error stream. That is,
+   * it is always kept flushed, so {@code flushOut(stdErr)} is redundant.
+   */
+  TEXT_IO_STD_ERR("TextIO", "stdErr", TypeSystem::outstream),
+
+  /**
+   * Function "TextIO.print", of type "string &rarr; unit".
+   *
+   * <p>"print s" outputs {@code s} to {@code stdOut} and flushes immediately.
+   */
+  TEXT_IO_PRINT("TextIO", "print", ts -> ts.fnType(STRING, UNIT)),
+
+  /**
    * Constant "Vector.maxLen" of type "int".
    *
    * <p>The maximum length of vectors supported by this implementation. Attempts
@@ -3843,6 +4046,8 @@ public enum BuiltIn {
   /** Built-in equality type. */
   public enum Eqtype implements BuiltInType {
     BAG("bag", 1),
+    INSTREAM("instream", 0),
+    OUTSTREAM("outstream", 0),
     LIST("list", 1),
     VECTOR("vector", 1);
 
