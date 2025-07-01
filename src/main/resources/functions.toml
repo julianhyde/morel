@@ -3282,28 +3282,23 @@ description = """
 
 # === TextIO structure ===============================================
 
-# (* TextIO ------------------------------------------------------ *)
-# (* This structure provides input/output functions on text streams.
-#    The functions are state-based: reading from or writing to a stream
-#    changes the state of the stream.  The streams are buffered: output
-#    to a stream may not immediately affect the underlying file or
-#    device.
-# 
-#    Note that under DOS, Windows, OS/2, and MacOS, text streams will be
-#    `translated' by converting (e.g.) the double newline CRLF to a
-#    single newline character \n.
-# 
-#    [instream] is the type of state-based character input streams.
-# 
-#    [outstream] is the type of state-based character output streams.
-# 
-#    [elem] is the type char of characters.
-# 
-#    [vector] is the type of character vectors, that is, strings.
-# *)
-# 
-# TextIO;
-# 
+# This structure provides input/output functions on text streams.
+# The functions are state-based: reading from or writing to a stream
+# changes the state of the stream.  The streams are buffered: output
+# to a stream may not immediately affect the underlying file or
+# device.
+#
+# Note that under DOS, Windows, OS/2, and MacOS, text streams will be
+# 'translated' by converting (e.g.) the double newline CRLF to a
+# single newline character \n.
+#
+# [instream] is the type of state-based character input streams.
+#
+# [outstream] is the type of state-based character output streams.
+#
+# [elem] is the type char of characters.
+#
+# [vector] is the type of character vectors, that is, strings.
 
 [[functions]]
 ordinal = 501
@@ -3356,7 +3351,7 @@ ordinal = 502
 structure = "TextIO"
 name = "input"
 specified = "basis"
-type = "instream → vector"
+type = "instream → string"
 description = """
 "input istr" reads some elements from `istr`, returning a vector `v` of
 those elements. The vector will be empty (size `v` = 0) if and only
@@ -3369,7 +3364,7 @@ ordinal = 505
 structure = "TextIO"
 name = "input1"
 specified = "basis"
-type = "instream → elem option"
+type = "instream → char option"
 description = """
 "input1 istr" returns `SOME(e)` if at least one element `e` of `istr` is
 available; returns `NONE` if `istr` is at end of stream or is closed;
@@ -3381,7 +3376,7 @@ ordinal = 503
 structure = "TextIO"
 name = "inputAll"
 specified = "basis"
-type = "instream → vector"
+type = "instream → string"
 description = """
 "inputAll istr" reads and returns the string `v` of all characters
 remaining in `istr` up to end of stream.
@@ -3406,7 +3401,7 @@ ordinal = 506
 structure = "TextIO"
 name = "inputN"
 specified = "basis"
-type = "instream * int → vector"
+type = "instream * int → string"
 description = """
 "inputN(istr, n)" returns the next `n` characters from `istr`
 as a string, if that many are available; returns all remaining
@@ -3421,7 +3416,7 @@ ordinal = 504
 structure = "TextIO"
 name = "inputNoBlock"
 specified = "basis"
-type = "instream → vector option"
+type = "instream → string option"
 description = """
 "inputNoBlock istr" returns `SOME(v)` if some elements `v` can be read
 without blocking; returns `SOME("")` if it can be determined without
@@ -3435,7 +3430,7 @@ ordinal = 509
 structure = "TextIO"
 name = "lookahead"
 specified = "basis"
-type = "instream → elem option"
+type = "instream → char option"
 description = """
 "lookahead istr" returns `SOME(e)` where `e` is the next element in the
 stream; returns `NONE` if `istr` is at end of stream or is closed;
@@ -3486,7 +3481,7 @@ ordinal = 515
 structure = "TextIO"
 name = "output"
 specified = "basis"
-type = "outstream * vector → unit"
+type = "outstream * string → unit"
 description = """
 "output(ostr, v)" writes the string `v` on outstream `ostr`.
 """
@@ -3496,7 +3491,7 @@ ordinal = 516
 structure = "TextIO"
 name = "output1"
 specified = "basis"
-type = "outstream * elem → unit"
+type = "outstream * char → unit"
 description = """
 "output1(ostr, e)" writes the character `e` on outstream `ostr`.
 """
@@ -3547,11 +3542,6 @@ description = """
 "stdIn" is the buffered state-based standard input stream.
 """
 
-
-#
-# (* [stdOut] is the buffered state-based standard output stream. *)
-# TextIO.stdOut;
-# > val stdOut = outstream
 [[functions]]
 ordinal = 518
 structure = "TextIO"
