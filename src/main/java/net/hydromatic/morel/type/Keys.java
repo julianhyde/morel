@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /** Type keys. */
 public class Keys {
@@ -52,8 +53,9 @@ public class Keys {
   }
 
   /** Returns a key that gives a name to an existing type. */
-  public static Type.Key alias(String name, Type.Key key) {
-    return new AliasKey(name, key);
+  public static Type.Key alias(
+      String name, Type.Key key, List<? extends Type.Key> arguments) {
+    return new AliasKey(name, key, ImmutableList.copyOf(arguments));
   }
 
   /**
@@ -215,6 +217,33 @@ public class Keys {
     return key;
   }
 
+  static StringBuilder describeParameterized(
+      StringBuilder buf, String name, List<Type.Key> arguments) {
+    if (arguments.isEmpty()) {
+      return buf.append(name);
+    }
+    if (arguments.size() > 1) {
+      buf.append('(');
+    }
+    final int length = buf.length();
+    for (Type.Key key : arguments) {
+      if (buf.length() > length) {
+        buf.append(",");
+      }
+      if (key.op == Op.TUPLE_TYPE) {
+        buf.append('(');
+      }
+      key.describe(buf, 0, 0);
+      if (key.op == Op.TUPLE_TYPE) {
+        buf.append(')');
+      }
+    }
+    if (arguments.size() > 1) {
+      buf.append(')');
+    }
+    return buf.append(' ').append(name);
+  }
+
   /** Key that identifies a type by name. */
   private static class NameKey extends Type.Key {
     private final String name;
@@ -258,11 +287,14 @@ public class Keys {
   private static class AliasKey extends Type.Key {
     private final String name;
     private final Type.Key key;
+    private final ImmutableList<Type.@NonNull Key> arguments;
 
-    AliasKey(String name, Type.Key key) {
+    AliasKey(
+        String name, Type.Key key, ImmutableList<Type.@NonNull Key> arguments) {
       super(Op.ALIAS_TYPE);
       this.name = requireNonNull(name);
       this.key = key;
+      this.arguments = requireNonNull(arguments);
     }
 
     @Override
@@ -272,7 +304,7 @@ public class Keys {
 
     @Override
     public StringBuilder describe(StringBuilder buf, int left, int right) {
-      return buf.append(name);
+      return describeParameterized(buf, name, arguments);
     }
 
     @Override
@@ -290,7 +322,8 @@ public class Keys {
 
     @Override
     public Type toType(TypeSystem typeSystem) {
-      return typeSystem.aliasType(name, key.toType(typeSystem));
+      return typeSystem.aliasType(
+          name, key.toType(typeSystem), typeSystem.typesFor(arguments));
     }
   }
 
@@ -671,29 +704,7 @@ public class Keys {
      */
     @Override
     public StringBuilder describe(StringBuilder buf, int left, int right) {
-      if (arguments.isEmpty()) {
-        return buf.append(name);
-      }
-      if (arguments.size() > 1) {
-        buf.append('(');
-      }
-      final int length = buf.length();
-      for (Type.Key key : arguments) {
-        if (buf.length() > length) {
-          buf.append(",");
-        }
-        if (key.op == Op.TUPLE_TYPE) {
-          buf.append('(');
-        }
-        key.describe(buf, 0, 0);
-        if (key.op == Op.TUPLE_TYPE) {
-          buf.append(')');
-        }
-      }
-      if (arguments.size() > 1) {
-        buf.append(')');
-      }
-      return buf.append(' ').append(name);
+      return describeParameterized(buf, name, arguments);
     }
 
     @Override

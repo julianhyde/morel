@@ -313,10 +313,17 @@ public class Resolver {
                       patIter.next(), r.toCore(exp), pat.pos.plus(exp.pos))));
     } else {
       matches.forEach(
-          (pat, exp) ->
-              patExps.add(
-                  new PatExp(
-                      toCore(pat, inst), toCore(exp), pat.pos.plus(exp.pos))));
+          (pat, exp) -> {
+            Core.Pat corePat = toCore(pat, inst);
+            if (corePat instanceof Core.NamedPat) {
+              final Type realType = typeMap.getRealType(pat);
+              if (realType != null) {
+                corePat = ((Core.NamedPat) corePat).withType(realType);
+              }
+            }
+            patExps.add(
+                new PatExp(corePat, toCore(exp), pat.pos.plus(exp.pos)));
+          });
       patExps.forEach(
           x -> Compiles.acceptBinding(typeMap.typeSystem, x.pat, bindings));
     }
