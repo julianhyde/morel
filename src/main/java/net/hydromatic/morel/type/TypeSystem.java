@@ -281,9 +281,8 @@ public class TypeSystem {
   }
 
   /** Creates a type that is an alias for another type. */
-  Type aliasType(String name, Type type) {
-    final String moniker = type.moniker();
-    final AliasType aliasType = new AliasType(name, moniker, type);
+  Type aliasType(String name, Type type, List<Type> arguments) {
+    final AliasType aliasType = new AliasType(name, type, arguments);
     typeByName.put(name, aliasType);
     return aliasType;
   }
@@ -633,6 +632,7 @@ public class TypeSystem {
     }
     return fromType.equals(toType)
         || fromType instanceof RecordType && toType.isProgressive()
+        || toType.containsAlias()
         || fromType instanceof ListType
             && toType instanceof ListType
             && canAssign(

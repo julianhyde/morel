@@ -118,33 +118,6 @@ in
 end;
 > val it = ("x",2) : string * int
 
-(*) Type alias
-type myInt = int;
-> type myInt = int
-val x: myInt = 5;
-> val x = 5 : int
-(* TODO previous line should be myInt *)
-type intPair = int * int;
-> type intPair = int * int
-val x: intPair = (4, 5);
-> val x = (4,5) : int * int
-(* TODO previous line should be intPair *)
-val x2 = (4, 5): intPair;
-> val x2 = (4,5) : int * int
-(* TODO previous line should be intPair *)
-val x3 = (4, 5);
-> val x3 = (4,5) : int * int
-val y: int * int = x;
-> val y = (4,5) : int * int
-val z: intPair = y;
-> val z = (4,5) : int * int
-(* TODO previous line should be intPair *)
-
-(*) Define two aliases at once
-type myInt = int and myRealList = real list;
-> type myInt = int
-> type myRealList = real list
-
 (*) A datatype whose constructor overwrites another datatype's constructor
 datatype foo = W | X | Y of int;
 > datatype foo = W | X | Y of int

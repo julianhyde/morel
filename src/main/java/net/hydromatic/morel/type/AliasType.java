@@ -18,6 +18,10 @@
  */
 package net.hydromatic.morel.type;
 
+import static net.hydromatic.morel.util.Static.transformEager;
+
+import com.google.common.collect.ImmutableList;
+import java.util.List;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
 
@@ -29,25 +33,37 @@ import net.hydromatic.morel.ast.Op;
  */
 public class AliasType extends ParameterizedType {
   public final Type type;
+  public final List<Type> arguments;
 
-  public AliasType(String name, String moniker, Type type) {
-    super(Op.ALIAS_TYPE, name, moniker, 0);
+  AliasType(String name, Type type, List<Type> arguments) {
+    super(Op.ALIAS_TYPE, name, name, 0);
     this.type = type;
+    this.arguments = ImmutableList.copyOf(arguments);
   }
 
   @Override
   public Key key() {
-    return Keys.alias(name, type.key());
+    return Keys.alias(name, type.key(), transformEager(arguments, Type::key));
   }
 
   @Override
-  public Type copy(TypeSystem typeSystem, UnaryOperator<Type> transform) {
-    return typeSystem.aliasType(name, transform.apply(type));
+  public AliasType copy(TypeSystem typeSystem, UnaryOperator<Type> transform) {
+    final Type type = transform.apply(this.type);
+    final List<Type> arguments = transformEager(this.arguments, transform);
+    if (type.equals(this.type) && arguments.equals(this.arguments)) {
+      return this;
+    }
+    return (AliasType) key().substitute(arguments).toType(typeSystem);
   }
 
   @Override
   public Type arg(int i) {
-    return type;
+    return arguments.get(i);
+  }
+
+  @Override
+  public boolean containsAlias() {
+    return true;
   }
 
   @Override
