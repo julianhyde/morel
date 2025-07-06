@@ -936,9 +936,15 @@ String.isPrefix "" "hello";
 String.isPrefix "" "";
 > val it = true : bool
 Sys.plan ();
-> val it =
->   "apply(fnCode apply(fnValue String.isPrefix, argCode constant()), argCode constant())"
->   : string
+> val it = "apply2(fnValue String.isPrefix, constant(), constant())" : string
+
+(*) Partial evaluation
+String.isPrefix "he";
+> val it = fn : string -> bool
+it "hello";
+> val it = true : bool
+Sys.plan ();
+> val it = "apply2(fnValue String.isPrefix, constant(), constant())" : string
 
 (*) val isSubstring : string -> string -> bool
 String.isSubstring;

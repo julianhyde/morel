@@ -42,6 +42,8 @@ import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
 import net.hydromatic.morel.compile.Resolver;
+import net.hydromatic.morel.eval.Applicable;
+import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
@@ -839,6 +841,26 @@ public class Core {
         o = ((Codes.Positioned) o).withPos(first(pos, this.pos));
       }
       return o;
+    }
+
+    /** Converts to an {@link Applicable} with one argument, or returns null. */
+    public @Nullable Applicable toApplicable1(
+        TypeSystem typeSystem, @Nullable Pos pos) {
+      Object o = toBuiltIn(typeSystem, pos);
+      if (o instanceof Applicable2) {
+        return ((Applicable2) o).partial1();
+      }
+      return null;
+    }
+
+    /** Converts to an {@link Applicable2}, or returns null. */
+    public @Nullable Applicable2 toApplicable2(
+        TypeSystem typeSystem, @Nullable Pos pos) {
+      Object o = toBuiltIn(typeSystem, pos);
+      if (o instanceof Applicable2) {
+        return (Applicable2) o;
+      }
+      return null;
     }
 
     @Override

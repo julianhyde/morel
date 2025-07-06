@@ -73,6 +73,7 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MorelException;
+import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -1513,23 +1514,12 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_IS_PREFIX */
   private static final Applicable STRING_IS_PREFIX =
-      new ApplicableImpl(BuiltIn.STRING_IS_PREFIX) {
+      new Applicable2<Boolean, String, String>(BuiltIn.STRING_IS_PREFIX) {
         @Override
-        public Applicable apply(EvalEnv env, Object arg) {
-          final String s = (String) arg;
-          return isPrefix(s);
+        public Boolean apply(String s, String s2) {
+          return s2.startsWith(s);
         }
       };
-
-  private static Applicable isPrefix(String s) {
-    return new ApplicableImpl("String.isPrefix$s") {
-      @Override
-      public Boolean apply(EvalEnv env, Object arg) {
-        final String s2 = (String) arg;
-        return s2.startsWith(s);
-      }
-    };
-  }
 
   /** @see BuiltIn#STRING_IS_SUBSTRING */
   private static final Applicable STRING_IS_SUBSTRING =
@@ -4105,7 +4095,7 @@ public abstract class Codes {
   }
 
   public static final ImmutableMap<BuiltIn, Object> BUILT_IN_VALUES =
-      ImmutableMap.<BuiltIn, Object>builder()
+      new Builder()
           .put(BuiltIn.TRUE, true)
           .put(BuiltIn.FALSE, false)
           .put(BuiltIn.NOT, NOT)
@@ -4330,7 +4320,7 @@ public abstract class Codes {
           .put(BuiltIn.STRING_EXTRACT, STRING_EXTRACT)
           .put(BuiltIn.STRING_FIELDS, STRING_FIELDS)
           .put(BuiltIn.STRING_IMPLODE, STRING_IMPLODE)
-          .put(BuiltIn.STRING_IS_PREFIX, STRING_IS_PREFIX)
+          .put2(BuiltIn.STRING_IS_PREFIX, STRING_IS_PREFIX)
           .put(BuiltIn.STRING_IS_SUBSTRING, STRING_IS_SUBSTRING)
           .put(BuiltIn.STRING_IS_SUFFIX, STRING_IS_SUFFIX)
           .put(BuiltIn.STRING_MAP, STRING_MAP)
@@ -5763,7 +5753,7 @@ public abstract class Codes {
   }
 
   /** Implementation of {@link Applicable} that stores a {@link BuiltIn}. */
-  private abstract static class Applicable1 implements Applicable {
+  abstract static class Applicable1 implements Applicable {
     final BuiltIn builtIn;
     final Pos pos;
 
@@ -5943,6 +5933,24 @@ public abstract class Codes {
     @Override
     public List apply(Object o1, Object o2) {
       return Codes.order(comparator.compare(o1, o2));
+    }
+  }
+
+  private static class Builder {
+    final PairList<BuiltIn, Object> builtIns = PairList.of();
+
+    ImmutableMap<@NonNull BuiltIn, @NonNull Object> build() {
+      return builtIns.toImmutableMap();
+    }
+
+    Builder put(BuiltIn builtin, Object o) {
+      builtIns.add(builtin, o);
+      return this;
+    }
+
+    Builder put2(BuiltIn builtin, Object o) {
+      builtIns.add(builtin, o);
+      return this;
     }
   }
 }

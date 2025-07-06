@@ -76,6 +76,27 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl {
   }
 
   public abstract R apply(A0 a0, A1 a1);
+
+  public Applicable partial1() {
+    return new BaseApplicable() {
+      @Override
+      public Object apply(EvalEnv env, Object a0) {
+        return new BaseApplicable() {
+          @Override
+          public Object apply(EvalEnv env, Object a1) {
+            return Applicable2.this.apply((A0) a0, (A1) a1);
+          }
+        };
+      }
+    };
+  }
+
+  abstract static class BaseApplicable implements Applicable {
+    @Override
+    public Describer describe(Describer describer) {
+      throw new UnsupportedOperationException("describe");
+    }
+  }
 }
 
 // End Applicable2.java
