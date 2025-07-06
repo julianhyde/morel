@@ -331,10 +331,36 @@ public class Compiler {
 
   protected Code compileApply(Context cx, Core.Apply apply) {
     // Is this is a call to a built-in operator?
-    switch (apply.fn.op) {
-      case FN_LITERAL:
-        return compileCall(cx, (Core.Literal) apply.fn, apply.arg, apply.pos);
+    //    switch (apply.fn.op) {
+    //      case FN_LITERAL:
+    //        return compileCall(cx, (Core.Literal) apply.fn, apply.arg,
+    // apply.pos);
+    //    }
+    final Gather gather = gather(apply);
+    if (gather != null) {
+      // If we have a gather, we can compile the argument and return the
+      // gather code.
+      final @Nullable Applicable2 applicable2;
+      switch (gather.args.size()) {
+        case 1:
+          applicable2 = gather.fnLiteral.toApplicable2(typeSystem, apply.pos);
+          if (applicable2 != null) {
+            final List<Code> argCodes = compileArgs(cx, gather.args);
+            return Codes.apply(applicable2.partial1(), argCodes.get(0));
+          }
+          break;
+        case 2:
+          applicable2 = gather.fnLiteral.toApplicable2(typeSystem, apply.pos);
+          if (applicable2 != null) {
+            final List<Code> argCodes = compileArgs(cx, gather.args);
+            return Codes.apply2(applicable2, argCodes.get(0), argCodes.get(1));
+          }
+          break;
+        default:
+          // fall through
+      }
     }
+
     final Code argCode = compileArg(cx, apply.arg);
     final Type argType = apply.arg.type;
     final Applicable fnValue =
@@ -344,6 +370,19 @@ public class Compiler {
     }
     final Code fnCode = compile(cx, apply.fn);
     return finishCompileApply(cx, fnCode, argCode, argType);
+  }
+
+  private @Nullable Gather gather(Core.Apply apply) {
+    if (apply.fn.op == Op.FN_LITERAL) {
+      return new Gather((Core.Literal) apply.fn, apply.arg);
+    }
+    if (apply.fn.op == Op.APPLY) {
+      Core.Apply apply1 = (Core.Apply) apply.fn;
+      if (apply1.fn.op == Op.FN_LITERAL) {
+        return new Gather((Core.Literal) apply1.fn, apply1.arg, apply.arg);
+      }
+    }
+    return null;
   }
 
   protected Code finishCompileApply(
@@ -987,6 +1026,17 @@ public class Compiler {
     @Override
     public Object eval(EvalEnv evalEnv) {
       return new Closure(evalEnv, patCodes, pos);
+    }
+  }
+
+  /** Application of a function to a sequence of arguments. */
+  private static class Gather {
+    final Core.Literal fnLiteral;
+    final List<Core.Exp> args;
+
+    private Gather(Core.Literal fnLiteral, Core.Exp... args) {
+      this.fnLiteral = fnLiteral;
+      this.args = ImmutableList.copyOf(args);
     }
   }
 }
