@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Algebraic types ("datatype") and type aliases ("type").
+ * Algebraic types ("datatype").
  *)
 Sys.set ("printDepth", ~1);
 > val it = () : unit
