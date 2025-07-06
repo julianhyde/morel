@@ -225,6 +225,21 @@ in
 end;
 > val it = 120 : int
 
+fun compose f g =
+  let
+    fun f2 (g2 (* : typeof g *) ) =
+      f g2
+  in
+    fn x => f2 (g x)
+  end;
+> val compose = fn : ('a -> 'b) -> ('c -> 'a) -> 'c -> 'b
+compose (fn i => i * 2) (fn j => j * 3) 10;
+> val it = 60 : int
+
+datatype ScottType =
+   DEPT of typeof (hd scott.depts)
+ | EMP of typeof (hd scott.emps);
+
 (*) Function with unit arg
 fun one () = 1;
 > val one = fn : unit -> int

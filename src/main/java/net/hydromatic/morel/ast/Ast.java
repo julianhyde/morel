@@ -1231,6 +1231,10 @@ public class Ast {
     public AstNode accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
+
+    public TyCon copy(Type type) {
+      return type.equals(this.type) ? this : ast.typeConstructor(pos, id, type);
+    }
   }
 
   /** Parse tree node of a value declaration. */

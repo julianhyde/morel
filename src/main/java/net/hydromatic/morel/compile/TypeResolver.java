@@ -69,6 +69,7 @@ import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Binding.Kind;
 import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.DummyType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
@@ -1428,7 +1429,7 @@ public class TypeResolver {
     }
   }
 
-  private Ast.Decl deduceDataTypeDeclType(
+  private Ast.Decl deduceDataTypeDeclType0(
       TypeEnv env,
       Ast.DatatypeDecl datatypeDecl,
       PairList<Ast.IdPat, Term> termMap) {
@@ -1475,6 +1476,62 @@ public class TypeResolver {
     return datatypeDecl;
   }
 
+  private void deduceDatatypeBindType(
+      Ast.DatatypeBind datatypeBind, PairList<String, Type.Key> tyCons) {
+    KeyBuilder keyBuilder = new KeyBuilder();
+    for (Ast.TyCon tyCon : datatypeBind.tyCons) {
+      tyCons.add(
+          tyCon.id.name,
+          tyCon.type == null ? Keys.dummy() : keyBuilder.toTypeKey(tyCon.type));
+    }
+  }
+
+  private Ast.Decl deduceDataTypeDeclType(
+      TypeEnv env,
+      Ast.DatatypeDecl datatypeDecl,
+      PairList<Ast.IdPat, Term> termMap) {
+    final TypeToTermConverter converter0 = new TypeToTermConverter(env);
+    final PairList<Ast.TyCon, Term> tyCons = PairList.of();
+    for (Ast.DatatypeBind bind : datatypeDecl.binds) {
+      final TypeToTermConverter converter = converter0.push();
+      for (Ast.TyVar tyVar : bind.tyVars) {
+        Ast.Type type = converter.typeTerm(tyVar, unifier.variable());
+        checkArgument(type == tyVar);
+      }
+
+      for (Ast.TyCon tyCon : bind.tyCons) {
+        if (tyCon.type == null) {
+          tyCons.add(tyCon, toTerm(DummyType.INSTANCE, Subst.EMPTY));
+        } else {
+          Variable v = unifier.variable();
+          tyCons.add(tyCon.copy(converter.typeTerm(tyCon.type, v)), v);
+        }
+      }
+    }
+
+    for (Ast.DatatypeBind datatypeBind : datatypeDecl.binds) {
+      final DataType dataType =
+          (DataType)
+              (type instanceof DataType ? type : ((ForallType) type).type);
+      for (Ast.TyCon tyCon : datatypeBind.tyCons) {
+        final Type tyConType;
+        if (tyCon.type != null) {
+          final Type.Key conKey = toTypeKey(tyCon.type);
+          tyConType = typeSystem.fnType(conKey.toType(typeSystem), dataType);
+        } else {
+          tyConType = dataType;
+        }
+        termMap.add(
+            (Ast.IdPat) ast.idPat(tyCon.pos, tyCon.id.name),
+            toTerm(tyConType, Subst.EMPTY));
+        map.put(tyCon, toTerm(tyConType, Subst.EMPTY));
+      }
+    }
+
+    map.put(datatypeDecl, toTerm(PrimitiveType.UNIT));
+    return datatypeDecl;
+  }
+
   private Ast.Decl deduceOverDeclType(
       TypeEnv env, Ast.OverDecl overDecl, PairList<Ast.IdPat, Term> termMap) {
     map.put(overDecl, toTerm(PrimitiveType.UNIT));
@@ -1514,16 +1571,6 @@ public class TypeResolver {
     Ast.Decl node2 = valDecl.copy(valBinds);
     map.put(node2, toTerm(PrimitiveType.UNIT));
     return node2;
-  }
-
-  private void deduceDatatypeBindType(
-      Ast.DatatypeBind datatypeBind, PairList<String, Type.Key> tyCons) {
-    KeyBuilder keyBuilder = new KeyBuilder();
-    for (Ast.TyCon tyCon : datatypeBind.tyCons) {
-      tyCons.add(
-          tyCon.id.name,
-          tyCon.type == null ? Keys.dummy() : keyBuilder.toTypeKey(tyCon.type));
-    }
   }
 
   /** Workspace for converting types to keys. */
@@ -1686,6 +1733,11 @@ public class TypeResolver {
         typeTerms.add(typeTerm(t, v), v);
       }
       return typeTerms;
+    }
+
+    /** Creates a converter with same environment but fresh set of variables. */
+    public TypeToTermConverter push() {
+      return new TypeToTermConverter(env);
     }
   }
 
