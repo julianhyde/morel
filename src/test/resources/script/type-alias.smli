@@ -58,5 +58,7 @@ val z: intPair = y;
 type myInt = int and myRealList = real list;
 > type myInt = int
 > type myRealList = real list
+val reals = [1.0, 2.0, 3.0]: myRealList;
+> val reals = [1.0,2.0,3.0] : myRealList
 
 (*) End type-alias.smli
