@@ -1847,6 +1847,12 @@ public class TypeResolver {
 
         case NAMED_TYPE:
           final Ast.NamedType namedType = (Ast.NamedType) type;
+          final Type aliasType = typeSystem.lookupOpt(namedType.name);
+          if (aliasType instanceof AliasType) {
+            final Term aliasTerm = toTerm(aliasType, Subst.EMPTY);
+            return reg(type, v, aliasTerm);
+          }
+
           final PairList<Ast.Type, Variable> typeTerms2 =
               typeTerms(namedType.types);
           final Term term;

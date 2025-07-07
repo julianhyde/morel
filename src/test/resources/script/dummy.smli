@@ -16,11 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  *)
-let
-  val r = {empno = 100, isMgr = true, name = "Fred"};
-in
-  fn x: {a: string, b: typeof r.empno list, c: typeof (r.name ^ "!")} => ()
-end;
-> val it = fn : {a:string, b:int list, c:string} -> unit
+"this is a simple script; modify it for debugging test cases";
+> val it = "this is a simple script; modify it for debugging test cases" : string
 
 (*) End dummy.smli
