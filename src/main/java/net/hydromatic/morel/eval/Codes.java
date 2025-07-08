@@ -1852,25 +1852,15 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#LIST_MAP */
-  private static final Applicable LIST_MAP = listMap0(BuiltIn.LIST_MAP);
+  private static final Applicable LIST_MAP = listMap(BuiltIn.LIST_MAP);
 
-  private static Applicable listMap0(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+  private static Applicable listMap(BuiltIn builtIn) {
+    return new Applicable2<List, Applicable, List>(builtIn) {
       @Override
-      public Applicable apply(EvalEnv env, Object arg) {
-        return listMap((Applicable) arg);
-      }
-    };
-  }
-
-  private static Applicable listMap(Applicable fn) {
-    return new ApplicableImpl("List.map$f") {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List list = (List) arg;
+      public List apply(Applicable fn, List list) {
         final ImmutableList.Builder<Object> builder = ImmutableList.builder();
         for (Object o : list) {
-          builder.add(fn.apply(env, o));
+          builder.add(fn.apply(null, o));
         }
         return builder.build();
       }
@@ -3914,7 +3904,7 @@ public abstract class Codes {
   private static final Applicable BAG_APP = listApp0(BuiltIn.BAG_APP);
 
   /** @see BuiltIn#BAG_MAP */
-  private static final Applicable BAG_MAP = listMap0(BuiltIn.BAG_MAP);
+  private static final Applicable BAG_MAP = listMap(BuiltIn.BAG_MAP);
 
   /** @see BuiltIn#BAG_MAP_PARTIAL */
   private static final Applicable BAG_MAP_PARTIAL =
