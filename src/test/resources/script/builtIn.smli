@@ -545,7 +545,7 @@ Bag.map (fn x => x + 1) (bag []);
 > val it = [] : int bag
 Sys.plan ();
 > val it =
->   "apply(fnCode apply(fnValue Bag.map, argCode match(x, apply2(fnValue +, get(name x), constant(1)))), argCode apply(fnValue Bag.fromList, argCode tuple))"
+>   "apply2(fnValue Bag.map, match(x, apply2(fnValue +, get(name x), constant(1))), apply(fnValue Bag.fromList, argCode tuple))"
 >   : string
 
 (*) val mapPartial : ('a -> 'b option) -> 'a bag -> 'b bag
@@ -1273,7 +1273,7 @@ List.map (fn x => x + 1) [];
 > val it = [] : int list
 Sys.plan ();
 > val it =
->   "apply(fnCode apply(fnValue List.map, argCode match(x, apply2(fnValue +, get(name x), constant(1)))), argCode tuple)"
+>   "apply2(fnValue List.map, match(x, apply2(fnValue +, get(name x), constant(1))), tuple)"
 >   : string
 
 (*) map is alias for List.map
@@ -1282,9 +1282,7 @@ map;
 map (fn x => x) [];
 > val it = [] : 'a list
 Sys.plan ();
-> val it =
->   "apply(fnCode apply(fnValue List.map, argCode match(x, get(name x))), argCode tuple)"
->   : string
+> val it = "apply2(fnValue List.map, match(x, get(name x)), tuple)" : string
 
 (*) val mapPartial : ('a -> 'b option) -> 'a list -> 'b list
 List.mapPartial;
