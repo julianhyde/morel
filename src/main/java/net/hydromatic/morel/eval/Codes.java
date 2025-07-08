@@ -399,20 +399,15 @@ public abstract class Codes {
 
   /** @see BuiltIn#CHAR_CONTAINS */
   private static final Applicable CHAR_CONTAINS =
-      new ApplicableImpl(BuiltIn.CHAR_CONTAINS) {
-        @Override
-        public Object apply(EvalEnv env, Object argValue) {
-          final String s = (String) argValue;
-          return charContains(s, false);
-        }
-      };
+      charContains(BuiltIn.CHAR_CONTAINS);
 
   /** Implement {@link #CHAR_CONTAINS} and {@link #CHAR_NOT_CONTAINS}. */
-  private static ApplicableImpl charContains(String s, boolean negate) {
-    return new ApplicableImpl("contains") {
+  private static Applicable charContains(BuiltIn builtIn) {
+    return new Applicable2<Boolean, String, Character>(builtIn) {
+      final boolean negate = builtIn == BuiltIn.CHAR_NOT_CONTAINS;
+
       @Override
-      public Object apply(EvalEnv env, Object argValue) {
-        final Character c = (Character) argValue;
+      public Boolean apply(String s, Character c) {
         return s.indexOf(c) >= 0 ^ negate;
       }
     };
@@ -497,13 +492,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#CHAR_NOT_CONTAINS */
   private static final Applicable CHAR_NOT_CONTAINS =
-      new ApplicableImpl(BuiltIn.CHAR_CONTAINS) {
-        @Override
-        public Object apply(EvalEnv env, Object argValue) {
-          final String s = (String) argValue;
-          return charContains(s, true);
-        }
-      };
+      charContains(BuiltIn.CHAR_NOT_CONTAINS);
 
   /** @see BuiltIn#CHAR_OP_GE */
   private static final Applicable CHAR_OP_GE =
@@ -1077,7 +1066,7 @@ public abstract class Codes {
    * record.
    */
   public static Applicable nth(int slot) {
-    assert slot >= 0 : slot;
+    checkArgument(slot >= 0);
     return new ApplicableImpl("nth:" + slot) {
       @Override
       public Object apply(EvalEnv env, Object arg) {
@@ -1543,43 +1532,21 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_IS_SUBSTRING */
   private static final Applicable STRING_IS_SUBSTRING =
-      new ApplicableImpl(BuiltIn.STRING_IS_SUBSTRING) {
+      new Applicable2<Boolean, String, String>(BuiltIn.STRING_IS_SUBSTRING) {
         @Override
-        public Applicable apply(EvalEnv env, Object arg) {
-          final String s = (String) arg;
-          return isSubstring(s);
+        public Boolean apply(String s, String s2) {
+          return s2.contains(s);
         }
       };
-
-  private static Applicable isSubstring(String s) {
-    return new ApplicableImpl("String.isSubstring$s") {
-      @Override
-      public Boolean apply(EvalEnv env, Object arg) {
-        final String s2 = (String) arg;
-        return s2.contains(s);
-      }
-    };
-  }
 
   /** @see BuiltIn#STRING_IS_SUFFIX */
   private static final Applicable STRING_IS_SUFFIX =
-      new ApplicableImpl(BuiltIn.STRING_IS_SUFFIX) {
+      new Applicable2<Boolean, String, String>(BuiltIn.STRING_IS_SUFFIX) {
         @Override
-        public Applicable apply(EvalEnv env, Object arg) {
-          final String s = (String) arg;
-          return isSuffix(s);
+        public Boolean apply(String s, String s2) {
+          return s2.endsWith(s);
         }
       };
-
-  private static Applicable isSuffix(String s) {
-    return new ApplicableImpl("String.isSuffix$s") {
-      @Override
-      public Boolean apply(EvalEnv env, Object arg) {
-        final String s2 = (String) arg;
-        return s2.endsWith(s);
-      }
-    };
-  }
 
   /** @see BuiltIn#LIST_NULL */
   private static final Applicable LIST_NULL = empty(BuiltIn.LIST_NULL);

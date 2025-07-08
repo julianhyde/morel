@@ -966,9 +966,7 @@ String.isSubstring "" "hello";
 String.isSubstring "" "";
 > val it = true : bool
 Sys.plan ();
-> val it =
->   "apply(fnCode apply(fnValue String.isSubstring, argCode constant()), argCode constant())"
->   : string
+> val it = "apply2(fnValue String.isSubstring, constant(), constant())" : string
 
 (*) val isSuffix    : string -> string -> bool
 String.isSuffix;
@@ -988,9 +986,7 @@ String.isSuffix "" "hello";
 String.isSuffix "" "";
 > val it = true : bool
 Sys.plan ();
-> val it =
->   "apply(fnCode apply(fnValue String.isSuffix, argCode constant()), argCode constant())"
->   : string
+> val it = "apply2(fnValue String.isSuffix, constant(), constant())" : string
 
 (*) val compare : string * string -> order
 String.compare;
