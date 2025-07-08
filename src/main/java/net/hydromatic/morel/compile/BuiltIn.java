@@ -2110,7 +2110,7 @@ public enum BuiltIn {
   MATH_ATAN("Math", "atan", ts -> ts.fnType(REAL, REAL)),
 
   /**
-   * Function "Math.atan2", of type "real *real &rarr; real".
+   * Function "Math.atan2", of type "real * real &rarr; real".
    *
    * <p>"atan2 (x, y)" returns the arc tangent of (y / x) in the closed interval
    * [-pi, pi], corresponding to angles within +-180 degrees. The quadrant of

@@ -903,10 +903,30 @@ public abstract class Codes {
     return new ApplyCode2(fnValue, argCode0, argCode1);
   }
 
+  /** Generates the code for applying a function value to a 2-tuple argument. */
+  public static Code apply2Tuple(Applicable2 fnValue, Code argCode0) {
+    return new ApplyCode2Tuple(fnValue, argCode0);
+  }
+
   /** Generates the code for applying a function value to three arguments. */
   public static Code apply3(
       Applicable3 fnValue, Code argCode0, Code argCode1, Code argCode2) {
     return new ApplyCode3(fnValue, argCode0, argCode1, argCode2);
+  }
+
+  /** Generates the code for applying a function value to a 3-tuple argument. */
+  public static Code apply3Tuple(Applicable3 fnValue, Code argCode0) {
+    return new ApplyCode3Tuple(fnValue, argCode0);
+  }
+
+  /** Generates the code for applying a function value to four arguments. */
+  public static Code apply4(
+      Applicable4 fnValue,
+      Code argCode0,
+      Code argCode1,
+      Code argCode2,
+      Code argCode3) {
+    return new ApplyCode4(fnValue, argCode0, argCode1, argCode2, argCode3);
   }
 
   public static Code list(Iterable<? extends Code> codes) {
@@ -5626,6 +5646,29 @@ public abstract class Codes {
     }
   }
 
+  /** Applies an {@link Applicable2} to an argument that yields a 2-tuple. */
+  private static class ApplyCode2Tuple implements Code {
+    private final Applicable2 fnValue;
+    private final Code argCode;
+
+    ApplyCode2Tuple(Applicable2 fnValue, Code argCode) {
+      this.fnValue = fnValue;
+      this.argCode = argCode;
+    }
+
+    @Override
+    public Object eval(EvalEnv env) {
+      final List arg = (List) argCode.eval(env);
+      return fnValue.apply(arg.get(0), arg.get(1));
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "apply2Tuple", d -> d.arg("fnValue", fnValue).arg("", argCode));
+    }
+  }
+
   /** Applies an {@link Applicable3} to three {@link Code} arguments. */
   private static class ApplyCode3 implements Code {
     private final Applicable3 fnValue;
@@ -5658,6 +5701,72 @@ public abstract class Codes {
                   .arg("", argCode0)
                   .arg("", argCode1)
                   .arg("", argCode2));
+    }
+  }
+
+  /** Applies an {@link Applicable3} to an argument that yields a 3-tuple. */
+  private static class ApplyCode3Tuple implements Code {
+    private final Applicable3 fnValue;
+    private final Code argCode;
+
+    ApplyCode3Tuple(Applicable3 fnValue, Code argCode) {
+      this.fnValue = fnValue;
+      this.argCode = argCode;
+    }
+
+    @Override
+    public Object eval(EvalEnv env) {
+      final List arg = (List) argCode.eval(env);
+      return fnValue.apply(arg.get(0), arg.get(1), arg.get(2));
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "apply3Tuple", d -> d.arg("fnValue", fnValue).arg("", argCode));
+    }
+  }
+
+  /** Applies an {@link Applicable4} to four {@link Code} arguments. */
+  private static class ApplyCode4 implements Code {
+    private final Applicable4 fnValue;
+    private final Code argCode0;
+    private final Code argCode1;
+    private final Code argCode2;
+    private final Code argCode3;
+
+    ApplyCode4(
+        Applicable4 fnValue,
+        Code argCode0,
+        Code argCode1,
+        Code argCode2,
+        Code argCode3) {
+      this.fnValue = fnValue;
+      this.argCode0 = argCode0;
+      this.argCode1 = argCode1;
+      this.argCode2 = argCode2;
+      this.argCode3 = argCode3;
+    }
+
+    @Override
+    public Object eval(EvalEnv env) {
+      final Object arg0 = argCode0.eval(env);
+      final Object arg1 = argCode1.eval(env);
+      final Object arg2 = argCode2.eval(env);
+      final Object arg3 = argCode3.eval(env);
+      return fnValue.apply(arg0, arg1, arg2, arg3);
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "apply4",
+          d ->
+              d.arg("fnValue", fnValue)
+                  .arg("", argCode0)
+                  .arg("", argCode1)
+                  .arg("", argCode2)
+                  .arg("", argCode3));
     }
   }
 

@@ -939,12 +939,14 @@ Sys.plan ();
 > val it = "apply2(fnValue String.isPrefix, constant(), constant())" : string
 
 (*) Partial evaluation
-String.isPrefix "he";
-> val it = fn : string -> bool
-it "hello";
-> val it = true : bool
+val p = String.isPrefix "he";
+> val p = fn : string -> bool
 Sys.plan ();
-> val it = "apply2(fnValue String.isPrefix, constant(), constant())" : string
+> val it = "apply(fnValue String.isPrefix, argCode constant(he))" : string
+p "hello";
+> val it = true : bool
+p "goodbye";
+> val it = false : bool
 
 (*) val isSubstring : string -> string -> bool
 String.isSubstring;
