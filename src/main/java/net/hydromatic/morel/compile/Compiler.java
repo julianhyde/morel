@@ -19,10 +19,12 @@
 package net.hydromatic.morel.compile;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.last;
+import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.str;
 import static net.hydromatic.morel.util.Static.transformEager;
@@ -47,6 +49,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.Applicable3;
+import net.hydromatic.morel.eval.Applicable4;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
@@ -60,10 +63,13 @@ import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
@@ -331,22 +337,90 @@ public class Compiler {
 
   protected Code compileApply(Context cx, Core.Apply apply) {
     // Is this is a call to a built-in operator?
-    //    switch (apply.fn.op) {
-    //      case FN_LITERAL:
-    //        return compileCall(cx, (Core.Literal) apply.fn, apply.arg,
-    // apply.pos);
-    //    }
-    final Gather gather = gather(apply);
+    switch (apply.fn.op) {
+      case FN_LITERAL:
+        final BuiltIn builtIn = ((Core.Literal) apply.fn).unwrap(BuiltIn.class);
+        final List<Code> argCodes;
+        switch (builtIn) {
+          case Z_ANDALSO:
+            // Argument for a built-in infix operator such as "andalso" is
+            // always a
+            // tuple; operators are never curried, nor do they evaluate an
+            // expression to yield the tuple of arguments.
+            argCodes = compileArgs(cx, ((Core.Tuple) apply.arg).args);
+            return Codes.andAlso(argCodes.get(0), argCodes.get(1));
+          case Z_ORELSE:
+            argCodes = compileArgs(cx, ((Core.Tuple) apply.arg).args);
+            return Codes.orElse(argCodes.get(0), argCodes.get(1));
+          case Z_LIST:
+            argCodes = compileArgs(cx, ((Core.Tuple) apply.arg).args);
+            return Codes.list(argCodes);
+          case Z_ORDINAL:
+            int[] ordinalSlots = ORDINAL_CODE.get();
+            ordinalSlots[0]++; // signal that we are using an ordinal
+            return Codes.ordinalGet(ordinalSlots);
+          default:
+            if (true) {
+              break;
+            }
+            final Object o =
+                ((Core.Literal) apply.fn).toBuiltIn(typeSystem, apply.pos);
+            if (o instanceof Applicable) {
+              final Code argCode = compile(cx, apply.arg);
+              if (argCode instanceof Codes.TupleCode) {
+                final Codes.TupleCode tupleCode = (Codes.TupleCode) argCode;
+                if (tupleCode.codes.size() == 2 && o instanceof Applicable2) {
+                  //noinspection rawtypes
+                  return Codes.apply2(
+                      (Applicable2) o,
+                      tupleCode.codes.get(0),
+                      tupleCode.codes.get(1));
+                }
+                if (tupleCode.codes.size() == 3 && o instanceof Applicable3) {
+                  //noinspection rawtypes
+                  return Codes.apply3(
+                      (Applicable3) o,
+                      tupleCode.codes.get(0),
+                      tupleCode.codes.get(1),
+                      tupleCode.codes.get(2));
+                }
+              }
+              return Codes.apply((Applicable) o, argCode);
+            }
+            throw new AssertionError("unknown " + builtIn);
+        }
+    }
+    final Gather gather = Gather.of(apply);
     if (gather != null) {
       // If we have a gather, we can compile the argument and return the
       // gather code.
+      @Nullable Applicable applicable1;
       final @Nullable Applicable2 applicable2;
+      final @Nullable Applicable3 applicable3;
+      final @Nullable Applicable4 applicable4;
       switch (gather.args.size()) {
         case 1:
-          applicable2 = gather.fnLiteral.toApplicable2(typeSystem, apply.pos);
-          if (applicable2 != null) {
+          if (gather.argIsTuple(0, 2)) {
+            applicable2 = gather.fnLiteral.toApplicable2(typeSystem, apply.pos);
+            if (applicable2 != null) {
+              final List<Code> argCodes = compileArgs(cx, gather.args);
+              return Codes.apply2Tuple(applicable2, argCodes.get(0));
+            }
+          }
+          if (gather.argIsTuple(0, 3)) {
+            applicable3 = gather.fnLiteral.toApplicable3(typeSystem, apply.pos);
+            if (applicable3 != null) {
+              final List<Code> argCodes = compileArgs(cx, gather.args);
+              return Codes.apply3Tuple(applicable3, argCodes.get(0));
+            }
+          }
+          // Compile for partial evaluation, e.g. applying "String.isPrefix:
+          // string -> string -> bool", a curried function with two arguments,
+          // to just one argument.
+          applicable1 = gather.fnLiteral.toApplicable1(typeSystem, apply.pos);
+          if (applicable1 != null) {
             final List<Code> argCodes = compileArgs(cx, gather.args);
-            return Codes.apply(applicable2.partial1(), argCodes.get(0));
+            return Codes.apply(applicable1, argCodes.get(0));
           }
           break;
         case 2:
@@ -356,8 +430,29 @@ public class Compiler {
             return Codes.apply2(applicable2, argCodes.get(0), argCodes.get(1));
           }
           break;
+        case 3:
+          applicable3 = gather.fnLiteral.toApplicable3(typeSystem, apply.pos);
+          if (applicable3 != null) {
+            final List<Code> argCodes = compileArgs(cx, gather.args);
+            return Codes.apply3(
+                applicable3, argCodes.get(0), argCodes.get(1), argCodes.get(2));
+          }
+          break;
+        case 4:
+          applicable4 = gather.fnLiteral.toApplicable4(typeSystem, apply.pos);
+          if (applicable4 != null) {
+            final List<Code> argCodes = compileArgs(cx, gather.args);
+            return Codes.apply4(
+                applicable4,
+                argCodes.get(0),
+                argCodes.get(1),
+                argCodes.get(2),
+                argCodes.get(3));
+          }
+          break;
         default:
-          // fall through
+          throw new UnsupportedOperationException(
+              "arity " + gather.args.size());
       }
     }
 
@@ -372,8 +467,14 @@ public class Compiler {
     return finishCompileApply(cx, fnCode, argCode, argType);
   }
 
-  private @Nullable Gather gather(Core.Apply apply) {
+  private @Nullable Gather gather0(Core.Apply apply) {
     if (apply.fn.op == Op.FN_LITERAL) {
+      if (apply.arg instanceof Core.Tuple) {
+        Core.Tuple arg = (Core.Tuple) apply.arg;
+        if (arity(apply.fn) == arg.args.size()) {
+          return new Gather((Core.Literal) apply.fn, arg.args);
+        }
+      }
       return new Gather((Core.Literal) apply.fn, apply.arg);
     }
     if (apply.fn.op == Op.APPLY) {
@@ -381,8 +482,55 @@ public class Compiler {
       if (apply1.fn.op == Op.FN_LITERAL) {
         return new Gather((Core.Literal) apply1.fn, apply1.arg, apply.arg);
       }
+      if (apply1.fn.op == Op.APPLY) {
+        Core.Apply apply2 = (Core.Apply) apply1.fn;
+        if (apply2.fn.op == Op.FN_LITERAL) {
+          return new Gather(
+              (Core.Literal) apply2.fn, apply2.arg, apply1.arg, apply.arg);
+        }
+        if (apply2.fn.op == Op.APPLY) {
+          Core.Apply apply3 = (Core.Apply) apply2.fn;
+          if (apply3.fn.op == Op.FN_LITERAL) {
+            return new Gather(
+                (Core.Literal) apply3.fn,
+                apply3.arg,
+                apply2.arg,
+                apply1.arg,
+                apply.arg);
+          }
+        }
+      }
     }
     return null;
+  }
+
+  /**
+   * Returns the arity of a function.
+   *
+   * <ul>
+   *   <li>{@code 5: int} has arity -1;
+   *   <li>{@code Sys.env: unit &rarr; string list} has arity 0;
+   *   <li>{@code String.explode: string &rarr; char list} has arity 1;
+   *   <li>{@code Math.atan2: real * real &rarr; real} has arity 2;
+   *   <li>{@code Real.fromManExp: {exp:int, man:real} &rarr; real} has arity 2.
+   * </ul>
+   */
+  private static int arity(Core.Exp fn) {
+    Type type = fn.type;
+    while (type instanceof ForallType) {
+      type = ((ForallType) type).type;
+    }
+    if (!(type instanceof FnType)) {
+      return -1;
+    }
+    final FnType fnType = (FnType) type;
+    if (fnType.paramType instanceof TupleType) {
+      return ((TupleType) fnType.paramType).argTypes.size();
+    } else if (fnType.paramType instanceof RecordType) {
+      return ((RecordType) fnType.paramType).argNameTypes.size();
+    } else {
+      return 1;
+    }
   }
 
   protected Code finishCompileApply(
@@ -773,55 +921,6 @@ public class Compiler {
     }
   }
 
-  private Code compileCall(
-      Context cx, Core.Literal fnLiteral, Core.Exp arg, Pos pos) {
-    final BuiltIn builtIn = fnLiteral.unwrap(BuiltIn.class);
-    final List<Code> argCodes;
-    switch (builtIn) {
-      case Z_ANDALSO:
-        // Argument for a built-in infix operator such as "andalso" is always a
-        // tuple; operators are never curried, nor do they evaluate an
-        // expression to yield the tuple of arguments.
-        argCodes = compileArgs(cx, ((Core.Tuple) arg).args);
-        return Codes.andAlso(argCodes.get(0), argCodes.get(1));
-      case Z_ORELSE:
-        argCodes = compileArgs(cx, ((Core.Tuple) arg).args);
-        return Codes.orElse(argCodes.get(0), argCodes.get(1));
-      case Z_LIST:
-        argCodes = compileArgs(cx, ((Core.Tuple) arg).args);
-        return Codes.list(argCodes);
-      case Z_ORDINAL:
-        int[] ordinalSlots = ORDINAL_CODE.get();
-        ordinalSlots[0]++; // signal that we are using an ordinal
-        return Codes.ordinalGet(ordinalSlots);
-      default:
-        final Object o = fnLiteral.toBuiltIn(typeSystem, pos);
-        if (o instanceof Applicable) {
-          final Code argCode = compile(cx, arg);
-          if (argCode instanceof Codes.TupleCode) {
-            final Codes.TupleCode tupleCode = (Codes.TupleCode) argCode;
-            if (tupleCode.codes.size() == 2 && o instanceof Applicable2) {
-              //noinspection rawtypes
-              return Codes.apply2(
-                  (Applicable2) o,
-                  tupleCode.codes.get(0),
-                  tupleCode.codes.get(1));
-            }
-            if (tupleCode.codes.size() == 3 && o instanceof Applicable3) {
-              //noinspection rawtypes
-              return Codes.apply3(
-                  (Applicable3) o,
-                  tupleCode.codes.get(0),
-                  tupleCode.codes.get(1),
-                  tupleCode.codes.get(2));
-            }
-          }
-          return Codes.apply((Applicable) o, argCode);
-        }
-        throw new AssertionError("unknown " + builtIn);
-    }
-  }
-
   /**
    * Compiles a {@code match} expression.
    *
@@ -1029,14 +1128,62 @@ public class Compiler {
     }
   }
 
-  /** Application of a function to a sequence of arguments. */
+  /** Application of a function to a sequence or tuple of arguments. */
   private static class Gather {
     final Core.Literal fnLiteral;
     final List<Core.Exp> args;
 
-    private Gather(Core.Literal fnLiteral, Core.Exp... args) {
-      this.fnLiteral = fnLiteral;
+    private Gather(Core.Literal fnLiteral, List<Core.Exp> args) {
+      this.fnLiteral = requireNonNull(fnLiteral);
       this.args = ImmutableList.copyOf(args);
+    }
+
+    private Gather(Core.Literal fnLiteral, Core.Exp... args) {
+      this(fnLiteral, ImmutableList.copyOf(args));
+    }
+
+    @Override
+    public String toString() {
+      return format("Gather{fnLiteral=%s, args=%s}", fnLiteral, args);
+    }
+
+    static @Nullable Gather of(Core.Apply apply) {
+      switch (apply.fn.op) {
+        case FN_LITERAL:
+          if (apply.arg instanceof Core.Tuple) {
+            Core.Tuple arg = (Core.Tuple) apply.arg;
+            if (arity(apply.fn) == arg.args.size()) {
+              return new Gather((Core.Literal) apply.fn, arg.args);
+            }
+          }
+          return new Gather((Core.Literal) apply.fn, apply.arg);
+        default:
+          return of2(apply.fn, ImmutableList.of(apply.arg));
+      }
+    }
+
+    static @Nullable Gather of2(Core.Exp fn, List<Core.Exp> args) {
+      switch (fn.op) {
+        case FN_LITERAL:
+          return new Gather((Core.Literal) fn, args);
+        case APPLY:
+          final Core.Apply apply = (Core.Apply) fn;
+          return of2(apply.fn, plus(apply.arg, args));
+        default:
+          return null;
+      }
+    }
+
+    /**
+     * Returns whether the argument at index {@code i} is a tuple of {@code
+     * arity}.
+     */
+    public boolean argIsTuple(int i, int arity) {
+      return arity(fnLiteral) == arity
+          && i < args.size()
+          && (args.get(i).type instanceof TupleType
+              || args.get(i).type instanceof RecordType)
+          && ((RecordLikeType) args.get(i).type).argTypes().size() == arity;
     }
   }
 }

@@ -107,7 +107,7 @@ public class Inliner extends EnvShuttle {
             assert v instanceof Applicable || v instanceof Macro : v;
             final BuiltIn builtIn = Codes.BUILT_IN_MAP.get(v);
             if (builtIn != null) {
-              return core.functionLiteral(typeSystem, builtIn);
+              return core.functionLiteral(id.type, builtIn);
             }
             // Applicable (including Closure) that does not map to a BuiltIn
             // is not considered 'constant', mainly because it creates messy

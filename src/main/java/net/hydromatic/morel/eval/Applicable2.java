@@ -78,10 +78,10 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl {
   public abstract R apply(A0 a0, A1 a1);
 
   public Applicable partial1() {
-    return new BaseApplicable() {
+    return new PartialApplicable(this) {
       @Override
       public Object apply(EvalEnv env, Object a0) {
-        return new BaseApplicable() {
+        return new SimpleApplicable() {
           @Override
           public Object apply(EvalEnv env, Object a1) {
             return Applicable2.this.apply((A0) a0, (A1) a1);
@@ -91,10 +91,25 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl {
     };
   }
 
-  abstract static class BaseApplicable implements Applicable {
+  abstract static class PartialApplicable implements Applicable {
+    private final Applicable parent;
+
+    PartialApplicable(Applicable parent) {
+      this.parent = parent;
+    }
+
     @Override
     public Describer describe(Describer describer) {
-      throw new UnsupportedOperationException("describe");
+      return parent.describe(describer);
+    }
+  }
+
+  abstract static class SimpleApplicable implements Applicable {
+    SimpleApplicable() {}
+
+    @Override
+    public Describer describe(Describer describer) {
+      throw new UnsupportedOperationException();
     }
   }
 }
