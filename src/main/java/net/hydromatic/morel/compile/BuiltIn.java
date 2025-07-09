@@ -3505,7 +3505,10 @@ public enum BuiltIn {
    * Internal list constructor, e.g. "list (1 + 2, 3)" implements "[1 + 2, 3]".
    * It cannot be assigned a type, because the tuple is variadic.
    */
-  Z_LIST("$", "list", ts -> UNIT);
+  Z_LIST("$", "list", ts -> UNIT),
+
+  /** Internal accessor of the {@code n}th field of a record. */
+  Z_NTH("$", "nth", ts -> UNIT);
 
   /** Name of the structure (e.g. "List", "String"), or null. */
   public final String structure;

@@ -1067,10 +1067,15 @@ public abstract class Codes {
    */
   public static Applicable nth(int slot) {
     checkArgument(slot >= 0);
-    return new ApplicableImpl("nth:" + slot) {
+    return new Applicable1<Object, List>(BuiltIn.Z_NTH) {
       @Override
-      public Object apply(EvalEnv env, Object arg) {
-        return ((List) arg).get(slot);
+      protected String name() {
+        return "nth:" + slot;
+      }
+
+      @Override
+      public Object apply(List list) {
+        return list.get(slot);
       }
     };
   }
@@ -4260,6 +4265,7 @@ public abstract class Codes {
           .put(BuiltIn.Z_MINUS_REAL, Z_MINUS_REAL)
           .put(BuiltIn.Z_NEGATE_INT, Z_NEGATE_INT)
           .put(BuiltIn.Z_NEGATE_REAL, Z_NEGATE_REAL)
+          .put(BuiltIn.Z_NTH, Unit.INSTANCE)
           .put(BuiltIn.Z_ORDINAL, 0)
           .put(BuiltIn.Z_ORELSE, Unit.INSTANCE)
           .put(BuiltIn.Z_PLUS_INT, Z_PLUS_INT)
