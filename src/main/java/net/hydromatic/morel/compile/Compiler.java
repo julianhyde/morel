@@ -203,6 +203,17 @@ public class Compiler {
     return transformEager(expressions, e -> compile(cx, e));
   }
 
+  /** Compiles the tuple arguments to "apply". */
+  public PairList<Code, Type> compileArgTypes(
+      Context cx, List<? extends Core.Exp> expressions) {
+    PairList.BiTransformer<Core.Exp, Code, Type> transformer =
+        (exp, consumer) -> {
+          final Code code = compileArg(cx, exp);
+          consumer.accept(code, exp.type);
+        };
+    return ImmutablePairList.fromTransformed(expressions, transformer);
+  }
+
   /** Compiles an expression that is evaluated once per row. */
   public Code compileRow(Context cx, Core.Exp expression) {
     final int[] ordinalSlots = {0};
@@ -344,9 +355,8 @@ public class Compiler {
         switch (builtIn) {
           case Z_ANDALSO:
             // Argument for a built-in infix operator such as "andalso" is
-            // always a
-            // tuple; operators are never curried, nor do they evaluate an
-            // expression to yield the tuple of arguments.
+            // always a tuple; operators are never curried, nor do they evaluate
+            // an expression to yield the tuple of arguments.
             argCodes = compileArgs(cx, ((Core.Tuple) apply.arg).args);
             return Codes.andAlso(argCodes.get(0), argCodes.get(1));
           case Z_ORELSE:
@@ -394,7 +404,7 @@ public class Compiler {
     if (gather != null) {
       // If we have a gather, we can compile the argument and return the
       // gather code.
-      @Nullable Applicable applicable1;
+      final @Nullable Applicable applicable1;
       final @Nullable Applicable2 applicable2;
       final @Nullable Applicable3 applicable3;
       final @Nullable Applicable4 applicable4;
@@ -426,8 +436,9 @@ public class Compiler {
         case 2:
           applicable2 = gather.fnLiteral.toApplicable2(typeSystem, apply.pos);
           if (applicable2 != null) {
-            final List<Code> argCodes = compileArgs(cx, gather.args);
-            return Codes.apply2(applicable2, argCodes.get(0), argCodes.get(1));
+            final PairList<Code, Type> argCodes =
+                compileArgTypes(cx, gather.args);
+            return finishCompileApply2(cx, applicable2, argCodes);
           }
           break;
         case 3:
@@ -467,43 +478,6 @@ public class Compiler {
     return finishCompileApply(cx, fnCode, argCode, argType);
   }
 
-  private @Nullable Gather gather0(Core.Apply apply) {
-    if (apply.fn.op == Op.FN_LITERAL) {
-      if (apply.arg instanceof Core.Tuple) {
-        Core.Tuple arg = (Core.Tuple) apply.arg;
-        if (arity(apply.fn) == arg.args.size()) {
-          return new Gather((Core.Literal) apply.fn, arg.args);
-        }
-      }
-      return new Gather((Core.Literal) apply.fn, apply.arg);
-    }
-    if (apply.fn.op == Op.APPLY) {
-      Core.Apply apply1 = (Core.Apply) apply.fn;
-      if (apply1.fn.op == Op.FN_LITERAL) {
-        return new Gather((Core.Literal) apply1.fn, apply1.arg, apply.arg);
-      }
-      if (apply1.fn.op == Op.APPLY) {
-        Core.Apply apply2 = (Core.Apply) apply1.fn;
-        if (apply2.fn.op == Op.FN_LITERAL) {
-          return new Gather(
-              (Core.Literal) apply2.fn, apply2.arg, apply1.arg, apply.arg);
-        }
-        if (apply2.fn.op == Op.APPLY) {
-          Core.Apply apply3 = (Core.Apply) apply2.fn;
-          if (apply3.fn.op == Op.FN_LITERAL) {
-            return new Gather(
-                (Core.Literal) apply3.fn,
-                apply3.arg,
-                apply2.arg,
-                apply1.arg,
-                apply.arg);
-          }
-        }
-      }
-    }
-    return null;
-  }
-
   /**
    * Returns the arity of a function.
    *
@@ -541,6 +515,12 @@ public class Compiler {
   protected Code finishCompileApply(
       Context cx, Code fnCode, Code argCode, Type argType) {
     return Codes.apply(fnCode, argCode);
+  }
+
+  @SuppressWarnings("rawtypes")
+  protected Code finishCompileApply2(
+      Context cx, Applicable2 applicable2, PairList<Code, Type> argCodes) {
+    return Codes.apply2(applicable2, argCodes.left(0), argCodes.left(1));
   }
 
   protected Code compileFrom(Context cx, Core.From from) {

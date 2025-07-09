@@ -1230,36 +1230,26 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_COLLATE */
   private static final Applicable STRING_COLLATE =
-      new ApplicableImpl(BuiltIn.STRING_COLLATE) {
+      new Applicable2<List, Applicable, List>(BuiltIn.STRING_COLLATE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return stringCollate((Applicable) arg);
+        public List apply(Applicable comparator, List tuple) {
+          final String string0 = (String) tuple.get(0);
+          final String string1 = (String) tuple.get(1);
+          final int n0 = string0.length();
+          final int n1 = string1.length();
+          final int n = Math.min(n0, n1);
+          for (int i = 0; i < n; i++) {
+            final char char0 = string0.charAt(i);
+            final char char1 = string1.charAt(i);
+            final List compare =
+                (List) comparator.apply(null, FlatLists.of(char0, char1));
+            if (!compare.get(0).equals("EQUAL")) {
+              return compare;
+            }
+          }
+          return order(Integer.compare(n0, n1));
         }
       };
-
-  private static Applicable stringCollate(Applicable comparator) {
-    return new ApplicableImpl("String.collate$comparator") {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List tuple = (List) arg;
-        final String string0 = (String) tuple.get(0);
-        final String string1 = (String) tuple.get(1);
-        final int n0 = string0.length();
-        final int n1 = string1.length();
-        final int n = Math.min(n0, n1);
-        for (int i = 0; i < n; i++) {
-          final char char0 = string0.charAt(i);
-          final char char1 = string1.charAt(i);
-          final List compare =
-              (List) comparator.apply(env, ImmutableList.of(char0, char1));
-          if (!compare.get(0).equals("EQUAL")) {
-            return compare;
-          }
-        }
-        return order(Integer.compare(n0, n1));
-      }
-    };
-  }
 
   /** @see BuiltIn#STRING_COMPARE */
   private static final Applicable STRING_COMPARE =
@@ -1275,47 +1265,45 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_FIELDS */
   private static final Applicable STRING_FIELDS =
-      fieldsTokens(BuiltIn.STRING_FIELDS);
+      new StringTokenize(BuiltIn.STRING_FIELDS);
 
   /** @see BuiltIn#STRING_TOKENS */
   private static final Applicable STRING_TOKENS =
-      fieldsTokens(BuiltIn.STRING_TOKENS);
+      new StringTokenize(BuiltIn.STRING_TOKENS);
 
-  private static Applicable fieldsTokens(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
-      @Override
-      public Object apply(EvalEnv env, Object argValue) {
-        return fieldsTokens2(builtIn, (Applicable) argValue);
-      }
-    };
-  }
+  /**
+   * Implements {@link BuiltIn#STRING_FIELDS} and {@link BuiltIn#STRING_TOKENS}.
+   */
+  private static class StringTokenize
+      extends Applicable2<List<String>, Applicable, String> {
+    final BuiltIn builtIn;
 
-  private static Applicable fieldsTokens2(
-      BuiltIn builtIn, Applicable applicable) {
-    return new ApplicableImpl(builtIn) {
-      @Override
-      public Object apply(EvalEnv env, Object argValue) {
-        String s = (String) argValue;
-        List<String> result = new ArrayList<>();
-        int h = 0;
-        for (int i = 0; i < s.length(); i++) {
-          char c = s.charAt(i);
-          Boolean b = (Boolean) applicable.apply(env, c);
-          if (b) {
-            if (builtIn == BuiltIn.STRING_FIELDS || i > h) {
-              // String.tokens only adds fields if they are non-empty.
-              result.add(s.substring(h, i));
-            }
-            h = i + 1;
+    StringTokenize(BuiltIn builtIn) {
+      super(builtIn);
+      this.builtIn = builtIn;
+    }
+
+    @Override
+    public List<String> apply(Applicable applicable, String s) {
+      List<String> result = new ArrayList<>();
+      int h = 0;
+      for (int i = 0; i < s.length(); i++) {
+        char c = s.charAt(i);
+        Boolean b = (Boolean) applicable.apply(null, c);
+        if (b) {
+          if (builtIn == BuiltIn.STRING_FIELDS || i > h) {
+            // String.tokens only adds fields if they are non-empty.
+            result.add(s.substring(h, i));
           }
+          h = i + 1;
         }
-        if (builtIn == BuiltIn.STRING_FIELDS || s.length() > h) {
-          // String.tokens only adds fields if they are non-empty.
-          result.add(s.substring(h));
-        }
-        return result;
       }
-    };
+      if (builtIn == BuiltIn.STRING_FIELDS || s.length() > h) {
+        // String.tokens only adds fields if they are non-empty.
+        result.add(s.substring(h));
+      }
+      return result;
+    }
   }
 
   /** Implements {@link BuiltIn#STRING_SUB}. */
@@ -1377,73 +1365,69 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#STRING_CONCAT */
-  private static final Applicable STRING_CONCAT = new StringConcat(Pos.ZERO);
+  private static final Applicable STRING_CONCAT =
+      new StringConcat(BuiltIn.STRING_CONCAT, Pos.ZERO);
 
   /** Implements {@link BuiltIn#STRING_CONCAT}. */
-  private static class StringConcat extends PositionedApplicableImpl {
-    StringConcat(Pos pos) {
-      super(BuiltIn.STRING_CONCAT, pos);
+  private static class StringConcat extends Applicable1<String, List<String>>
+      implements Positioned {
+    StringConcat(BuiltIn builtIn, Pos pos) {
+      super(builtIn, pos);
     }
 
     @Override
     public Applicable withPos(Pos pos) {
-      return new StringConcat(pos);
+      return new StringConcat(BuiltIn.STRING_CONCAT, pos);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      return stringConcat(pos, "", (List<String>) arg);
+    public String apply(List<String> list) {
+      long n = 0;
+      for (String s : list) {
+        n += s.length();
+      }
+      if (n > STRING_MAX_SIZE) {
+        throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
+      }
+      return String.join("", list);
     }
   }
 
   /** @see BuiltIn#STRING_CONCAT_WITH */
   private static final Applicable STRING_CONCAT_WITH =
-      new StringConcatWith(Pos.ZERO);
+      new StringConcatWith(BuiltIn.STRING_CONCAT_WITH, Pos.ZERO);
 
   /** Implements {@link BuiltIn#STRING_CONCAT_WITH}. */
-  private static class StringConcatWith extends PositionedApplicableImpl {
-    StringConcatWith(Pos pos) {
-      super(BuiltIn.STRING_CONCAT_WITH, pos);
+  private static class StringConcatWith
+      extends Applicable2<String, String, List<String>> implements Positioned {
+    StringConcatWith(BuiltIn builtIn, Pos pos) {
+      super(builtIn, pos);
     }
 
     @Override
     public Applicable withPos(Pos pos) {
-      return new StringConcatWith(pos);
+      return new StringConcatWith(BuiltIn.STRING_CONCAT_WITH, pos);
     }
 
     @Override
-    public Object apply(EvalEnv env, Object argValue) {
-      final String separator = (String) argValue;
-      return new ApplicableImpl("String.concatWith$separator") {
-        @SuppressWarnings("unchecked")
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return stringConcat(pos, separator, (List<String>) arg);
-        }
-      };
+    public String apply(String separator, List<String> list) {
+      long n = 0;
+      for (String s : list) {
+        n += s.length();
+        n += separator.length();
+      }
+      if (n > STRING_MAX_SIZE) {
+        throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
+      }
+      return String.join(separator, list);
     }
-  }
-
-  private static String stringConcat(
-      Pos pos, String separator, List<String> list) {
-    long n = 0;
-    for (String s : list) {
-      n += s.length();
-      n += separator.length();
-    }
-    if (n > STRING_MAX_SIZE) {
-      throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
-    }
-    return String.join(separator, list);
   }
 
   /** @see BuiltIn#STRING_STR */
   private static final Applicable STRING_STR =
-      new ApplicableImpl(BuiltIn.STRING_STR) {
+      new Applicable1<String, Character>(BuiltIn.STRING_STR) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final Character character = (Character) arg;
+        public String apply(Character character) {
           return character + "";
         }
       };
@@ -1472,54 +1456,33 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_MAP */
   private static final Applicable STRING_MAP =
-      new ApplicableImpl(BuiltIn.STRING_MAP) {
+      new Applicable2<String, Applicable, String>(BuiltIn.STRING_MAP) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return stringMap((Applicable) arg);
+        public String apply(Applicable f, String s) {
+          final StringBuilder buf = new StringBuilder();
+          for (int i = 0; i < s.length(); i++) {
+            final char c = s.charAt(i);
+            final char c2 = (Character) f.apply(null, c);
+            buf.append(c2);
+          }
+          return buf.toString();
         }
       };
-
-  private static Applicable stringMap(Applicable f) {
-    return new ApplicableImpl("String.map$f") {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final String s = (String) arg;
-        final StringBuilder buf = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-          final char c = s.charAt(i);
-          final char c2 = (Character) f.apply(env, c);
-          buf.append(c2);
-        }
-        return buf.toString();
-      }
-    };
-  }
 
   /** @see BuiltIn#STRING_TRANSLATE */
   private static final Applicable STRING_TRANSLATE =
-      new ApplicableImpl(BuiltIn.STRING_TRANSLATE) {
+      new Applicable2<String, Applicable, String>(BuiltIn.STRING_TRANSLATE) {
         @Override
-        public Applicable apply(EvalEnv env, Object arg) {
-          final Applicable f = (Applicable) arg;
-          return translate(f);
+        public String apply(Applicable f, String s) {
+          final StringBuilder buf = new StringBuilder();
+          for (int i = 0; i < s.length(); i++) {
+            final char c = s.charAt(i);
+            final String c2 = (String) f.apply(null, c);
+            buf.append(c2);
+          }
+          return buf.toString();
         }
       };
-
-  private static Applicable translate(Applicable f) {
-    return new ApplicableImpl("String.translate$f") {
-      @Override
-      public String apply(EvalEnv env, Object arg) {
-        final String s = (String) arg;
-        final StringBuilder buf = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-          final char c = s.charAt(i);
-          final String c2 = (String) f.apply(env, c);
-          buf.append(c2);
-        }
-        return buf.toString();
-      }
-    };
-  }
 
   /** @see BuiltIn#STRING_IS_PREFIX */
   private static final Applicable STRING_IS_PREFIX =
@@ -1554,11 +1517,11 @@ public abstract class Codes {
   /** @see BuiltIn#LIST_LENGTH */
   private static final Applicable LIST_LENGTH = length(BuiltIn.LIST_LENGTH);
 
-  private static ApplicableImpl length(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+  private static Applicable length(BuiltIn builtIn) {
+    return new Applicable1<Integer, List>(builtIn) {
       @Override
-      public Object apply(EvalEnv env, Object arg) {
-        return ((List) arg).size();
+      public Integer apply(List list) {
+        return list.size();
       }
     };
   }
@@ -1656,11 +1619,10 @@ public abstract class Codes {
   private static final Applicable LIST_GET_ITEM =
       listGetItem(BuiltIn.LIST_GET_ITEM);
 
-  private static ApplicableImpl listGetItem(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+  private static Applicable1<List, List> listGetItem(BuiltIn builtIn) {
+    return new Applicable1<List, List>(builtIn) {
       @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List list = (List) arg;
+      public List apply(List list) {
         if (list.isEmpty()) {
           return OPTION_NONE;
         } else {
@@ -1752,14 +1714,13 @@ public abstract class Codes {
   /** @see BuiltIn#LIST_CONCAT */
   private static final Applicable LIST_CONCAT = listConcat(BuiltIn.LIST_CONCAT);
 
-  private static ApplicableImpl listConcat(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+  private static Applicable listConcat(BuiltIn builtIn) {
+    return new Applicable1<List, List<List>>(builtIn) {
       @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List list = (List) arg;
-        final ImmutableList.Builder<Object> builder = ImmutableList.builder();
-        for (Object o : list) {
-          builder.addAll((List) o);
+      public List apply(List<List> lists) {
+        final ImmutableList.Builder builder = ImmutableList.builder();
+        for (List list : lists) {
+          builder.addAll(list);
         }
         return builder.build();
       }
@@ -1820,23 +1781,13 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#LIST_APP */
-  private static final Applicable LIST_APP = listApp0(BuiltIn.LIST_APP);
+  private static final Applicable LIST_APP = listApp(BuiltIn.LIST_APP);
 
-  private static ApplicableImpl listApp0(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+  private static ApplicableImpl listApp(BuiltIn builtIn) {
+    return new Applicable2<Unit, Applicable, List>(builtIn) {
       @Override
-      public Applicable apply(EvalEnv env, Object arg) {
-        return listApp((Applicable) arg);
-      }
-    };
-  }
-
-  private static Applicable listApp(Applicable consumer) {
-    return new ApplicableImpl("List.app$f") {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List list = (List) arg;
-        list.forEach(o -> consumer.apply(env, o));
+      public Unit apply(Applicable consumer, List list) {
+        list.forEach(o -> consumer.apply(null, o));
         return Unit.INSTANCE;
       }
     };
@@ -1858,7 +1809,7 @@ public abstract class Codes {
     return new Applicable2<List, Applicable, List>(builtIn) {
       @Override
       public List apply(Applicable fn, List list) {
-        final ImmutableList.Builder<Object> builder = ImmutableList.builder();
+        final ImmutableList.Builder builder = ImmutableList.builder();
         for (Object o : list) {
           builder.add(fn.apply(null, o));
         }
@@ -1869,25 +1820,15 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_MAP_PARTIAL */
   private static final Applicable LIST_MAP_PARTIAL =
-      listMapPartial0(BuiltIn.LIST_MAP_PARTIAL);
+      listMapPartial(BuiltIn.LIST_MAP_PARTIAL);
 
-  private static Applicable listMapPartial0(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+  private static Applicable listMapPartial(BuiltIn builtIn) {
+    return new Applicable2<List, Applicable, List>(builtIn) {
       @Override
-      public Applicable apply(EvalEnv env, Object arg) {
-        return listMapPartial((Applicable) arg);
-      }
-    };
-  }
-
-  private static Applicable listMapPartial(Applicable f) {
-    return new ApplicableImpl("List.mapPartial$f") {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List list = (List) arg;
-        final ImmutableList.Builder<Object> builder = ImmutableList.builder();
+      public List apply(Applicable f, List list) {
+        final ImmutableList.Builder builder = ImmutableList.builder();
         for (Object o : list) {
-          final List opt = (List) f.apply(env, o);
+          final List opt = (List) f.apply(null, o);
           if (opt.size() == 2) {
             builder.add(opt.get(1));
           }
@@ -1901,22 +1842,11 @@ public abstract class Codes {
   private static final Applicable LIST_FIND = find(BuiltIn.LIST_FIND);
 
   private static ApplicableImpl find(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+    return new Applicable2<List, Applicable, List>(builtIn) {
       @Override
-      public Applicable apply(EvalEnv env, Object arg) {
-        final Applicable fn = (Applicable) arg;
-        return find(fn);
-      }
-    };
-  }
-
-  private static Applicable find(Applicable f) {
-    return new ApplicableImpl("List.find$f") {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List list = (List) arg;
+      public List apply(Applicable f, List list) {
         for (Object o : list) {
-          if ((Boolean) f.apply(env, o)) {
+          if ((Boolean) f.apply(null, o)) {
             return optionSome(o);
           }
         }
@@ -1926,27 +1856,15 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#LIST_FILTER */
-  private static final Applicable LIST_FILTER =
-      listFilter0(BuiltIn.LIST_FILTER);
+  private static final Applicable LIST_FILTER = listFilter(BuiltIn.LIST_FILTER);
 
-  private static Applicable listFilter0(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+  private static Applicable listFilter(BuiltIn builtIn) {
+    return new Applicable2<List, Applicable, List>(builtIn) {
       @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final Applicable fn = (Applicable) arg;
-        return listFilter(fn);
-      }
-    };
-  }
-
-  private static Applicable listFilter(Applicable f) {
-    return new ApplicableImpl("List.filter$f") {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List list = (List) arg;
+      public List apply(Applicable f, List list) {
         final ImmutableList.Builder builder = ImmutableList.builder();
         for (Object o : list) {
-          if ((Boolean) f.apply(env, o)) {
+          if ((Boolean) f.apply(null, o)) {
             builder.add(o);
           }
         }
@@ -1960,24 +1878,13 @@ public abstract class Codes {
       listPartition0(BuiltIn.LIST_PARTITION);
 
   private static ApplicableImpl listPartition0(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+    return new Applicable2<List, Applicable, List>(builtIn) {
       @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final Applicable fn = (Applicable) arg;
-        return listPartition(fn);
-      }
-    };
-  }
-
-  private static Applicable listPartition(Applicable f) {
-    return new ApplicableImpl("List.partition$f") {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        final List list = (List) arg;
+      public List apply(Applicable f, List list) {
         final ImmutableList.Builder trueBuilder = ImmutableList.builder();
         final ImmutableList.Builder falseBuilder = ImmutableList.builder();
         for (Object o : list) {
-          ((Boolean) f.apply(env, o) ? trueBuilder : falseBuilder).add(o);
+          ((Boolean) f.apply(null, o) ? trueBuilder : falseBuilder).add(o);
         }
         return ImmutableList.of(trueBuilder.build(), falseBuilder.build());
       }
@@ -2206,7 +2113,7 @@ public abstract class Codes {
   }
 
   /** Second stage of {@link ListPairApp}. */
-  private static class ListPairApp2 extends Applicable1 {
+  private static class ListPairApp2 extends BaseApplicable {
     private final Applicable f;
 
     ListPairApp2(BuiltIn builtIn, Pos pos, Applicable f) {
@@ -2290,7 +2197,7 @@ public abstract class Codes {
   }
 
   /** Second stage of {@link ListPairFold}. */
-  private static class ListPairFold2 extends Applicable1 {
+  private static class ListPairFold2 extends BaseApplicable {
     private final Applicable f;
 
     ListPairFold2(BuiltIn builtIn, Pos pos, Applicable f) {
@@ -2305,7 +2212,7 @@ public abstract class Codes {
   }
 
   /** Third stage of {@link ListPairFold}. */
-  private static class ListPairFold3 extends Applicable1 {
+  private static class ListPairFold3 extends BaseApplicable {
     private final Applicable f;
     private final Object init;
 
@@ -2383,7 +2290,7 @@ public abstract class Codes {
   }
 
   /** Second stage of {@link ListPairMap}. */
-  private static class ListPairMap2 extends Applicable1 {
+  private static class ListPairMap2 extends BaseApplicable {
     private final Applicable f;
 
     ListPairMap2(BuiltIn builtIn, Pos pos, Applicable f) {
@@ -3901,20 +3808,20 @@ public abstract class Codes {
   private static final Applicable BAG_CONCAT = listConcat(BuiltIn.BAG_CONCAT);
 
   /** @see BuiltIn#BAG_APP */
-  private static final Applicable BAG_APP = listApp0(BuiltIn.BAG_APP);
+  private static final Applicable BAG_APP = listApp(BuiltIn.BAG_APP);
 
   /** @see BuiltIn#BAG_MAP */
   private static final Applicable BAG_MAP = listMap(BuiltIn.BAG_MAP);
 
   /** @see BuiltIn#BAG_MAP_PARTIAL */
   private static final Applicable BAG_MAP_PARTIAL =
-      listMapPartial0(BuiltIn.BAG_MAP_PARTIAL);
+      listMapPartial(BuiltIn.BAG_MAP_PARTIAL);
 
   /** @see BuiltIn#BAG_FIND */
   private static final Applicable BAG_FIND = find(BuiltIn.BAG_FIND);
 
   /** @see BuiltIn#BAG_FILTER */
-  private static final Applicable BAG_FILTER = listFilter0(BuiltIn.BAG_FILTER);
+  private static final Applicable BAG_FILTER = listFilter(BuiltIn.BAG_FILTER);
 
   /** @see BuiltIn#BAG_PARTITION */
   private static final Applicable BAG_PARTITION =
@@ -5818,12 +5725,15 @@ public abstract class Codes {
     Applicable withType(TypeSystem typeSystem, Type type);
   }
 
-  /** Implementation of {@link Applicable} that stores a {@link BuiltIn}. */
-  abstract static class Applicable1 implements Applicable {
+  /**
+   * Implementation of {@link Applicable} that stores a {@link BuiltIn} and
+   * {@link Pos}.
+   */
+  abstract static class BaseApplicable implements Applicable {
     final BuiltIn builtIn;
     final Pos pos;
 
-    protected Applicable1(BuiltIn builtIn, Pos pos) {
+    protected BaseApplicable(BuiltIn builtIn, Pos pos) {
       this.builtIn = builtIn;
       this.pos = pos;
     }
@@ -5844,7 +5754,7 @@ public abstract class Codes {
    * Implementation of both {@link Applicable} and {@link Positioned}. Remembers
    * its {@link BuiltIn} so that it can re-position.
    */
-  private abstract static class PositionedApplicableImpl extends Applicable1
+  private abstract static class PositionedApplicableImpl extends BaseApplicable
       implements Positioned {
     protected PositionedApplicableImpl(BuiltIn builtIn, Pos pos) {
       super(builtIn, pos);
