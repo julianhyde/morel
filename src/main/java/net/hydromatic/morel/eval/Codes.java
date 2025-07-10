@@ -1233,9 +1233,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_COLLATE */
   private static final Applicable STRING_COLLATE =
-      new Applicable2<List, Applicable, List>(BuiltIn.STRING_COLLATE) {
+      new Applicable2<List, Applicable1, List>(BuiltIn.STRING_COLLATE) {
         @Override
-        public List apply(Applicable comparator, List tuple) {
+        public List apply(Applicable1 comparator, List tuple) {
           final String string0 = (String) tuple.get(0);
           final String string1 = (String) tuple.get(1);
           final int n0 = string0.length();
@@ -1245,7 +1245,7 @@ public abstract class Codes {
             final char char0 = string0.charAt(i);
             final char char1 = string1.charAt(i);
             final List compare =
-                (List) comparator.apply(null, FlatLists.of(char0, char1));
+                (List) comparator.apply(FlatLists.of(char0, char1));
             if (!compare.get(0).equals("EQUAL")) {
               return compare;
             }
@@ -1448,24 +1448,24 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#STRING_EXPLODE */
-  private static final Applicable STRING_EXPLODE =
-      new ApplicableImpl(BuiltIn.STRING_EXPLODE) {
+  private static final Applicable1 STRING_EXPLODE =
+      new BaseApplicable1<List, String>(BuiltIn.STRING_EXPLODE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final String s = (String) arg;
+        public List apply(String s) {
           return MapList.of(s.length(), s::charAt);
         }
       };
 
   /** @see BuiltIn#STRING_MAP */
   private static final Applicable STRING_MAP =
-      new Applicable2<String, Applicable, String>(BuiltIn.STRING_MAP) {
+      new Applicable2<String, Applicable1<Character, Character>, String>(
+          BuiltIn.STRING_MAP) {
         @Override
-        public String apply(Applicable f, String s) {
+        public String apply(Applicable1<Character, Character> f, String s) {
           final StringBuilder buf = new StringBuilder();
           for (int i = 0; i < s.length(); i++) {
             final char c = s.charAt(i);
-            final char c2 = (Character) f.apply(null, c);
+            final char c2 = f.apply(c);
             buf.append(c2);
           }
           return buf.toString();
@@ -1474,13 +1474,14 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_TRANSLATE */
   private static final Applicable STRING_TRANSLATE =
-      new Applicable2<String, Applicable, String>(BuiltIn.STRING_TRANSLATE) {
+      new Applicable2<String, Applicable1<String, Character>, String>(
+          BuiltIn.STRING_TRANSLATE) {
         @Override
-        public String apply(Applicable f, String s) {
+        public String apply(Applicable1<String, Character> f, String s) {
           final StringBuilder buf = new StringBuilder();
           for (int i = 0; i < s.length(); i++) {
             final char c = s.charAt(i);
-            final String c2 = (String) f.apply(null, c);
+            final String c2 = f.apply(c);
             buf.append(c2);
           }
           return buf.toString();
@@ -1530,9 +1531,9 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#LIST_AT */
-  private static final Applicable LIST_AT = union(BuiltIn.LIST_AT);
+  private static final Applicable2 LIST_AT = union(BuiltIn.LIST_AT);
 
-  private static ApplicableImpl union(final BuiltIn builtIn) {
+  private static Applicable2 union(final BuiltIn builtIn) {
     return new Applicable2<List, List, List>(builtIn) {
       @Override
       public List apply(List list0, List list1) {
@@ -1787,10 +1788,10 @@ public abstract class Codes {
   private static final Applicable LIST_APP = listApp(BuiltIn.LIST_APP);
 
   private static ApplicableImpl listApp(BuiltIn builtIn) {
-    return new Applicable2<Unit, Applicable, List>(builtIn) {
+    return new Applicable2<Unit, Applicable1, List>(builtIn) {
       @Override
-      public Unit apply(Applicable consumer, List list) {
-        list.forEach(o -> consumer.apply(null, o));
+      public Unit apply(Applicable1 consumer, List list) {
+        list.forEach(consumer::apply);
         return Unit.INSTANCE;
       }
     };
@@ -1803,12 +1804,12 @@ public abstract class Codes {
   private static final Applicable LIST_MAP = listMap(BuiltIn.LIST_MAP);
 
   private static Applicable listMap(BuiltIn builtIn) {
-    return new Applicable2<List, Applicable, List>(builtIn) {
+    return new Applicable2<List, Applicable1, List>(builtIn) {
       @Override
-      public List apply(Applicable fn, List list) {
+      public List apply(Applicable1 f, List list) {
         final ImmutableList.Builder builder = ImmutableList.builder();
         for (Object o : list) {
-          builder.add(fn.apply(null, o));
+          builder.add(f.apply(o));
         }
         return builder.build();
       }
@@ -1820,12 +1821,12 @@ public abstract class Codes {
       listMapPartial(BuiltIn.LIST_MAP_PARTIAL);
 
   private static Applicable listMapPartial(BuiltIn builtIn) {
-    return new Applicable2<List, Applicable, List>(builtIn) {
+    return new Applicable2<List, Applicable1<List, Object>, List>(builtIn) {
       @Override
-      public List apply(Applicable f, List list) {
+      public List apply(Applicable1<List, Object> f, List list) {
         final ImmutableList.Builder builder = ImmutableList.builder();
         for (Object o : list) {
-          final List opt = (List) f.apply(null, o);
+          final List opt = f.apply(o);
           if (opt.size() == 2) {
             builder.add(opt.get(1));
           }
@@ -1839,11 +1840,11 @@ public abstract class Codes {
   private static final Applicable LIST_FIND = find(BuiltIn.LIST_FIND);
 
   private static ApplicableImpl find(BuiltIn builtIn) {
-    return new Applicable2<List, Applicable, List>(builtIn) {
+    return new Applicable2<List, Applicable1<Boolean, Object>, List>(builtIn) {
       @Override
-      public List apply(Applicable f, List list) {
+      public List apply(Applicable1<Boolean, Object> f, List list) {
         for (Object o : list) {
-          if ((Boolean) f.apply(null, o)) {
+          if (f.apply(o)) {
             return optionSome(o);
           }
         }
@@ -1856,12 +1857,12 @@ public abstract class Codes {
   private static final Applicable LIST_FILTER = listFilter(BuiltIn.LIST_FILTER);
 
   private static Applicable listFilter(BuiltIn builtIn) {
-    return new Applicable2<List, Applicable, List>(builtIn) {
+    return new Applicable2<List, Applicable1<Boolean, Object>, List>(builtIn) {
       @Override
-      public List apply(Applicable f, List list) {
+      public List apply(Applicable1<Boolean, Object> f, List list) {
         final ImmutableList.Builder builder = ImmutableList.builder();
         for (Object o : list) {
-          if ((Boolean) f.apply(null, o)) {
+          if ((Boolean) f.apply(o)) {
             builder.add(o);
           }
         }
@@ -1875,13 +1876,13 @@ public abstract class Codes {
       listPartition0(BuiltIn.LIST_PARTITION);
 
   private static ApplicableImpl listPartition0(BuiltIn builtIn) {
-    return new Applicable2<List, Applicable, List>(builtIn) {
+    return new Applicable2<List, Applicable1<Boolean, Object>, List>(builtIn) {
       @Override
-      public List apply(Applicable f, List list) {
+      public List apply(Applicable1<Boolean, Object> f, List list) {
         final ImmutableList.Builder trueBuilder = ImmutableList.builder();
         final ImmutableList.Builder falseBuilder = ImmutableList.builder();
         for (Object o : list) {
-          ((Boolean) f.apply(null, o) ? trueBuilder : falseBuilder).add(o);
+          (f.apply(o) ? trueBuilder : falseBuilder).add(o);
         }
         return ImmutableList.of(trueBuilder.build(), falseBuilder.build());
       }
@@ -1897,12 +1898,13 @@ public abstract class Codes {
       listFold0(BuiltIn.LIST_FOLDR, false);
 
   private static ApplicableImpl listFold0(BuiltIn builtIn, boolean left) {
-    return new Applicable3<Object, Applicable, Object, List>(builtIn) {
+    return new Applicable3<Object, Applicable1<Object, List>, Object, List>(
+        builtIn) {
       @Override
-      public Object apply(Applicable f, Object init, List list) {
+      public Object apply(Applicable1<Object, List> f, Object init, List list) {
         Object b = init;
         for (Object a : left ? list : Lists.reverse(list)) {
-          b = f.apply(null, FlatLists.of(a, b));
+          b = f.apply(FlatLists.of(a, b));
         }
         return b;
       }
@@ -1948,9 +1950,13 @@ public abstract class Codes {
       new ListTabulate(BuiltIn.LIST_TABULATE, Pos.ZERO);
 
   /** Implements {@link BuiltIn#LIST_TABULATE}. */
-  private static class ListTabulate extends PositionedApplicableImpl {
+  private static class ListTabulate
+      extends Applicable2<Object, Integer, Applicable1> implements Positioned {
+    private final BuiltIn builtIn;
+
     ListTabulate(BuiltIn builtIn, Pos pos) {
       super(builtIn, pos);
+      this.builtIn = builtIn;
     }
 
     @Override
@@ -1959,16 +1965,13 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      final List tuple = (List) arg;
-      final int count = (Integer) tuple.get(0);
+    public Object apply(Integer count, Applicable1 f) {
       if (count < 0) {
         throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
       }
-      final Applicable fn = (Applicable) tuple.get(1);
-      final ImmutableList.Builder<Object> builder = ImmutableList.builder();
+      final ImmutableList.Builder builder = ImmutableList.builder();
       for (int i = 0; i < count; i++) {
-        builder.add(fn.apply(env, i));
+        builder.add(f.apply(i));
       }
       return builder.build();
     }

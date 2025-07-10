@@ -60,7 +60,8 @@ import net.hydromatic.morel.compile.BuiltIn;
  * @param <A1> type of argument 1
  */
 @SuppressWarnings({"rawtypes", "unchecked"})
-public abstract class Applicable2<R, A0, A1> extends ApplicableImpl {
+public abstract class Applicable2<R, A0, A1> extends ApplicableImpl
+    implements Applicable1<R, List> {
   protected Applicable2(BuiltIn builtIn, Pos pos) {
     super(builtIn, pos);
   }
@@ -69,7 +70,12 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl {
     this(builtIn, Pos.ZERO);
   }
 
-  @Override
+  @Override // Applicable1
+  public R apply(List list) {
+    return apply((A0) list.get(0), (A1) list.get(1));
+  }
+
+  @Override // Applicable
   public Object apply(EvalEnv env, Object argValue) {
     final List list = (List) argValue;
     return apply((A0) list.get(0), (A1) list.get(1));
