@@ -43,6 +43,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.eval.Applicable;
+import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.Applicable3;
 import net.hydromatic.morel.eval.Applicable4;
@@ -846,11 +847,14 @@ public class Core {
     }
 
     /** Converts to an {@link Applicable} with one argument, or returns null. */
-    public @Nullable Applicable toApplicable1(
+    public @Nullable Applicable1 toApplicable1(
         TypeSystem typeSystem, @Nullable Pos pos) {
       Object o = toBuiltIn(typeSystem, pos);
       if (o instanceof Applicable2) {
-        return ((Applicable2) o).partial1();
+        return ((Applicable2) o).curry(BuiltIn.STRING_IS_PREFIX);
+      }
+      if (o instanceof Applicable3) {
+        return ((Applicable3) o).curry(BuiltIn.STRING_IS_PREFIX);
       }
       return null;
     }

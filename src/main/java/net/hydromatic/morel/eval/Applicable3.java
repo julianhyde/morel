@@ -60,6 +60,25 @@ public abstract class Applicable3<R, A0, A1, A2> extends ApplicableImpl {
   }
 
   public abstract R apply(A0 a0, A1 a1, A2 a2);
+
+  public Applicable1 curry(BuiltIn builtIn) {
+    return new Applicable2.PartialApplicable<Applicable1, A0>(builtIn, this) {
+      @Override
+      public Applicable1 apply(A0 a0) {
+        return new Applicable1<Applicable1, A1>() {
+          @Override
+          public Applicable1 apply(A1 a1) {
+            return new Applicable1<R, A2>() {
+              @Override
+              public R apply(A2 a2) {
+                return Applicable3.this.apply(a0, a1, a2);
+              }
+            };
+          }
+        };
+      }
+    };
+  }
 }
 
 // End Applicable3.java

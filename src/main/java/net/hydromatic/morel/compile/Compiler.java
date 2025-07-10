@@ -47,6 +47,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.eval.Applicable;
+import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.Applicable3;
 import net.hydromatic.morel.eval.Applicable4;
@@ -404,7 +405,7 @@ public class Compiler {
     if (gather != null) {
       // If we have a gather, we can compile the argument and return the
       // gather code.
-      final @Nullable Applicable applicable1;
+      final @Nullable Applicable1 applicable1;
       final @Nullable Applicable2 applicable2;
       final @Nullable Applicable3 applicable3;
       final @Nullable Applicable4 applicable4;
@@ -430,7 +431,7 @@ public class Compiler {
           applicable1 = gather.fnLiteral.toApplicable1(typeSystem, apply.pos);
           if (applicable1 != null) {
             final List<Code> argCodes = compileArgs(cx, gather.args);
-            return Codes.apply(applicable1, argCodes.get(0));
+            return Codes.apply1(applicable1, argCodes.get(0));
           }
           break;
         case 2:
@@ -1148,6 +1149,11 @@ public class Compiler {
           return new Gather((Core.Literal) fn, args);
         case APPLY:
           final Core.Apply apply = (Core.Apply) fn;
+          if (apply.arg.op == Op.TUPLE || apply.arg.op == Op.RECORD) {
+            // A mixture of tuples and chained arguments,
+            // such as "General.o (f, g) arg", is not a valid Gather.
+            return null;
+          }
           return of2(apply.fn, plus(apply.arg, args));
         default:
           return null;
