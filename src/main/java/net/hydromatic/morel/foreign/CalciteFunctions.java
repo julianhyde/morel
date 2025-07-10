@@ -365,7 +365,13 @@ public class CalciteFunctions {
         final Core.NonRecValDecl valDecl3 =
             (Core.NonRecValDecl)
                 Resolver.of(resolved.typeMap, env, null).toCore(valDecl2);
-        final Core.Exp e3 = Compiles.toExp(valDecl3);
+
+        // Limited inlining, e.g. to convert "#filter Bag" to a function
+        // literal.
+        final Inliner inliner = Inliner.of(typeSystem, env, null);
+        final Core.NonRecValDecl valDecl4 = valDecl3.accept(inliner);
+
+        final Core.Exp e3 = Compiles.toExp(valDecl4);
         code = new Compiler(typeSystem).compile(env, e3);
         f = Converters.toCalcite(e3.type, typeFactory);
       }
