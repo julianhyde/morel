@@ -57,7 +57,7 @@ import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.compile.CompileException;
-import net.hydromatic.morel.eval.Applicable;
+import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.ForeignValue;
@@ -1098,8 +1098,8 @@ public class MainTest {
 
     // Invoke a function that has two curried arguments on one argument.
     final String ml1 = "String.isPrefix \"mo\"";
-    final String plan1 = "apply(fnValue String.isPrefix, argCode constant(mo))";
-    ml(ml1).assertEval(instanceOf(Applicable.class)).assertPlan(isCode(plan1));
+    final String plan1 = "apply1(fnValue String.isPrefix, constant(mo))";
+    ml(ml1).assertEval(instanceOf(Applicable1.class)).assertPlan(isCode(plan1));
   }
 
   /**

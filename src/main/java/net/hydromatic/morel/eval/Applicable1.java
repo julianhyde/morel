@@ -18,9 +18,6 @@
  */
 package net.hydromatic.morel.eval;
 
-import net.hydromatic.morel.ast.Pos;
-import net.hydromatic.morel.compile.BuiltIn;
-
 /**
  * Applicable whose argument is an atomic value.
  *
@@ -30,21 +27,13 @@ import net.hydromatic.morel.compile.BuiltIn;
  * @param <A0> type of argument
  */
 @SuppressWarnings({"rawtypes", "unchecked"})
-public abstract class Applicable1<R, A0> extends Codes.BaseApplicable {
-  protected Applicable1(BuiltIn builtIn, Pos pos) {
-    super(builtIn, pos);
-  }
-
-  protected Applicable1(BuiltIn builtIn) {
-    this(builtIn, Pos.ZERO);
-  }
+public interface Applicable1<R, A0> extends Describable {
+  R apply(A0 a0);
 
   @Override
-  public Object apply(EvalEnv env, Object argValue) {
-    return apply((A0) argValue);
+  default Describer describe(Describer describer) {
+    throw new UnsupportedOperationException("describe");
   }
-
-  public abstract R apply(A0 a0);
 }
 
 // End Applicable1.java

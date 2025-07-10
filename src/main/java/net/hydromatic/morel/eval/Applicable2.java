@@ -77,39 +77,37 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl {
 
   public abstract R apply(A0 a0, A1 a1);
 
-  public Applicable partial1() {
-    return new PartialApplicable(this) {
+  public Applicable1 curry(BuiltIn builtIn) {
+    return new PartialApplicable<Applicable1, A0>(builtIn, this) {
       @Override
-      public Object apply(EvalEnv env, Object a0) {
-        return new SimpleApplicable() {
+      public Applicable1 apply(A0 a0) {
+        return new Applicable1<R, A1>() {
           @Override
-          public Object apply(EvalEnv env, Object a1) {
-            return Applicable2.this.apply((A0) a0, (A1) a1);
+          public R apply(A1 a1) {
+            return Applicable2.this.apply(a0, a1);
+          }
+
+          @Override
+          public Describer describe(Describer describer) {
+            return Applicable2.this.describe(describer);
           }
         };
       }
     };
   }
 
-  abstract static class PartialApplicable implements Applicable {
+  abstract static class PartialApplicable<R, A0>
+      extends Codes.BaseApplicable1<R, A0> {
     private final Applicable parent;
 
-    PartialApplicable(Applicable parent) {
+    PartialApplicable(BuiltIn builtIn, Applicable parent) {
+      super(builtIn);
       this.parent = parent;
     }
 
     @Override
     public Describer describe(Describer describer) {
       return parent.describe(describer);
-    }
-  }
-
-  abstract static class SimpleApplicable implements Applicable {
-    SimpleApplicable() {}
-
-    @Override
-    public Describer describe(Describer describer) {
-      throw new UnsupportedOperationException();
     }
   }
 }

@@ -234,7 +234,7 @@ public enum BuiltIn {
               1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), h.get(0)))),
 
   /** Function "General.ignore", of type "&alpha; &rarr; unit". */
-  IGNORE(
+  GENERAL_IGNORE(
       "General",
       "ignore",
       "ignore",
