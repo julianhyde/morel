@@ -1278,7 +1278,7 @@ public abstract class Codes {
    * Implements {@link BuiltIn#STRING_FIELDS} and {@link BuiltIn#STRING_TOKENS}.
    */
   private static class StringTokenize
-      extends Applicable2<List<String>, Applicable, String> {
+      extends Applicable2<List<String>, Applicable1<Boolean, Character>, String> {
     final BuiltIn builtIn;
 
     StringTokenize(BuiltIn builtIn) {
@@ -1287,13 +1287,12 @@ public abstract class Codes {
     }
 
     @Override
-    public List<String> apply(Applicable applicable, String s) {
+    public List<String> apply(Applicable1<Boolean, Character> f, String s) {
       List<String> result = new ArrayList<>();
       int h = 0;
       for (int i = 0; i < s.length(); i++) {
         char c = s.charAt(i);
-        Boolean b = (Boolean) applicable.apply(null, c);
-        if (b) {
+        if (f.apply(c)) {
           if (builtIn == BuiltIn.STRING_FIELDS || i > h) {
             // String.tokens only adds fields if they are non-empty.
             result.add(s.substring(h, i));
