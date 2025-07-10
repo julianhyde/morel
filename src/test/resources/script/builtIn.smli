@@ -662,7 +662,7 @@ Bag.tabulate (~1, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fact
 >   raised at: stdIn:1.1-1.86
 Sys.plan ();
 > val it =
->   "apply(fnValue Bag.tabulate, argCode tuple(constant(-1), let1(matchCode match(fact, match(n, apply(fnCode match(true, constant(1), _, apply2(fnValue *, get(name n), apply(fnCode link, argCode apply2(fnValue -, get(name n), constant(1))))), argCode apply2(fnValue =, get(name n), constant(0))))), resultCode get(name fact))))"
+>   "apply2(fnValue Bag.tabulate, constant(-1), let1(matchCode match(fact, match(n, apply(fnCode match(true, constant(1), _, apply2(fnValue *, get(name n), apply(fnCode link, argCode apply2(fnValue -, get(name n), constant(1))))), argCode apply2(fnValue =, get(name n), constant(0))))), resultCode get(name fact)))"
 >   : string
 
 (* General ----------------------------------------------------- *)
@@ -1412,7 +1412,7 @@ List.tabulate (~1, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fac
 >   raised at: stdIn:1.1-1.87
 Sys.plan ();
 > val it =
->   "apply(fnValue List.tabulate, argCode tuple(constant(-1), let1(matchCode match(fact, match(n, apply(fnCode match(true, constant(1), _, apply2(fnValue *, get(name n), apply(fnCode link, argCode apply2(fnValue -, get(name n), constant(1))))), argCode apply2(fnValue =, get(name n), constant(0))))), resultCode get(name fact))))"
+>   "apply2(fnValue List.tabulate, constant(-1), let1(matchCode match(fact, match(n, apply(fnCode match(true, constant(1), _, apply2(fnValue *, get(name n), apply(fnCode link, argCode apply2(fnValue -, get(name n), constant(1))))), argCode apply2(fnValue =, get(name n), constant(0))))), resultCode get(name fact)))"
 >   : string
 
 (*) val collate : ('a * 'a -> order) -> 'a list * 'a list -> order
@@ -4378,7 +4378,7 @@ Vector.tabulate (5, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fa
 > val it = #[1,1,2,6,24] : int vector
 Sys.plan ();
 > val it =
->   "apply(fnValue Vector.tabulate, argCode tuple(constant(5), let1(matchCode match(fact, match(n, apply(fnCode match(true, constant(1), _, apply2(fnValue *, get(name n), apply(fnCode link, argCode apply2(fnValue -, get(name n), constant(1))))), argCode apply2(fnValue =, get(name n), constant(0))))), resultCode get(name fact))))"
+>   "apply2(fnValue Vector.tabulate, constant(5), let1(matchCode match(fact, match(n, apply(fnCode match(true, constant(1), _, apply2(fnValue *, get(name n), apply(fnCode link, argCode apply2(fnValue -, get(name n), constant(1))))), argCode apply2(fnValue =, get(name n), constant(0))))), resultCode get(name fact)))"
 >   : string
 
 (*) Vector.length : 'a vector -> int
