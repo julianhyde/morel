@@ -221,19 +221,18 @@ public abstract class Codes {
 
   /** Implements {@link #OP_NEGATE} for type {@code int}. */
   private static final Applicable Z_NEGATE_INT =
-      new ApplicableImpl(BuiltIn.OP_NEGATE) {
+      new BaseApplicable1<Integer, Integer>(BuiltIn.OP_NEGATE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return -((Integer) arg);
+        public Integer apply(Integer i) {
+          return -i;
         }
       };
 
   /** Implements {@link #OP_NEGATE} for type {@code real}. */
   private static final Applicable Z_NEGATE_REAL =
-      new ApplicableImpl(BuiltIn.OP_NEGATE) {
+      new BaseApplicable1<Float, Float>(BuiltIn.OP_NEGATE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final float f = (Float) arg;
+        public Float apply(Float f) {
           if (Float.isNaN(f)) {
             // ~nan -> nan
             // nan (or any other value f such that isNan(f)) -> ~nan
@@ -363,17 +362,28 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#CHAR_CHR */
-  private static final Applicable CHAR_CHR =
-      new ApplicableImpl(BuiltIn.CHAR_CHR) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          int ord = (int) arg;
-          if (ord < 0 || ord > 255) {
-            throw new MorelRuntimeException(BuiltInExn.CHR, pos);
-          }
-          return (char) ord;
-        }
-      };
+  private static final Applicable1 CHAR_CHR = new CharChr(Pos.ZERO);
+
+  private static class CharChr
+      extends BasePositionedApplicable1<Character, Integer>
+      implements Positioned {
+    CharChr(Pos pos) {
+      super(BuiltIn.CHAR_CHR, pos);
+    }
+
+    @Override
+    public CharChr withPos(Pos pos) {
+      return new CharChr(pos);
+    }
+
+    @Override
+    public Character apply(Integer ord) {
+      if (ord < 0 || ord > 255) {
+        throw new MorelRuntimeException(BuiltInExn.CHR, pos);
+      }
+      return (char) ord.intValue();
+    }
+  }
 
   /** @see BuiltIn#CHAR_COMPARE */
   private static final Applicable CHAR_COMPARE =
@@ -407,20 +417,19 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#CHAR_FROM_CSTRING */
-  private static final Applicable CHAR_FROM_CSTRING =
-      new ApplicableImpl(BuiltIn.CHAR_FROM_CSTRING) {
+  private static final Applicable1<List, String> CHAR_FROM_CSTRING =
+      new BaseApplicable1<List, String>(BuiltIn.CHAR_FROM_CSTRING) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
+        public List apply(String s) {
           throw new UnsupportedOperationException("CHAR_FROM_CSTRING");
         }
       };
 
   /** @see BuiltIn#CHAR_FROM_STRING */
   private static final Applicable CHAR_FROM_STRING =
-      new ApplicableImpl(BuiltIn.CHAR_FROM_STRING) {
+      new BaseApplicable1<List, String>(BuiltIn.CHAR_FROM_STRING) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          String s = (String) arg;
+        public List apply(String s) {
           Character c = Parsers.fromString(s);
           return c == null ? OPTION_NONE : optionSome(c);
         }
@@ -524,82 +533,104 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#CHAR_ORD */
-  private static final Applicable CHAR_ORD =
-      new ApplicableImpl(BuiltIn.CHAR_ORD) {
+  private static final Applicable1 CHAR_ORD =
+      new BaseApplicable1<Integer, Character>(BuiltIn.CHAR_ORD) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (int) ((char) arg);
+        public Integer apply(Character arg) {
+          return (int) arg;
         }
       };
 
   /** @see BuiltIn#CHAR_PRED */
-  private static final Applicable CHAR_PRED =
-      new ApplicableImpl(BuiltIn.CHAR_PRED) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          char c = (char) arg;
-          if (c == CHAR_MIN_CHAR) {
-            throw new MorelRuntimeException(BuiltInExn.CHR, pos);
-          }
-          return (char) (c - 1);
-        }
-      };
+  private static final Applicable1 CHAR_PRED = new CharPred(Pos.ZERO);
+
+  /** Implements {@link #CHAR_PRED}. */
+  private static class CharPred
+      extends BasePositionedApplicable1<Character, Character> {
+    CharPred(Pos pos) {
+      super(BuiltIn.CHAR_PRED, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new CharPred(pos);
+    }
+
+    @Override
+    public Character apply(Character c) {
+      if (c == CHAR_MIN_CHAR) {
+        throw new MorelRuntimeException(BuiltInExn.CHR, pos);
+      }
+      return (char) (c - 1);
+    }
+  }
 
   /** @see BuiltIn#CHAR_SUCC */
-  private static final Applicable CHAR_SUCC =
-      new ApplicableImpl(BuiltIn.CHAR_SUCC) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          char c = (char) arg;
-          if (c == CHAR_MAX_CHAR) {
-            throw new MorelRuntimeException(BuiltInExn.CHR, pos);
-          }
-          return (char) (c + 1);
-        }
-      };
+  private static final Applicable CHAR_SUCC = new CharSucc(Pos.ZERO);
+
+  /** Implements {@link #CHAR_SUCC}. */
+  private static class CharSucc
+      extends BasePositionedApplicable1<Character, Character> {
+    CharSucc(Pos pos) {
+      super(BuiltIn.CHAR_SUCC, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new CharSucc(pos);
+    }
+
+    @Override
+    public Character apply(Character c) {
+      if (c.equals(CHAR_MAX_CHAR)) {
+        throw new MorelRuntimeException(BuiltInExn.CHR, pos);
+      }
+      return (char) (c + 1);
+    }
+  }
 
   /** @see BuiltIn#CHAR_TO_CSTRING */
   private static final Applicable CHAR_TO_CSTRING =
-      new ApplicableImpl(BuiltIn.CHAR_TO_CSTRING) {
+      new BaseApplicable1<String, Character>(BuiltIn.CHAR_TO_CSTRING) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
+        public String apply(Character character) {
           throw new UnsupportedOperationException("CHAR_TO_CSTRING");
         }
       };
 
   /** @see BuiltIn#CHAR_TO_LOWER */
   private static final Applicable CHAR_TO_LOWER =
-      new ApplicableImpl(BuiltIn.CHAR_TO_LOWER) {
+      new BaseApplicable1<Character, Character>(BuiltIn.CHAR_TO_LOWER) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.toLowerCase((char) arg);
+        public Character apply(Character c) {
+          return Character.toLowerCase(c);
         }
       };
 
   /** @see BuiltIn#CHAR_TO_STRING */
   private static final Applicable CHAR_TO_STRING =
-      new ApplicableImpl(BuiltIn.CHAR_TO_STRING) {
+      new BaseApplicable1<String, Character>(BuiltIn.CHAR_TO_STRING) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Parsers.charToString((Character) arg);
+        public String apply(Character c) {
+          return Parsers.charToString(c);
         }
       };
 
   /** @see BuiltIn#CHAR_TO_UPPER */
   private static final Applicable CHAR_TO_UPPER =
-      new ApplicableImpl(BuiltIn.CHAR_TO_UPPER) {
+      new BaseApplicable1<Character, Character>(BuiltIn.CHAR_TO_LOWER) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Character.toUpperCase((char) arg);
+        public Character apply(Character c) {
+          return Character.toUpperCase(c);
         }
       };
 
   /** @see BuiltIn#INT_ABS */
   private static final Applicable INT_ABS =
-      new ApplicableImpl(BuiltIn.INT_ABS) {
+      new BaseApplicable1<Integer, Integer>(BuiltIn.INT_ABS) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Math.abs((int) arg);
+        public Integer apply(Integer i) {
+          return Math.abs(i);
         }
       };
 
@@ -627,10 +658,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#INT_FROM_STRING */
   private static final Applicable INT_FROM_STRING =
-      new ApplicableImpl(BuiltIn.INT_FROM_STRING) {
+      new BaseApplicable1<List, String>(BuiltIn.INT_FROM_STRING) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final String s = (String) arg;
+        public List apply(String s) {
           final String s2 = s.replace('~', '-');
           final Matcher matcher = INT_PATTERN.matcher(s2);
           if (!matcher.find(0)) {
@@ -744,10 +774,10 @@ public abstract class Codes {
 
   /** @see BuiltIn#INT_SIGN */
   private static final Applicable INT_SIGN =
-      new ApplicableImpl(BuiltIn.INT_SIGN) {
+      new BaseApplicable1<Integer, Integer>(BuiltIn.INT_SIGN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Integer.compare((Integer) arg, 0);
+        public Integer apply(Integer i) {
+          return Integer.compare(i, 0);
         }
       };
 
@@ -759,12 +789,11 @@ public abstract class Codes {
 
   /** @see BuiltIn#INT_TO_STRING */
   private static final Applicable INT_TO_STRING =
-      new ApplicableImpl(BuiltIn.INT_TO_STRING) {
+      new BaseApplicable1<String, Integer>(BuiltIn.INT_TO_STRING) {
         @Override
-        public String apply(EvalEnv env, Object arg) {
+        public String apply(Integer f) {
           // Java's formatting is reasonably close to ML's formatting,
           // if we replace minus signs.
-          Integer f = (Integer) arg;
           final String s = Integer.toString(f);
           return s.replace('-', '~');
         }
@@ -791,7 +820,7 @@ public abstract class Codes {
     }
   }
 
-  /** Implements {@link BuiltIn#INTERACT_USE}. */
+  /** Implements {@link #INTERACT_USE}. */
   private static class InteractUse extends PositionedApplicableImpl {
     private final boolean silent;
 
@@ -1080,19 +1109,18 @@ public abstract class Codes {
 
   /** An applicable that negates a boolean value. */
   private static final Applicable NOT =
-      new ApplicableImpl(BuiltIn.NOT) {
+      new BaseApplicable1<Boolean, Boolean>(BuiltIn.NOT) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return !(Boolean) arg;
+        public Boolean apply(Boolean b) {
+          return !(Boolean) b;
         }
       };
 
   /** An applicable that returns the absolute value of an int. */
-  private static final Applicable ABS =
-      new ApplicableImpl(BuiltIn.ABS) {
+  private static final Applicable1 ABS =
+      new BaseApplicable1<Integer, Integer>(BuiltIn.ABS) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final Integer integer = (Integer) arg;
+        public Integer apply(Integer integer) {
           return integer >= 0 ? integer : -integer;
         }
       };
@@ -1211,7 +1239,7 @@ public abstract class Codes {
   /** @see BuiltIn#STRING_SUB */
   private static final Applicable STRING_SUB = new StringSub(Pos.ZERO);
 
-  /** Implements {@link BuiltIn#STRING_SUB}. */
+  /** Implements {@link #STRING_SUB}. */
   private static class StringSub extends Applicable2<Character, String, Integer>
       implements Positioned {
     StringSub(Pos pos) {
@@ -1274,9 +1302,7 @@ public abstract class Codes {
   private static final Applicable STRING_TOKENS =
       new StringTokenize(BuiltIn.STRING_TOKENS);
 
-  /**
-   * Implements {@link BuiltIn#STRING_FIELDS} and {@link BuiltIn#STRING_TOKENS}.
-   */
+  /** Implements {@link #STRING_FIELDS} and {@link #STRING_TOKENS}. */
   private static class StringTokenize
       extends Applicable2<
           List<String>, Applicable1<Boolean, Character>, String> {
@@ -1309,7 +1335,7 @@ public abstract class Codes {
     }
   }
 
-  /** Implements {@link BuiltIn#STRING_SUB}. */
+  /** Implements {@link #STRING_SUB}. */
   private static class StringExtract
       extends Applicable3<String, String, Integer, List> implements Positioned {
     StringExtract(Pos pos) {
@@ -1345,7 +1371,7 @@ public abstract class Codes {
   private static final Applicable STRING_SUBSTRING =
       new StringSubstring(Pos.ZERO);
 
-  /** Implements {@link BuiltIn#STRING_SUBSTRING}. */
+  /** Implements {@link #STRING_SUBSTRING}. */
   private static class StringSubstring
       extends Applicable3<String, String, Integer, Integer>
       implements Positioned {
@@ -1371,9 +1397,9 @@ public abstract class Codes {
   private static final Applicable STRING_CONCAT =
       new StringConcat(BuiltIn.STRING_CONCAT, Pos.ZERO);
 
-  /** Implements {@link BuiltIn#STRING_CONCAT}. */
+  /** Implements {@link #STRING_CONCAT}. */
   private static class StringConcat
-      extends BaseApplicable1<String, List<String>> implements Positioned {
+      extends BasePositionedApplicable1<String, List<String>> {
     StringConcat(BuiltIn builtIn, Pos pos) {
       super(builtIn, pos);
     }
@@ -1400,7 +1426,7 @@ public abstract class Codes {
   private static final Applicable STRING_CONCAT_WITH =
       new StringConcatWith(BuiltIn.STRING_CONCAT_WITH, Pos.ZERO);
 
-  /** Implements {@link BuiltIn#STRING_CONCAT_WITH}. */
+  /** Implements {@link #STRING_CONCAT_WITH}. */
   private static class StringConcatWith
       extends Applicable2<String, String, List<String>> implements Positioned {
     StringConcatWith(BuiltIn builtIn, Pos pos) {
@@ -1437,13 +1463,13 @@ public abstract class Codes {
 
   /** @see BuiltIn#STRING_IMPLODE */
   private static final Applicable STRING_IMPLODE =
-      new ApplicableImpl(BuiltIn.STRING_IMPLODE) {
+      new BaseApplicable1<String, List<Character>>(BuiltIn.STRING_IMPLODE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
+        public String apply(List<Character> characters) {
           // Note: In theory this function should raise Size, but it is not
           // possible in practice because List.size() is never larger than
           // Integer.MAX_VALUE.
-          return String.valueOf(Chars.toArray((List) arg));
+          return String.valueOf(Chars.toArray(characters));
         }
       };
 
@@ -1546,8 +1572,8 @@ public abstract class Codes {
   private static final Applicable LIST_HD =
       new ListHd(BuiltIn.LIST_HD, Pos.ZERO);
 
-  /** Implements {@link BuiltIn#LIST_HD}. */
-  private static class ListHd extends PositionedApplicableImpl {
+  /** Implements {@link #LIST_HD}. */
+  private static class ListHd extends BasePositionedApplicable1<Object, List> {
     ListHd(BuiltIn builtIn, Pos pos) {
       super(builtIn, pos);
     }
@@ -1558,8 +1584,7 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      final List list = (List) arg;
+    public Object apply(List list) {
       if (list.isEmpty()) {
         throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
       }
@@ -1571,8 +1596,8 @@ public abstract class Codes {
   private static final Applicable LIST_TL =
       new ListTl(BuiltIn.LIST_TL, Pos.ZERO);
 
-  /** Implements {@link BuiltIn#LIST_TL}. */
-  private static class ListTl extends PositionedApplicableImpl {
+  /** Implements {@link #LIST_TL}. */
+  private static class ListTl extends BasePositionedApplicable1<List, List> {
     ListTl(BuiltIn builtIn, Pos pos) {
       super(builtIn, pos);
     }
@@ -1583,8 +1608,7 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      final List list = (List) arg;
+    public List apply(List list) {
       final int size = list.size();
       if (size == 0) {
         throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
@@ -1597,7 +1621,7 @@ public abstract class Codes {
   private static final Applicable LIST_LAST =
       new ListLast(BuiltIn.LIST_LAST, Pos.ZERO);
 
-  /** Implements {@link BuiltIn#LIST_LAST}. */
+  /** Implements {@link #LIST_LAST}. */
   private static class ListLast extends PositionedApplicableImpl {
     ListLast(BuiltIn builtIn, Pos pos) {
       super(builtIn, pos);
@@ -1641,7 +1665,7 @@ public abstract class Codes {
   private static final Applicable LIST_NTH =
       new ListNth(BuiltIn.LIST_NTH, Pos.ZERO);
 
-  /** Implements {@link BuiltIn#LIST_NTH} and {@link BuiltIn#VECTOR_SUB}. */
+  /** Implements {@link #LIST_NTH} and {@link #VECTOR_SUB}. */
   private static class ListNth extends Applicable2<Object, List, Integer>
       implements Positioned {
     private final BuiltIn builtIn;
@@ -1669,7 +1693,7 @@ public abstract class Codes {
   private static final Applicable LIST_TAKE =
       new ListTake(BuiltIn.LIST_TAKE, Pos.ZERO);
 
-  /** Implements {@link BuiltIn#LIST_TAKE}. */
+  /** Implements {@link #LIST_TAKE}. */
   private static class ListTake extends Applicable2<List, List, Integer>
       implements Positioned {
     private final BuiltIn builtIn;
@@ -1707,10 +1731,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#LIST_REV */
   private static final Applicable LIST_REV =
-      new ApplicableImpl(BuiltIn.LIST_REV) {
+      new BaseApplicable1<List, List>(BuiltIn.LIST_REV) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final List list = (List) arg;
+        public List apply(List list) {
           return Lists.reverse(list);
         }
       };
@@ -1732,45 +1755,67 @@ public abstract class Codes {
   }
 
   /** @see BuiltIn#LIST_EXCEPT */
-  private static final Applicable LIST_EXCEPT =
-      new ApplicableImpl(BuiltIn.LIST_EXCEPT) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final List<List> list = (List) arg;
-          if (list.isEmpty()) {
-            throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
-          }
-          List collection = new ArrayList(list.get(0));
-          for (int i = 1; i < list.size(); i++) {
-            collection.removeAll(list.get(i));
-          }
-          if (collection.size() == list.get(0).size()) {
-            collection = list.get(0); // save the effort of making a copy
-          }
-          return ImmutableList.copyOf(collection);
-        }
-      };
+  private static final Applicable LIST_EXCEPT = new ListExcept(Pos.ZERO);
+
+  /** Implements {@link #LIST_EXCEPT}. */
+  private static class ListExcept
+      extends BasePositionedApplicable1<List, List<List>> {
+    ListExcept(Pos pos) {
+      super(BuiltIn.LIST_EXCEPT, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new ListExcept(pos);
+    }
+
+    @Override
+    public List apply(List<List> lists) {
+      if (lists.isEmpty()) {
+        throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
+      }
+      List collection = new ArrayList(lists.get(0));
+      for (int i = 1; i < lists.size(); i++) {
+        collection.removeAll(lists.get(i));
+      }
+      if (collection.size() == lists.get(0).size()) {
+        collection = lists.get(0); // save the effort of making a copy
+      }
+      return ImmutableList.copyOf(collection);
+    }
+  }
 
   /** @see BuiltIn#LIST_INTERSECT */
-  private static final Applicable LIST_INTERSECT =
-      new ApplicableImpl(BuiltIn.LIST_EXCEPT) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final List<List> list = (List) arg;
-          if (list.isEmpty()) {
-            throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
-          }
-          List collection = new ArrayList(list.get(0));
-          for (int i = 1; i < list.size(); i++) {
-            final Set set = new HashSet(list.get(i));
-            collection.retainAll(set);
-          }
-          if (collection.size() == list.get(0).size()) {
-            collection = list.get(0); // save the effort of making a copy
-          }
-          return ImmutableList.copyOf(collection);
-        }
-      };
+  private static final Applicable LIST_INTERSECT = new ListIntersect(Pos.ZERO);
+
+  /** Implements {@link #LIST_INTERSECT}. */
+  private static class ListIntersect
+      extends BasePositionedApplicable1<List, List<List>> {
+    ListIntersect(Pos pos) {
+      super(BuiltIn.LIST_INTERSECT, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new ListIntersect(pos);
+    }
+
+    @Override
+    public List apply(List<List> lists) {
+      if (lists.isEmpty()) {
+        throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
+      }
+      List collection = new ArrayList(lists.get(0));
+      for (int i = 1; i < lists.size(); i++) {
+        final Set set = new HashSet(lists.get(i));
+        collection.retainAll(set);
+      }
+      if (collection.size() == lists.get(0).size()) {
+        collection = lists.get(0); // save the effort of making a copy
+      }
+      return ImmutableList.copyOf(collection);
+    }
+  }
 
   /** @see BuiltIn#LIST_REV_APPEND */
   private static final Applicable LIST_REV_APPEND =
@@ -1949,7 +1994,7 @@ public abstract class Codes {
   private static final Applicable LIST_TABULATE =
       new ListTabulate(BuiltIn.LIST_TABULATE, Pos.ZERO);
 
-  /** Implements {@link BuiltIn#LIST_TABULATE}. */
+  /** Implements {@link #LIST_TABULATE}. */
   private static class ListTabulate
       extends Applicable2<Object, Integer, Applicable1> implements Positioned {
     private final BuiltIn builtIn;
@@ -2193,25 +2238,36 @@ public abstract class Codes {
       new ListPairMap(BuiltIn.LIST_PAIR_MAP_EQ, Pos.ZERO, true);
 
   /** @see BuiltIn#LIST_PAIR_UNZIP */
-  private static final Applicable LIST_PAIR_UNZIP =
-      new ApplicableImpl(BuiltIn.LIST_PAIR_UNZIP) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final List<List<Object>> list = (List) arg;
-          if (list.isEmpty()) {
-            throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
-          }
-          final ImmutableList.Builder<@NonNull Object> builder0 =
-              ImmutableList.builder();
-          final ImmutableList.Builder<@NonNull Object> builder1 =
-              ImmutableList.builder();
-          for (List<Object> pair : list) {
-            builder0.add(pair.get(0));
-            builder1.add(pair.get(1));
-          }
-          return ImmutableList.of(builder0.build(), builder1.build());
-        }
-      };
+  private static final Applicable LIST_PAIR_UNZIP = new ListPairUnzip(Pos.ZERO);
+
+  /** Implements {@link #LIST_PAIR_UNZIP}. */
+  private static class ListPairUnzip
+      extends BasePositionedApplicable1<List<List>, List<List>> {
+    ListPairUnzip(Pos pos) {
+      super(BuiltIn.LIST_PAIR_UNZIP, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new ListPairUnzip(pos);
+    }
+
+    @Override
+    public List<List> apply(List<List> lists) {
+      if (lists.isEmpty()) {
+        throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
+      }
+      final ImmutableList.Builder<@NonNull Object> builder0 =
+          ImmutableList.builder();
+      final ImmutableList.Builder<@NonNull Object> builder1 =
+          ImmutableList.builder();
+      for (List<Object> pair : lists) {
+        builder0.add(pair.get(0));
+        builder1.add(pair.get(1));
+      }
+      return ImmutableList.of(builder0.build(), builder1.build());
+    }
+  }
 
   /** Helper for {@link #LIST_PAIR_ZIP} and {@link #LIST_PAIR_ZIP_EQ}. */
   private static class ListPairZip extends PositionedApplicableImpl {
@@ -2248,28 +2304,28 @@ public abstract class Codes {
 
   /** @see BuiltIn#MATH_ACOS */
   private static final Applicable MATH_ACOS =
-      new ApplicableImpl(BuiltIn.MATH_ACOS) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_ACOS) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.acos((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.acos(f);
         }
       };
 
   /** @see BuiltIn#MATH_ASIN */
   private static final Applicable MATH_ASIN =
-      new ApplicableImpl(BuiltIn.MATH_ASIN) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_ASIN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.asin((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.asin(f);
         }
       };
 
   /** @see BuiltIn#MATH_ATAN */
   private static final Applicable MATH_ATAN =
-      new ApplicableImpl(BuiltIn.MATH_ATAN) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_ATAN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.atan((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.atan(f);
         }
       };
 
@@ -2284,19 +2340,19 @@ public abstract class Codes {
 
   /** @see BuiltIn#MATH_COS */
   private static final Applicable MATH_COS =
-      new ApplicableImpl(BuiltIn.MATH_COS) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_COS) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.cos((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.cos(f);
         }
       };
 
   /** @see BuiltIn#MATH_COSH */
   private static final Applicable MATH_COSH =
-      new ApplicableImpl(BuiltIn.MATH_COSH) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_COSH) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.cosh((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.cosh(f);
         }
       };
 
@@ -2305,28 +2361,28 @@ public abstract class Codes {
 
   /** @see BuiltIn#MATH_EXP */
   private static final Applicable MATH_EXP =
-      new ApplicableImpl(BuiltIn.MATH_EXP) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_EXP) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.exp((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.exp(f);
         }
       };
 
   /** @see BuiltIn#MATH_LN */
   private static final Applicable MATH_LN =
-      new ApplicableImpl(BuiltIn.MATH_LN) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_LN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.log((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.log(f);
         }
       };
 
   /** @see BuiltIn#MATH_LOG10 */
   private static final Applicable MATH_LOG10 =
-      new ApplicableImpl(BuiltIn.MATH_LOG10) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_LOG10) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.log10((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.log10(f);
         }
       };
 
@@ -2344,46 +2400,46 @@ public abstract class Codes {
 
   /** @see BuiltIn#MATH_SIN */
   private static final Applicable MATH_SIN =
-      new ApplicableImpl(BuiltIn.MATH_SIN) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_SIN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.sin((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.sin(f);
         }
       };
 
   /** @see BuiltIn#MATH_SINH */
   private static final Applicable MATH_SINH =
-      new ApplicableImpl(BuiltIn.MATH_SINH) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_SINH) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.sinh((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.sinh(f);
         }
       };
 
   /** @see BuiltIn#MATH_SQRT */
   private static final Applicable MATH_SQRT =
-      new ApplicableImpl(BuiltIn.MATH_SQRT) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_SQRT) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.sqrt((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.sqrt(f);
         }
       };
 
   /** @see BuiltIn#MATH_TAN */
   private static final Applicable MATH_TAN =
-      new ApplicableImpl(BuiltIn.MATH_TAN) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_TAN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.tan((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.tan(f);
         }
       };
 
   /** @see BuiltIn#MATH_TANH */
   private static final Applicable MATH_TANH =
-      new ApplicableImpl(BuiltIn.MATH_TANH) {
+      new BaseApplicable1<Float, Float>(BuiltIn.MATH_TANH) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return (float) Math.tanh((Float) arg);
+        public Float apply(Float f) {
+          return (float) Math.tanh(f);
         }
       };
 
@@ -2401,25 +2457,22 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_GET_OPT */
   private static final Applicable OPTION_GET_OPT =
-      new ApplicableImpl(BuiltIn.OPTION_GET_OPT) {
+      new Applicable2<Object, List, Object>(BuiltIn.OPTION_GET_OPT) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final List tuple = (List) arg;
-          final List opt = (List) tuple.get(0);
+        public Object apply(List opt, Object o) {
           if (opt.size() == 2) {
             assert opt.get(0).equals("SOME");
             return opt.get(1); // SOME has 2 elements, NONE has 1
           }
-          return tuple.get(1);
+          return o;
         }
       };
 
   /** @see BuiltIn#OPTION_IS_SOME */
   private static final Applicable OPTION_IS_SOME =
-      new ApplicableImpl(BuiltIn.OPTION_IS_SOME) {
+      new BaseApplicable1<Boolean, List>(BuiltIn.OPTION_IS_SOME) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final List opt = (List) arg;
+        public Boolean apply(List opt) {
           return opt.size() == 2; // SOME has 2 elements, NONE has 1
         }
       };
@@ -2427,8 +2480,9 @@ public abstract class Codes {
   /** @see BuiltIn#OPTION_VAL_OF */
   private static final Applicable OPTION_VAL_OF = new OptionValOf(Pos.ZERO);
 
-  /** Implements {@link BuiltIn#OPTION_VAL_OF}. */
-  private static class OptionValOf extends PositionedApplicableImpl {
+  /** Implements {@link #OPTION_VAL_OF}. */
+  private static class OptionValOf
+      extends BasePositionedApplicable1<Object, List> {
     OptionValOf(Pos pos) {
       super(BuiltIn.OPTION_VAL_OF, pos);
     }
@@ -2439,8 +2493,7 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      final List opt = (List) arg;
+    public Object apply(List opt) {
       if (opt.size() == 2) { // SOME has 2 elements, NONE has 1
         return opt.get(1);
       } else {
@@ -2464,10 +2517,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#OPTION_JOIN */
   private static final Applicable OPTION_JOIN =
-      new ApplicableImpl(BuiltIn.OPTION_JOIN) {
+      new BaseApplicable1<List, List<List>>(BuiltIn.OPTION_JOIN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final List opt = (List) arg;
+        public List apply(List<List> opt) {
           return opt.size() == 2
               ? opt.get(1) // SOME(SOME(v)) -> SOME(v), SOME(NONE) -> NONE
               : opt; // NONE -> NONE
@@ -2545,19 +2597,18 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_ABS */
   private static final Applicable REAL_ABS =
-      new ApplicableImpl(BuiltIn.REAL_ABS) {
+      new BaseApplicable1<Float, Float>(BuiltIn.REAL_ABS) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Math.abs((float) arg);
+        public Float apply(Float f) {
+          return Math.abs(f);
         }
       };
 
   /** @see BuiltIn#REAL_CEIL */
   private static final Applicable REAL_CEIL =
-      new ApplicableImpl(BuiltIn.REAL_CEIL) {
+      new BaseApplicable1<Integer, Float>(BuiltIn.REAL_CEIL) {
         @Override
-        public Integer apply(EvalEnv env, Object arg) {
-          float f = (float) arg;
+        public Integer apply(Float f) {
           if (f >= 0) {
             return Math.round(f);
           } else {
@@ -2570,8 +2621,9 @@ public abstract class Codes {
   private static final Applicable REAL_CHECK_FLOAT =
       new RealCheckFloat(Pos.ZERO);
 
-  /** Implements {@link BuiltIn#REAL_CHECK_FLOAT}. */
-  private static class RealCheckFloat extends PositionedApplicableImpl {
+  /** Implements {@link #REAL_CHECK_FLOAT}. */
+  private static class RealCheckFloat
+      extends BasePositionedApplicable1<Float, Float> {
     RealCheckFloat(Pos pos) {
       super(BuiltIn.REAL_CHECK_FLOAT, pos);
     }
@@ -2582,8 +2634,7 @@ public abstract class Codes {
     }
 
     @Override
-    public Float apply(EvalEnv env, Object arg) {
-      final Float f = (Float) arg;
+    public Float apply(Float f) {
       if (Float.isFinite(f)) {
         return f;
       }
@@ -2598,7 +2649,7 @@ public abstract class Codes {
   /** @see BuiltIn#REAL_COMPARE */
   private static final Applicable REAL_COMPARE = new RealCompare(Pos.ZERO);
 
-  /** Implements {@link BuiltIn#REAL_COMPARE}. */
+  /** Implements {@link #REAL_COMPARE}. */
   private static class RealCompare extends Applicable2<List, Float, Float>
       implements Positioned {
     RealCompare(Pos pos) {
@@ -2642,10 +2693,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_FLOOR */
   private static final Applicable REAL_FLOOR =
-      new ApplicableImpl(BuiltIn.REAL_FLOOR) {
+      new BaseApplicable1<Integer, Float>(BuiltIn.REAL_FLOOR) {
         @Override
-        public Integer apply(EvalEnv env, Object arg) {
-          float f = (float) arg;
+        public Integer apply(Float f) {
           if (f >= 0) {
             return -Math.round(-f);
           } else {
@@ -2656,10 +2706,10 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_FROM_INT */
   private static final Applicable REAL_FROM_INT =
-      new ApplicableImpl(BuiltIn.REAL_FROM_INT) {
+      new BaseApplicable1<Float, Integer>(BuiltIn.REAL_FROM_INT) {
         @Override
-        public Float apply(EvalEnv env, Object arg) {
-          return (float) ((Integer) arg);
+        public Float apply(Integer i) {
+          return i.floatValue();
         }
       };
 
@@ -2693,10 +2743,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_FROM_STRING */
   private static final Applicable REAL_FROM_STRING =
-      new ApplicableImpl(BuiltIn.REAL_FROM_STRING) {
+      new BaseApplicable1<List, String>(BuiltIn.REAL_FROM_STRING) {
         @Override
-        public List apply(EvalEnv env, Object arg) {
-          final String s = (String) arg;
+        public List<Float> apply(String s) {
           final String s2 = s.replace('~', '-');
           final Matcher matcher = FLOAT_PATTERN.matcher(s2);
           if (!matcher.find(0)) {
@@ -2716,28 +2765,27 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_IS_FINITE */
   private static final Applicable REAL_IS_FINITE =
-      new ApplicableImpl(BuiltIn.REAL_IS_FINITE) {
+      new BaseApplicable1<Boolean, Float>(BuiltIn.REAL_IS_FINITE) {
         @Override
-        public Boolean apply(EvalEnv env, Object arg) {
-          return Float.isFinite((Float) arg);
+        public Boolean apply(Float f) {
+          return Float.isFinite(f);
         }
       };
 
   /** @see BuiltIn#REAL_IS_NAN */
   private static final Applicable REAL_IS_NAN =
-      new ApplicableImpl(BuiltIn.REAL_IS_NAN) {
+      new BaseApplicable1<Boolean, Float>(BuiltIn.REAL_IS_NAN) {
         @Override
-        public Boolean apply(EvalEnv env, Object arg) {
-          return Float.isNaN((Float) arg);
+        public Boolean apply(Float f) {
+          return Float.isNaN(f);
         }
       };
 
   /** @see BuiltIn#REAL_IS_NORMAL */
   private static final Applicable REAL_IS_NORMAL =
-      new ApplicableImpl(BuiltIn.REAL_IS_NORMAL) {
+      new BaseApplicable1<Boolean, Float>(BuiltIn.REAL_IS_NORMAL) {
         @Override
-        public Boolean apply(EvalEnv env, Object arg) {
-          final Float f = (Float) arg;
+        public Boolean apply(Float f) {
           return Float.isFinite(f)
               && (f >= Float.MIN_NORMAL || f <= -Float.MIN_NORMAL);
         }
@@ -2787,10 +2835,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_REAL_MOD */
   private static final Applicable REAL_REAL_MOD =
-      new ApplicableImpl(BuiltIn.REAL_REAL_MOD) {
+      new BaseApplicable1<Float, Float>(BuiltIn.REAL_REAL_MOD) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final float f = (Float) arg;
+        public Float apply(Float f) {
           if (Float.isInfinite(f)) {
             // realMod posInf  => 0.0
             // realMod negInf  => ~0.0
@@ -2802,37 +2849,36 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_REAL_CEIL */
   private static final Applicable REAL_REAL_CEIL =
-      new ApplicableImpl(BuiltIn.REAL_REAL_CEIL) {
+      new BaseApplicable1<Float, Float>(BuiltIn.REAL_REAL_CEIL) {
         @Override
-        public Float apply(EvalEnv env, Object arg) {
-          return (float) Math.ceil((float) arg);
+        public Float apply(Float f) {
+          return (float) Math.ceil(f);
         }
       };
 
   /** @see BuiltIn#REAL_REAL_FLOOR */
   private static final Applicable REAL_REAL_FLOOR =
-      new ApplicableImpl(BuiltIn.REAL_REAL_FLOOR) {
+      new BaseApplicable1<Float, Float>(BuiltIn.REAL_REAL_FLOOR) {
         @Override
-        public Float apply(EvalEnv env, Object arg) {
-          return (float) Math.floor((float) arg);
+        public Float apply(Float f) {
+          return (float) Math.floor(f);
         }
       };
 
   /** @see BuiltIn#REAL_REAL_ROUND */
   private static final Applicable REAL_REAL_ROUND =
-      new ApplicableImpl(BuiltIn.REAL_REAL_ROUND) {
+      new BaseApplicable1<Float, Float>(BuiltIn.REAL_REAL_ROUND) {
         @Override
-        public Float apply(EvalEnv env, Object arg) {
-          return (float) Math.rint((float) arg);
+        public Float apply(Float f) {
+          return (float) Math.rint(f);
         }
       };
 
   /** @see BuiltIn#REAL_REAL_TRUNC */
   private static final Applicable REAL_REAL_TRUNC =
-      new ApplicableImpl(BuiltIn.REAL_REAL_TRUNC) {
+      new BaseApplicable1<Float, Float>(BuiltIn.REAL_REAL_TRUNC) {
         @Override
-        public Float apply(EvalEnv env, Object arg) {
-          final float f = (float) arg;
+        public Float apply(Float f) {
           final float frac = f % 1;
           return f - frac;
         }
@@ -2849,10 +2895,10 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_ROUND */
   private static final Applicable REAL_ROUND =
-      new ApplicableImpl(BuiltIn.REAL_ROUND) {
+      new BaseApplicable1<Integer, Float>(BuiltIn.REAL_ROUND) {
         @Override
-        public Integer apply(EvalEnv env, Object arg) {
-          return Math.round((float) arg);
+        public Integer apply(Float f) {
+          return Math.round(f);
         }
       };
 
@@ -2884,8 +2930,9 @@ public abstract class Codes {
   /** @see BuiltIn#REAL_SIGN */
   private static final Applicable REAL_SIGN = new RealSign(Pos.ZERO);
 
-  /** Implements {@link BuiltIn#REAL_COMPARE}. */
-  private static class RealSign extends PositionedApplicableImpl {
+  /** Implements {@link #REAL_COMPARE}. */
+  private static class RealSign
+      extends BasePositionedApplicable1<Integer, Float> {
     RealSign(Pos pos) {
       super(BuiltIn.REAL_SIGN, pos);
     }
@@ -2896,8 +2943,7 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      final float f = (Float) arg;
+    public Integer apply(Float f) {
       if (Float.isNaN(f)) {
         throw new MorelRuntimeException(BuiltInExn.DOMAIN, pos);
       }
@@ -2911,19 +2957,18 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_SIGN_BIT */
   private static final Applicable REAL_SIGN_BIT =
-      new ApplicableImpl(BuiltIn.REAL_SIGN_BIT) {
+      new BaseApplicable1<Boolean, Float>(BuiltIn.REAL_SIGN_BIT) {
         @Override
-        public Boolean apply(EvalEnv env, Object arg) {
-          return isNegative((Float) arg);
+        public Boolean apply(Float f) {
+          return isNegative(f);
         }
       };
 
   /** @see BuiltIn#REAL_SPLIT */
   private static final Applicable REAL_SPLIT =
-      new ApplicableImpl(BuiltIn.REAL_SPLIT) {
+      new BaseApplicable1<List, Float>(BuiltIn.REAL_SPLIT) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final float f = (Float) arg;
+        public List apply(Float f) {
           final float frac;
           final float whole;
           if (Float.isInfinite(f)) {
@@ -2941,14 +2986,13 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_TO_MAN_EXP */
   private static final Applicable REAL_TO_MAN_EXP =
-      new ApplicableImpl(BuiltIn.REAL_TO_MAN_EXP) {
+      new BaseApplicable1<List, Float>(BuiltIn.REAL_TO_MAN_EXP) {
         @Override
-        public List apply(EvalEnv env, Object arg) {
+        public List apply(Float f) {
           // In IEEE 32 bit floating point,
           // bit 31 is the sign (1 bit);
           // bits 30 - 23 are the exponent (8 bits);
           // bits 22 - 0 are the mantissa (23 bits).
-          float f = (Float) arg;
           final int bits = Float.floatToRawIntBits(f);
           final int exp = (bits >> 23) & 0xFF;
           final float mantissa;
@@ -2971,23 +3015,21 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_TO_STRING */
   private static final Applicable REAL_TO_STRING =
-      new ApplicableImpl(BuiltIn.REAL_TO_STRING) {
+      new BaseApplicable1<String, Float>(BuiltIn.REAL_TO_STRING) {
         @Override
-        public String apply(EvalEnv env, Object arg) {
+        public String apply(Float f) {
           // Java's formatting is reasonably close to ML's formatting,
           // if we replace minus signs.
-          Float f = (Float) arg;
           return floatToString(f);
         }
       };
 
   /** @see BuiltIn#REAL_TRUNC */
   private static final Applicable REAL_TRUNC =
-      new ApplicableImpl(BuiltIn.REAL_TRUNC) {
+      new BaseApplicable1<Integer, Float>(BuiltIn.REAL_TRUNC) {
         @Override
-        public Integer apply(EvalEnv env, Object arg) {
-          float f = (float) arg;
-          return (int) f;
+        public Integer apply(Float f) {
+          return f.intValue();
         }
       };
 
@@ -3064,8 +3106,9 @@ public abstract class Codes {
   private static final Applicable RELATIONAL_ONLY =
       new RelationalOnly(Pos.ZERO);
 
-  /** Implements {@link BuiltIn#RELATIONAL_ONLY}. */
-  private static class RelationalOnly extends PositionedApplicableImpl {
+  /** Implements {@link #RELATIONAL_ONLY}. */
+  private static class RelationalOnly
+      extends BasePositionedApplicable1<Object, List> {
     RelationalOnly(Pos pos) {
       super(BuiltIn.RELATIONAL_ONLY, pos);
     }
@@ -3076,8 +3119,7 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      final List list = (List) arg;
+    public Object apply(List list) {
       if (list.isEmpty()) {
         throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
       }
@@ -3090,13 +3132,16 @@ public abstract class Codes {
 
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
   private static final Applicable Z_SUM_INT =
-      new ApplicableImpl("Relational.sum$int") {
+      new BaseApplicable1<Integer, List<? extends Number>>(BuiltIn.Z_SUM_INT) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          @SuppressWarnings("unchecked")
-          final List<? extends Number> list = (List) arg;
+        protected String name() {
+          return "Relational.sum$int";
+        }
+
+        @Override
+        public Integer apply(List<? extends Number> numbers) {
           int sum = 0;
-          for (Number o : list) {
+          for (Number o : numbers) {
             sum += o.intValue();
           }
           return sum;
@@ -3105,13 +3150,16 @@ public abstract class Codes {
 
   /** Implements {@link #RELATIONAL_SUM} for type {@code real list}. */
   private static final Applicable Z_SUM_REAL =
-      new ApplicableImpl("Relational.sum$real") {
+      new BaseApplicable1<Float, List<? extends Number>>(BuiltIn.Z_SUM_REAL) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          @SuppressWarnings("unchecked")
-          final List<? extends Number> list = (List) arg;
+        protected String name() {
+          return "Relational.sum$real";
+        }
+
+        @Override
+        public Float apply(List<? extends Number> numbers) {
           float sum = 0;
-          for (Number o : list) {
+          for (Number o : numbers) {
             sum += o.floatValue();
           }
           return sum;
@@ -3135,19 +3183,19 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_MIN */
   private static final Applicable RELATIONAL_MIN =
-      new ApplicableImpl(BuiltIn.RELATIONAL_MIN) {
+      new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MIN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Ordering.natural().min((List) arg);
+        public Object apply(List list) {
+          return Ordering.natural().min(list);
         }
       };
 
   /** @see BuiltIn#RELATIONAL_MAX */
   private static final Applicable RELATIONAL_MAX =
-      new ApplicableImpl(BuiltIn.RELATIONAL_MAX) {
+      new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MAX) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return Ordering.natural().max((List) arg);
+        public Object apply(List list) {
+          return Ordering.natural().max(list);
         }
       };
 
@@ -3299,7 +3347,7 @@ public abstract class Codes {
   /** @see BuiltIn#VECTOR_UPDATE */
   private static final Applicable VECTOR_UPDATE = new VectorUpdate(Pos.ZERO);
 
-  /** Implements {@link BuiltIn#VECTOR_UPDATE}. */
+  /** Implements {@link #VECTOR_UPDATE}. */
   private static class VectorUpdate
       extends Applicable3<List, List, Integer, Object> implements Positioned {
     VectorUpdate(Pos pos) {
@@ -3324,12 +3372,10 @@ public abstract class Codes {
 
   /** @see BuiltIn#VECTOR_CONCAT */
   private static final Applicable VECTOR_CONCAT =
-      new ApplicableImpl(BuiltIn.VECTOR_CONCAT) {
+      new BaseApplicable1<List, List<List>>(BuiltIn.VECTOR_CONCAT) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          @SuppressWarnings("unchecked")
-          final List<List<Object>> lists = (List<List<Object>>) arg;
-          final ImmutableList.Builder<Object> b = ImmutableList.builder();
+        public List apply(List<List> lists) {
+          final ImmutableList.Builder b = ImmutableList.builder();
           for (List<Object> list : lists) {
             b.addAll(list);
           }
@@ -3554,10 +3600,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#Z_EXTENT */
   private static final Applicable Z_EXTENT =
-      new ApplicableImpl(BuiltIn.Z_EXTENT) {
+      new BaseApplicable1<List, RangeExtent>(BuiltIn.Z_EXTENT) {
         @Override
-        public List apply(EvalEnv env, Object arg) {
-          final RangeExtent rangeExtent = (RangeExtent) arg;
+        public List apply(RangeExtent rangeExtent) {
           if (rangeExtent.iterable == null) {
             throw new AssertionError("infinite: " + rangeExtent);
           }
@@ -5453,17 +5498,12 @@ public abstract class Codes {
     Applicable withType(TypeSystem typeSystem, Type type);
   }
 
-  /**
-   * Implementation of {@link Applicable} that stores a {@link BuiltIn} and
-   * {@link Pos}.
-   */
+  /** Implementation of {@link Applicable} that stores a {@link BuiltIn}. */
   abstract static class BaseApplicable implements Applicable {
     final BuiltIn builtIn;
-    final Pos pos;
 
-    protected BaseApplicable(BuiltIn builtIn, Pos pos) {
+    protected BaseApplicable(BuiltIn builtIn) {
       this.builtIn = builtIn;
-      this.pos = pos;
     }
 
     @Override
@@ -5478,23 +5518,57 @@ public abstract class Codes {
     }
   }
 
-  @SuppressWarnings({"rawtypes", "unchecked"})
+  /**
+   * Implementation of {@link Applicable} that stores a {@link BuiltIn} and
+   * {@link Pos}.
+   */
+  abstract static class BasePositionedApplicable extends BaseApplicable
+      implements Positioned {
+    final Pos pos;
+
+    protected BasePositionedApplicable(BuiltIn builtIn, Pos pos) {
+      super(builtIn);
+      this.pos = pos;
+    }
+  }
+
+  /**
+   * Base class with which to implement {@link Applicable1}.
+   *
+   * @param <R> return type
+   * @param <A0> type of argument
+   */
+  @SuppressWarnings({"unchecked"})
   abstract static class BaseApplicable1<R, A0> extends Codes.BaseApplicable
       implements Applicable1<R, A0> {
-    protected BaseApplicable1(BuiltIn builtIn, Pos pos) {
-      super(builtIn, pos);
-    }
-
     protected BaseApplicable1(BuiltIn builtIn) {
-      this(builtIn, Pos.ZERO);
+      super(builtIn);
     }
 
     @Override
     public Object apply(EvalEnv env, Object argValue) {
       return apply((A0) argValue);
     }
+  }
 
-    public abstract R apply(A0 a0);
+  /**
+   * Base class with which to implement {@link Applicable1} and {@link
+   * Positioned}.
+   *
+   * @param <R> return type
+   * @param <A0> type of argument
+   */
+  @SuppressWarnings({"unchecked"})
+  abstract static class BasePositionedApplicable1<R, A0>
+      extends BasePositionedApplicable implements Applicable1<R, A0> {
+    protected BasePositionedApplicable1(BuiltIn builtIn, Pos pos) {
+      super(builtIn, pos);
+    }
+
+    @Override
+    public Object apply(EvalEnv env, Object argValue) {
+      return apply((A0) argValue);
+    }
   }
 
   /**
@@ -5503,8 +5577,11 @@ public abstract class Codes {
    */
   private abstract static class PositionedApplicableImpl extends BaseApplicable
       implements Positioned {
+    protected final Pos pos;
+
     protected PositionedApplicableImpl(BuiltIn builtIn, Pos pos) {
-      super(builtIn, pos);
+      super(builtIn);
+      this.pos = pos;
     }
   }
 
@@ -5683,13 +5760,18 @@ public abstract class Codes {
     }
   }
 
-  /** Curried function.
+  /**
+   * Curried function.
    *
    * <p>It takes one argument, because it is the first stage of several calls.
    *
    * <p>It implements {@link Describable}, because it may need to appear in a
    * plan. (If a call yields another {@link Applicable1}, that function is
-   * lighter weight, because it does not need to be described.) */
+   * lighter weight, because it does not need to be described.)
+   *
+   * @param <R> return type
+   * @param <A0> type of first argument
+   */
   abstract static class CurriedApplicable1<R, A0>
       extends BaseApplicable1<R, A0> {
     private final Applicable1 parent;

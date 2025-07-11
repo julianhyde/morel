@@ -84,8 +84,10 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl
   /** Applies this function to its two arguments. */
   public abstract R apply(A0 a0, A1 a1);
 
-  /** Converts this function {@code f(a, b)} into a function that can be called
-   * {@code f(a)(b)}. */
+  /**
+   * Converts this function {@code f(a, b)} into a function that can be called
+   * {@code f(a)(b)}.
+   */
   public Applicable1 curry(BuiltIn builtIn) {
     return new Codes.CurriedApplicable1<Applicable1, A0>(builtIn, this) {
       @Override
