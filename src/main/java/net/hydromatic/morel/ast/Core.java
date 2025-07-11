@@ -851,17 +851,16 @@ public class Core {
         TypeSystem typeSystem, @Nullable Pos pos) {
       Object o = toBuiltIn(typeSystem, pos);
       if (o instanceof Applicable2) {
-        return ((Applicable2) o).curry(BuiltIn.STRING_IS_PREFIX);
+        return ((Applicable2) o).curry();
       }
       if (o instanceof Applicable3) {
-        return ((Applicable3) o).curry(BuiltIn.STRING_IS_PREFIX);
+        return ((Applicable3) o).curry();
       }
       return null;
     }
 
     /** Converts to an {@link Applicable2}, or returns null. */
-    public @Nullable Applicable2 toApplicable2(
-        TypeSystem typeSystem, @Nullable Pos pos) {
+    public Applicable2 toApplicable2(TypeSystem typeSystem, @Nullable Pos pos) {
       Object o = toBuiltIn(typeSystem, pos);
       if (o instanceof Applicable2) {
         return (Applicable2) o;
