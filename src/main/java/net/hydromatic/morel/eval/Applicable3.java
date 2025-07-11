@@ -19,8 +19,6 @@
 package net.hydromatic.morel.eval;
 
 import java.util.List;
-import net.hydromatic.morel.ast.Pos;
-import net.hydromatic.morel.compile.BuiltIn;
 
 /**
  * Applicable whose argument is a 3-tuple.
@@ -43,53 +41,15 @@ import net.hydromatic.morel.compile.BuiltIn;
  * @param <A1> type of argument 1
  * @param <A2> type of argument 2
  */
-@SuppressWarnings({"rawtypes", "unchecked"})
-public abstract class Applicable3<R, A0, A1, A2> extends ApplicableImpl
-    implements Applicable1<R, List> {
-  protected Applicable3(BuiltIn builtIn, Pos pos) {
-    super(builtIn, pos);
-  }
-
-  protected Applicable3(BuiltIn builtIn) {
-    this(builtIn, Pos.ZERO);
-  }
-
-  @Override // Applicable1
-  public R apply(List list) {
-    return apply((A0) list.get(0), (A1) list.get(1), (A2) list.get(2));
-  }
-
-  @Override // Applicable
-  public Object apply(EvalEnv env, Object argValue) {
-    final List list = (List) argValue;
-    return apply((A0) list.get(0), (A1) list.get(1), (A2) list.get(2));
-  }
-
+public interface Applicable3<R, A0, A1, A2> {
   /** Applies this function to its three arguments. */
-  public abstract R apply(A0 a0, A1 a1, A2 a2);
+  R apply(A0 a0, A1 a1, A2 a2);
 
   /**
    * Converts this function {@code f(a, b, c)} into a function that can be
    * called {@code f(a)(b)(c)}.
    */
-  public Applicable1 curry(BuiltIn builtIn) {
-    return new Codes.CurriedApplicable1<Applicable1, A0>(builtIn, this) {
-      @Override
-      public Applicable1 apply(A0 a0) {
-        return new Applicable1<Applicable1, A1>() {
-          @Override
-          public Applicable1 apply(A1 a1) {
-            return new Applicable1<R, A2>() {
-              @Override
-              public R apply(A2 a2) {
-                return Applicable3.this.apply(a0, a1, a2);
-              }
-            };
-          }
-        };
-      }
-    };
-  }
+  Applicable1<Applicable1<Applicable1<R, A2>, A1>, A0> curry();
 }
 
 // End Applicable3.java

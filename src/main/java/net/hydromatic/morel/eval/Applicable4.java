@@ -19,8 +19,6 @@
 package net.hydromatic.morel.eval;
 
 import java.util.List;
-import net.hydromatic.morel.ast.Pos;
-import net.hydromatic.morel.compile.BuiltIn;
 
 /**
  * Applicable whose argument is a 4-tuple.
@@ -45,24 +43,15 @@ import net.hydromatic.morel.compile.BuiltIn;
  * @param <A2> type of argument 2
  * @param <A3> type of argument 3
  */
-@SuppressWarnings({"rawtypes", "unchecked"})
-public abstract class Applicable4<R, A0, A1, A2, A3> extends ApplicableImpl {
-  protected Applicable4(BuiltIn builtIn, Pos pos) {
-    super(builtIn, pos);
-  }
+public interface Applicable4<R, A0, A1, A2, A3> {
+  /** Applies this function to its four arguments. */
+  R apply(A0 a0, A1 a1, A2 a2, A3 a3);
 
-  protected Applicable4(BuiltIn builtIn) {
-    this(builtIn, Pos.ZERO);
-  }
-
-  @Override
-  public Object apply(EvalEnv env, Object argValue) {
-    final List list = (List) argValue;
-    return apply(
-        (A0) list.get(0), (A1) list.get(1), (A2) list.get(2), (A3) list.get(3));
-  }
-
-  public abstract R apply(A0 a0, A1 a1, A2 a2, A3 a3);
+  /**
+   * Converts this function {@code f(a, b, c, d)} into a function that can be
+   * called {@code f(a)(b)(c)(d)}.
+   */
+  Applicable1<Applicable1<Applicable1<Applicable1<R, A3>, A2>, A1>, A0> curry();
 }
 
 // End Applicable4.java
