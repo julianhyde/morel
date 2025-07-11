@@ -1548,12 +1548,12 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#LIST_NULL */
-  private static final Applicable LIST_NULL = empty(BuiltIn.LIST_NULL);
+  private static final Applicable1 LIST_NULL = empty(BuiltIn.LIST_NULL);
 
   /** @see BuiltIn#LIST_LENGTH */
-  private static final Applicable LIST_LENGTH = length(BuiltIn.LIST_LENGTH);
+  private static final Applicable1 LIST_LENGTH = length(BuiltIn.LIST_LENGTH);
 
-  private static Applicable length(BuiltIn builtIn) {
+  private static Applicable1 length(BuiltIn builtIn) {
     return new BaseApplicable1<Integer, List>(builtIn) {
       @Override
       public Integer apply(List list) {
@@ -3048,31 +3048,27 @@ public abstract class Codes {
   private static final Applicable RELATIONAL_COMPARE = Comparer.INITIAL;
 
   /** @see BuiltIn#RELATIONAL_COUNT */
-  private static final Applicable RELATIONAL_COUNT =
+  private static final Applicable1 RELATIONAL_COUNT =
       length(BuiltIn.RELATIONAL_COUNT);
 
   /** @see BuiltIn#RELATIONAL_NON_EMPTY */
-  private static final Applicable RELATIONAL_NON_EMPTY =
-      nonEmpty(BuiltIn.RELATIONAL_NON_EMPTY);
-
-  private static ApplicableImpl nonEmpty(final BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        return !((List) arg).isEmpty();
-      }
-    };
-  }
+  private static final Applicable1 RELATIONAL_NON_EMPTY =
+      new BaseApplicable1<Boolean, List>(BuiltIn.RELATIONAL_NON_EMPTY) {
+        @Override
+        public Boolean apply(List list) {
+          return !list.isEmpty();
+        }
+      };
 
   /** @see BuiltIn#RELATIONAL_EMPTY */
-  private static final Applicable RELATIONAL_EMPTY =
+  private static final Applicable1 RELATIONAL_EMPTY =
       empty(BuiltIn.RELATIONAL_EMPTY);
 
-  private static ApplicableImpl empty(BuiltIn builtIn) {
-    return new ApplicableImpl(builtIn) {
+  private static Applicable1<Boolean, List> empty(BuiltIn builtIn) {
+    return new BaseApplicable1<Boolean, List>(builtIn) {
       @Override
-      public Boolean apply(EvalEnv env, Object arg) {
-        return ((List) arg).isEmpty();
+      public Boolean apply(List list) {
+        return list.isEmpty();
       }
     };
   }
@@ -3203,7 +3199,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#SYS_CLEAR_ENV */
   private static final Applicable SYS_CLEAR_ENV =
-      new ApplicableImpl(BuiltIn.MATH_LOG10) {
+      new ApplicableImpl(BuiltIn.SYS_CLEAR_ENV) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
           final Session session = (Session) env.getOpt(EvalEnv.SESSION);
@@ -3340,7 +3336,8 @@ public abstract class Codes {
       new ListTabulate(BuiltIn.VECTOR_TABULATE, Pos.ZERO);
 
   /** @see BuiltIn#VECTOR_LENGTH */
-  private static final Applicable VECTOR_LENGTH = length(BuiltIn.VECTOR_LENGTH);
+  private static final Applicable1 VECTOR_LENGTH =
+      length(BuiltIn.VECTOR_LENGTH);
 
   /** @see BuiltIn#VECTOR_SUB */
   private static final Applicable VECTOR_SUB =
@@ -3524,10 +3521,10 @@ public abstract class Codes {
       collate(BuiltIn.VECTOR_COLLATE);
 
   /** @see BuiltIn#BAG_NULL */
-  private static final Applicable BAG_NULL = empty(BuiltIn.BAG_NULL);
+  private static final Applicable1 BAG_NULL = empty(BuiltIn.BAG_NULL);
 
   /** @see BuiltIn#BAG_LENGTH */
-  private static final Applicable BAG_LENGTH = length(BuiltIn.BAG_LENGTH);
+  private static final Applicable1 BAG_LENGTH = length(BuiltIn.BAG_LENGTH);
 
   /** @see BuiltIn#BAG_AT */
   private static final Applicable2 BAG_AT = union(BuiltIn.BAG_AT);
@@ -3702,7 +3699,12 @@ public abstract class Codes {
       Code aggregateCode,
       List<String> names,
       @Nullable Code argumentCode) {
-    return new ApplicableImpl("aggregate") {
+    return new Applicable() {
+      @Override
+      public Describer describe(Describer describer) {
+        return describer.start("aggregate", d -> {});
+      }
+
       @Override
       public Object apply(EvalEnv env, Object arg) {
         @SuppressWarnings("unchecked")

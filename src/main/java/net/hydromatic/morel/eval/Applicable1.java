@@ -27,16 +27,15 @@ package net.hydromatic.morel.eval;
  * the function you are implementing requires an environment, you should use
  * {@link Applicable1} rather than {@link Applicable}.
  *
- * <p>The interfaces for functions with multiple arguments,
- * {@link Applicable2}, {@link Applicable3}, and {@link Applicable4}, each have a
- * {@code curry} method that returns an {@link Applicable1}.
+ * <p>The interfaces for functions with multiple arguments, {@link Applicable2},
+ * {@link Applicable3}, and {@link Applicable4}, each have a {@code curry}
+ * method that returns an {@link Applicable1}.
  *
  * @see Applicable2#curry()
  * @see Applicable3#curry()
  * @see Applicable4#curry()
  * @see Codes.BaseApplicable1
  * @see Codes.BasePositionedApplicable1
- *
  * @param <R> return type
  * @param <A0> type of argument
  */
