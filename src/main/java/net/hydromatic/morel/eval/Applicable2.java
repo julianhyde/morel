@@ -24,7 +24,7 @@ import net.hydromatic.morel.compile.BuiltIn;
 
 // CHECKSTYLE: IGNORE 30 (long line in javadoc)
 /**
- * Applicable whose argument is a 3-tuple.
+ * Applicable whose argument is a 2-tuple.
  *
  * <p>Implementations that use {@code Applicable3} are more efficient and
  * concise than {@link ApplicableImpl} because there is no need to create an
@@ -81,10 +81,13 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl
     return apply((A0) list.get(0), (A1) list.get(1));
   }
 
+  /** Applies this function to its two arguments. */
   public abstract R apply(A0 a0, A1 a1);
 
+  /** Converts this function {@code f(a, b)} into a function that can be called
+   * {@code f(a)(b)}. */
   public Applicable1 curry(BuiltIn builtIn) {
-    return new PartialApplicable<Applicable1, A0>(builtIn, this) {
+    return new Codes.CurriedApplicable1<Applicable1, A0>(builtIn, this) {
       @Override
       public Applicable1 apply(A0 a0) {
         return new Applicable1<R, A1>() {
@@ -92,29 +95,9 @@ public abstract class Applicable2<R, A0, A1> extends ApplicableImpl
           public R apply(A1 a1) {
             return Applicable2.this.apply(a0, a1);
           }
-
-          @Override
-          public Describer describe(Describer describer) {
-            return Applicable2.this.describe(describer);
-          }
         };
       }
     };
-  }
-
-  abstract static class PartialApplicable<R, A0>
-      extends Codes.BaseApplicable1<R, A0> {
-    private final Applicable parent;
-
-    PartialApplicable(BuiltIn builtIn, Applicable parent) {
-      super(builtIn);
-      this.parent = parent;
-    }
-
-    @Override
-    public Describer describe(Describer describer) {
-      return parent.describe(describer);
-    }
   }
 }
 

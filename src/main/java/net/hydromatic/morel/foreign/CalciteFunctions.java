@@ -411,7 +411,7 @@ public class CalciteFunctions {
       final Closure fn = (Closure) closure;
       final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
       final Object o = compiled.converter.apply(arg);
-      return fn.apply(evalEnv, o);
+      return fn.apply(o);
     }
 
     /** Compiled state. */

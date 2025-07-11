@@ -1278,7 +1278,8 @@ public abstract class Codes {
    * Implements {@link BuiltIn#STRING_FIELDS} and {@link BuiltIn#STRING_TOKENS}.
    */
   private static class StringTokenize
-      extends Applicable2<List<String>, Applicable1<Boolean, Character>, String> {
+      extends Applicable2<
+          List<String>, Applicable1<Boolean, Character>, String> {
     final BuiltIn builtIn;
 
     StringTokenize(BuiltIn builtIn) {
@@ -5679,6 +5680,28 @@ public abstract class Codes {
     Builder put2(BuiltIn builtin, Object o) {
       builtIns.add(builtin, o);
       return this;
+    }
+  }
+
+  /** Curried function.
+   *
+   * <p>It takes one argument, because it is the first stage of several calls.
+   *
+   * <p>It implements {@link Describable}, because it may need to appear in a
+   * plan. (If a call yields another {@link Applicable1}, that function is
+   * lighter weight, because it does not need to be described.) */
+  abstract static class CurriedApplicable1<R, A0>
+      extends BaseApplicable1<R, A0> {
+    private final Applicable1 parent;
+
+    CurriedApplicable1(BuiltIn builtIn, Applicable1 parent) {
+      super(builtIn);
+      this.parent = parent;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return parent.describe(describer);
     }
   }
 }
