@@ -24,7 +24,7 @@ import java.util.List;
  * Applicable whose argument is a 3-tuple.
  *
  * <p>Implementations that use {@code Applicable3} are more efficient and
- * concise than {@link ApplicableImpl} because there is no need to create an
+ * concise than {@link Applicable} because there is no need to create an
  * ephemeral tuple (Java {@link List}) to pass the arguments, and Java's
  * generics provide the casting.
  *
@@ -36,6 +36,9 @@ import java.util.List;
  * tuple is evaluated whole, the old evaluation path will be used.
  *
  * @see Applicable2
+ * @see Applicable4
+ * @see Codes.BaseApplicable3
+ * @see Codes.BasePositionedApplicable3
  * @param <R> return type
  * @param <A0> type of argument 0
  * @param <A1> type of argument 1
