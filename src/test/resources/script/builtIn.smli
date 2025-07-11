@@ -2021,8 +2021,7 @@ Option.getOpt (SOME 1, 2);
 Option.getOpt (NONE, 2);
 > val it = 2 : int
 Sys.plan ();
-> val it =
->   "apply(fnValue Option.getOpt, argCode tuple(constant([NONE]), constant(2)))"
+> val it = "apply2(fnValue Option.getOpt, constant([NONE]), constant(2))"
 >   : string
 
 (*) val isSome : 'a option -> bool
@@ -2182,13 +2181,13 @@ Char.chr 65;
 > val it = #"A" : char
 Char.chr ~1;
 > uncaught exception Chr
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.12
 Char.chr 256;
 > uncaught exception Chr
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.13
 Char.chr 12345678;
 > uncaught exception Chr
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.18
 
 (* [ord c] returns the code of character c. *)
 Char.ord;
@@ -2206,7 +2205,7 @@ Char.succ (chr 254);
 > val it = #"\255" : char
 Char.succ (chr 255);
 > uncaught exception Chr
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.19
 
 (* [pred c] returns the character immediately preceding c, or raises
    Chr if c = minChar. *)
@@ -2216,7 +2215,7 @@ Char.pred #"B";
 > val it = #"A" : char
 Char.pred (chr 0);
 > uncaught exception Chr
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.17
 
 (* [isAscii c] returns true if c is an ASCII character (0 to 127). *)
 Char.isAscii;
@@ -3830,6 +3829,10 @@ Sys.plan ();
 
 Relational.sum [1, 2, 3];
 > val it = 6 : int
+Sys.plan ();
+> val it =
+>   "apply(fnValue Relational.sum$int, argCode tuple(constant(1), constant(2), constant(3)))"
+>   : string
 Relational.sum [1.0, 2.5, 3.5];
 > val it = 7.0 : real
 Sys.plan ();
@@ -3914,7 +3917,7 @@ List.`except` [[1, 2, 3], List.`intersect` [[1, 3, 5], [2, 3, 4]]];
 > val it = [1,2] : int list
 Sys.plan ();
 > val it =
->   "apply(fnValue List.except, argCode tuple(tuple(constant(1), constant(2), constant(3)), apply(fnValue List.except, argCode tuple(tuple(constant(1), constant(3), constant(5)), tuple(constant(2), constant(3), constant(4))))))"
+>   "apply(fnValue List.except, argCode tuple(tuple(constant(1), constant(2), constant(3)), apply(fnValue List.intersect, argCode tuple(tuple(constant(1), constant(3), constant(5)), tuple(constant(2), constant(3), constant(4))))))"
 >   : string
 
 1 elem [1, 2, 3];
