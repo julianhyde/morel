@@ -5097,9 +5097,7 @@ public abstract class Codes {
 
     @Override
     public Describer describe(Describer describer) {
-      return value instanceof Describable
-          ? describer.start("constant", d -> d.arg("", (Describable) value))
-          : describer.start("constant", d -> d.arg("", value));
+      return describer.start("constant", d -> d.arg("", value));
     }
 
     public Object eval(EvalEnv env) {
