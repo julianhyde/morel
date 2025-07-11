@@ -3508,7 +3508,10 @@ public enum BuiltIn {
   Z_LIST("$", "list", ts -> UNIT),
 
   /** Internal accessor of the {@code n}th field of a record. */
-  Z_NTH("$", "nth", ts -> UNIT);
+  Z_NTH("$", "nth", ts -> UNIT),
+
+  /** Internal function that constructs a datatype value. */
+  Z_TY_CON("$", "tyCon", ts -> UNIT);
 
   /** Name of the structure (e.g. "List", "String"), or null. */
   public final String structure;
