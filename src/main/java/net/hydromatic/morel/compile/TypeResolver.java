@@ -716,7 +716,11 @@ public class TypeResolver {
         return deduceApplyType(env, (Ast.Apply) node, v);
 
       case AGGREGATE:
-        Triple triple = aggregateTripleStack.element();
+        Triple triple = aggregateTripleStack.peek();
+        if (triple == null) {
+          throw new CompileException(
+              "'over' is only valid in 'compute'", false, node.pos);
+        }
         return deduceAggregateType(triple, (Ast.Aggregate) node, v);
 
       case AT:

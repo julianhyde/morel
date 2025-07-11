@@ -826,6 +826,46 @@ from (x, y) in [(1,2),(3,4),(3,0)]
   group x + y;
 > val it = [3,7] : int list
 
+(* "over" is only valid inside "compute" *)
+from i in [2, 1, 2]
+  where (sum over i) > 3;
+> stdIn:2.10-2.20 Error: 'over' is only valid in 'compute'
+>   raised at: stdIn:2.10-2.20
+from i in [2, 1, 2]
+  group (sum over i);
+> stdIn:2.10-2.20 Error: 'over' is only valid in 'compute'
+>   raised at: stdIn:2.10-2.20
+from i in [2, 1, 2]
+  yield (sum over i);
+> stdIn:2.10-2.20 Error: 'over' is only valid in 'compute'
+>   raised at: stdIn:2.10-2.20
+from i in [2, 1, 2]
+  skip (sum over i);
+> stdIn:2.9-2.19 Error: 'over' is only valid in 'compute'
+>   raised at: stdIn:2.9-2.19
+from i in [2, 1, 2]
+  take (sum over i);
+> stdIn:2.9-2.19 Error: 'over' is only valid in 'compute'
+>   raised at: stdIn:2.9-2.19
+from i in [2, 1, 2]
+  order (sum over i);
+> stdIn:2.10-2.20 Error: 'over' is only valid in 'compute'
+>   raised at: stdIn:2.10-2.20
+from i in [2, 1, 2]
+  compute sum over i;
+> val it = 5 : int
+from i in [2, 1, 2]
+  compute {s = sum over i, t = 1 + sum over i * 3};
+> val it = {s=5,t=16} : {s:int, t:int}
+from i in [2, 1, 2]
+  group i compute (sum over i);
+> val it = [{i=1,sum=1},{i=2,sum=4}] : {i:int, sum:int} list
+(* TODO: Using "over" in a subquery is valid but not yet supported.
+from i in [2, 1, 2]
+  group i compute {x = from j in [3, 4] yield j + (sum over i)};
+> val it = [{i=1,x=[4,5]},{i=2,x=[7,8]}] : {i:int, x:int} list
+*)
+
 (* Theoretically a "group" without a "compute" can be followed by a
  * "compute" step. So, the following is ambiguous. We treat it as a single
  * "group ... compute" step. Under the two-step interpretation, the type
