@@ -965,12 +965,17 @@ public abstract class Codes {
    * Returns an applicable that constructs an instance of a datatype. The
    * instance is a list with two elements [constructorName, value].
    */
-  public static Applicable tyCon(Type dataType, String name) {
+  public static Applicable1 tyCon(Type dataType, String name) {
     requireNonNull(dataType);
     requireNonNull(name);
-    return new ApplicableImpl("tyCon") {
+    return new BaseApplicable1(BuiltIn.Z_TY_CON) {
       @Override
-      public Object apply(EvalEnv env, Object arg) {
+      protected String name() {
+        return "tyCon";
+      }
+
+      @Override
+      public Object apply(Object arg) {
         return ImmutableList.of(name, arg);
       }
     };
@@ -4014,6 +4019,7 @@ public abstract class Codes {
           .put(BuiltIn.Z_SUM_REAL, Z_SUM_REAL)
           .put(BuiltIn.Z_TIMES_INT, Z_TIMES_INT)
           .put(BuiltIn.Z_TIMES_REAL, Z_TIMES_REAL)
+          .put(BuiltIn.Z_TY_CON, Unit.INSTANCE)
           .build(); // lint:endSorted
 
   @SuppressWarnings("TrivialFunctionalExpressionUsage")
