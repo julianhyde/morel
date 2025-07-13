@@ -68,6 +68,7 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Builds parse tree nodes. */
@@ -509,8 +510,19 @@ public enum CoreBuilder {
 
   /** Creates a builder that will create a {@link Core.From}. */
   public FromBuilder fromBuilder(
+      TypeSystem typeSystem,
+      @Nullable Supplier<@NonNull Environment> envSupplier) {
+    return new FromBuilder(typeSystem, envSupplier);
+  }
+
+  /**
+   * Creates a builder that will create a {@link Core.From} and validates if
+   * {@code env} is not null.
+   */
+  public FromBuilder fromBuilder(
       TypeSystem typeSystem, @Nullable Environment env) {
-    return new FromBuilder(typeSystem, env);
+    final Supplier<Environment> envSupplier = env == null ? null : () -> env;
+    return fromBuilder(typeSystem, envSupplier);
   }
 
   /**
@@ -518,7 +530,7 @@ public enum CoreBuilder {
    * validate.
    */
   public FromBuilder fromBuilder(TypeSystem typeSystem) {
-    return fromBuilder(typeSystem, null);
+    return fromBuilder(typeSystem, (Supplier<Environment>) null);
   }
 
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {

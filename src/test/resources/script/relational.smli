@@ -860,11 +860,10 @@ from i in [2, 1, 2]
 from i in [2, 1, 2]
   group i compute (sum over i);
 > val it = [{i=1,sum=1},{i=2,sum=4}] : {i:int, sum:int} list
-(* TODO: Using "over" in a subquery is valid but not yet supported.
+(*) Aggregate used in a subquery
 from i in [2, 1, 2]
   group i compute {x = from j in [3, 4] yield j + (sum over i)};
-> val it = [{i=1,x=[4,5]},{i=2,x=[7,8]}] : {i:int, x:int} list
-*)
+> val it = [{i=1,x=[4,5]},{i=2,x=[7,8]}] : {i:int, x:int list} list
 from (i, j) in [(2, 5), (1, 1), (2, 7)]
   group i compute {mid = ((min over j) + (max over j)) / 2};
 > val it = [{i=1,mid=1},{i=2,mid=6}] : {i:int, mid:int} list
