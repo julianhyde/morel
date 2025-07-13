@@ -865,14 +865,19 @@ from i in [2, 1, 2]
   group i compute {x = from j in [3, 4] yield j + (sum over i)};
 > val it = [{i=1,x=[4,5]},{i=2,x=[7,8]}] : {i:int, x:int} list
 *)
-(* TODO "over" in an expression is valid but not yet supported.
 from (i, j) in [(2, 5), (1, 1), (2, 7)]
-  group i compute {mid = (min over j + max over j) / 2};
-*)
+  group i compute {mid = ((min over j) + (max over j)) / 2};
+> val it = [{i=1,mid=1},{i=2,mid=6}] : {i:int, mid:int} list
 from i in [2, 1, 2]
   compute 1;
+> val it = 1 : int
+(*) "count" used as an ordinary function ("over" is not present)
 from i in [2, 1, 2]
-  compute count;
+  compute count ["a", "b"];
+> val it = 2 : int
+from i in [2, 1, 2]
+  group i compute {c = count ["a", "b"]};
+> val it = [{c=2,i=1},{c=2,i=2}] : {c:int, i:int} list
 
 (* Theoretically a "group" without a "compute" can be followed by a
  * "compute" step. So, the following is ambiguous. We treat it as a single

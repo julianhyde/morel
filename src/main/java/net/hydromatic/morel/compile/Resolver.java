@@ -1376,10 +1376,12 @@ public class Resolver {
           idPat = core.idPat(exp.type, typeMap.typeSystem.nameGenerator::get);
           id = core.id(idPat);
         }
-        if (!emptyKey) {
+        if (emptyKey) {
+          postExps.add(idPat.name, exp);
+        } else {
           groupExps.add(idPat, exp);
+          postExps.add(idPat.name, id);
         }
-        postExps.add(idPat.name, id);
       } else {
         group
             .key()
@@ -1397,10 +1399,12 @@ public class Resolver {
                 (id, exp) ->
                     postExps.add(id.name, aggregateResolver.toCore(exp, id)));
       }
-      fromBuilder.group(
-          atom,
-          groupExps.toImmutableSortedMap(),
-          aggregateResolver.aggregates());
+      final SortedMap<Core.IdPat, Core.Exp> groupMap =
+          groupExps.toImmutableSortedMap();
+      final SortedMap<Core.IdPat, Core.Aggregate> aggregates =
+          aggregateResolver.aggregates();
+      int count = groupMap.size() + aggregates.size();
+      fromBuilder.group(atom && count == 1, groupMap, aggregates);
 
       final Core.Exp yieldExp;
       if (atom) {

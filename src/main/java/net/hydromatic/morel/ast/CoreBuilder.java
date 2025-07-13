@@ -624,7 +624,11 @@ public enum CoreBuilder {
     final List<Binding> bindings = new ArrayList<>();
     groupExps.keySet().forEach(id -> bindings.add(Binding.of(id)));
     aggregates.keySet().forEach(id -> bindings.add(Binding.of(id)));
-    checkArgument(!atom || bindings.size() == 1);
+    checkArgument(
+        !atom || bindings.size() == 1,
+        "atom with %s bindings %s",
+        bindings.size(),
+        bindings);
     return new Core.Group(
         Core.StepEnv.of(bindings, atom),
         ImmutableSortedMap.copyOfSorted(groupExps),
