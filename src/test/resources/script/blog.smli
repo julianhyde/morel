@@ -2019,22 +2019,26 @@ from i in ["candy", "soda", "soda", "candy", "candy"]
 
 (* Count employees and compute total salary for each
    department. *)
+(* The "order deptno unorder" line is added for determinism across JDK versions. *)
 from e in scott.emps
   group e.deptno
-    compute {count over (), sumSal = sum over e.sal};
+    compute {count over (), sumSal = sum over e.sal}
+  order deptno unorder;
 > count deptno sumSal
 > ----- ------ -------
-> 5     20     10875.0
 > 3     10     8750.0
+> 5     20     10875.0
 > 6     30     9400.0
 >
 > val it : {count:int, deptno:int, sumSal:real} bag
 
 (* One group key and no compute expressions gives an
    atomic result. *)
+(* The "order deptno unorder" line is added for determinism across JDK versions. *)
 from e in scott.emps
-  group e.deptno;
-> val it = [20,10,30] : int bag
+  group e.deptno
+  order deptno unorder;
+> val it = [10,20,30] : int bag
 
 (* Empty group key and one compute expression gives an
    atomic result. *)
