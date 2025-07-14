@@ -714,6 +714,7 @@ Match match() :
  * <ul>
  * <li>infix 9 {@code .}
  * <li>infix 8 (application)
+ * <li>infix 7.5 {@code over}
  * <li>infix 7 {@code * / div mod}
  * <li>infix 6 {@code + - ^}
  * <li>infixr 5 {@code :: @}
@@ -722,7 +723,6 @@ Match match() :
  * <li>infix 2 {@code andalso}
  * <li>infix 1 {@code orelse}
  * <li>infix 0 {@code before implies}
- * <li>infix -1 {@code over}
  * </ul>
  */
 Exp expression9() :
@@ -754,6 +754,22 @@ Exp expression8() :
       e = ast.apply(e, e2);
     }
   )*
+  { return e; }
+}
+
+/** Parses an expression of precedence level 7.5 ({@code over}). */
+Exp expression7b() :
+{
+  final Exp e;
+  final Exp e2;
+}
+{
+  e = expression8()
+  [
+    <OVER> e2 = expression5() {
+      return ast.aggregate(e.pos.plus(e2.pos), e, e2);
+    }
+  ]
   { return e; }
 }
 
@@ -934,22 +950,6 @@ Exp expression0() :
       e = ast.implies(e, e2);
     }
   )*
-  { return e; }
-}
-
-/** Parses an expression of precedence level 7.5 ({@code over}). */
-Exp expression7b() :
-{
-  final Exp e;
-  final Exp e2;
-}
-{
-  e = expression8()
-  [
-    <OVER> e2 = expression0() {
-      return ast.aggregate(e.pos.plus(e2.pos), e, e2);
-    }
-  ]
   { return e; }
 }
 
