@@ -851,6 +851,18 @@ from i in [2, 1, 2]
   order (sum over i);
 > stdIn:2.10-2.20 Error: 'over' is only valid in 'compute'
 >   raised at: stdIn:2.10-2.20
+
+(* "over" is not valid inside "over" *)
+from (i, j) in [(2, 5), (1, 1), (2, 7)]
+  group i compute {min over (max over j)};
+> stdIn:2.30-2.40 Error: 'over' is not valid in 'over'
+>   raised at: stdIn:2.30-2.40
+
+from (i, j) in [(2, 5), (1, 1), (2, 7)]
+  group i compute {min over (count over ())};
+> stdIn:2.30-2.43 Error: 'over' is not valid in 'over'
+>   raised at: stdIn:2.30-2.43
+
 from i in [2, 1, 2]
   compute sum over i;
 > val it = 5 : int

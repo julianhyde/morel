@@ -120,7 +120,7 @@ public class TypeResolver {
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
   private final List<Constraint> constraints = new ArrayList<>();
-  private final Deque<Triple> aggregateTripleStack = new ArrayDeque<>();
+  private final Deque<AggFrame> aggregateTripleStack = new ArrayDeque<>();
 
   static final String BAG_TY_CON = BuiltIn.Eqtype.BAG.mlName();
   static final String TUPLE_TY_CON = "tuple";
@@ -716,12 +716,16 @@ public class TypeResolver {
         return deduceApplyType(env, (Ast.Apply) node, v);
 
       case AGGREGATE:
-        Triple triple = aggregateTripleStack.peek();
-        if (triple == null) {
+        final AggFrame aggFrame = aggregateTripleStack.peek();
+        if (aggFrame == null) {
           throw new CompileException(
               "'over' is only valid in 'compute'", false, node.pos);
         }
-        return deduceAggregateType(triple, (Ast.Aggregate) node, v);
+        if (aggFrame.activeCount > 0) {
+          throw new CompileException(
+              "'over' is not valid in 'over'", false, node.pos);
+        }
+        return deduceAggregateType(aggFrame, (Ast.Aggregate) node, v);
 
       case AT:
       case CARET:
@@ -1132,8 +1136,10 @@ public class TypeResolver {
           final Variable v8 = unifier.variable();
           reg(id, v8);
           final Ast.Exp exp2;
+          final AggFrame aggFrame =
+              new AggFrame(p.withEnv(p.env.bindAll(bindings)));
           try {
-            aggregateTripleStack.push(p.withEnv(p.env.bindAll(bindings)));
+            aggregateTripleStack.push(aggFrame);
             exp2 = deduceType(groupEnv, exp, v8);
           } finally {
             aggregateTripleStack.pop();
@@ -1591,7 +1597,8 @@ public class TypeResolver {
   }
 
   private Ast.Aggregate deduceAggregateType(
-      Triple p, Ast.Aggregate aggregate, Variable v) {
+      AggFrame aggFrame, Ast.Aggregate aggregate, Variable v) {
+    final Triple p = aggFrame.p;
     final Ast.Exp arg2;
     final Variable c;
     if (aggregate.argument == null) {
@@ -1603,7 +1610,12 @@ public class TypeResolver {
       final Variable v10 = unifier.variable();
       c = unifier.variable();
       isListOrBagMatchingInput(c, v10, p.c, p.v);
-      arg2 = deduceType(p.env, aggregate.argument, v10);
+      try {
+        ++aggFrame.activeCount;
+        arg2 = deduceType(p.env, aggregate.argument, v10);
+      } finally {
+        --aggFrame.activeCount;
+      }
     }
 
     final Variable vAgg = unifier.variable();
@@ -3038,6 +3050,18 @@ public class TypeResolver {
 
     Triple withEnv(TypeEnv env) {
       return env == this.env ? this : new Triple(env, v, c);
+    }
+  }
+
+  /** Frame in which an "over" expression is resolved. */
+  private static class AggFrame {
+    final Triple p;
+
+    /** Number of nested "over" expressions encountered. */
+    int activeCount = 0;
+
+    private AggFrame(Triple p) {
+      this.p = p;
     }
   }
 
