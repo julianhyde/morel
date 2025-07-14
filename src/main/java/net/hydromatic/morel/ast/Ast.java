@@ -1565,9 +1565,9 @@ public class Ast {
   /**
    * Record.
    *
-   * @see #isSingletonRecord(Exp)
-   * @see #isEmptyRecord(AstNode)
-   * @see #fieldCount(Exp)
+   * @see AstBuilder#isSingletonRecord(Exp)
+   * @see AstBuilder#isEmptyRecord(AstNode)
+   * @see AstBuilder#fieldCount(Exp)
    */
   public static class Record extends Exp {
     public final Ast.@Nullable Exp with;
