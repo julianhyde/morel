@@ -2775,6 +2775,17 @@ max of e.id`.
 [[functions]]
 ordinal = 191
 structure = "Relational"
+name = "maxOpt"
+specified = "morel"
+type = "α list → α option"
+description = """
+"maxOpt list" returns `SOME (x)`, where `x` is the greatest element
+of `list`, if `list` is non-empty; otherwise it returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 192
+structure = "Relational"
 name = "min, min"
 specified = "morel"
 type = "α list → α"
@@ -2785,7 +2796,18 @@ min of e.id`.
 """
 
 [[functions]]
-ordinal = 192
+ordinal = 193
+structure = "Relational"
+name = "minOpt"
+specified = "morel"
+type = "α list → α option"
+description = """
+"minOpt list" returns `SOME (x)`, where `x` is the least element
+of `list`, if `list` is non-empty; otherwise it returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 196
 structure = "Relational"
 name = "nonEmpty, nonEmpty"
 specified = "morel"
@@ -2797,7 +2819,7 @@ d.deptno)`.
 """
 
 [[functions]]
-ordinal = 193
+ordinal = 198
 structure = "Relational"
 name = "only, only"
 specified = "morel"
@@ -2808,7 +2830,7 @@ emps yield only (from d where d.deptno = e.deptno)`.
 """
 
 [[functions]]
-ordinal = 194
+ordinal = 200
 structure = "Relational"
 name = "op elem"
 specified = "morel"
@@ -2818,7 +2840,7 @@ description = """
 """
 
 [[functions]]
-ordinal = 195
+ordinal = 202
 structure = "Relational"
 name = "op notelem"
 specified = "morel"
@@ -2829,7 +2851,7 @@ description = """
 """
 
 [[functions]]
-ordinal = 196
+ordinal = 204
 structure = "Relational"
 name = "sum, sum"
 specified = "morel"

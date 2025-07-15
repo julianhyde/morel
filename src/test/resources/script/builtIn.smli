@@ -177,12 +177,12 @@ Real;
 >      trunc:real -> int, unordered:real * real -> bool}
 Relational;
 > val it =
->   {compare=fn,count=fn,empty=fn,iterate=fn,max=fn,min=fn,nonEmpty=fn,only=fn,
->    sum=fn}
+>   {compare=fn,count=fn,empty=fn,iterate=fn,max=fn,maxOpt=fn,min=fn,minOpt=fn,
+>    nonEmpty=fn,only=fn,sum=fn}
 >   : {compare:'a * 'a -> order, count:'b bag -> int, empty:'c bag -> bool,
 >      iterate:'d bag -> ('d bag * 'd bag -> 'd bag) -> 'd bag, max:'e bag -> 'e,
->      min:'f bag -> 'f, nonEmpty:'g bag -> bool, only:'h bag -> 'h,
->      sum:'i bag -> 'i}
+>      maxOpt:'f bag -> 'f option, min:'g bag -> 'g, minOpt:'h bag -> 'h option,
+>      nonEmpty:'i bag -> bool, only:'j bag -> 'j, sum:'k bag -> 'k}
 Sys;
 > val it =
 >   {clearEnv=fn,env=fn,file={},plan=fn,set=fn,show=fn,showAll=fn,unset=fn}
@@ -3853,6 +3853,23 @@ Sys.plan ();
 >   "apply(fnValue Relational.max, argCode tuple(constant(false), constant(true)))"
 >   : string
 
+Relational.maxOpt [1, 2, 3];
+> val it = SOME 3 : int option
+Relational.maxOpt [1.0, 2.5, 3.5];
+> val it = SOME 3.5 : real option
+Relational.maxOpt ["a", "bc", "ab"];
+> val it = SOME "bc" : string option
+Relational.maxOpt [false, true];
+> val it = SOME true : bool option
+Relational.maxOpt ([]: bool list);
+> val it = NONE : bool option
+Relational.maxOpt (bag []: bool bag);
+> val it = NONE : bool option
+Sys.plan ();
+> val it =
+>   "apply(fnValue Relational.maxOpt, argCode apply(fnValue Bag.fromList, argCode tuple))"
+>   : string
+
 Relational.min [1, 2, 3];
 > val it = 1 : int
 Relational.min [1.0, 2.5, 3.5];
@@ -3864,6 +3881,23 @@ Relational.min [false, true];
 Sys.plan ();
 > val it =
 >   "apply(fnValue Relational.min, argCode tuple(constant(false), constant(true)))"
+>   : string
+
+Relational.minOpt [1, 2, 3];
+> val it = SOME 1 : int option
+Relational.minOpt [1.0, 2.5, 3.5];
+> val it = SOME 1.0 : real option
+Relational.minOpt ["a", "bc", "ab"];
+> val it = SOME "a" : string option
+Relational.minOpt [false, true];
+> val it = SOME false : bool option
+Relational.minOpt ([]: bool list);
+> val it = NONE : bool option
+Relational.minOpt (bag []: bool bag);
+> val it = NONE : bool option
+Sys.plan ();
+> val it =
+>   "apply(fnValue Relational.minOpt, argCode apply(fnValue Bag.fromList, argCode tuple))"
 >   : string
 
 Relational.only [2];
@@ -4111,7 +4145,7 @@ Sys.env ();
 >    ("Real",
 >     "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",
->     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
+>     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), maxOpt:multi(forall 'a. 'a bag -> 'a option,forall 'a. 'a list -> 'a option), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), minOpt:multi(forall 'a. 'a bag -> 'a option,forall 'a. 'a list -> 'a option), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
 >     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
@@ -4138,12 +4172,15 @@ Sys.env ();
 >    ("iterate","forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag"),
 >    ("length","forall 'a. 'a list -> int"),
 >    ("map","forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list"),
->    ("max","forall 'a. 'a bag -> 'a"),("min","forall 'a. 'a bag -> 'a"),
->    ("nan","real"),("nonEmpty","forall 'a. 'a bag -> bool"),
->    ("noneInt","int option"),("not","bool -> bool"),
->    ("null","forall 'a. 'a list -> bool"),("only","forall 'a. 'a bag -> 'a"),
->    ("op *","forall 'a. 'a * 'a -> 'a"),("op +","forall 'a. 'a * 'a -> 'a"),
->    ("op -","forall 'a. 'a * 'a -> 'a"),("op /","forall 'a. 'a * 'a -> 'a"),
+>    ("max","forall 'a. 'a bag -> 'a"),
+>    ("maxOpt","forall 'a. 'a bag -> 'a option"),
+>    ("min","forall 'a. 'a bag -> 'a"),
+>    ("minOpt","forall 'a. 'a bag -> 'a option"),("nan","real"),
+>    ("nonEmpty","forall 'a. 'a bag -> bool"),("noneInt","int option"),
+>    ("not","bool -> bool"),("null","forall 'a. 'a list -> bool"),
+>    ("only","forall 'a. 'a bag -> 'a"),("op *","forall 'a. 'a * 'a -> 'a"),
+>    ("op +","forall 'a. 'a * 'a -> 'a"),("op -","forall 'a. 'a * 'a -> 'a"),
+>    ("op /","forall 'a. 'a * 'a -> 'a"),
 >    ("op ::","forall 'a. 'a * 'a list -> 'a list"),
 >    ("op <","forall 'a. 'a * 'a -> bool"),
 >    ("op <=","forall 'a. 'a * 'a -> bool"),
@@ -4201,7 +4238,7 @@ env ();
 >    ("Real",
 >     "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",
->     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
+>     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), maxOpt:multi(forall 'a. 'a bag -> 'a option,forall 'a. 'a list -> 'a option), min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), minOpt:multi(forall 'a. 'a bag -> 'a option,forall 'a. 'a list -> 'a option), nonEmpty:multi(forall 'a. 'a bag -> bool,forall 'a. 'a list -> bool), only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
 >     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
@@ -4228,12 +4265,15 @@ env ();
 >    ("iterate","forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag"),
 >    ("length","forall 'a. 'a list -> int"),
 >    ("map","forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list"),
->    ("max","forall 'a. 'a bag -> 'a"),("min","forall 'a. 'a bag -> 'a"),
->    ("nan","real"),("nonEmpty","forall 'a. 'a bag -> bool"),
->    ("noneInt","int option"),("not","bool -> bool"),
->    ("null","forall 'a. 'a list -> bool"),("only","forall 'a. 'a bag -> 'a"),
->    ("op *","forall 'a. 'a * 'a -> 'a"),("op +","forall 'a. 'a * 'a -> 'a"),
->    ("op -","forall 'a. 'a * 'a -> 'a"),("op /","forall 'a. 'a * 'a -> 'a"),
+>    ("max","forall 'a. 'a bag -> 'a"),
+>    ("maxOpt","forall 'a. 'a bag -> 'a option"),
+>    ("min","forall 'a. 'a bag -> 'a"),
+>    ("minOpt","forall 'a. 'a bag -> 'a option"),("nan","real"),
+>    ("nonEmpty","forall 'a. 'a bag -> bool"),("noneInt","int option"),
+>    ("not","bool -> bool"),("null","forall 'a. 'a list -> bool"),
+>    ("only","forall 'a. 'a bag -> 'a"),("op *","forall 'a. 'a * 'a -> 'a"),
+>    ("op +","forall 'a. 'a * 'a -> 'a"),("op -","forall 'a. 'a * 'a -> 'a"),
+>    ("op /","forall 'a. 'a * 'a -> 'a"),
 >    ("op ::","forall 'a. 'a * 'a list -> 'a list"),
 >    ("op <","forall 'a. 'a * 'a -> bool"),
 >    ("op <=","forall 'a. 'a * 'a -> bool"),

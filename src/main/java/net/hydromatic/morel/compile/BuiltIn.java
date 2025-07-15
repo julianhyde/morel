@@ -2964,6 +2964,19 @@ public enum BuiltIn {
               ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
 
   /**
+   * Function "Relational.maxOpt", aka "maxOpt", of type "&alpha; bag &rarr;
+   * &alpha; option" (where &alpha; must be comparable).
+   */
+  RELATIONAL_MAX_OPT(
+      "Relational",
+      "maxOpt",
+      "maxOpt",
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), h.option(0))),
+              ts.forallType(1, h -> ts.fnType(h.list(0), h.option(0))))),
+
+  /**
    * Function "Relational.min", aka "min", of type "&alpha; bag &rarr; &alpha;"
    * (where &alpha; must be comparable).
    */
@@ -2975,6 +2988,19 @@ public enum BuiltIn {
           ts.multi(
               ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
               ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
+
+  /**
+   * Function "Relational.minOpt", aka "minOpt", of type "&alpha; bag &rarr;
+   * &alpha; option" (where &alpha; must be comparable).
+   */
+  RELATIONAL_MIN_OPT(
+      "Relational",
+      "minOpt",
+      "minOpt",
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), h.option(0))),
+              ts.forallType(1, h -> ts.fnType(h.list(0), h.option(0))))),
 
   /** Function "Sys.clearEnv", of type "unit &rarr; unit". */
   SYS_CLEAR_ENV("Sys", "clearEnv", ts -> ts.fnType(UNIT, UNIT)),

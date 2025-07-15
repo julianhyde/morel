@@ -569,7 +569,9 @@ Exception:
 | Relational.count, count | int list &rarr; int | "count list" returns the number of elements in `list`. Often used with `group`, for example `from e in emps group e.deptno compute countId = count`. |
 | Relational.empty, empty | &alpha; list &rarr; bool | "empty list" returns whether the list is empty, for example `from d in depts where empty (from e where e.deptno = d.deptno)`. |
 | Relational.max, max | &alpha; list &rarr; &alpha; | "max list" returns the greatest element of `list`. Often used with `group`, for example `from e in emps group e.deptno compute maxId = max of e.id`. |
+| Relational.maxOpt | &alpha; list &rarr; &alpha; option | "maxOpt list" returns `SOME (x)`, where `x` is the greatest element of `list`, if `list` is non-empty; otherwise it returns `NONE`. |
 | Relational.min, min | &alpha; list &rarr; &alpha; | "min list" returns the least element of `list`. Often used with `group`, for example `from e in emps group e.deptno compute minId = min of e.id`. |
+| Relational.minOpt | &alpha; list &rarr; &alpha; option | "minOpt list" returns `SOME (x)`, where `x` is the least element of `list`, if `list` is non-empty; otherwise it returns `NONE`. |
 | Relational.nonEmpty, nonEmpty | &alpha; list &rarr; bool | "nonEmpty list" returns whether the list has at least one element, for example `from d in depts where nonEmpty (from e where e.deptno = d.deptno)`. |
 | Relational.only, only | &alpha; list &rarr; &alpha; | "only list" returns the sole element of list, for example `from e in emps yield only (from d where d.deptno = e.deptno)`. |
 | Relational.op elem | &alpha; * &alpha; bag &rarr; bool, &alpha; * &alpha; list &rarr; bool | "e elem collection" returns whether `e` is a member of `collection`. |

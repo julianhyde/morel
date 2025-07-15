@@ -2435,12 +2435,34 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#RELATIONAL_MAX_OPT */
+  private static final Applicable RELATIONAL_MAX_OPT =
+      new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MAX_OPT) {
+        @Override
+        public Object apply(List list) {
+          return list.isEmpty()
+              ? OPTION_NONE
+              : optionSome(Ordering.natural().max(list));
+        }
+      };
+
   /** @see BuiltIn#RELATIONAL_MAX */
   private static final Applicable RELATIONAL_MAX =
       new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MAX) {
         @Override
         public Object apply(List list) {
           return Ordering.natural().max(list);
+        }
+      };
+
+  /** @see BuiltIn#RELATIONAL_MIN_OPT */
+  private static final Applicable RELATIONAL_MIN_OPT =
+      new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MIN_OPT) {
+        @Override
+        public Object apply(List list) {
+          return list.isEmpty()
+              ? OPTION_NONE
+              : optionSome(Ordering.natural().min(list));
         }
       };
 
@@ -3831,7 +3853,9 @@ public abstract class Codes {
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY)
           .put(BuiltIn.RELATIONAL_ITERATE, RELATIONAL_ITERATE)
+          .put(BuiltIn.RELATIONAL_MAX_OPT, RELATIONAL_MAX_OPT)
           .put(BuiltIn.RELATIONAL_MAX, RELATIONAL_MAX)
+          .put(BuiltIn.RELATIONAL_MIN_OPT, RELATIONAL_MIN_OPT)
           .put(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN)
           .put(BuiltIn.RELATIONAL_NON_EMPTY, RELATIONAL_NON_EMPTY)
           .put(BuiltIn.RELATIONAL_ONLY, RELATIONAL_ONLY)
