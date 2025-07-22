@@ -16,7 +16,61 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
+from i in [1, 2, 3]
+  compute (fn x => x) over i;
+> val it = [1, 2, 3] : int list
+
+from i in bag [1, 2]
+  compute sum over i;
+> val it = 3 : int
+
+from i in [1, 2]
+  compute sum over i;
+> val it = 3 : int
+
+from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]
+  group e.a compute {rows = (fn x => x) over e};
+> val it = [{rows=[{a=1,b=5},{a=1,b=1}],a=1},{rows=[{a=0,b=1}],a=0}]
+>   : {rows:{a:int,b:int} bag, a:int} list
+
+let
+  fun listAgg list = List.hd list
+in
+  from i in bag [1, 2]
+    compute listAgg over i
+end;
+> val it = 1 : int
+
+fun listAgg list = List.hd list;
+> val listAgg = fn : 'a list -> 'a
+fun bagAgg bag = Bag.hd (Bag.tl bag);
+> val bagAgg = fn : 'a bag -> 'a
+
+(*) List agg over list input (should return first element)
+from i in [1, 2]
+  compute listAgg over i;
+> val it = 1 : int
+
+(*) Bag agg over bag input (should return second element)
+from i in bag [1, 2]
+  compute bagAgg over i;
+> val it = 2 : int
+
+(*) List agg over bag input (should return first element)
+from i in bag [1, 2]
+  compute listAgg over i;
+> val it = 1 : int
+
+from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
+  group k compute {x = fn vs => k + sum vs over v};
+> val it = [(1, {x = 12}), (2, {x = 17})] : (int * {x : int}) list
+
+val recList = [{i=1,b=true}, {i=2,b=false}, {i=1,b=false}];
+> val recList = [{b=true,i=1},{b=false,i=2},{b=false,i=1}] : {b:bool, i:int} list
+val recBag = bag recList;
+> val recBag = [{b=true,i=1},{b=false,i=2},{b=false,i=1}] : {b:bool, i:int} bag
+
+from r in recBag group r.i compute {bs = (fn x => x) over r.b} order DESC i;
+> val it = [{bs=[false],i=2},{bs=[true,false],i=1}] : {bs:bool bag, i:int} list
 
 (*) End dummy.smli
