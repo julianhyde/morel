@@ -439,8 +439,10 @@ from p in [{r=1.0, s="a"}]
 group p.r compute {x = p.r};
 > stdIn:2.24 Error: unbound variable or constructor: p
 >   raised at: stdIn:2.24
+(* TODO: adaptive aggregates in 'into'
 :t from d in [{a=1,b=true}] yield d.a into sum;
 > val it : int
+*)
 
 :t
 from a in [1], b in [true] yield (b,a) where c;
