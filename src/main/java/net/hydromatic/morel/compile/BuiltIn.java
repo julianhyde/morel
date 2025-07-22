@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.eval.Codes.BuiltInExn;
@@ -3818,7 +3817,8 @@ public enum BuiltIn {
    */
   public final Function<TypeSystem, Type> typeFunction;
 
-  private final @Nullable PrimitiveType preferredType;
+  /** Preferred argument type, if this built-in has a generic type. */
+  public final @Nullable PrimitiveType preferredType;
 
   /** Computes a value for a particular session. */
   public final @Nullable Function<Session, Object> sessionValue;
@@ -4017,12 +4017,6 @@ public enum BuiltIn {
     Structure(String name, SortedMap<String, BuiltIn> memberMap) {
       this.name = requireNonNull(name, "name");
       this.memberMap = ImmutableSortedMap.copyOf(memberMap);
-    }
-  }
-
-  public void prefer(Consumer<PrimitiveType> consumer) {
-    if (preferredType != null) {
-      consumer.accept(preferredType);
     }
   }
 
