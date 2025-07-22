@@ -102,6 +102,7 @@ import net.hydromatic.morel.util.Unifier.Substitution;
 import net.hydromatic.morel.util.Unifier.Term;
 import net.hydromatic.morel.util.Unifier.TermTerm;
 import net.hydromatic.morel.util.Unifier.Variable;
+import net.hydromatic.morel.util.Unifiers;
 import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -1371,8 +1372,8 @@ public class TypeResolver {
 
     if (fn2 instanceof Ast.Id) {
       final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(((Ast.Id) fn2).name);
-      if (builtIn != null) {
-        builtIn.prefer(t -> preferredTypes.add(v, t));
+      if (builtIn != null && builtIn.preferredType != null) {
+        preferredTypes.add(v, builtIn.preferredType);
       }
     }
     return reg(apply.copy(fn2, arg2), v);
@@ -1452,6 +1453,87 @@ public class TypeResolver {
     return reg(id, vFn);
   }
 
+  /**
+   * Deduces the datatype of an aggregate function being applied to an argument.
+   * If the function is overloaded, the argument will help us resolve the
+   * overloading.
+   *
+   * @param env Compile-time environment
+   * @param fn Function expression (often an identifier)
+   * @param vFn Variable for the function type
+   * @param vArg Variable for the argument type
+   * @param vResult Variable for the result type
+   * @return the function expression with its type deduced
+   */
+  private Ast.Exp deduceAggFnType(
+      TypeEnv env,
+      Ast.Exp fn,
+      Variable vFn,
+      Variable vArg,
+      Variable vResult,
+      AtomicBoolean overloaded) {
+    @Nullable Type type = getType(env, fn);
+    if (type instanceof MultiType) {
+      final MultiType multiType = (MultiType) type;
+      final PairList<Term, Term> argResults = PairList.of();
+      for (Type type1 : multiType.types) {
+        Subst subst = Subst.EMPTY;
+        if (type1 instanceof ForallType) {
+          for (int i = 0; i < ((ForallType) type1).parameterCount; i++) {
+            subst = subst.plus(typeSystem.typeVariable(i), unifier.variable());
+          }
+          type1 = typeSystem.unqualified(type1);
+        }
+        FnType fnType = (FnType) type1;
+        argResults.add(
+            toTerm(fnType.paramType, subst), toTerm(fnType.resultType, subst));
+      }
+      constrain(vArg, vResult, argResults);
+      overloaded.set(true);
+      return reg(fn, vFn);
+    }
+
+    if (!(fn instanceof Ast.Id) || !env.hasOverloaded(((Ast.Id) fn).name)) {
+      overloaded.set(false);
+      return deduceType(env, fn, vFn);
+    }
+
+    // "apply" is "f arg" and has type "v";
+    // "f" is an overloaded name, and has type "vArg -> v";
+    // "arg" has type "vArg".
+    // To resolve overloading, we gather all known overloads, and apply
+    // them as constraints to "vArg".
+    overloaded.set(true);
+    final Ast.Id id = (Ast.Id) fn;
+    final List<Variable> variables = new ArrayList<>();
+    env.collectInstances(
+        typeSystem,
+        id.name,
+        term -> {
+          final Variable variable = toVariable(term);
+          variables.add(variable);
+          if (term instanceof Sequence) {
+            Sequence sequence = (Sequence) term;
+            if (sequence.operator.equals(FN_TY_CON)) {
+              assert sequence.terms.size() == 2;
+              Term arg = sequence.terms.get(0);
+              Term result = sequence.terms.get(1);
+              overloads.add(
+                  new Inst(
+                      id.name, variable, toVariable(arg), toVariable(result)));
+            }
+          }
+        });
+    final PairList<Term, Term> argResults = PairList.of();
+    for (Inst inst : overloads) {
+      if (inst.name.equals(id.name) && variables.contains(inst.vFn)) {
+        argResults.add(inst.vArg, inst.vResult);
+      }
+    }
+    constrain(vArg, vResult, argResults);
+    return reg(id, vFn);
+  }
+
   private @Nullable Type getType(TypeEnv env, Ast.Exp exp) {
     switch (exp.op) {
       case BOOL_LITERAL:
@@ -1498,9 +1580,11 @@ public class TypeResolver {
     actionMap.put(
         vArg,
         (v, t, substitution, termPairs) -> {
-          // We now know that the type arg, say "{a: int, b: real}".
-          // So, now we can declare that the type of vResult, say "#b", is
-          // "real".
+          // We now know "vArg", the argument type, and so we can deduce
+          // "vResult", the result type.
+          //
+          // Suppose it is "{a: int, b: real}", and "recordSelector" is "#b".
+          // From this, we can declare that the result type is "real".
           if (t instanceof Sequence) {
             final Sequence sequence = (Sequence) t;
             final List<String> fieldList = fieldList(sequence);
@@ -1600,32 +1684,71 @@ public class TypeResolver {
   private Ast.Aggregate deduceAggregateType(
       AggFrame aggFrame, Ast.Aggregate aggregate, Variable v) {
     final Triple p = aggFrame.p;
+
+    // The collection that is the input to the aggregate function is ordered iff
+    // the input is ordered.
+    final Variable vArg = unifier.variable();
+    final Variable cArg = unifier.variable();
+    isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
+
     final Ast.Exp arg2;
-    final Variable c;
-    if (aggregate.argument == null) {
-      c = p.c;
-      arg2 = null;
-    } else {
-      // The collection that is the input to the aggregate function is
-      // ordered iff the input is ordered.
-      final Variable v10 = unifier.variable();
-      c = unifier.variable();
-      isListOrBagMatchingInput(c, v10, p.c, p.v);
-      try {
-        ++aggFrame.activeCount;
-        arg2 = deduceType(p.env, aggregate.argument, v10);
-      } finally {
-        --aggFrame.activeCount;
-      }
+    try {
+      ++aggFrame.activeCount;
+      arg2 = deduceType(p.env, aggregate.argument, vArg);
+    } finally {
+      --aggFrame.activeCount;
     }
 
     final Variable vAgg = unifier.variable();
+    final AtomicBoolean overloaded = new AtomicBoolean(false);
     final Ast.Exp aggregateFn2 =
-        deduceApplyFnType(p.env, aggregate.aggregate, vAgg, c, v);
-    reg(aggregate.aggregate, vAgg);
+        deduceAggFnType(p.env, aggregate.aggregate, vAgg, cArg, v, overloaded);
+    reg(aggregateFn2, vAgg);
 
-    final Sequence fnType = fnTerm(c, v);
-    equiv(vAgg, fnType);
+    if (overloaded.get()) {
+      equiv(vAgg, fnTerm(cArg, v));
+    } else {
+      // Find the parameter type - the type that the aggregate function wants to
+      // receive. For example "sum" is "int bag -> int", so the parameter is
+      // "int bag". As we see below, it may also be applied to a "int list".
+      final Variable cParam = unifier.variable();
+      equiv(vAgg, fnTerm(cParam, v));
+
+      // The aggregate's type must a function from the argument collection to
+      // the result type, or some variation substituting list for bag.
+      //
+      // For example, in "from i in [1, 2] compute sum over i",
+      // cArg is "int list", v is "int", and
+      // vAgg (the type of "sum") is "int bag -> int",
+      // cParam (the parameter type of "sum") is "int bag".
+      //
+      // It is OK to apply "int bag -> int" to an "int list", and it would also
+      // be OK to apply "int bag -> int" to an "int bag" or "int list".
+      mayBeBagOrList(cParam, vArg);
+      if (false) {
+        // This is implicit from above
+        mayBeBagOrList(cArg, vArg);
+      }
+
+      actionMap.put(
+          cArg,
+          (vArg2, t, substitution, termPairs) -> {
+            // This method was called because we now know the argument type,
+            // "vArg". From this, we can firm up the aggregate type, "vAgg".
+            if (t instanceof Sequence) {
+              final Sequence sequence = (Sequence) t;
+              System.out.println(sequence);
+            }
+          });
+
+      Unifiers.onAllVariablesMatched(
+          Arrays.asList(cArg, cParam),
+          actionMap::put,
+          terms1 -> {
+            System.out.println(terms1);
+          });
+    }
+
     final Ast.Aggregate aggregate2 = aggregate.copy(aggregateFn2, arg2);
     return reg(aggregate2, v);
   }
