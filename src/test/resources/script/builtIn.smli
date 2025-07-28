@@ -666,34 +666,21 @@ Sys.plan ();
 >   : string
 
 (* Either ------------------------------------------------------ *)
-(*
-The Either structure provides a polymorphic disjoint-sum type with associated operations.
-
-Interface
-datatype ('left, 'right) either = INL of 'left | INR of 'right
-
-val isLeft  : ('left, 'right) either -> bool
-val isRight : ('left, 'right) either -> bool
-
-val asLeft  : ('left, 'right) either -> 'left option
-val asRight : ('left, 'right) either -> 'right option
-
-val map : ('ldom -> 'lrng) * ('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('lrng, 'rrng) either
-
-val mapLeft  : ('ldom -> 'lrng) -> ('ldom, 'rdom) either -> ('lrng, 'rdom) either
-val mapRight : ('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('ldom, 'rrng) either
-
-val app : ('left -> unit) * ('right -> unit) -> ('left, 'right) either -> unit
-
-val appLeft  : ('left -> unit) -> ('left, 'right) either -> unit
-val appRight : ('right -> unit) -> ('left, 'right) either -> unit
-
-val fold : ('left * 'b -> 'b) * ('right * 'b -> 'b) -> 'b -> ('left, 'right) either -> 'b
-
-val proj : ('a, 'a) either -> 'a
-
-val partition : (('left, 'right) either) list -> ('left list * 'right list)
-*)
+Either;
+> val it =
+>   {app=fn,appLeft=fn,appRight=fn,asLeft=fn,asRight=fn,fold=fn,isLeft=fn,
+>    isRight=fn,map=fn,mapLeft=fn,mapRight=fn,partition=fn,proj=fn}
+>   : {app:('a -> unit) * ('b -> unit) -> ('a,'b) either -> unit,
+>      appLeft:('c -> unit) -> ('c,'d) either -> unit,
+>      appRight:('e -> unit) -> ('f,'e) either -> unit,
+>      asLeft:('g,'h) either -> 'g option, asRight:('i,'j) either -> 'j option,
+>      fold:('k * 'l -> 'l) * ('m * 'l -> 'l) -> 'l -> ('k,'m) either -> 'l,
+>      isLeft:('n,'o) either -> bool, isRight:('p,'q) either -> bool,
+>      map:('r -> 's) * ('t -> 'u) -> ('r,'t) either -> ('s,'u) either,
+>      mapLeft:('v -> 'w) -> ('v,'x) either -> ('w,'x) either,
+>      mapRight:('y -> 'z) -> ('ba,'y) either -> ('ba,'z) either,
+>      partition:('bb,'bc) either list -> 'bb list * 'bc list,
+>      proj:('bd,'bd) either -> 'bd}
 
 val yes: (bool, int) either = INL true;
 > val yes = INL true : (bool,int) either
@@ -768,16 +755,14 @@ Either.fold (fn (b,i) => i + (if b then 2 else 1), fn (j,i) => j + i) 3 ten;
 > val it = 13 : int
 Either.proj;
 > val it = fn : ('a,'a) either -> 'a
-Either.proj (Either.INL 5);
+Either.proj (INL 5);
 > val it = 5 : int
-Either.proj (Either.INR 7);
+Either.proj (INR 7);
 > val it = 7 : int
 Either.partition;
 > val it = fn : ('a,'b) either list -> 'a list * 'b list
 Either.partition [yes, ten];
 > val it = ([true],[10]) : bool list * int list
-
-Either;
 
 (* Fn ---------------------------------------------------------- *)
 Fn;
@@ -4291,11 +4276,15 @@ Sys.env ();
 >    ("Char",
 >     "{chr:int -> char, compare:char * char -> order, contains:string -> char -> bool, fromCString:string -> char option, fromString:string -> char option, isAlpha:char -> bool, isAlphaNum:char -> bool, isAscii:char -> bool, isCntrl:char -> bool, isDigit:char -> bool, isGraph:char -> bool, isHexDigit:char -> bool, isLower:char -> bool, isPrint:char -> bool, isPunct:char -> bool, isSpace:char -> bool, isUpper:char -> bool, maxChar:char, maxOrd:int, minChar:char, notContains:string -> char -> bool, `op <`:char * char -> bool, `op <=`:char * char -> bool, `op >`:char * char -> bool, `op >=`:char * char -> bool, ord:char -> int, pred:char -> char, succ:char -> char, toCString:char -> string, toLower:char -> char, toString:char -> string, toUpper:char -> char}"),
 >    ("DESC","forall 'a. 'a -> 'a descending"),("EQUAL","order"),
+>    ("Either",
+>     "{app:forall 'a 'b 'c. ('a -> unit) * ('b -> unit) -> ('a,'b) either -> unit, appLeft:forall 'a 'b. ('a -> unit) -> ('a,'b) either -> unit, appRight:forall 'a 'b. ('b -> unit) -> ('a,'b) either -> unit, asLeft:forall 'a 'b. ('a,'b) either -> 'a option, asRight:forall 'a 'b. ('a,'b) either -> 'b option, fold:forall 'a 'b 'c. ('a * 'b -> 'b) * ('c * 'b -> 'b) -> 'b -> ('a,'c) either -> 'b, isLeft:forall 'a 'b. ('a,'b) either -> bool, isRight:forall 'a 'b. ('a,'b) either -> bool, map:forall 'a 'b 'c 'd. ('a -> 'c) * ('b -> 'd) -> ('a,'b) either -> ('c,'d) either, mapLeft:forall 'a 'b 'c. ('a -> 'b) -> ('a,'c) either -> ('b,'c) either, mapRight:forall 'a 'b 'c. ('b -> 'c) -> ('a,'b) either -> ('a,'c) either, partition:forall 'a 'b. ('a,'b) either list -> 'a list * 'b list, proj:forall 'a. ('a,'a) either -> 'a}"),
 >    ("Fn",
 >     "{apply:forall 'a 'b. ('a -> 'b) * 'a -> 'b, const:forall 'a 'b. 'a -> 'b -> 'a, curry:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'a -> 'b -> 'c, equal:forall 'a 'b. 'a -> 'a -> bool, flip:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'b * 'a -> 'c, id:forall 'a. 'a -> 'a, notEqual:forall 'a 'b. 'a -> 'a -> bool, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c, repeat:forall 'a. int -> ('a -> 'a) -> 'a -> 'a, uncurry:forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a * 'b -> 'c}"),
 >    ("GREATER","order"),
 >    ("General",
 >     "{ignore:forall 'a. 'a -> unit, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
+>    ("INL","forall 'a 'b. 'a -> ('a,'b) either"),
+>    ("INR","forall 'a 'b. 'b -> ('a,'b) either"),
 >    ("Int",
 >     "{abs:int -> int, compare:int * int -> order, div:int * int -> int, fromInt:int -> int, fromLarge:int -> int, fromString:string -> int option, max:int * int -> int, maxInt:int option, min:int * int -> int, minInt:int option, mod:int * int -> int, precision:int option, quot:int * int -> int, rem:int * int -> int, sameSign:int * int -> bool, sign:int -> int, toInt:int -> int, toLarge:int -> int, toString:int -> string}"),
 >    ("Interact","{use:string -> unit, useSilently:string -> unit}"),
@@ -4365,13 +4354,14 @@ Sys.env ();
 >    ("showAll","unit -> (string * string option) list"),
 >    ("size","string -> int"),("str","char -> string"),
 >    ("substring","string * int * int -> string"),
->    ("sum","forall 'a. 'a bag -> 'a"),
+>    ("sum","forall 'a. 'a bag -> 'a"),("ten","(bool,int) either"),
 >    ("testChar","(char -> bool) -> (bool * string) list"),
 >    ("timesTwo","int -> int"),("tl","forall 'a. 'a list -> 'a list"),
 >    ("tokens","(char -> bool) -> string -> string list"),("true","bool"),
 >    ("trunc","real -> int"),("unset","string -> unit"),("use","string -> unit"),
 >    ("useSilently","string -> unit"),("valOf","forall 'a. 'a option -> 'a"),
->    ("vector","forall 'a. 'a list -> 'a vector")] : (string * string) list
+>    ("vector","forall 'a. 'a list -> 'a vector"),("yes","(bool,int) either")]
+>   : (string * string) list
 
 env;
 > val it = fn : unit -> (string * string) list
@@ -4383,11 +4373,15 @@ env ();
 >    ("Char",
 >     "{chr:int -> char, compare:char * char -> order, contains:string -> char -> bool, fromCString:string -> char option, fromString:string -> char option, isAlpha:char -> bool, isAlphaNum:char -> bool, isAscii:char -> bool, isCntrl:char -> bool, isDigit:char -> bool, isGraph:char -> bool, isHexDigit:char -> bool, isLower:char -> bool, isPrint:char -> bool, isPunct:char -> bool, isSpace:char -> bool, isUpper:char -> bool, maxChar:char, maxOrd:int, minChar:char, notContains:string -> char -> bool, `op <`:char * char -> bool, `op <=`:char * char -> bool, `op >`:char * char -> bool, `op >=`:char * char -> bool, ord:char -> int, pred:char -> char, succ:char -> char, toCString:char -> string, toLower:char -> char, toString:char -> string, toUpper:char -> char}"),
 >    ("DESC","forall 'a. 'a -> 'a descending"),("EQUAL","order"),
+>    ("Either",
+>     "{app:forall 'a 'b 'c. ('a -> unit) * ('b -> unit) -> ('a,'b) either -> unit, appLeft:forall 'a 'b. ('a -> unit) -> ('a,'b) either -> unit, appRight:forall 'a 'b. ('b -> unit) -> ('a,'b) either -> unit, asLeft:forall 'a 'b. ('a,'b) either -> 'a option, asRight:forall 'a 'b. ('a,'b) either -> 'b option, fold:forall 'a 'b 'c. ('a * 'b -> 'b) * ('c * 'b -> 'b) -> 'b -> ('a,'c) either -> 'b, isLeft:forall 'a 'b. ('a,'b) either -> bool, isRight:forall 'a 'b. ('a,'b) either -> bool, map:forall 'a 'b 'c 'd. ('a -> 'c) * ('b -> 'd) -> ('a,'b) either -> ('c,'d) either, mapLeft:forall 'a 'b 'c. ('a -> 'b) -> ('a,'c) either -> ('b,'c) either, mapRight:forall 'a 'b 'c. ('b -> 'c) -> ('a,'b) either -> ('a,'c) either, partition:forall 'a 'b. ('a,'b) either list -> 'a list * 'b list, proj:forall 'a. ('a,'a) either -> 'a}"),
 >    ("Fn",
 >     "{apply:forall 'a 'b. ('a -> 'b) * 'a -> 'b, const:forall 'a 'b. 'a -> 'b -> 'a, curry:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'a -> 'b -> 'c, equal:forall 'a 'b. 'a -> 'a -> bool, flip:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'b * 'a -> 'c, id:forall 'a. 'a -> 'a, notEqual:forall 'a 'b. 'a -> 'a -> bool, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c, repeat:forall 'a. int -> ('a -> 'a) -> 'a -> 'a, uncurry:forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a * 'b -> 'c}"),
 >    ("GREATER","order"),
 >    ("General",
 >     "{ignore:forall 'a. 'a -> unit, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
+>    ("INL","forall 'a 'b. 'a -> ('a,'b) either"),
+>    ("INR","forall 'a 'b. 'b -> ('a,'b) either"),
 >    ("Int",
 >     "{abs:int -> int, compare:int * int -> order, div:int * int -> int, fromInt:int -> int, fromLarge:int -> int, fromString:string -> int option, max:int * int -> int, maxInt:int option, min:int * int -> int, minInt:int option, mod:int * int -> int, precision:int option, quot:int * int -> int, rem:int * int -> int, sameSign:int * int -> bool, sign:int -> int, toInt:int -> int, toLarge:int -> int, toString:int -> string}"),
 >    ("Interact","{use:string -> unit, useSilently:string -> unit}"),
@@ -4457,13 +4451,14 @@ env ();
 >    ("showAll","unit -> (string * string option) list"),
 >    ("size","string -> int"),("str","char -> string"),
 >    ("substring","string * int * int -> string"),
->    ("sum","forall 'a. 'a bag -> 'a"),
+>    ("sum","forall 'a. 'a bag -> 'a"),("ten","(bool,int) either"),
 >    ("testChar","(char -> bool) -> (bool * string) list"),
 >    ("timesTwo","int -> int"),("tl","forall 'a. 'a list -> 'a list"),
 >    ("tokens","(char -> bool) -> string -> string list"),("true","bool"),
 >    ("trunc","real -> int"),("unset","string -> unit"),("use","string -> unit"),
 >    ("useSilently","string -> unit"),("valOf","forall 'a. 'a option -> 'a"),
->    ("vector","forall 'a. 'a list -> 'a vector")] : (string * string) list
+>    ("vector","forall 'a. 'a list -> 'a vector"),("yes","(bool,int) either")]
+>   : (string * string) list
 
 (*) val plan : unit -> string
 Sys.plan;

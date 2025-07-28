@@ -1428,6 +1428,30 @@ public enum BuiltIn {
                       h.either(0, 2)))),
 
   /**
+   * Function "Either.partition", of type "(&alpha;, &beta;) either list &rarr;
+   * &alpha; list * &beta; list".
+   */
+  EITHER_PARTITION(
+      "Either",
+      "partition",
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.listType(h.either(0, 1)),
+                      ts.tupleType(
+                          ts.listType(h.get(0)), ts.listType(h.get(1)))))),
+
+  /**
+   * Function "Either.proj", of type "(&alpha;, &alph;) either &rarr; &alpha;".
+   */
+  EITHER_PROJ(
+      "Either",
+      "proj",
+      ts -> ts.forallType(1, h -> ts.fnType(h.either(0, 0), h.get(0)))),
+
+  /**
    * Function "Fn.apply", of type "(&alpha; &rarr; &beta;) * &alpha; &rarr;
    * &beta;".
    */
