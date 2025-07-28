@@ -684,6 +684,236 @@ description = """
 is a letter (a to z or A to Z); otherwise returns `c`.
 """
 
+# === Either structure ===============================================
+# The Either structure provides a polymorphic disjoint-sum type with associated operations.
+#
+# Interface
+#
+# datatype ('left, 'right) either = INL of 'left | INR of 'right
+# 
+# val isLeft  : ('left, 'right) either -> bool
+# val isRight : ('left, 'right) either -> bool
+# 
+# val asLeft  : ('left, 'right) either -> 'left option
+# val asRight : ('left, 'right) either -> 'right option
+# 
+# val map : ('ldom -> 'lrng) * ('rdom -> 'rrng)
+# 	  -> ('ldom, 'rdom) either
+# 	    -> ('lrng, 'rrng) either
+# 
+# val mapLeft  : ('ldom -> 'lrng) -> ('ldom, 'rdom) either -> ('lrng, 'rdom) either
+# val mapRight : ('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('ldom, 'rrng) either
+# 
+# val app : ('left -> unit) * ('right -> unit)
+# 	  -> ('left, 'right) either
+# 	    -> unit
+# 
+# val appLeft  : ('left -> unit) -> ('left, 'right) either -> unit
+# val appRight : ('right -> unit) -> ('left, 'right) either -> unit
+# 
+# val fold : ('left * 'b -> 'b) * ('right * 'b -> 'b)
+# 	   -> 'b -> ('left, 'right) either -> 'b
+# 
+# val proj : ('a, 'a) either -> 'a
+# 
+# val partition : (('left, 'right) either) list -> ('left list * 'right list)
+#
+# Description
+#
+# datatype ('left, 'right) either = INL of 'left | INR of 'right
+# defines a generic union type. We say that a value INL(x) is a left value with x as its contents. Likewise, INR(x) is a right value.
+# 
+# isLeft sm
+# returns true if sm is a left value.
+# 
+# isRight sm
+# returns true if sm is a right value.
+# 
+# asLeft sm
+# returns SOME(x) if sm is a left value with contents x, otherwise it returns NONE.
+# 
+# asRight sm
+# returns SOME(x) if sm is a right value with contents x, otherwise it returns NONE.
+# 
+# map (fl, fr) sm
+# maps fl over the contents of left values and fr over the contents of right values.
+# 
+# mapLeft f sm
+# maps the function f over the contents of left values and acts as the identity on right values.
+# 
+# mapRight f sm
+# maps the function f over the contents of right values and acts as the identity on left values.
+# 
+# app (fl, fr) sm
+# applies fl to the contents of left values and fr to the contents of right values.
+# 
+# appLeft f sm
+# applies f to the contents of left values and ignores right values.
+# 
+# appRight f sm
+# applies f to the contents of right values and ignores left values.
+# 
+# fold (fl, fr) init sm
+# computes fx (v, init), where v is the contents of sm and fx is either fl (if sm is a left value) or fr (if sm is a right value).
+# 
+# proj sm
+# projects out the contents of sm.
+# 
+# partition sms
+# partitions the list of sum values into a list of left values and a list of right values.
+
+[[functions]]
+ordinal = 8
+structure = "Either"
+name = "app"
+specified = "basis+"
+type = "('left -> unit) * ('right -> unit) -> ('left, 'right) either -> unit"
+description = """
+"app (fl, fr) sm"
+applies `fl` to the contents of left values and `fr` to the contents
+of right values.
+"""
+
+[[functions]]
+ordinal = 9
+structure = "Either"
+name = "appLeft"
+specified = "basis+"
+type = "('left -> unit) -> ('left, 'right) either -> unit"
+description = """
+"appLeft f sm"
+applies `f` to the contents of left values and ignores right values.
+"""
+
+[[functions]]
+ordinal = 10
+structure = "Either"
+name = "appRight"
+specified = "basis+"
+type = "('right -> unit) -> ('left, 'right) either -> unit"
+description = """
+"appRight f sm"
+applies `f` to the contents of right values and ignores left values.
+"""
+
+[[functions]]
+ordinal = 3
+structure = "Either"
+name = "asLeft"
+specified = "basis+"
+type = "('left, 'right) either → 'left option"
+description = """
+"asLeft sm"
+returns `SOME (x)` if `sm` is a left value with contents `x`,
+otherwise it returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 4
+structure = "Either"
+name = "asRight"
+specified = "basis+"
+type = "('left, 'right) either → 'right option"
+description = """
+"asRight sm"
+returns `SOME (x)` if `sm` is a right value with contents `x`,
+otherwise it returns `NONE`.
+"""
+
+[[functions]]
+ordinal = 11
+structure = "Either"
+name = "fold"
+specified = "basis+"
+type = "('left * 'b -> 'b) * ('right * 'b -> 'b) -> 'b -> ('left, 'right) either -> 'b"
+description = """
+"fold (fl, fr) init sm"
+computes `fx (v, init)`, where `v` is the contents of `sm` and `fx`
+is either `fl` (if `sm` is a left value) or `fr` (if `sm` is a right
+value).
+"""
+
+[[functions]]
+ordinal = 1
+structure = "Either"
+name = "isLeft"
+specified = "basis+"
+type = "('left, 'right) either → bool"
+description = """
+"isLeft sm"
+returns true if `sm` is a left value.
+"""
+
+[[functions]]
+ordinal = 2
+structure = "Either"
+name = "isRight"
+specified = "basis+"
+type = "('left, 'right) either → bool"
+description = """
+"isRight sm"
+returns true if `sm` is a right value.
+"""
+
+[[functions]]
+ordinal = 5
+structure = "Either"
+name = "map"
+specified = "basis+"
+type = "('ldom -> 'lrng) * ('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('lrng, 'rrng) either"
+description = """
+"map (fl, fr) sm"
+maps `fl` over the contents of left values and `fr` over the contents
+of right values.
+"""
+
+[[functions]]
+ordinal = 6
+structure = "Either"
+name = "mapLeft"
+specified = "basis+"
+type = "('ldom -> 'lrng) -> ('ldom, 'rdom) either -> ('lrng, 'rdom) either"
+description = """
+"mapLeft f sm"
+maps the function `f` over the contents of left values and acts as the
+identity on right values.
+"""
+
+[[functions]]
+ordinal = 7
+structure = "Either"
+name = "mapRight"
+specified = "basis+"
+type = "('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('ldom, 'rrng) either"
+description = """
+"mapRight f sm"
+maps the function `f` over the contents of right values and acts as the
+identity on left values.
+"""
+
+[[functions]]
+ordinal = 13
+structure = "Either"
+name = "partition"
+specified = "basis+"
+type = "('left, 'right) either list -> ('left list * 'right list)"
+description = """
+"partition sms"
+partitions the list of sum values into a list of left values and a
+list of right values.
+"""
+
+[[functions]]
+ordinal = 12
+structure = "Either"
+name = "proj"
+specified = "basis+"
+type = "('a, 'a) either -> 'a"
+description = """
+"proj sm"
+projects out the contents of `sm`.
+"""
+
 # === Fn structure ===================================================
 # The Fn structure provides various combinators to aid computing with
 # function values.
@@ -703,7 +933,7 @@ is a letter (a to z or A to Z); otherwise returns `c`.
 ordinal = 3
 structure = "Fn"
 name = "apply"
-specified = "basis"
+specified = "basis+"
 type = "(α → β) * α → β"
 description = """
 "apply (f, x)"
@@ -714,7 +944,7 @@ applies the function `f` to `x`. Thus, it is equivalent to `f x`.
 ordinal = 2
 structure = "Fn"
 name = "const"
-specified = "basis"
+specified = "basis+"
 type = "α → β → α"
 description = """
 "const x y"
@@ -725,7 +955,7 @@ returns the value `x`.
 ordinal = 5
 structure = "Fn"
 name = "curry"
-specified = "basis"
+specified = "basis+"
 type = "(α * β → γ) → α → β → γ"
 description = """
 "curry f x y"
@@ -737,7 +967,7 @@ the binary function `f` into curried form.
 ordinal = 9
 structure = "Fn"
 name = "equal"
-specified = "basis"
+specified = "basis+"
 type = "α → α → bool"
 description = """
 "equal a b"
@@ -749,7 +979,7 @@ polymorphic equality function (`=`).
 ordinal = 7
 structure = "Fn"
 name = "flip"
-specified = "basis"
+specified = "basis+"
 type = "(α * β → γ) → β * α → γ"
 description = """
 "flip f (x, y)"
@@ -761,7 +991,7 @@ of the binary function `f`.
 ordinal = 1
 structure = "Fn"
 name = "id"
-specified = "basis"
+specified = "basis+"
 type = "α → α"
 description = """
 "id x"
@@ -772,7 +1002,7 @@ returns the value `x` It is the polymorphic identity function)
 ordinal = 10
 structure = "Fn"
 name = "notEqual"
-specified = "basis"
+specified = "basis+"
 type = "α → α → bool"
 description = """
 "notEqual a b"
@@ -784,7 +1014,7 @@ the polymorphic inequality function (`<>`).
 ordinal = 4
 structure = "Fn"
 name = "op o"
-specified = "basis"
+specified = "basis+"
 type = "(β → γ) * (α → β) → α → γ"
 description = """
 "f o g"
@@ -797,7 +1027,7 @@ is equivalent to `f (g a)`. This function is the same as the global
 ordinal = 8
 structure = "Fn"
 name = "repeat"
-specified = "basis"
+specified = "basis+"
 type = "int → (α → α) → α → α"
 description = """
 "repeat n f"
@@ -810,7 +1040,7 @@ it raises the exception `Domain`.
 ordinal = 6
 structure = "Fn"
 name = "uncurry"
-specified = "basis"
+specified = "basis+"
 type = "(α → β → γ) → α * β → γ"
 description = """
 "ucurry f (x, y)"
