@@ -665,6 +665,120 @@ Sys.plan ();
 >   "apply2(fnValue Bag.tabulate, constant(-1), let1(matchCode match(fact, match(n, apply(fnCode match(true, constant(1), _, apply2(fnValue *, get(name n), apply(fnCode link, argCode apply2(fnValue -, get(name n), constant(1))))), argCode apply2(fnValue =, get(name n), constant(0))))), resultCode get(name fact)))"
 >   : string
 
+(* Either ------------------------------------------------------ *)
+(*
+The Either structure provides a polymorphic disjoint-sum type with associated operations.
+
+Interface
+datatype ('left, 'right) either = INL of 'left | INR of 'right
+
+val isLeft  : ('left, 'right) either -> bool
+val isRight : ('left, 'right) either -> bool
+
+val asLeft  : ('left, 'right) either -> 'left option
+val asRight : ('left, 'right) either -> 'right option
+
+val map : ('ldom -> 'lrng) * ('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('lrng, 'rrng) either
+
+val mapLeft  : ('ldom -> 'lrng) -> ('ldom, 'rdom) either -> ('lrng, 'rdom) either
+val mapRight : ('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('ldom, 'rrng) either
+
+val app : ('left -> unit) * ('right -> unit) -> ('left, 'right) either -> unit
+
+val appLeft  : ('left -> unit) -> ('left, 'right) either -> unit
+val appRight : ('right -> unit) -> ('left, 'right) either -> unit
+
+val fold : ('left * 'b -> 'b) * ('right * 'b -> 'b) -> 'b -> ('left, 'right) either -> 'b
+
+val proj : ('a, 'a) either -> 'a
+
+val partition : (('left, 'right) either) list -> ('left list * 'right list)
+*)
+
+val yes: (bool, int) either = INL true;
+> val yes = INL true : (bool,int) either
+val ten: (bool, int) either = INR 10;
+> val ten = INR 10 : (bool,int) either
+
+Either.isLeft;
+> val it = fn : ('a,'b) either -> bool
+Either.isLeft yes;
+> val it = true : bool
+Either.isLeft ten;
+> val it = false : bool
+Either.isRight;
+> val it = fn : ('a,'b) either -> bool
+Either.isRight yes;
+> val it = false : bool
+Either.isRight ten;
+> val it = true : bool
+Either.asLeft;
+> val it = fn : ('a,'b) either -> 'a option
+Either.asLeft yes;
+> val it = SOME true : bool option
+Either.asLeft ten;
+> val it = NONE : bool option
+Either.asRight;
+> val it = fn : ('a,'b) either -> 'b option
+Either.asRight yes;
+> val it = NONE : int option
+Either.asRight ten;
+> val it = SOME 10 : int option
+Either.map;
+> val it = fn : ('a -> 'b) * ('c -> 'd) -> ('a,'c) either -> ('b,'d) either
+Either.map (fn b => not b, fn i => i + 1) yes;
+> val it = INL false : (bool,int) either
+Either.map (fn b => not b, fn i => i + 1) ten;
+> val it = INR 11 : (bool,int) either
+Either.mapLeft;
+> val it = fn : ('a -> 'b) -> ('a,'c) either -> ('b,'c) either
+Either.mapLeft (fn b => not b) yes;
+> val it = INL false : (bool,int) either
+Either.mapLeft (fn b => not b) ten;
+> val it = INR 10 : (bool,int) either
+Either.mapRight;
+> val it = fn : ('a -> 'b) -> ('c,'a) either -> ('c,'b) either
+Either.mapRight (fn i => i + 1) yes;
+> val it = INL true : (bool,int) either
+Either.mapRight (fn i => i + 1) ten;
+> val it = INR 11 : (bool,int) either
+Either.app;
+> val it = fn : ('a -> unit) * ('b -> unit) -> ('a,'b) either -> unit
+Either.app (fn b => ignore (not b), fn i => ignore (i + 1)) yes;
+> val it = () : unit
+Either.app (fn b => ignore (not b), fn i => ignore (i + 1)) ten;
+> val it = () : unit
+Either.appLeft;
+> val it = fn : ('a -> unit) -> ('a,'b) either -> unit
+Either.appLeft (fn b => ignore (not b)) yes;
+> val it = () : unit
+Either.appLeft (fn b => ignore (not b)) ten;
+> val it = () : unit
+Either.appRight;
+> val it = fn : ('a -> unit) -> ('b,'a) either -> unit
+Either.appRight (fn i => ignore (i + 1)) yes;
+> val it = () : unit
+Either.appRight (fn i => ignore (i + 1)) ten;
+> val it = () : unit
+Either.fold;
+> val it = fn : ('a * 'b -> 'b) * ('c * 'b -> 'b) -> 'b -> ('a,'c) either -> 'b
+Either.fold (fn (b,i) => i + (if b then 2 else 1), fn (j,i) => j + i) 3 yes;
+> val it = 5 : int
+Either.fold (fn (b,i) => i + (if b then 2 else 1), fn (j,i) => j + i) 3 ten;
+> val it = 13 : int
+Either.proj;
+> val it = fn : ('a,'a) either -> 'a
+Either.proj (Either.INL 5);
+> val it = 5 : int
+Either.proj (Either.INR 7);
+> val it = 7 : int
+Either.partition;
+> val it = fn : ('a,'b) either list -> 'a list * 'b list
+Either.partition [yes, ten];
+> val it = ([true],[10]) : bool list * int list
+
+Either;
+
 (* Fn ---------------------------------------------------------- *)
 Fn;
 > val it =
