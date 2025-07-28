@@ -422,11 +422,11 @@ Exception:
 | Fn.id | &alpha; &rarr; &alpha; | "id x" returns the value `x` It is the polymorphic identity function) |
 | Fn.const | &alpha; &rarr; &beta; &rarr; &alpha; | "const x y" returns the value `x`. |
 | Fn.apply | (&alpha; &rarr; &beta;) * &alpha; &rarr; &beta; | "apply (f, x)" applies the function `f` to `x`. Thus, it is equivalent to `f x`. |
-| Fn.op o | (&beta; &rarr; &gamma;) (&alpha; &rarr; &beta;) &rarr; &alpha; &rarr; &gamma; | "f o g" is the function composition of `f` and `g`. Thus, `(f o g) a` is equivalent to `f (g a)`. This function is the same as the global `o` operator and is also part of the `General` structure. |
-| Fn.curry | (&alpha; * &beta; &rarr; &gamma;) &rarr; (&alpha; &rarr; &beta; &rarr; &gamma;) | "curry f x y" is equivalent to `f (x, y)`; i.e., `curry f` transforms the binary function `f` into curried form. |
-| Fn.uncurry | (&alpha; &rarr; &beta; &rarr; &gamma;) &rarr; (&alpha; * &beta; &rarr; &gamma;) | "ucurry f (x, y)" is equivalent to `f x y`; i.e., `uncurry f` transforms the curried function `f` into a binary function. This function is the inverse of `curry`. |
-| Fn.flip | (&alpha; * &beta; &rarr; &gamma;) &rarr; (&beta; * &alpha; &rarr; &gamma;) | "flip f (x, y)" is equivalent to `f (y, x)`; i.e., `flip f` flips the argument order of the binary function `f`. |
-| Fn.repeat | int &rarr; (&alpha; &rarr; &alpha;) &rarr; (&alpha; &rarr; &alpha;) | "repeat n f" returns the `n`-fold composition of `f`. If `n` is zero, then `repeat n f` returns the identity function. If `n` is negative, then it raises the exception `Domain`. |
+| Fn.op o | (&beta; &rarr; &gamma;) * (&alpha; &rarr; &beta;) &rarr; &alpha; &rarr; &gamma; | "f o g" is the function composition of `f` and `g`. Thus, `(f o g) a` is equivalent to `f (g a)`. This function is the same as the global `o` operator and is also part of the `General` structure. |
+| Fn.curry | (&alpha; * &beta; &rarr; &gamma;) &rarr; &alpha; &rarr; &beta; &rarr; &gamma; | "curry f x y" is equivalent to `f (x, y)`; i.e., `curry f` transforms the binary function `f` into curried form. |
+| Fn.uncurry | (&alpha; &rarr; &beta; &rarr; &gamma;) &rarr; &alpha; * &beta; &rarr; &gamma; | "ucurry f (x, y)" is equivalent to `f x y`; i.e., `uncurry f` transforms the curried function `f` into a binary function. This function is the inverse of `curry`. |
+| Fn.flip | (&alpha; * &beta; &rarr; &gamma;) &rarr; &beta; * &alpha; &rarr; &gamma; | "flip f (x, y)" is equivalent to `f (y, x)`; i.e., `flip f` flips the argument order of the binary function `f`. |
+| Fn.repeat | int &rarr; (&alpha; &rarr; &alpha;) &rarr; &alpha; &rarr; &alpha; | "repeat n f" returns the `n`-fold composition of `f`. If `n` is zero, then `repeat n f` returns the identity function. If `n` is negative, then it raises the exception `Domain`. |
 | Fn.equal | &alpha; &rarr; &alpha; &rarr; bool | "equal a b" returns whether `a` is equal to `b`. It is a curried version of the polymorphic equality function (`=`). |
 | Fn.notEqual | &alpha; &rarr; &alpha; &rarr; bool | "notEqual a b" returns whether `a` is not equal to `b`. It is a curried version of the polymorphic inequality function (`&lt;&gt;`). |
 | General.ignore | &alpha; &rarr; unit | "ignore x" always returns `unit`. The function evaluates its argument but throws away the value. |
