@@ -484,6 +484,30 @@ public abstract class Codes {
     return FlatLists.of(BuiltIn.Constructor.EITHER_INR.constructor, o);
   }
 
+  /** @see BuiltIn#EITHER_APP_LEFT */
+  private static final Applicable2 EITHER_APP_LEFT =
+      new BaseApplicable2<Unit, Applicable1, List>(BuiltIn.EITHER_APP_LEFT) {
+        @Override
+        public Unit apply(Applicable1 f, List either) {
+          if (isEitherLeft(either)) {
+            f.apply(eitherProj(either));
+          }
+          return Unit.INSTANCE;
+        }
+      };
+
+  /** @see BuiltIn#EITHER_APP_RIGHT */
+  private static final Applicable2 EITHER_APP_RIGHT =
+      new BaseApplicable2<Unit, Applicable1, List>(BuiltIn.EITHER_APP_RIGHT) {
+        @Override
+        public Unit apply(Applicable1 f, List either) {
+          if (!isEitherLeft(either)) {
+            f.apply(eitherProj(either));
+          }
+          return Unit.INSTANCE;
+        }
+      };
+
   /** @see BuiltIn#EITHER_APP */
   private static final Applicable2 EITHER_APP =
       new BaseApplicable2<Applicable1, Applicable1, Applicable1>(
@@ -502,36 +526,14 @@ public abstract class Codes {
         }
       };
 
-  /** @see BuiltIn#EITHER_APP_LEFT */
-  private static final Applicable2 EITHER_APP_LEFT =
-      new BaseApplicable2<Unit, Applicable1, List>(BuiltIn.EITHER_APP_LEFT) {
-        @Override
-        public Unit apply(Applicable1 f, List either) {
-          if (isEitherLeft(either)) {
-            f.apply(either.get(1));
-          }
-          return Unit.INSTANCE;
-        }
-      };
-
-  /** @see BuiltIn#EITHER_APP_RIGHT */
-  private static final Applicable2 EITHER_APP_RIGHT =
-      new BaseApplicable2<Unit, Applicable1, List>(BuiltIn.EITHER_APP_RIGHT) {
-        @Override
-        public Unit apply(Applicable1 f, List either) {
-          if (!isEitherLeft(either)) {
-            f.apply(either.get(1));
-          }
-          return Unit.INSTANCE;
-        }
-      };
-
   /** @see BuiltIn#EITHER_AS_LEFT */
   private static final Applicable1<List, List> EITHER_AS_LEFT =
       new BaseApplicable1<List, List>(BuiltIn.EITHER_AS_LEFT) {
         @Override
         public List apply(List either) {
-          return isEitherLeft(either) ? optionSome(either.get(1)) : OPTION_NONE;
+          return isEitherLeft(either)
+              ? optionSome(eitherProj(either))
+              : OPTION_NONE;
         }
       };
 
@@ -540,7 +542,9 @@ public abstract class Codes {
       new BaseApplicable1<List, List>(BuiltIn.EITHER_AS_RIGHT) {
         @Override
         public List apply(List either) {
-          return isEitherLeft(either) ? OPTION_NONE : optionSome(either.get(1));
+          return isEitherLeft(either)
+              ? OPTION_NONE
+              : optionSome(eitherProj(either));
         }
       };
 
@@ -548,21 +552,16 @@ public abstract class Codes {
   private static final Applicable2 EITHER_FOLD =
       new BaseApplicable2<
           Applicable1<Applicable1<Object, List>, Object>,
-          Applicable2,
-          Applicable2>(BuiltIn.EITHER_FOLD) {
+          Applicable,
+          Applicable>(BuiltIn.EITHER_FOLD) {
         @Override
         public Applicable1<Applicable1<Object, List>, Object> apply(
-            Applicable2 f, Applicable2 g) {
-          return init -> {
-            return either -> {
-              Object o = eitherProj(either);
-              if (isEitherLeft(either)) {
-                return f.apply(init, o);
-              } else {
-                return g.apply(init, o);
-              }
-            };
-          };
+            Applicable f, Applicable g) {
+          return init ->
+              either -> {
+                Applicable a = isEitherLeft(either) ? f : g;
+                return a.apply(null, FlatLists.of(eitherProj(either), init));
+              };
         }
       };
 
@@ -584,6 +583,28 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#EITHER_MAP_LEFT */
+  private static final Applicable2 EITHER_MAP_LEFT =
+      new BaseApplicable2<List, Applicable1, List>(BuiltIn.EITHER_MAP_LEFT) {
+        @Override
+        public List apply(Applicable1 f, List either) {
+          return isEitherLeft(either)
+              ? eitherInl(f.apply(eitherProj(either)))
+              : either;
+        }
+      };
+
+  /** @see BuiltIn#EITHER_MAP_RIGHT */
+  private static final Applicable2 EITHER_MAP_RIGHT =
+      new BaseApplicable2<List, Applicable1, List>(BuiltIn.EITHER_MAP_RIGHT) {
+        @Override
+        public List apply(Applicable1 f, List either) {
+          return isEitherLeft(either)
+              ? either
+              : eitherInr(f.apply(eitherProj(either)));
+        }
+      };
+
   /** @see BuiltIn#EITHER_MAP */
   private static final Applicable2 EITHER_MAP =
       new BaseApplicable2<Applicable1, Applicable1, Applicable1>(
@@ -601,28 +622,6 @@ public abstract class Codes {
         }
       };
 
-  /** @see BuiltIn#EITHER_MAP_LEFT */
-  private static final Applicable2 EITHER_MAP_LEFT =
-      new BaseApplicable2<List, Applicable1, List>(BuiltIn.EITHER_MAP_LEFT) {
-        @Override
-        public List apply(Applicable1 f, List either) {
-          return isEitherLeft(either)
-              ? eitherInl(f.apply(either.get(1)))
-              : either;
-        }
-      };
-
-  /** @see BuiltIn#EITHER_MAP_RIGHT */
-  private static final Applicable2 EITHER_MAP_RIGHT =
-      new BaseApplicable2<List, Applicable1, List>(BuiltIn.EITHER_MAP_RIGHT) {
-        @Override
-        public List apply(Applicable1 f, List either) {
-          return isEitherLeft(either)
-              ? either
-              : eitherInr(f.apply(either.get(1)));
-        }
-      };
-
   /** @see BuiltIn#EITHER_PARTITION */
   private static final Applicable1 EITHER_PARTITION =
       new BaseApplicable1<List<List>, List<List>>(BuiltIn.EITHER_PARTITION) {
@@ -631,10 +630,11 @@ public abstract class Codes {
           final List lefts = new ArrayList();
           final List rights = new ArrayList();
           eithers.forEach(
-              either ->
-                  (isEitherLeft(either) ? lefts : rights)
-                      .add(eitherProj(either)));
-          return Arrays.asList(lefts, rights);
+              either -> {
+                List target = isEitherLeft(either) ? lefts : rights;
+                target.add(eitherProj(either));
+              });
+          return FlatLists.of(lefts, rights);
         }
       };
 
@@ -3977,17 +3977,17 @@ public abstract class Codes {
           .put(BuiltIn.CHAR_TO_LOWER, CHAR_TO_LOWER)
           .put(BuiltIn.CHAR_TO_STRING, CHAR_TO_STRING)
           .put(BuiltIn.CHAR_TO_UPPER, CHAR_TO_UPPER)
-          .put(BuiltIn.EITHER_APP, EITHER_APP)
           .put(BuiltIn.EITHER_APP_LEFT, EITHER_APP_LEFT)
           .put(BuiltIn.EITHER_APP_RIGHT, EITHER_APP_RIGHT)
+          .put(BuiltIn.EITHER_APP, EITHER_APP)
           .put(BuiltIn.EITHER_AS_LEFT, EITHER_AS_LEFT)
           .put(BuiltIn.EITHER_AS_RIGHT, EITHER_AS_RIGHT)
           .put(BuiltIn.EITHER_FOLD, EITHER_FOLD)
           .put(BuiltIn.EITHER_IS_LEFT, EITHER_IS_LEFT)
           .put(BuiltIn.EITHER_IS_RIGHT, EITHER_IS_RIGHT)
-          .put(BuiltIn.EITHER_MAP, EITHER_MAP)
           .put(BuiltIn.EITHER_MAP_LEFT, EITHER_MAP_LEFT)
           .put(BuiltIn.EITHER_MAP_RIGHT, EITHER_MAP_RIGHT)
+          .put(BuiltIn.EITHER_MAP, EITHER_MAP)
           .put(BuiltIn.EITHER_PARTITION, EITHER_PARTITION)
           .put(BuiltIn.EITHER_PROJ, EITHER_PROJ)
           .put(BuiltIn.FN_APPLY, FN_APPLY)
