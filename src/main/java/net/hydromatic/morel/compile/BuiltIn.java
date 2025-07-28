@@ -1444,7 +1444,7 @@ public enum BuiltIn {
                           ts.listType(h.get(0)), ts.listType(h.get(1)))))),
 
   /**
-   * Function "Either.proj", of type "(&alpha;, &alph;) either &rarr; &alpha;".
+   * Function "Either.proj", of type "(&alpha;, &alpha;) either &rarr; &alpha;".
    */
   EITHER_PROJ(
       "Either",
