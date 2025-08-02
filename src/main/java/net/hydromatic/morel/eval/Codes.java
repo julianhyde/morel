@@ -3471,6 +3471,15 @@ public abstract class Codes {
     }
   }
 
+  /** @see BuiltIn#Z_AGG */
+  private static final Applicable2 Z_AGG =
+      new BaseApplicable2<Object, Object, List>(BuiltIn.Z_AGG) {
+        @Override
+        public Object apply(Object o, List list) {
+          return o;
+        }
+      };
+
   /** Implements {@link #OP_DIVIDE} for type {@code int}. */
   private static final Applicable2 Z_DIVIDE_INT =
       new BaseApplicable2<Integer, Integer, Integer>(BuiltIn.OP_DIVIDE) {
@@ -4210,6 +4219,7 @@ public abstract class Codes {
           .put(BuiltIn.VECTOR_SUB, VECTOR_SUB)
           .put(BuiltIn.VECTOR_TABULATE, VECTOR_TABULATE)
           .put(BuiltIn.VECTOR_UPDATE, VECTOR_UPDATE)
+          .put(BuiltIn.Z_AGG, Z_AGG) // TODO
           .put(BuiltIn.Z_ANDALSO, Unit.INSTANCE)
           .put(BuiltIn.Z_CURRENT, Unit.INSTANCE)
           .put(BuiltIn.Z_DIVIDE_INT, Z_DIVIDE_INT)

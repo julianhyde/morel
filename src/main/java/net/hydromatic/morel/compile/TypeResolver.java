@@ -578,6 +578,9 @@ public class TypeResolver {
       case INT_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.INT));
 
+      case INTERNAL_LITERAL:
+        return reg(node, v, (Variable) ((Ast.Literal) node).value);
+
       case REAL_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.REAL));
 
@@ -1689,7 +1692,7 @@ public class TypeResolver {
     // the input is ordered.
     final Variable vArg = unifier.variable();
     final Variable cArg = unifier.variable();
-    isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
+    isListOrBagMatchingInput(cArg, vArg, requireNonNull(p.c), p.v);
 
     final Ast.Exp arg2;
     try {
@@ -1698,6 +1701,24 @@ public class TypeResolver {
     } finally {
       --aggFrame.activeCount;
     }
+
+    // Replace 'aggregate' with "$agg(aggregate, input)".
+    //
+    // "aggregate" has type "alpha -> beta";
+    // "$agg" has overloads
+    // "(alpha -> beta) * gamma bag -> beta" and
+    // "(alpha -> beta) * gamma list -> beta",
+    // and returns its first argument.
+    //
+    // "alpha" is either "gamma bag" or "gamma list", but we don't want to
+    // constrain it to be either.
+    final Ast.Apply aggFn =
+        ast.apply(
+            ast.ref(Pos.ZERO, BuiltIn.Z_AGG),
+            ast.tuple(
+                Pos.ZERO,
+                ImmutableList.of(
+                    aggregate.aggregate, ast.internalLiteral(Pos.ZERO, cArg))));
 
     final Variable vAgg = unifier.variable();
     final AtomicBoolean overloaded = new AtomicBoolean(false);
@@ -1709,8 +1730,9 @@ public class TypeResolver {
       equiv(vAgg, fnTerm(cArg, v));
     } else {
       // Find the parameter type - the type that the aggregate function wants to
-      // receive. For example "sum" is "int bag -> int", so the parameter is
-      // "int bag". As we see below, it may also be applied to a "int list".
+      // receive. For example the type ("vAgg") for "sum" is "int bag -> int",
+      // so the parameter ("cParam") is "int bag". As we see below, it may also
+      // be applied to an "int list".
       final Variable cParam = unifier.variable();
       equiv(vAgg, fnTerm(cParam, v));
 
@@ -1737,7 +1759,7 @@ public class TypeResolver {
             // "vArg". From this, we can firm up the aggregate type, "vAgg".
             if (t instanceof Sequence) {
               final Sequence sequence = (Sequence) t;
-              System.out.println(sequence);
+              //              System.out.println(sequence);
             }
           });
 
@@ -1745,7 +1767,7 @@ public class TypeResolver {
           Arrays.asList(cArg, cParam),
           actionMap::put,
           terms1 -> {
-            System.out.println(terms1);
+            //            System.out.println(terms1);
           });
     }
 
