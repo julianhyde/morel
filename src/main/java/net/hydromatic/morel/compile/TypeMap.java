@@ -69,6 +69,7 @@ public class TypeMap {
     this.nodeTypeTerms = ImmutableMap.copyOf(nodeTypeTerms);
     this.substitution = requireNonNull(substitution.resolve());
     this.realTypes = ImmutableMap.copyOf(realTypes);
+    //    System.out.println(this);
   }
 
   @Override

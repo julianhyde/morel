@@ -16,22 +16,38 @@
  * language governing permissions and limitations under the
  * License.
  *)
+
+(*) List agg applied to list
 from i in [1, 2, 3]
-  compute (fn x => x) over i;
-> val it = [1, 2, 3] : int list
+  compute List.hd over i;
+> val it = 1 : int
 
-from i in bag [1, 2]
-  compute sum over i;
-> val it = 3 : int
+(*) List agg applied to bag
+from i in bag [1, 2, 3]
+  compute List.hd over i;
+> val it = 1 : int
 
-from i in [1, 2]
-  compute sum over i;
-> val it = 3 : int
+(*) Bag agg applied to list
+from i in [1, 2, 3]
+  compute Bag.hd over i;
+> val it = 1 : int
 
-from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]
-  group e.a compute {rows = (fn x => x) over e};
-> val it = [{rows=[{a=1,b=5},{a=1,b=1}],a=1},{rows=[{a=0,b=1}],a=0}]
->   : {rows:{a:int,b:int} bag, a:int} list
+(*) Bag agg applied to bag
+from i in bag [1, 2, 3]
+  compute Bag.hd over i;
+> val it = 1 : int
+
+over overAgg;
+> over overAgg
+val inst overAgg = fn list => List.hd list;
+> val overAgg = fn : 'a list -> 'a
+val inst overAgg = fn bag => Bag.hd (Bag.tl bag);
+> val overAgg = fn : 'a bag -> 'a
+
+overAgg [1,2,3];
+> val it = 1 : int
+overAgg (bag [1,2,3]);
+> val it = 2 : int
 
 let
   fun listAgg list = List.hd list
@@ -61,9 +77,60 @@ from i in bag [1, 2]
   compute listAgg over i;
 > val it = 1 : int
 
+(*) Fails from this point on
+
+(*) Overloaded agg applied to list
+from i in [1, 2, 3]
+  compute overAgg over i;
+> val it = 1 : int
+
+(*) Overloaded agg applied to bag
+from i in bag [1, 2, 3]
+  compute overAgg over i;
+> val it = 1 : int
+
+(*) Polymorphic agg applied to list
+from i in [1, 2, 3]
+  compute Fn.id over i;
+> val it = [1, 2, 3] : int list
+
+(*) Polymorphic agg applied to bag
+from i in bag [1, 2, 3]
+  compute Fn.id over i;
+> val it = [1, 2, 3] : int list
+
+(* Crashes
 from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
-  group k compute {x = fn vs => k + sum vs over v};
+  group k compute {x = (fn vs => k + sum vs) over v};
+> val it = [{k=1,x=12},{k=2,x=19}] : {k:int, x:int} list
+*)
+
+from i in [1, 2, 3]
+  compute (fn x => x) over i;
+> val it = [1, 2, 3] : int list
+
+from i in [1, 2, 3]
+  compute (fn x => x) over i;
+> val it = [1, 2, 3] : int list
+
+from i in bag [1, 2]
+  compute sum over i;
+> val it = 3 : int
+
+from i in [1, 2]
+  compute sum over i;
+> val it = 3 : int
+
+from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]
+  group e.a compute {rows = (fn x => x) over e};
+> val it = [{rows=[{a=1,b=5},{a=1,b=1}],a=1},{rows=[{a=0,b=1}],a=0}]
+>   : {rows:{a:int,b:int} bag, a:int} list
+
+(* Crashes
+from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
+  group k compute {x = (fn vs => k + sum vs) over v};
 > val it = [(1, {x = 12}), (2, {x = 17})] : (int * {x : int}) list
+*)
 
 val recList = [{i=1,b=true}, {i=2,b=false}, {i=1,b=false}];
 > val recList = [{b=true,i=1},{b=false,i=2},{b=false,i=1}] : {b:bool, i:int} list
