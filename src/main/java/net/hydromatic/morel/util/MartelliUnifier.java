@@ -96,10 +96,11 @@ public class MartelliUnifier extends Unifier {
                         (equiv(t, left, result) || equiv(t, right, result))
                             && a.canAmend());
             if (i >= 0) {
+              final RetryAction retryAction = retryMap.right(i);
               return new Retry() {
                 @Override
                 public void amend() {
-                  retryMap.right(i).amend();
+                  retryAction.amend();
                 }
               };
             } else {
@@ -176,7 +177,13 @@ public class MartelliUnifier extends Unifier {
                     (equiv(t, left, result) || equiv(t, right, result))
                         && a.canAmend());
         if (i >= 0) {
-          return (Retry) retryMap.right(i)::amend;
+          final RetryAction retryAction = retryMap.right(i);
+          return new Retry() {
+            @Override
+            public void amend() {
+              retryAction.amend();
+            }
+          };
         }
       }
 
