@@ -98,12 +98,13 @@ import net.hydromatic.morel.util.Unifier.Constraint;
 import net.hydromatic.morel.util.Unifier.Failure;
 import net.hydromatic.morel.util.Unifier.Result;
 import net.hydromatic.morel.util.Unifier.Retry;
+import net.hydromatic.morel.util.Unifier.RetryAction;
 import net.hydromatic.morel.util.Unifier.Sequence;
 import net.hydromatic.morel.util.Unifier.Substitution;
 import net.hydromatic.morel.util.Unifier.Term;
 import net.hydromatic.morel.util.Unifier.TermTerm;
 import net.hydromatic.morel.util.Unifier.Variable;
-import net.hydromatic.morel.util.Unifiers;
+import org.apache.calcite.util.ControlFlowException;
 import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -118,6 +119,7 @@ public class TypeResolver {
   private final List<TermVariable> terms = new ArrayList<>();
   private final Map<AstNode, Term> map = new HashMap<>();
   private final Map<Variable, Action> actionMap = new HashMap<>();
+  private final PairList<Term, MyRetryAction> retryMap;
   private final PairList<Variable, PrimitiveType> preferredTypes =
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
@@ -136,9 +138,12 @@ public class TypeResolver {
   static final String PROGRESSIVE_LABEL = "z$dummy";
 
   private TypeResolver(
-      TypeSystem typeSystem, Consumer<CompileException> warningConsumer) {
+      TypeSystem typeSystem,
+      Consumer<CompileException> warningConsumer,
+      PairList<Term, MyRetryAction> retryMap) {
     this.typeSystem = requireNonNull(typeSystem);
     this.warningConsumer = requireNonNull(warningConsumer);
+    this.retryMap = retryMap;
   }
 
   /** Deduces the datatype of a declaration. */
@@ -147,12 +152,19 @@ public class TypeResolver {
       Ast.Decl decl,
       TypeSystem typeSystem,
       Consumer<CompileException> warningConsumer) {
-    final TypeResolver typeResolver =
-        new TypeResolver(typeSystem, warningConsumer);
-    Resolved resolved =
-        typeResolver.deduceTypeWithRetries(env, decl, typeSystem);
-    typeResolver.validations.forEach(v -> v.accept(resolved));
-    return resolved;
+    final PairList<Term, MyRetryAction> retryMap = PairList.of();
+    for (; ; ) {
+      final TypeResolver typeResolver =
+          new TypeResolver(typeSystem, warningConsumer, retryMap);
+      final Resolved resolved;
+      try {
+        resolved = typeResolver.deduceTypeWithRetries(env, decl, typeSystem);
+      } catch (RetryException unused) {
+        continue;
+      }
+      typeResolver.validations.forEach(v -> v.accept(resolved));
+      return resolved;
+    }
   }
 
   /** Converts a type AST to a type. */
@@ -181,7 +193,11 @@ public class TypeResolver {
     }
   }
 
-  /** Deduces the datatype of a declaration. */
+  /**
+   * Deduces the datatype of a declaration.
+   *
+   * @throws TypeResolver.RetryException if it wants to be called again
+   */
   private Resolved deduceType_(Environment env, Ast.Decl decl) {
     // Clean up from previous attempt.
     validations.clear();
@@ -204,10 +220,13 @@ public class TypeResolver {
       final List<TermTerm> termPairs = new ArrayList<>();
       terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
       final Result result =
-          unifier.unify(termPairs, actionMap, constraints, tracer);
+          unifier.unify(termPairs, actionMap, retryMap, constraints, tracer);
       if (result instanceof Retry) {
         final Retry retry = (Retry) result;
         retry.amend();
+        if (retry.requiresRestart()) {
+          throw new RetryException();
+        }
         continue;
       }
       if (result instanceof Failure) {
@@ -510,6 +529,23 @@ public class TypeResolver {
         unifier.constraint(c2, c1, copyOf(list2, list1, bag2, bag1)));
     constraints.add(
         unifier.constraint(c1, c2, copyOf(list1, list2, bag1, bag2)));
+  }
+
+  /**
+   * Adds a constraint that {@code c1} is a bag or list of {@code v1}; if it is
+   * a list then {@code c2} is a bag of {@code v2}, otherwise {@code c2} is a
+   * list of {@code v2}.
+   */
+  private void isListOrBagOpposingInput(
+      Variable c1, Variable v1, Variable c2, Variable v2) {
+    Sequence list1 = listTerm(v1);
+    Sequence bag1 = bagTerm(v1);
+    Sequence list2 = listTerm(v2);
+    Sequence bag2 = bagTerm(v2);
+    constraints.add(
+        unifier.constraint(c2, c1, copyOf(list2, bag1, bag2, list1)));
+    constraints.add(
+        unifier.constraint(c1, c2, copyOf(bag1, list2, list1, bag2)));
   }
 
   /**
@@ -1603,7 +1639,7 @@ public class TypeResolver {
   }
 
   /** Inverse of {@link #recordLabel(NavigableSet)}. */
-  static List<String> fieldList(final Sequence sequence) {
+  static @Nullable List<String> fieldList(final Sequence sequence) {
     if (sequence.operator.equals(RECORD_TY_CON)) {
       return ImmutableList.of();
     } else if (sequence.operator.startsWith(RECORD_TY_CON + ":")) {
@@ -1684,12 +1720,22 @@ public class TypeResolver {
   private Ast.Aggregate deduceAggregateType(
       AggFrame aggFrame, Ast.Aggregate aggregate, Variable v) {
     final Triple p = aggFrame.p;
+    requireNonNull(p.c);
 
-    // The collection that is the input to the aggregate function is ordered iff
-    // the input is ordered.
+    // The collection that is the input to the aggregate function is
+    // ordered iff the input is ordered.
     final Variable vArg = unifier.variable();
     final Variable cArg = unifier.variable();
-    isListOrBagMatchingInput(cArg, vArg, requireNonNull(p.c), p.v);
+    final MyRetryAction retryAction =
+        retryMap.putIfAbsent(cArg, MyRetryAction::new);
+    if (retryAction.n == 0) {
+      // This is the first time we are deducing the type of this
+      // variable. We need to ensure that it matches the input
+      // collection type.
+      isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
+    } else {
+      isListOrBagOpposingInput(cArg, vArg, p.c, p.v);
+    }
 
     final Ast.Exp arg2;
     try {
@@ -1699,75 +1745,13 @@ public class TypeResolver {
       --aggFrame.activeCount;
     }
 
-    // Replace 'aggregate' with "$agg(aggregate, input)".
-    //
-    // "aggregate" has type "alpha -> beta";
-    // "$agg" has overloads
-    // "(alpha -> beta) * gamma bag -> beta" and
-    // "(alpha -> beta) * gamma list -> beta",
-    // and returns its first argument.
-    //
-    // "alpha" is either "gamma bag" or "gamma list", but we don't want to
-    // constrain it to be either.
-    final Ast.Apply aggFn =
-        ast.apply(
-            ast.ref(Pos.ZERO, BuiltIn.Z_AGG),
-            ast.tuple(
-                Pos.ZERO,
-                ImmutableList.of(
-                    aggregate.aggregate, ast.internalLiteral(Pos.ZERO, cArg))));
-
     final Variable vAgg = unifier.variable();
-    final AtomicBoolean overloaded = new AtomicBoolean(false);
     final Ast.Exp aggregateFn2 =
-        deduceAggFnType(p.env, aggregate.aggregate, vAgg, cArg, v, overloaded);
-    reg(aggregateFn2, vAgg);
+        deduceApplyFnType(p.env, aggregate.aggregate, vAgg, cArg, v);
+    reg(aggregate.aggregate, vAgg);
 
-    if (overloaded.get()) {
-      equiv(vAgg, fnTerm(cArg, v));
-    } else {
-      // Find the parameter type - the type that the aggregate function wants to
-      // receive. For example the type ("vAgg") for "sum" is "int bag -> int",
-      // so the parameter ("cParam") is "int bag". As we see below, it may also
-      // be applied to an "int list".
-      final Variable cParam = unifier.variable();
-      equiv(vAgg, fnTerm(cParam, v));
-
-      // The aggregate's type must a function from the argument collection to
-      // the result type, or some variation substituting list for bag.
-      //
-      // For example, in "from i in [1, 2] compute sum over i",
-      // cArg is "int list", v is "int", and
-      // vAgg (the type of "sum") is "int bag -> int",
-      // cParam (the parameter type of "sum") is "int bag".
-      //
-      // It is OK to apply "int bag -> int" to an "int list", and it would also
-      // be OK to apply "int bag -> int" to an "int bag" or "int list".
-      mayBeBagOrList(cParam, vArg);
-      if (false) {
-        // This is implicit from above
-        mayBeBagOrList(cArg, vArg);
-      }
-
-      actionMap.put(
-          cArg,
-          (vArg2, t, substitution, termPairs) -> {
-            // This method was called because we now know the argument type,
-            // "vArg". From this, we can firm up the aggregate type, "vAgg".
-            if (t instanceof Sequence) {
-              final Sequence sequence = (Sequence) t;
-              //              System.out.println(sequence);
-            }
-          });
-
-      Unifiers.onAllVariablesMatched(
-          Arrays.asList(cArg, cParam),
-          actionMap::put,
-          terms1 -> {
-            //            System.out.println(terms1);
-          });
-    }
-
+    final Sequence fnType = fnTerm(cArg, v);
+    equiv(vAgg, fnType);
     final Ast.Aggregate aggregate2 = aggregate.copy(aggregateFn2, arg2);
     return reg(aggregate2, v);
   }
@@ -3246,6 +3230,24 @@ public class TypeResolver {
       return format("id %s term %s", id, term);
     }
   }
+
+  private static class MyRetryAction implements RetryAction {
+    int n = 0;
+
+    @Override
+    public boolean canAmend() {
+      return n == 0; // we can retry just once
+    }
+
+    @Override
+    public void amend() {
+      checkArgument(canAmend());
+      ++n;
+    }
+  }
+
+  /** Exception that indicates that a retry is required. */
+  private static class RetryException extends ControlFlowException {}
 }
 
 // End TypeResolver.java

@@ -676,7 +676,9 @@ public class Compiler {
               compileApplicable(
                   cx,
                   aggregate.aggregate,
-                  typeSystem.listType(argumentType),
+                  group.env.ordered
+                      ? typeSystem.listType(argumentType)
+                      : typeSystem.bagType(argumentType),
                   aggregate.pos);
           final Code aggregateCode;
           if (aggregateApplicable == null) {
@@ -724,7 +726,7 @@ public class Compiler {
    * Compiles a function value to an {@link Applicable}, if possible, or returns
    * null.
    */
-  private Applicable compileApplicable(
+  private @Nullable Applicable compileApplicable(
       Context cx, Core.Exp fn, Type argType, Pos pos) {
     final Core.Literal literal;
     switch (fn.op) {
