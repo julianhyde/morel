@@ -97,12 +97,7 @@ public class MartelliUnifier extends Unifier {
                             && a.canAmend());
             if (i >= 0) {
               final RetryAction retryAction = retryMap.right(i);
-              return new Retry() {
-                @Override
-                public void amend() {
-                  retryAction.amend();
-                }
-              };
+              return (Retry) retryAction::amend;
             } else {
               // Defer resolution.
               work.conflictQueue.add(pair);
@@ -178,12 +173,7 @@ public class MartelliUnifier extends Unifier {
                         && a.canAmend());
         if (i >= 0) {
           final RetryAction retryAction = retryMap.right(i);
-          return new Retry() {
-            @Override
-            public void amend() {
-              retryAction.amend();
-            }
-          };
+          return (Retry) retryAction::amend;
         }
       }
 
