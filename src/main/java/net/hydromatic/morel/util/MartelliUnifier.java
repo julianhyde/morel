@@ -96,7 +96,12 @@ public class MartelliUnifier extends Unifier {
                         (equiv(t, left, result) || equiv(t, right, result))
                             && a.canAmend());
             if (i >= 0) {
-              return (Retry) retryMap.right(i)::amend;
+              return new Retry() {
+                @Override
+                public void amend() {
+                  retryMap.right(i).amend();
+                }
+              };
             } else {
               // Defer resolution.
               work.conflictQueue.add(pair);
