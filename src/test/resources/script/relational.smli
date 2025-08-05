@@ -1945,6 +1945,7 @@ from e in emps
 (*) Primitive 'yield' followed  by 'into'
 from e in emps
   yield e.deptno
+  unorder
   into sum;
 > val it = 90 : int
 
