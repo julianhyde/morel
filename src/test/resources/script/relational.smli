@@ -890,6 +890,48 @@ from i in [2, 1, 2]
   group i compute {c = count ["a", "b"]};
 > val it = [{c=2,i=1},{c=2,i=2}] : {c:int, i:int} list
 
+(* ---------------------------------------------------------------------------
+ * List and bag aggregate functions can be applied to list and bag inputs. *)
+
+(*) List aggregate function returns first element, bag returns second.
+fun listAgg list = List.hd list;
+> val listAgg = fn : 'a list -> 'a
+fun bagAgg bag = Bag.hd (Bag.tl bag);
+> val bagAgg = fn : 'a bag -> 'a
+
+from i in [1, 2]
+  compute listAgg over i;
+> val it = 1 : int
+from i in bag [1, 2]
+  compute bagAgg over i;
+> val it = 2 : int
+from i in bag [1, 2]
+  compute listAgg over i;
+> val it = 1 : int
+from i in [1, 2]
+  compute bagAgg over i;
+> val it = 2 : int
+
+(*) Polymorphic agg applied to list, then bag
+from i in [1, 2, 3]
+  compute Fn.id over i;
+> val it = [1,2,3] : int list
+from i in bag [1, 2, 3]
+  compute Fn.id over i;
+> val it = [1,2,3] : int bag
+
+(*) Aggregate function that is a closure that references group key
+from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
+  group k compute {x = (fn vs => k + sum vs) over v};
+> val it = [{k=1,x=12},{k=2,x=19}] : {k:int, x:int} list
+from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
+  group {k2 = k} compute {x = (fn vs => k2 + sum vs) over v};
+> val it = [{k2=1,x=12},{k2=2,x=19}] : {k2:int, x:int} list
+from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]
+  group e.a compute {rows = (fn x => x) over e};
+> val it = [{a=1,rows=[{a=1,b=5},{a=1,b=1}]},{a=0,rows=[{a=0,b=1}]}]
+>   : {a:int, rows:{a:int, b:int} list} list
+
 (* Theoretically a "group" without a "compute" can be followed by a
  * "compute" step. So, the following is ambiguous. We treat it as a single
  * "group ... compute" step. Under the two-step interpretation, the type
