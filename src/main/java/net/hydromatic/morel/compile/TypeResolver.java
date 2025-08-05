@@ -119,7 +119,7 @@ public class TypeResolver {
   private final List<TermVariable> terms = new ArrayList<>();
   private final Map<AstNode, Term> map = new HashMap<>();
   private final Map<Variable, Action> actionMap = new HashMap<>();
-  private final PairList<Term, MyRetryAction> retryMap;
+  private final PairList<Term, OneShotRetryAction> retryMap;
   private final PairList<Variable, PrimitiveType> preferredTypes =
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
@@ -140,7 +140,7 @@ public class TypeResolver {
   private TypeResolver(
       TypeSystem typeSystem,
       Consumer<CompileException> warningConsumer,
-      PairList<Term, MyRetryAction> retryMap) {
+      PairList<Term, OneShotRetryAction> retryMap) {
     this.typeSystem = requireNonNull(typeSystem);
     this.warningConsumer = requireNonNull(warningConsumer);
     this.retryMap = retryMap;
@@ -152,7 +152,7 @@ public class TypeResolver {
       Ast.Decl decl,
       TypeSystem typeSystem,
       Consumer<CompileException> warningConsumer) {
-    final PairList<Term, MyRetryAction> retryMap = PairList.of();
+    final PairList<Term, OneShotRetryAction> retryMap = PairList.of();
     for (; ; ) {
       final TypeResolver typeResolver =
           new TypeResolver(typeSystem, warningConsumer, retryMap);
@@ -1726,8 +1726,8 @@ public class TypeResolver {
     // ordered iff the input is ordered.
     final Variable vArg = unifier.variable();
     final Variable cArg = unifier.variable();
-    final MyRetryAction retryAction =
-        retryMap.putIfAbsent(cArg, MyRetryAction::new);
+    final OneShotRetryAction retryAction =
+        retryMap.addIfLeftAbsent(cArg, OneShotRetryAction::new);
     if (retryAction.n == 0) {
       // This is the first time we are deducing the type of this
       // variable. We need to ensure that it matches the input
@@ -3231,8 +3231,12 @@ public class TypeResolver {
     }
   }
 
-  private static class MyRetryAction implements RetryAction {
-    int n = 0;
+  /**
+   * Implementation of {@link RetryAction} that retries a type resolution action
+   * just once.
+   */
+  private static class OneShotRetryAction implements RetryAction {
+    private int n = 0;
 
     @Override
     public boolean canAmend() {
