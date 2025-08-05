@@ -263,4 +263,49 @@ Relational.nonEmpty (bag [1]);
 Relational.nonEmpty [1];
 > val it = true : bool
 
+(* ---------------------------------------------------------------------------
+ * An overloaded aggregate function is resolved based on whether the input is
+   ordered. *)
+over overAgg;
+> over overAgg
+val inst overAgg = fn bag => if Bag.length bag < 0 then "" else "bag";
+> val overAgg = fn : 'a bag -> string
+val inst overAgg = fn list => if List.length list < 0 then "" else "list";
+> val overAgg = fn : 'a list -> string
+
+from i in [1, 2, 3]
+  compute overAgg over i;
+> val it = "list" : string
+from i in bag [1, 2, 3]
+  compute overAgg over i;
+> val it = "bag" : string
+from i in [1, 2, 3]
+  unorder
+  compute overAgg over i;
+> val it = "bag" : string
+from i in bag [1, 2, 3]
+  order DESC i
+  compute overAgg over i;
+> val it = "list" : string
+
+(*) A non-overloaded aggregate function can adapt.
+(*) 1. List agg applied to list
+from i in [1, 2, 3]
+  compute List.hd over i;
+> val it = 1 : int
+(*) 2. List agg applied to bag
+from i in bag [1, 2, 3]
+  compute List.hd over i;
+> val it = 1 : int
+(*) 3. Bag agg applied to list
+from i in [1, 2, 3]
+  compute Bag.hd over i;
+> val it = 1 : int
+(*) 4. Bag agg applied to bag
+from i in bag [1, 2, 3]
+  compute Bag.hd over i;
+> val it = 1 : int
+
+
+
 (*) End overload.smli
