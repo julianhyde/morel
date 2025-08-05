@@ -2480,7 +2480,7 @@ public class MainTest {
     mlE("from p in [{r=1.0, s=\"a\"}]\n" //
             + "  group p.r compute {x = $p$.r}")
         .assertTypeThrowsCompileException("unbound variable or constructor: p");
-    ml("from d in [{a=1,b=true}] yield d.a into sum")
+    ml("from d in [{a=1,b=true}] yield d.a unorder into sum")
         .assertType("int")
         .assertEval(is(1));
     ml("fn f => from i in [1, 2, 3] join j in [3, 4] on f (i, j) yield i + j")
@@ -2634,7 +2634,7 @@ public class MainTest {
     ml("from d in [{a=1,b=true}] yield d.a into List.length").assertType("int");
     ml("from d in bag [{a=1,b=true}] yield d.a into Bag.length")
         .assertType("int");
-    ml("from d in [{a=1,b=true}] yield d.a into sum")
+    ml("from d in [{a=1,b=true}] yield d.a unorder into sum")
         .assertType("int")
         .assertEval(is(1));
 
