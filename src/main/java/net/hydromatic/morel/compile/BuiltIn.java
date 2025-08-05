@@ -3717,31 +3717,6 @@ public enum BuiltIn {
                   ts.fnType(
                       ts.tupleType(h.vector(0), INT, h.get(0)), h.vector(0)))),
 
-  /**
-   * Internal overloaded operator "agg", of type "(&alpha; &rarr; &beta;) *
-   * &gamma; bag &rarr; &beta;" and "(&alpha; &rarr; &beta;) * &gamma; list
-   * &rarr; &beta;".
-   */
-  Z_AGG(
-      "Z",
-      "agg",
-      "agg",
-      ts ->
-          ts.multi(
-              ts.forallType(
-                  3,
-                  h ->
-                      ts.fnType(
-                          ts.tupleType(ts.fnType(h.get(0), h.get(1)), h.bag(2)),
-                          h.get(1))),
-              ts.forallType(
-                  3,
-                  h ->
-                      ts.fnType(
-                          ts.tupleType(
-                              ts.fnType(h.get(0), h.get(1)), h.list(2)),
-                          h.get(1))))),
-
   /** Internal operator "andalso", of type "bool * bool &rarr; bool". */
   Z_ANDALSO("$", "andalso", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 

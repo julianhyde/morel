@@ -223,6 +223,7 @@ public abstract class Unifier {
   public abstract Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
+      PairList<Term, ? extends RetryAction> retryMap,
       List<Constraint> constraints,
       Tracer tracer);
 
@@ -248,6 +249,15 @@ public abstract class Unifier {
         BiConsumer<Term, Term> termPairs);
   }
 
+  /** Called by unifier when a variable cannot be resolved. */
+  public interface RetryAction {
+    /** Returns whether the type graph can be remedied. */
+    boolean canAmend();
+
+    /** Amends the type graph. */
+    void amend();
+  }
+
   /**
    * Result of attempting unification. A success is {@link Substitution}, but
    * there are other failures.
@@ -264,6 +274,11 @@ public abstract class Unifier {
    * initial parameters.
    */
   public interface Retry extends Result {
+    /** Returns whether trying requires restarting the unifier. */
+    default boolean requiresRestart() {
+      return true;
+    }
+
     /** Changes some stuff so that we can try unification again. */
     void amend();
   }
@@ -457,6 +472,19 @@ public abstract class Unifier {
     @Override
     public String toString() {
       return name;
+    }
+
+    @Override
+    public int hashCode() {
+      return name.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj == this
+          || obj instanceof Variable
+              && this.ordinal == ((Variable) obj).ordinal
+              && this.name.equals(((Variable) obj).name);
     }
 
     @Override

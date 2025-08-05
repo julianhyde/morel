@@ -54,6 +54,7 @@ import java.util.SortedMap;
 import java.util.function.Predicate;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
@@ -661,12 +662,9 @@ public class Resolver {
   }
 
   private Core.Apply toCore(Ast.Apply apply) {
-    Core.Exp coreArg = toCore(apply.arg);
+    final Core.Exp coreArg = toCore(apply.arg);
     Type type = typeMap.getType(apply);
-    Core.Exp coreFn;
-    @Nullable
-    Binding top =
-        apply.fn.op == Op.ID ? env.getTop(((Ast.Id) apply.fn).name) : null;
+    final Core.Exp coreFn;
     if (apply.fn.op == Op.RECORD_SELECTOR) {
       final Ast.RecordSelector recordSelector = (Ast.RecordSelector) apply.fn;
       RecordLikeType recordType = (RecordLikeType) coreArg.type;
@@ -691,13 +689,26 @@ public class Resolver {
         // available now may be more precise than the deduced type.
         type = ((FnType) coreFn.type).resultType;
       }
-    } else if (apply.fn.op == Op.ID // TODO: change to 'top != null'
-        && resolvedOverloads.containsKey(((Ast.Id) apply.fn).name)) {
-      final Type argType = typeMap.getType(apply.arg);
+    } else {
+      coreFn = fnToCore(apply.fn, typeMap.getType(apply.arg));
+    }
+    return core.apply(apply.pos, type, coreFn, coreArg);
+  }
+
+  /**
+   * Converts a function (inside an {@link Ast.Apply} or {@link Ast.Aggregate})
+   * to a core expression, dealing with overloads (if necessary) based on
+   * argument type.
+   */
+  private Core.Exp fnToCore(Ast.Exp fn, Type argType) {
+    @Nullable
+    Binding top = fn.op == Op.ID ? env.getTop(((Ast.Id) fn).name) : null;
+    if (fn.op == Op.ID // TODO: change to 'top != null'
+        && resolvedOverloads.containsKey(((Ast.Id) fn).name)) {
       final List<Core.IdPat> matchingBindings = new ArrayList<>();
       Pair<Core.IdPat, List<Core.IdPat>> pair =
-          resolvedOverloads.get(((Ast.Id) apply.fn).name);
-      for (Core.IdPat idPat : pair.right) {
+          resolvedOverloads.get(((Ast.Id) fn).name);
+      for (Core.IdPat idPat : requireNonNull(pair.right)) {
         if (idPat.type.canCallArgOf(argType)) {
           matchingBindings.add(idPat);
         }
@@ -705,9 +716,9 @@ public class Resolver {
       if (matchingBindings.size() != 1) {
         throw new AssertionError(matchingBindings);
       }
-      coreFn = core.id(matchingBindings.get(0));
+      return CoreBuilder.core.id(matchingBindings.get(0));
     } else if (top != null && top.isInst()) {
-      final Type argType = typeMap.getType(apply.arg);
+      requireNonNull(top.overloadId);
       final List<Core.IdPat> matchingIds = new ArrayList<>();
       for (Core.IdPat idPat : env.getOverloads(top.overloadId)) {
         if (idPat.type.canCallArgOf(argType)) {
@@ -718,11 +729,10 @@ public class Resolver {
         throw new AssertionError(
             "zero or more than one matching bindings: " + matchingIds);
       }
-      coreFn = core.id(getIdPat((Ast.Id) apply.fn, matchingIds.get(0)));
+      return CoreBuilder.core.id(getIdPat((Ast.Id) fn, matchingIds.get(0)));
     } else {
-      coreFn = toCore(apply.fn);
+      return toCore(fn);
     }
-    return core.apply(apply.pos, type, coreFn, coreArg);
   }
 
   static Object valueOf(Environment env, Core.Exp exp) {
@@ -1542,10 +1552,16 @@ public class Resolver {
         boolean orderedAgg,
         Resolver outerResolver,
         Ast.@Nullable Id id) {
+      final TypeMap typeMap = outerResolver.typeMap;
+      final Type argElementType = typeMap.getType(aggregate.argument);
+      final Type argType =
+          orderedAgg
+              ? typeMap.typeSystem.listType(argElementType)
+              : typeMap.typeSystem.bagType(argElementType);
       final Core.Aggregate coreAggregate =
           core.aggregate(
-              outerResolver.typeMap.getType(aggregate),
-              outerResolver.toCore(aggregate.aggregate, null),
+              typeMap.getType(aggregate),
+              outerResolver.fnToCore(aggregate.aggregate, argType),
               inputResolver.toCore(aggregate.argument));
       final String base =
           id != null

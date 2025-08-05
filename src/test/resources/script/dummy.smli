@@ -17,6 +17,22 @@
  * License.
  *)
 
+over toList;
+> over toList
+val inst toList = fn bag => if Bag.length bag < 0 then "" else "bag";
+> val toList = fn : 'a bag -> string
+val inst toList = fn list => if List.length list < 0 then "" else "list";
+> val toList = fn : 'a list -> string
+
+(*
+from i in [1, 2, 3]
+  compute toList over i;
+> val it = "list" : string
+*)
+from i in bag [1, 2, 3]
+  compute toList over i;
+> val it = "bag" : string
+
 (*) List agg applied to list
 from i in [1, 2, 3]
   compute List.hd over i;
@@ -36,18 +52,6 @@ from i in [1, 2, 3]
 from i in bag [1, 2, 3]
   compute Bag.hd over i;
 > val it = 1 : int
-
-over overAgg;
-> over overAgg
-val inst overAgg = fn list => List.hd list;
-> val overAgg = fn : 'a list -> 'a
-val inst overAgg = fn bag => Bag.hd (Bag.tl bag);
-> val overAgg = fn : 'a bag -> 'a
-
-overAgg [1,2,3];
-> val it = 1 : int
-overAgg (bag [1,2,3]);
-> val it = 2 : int
 
 let
   fun listAgg list = List.hd list
@@ -79,25 +83,37 @@ from i in bag [1, 2]
 
 (*) Fails from this point on
 
+over overAgg;
+> over overAgg
+val inst overAgg = fn list => if List.length list < 0 then "" else "list";
+> val overAgg = fn : 'a list -> string
+val inst overAgg = fn bag => if Bag.length bag < 0 then "" else "bag";
+> val overAgg = fn : 'a bag -> string
+
+overAgg [1,2,3];
+> val it = "list" : string
+overAgg (bag [1,2,3]);
+> val it = "bag" : string
+
 (*) Overloaded agg applied to list
 from i in [1, 2, 3]
   compute overAgg over i;
-> val it = 1 : int
+> val it = "list" : string
 
 (*) Overloaded agg applied to bag
 from i in bag [1, 2, 3]
   compute overAgg over i;
-> val it = 1 : int
+> val it = "bag" : string
 
 (*) Polymorphic agg applied to list
 from i in [1, 2, 3]
   compute Fn.id over i;
-> val it = [1, 2, 3] : int list
+> val it = [1,2,3] : int list
 
 (*) Polymorphic agg applied to bag
 from i in bag [1, 2, 3]
   compute Fn.id over i;
-> val it = [1, 2, 3] : int list
+> val it = [1,2,3] : int bag
 
 (* Crashes
 from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
@@ -107,11 +123,11 @@ from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
 
 from i in [1, 2, 3]
   compute (fn x => x) over i;
-> val it = [1, 2, 3] : int list
+> val it = [1,2,3] : int list
 
 from i in [1, 2, 3]
   compute (fn x => x) over i;
-> val it = [1, 2, 3] : int list
+> val it = [1,2,3] : int list
 
 from i in bag [1, 2]
   compute sum over i;
@@ -123,14 +139,17 @@ from i in [1, 2]
 
 from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]
   group e.a compute {rows = (fn x => x) over e};
-> val it = [{rows=[{a=1,b=5},{a=1,b=1}],a=1},{rows=[{a=0,b=1}],a=0}]
->   : {rows:{a:int,b:int} bag, a:int} list
+> val it = [{a=1,rows=[{a=1,b=5},{a=1,b=1}]},{a=0,rows=[{a=0,b=1}]}]
+>   : {a:int, rows:{a:int, b:int} list} list
 
-(* Crashes
+(*) Aggregate function that is a closure that references group key
 from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
   group k compute {x = (fn vs => k + sum vs) over v};
-> val it = [(1, {x = 12}), (2, {x = 17})] : (int * {x : int}) list
-*)
+> val it = [{k=1,x=12},{k=2,x=19}] : {k:int, x:int} list
+
+from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
+  group {k2 = k} compute {x = (fn vs => k2 + sum vs) over v};
+> val it = [{k2=1,x=12},{k2=2,x=19}] : {k2:int, x:int} list
 
 val recList = [{i=1,b=true}, {i=2,b=false}, {i=1,b=false}];
 > val recList = [{b=true,i=1},{b=false,i=2},{b=false,i=1}] : {b:bool, i:int} list
