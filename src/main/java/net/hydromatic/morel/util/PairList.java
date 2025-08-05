@@ -270,11 +270,12 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
   boolean noneMatch(BiPredicate<T, U> predicate);
 
   /**
-   * Adds a pair to this list if the key is not already present.
+   * Adds a pair to this list if the left value is not present at least once,
+   * and returns the first right value.
    *
    * <p>Analogous to {@link Map#putIfAbsent(Object, Object)}.
    */
-  default U putIfAbsent(T t, Supplier<U> uSupplier) {
+  default U addIfLeftAbsent(T t, Supplier<U> uSupplier) {
     final int i = firstMatch((t2, u) -> t2.equals(t));
     if (i >= 0) {
       return right(i);
