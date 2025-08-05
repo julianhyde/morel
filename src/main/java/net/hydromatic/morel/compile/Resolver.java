@@ -528,16 +528,7 @@ public class Resolver {
         return toCoreImplies(
             ((Ast.InfixCall) exp).a0, ((Ast.InfixCall) exp).a1);
       case APPLY:
-        Ast.Apply apply = (Ast.Apply) exp;
-        if (apply.fn.toString().equals("#agg Z")) {
-          Ast.Tuple tuple = (Ast.Tuple) apply.arg;
-          Type type = typeMap.getType(apply);
-          Type type2 = typeMap.getType(tuple.args.get(0));
-          Type type3 = typeMap.getType(tuple.args.get(1));
-          //          System.out.println(type + " " + type2 + " " + type3);
-          return toCore(tuple.args.get(0), id);
-        }
-        return toCore(apply);
+        return toCore((Ast.Apply) exp);
       case AGGREGATE:
         return toCore((Ast.Aggregate) exp, id);
       case FN:

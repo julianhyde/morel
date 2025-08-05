@@ -41,7 +41,6 @@ import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.RefChecker;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
@@ -305,27 +304,15 @@ public class FromBuilder {
   }
 
   public FromBuilder except(boolean distinct, List<Core.Exp> args) {
-    final Core.StepEnv env = stepEnv();
-    final Core.StepEnv env2 =
-        env.withOrdered(
-            env.ordered && allMatch(args, arg -> arg.type instanceof ListType));
-    return addStep(core.except(env2, distinct, args));
+    return addStep(core.except(stepEnv(), distinct, args));
   }
 
   public FromBuilder intersect(boolean distinct, List<Core.Exp> args) {
-    final Core.StepEnv env = stepEnv();
-    final Core.StepEnv env2 =
-        env.withOrdered(
-            env.ordered && allMatch(args, arg -> arg.type instanceof ListType));
-    return addStep(core.intersect(env2, distinct, args));
+    return addStep(core.intersect(stepEnv(), distinct, args));
   }
 
   public FromBuilder union(boolean distinct, List<Core.Exp> args) {
-    final Core.StepEnv env = stepEnv();
-    final Core.StepEnv env2 =
-        env.withOrdered(
-            env.ordered && allMatch(args, arg -> arg.type instanceof ListType));
-    return addStep(core.union(env2, distinct, args));
+    return addStep(core.union(stepEnv(), distinct, args));
   }
 
   /** Makes the query unordered. No-op if already unordered. */

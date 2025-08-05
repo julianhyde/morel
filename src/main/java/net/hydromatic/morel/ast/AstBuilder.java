@@ -627,11 +627,6 @@ public enum AstBuilder {
   public Ast.FromStep through(Pos pos, Ast.Pat pat, Ast.Exp exp) {
     return new Ast.Through(pos, pat, exp);
   }
-
-  /** Creates an internal literal. */
-  public Ast.Literal internalLiteral(Pos pos, Comparable<?> value) {
-    return new Ast.Literal(pos, Op.INTERNAL_LITERAL, value);
-  }
 }
 
 // End AstBuilder.java

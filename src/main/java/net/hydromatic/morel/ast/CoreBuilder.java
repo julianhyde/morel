@@ -620,7 +620,6 @@ public enum CoreBuilder {
 
   public Core.Scan scan(
       Core.StepEnv env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    env = env.withOrdered(env.ordered && exp.type instanceof ListType);
     return new Core.Scan(env, pat, exp, condition);
   }
 
@@ -630,7 +629,7 @@ public enum CoreBuilder {
   }
 
   public Core.Order order(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Order(env.withOrdered(true), exp);
+    return new Core.Order(env, exp);
   }
 
   public Core.Group group(
@@ -680,7 +679,7 @@ public enum CoreBuilder {
   }
 
   public Core.Unorder unorder(Core.StepEnv env) {
-    return new Core.Unorder(env.withOrdered(false));
+    return new Core.Unorder(env);
   }
 
   public Core.Yield yield_(Core.StepEnv env, Core.Exp exp) {
