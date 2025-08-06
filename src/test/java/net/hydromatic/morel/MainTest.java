@@ -2443,6 +2443,17 @@ public class MainTest {
   }
 
   @Test
+  void testFromType0() {
+    ml("from e in [{deptno=10}]\n"
+            + "  group {e.deptno, parity = e.deptno mod 2}\n"
+            + "    compute {sumId = sum over e.deptno}\n"
+            + "  group {parity}\n"
+            + "    compute {sumSumId = sum over sumId,\n"
+            + "      c = count over ()}")
+        .assertType("{c:int, parity:int, sumSumId:int} list");
+  }
+
+  @Test
   void testFromType() {
     ml("from i in [1]").assertType("int list");
     ml("from i in bag [1]").assertType("int bag");

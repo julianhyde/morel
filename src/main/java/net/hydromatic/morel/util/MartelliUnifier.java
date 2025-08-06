@@ -159,7 +159,7 @@ public class MartelliUnifier extends Unifier {
         continue;
       }
 
-      if (!work.conflictQueue.isEmpty()) {
+      while (!work.conflictQueue.isEmpty()) {
         // Now that the other work queues are empty, we have a better chance
         // to identify whether a conflict maps to a term in the retry map.
         TermTerm pair = work.conflictQueue.remove(0);
