@@ -159,7 +159,7 @@ public class MartelliUnifier extends Unifier {
         continue;
       }
 
-      if (!work.conflictQueue.isEmpty()) {
+      while (!work.conflictQueue.isEmpty()) {
         // Now that the other work queues are empty, we have a better chance
         // to identify whether a conflict maps to a term in the retry map.
         TermTerm pair = work.conflictQueue.remove(0);
@@ -416,7 +416,6 @@ public class MartelliUnifier extends Unifier {
   private static class MutableConstraint {
     final Variable v;
     Term arg;
-    Variable result;
     final PairList<Term, Constraint.Action> termActions;
 
     /** Creates a MutableConstraint. */
@@ -434,7 +433,7 @@ public class MartelliUnifier extends Unifier {
 
     @Override
     public String toString() {
-      return format("{constraint %s = %s %s %s}", v, arg, result, termActions);
+      return format("{constraint %s = %s %s}", v, arg, termActions);
     }
   }
 }

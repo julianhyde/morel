@@ -884,10 +884,10 @@ from i in [2, 1, 2]
 > val it = 1 : int
 (*) "count" used as an ordinary function ("over" is not present)
 from i in [2, 1, 2]
-  compute count ["a", "b"];
+  compute count (bag ["a", "b"]);
 > val it = 2 : int
 from i in [2, 1, 2]
-  group i compute {c = count ["a", "b"]};
+  group i compute {c = count (bag ["a", "b"])};
 > val it = [{c=2,i=1},{c=2,i=2}] : {c:int, i:int} list
 
 (* ---------------------------------------------------------------------------

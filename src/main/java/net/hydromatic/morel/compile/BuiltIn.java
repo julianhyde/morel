@@ -2857,8 +2857,8 @@ public enum BuiltIn {
    *
    * <pre>{@code
    * from e in emps
-   *   group deptno = (#deptno e)
-   *     compute sumId = sum of (#id e)
+   *   group {deptno = #deptno e}
+   *     compute {sumId = sum over #id e}
    * }</pre>
    */
   RELATIONAL_COUNT(
@@ -2900,10 +2900,7 @@ public enum BuiltIn {
       "Relational",
       "empty",
       "empty",
-      ts ->
-          ts.multi(
-              ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL)),
-              ts.forallType(1, h -> ts.fnType(h.list(0), BOOL)))),
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
 
   /**
    * Function "Relational.iterate", aka "iterate", of type "&alpha; bag &rarr;
@@ -2942,10 +2939,7 @@ public enum BuiltIn {
       "Relational",
       "max",
       "max",
-      ts ->
-          ts.multi(
-              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
-              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
   /**
    * Function "Relational.min", aka "min", of type "&alpha; bag &rarr; &alpha;"
@@ -2986,18 +2980,15 @@ public enum BuiltIn {
       "Relational",
       "nonEmpty",
       "nonEmpty",
-      ts ->
-          ts.multi(
-              ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL)),
-              ts.forallType(1, h -> ts.fnType(h.list(0), BOOL)))),
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
 
   /**
    * Function "Relational.only", aka "only", of type "&alpha; bag &rarr;
-   * &alpha;".
+   * &alpha;" or "&alpha; list &rarr; &alpha;".
    *
-   * <p>"only bag" returns the only element of {@code bag}. It raises {@link
-   * BuiltInExn#EMPTY Empty} if {@code list} is nil, {@link BuiltInExn#SIZE
-   * Size} if {@code list} has more than one element.
+   * <p>"only collection" returns the only element of {@code collection}. It
+   * raises {@link BuiltInExn#EMPTY Empty} if {@code collection} is nil, {@link
+   * BuiltInExn#SIZE Size} if {@code collection} has more than one element.
    *
    * <p>"only" allows you to write the equivalent of a scalar sub-query:
    *
@@ -3025,8 +3016,8 @@ public enum BuiltIn {
    *
    * <pre>{@code
    * from e in emps
-   * group deptno = (#deptno e)
-   *   compute sumId = sum of (#id e)
+   * group {deptno = #deptno e}
+   *   compute {sumId = sum over #id e}
    * }</pre>
    */
   RELATIONAL_SUM(
