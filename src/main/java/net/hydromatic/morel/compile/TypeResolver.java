@@ -1211,7 +1211,7 @@ public class TypeResolver {
 
       // Output is ordered iff input is ordered.
       final Variable c2 = unifier.variable();
-      isListOrBagMatchingInput(c2, v2, p.c, p.v);
+      isListOrBagMatchingInput(c2, v2, requireNonNull(p.c), p.v);
       return Triple.of(env.bindAll(bindings), v2, c2);
     } else {
       fromSteps.add(((Ast.Compute) group).copy(compute2));
