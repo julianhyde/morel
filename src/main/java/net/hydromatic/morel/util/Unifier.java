@@ -256,6 +256,9 @@ public abstract class Unifier {
 
     /** Amends the type graph. */
     void amend();
+
+    /** Returns whether the variable is "on". */
+    boolean test();
   }
 
   /**

@@ -119,7 +119,7 @@ public class TypeResolver {
   private final List<TermVariable> terms = new ArrayList<>();
   private final Map<AstNode, Term> map = new HashMap<>();
   private final Map<Variable, Action> actionMap = new HashMap<>();
-  private final PairList<Term, OneShotRetryAction> retryMap;
+  private final PairList<Term, RetryAction> retryMap;
   private final PairList<Variable, PrimitiveType> preferredTypes =
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
@@ -140,7 +140,7 @@ public class TypeResolver {
   private TypeResolver(
       TypeSystem typeSystem,
       Consumer<CompileException> warningConsumer,
-      PairList<Term, OneShotRetryAction> retryMap) {
+      PairList<Term, RetryAction> retryMap) {
     this.typeSystem = requireNonNull(typeSystem);
     this.warningConsumer = requireNonNull(warningConsumer);
     this.retryMap = retryMap;
@@ -152,7 +152,7 @@ public class TypeResolver {
       Ast.Decl decl,
       TypeSystem typeSystem,
       Consumer<CompileException> warningConsumer) {
-    final PairList<Term, OneShotRetryAction> retryMap = PairList.of();
+    final PairList<Term, RetryAction> retryMap = PairList.of();
     for (; ; ) {
       final TypeResolver typeResolver =
           new TypeResolver(typeSystem, warningConsumer, retryMap);
@@ -1742,9 +1742,9 @@ public class TypeResolver {
     final Sequence fnType = fnTerm(cArg, v);
     equiv(vAgg, fnType);
 
-    final OneShotRetryAction retryAction =
+    final RetryAction retryAction =
         retryMap.addIfLeftAbsent(cArg, OneShotRetryAction::new);
-    if (retryAction.n == 0) {
+    if (!retryAction.test()) {
       // This is the first time we are deducing the type of this
       // variable. We need to ensure that it matches the input
       // collection type.
@@ -3242,6 +3242,11 @@ public class TypeResolver {
     @Override
     public String toString() {
       return "OneShotRetryAction{n=" + n + '}';
+    }
+
+    @Override
+    public boolean test() {
+      return n == 0;
     }
 
     @Override
