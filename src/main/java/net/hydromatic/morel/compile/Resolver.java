@@ -1525,17 +1525,15 @@ public class Resolver {
    */
   private static class AggregateResolverImpl implements AggregateResolver {
     private final ImmutableList<Core.IdPat> groupKeys;
-    private final boolean ordered;
     private final Resolver inputResolver;
     private final PairList<Core.IdPat, Core.Aggregate> aggregates;
 
     private AggregateResolverImpl(
         Collection<? extends Core.IdPat> groupKeys,
-        boolean ordered,
+        @SuppressWarnings("unused") boolean ordered,
         Resolver inputResolver,
         PairList<Core.IdPat, Core.Aggregate> aggregates) {
       this.groupKeys = ImmutableList.copyOf(groupKeys);
-      this.ordered = ordered;
       this.inputResolver = inputResolver;
       this.aggregates = aggregates;
     }
