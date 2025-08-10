@@ -159,7 +159,7 @@ public class MartelliUnifier extends Unifier {
         continue;
       }
 
-      while (!work.conflictQueue.isEmpty()) {
+      if (!work.conflictQueue.isEmpty()) {
         // Now that the other work queues are empty, we have a better chance
         // to identify whether a conflict maps to a term in the retry map.
         TermTerm pair = work.conflictQueue.remove(0);
@@ -175,6 +175,7 @@ public class MartelliUnifier extends Unifier {
           final RetryAction retryAction = retryMap.right(i);
           return (Retry) retryAction::amend;
         }
+        return failure("conflict: " + left + " vs " + right);
       }
 
       final long duration = System.nanoTime() - start;
@@ -190,8 +191,12 @@ public class MartelliUnifier extends Unifier {
 
   /** Returns whether two terms are equivalent under a substitution. */
   private boolean equiv(Term t1, Term t2, Map<Variable, Term> result) {
-    return t1.equals(t2) // short-cut
-        || t1.apply(result).equals(t2.apply(result));
+    if (t1.equals(t2)) {
+      return true;
+    }
+    Term t1b = t1.apply(result);
+    Term t2b = t2.apply(result);
+    return t1b.equals(t2b);
   }
 
   private void act(

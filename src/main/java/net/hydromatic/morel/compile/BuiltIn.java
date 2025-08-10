@@ -2851,24 +2851,21 @@ public enum BuiltIn {
               1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), ts.order()))),
 
   /**
-   * Function "Relational.count", aka "count", of type "int bag &rarr; int".
+   * Function "Relational.count", aka "count", of type "&alpha; bag &rarr; int".
    *
    * <p>Often used with {@code group}:
    *
    * <pre>{@code
    * from e in emps
    *   group {deptno = #deptno e}
-   *     compute {sumId = sum over #id e}
+   *     compute {c = count over ()}
    * }</pre>
    */
   RELATIONAL_COUNT(
       "Relational",
       "count",
       "count",
-      ts ->
-          ts.multi(
-              ts.forallType(1, h -> ts.fnType(h.bag(0), INT)),
-              ts.forallType(1, h -> ts.fnType(h.list(0), INT)))),
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), INT))),
 
   /**
    * Function "Relational.empty", aka "empty", of type "&alpha; bag &rarr;

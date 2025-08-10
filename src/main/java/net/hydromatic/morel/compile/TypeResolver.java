@@ -1732,17 +1732,6 @@ public class TypeResolver {
     // ordered iff the input is ordered.
     final Variable vArg = unifier.variable();
     final Variable cArg = unifier.variable();
-    final OneShotRetryAction retryAction =
-        retryMap.addIfLeftAbsent(cArg, OneShotRetryAction::new);
-    if (retryAction.n == 0) {
-      // This is the first time we are deducing the type of this
-      // variable. We need to ensure that it matches the input
-      // collection type.
-      isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
-    } else {
-      isListOrBagOpposingInput(cArg, vArg, p.c, p.v);
-    }
-
     final Ast.Exp arg2;
     try {
       ++aggFrame.activeCount;
@@ -1758,6 +1747,18 @@ public class TypeResolver {
 
     final Sequence fnType = fnTerm(cArg, v);
     equiv(vAgg, fnType);
+
+    final OneShotRetryAction retryAction =
+        retryMap.addIfLeftAbsent(cArg, OneShotRetryAction::new);
+    if (retryAction.n == 0) {
+      // This is the first time we are deducing the type of this
+      // variable. We need to ensure that it matches the input
+      // collection type.
+      isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
+    } else {
+      isListOrBagOpposingInput(cArg, vArg, p.c, p.v);
+    }
+
     final Ast.Aggregate aggregate2 = aggregate.copy(aggregateFn2, arg2);
     return reg(aggregate2, v);
   }
@@ -3243,6 +3244,11 @@ public class TypeResolver {
    */
   private static class OneShotRetryAction implements RetryAction {
     private int n = 0;
+
+    @Override
+    public String toString() {
+      return "OneShotRetryAction{n=" + n + '}';
+    }
 
     @Override
     public boolean canAmend() {
