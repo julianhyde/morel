@@ -2445,11 +2445,11 @@ public class MainTest {
   @Test
   void testFromType0() {
     ml("from e in [{deptno=10}]\n"
-            + "  group {e.deptno, parity = e.deptno mod 2}\n"
-            + "    compute {sumId = sum over e.deptno}\n"
-            + "  group {parity}\n"
-            + "    compute {sumSumId = sum over sumId,\n"
-            + "      c = count over ()}")
+            + "  group {e.deptno, parity = e.deptno div 2}\n"
+            + "    compute {sumId = count over e.deptno}\n"
+            + "  group {}\n"
+            + "    compute {c = count over 1,\n"
+            + "      c2 = count over 2}")
         .assertType("{c:int, parity:int, sumSumId:int} list");
   }
 
