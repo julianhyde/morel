@@ -978,6 +978,18 @@ from (i, j) in [(1, 1), (2, 3), (3, 4)]
 > val it = [{count=2,j=1,sum=5},{count=1,j=0,sum=3}]
 >   : {count:int, j:int, sum:int} list
 
+(* Elements --------------------------------------------------- *)
+(* TODO
+from (i, j) in [("a", 1), ("b", 4), ("a", 3)]
+  group {i} compute {from r in elements compute sum over r.j};
+*)
+
+from (i, j) in [("a", 1), ("b", 4), ("a", 3)]
+  group {i} compute {s = from r in elements compute sum over r.j};
+> val
+
+(* Yield ------------------------------------------------------ *)
+
 from i in [1, 2, 3]
   yield {i = {i = i}};
 > val it = [{i={i=1}},{i={i=2}},{i={i=3}}] : {i:{i:int}} list

@@ -193,6 +193,10 @@ public enum AstBuilder {
     return new Ast.Current(pos);
   }
 
+  public Ast.Elements elements(Pos pos) {
+    return new Ast.Elements(pos);
+  }
+
   public Ast.Ordinal ordinal(Pos pos) {
     return new Ast.Ordinal(pos);
   }
