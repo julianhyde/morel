@@ -67,6 +67,7 @@ public enum AstBuilder {
   public @Nullable String implicitLabelOpt(Ast.Exp exp) {
     switch (exp.op) {
       case CURRENT:
+      case ELEMENTS:
       case ORDINAL:
         return exp.op.lowerName();
       case ID:

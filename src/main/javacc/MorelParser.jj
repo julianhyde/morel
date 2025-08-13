@@ -1032,6 +1032,8 @@ Exp atom() :
 |
   e = current() { return e; }
 |
+  e = elements() { return e; }
+|
   e = ordinal() { return e; }
 |
   e = recordSelector() { return e; }
