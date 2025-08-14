@@ -16,7 +16,36 @@
  * language governing permissions and limitations under the
  * License.
  *)
+(*
 "this is a simple script; modify it for debugging test cases";
 > val it = "this is a simple script; modify it for debugging test cases" : string
+*)
+
+(*) Succeeds
+(*
+let
+  val foo = List.tl
+in
+  from i in bag ["a", "b", "c"]
+    compute foo over i
+end;
+> val it = ["b","c"] : string list
+*)
+
+(*) Succeeds
+(*
+from i in bag ["a", "b"]
+  compute List.hd over i;
+> val it = "a" : string
+*)
+
+(*) Fails
+let
+  val listAgg = List.hd
+in
+  from i in bag ["a", "b"]
+    compute listAgg over i
+end;
+> val it = 1 : int
 
 (*) End dummy.smli

@@ -119,7 +119,7 @@ public class TypeResolver {
   private final List<TermVariable> terms = new ArrayList<>();
   private final Map<AstNode, Term> map = new HashMap<>();
   private final Map<Variable, Action> actionMap = new HashMap<>();
-  private final PairList<Term, RetryAction> retryMap;
+  private final RetryMap retryMap;
   private final PairList<Variable, PrimitiveType> preferredTypes =
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
@@ -140,7 +140,7 @@ public class TypeResolver {
   private TypeResolver(
       TypeSystem typeSystem,
       Consumer<CompileException> warningConsumer,
-      PairList<Term, RetryAction> retryMap) {
+      RetryMap retryMap) {
     this.typeSystem = requireNonNull(typeSystem);
     this.warningConsumer = requireNonNull(warningConsumer);
     this.retryMap = retryMap;
@@ -152,7 +152,7 @@ public class TypeResolver {
       Ast.Decl decl,
       TypeSystem typeSystem,
       Consumer<CompileException> warningConsumer) {
-    final PairList<Term, RetryAction> retryMap = PairList.of();
+    final RetryMap retryMap = new RetryMap();
     for (; ; ) {
       final TypeResolver typeResolver =
           new TypeResolver(typeSystem, warningConsumer, retryMap);
@@ -220,7 +220,8 @@ public class TypeResolver {
       final List<TermTerm> termPairs = new ArrayList<>();
       terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
       final Result result =
-          unifier.unify(termPairs, actionMap, retryMap, constraints, tracer);
+          unifier.unify(
+              termPairs, actionMap, retryMap.termActions, constraints, tracer);
       if (result instanceof Retry) {
         final Retry retry = (Retry) result;
         retry.amend();
@@ -1742,9 +1743,8 @@ public class TypeResolver {
     final Sequence fnType = fnTerm(cArg, v);
     equiv(vAgg, fnType);
 
-    final RetryAction retryAction =
-        retryMap.addIfLeftAbsent(cArg, OneShotRetryAction::new);
-    if (!retryAction.test()) {
+    final RetryAction retryAction = retryMap.get(cArg);
+    if (retryAction.test()) {
       // This is the first time we are deducing the type of this
       // variable. We need to ensure that it matches the input
       // collection type.
@@ -3261,8 +3261,66 @@ public class TypeResolver {
     }
   }
 
+  /**
+   * Implementation of {@link RetryAction} that iterates over the
+   * <i>2<sup>n</sup></i> combinations of the <i>n</i> variables.
+   */
+  private static class BitRetryAction implements RetryAction {
+    private final RetryMap retryMap;
+    private final int n;
+
+    BitRetryAction(RetryMap retryMap, int n) {
+      this.retryMap = retryMap;
+      this.n = n;
+      checkArgument((1 << n) > 0, "too many actions: %s", n);
+    }
+
+    @Override
+    public String toString() {
+      return "BitRetryAction{" + n + '}';
+    }
+
+    /**
+     * Returns whether the {@code bit}<sup>th</sup> bit of an integer is set.
+     */
+    private boolean bit(int i, int bit) {
+      return (i & (1 << bit)) != 0;
+    }
+
+    @Override
+    public boolean test() {
+      return !bit(retryMap.actionOrdinal, n);
+    }
+
+    @Override
+    public boolean canAmend() {
+      return retryMap.actionOrdinal < (1 << retryMap.actionCount) - 1;
+    }
+
+    @Override
+    public void amend() {
+      checkArgument(canAmend());
+      retryMap.actionOrdinal++;
+    }
+  }
+
   /** Exception that indicates that a retry is required. */
   private static class RetryException extends ControlFlowException {}
+
+  /**
+   * Collection of variables and actions. Persists over TypeResolver
+   * invocations.
+   */
+  private static class RetryMap {
+    final PairList<Term, RetryAction> termActions = PairList.of();
+    int actionCount = 0;
+    int actionOrdinal = 0;
+
+    RetryAction get(Term term) {
+      return termActions.addIfLeftAbsent(
+          term, () -> new BitRetryAction(this, actionCount++));
+    }
+  }
 }
 
 // End TypeResolver.java
