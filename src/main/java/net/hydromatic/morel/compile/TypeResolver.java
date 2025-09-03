@@ -707,9 +707,7 @@ public class TypeResolver {
         final Variable resultVariable = unifier.variable();
         final List<Ast.Match> matchList = new ArrayList<>();
         for (Ast.Match match : fn.matchList) {
-          matchList.add(
-              deduceMatchType(
-                  env, match, (idPat, term1) -> {}, v, resultVariable));
+          matchList.add(deduceMatchType(env, match, v, resultVariable));
         }
         final Ast.Fn fn2b = fn.copy(matchList);
         return reg(fn2b, v);
@@ -1538,7 +1536,6 @@ public class TypeResolver {
   private Ast.Match deduceMatchType(
       TypeEnv env,
       Ast.Match match,
-      BiConsumer<Ast.IdPat, Term> termMap,
       Variable argVariable,
       Variable resultVariable) {
     final Variable vPat = unifier.variable();
@@ -1546,7 +1543,6 @@ public class TypeResolver {
     final Consumer<PatTerm> consumer = p -> termMap1.add(p.id, p.term);
     final Ast.Pat pat =
         deducePatType(env, match.pat, consumer, null, vPat, t -> t);
-    termMap1.forEach(termMap);
     TypeEnv env2 = bindAll(env, termMap1);
     Ast.Exp exp2 = deduceType(env2, match.exp, resultVariable);
     Ast.Match match2 = match.copy(pat, exp2);
