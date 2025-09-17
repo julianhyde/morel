@@ -562,10 +562,10 @@ public class TypeResolver {
    * namespace.
    */
   private Ast.Exp deduceYieldType(TypeEnv env, Ast.Exp node, Variable v) {
-    return deduceType(env, node, v);
+    return deduceExpType(env, node, v);
   }
 
-  private Ast.Exp deduceType(TypeEnv env, Ast.Exp node, Variable v) {
+  private Ast.Exp deduceExpType(TypeEnv env, Ast.Exp node, Variable v) {
     final List<Ast.Exp> args2;
     final Variable v2;
     final PairList<Ast.IdPat, Term> termMap;
@@ -591,7 +591,7 @@ public class TypeResolver {
       case ANNOTATED_EXP:
         final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) node;
         final Ast.Type type2 = deduceTypeType(env, annotatedExp.type, v);
-        final Ast.Exp exp2 = deduceType(env, annotatedExp.exp, v);
+        final Ast.Exp exp2 = deduceExpType(env, annotatedExp.exp, v);
         final Ast.AnnotatedExp annotatedExp2 = annotatedExp.copy(exp2, type2);
         return reg(annotatedExp2, v);
 
@@ -606,7 +606,7 @@ public class TypeResolver {
         args2 = new ArrayList<>();
         for (Ast.Exp arg : tuple.args) {
           final Variable vArg = unifier.variable();
-          args2.add(deduceType(env, arg, vArg));
+          args2.add(deduceExpType(env, arg, vArg));
           types.add(vArg);
         }
         return reg(tuple.copy(args2), v, tupleTerm(types));
@@ -616,7 +616,7 @@ public class TypeResolver {
         final Variable vArg2 = unifier.variable();
         args2 = new ArrayList<>();
         for (Ast.Exp arg : list.args) {
-          args2.add(deduceType(env, arg, vArg2));
+          args2.add(deduceExpType(env, arg, vArg2));
         }
         return reg(list.copy(args2), v, listTerm(vArg2));
 
@@ -633,7 +633,7 @@ public class TypeResolver {
           env2 = bindAll(env2, termMap);
           termMap.clear();
         }
-        final Ast.Exp e2 = deduceType(env2, let.exp, v);
+        final Ast.Exp e2 = deduceExpType(env2, let.exp, v);
         final Ast.Let let2 = let.copy(decls, e2);
         return reg(let2, v);
 
@@ -648,10 +648,10 @@ public class TypeResolver {
       case IF:
         final Ast.If if_ = (Ast.If) node;
         v2 = unifier.variable();
-        final Ast.Exp condition2 = deduceType(env, if_.condition, v2);
+        final Ast.Exp condition2 = deduceExpType(env, if_.condition, v2);
         equiv(v2, toTerm(PrimitiveType.BOOL));
-        final Ast.Exp ifTrue2 = deduceType(env, if_.ifTrue, v);
-        final Ast.Exp ifFalse2 = deduceType(env, if_.ifFalse, v);
+        final Ast.Exp ifTrue2 = deduceExpType(env, if_.ifTrue, v);
+        final Ast.Exp ifFalse2 = deduceExpType(env, if_.ifFalse, v);
         final Ast.If if2 = if_.copy(condition2, ifTrue2, ifFalse2);
         return reg(if2, v);
 
@@ -830,7 +830,7 @@ public class TypeResolver {
       case WHERE:
         final Ast.Where where = (Ast.Where) step;
         final Variable v5 = unifier.variable();
-        final Ast.Exp filter2 = deduceType(p.env, where.exp, v5);
+        final Ast.Exp filter2 = deduceExpType(p.env, where.exp, v5);
         equiv(v5, toTerm(PrimitiveType.BOOL));
         fromSteps.add(where.copy(filter2));
         return p;
@@ -838,7 +838,7 @@ public class TypeResolver {
       case REQUIRE:
         final Ast.Require require = (Ast.Require) step;
         final Variable v21 = unifier.variable();
-        final Ast.Exp filter3 = deduceType(p.env, require.exp, v21);
+        final Ast.Exp filter3 = deduceExpType(p.env, require.exp, v21);
         equiv(v21, toTerm(PrimitiveType.BOOL));
         fromSteps.add(require.copy(filter3));
         return p;
@@ -855,7 +855,7 @@ public class TypeResolver {
         // same type as the input. The skip expression must be an int.
         final Ast.Skip skip = (Ast.Skip) step;
         final Variable v11 = unifier.variable();
-        final Ast.Exp skipCount = deduceType(env, skip.exp, v11);
+        final Ast.Exp skipCount = deduceExpType(env, skip.exp, v11);
         equiv(v11, toTerm(PrimitiveType.INT));
         fromSteps.add(skip.copy(skipCount));
         return p;
@@ -866,7 +866,7 @@ public class TypeResolver {
         // same type as the input. The take expression must be an int.
         final Ast.Take take = (Ast.Take) step;
         final Variable v12 = unifier.variable();
-        final Ast.Exp takeCount = deduceType(env, take.exp, v12);
+        final Ast.Exp takeCount = deduceExpType(env, take.exp, v12);
         equiv(v12, toTerm(PrimitiveType.INT));
         fromSteps.add(take.copy(takeCount));
         return p;
@@ -881,7 +881,7 @@ public class TypeResolver {
         for (Ast.Exp arg : setStep.args) {
           final Variable v15 = unifier.variable();
           terms.add(v15);
-          args2.add(deduceType(env, arg, v15));
+          args2.add(deduceExpType(env, arg, v15));
         }
         final Variable c4 = unifier.variable();
         isListIfAllAreLists(terms, c4, p.v);
@@ -932,7 +932,8 @@ public class TypeResolver {
       case ORDER:
         final Ast.Order order = (Ast.Order) step;
         final Ast.Order order2 = validateOrder(order);
-        final Ast.Exp exp = deduceType(p.env, order2.exp, unifier.variable());
+        final Ast.Exp exp =
+            deduceExpType(p.env, order2.exp, unifier.variable());
         fromSteps.add(order2.copy(exp));
         return Triple.of(p.env, p.v, toVariable(listTerm(p.v)));
 
@@ -953,7 +954,7 @@ public class TypeResolver {
         final Ast.Into into = (Ast.Into) step;
         final Variable v13 = unifier.variable();
         final Variable v14 = unifier.variable();
-        final Ast.Exp intoExp = deduceType(p.env, into.exp, v14);
+        final Ast.Exp intoExp = deduceExpType(p.env, into.exp, v14);
         final Sequence fnType = fnTerm(requireNonNull(p.c), v13);
         equiv(v14, fnType);
         fromSteps.add(into.copy(intoExp));
@@ -980,7 +981,7 @@ public class TypeResolver {
         final List<PatTerm> termMap = new ArrayList<>();
         pat = deducePatType(env, through.pat, termMap::add, null, v18, t -> t);
         final Variable v17 = toVariable(fnTerm(p.c, c18));
-        final Ast.Exp throughExp = deduceType(p.env, through.exp, v17);
+        final Ast.Exp throughExp = deduceExpType(p.env, through.exp, v17);
         mayBeBagOrList(c18, v18);
         fromSteps.add(through.copy(pat, throughExp));
         TypeEnv env5 = env;
@@ -1016,14 +1017,14 @@ public class TypeResolver {
       c0 = null;
     } else if (scan.exp.op == Op.FROM_EQ) {
       final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
-      final Ast.Exp scanExp2 = deduceType(p.env, scanExp, v0);
+      final Ast.Exp scanExp2 = deduceExpType(p.env, scanExp, v0);
       scanExp3 = ast.fromEq(scanExp2);
       containerize = CollectionType.INHERIT; // retain source collection type
       c0 = null;
       reg(scanExp, v0);
     } else {
       c0 = unifier.variable();
-      scanExp3 = deduceType(p.env, scan.exp, c0);
+      scanExp3 = deduceExpType(p.env, scan.exp, c0);
       reg(scan.exp, c0);
       containerize = CollectionType.BOTH; // retain source collection type
     }
@@ -1095,7 +1096,7 @@ public class TypeResolver {
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
       final Variable v5 = unifier.variable();
-      scanCondition2 = deduceType(env4, scan.condition, v5);
+      scanCondition2 = deduceExpType(env4, scan.condition, v5);
       equiv(v5, toTerm(PrimitiveType.BOOL));
     } else {
       scanCondition2 = null;
@@ -1123,7 +1124,7 @@ public class TypeResolver {
     key.args.forEach(
         (id, exp) -> {
           final Variable v7 = unifier.variable();
-          final Ast.Exp exp2 = deduceType(p.env, exp, v7);
+          final Ast.Exp exp2 = deduceExpType(p.env, exp, v7);
           reg(id, v7);
           bindings.add(id.name, v7);
           fieldVars.add(id, v7);
@@ -1142,7 +1143,7 @@ public class TypeResolver {
               new AggFrame(p.withEnv(p.env.bindAll(bindings)));
           try {
             aggregateTripleStack.push(aggFrame);
-            exp2 = deduceType(groupEnv, exp, v8);
+            exp2 = deduceExpType(groupEnv, exp, v8);
           } finally {
             aggregateTripleStack.pop();
           }
@@ -1191,7 +1192,7 @@ public class TypeResolver {
     }
 
     final Variable v2 = unifier.variable();
-    final Ast.Exp with2 = deduceType(env, record.with, v2);
+    final Ast.Exp with2 = deduceExpType(env, record.with, v2);
     actionMap.put(
         v2,
         (v0, t, substitution, termPairs) -> {
@@ -1238,7 +1239,7 @@ public class TypeResolver {
         .forEach(
             (id, exp) -> {
               final Variable vArg = unifier.variable();
-              final Ast.Exp e2 = deduceType(env, exp, vArg);
+              final Ast.Exp e2 = deduceExpType(env, exp, vArg);
               labelTypes.accept(id.name, vArg);
               map.accept(id, e2);
             });
@@ -1349,7 +1350,7 @@ public class TypeResolver {
           env, (Ast.RecordSelector) apply.arg, vRec, vField);
       arg2 = reg(apply.arg, vArg, fnTerm(vRec, vField));
     } else {
-      arg2 = deduceType(env, apply.arg, vArg);
+      arg2 = deduceExpType(env, apply.arg, vArg);
     }
 
     final Ast.Exp fn2;
@@ -1407,11 +1408,11 @@ public class TypeResolver {
     }
 
     if (!(fn instanceof Ast.Id)) {
-      return deduceType(env, fn, vFn);
+      return deduceExpType(env, fn, vFn);
     }
     final Ast.Id id = (Ast.Id) fn;
     if (!env.hasOverloaded(id.name)) {
-      return deduceType(env, fn, vFn);
+      return deduceExpType(env, fn, vFn);
     }
     // "apply" is "f arg" and has type "v";
     // "f" is an overloaded name, and has type "vArg -> v";
@@ -1544,7 +1545,7 @@ public class TypeResolver {
     final Ast.Pat pat =
         deducePatType(env, match.pat, consumer, null, vPat, t -> t);
     TypeEnv env2 = bindAll(env, termMap1);
-    Ast.Exp exp2 = deduceType(env2, match.exp, resultVariable);
+    Ast.Exp exp2 = deduceExpType(env2, match.exp, resultVariable);
     Ast.Match match2 = match.copy(pat, exp2);
     return reg(match2, argVariable, fnTerm(vPat, resultVariable));
   }
@@ -1568,7 +1569,7 @@ public class TypeResolver {
           deducePatType(
               env, match.pat, consumer, labelNames, argVariable, t -> t);
       final TypeEnv env2 = bindAll(env, termMap);
-      final Ast.Exp exp2 = deduceType(env2, match.exp, resultVariable);
+      final Ast.Exp exp2 = deduceExpType(env2, match.exp, resultVariable);
       matchList2.add(match.copy(pat2, exp2));
     }
     return matchList2;
@@ -1576,7 +1577,7 @@ public class TypeResolver {
 
   private Ast.Case deduceCaseType(TypeEnv env, Ast.Case case_, Variable v) {
     final Variable v2 = unifier.variable();
-    final Ast.Exp e2b = deduceType(env, case_.exp, v2);
+    final Ast.Exp e2b = deduceExpType(env, case_.exp, v2);
     final NavigableSet<String> labelNames = new TreeSet<>();
     final Term argType = map.get(e2b);
     if (argType instanceof Sequence) {
@@ -1606,7 +1607,7 @@ public class TypeResolver {
       isListOrBagMatchingInput(c, v10, p.c, p.v);
       try {
         ++aggFrame.activeCount;
-        arg2 = deduceType(p.env, aggregate.argument, v10);
+        arg2 = deduceExpType(p.env, aggregate.argument, v10);
       } finally {
         --aggFrame.activeCount;
       }
@@ -1631,7 +1632,7 @@ public class TypeResolver {
     final Consumer<PatTerm> consumer = p -> termMap.add(p.id, p.term);
     final Ast.Pat pat =
         deducePatType(env, valBind.pat, consumer, null, vPat, t -> t);
-    final Ast.Exp exp = deduceType(env, valBind.exp, vPat);
+    final Ast.Exp exp = deduceExpType(env, valBind.exp, vPat);
     final Ast.ValBind valBind2 = valBind.copy(pat, exp);
     if (valBind2.pat instanceof Ast.IdPat) {
       if (env.hasOverloaded(((Ast.IdPat) valBind2.pat).name)) {
@@ -1879,7 +1880,7 @@ public class TypeResolver {
       switch (type.op) {
         case EXPRESSION_TYPE:
           final Ast.ExpressionType expressionType = (Ast.ExpressionType) type;
-          final Ast.Exp exp2 = deduceType(env, expressionType.exp, v);
+          final Ast.Exp exp2 = deduceExpType(env, expressionType.exp, v);
           return reg(expressionType.copy(exp2), v);
 
         case TUPLE_TYPE:
@@ -2103,8 +2104,8 @@ public class TypeResolver {
    * Derives a type term for a pattern, collecting the names of pattern
    * variables.
    *
-   * <p>Unlike {@link #deduceType(TypeEnv, Ast.Exp, Variable)}, return is {@code
-   * void}, because the pattern is never modified.
+   * <p>Unlike {@link #deduceExpType(TypeEnv, Ast.Exp, Variable)}, return is
+   * {@code void}, because the pattern is never modified.
    *
    * @param env Compile-time environment
    * @param pat Pattern AST
@@ -2320,8 +2321,8 @@ public class TypeResolver {
   private Ast.Exp infix(
       TypeEnv env, Ast.InfixCall call, Variable v, Type type) {
     final Term term = toTerm(type, Subst.EMPTY);
-    final Ast.Exp a0 = deduceType(env, call.a0, v);
-    final Ast.Exp a1 = deduceType(env, call.a1, v);
+    final Ast.Exp a0 = deduceExpType(env, call.a0, v);
+    final Ast.Exp a1 = deduceExpType(env, call.a1, v);
     return reg(call.copy(a0, a1), v, term);
   }
 
@@ -2329,13 +2330,13 @@ public class TypeResolver {
   private Ast.Exp infix(TypeEnv env, Ast.InfixCall call, Variable v) {
     Ast.Id id = ast.id(Pos.ZERO, requireNonNull(call.op.opName));
     Ast.Tuple arg = ast.tuple(Pos.ZERO, ImmutableList.of(call.a0, call.a1));
-    return deduceType(env, ast.apply(id, arg), v);
+    return deduceExpType(env, ast.apply(id, arg), v);
   }
 
   /** Registers a prefix operator. */
   private Ast.Exp prefix(TypeEnv env, Ast.PrefixCall call, Variable v) {
     Ast.Id id = ast.id(Pos.ZERO, requireNonNull(call.op.opName));
-    return deduceType(env, ast.apply(id, call.a), v);
+    return deduceExpType(env, ast.apply(id, call.a), v);
   }
 
   /** Converts a term to a variable. */
