@@ -858,7 +858,7 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#INT_MIN_INT */
-  private static final List INT_MIN_INT = optionSome(Integer.MAX_VALUE);
+  private static final List INT_MIN_INT = optionSome(Integer.MIN_VALUE);
 
   /** @see BuiltIn#INT_DIV */
   private static final Applicable2 INT_DIV = new IntDiv(BuiltIn.INT_DIV);
