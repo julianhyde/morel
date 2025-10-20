@@ -144,13 +144,16 @@ public class Main {
     final StringBuilder b = new StringBuilder();
     readerToString(in, b);
     final String s = str(b);
+    b.setLength(0); // Clear for reuse
+
     for (int i = 0, n = s.length(); ; ) {
       int j0 = i == 0 && (s.startsWith("> ") || s.startsWith(">\n")) ? 0 : -1;
       int j1 = s.indexOf("\n> ", i); // lint:skip
       int j2 = s.indexOf("\n>\n", i); // lint:skip
-      int j3 = s.indexOf("(*)", i);
-      int j4 = s.indexOf("(*", i);
-      int j = min(j0, j1, j2, j3, j4);
+      int j3 = s.indexOf(":t", i);
+      int j4 = s.indexOf("(*)", i);
+      int j5 = s.indexOf("(*", i);
+      int j = min(j0, j1, j2, j3, j4, j5);
       if (j < 0) {
         b.append(s, i, n);
         break;
@@ -164,6 +167,23 @@ public class Main {
         }
         i = k;
       } else if (j == j3) {
+        // Found ":t" - check if followed by space or newline
+        boolean atLineStart = j == 0 || s.charAt(j - 1) == '\n';
+        boolean followedBySpaceOrNewline =
+            j + 2 < n && (s.charAt(j + 2) == ' ' || s.charAt(j + 2) == '\n');
+        if (atLineStart && followedBySpaceOrNewline) {
+          b.append(s, i, j);
+          b.append("(*TYPE_ONLY*)");
+          i =
+              j
+                  + (s.charAt(j + 2) == ' '
+                      ? 3
+                      : 2); // Skip ":t " or ":t" (not newline)
+        } else {
+          b.append(s, i, j + 1);
+          i = j + 1;
+        }
+      } else if (j == j4) {
         // If a line contains "(*)", next search begins at the start of the
         // next line.
         int k = s.indexOf("\n", j + "(*)".length());
@@ -172,7 +192,7 @@ public class Main {
         }
         b.append(s, i, k);
         i = k;
-      } else if (j == j4) {
+      } else if (j == j5) {
         // If a line contains "(*", next search begins at the next "*)".
         int k = s.indexOf("*)", j + "(*".length());
         if (k < 0) {
@@ -295,16 +315,43 @@ public class Main {
           if (statement == null && code.endsWith("\n")) {
             code = code.substring(0, code.length() - 1);
           }
+          // Check if code contains (*TYPE_ONLY*) marker (type-only mode)
+          boolean typeOnly = false;
+          String echoCode = code;
+          if (main.idempotent && code.contains("(*TYPE_ONLY*)")) {
+            typeOnly = true;
+            // Insert ":t " or ":t\n" where the marker was
+            int markerPos = code.indexOf("(*TYPE_ONLY*)");
+            int markerEnd = markerPos + "(*TYPE_ONLY*)".length();
+            String prefix;
+            if (markerPos >= 0
+                && markerEnd < code.length()
+                && code.charAt(markerEnd) == '\n') {
+              // Original was ":t\n" - just use ":t" since newline is already
+              // there
+              prefix = ":t";
+            } else {
+              prefix = ":t ";
+            }
+            // Build echo code with prefix inserted at marker position
+            echoCode =
+                code.substring(0, markerPos)
+                    + prefix
+                    + code.substring(markerEnd);
+            // Remove marker from actual code
+            code = code.replace("(*TYPE_ONLY*)", "");
+          }
           if (main.echo) {
-            echoLines.accept(code);
+            echoLines.accept(echoCode);
           }
           if (statement == null) {
             break;
           }
+          final boolean typeOnlyFinal = typeOnly;
           session.withShell(
               subShell,
               outLines,
-              session1 -> subShell.command(statement, outLines));
+              session1 -> subShell.command(statement, outLines, typeOnlyFinal));
         } catch (MorelParseException | CompileException e) {
           final String message = e.getMessage();
           if (message.startsWith("Encountered \"<EOF>\" ")) {
@@ -394,7 +441,8 @@ public class Main {
       }
     }
 
-    void command(AstNode statement, Consumer<String> outLines) {
+    void command(
+        AstNode statement, Consumer<String> outLines, boolean typeOnly) {
       try {
         final Environment env = env0.bindAll(bindingMap.values());
         final Tracer tracer = Tracers.empty();
@@ -408,7 +456,18 @@ public class Main {
                 e -> appendToOutput(e, outLines),
                 tracer);
         final List<Binding> bindings = new ArrayList<>();
-        compiled.eval(main.session, env, outLines, bindings::add);
+        if (typeOnly) {
+          // For type-only mode, get bindings without evaluation
+          Consumer<Binding> typeOnlyConsumer =
+              binding -> {
+                bindings.add(binding);
+                outLines.accept(
+                    "val " + binding.id.name + " : " + binding.id.type);
+              };
+          compiled.getBindings(typeOnlyConsumer);
+        } else {
+          compiled.eval(main.session, env, outLines, bindings::add);
+        }
 
         // Add the new bindings to the map. Overloaded bindings (INST) add to
         // previous bindings; ordinary bindings (VAL) replace previous bindings
@@ -465,6 +524,26 @@ public class Main {
 
     public String flush() {
       return str(buf);
+    }
+
+    /** Peeks at the next line without consuming it. Returns null if at EOF. */
+    public String peekLine() throws IOException {
+      mark(1000);
+      try {
+        StringBuilder sb = new StringBuilder();
+        int c;
+        while ((c = read()) != -1) {
+          if (c == '\n') {
+            break;
+          }
+          sb.append((char) c);
+        }
+        return sb.length() == 0 && c == -1 ? null : sb.toString();
+      } finally {
+        reset();
+        // Clear the buffer since we're peeking
+        buf.setLength(0);
+      }
     }
   }
 }

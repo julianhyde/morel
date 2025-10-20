@@ -1,0 +1,168 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Type inference tests.
+ *
+ * Generally, each test will use '>type' rather than '> val', so that
+ * Morel just infers the type, and does not execute.
+ *)
+Sys.set ("lineWidth", 78);
+> val it = () : unit
+
+(* Test the test infrastructure.
+ * ':t' can be on same line or previous line.
+ * The expression is not executed, only type-checked.
+ * Non-exhaustive matches are flagged. *)
+:t 1;
+> val it : int
+:t
+1;
+> val it : int
+:t 1 / 0;
+> val it : int
+:t fn 1 => "a";
+> stdIn:1.14-1.25 Warning: match nonexhaustive
+>   raised at: stdIn:1.14-1.25
+> val it : int -> string
+
+(*) Type tests
+:t #"h";
+> val it : char
+:t "hello";
+> val it : string
+:t "hello"
+ ^ ", world!";
+> val it : string
+:t
+"hello"
+ ^ ", world!";
+> val it : string
+:t 1;
+> val it : int
+:t ~1.0;
+> val it : real
+:t 6.02e~23;
+> val it : real
+:t ~6.02e~23;
+> val it : real
+:t ~6e~23;
+> val it : real
+:t 6e~23;
+> val it : real
+:t 6E~23;
+> val it : real
+:t 6E23;
+> val it : real
+:t ();
+> val it : unit
+:t true;
+> val it : bool
+:t false;
+> val it : bool
+:t (1);
+> val it : int
+
+:t (1, true);
+> val it : int * bool
+:t (false, 1, (true, false));
+> val it : bool * int * (bool * bool)
+:t (false, 1, (true, "a"), 2);
+> val it : bool * int * (bool * string) * int
+:t [1,2];
+> val it : int list
+:t [[1,2]];
+> val it : int list list
+:t [(1,2)];
+> val it : (int * int) list
+:t (1, [2]);
+> val it : int * int list
+:t (1, [2], 3);
+> val it : int * int list * int
+:t {a=1, b="two"};
+> val it : {a:int, b:string}
+:t fn () => 3;
+> val it : unit -> int
+:t fn () => fn () => 4;
+> val it : unit -> unit -> int
+:t (fn () => 5, fn () => 6);
+> val it : (unit -> int) * (unit -> int)
+:t fn () => (5, fn () => 6);
+> val it : unit -> int * (unit -> int)
+:t fn f => fn g => fn x => g (f x);
+> val it : ('a -> 'b) -> ('b -> 'c) -> 'a -> 'c
+:t fn (f, g) => fn x => f (g x);
+> val it : ('a -> 'b) * ('c -> 'a) -> 'c -> 'b
+:t fn x: int => true;
+> val it : int -> bool
+:t fn (x: int, y: string) => (true, [1]);
+> val it : int * string -> bool * int list
+:t {f = fn () => 0, g = 1};
+> val it : {f:unit -> int, g:int}
+:t fn {f, g} => true;
+> val it : {f:'a, g:'b} -> bool
+:t fn x => fn f => f x;
+> val it : 'a -> ('a -> 'b) -> 'b
+:t fn (x, y) => x andalso y;
+> val it : bool * bool -> bool
+:t fn (x, y) => x orelse y;
+> val it : bool * bool -> bool
+:t fn (x, y) => x implies y;
+> val it : bool * bool -> bool
+:t fn (x, y) => x < y;
+> val it : 'a * 'a -> bool
+:t fn (x, y) => x <= y;
+> val it : 'a * 'a -> bool
+:t fn (x, y) => x > y;
+> val it : 'a * 'a -> bool
+:t fn (x, y) => x >= y;
+> val it : 'a * 'a -> bool
+:t fn (x, y) => x = y;
+> val it : 'a * 'a -> bool
+:t fn (x, y) => x <> y;
+> val it : 'a * 'a -> bool
+:t fn (x, y) => x + y + 0;
+> val it : int * int -> int
+:t fn (x, y) => x - y + 0;
+> val it : int * int -> int
+:t fn (x, y) => x mod y;
+> val it : int * int -> int
+:t fn (x, y) => x div y;
+> val it : int * int -> int
+:t fn (x, y) => x / y;
+> val it : int * int -> int
+:t fn (x, y) => x * y * 1;
+> val it : int * int -> int
+:t
+fn NONE => 0;
+> stdIn:1.1-1.13 Warning: match nonexhaustive
+>   raised at: stdIn:1.1-1.13
+> val it : 'a option -> int
+
+:t
+fn (SOME x) => 0;
+> stdIn:1.1-1.17 Warning: match nonexhaustive
+>   raised at: stdIn:1.1-1.17
+> val it : 'a option -> int
+
+:t
+fn (SOME x) => x + 1;
+> stdIn:1.1-1.21 Warning: match nonexhaustive
+>   raised at: stdIn:1.1-1.21
+> val it : int option -> int
+
+(*) End type-inference.smli
