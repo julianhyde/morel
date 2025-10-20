@@ -144,7 +144,6 @@ public class Main {
     final StringBuilder b = new StringBuilder();
     readerToString(in, b);
     final String s = str(b);
-    b.setLength(0); // Clear for reuse
 
     for (int i = 0, n = s.length(); ; ) {
       int j0 = i == 0 && (s.startsWith("> ") || s.startsWith(">\n")) ? 0 : -1;
@@ -316,42 +315,24 @@ public class Main {
             code = code.substring(0, code.length() - 1);
           }
           // Check if code contains (*TYPE_ONLY*) marker (type-only mode)
-          boolean typeOnly = false;
-          String echoCode = code;
-          if (main.idempotent && code.contains("(*TYPE_ONLY*)")) {
-            typeOnly = true;
+          final boolean typeOnly =
+              main.idempotent && code.contains("(*TYPE_ONLY*)");
+          if (typeOnly) {
             // Insert ":t " or ":t\n" where the marker was
-            int markerPos = code.indexOf("(*TYPE_ONLY*)");
-            int markerEnd = markerPos + "(*TYPE_ONLY*)".length();
-            String prefix;
-            if (markerPos >= 0
-                && markerEnd < code.length()
-                && code.charAt(markerEnd) == '\n') {
-              // Original was ":t\n" - just use ":t" since newline is already
-              // there
-              prefix = ":t";
-            } else {
-              prefix = ":t ";
-            }
-            // Build echo code with prefix inserted at marker position
-            echoCode =
-                code.substring(0, markerPos)
-                    + prefix
-                    + code.substring(markerEnd);
-            // Remove marker from actual code
-            code = code.replace("(*TYPE_ONLY*)", "");
+            code =
+                code.replace("(*TYPE_ONLY*)\n", ":t\n")
+                    .replace("(*TYPE_ONLY*)", ":t ");
           }
           if (main.echo) {
-            echoLines.accept(echoCode);
+            echoLines.accept(code);
           }
           if (statement == null) {
             break;
           }
-          final boolean typeOnlyFinal = typeOnly;
           session.withShell(
               subShell,
               outLines,
-              session1 -> subShell.command(statement, outLines, typeOnlyFinal));
+              session1 -> subShell.command(statement, outLines, typeOnly));
         } catch (MorelParseException | CompileException e) {
           final String message = e.getMessage();
           if (message.startsWith("Encountered \"<EOF>\" ")) {
