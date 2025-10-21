@@ -1743,7 +1743,33 @@ public class TypeResolver {
     final Sequence fnType = fnTerm(cArg, v);
     equiv(vAgg, fnType);
 
+    // Register cArg and related collection type terms in the retry map,
+    // so that list/bag conflicts can trigger retries with opposing constraints.
+    // We need to register multiple terms because the conflict might involve
+    // any of them after type unification and constraint evaluation.
     final RetryAction retryAction = retryMap.get(cArg);
+
+    // Register terms for the aggregate's argument collection type
+    final Sequence listCArg = listTerm(vArg);
+    final Sequence bagCArg = bagTerm(vArg);
+    retryMap.get(vArg);
+    retryMap.get(listCArg);
+    retryMap.get(bagCArg);
+
+    // Register terms for the group input collection type
+    // This is crucial for cases like union/join followed by group,
+    // where p.c and p.v might contain progressive record types
+    retryMap.get(p.c);
+    retryMap.get(p.v);
+    final Sequence listPV = listTerm(p.v);
+    final Sequence bagPV = bagTerm(p.v);
+    retryMap.get(listPV);
+    retryMap.get(bagPV);
+
+    // Also register the function type components
+    retryMap.get(v); // The result type of the aggregate
+    retryMap.get(fnType); // The function type cArg -> v
+
     if (retryAction.test()) {
       // This is the first time we are deducing the type of this
       // variable. We need to ensure that it matches the input

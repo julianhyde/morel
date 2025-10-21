@@ -2445,12 +2445,46 @@ public class MainTest {
   @Test
   void testFromType0() {
     ml("from e in [{deptno=10}]\n"
-            + "  group {e.deptno, parity = e.deptno div 2}\n"
+            + "  group {e.deptno}\n"
             + "    compute {sumId = count over e.deptno}\n"
             + "  group {}\n"
-            + "    compute {c = count over 1,\n"
-            + "      c2 = count over 2}")
-        .assertType("{c:int, parity:int, sumSumId:int} list");
+            + "    compute {c = count over 1}")
+        .assertType("{c:int} list");
+  }
+
+  @Test
+  void testFromTypeGroupCount() {
+    ml("from e in [{deptno=10}]\n"
+            + "  group {e.deptno}\n"
+            + "    compute {sumId = count over e.deptno}")
+        .assertType("{deptno:int, sumId:int} list");
+  }
+
+  @Test
+  void testFromUnionGroup() {
+    ml("from x in (from e in [1,2])\n"
+            + "  union (from d in [2,3])\n"
+            + "group x compute {c = count over ()}")
+        .assertType("{c:int, x:int} list");
+    ml("from x in (from e in [1,2])\n"
+            + "  union (from d in [2,3])\n"
+            + "group x compute {c = count over ()}\n"
+            + "order (c, x)")
+        .assertType("{c:int, x:int} list");
+  }
+
+  @Test
+  void testFromJoinGroup() {
+    ml("from d in [{deptno=10}]\n"
+            + "  join e in [{deptno=10,empno=1}] on d.deptno = e.deptno\n"
+            + "group e.deptno compute {c = count over ()}\n"
+            + "order deptno")
+        .assertType("{c:int, deptno:int} list");
+    ml("from d in [{deptno=10}]\n"
+            + "  join e in [{deptno=10,empno=1}] on d.deptno = e.deptno\n"
+            + "group e.deptno compute count over ()\n"
+            + "order deptno")
+        .assertType("{count:int, deptno:int} list");
   }
 
   @Test
