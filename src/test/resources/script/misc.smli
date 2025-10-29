@@ -122,4 +122,36 @@ in
 end;
 > val it = ["a"] : string list
 
+(* -------------------------------------------------------------
+ * [MOREL-311] op
+ *)
+foldl (op +) 0 [2,3,4];
+> val it = 9 : int
+op +;
+> val it = fn : int * int -> int
+op x;
+> stdIn:6.1-6.5 Error: unbound variable or constructor: x
+op SOME;
+> val it = fn : 'a -> 'a option
+op NONE;
+> val it = NONE : 'a option
+(op ~) o (op ~);
+> val it = fn : int -> int
+it 5;
+> val it = 5 : int
+op ~ o op ~ o op ~;
+> val it = fn : int -> int
+it 5;
+> val it = ~5 : int
+(op *) (8,3);
+> val it = 24 : int
+(op +) (3,4);
+> val it = 7 : int
+(op ^) ("foo","bar");
+> val it = "foobar" : string
+(op ::) (1,[2,3,4]);
+> val it = [1,2,3,4] : int list
+(op @) ([1,2],[3,4]);
+> val it = [1,2,3,4] : int list
+
 (*) End misc.smli

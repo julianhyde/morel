@@ -676,6 +676,15 @@ public class TypeResolver {
         final Term term = env.get(typeSystem, id.name, TypeEnv.unbound(id));
         return reg(id, v, term);
 
+      case OP_SECTION:
+        final Ast.OpSection opSection = (Ast.OpSection) node;
+        // Operators are registered with "op " prefix (e.g., "op +" not just
+        // "+")
+        final String opName = "op " + opSection.name;
+        final Term opTerm =
+            env.get(typeSystem, opName, TypeEnv.unbound(opSection));
+        return reg(opSection, v, opTerm);
+
       case ORDINAL:
         final Ast.Ordinal ordinal = (Ast.Ordinal) node;
         checkInQuery(env, ordinal);
@@ -2628,6 +2637,13 @@ public class TypeResolver {
       return name ->
           new CompileException(
               "unbound variable or constructor: " + name, false, id.pos);
+    }
+
+    /** Exception factory where a missing symbol is a user error. */
+    static Function<String, RuntimeException> unbound(Ast.OpSection opSection) {
+      return name ->
+          new CompileException(
+              "unbound variable or constructor: " + name, false, opSection.pos);
     }
 
     default TypeEnv bindAll(Iterable<Map.Entry<String, Term>> nameTerms) {

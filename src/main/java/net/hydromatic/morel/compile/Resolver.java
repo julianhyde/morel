@@ -516,6 +516,8 @@ public class Resolver {
         return toCore(((Ast.AnnotatedExp) exp).exp);
       case ID:
         return toCore((Ast.Id) exp);
+      case OP_SECTION:
+        return toCore((Ast.OpSection) exp);
       case CURRENT:
         return toCore((Ast.Current) exp);
       case ELEMENTS:
@@ -566,6 +568,22 @@ public class Resolver {
     return core.id(idPat);
   }
 
+  private Core.Exp toCore(Ast.OpSection opSection) {
+    // Desugar 'op +' to 'fn (x, y) => x + y'
+    // Operators are registered with "op " prefix (e.g., "op +" not just "+")
+    final String opName = "op " + opSection.name;
+    final Binding binding = env.getOpt(opName);
+    checkNotNull(binding, "not found", opSection);
+
+    // Get the type of the operator (e.g., int * int -> int)
+    final Type opType = typeMap.getType(opSection);
+
+    // Just return a reference to the operator binding
+    // The operator is already defined as a function value
+    final Core.NamedPat idPat = getIdPat(opSection, binding.id);
+    return core.id(idPat);
+  }
+
   private Core.Exp toCore(Ast.Current ignoredCurrent) {
     return requireNonNull(this.current);
   }
@@ -589,6 +607,23 @@ public class Resolver {
    */
   private Core.NamedPat getIdPat(Ast.Id id, Core.NamedPat coreId) {
     final Type type = typeMap.getType(id);
+    if (type == coreId.type) {
+      return coreId;
+    }
+    // The required type is different from the binding type, presumably more
+    // specific. Create a new IdPat, reusing an existing IdPat if there was
+    // one for the same type.
+    return variantIdMap.computeIfAbsent(
+        Pair.of(coreId, type), k -> k.left.withType(k.right));
+  }
+
+  /**
+   * Converts an OpSection that is a reference to a variable into an IdPat that
+   * represents its declaration.
+   */
+  private Core.NamedPat getIdPat(
+      Ast.OpSection opSection, Core.NamedPat coreId) {
+    final Type type = typeMap.getType(opSection);
     if (type == coreId.type) {
       return coreId;
     }
