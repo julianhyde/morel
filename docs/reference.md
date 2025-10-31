@@ -95,7 +95,9 @@ In Standard ML but not in Morel:
 * data type replication (`type`)
 * `withtype` in `datatype` declaration
 * abstract type (`abstype`)
-* modules (`structure` and `signature`)
+* structures (`structure`)
+* signature refinement (`where type`)
+* signature sharing constraints
 * local declarations (`local`)
 * operator declarations (`nonfix`, `infix`, `infixr`)
 * `open`
@@ -262,6 +264,7 @@ In Standard ML but not in Morel:
     | <b>fun</b> <i>funbind</i>               function
     | <b>type</b> <i>typbind</i>              type
     | <b>datatype</b> <i>datbind</i>          data type
+    | <b>signature</b> <i>sigbind</i>         signature
     | <b>over</b> <i>id</i>                   overloaded name
     | <i>empty</i>
     | <i>dec<sub>1</sub></i> [<b>;</b>] <i>dec<sub>2</sub></i>              sequence
@@ -286,11 +289,108 @@ In Standard ML but not in Morel:
 <i>conbind</i> &rarr; <i>conbindItem</i> [ '<b>|</b>' <i>conbindItem</i> ]*
                                 data constructor
 <i>conbindItem</i> &rarr; <i>id</i> [ <b>of</b> <i>typ</i> ]
+<i>sigbind</i> &rarr; <i>id</i> <b>=</b> <b>sig</b> <i>spec</i> <b>end</b> [ <b>and</b> <i>sigbind</i> ]*
+                                signature
+<i>spec</i> &rarr; <b>val</b> <i>valdesc</i>              value
+    | <b>type</b> <i>typdesc</i>             abstract type
+    | <b>type</b> <i>typbind</i>             type abbreviation
+    | <b>datatype</b> <i>datdesc</i>         data type
+    | <b>exception</b> <i>exndesc</i>        exception
+    | <i>empty</i>
+    | <i>spec<sub>1</sub></i> [<b>;</b>] <i>spec<sub>2</sub></i>             sequence
+<i>valdesc</i> &rarr; <i>id</i> <b>:</b> <i>typ</i> [ <b>and</b> <i>valdesc</i> ]*
+                                value specification
+<i>typdesc</i> &rarr; [ <i>vars</i> ] <i>id</i> [ <b>and</b> <i>typdesc</i> ]*
+                                type specification
+<i>datdesc</i> &rarr; <i>datdescItem</i> [ <b>and</b> <i>datdescItem</i> ]*
+                                datatype specification
+<i>datdescItem</i> &rarr; [ <i>vars</i> ] <i>id</i> <b>=</b> <i>conbind</i>
+<i>exndesc</i> &rarr; <i>id</i> [ <b>of</b> <i>typ</i> ] [ <b>and</b> <i>exndesc</i> ]*
+                                exception specification
 <i>vals</i> &rarr; <i>val</i>
     | '<b>(</b>' <i>val</i> [<b>,</b> <i>val</i>]* '<b>)</b>'
 <i>vars</i> &rarr; <i>var</i>
     | '<b>(</b>' <i>var</i> [<b>,</b> <i>var</i>]* '<b>)</b>'
 </pre>
+
+### Signatures
+
+A **signature** defines an interface that specifies types, values, datatypes,
+and exceptions without providing implementations. Signatures are used to
+document module interfaces and, in future versions of Morel, will be used
+to constrain structure implementations.
+
+#### Signature Declaration
+
+A signature declaration has the form:
+
+```sml
+signature STACK =
+sig
+  type 'a stack
+  exception Empty
+  val empty : 'a stack
+  val isEmpty : 'a stack -> bool
+  val push : 'a * 'a stack -> 'a stack
+  val pop : 'a stack -> 'a stack
+  val top : 'a stack -> 'a
+end
+```
+
+Multiple signatures can be declared together using `and`:
+
+```sml
+signature EQ =
+sig
+  type t
+  val eq : t * t -> bool
+end
+and ORD =
+sig
+  type t
+  val lt : t * t -> bool
+  val le : t * t -> bool
+end
+```
+
+#### Specifications
+
+A signature body contains **specifications** that describe the interface:
+
+**Value specifications** declare the type of a value without defining it:
+```sml
+val empty : 'a stack
+val push : 'a * 'a stack -> 'a stack
+```
+
+**Type specifications** can be abstract (no definition) or concrete (type alias):
+```sml
+type 'a stack              (* abstract type *)
+type point = real * real   (* concrete type alias *)
+type ('k, 'v) map          (* abstract type with multiple parameters *)
+```
+
+**Datatype specifications** describe algebraic datatypes:
+```sml
+datatype 'a tree = Leaf | Node of 'a * 'a tree * 'a tree
+```
+
+**Exception specifications** declare exceptions:
+```sml
+exception Empty                  (* exception without payload *)
+exception QueueError of string   (* exception with payload *)
+```
+
+#### Current Limitations
+
+The current implementation supports parsing and pretty-printing signatures
+but does not yet support:
+* Structure declarations that implement signatures
+* Signature refinement (`where type`)
+* Signature sharing constraints
+* Signature inclusion (`include`)
+
+These features may be added in future versions.
 
 ### Notation
 
