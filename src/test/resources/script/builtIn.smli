@@ -1538,15 +1538,17 @@ List.foldl;
 > val it = fn : ('a * 'b -> 'b) -> 'b -> 'a list -> 'b
 List.foldl (fn (a, b) => a + b) 0 [1,2,3];
 > val it = 6 : int
-List.foldl (fn (a, b) => a + b) 0 [];
+List.foldl (op +) 0 [1,2,3];
+> val it = 6 : int
+List.foldl (op +) 0 [];
 > val it = 0 : int
 List.foldl (fn (a, b) => b) 0 [1,2,3];
 > val it = 0 : int
-List.foldl (fn (a, b) => a - b) 0 [1,2,3,4];
+List.foldl (op -) 0 [1,2,3,4];
 > val it = 2 : int
 Sys.plan ();
 > val it =
->   "apply3(fnValue List.foldl, match(v, apply(fnCode match((a, b), apply2(fnValue -, get(name a), get(name b))), argCode get(name v))), constant(0), tuple(constant(1), constant(2), constant(3), constant(4)))"
+>   "apply3(fnValue List.foldl, constant(-), constant(0), tuple(constant(1), constant(2), constant(3), constant(4)))"
 >   : string
 
 (*) val foldr : ('a * 'b -> 'b) -> 'b -> 'a list -> 'b
@@ -1554,15 +1556,17 @@ List.foldr;
 > val it = fn : ('a * 'b -> 'b) -> 'b -> 'a list -> 'b
 List.foldr (fn (a, b) => a + b) 0 [1,2,3];
 > val it = 6 : int
-List.foldr (fn (a, b) => a + b) 0 [];
+List.foldr (op +) 0 [1,2,3];
+> val it = 6 : int
+List.foldr (op +) 0 [];
 > val it = 0 : int
 List.foldr (fn (a, b) => b) 0 [1,2,3];
 > val it = 0 : int
-List.foldr (fn (a, b) => a - b) 0 [1,2,3,4];
+List.foldr (op -) 0 [1,2,3,4];
 > val it = ~2 : int
 Sys.plan ();
 > val it =
->   "apply3(fnValue List.foldr, match(v, apply(fnCode match((a, b), apply2(fnValue -, get(name a), get(name b))), argCode get(name v))), constant(0), tuple(constant(1), constant(2), constant(3), constant(4)))"
+>   "apply3(fnValue List.foldr, constant(-), constant(0), tuple(constant(1), constant(2), constant(3), constant(4)))"
 >   : string
 
 (*) val exists : ('a -> bool) -> 'a list -> bool
@@ -1806,11 +1810,11 @@ ListPair.foldrEq (fn (x, y, r) => x + y + r) 0 ([1, 2], [4, 5, 6]);
    List.map f (zip (xs, ys)). *)
 ListPair.map;
 > val it = fn : ('a * 'b -> 'c) -> 'a list * 'b list -> 'c list
-ListPair.map (fn (x, y) => x + y) ([1, 2, 3], [4, 5, 6]);
+ListPair.map (op +) ([1, 2, 3], [4, 5, 6]);
 > val it = [5,7,9] : int list
-ListPair.map (fn (x, y) => x + y) ([1, 2, 3], [4, 5]);
+ListPair.map (op +) ([1, 2, 3], [4, 5]);
 > val it = [5,7] : int list
-ListPair.map (fn (x, y) => x + y) ([], [4, 5]);
+ListPair.map (op +) ([], [4, 5]);
 > val it = [] : int list
 
 (* [mapEq f (xs, ys)] applies function f to pairs of corresponding
@@ -1820,14 +1824,14 @@ ListPair.map (fn (x, y) => x + y) ([], [4, 5]);
    is equivalent to List.map f (zipEq (xs, ys)). *)
 ListPair.mapEq;
 > val it = fn : ('a * 'b -> 'c) -> 'a list * 'b list -> 'c list
-ListPair.mapEq (fn (x, y) => x + y) ([1, 2, 3], [4, 5, 6]);
+ListPair.mapEq (op +) ([1, 2, 3], [4, 5, 6]);
 > val it = [5,7,9] : int list
-ListPair.mapEq (fn (x, y) => x + y) ([1, 2, 3], [4, 5]);
+ListPair.mapEq (op +) ([1, 2, 3], [4, 5]);
 > uncaught exception UnequalLengths
->   raised at: stdIn:1.1-1.56
-ListPair.mapEq (fn (x, y) => x + y) ([], [4, 5]);
+>   raised at: stdIn:1.1-1.42
+ListPair.mapEq (op +) ([], [4, 5]);
 > uncaught exception UnequalLengths
->   raised at: stdIn:1.1-1.49
+>   raised at: stdIn:1.1-1.35
 
 (* [unzip xys] returns a pair (xs, ys), where xs is the list of first
    components of xys, and ys is the list of second components from
@@ -4715,11 +4719,11 @@ Sys.plan ();
 (*) Vector.foldl  : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b
 Vector.foldl;
 > val it = fn : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b
-Vector.foldl (fn (j,a) => a + j) 0 (Vector.fromList [2,3,4]);
+Vector.foldl (op +) 0 (Vector.fromList [2,3,4]);
 > val it = 9 : int
 Sys.plan ();
 > val it =
->   "apply3(fnValue Vector.foldl, match(v, apply(fnCode match((j, a), apply2(fnValue +, get(name a), get(name j))), argCode get(name v))), constant(0), apply(fnValue Vector.fromList, argCode tuple(constant(2), constant(3), constant(4))))"
+>   "apply3(fnValue Vector.foldl, constant(+), constant(0), apply(fnValue Vector.fromList, argCode tuple(constant(2), constant(3), constant(4))))"
 >   : string
 
 (*) Vector.foldr  : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b

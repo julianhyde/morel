@@ -1513,7 +1513,7 @@ let
   fun foldl f start [] = start
     | foldl f start (hd :: tl) = foldl f (f (start, hd)) tl
 in
-  foldl (fn (x, y) => x + y) 0 [2,3,4]
+  foldl (op +) 0 [2,3,4]
 end;
 > val it = 9 : int
 
