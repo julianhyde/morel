@@ -283,36 +283,35 @@ Id identifier() : {}
 /** Parses an operator. */
 OpSection opSection() : {
   final Pos pos;
-  final Pos endPos;
-  String name;
+  final String name;
 }
 {
   <OP> { pos = pos(); }
   (
-    <IDENTIFIER> { name = token.image; endPos = pos(); }
-  | <QUOTED_IDENTIFIER> { name = unquoteIdentifier(token.image); endPos = pos(); }
-  | <PLUS> { name = "+"; endPos = pos(); }
-  | <MINUS> { name = "-"; endPos = pos(); }
-  | <STAR> { name = "*"; endPos = pos(); }
-  | <SLASH> { name = "/"; endPos = pos(); }
-  | <CARET> { name = "^"; endPos = pos(); }
-  | <TILDE> { name = "~"; endPos = pos(); }
-  | <CONS> { name = "::"; endPos = pos(); }
-  | <AT> { name = "@"; endPos = pos(); }
-  | <EQ> { name = "="; endPos = pos(); }
-  | <NE> { name = "<>"; endPos = pos(); }
-  | <LT> { name = "<"; endPos = pos(); }
-  | <GT> { name = ">"; endPos = pos(); }
-  | <LE> { name = "<="; endPos = pos(); }
-  | <GE> { name = ">="; endPos = pos(); }
-  | <DIV> { name = "div"; endPos = pos(); }
-  | <MOD> { name = "mod"; endPos = pos(); }
-  | <ANDALSO> { name = "andalso"; endPos = pos(); }
-  | <ORELSE> { name = "orelse"; endPos = pos(); }
-  | <O> { name = "o"; endPos = pos(); }
+    <IDENTIFIER> { name = token.image; }
+  | <QUOTED_IDENTIFIER> { name = unquoteIdentifier(token.image); }
+  | <PLUS> { name = "+"; }
+  | <MINUS> { name = "-"; }
+  | <STAR> { name = "*"; }
+  | <SLASH> { name = "/"; }
+  | <CARET> { name = "^"; }
+  | <TILDE> { name = "~"; }
+  | <CONS> { name = "::"; }
+  | <AT> { name = "@"; }
+  | <EQ> { name = "="; }
+  | <NE> { name = "<>"; }
+  | <LT> { name = "<"; }
+  | <GT> { name = ">"; }
+  | <LE> { name = "<="; }
+  | <GE> { name = ">="; }
+  | <DIV> { name = "div"; }
+  | <MOD> { name = "mod"; }
+  | <ANDALSO> { name = "andalso"; }
+  | <ORELSE> { name = "orelse"; }
+  | <O> { name = "o"; }
   )
   {
-    return ast.op(pos.plus(endPos), name);
+    return ast.opSection(pos.plus(pos()), name);
   }
 }
 

@@ -81,7 +81,7 @@ public class Shuttle {
   }
 
   protected Ast.OpSection visit(Ast.OpSection opSection) {
-    return opSection; // leaf
+    return opSection;
   }
 
   protected Ast.Current visit(Ast.Current current) {

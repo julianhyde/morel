@@ -678,11 +678,10 @@ public class TypeResolver {
 
       case OP_SECTION:
         final Ast.OpSection opSection = (Ast.OpSection) node;
-        // Operators are registered with "op " prefix (e.g., "op +" not just
-        // "+")
         final String opName = "op " + opSection.name;
         final Term opTerm =
             env.get(typeSystem, opName, TypeEnv.unbound(opSection));
+        preferredOverload(BuiltIn.BY_ML_NAME.get(opName), v);
         return reg(opSection, v, opTerm);
 
       case ORDINAL:
@@ -764,6 +763,38 @@ public class TypeResolver {
       default:
         throw new AssertionError("cannot deduce type for " + node.op);
     }
+  }
+
+  /**
+   * Registers the preferred overload of a built-in operator such as "op +" or
+   * "op ~".
+   */
+  private void preferredOverload(@Nullable BuiltIn builtIn, Variable v) {
+    if (builtIn == null) {
+      return;
+    }
+    builtIn.prefer(
+        preferredType -> {
+          final Constraint.Action noAction = (actualArg, term1, consumer) -> {};
+          final Function<Term, Term> fnType =
+              arg ->
+                  fnTerm(
+                      builtIn == BuiltIn.OP_NEGATE
+                          ? arg
+                          : tupleTerm(ImmutableList.of(arg, arg)),
+                      arg);
+          Variable v3 = unifier.variable();
+          equiv(v, fnType.apply(v3));
+          preferredTypes.add(v3, preferredType);
+
+          PairList<Term, Constraint.Action> termActions =
+              copyOf(
+                  fnType.apply(toTerm(PrimitiveType.INT)),
+                  noAction,
+                  fnType.apply(toTerm(PrimitiveType.REAL)),
+                  noAction);
+          constraints.add(unifier.constraint(v, termActions));
+        });
   }
 
   /** Throws if the current expression is not within a query. */
@@ -2633,17 +2664,10 @@ public class TypeResolver {
     }
 
     /** Exception factory where a missing symbol is a user error. */
-    static Function<String, RuntimeException> unbound(Ast.Id id) {
+    static Function<String, RuntimeException> unbound(Ast.Exp id) {
       return name ->
           new CompileException(
               "unbound variable or constructor: " + name, false, id.pos);
-    }
-
-    /** Exception factory where a missing symbol is a user error. */
-    static Function<String, RuntimeException> unbound(Ast.OpSection opSection) {
-      return name ->
-          new CompileException(
-              "unbound variable or constructor: " + name, false, opSection.pos);
     }
 
     default TypeEnv bindAll(Iterable<Map.Entry<String, Term>> nameTerms) {

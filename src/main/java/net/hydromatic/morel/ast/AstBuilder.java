@@ -206,7 +206,7 @@ public enum AstBuilder {
     return new Ast.Id(pos, name);
   }
 
-  public Ast.OpSection op(Pos pos, String name) {
+  public Ast.OpSection opSection(Pos pos, String name) {
     return new Ast.OpSection(pos, name);
   }
 

@@ -923,7 +923,7 @@ fun emps2 () =
        e.name,
        e.deptno,
        comp = fn revenue => case e.deptno of
-           30 => e.id + revenue / 2
+           30 => e.id + revenue div 2
          | _ => e.id};
 > val emps2 = fn
 >   : unit -> {comp:int -> int, deptno:int, id:int, name:string} list
