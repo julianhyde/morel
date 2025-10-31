@@ -278,6 +278,60 @@ public class MainTest {
             "let val v : typeof x = y = false in v orelse true end");
   }
 
+  /** Tests parsing signature declarations. */
+  @Test
+  void testParseSignature() {
+    // Simple signature with abstract type and value specs
+    ml("signature ORDERED = sig type t val lt : t * t -> bool end")
+        .assertParseDecl(
+            Ast.SignatureDecl.class,
+            "signature ORDERED = sig type t val lt : t * t -> bool end");
+
+    // Signature with polymorphic type
+    ml("signature STACK = sig type 'a stack val empty : 'a stack end")
+        .assertParseDecl(
+            Ast.SignatureDecl.class,
+            "signature STACK = sig type 'a stack val empty : 'a stack end");
+
+    // Signature with exception
+    ml("signature STACK = sig exception Empty val pop : 'a stack -> 'a end")
+        .assertParseDecl(
+            Ast.SignatureDecl.class,
+            "signature STACK = sig exception Empty val pop : 'a stack -> 'a end");
+
+    // Signature with exception carrying a value
+    ml("signature QUEUE = sig exception QueueError of string end")
+        .assertParseDecl(
+            Ast.SignatureDecl.class,
+            "signature QUEUE = sig exception QueueError of string end");
+
+    // Signature with datatype specification
+    ml("signature TREE = sig datatype 'a tree = Leaf | Node of 'a end")
+        .assertParseDecl(
+            Ast.SignatureDecl.class,
+            "signature TREE = sig datatype 'a tree = Leaf | Node of 'a end");
+
+    // Signature with concrete type (type alias)
+    ml("signature POINT = sig type point = real * real end")
+        .assertParseDecl(
+            Ast.SignatureDecl.class,
+            "signature POINT = sig type point = real * real end");
+
+    // Multiple signatures with 'and'
+    ml("signature EQ = sig type t val eq : t * t -> bool end "
+            + "and ORD = sig type t end")
+        .assertParseDecl(
+            Ast.SignatureDecl.class,
+            "signature EQ = sig type t val eq : t * t -> bool end "
+                + "and ORD = sig type t end");
+
+    // Signature with multiple type variables
+    ml("signature MAP = sig type ('k, 'v) map end")
+        .assertParseDecl(
+            Ast.SignatureDecl.class,
+            "signature MAP = sig type ('k, 'v) map end");
+  }
+
   @Test
   void testParse1b() {
     // parentheses creating left precedence, which is the natural precedence for

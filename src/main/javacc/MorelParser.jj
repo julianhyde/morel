@@ -1251,6 +1251,8 @@ Ast.Decl decl() :
 |
   n = funDecl() { return n; }
 |
+  n = signatureDecl() { return n; }
+|
   n = overDecl() { return n; }
 }
 
@@ -1456,6 +1458,130 @@ void funMatch(List<FunMatch> list) :
         ast.funMatch(id.pos.plus(expression.pos), id.name, patList, returnType,
             expression));
   }
+}
+
+/** Parses a signature declaration, e.g.
+* {@code signature STACK = sig type 'a stack val empty : 'a stack end}. */
+Ast.SignatureDecl signatureDecl() :
+{
+  final Span span;
+  final List<SignatureBind> binds = new ArrayList<>();
+}
+{
+  <SIGNATURE> { span = Span.of(pos()); }
+  signatureBind(binds)
+  (
+    <AND> signatureBind(binds)
+  )*
+  { return ast.signatureDecl(span.end(this), binds); }
+}
+
+/** Parses a signature binding and adds it to a list. */
+void signatureBind(List<SignatureBind> list) :
+{
+  final Ast.Id name;
+  final List<Spec> specs = new ArrayList<>();
+  Spec spec;
+}
+{
+  name = identifier()
+  <EQ>
+  <SIG>
+  (
+    spec = spec() { specs.add(spec); }
+  )*
+  <END>
+  {
+    list.add(ast.signatureBind(name.pos, name, specs));
+  }
+}
+
+/** Parses a specification inside a signature. */
+Ast.Spec spec() :
+{
+  final Ast.Spec spec;
+}
+{
+  spec = valSpec() { return spec; }
+|
+  spec = typeSpec() { return spec; }
+|
+  spec = datatypeSpec() { return spec; }
+|
+  spec = exceptionSpec() { return spec; }
+}
+
+/** Parses a value specification, e.g. {@code val empty : 'a stack}. */
+Ast.ValSpec valSpec() :
+{
+  final Span span;
+  final Ast.Id name;
+  final Ast.Type type;
+}
+{
+  <VAL> { span = Span.of(pos()); }
+  name = identifier()
+  <COLON>
+  type = type()
+  { return ast.valSpec(span.end(this), name, type); }
+}
+
+/** Parses a type specification, e.g. {@code type 'a stack}. */
+Ast.TypeSpec typeSpec() :
+{
+  final Span span;
+  Pair<Pos, List<TyVar>> pair;
+  final Ast.Id name;
+  Ast.Type type = null;
+}
+{
+  <TYPE> { span = Span.of(pos()); }
+  pair = tyVars()
+  name = identifier()
+  [
+    <EQ>
+    type = type()
+  ]
+  { return ast.typeSpec(span.end(this), pair.right, name, type); }
+}
+
+/** Parses a datatype specification, e.g.
+* {@code datatype 'a tree = Leaf | Node of 'a * 'a tree * 'a tree}. */
+Ast.DatatypeSpec datatypeSpec() :
+{
+  final Span span;
+  Pair<Pos, List<TyVar>> pair;
+  final Ast.Id name;
+  final List<TyCon> tyCons = new ArrayList<>();
+  TyCon tyCon;
+}
+{
+  <DATATYPE> { span = Span.of(pos()); }
+  pair = tyVars()
+  name = identifier()
+  <EQ>
+  tyCon = typeConstructor() { tyCons.add(tyCon); }
+  (
+    <BAR> tyCon = typeConstructor() { tyCons.add(tyCon); }
+  )*
+  { return ast.datatypeSpec(span.end(this), pair.right, name, tyCons); }
+}
+
+/** Parses an exception specification, e.g. {@code exception Empty}. */
+Ast.ExceptionSpec exceptionSpec() :
+{
+  final Span span;
+  final Ast.Id name;
+  Ast.Type type = null;
+}
+{
+  <EXCEPTION> { span = Span.of(pos()); }
+  name = identifier()
+  [
+    <OF>
+    type = type()
+  ]
+  { return ast.exceptionSpec(span.end(this), name, type); }
 }
 
 /** Parses a pattern. */
@@ -1752,6 +1878,7 @@ AstNode statementEof() :
 | < DIV: "div" >
 | < ELSE: "else" >
 | < END: "end" >
+| < EXCEPTION: "exception" >
 | < FN: "fn" >
 | < FUN: "fun" >
 | < IF: "if" >
@@ -1763,6 +1890,8 @@ AstNode statementEof() :
 | < OP: "op" >
 | < ORELSE: "orelse" >
 | < REC: "rec" >
+| < SIG: "sig" >
+| < SIGNATURE: "signature" >
 | < THEN: "then" >
 | < TYPE: "type" >
 | < VAL: "val" >

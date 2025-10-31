@@ -256,6 +256,15 @@ public class Resolver {
       case DATATYPE_DECL:
         return toCore((Ast.DatatypeDecl) node);
 
+      case SIGNATURE_DECL:
+        // Signatures are interface declarations that don't compile to anything
+        // Return a no-op declaration that evaluates to unit
+        return core.nonRecValDecl(
+            node.pos,
+            core.idPat(PrimitiveType.UNIT, "_signature", 0),
+            null,
+            core.unitLiteral());
+
       default:
         throw new AssertionError(
             "unknown decl [" + node.op + ", " + node + "]");
