@@ -289,6 +289,15 @@ In Standard ML but not in Morel:
 <i>conbind</i> &rarr; <i>conbindItem</i> [ '<b>|</b>' <i>conbindItem</i> ]*
                                 data constructor
 <i>conbindItem</i> &rarr; <i>id</i> [ <b>of</b> <i>typ</i> ]
+<i>vals</i> &rarr; <i>val</i>
+    | '<b>(</b>' <i>val</i> [<b>,</b> <i>val</i>]* '<b>)</b>'
+<i>vars</i> &rarr; <i>var</i>
+    | '<b>(</b>' <i>var</i> [<b>,</b> <i>var</i>]* '<b>)</b>'
+</pre>
+
+### Modules
+
+<pre>
 <i>sigbind</i> &rarr; <i>id</i> <b>=</b> <b>sig</b> <i>spec</i> <b>end</b> [ <b>and</b> <i>sigbind</i> ]*
                                 signature
 <i>spec</i> &rarr; <b>val</b> <i>valdesc</i>              value
@@ -307,13 +316,7 @@ In Standard ML but not in Morel:
 <i>datdescItem</i> &rarr; [ <i>vars</i> ] <i>id</i> <b>=</b> <i>conbind</i>
 <i>exndesc</i> &rarr; <i>id</i> [ <b>of</b> <i>typ</i> ] [ <b>and</b> <i>exndesc</i> ]*
                                 exception specification
-<i>vals</i> &rarr; <i>val</i>
-    | '<b>(</b>' <i>val</i> [<b>,</b> <i>val</i>]* '<b>)</b>'
-<i>vars</i> &rarr; <i>var</i>
-    | '<b>(</b>' <i>var</i> [<b>,</b> <i>var</i>]* '<b>)</b>'
 </pre>
-
-### Signatures
 
 A **signature** defines an interface that specifies types,
 values, datatypes, and exceptions without providing
@@ -321,38 +324,8 @@ implementations. Signatures are used to document module
 interfaces and, in future versions of Morel, will be used to
 constrain structure implementations.
 
-#### Signature Declaration
-
-A signature declaration has the form:
-
-```sml
-signature STACK =
-sig
-  type 'a stack
-  exception Empty
-  val empty : 'a stack
-  val isEmpty : 'a stack -> bool
-  val push : 'a * 'a stack -> 'a stack
-  val pop : 'a stack -> 'a stack
-  val top : 'a stack -> 'a
-end
-```
-
-Multiple signatures can be declared together using `and`:
-
-```sml
-signature EQ =
-sig
-  type t
-  val eq : t * t -> bool
-end
-and ORD =
-sig
-  type t
-  val lt : t * t -> bool
-  val le : t * t -> bool
-end
-```
+Signature declarations appear at the top level (see grammar in
+[Declarations](#declarations)).
 
 #### Specifications
 
@@ -371,7 +344,7 @@ concrete (type alias):
 ```sml
 type 'a stack              (* abstract type *)
 type point = real * real   (* concrete type alias *)
-type ('k, 'v) map          (* abstract type with multiple parameters *)
+type ('k, 'v) map          (* abstract with multiple params *)
 ```
 
 **Datatype specifications** describe algebraic datatypes:
@@ -383,6 +356,39 @@ datatype 'a tree = Leaf | Node of 'a * 'a tree * 'a tree
 ```sml
 exception Empty                  (* exception without payload *)
 exception QueueError of string   (* exception with payload *)
+```
+
+#### Examples
+
+A simple signature with abstract type and value specifications:
+
+```sml
+signature STACK =
+sig
+  type 'a stack
+  exception Empty
+  val empty : 'a stack
+  val isEmpty : 'a stack -> bool
+  val push : 'a * 'a stack -> 'a stack
+  val pop : 'a stack -> 'a stack
+  val top : 'a stack -> 'a
+end
+```
+
+Multiple signatures declared together using `and`:
+
+```sml
+signature EQ =
+sig
+  type t
+  val eq : t * t -> bool
+end
+and ORD =
+sig
+  type t
+  val lt : t * t -> bool
+  val le : t * t -> bool
+end
 ```
 
 #### Current Limitations
