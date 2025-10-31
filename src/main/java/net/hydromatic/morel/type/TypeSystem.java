@@ -570,6 +570,11 @@ public class TypeSystem {
     return lookup(BuiltIn.Datatype.ORDER);
   }
 
+  /** Returns the "Syntax.expr" built-in data type. */
+  public Type expr() {
+    return lookup(BuiltIn.Datatype.EXPR);
+  }
+
   /**
    * Creates a "bag" type.
    *

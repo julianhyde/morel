@@ -3260,6 +3260,9 @@ public enum BuiltIn {
       "translate",
       ts -> ts.fnType(ts.fnType(CHAR, STRING), STRING, STRING)),
 
+  /** Function "Syntax.parse", of type "string &rarr; Syntax.expr". */
+  SYNTAX_PARSE("Syntax", "parse", ts -> ts.fnType(STRING, ts.expr())),
+
   /** Function "Sys.clearEnv", of type "unit &rarr; unit". */
   SYS_CLEAR_ENV("Sys", "clearEnv", ts -> ts.fnType(UNIT, UNIT)),
 
@@ -4064,6 +4067,12 @@ public enum BuiltIn {
         2,
         h -> h.tyCon(Constructor.EITHER_INL).tyCon(Constructor.EITHER_INR)),
 
+    EXPR(
+        "expr",
+        false,
+        0,
+        h -> h.tyCon(Constructor.EITHER_INL).tyCon(Constructor.EITHER_INR)),
+
     ORDER(
         "order",
         false,
@@ -4171,6 +4180,7 @@ public enum BuiltIn {
     DESCENDING_DESC(Datatype.DESCENDING, "DESC", h -> h.get(0)),
     EITHER_INL(Datatype.EITHER, "INL", h -> h.get(0)),
     EITHER_INR(Datatype.EITHER, "INR", h -> h.get(1)),
+    EXPR_CALL(Datatype.EXPR, "INR", h -> h.get(1)),
     LIST_NIL(Datatype.PSEUDO_LIST, "NIL"),
     LIST_CONS(Datatype.PSEUDO_LIST, "CONS", h -> h.get(0)),
     OPTION_SOME(Datatype.OPTION, "SOME", h -> h.get(0)),
