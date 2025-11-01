@@ -46,13 +46,14 @@ import static org.hamcrest.Matchers.hasToString;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.Files;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
-import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -352,7 +353,8 @@ public class MainTest {
     int parsed = 0;
     int failed = 0;
     for (File file : files) {
-      final String content = Files.readString(file.toPath());
+      final String content =
+          Files.asCharSource(file, StandardCharsets.UTF_8).read();
       try {
         // Just check that it parses without throwing an exception
         ml(content).assertType(instanceOf(Ast.SignatureDecl.class));
