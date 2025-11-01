@@ -39,7 +39,7 @@ sig
   val quot : int * int -> int
   val rem : int * int -> int
   
-  val compare : int * int -> order
+  val compare : int * int -> `order`
   val <  : int * int -> bool
   val <= : int * int -> bool
   val >  : int * int -> bool
@@ -49,7 +49,7 @@ sig
   val abs : int -> int
   val min : int * int -> int
   val max : int * int -> int
-  val sign : int -> Int.int
+  val sign : int -> (*Int.*)int
   val sameSign : int * int -> bool
   
   val fmt      : (*StringCvt.*)radix -> int -> string
@@ -58,4 +58,4 @@ sig
                      -> (char, 'a) (*StringCvt.*)reader
                        -> (int, 'a) (*StringCvt.*)reader
   val fromString : string -> int option
-end;
+end

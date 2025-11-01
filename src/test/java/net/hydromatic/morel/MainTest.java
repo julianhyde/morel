@@ -58,6 +58,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Ast;
+import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Codes;
@@ -281,7 +282,10 @@ public class MainTest {
             "let val v : typeof x = y = false in v orelse true end");
   }
 
-  /** Tests parsing signature declarations. */
+  /**
+   * Tests parsing a signature declaration. More tests in {@code
+   * signature.smli}.
+   */
   @Test
   void testParseSignature() {
     // Simple signature with abstract type and value specs
@@ -289,50 +293,6 @@ public class MainTest {
         .assertParseDecl(
             Ast.SignatureDecl.class,
             "signature ORDERED = sig type t val lt : t * t -> bool end");
-
-    // Signature with polymorphic type
-    ml("signature STACK = sig type 'a stack val empty : 'a stack end")
-        .assertParseDecl(
-            Ast.SignatureDecl.class,
-            "signature STACK = sig type 'a stack val empty : 'a stack end");
-
-    // Signature with exception
-    ml("signature STACK = sig exception Empty val pop : 'a stack -> 'a end")
-        .assertParseDecl(
-            Ast.SignatureDecl.class,
-            "signature STACK = sig exception Empty val pop : 'a stack -> 'a end");
-
-    // Signature with exception carrying a value
-    ml("signature QUEUE = sig exception QueueError of string end")
-        .assertParseDecl(
-            Ast.SignatureDecl.class,
-            "signature QUEUE = sig exception QueueError of string end");
-
-    // Signature with datatype specification
-    ml("signature TREE = sig datatype 'a tree = Leaf | Node of 'a end")
-        .assertParseDecl(
-            Ast.SignatureDecl.class,
-            "signature TREE = sig datatype 'a tree = Leaf | Node of 'a end");
-
-    // Signature with concrete type (type alias)
-    ml("signature POINT = sig type point = real * real end")
-        .assertParseDecl(
-            Ast.SignatureDecl.class,
-            "signature POINT = sig type point = real * real end");
-
-    // Multiple signatures with 'and'
-    ml("signature EQ = sig type t val eq : t * t -> bool end "
-            + "and ORD = sig type t end")
-        .assertParseDecl(
-            Ast.SignatureDecl.class,
-            "signature EQ = sig type t val eq : t * t -> bool end "
-                + "and ORD = sig type t end");
-
-    // Signature with multiple type variables
-    ml("signature MAP = sig type ('k, 'v) map end")
-        .assertParseDecl(
-            Ast.SignatureDecl.class,
-            "signature MAP = sig type ('k, 'v) map end");
   }
 
   @Test
@@ -350,27 +310,25 @@ public class MainTest {
       return; // No files to test
     }
 
-    int parsed = 0;
-    int failed = 0;
     for (File file : files) {
       final String content =
           Files.asCharSource(file, StandardCharsets.UTF_8).read();
-      try {
-        // Just check that it parses without throwing an exception
-        ml(content).assertType(instanceOf(Ast.SignatureDecl.class));
-        parsed++;
-      } catch (Exception e) {
-        // For now, just count parse failures (lib files may use
-        // features not yet implemented like qualified type names)
-        System.out.println(
-            "Note: " + file.getName() + " failed to parse: " + e.getMessage());
-        failed++;
-      }
+      // Parse and verify it's a signature declaration
+      ml(content)
+          .withParser(
+              parser -> {
+                try {
+                  final AstNode node = parser.statementSemicolonOrEof();
+                  assertThat(
+                      "File: " + file.getName(),
+                      node,
+                      instanceOf(Ast.SignatureDecl.class));
+                } catch (Exception e) {
+                  throw new RuntimeException(
+                      "Failed to parse " + file.getName(), e);
+                }
+              });
     }
-    System.out.println(
-        "Parsed " + parsed + " lib files successfully, " + failed + " failed");
-    // At least check that we attempted to parse some files
-    assertThat(parsed + failed, is(files.length));
   }
 
   @Test
