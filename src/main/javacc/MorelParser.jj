@@ -1514,17 +1514,23 @@ Ast.Spec spec() :
 }
 
 /** Parses a value specification, e.g. {@code val empty : 'a stack}
- * or {@code val + : int * int -> int}. */
+ * or {@code val + : int * int -> int}
+ * or {@code val op o : ...}. */
 Ast.ValSpec valSpec() :
 {
   final Span span;
   final String name;
   final Ast.Id id;
   final Ast.Type type;
+  boolean hasOp = false;
 }
 {
   <VAL> { span = Span.of(pos()); }
-  name = identifierOrSymbol() { id = ast.id(pos(), name); }
+  ( <OP> { hasOp = true; } )?
+  name = identifierOrSymbol()
+  {
+    id = ast.id(pos(), hasOp ? "op " + name : name);
+  }
   <COLON>
   type = type()
   { return ast.valSpec(span.end(this), id, type); }

@@ -29,9 +29,6 @@ fun print x = ignore x;
 > val print = fn : 'a -> unit
 
 (* Structures -------------------------------------------------- *)
-General;
-> val it = {ignore=fn,`op o`=fn}
->   : {ignore:'a -> unit, `op o`:('b -> 'c) * ('d -> 'b) -> 'd -> 'c}
 Char;
 > val it =
 >   {chr=fn,compare=fn,contains=fn,fromCString=fn,fromString=fn,isAlpha=fn,
@@ -865,8 +862,44 @@ Fn.notEqual 3 3;
 > val it = false : bool
 
 (* General ----------------------------------------------------- *)
+General;
+> val it = {ignore=fn,`op o`=fn}
+>   : {ignore:'a -> unit, `op o`:('b -> 'c) * ('d -> 'b) -> 'd -> 'c}
+
+(*) val exnMessage : exn -> string
+General.exnMessage;
+> val it = fn : exn -> string
+General.exnMessage Bind;
+> val it = "nonexhaustive binding failure" : string
+General.exnMessage Divide;
+> val it = "division by zero" : string
+General.exnMessage Overflow;
+> val it = "integer overflow" : string
+
+(*) val exnName : exn -> string
+General.exnName;
+> val it = fn : exn -> string
+General.exnName Bind;
+> val it = "Bind" : string
+General.exnName Divide;
+> val it = "Divide" : string
+General.exnName Overflow;
+> val it = "Overflow" : string
 
 (*) op o - function composition
+General.o;
+> val it = fn : ('a -> 'b) * ('c -> 'a) -> 'c -> 'b
+String.size;
+> val it = fn : string -> int
+Char.chr;
+> val it = fn : int -> char
+General.o (Char.chr, String.size);
+> val it = fn : int -> int
+General.o (Char.chr, String.size) "012345678901234567890123456789012";
+> val it = #"!" : char
+(op o) (Char.chr, String.size) "012345678901234567890123456789012";
+> val it = #"!" : char
+
 val plusOne = fn x => x + 1;
 > val plusOne = fn : int -> int
 val timesTwo = fn x => x * 2;
@@ -888,9 +921,9 @@ Sys.plan ();
 >   "apply(fnCode apply2(fnValue o, get(name plusOne), apply2(fnValue o, get(name timesTwo), get(name plusThree))), argCode constant(3))"
 >   : string
 
-ignore;
+General.ignore;
 > val it = fn : 'a -> unit
-ignore (1 + 2);
+General.ignore (1 + 2);
 > val it = () : unit
 Sys.plan ();
 > val it =

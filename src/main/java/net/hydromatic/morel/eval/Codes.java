@@ -711,8 +711,8 @@ public abstract class Codes {
         }
       };
 
-  /** @see BuiltIn#FN_OP_O */
-  private static final Applicable2 FN_OP_O = new OpO(BuiltIn.FN_OP_O);
+  /** @see BuiltIn#FN_O */
+  private static final Applicable2 FN_OP_O = new OpO(BuiltIn.FN_O);
 
   /** @see BuiltIn#FN_REPEAT */
   private static final Applicable2 FN_REPEAT = new FnRepeat(Pos.ZERO);
@@ -757,6 +757,34 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#GENERAL_BEFORE */
+  private static final Applicable GENERAL_BEFORE =
+      new BaseApplicable1<Object, List>(BuiltIn.GENERAL_BEFORE) {
+        @Override
+        public Object apply(List arg) {
+          // Returns first element of tuple (a, unit), ignoring the second
+          return arg.get(0);
+        }
+      };
+
+  /** @see BuiltIn#GENERAL_EXN_MESSAGE */
+  private static final Applicable GENERAL_EXN_MESSAGE =
+      new BaseApplicable1<String, BuiltInExn>(BuiltIn.GENERAL_EXN_MESSAGE) {
+        @Override
+        public String apply(BuiltInExn arg) {
+          return arg.mlName;
+        }
+      };
+
+  /** @see BuiltIn#GENERAL_EXN_NAME */
+  private static final Applicable GENERAL_EXN_NAME =
+      new BaseApplicable1<String, BuiltInExn>(BuiltIn.GENERAL_EXN_NAME) {
+        @Override
+        public String apply(BuiltInExn arg) {
+          return arg.structure + "." + arg.mlName;
+        }
+      };
+
   /** @see BuiltIn#GENERAL_IGNORE */
   private static final Applicable GENERAL_IGNORE =
       new BaseApplicable1<Unit, Object>(BuiltIn.GENERAL_IGNORE) {
@@ -766,8 +794,8 @@ public abstract class Codes {
         }
       };
 
-  /** @see BuiltIn#GENERAL_OP_O */
-  private static final Applicable2 GENERAL_OP_O = new OpO(BuiltIn.GENERAL_OP_O);
+  /** @see BuiltIn#GENERAL_O */
+  private static final Applicable2 GENERAL_OP_O = new OpO(BuiltIn.GENERAL_O);
 
   /** Implements {@link #GENERAL_OP_O}, {@link #FN_OP_O}. */
   private static class OpO
@@ -3981,11 +4009,14 @@ public abstract class Codes {
           .put(BuiltIn.FN_FLIP, FN_FLIP)
           .put(BuiltIn.FN_ID, FN_ID)
           .put(BuiltIn.FN_NOT_EQUAL, FN_NOT_EQUAL)
-          .put(BuiltIn.FN_OP_O, FN_OP_O)
+          .put(BuiltIn.FN_O, FN_OP_O)
           .put(BuiltIn.FN_REPEAT, FN_REPEAT)
           .put(BuiltIn.FN_UNCURRY, FN_UNCURRY)
+          .put(BuiltIn.GENERAL_BEFORE, GENERAL_BEFORE)
+          .put(BuiltIn.GENERAL_EXN_MESSAGE, GENERAL_EXN_MESSAGE)
+          .put(BuiltIn.GENERAL_EXN_NAME, GENERAL_EXN_NAME)
           .put(BuiltIn.GENERAL_IGNORE, GENERAL_IGNORE)
-          .put(BuiltIn.GENERAL_OP_O, GENERAL_OP_O)
+          .put(BuiltIn.GENERAL_O, GENERAL_OP_O)
           .put(BuiltIn.INT_ABS, INT_ABS)
           .put(BuiltIn.INT_COMPARE, INT_COMPARE)
           .put(BuiltIn.INT_DIV, INT_DIV)
@@ -4027,7 +4058,6 @@ public abstract class Codes {
           .put(BuiltIn.LIST_MAP, LIST_MAP)
           .put(BuiltIn.LIST_MAP_PARTIAL, LIST_MAP_PARTIAL)
           .put(BuiltIn.LIST_MAPI, LIST_MAPI)
-          .put(BuiltIn.LIST_NIL, ImmutableList.of())
           .put(BuiltIn.LIST_NTH, LIST_NTH)
           .put(BuiltIn.LIST_NULL, LIST_NULL)
           .put(BuiltIn.LIST_OP_AT, LIST_AT) // op @ == List.at

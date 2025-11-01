@@ -40,6 +40,7 @@ import static net.hydromatic.morel.Ml.mlE;
 import static net.hydromatic.morel.TestUtils.first;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasToString;
@@ -50,6 +51,7 @@ import com.google.common.io.Files;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
@@ -299,36 +301,39 @@ public class MainTest {
   void testParseLibFiles() throws Exception {
     // Parse all .sig and .sml files in the lib directory
     final File libDir = new File("lib");
-    if (!libDir.exists() || !libDir.isDirectory()) {
-      return; // Skip test if lib directory doesn't exist
-    }
+    assertThat(libDir.exists(), is(true));
+    assertThat(libDir.isDirectory(), is(true));
 
     final File[] files =
         libDir.listFiles(
             (dir, name) -> name.endsWith(".sig") || name.endsWith(".sml"));
-    if (files == null || files.length == 0) {
-      return; // No files to test
-    }
+    assertThat("no files to test in lib directory", files, notNullValue());
 
     for (File file : files) {
-      final String content =
-          Files.asCharSource(file, StandardCharsets.UTF_8).read();
-      // Parse and verify it's a signature declaration
-      ml(content)
-          .withParser(
-              parser -> {
-                try {
-                  final AstNode node = parser.statementSemicolonOrEof();
-                  assertThat(
-                      "File: " + file.getName(),
-                      node,
-                      instanceOf(Ast.SignatureDecl.class));
-                } catch (Exception e) {
-                  throw new RuntimeException(
-                      "Failed to parse " + file.getName(), e);
-                }
-              });
+      checkSignatureFile(file);
     }
+  }
+
+  /** Parses a .sig file and verifies that it is a signature declaration. */
+  private static void checkSignatureFile(File file) throws IOException {
+    final String content =
+        Files.asCharSource(file, StandardCharsets.UTF_8).read();
+    ml(content)
+        .withParser(
+            parser -> {
+              try {
+                final AstNode node = parser.statementSemicolonOrEof();
+                assertThat(node, notNullValue());
+                assertThat(
+                    "File: " + file.getName(),
+                    node,
+                    instanceOf(Ast.SignatureDecl.class));
+                SignatureChecker.checkSignature((Ast.SignatureDecl) node);
+              } catch (Exception e) {
+                throw new RuntimeException(
+                    "Failed to parse " + file.getName(), e);
+              }
+            });
   }
 
   @Test

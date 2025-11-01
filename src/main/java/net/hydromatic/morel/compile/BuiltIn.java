@@ -1121,14 +1121,14 @@ public enum BuiltIn {
       ts -> ts.forallType(2, h -> ts.fnType(h.get(0), h.get(0), BOOL))),
 
   /**
-   * Operator "Fn.op o", of type "(&beta; &rarr; &gamma;) * (&alpha; &rarr;
-   * &beta;) &rarr; &alpha; &rarr; &gamma;".
+   * Operator "Fn.o", of type "(&beta; &rarr; &gamma;) * (&alpha; &rarr; &beta;)
+   * &rarr; &alpha; &rarr; &gamma;".
    *
-   * @see #GENERAL_OP_O
+   * @see #GENERAL_O
    */
-  FN_OP_O(
+  FN_O(
       "Fn",
-      "op o",
+      "o",
       ts ->
           ts.forallType(
               3,
@@ -1170,6 +1170,34 @@ public enum BuiltIn {
                       ts.fnType(h.get(0), h.get(1), h.get(2)),
                       ts.fnType(ts.tupleType(h.get(0), h.get(1)), h.get(2))))),
 
+  /**
+   * Function "General.before" of type "&alpha; * unit &rarr; &alpha;".
+   *
+   * <p>Evaluates to the first argument, ignoring the second.
+   */
+  GENERAL_BEFORE(
+      "General",
+      "before",
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.tupleType(h.get(0), UNIT), h.get(0)))),
+
+  /**
+   * Function "General.exnMessage" of type "exn &rarr; string".
+   *
+   * <p>Returns a message associated with an exception.
+   */
+  GENERAL_EXN_MESSAGE(
+      "General", "exnMessage", ts -> ts.fnType(ts.lookup("exn"), STRING)),
+
+  /**
+   * Function "General.exnName" of type "exn &rarr; string".
+   *
+   * <p>Returns the name of an exception.
+   */
+  GENERAL_EXN_NAME(
+      "General", "exnName", ts -> ts.fnType(ts.lookup("exn"), STRING)),
+
   /** Function "General.ignore", of type "&alpha; &rarr; unit". */
   GENERAL_IGNORE(
       "General",
@@ -1178,15 +1206,15 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.get(0), UNIT))),
 
   /**
-   * Operator "General.op o", of type "(&beta; &rarr; &gamma;) * (&alpha; &rarr;
-   * &beta;) &rarr; &alpha; &rarr; &gamma;"
+   * Function "General.o", and operator "op o", of type "(&beta; &rarr; &gamma;)
+   * * (&alpha; &rarr; &beta;) &rarr; &alpha; &rarr; &gamma;"
    *
    * <p>"f o g" is the function composition of "f" and "g". Thus, "(f o g) a" is
    * equivalent to "f (g a)".
    */
-  GENERAL_OP_O(
+  GENERAL_O(
       "General",
-      "op o",
+      "o",
       "op o",
       ts ->
           ts.forallType(
@@ -1365,11 +1393,10 @@ public enum BuiltIn {
 
   /**
    * Function "List.at", of type "&alpha; list * &alpha; list &rarr; &alpha;
-   * list".
+   * list", an alias for {@link #LIST_OP_AT}.
    *
    * <p>"l1 @ l2" returns the list that is the concatenation of l1 and l2.
    */
-  // TODO: remove
   LIST_AT(
       "List",
       "at",
@@ -1652,13 +1679,6 @@ public enum BuiltIn {
                       ts.fnType(ts.tupleType(INT, h.get(0)), h.get(1)),
                       h.list(0),
                       h.list(1)))),
-
-  /**
-   * Constant "List.nil", of type "&alpha; list".
-   *
-   * <p>"nil" is the empty list.
-   */
-  LIST_NIL("List", "nil", ts -> ts.forallType(1, h -> h.list(0))),
 
   /**
    * Function "List.nth", of type "&alpha; list * int &rarr; &alpha;".
@@ -4063,6 +4083,8 @@ public enum BuiltIn {
         false,
         2,
         h -> h.tyCon(Constructor.EITHER_INL).tyCon(Constructor.EITHER_INR)),
+
+    EXN("exn", false, 0, h -> h),
 
     ORDER(
         "order",
