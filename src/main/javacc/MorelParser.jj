@@ -1506,6 +1506,8 @@ Ast.Spec spec() :
 |
   spec = typeSpec() { return spec; }
 |
+  spec = eqtypeSpec() { return spec; }
+|
   spec = datatypeSpec() { return spec; }
 |
   spec = exceptionSpec() { return spec; }
@@ -1536,6 +1538,26 @@ Ast.TypeSpec typeSpec() :
 }
 {
   <TYPE> { span = Span.of(pos()); }
+  pair = tyVars()
+  name = identifier()
+  [
+    <EQ>
+    type = type()
+  ]
+  { return ast.typeSpec(span.end(this), pair.right, name, type); }
+}
+
+/** Parses an eqtype specification, e.g. {@code eqtype int}.
+ * For now, we treat eqtype the same as type in the AST. */
+Ast.TypeSpec eqtypeSpec() :
+{
+  final Span span;
+  Pair<Pos, List<TyVar>> pair;
+  final Ast.Id name;
+  Ast.Type type = null;
+}
+{
+  <EQTYPE> { span = Span.of(pos()); }
   pair = tyVars()
   name = identifier()
   [
@@ -1878,6 +1900,7 @@ AstNode statementEof() :
 | < DIV: "div" >
 | < ELSE: "else" >
 | < END: "end" >
+| < EQTYPE: "eqtype" >
 | < EXCEPTION: "exception" >
 | < FN: "fn" >
 | < FUN: "fun" >

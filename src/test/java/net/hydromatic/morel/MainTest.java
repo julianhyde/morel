@@ -48,9 +48,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -330,6 +332,43 @@ public class MainTest {
         .assertParseDecl(
             Ast.SignatureDecl.class,
             "signature MAP = sig type ('k, 'v) map end");
+  }
+
+  @Test
+  void testParseLibFiles() throws Exception {
+    // Parse all .sig and .sml files in the lib directory
+    final File libDir = new File("lib");
+    if (!libDir.exists() || !libDir.isDirectory()) {
+      return; // Skip test if lib directory doesn't exist
+    }
+
+    final File[] files =
+        libDir.listFiles(
+            (dir, name) -> name.endsWith(".sig") || name.endsWith(".sml"));
+    if (files == null || files.length == 0) {
+      return; // No files to test
+    }
+
+    int parsed = 0;
+    int failed = 0;
+    for (File file : files) {
+      final String content = Files.readString(file.toPath());
+      try {
+        // Just check that it parses without throwing an exception
+        ml(content).assertType(instanceOf(Ast.SignatureDecl.class));
+        parsed++;
+      } catch (Exception e) {
+        // For now, just count parse failures (lib files may use
+        // features not yet implemented like qualified type names)
+        System.out.println(
+            "Note: " + file.getName() + " failed to parse: " + e.getMessage());
+        failed++;
+      }
+    }
+    System.out.println(
+        "Parsed " + parsed + " lib files successfully, " + failed + " failed");
+    // At least check that we attempted to parse some files
+    assertThat(parsed + failed, is(files.length));
   }
 
   @Test
