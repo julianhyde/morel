@@ -28,8 +28,10 @@ import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.PairList.copyOf;
+import static net.hydromatic.morel.util.Static.joinQuoted;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skip;
+import static net.hydromatic.morel.util.Static.splitQuoted;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.first;
@@ -44,7 +46,6 @@ import com.google.common.collect.Ordering;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -91,6 +92,7 @@ import net.hydromatic.morel.util.MartelliUnifier;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
+import net.hydromatic.morel.util.Static;
 import net.hydromatic.morel.util.Tracers;
 import net.hydromatic.morel.util.TriConsumer;
 import net.hydromatic.morel.util.Unifier;
@@ -1591,12 +1593,12 @@ public class TypeResolver {
   }
 
   /** Inverse of {@link #recordLabel(NavigableSet)}. */
-  static List<String> fieldList(final Sequence sequence) {
+  static @Nullable List<String> fieldList(final Sequence sequence) {
     if (sequence.operator.equals(RECORD_TY_CON)) {
       return ImmutableList.of();
     } else if (sequence.operator.startsWith(RECORD_TY_CON + ":")) {
-      final String[] fields = sequence.operator.split(":");
-      return skip(Arrays.asList(fields));
+      final List<String> fields = splitQuoted(sequence.operator, ':', '`');
+      return skip(fields);
     } else if (sequence.operator.equals(TUPLE_TY_CON)) {
       final int size = sequence.terms.size();
       return TupleType.ordinalNames(size);
@@ -1607,7 +1609,8 @@ public class TypeResolver {
 
   /** Inverse of {@link #fieldList(Sequence)}. */
   static String recordLabel(NavigableSet<String> labels) {
-    return labels.stream().collect(joining(":", RECORD_TY_CON + ":", ""));
+    return RECORD_TY_CON + ":" + joinQuoted(labels,
+        ':', '`');
   }
 
   private Ast.Match deduceMatchType(
