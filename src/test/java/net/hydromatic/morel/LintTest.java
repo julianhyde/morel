@@ -20,6 +20,7 @@ package net.hydromatic.morel;
 
 import static java.lang.String.format;
 import static net.hydromatic.morel.util.Static.last;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.core.Is.is;
@@ -581,6 +582,29 @@ public class LintTest {
               + genFile
               + "\n" //
               + diff);
+    }
+  }
+
+  /**
+   * Validates that signature files in the lib directory are well-formed and
+   * that their value and exception declarations match the corresponding entries
+   * in the {@link net.hydromatic.morel.compile.BuiltIn} and {@link
+   * net.hydromatic.morel.eval.Codes.BuiltInExn} enums.
+   */
+  @Test
+  void testSignatures() throws Exception {
+    final File libDir = new File("lib");
+    assertThat(libDir.exists(), is(true));
+    assertThat(libDir.isDirectory(), is(true));
+
+    final File[] files =
+        libDir.listFiles(
+            (dir, name) -> name.endsWith(".sig") || name.endsWith(".sml"));
+    assertThat("no files to test in lib directory", files, notNullValue());
+
+    final SignatureChecker checker = new SignatureChecker();
+    for (File file : files) {
+      checker.checkSignatureFile(file);
     }
   }
 

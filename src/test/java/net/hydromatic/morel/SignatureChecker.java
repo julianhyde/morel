@@ -171,11 +171,9 @@ class SignatureChecker {
       }
     }
     assertThat(
-        "Exception "
-            + exnName
-            + " in signature "
-            + structure
-            + " should exist in BuiltInExn",
+        format(
+            "Exception %s in signature %s should exist in BuiltInExn",
+            exnName, structure),
         found,
         is(true));
   }

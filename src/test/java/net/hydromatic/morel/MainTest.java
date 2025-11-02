@@ -40,7 +40,6 @@ import static net.hydromatic.morel.Ml.mlE;
 import static net.hydromatic.morel.TestUtils.first;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasToString;
@@ -49,7 +48,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
@@ -291,24 +289,6 @@ public class MainTest {
         .assertParseDecl(
             Ast.SignatureDecl.class,
             "signature ORDERED = sig type t val lt : t * t -> bool end");
-  }
-
-  @Test
-  void testParseLibFiles() throws Exception {
-    // Parse all .sig and .sml files in the lib directory
-    final File libDir = new File("lib");
-    assertThat(libDir.exists(), is(true));
-    assertThat(libDir.isDirectory(), is(true));
-
-    final File[] files =
-        libDir.listFiles(
-            (dir, name) -> name.endsWith(".sig") || name.endsWith(".sml"));
-    assertThat("no files to test in lib directory", files, notNullValue());
-
-    final SignatureChecker checker = new SignatureChecker();
-    for (File file : files) {
-      checker.checkSignatureFile(file);
-    }
   }
 
   @Test
