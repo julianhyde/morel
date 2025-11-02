@@ -67,11 +67,13 @@ public class LintTest {
         line -> {
           String f = line.filename();
           final int slash = f.lastIndexOf('/');
-          final String endMarker =
-              "// End " + (slash < 0 ? f : f.substring(slash + 1));
-          if (!line.line().equals(endMarker)
-              && line.filename().endsWith(".java")) {
-            line.state().message(line, "File must end with '%s'", endMarker);
+          final String comment = getCommentStyleForFile(f);
+          if (comment != null) {
+            final String endMarker =
+                comment + " End " + (slash < 0 ? f : f.substring(slash + 1));
+            if (!line.line().equals(endMarker)) {
+              line.state().message(line, "File must end with '%s'", endMarker);
+            }
           }
         });
     b.add(line -> line.fnr() == 1, line -> line.globalState().fileCount++);
@@ -390,6 +392,29 @@ public class LintTest {
         .fileOpt()
         .filter(f -> f.getName().equals(anObject))
         .isPresent();
+  }
+
+  /**
+   * Returns the comment style for a file based on its extension, or null if the
+   * file type doesn't require an end marker.
+   */
+  private static String getCommentStyleForFile(String filename) {
+    // Find the file extension
+    final int dot = filename.lastIndexOf('.');
+    if (dot < 0) {
+      return null;
+    }
+    final String extension = filename.substring(dot);
+
+    switch (extension) {
+      case ".java":
+        return "//";
+      case ".smli":
+      case ".sig":
+        return "(*)";
+      default:
+        return null;
+    }
   }
 
   /** Returns whether we are in a file that contains Java code. */

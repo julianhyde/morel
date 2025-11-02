@@ -29,3 +29,5 @@ sig
 *)
   val fromString : string -> bool option
 end
+
+(*) End bool.sig

@@ -1073,7 +1073,7 @@ public class Resolver {
 
     Init() {
       Object[] values = {
-        BuiltIn.LIST_OP_AT, Op.AT,
+        BuiltIn.LIST_AT, Op.AT,
         BuiltIn.OP_CONS, Op.CONS,
         BuiltIn.OP_EQ, Op.EQ,
         BuiltIn.OP_GE, Op.GE,

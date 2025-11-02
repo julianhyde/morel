@@ -22,7 +22,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 import static java.lang.String.join;
 import static java.util.Objects.requireNonNull;
-import static java.util.stream.Collectors.joining;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
@@ -92,7 +91,6 @@ import net.hydromatic.morel.util.MartelliUnifier;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
-import net.hydromatic.morel.util.Static;
 import net.hydromatic.morel.util.Tracers;
 import net.hydromatic.morel.util.TriConsumer;
 import net.hydromatic.morel.util.Unifier;
@@ -1609,8 +1607,7 @@ public class TypeResolver {
 
   /** Inverse of {@link #fieldList(Sequence)}. */
   static String recordLabel(NavigableSet<String> labels) {
-    return RECORD_TY_CON + ":" + joinQuoted(labels,
-        ':', '`');
+    return RECORD_TY_CON + ":" + joinQuoted(labels, ':', '`');
   }
 
   private Ast.Match deduceMatchType(

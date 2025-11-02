@@ -731,8 +731,8 @@ public class UtilTest {
   }
 
   /**
-   * Tests {@link Static#splitQuoted(String, char, char)} and {@link Static#join(List,
-   * char, char)}.
+   * Tests {@link Static#splitQuoted(String, char, char)} and {@link
+   * Static#join(List, char, char)}.
    */
   @Test
   void testSplitJoin() {

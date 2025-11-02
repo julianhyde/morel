@@ -457,7 +457,8 @@ public class Static {
    * <p>For example, {@code join(Arrays.asList("a", "b,c", "d"), ',', '\'')}
    * returns {@code "a,'b,c',d"}.
    */
-  public static String joinQuoted(Iterable<String> strings, char sep, char quote) {
+  public static String joinQuoted(
+      Iterable<String> strings, char sep, char quote) {
     final StringBuilder result = new StringBuilder();
     boolean first = true;
 

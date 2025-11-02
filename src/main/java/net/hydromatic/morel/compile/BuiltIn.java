@@ -1707,6 +1707,13 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), BOOL))),
 
   /**
+   * Constant "List.nil", of type "&alpha; list".
+   *
+   * <p>"nil" is the empty list.
+   */
+  LIST_NIL("List", "nil", ts -> ts.forallType(1, h -> h.list(0))),
+
+  /**
    * Operator "List.op @", of type "&alpha; list * &alpha; list &rarr; &alpha;
    * list".
    *
@@ -2359,8 +2366,7 @@ public enum BuiltIn {
       "app",
       ts ->
           ts.forallType(
-              1,
-              h -> ts.fnType(ts.fnType(h.option(0), UNIT), h.option(0), UNIT))),
+              1, h -> ts.fnType(ts.fnType(h.get(0), UNIT), h.option(0), UNIT))),
 
   /**
    * Function "Option.compose", of type "(&alpha; &rarr; &beta;) * (&gamma;

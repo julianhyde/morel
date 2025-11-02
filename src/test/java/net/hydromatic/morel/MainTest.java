@@ -47,20 +47,16 @@ import static org.hamcrest.Matchers.hasToString;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.io.Files;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Ast;
-import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Codes;
@@ -309,31 +305,10 @@ public class MainTest {
             (dir, name) -> name.endsWith(".sig") || name.endsWith(".sml"));
     assertThat("no files to test in lib directory", files, notNullValue());
 
+    final SignatureChecker checker = new SignatureChecker();
     for (File file : files) {
-      checkSignatureFile(file);
+      checker.checkSignatureFile(file);
     }
-  }
-
-  /** Parses a .sig file and verifies that it is a signature declaration. */
-  private static void checkSignatureFile(File file) throws IOException {
-    final String content =
-        Files.asCharSource(file, StandardCharsets.UTF_8).read();
-    ml(content)
-        .withParser(
-            parser -> {
-              try {
-                final AstNode node = parser.statementSemicolonOrEof();
-                assertThat(node, notNullValue());
-                assertThat(
-                    "File: " + file.getName(),
-                    node,
-                    instanceOf(Ast.SignatureDecl.class));
-                SignatureChecker.checkSignature((Ast.SignatureDecl) node);
-              } catch (Exception e) {
-                throw new RuntimeException(
-                    "Failed to parse " + file.getName(), e);
-              }
-            });
   }
 
   @Test

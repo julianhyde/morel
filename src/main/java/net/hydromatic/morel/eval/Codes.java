@@ -4058,9 +4058,10 @@ public abstract class Codes {
           .put(BuiltIn.LIST_MAP, LIST_MAP)
           .put(BuiltIn.LIST_MAP_PARTIAL, LIST_MAP_PARTIAL)
           .put(BuiltIn.LIST_MAPI, LIST_MAPI)
+          .put(BuiltIn.LIST_NIL, ImmutableList.of())
           .put(BuiltIn.LIST_NTH, LIST_NTH)
           .put(BuiltIn.LIST_NULL, LIST_NULL)
-          .put(BuiltIn.LIST_OP_AT, LIST_AT) // op @ == List.at
+          .put(BuiltIn.LIST_OP_AT, LIST_AT)
           .put(BuiltIn.LIST_PAIR_ALL, LIST_PAIR_ALL)
           .put(BuiltIn.LIST_PAIR_ALL_EQ, LIST_PAIR_ALL_EQ)
           .put(BuiltIn.LIST_PAIR_APP, LIST_PAIR_APP)
@@ -4420,7 +4421,11 @@ public abstract class Codes {
 
     @Override
     public StringBuilder describeTo(StringBuilder buf) {
-      return buf.append("uncaught exception ").append(e.mlName);
+      buf.append("uncaught exception ").append(e.mlName);
+      if (e.description != null) {
+        buf.append(" [").append(e.description).append("]");
+      }
+      return buf;
     }
 
     @Override
@@ -4431,25 +4436,30 @@ public abstract class Codes {
 
   /** Definitions of Morel built-in exceptions. */
   public enum BuiltInExn {
-    EMPTY("List", "Empty"),
-    BIND("General", "Bind"),
-    CHR("General", "Chr"),
-    DIV("General", "Div"),
-    DOMAIN("General", "Domain"),
-    OPTION("Option", "Option"),
-    OVERFLOW("General", "Overflow"),
-    ERROR("Interact", "Error"), // not in standard basis
-    SIZE("General", "Size"),
-    SUBSCRIPT("General", "Subscript [subscript out of bounds]"),
-    UNEQUAL_LENGTHS("ListPair", "UnequalLengths"),
-    UNORDERED("IEEEReal", "Unordered");
+    EMPTY("List", "Empty", null),
+    BIND("General", "Bind", null),
+    CHR("General", "Chr", null),
+    DIV("General", "Div", null),
+    DOMAIN("General", "Domain", null),
+    FAIL("General", "Fail", null),
+    MATCH("General", "Match", null),
+    OPTION("Option", "Option", null),
+    OVERFLOW("General", "Overflow", null),
+    ERROR("Interact", "Error", null), // not in standard basis
+    SIZE("General", "Size", null),
+    SPAN("General", "Span", null),
+    SUBSCRIPT("General", "Subscript", "subscript out of bounds"),
+    UNEQUAL_LENGTHS("ListPair", "UnequalLengths", null),
+    UNORDERED("IEEEReal", "Unordered", null);
 
     public final String structure;
     public final String mlName;
+    public final @Nullable String description;
 
-    BuiltInExn(String structure, String mlName) {
+    BuiltInExn(String structure, String mlName, @Nullable String description) {
       this.structure = structure;
       this.mlName = mlName;
+      this.description = description;
     }
   }
 

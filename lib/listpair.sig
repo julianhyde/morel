@@ -133,3 +133,5 @@ sig
        all p (xs, ys) andalso length xs = length ys.
 *)
 end
+
+(*) End listpair.sig

@@ -122,7 +122,7 @@ Option;
 > val it =
 >   {app=fn,compose=fn,composePartial=fn,filter=fn,getOpt=fn,isSome=fn,join=fn,
 >    map=fn,mapPartial=fn,valOf=fn}
->   : {app:('a option -> unit) -> 'a option -> unit,
+>   : {app:('a -> unit) -> 'a option -> unit,
 >      compose:('b -> 'c) * ('d -> 'b option) -> 'd -> 'c option,
 >      composePartial:('e -> 'f option) * ('g -> 'e option) -> 'g -> 'f option,
 >      filter:('h -> bool) -> 'h -> 'h option, getOpt:'i option * 'i -> 'i,
@@ -779,12 +779,12 @@ Either.partition [yes, ten];
 (* Fn ---------------------------------------------------------- *)
 Fn;
 > val it =
->   {apply=fn,const=fn,curry=fn,equal=fn,flip=fn,id=fn,notEqual=fn,`op o`=fn,
+>   {apply=fn,const=fn,curry=fn,equal=fn,flip=fn,id=fn,notEqual=fn,o=fn,
 >    repeat=fn,uncurry=fn}
 >   : {apply:('a -> 'b) * 'a -> 'b, const:'c -> 'd -> 'c,
 >      curry:('e * 'f -> 'g) -> 'e -> 'f -> 'g, equal:'h -> 'h -> bool,
 >      flip:('i * 'j -> 'k) -> 'j * 'i -> 'k, id:'l -> 'l,
->      notEqual:'m -> 'm -> bool, `op o`:('n -> 'o) * ('p -> 'n) -> 'p -> 'o,
+>      notEqual:'m -> 'm -> bool, o:('n -> 'o) * ('p -> 'n) -> 'p -> 'o,
 >      repeat:int -> ('q -> 'q) -> 'q -> 'q,
 >      uncurry:('r -> 's -> 't) -> 'r * 's -> 't}
 
@@ -863,39 +863,44 @@ Fn.notEqual 3 3;
 
 (* General ----------------------------------------------------- *)
 General;
-> val it = {ignore=fn,`op o`=fn}
->   : {ignore:'a -> unit, `op o`:('b -> 'c) * ('d -> 'b) -> 'd -> 'c}
+> val it = {before=fn,exnMessage=fn,exnName=fn,ignore=fn,o=fn}
+>   : {before:'a * unit -> 'a, exnMessage:exn -> string, exnName:exn -> string,
+>      ignore:'b -> unit, o:('c -> 'd) * ('e -> 'c) -> 'e -> 'd}
 
 (*) val exnMessage : exn -> string
 General.exnMessage;
 > val it = fn : exn -> string
+(* TODO
 General.exnMessage Bind;
 > val it = "nonexhaustive binding failure" : string
 General.exnMessage Divide;
 > val it = "division by zero" : string
 General.exnMessage Overflow;
 > val it = "integer overflow" : string
+*)
 
 (*) val exnName : exn -> string
 General.exnName;
 > val it = fn : exn -> string
+(* TODO
 General.exnName Bind;
 > val it = "Bind" : string
 General.exnName Divide;
 > val it = "Divide" : string
 General.exnName Overflow;
 > val it = "Overflow" : string
+*)
 
 (*) op o - function composition
-General.o;
+General.`o`;
 > val it = fn : ('a -> 'b) * ('c -> 'a) -> 'c -> 'b
 String.size;
 > val it = fn : string -> int
 Char.chr;
 > val it = fn : int -> char
-General.o (Char.chr, String.size);
-> val it = fn : int -> int
-General.o (Char.chr, String.size) "012345678901234567890123456789012";
+General.`o` (Char.chr, String.size);
+> val it = fn : string -> char
+General.`o` (Char.chr, String.size) "012345678901234567890123456789012";
 > val it = #"!" : char
 (op o) (Char.chr, String.size) "012345678901234567890123456789012";
 > val it = #"!" : char
@@ -918,7 +923,7 @@ plusOne o timesTwo o plusThree;
 > val it = 13 : int
 Sys.plan ();
 > val it =
->   "apply(fnCode apply2(fnValue o, get(name plusOne), apply2(fnValue o, get(name timesTwo), get(name plusThree))), argCode constant(3))"
+>   "apply(fnCode apply2(fnValue General.o, get(name plusOne), apply2(fnValue General.o, get(name timesTwo), get(name plusThree))), argCode constant(3))"
 >   : string
 
 General.ignore;
@@ -4333,10 +4338,10 @@ Sys.env ();
 >    ("Either",
 >     "{app:forall 'a 'b 'c. ('a -> unit) * ('b -> unit) -> ('a,'b) either -> unit, appLeft:forall 'a 'b. ('a -> unit) -> ('a,'b) either -> unit, appRight:forall 'a 'b. ('b -> unit) -> ('a,'b) either -> unit, asLeft:forall 'a 'b. ('a,'b) either -> 'a option, asRight:forall 'a 'b. ('a,'b) either -> 'b option, fold:forall 'a 'b 'c. ('a * 'b -> 'b) * ('c * 'b -> 'b) -> 'b -> ('a,'c) either -> 'b, isLeft:forall 'a 'b. ('a,'b) either -> bool, isRight:forall 'a 'b. ('a,'b) either -> bool, map:forall 'a 'b 'c 'd. ('a -> 'c) * ('b -> 'd) -> ('a,'b) either -> ('c,'d) either, mapLeft:forall 'a 'b 'c. ('a -> 'b) -> ('a,'c) either -> ('b,'c) either, mapRight:forall 'a 'b 'c. ('b -> 'c) -> ('a,'b) either -> ('a,'c) either, partition:forall 'a 'b. ('a,'b) either list -> 'a list * 'b list, proj:forall 'a. ('a,'a) either -> 'a}"),
 >    ("Fn",
->     "{apply:forall 'a 'b. ('a -> 'b) * 'a -> 'b, const:forall 'a 'b. 'a -> 'b -> 'a, curry:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'a -> 'b -> 'c, equal:forall 'a 'b. 'a -> 'a -> bool, flip:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'b * 'a -> 'c, id:forall 'a. 'a -> 'a, notEqual:forall 'a 'b. 'a -> 'a -> bool, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c, repeat:forall 'a. int -> ('a -> 'a) -> 'a -> 'a, uncurry:forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a * 'b -> 'c}"),
+>     "{apply:forall 'a 'b. ('a -> 'b) * 'a -> 'b, const:forall 'a 'b. 'a -> 'b -> 'a, curry:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'a -> 'b -> 'c, equal:forall 'a 'b. 'a -> 'a -> bool, flip:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'b * 'a -> 'c, id:forall 'a. 'a -> 'a, notEqual:forall 'a 'b. 'a -> 'a -> bool, o:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c, repeat:forall 'a. int -> ('a -> 'a) -> 'a -> 'a, uncurry:forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a * 'b -> 'c}"),
 >    ("GREATER","order"),
 >    ("General",
->     "{ignore:forall 'a. 'a -> unit, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
+>     "{before:forall 'a. 'a * unit -> 'a, exnMessage:exn -> string, exnName:exn -> string, ignore:forall 'a. 'a -> unit, o:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
 >    ("INL","forall 'a 'b. 'a -> ('a,'b) either"),
 >    ("INR","forall 'a 'b. 'b -> ('a,'b) either"),
 >    ("Int",
@@ -4351,7 +4356,7 @@ Sys.env ();
 >     "{acos:real -> real, asin:real -> real, atan:real -> real, atan2:real * real -> real, cos:real -> real, cosh:real -> real, e:real, exp:real -> real, ln:real -> real, log10:real -> real, pi:real, pow:real * real -> real, sin:real -> real, sinh:real -> real, sqrt:real -> real, tan:real -> real, tanh:real -> real}"),
 >    ("NONE","'a option"),
 >    ("Option",
->     "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, join:forall 'a. 'a option option -> 'a option, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
+>     "{app:forall 'a. ('a -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, join:forall 'a. 'a option option -> 'a option, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
 >    ("Real",
 >     "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, `op /`:real * real -> real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",
@@ -4430,10 +4435,10 @@ env ();
 >    ("Either",
 >     "{app:forall 'a 'b 'c. ('a -> unit) * ('b -> unit) -> ('a,'b) either -> unit, appLeft:forall 'a 'b. ('a -> unit) -> ('a,'b) either -> unit, appRight:forall 'a 'b. ('b -> unit) -> ('a,'b) either -> unit, asLeft:forall 'a 'b. ('a,'b) either -> 'a option, asRight:forall 'a 'b. ('a,'b) either -> 'b option, fold:forall 'a 'b 'c. ('a * 'b -> 'b) * ('c * 'b -> 'b) -> 'b -> ('a,'c) either -> 'b, isLeft:forall 'a 'b. ('a,'b) either -> bool, isRight:forall 'a 'b. ('a,'b) either -> bool, map:forall 'a 'b 'c 'd. ('a -> 'c) * ('b -> 'd) -> ('a,'b) either -> ('c,'d) either, mapLeft:forall 'a 'b 'c. ('a -> 'b) -> ('a,'c) either -> ('b,'c) either, mapRight:forall 'a 'b 'c. ('b -> 'c) -> ('a,'b) either -> ('a,'c) either, partition:forall 'a 'b. ('a,'b) either list -> 'a list * 'b list, proj:forall 'a. ('a,'a) either -> 'a}"),
 >    ("Fn",
->     "{apply:forall 'a 'b. ('a -> 'b) * 'a -> 'b, const:forall 'a 'b. 'a -> 'b -> 'a, curry:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'a -> 'b -> 'c, equal:forall 'a 'b. 'a -> 'a -> bool, flip:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'b * 'a -> 'c, id:forall 'a. 'a -> 'a, notEqual:forall 'a 'b. 'a -> 'a -> bool, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c, repeat:forall 'a. int -> ('a -> 'a) -> 'a -> 'a, uncurry:forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a * 'b -> 'c}"),
+>     "{apply:forall 'a 'b. ('a -> 'b) * 'a -> 'b, const:forall 'a 'b. 'a -> 'b -> 'a, curry:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'a -> 'b -> 'c, equal:forall 'a 'b. 'a -> 'a -> bool, flip:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'b * 'a -> 'c, id:forall 'a. 'a -> 'a, notEqual:forall 'a 'b. 'a -> 'a -> bool, o:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c, repeat:forall 'a. int -> ('a -> 'a) -> 'a -> 'a, uncurry:forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a * 'b -> 'c}"),
 >    ("GREATER","order"),
 >    ("General",
->     "{ignore:forall 'a. 'a -> unit, `op o`:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
+>     "{before:forall 'a. 'a * unit -> 'a, exnMessage:exn -> string, exnName:exn -> string, ignore:forall 'a. 'a -> unit, o:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
 >    ("INL","forall 'a 'b. 'a -> ('a,'b) either"),
 >    ("INR","forall 'a 'b. 'b -> ('a,'b) either"),
 >    ("Int",
@@ -4448,7 +4453,7 @@ env ();
 >     "{acos:real -> real, asin:real -> real, atan:real -> real, atan2:real * real -> real, cos:real -> real, cosh:real -> real, e:real, exp:real -> real, ln:real -> real, log10:real -> real, pi:real, pow:real * real -> real, sin:real -> real, sinh:real -> real, sqrt:real -> real, tan:real -> real, tanh:real -> real}"),
 >    ("NONE","'a option"),
 >    ("Option",
->     "{app:forall 'a. ('a option -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, join:forall 'a. 'a option option -> 'a option, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
+>     "{app:forall 'a. ('a -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, join:forall 'a. 'a option option -> 'a option, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
 >    ("Real",
 >     "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, `op /`:real * real -> real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",

@@ -21,19 +21,46 @@
  *)
 signature FN =
 sig
+  (* Returns the value unchanged; the polymorphic identity function. *)
   val id       : 'a -> 'a
+
+  (* Returns the first argument, ignoring the second;
+   * useful for creating constant functions. *)
   val const    : 'a -> 'b -> 'a
+
+  (* Applies a function to an argument;
+   * equivalent to direct function application. *)
   val apply    : ('a -> 'b) * 'a -> 'b
+
+  (* Composes two functions; (f o g) x evaluates to f (g x). *)
   val o        : ('b -> 'c) * ('a -> 'b) -> ('a -> 'c)
+
+  (* Transforms a binary function into curried form,
+   * taking arguments separately. *)
   val curry    : ('a * 'b -> 'c) -> ('a -> 'b -> 'c)
+
+  (* Transforms a curried function into binary form,
+   * taking a tuple argument. *)
   val uncurry  : ('a -> 'b -> 'c) -> ('a * 'b -> 'c)
+
+  (* Reverses argument order for a binary function;
+   * flip f (x, y) becomes f (y, x). *)
   val flip     : ('a * 'b -> 'c) -> ('b * 'a -> 'c)
+
+  (* Returns the n-fold composition of a function;
+   * raises Domain exception if n is negative. *)
   val repeat   : int -> ('a -> 'a) -> ('a -> 'a)
+
 (* TODO support eqtype in signatures
   val equal    : ''a -> ''a -> bool
   val notEqual : ''a -> ''a -> bool
 *)
+  (* Curried version of the polymorphic equality operator
+   * for functional composition. *)
   val equal    : 'a -> 'a -> bool
+
+  (* Curried version of the polymorphic inequality operator
+   * for functional composition. *)
   val notEqual : 'a -> 'a -> bool
 end
 

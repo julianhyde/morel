@@ -20,29 +20,63 @@
  *)
 signature GENERAL =
 sig
+  (* The unit type; contains a single value (). *)
   eqtype unit
+
+  (* The type of exceptions. *)
   type exn = exn
-    
+
+  (* Raised when pattern matching fails in val bindings. *)
   exception Bind
+
+  (* Raised when pattern matching fails in case expressions and function
+   * applications. *)
   exception Match
+
+  (* Raised when character operations are given invalid arguments. *)
   exception Chr
+
+  (* Raised on integer division by zero. *)
   exception Div
+
+  (* Raised when a function is applied outside its domain. *)
   exception Domain
+
+  (* General-purpose exception with a message string. *)
   exception Fail of string
+
+  (* Raised on integer overflow. *)
   exception Overflow
+
+  (* Raised when a size is too large or negative. *)
   exception Size
+
+  (* Raised when a span is invalid. *)
   exception Span
+
+  (* Raised when an index is out of bounds. *)
   exception Subscript
 
+  (* Returns the name of an exception. *)
   val exnName : exn -> string
+
+  (* Returns the message associated with an exception. *)
   val exnMessage : exn -> string
 
+  (* The type for ordering values. *)
   datatype `order` = LESS | EQUAL | GREATER
 (*
   val ! : 'a ref -> 'a
   val := : 'a ref * 'a -> unit
 *)
+  (* Function composition; (f o g) x equals f(g(x)). *)
   val o : ('b -> 'c) * ('a -> 'b) -> 'a -> 'c
+
+  (* Evaluates both arguments and returns the first, ignoring the second. *)
   val before : 'a * unit -> 'a
+
+  (* Evaluates its argument and returns (). *)
   val ignore : 'a -> unit
 end
+
+(*) End general.sig
