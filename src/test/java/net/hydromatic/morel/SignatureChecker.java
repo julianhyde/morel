@@ -146,6 +146,10 @@ class SignatureChecker {
         // Verify exception declarations
         final Ast.ExceptionSpec exnSpec = (Ast.ExceptionSpec) spec;
         verifyException(structure, exnSpec);
+      } else if (spec.op == Op.SPEC_DATATYPE) {
+        // Verify datatype constructors
+        final Ast.DatatypeSpec datatypeSpec = (Ast.DatatypeSpec) spec;
+        verifyDatatypeConstructors(structure, datatypeSpec);
       }
     }
 
@@ -176,6 +180,56 @@ class SignatureChecker {
             exnName, structure),
         found,
         is(true));
+  }
+
+  /**
+   * Verifies that datatype constructors match entries in BuiltIn.Constructor.
+   */
+  private void verifyDatatypeConstructors(
+      String structure, Ast.DatatypeSpec datatypeSpec) {
+    String datatypeName = datatypeSpec.name.name;
+    // Map structure+datatype name to Datatype enum
+    String datatypeKey = structure + "." + datatypeName;
+
+    for (Ast.TyCon tyCon : datatypeSpec.tyCons) {
+      String constructorName = tyCon.id.name;
+      // Normalize constructor name for lookup
+      String normalizedName = normalizeConstructorName(constructorName);
+
+      // Find matching constructor in BuiltIn.Constructor
+      BuiltIn.Constructor foundConstructor = null;
+      for (BuiltIn.Constructor constructor : BuiltIn.Constructor.values()) {
+        if (constructor.constructor.equals(normalizedName)) {
+          foundConstructor = constructor;
+          break;
+        }
+      }
+
+      assertThat(
+          format(
+              "Constructor %s of datatype %s in signature %s should exist in BuiltIn.Constructor",
+              constructorName, datatypeName, structure),
+          foundConstructor,
+          notNullValue());
+    }
+  }
+
+  /**
+   * Normalizes a constructor name for lookup in BuiltIn.Constructor. Most
+   * constructors are converted to uppercase, but special operators like "::"
+   * are mapped to their internal names like "CONS".
+   */
+  private static String normalizeConstructorName(String name) {
+    // Special case for list cons operator
+    if ("::".equals(name)) {
+      return "CONS";
+    }
+    // Special case for nil
+    if ("nil".equals(name)) {
+      return "NIL";
+    }
+    // Default: uppercase
+    return name.toUpperCase(Locale.ROOT);
   }
 
   /** Returns true if the name is an operator symbol (not alphanumeric). */
