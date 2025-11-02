@@ -18,10 +18,12 @@
  */
 package net.hydromatic.morel;
 
+import static com.google.common.base.Strings.repeat;
 import static java.lang.String.format;
 import static net.hydromatic.morel.util.Static.last;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -36,6 +38,7 @@ import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
@@ -531,30 +534,70 @@ public class LintTest {
     assertThat("Lint violations:\n" + b, g.messages, empty());
   }
 
-  /** Tests the new Sort specification syntax. */
+  /** Tests the Sort specification syntax. */
   @Test
-  void testSortSpec() {
-    final String code =
+  void testSort() {
+    checkSortSpec(
         "class Test {\n"
-            + "  // lint: sort until '#}' where '##A::' erase '^ *'\n"
+            + "  switch (x) {\n"
+            + "  // lint: sort until '#}' where '##case '\n"
+            + "  case c\n"
+            + "  case a\n"
+            + "  case b\n"
+            + "  }\n"
+            + "}\n",
+        "GuavaCharSource{memory}:5:"
+            + "Lines must be sorted; '  case a' should be before '  case c'");
+
+    checkSortSpec(
+        "class Test {\n"
+            + "  switch (x) {\n"
+            + "  // lint: sort until '#}' where '##case '\n"
+            + "  case x\n"
+            + "  case y\n"
+            + "  case z\n"
+            + "  }\n"
+            + "  switch (y) {\n"
+            + "  case a\n"
+            + "  }\n"
+            + "}\n",
+        "GuavaCharSource{memory}:9:"
+            + "Lines must be sorted; '  case a' should be before '  case z'");
+
+    // Change '##}' to '#}' to make the test pass
+    checkSortSpec(
+        "class Test {\n"
+            + "  switch (x) {\n"
+            + "  // lint: sort until '##}' where '##case '\n"
+            + "  case x\n"
+            + "  case y\n"
+            + "  case z\n"
+            + "  }\n"
+            + "  switch (y) {\n"
+            + "  case a\n"
+            + "  }\n"
+            + "}\n");
+
+    checkSortSpec(
+        "class Test {\n"
+            + "  // lint: sort until '#}' where '##A::' erase '^ .*::'\n"
             + "  A::c\n"
             + "  A::a\n"
             + "  A::b\n"
             + "  }\n"
-            + "}\n";
-    final String expectedMessages =
-        "["
-            + "GuavaCharSource{memory}:4:"
-            + "Lines must be sorted; 'A::c' should be after 'A::a'\n";
+            + "}\n",
+        "GuavaCharSource{memory}:4:"
+            + "Lines must be sorted; 'a' should be before 'c'");
+  }
+
+  private void checkSortSpec(String code, String... expectedMessages) {
     final Puffin.Program<GlobalState> program = makeProgram();
     final StringWriter sw = new StringWriter();
     final GlobalState g;
     try (PrintWriter pw = new PrintWriter(sw)) {
       g = program.execute(Stream.of(Sources.of(code)), pw);
     }
-    assertThat(
-        g.messages.toString().replace(", ", "\n").replace(']', '\n'),
-        is(expectedMessages));
+    assertThat(g.messages, hasToString(Arrays.toString(expectedMessages)));
   }
 
   /** Parses the "reference.md" file. */
@@ -739,8 +782,9 @@ public class LintTest {
 
       String pattern = rest.substring(1, endQuote);
       // Replace indentation placeholders
-      pattern = pattern.replace("##", "^" + " ".repeat(indent));
-      pattern = pattern.replace("#", "^" + " ".repeat(Math.max(0, indent - 2)));
+      pattern = pattern.replace("##", "^" + repeat(" ", indent));
+      pattern =
+          pattern.replace("#", "^" + repeat(" ", Math.max(0, indent - 2)));
 
       try {
         return Pattern.compile(pattern);
@@ -761,8 +805,8 @@ public class LintTest {
       if (!lines.isEmpty()) {
         String prevLine = last(lines);
         if (comparator.compare(prevLine, thisLine) > 0) {
-          String format = "Lines must be sorted; '%s' should be after '%s'";
-          line.state().message(line, format, prevLine, thisLine);
+          String format = "Lines must be sorted; '%s' should be before '%s'";
+          line.state().message(line, format, thisLine, prevLine);
         }
       }
       lines.add(thisLine);
