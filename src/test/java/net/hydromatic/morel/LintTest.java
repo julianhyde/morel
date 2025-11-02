@@ -160,7 +160,20 @@ public class LintTest {
         line -> line.state().sortConsumer != null,
         line -> line.state().sortConsumer.accept(line));
 
-    // Start sorting
+    // Start sorting with specification (new style: lint: sort until 'X')
+    b.add(
+        line ->
+            line.contains("// lint: sort")
+                && !line.contains("lint:startSorted")
+                && line.state().sortConsumer == null,
+        line -> {
+          Sort sort = Sort.parse(line.line());
+          if (sort != null) {
+            line.state().sortConsumer = new SpecSortConsumer(sort);
+          }
+        });
+
+    // Start sorting (old style: lint:startSorted)
     b.add(
         line -> line.contains("// " + "lint:startSorted"),
         line ->
@@ -177,7 +190,7 @@ public class LintTest {
                                     ? new RegexConsumer("^ *<[a-z].*")
                                     : new CodesConsumer());
 
-    // End sorting
+    // End sorting (old style: lint:endSorted)
     b.add(
         line -> line.contains("// " + "lint:endSorted"),
         line -> line.state().sortConsumer = null);
@@ -518,6 +531,32 @@ public class LintTest {
     assertThat("Lint violations:\n" + b, g.messages, empty());
   }
 
+  /** Tests the new Sort specification syntax. */
+  @Test
+  void testSortSpec() {
+    final String code =
+        "class Test {\n"
+            + "  // lint: sort until '#}' where '##A::' erase '^ *'\n"
+            + "  A::c\n"
+            + "  A::a\n"
+            + "  A::b\n"
+            + "  }\n"
+            + "}\n";
+    final String expectedMessages =
+        "["
+            + "GuavaCharSource{memory}:4:"
+            + "Lines must be sorted; 'A::c' should be after 'A::a'\n";
+    final Puffin.Program<GlobalState> program = makeProgram();
+    final StringWriter sw = new StringWriter();
+    final GlobalState g;
+    try (PrintWriter pw = new PrintWriter(sw)) {
+      g = program.execute(Stream.of(Sources.of(code)), pw);
+    }
+    assertThat(
+        g.messages.toString().replace(", ", "\n").replace(']', '\n'),
+        is(expectedMessages));
+  }
+
   /** Parses the "reference.md" file. */
   @Test
   void testFunctionTable() throws IOException {
@@ -612,6 +651,105 @@ public class LintTest {
     }
   }
 
+  /**
+   * Specification for a sort directive, parsed from comments like {@code //
+   * lint: sort until 'pattern' where 'filter' erase 'prefix'}.
+   *
+   * <p>Supports indentation placeholders:
+   *
+   * <ul>
+   *   <li>{@code ##} - current line's indentation
+   *   <li>{@code #} - one level up (2 fewer spaces)
+   * </ul>
+   */
+  private static class Sort {
+    final Pattern until;
+    final @Nullable Pattern where;
+    final @Nullable Pattern erase;
+    final int indent;
+
+    Sort(
+        Pattern until,
+        @Nullable Pattern where,
+        @Nullable Pattern erase,
+        int indent) {
+      this.until = until;
+      this.where = where;
+      this.erase = erase;
+      this.indent = indent;
+    }
+
+    /**
+     * Parses a sort directive from a line like {@code // lint: sort until 'X'
+     * where 'Y' erase 'Z'}.
+     *
+     * @param line the line containing the directive
+     * @return parsed Sort specification, or null if parsing fails
+     */
+    static @Nullable Sort parse(String line) {
+      // Extract everything after "lint: sort"
+      int sortIndex = line.indexOf("lint: sort");
+      if (sortIndex < 0) {
+        return null;
+      }
+
+      String spec = line.substring(sortIndex + "lint: sort".length()).trim();
+
+      // Count leading spaces for indentation
+      int indent = 0;
+      while (indent < line.length() && line.charAt(indent) == ' ') {
+        indent++;
+      }
+
+      // Parse until clause (required)
+      Pattern until = extractPattern(spec, "until", indent);
+      if (until == null) {
+        return null;
+      }
+
+      // Parse optional where clause
+      Pattern where = extractPattern(spec, "where", indent);
+
+      // Parse optional erase clause
+      Pattern erase = extractPattern(spec, "erase", indent);
+
+      return new Sort(until, where, erase, indent);
+    }
+
+    /**
+     * Extracts a pattern from a clause like {@code until 'pattern'} or {@code
+     * where 'pattern'}.
+     */
+    private static @Nullable Pattern extractPattern(
+        String spec, String keyword, int indent) {
+      int keywordIndex = spec.indexOf(keyword);
+      if (keywordIndex < 0) {
+        return null;
+      }
+
+      String rest = spec.substring(keywordIndex + keyword.length()).trim();
+      if (rest.isEmpty() || rest.charAt(0) != '\'') {
+        return null;
+      }
+
+      int endQuote = rest.indexOf('\'', 1);
+      if (endQuote < 0) {
+        return null;
+      }
+
+      String pattern = rest.substring(1, endQuote);
+      // Replace indentation placeholders
+      pattern = pattern.replace("##", "^" + " ".repeat(indent));
+      pattern = pattern.replace("#", "^" + " ".repeat(Math.max(0, indent - 2)));
+
+      try {
+        return Pattern.compile(pattern);
+      } catch (Exception e) {
+        return null;
+      }
+    }
+  }
+
   /** Consumer that checks that are sorted. */
   private abstract static class SortConsumer
       implements Consumer<Puffin.Line<GlobalState, FileState>> {
@@ -674,6 +812,54 @@ public class LintTest {
       if (pattern.matcher(thisLine).matches()) {
         addLine(line, thisLine);
       }
+    }
+  }
+
+  /**
+   * Consumer that checks lines are sorted according to a Sort specification.
+   * Uses until pattern to end sorting, where pattern to filter lines, and erase
+   * pattern to normalize before comparison.
+   */
+  private static class SpecSortConsumer extends SortConsumer {
+    private final Sort sort;
+    private boolean done = false;
+
+    SpecSortConsumer(Sort sort) {
+      this.sort = sort;
+    }
+
+    @Override
+    public void accept(Puffin.Line<GlobalState, FileState> line) {
+      if (done) {
+        return;
+      }
+
+      String thisLine = line.line();
+
+      // Check if we've reached the end marker
+      if (sort.until.matcher(thisLine).find()) {
+        done = true;
+        // Clear the consumer from state to stop processing
+        line.state().sortConsumer = null;
+        return;
+      }
+
+      // If where clause exists, only process matching lines
+      if (sort.where != null && !sort.where.matcher(thisLine).find()) {
+        return;
+      }
+
+      // Apply erase pattern if present
+      String compareLine = thisLine;
+      if (sort.erase != null) {
+        compareLine = sort.erase.matcher(thisLine).replaceAll("");
+      }
+
+      addLine(line, compareLine);
+    }
+
+    boolean isDone() {
+      return done;
     }
   }
 }
