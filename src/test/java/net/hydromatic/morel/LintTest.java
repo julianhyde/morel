@@ -20,6 +20,7 @@ package net.hydromatic.morel;
 
 import static com.google.common.base.Strings.repeat;
 import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.last;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
@@ -163,16 +164,50 @@ public class LintTest {
         line -> line.state().sortConsumer != null,
         line -> line.state().sortConsumer.accept(line));
 
-    // Start sorting with specification (new style: lint: sort until 'X')
+    // Start sorting if line has "lint: sort until ..."
     b.add(
         line ->
             line.contains("// lint: sort")
-                && !line.contains("lint:startSorted")
-                && line.state().sortConsumer == null,
+                && !filenameIs(line, "LintTest.java"),
         line -> {
-          Sort sort = Sort.parse(line.line());
-          if (sort != null) {
-            line.state().sortConsumer = new SpecSortConsumer(sort);
+          line.state().sortConsumer = null;
+          boolean continued = line.line().endsWith("\\");
+          if (continued) {
+            line.state().partialSort = "";
+          } else {
+            line.state().partialSort = null;
+            Sort sort = Sort.parse(line.line());
+            if (sort != null) {
+              line.state().sortConsumer = new SpecSortConsumer(sort);
+            }
+          }
+        });
+
+    // Start sorting if previous line had "lint: sort until ... \"
+    b.add(
+        line -> line.state().partialSort != null,
+        line -> {
+          String thisLine = line.line();
+          boolean continued = line.line().endsWith("\\");
+          if (continued) {
+            thisLine = skipLast(thisLine);
+          }
+          String nextLine;
+          requireNonNull(line.state().partialSort);
+          if (line.state().partialSort.isEmpty()) {
+            nextLine = thisLine;
+          } else {
+            thisLine = thisLine.replaceAll("^ *(// )?", "");
+            nextLine = line.state().partialSort + thisLine;
+          }
+          if (continued) {
+            line.state().partialSort = nextLine;
+          } else {
+            line.state().partialSort = null;
+            Sort sort = Sort.parse(nextLine);
+            if (sort != null) {
+              line.state().sortConsumer = new SpecSortConsumer(sort);
+            }
           }
         });
 
@@ -206,6 +241,10 @@ public class LintTest {
                 && !line.matches(".*[^ ][ ][:]$")
                 && isJava(line.filename()),
         line -> line.state().message(line, "':' must be surrounded by ' '"));
+  }
+
+  private static String skipLast(String s) {
+    return s.substring(0, s.length() - 1);
   }
 
   private static void addProgram1(Puffin.Builder<GlobalState, FileState> b) {
@@ -531,12 +570,16 @@ public class LintTest {
       g = program.execute(javaFiles.parallelStream().map(Sources::of), pw);
     }
 
+    for (Message message : g.messages) {
+      System.out.println(message);
+    }
     assertThat("Lint violations:\n" + b, g.messages, empty());
   }
 
   /** Tests the Sort specification syntax. */
   @Test
   void testSort() {
+    // With "until" and "where"
     checkSortSpec(
         "class Test {\n"
             + "  switch (x) {\n"
@@ -549,6 +592,7 @@ public class LintTest {
         "GuavaCharSource{memory}:5:"
             + "Lines must be sorted; '  case a' should be before '  case c'");
 
+    // With "until" and "where"; cases after "until" should be ignored.
     checkSortSpec(
         "class Test {\n"
             + "  switch (x) {\n"
@@ -564,7 +608,7 @@ public class LintTest {
         "GuavaCharSource{memory}:9:"
             + "Lines must be sorted; '  case a' should be before '  case z'");
 
-    // Change '##}' to '#}' to make the test pass
+    // Change '##}' to '#}' to make the test pass.
     checkSortSpec(
         "class Test {\n"
             + "  switch (x) {\n"
@@ -578,6 +622,7 @@ public class LintTest {
             + "  }\n"
             + "}\n");
 
+    // Specification has "until", "where" and "erase" clauses.
     checkSortSpec(
         "class Test {\n"
             + "  // lint: sort until '#}' where '##A::' erase '^ .*::'\n"
@@ -587,6 +632,20 @@ public class LintTest {
             + "  }\n"
             + "}\n",
         "GuavaCharSource{memory}:4:"
+            + "Lines must be sorted; 'a' should be before 'c'");
+
+    // Specification is spread over multiple lines.
+    checkSortSpec(
+        "class Test {\n"
+            + "  // lint: sort until '#}'\\\n"
+            + "  // where '##A::'\\\n"
+            + "  // erase '^ .*::'\n"
+            + "  A::c\n"
+            + "  A::a\n"
+            + "  A::b\n"
+            + "  }\n"
+            + "}\n",
+        "GuavaCharSource{memory}:6:"
             + "Lines must be sorted; 'a' should be before 'c'");
   }
 
@@ -668,6 +727,7 @@ public class LintTest {
   /** Internal state of the lint rules, per file. */
   private static class FileState {
     final GlobalState global;
+    @Nullable String partialSort;
     @Nullable Consumer<Puffin.Line<GlobalState, FileState>> sortConsumer;
     int versionCount;
     int starLine;
