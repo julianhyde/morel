@@ -162,7 +162,7 @@ public class LintTest {
     // Add line to sorting
     b.add(
         line -> line.state().sortConsumer != null,
-        line -> line.state().sortConsumer.accept(line));
+        line -> requireNonNull(line.state().sortConsumer).accept(line));
 
     // Start sorting if line has "lint: sort until ..."
     b.add(
@@ -178,7 +178,7 @@ public class LintTest {
             line.state().partialSort = null;
             Sort sort = Sort.parse(line.line());
             if (sort != null) {
-              line.state().sortConsumer = new SpecSortConsumer(sort);
+              line.state().sortConsumer = new SortConsumer(sort);
             }
           }
         });
@@ -193,8 +193,7 @@ public class LintTest {
             thisLine = skipLast(thisLine);
           }
           String nextLine;
-          requireNonNull(line.state().partialSort);
-          if (line.state().partialSort.isEmpty()) {
+          if (requireNonNull(line.state().partialSort).isEmpty()) {
             nextLine = thisLine;
           } else {
             thisLine = thisLine.replaceAll("^ *(// )?", "");
@@ -206,32 +205,10 @@ public class LintTest {
             line.state().partialSort = null;
             Sort sort = Sort.parse(nextLine);
             if (sort != null) {
-              line.state().sortConsumer = new SpecSortConsumer(sort);
+              line.state().sortConsumer = new SortConsumer(sort);
             }
           }
         });
-
-    // Start sorting (old style: lint:startSorted)
-    b.add(
-        line -> line.contains("// " + "lint:startSorted"),
-        line ->
-            line.state().sortConsumer =
-                line.contains(":enum")
-                    ? new RegexConsumer("^ *[A-Z_]*\\(")
-                    : line.contains(":fields")
-                        ? new FieldsConsumer()
-                        : line.contains(":groupId6")
-                            ? new RegexConsumer("^      <groupId>.*")
-                            : line.contains(":groupId8")
-                                ? new RegexConsumer("^        <groupId>.*")
-                                : line.contains(":properties")
-                                    ? new RegexConsumer("^ *<[a-z].*")
-                                    : new CodesConsumer());
-
-    // End sorting (old style: lint:endSorted)
-    b.add(
-        line -> line.contains("// " + "lint:endSorted"),
-        line -> line.state().sortConsumer = null);
 
     // In 'for (int i : list)', colon must be surrounded by space.
     b.add(
@@ -855,80 +832,14 @@ public class LintTest {
   }
 
   /** Consumer that checks that are sorted. */
-  private abstract static class SortConsumer
+  private static class SortConsumer
       implements Consumer<Puffin.Line<GlobalState, FileState>> {
+    final Sort sort;
     final Comparator<String> comparator = WordComparator.INSTANCE;
     final List<String> lines = new ArrayList<>();
+    boolean done = false;
 
-    protected void addLine(
-        Puffin.Line<GlobalState, FileState> line, String thisLine) {
-      if (!lines.isEmpty()) {
-        String prevLine = last(lines);
-        if (comparator.compare(prevLine, thisLine) > 0) {
-          String format = "Lines must be sorted; '%s' should be before '%s'";
-          line.state().message(line, format, thisLine, prevLine);
-        }
-      }
-      lines.add(thisLine);
-    }
-  }
-
-  /** Consumer that checks that lines that start with ".put" are sorted. */
-  private static class CodesConsumer extends SortConsumer {
-    @Override
-    public void accept(Puffin.Line<GlobalState, FileState> line) {
-      String thisLine = line.line();
-      if (thisLine.contains(".put")) {
-        thisLine = thisLine.replaceAll("^ *\\.put[0-9]*", "");
-        addLine(line, thisLine);
-      }
-    }
-  }
-
-  /**
-   * Consumer that checks that lines that start with "static final" are sorted.
-   */
-  private static class FieldsConsumer extends SortConsumer {
-    @Override
-    public void accept(Puffin.Line<GlobalState, FileState> line) {
-      String thisLine = line.line();
-      if (thisLine.matches(
-          "^.*static final (Macro|Applicable[0-4]*) [A-Z_]+ =")) {
-        thisLine =
-            thisLine.replaceAll(
-                "^ *private static final (Macro|Applicable[0-4]*) ", "");
-        addLine(line, thisLine);
-      }
-    }
-  }
-
-  /** Consumer that checks whether lines that match a regex are sorted. */
-  private static class RegexConsumer extends SortConsumer {
-    final Pattern pattern;
-
-    RegexConsumer(String regex) {
-      pattern = Pattern.compile(regex);
-    }
-
-    @Override
-    public void accept(Puffin.Line<GlobalState, FileState> line) {
-      String thisLine = line.line();
-      if (pattern.matcher(thisLine).matches()) {
-        addLine(line, thisLine);
-      }
-    }
-  }
-
-  /**
-   * Consumer that checks lines are sorted according to a Sort specification.
-   * Uses until pattern to end sorting, where pattern to filter lines, and erase
-   * pattern to normalize before comparison.
-   */
-  private static class SpecSortConsumer extends SortConsumer {
-    private final Sort sort;
-    private boolean done = false;
-
-    SpecSortConsumer(Sort sort) {
+    SortConsumer(Sort sort) {
       this.sort = sort;
     }
 
@@ -948,12 +859,12 @@ public class LintTest {
         return;
       }
 
-      // If where clause exists, only process matching lines
+      // If where clause exists, only process matching lines.
       if (sort.where != null && !sort.where.matcher(thisLine).find()) {
         return;
       }
 
-      // Apply erase pattern if present
+      // Apply the erase pattern, if present.
       String compareLine = thisLine;
       if (sort.erase != null) {
         compareLine = sort.erase.matcher(thisLine).replaceAll("");
@@ -962,8 +873,16 @@ public class LintTest {
       addLine(line, compareLine);
     }
 
-    boolean isDone() {
-      return done;
+    protected void addLine(
+        Puffin.Line<GlobalState, FileState> line, String thisLine) {
+      if (!lines.isEmpty()) {
+        String prevLine = last(lines);
+        if (comparator.compare(prevLine, thisLine) > 0) {
+          String format = "Lines must be sorted; '%s' should be before '%s'";
+          line.state().message(line, format, thisLine, prevLine);
+        }
+      }
+      lines.add(thisLine);
     }
   }
 }
