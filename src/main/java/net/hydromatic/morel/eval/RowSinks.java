@@ -31,6 +31,7 @@ import com.google.common.collect.Multimaps;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -357,7 +358,8 @@ public abstract class RowSinks {
     final boolean distinct;
     final ImmutableList<Code> codes;
     final ImmutableList<String> names;
-    final Map<Object, int[]> map = new HashMap<>();
+    final Map<Object, int[]> map;
+
     final Object[] values;
 
     SetRowSink(
@@ -376,6 +378,13 @@ public abstract class RowSinks {
       this.codes = requireNonNull(codes);
       this.names = requireNonNull(names);
       this.values = new Object[names.size()];
+      if (op == Op.INTERSECT) {
+        // For intersect, we need to preserve order of insertion.
+        map = new LinkedHashMap<>();
+      } else {
+        // Except uses the map only for probing, so a HashMap is fine.
+        map = new HashMap<>();
+      }
     }
 
     @Override
@@ -489,6 +498,8 @@ public abstract class RowSinks {
 
   /** Implementation of {@link RowSink} for non-distinct {@code except} step. */
   private static class ExceptAllRowSink extends SetRowSink {
+    private boolean initialized = false;
+
     ExceptAllRowSink(
         ImmutableList<Code> codes,
         ImmutableList<String> names,
@@ -498,34 +509,47 @@ public abstract class RowSinks {
 
     @Override
     public void accept(EvalEnv env) {
-      inc(env);
+      // On first call, build the multiset from the right-hand side(s).
+      if (!initialized) {
+        initialized = true;
+        final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
+        for (Code code : codes) {
+          final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
+          for (Object element : elements) {
+            mutableEvalEnv.set(element);
+            // Build multiset of elements to exclude.
+            inc(mutableEvalEnv);
+          }
+        }
+      }
+
+      // For each element from the left, check if it's in the exclusion
+      // multiset.
+      Object value;
+      if (names.size() == 1) {
+        value = env.getOpt(names.get(0));
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = env.getOpt(names.get(i));
+        }
+        value = ImmutableList.copyOf(values);
+      }
+
+      int[] count = map.get(value);
+      if (count != null && count[0] > 0) {
+        // Element is in the exclusion multiset; decrement and don't emit.
+        --count[0];
+        if (count[0] == 0) {
+          map.remove(value);
+        }
+      } else {
+        // Element is not in the exclusion multiset; emit it.
+        rowSink.accept(env);
+      }
     }
 
     @Override
     public List<Object> result(EvalEnv env) {
-      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
-      for (Code code : codes) {
-        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-        for (Object element : elements) {
-          mutableEvalEnv.set(element);
-          dec(mutableEvalEnv);
-        }
-      }
-      // Output any elements remaining in the collection.
-      if (!map.isEmpty()) {
-        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
-        map.forEach(
-            (k, v) -> {
-              int v2 = v[0];
-              if (v2 > 0) {
-                mutableEvalEnv2.set(k);
-                for (int i = 0; i < v2; i++) {
-                  // Output the element several times.
-                  rowSink.accept(mutableEvalEnv2);
-                }
-              }
-            });
-      }
       return rowSink.result(env);
     }
   }
