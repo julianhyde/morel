@@ -39,12 +39,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -67,7 +65,6 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MorelException;
-import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -1268,16 +1265,19 @@ public abstract class Codes {
 
       // For each of the right inputs, count the occurrences of each element.
       final Map<Object, int[]> map = new HashMap<>();
-      forEachIndexed(lists, (list, i) -> {
-        if (i > 0) {
-          final Function<Object, int[]> create = k -> new int[lists.size() - 1];
-          final int j = i - 1;
-          for (Object o : list) {
-            int @Nullable [] ints = map.computeIfAbsent(o, create);
-            ints[j]++;
-          }
-        }
-      });
+      forEachIndexed(
+          lists,
+          (list, i) -> {
+            if (i > 0) {
+              final Function<Object, int[]> create =
+                  k -> new int[lists.size() - 1];
+              final int j = i - 1;
+              for (Object o : list) {
+                int @Nullable [] ints = map.computeIfAbsent(o, create);
+                ints[j]++;
+              }
+            }
+          });
 
       // If there is more than one right input, put the minimum of the counts
       // into slot 0. Remove the element from the map if the count from any
