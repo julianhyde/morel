@@ -127,10 +127,10 @@ public enum Prop {
   /**
    * String property "productName" is the name of the Morel product.
    *
-   * <p>This property is read-only and should not be modified via {@code
-   * Sys.set}.
+   * <p>The value is sourced from {@link JavaVersion#MOREL_PRODUCT}. This
+   * property is read-only and should not be modified via {@code Sys.set}.
    */
-  PRODUCT_NAME("productName", String.class, true, "morel"),
+  PRODUCT_NAME("productName", String.class, true, JavaVersion.MOREL_PRODUCT),
 
   /**
    * String property "productVersion" is the current version of Morel.

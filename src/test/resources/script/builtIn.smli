@@ -4593,7 +4593,7 @@ map
 >    ("inlinePassCount",SOME "5"),("lineWidth",SOME "78"),
 >    ("matchCoverageEnabled",SOME "true"),("optionalInt",NONE),
 >    ("output",SOME "CLASSIC"),("printDepth",SOME "5"),
->    ("printLength",SOME "999"),("productName",SOME "morel"),
+>    ("printLength",SOME "999"),("productName",SOME "morel-java"),
 >    ("productVersion",SOME "?"),("relationalize",SOME "false"),
 >    ("scriptDirectory",SOME "?"),("stringDepth",SOME "-1")]
 >   : (string * string option) list
@@ -4608,7 +4608,7 @@ Sys.plan ();
 
 (*) Test new product properties (MOREL-319)
 Sys.show "productName";
-> val it = SOME "morel" : string option
+> val it = SOME "morel-java" : string option
 
 (*) Mask version number since it changes with each release
 case Sys.show "productVersion" of
