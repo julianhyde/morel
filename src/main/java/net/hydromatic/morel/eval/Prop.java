@@ -52,7 +52,7 @@ public enum Prop {
    * <p>The format matches the output of {@code Shell.banner()}. This property
    * is read-only and should not be modified via {@code Sys.set}.
    */
-  BANNER("banner", String.class, true, computeBanner()),
+  BANNER("banner", String.class, true, JavaVersion.banner(null)),
 
   /**
    * File property "directory" is the path of the directory that the {@code
@@ -135,11 +135,14 @@ public enum Prop {
   /**
    * String property "productVersion" is the current version of Morel.
    *
-   * <p>The value is sourced from {@link JavaVersion#MOREL}. This property is
-   * read-only and should not be modified via {@code Sys.set}.
+   * <p>The value is sourced from {@link JavaVersion#MOREL_VERSION}. This
+   * property is read-only and should not be modified via {@code Sys.set}.
    */
   PRODUCT_VERSION(
-      "productVersion", String.class, true, JavaVersion.MOREL.toString()),
+      "productVersion",
+      String.class,
+      true,
+      JavaVersion.MOREL_VERSION.toString()),
 
   /**
    * Boolean property "relationalize" is whether to convert to relational
@@ -223,18 +226,6 @@ public enum Prop {
       return type.isInstance(value);
     }
     return false;
-  }
-
-  /**
-   * Computes the banner string for the BANNER property.
-   *
-   * <p>This is a simplified version of {@code Shell.banner()} that does not
-   * include terminal-specific information.
-   */
-  private static String computeBanner() {
-    return String.format(
-        "morel version %s (java version \"%s\")",
-        JavaVersion.MOREL, System.getProperty("java.version"));
   }
 
   /** Looks up a property by name. Throws if not found; never returns null. */

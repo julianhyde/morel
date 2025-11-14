@@ -4585,7 +4585,8 @@ showAll;
 > val it = fn : unit -> (string * string option) list
 map
   (fn (p,v) =>
-    (p, if p = "directory" orelse p = "scriptDirectory" orelse p = "banner" orelse p = "productVersion" then SOME "?" else v))
+    (p, if p elem ["directory", "scriptDirectory", "banner", "productVersion"]
+      then SOME "?" else v))
   (Sys.showAll ());
 > val it =
 >   [("banner",SOME "?"),("directory",SOME "?"),("hybrid",SOME "true"),
@@ -4617,7 +4618,7 @@ case Sys.show "productVersion" of
 
 (*) Mask banner since it includes version and Java version
 case Sys.show "banner" of
-  SOME v => String.isPrefix "morel version " v
+  SOME v => String.isPrefix "morel-java version " v
 | NONE => false;
 > val it = true : bool
 
