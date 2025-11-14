@@ -1210,7 +1210,6 @@ public class TypeResolver {
       group2 = groupExps.right(0);
     } else {
       group2 = key.copy(key.with, groupExps);
-      Variable v = fieldVar(fieldVars.first(groupExps.size()), false);
     }
     final Ast.Exp compute2 =
         args2.size() == 1 && group.isAtom()
