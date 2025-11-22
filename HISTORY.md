@@ -40,9 +40,103 @@ Contributors:
 
 ### Site and documentation
 
-* [[MOREL-xxx](https://github.com/hydromatic/morel/issues/xxx)]
-  Release 0.x.0
+* Release 0.x.0 (#xxx)
+
 -->
+
+## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.8.0">0.8.0</a> / 2025-11-22
+
+Release 0.8.0 ...
+
+Contributors:
+
+### Features
+
+* Don't allow `on` after singleton scan (denoted by `=`) (#317)
+* Add properties "productName", "productVersion", "banner" (#319)
+* Add signatures for standard library, and verify that built-in types match
+* Parse `signature` (#315)
+* Support `op` keyword (operator sections) (#311)
+* Add validation-mode to scripts, with syntax `:t`, to check the type of an
+  expression without evaluating (#310)
+* Add `elements` collection, available in `compute` clause, to enable advanced
+  aggregation (#304)
+* `Either` structure (#302)
+* `Fn` structure (#301)
+* Improve syntax of `group` and `compute` steps (#288)
+* Add `typeof` operator, to extract the type of an expression (#291)
+* Type abbreviations, also known as alias types, declared using the `type`
+  keyword (#285)
+* Parse exceptions should indicate the position in the source code where the
+  exception occurred (#297)
+* `ListPair` structure (#295)
+* Quoted type names (#289)
+
+### Bug-fixes and internal improvements
+
+* The `intersect` and `except` steps should count, and preserve order (#321)
+* Various refactorings and minor bug-fixes to match Rust (#308)
+* Refactor: Normalize order of several `enum` types
+* When encoding record types in unifier, quote field names that contain ':'
+* Add directive `lint:sort until` to ensure that code regions are sorted (#316)
+* Refactor: In `class StepEnv` add field `ordered`
+* `Ast.ref` should generate "#map List" for "List.map", not "map List"
+* Add an `--echo` flag to script runner (#309)
+* In CI, bump actions `checkout` from 1 to 4, and `setup-java` from 1 to 4
+* The "cannot derive label for compute expression" error currently causes a
+  crash (#305)
+* Refactor: Add `@Nullable` annotations where necessary
+* In `class Pair`, add `List` variants of methods `allMatch`, `anyMatch`,
+  `noneMatch`, `firstMatch`, `forEach`
+* Lint: Sort enum constants in `class BuiltIn`
+* Decompose definition of built-in functions into prototype and description
+* Lint: Sort various sections in Maven POM file
+* Refactor: Add `NullMarked` annotation to every package, so that fields and
+  parameters are not-null by default
+* In `interface PairList`, add method `fromTransformed`
+* Run `.smli` scripts from the command-line (#300)
+* Refactor: Move `interface RowSink` out of `class Codes` to top-level
+* Lint: Sort constants in `class Codes`
+* Refactor: Make `ImmutablePairList.copyOf` more tolerant
+* In `PairList`, add methods `subList`, `first`, `skipFirst`
+* Implementations of built-in functions should be in n-ary form, with a helper
+  to curry them (#298)
+* Add method `ImmutablePairList.fromTransformed`
+* Refactor: Add `copy` methods for various AST nodes
+* Assert that in an assignment `val p = e`, pattern and expression have same type
+* Environment for an `EnvVisitor` should be the output from the previous step
+* Refactor: Change type of `Ast.Record.args` from `SortedMap` to `PairList`
+* Add method `PairList.toImmutableSortedMap`
+* Refactor: When printing the AST of a record constructor, omit obvious labels
+* Refactor: Change key of `class Ast.Record` from `String` to `Ast.Id`
+
+### Build and tests
+
+* Lint: Add another check for broken strings
+* Lint: Assert that regions of a file are sorted
+
+### Component upgrades
+
+* Bump build-helper-maven-plugin from 3.6.0 to 3.6.1
+* Bump calcite from 1.40.0 to 1.41.0
+* Bump checkstyle from 10.25.0 to 12.1.2
+* Bump guava from 33.4.8-jre to 33.5.0-jre
+* Bump jackson from 2.19.0 to 2.20.1
+* Bump java from 8..24 to 8..25
+* Bump junit-jupiter from 5.13.1 to 5.14.1
+* Bump maven from 3.9.9 to 3.9.11
+* Bump maven-compiler-plugin from 3.14.0 to 3.14.1
+* Bump maven-enforcer-plugin from 3.5.0 to 3.6.2
+* Bump maven-javadoc-plugin from 3.11.2 to 3.12.0
+* Bump maven-site-plugin from 3.12.1 to 3.21.0
+* Bump maven-source-plugin from 3.2.1 to 3.3.1
+* Bump maven-surefire-plugin from 3.5.3 to 3.5.4
+* Bump scott-data-hsqldb from 0.2 to 0.3
+* Bump versions-maven-plugin from 2.18.0 to 2.19.1
+
+### Site and documentation
+
+* Release 0.8.0 (#320)
 
 ## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.7.0">0.7.0</a> / 2025-06-07
 
