@@ -52,39 +52,39 @@ Contributors:
 
 ### Features
 
-* Don't allow `on` after singleton scan (denoted by `=`) (#317)
-* Add properties "productName", "productVersion", "banner" (#319)
+* Don't allow `on` after singleton scan (denoted by `=`) ([#317](https://github.com/hydromatic/morel/issues/317))
+* Add properties "productName", "productVersion", "banner" ([#319](https://github.com/hydromatic/morel/issues/319))
 * Add signatures for standard library, and verify that built-in types match
-* Parse `signature` (#315)
-* Support `op` keyword (operator sections) (#311)
+* Parse `signature` ([#315](https://github.com/hydromatic/morel/issues/315))
+* Support `op` keyword (operator sections) ([#311](https://github.com/hydromatic/morel/issues/311))
 * Add validation-mode to scripts, with syntax `:t`, to check the type of an
-  expression without evaluating (#310)
+  expression without evaluating ([#310](https://github.com/hydromatic/morel/issues/310))
 * Add `elements` collection, available in `compute` clause, to enable advanced
-  aggregation (#304)
-* `Either` structure (#302)
-* `Fn` structure (#301)
-* Improve syntax of `group` and `compute` steps (#288)
-* Add `typeof` operator, to extract the type of an expression (#291)
+  aggregation ([#304](https://github.com/hydromatic/morel/issues/304))
+* `Either` structure ([#302](https://github.com/hydromatic/morel/issues/302))
+* `Fn` structure ([#301](https://github.com/hydromatic/morel/issues/301))
+* Improve syntax of `group` and `compute` steps ([#288](https://github.com/hydromatic/morel/issues/288))
+* Add `typeof` operator, to extract the type of an expression ([#291](https://github.com/hydromatic/morel/issues/291))
 * Type abbreviations, also known as alias types, declared using the `type`
-  keyword (#285)
+  keyword ([#285](https://github.com/hydromatic/morel/issues/285))
 * Parse exceptions should indicate the position in the source code where the
-  exception occurred (#297)
-* `ListPair` structure (#295)
-* Quoted type names (#289)
+  exception occurred ([#297](https://github.com/hydromatic/morel/issues/297))
+* `ListPair` structure ([#295](https://github.com/hydromatic/morel/issues/295))
+* Quoted type names ([#289](https://github.com/hydromatic/morel/issues/289))
 
 ### Bug-fixes and internal improvements
 
-* The `intersect` and `except` steps should count, and preserve order (#321)
-* Various refactorings and minor bug-fixes to match Rust (#308)
+* The `intersect` and `except` steps should count, and preserve order ([#321](https://github.com/hydromatic/morel/issues/321))
+* Various refactorings and minor bug-fixes to match Rust ([#308](https://github.com/hydromatic/morel/issues/308))
 * Refactor: Normalize order of several `enum` types
 * When encoding record types in unifier, quote field names that contain ':'
-* Add directive `lint:sort until` to ensure that code regions are sorted (#316)
+* Add directive `lint:sort until` to ensure that code regions are sorted ([#316](https://github.com/hydromatic/morel/issues/316))
 * Refactor: In `class StepEnv` add field `ordered`
 * `Ast.ref` should generate "#map List" for "List.map", not "map List"
-* Add an `--echo` flag to script runner (#309)
+* Add an `--echo` flag to script runner ([#309](https://github.com/hydromatic/morel/issues/309))
 * In CI, bump actions `checkout` from 1 to 4, and `setup-java` from 1 to 4
 * The "cannot derive label for compute expression" error currently causes a
-  crash (#305)
+  crash ([#305](https://github.com/hydromatic/morel/issues/305))
 * Refactor: Add `@Nullable` annotations where necessary
 * In `class Pair`, add `List` variants of methods `allMatch`, `anyMatch`,
   `noneMatch`, `firstMatch`, `forEach`
@@ -94,13 +94,13 @@ Contributors:
 * Refactor: Add `NullMarked` annotation to every package, so that fields and
   parameters are not-null by default
 * In `interface PairList`, add method `fromTransformed`
-* Run `.smli` scripts from the command-line (#300)
+* Run `.smli` scripts from the command-line ([#300](https://github.com/hydromatic/morel/issues/300))
 * Refactor: Move `interface RowSink` out of `class Codes` to top-level
 * Lint: Sort constants in `class Codes`
 * Refactor: Make `ImmutablePairList.copyOf` more tolerant
 * In `PairList`, add methods `subList`, `first`, `skipFirst`
 * Implementations of built-in functions should be in n-ary form, with a helper
-  to curry them (#298)
+  to curry them ([#298](https://github.com/hydromatic/morel/issues/298))
 * Add method `ImmutablePairList.fromTransformed`
 * Refactor: Add `copy` methods for various AST nodes
 * Assert that in an assignment `val p = e`, pattern and expression have same type
@@ -136,7 +136,7 @@ Contributors:
 
 ### Site and documentation
 
-* Release 0.8.0 (#320)
+* Release 0.8.0 ([#320](https://github.com/hydromatic/morel/issues/320))
 
 ## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.7.0">0.7.0</a> / 2025-06-07
 
