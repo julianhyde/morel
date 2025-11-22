@@ -44,11 +44,35 @@ Contributors:
 
 -->
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.8.0">0.8.0</a> / 2025-11-22
+## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.8.0">0.8.0</a> / 2025-11-23
 
-Release 0.8.0 ...
+Release 0.8.0 has improvements to aggregate query syntax, the type
+system, and the standard library.
+
+The syntax of aggregate queries is
+[now more powerful](https://github.com/hydromatic/morel/issues/288).
+You can now compute expressions before and after aggregation, for
+example `2.0 * avg over (units * unitPrice)`. The `elements`
+collection lets you access the
+[raw elements of a group](https://github.com/hydromatic/morel/issues/304)
+and even write subqueries in the `compute` clause. (*Breaking change:*
+The `of` keyword has been replaced by `over`, and composite keys and
+compute expressions must now be records with the usual `{` ... `}`
+syntax.)
+
+The type system includes
+[type aliases](https://github.com/hydromatic/morel/issues/285)
+via the `type` keyword. The `typeof` operator lets you
+[extract an expression's type](https://github.com/hydromatic/morel/issues/291).
+
+The built-in library adds the
+[`Either`](https://github.com/hydromatic/morel/issues/302),
+[`Fn`](https://github.com/hydromatic/morel/issues/301), and
+[`ListPair`](https://github.com/hydromatic/morel/issues/295)
+structures.
 
 Contributors:
+Julian Hyde
 
 ### Features
 
@@ -61,9 +85,6 @@ Contributors:
   ([#315](https://github.com/hydromatic/morel/issues/315))
 * Support `op` keyword (operator sections)
   ([#311](https://github.com/hydromatic/morel/issues/311))
-* Add validation-mode to scripts, with syntax `:t`, to check the type of an
-  expression without evaluating
-  ([#310](https://github.com/hydromatic/morel/issues/310))
 * Add `elements` collection, available in `compute` clause, to enable advanced
   aggregation
   ([#304](https://github.com/hydromatic/morel/issues/304))
@@ -73,7 +94,7 @@ Contributors:
   ([#301](https://github.com/hydromatic/morel/issues/301))
 * Improve syntax of `group` and `compute` steps
   ([#288](https://github.com/hydromatic/morel/issues/288))
-* Add `typeof` operator, to extract the type of an expression
+* Add `typeof` operator, to extract an expression's type
   ([#291](https://github.com/hydromatic/morel/issues/291))
 * Type abbreviations, also known as alias types, declared using the `type`
   keyword
@@ -97,28 +118,18 @@ Contributors:
 * Add directive `lint:sort until` to ensure that code regions are sorted
   ([#316](https://github.com/hydromatic/morel/issues/316))
 * Refactor: In `class StepEnv` add field `ordered`
-* `Ast.ref` should generate "#map List" for "List.map", not "map List"
-* Add an `--echo` flag to script runner
-  ([#309](https://github.com/hydromatic/morel/issues/309))
-* In CI, bump actions `checkout` from 1 to 4, and `setup-java` from 1 to 4
+* `Ast.ref` should translate the `List.map` function to `#map List`, not to
+  `map List`
 * The "cannot derive label for compute expression" error currently causes a
   crash
   ([#305](https://github.com/hydromatic/morel/issues/305))
-* Refactor: Add `@Nullable` annotations where necessary
 * In `class Pair`, add `List` variants of methods `allMatch`, `anyMatch`,
   `noneMatch`, `firstMatch`, `forEach`
-* Lint: Sort enum constants in `class BuiltIn`
-* Decompose definition of built-in functions into prototype and description
-* Lint: Sort various sections in Maven POM file
-* Refactor: Add `NullMarked` annotation to every package, so that fields and
-  parameters are not-null by default
 * In `interface PairList`, add method `fromTransformed`
-* Run `.smli` scripts from the command-line
-  ([#300](https://github.com/hydromatic/morel/issues/300))
 * Refactor: Move `interface RowSink` out of `class Codes` to top-level
 * Lint: Sort constants in `class Codes`
 * Refactor: Make `ImmutablePairList.copyOf` more tolerant
-* In `PairList`, add methods `subList`, `first`, `skipFirst`
+* In `class PairList`, add methods `subList`, `first`, `skipFirst`
 * Implementations of built-in functions should be in n-ary form, with a helper
   to curry them
   ([#298](https://github.com/hydromatic/morel/issues/298))
@@ -133,6 +144,20 @@ Contributors:
 
 ### Build and tests
 
+* Add validation-mode to scripts, with syntax `:t`, to check an expression's
+  type without evaluating
+  ([#310](https://github.com/hydromatic/morel/issues/310))
+* Add an `--echo` flag to script runner
+  ([#309](https://github.com/hydromatic/morel/issues/309))
+* In CI, bump actions `checkout` from 1 to 4, and `setup-java` from 1 to 4
+* Refactor: Add `@Nullable` annotations where necessary
+* Lint: Sort enum constants in `class BuiltIn`
+* Decompose definition of built-in functions into prototype and description
+* Lint: Sort various sections in Maven POM file
+* Refactor: Add `NullMarked` annotation to every package, so that fields and
+  parameters are not-null by default
+* Run `.smli` scripts from the command-line
+  ([#300](https://github.com/hydromatic/morel/issues/300))
 * Lint: Add another check for broken strings
 * Lint: Assert that regions of a file are sorted
 
