@@ -80,10 +80,10 @@ License.
     <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
     <calcite.version>1.41.0</calcite.version>
     <!-- We support (and test) Checkstyle as low as 9.3.
-         In JDK 8, you must add '-Dcheckstyle.version=9.3' because
-         Checkstyle 10 requires JDK 11 or higher.
-         In JDK 11, you must add '-Dcheckstyle.version=10.26.1' because
-         Checkstyle 11 and 12 require JDK 17 or higher. -->
+         In JDK 8 through 10, you must add '-Dcheckstyle.version=9.3'
+         because Checkstyle 10 requires JDK 11 or higher.
+         In JDK 11 through 16, you must add '-Dcheckstyle.version=10.26.1'
+         because Checkstyle 11 and 12 require JDK 17 or higher. -->
     <checkstyle.version>12.1.2</checkstyle.version>
     <findbugs.version>3.0.2</findbugs.version>
     <foodmart-data-hsqldb.version>0.5</foodmart-data-hsqldb.version>
