@@ -34,7 +34,7 @@ jobs:
 
     strategy:
       matrix:
-        java-version: [ "11" ]
+        java-version: [ "21" ]
         guava-version: [ "33.5.0-jre" ]
         hsqldb-version: [ "" ]
         checkstyle-version: [ "" ]
@@ -45,6 +45,7 @@ jobs:
             hsqldb-version: "2.5.1"
             checkstyle-version: "9.3"
           - java-version: "11"
+            checkstyle-version: "10.26.1"
           - java-version: "17"
             javadoc: true
           - java-version: "21"
