@@ -500,6 +500,24 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#DATALOG_EXECUTE */
+  private static final Applicable DATALOG_EXECUTE =
+      new BaseApplicable1<String, String>(BuiltIn.DATALOG_EXECUTE) {
+        @Override
+        public String apply(String s) {
+          return "";
+        }
+      };
+
+  /** @see BuiltIn#DATALOG_VALIDATE */
+  private static final Applicable DATALOG_VALIDATE =
+      new BaseApplicable1<String, String>(BuiltIn.DATALOG_VALIDATE) {
+        @Override
+        public String apply(String s) {
+          return "";
+        }
+      };
+
   /** Returns whether an {@code either} value is a left value. */
   private static boolean isEitherLeft(List either) {
     return either.get(0) == BuiltIn.Constructor.EITHER_INL.constructor;
@@ -4246,6 +4264,8 @@ public abstract class Codes {
           .put(BuiltIn.CHAR_TO_LOWER, CHAR_TO_LOWER)
           .put(BuiltIn.CHAR_TO_STRING, CHAR_TO_STRING)
           .put(BuiltIn.CHAR_TO_UPPER, CHAR_TO_UPPER)
+          .put(BuiltIn.DATALOG_EXECUTE, DATALOG_EXECUTE)
+          .put(BuiltIn.DATALOG_VALIDATE, DATALOG_VALIDATE)
           .put(BuiltIn.EITHER_APP, EITHER_APP)
           .put(BuiltIn.EITHER_APP_LEFT, EITHER_APP_LEFT)
           .put(BuiltIn.EITHER_APP_RIGHT, EITHER_APP_RIGHT)
