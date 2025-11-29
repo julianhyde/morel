@@ -18,13 +18,13 @@
  */
 package net.hydromatic.morel.datalog;
 
+import static java.util.Objects.requireNonNull;
+
 import com.google.common.collect.ImmutableList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-import static java.util.Objects.requireNonNull;
 
 /**
  * Abstract syntax tree nodes for Datalog programs.
