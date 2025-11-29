@@ -1,0 +1,272 @@
+/*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ */
+package net.hydromatic.morel.datalog;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import net.hydromatic.morel.datalog.DatalogAst.*;
+
+/**
+ * Analyzer for Datalog programs.
+ *
+ * <p>Performs safety checking and stratification analysis.
+ */
+public class DatalogAnalyzer {
+  private DatalogAnalyzer() {
+    // Utility class
+  }
+
+  /**
+   * Analyzes a Datalog program for safety and stratification.
+   *
+   * @param program the program to analyze
+   * @throws DatalogException if the program is unsafe or non-stratified
+   */
+  public static void analyze(Program program) {
+    checkDeclarations(program);
+    checkSafety(program);
+    checkStratification(program);
+  }
+
+  /** Checks that all relations used in facts and rules are declared. */
+  private static void checkDeclarations(Program program) {
+    for (Statement stmt : program.statements) {
+      if (stmt instanceof Fact) {
+        Fact fact = (Fact) stmt;
+        checkAtomDeclaration(program, fact.atom, "fact");
+      } else if (stmt instanceof Rule) {
+        Rule rule = (Rule) stmt;
+        checkAtomDeclaration(program, rule.head, "rule head");
+        for (BodyAtom bodyAtom : rule.body) {
+          checkAtomDeclaration(program, bodyAtom.atom, "rule body");
+        }
+      }
+    }
+  }
+
+  private static void checkAtomDeclaration(
+      Program program, Atom atom, String context) {
+    if (!program.hasDeclaration(atom.name)) {
+      throw new DatalogException(
+          "Relation '"
+              + atom.name
+              + "' used in "
+              + context
+              + " but not declared");
+    }
+
+    Declaration decl = program.getDeclaration(atom.name);
+    if (atom.arity() != decl.arity()) {
+      throw new DatalogException(
+          "Atom "
+              + atom.name
+              + "/"
+              + atom.arity()
+              + " does not match declaration "
+              + decl.name
+              + "/"
+              + decl.arity());
+    }
+
+    // Check types of constants in the atom
+    for (int i = 0; i < atom.terms.size(); i++) {
+      Term term = atom.terms.get(i);
+      if (term instanceof Constant) {
+        Constant constant = (Constant) term;
+        String expectedType = decl.params.get(i).type;
+        String actualType = constant.type;
+
+        // Map types for validation
+        String normalizedExpected = normalizeType(expectedType);
+        String normalizedActual = normalizeType(actualType);
+
+        if (!normalizedExpected.equals(normalizedActual)) {
+          throw new DatalogException(
+              "Type mismatch in "
+                  + context
+                  + " "
+                  + atom.name
+                  + "(...): "
+                  + "expected "
+                  + expectedType
+                  + ", got "
+                  + actualType
+                  + " for parameter "
+                  + decl.params.get(i).name);
+        }
+      }
+    }
+  }
+
+  private static String normalizeType(String type) {
+    // Both "string" and "symbol" map to string in Morel
+    if ("symbol".equals(type) || "string".equals(type)) {
+      return "string";
+    }
+    return type;
+  }
+
+  /**
+   * Checks that all rules are safe.
+   *
+   * <p>A rule is safe if:
+   *
+   * <ul>
+   *   <li>Each variable in the head appears in a positive body atom
+   *   <li>Each variable in a negated body atom appears in a positive body atom
+   * </ul>
+   */
+  private static void checkSafety(Program program) {
+    for (Statement stmt : program.statements) {
+      if (stmt instanceof Rule) {
+        Rule rule = (Rule) stmt;
+        checkRuleSafety(rule);
+      }
+    }
+  }
+
+  private static void checkRuleSafety(Rule rule) {
+    // Collect variables from positive body atoms
+    Set<String> groundedVars = new HashSet<>();
+    for (BodyAtom bodyAtom : rule.body) {
+      if (!bodyAtom.negated) {
+        for (Term term : bodyAtom.atom.terms) {
+          if (term instanceof Variable) {
+            groundedVars.add(((Variable) term).name);
+          }
+        }
+      }
+    }
+
+    // Check that all head variables are grounded
+    for (Term term : rule.head.terms) {
+      if (term instanceof Variable) {
+        String varName = ((Variable) term).name;
+        if (!groundedVars.contains(varName)) {
+          throw new DatalogException(
+              "Rule is unsafe. Variable '"
+                  + varName
+                  + "' in head does not appear in positive body atom");
+        }
+      }
+    }
+
+    // Check that variables in negated atoms are grounded
+    for (BodyAtom bodyAtom : rule.body) {
+      if (bodyAtom.negated) {
+        for (Term term : bodyAtom.atom.terms) {
+          if (term instanceof Variable) {
+            String varName = ((Variable) term).name;
+            if (!groundedVars.contains(varName)) {
+              throw new DatalogException(
+                  "Rule is unsafe. Variable '"
+                      + varName
+                      + "' in negated atom does not appear in positive body atom");
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Checks that the program is stratified.
+   *
+   * <p>A program is stratified if there are no cycles in the dependency graph
+   * that contain a negated edge.
+   */
+  private static void checkStratification(Program program) {
+    // Build dependency graph
+    Map<String, Set<Dependency>> graph = new HashMap<>();
+
+    for (Statement stmt : program.statements) {
+      if (stmt instanceof Rule) {
+        Rule rule = (Rule) stmt;
+        String headRelation = rule.head.name;
+
+        graph.putIfAbsent(headRelation, new HashSet<>());
+
+        for (BodyAtom bodyAtom : rule.body) {
+          String bodyRelation = bodyAtom.atom.name;
+          graph
+              .get(headRelation)
+              .add(new Dependency(bodyRelation, bodyAtom.negated));
+        }
+      }
+    }
+
+    // Check for cycles with negation using DFS
+    for (String relation : graph.keySet()) {
+      Set<String> visited = new HashSet<>();
+      Set<String> recStack = new HashSet<>();
+      if (hasNegationCycle(graph, relation, visited, recStack, false)) {
+        throw new DatalogException(
+            "Program is not stratified. Negation cycle detected involving relation: "
+                + relation);
+      }
+    }
+  }
+
+  private static boolean hasNegationCycle(
+      Map<String, Set<Dependency>> graph,
+      String node,
+      Set<String> visited,
+      Set<String> recStack,
+      boolean seenNegation) {
+    if (recStack.contains(node)) {
+      // Found a cycle; it's a problem if we've seen negation
+      return seenNegation;
+    }
+
+    if (visited.contains(node)) {
+      return false;
+    }
+
+    visited.add(node);
+    recStack.add(node);
+
+    Set<Dependency> dependencies = graph.get(node);
+    if (dependencies != null) {
+      for (Dependency dep : dependencies) {
+        boolean negInPath = seenNegation || dep.negated;
+        if (hasNegationCycle(graph, dep.target, visited, recStack, negInPath)) {
+          return true;
+        }
+      }
+    }
+
+    recStack.remove(node);
+    return false;
+  }
+
+  /** A dependency between relations in the dependency graph. */
+  private static class Dependency {
+    final String target;
+    final boolean negated;
+
+    Dependency(String target, boolean negated) {
+      this.target = target;
+      this.negated = negated;
+    }
+  }
+}
+
+// End DatalogAnalyzer.java

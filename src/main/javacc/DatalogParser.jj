@@ -1,0 +1,317 @@
+/*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ */
+
+options {
+  STATIC = false;
+  IGNORE_CASE = false;
+  UNICODE_INPUT = true;
+}
+
+PARSER_BEGIN(DatalogParserImpl)
+
+package net.hydromatic.morel.datalog;
+
+import net.hydromatic.morel.datalog.DatalogAst.*;
+
+import com.google.common.collect.ImmutableList;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Parser for Datalog, generated from DatalogParser.jj by JavaCC.
+ */
+public class DatalogParserImpl {
+  /** Parses a Datalog program from a string. */
+  public static Program parse(String input) throws ParseException {
+    java.io.StringReader reader = new java.io.StringReader(input);
+    DatalogParserImpl parser = new DatalogParserImpl(reader);
+    return parser.program();
+  }
+}
+
+PARSER_END(DatalogParserImpl)
+
+SKIP :
+{
+  " "
+| "\t"
+| "\r"
+| "\n"
+| < COMMENT: "//" (~["\n", "\r"])* ("\n" | "\r" | "\r\n") >
+| < MULTI_LINE_COMMENT: "/*" (~["*"])* "*" ("*" | ~["*", "/"] (~["*"])* "*")* "/" >
+| < HASH_COMMENT: "#" (~["\n", "\r"])* ("\n" | "\r" | "\r\n") >
+}
+
+TOKEN :
+{
+  < DECL: ".decl" >
+| < INPUT: ".input" >
+| < OUTPUT: ".output" >
+| < NUMBER_TYPE: "number" >
+| < STRING_TYPE: "string" >
+| < SYMBOL_TYPE: "symbol" >
+| < LPAREN: "(" >
+| < RPAREN: ")" >
+| < COMMA: "," >
+| < DOT: "." >
+| < COLON: ":" >
+| < COLONMINUS: ":-" >
+| < EXCLAMATION: "!" >
+}
+
+TOKEN :
+{
+  < INTEGER_LITERAL: (["0"-"9"])+ >
+| < STRING_LITERAL: "\"" (~["\"", "\\", "\n", "\r"] | "\\" (["\\", "\"", "n", "r", "t"]))* "\"" >
+| < IDENTIFIER: ["a"-"z", "A"-"Z", "_"] (["a"-"z", "A"-"Z", "0"-"9", "_"])* >
+}
+
+/**
+ * Parses a complete Datalog program.
+ */
+Program program() :
+{
+  final List<Statement> statements = new ArrayList<Statement>();
+  Statement stmt;
+}
+{
+  (
+    stmt = statement() { statements.add(stmt); }
+  )*
+  <EOF>
+  { return new Program(statements); }
+}
+
+/**
+ * Parses a single statement (declaration, input, output, fact, or rule).
+ */
+Statement statement() :
+{
+  Statement stmt;
+}
+{
+  (
+    stmt = declaration() { return stmt; }
+  | stmt = input() { return stmt; }
+  | stmt = output() { return stmt; }
+  | stmt = factOrRule() { return stmt; }
+  )
+}
+
+/**
+ * Parses a declaration: .decl relation(var:type, ...)
+ */
+Declaration declaration() :
+{
+  Token name;
+  List<Param> params;
+}
+{
+  <DECL> name = <IDENTIFIER> <LPAREN> params = paramList() <RPAREN>
+  { return new Declaration(name.image, params); }
+}
+
+/**
+ * Parses a parameter list for a declaration.
+ */
+List<Param> paramList() :
+{
+  final List<Param> params = new ArrayList<Param>();
+  Param param;
+}
+{
+  param = param() { params.add(param); }
+  (
+    <COMMA> param = param() { params.add(param); }
+  )*
+  { return params; }
+|
+  { return params; } // empty list
+}
+
+/**
+ * Parses a single parameter: var:type
+ */
+Param param() :
+{
+  Token name;
+  String type;
+}
+{
+  name = <IDENTIFIER> <COLON> type = datalogType()
+  { return new Param(name.image, type); }
+}
+
+/**
+ * Parses a Datalog type.
+ */
+String datalogType() :
+{
+  Token t;
+}
+{
+  (
+    t = <NUMBER_TYPE> { return t.image; }
+  | t = <STRING_TYPE> { return t.image; }
+  | t = <SYMBOL_TYPE> { return t.image; }
+  )
+}
+
+/**
+ * Parses an input directive: .input relation
+ */
+Input input() :
+{
+  Token name;
+}
+{
+  <INPUT> name = <IDENTIFIER>
+  { return new Input(name.image); }
+}
+
+/**
+ * Parses an output directive: .output relation
+ */
+Output output() :
+{
+  Token name;
+}
+{
+  <OUTPUT> name = <IDENTIFIER>
+  { return new Output(name.image); }
+}
+
+/**
+ * Parses a fact or rule.
+ * Fact: atom.
+ * Rule: atom :- body.
+ */
+Statement factOrRule() :
+{
+  Atom head;
+  List<BodyAtom> body;
+}
+{
+  head = atom()
+  (
+    <COLONMINUS> body = ruleBody() <DOT>
+    { return new Rule(head, body); }
+  | <DOT>
+    { return new Fact(head); }
+  )
+}
+
+/**
+ * Parses the body of a rule: a comma-separated list of (possibly negated) atoms.
+ */
+List<BodyAtom> ruleBody() :
+{
+  final List<BodyAtom> bodyAtoms = new ArrayList<BodyAtom>();
+  BodyAtom bodyAtom;
+}
+{
+  bodyAtom = bodyAtom() { bodyAtoms.add(bodyAtom); }
+  (
+    <COMMA> bodyAtom = bodyAtom() { bodyAtoms.add(bodyAtom); }
+  )*
+  { return bodyAtoms; }
+}
+
+/**
+ * Parses a body atom (optionally negated).
+ */
+BodyAtom bodyAtom() :
+{
+  boolean negated = false;
+  Atom atom;
+}
+{
+  ( <EXCLAMATION> { negated = true; } )?
+  atom = atom()
+  { return new BodyAtom(atom, negated); }
+}
+
+/**
+ * Parses an atom: relation(term, ...)
+ */
+Atom atom() :
+{
+  Token name;
+  List<Term> terms;
+}
+{
+  name = <IDENTIFIER> <LPAREN> terms = termList() <RPAREN>
+  { return new Atom(name.image, terms); }
+}
+
+/**
+ * Parses a term list.
+ */
+List<Term> termList() :
+{
+  final List<Term> terms = new ArrayList<Term>();
+  Term term;
+}
+{
+  term = term() { terms.add(term); }
+  (
+    <COMMA> term = term() { terms.add(term); }
+  )*
+  { return terms; }
+|
+  { return terms; } // empty list
+}
+
+/**
+ * Parses a term (variable or constant).
+ */
+Term term() :
+{
+  Token t;
+  String strValue;
+  int intValue;
+}
+{
+  t = <IDENTIFIER>
+  {
+    // Variables start with lowercase, constants with uppercase (but we treat all identifiers as variables)
+    return new Variable(t.image);
+  }
+| t = <INTEGER_LITERAL>
+  {
+    intValue = Integer.parseInt(t.image);
+    return new Constant(intValue, "number");
+  }
+| t = <STRING_LITERAL>
+  {
+    // Remove quotes from string literal
+    strValue = t.image.substring(1, t.image.length() - 1);
+    // Unescape basic escapes
+    strValue = strValue.replace("\\n", "\n")
+                       .replace("\\r", "\r")
+                       .replace("\\t", "\t")
+                       .replace("\\\\", "\\")
+                       .replace("\\\"", "\"");
+    // String literals are treated as symbols by default in Datalog
+    return new Constant(strValue, "symbol");
+  }
+}
+
+// End DatalogParser.jj
