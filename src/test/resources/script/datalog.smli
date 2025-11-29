@@ -1,0 +1,270 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *)
+
+(*) Basic validation - valid program
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+edge(1,2).
+edge(2,3).
+.output edge";
+> val it = "string" : string
+*)
+
+(*) Basic validation - parse error
+(* TODO
+Datalog.validate ".decl edge(x:number";
+> val it = "Error: Parse error: Encountered end of file at line 1, column 21." : string
+*)
+
+(*) Schema validation - arity mismatch in fact
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+edge(1,2,3).";
+> val it = "Error: Fact edge/3 does not match declared arity edge/2" : string
+*)
+
+(*) Schema validation - arity mismatch in rule head
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+path(X,Y,Z) :- edge(X,Y).";
+> val it = "Error: Atom path/3 in rule head does not match declared arity path/2" : string
+*)
+
+(*) Schema validation - arity mismatch in rule body
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+path(X,Y) :- edge(X).";
+> val it = "Error: Atom edge/1 in rule body does not match declared arity edge/2" : string
+*)
+
+(*) Schema validation - undeclared relation
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+path(1,2).";
+> val it = "Error: Undeclared relation 'path' in fact" : string
+*)
+
+(*) Safety - unsafe rule (variable in head not in body)
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+path(X,Y) :- edge(X,Z).";
+> val it = "Error: Rule is unsafe: Variable 'Y' in head must appear in a positive body atom" : string
+*)
+
+(*) Safety - unsafe negation (variable only in negated atom)
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+path(X,Y) :- edge(X,Z), !edge(Y,W).";
+> val it = "Error: Rule is unsafe: Variable 'Y' in negated atom must appear in a positive body atom" : string
+*)
+
+(*) Stratification - negation cycle
+(* TODO
+Datalog.validate ".decl p(x:number)
+.decl q(x:number)
+p(X) :- !q(X).
+q(X) :- !p(X).";
+> val it = "Error: Program is not stratified: negation cycle detected involving relation 'p'" : string
+*)
+
+(*) Stratification - valid stratified program
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+.decl unreachable(x:number, y:number)
+path(X,Y) :- edge(X,Y).
+path(X,Z) :- path(X,Y), edge(Y,Z).
+unreachable(X,Y) :- edge(X,Y), !path(X,Y).
+.output unreachable";
+> val it = "string" : string
+*)
+
+(*) Multiple .output directives
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+edge(1,2).
+path(X,Y) :- edge(X,Y).
+.output edge
+.output path";
+> val it = "string" : string
+*)
+
+(*) Basic facts - number type
+(* TODO
+Datalog.validate ".decl num(n:number)
+num(42).
+num(0).
+num(~1).
+.output num";
+> val it = "string" : string
+*)
+
+(*) Basic facts - string type
+(* TODO
+Datalog.validate ".decl person(name:string)
+person(\"Alice\").
+person(\"Bob\").
+.output person";
+> val it = "string" : string
+*)
+
+(*) Basic facts - symbol type
+(* TODO
+Datalog.validate ".decl color(c:symbol)
+color(red).
+color(blue).
+color(green).
+.output color";
+> val it = "string" : string
+*)
+
+(*) Basic facts - mixed types
+(* TODO
+Datalog.validate ".decl employee(name:string, age:number, dept:symbol)
+employee(\"Alice\", 30, engineering).
+employee(\"Bob\", 25, sales).
+.output employee";
+> val it = "string" : string
+*)
+
+(*) Type mismatch - number for string
+(* TODO
+Datalog.validate ".decl person(name:string)
+person(42).";
+> val it = "Error: Type mismatch in fact: Expected string for parameter 'name', got number" : string
+*)
+
+(*) Type mismatch - string for number
+(* TODO
+Datalog.validate ".decl num(n:number)
+num(\"hello\").";
+> val it = "Error: Type mismatch in fact: Expected number for parameter 'n', got string" : string
+*)
+
+(*) Type mismatch - symbol for number
+(* TODO
+Datalog.validate ".decl num(n:number)
+num(foo).";
+> val it = "Error: Type mismatch in fact: Expected number for parameter 'n', got symbol" : string
+*)
+
+(*) Simple rule - transitive closure
+(* TODO
+Datalog.validate ".decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+edge(1,2).
+edge(2,3).
+edge(3,4).
+path(X,Y) :- edge(X,Y).
+path(X,Z) :- path(X,Y), edge(Y,Z).
+.output path";
+> val it = "string" : string
+*)
+
+(*) Simple rule - join
+(* TODO
+Datalog.validate ".decl parent(p:string, c:string)
+.decl sibling(x:string, y:string)
+parent(\"Alice\", \"Bob\").
+parent(\"Alice\", \"Carol\").
+sibling(X,Y) :- parent(P,X), parent(P,Y), X != Y.
+.output sibling";
+> val it = "string" : string
+*)
+
+(*) Negation - set difference
+(* TODO
+Datalog.validate ".decl student(name:string)
+.decl graduate(name:string)
+.decl undergraduate(name:string)
+student(\"Alice\").
+student(\"Bob\").
+graduate(\"Alice\").
+undergraduate(X) :- student(X), !graduate(X).
+.output undergraduate";
+> val it = "string" : string
+*)
+
+(*) Complex example - ancestor queries
+(* TODO
+Datalog.validate ".decl parent(p:string, c:string)
+.decl ancestor(a:string, d:string)
+.decl descendant(p:string, d:string)
+parent(\"Alice\", \"Bob\").
+parent(\"Bob\", \"Carol\").
+parent(\"Carol\", \"Dan\").
+ancestor(P,C) :- parent(P,C).
+ancestor(A,D) :- ancestor(A,X), parent(X,D).
+descendant(P,D) :- ancestor(D,P).
+.output ancestor
+.output descendant";
+> val it = "string" : string
+*)
+
+(*) Empty relation
+(* TODO
+Datalog.validate ".decl empty(x:number)
+.output empty";
+> val it = "string" : string
+*)
+
+(*) Comments in Datalog
+(* TODO
+Datalog.validate "// Line comment
+.decl edge(x:number, y:number)
+/* Block comment */
+edge(1,2). // Another comment
+.output edge";
+> val it = "string" : string
+*)
+
+(*) Execution - basic facts (not yet implemented)
+(* TODO
+Datalog.execute ".decl num(n:number)
+num(1).
+num(2).
+num(3).
+.output num";
+> num
+> 1
+> 2
+> 3
+*)
+
+(*) Execution - transitive closure (not yet implemented)
+(* TODO
+Datalog.execute ".decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+edge(1,2).
+edge(2,3).
+path(X,Y) :- edge(X,Y).
+path(X,Z) :- path(X,Y), edge(Y,Z).
+.output path";
+> path
+> 1 2
+> 2 3
+> 1 3
+*)
+
+(*) End datalog.smli
