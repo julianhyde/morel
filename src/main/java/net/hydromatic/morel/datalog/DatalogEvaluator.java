@@ -29,15 +29,20 @@ import java.util.stream.Collectors;
 import net.hydromatic.morel.datalog.DatalogAst.Atom;
 import net.hydromatic.morel.datalog.DatalogAst.BodyAtom;
 import net.hydromatic.morel.datalog.DatalogAst.Constant;
+import net.hydromatic.morel.datalog.DatalogAst.Declaration;
 import net.hydromatic.morel.datalog.DatalogAst.Fact;
 import net.hydromatic.morel.datalog.DatalogAst.Output;
+import net.hydromatic.morel.datalog.DatalogAst.Param;
 import net.hydromatic.morel.datalog.DatalogAst.Program;
 import net.hydromatic.morel.datalog.DatalogAst.Rule;
 import net.hydromatic.morel.datalog.DatalogAst.Statement;
 import net.hydromatic.morel.datalog.DatalogAst.Term;
 import net.hydromatic.morel.datalog.DatalogAst.Variable;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.PairList;
 
 /**
  * Evaluator for Datalog programs.
@@ -350,7 +355,8 @@ public class DatalogEvaluator {
    *
    * @param program the Datalog program source code
    * @param session the Morel session
-   * @return "string" if valid, or "Error: message" if invalid
+   * @return type representation like "{edge: (int * int) list}", or "Error:
+   *     ..." if invalid
    */
   public static String validate(String program, Session session) {
     try {
@@ -360,9 +366,10 @@ public class DatalogEvaluator {
       // 2. Analyze for safety and stratification
       DatalogAnalyzer.analyze(ast);
 
-      // 3. Determine output type
-      // For now, all Datalog programs that execute successfully return strings
-      return "string";
+      // 3. Build and return type representation
+      TypeSystem typeSystem = new TypeSystem();
+      Type type = buildOutputType(ast, typeSystem);
+      return type.toString();
 
     } catch (ParseException e) {
       return "Error: Parse error: " + e.getMessage();
@@ -390,12 +397,93 @@ public class DatalogEvaluator {
       // 2. Analyze for safety and stratification
       DatalogAnalyzer.analyze(ast);
 
-      // 3. Return type
-      // All Datalog execute() calls return formatted strings
-      return net.hydromatic.morel.type.PrimitiveType.STRING;
+      // 3. Build and return output type
+      TypeSystem typeSystem = new TypeSystem();
+      return buildOutputType(ast, typeSystem);
 
     } catch (ParseException e) {
       throw new DatalogException("Parse error: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Builds the output type for a Datalog program.
+   *
+   * <p>For a program with .output directives, returns a record type with each
+   * output relation as a field. For example, {@code .output edge} where edge
+   * has type {@code (int * int)} produces {@code {edge: (int * int) list}}.
+   *
+   * @param ast the parsed Datalog program
+   * @param typeSystem the Morel type system
+   * @return the output type
+   */
+  private static Type buildOutputType(Program ast, TypeSystem typeSystem) {
+    PairList<String, Type> fields = PairList.of();
+
+    for (Output output : ast.getOutputs()) {
+      String relationName = output.relationName;
+      Declaration decl = ast.getDeclaration(relationName);
+
+      if (decl == null) {
+        throw new DatalogException(
+            "Output relation '" + relationName + "' not declared");
+      }
+
+      // Build tuple type for the relation
+      Type tupleType = buildTupleType(decl, typeSystem);
+
+      // Wrap in list type
+      Type listType = typeSystem.listType(tupleType);
+
+      fields.add(relationName, listType);
+    }
+
+    // Return record type with all output relations
+    return typeSystem.recordType(fields);
+  }
+
+  /**
+   * Builds a tuple type for a Datalog relation declaration.
+   *
+   * <p>For example, {@code .decl edge(x:number, y:number)} produces type {@code
+   * int * int}.
+   *
+   * @param decl the relation declaration
+   * @param typeSystem the Morel type system
+   * @return the tuple type
+   */
+  private static Type buildTupleType(Declaration decl, TypeSystem typeSystem) {
+    if (decl.params.isEmpty()) {
+      return PrimitiveType.UNIT;
+    }
+
+    List<Type> paramTypes = new ArrayList<>();
+    for (Param param : decl.params) {
+      paramTypes.add(datalogTypeToMorelType(param.type));
+    }
+
+    if (paramTypes.size() == 1) {
+      return paramTypes.get(0);
+    } else {
+      return typeSystem.tupleType(paramTypes);
+    }
+  }
+
+  /**
+   * Converts a Datalog type name to a Morel type.
+   *
+   * @param datalogType the Datalog type ("number", "string", "symbol")
+   * @return the corresponding Morel type
+   */
+  private static Type datalogTypeToMorelType(String datalogType) {
+    switch (datalogType) {
+      case "number":
+        return PrimitiveType.INT;
+      case "string":
+      case "symbol":
+        return PrimitiveType.STRING;
+      default:
+        throw new DatalogException("Unknown Datalog type: " + datalogType);
     }
   }
 }
