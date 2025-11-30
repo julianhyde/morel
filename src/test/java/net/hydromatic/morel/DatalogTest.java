@@ -479,6 +479,24 @@ public class DatalogTest {
 
     assertThat(program.statements.size(), is(0));
   }
+
+  @Test
+  void testValidateThroughMorel() {
+    // Test Datalog.validate integration with Morel - verify it compiles and has
+    // correct type
+    String ml =
+        "Datalog.validate \".decl edge(x:number, y:number)\\nedge(1,2).\\n.output edge\"";
+    net.hydromatic.morel.Ml.ml(ml).assertType("string");
+  }
+
+  @Test
+  void testExecuteThroughMorel() {
+    // Test Datalog.execute integration with Morel - verify it compiles and has
+    // correct type
+    String ml =
+        "Datalog.execute \".decl edge(x:number, y:number)\\nedge(1,2).\\n.output edge\"";
+    net.hydromatic.morel.Ml.ml(ml).assertType("string");
+  }
 }
 
 // End DatalogTest.java
