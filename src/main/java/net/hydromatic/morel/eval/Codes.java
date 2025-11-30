@@ -65,6 +65,7 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MorelException;
+import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -883,8 +884,8 @@ public abstract class Codes {
       new BaseApplicable1<List, String>(BuiltIn.INT_FROM_STRING) {
         @Override
         public List apply(String s) {
-          final Integer i = parseInt(s);
-          return i == null ? OPTION_NONE : optionSome(i);
+          final Ord<Integer> ord = parseInt(s);
+          return ord == null ? OPTION_NONE : optionSome(ord.e);
         }
       };
 
@@ -2534,10 +2535,10 @@ public abstract class Codes {
    * Parses an integer from a string that may use Standard ML negation syntax.
    *
    * @param s String to parse (may use ~ or - for negation)
-   * @return The parsed integer, or null if the string does not start with a
-   *     valid integer
+   * @return Ord containing the parsed integer and character count, or null if
+   *     the string does not start with a valid integer
    */
-  public static Integer parseInt(String s) {
+  static Ord<Integer> parseInt(String s) {
     final String s2 = s.replace('~', '-');
     final Matcher matcher = INT_PATTERN.matcher(s2);
     if (!matcher.find(0)) {
@@ -2545,7 +2546,8 @@ public abstract class Codes {
     }
     final String s3 = s2.substring(0, matcher.end());
     try {
-      return Integer.parseInt(s3);
+      final int value = Integer.parseInt(s3);
+      return Ord.of(matcher.end(), value);
     } catch (NumberFormatException e) {
       return null;
     }
@@ -2556,10 +2558,10 @@ public abstract class Codes {
    * syntax.
    *
    * @param s String to parse (may use ~ or - for negation)
-   * @return The parsed float, or null if the string does not start with a valid
-   *     real number
+   * @return Ord containing the parsed float and character count, or null if the
+   *     string does not start with a valid real number
    */
-  public static Float parseReal(String s) {
+  static Ord<Float> parseReal(String s) {
     final String s2 = s.replace('~', '-');
     final Matcher matcher = FLOAT_PATTERN.matcher(s2);
     if (!matcher.find(0)) {
@@ -2567,7 +2569,8 @@ public abstract class Codes {
     }
     final String s3 = s2.substring(0, matcher.end());
     try {
-      return Float.parseFloat(s3);
+      final float value = Float.parseFloat(s3);
+      return Ord.of(matcher.end(), value);
     } catch (NumberFormatException e) {
       return null;
     }
@@ -2578,8 +2581,8 @@ public abstract class Codes {
       new BaseApplicable1<List, String>(BuiltIn.REAL_FROM_STRING) {
         @Override
         public List<Float> apply(String s) {
-          final Float f = parseReal(s);
-          return f == null ? OPTION_NONE : optionSome(f);
+          final Ord<Float> ord = parseReal(s);
+          return ord == null ? OPTION_NONE : optionSome(ord.e);
         }
       };
 

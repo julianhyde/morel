@@ -20,6 +20,7 @@ package net.hydromatic.morel.eval;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import net.hydromatic.morel.util.Ord;
 
 /**
  * Utilities for the Value structure - universal value representation for
@@ -252,33 +253,27 @@ public class Values {
       final String remaining = input.substring(pos);
 
       // Try parseReal first (FLOAT_PATTERN handles both reals and integers)
-      final Float f = Codes.parseReal(remaining);
-      if (f != null) {
-        // Determine how many characters were consumed and what type it is
+      final Ord<Float> realOrd = Codes.parseReal(remaining);
+      if (realOrd != null) {
+        // Determine what type it is by checking the consumed string
         final String s2 = remaining.replace('~', '-');
-        final java.util.regex.Matcher matcher = Codes.FLOAT_PATTERN.matcher(s2);
-        matcher.find(0);
-        final String consumed = s2.substring(0, matcher.end());
+        final String consumed = s2.substring(0, realOrd.i);
 
         // Check if it's actually a real (has decimal point or exponent)
         if (consumed.contains(".")
             || consumed.contains("e")
             || consumed.contains("E")) {
-          pos += matcher.end();
-          return ImmutableList.of("REAL", f);
+          pos += realOrd.i;
+          return ImmutableList.of("REAL", realOrd.e);
         }
         // Fall through to parseInt for integer case
       }
 
       // Try parseInt (will match if it's an integer)
-      final Integer i = Codes.parseInt(remaining);
-      if (i != null) {
-        // Determine how many characters were consumed
-        final String s2 = remaining.replace('~', '-');
-        final java.util.regex.Matcher matcher = Codes.INT_PATTERN.matcher(s2);
-        matcher.find(0);
-        pos += matcher.end();
-        return ImmutableList.of("INT", i);
+      final Ord<Integer> intOrd = Codes.parseInt(remaining);
+      if (intOrd != null) {
+        pos += intOrd.i;
+        return ImmutableList.of("INT", intOrd.e);
       }
 
       throw new IllegalArgumentException("Expected number at position " + pos);
