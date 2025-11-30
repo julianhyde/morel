@@ -18,7 +18,19 @@
  */
 package net.hydromatic.morel.datalog;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import net.hydromatic.morel.datalog.DatalogAst.Atom;
+import net.hydromatic.morel.datalog.DatalogAst.Constant;
+import net.hydromatic.morel.datalog.DatalogAst.Fact;
+import net.hydromatic.morel.datalog.DatalogAst.Output;
 import net.hydromatic.morel.datalog.DatalogAst.Program;
+import net.hydromatic.morel.datalog.DatalogAst.Statement;
+import net.hydromatic.morel.datalog.DatalogAst.Term;
+import net.hydromatic.morel.datalog.DatalogAst.Variable;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.type.Type;
 
@@ -49,24 +61,65 @@ public class DatalogEvaluator {
       // 2. Analyze for safety and stratification
       DatalogAnalyzer.analyze(ast);
 
-      // 3. Translate to Core (currently throws UnsupportedOperationException)
-      // Map<String, Core.Exp> relations =
-      //     DatalogToCoreTranslator.translate(ast, session.typeSystem);
+      // 3. Collect facts by relation
+      Map<String, List<Fact>> factsByRelation = new LinkedHashMap<>();
+      for (Statement stmt : ast.statements) {
+        if (stmt instanceof Fact) {
+          Fact fact = (Fact) stmt;
+          factsByRelation
+              .computeIfAbsent(fact.atom.name, k -> new ArrayList<>())
+              .add(fact);
+        }
+      }
 
-      // 4. Compile and evaluate
-      // TODO: Implement compilation and evaluation
+      // 4. Format output for each .output directive
+      StringBuilder result = new StringBuilder();
+      for (Output output : ast.getOutputs()) {
+        String relationName = output.relationName;
+        List<Fact> facts =
+            factsByRelation.getOrDefault(relationName, new ArrayList<>());
 
-      // 5. Format output
-      // TODO: Implement output formatting
+        // Output relation name
+        if (result.length() > 0) {
+          result.append("\n");
+        }
+        result.append(relationName).append("\n");
 
-      throw new UnsupportedOperationException(
-          "Datalog execution not yet fully implemented. "
-              + "Parser and analyzer are working. "
-              + "Translation to Core and execution are pending.");
+        // Output each fact's tuple
+        for (Fact fact : facts) {
+          result.append(formatTuple(fact.atom)).append("\n");
+        }
+      }
+
+      return result.toString().trim();
 
     } catch (ParseException e) {
       throw new DatalogException("Parse error: " + e.getMessage(), e);
     }
+  }
+
+  /** Formats a tuple for output. */
+  private static String formatTuple(Atom atom) {
+    return atom.terms.stream()
+        .map(DatalogEvaluator::formatTerm)
+        .collect(Collectors.joining(" "));
+  }
+
+  /** Formats a single term for output. */
+  private static String formatTerm(Term term) {
+    if (term instanceof Constant) {
+      Constant constant = (Constant) term;
+      Object value = constant.value;
+      if (value instanceof String) {
+        // String values should be quoted in output
+        return "\"" + value + "\"";
+      }
+      return String.valueOf(value);
+    } else if (term instanceof Variable) {
+      // Variables in facts are treated as symbols
+      return ((Variable) term).name;
+    }
+    return term.toString();
   }
 
   /**
