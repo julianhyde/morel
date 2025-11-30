@@ -3902,6 +3902,81 @@ description = """
 clears the current the value of `property`.
 """
 
+# === Value structure ================================================
+
+[[functions]]
+structure = "Value"
+name = "parse"
+specified = "morel"
+type = "string → value"
+implemented = false
+prototype = "parse s"
+description = """
+parses a string representation into a value.
+
+The string should be in the format produced by the `print` function.
+This enables round-tripping: `parse (print v) = v` for all values `v`.
+
+Examples:
+  `parse "()"` returns `UNIT`
+  `parse "true"` returns `BOOL true`
+  `parse "42"` returns `INT 42`
+  `parse "\"hello\""` returns `STRING "hello"`
+  `parse "[1, 2, 3]"` returns `LIST [INT 1, INT 2, INT 3]`
+  `parse "{x = 1, y = 2}"` returns `RECORD [("x", INT 1), ("y", INT 2)]`
+"""
+
+[[functions]]
+structure = "Value"
+name = "prettyPrint"
+specified = "morel"
+type = "value → string"
+implemented = false
+prototype = "prettyPrint v"
+description = """
+converts a value to a pretty-printed string representation with
+indentation and line breaks for better readability of nested structures.
+
+This function produces the same logical output as `print`, but formats
+it for human readability:
+- Nested structures are indented
+- Long lines are broken at appropriate points
+- Collections with many elements are formatted across multiple lines
+
+The exact formatting depends on configured line width, print depth,
+and other Pretty printer settings.
+
+Example:
+  `prettyPrint (RECORD [("name", STRING "Alice"), ("age", INT 30)])`
+  might produce:
+    `{name = "Alice",`
+    ` age = 30}`
+"""
+
+[[functions]]
+structure = "Value"
+name = "print"
+specified = "morel"
+type = "value → string"
+prototype = "print v"
+description = """
+converts a value to its compact string representation.
+
+The output is a valid Standard ML expression that can be parsed
+back into the same value using the `parse` function.
+
+Examples:
+  `print UNIT` returns `"()"`
+  `print (BOOL true)` returns `"true"`
+  `print (INT 42)` returns `"42"`
+  `print (STRING "hello")` returns `"\"hello\""`
+  `print (LIST [INT 1, INT 2, INT 3])` returns `"[1, 2, 3]"`
+  `print (RECORD [("x", INT 1), ("y", INT 2)])` returns `"{x = 1, y = 2}"`
+
+The output is compact (no unnecessary whitespace) for efficient
+transmission and storage.
+"""
+
 # === Vector structure ===============================================
 
 [[functions]]

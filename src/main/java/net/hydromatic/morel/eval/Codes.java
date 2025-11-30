@@ -2325,6 +2325,462 @@ public abstract class Codes {
     return ImmutableList.of(BuiltIn.Constructor.OPTION_SOME.constructor, o);
   }
 
+  /**
+   * Converts a value (represented as a List) to its string representation.
+   *
+   * @see BuiltIn#VALUE_PRINT
+   */
+  private static String valuePrint(List value) {
+    if (value.isEmpty()) {
+      throw new IllegalArgumentException("Invalid value: empty list");
+    }
+
+    final String constructor = (String) value.get(0);
+    switch (constructor) {
+      case "UNIT":
+        return "()";
+      case "BOOL":
+        return String.valueOf(value.get(1));
+      case "INT":
+        return String.valueOf(value.get(1));
+      case "REAL":
+        return String.valueOf(value.get(1));
+      case "CHAR":
+        final Character ch = (Character) value.get(1);
+        return "#\"" + charEscape(ch) + "\"";
+      case "STRING":
+        final String str = (String) value.get(1);
+        return "\"" + stringEscape(str) + "\"";
+      case "LIST":
+        return "[" + valuePrintList((List) value.get(1)) + "]";
+      case "BAG":
+        return "{" + valuePrintList((List) value.get(1)) + "}";
+      case "VECTOR":
+        return "#[" + valuePrintList((List) value.get(1)) + "]";
+      case "OPTION":
+        final Object opt = value.get(1);
+        if (opt instanceof List
+            && !((List) opt).isEmpty()
+            && "NONE".equals(((List) opt).get(0))) {
+          return "NONE";
+        } else if (opt instanceof List
+            && ((List) opt).size() == 2
+            && "SOME".equals(((List) opt).get(0))) {
+          return "SOME " + valuePrint((List) ((List) opt).get(1));
+        } else {
+          throw new IllegalArgumentException("Invalid OPTION value: " + opt);
+        }
+      case "RECORD":
+        return "{" + valuePrintRecord((List) value.get(1)) + "}";
+      case "DATATYPE":
+        final String dtName = (String) value.get(1);
+        final List dtValue = (List) value.get(2);
+        if (dtValue.size() == 1 && "UNIT".equals(dtValue.get(0))) {
+          return dtName;
+        } else {
+          return dtName + " " + valuePrint(dtValue);
+        }
+      default:
+        throw new IllegalArgumentException(
+            "Unknown value constructor: " + constructor);
+    }
+  }
+
+  /** Helper for valuePrint: prints a list of values. */
+  private static String valuePrintList(List values) {
+    final StringBuilder buf = new StringBuilder();
+    for (int i = 0; i < values.size(); i++) {
+      if (i > 0) {
+        buf.append(", ");
+      }
+      buf.append(valuePrint((List) values.get(i)));
+    }
+    return buf.toString();
+  }
+
+  /** Helper for valuePrint: prints a record (list of (string, value) pairs). */
+  private static String valuePrintRecord(List fields) {
+    final StringBuilder buf = new StringBuilder();
+    for (int i = 0; i < fields.size(); i++) {
+      if (i > 0) {
+        buf.append(", ");
+      }
+      final List pair = (List) fields.get(i);
+      final String key = (String) pair.get(0);
+      final List val = (List) pair.get(1);
+      buf.append(key).append(" = ").append(valuePrint(val));
+    }
+    return buf.toString();
+  }
+
+  /** Helper for valuePrint: escapes a character for printing. */
+  private static String charEscape(Character ch) {
+    switch (ch) {
+      case '\n':
+        return "\\n";
+      case '\t':
+        return "\\t";
+      case '\r':
+        return "\\r";
+      case '\\':
+        return "\\\\";
+      case '"':
+        return "\\\"";
+      default:
+        return String.valueOf(ch);
+    }
+  }
+
+  /** Helper for valuePrint: escapes a string for printing. */
+  private static String stringEscape(String str) {
+    final StringBuilder buf = new StringBuilder();
+    for (int i = 0; i < str.length(); i++) {
+      buf.append(charEscape(str.charAt(i)));
+    }
+    return buf.toString();
+  }
+
+  /**
+   * Converts a value to its pretty-printed string representation.
+   *
+   * <p>TODO: Implement proper pretty-printing using Pretty class when it
+   * becomes accessible. For now, delegates to valuePrint for consistent output.
+   *
+   * @see BuiltIn#VALUE_PRETTY_PRINT
+   */
+  private static String valuePrettyPrint(List value, Session session) {
+    // For now, delegate to valuePrint
+    // Future enhancement: use Pretty class for formatted output with
+    // indentation and line breaks based on session settings
+    return valuePrint(value);
+  }
+
+  /**
+   * Parses a string representation into a value.
+   *
+   * @see BuiltIn#VALUE_PARSE
+   */
+  private static List valueParse(String s) {
+    final ValueParser parser = new ValueParser(s);
+    return parser.parse();
+  }
+
+  /** Helper class for parsing value representations. */
+  private static class ValueParser {
+    private final String input;
+    private int pos;
+
+    ValueParser(String input) {
+      this.input = input;
+      this.pos = 0;
+    }
+
+    List parse() {
+      skipWhitespace();
+      return parseValue();
+    }
+
+    private List parseValue() {
+      skipWhitespace();
+      if (pos >= input.length()) {
+        throw new IllegalArgumentException("Unexpected end of input");
+      }
+
+      final char c = input.charAt(pos);
+      switch (c) {
+        case '(':
+          return parseUnit();
+        case 't':
+        case 'f':
+          return parseBool();
+        case '"':
+          return parseString();
+        case '#':
+          return parseChar();
+        case '[':
+          return parseList();
+        case '{':
+          return parseRecord();
+        case '-':
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          return parseNumber();
+        case 'U':
+          return parseDatatype();
+        case 'N':
+          return parseOption();
+        case 'S':
+          return parseOption();
+        default:
+          throw new IllegalArgumentException(
+              "Unexpected character at position " + pos + ": " + c);
+      }
+    }
+
+    private List parseUnit() {
+      expect("()");
+      return ImmutableList.of("UNIT");
+    }
+
+    private List parseBool() {
+      if (tryConsume("true")) {
+        return ImmutableList.of("BOOL", true);
+      } else if (tryConsume("false")) {
+        return ImmutableList.of("BOOL", false);
+      } else {
+        throw new IllegalArgumentException(
+            "Expected 'true' or 'false' at position " + pos);
+      }
+    }
+
+    private List parseNumber() {
+      final int start = pos;
+      boolean isNegative = false;
+      if (input.charAt(pos) == '-') {
+        isNegative = true;
+        pos++;
+      }
+
+      while (pos < input.length() && Character.isDigit(input.charAt(pos))) {
+        pos++;
+      }
+
+      // Check for real number (has decimal point or exponent)
+      boolean isReal = false;
+      if (pos < input.length() && input.charAt(pos) == '.') {
+        isReal = true;
+        pos++;
+        while (pos < input.length() && Character.isDigit(input.charAt(pos))) {
+          pos++;
+        }
+      }
+
+      if (pos < input.length()
+          && (input.charAt(pos) == 'e' || input.charAt(pos) == 'E')) {
+        isReal = true;
+        pos++;
+        if (pos < input.length()
+            && (input.charAt(pos) == '+' || input.charAt(pos) == '-')) {
+          pos++;
+        }
+        while (pos < input.length() && Character.isDigit(input.charAt(pos))) {
+          pos++;
+        }
+      }
+
+      final String numStr = input.substring(start, pos);
+      if (isReal) {
+        return ImmutableList.of("REAL", Double.parseDouble(numStr));
+      } else {
+        return ImmutableList.of("INT", Integer.parseInt(numStr));
+      }
+    }
+
+    private List parseString() {
+      expect("\"");
+      final StringBuilder sb = new StringBuilder();
+      while (pos < input.length() && input.charAt(pos) != '"') {
+        if (input.charAt(pos) == '\\') {
+          pos++;
+          if (pos >= input.length()) {
+            throw new IllegalArgumentException("Incomplete escape sequence");
+          }
+          final char c = input.charAt(pos);
+          switch (c) {
+            case 'n':
+              sb.append('\n');
+              break;
+            case 't':
+              sb.append('\t');
+              break;
+            case 'r':
+              sb.append('\r');
+              break;
+            case '\\':
+              sb.append('\\');
+              break;
+            case '"':
+              sb.append('"');
+              break;
+            default:
+              sb.append(c);
+              break;
+          }
+          pos++;
+        } else {
+          sb.append(input.charAt(pos));
+          pos++;
+        }
+      }
+      expect("\"");
+      return ImmutableList.of("STRING", sb.toString());
+    }
+
+    private List parseChar() {
+      expect("#\"");
+      if (pos >= input.length()) {
+        throw new IllegalArgumentException("Incomplete character literal");
+      }
+      char c;
+      if (input.charAt(pos) == '\\') {
+        pos++;
+        if (pos >= input.length()) {
+          throw new IllegalArgumentException("Incomplete escape sequence");
+        }
+        final char escapeChar = input.charAt(pos);
+        switch (escapeChar) {
+          case 'n':
+            c = '\n';
+            break;
+          case 't':
+            c = '\t';
+            break;
+          case 'r':
+            c = '\r';
+            break;
+          case '\\':
+            c = '\\';
+            break;
+          case '"':
+            c = '"';
+            break;
+          default:
+            c = escapeChar;
+            break;
+        }
+        pos++;
+      } else {
+        c = input.charAt(pos);
+        pos++;
+      }
+      expect("\"");
+      return ImmutableList.of("CHAR", c);
+    }
+
+    private List parseList() {
+      expect("[");
+      skipWhitespace();
+      if (tryConsume("]")) {
+        return ImmutableList.of("LIST", ImmutableList.of());
+      }
+
+      final ImmutableList.Builder<List> values = ImmutableList.builder();
+      values.add(parseValue());
+      skipWhitespace();
+      while (tryConsume(",")) {
+        skipWhitespace();
+        values.add(parseValue());
+        skipWhitespace();
+      }
+      expect("]");
+      return ImmutableList.of("LIST", values.build());
+    }
+
+    private List parseRecord() {
+      expect("{");
+      skipWhitespace();
+      if (tryConsume("}")) {
+        return ImmutableList.of("RECORD", ImmutableList.of());
+      }
+
+      final ImmutableList.Builder<List> fields = ImmutableList.builder();
+      // Parse first field
+      skipWhitespace();
+      final String fieldName = parseIdentifier();
+      skipWhitespace();
+      expect("=");
+      skipWhitespace();
+      final List fieldValue = parseValue();
+      fields.add(ImmutableList.of(fieldName, fieldValue));
+
+      skipWhitespace();
+      while (tryConsume(",")) {
+        skipWhitespace();
+        final String name = parseIdentifier();
+        skipWhitespace();
+        expect("=");
+        skipWhitespace();
+        final List value = parseValue();
+        fields.add(ImmutableList.of(name, value));
+        skipWhitespace();
+      }
+      expect("}");
+      return ImmutableList.of("RECORD", fields.build());
+    }
+
+    private List parseOption() {
+      if (tryConsume("NONE")) {
+        return ImmutableList.of("OPTION", ImmutableList.of());
+      } else if (tryConsume("SOME")) {
+        skipWhitespace();
+        final List value = parseValue();
+        return ImmutableList.of("OPTION", ImmutableList.of(value));
+      } else {
+        throw new IllegalArgumentException(
+            "Expected 'NONE' or 'SOME' at position " + pos);
+      }
+    }
+
+    private List parseDatatype() {
+      final String constructor = parseIdentifier();
+      skipWhitespace();
+      final List value = parseValue();
+      return ImmutableList.of("DATATYPE", ImmutableList.of(constructor, value));
+    }
+
+    private String parseIdentifier() {
+      final int start = pos;
+      while (pos < input.length()
+          && (Character.isLetterOrDigit(input.charAt(pos))
+              || input.charAt(pos) == '_')) {
+        pos++;
+      }
+      if (start == pos) {
+        throw new IllegalArgumentException(
+            "Expected identifier at position " + pos);
+      }
+      return input.substring(start, pos);
+    }
+
+    private void skipWhitespace() {
+      while (pos < input.length()
+          && Character.isWhitespace(input.charAt(pos))) {
+        pos++;
+      }
+    }
+
+    private void expect(String expected) {
+      skipWhitespace();
+      if (!input.startsWith(expected, pos)) {
+        throw new IllegalArgumentException(
+            "Expected '"
+                + expected
+                + "' at position "
+                + pos
+                + " but found: "
+                + input.substring(pos, Math.min(pos + 10, input.length())));
+      }
+      pos += expected.length();
+    }
+
+    private boolean tryConsume(String expected) {
+      skipWhitespace();
+      if (input.startsWith(expected, pos)) {
+        pos += expected.length();
+        return true;
+      }
+      return false;
+    }
+  }
+
   /** @see BuiltIn#OPTION_VAL_OF */
   private static final Applicable OPTION_VAL_OF = new OptionValOf(Pos.ZERO);
 
@@ -3422,28 +3878,30 @@ public abstract class Codes {
 
   /** @see BuiltIn#VALUE_PARSE */
   private static final Applicable1 VALUE_PARSE =
-      new BaseApplicable1<String, String>(BuiltIn.VALUE_PARSE) {
+      new BaseApplicable1<List, String>(BuiltIn.VALUE_PARSE) {
         @Override
-        public String apply(String s) {
-          return s;
+        public List apply(String s) {
+          return valueParse(s);
         }
       };
 
   /** @see BuiltIn#VALUE_PRETTY_PRINT */
-  private static final Applicable1 VALUE_PRETTY_PRINT =
-      new BaseApplicable1<String, String>(BuiltIn.VALUE_PRETTY_PRINT) {
+  private static final Applicable VALUE_PRETTY_PRINT =
+      new ApplicableImpl(BuiltIn.VALUE_PRETTY_PRINT) {
         @Override
-        public String apply(String s) {
-          return s;
+        public String apply(EvalEnv env, Object arg) {
+          final List value = (List) arg;
+          final Session session = env.getSession();
+          return valuePrettyPrint(value, session);
         }
       };
 
   /** @see BuiltIn#VALUE_PRINT */
   private static final Applicable1 VALUE_PRINT =
-      new BaseApplicable1<String, String>(BuiltIn.VALUE_PRINT) {
+      new BaseApplicable1<String, List>(BuiltIn.VALUE_PRINT) {
         @Override
-        public String apply(String s) {
-          return s;
+        public String apply(List value) {
+          return valuePrint(value);
         }
       };
 

@@ -4914,4 +4914,65 @@ Sys.plan ();
 >   "apply2(fnValue Vector.collate, match(v, apply(fnCode match((i, j), apply(fnCode match(true, constant([LESS]), _, apply(fnCode match(true, constant([EQUAL]), _, constant([GREATER])), argCode apply2(fnValue =, get(name i), get(name j)))), argCode apply2(fnValue <, get(name i), get(name j)))), argCode get(name v))), tuple(apply(fnValue Vector.fromList, argCode tuple(constant(1), constant(3), constant(5))), apply(fnValue Vector.fromList, argCode tuple(constant(1), constant(3), constant(6)))))"
 >   : string
 
+(*) Value structure tests
+
+(*) value datatype constructors exist
+UNIT;
+> val it = UNIT : value
+BOOL true;
+> val it = BOOL true : value
+INT 42;
+> val it = INT 42 : value
+REAL 3.14;
+> val it = REAL 3.14 : value
+CHAR #"x";
+> val it = CHAR #"x" : value
+STRING "hello";
+> val it = STRING "hello" : value
+LIST [INT 1, INT 2];
+> val it = LIST [INT 1,INT 2] : value
+BAG [INT 3];
+> val it = BAG [INT 3] : value
+VECTOR [STRING "a"];
+> val it = VECTOR [STRING "a"] : value
+OPTION NONE;
+> val it = OPTION (NONE) : value
+OPTION (SOME (INT 5));
+> val it = OPTION (SOME (INT 5)) : value
+RECORD [("x", INT 1)];
+> val it = RECORD [("x",INT 1)] : value
+DATATYPE ("Cons", UNIT);
+> val it = DATATYPE ("Cons",UNIT) : value
+
+(*) Value.print : value -> string (TODO: implement)
+(* Value.print;
+> val it = fn : value -> string
+Value.print UNIT;
+> val it = "()" : string
+Value.print (INT 42);
+> val it = "42" : string
+Value.print (STRING "hello");
+> val it = "\"hello\"" : string
+Value.print (LIST [INT 1, INT 2, INT 3]);
+> val it = "[1, 2, 3]" : string
+*)
+
+(*) Value.prettyPrint : value -> string (TODO: implement)
+(* Value.prettyPrint;
+> val it = fn : value -> string
+Value.prettyPrint (RECORD [("name", STRING "Alice"), ("age", INT 30)]);
+> val it = "{name = \"Alice\", age = 30}" : string
+*)
+
+(*) Value.parse : string -> value (TODO: implement)
+(* Value.parse;
+> val it = fn : string -> value
+Value.parse "()";
+> val it = UNIT : value
+Value.parse "42";
+> val it = INT 42 : value
+Value.parse "true";
+> val it = BOOL true : value
+*)
+
 (*) End built-in.smli
