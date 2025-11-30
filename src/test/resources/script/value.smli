@@ -285,4 +285,26 @@ testRoundTrip
   ]);
 > val it = true : bool
 
+(*) Test parsing negative integers
+Value.parse "~5";
+> val it = INT ~5 : value
+Value.parse "~42";
+> val it = INT ~42 : value
+Value.parse "~1";
+> val it = INT ~1 : value
+
+(*) Test parsing negative reals
+Value.parse "~3.14";
+> val it = REAL ~3.14 : value
+Value.parse "~0.5";
+> val it = REAL ~0.5 : value
+Value.parse "~2.5";
+> val it = REAL ~2.5 : value
+
+(*) Test round-trip for negative integers
+testRoundTrip (INT ~5);
+> val it = true : bool
+testRoundTrip (INT ~100);
+> val it = true : bool
+
 (*) End value.smli
