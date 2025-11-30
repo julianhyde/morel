@@ -504,19 +504,23 @@ public abstract class Codes {
 
   /** @see BuiltIn#DATALOG_EXECUTE */
   private static final Applicable DATALOG_EXECUTE =
-      new BaseApplicable1<String, String>(BuiltIn.DATALOG_EXECUTE) {
+      new BaseApplicable(BuiltIn.DATALOG_EXECUTE) {
         @Override
-        public String apply(String s) {
-          return "";
+        public Object apply(EvalEnv env, Object arg) {
+          String program = (String) arg;
+          return net.hydromatic.morel.datalog.DatalogEvaluator.execute(
+              program, env.getSession());
         }
       };
 
   /** @see BuiltIn#DATALOG_VALIDATE */
   private static final Applicable DATALOG_VALIDATE =
-      new BaseApplicable1<String, String>(BuiltIn.DATALOG_VALIDATE) {
+      new BaseApplicable(BuiltIn.DATALOG_VALIDATE) {
         @Override
-        public String apply(String s) {
-          return "";
+        public Object apply(EvalEnv env, Object arg) {
+          String program = (String) arg;
+          return net.hydromatic.morel.datalog.DatalogEvaluator.validate(
+              program, env.getSession());
         }
       };
 
