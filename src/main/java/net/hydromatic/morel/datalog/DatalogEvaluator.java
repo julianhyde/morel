@@ -118,7 +118,8 @@ public class DatalogEvaluator {
       return result.toString().trim();
 
     } catch (ParseException e) {
-      throw new DatalogException("Parse error: " + e.getMessage(), e);
+      throw new DatalogException(
+          String.format("Parse error: %s", e.getMessage()), e);
     }
   }
 
@@ -490,7 +491,8 @@ public class DatalogEvaluator {
       return buildOutputType(ast, typeSystem);
 
     } catch (ParseException e) {
-      throw new DatalogException("Parse error: " + e.getMessage(), e);
+      throw new DatalogException(
+          String.format("Parse error: %s", e.getMessage()), e);
     }
   }
 
@@ -514,7 +516,7 @@ public class DatalogEvaluator {
 
       if (decl == null) {
         throw new DatalogException(
-            "Output relation '" + relationName + "' not declared");
+            String.format("Output relation '%s' not declared", relationName));
       }
 
       // Build tuple type for the relation
@@ -571,7 +573,8 @@ public class DatalogEvaluator {
       case "symbol":
         return PrimitiveType.STRING;
       default:
-        throw new DatalogException("Unknown Datalog type: " + datalogType);
+        throw new DatalogException(
+            String.format("Unknown Datalog type: %s", datalogType));
     }
   }
 }
