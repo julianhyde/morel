@@ -20,6 +20,7 @@ package net.hydromatic.morel.eval;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import java.util.regex.Matcher;
 
 /**
  * Utilities for the Value structure - universal value representation for
@@ -248,50 +249,29 @@ public class Values {
     }
 
     private List parseNumber() {
-      final int start = pos;
-      // Handle ~ (Standard ML negation operator)
-      if (input.charAt(pos) == '~') {
-        pos++;
-      }
+      // Reuse the parsing logic from INT_FROM_STRING and REAL_FROM_STRING
+      final String remaining = input.substring(pos);
+      final String s2 = remaining.replace('~', '-');
 
-      while (pos < input.length() && Character.isDigit(input.charAt(pos))) {
-        pos++;
-      }
+      // Try to parse as REAL first (FLOAT_PATTERN is more general)
+      final Matcher floatMatcher = Codes.FLOAT_PATTERN.matcher(s2);
+      if (floatMatcher.find(0)) {
+        final String s3 = s2.substring(0, floatMatcher.end());
+        final String original = remaining.substring(0, floatMatcher.end());
+        pos += floatMatcher.end();
 
-      // Check for real number (has decimal point or exponent)
-      boolean isReal = false;
-      if (pos < input.length() && input.charAt(pos) == '.') {
-        isReal = true;
-        pos++;
-        while (pos < input.length() && Character.isDigit(input.charAt(pos))) {
-          pos++;
+        // Check if it's actually a real (has decimal point or exponent)
+        if (s3.contains(".") || s3.contains("e") || s3.contains("E")) {
+          final float f = Float.parseFloat(s3);
+          return ImmutableList.of("REAL", f);
+        } else {
+          // It's an integer
+          final int i = Integer.parseInt(s3);
+          return ImmutableList.of("INT", i);
         }
       }
 
-      if (pos < input.length()
-          && (input.charAt(pos) == 'e' || input.charAt(pos) == 'E')) {
-        isReal = true;
-        pos++;
-        if (pos < input.length()
-            && (input.charAt(pos) == '+' || input.charAt(pos) == '-')) {
-          pos++;
-        }
-        while (pos < input.length() && Character.isDigit(input.charAt(pos))) {
-          pos++;
-        }
-      }
-
-      // Convert ~ to - for Java's parser (Standard ML uses ~ for negation)
-      String numStr = input.substring(start, pos);
-      if (numStr.startsWith("~")) {
-        numStr = "-" + numStr.substring(1);
-      }
-
-      if (isReal) {
-        return ImmutableList.of("REAL", Float.parseFloat(numStr));
-      } else {
-        return ImmutableList.of("INT", Integer.parseInt(numStr));
-      }
+      throw new IllegalArgumentException("Expected number at position " + pos);
     }
 
     private List parseString() {
