@@ -27,20 +27,31 @@ PARSER_BEGIN(DatalogParserImpl)
 
 package net.hydromatic.morel.datalog;
 
-import net.hydromatic.morel.datalog.DatalogAst.*;
+import net.hydromatic.morel.datalog.DatalogAst.Atom;
+import net.hydromatic.morel.datalog.DatalogAst.BodyAtom;
+import net.hydromatic.morel.datalog.DatalogAst.CompOp;
+import net.hydromatic.morel.datalog.DatalogAst.Comparison;
+import net.hydromatic.morel.datalog.DatalogAst.Constant;
+import net.hydromatic.morel.datalog.DatalogAst.Declaration;
+import net.hydromatic.morel.datalog.DatalogAst.Fact;
+import net.hydromatic.morel.datalog.DatalogAst.Input;
+import net.hydromatic.morel.datalog.DatalogAst.Output;
+import net.hydromatic.morel.datalog.DatalogAst.Param;
+import net.hydromatic.morel.datalog.DatalogAst.Program;
+import net.hydromatic.morel.datalog.DatalogAst.Rule;
+import net.hydromatic.morel.datalog.DatalogAst.Statement;
+import net.hydromatic.morel.datalog.DatalogAst.Term;
+import net.hydromatic.morel.datalog.DatalogAst.Variable;
 
-import com.google.common.collect.ImmutableList;
-
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Parser for Datalog, generated from DatalogParser.jj by JavaCC.
- */
+/** Parser for Datalog, generated from DatalogParser.jj by JavaCC. */
 public class DatalogParserImpl {
   /** Parses a Datalog program from a string. */
   public static Program parse(String input) throws ParseException {
-    java.io.StringReader reader = new java.io.StringReader(input);
+    StringReader reader = new StringReader(input);
     DatalogParserImpl parser = new DatalogParserImpl(reader);
     return parser.program();
   }
@@ -89,9 +100,7 @@ TOKEN :
 | < IDENTIFIER: ["a"-"z", "A"-"Z", "_"] (["a"-"z", "A"-"Z", "0"-"9", "_"])* >
 }
 
-/**
- * Parses a complete Datalog program.
- */
+/** Parses a complete Datalog program. */
 Program program() :
 {
   final List<Statement> statements = new ArrayList<Statement>();
@@ -105,12 +114,10 @@ Program program() :
   { return new Program(statements); }
 }
 
-/**
- * Parses a single statement (declaration, input, output, fact, or rule).
- */
+/** Parses a single statement (declaration, input, output, fact, or rule). */
 Statement statement() :
 {
-  Statement stmt;
+  final Statement stmt;
 }
 {
   (
@@ -121,9 +128,7 @@ Statement statement() :
   )
 }
 
-/**
- * Parses a declaration: .decl relation(var:type, ...)
- */
+/** Parses a declaration: {@code .decl relation(var:type, ...)} */
 Declaration declaration() :
 {
   Token name;
@@ -134,9 +139,7 @@ Declaration declaration() :
   { return new Declaration(name.image, params); }
 }
 
-/**
- * Parses a parameter list for a declaration.
- */
+/** Parses a parameter list for a declaration. */
 List<Param> paramList() :
 {
   final List<Param> params = new ArrayList<Param>();
@@ -152,25 +155,21 @@ List<Param> paramList() :
   { return params; } // empty list
 }
 
-/**
- * Parses a single parameter: var:type
- */
+/** Parses a single parameter: {@code var:type}. */
 Param param() :
 {
-  Token name;
-  String type;
+  final Token name;
+  final String type;
 }
 {
   name = <IDENTIFIER> <COLON> type = datalogType()
   { return new Param(name.image, type); }
 }
 
-/**
- * Parses a Datalog type.
- */
+/** Parses a Datalog type. */
 String datalogType() :
 {
-  Token t;
+  final Token t;
 }
 {
   (
@@ -180,39 +179,31 @@ String datalogType() :
   )
 }
 
-/**
- * Parses an input directive: .input relation
- */
+/** Parses an input directive: {@code .input relation}. */
 Input input() :
 {
-  Token name;
+  final Token name;
 }
 {
   <INPUT> name = <IDENTIFIER>
   { return new Input(name.image); }
 }
 
-/**
- * Parses an output directive: .output relation
- */
+/** Parses an output directive: {@code .output relation}. */
 Output output() :
 {
-  Token name;
+  final Token name;
 }
 {
   <OUTPUT> name = <IDENTIFIER>
   { return new Output(name.image); }
 }
 
-/**
- * Parses a fact or rule.
- * Fact: atom.
- * Rule: atom :- body.
- */
+/** Parses a fact ({@code atom.}) or rule ({@code atom :- body.}). */
 Statement factOrRule() :
 {
-  Atom head;
-  List<BodyAtom> body;
+  final Atom head;
+  final List<BodyAtom> body;
 }
 {
   head = atom()
@@ -224,9 +215,8 @@ Statement factOrRule() :
   )
 }
 
-/**
- * Parses the body of a rule: a comma-separated list of (possibly negated) atoms.
- */
+/** Parses the body of a rule: a comma-separated list of (possibly negated)
+ * atoms. */
 List<BodyAtom> ruleBody() :
 {
   final List<BodyAtom> bodyAtoms = new ArrayList<BodyAtom>();
@@ -240,15 +230,13 @@ List<BodyAtom> ruleBody() :
   { return bodyAtoms; }
 }
 
-/**
- * Parses a body atom (optionally negated).
- */
+/** Parses a body atom (optionally negated). */
 BodyAtom bodyAtom() :
 {
   boolean negated = false;
-  Atom atom;
-  Term left, right;
-  CompOp op;
+  final Atom atom;
+  final Term left, right;
+  final CompOp op;
 }
 {
   LOOKAHEAD(2)
@@ -262,9 +250,7 @@ BodyAtom bodyAtom() :
   { return new BodyAtom(atom, negated); }
 }
 
-/**
- * Parses a comparison operator.
- */
+/** Parses a comparison operator. */
 CompOp compOp() :
 {}
 {
@@ -276,22 +262,18 @@ CompOp compOp() :
 | <GT> { return CompOp.GT; }
 }
 
-/**
- * Parses an atom: relation(term, ...)
- */
+/** Parses an atom: {@code relation(term, ...)}. */
 Atom atom() :
 {
-  Token name;
-  List<Term> terms;
+  final Token name;
+  final List<Term> terms;
 }
 {
   name = <IDENTIFIER> <LPAREN> terms = termList() <RPAREN>
   { return new Atom(name.image, terms); }
 }
 
-/**
- * Parses a term list.
- */
+/** Parses a term list. */
 List<Term> termList() :
 {
   final List<Term> terms = new ArrayList<Term>();
@@ -307,19 +289,18 @@ List<Term> termList() :
   { return terms; } // empty list
 }
 
-/**
- * Parses a term (variable or constant).
- */
+/** Parses a term (variable or constant). */
 Term term() :
 {
-  Token t;
-  String strValue;
-  int intValue;
+  final Token t;
+  final String strValue;
+  final int intValue;
 }
 {
   t = <IDENTIFIER>
   {
-    // Variables start with lowercase, constants with uppercase (but we treat all identifiers as variables)
+    // Variables start with lowercase, constants with uppercase (but we treat
+    // all identifiers as variables)
     return new Variable(t.image);
   }
 | t = <INTEGER_LITERAL>
@@ -329,14 +310,13 @@ Term term() :
   }
 | t = <STRING_LITERAL>
   {
-    // Remove quotes from string literal
-    strValue = t.image.substring(1, t.image.length() - 1);
-    // Unescape basic escapes
-    strValue = strValue.replace("\\n", "\n")
-                       .replace("\\r", "\r")
-                       .replace("\\t", "\t")
-                       .replace("\\\\", "\\")
-                       .replace("\\\"", "\"");
+    // Remove quotes from string literal, and unescape
+    strValue = t.image.substring(1, t.image.length() - 1)
+        .replace("\\n", "\n")
+        .replace("\\r", "\r")
+        .replace("\\t", "\t")
+        .replace("\\\\", "\\")
+        .replace("\\\"", "\"");
     // String literals are treated as symbols by default in Datalog
     return new Constant(strValue, "symbol");
   }
