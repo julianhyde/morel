@@ -76,6 +76,7 @@ import net.hydromatic.morel.type.TypeSystem;
  * <p>Core API Usage:
  *
  * <blockquote>
+ *
  * <pre>
  * // Create predicate function: fun p(x, y) = body
  * FnType fnType = typeSystem.fnType(tupleType, PrimitiveType.BOOL);
@@ -91,6 +92,7 @@ import net.hydromatic.morel.type.TypeSystem;
  * // Create equality: x = 1
  * Core.Exp eq = core.equal(typeSystem, idExp, literalExp);
  * </pre>
+ *
  * </blockquote>
  */
 public class DatalogToCoreTranslator {
