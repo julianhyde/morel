@@ -16,6 +16,12 @@
  * language governing permissions and limitations under the
  * License.
  *)
+Sys.set ("printDepth", ~1);
+> val it = () : unit
+Sys.set ("lineWidth", 78);
+> val it = () : unit
+Sys.set ("stringDepth", ~1);
+> val it = () : unit
 
 (*) Basic validation - valid program
 Datalog.validate ".decl edge(x:number, y:number)
@@ -27,7 +33,7 @@ edge(2,3).
 (*) Basic validation - parse error
 Datalog.validate ".decl edge(x:number";
 > val it =
->   "Error: Parse error: Encountered \"<EOF>\" at line 1, column 19.\nWas expe#"
+>   "Error: Parse error: Encountered \"<EOF>\" at line 1, column 19.\nWas expecting one of:\n    \")\" ...\n    \",\" ...\n    "
 >   : string
 
 (*) Schema validation - arity mismatch in fact
@@ -57,7 +63,7 @@ Datalog.validate ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 path(X,Y) :- edge(X,Z).";
 > val it =
->   "Error: Rule is unsafe. Variable 'Y' in head does not appear in positiv#"
+>   "Error: Rule is unsafe. Variable 'Y' in head does not appear in positive body atom"
 >   : string
 
 (*) Safety - unsafe negation (variable only in negated atom)
@@ -65,7 +71,7 @@ Datalog.validate ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 path(X,Y) :- edge(X,Z), !edge(Y,W).";
 > val it =
->   "Error: Rule is unsafe. Variable 'Y' in head does not appear in positiv#"
+>   "Error: Rule is unsafe. Variable 'Y' in head does not appear in positive body atom"
 >   : string
 
 (*) Stratification - negation cycle
@@ -76,7 +82,7 @@ edge(1,2).
 p(X) :- edge(X,Y), !q(X).
 q(X) :- edge(X,Y), !p(X).";
 > val it =
->   "Error: Program is not stratified. Negation cycle detected involving re#"
+>   "Error: Program is not stratified. Negation cycle detected involving relation: p"
 >   : string
 
 (*) Stratification - valid stratified program
@@ -130,14 +136,14 @@ employee(\"Bob\", 25, sales).
 Datalog.validate ".decl person(name:string)
 person(42).";
 > val it =
->   "Error: Type mismatch in fact person(...): expected string, got number #"
+>   "Error: Type mismatch in fact person(...): expected string, got number for parameter name"
 >   : string
 
 (*) Type mismatch - string for number
 Datalog.validate ".decl num(n:number)
 num(\"hello\").";
 > val it =
->   "Error: Type mismatch in fact num(...): expected number, got symbol for#"
+>   "Error: Type mismatch in fact num(...): expected number, got symbol for parameter n"
 >   : string
 
 (*) Variables in facts are allowed
