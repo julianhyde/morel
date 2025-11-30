@@ -2354,7 +2354,7 @@ public abstract class Codes {
       case "LIST":
         return "[" + valuePrintList((List) value.get(1)) + "]";
       case "BAG":
-        return "{" + valuePrintList((List) value.get(1)) + "}";
+        return "bag [" + valuePrintList((List) value.get(1)) + "]";
       case "VECTOR":
         return "#[" + valuePrintList((List) value.get(1)) + "]";
       case "OPTION":
@@ -2510,35 +2510,8 @@ public abstract class Codes {
         case '[':
           return parseList();
         case '{':
-          // Check if it's a BAG ({...}) or RECORD ({key = value, ...})
-          // Peek ahead to see if there's an '=' which indicates a record
-          // Empty {} defaults to RECORD
-          int savePos = pos + 1;
-          while (savePos < input.length()
-              && Character.isWhitespace(input.charAt(savePos))) {
-            savePos++;
-          }
-          // Empty braces or identifier followed by '=' is a RECORD
-          boolean isRecord = false;
-          if (savePos >= input.length() || input.charAt(savePos) == '}') {
-            // Empty {} is a RECORD
-            isRecord = true;
-          } else if (savePos < input.length()
-              && Character.isLetter(input.charAt(savePos))) {
-            while (savePos < input.length()
-                && (Character.isLetterOrDigit(input.charAt(savePos))
-                    || input.charAt(savePos) == '_')) {
-              savePos++;
-            }
-            while (savePos < input.length()
-                && Character.isWhitespace(input.charAt(savePos))) {
-              savePos++;
-            }
-            if (savePos < input.length() && input.charAt(savePos) == '=') {
-              isRecord = true;
-            }
-          }
-          return isRecord ? parseRecord() : parseBag();
+          // Braces are always RECORD (BAG uses 'bag [...]' format)
+          return parseRecord();
         case '-':
         case '0':
         case '1':
@@ -2720,25 +2693,6 @@ public abstract class Codes {
       return ImmutableList.of("LIST", values.build());
     }
 
-    private List parseBag() {
-      expect("{");
-      skipWhitespace();
-      if (tryConsume("}")) {
-        return ImmutableList.of("BAG", ImmutableList.of());
-      }
-
-      final ImmutableList.Builder<List> values = ImmutableList.builder();
-      values.add(parseValue());
-      skipWhitespace();
-      while (tryConsume(",")) {
-        skipWhitespace();
-        values.add(parseValue());
-        skipWhitespace();
-      }
-      expect("}");
-      return ImmutableList.of("BAG", values.build());
-    }
-
     private List parseVector() {
       expect("#[");
       skipWhitespace();
@@ -2791,7 +2745,26 @@ public abstract class Codes {
     }
 
     private List parseIdentifierValue() {
-      // Check for DATATYPE() format first
+      // Check for 'bag' prefix first
+      if (tryConsume("bag")) {
+        skipWhitespace();
+        expect("[");
+        skipWhitespace();
+        if (tryConsume("]")) {
+          return ImmutableList.of("BAG", ImmutableList.of());
+        }
+        final ImmutableList.Builder<List> values = ImmutableList.builder();
+        values.add(parseValue());
+        skipWhitespace();
+        while (tryConsume(",")) {
+          skipWhitespace();
+          values.add(parseValue());
+          skipWhitespace();
+        }
+        expect("]");
+        return ImmutableList.of("BAG", values.build());
+      }
+      // Check for DATATYPE() format
       if (tryConsume("DATATYPE")) {
         skipWhitespace();
         if (tryConsume("(")) {
