@@ -28,7 +28,7 @@ Datalog.validate ".decl edge(x:number, y:number)
 edge(1,2).
 edge(2,3).
 .output edge";
-> val it = "string" : string
+> val it = "{edge:(int * int) list}" : string
 
 (*) Basic validation - parse error
 Datalog.validate ".decl edge(x:number";
@@ -92,7 +92,7 @@ edge(1,2).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> val it = "string" : string
+> val it = "{path:(int * int) list}" : string
 
 (*) Multiple .output directives
 Datalog.validate ".decl edge(x:number, y:number)
@@ -101,21 +101,21 @@ edge(1,2).
 path(X,Y) :- edge(X,Y).
 .output edge
 .output path";
-> val it = "string" : string
+> val it = "{edge:(int * int) list, path:(int * int) list}" : string
 
 (*) Basic facts - number type
 Datalog.validate ".decl num(n:number)
 num(42).
 num(0).
 .output num";
-> val it = "string" : string
+> val it = "{num:int list}" : string
 
 (*) Basic facts - string type
 Datalog.validate ".decl person(name:string)
 person(\"Alice\").
 person(\"Bob\").
 .output person";
-> val it = "string" : string
+> val it = "{person:string list}" : string
 
 (*) Basic facts - symbol type
 Datalog.validate ".decl color(c:symbol)
@@ -123,14 +123,14 @@ color(red).
 color(blue).
 color(green).
 .output color";
-> val it = "string" : string
+> val it = "{color:string list}" : string
 
 (*) Basic facts - mixed types
 Datalog.validate ".decl employee(name:string, age:number, dept:symbol)
 employee(\"Alice\", 30, engineering).
 employee(\"Bob\", 25, sales).
 .output employee";
-> val it = "string" : string
+> val it = "{employee:(string * int * string) list}" : string
 
 (*) Type mismatch - number for string
 Datalog.validate ".decl person(name:string)
@@ -149,7 +149,7 @@ num(\"hello\").";
 (*) Variables in facts are allowed
 Datalog.validate ".decl num(n:number)
 num(foo).";
-> val it = "string" : string
+> val it = "unit" : string
 
 (*) Simple rule - transitive closure
 Datalog.validate ".decl edge(x:number, y:number)
@@ -160,7 +160,7 @@ edge(3,4).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> val it = "string" : string
+> val it = "{path:(int * int) list}" : string
 
 (*) Simple rule - join
 Datalog.validate ".decl parent(p:string, c:string)
@@ -169,7 +169,7 @@ parent(\"Alice\", \"Bob\").
 parent(\"Alice\", \"Carol\").
 sibling(X,Y) :- parent(P,X), parent(P,Y).
 .output sibling";
-> val it = "string" : string
+> val it = "{sibling:(string * string) list}" : string
 
 (*) Negation - set difference
 Datalog.validate ".decl student(name:string)
@@ -180,7 +180,7 @@ student(\"Bob\").
 graduate(\"Alice\").
 undergraduate(X) :- student(X), !graduate(X).
 .output undergraduate";
-> val it = "string" : string
+> val it = "{undergraduate:string list}" : string
 
 (*) Complex example - ancestor queries
 Datalog.validate ".decl parent(p:string, c:string)
@@ -194,12 +194,14 @@ ancestor(A,D) :- ancestor(A,X), parent(X,D).
 descendant(P,D) :- ancestor(D,P).
 .output ancestor
 .output descendant";
-> val it = "string" : string
+> val it =
+>   "{ancestor:(string * string) list, descendant:(string * string) list}"
+>   : string
 
 (*) Empty relation
 Datalog.validate ".decl empty(x:number)
 .output empty";
-> val it = "string" : string
+> val it = "{empty:int list}" : string
 
 (*) Comments in Datalog
 Datalog.validate "// Line comment
@@ -207,7 +209,7 @@ Datalog.validate "// Line comment
 /* Block comment */
 edge(1,2).
 .output edge";
-> val it = "string" : string
+> val it = "{edge:(int * int) list}" : string
 
 (*) Execution - basic facts
 Datalog.execute ".decl num(n:number)
