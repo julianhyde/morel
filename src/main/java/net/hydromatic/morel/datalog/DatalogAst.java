@@ -187,6 +187,46 @@ public class DatalogAst {
     }
   }
 
+  /** Comparison operators for use in rule bodies. */
+  public enum CompOp {
+    EQ("="),
+    NE("!="),
+    LT("<"),
+    LE("<="),
+    GT(">"),
+    GE(">=");
+
+    public final String symbol;
+
+    CompOp(String symbol) {
+      this.symbol = symbol;
+    }
+
+    @Override
+    public String toString() {
+      return symbol;
+    }
+  }
+
+  /** A comparison predicate in a rule body. */
+  public static class Comparison extends BodyAtom {
+    public final Term left;
+    public final CompOp op;
+    public final Term right;
+
+    public Comparison(Term left, CompOp op, Term right) {
+      super(new Atom("$compare", ImmutableList.of(left, right)), false);
+      this.left = requireNonNull(left);
+      this.op = requireNonNull(op);
+      this.right = requireNonNull(right);
+    }
+
+    @Override
+    public String toString() {
+      return left + " " + op + " " + right;
+    }
+  }
+
   /** An atom: relation(term, ...) */
   public static class Atom {
     public final String name;
