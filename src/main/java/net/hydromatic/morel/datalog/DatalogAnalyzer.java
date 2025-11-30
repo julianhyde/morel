@@ -69,24 +69,16 @@ public class DatalogAnalyzer {
       Program program, Atom atom, String context) {
     if (!program.hasDeclaration(atom.name)) {
       throw new DatalogException(
-          "Relation '"
-              + atom.name
-              + "' used in "
-              + context
-              + " but not declared");
+          String.format(
+              "Relation '%s' used in %s but not declared", atom.name, context));
     }
 
     Declaration decl = program.getDeclaration(atom.name);
     if (atom.arity() != decl.arity()) {
       throw new DatalogException(
-          "Atom "
-              + atom.name
-              + "/"
-              + atom.arity()
-              + " does not match declaration "
-              + decl.name
-              + "/"
-              + decl.arity());
+          String.format(
+              "Atom %s/%d does not match declaration %s/%d",
+              atom.name, atom.arity(), decl.name, decl.arity()));
     }
 
     // Check types of constants in the atom
@@ -103,17 +95,13 @@ public class DatalogAnalyzer {
 
         if (!normalizedExpected.equals(normalizedActual)) {
           throw new DatalogException(
-              "Type mismatch in "
-                  + context
-                  + " "
-                  + atom.name
-                  + "(...): "
-                  + "expected "
-                  + expectedType
-                  + ", got "
-                  + actualType
-                  + " for parameter "
-                  + decl.params.get(i).name);
+              String.format(
+                  "Type mismatch in %s %s(...): expected %s, got %s for parameter %s",
+                  context,
+                  atom.name,
+                  expectedType,
+                  actualType,
+                  decl.params.get(i).name));
         }
       }
     }
@@ -165,9 +153,9 @@ public class DatalogAnalyzer {
         String varName = ((Variable) term).name;
         if (!groundedVars.contains(varName)) {
           throw new DatalogException(
-              "Rule is unsafe. Variable '"
-                  + varName
-                  + "' in head does not appear in positive body atom");
+              String.format(
+                  "Rule is unsafe. Variable '%s' in head does not appear in positive body atom",
+                  varName));
         }
       }
     }
@@ -184,11 +172,9 @@ public class DatalogAnalyzer {
                       ? "comparison"
                       : "negated atom";
               throw new DatalogException(
-                  "Rule is unsafe. Variable '"
-                      + varName
-                      + "' in "
-                      + context
-                      + " does not appear in positive body atom");
+                  String.format(
+                      "Rule is unsafe. Variable '%s' in %s does not appear in positive body atom",
+                      varName, context));
             }
           }
         }
@@ -231,8 +217,9 @@ public class DatalogAnalyzer {
       Set<String> recStack = new HashSet<>();
       if (hasNegationCycle(graph, relation, visited, recStack, false)) {
         throw new DatalogException(
-            "Program is not stratified. Negation cycle detected involving relation: "
-                + relation);
+            String.format(
+                "Program is not stratified. Negation cycle detected involving relation: %s",
+                relation));
       }
     }
   }
