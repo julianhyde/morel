@@ -4371,10 +4371,10 @@ Sys.env ();
 >     "{@:forall 'a. 'a bag * 'a bag -> 'a bag, all:forall 'a. ('a -> bool) -> 'a bag -> bool, app:forall 'a. ('a -> unit) -> 'a bag -> unit, concat:forall 'a. 'a bag list -> 'a bag, drop:forall 'a. 'a bag * int -> 'a bag, exists:forall 'a. ('a -> bool) -> 'a bag -> bool, filter:forall 'a. ('a -> bool) -> 'a bag -> 'a bag, find:forall 'a. ('a -> bool) -> 'a bag -> 'a option, fold:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a bag -> 'b, fromList:forall 'a. 'a list -> 'a bag, getItem:forall 'a. 'a bag -> ('a * 'a bag) option, hd:forall 'a. 'a bag -> 'a, length:forall 'a. 'a bag -> int, map:forall 'a 'b. ('a -> 'b) -> 'a bag -> 'b bag, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a bag -> 'b bag, nil:forall 'a. 'a bag, nth:forall 'a. 'a bag * int -> 'a, null:forall 'a. 'a bag -> bool, partition:forall 'a. ('a -> bool) -> 'a bag -> 'a bag * 'a bag, tabulate:forall 'a. int * (int -> 'a) -> 'a bag, take:forall 'a. 'a bag * int -> 'a bag, tl:forall 'a. 'a bag -> 'a bag, toList:forall 'a. 'a bag -> 'a list}"),
 >    ("Bool",
 >     "{fromString:string -> bool option, not:bool -> bool, toString:bool -> string}"),
->    ("CHAR","char -> value"),
+>    ("CHAR","char -> value"),("CON","string * value -> value"),
+>    ("CONST","string -> value"),
 >    ("Char",
 >     "{<:char * char -> bool, <=:char * char -> bool, >:char * char -> bool, >=:char * char -> bool, chr:int -> char, compare:char * char -> order, contains:string -> char -> bool, fromCString:string -> char option, fromString:string -> char option, isAlpha:char -> bool, isAlphaNum:char -> bool, isAscii:char -> bool, isCntrl:char -> bool, isDigit:char -> bool, isGraph:char -> bool, isHexDigit:char -> bool, isLower:char -> bool, isPrint:char -> bool, isPunct:char -> bool, isSpace:char -> bool, isUpper:char -> bool, maxChar:char, maxOrd:int, minChar:char, notContains:string -> char -> bool, ord:char -> int, pred:char -> char, succ:char -> char, toCString:char -> string, toLower:char -> char, toString:char -> string, toUpper:char -> char}"),
->    ("DATATYPE","string * value -> value"),
 >    ("DESC","forall 'a. 'a -> 'a descending"),("EQUAL","order"),
 >    ("Either",
 >     "{app:forall 'a 'b. ('a -> unit) * ('b -> unit) -> ('a,'b) either -> unit, appLeft:forall 'a 'b. ('a -> unit) -> ('a,'b) either -> unit, appRight:forall 'a 'b. ('b -> unit) -> ('a,'b) either -> unit, asLeft:forall 'a 'b. ('a,'b) either -> 'a option, asRight:forall 'a 'b. ('a,'b) either -> 'b option, fold:forall 'a 'b 'c. ('a * 'b -> 'b) * ('c * 'b -> 'b) -> 'b -> ('a,'c) either -> 'b, isLeft:forall 'a 'b. ('a,'b) either -> bool, isRight:forall 'a 'b. ('a,'b) either -> bool, map:forall 'a 'b 'c 'd. ('a -> 'c) * ('b -> 'd) -> ('a,'b) either -> ('c,'d) either, mapLeft:forall 'a 'b 'c. ('a -> 'b) -> ('a,'c) either -> ('b,'c) either, mapRight:forall 'a 'b 'c. ('b -> 'c) -> ('a,'b) either -> ('a,'c) either, partition:forall 'a 'b. ('a,'b) either list -> 'a list * 'b list, proj:forall 'a. ('a,'a) either -> 'a}"),
@@ -4477,10 +4477,10 @@ env ();
 >     "{@:forall 'a. 'a bag * 'a bag -> 'a bag, all:forall 'a. ('a -> bool) -> 'a bag -> bool, app:forall 'a. ('a -> unit) -> 'a bag -> unit, concat:forall 'a. 'a bag list -> 'a bag, drop:forall 'a. 'a bag * int -> 'a bag, exists:forall 'a. ('a -> bool) -> 'a bag -> bool, filter:forall 'a. ('a -> bool) -> 'a bag -> 'a bag, find:forall 'a. ('a -> bool) -> 'a bag -> 'a option, fold:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a bag -> 'b, fromList:forall 'a. 'a list -> 'a bag, getItem:forall 'a. 'a bag -> ('a * 'a bag) option, hd:forall 'a. 'a bag -> 'a, length:forall 'a. 'a bag -> int, map:forall 'a 'b. ('a -> 'b) -> 'a bag -> 'b bag, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a bag -> 'b bag, nil:forall 'a. 'a bag, nth:forall 'a. 'a bag * int -> 'a, null:forall 'a. 'a bag -> bool, partition:forall 'a. ('a -> bool) -> 'a bag -> 'a bag * 'a bag, tabulate:forall 'a. int * (int -> 'a) -> 'a bag, take:forall 'a. 'a bag * int -> 'a bag, tl:forall 'a. 'a bag -> 'a bag, toList:forall 'a. 'a bag -> 'a list}"),
 >    ("Bool",
 >     "{fromString:string -> bool option, not:bool -> bool, toString:bool -> string}"),
->    ("CHAR","char -> value"),
+>    ("CHAR","char -> value"),("CON","string * value -> value"),
+>    ("CONST","string -> value"),
 >    ("Char",
 >     "{<:char * char -> bool, <=:char * char -> bool, >:char * char -> bool, >=:char * char -> bool, chr:int -> char, compare:char * char -> order, contains:string -> char -> bool, fromCString:string -> char option, fromString:string -> char option, isAlpha:char -> bool, isAlphaNum:char -> bool, isAscii:char -> bool, isCntrl:char -> bool, isDigit:char -> bool, isGraph:char -> bool, isHexDigit:char -> bool, isLower:char -> bool, isPrint:char -> bool, isPunct:char -> bool, isSpace:char -> bool, isUpper:char -> bool, maxChar:char, maxOrd:int, minChar:char, notContains:string -> char -> bool, ord:char -> int, pred:char -> char, succ:char -> char, toCString:char -> string, toLower:char -> char, toString:char -> string, toUpper:char -> char}"),
->    ("DATATYPE","string * value -> value"),
 >    ("DESC","forall 'a. 'a -> 'a descending"),("EQUAL","order"),
 >    ("Either",
 >     "{app:forall 'a 'b. ('a -> unit) * ('b -> unit) -> ('a,'b) either -> unit, appLeft:forall 'a 'b. ('a -> unit) -> ('a,'b) either -> unit, appRight:forall 'a 'b. ('b -> unit) -> ('a,'b) either -> unit, asLeft:forall 'a 'b. ('a,'b) either -> 'a option, asRight:forall 'a 'b. ('a,'b) either -> 'b option, fold:forall 'a 'b 'c. ('a * 'b -> 'b) * ('c * 'b -> 'b) -> 'b -> ('a,'c) either -> 'b, isLeft:forall 'a 'b. ('a,'b) either -> bool, isRight:forall 'a 'b. ('a,'b) either -> bool, map:forall 'a 'b 'c 'd. ('a -> 'c) * ('b -> 'd) -> ('a,'b) either -> ('c,'d) either, mapLeft:forall 'a 'b 'c. ('a -> 'b) -> ('a,'c) either -> ('b,'c) either, mapRight:forall 'a 'b 'c. ('b -> 'c) -> ('a,'b) either -> ('a,'c) either, partition:forall 'a 'b. ('a,'b) either list -> 'a list * 'b list, proj:forall 'a. ('a,'a) either -> 'a}"),
@@ -4943,8 +4943,10 @@ VALUE_SOME (INT 5);
 > val it = VALUE_SOME (INT 5) : value
 RECORD [("x", INT 1)];
 > val it = RECORD [("x",INT 1)] : value
-DATATYPE ("Cons", UNIT);
-> val it = DATATYPE ("Cons",UNIT) : value
+CONST "Nil";
+> val it = CONST "Nil" : value
+CON ("Cons", INT 1);
+> val it = CON ("Cons",INT 1) : value
 
 (*) Value.print : value -> string (TODO: implement)
 (* Value.print;

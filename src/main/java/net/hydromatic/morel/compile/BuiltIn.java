@@ -4179,7 +4179,8 @@ public enum BuiltIn {
      *   | VALUE_NONE
      *   | VALUE_SOME of value
      *   | RECORD of (string * value) list
-     *   | DATATYPE of string * value
+     *   | CONST of string
+     *   | CON of string * value
      * }</pre>
      */
     VALUE(
@@ -4199,7 +4200,8 @@ public enum BuiltIn {
                 .tyCon(Constructor.VALUE_NONE)
                 .tyCon(Constructor.VALUE_SOME)
                 .tyCon(Constructor.VALUE_RECORD)
-                .tyCon(Constructor.VALUE_DATATYPE));
+                .tyCon(Constructor.VALUE_CONST)
+                .tyCon(Constructor.VALUE_CON));
 
     private final String mlName;
     private final boolean internal;
@@ -4278,10 +4280,11 @@ public enum BuiltIn {
     VALUE_BAG(Datatype.VALUE, "BAG", h -> Keys.list(Keys.name("value"))),
     VALUE_BOOL(Datatype.VALUE, "BOOL", h -> BOOL.key()),
     VALUE_CHAR(Datatype.VALUE, "CHAR", h -> CHAR.key()),
-    VALUE_DATATYPE(
+    VALUE_CON(
         Datatype.VALUE,
-        "DATATYPE",
+        "CON",
         h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("value")))),
+    VALUE_CONST(Datatype.VALUE, "CONST", h -> STRING.key()),
     VALUE_INT(Datatype.VALUE, "INT", h -> INT.key()),
     VALUE_LIST(Datatype.VALUE, "LIST", h -> Keys.list(Keys.name("value"))),
     VALUE_NONE(Datatype.VALUE, "VALUE_NONE"),

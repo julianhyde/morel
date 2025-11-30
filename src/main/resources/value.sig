@@ -37,7 +37,8 @@ datatype value =
   | VALUE_NONE
   | VALUE_SOME of value
   | RECORD of (string * value) list
-  | DATATYPE of string * value
+  | CONST of string
+  | CON of string * value
 
 (* Value structure signature *)
 signature VALUE =
@@ -56,7 +57,8 @@ sig
     | VALUE_NONE
     | VALUE_SOME of value
     | RECORD of (string * value) list
-    | DATATYPE of string * value
+    | CONST of string
+    | CON of string * value
 
   (*
    * parse : string -> value
@@ -137,8 +139,8 @@ end
  *    This property is essential for reliable data exchange.
  *
  * 2. Nullary constructors:
- *    Nullary datatype constructors are represented as DATATYPE (name, UNIT).
- *    For example, the constructor NIL would be DATATYPE ("NIL", UNIT).
+ *    Nullary datatype constructors are represented as CONST name.
+ *    For example, the constructor NIL would be CONST "NIL".
  *
  * 3. Type information:
  *    Values do not carry explicit type information. The type system

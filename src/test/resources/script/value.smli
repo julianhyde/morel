@@ -126,18 +126,17 @@ RECORD [("name", STRING "Alice"), ("age", INT 30)];
 RECORD [("i", INT 42), ("b", BOOL true), ("s", STRING "test")];
 > val it = RECORD [("i",INT 42),("b",BOOL true),("s",STRING "test")] : value
 
-(*) DATATYPE constructor - nullary constructor
-DATATYPE ("NIL", UNIT);
-> val it = DATATYPE ("NIL",UNIT) : value
+(*) CONST constructor - nullary constructor
+CONST "NIL";
+> val it = CONST "NIL" : value
 
-(*) DATATYPE constructor - unary constructor
-DATATYPE ("SOME", INT 42);
-> val it = DATATYPE ("SOME",INT 42) : value
+(*) CON constructor - unary constructor
+CON ("SOME", INT 42);
+> val it = CON ("SOME",INT 42) : value
 
-(*) DATATYPE constructor - constructor with tuple
-DATATYPE ("CONS", RECORD [("1", INT 1), ("2", DATATYPE ("NIL", UNIT))]);
-> val it = DATATYPE ("CONS",RECORD [("1",INT 1),("2",DATATYPE ("NIL",UNIT))])
->   : value
+(*) CON constructor - constructor with tuple
+CON ("CONS", RECORD [("1", INT 1), ("2", CONST "NIL")]);
+> val it = CON ("CONS",RECORD [("1",INT 1),("2",CONST "NIL")]) : value
 
 (*) Complex nested value
 LIST [
@@ -191,7 +190,8 @@ fun valueDepth v =
   | VALUE_SOME v => 1 + valueDepth v
   | RECORD [] => 0
   | RECORD ((_, v)::rest) => Int.max (1 + (valueDepth v), valueDepth (RECORD rest))
-  | DATATYPE (_, v) => 1 + valueDepth v;
+  | CONST _ => 0
+  | CON (_, v) => 1 + valueDepth v;
 > val valueDepth = fn : value -> int
 
 valueDepth UNIT;
@@ -271,10 +271,10 @@ testRoundTrip (RECORD [("x", INT 1), ("y", INT 2)]);
 testRoundTrip (RECORD [("name", STRING "Alice"), ("age", INT 30)]);
 > val it = true : bool
 
-(*) Test datatype round-trip
-testRoundTrip (DATATYPE ("NIL", UNIT));
+(*) Test CONST and CON round-trip
+testRoundTrip (CONST "NIL");
 > val it = true : bool
-testRoundTrip (DATATYPE ("SOME", INT 42));
+testRoundTrip (CON ("SOME", INT 42));
 > val it = true : bool
 
 (*) Test complex nested structure round-trip

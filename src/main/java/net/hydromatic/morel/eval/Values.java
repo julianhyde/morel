@@ -71,13 +71,14 @@ public class Values {
         return "VALUE_SOME " + print((List) value.get(1));
       case "RECORD":
         return "{" + printRecord((List) value.get(1)) + "}";
-      case "DATATYPE":
-        final List dtPair = (List) value.get(1);
-        final String dtName = (String) dtPair.get(0);
-        final List dtValue = (List) dtPair.get(1);
-        // Use explicit DATATYPE() format to avoid ambiguity with OPTION
-        // constructors
-        return "DATATYPE(\"" + dtName + "\", " + print(dtValue) + ")";
+      case "CONST":
+        final String constName = (String) value.get(1);
+        return "CONST \"" + constName + "\"";
+      case "CON":
+        final List conPair = (List) value.get(1);
+        final String conName = (String) conPair.get(0);
+        final List conValue = (List) conPair.get(1);
+        return "CON (\"" + conName + "\", " + print(conValue) + ")";
       default:
         throw new IllegalArgumentException(
             "Unknown value constructor: " + constructor);
@@ -218,7 +219,8 @@ public class Values {
         case '9':
           return parseNumber();
         default:
-          // Check if it's an identifier (OPTION, BAG, or DATATYPE)
+          // Check if it's an identifier (bag, CONST, CON, VALUE_NONE,
+          // VALUE_SOME)
           if (Character.isLetter(c)) {
             return parseIdentifierValue();
           }
@@ -457,22 +459,29 @@ public class Values {
         expect("]");
         return ImmutableList.of("BAG", values.build());
       }
-      // Check for DATATYPE() format
-      if (tryConsume("DATATYPE")) {
+      // Check for CONST format (CONST "name")
+      if (tryConsume("CONST")) {
         skipWhitespace();
-        if (tryConsume("(")) {
-          skipWhitespace();
-          expect("\"");
-          final String name = parseStringContent();
-          expect("\"");
-          skipWhitespace();
-          expect(",");
-          skipWhitespace();
-          final List value = parseValue();
-          skipWhitespace();
-          expect(")");
-          return ImmutableList.of("DATATYPE", ImmutableList.of(name, value));
-        }
+        expect("\"");
+        final String constName = parseStringContent();
+        expect("\"");
+        return ImmutableList.of("CONST", constName);
+      }
+      // Check for CON format (CON ("name", value))
+      if (tryConsume("CON")) {
+        skipWhitespace();
+        expect("(");
+        skipWhitespace();
+        expect("\"");
+        final String conName = parseStringContent();
+        expect("\"");
+        skipWhitespace();
+        expect(",");
+        skipWhitespace();
+        final List conValue = parseValue();
+        skipWhitespace();
+        expect(")");
+        return ImmutableList.of("CON", ImmutableList.of(conName, conValue));
       }
       // Try VALUE_NONE and VALUE_SOME constructors
       if (tryConsume("VALUE_NONE")) {
