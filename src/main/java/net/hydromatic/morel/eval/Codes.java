@@ -883,20 +883,8 @@ public abstract class Codes {
       new BaseApplicable1<List, String>(BuiltIn.INT_FROM_STRING) {
         @Override
         public List apply(String s) {
-          final String s2 = s.replace('~', '-');
-          final Matcher matcher = INT_PATTERN.matcher(s2);
-          if (!matcher.find(0)) {
-            return OPTION_NONE;
-          }
-          final String s3 = s2.substring(0, matcher.end());
-          try {
-            final int f = Integer.parseInt(s3);
-            return optionSome(f);
-          } catch (NumberFormatException e) {
-            // We should not have reached this point. The pattern
-            // should not have matched the input.
-            throw new AssertionError(e);
-          }
+          final Integer i = parseInt(s);
+          return i == null ? OPTION_NONE : optionSome(i);
         }
       };
 
@@ -2542,25 +2530,56 @@ public abstract class Codes {
   static final Pattern FLOAT_PATTERN =
       Pattern.compile("^ *-?([0-9]*\\.)?[0-9]+([Ee]-?[0-9]+)?");
 
+  /**
+   * Parses an integer from a string that may use Standard ML negation syntax.
+   *
+   * @param s String to parse (may use ~ or - for negation)
+   * @return The parsed integer, or null if the string does not start with a
+   *     valid integer
+   */
+  public static Integer parseInt(String s) {
+    final String s2 = s.replace('~', '-');
+    final Matcher matcher = INT_PATTERN.matcher(s2);
+    if (!matcher.find(0)) {
+      return null;
+    }
+    final String s3 = s2.substring(0, matcher.end());
+    try {
+      return Integer.parseInt(s3);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  /**
+   * Parses a real (float) from a string that may use Standard ML negation
+   * syntax.
+   *
+   * @param s String to parse (may use ~ or - for negation)
+   * @return The parsed float, or null if the string does not start with a valid
+   *     real number
+   */
+  public static Float parseReal(String s) {
+    final String s2 = s.replace('~', '-');
+    final Matcher matcher = FLOAT_PATTERN.matcher(s2);
+    if (!matcher.find(0)) {
+      return null;
+    }
+    final String s3 = s2.substring(0, matcher.end());
+    try {
+      return Float.parseFloat(s3);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
   /** @see BuiltIn#REAL_FROM_STRING */
   private static final Applicable REAL_FROM_STRING =
       new BaseApplicable1<List, String>(BuiltIn.REAL_FROM_STRING) {
         @Override
         public List<Float> apply(String s) {
-          final String s2 = s.replace('~', '-');
-          final Matcher matcher = FLOAT_PATTERN.matcher(s2);
-          if (!matcher.find(0)) {
-            return OPTION_NONE;
-          }
-          final String s3 = s2.substring(0, matcher.end());
-          try {
-            final float f = Float.parseFloat(s3);
-            return optionSome(f);
-          } catch (NumberFormatException e) {
-            // We should not have reached this point. The pattern
-            // should not have matched the input.
-            throw new AssertionError(e);
-          }
+          final Float f = parseReal(s);
+          return f == null ? OPTION_NONE : optionSome(f);
         }
       };
 

@@ -20,7 +20,6 @@ package net.hydromatic.morel.eval;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
-import java.util.regex.Matcher;
 
 /**
  * Utilities for the Value structure - universal value representation for
@@ -249,26 +248,37 @@ public class Values {
     }
 
     private List parseNumber() {
-      // Reuse the parsing logic from INT_FROM_STRING and REAL_FROM_STRING
+      // Call parseReal and parseInt in succession to try both
       final String remaining = input.substring(pos);
-      final String s2 = remaining.replace('~', '-');
 
-      // Try to parse as REAL first (FLOAT_PATTERN is more general)
-      final Matcher floatMatcher = Codes.FLOAT_PATTERN.matcher(s2);
-      if (floatMatcher.find(0)) {
-        final String s3 = s2.substring(0, floatMatcher.end());
-        final String original = remaining.substring(0, floatMatcher.end());
-        pos += floatMatcher.end();
+      // Try parseReal first (FLOAT_PATTERN handles both reals and integers)
+      final Float f = Codes.parseReal(remaining);
+      if (f != null) {
+        // Determine how many characters were consumed and what type it is
+        final String s2 = remaining.replace('~', '-');
+        final java.util.regex.Matcher matcher = Codes.FLOAT_PATTERN.matcher(s2);
+        matcher.find(0);
+        final String consumed = s2.substring(0, matcher.end());
 
         // Check if it's actually a real (has decimal point or exponent)
-        if (s3.contains(".") || s3.contains("e") || s3.contains("E")) {
-          final float f = Float.parseFloat(s3);
+        if (consumed.contains(".")
+            || consumed.contains("e")
+            || consumed.contains("E")) {
+          pos += matcher.end();
           return ImmutableList.of("REAL", f);
-        } else {
-          // It's an integer
-          final int i = Integer.parseInt(s3);
-          return ImmutableList.of("INT", i);
         }
+        // Fall through to parseInt for integer case
+      }
+
+      // Try parseInt (will match if it's an integer)
+      final Integer i = Codes.parseInt(remaining);
+      if (i != null) {
+        // Determine how many characters were consumed
+        final String s2 = remaining.replace('~', '-');
+        final java.util.regex.Matcher matcher = Codes.INT_PATTERN.matcher(s2);
+        matcher.find(0);
+        pos += matcher.end();
+        return ImmutableList.of("INT", i);
       }
 
       throw new IllegalArgumentException("Expected number at position " + pos);
