@@ -57,6 +57,7 @@ import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
+import net.hydromatic.morel.datalog.DatalogEvaluator;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.DataType;
@@ -512,8 +513,7 @@ public abstract class Codes {
         @Override
         public Object apply(EvalEnv env, Object arg) {
           String program = (String) arg;
-          return net.hydromatic.morel.datalog.DatalogEvaluator.execute(
-              program, env.getSession());
+          return DatalogEvaluator.execute(program, env.getSession());
         }
       };
 
@@ -523,8 +523,7 @@ public abstract class Codes {
         @Override
         public Object apply(EvalEnv env, Object arg) {
           String program = (String) arg;
-          return net.hydromatic.morel.datalog.DatalogEvaluator.validate(
-              program, env.getSession());
+          return DatalogEvaluator.validate(program, env.getSession());
         }
       };
 
