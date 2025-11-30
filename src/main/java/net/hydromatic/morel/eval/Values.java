@@ -50,9 +50,11 @@ public class Values {
       case "BOOL":
         return String.valueOf(value.get(1));
       case "INT":
-        return String.valueOf(value.get(1));
+        final int intVal = (Integer) value.get(1);
+        return intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal);
       case "REAL":
-        return String.valueOf(value.get(1));
+        final float realVal = (Float) value.get(1);
+        return realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal);
       case "CHAR":
         final Character ch = (Character) value.get(1);
         return "#\"" + charEscape(ch) + "\"";
@@ -206,7 +208,7 @@ public class Values {
         case '{':
           // Braces are always RECORD (BAG uses 'bag [...]' format)
           return parseRecord();
-        case '-':
+        case '~':
         case '0':
         case '1':
         case '2':
@@ -247,9 +249,8 @@ public class Values {
 
     private List parseNumber() {
       final int start = pos;
-      boolean isNegative = false;
-      if (input.charAt(pos) == '-') {
-        isNegative = true;
+      // Handle ~ (Standard ML negation operator)
+      if (input.charAt(pos) == '~') {
         pos++;
       }
 
@@ -280,9 +281,14 @@ public class Values {
         }
       }
 
-      final String numStr = input.substring(start, pos);
+      // Convert ~ to - for Java's parser (Standard ML uses ~ for negation)
+      String numStr = input.substring(start, pos);
+      if (numStr.startsWith("~")) {
+        numStr = "-" + numStr.substring(1);
+      }
+
       if (isReal) {
-        return ImmutableList.of("REAL", Double.parseDouble(numStr));
+        return ImmutableList.of("REAL", Float.parseFloat(numStr));
       } else {
         return ImmutableList.of("INT", Integer.parseInt(numStr));
       }
