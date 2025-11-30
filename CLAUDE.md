@@ -990,18 +990,58 @@ path(x, y) :- edge(x, y).
 path(x, z) :- path(x, y), edge(y, z).
 ```
 
-**Translation** (conceptual Morel code):
-```sml
-fun edge (x, y) =
+**Translation Strategy (Simplified)**:
+
+Datalog rules translate directly to Morel predicate functions:
+
+```
+Datalog:  p(x) :- q(x, 1), r(x).
+Morel:    fun p x = q(x, 1) andalso r(x)
+
+Datalog:  .output p
+Morel:    from x where p(x)
+```
+
+**Complete Example**:
+```
+Datalog Input:
+.decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+edge(1, 2).
+edge(2, 3).
+path(X, Y) :- edge(X, Y).
+path(X, Z) :- path(X, Y), edge(Y, Z).
+.output path
+
+Generated Morel (conceptual):
+fun edge(x, y) =
   (x = 1 andalso y = 2) orelse
   (x = 2 andalso y = 3);
 
-fun path (x, y) =
-  edge (x, y) orelse
-  exists (from z where path (x, z) andalso edge (z, y));
+fun path(x, y) =
+  edge(x, y) orelse
+  (exists (from z where path(x, z) andalso edge(z, y)));
 
-from x, y where path (x, y)
+(* .output path becomes: *)
+from x, y where path(x, y)
 ```
+
+**Translation Rules**:
+1. **Facts** → Disjunction of equality tests
+   - `edge(1,2). edge(2,3).` → `fun edge(x,y) = (x=1 andalso y=2) orelse (x=2 andalso y=3)`
+
+2. **Rules** → Function returning conjunction of body predicates
+   - `p(X) :- q(X,1), r(X).` → `fun p x = q(x,1) andalso r(x)`
+   - Multiple rules with same head → Disjunction of rule bodies
+
+3. **Negation** → andalso not
+   - `p(X) :- q(X), !r(X).` → `fun p x = q(x) andalso not(r(x))`
+
+4. **Output** → from expression
+   - `.output p` → `from x where p(x)` (where x matches relation arity)
+
+5. **Recursive Rules** → Recursive functions
+   - `path(X,Z) :- path(X,Y), edge(Y,Z).` → Uses recursion in function definition
 
 **Output**:
 ```
