@@ -209,18 +209,13 @@ edge(1,2).
 .output edge";
 > val it = "string" : string
 
-(*) Execution - basic facts (not yet implemented)
-(* TODO
+(*) Execution - basic facts
 Datalog.execute ".decl num(n:number)
 num(1).
 num(2).
 num(3).
 .output num";
-> num
-> 1
-> 2
-> 3
-*)
+> val it = "num\n1\n2\n3" : string
 
 (*) Execution - transitive closure (not yet implemented)
 (* TODO
