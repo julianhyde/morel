@@ -205,4 +205,84 @@ valueDepth (LIST [LIST [INT 1]]);
 valueDepth (RECORD [("x", LIST [INT 1, INT 2])]);
 > val it = 2 : int
 
+(*) Round-trip tests: parse (print v) = v
+fun testRoundTrip v =
+  let
+    val s = Value.print v
+    val v2 = Value.parse s
+  in
+    v = v2
+  end;
+> val testRoundTrip = fn : value -> bool
+
+(*) Test primitives round-trip
+testRoundTrip UNIT;
+> val it = true : bool
+testRoundTrip (BOOL true);
+> val it = true : bool
+testRoundTrip (BOOL false);
+> val it = true : bool
+testRoundTrip (INT 0);
+> val it = true : bool
+testRoundTrip (INT 42);
+> val it = true : bool
+testRoundTrip (INT ~5);
+> val it = true : bool
+(*) REAL comparisons - note: real is not an equality type in Standard ML
+(*) so we can't directly compare REAL values; skip these tests
+(*testRoundTrip (REAL 0.0);*)
+(*> val it = true : bool*)
+(*testRoundTrip (REAL 3.14);*)
+(*> val it = true : bool*)
+testRoundTrip (CHAR #"a");
+> val it = true : bool
+testRoundTrip (CHAR #"\n");
+> val it = true : bool
+testRoundTrip (STRING "");
+> val it = true : bool
+testRoundTrip (STRING "hello");
+> val it = true : bool
+testRoundTrip (STRING "hello\nworld");
+> val it = true : bool
+
+(*) Test collections round-trip
+testRoundTrip (LIST []);
+> val it = true : bool
+testRoundTrip (LIST [INT 1, INT 2, INT 3]);
+> val it = true : bool
+testRoundTrip (LIST [LIST [INT 1], LIST [INT 2]]);
+> val it = true : bool
+testRoundTrip (BAG [INT 1, INT 2]);
+> val it = true : bool
+testRoundTrip (VECTOR [STRING "a", STRING "b"]);
+> val it = true : bool
+
+(*) Test option round-trip
+testRoundTrip (OPTION NONE);
+> val it = true : bool
+testRoundTrip (OPTION (SOME (INT 42)));
+> val it = true : bool
+
+(*) Test record round-trip
+testRoundTrip (RECORD []);
+> val it = true : bool
+testRoundTrip (RECORD [("x", INT 1), ("y", INT 2)]);
+> val it = true : bool
+testRoundTrip (RECORD [("name", STRING "Alice"), ("age", INT 30)]);
+> val it = true : bool
+
+(*) Test datatype round-trip
+testRoundTrip (DATATYPE ("NIL", UNIT));
+> val it = true : bool
+testRoundTrip (DATATYPE ("SOME", INT 42));
+> val it = true : bool
+
+(*) Test complex nested structure round-trip
+testRoundTrip
+  (LIST [
+    RECORD [("name", STRING "Alice"), ("age", INT 30)],
+    RECORD [("name", STRING "Bob"), ("age", INT 25)]
+  ]);
+> val it = true : bool
+
 (*) End value.smli

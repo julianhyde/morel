@@ -2359,27 +2359,32 @@ public abstract class Codes {
         return "#[" + valuePrintList((List) value.get(1)) + "]";
       case "OPTION":
         final Object opt = value.get(1);
-        if (opt instanceof List
-            && !((List) opt).isEmpty()
-            && "NONE".equals(((List) opt).get(0))) {
-          return "NONE";
-        } else if (opt instanceof List
-            && ((List) opt).size() == 2
-            && "SOME".equals(((List) opt).get(0))) {
-          return "SOME " + valuePrint((List) ((List) opt).get(1));
-        } else {
-          throw new IllegalArgumentException("Invalid OPTION value: " + opt);
+        if (opt instanceof List) {
+          final List optList = (List) opt;
+          if (optList.isEmpty()) {
+            // Empty list represents NONE
+            return "NONE";
+          } else if (optList.size() >= 1 && "NONE".equals(optList.get(0))) {
+            // ["NONE"] represents NONE
+            return "NONE";
+          } else if (optList.size() == 2 && "SOME".equals(optList.get(0))) {
+            // ["SOME", value] represents SOME value
+            return "SOME " + valuePrint((List) optList.get(1));
+          } else if (optList.size() == 1) {
+            // Single-element list [value] represents SOME value
+            return "SOME " + valuePrint((List) optList.get(0));
+          }
         }
+        throw new IllegalArgumentException("Invalid OPTION value: " + opt);
       case "RECORD":
         return "{" + valuePrintRecord((List) value.get(1)) + "}";
       case "DATATYPE":
-        final String dtName = (String) value.get(1);
-        final List dtValue = (List) value.get(2);
-        if (dtValue.size() == 1 && "UNIT".equals(dtValue.get(0))) {
-          return dtName;
-        } else {
-          return dtName + " " + valuePrint(dtValue);
-        }
+        final List dtPair = (List) value.get(1);
+        final String dtName = (String) dtPair.get(0);
+        final List dtValue = (List) dtPair.get(1);
+        // Use explicit DATATYPE() format to avoid ambiguity with OPTION
+        // constructors
+        return "DATATYPE(\"" + dtName + "\", " + valuePrint(dtValue) + ")";
       default:
         throw new IllegalArgumentException(
             "Unknown value constructor: " + constructor);
@@ -2496,11 +2501,44 @@ public abstract class Codes {
         case '"':
           return parseString();
         case '#':
-          return parseChar();
+          // Check if it's a VECTOR (#[...]) or CHAR (#"...")
+          if (pos + 1 < input.length() && input.charAt(pos + 1) == '[') {
+            return parseVector();
+          } else {
+            return parseChar();
+          }
         case '[':
           return parseList();
         case '{':
-          return parseRecord();
+          // Check if it's a BAG ({...}) or RECORD ({key = value, ...})
+          // Peek ahead to see if there's an '=' which indicates a record
+          // Empty {} defaults to RECORD
+          int savePos = pos + 1;
+          while (savePos < input.length()
+              && Character.isWhitespace(input.charAt(savePos))) {
+            savePos++;
+          }
+          // Empty braces or identifier followed by '=' is a RECORD
+          boolean isRecord = false;
+          if (savePos >= input.length() || input.charAt(savePos) == '}') {
+            // Empty {} is a RECORD
+            isRecord = true;
+          } else if (savePos < input.length()
+              && Character.isLetter(input.charAt(savePos))) {
+            while (savePos < input.length()
+                && (Character.isLetterOrDigit(input.charAt(savePos))
+                    || input.charAt(savePos) == '_')) {
+              savePos++;
+            }
+            while (savePos < input.length()
+                && Character.isWhitespace(input.charAt(savePos))) {
+              savePos++;
+            }
+            if (savePos < input.length() && input.charAt(savePos) == '=') {
+              isRecord = true;
+            }
+          }
+          return isRecord ? parseRecord() : parseBag();
         case '-':
         case '0':
         case '1':
@@ -2513,13 +2551,11 @@ public abstract class Codes {
         case '8':
         case '9':
           return parseNumber();
-        case 'U':
-          return parseDatatype();
-        case 'N':
-          return parseOption();
-        case 'S':
-          return parseOption();
         default:
+          // Check if it's an identifier (OPTION or DATATYPE)
+          if (Character.isLetter(c)) {
+            return parseIdentifierValue();
+          }
           throw new IllegalArgumentException(
               "Unexpected character at position " + pos + ": " + c);
       }
@@ -2684,6 +2720,44 @@ public abstract class Codes {
       return ImmutableList.of("LIST", values.build());
     }
 
+    private List parseBag() {
+      expect("{");
+      skipWhitespace();
+      if (tryConsume("}")) {
+        return ImmutableList.of("BAG", ImmutableList.of());
+      }
+
+      final ImmutableList.Builder<List> values = ImmutableList.builder();
+      values.add(parseValue());
+      skipWhitespace();
+      while (tryConsume(",")) {
+        skipWhitespace();
+        values.add(parseValue());
+        skipWhitespace();
+      }
+      expect("}");
+      return ImmutableList.of("BAG", values.build());
+    }
+
+    private List parseVector() {
+      expect("#[");
+      skipWhitespace();
+      if (tryConsume("]")) {
+        return ImmutableList.of("VECTOR", ImmutableList.of());
+      }
+
+      final ImmutableList.Builder<List> values = ImmutableList.builder();
+      values.add(parseValue());
+      skipWhitespace();
+      while (tryConsume(",")) {
+        skipWhitespace();
+        values.add(parseValue());
+        skipWhitespace();
+      }
+      expect("]");
+      return ImmutableList.of("VECTOR", values.build());
+    }
+
     private List parseRecord() {
       expect("{");
       skipWhitespace();
@@ -2716,24 +2790,72 @@ public abstract class Codes {
       return ImmutableList.of("RECORD", fields.build());
     }
 
-    private List parseOption() {
+    private List parseIdentifierValue() {
+      // Check for DATATYPE() format first
+      if (tryConsume("DATATYPE")) {
+        skipWhitespace();
+        if (tryConsume("(")) {
+          skipWhitespace();
+          expect("\"");
+          final String name = parseStringContent();
+          expect("\"");
+          skipWhitespace();
+          expect(",");
+          skipWhitespace();
+          final List value = parseValue();
+          skipWhitespace();
+          expect(")");
+          return ImmutableList.of("DATATYPE", ImmutableList.of(name, value));
+        }
+      }
+      // Try OPTION constructors
       if (tryConsume("NONE")) {
-        return ImmutableList.of("OPTION", ImmutableList.of());
+        return ImmutableList.of("OPTION", ImmutableList.of("NONE"));
       } else if (tryConsume("SOME")) {
         skipWhitespace();
         final List value = parseValue();
-        return ImmutableList.of("OPTION", ImmutableList.of(value));
-      } else {
-        throw new IllegalArgumentException(
-            "Expected 'NONE' or 'SOME' at position " + pos);
+        return ImmutableList.of("OPTION", ImmutableList.of("SOME", value));
       }
+      throw new IllegalArgumentException(
+          "Unknown identifier at position " + pos);
     }
 
-    private List parseDatatype() {
-      final String constructor = parseIdentifier();
-      skipWhitespace();
-      final List value = parseValue();
-      return ImmutableList.of("DATATYPE", ImmutableList.of(constructor, value));
+    private String parseStringContent() {
+      final StringBuilder sb = new StringBuilder();
+      while (pos < input.length() && input.charAt(pos) != '"') {
+        if (input.charAt(pos) == '\\') {
+          pos++;
+          if (pos >= input.length()) {
+            throw new IllegalArgumentException("Incomplete escape sequence");
+          }
+          final char c = input.charAt(pos);
+          switch (c) {
+            case 'n':
+              sb.append('\n');
+              break;
+            case 't':
+              sb.append('\t');
+              break;
+            case 'r':
+              sb.append('\r');
+              break;
+            case '\\':
+              sb.append('\\');
+              break;
+            case '"':
+              sb.append('"');
+              break;
+            default:
+              sb.append(c);
+              break;
+          }
+          pos++;
+        } else {
+          sb.append(input.charAt(pos));
+          pos++;
+        }
+      }
+      return sb.toString();
     }
 
     private String parseIdentifier() {
