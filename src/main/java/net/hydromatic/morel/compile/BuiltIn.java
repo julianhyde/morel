@@ -27,6 +27,7 @@ import static net.hydromatic.morel.type.PrimitiveType.STRING;
 import static net.hydromatic.morel.type.PrimitiveType.UNIT;
 import static net.hydromatic.morel.util.Static.SKIP;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
@@ -3343,6 +3344,34 @@ public enum BuiltIn {
   SYS_UNSET("Sys", "unset", "unset", ts -> ts.fnType(STRING, UNIT)),
 
   /**
+   * Function "Value.parse", of type "string &rarr; value".
+   *
+   * <p>"parse s" parses a string representation into a value.
+   */
+  VALUE_PARSE(
+      "Value", "parse", ts -> ts.fnType(STRING, ts.lookup(Datatype.VALUE))),
+
+  /**
+   * Function "Value.prettyPrint", of type "value &rarr; string".
+   *
+   * <p>"prettyPrint v" converts a value to a pretty-printed string
+   * representation with indentation and line breaks for better readability of
+   * nested structures.
+   */
+  VALUE_PRETTY_PRINT(
+      "Value",
+      "prettyPrint",
+      ts -> ts.fnType(ts.lookup(Datatype.VALUE), STRING)),
+
+  /**
+   * Function "Value.print", of type "value &rarr; string".
+   *
+   * <p>"print v" converts a value to its compact string representation.
+   */
+  VALUE_PRINT(
+      "Value", "print", ts -> ts.fnType(ts.lookup(Datatype.VALUE), STRING)),
+
+  /**
    * Function "Vector.all" of type "(&alpha; &rarr; bool) &rarr; &alpha; vector
    * &rarr; bool".
    *
@@ -4131,7 +4160,44 @@ public enum BuiltIn {
         "$list",
         true,
         1,
-        h -> h.tyCon(Constructor.LIST_NIL).tyCon(Constructor.LIST_CONS));
+        h -> h.tyCon(Constructor.LIST_NIL).tyCon(Constructor.LIST_CONS)),
+
+    /**
+     * Universal value representation for embedded language interoperability.
+     *
+     * <pre>{@code
+     * datatype value =
+     *     UNIT
+     *   | BOOL of bool
+     *   | INT of int
+     *   | REAL of real
+     *   | CHAR of char
+     *   | STRING of string
+     *   | LIST of value list
+     *   | BAG of value list
+     *   | VECTOR of value list
+     *   | OPTION of value option
+     *   | RECORD of (string * value) list
+     *   | DATATYPE of string * value
+     * }</pre>
+     */
+    VALUE(
+        "value",
+        false,
+        0,
+        h ->
+            h.tyCon(Constructor.VALUE_UNIT)
+                .tyCon(Constructor.VALUE_BOOL)
+                .tyCon(Constructor.VALUE_INT)
+                .tyCon(Constructor.VALUE_REAL)
+                .tyCon(Constructor.VALUE_CHAR)
+                .tyCon(Constructor.VALUE_STRING)
+                .tyCon(Constructor.VALUE_LIST)
+                .tyCon(Constructor.VALUE_BAG)
+                .tyCon(Constructor.VALUE_VECTOR)
+                .tyCon(Constructor.VALUE_OPTION)
+                .tyCon(Constructor.VALUE_RECORD)
+                .tyCon(Constructor.VALUE_DATATYPE));
 
     private final String mlName;
     private final boolean internal;
@@ -4206,7 +4272,33 @@ public enum BuiltIn {
     OPTION_SOME(Datatype.OPTION, "SOME", h -> h.get(0)),
     ORDER_EQUAL(Datatype.ORDER, "EQUAL"),
     ORDER_GREATER(Datatype.ORDER, "GREATER"),
-    ORDER_LESS(Datatype.ORDER, "LESS");
+    ORDER_LESS(Datatype.ORDER, "LESS"),
+    VALUE_BAG(Datatype.VALUE, "BAG", h -> Keys.list(Keys.name("value"))),
+    VALUE_BOOL(Datatype.VALUE, "BOOL", h -> BOOL.key()),
+    VALUE_CHAR(Datatype.VALUE, "CHAR", h -> CHAR.key()),
+    VALUE_DATATYPE(
+        Datatype.VALUE,
+        "DATATYPE",
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("value")))),
+    VALUE_INT(Datatype.VALUE, "INT", h -> INT.key()),
+    VALUE_LIST(Datatype.VALUE, "LIST", h -> Keys.list(Keys.name("value"))),
+    VALUE_OPTION(
+        Datatype.VALUE,
+        "OPTION",
+        h ->
+            Keys.apply(
+                Keys.name("option"), ImmutableList.of(Keys.name("value")))),
+    VALUE_REAL(Datatype.VALUE, "REAL", h -> REAL.key()),
+    VALUE_RECORD(
+        Datatype.VALUE,
+        "RECORD",
+        h ->
+            Keys.list(
+                Keys.tuple(
+                    ImmutableList.of(STRING.key(), Keys.name("value"))))),
+    VALUE_STRING(Datatype.VALUE, "STRING", h -> STRING.key()),
+    VALUE_UNIT(Datatype.VALUE, "UNIT"),
+    VALUE_VECTOR(Datatype.VALUE, "VECTOR", h -> Keys.list(Keys.name("value")));
 
     public final Datatype datatype;
     public final String constructor;

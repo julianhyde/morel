@@ -1,0 +1,208 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Value structure tests - universal value representation for
+ * embedded language interoperability
+ *)
+Sys.set ("printDepth", ~1);
+> val it = () : unit
+Sys.set ("lineWidth", 78);
+> val it = () : unit
+Sys.set ("stringDepth", ~1);
+> val it = () : unit
+
+(*) Test the value datatype constructors
+
+(*) UNIT constructor
+UNIT;
+> val it = UNIT : value
+
+(*) BOOL constructor
+BOOL true;
+> val it = BOOL true : value
+BOOL false;
+> val it = BOOL false : value
+
+(*) INT constructor
+INT 0;
+> val it = INT 0 : value
+INT 42;
+> val it = INT 42 : value
+INT ~5;
+> val it = INT ~5 : value
+
+(*) REAL constructor
+REAL 0.0;
+> val it = REAL 0.0 : value
+REAL 3.14;
+> val it = REAL 3.14 : value
+REAL ~2.5;
+> val it = REAL ~2.5 : value
+
+(*) CHAR constructor
+CHAR #"a";
+> val it = CHAR #"a" : value
+CHAR #"Z";
+> val it = CHAR #"Z" : value
+CHAR #"\n";
+> val it = CHAR #"\n" : value
+
+(*) STRING constructor
+STRING "";
+> val it = STRING "" : value
+STRING "hello";
+> val it = STRING "hello" : value
+STRING "hello\nworld";
+> val it = STRING "hello\nworld" : value
+
+(*) LIST constructor - empty list
+LIST [];
+> val it = LIST [] : value
+
+(*) LIST constructor - list of ints
+LIST [INT 1, INT 2, INT 3];
+> val it = LIST [INT 1,INT 2,INT 3] : value
+
+(*) LIST constructor - nested lists
+LIST [LIST [INT 1, INT 2], LIST [INT 3]];
+> val it = LIST [LIST [INT 1,INT 2],LIST [INT 3]] : value
+
+(*) BAG constructor - empty bag
+BAG [];
+> val it = BAG [] : value
+
+(*) BAG constructor - bag of ints
+BAG [INT 1, INT 2, INT 3, INT 2];
+> val it = BAG [INT 1,INT 2,INT 3,INT 2] : value
+
+(*) VECTOR constructor - empty vector
+VECTOR [];
+> val it = VECTOR [] : value
+
+(*) VECTOR constructor - vector of strings
+VECTOR [STRING "a", STRING "b", STRING "c"];
+> val it = VECTOR [STRING "a",STRING "b",STRING "c"] : value
+
+(*) OPTION constructor - NONE
+OPTION NONE;
+> val it = OPTION (NONE) : value
+
+(*) OPTION constructor - SOME
+OPTION (SOME (INT 42));
+> val it = OPTION (SOME (INT 42)) : value
+
+(*) OPTION constructor - nested SOME
+OPTION (SOME (STRING "hello"));
+> val it = OPTION (SOME (STRING "hello")) : value
+
+(*) RECORD constructor - empty record
+RECORD [];
+> val it = RECORD [] : value
+
+(*) RECORD constructor - simple record
+RECORD [("x", INT 1), ("y", INT 2)];
+> val it = RECORD [("x",INT 1),("y",INT 2)] : value
+
+(*) RECORD constructor - nested record
+RECORD [("name", STRING "Alice"), ("age", INT 30)];
+> val it = RECORD [("name",STRING "Alice"),("age",INT 30)] : value
+
+(*) RECORD constructor - record with various types
+RECORD [("i", INT 42), ("b", BOOL true), ("s", STRING "test")];
+> val it = RECORD [("i",INT 42),("b",BOOL true),("s",STRING "test")] : value
+
+(*) DATATYPE constructor - nullary constructor
+DATATYPE ("NIL", UNIT);
+> val it = DATATYPE ("NIL",UNIT) : value
+
+(*) DATATYPE constructor - unary constructor
+DATATYPE ("SOME", INT 42);
+> val it = DATATYPE ("SOME",INT 42) : value
+
+(*) DATATYPE constructor - constructor with tuple
+DATATYPE ("CONS", RECORD [("1", INT 1), ("2", DATATYPE ("NIL", UNIT))]);
+> val it = DATATYPE ("CONS",RECORD [("1",INT 1),("2",DATATYPE ("NIL",UNIT))])
+>   : value
+
+(*) Complex nested value
+LIST [
+  RECORD [("name", STRING "Alice"), ("age", INT 30)],
+  RECORD [("name", STRING "Bob"), ("age", INT 25)]
+];
+> val it =
+>   LIST [RECORD [("name",STRING "Alice"),("age",INT 30)],
+>    RECORD [("name",STRING "Bob"),("age",INT 25)]] : value
+
+(*) Pattern matching on value
+fun isUnit v =
+  case v of
+    UNIT => true
+  | _ => false;
+> val isUnit = fn : value -> bool
+
+isUnit UNIT;
+> val it = true : bool
+isUnit (INT 42);
+> val it = false : bool
+
+(*) Pattern matching to extract values
+fun getInt v =
+  case v of
+    INT i => SOME i
+  | _ => NONE;
+> val getInt = fn : value -> int option
+
+getInt (INT 42);
+> val it = SOME 42 : int option
+getInt (STRING "hello");
+> val it = NONE : int option
+
+(*) Recursive function on value
+fun valueDepth v =
+  case v of
+    UNIT => 0
+  | BOOL _ => 0
+  | INT _ => 0
+  | REAL _ => 0
+  | CHAR _ => 0
+  | STRING _ => 0
+  | LIST [] => 0
+  | LIST (v::vs) => Int.max (1 + (valueDepth v), valueDepth (LIST vs))
+  | BAG [] => 0
+  | BAG (v::vs) => Int.max (1 + (valueDepth v), valueDepth (BAG vs))
+  | VECTOR [] => 0
+  | VECTOR (v::vs) => Int.max (1 + (valueDepth v), valueDepth (VECTOR vs))
+  | OPTION NONE => 0
+  | OPTION (SOME v) => 1 + valueDepth v
+  | RECORD [] => 0
+  | RECORD ((_, v)::rest) => Int.max (1 + (valueDepth v), valueDepth (RECORD rest))
+  | DATATYPE (_, v) => 1 + valueDepth v;
+> val valueDepth = fn : value -> int
+
+valueDepth UNIT;
+> val it = 0 : int
+valueDepth (INT 42);
+> val it = 0 : int
+valueDepth (LIST [INT 1, INT 2]);
+> val it = 1 : int
+valueDepth (LIST [LIST [INT 1]]);
+> val it = 2 : int
+valueDepth (RECORD [("x", LIST [INT 1, INT 2])]);
+> val it = 2 : int
+
+(*) End value.smli

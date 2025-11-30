@@ -3420,6 +3420,33 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#VALUE_PARSE */
+  private static final Applicable1 VALUE_PARSE =
+      new BaseApplicable1<String, String>(BuiltIn.VALUE_PARSE) {
+        @Override
+        public String apply(String s) {
+          return s;
+        }
+      };
+
+  /** @see BuiltIn#VALUE_PRETTY_PRINT */
+  private static final Applicable1 VALUE_PRETTY_PRINT =
+      new BaseApplicable1<String, String>(BuiltIn.VALUE_PRETTY_PRINT) {
+        @Override
+        public String apply(String s) {
+          return s;
+        }
+      };
+
+  /** @see BuiltIn#VALUE_PRINT */
+  private static final Applicable1 VALUE_PRINT =
+      new BaseApplicable1<String, String>(BuiltIn.VALUE_PRINT) {
+        @Override
+        public String apply(String s) {
+          return s;
+        }
+      };
+
   /** @see BuiltIn#VECTOR_ALL */
   private static final Applicable2 VECTOR_ALL = all(BuiltIn.VECTOR_ALL);
 
@@ -4303,6 +4330,9 @@ public abstract class Codes {
           .put(BuiltIn.SYS_SHOW, SYS_SHOW)
           .put(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL)
           .put(BuiltIn.SYS_UNSET, SYS_UNSET)
+          .put(BuiltIn.VALUE_PARSE, VALUE_PARSE)
+          .put(BuiltIn.VALUE_PRINT, VALUE_PRINT)
+          .put(BuiltIn.VALUE_PRETTY_PRINT, VALUE_PRETTY_PRINT)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_APP, VECTOR_APP)
           .put(BuiltIn.VECTOR_APPI, VECTOR_APPI)
