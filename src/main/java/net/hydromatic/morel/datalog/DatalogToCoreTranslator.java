@@ -39,61 +39,35 @@ import net.hydromatic.morel.type.TypeSystem;
 /**
  * Translates Datalog programs to Morel Core expressions.
  *
- * <p>Translation Strategy:
+ * <p>Translation Strategy - Generate Data (Lists), Not Predicates:
  *
  * <ul>
- *   <li>Facts → Predicate functions returning disjunction of equality tests
+ *   <li>Facts → List literals
  *       <p>Example: {@code edge(1,2). edge(2,3).}
- *       <p>Becomes: {@code fun edge(x,y) = (x=1 andalso y=2) orelse (x=2
- *       andalso y=3)}
- *   <li>Rules → Predicate functions returning conjunction of body atoms
- *       <p>Example: {@code p(X) :- q(X,1), r(X).}
- *       <p>Becomes: {@code fun p x = q(x,1) andalso r(x)}
- *   <li>Negation → Use {@code not} operator
+ *       <p>Becomes: {@code val edge = [(1,2), (2,3)]}
+ *   <li>Rules → {@code from} expressions that enumerate tuples
+ *       <p>Example: {@code path(X,Y) :- edge(X,Y).}
+ *       <p>Becomes: {@code from (x,y) in edge}
+ *   <li>Recursive rules → Fixpoint computation using {@code List.tabulate}
+ *       <p>Example: {@code path(X,Z) :- path(X,Y), edge(Y,Z).}
+ *       <p>Becomes: Iterative list generation until no new tuples
+ *   <li>Negation → Use {@code not (List.exists ...)}
  *       <p>Example: {@code p(X) :- q(X), !r(X).}
- *       <p>Becomes: {@code fun p x = q(x) andalso not(r(x))}
- *   <li>Output → Generate {@code from} expressions
- *       <p>Example: {@code .output p}
- *       <p>Becomes: {@code from x where p(x)}
+ *       <p>Becomes: {@code from x in q where not (List.exists (fn y => y = x)
+ *       r)}
+ *   <li>Output → Return lists for each output relation
+ *       <p>Example: {@code .output edge}
+ *       <p>Becomes: Return {@code {edge = edge_data}}
  * </ul>
  *
- * <p>TODO: Full implementation pending. Current stub throws
- * UnsupportedOperationException. Implementation requires:
+ * <p>NOTE: This translator is currently not used for execution. {@link
+ * DatalogEvaluator} handles execution directly using semi-naive evaluation with
+ * a custom Tuple-based engine. This translator could be used in the future for
+ * integrating Datalog into the Morel environment or for verification purposes.
  *
- * <ol>
- *   <li>Group facts and rules by relation name
- *   <li>For each relation, create a predicate function:
- *       <ul>
- *         <li>Parameters = relation arity (x, y for arity 2)
- *         <li>Body = disjunction of all facts/rules for that relation
- *       </ul>
- *   <li>For facts: Generate equality tests for each parameter
- *   <li>For rules: Generate conjunction of body atoms
- *   <li>Handle variable substitution from rule head to body
- *   <li>For .output: Generate {@code from} expression enumerating the relation
- * </ol>
- *
- * <p>Core API Usage:
- *
- * <blockquote>
- *
- * <pre>
- * // Create predicate function: fun p(x, y) = body
- * FnType fnType = typeSystem.fnType(tupleType, PrimitiveType.BOOL);
- * Core.IdPat param = core.idPat(tupleType, "p", 0);
- * Core.Exp body = ...; // Expression tree
- * Core.Fn fn = core.fn(fnType, param, body);
- *
- * // Create conjunction: e1 andalso e2
- * Core.Exp conj = core.apply(Pos.ZERO, PrimitiveType.BOOL,
- *     core.apply(Pos.ZERO, fnType,
- *         core.functionLiteral(typeSystem, BuiltIn.Z_ANDALSO), e1), e2);
- *
- * // Create equality: x = 1
- * Core.Exp eq = core.equal(typeSystem, idExp, literalExp);
- * </pre>
- *
- * </blockquote>
+ * <p>Current implementation generates predicate functions (bool-returning),
+ * which is insufficient for enumerating results. To make this useful, it needs
+ * to be rewritten to generate {@code from} expressions and list data.
  */
 public class DatalogToCoreTranslator {
   private final TypeSystem typeSystem;

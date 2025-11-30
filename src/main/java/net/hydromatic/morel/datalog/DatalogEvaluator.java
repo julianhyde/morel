@@ -28,6 +28,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import net.hydromatic.morel.datalog.DatalogAst.Atom;
 import net.hydromatic.morel.datalog.DatalogAst.BodyAtom;
+import net.hydromatic.morel.datalog.DatalogAst.CompOp;
+import net.hydromatic.morel.datalog.DatalogAst.Comparison;
 import net.hydromatic.morel.datalog.DatalogAst.Constant;
 import net.hydromatic.morel.datalog.DatalogAst.Declaration;
 import net.hydromatic.morel.datalog.DatalogAst.Fact;
@@ -207,6 +209,11 @@ public class DatalogEvaluator {
       List<Map<String, Object>> currentBindings,
       BodyAtom bodyAtom,
       Map<String, Set<Tuple>> tuplesByRelation) {
+    // Handle comparisons separately
+    if (bodyAtom instanceof Comparison) {
+      return filterByComparison(currentBindings, (Comparison) bodyAtom);
+    }
+
     List<Map<String, Object>> newBindings = new ArrayList<>();
 
     String relationName = bodyAtom.atom.name;
@@ -230,6 +237,87 @@ public class DatalogEvaluator {
     }
 
     return newBindings;
+  }
+
+  /**
+   * Filters bindings based on a comparison predicate.
+   *
+   * @param currentBindings current variable bindings
+   * @param comparison comparison to evaluate
+   * @return bindings that satisfy the comparison
+   */
+  private static List<Map<String, Object>> filterByComparison(
+      List<Map<String, Object>> currentBindings, Comparison comparison) {
+    List<Map<String, Object>> newBindings = new ArrayList<>();
+
+    for (Map<String, Object> binding : currentBindings) {
+      Object leftVal = evaluateTerm(comparison.left, binding);
+      Object rightVal = evaluateTerm(comparison.right, binding);
+
+      if (leftVal != null
+          && rightVal != null
+          && compareValues(leftVal, rightVal, comparison.op)) {
+        newBindings.add(binding);
+      }
+    }
+
+    return newBindings;
+  }
+
+  /**
+   * Evaluates a term given current bindings.
+   *
+   * @param term term to evaluate
+   * @param binding current variable bindings
+   * @return value of the term
+   */
+  private static Object evaluateTerm(Term term, Map<String, Object> binding) {
+    if (term instanceof Constant) {
+      return ((Constant) term).value;
+    } else if (term instanceof Variable) {
+      return binding.get(((Variable) term).name);
+    }
+    return null;
+  }
+
+  /**
+   * Compares two values using the given operator.
+   *
+   * @param left left operand
+   * @param right right operand
+   * @param op comparison operator
+   * @return true if the comparison holds
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static boolean compareValues(Object left, Object right, CompOp op) {
+    switch (op) {
+      case EQ:
+        return left.equals(right);
+      case NE:
+        return !left.equals(right);
+      case LT:
+        if (left instanceof Comparable && right instanceof Comparable) {
+          return ((Comparable) left).compareTo((Comparable) right) < 0;
+        }
+        return false;
+      case LE:
+        if (left instanceof Comparable && right instanceof Comparable) {
+          return ((Comparable) left).compareTo((Comparable) right) <= 0;
+        }
+        return false;
+      case GT:
+        if (left instanceof Comparable && right instanceof Comparable) {
+          return ((Comparable) left).compareTo((Comparable) right) > 0;
+        }
+        return false;
+      case GE:
+        if (left instanceof Comparable && right instanceof Comparable) {
+          return ((Comparable) left).compareTo((Comparable) right) >= 0;
+        }
+        return false;
+      default:
+        return false;
+    }
   }
 
   /**
