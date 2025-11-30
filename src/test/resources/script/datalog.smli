@@ -217,8 +217,7 @@ num(3).
 .output num";
 > val it = "num\n1\n2\n3" : string
 
-(*) Execution - transitive closure (not yet implemented)
-(* TODO
+(*) Execution - transitive closure
 Datalog.execute ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 edge(1,2).
@@ -226,10 +225,6 @@ edge(2,3).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> path
-> 1 2
-> 2 3
-> 1 3
-*)
+> val it = "path\n1 2\n1 3\n2 3" : string
 
 (*) End datalog.smli
