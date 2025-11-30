@@ -56,7 +56,10 @@ public class DatalogAnalyzer {
         Rule rule = (Rule) stmt;
         checkAtomDeclaration(program, rule.head, "rule head");
         for (BodyAtom bodyAtom : rule.body) {
-          checkAtomDeclaration(program, bodyAtom.atom, "rule body");
+          // Skip comparisons - they don't refer to declared relations
+          if (!(bodyAtom instanceof Comparison)) {
+            checkAtomDeclaration(program, bodyAtom.atom, "rule body");
+          }
         }
       }
     }
@@ -144,10 +147,10 @@ public class DatalogAnalyzer {
   }
 
   private static void checkRuleSafety(Rule rule) {
-    // Collect variables from positive body atoms
+    // Collect variables from positive body atoms (but not comparisons)
     Set<String> groundedVars = new HashSet<>();
     for (BodyAtom bodyAtom : rule.body) {
-      if (!bodyAtom.negated) {
+      if (!bodyAtom.negated && !(bodyAtom instanceof Comparison)) {
         for (Term term : bodyAtom.atom.terms) {
           if (term instanceof Variable) {
             groundedVars.add(((Variable) term).name);
@@ -169,17 +172,23 @@ public class DatalogAnalyzer {
       }
     }
 
-    // Check that variables in negated atoms are grounded
+    // Check that variables in negated atoms and comparisons are grounded
     for (BodyAtom bodyAtom : rule.body) {
-      if (bodyAtom.negated) {
+      if (bodyAtom.negated || bodyAtom instanceof Comparison) {
         for (Term term : bodyAtom.atom.terms) {
           if (term instanceof Variable) {
             String varName = ((Variable) term).name;
             if (!groundedVars.contains(varName)) {
+              String context =
+                  bodyAtom instanceof Comparison
+                      ? "comparison"
+                      : "negated atom";
               throw new DatalogException(
                   "Rule is unsafe. Variable '"
                       + varName
-                      + "' in negated atom does not appear in positive body atom");
+                      + "' in "
+                      + context
+                      + " does not appear in positive body atom");
             }
           }
         }
@@ -205,10 +214,13 @@ public class DatalogAnalyzer {
         graph.putIfAbsent(headRelation, new HashSet<>());
 
         for (BodyAtom bodyAtom : rule.body) {
-          String bodyRelation = bodyAtom.atom.name;
-          graph
-              .get(headRelation)
-              .add(new Dependency(bodyRelation, bodyAtom.negated));
+          // Skip comparisons - they don't create dependencies
+          if (!(bodyAtom instanceof Comparison)) {
+            String bodyRelation = bodyAtom.atom.name;
+            graph
+                .get(headRelation)
+                .add(new Dependency(bodyRelation, bodyAtom.negated));
+          }
         }
       }
     }

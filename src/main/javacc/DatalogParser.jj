@@ -74,6 +74,12 @@ TOKEN :
 | < COLON: ":" >
 | < COLONMINUS: ":-" >
 | < EXCLAMATION: "!" >
+| < LE: "<=" >
+| < GE: ">=" >
+| < NE: "!=" >
+| < LT: "<" >
+| < GT: ">" >
+| < EQ: "=" >
 }
 
 TOKEN :
@@ -241,11 +247,33 @@ BodyAtom bodyAtom() :
 {
   boolean negated = false;
   Atom atom;
+  Term left, right;
+  CompOp op;
 }
 {
+  LOOKAHEAD(2)
+  left = term()
+  op = compOp()
+  right = term()
+  { return new Comparison(left, op, right); }
+|
   ( <EXCLAMATION> { negated = true; } )?
   atom = atom()
   { return new BodyAtom(atom, negated); }
+}
+
+/**
+ * Parses a comparison operator.
+ */
+CompOp compOp() :
+{}
+{
+  <EQ> { return CompOp.EQ; }
+| <NE> { return CompOp.NE; }
+| <LE> { return CompOp.LE; }
+| <GE> { return CompOp.GE; }
+| <LT> { return CompOp.LT; }
+| <GT> { return CompOp.GT; }
 }
 
 /**
