@@ -4195,7 +4195,8 @@ public enum BuiltIn {
                 .tyCon(Constructor.VALUE_LIST)
                 .tyCon(Constructor.VALUE_BAG)
                 .tyCon(Constructor.VALUE_VECTOR)
-                .tyCon(Constructor.VALUE_OPTION)
+                .tyCon(Constructor.VALUE_NONE)
+                .tyCon(Constructor.VALUE_SOME)
                 .tyCon(Constructor.VALUE_RECORD)
                 .tyCon(Constructor.VALUE_DATATYPE));
 
@@ -4282,12 +4283,7 @@ public enum BuiltIn {
         h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("value")))),
     VALUE_INT(Datatype.VALUE, "INT", h -> INT.key()),
     VALUE_LIST(Datatype.VALUE, "LIST", h -> Keys.list(Keys.name("value"))),
-    VALUE_OPTION(
-        Datatype.VALUE,
-        "OPTION",
-        h ->
-            Keys.apply(
-                Keys.name("option"), ImmutableList.of(Keys.name("value")))),
+    VALUE_NONE(Datatype.VALUE, "VALUE_NONE"),
     VALUE_REAL(Datatype.VALUE, "REAL", h -> REAL.key()),
     VALUE_RECORD(
         Datatype.VALUE,
@@ -4296,6 +4292,7 @@ public enum BuiltIn {
             Keys.list(
                 Keys.tuple(
                     ImmutableList.of(STRING.key(), Keys.name("value"))))),
+    VALUE_SOME(Datatype.VALUE, "VALUE_SOME", h -> Keys.name("value")),
     VALUE_STRING(Datatype.VALUE, "STRING", h -> STRING.key()),
     VALUE_UNIT(Datatype.VALUE, "UNIT"),
     VALUE_VECTOR(Datatype.VALUE, "VECTOR", h -> Keys.list(Keys.name("value")));

@@ -34,7 +34,8 @@ datatype value =
   | LIST of value list
   | BAG of value list
   | VECTOR of value list
-  | OPTION of value option
+  | VALUE_NONE
+  | VALUE_SOME of value
   | RECORD of (string * value) list
   | DATATYPE of string * value
 
@@ -52,7 +53,8 @@ sig
     | LIST of value list
     | BAG of value list
     | VECTOR of value list
-    | OPTION of value option
+    | VALUE_NONE
+    | VALUE_SOME of value
     | RECORD of (string * value) list
     | DATATYPE of string * value
 

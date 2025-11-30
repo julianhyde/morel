@@ -65,25 +65,10 @@ public class Values {
         return "bag [" + printList((List) value.get(1)) + "]";
       case "VECTOR":
         return "#[" + printList((List) value.get(1)) + "]";
-      case "OPTION":
-        final Object opt = value.get(1);
-        if (opt instanceof List) {
-          final List optList = (List) opt;
-          if (optList.isEmpty()) {
-            // Empty list represents NONE
-            return "NONE";
-          } else if (optList.size() >= 1 && "NONE".equals(optList.get(0))) {
-            // ["NONE"] represents NONE
-            return "NONE";
-          } else if (optList.size() == 2 && "SOME".equals(optList.get(0))) {
-            // ["SOME", value] represents SOME value
-            return "SOME " + print((List) optList.get(1));
-          } else if (optList.size() == 1) {
-            // Single-element list [value] represents SOME value
-            return "SOME " + print((List) optList.get(0));
-          }
-        }
-        throw new IllegalArgumentException("Invalid OPTION value: " + opt);
+      case "VALUE_NONE":
+        return "VALUE_NONE";
+      case "VALUE_SOME":
+        return "VALUE_SOME " + print((List) value.get(1));
       case "RECORD":
         return "{" + printRecord((List) value.get(1)) + "}";
       case "DATATYPE":
@@ -489,13 +474,13 @@ public class Values {
           return ImmutableList.of("DATATYPE", ImmutableList.of(name, value));
         }
       }
-      // Try OPTION constructors
-      if (tryConsume("NONE")) {
-        return ImmutableList.of("OPTION", ImmutableList.of("NONE"));
-      } else if (tryConsume("SOME")) {
+      // Try VALUE_NONE and VALUE_SOME constructors
+      if (tryConsume("VALUE_NONE")) {
+        return ImmutableList.of("VALUE_NONE");
+      } else if (tryConsume("VALUE_SOME")) {
         skipWhitespace();
         final List value = parseValue();
-        return ImmutableList.of("OPTION", ImmutableList.of("SOME", value));
+        return ImmutableList.of("VALUE_SOME", value);
       }
       throw new IllegalArgumentException(
           "Unknown identifier at position " + pos);

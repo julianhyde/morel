@@ -98,17 +98,17 @@ VECTOR [];
 VECTOR [STRING "a", STRING "b", STRING "c"];
 > val it = VECTOR [STRING "a",STRING "b",STRING "c"] : value
 
-(*) OPTION constructor - NONE
-OPTION NONE;
-> val it = OPTION (NONE) : value
+(*) VALUE_NONE constructor
+VALUE_NONE;
+> val it = VALUE_NONE : value
 
-(*) OPTION constructor - SOME
-OPTION (SOME (INT 42));
-> val it = OPTION (SOME (INT 42)) : value
+(*) VALUE_SOME constructor - with INT
+VALUE_SOME (INT 42);
+> val it = VALUE_SOME (INT 42) : value
 
-(*) OPTION constructor - nested SOME
-OPTION (SOME (STRING "hello"));
-> val it = OPTION (SOME (STRING "hello")) : value
+(*) VALUE_SOME constructor - with STRING
+VALUE_SOME (STRING "hello");
+> val it = VALUE_SOME (STRING "hello") : value
 
 (*) RECORD constructor - empty record
 RECORD [];
@@ -187,8 +187,8 @@ fun valueDepth v =
   | BAG (v::vs) => Int.max (1 + (valueDepth v), valueDepth (BAG vs))
   | VECTOR [] => 0
   | VECTOR (v::vs) => Int.max (1 + (valueDepth v), valueDepth (VECTOR vs))
-  | OPTION NONE => 0
-  | OPTION (SOME v) => 1 + valueDepth v
+  | VALUE_NONE => 0
+  | VALUE_SOME v => 1 + valueDepth v
   | RECORD [] => 0
   | RECORD ((_, v)::rest) => Int.max (1 + (valueDepth v), valueDepth (RECORD rest))
   | DATATYPE (_, v) => 1 + valueDepth v;
@@ -257,10 +257,10 @@ testRoundTrip (BAG [INT 1, INT 2]);
 testRoundTrip (VECTOR [STRING "a", STRING "b"]);
 > val it = true : bool
 
-(*) Test option round-trip
-testRoundTrip (OPTION NONE);
+(*) Test VALUE_NONE and VALUE_SOME round-trip
+testRoundTrip VALUE_NONE;
 > val it = true : bool
-testRoundTrip (OPTION (SOME (INT 42)));
+testRoundTrip (VALUE_SOME (INT 42));
 > val it = true : bool
 
 (*) Test record round-trip
