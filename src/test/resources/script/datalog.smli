@@ -229,4 +229,44 @@ path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
 > val it = "path\n1 2\n1 3\n2 3" : string
 
+(*) Comparison operators - less than
+Datalog.execute ".decl num(n:number)
+.decl small(n:number)
+num(1).
+num(5).
+num(10).
+small(X) :- num(X), X < 7.
+.output small";
+> val it = "small\n1\n5" : string
+
+(*) Comparison operators - greater than or equal
+Datalog.execute ".decl num(n:number)
+.decl large(n:number)
+num(1).
+num(5).
+num(10).
+large(X) :- num(X), X >= 5.
+.output large";
+> val it = "large\n5\n10" : string
+
+(*) Comparison operators - not equal
+Datalog.execute ".decl num(n:number)
+.decl not_five(n:number)
+num(1).
+num(5).
+num(10).
+not_five(X) :- num(X), X != 5.
+.output not_five";
+> val it = "not_five\n1\n10" : string
+
+(*) Comparison operators - equal
+Datalog.execute ".decl edge(x:number, y:number)
+.decl self_loop(x:number)
+edge(1, 1).
+edge(2, 3).
+edge(4, 4).
+self_loop(X) :- edge(X, Y), X = Y.
+.output self_loop";
+> val it = "self_loop\n1\n4" : string
+
 (*) End datalog.smli
