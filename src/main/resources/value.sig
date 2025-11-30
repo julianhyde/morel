@@ -167,3 +167,5 @@ end
  *    Vectors are represented as lists but correspond to Standard ML
  *    vector types (immutable arrays with O(1) random access).
  *)
+
+(*) End value.sig
