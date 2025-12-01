@@ -56,6 +56,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
+import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
@@ -3969,11 +3970,17 @@ public abstract class Codes {
 
   /**
    * Returns an applicable that constructs an instance of a datatype. The
-   * instance is a list with two elements [constructorName, value].
+   * instance is a list with two elements [constructorName, value], except for
+   * the VALUE datatype which returns Value instances.
    */
   public static Applicable1 tyCon(Type dataType, String name) {
     requireNonNull(dataType);
     requireNonNull(name);
+    // Check if this is the VALUE datatype - if so, return Value instances
+    final boolean isValueDatatype =
+        dataType instanceof DataType
+            && ((DataType) dataType).name.equals("value");
+
     return new BaseApplicable1(BuiltIn.Z_TY_CON) {
       @Override
       protected String name() {
@@ -3982,7 +3989,34 @@ public abstract class Codes {
 
       @Override
       public Object apply(Object arg) {
-        return ImmutableList.of(name, arg);
+        if (isValueDatatype) {
+          // For VALUE datatype, create Value instances directly
+          // Map constructor names to appropriate types
+          switch (name) {
+            case "UNIT":
+              return Value.of(PrimitiveType.UNIT, Unit.INSTANCE);
+            case "BOOL":
+              return Value.of(PrimitiveType.BOOL, arg);
+            case "INT":
+              return Value.of(PrimitiveType.INT, arg);
+            case "REAL":
+              return Value.of(PrimitiveType.REAL, arg);
+            case "CHAR":
+              return Value.of(PrimitiveType.CHAR, arg);
+            case "STRING":
+              return Value.of(PrimitiveType.STRING, arg);
+            default:
+              // For complex types (LIST, BAG, VECTOR, VALUE_NONE, VALUE_SOME,
+              // RECORD, CONST, CON), we need the full TypeSystem.
+              // For now, fall back to List representation and let fromList
+              // handle it later.
+              // TODO: Pass TypeSystem to tyCon or handle these cases directly
+              return ImmutableList.of(name, arg);
+          }
+        } else {
+          // For other datatypes, use the traditional List representation
+          return ImmutableList.of(name, arg);
+        }
       }
     };
   }

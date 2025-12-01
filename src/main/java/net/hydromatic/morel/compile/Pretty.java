@@ -450,6 +450,16 @@ class Pretty {
       int depth,
       DataType dataType,
       Object value) {
+    // Special handling for VALUE datatype - it uses Value instances
+    if (dataType.name.equals("value")) {
+      if (value instanceof net.hydromatic.morel.eval.Value) {
+        net.hydromatic.morel.eval.Value v =
+            (net.hydromatic.morel.eval.Value) value;
+        // Pretty print the wrapped value with its type
+        return pretty2(buf, indent, lineEnd, depth, v.type, v.value, 0, 0);
+      }
+    }
+
     final List<Object> list;
     list = toList(value);
     if (dataType.name.equals("vector")) {
