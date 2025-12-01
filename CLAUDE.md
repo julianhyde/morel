@@ -381,6 +381,101 @@ refine (LIST [])
 - **Backward compatible**: Parse/print round-trip still works
 - **Incremental**: Can implement without breaking existing code
 
+### Current Status (Code Compiles!)
+
+**Completed:**
+1. ✅ Created `Value.java` class with Type and Object fields
+2. ✅ Implemented logical equality in Value.equals()
+3. ✅ Created `Values.fromList()` converter (partial - needs completion for RECORD, CONST, CON)
+4. ✅ Updated `Values.parse()` signature to return Value
+5. ✅ Parser creates TypeSystem and uses fromList
+6. ✅ Implemented `Values.print(Value)` with support for refined and unrefined values
+7. ✅ Updated `Values.prettyPrint(Value, Session)` (delegates to print)
+8. ✅ Updated Codes applicables: VALUE_PARSE, VALUE_PRINT, VALUE_PRETTY_PRINT
+9. ✅ Fixed option type detection (DataType instead of Type.Op)
+
+**Remaining Work:**
+
+#### High Priority (Required for Tests to Pass)
+
+1. **Update BuiltIn VALUE constructors**
+   - All VALUE constructors (UNIT, BOOL, INT, etc.) must return Value instances
+   - Currently they likely return Lists
+   - Need to update BuiltIn.java to create Value objects
+   - Example:
+     ```java
+     // Old: return ImmutableList.of("INT", intValue)
+     // New: return Value.of(PrimitiveType.INT, intValue)
+     ```
+
+#### Medium Priority (Required for Full Functionality)
+
+2. **Complete Values.fromList() for missing types**
+   - RECORD: Construct RecordType and record value
+   - CONST: Lookup datatype constructor
+   - CON: Lookup datatype constructor with value
+   - BAG: Use proper bag type (not just list)
+   - VECTOR: Use proper vector type
+
+#### Low Priority (Optimizations)
+
+3. **Implement Values.refine()**
+   ```java
+   public static Value refine(Value value) {
+     // If heterogeneous, return as-is
+     // If homogeneous, unwrap elements and create refined type
+     // Recursively refine nested structures
+   }
+   ```
+
+4. **Implement Values.typeString()**
+   ```java
+   public static String typeString(Value value) {
+     // Traverse value.type and format as ML type string
+     // "int", "int list", "{x: int, y: string}", etc.
+   }
+   ```
+
+5. **Add BuiltIn functions for refine and typeString**
+
+6. **Improve pretty-printing**
+   - Use existing Pretty.pretty() for formatted output
+   - Handle indentation and line breaks properly
+
+### Implementation Notes
+
+**Key Design Decisions:**
+- ✅ Logical equality: Refined and unrefined values are equal
+- ✅ Parser produces general types (value list, value option)
+- ✅ Internal constructors produce refined types (int list, int option)
+- ✅ Pretty-print delegates to wrapped value
+
+**Type System Access:**
+- Parser creates its own TypeSystem instance
+- TypeSystem.lookup("value") gets the value datatype
+- TypeSystem methods: listType(), option(), etc.
+
+**Unit Type:**
+- Use Unit.INSTANCE or Codes.Unit.INSTANCE
+- Check existing code for Unit representation
+
+**Option Type:**
+- NONE: Value(OptionType(valueType), null) or special representation?
+- SOME: Value(OptionType(valueType), innerValue)
+- Check how options are currently represented
+
+**Record Type:**
+- Need to construct RecordType with field names and types
+- Field order is alphabetical
+- Check RecordType constructor signature
+
+### Testing Strategy
+
+1. **Compile first** - Fix all compilation errors
+2. **Run existing tests** - They will fail, that's expected
+3. **Fix one test at a time** - Start with simple primitives
+4. **Add new tests** - For typeString and refine
+
 ## References
 
 - Issue #324: https://github.com/hydromatic/morel/issues/324
