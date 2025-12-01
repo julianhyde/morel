@@ -56,7 +56,6 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
-import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
@@ -3444,13 +3443,29 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#VALUE_PARSE */
-  private static final Applicable1 VALUE_PARSE =
-      new BaseApplicable1<Value, String>(BuiltIn.VALUE_PARSE) {
-        @Override
-        public Value apply(String s) {
-          return Values.parse(s);
-        }
-      };
+  private static final Applicable1 VALUE_PARSE = new ValueParser(null);
+
+  /** Implementation of {@link #VALUE_PARSE}. */
+  static class ValueParser extends BaseApplicable1<Value, String>
+      implements Typed {
+    private final TypeSystem typeSystem;
+
+    ValueParser(TypeSystem typeSystem) {
+      super(BuiltIn.VALUE_PARSE);
+      this.typeSystem = typeSystem;
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      return new ValueParser(typeSystem);
+    }
+
+    @Override
+    public Value apply(String s) {
+      // Parse to Value instance - matches what constructors now return
+      return Values.parse(s, typeSystem);
+    }
+  }
 
   /** @see BuiltIn#VALUE_PRETTY_PRINT */
   private static final Applicable VALUE_PRETTY_PRINT =
@@ -3464,13 +3479,29 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#VALUE_PRINT */
-  private static final Applicable1 VALUE_PRINT =
-      new BaseApplicable1<String, Value>(BuiltIn.VALUE_PRINT) {
-        @Override
-        public String apply(Value value) {
-          return Values.print(value);
-        }
-      };
+  private static final Applicable1 VALUE_PRINT = new ValuePrinter(null);
+
+  /** Implementation of {@link #VALUE_PRINT}. */
+  static class ValuePrinter extends BaseApplicable1<String, Value>
+      implements Typed {
+    private final TypeSystem typeSystem;
+
+    ValuePrinter(TypeSystem typeSystem) {
+      super(BuiltIn.VALUE_PRINT);
+      this.typeSystem = typeSystem;
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      return new ValuePrinter(typeSystem);
+    }
+
+    @Override
+    public String apply(Value arg) {
+      // VALUE constructors now create Value instances directly
+      return Values.print(arg);
+    }
+  }
 
   /** @see BuiltIn#VECTOR_ALL */
   private static final Applicable2 VECTOR_ALL = all(BuiltIn.VECTOR_ALL);
@@ -3969,18 +4000,38 @@ public abstract class Codes {
   }
 
   /**
-   * Returns an applicable that constructs an instance of a datatype. The
-   * instance is a list with two elements [constructorName, value], except for
-   * the VALUE datatype which returns Value instances.
+   * Returns an applicable that constructs an instance of a datatype.
+   *
+   * <p>For the VALUE datatype, creates Value instances. For other datatypes,
+   * creates Lists with two elements [constructorName, value].
    */
-  public static Applicable1 tyCon(Type dataType, String name) {
+  public static Applicable tyCon(Type dataType, String name) {
     requireNonNull(dataType);
     requireNonNull(name);
-    // Check if this is the VALUE datatype - if so, return Value instances
-    final boolean isValueDatatype =
-        dataType instanceof DataType
-            && ((DataType) dataType).name.equals("value");
+    // Special handling for VALUE datatype - create Value instances
+    if (dataType instanceof net.hydromatic.morel.type.DataType
+        && ((net.hydromatic.morel.type.DataType) dataType)
+            .name.equals("value")) {
+      return new ApplicableImpl(BuiltIn.Z_TY_CON) {
+        @Override
+        protected String name() {
+          return "tyCon";
+        }
 
+        @Override
+        public Object apply(EvalEnv env, Object arg) {
+          final Session session = env.getSession();
+          final TypeSystem typeSystem = session.typeSystem;
+          if (typeSystem == null) {
+            // Fallback to List if no TypeSystem available (e.g., in tests)
+            return ImmutableList.of(name, arg);
+          }
+          // Create Value instance based on constructor name
+          return Values.fromConstructor(name, arg, typeSystem);
+        }
+      };
+    }
+    // Standard datatype constructor - return List
     return new BaseApplicable1(BuiltIn.Z_TY_CON) {
       @Override
       protected String name() {
@@ -3989,34 +4040,7 @@ public abstract class Codes {
 
       @Override
       public Object apply(Object arg) {
-        if (isValueDatatype) {
-          // For VALUE datatype, create Value instances directly
-          // Map constructor names to appropriate types
-          switch (name) {
-            case "UNIT":
-              return Value.of(PrimitiveType.UNIT, Unit.INSTANCE);
-            case "BOOL":
-              return Value.of(PrimitiveType.BOOL, arg);
-            case "INT":
-              return Value.of(PrimitiveType.INT, arg);
-            case "REAL":
-              return Value.of(PrimitiveType.REAL, arg);
-            case "CHAR":
-              return Value.of(PrimitiveType.CHAR, arg);
-            case "STRING":
-              return Value.of(PrimitiveType.STRING, arg);
-            default:
-              // For complex types (LIST, BAG, VECTOR, VALUE_NONE, VALUE_SOME,
-              // RECORD, CONST, CON), we need the full TypeSystem.
-              // For now, fall back to List representation and let fromList
-              // handle it later.
-              // TODO: Pass TypeSystem to tyCon or handle these cases directly
-              return ImmutableList.of(name, arg);
-          }
-        } else {
-          // For other datatypes, use the traditional List representation
-          return ImmutableList.of(name, arg);
-        }
+        return ImmutableList.of(name, arg);
       }
     };
   }
