@@ -3444,9 +3444,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#VALUE_PARSE */
   private static final Applicable1 VALUE_PARSE =
-      new BaseApplicable1<List, String>(BuiltIn.VALUE_PARSE) {
+      new BaseApplicable1<Value, String>(BuiltIn.VALUE_PARSE) {
         @Override
-        public List apply(String s) {
+        public Value apply(String s) {
           return Values.parse(s);
         }
       };
@@ -3456,7 +3456,7 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.VALUE_PRETTY_PRINT) {
         @Override
         public String apply(EvalEnv env, Object arg) {
-          final List value = (List) arg;
+          final Value value = (Value) arg;
           final Session session = env.getSession();
           return Values.prettyPrint(value, session);
         }
@@ -3464,9 +3464,9 @@ public abstract class Codes {
 
   /** @see BuiltIn#VALUE_PRINT */
   private static final Applicable1 VALUE_PRINT =
-      new BaseApplicable1<String, List>(BuiltIn.VALUE_PRINT) {
+      new BaseApplicable1<String, Value>(BuiltIn.VALUE_PRINT) {
         @Override
-        public String apply(List value) {
+        public String apply(Value value) {
           return Values.print(value);
         }
       };

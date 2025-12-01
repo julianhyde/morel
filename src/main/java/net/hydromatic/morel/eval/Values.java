@@ -44,8 +44,8 @@ public class Values {
   /**
    * Converts a List representation (from parser) to a Value instance.
    *
-   * <p>The parser creates Lists like ["INT", 42] or ["LIST", [...]].
-   * This method converts them to Value instances with proper types.
+   * <p>The parser creates Lists like ["INT", 42] or ["LIST", [...]]. This
+   * method converts them to Value instances with proper types.
    *
    * <p>The resulting Value uses general types (value list, value option, etc.)
    * since the parser doesn't infer specific types.
@@ -69,54 +69,66 @@ public class Values {
         return Value.of(PrimitiveType.CHAR, list.get(1));
       case "STRING":
         return Value.of(PrimitiveType.STRING, list.get(1));
-      case "LIST": {
-        final List elements = (List) list.get(1);
-        final List<Value> values = new ArrayList<>();
-        for (Object elem : elements) {
-          values.add(fromList((List) elem, typeSystem));
+      case "LIST":
+        {
+          final List elements = (List) list.get(1);
+          final List<Value> values = new ArrayList<>();
+          for (Object elem : elements) {
+            values.add(fromList((List) elem, typeSystem));
+          }
+          // Parser produces general type: value list
+          final Type valueType = typeSystem.lookup("value");
+          return Value.of(typeSystem.listType(valueType), values);
         }
-        // Parser produces general type: value list
-        final Type valueType = typeSystem.lookup("value");
-        return Value.of(typeSystem.listType(valueType), values);
-      }
-      case "BAG": {
-        final List elements = (List) list.get(1);
-        final List<Value> values = new ArrayList<>();
-        for (Object elem : elements) {
-          values.add(fromList((List) elem, typeSystem));
+      case "BAG":
+        {
+          final List elements = (List) list.get(1);
+          final List<Value> values = new ArrayList<>();
+          for (Object elem : elements) {
+            values.add(fromList((List) elem, typeSystem));
+          }
+          // BAG is a datatype constructor - need to look it up
+          // For now, treat similar to LIST
+          final Type valueType = typeSystem.lookup("value");
+          return Value.of(
+              typeSystem.listType(valueType), values); // TODO: proper bag type
         }
-        // BAG is a datatype constructor - need to look it up
-        // For now, treat similar to LIST
-        final Type valueType = typeSystem.lookup("value");
-        return Value.of(typeSystem.listType(valueType), values); // TODO: proper bag type
-      }
-      case "VECTOR": {
-        final List elements = (List) list.get(1);
-        final List<Value> values = new ArrayList<>();
-        for (Object elem : elements) {
-          values.add(fromList((List) elem, typeSystem));
+      case "VECTOR":
+        {
+          final List elements = (List) list.get(1);
+          final List<Value> values = new ArrayList<>();
+          for (Object elem : elements) {
+            values.add(fromList((List) elem, typeSystem));
+          }
+          final Type valueType = typeSystem.lookup("value");
+          return Value.of(
+              typeSystem.listType(valueType),
+              values); // TODO: proper vector type
         }
-        final Type valueType = typeSystem.lookup("value");
-        return Value.of(typeSystem.listType(valueType), values); // TODO: proper vector type
-      }
       case "VALUE_NONE":
         // NONE of value option
         final Type valueType = typeSystem.lookup("value");
-        return Value.of(typeSystem.option(valueType), null); // TODO: proper option representation
-      case "VALUE_SOME": {
-        final Value inner = fromList((List) list.get(1), typeSystem);
-        final Type vType = typeSystem.lookup("value");
-        return Value.of(typeSystem.option(vType), inner); // TODO: proper option representation
-      }
-      case "RECORD": {
-        final List<List> fields = (List) list.get(1);
-        final List<Value> fieldValues = new ArrayList<>();
-        for (List field : fields) {
-          fieldValues.add(fromList((List) field.get(1), typeSystem));
+        return Value.of(
+            typeSystem.option(valueType),
+            null); // TODO: proper option representation
+      case "VALUE_SOME":
+        {
+          final Value inner = fromList((List) list.get(1), typeSystem);
+          final Type vType = typeSystem.lookup("value");
+          return Value.of(
+              typeSystem.option(vType),
+              inner); // TODO: proper option representation
         }
-        // TODO: construct proper record type and value
-        return Value.of(PrimitiveType.UNIT, fieldValues); // TEMP
-      }
+      case "RECORD":
+        {
+          final List<List> fields = (List) list.get(1);
+          final List<Value> fieldValues = new ArrayList<>();
+          for (List field : fields) {
+            fieldValues.add(fromList((List) field.get(1), typeSystem));
+          }
+          // TODO: construct proper record type and value
+          return Value.of(PrimitiveType.UNIT, fieldValues); // TEMP
+        }
       case "CONST":
         // TODO: datatype constructor
         return Value.of(PrimitiveType.STRING, list.get(1)); // TEMP
@@ -125,87 +137,138 @@ public class Values {
         final List pair = (List) list.get(1);
         return Value.of(PrimitiveType.STRING, pair.get(0)); // TEMP
       default:
-        throw new IllegalArgumentException("Unknown constructor: " + constructor);
+        throw new IllegalArgumentException(
+            "Unknown constructor: " + constructor);
     }
   }
 
   /**
-   * Converts a value (represented as a List) to its string representation.
+   * Converts a Value to its string representation.
+   *
+   * <p>Handles both refined (specific types like int list) and unrefined
+   * (general types like value list) representations.
    *
    * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PRINT
    */
-  public static String print(List value) {
-    if (value.isEmpty()) {
-      throw new IllegalArgumentException("Invalid value: empty list");
+  public static String print(Value value) {
+    final Type type = value.type;
+    final Object val = value.value;
+
+    // Handle primitive types
+    if (type == PrimitiveType.UNIT) {
+      return "()";
+    }
+    if (type == PrimitiveType.BOOL) {
+      return String.valueOf(val);
+    }
+    if (type == PrimitiveType.INT) {
+      final int intVal = (Integer) val;
+      return intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal);
+    }
+    if (type == PrimitiveType.REAL) {
+      final float realVal = (Float) val;
+      return realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal);
+    }
+    if (type == PrimitiveType.CHAR) {
+      final Character ch = (Character) val;
+      return "#\"" + charEscape(ch) + "\"";
+    }
+    if (type == PrimitiveType.STRING) {
+      final String str = (String) val;
+      return "\"" + stringEscape(str) + "\"";
     }
 
-    final String constructor = (String) value.get(0);
-    switch (constructor) {
-      case "UNIT":
-        return "()";
-      case "BOOL":
-        return String.valueOf(value.get(1));
-      case "INT":
-        final int intVal = (Integer) value.get(1);
-        return intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal);
-      case "REAL":
-        final float realVal = (Float) value.get(1);
-        return realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal);
-      case "CHAR":
-        final Character ch = (Character) value.get(1);
-        return "#\"" + charEscape(ch) + "\"";
-      case "STRING":
-        final String str = (String) value.get(1);
-        return "\"" + stringEscape(str) + "\"";
-      case "LIST":
-        return "[" + printList((List) value.get(1)) + "]";
-      case "BAG":
-        return "bag [" + printList((List) value.get(1)) + "]";
-      case "VECTOR":
-        return "#[" + printList((List) value.get(1)) + "]";
-      case "VALUE_NONE":
-        return "VALUE_NONE";
-      case "VALUE_SOME":
-        return "VALUE_SOME " + print((List) value.get(1));
-      case "RECORD":
-        return "{" + printRecord((List) value.get(1)) + "}";
-      case "CONST":
-        final String constName = (String) value.get(1);
-        return "CONST \"" + constName + "\"";
-      case "CON":
-        final List conPair = (List) value.get(1);
-        final String conName = (String) conPair.get(0);
-        final List conValue = (List) conPair.get(1);
-        return "CON (\"" + conName + "\", " + print(conValue) + ")";
-      default:
-        throw new IllegalArgumentException(
-            "Unknown value constructor: " + constructor);
+    // Handle list types
+    if (type instanceof ListType) {
+      final List list = (List) val;
+      final ListType listType = (ListType) type;
+      final Type elementType = listType.elementType;
+
+      // Check if elements are Value instances (unrefined) or raw values
+      // (refined)
+      if (!list.isEmpty() && list.get(0) instanceof Value) {
+        // Unrefined: list of Value instances
+        return "[" + printValueList((List<Value>) list) + "]";
+      } else {
+        // Refined: list of raw values (int, string, etc.)
+        return "[" + printRefinedList(list, elementType) + "]";
+      }
     }
+
+    // Handle option types (which are DataTypes)
+    if (type instanceof DataType) {
+      final DataType dataType = (DataType) type;
+      // Check if it's an option type by checking the constructor names
+      // Option has constructors NONE and SOME
+      if (dataType.name.equals("option")) {
+        if (val == null) {
+          return "VALUE_NONE";
+        } else if (val instanceof Value) {
+          return "VALUE_SOME " + print((Value) val);
+        } else {
+          // Refined option: wrap the value
+          // For option types, the argument type is the first element of
+          // arguments
+          final Type innerType = dataType.arguments.get(0);
+          return "VALUE_SOME " + print(Value.of(innerType, val));
+        }
+      }
+      // Handle other datatype constructors (CONST, CON)
+      // TODO: implement general datatype printing
+      return "CONST \"TODO\"";
+    }
+
+    // Handle record types
+    if (type instanceof RecordType) {
+      final RecordType recordType = (RecordType) type;
+      final List recordValues = (List) val;
+      return "{" + printRecordValues(recordType, recordValues) + "}";
+    }
+
+    throw new IllegalArgumentException("Cannot print value of type: " + type);
   }
 
-  /** Helper for print: prints a list of values. */
-  private static String printList(List values) {
+  /** Helper for print: prints a list of Value instances (unrefined). */
+  private static String printValueList(List<Value> values) {
     final StringBuilder buf = new StringBuilder();
     for (int i = 0; i < values.size(); i++) {
       if (i > 0) {
         buf.append(", ");
       }
-      buf.append(print((List) values.get(i)));
+      buf.append(print(values.get(i)));
     }
     return buf.toString();
   }
 
-  /** Helper for print: prints a record (list of (string, value) pairs). */
-  private static String printRecord(List fields) {
+  /** Helper for print: prints a list of raw values (refined). */
+  private static String printRefinedList(List values, Type elementType) {
     final StringBuilder buf = new StringBuilder();
-    for (int i = 0; i < fields.size(); i++) {
+    for (int i = 0; i < values.size(); i++) {
       if (i > 0) {
         buf.append(", ");
       }
-      final List pair = (List) fields.get(i);
-      final String key = (String) pair.get(0);
-      final List val = (List) pair.get(1);
-      buf.append(key).append(" = ").append(print(val));
+      // Wrap each raw value in a Value instance for printing
+      buf.append(print(Value.of(elementType, values.get(i))));
+    }
+    return buf.toString();
+  }
+
+  /** Helper for print: prints a record with field names and values. */
+  private static String printRecordValues(RecordType recordType, List values) {
+    final StringBuilder buf = new StringBuilder();
+    final java.util.Map<String, Type> fields = recordType.argNameTypes();
+    int i = 0;
+    for (java.util.Map.Entry<String, Type> entry : fields.entrySet()) {
+      if (i > 0) {
+        buf.append(", ");
+      }
+      final String fieldName = entry.getKey();
+      final Type fieldType = entry.getValue();
+      final Object fieldValue = values.get(i);
+
+      buf.append(fieldName).append(" = ");
+      buf.append(print(Value.of(fieldType, fieldValue)));
+      i++;
     }
     return buf.toString();
   }
@@ -245,7 +308,7 @@ public class Values {
    *
    * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PRETTY_PRINT
    */
-  public static String prettyPrint(List value, Session session) {
+  public static String prettyPrint(Value value, Session session) {
     // For now, delegate to print
     // Future enhancement: use Pretty class for formatted output with
     // indentation and line breaks based on session settings

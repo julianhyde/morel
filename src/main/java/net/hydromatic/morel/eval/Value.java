@@ -18,7 +18,6 @@
  */
 package net.hydromatic.morel.eval;
 
-import java.util.List;
 import java.util.Objects;
 import net.hydromatic.morel.type.Type;
 
@@ -26,15 +25,16 @@ import net.hydromatic.morel.type.Type;
  * A value with an explicit type.
  *
  * <p>This representation stores a Type alongside the actual Object value,
- * enabling efficient storage of homogeneous collections while maintaining
- * full type information.
+ * enabling efficient storage of homogeneous collections while maintaining full
+ * type information.
  *
  * <p>For example:
+ *
  * <ul>
  *   <li>{@code Value(PrimitiveType.INT, 42)} represents an int
  *   <li>{@code Value(ListType(INT), [1,2,3])} represents an int list
- *   <li>{@code Value(ListType(ValueType), [Value(...), ...])} represents
- *       a heterogeneous value list
+ *   <li>{@code Value(ListType(ValueType), [Value(...), ...])} represents a
+ *       heterogeneous value list
  * </ul>
  */
 public class Value {
@@ -64,20 +64,25 @@ public class Value {
     // This means refined and unrefined values are equal if they represent
     // the same logical value.
     // For now, delegate to value equality. In the future, we may need to
-    // normalize both sides (e.g., unwrap collections) for true logical equality.
+    // normalize both sides (e.g., unwrap collections) for true logical
+    // equality.
     return logicallyEqual(this, that);
   }
 
   /**
    * Checks logical equality between two values.
    *
-   * <p>Refined and unrefined representations of the same logical value
-   * should be equal. For example:
+   * <p>Refined and unrefined representations of the same logical value should
+   * be equal. For example:
+   *
    * <ul>
    *   <li>{@code Value(ListType(INT), [1,2])} (refined)
-   *   <li>{@code Value(ListType(ValueType), [Value(INT,1), Value(INT,2)])} (unrefined)
+   *   <li>{@code Value(ListType(ValueType), [Value(INT,1), Value(INT,2)])}
+   *       (unrefined)
    * </ul>
-   * These are logically equal even though they have different type and value representations.
+   *
+   * These are logically equal even though they have different type and value
+   * representations.
    */
   private static boolean logicallyEqual(Value v1, Value v2) {
     // For now, use structural equality on the wrapped values
