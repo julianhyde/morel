@@ -19,7 +19,14 @@
 package net.hydromatic.morel.eval;
 
 import com.google.common.collect.ImmutableList;
+import java.util.ArrayList;
 import java.util.List;
+import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 
 /**
@@ -32,6 +39,94 @@ import net.hydromatic.morel.util.Ord;
 public class Values {
   private Values() {
     // Utility class, no instances
+  }
+
+  /**
+   * Converts a List representation (from parser) to a Value instance.
+   *
+   * <p>The parser creates Lists like ["INT", 42] or ["LIST", [...]].
+   * This method converts them to Value instances with proper types.
+   *
+   * <p>The resulting Value uses general types (value list, value option, etc.)
+   * since the parser doesn't infer specific types.
+   */
+  static Value fromList(List list, TypeSystem typeSystem) {
+    if (list.isEmpty()) {
+      throw new IllegalArgumentException("Invalid value: empty list");
+    }
+
+    final String constructor = (String) list.get(0);
+    switch (constructor) {
+      case "UNIT":
+        return Value.of(PrimitiveType.UNIT, Unit.INSTANCE);
+      case "BOOL":
+        return Value.of(PrimitiveType.BOOL, list.get(1));
+      case "INT":
+        return Value.of(PrimitiveType.INT, list.get(1));
+      case "REAL":
+        return Value.of(PrimitiveType.REAL, list.get(1));
+      case "CHAR":
+        return Value.of(PrimitiveType.CHAR, list.get(1));
+      case "STRING":
+        return Value.of(PrimitiveType.STRING, list.get(1));
+      case "LIST": {
+        final List elements = (List) list.get(1);
+        final List<Value> values = new ArrayList<>();
+        for (Object elem : elements) {
+          values.add(fromList((List) elem, typeSystem));
+        }
+        // Parser produces general type: value list
+        final Type valueType = typeSystem.lookup("value");
+        return Value.of(typeSystem.listType(valueType), values);
+      }
+      case "BAG": {
+        final List elements = (List) list.get(1);
+        final List<Value> values = new ArrayList<>();
+        for (Object elem : elements) {
+          values.add(fromList((List) elem, typeSystem));
+        }
+        // BAG is a datatype constructor - need to look it up
+        // For now, treat similar to LIST
+        final Type valueType = typeSystem.lookup("value");
+        return Value.of(typeSystem.listType(valueType), values); // TODO: proper bag type
+      }
+      case "VECTOR": {
+        final List elements = (List) list.get(1);
+        final List<Value> values = new ArrayList<>();
+        for (Object elem : elements) {
+          values.add(fromList((List) elem, typeSystem));
+        }
+        final Type valueType = typeSystem.lookup("value");
+        return Value.of(typeSystem.listType(valueType), values); // TODO: proper vector type
+      }
+      case "VALUE_NONE":
+        // NONE of value option
+        final Type valueType = typeSystem.lookup("value");
+        return Value.of(typeSystem.option(valueType), null); // TODO: proper option representation
+      case "VALUE_SOME": {
+        final Value inner = fromList((List) list.get(1), typeSystem);
+        final Type vType = typeSystem.lookup("value");
+        return Value.of(typeSystem.option(vType), inner); // TODO: proper option representation
+      }
+      case "RECORD": {
+        final List<List> fields = (List) list.get(1);
+        final List<Value> fieldValues = new ArrayList<>();
+        for (List field : fields) {
+          fieldValues.add(fromList((List) field.get(1), typeSystem));
+        }
+        // TODO: construct proper record type and value
+        return Value.of(PrimitiveType.UNIT, fieldValues); // TEMP
+      }
+      case "CONST":
+        // TODO: datatype constructor
+        return Value.of(PrimitiveType.STRING, list.get(1)); // TEMP
+      case "CON":
+        // TODO: datatype constructor with value
+        final List pair = (List) list.get(1);
+        return Value.of(PrimitiveType.STRING, pair.get(0)); // TEMP
+      default:
+        throw new IllegalArgumentException("Unknown constructor: " + constructor);
+    }
   }
 
   /**
@@ -162,9 +257,12 @@ public class Values {
    *
    * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PARSE
    */
-  public static List parse(String s) {
+  public static Value parse(String s) {
     final Parser parser = new Parser(s);
-    return parser.parse();
+    final List list = parser.parse();
+    // Convert List representation to Value with proper types
+    final TypeSystem typeSystem = new TypeSystem();
+    return fromList(list, typeSystem);
   }
 
   /** Helper class for parsing value representations. */
