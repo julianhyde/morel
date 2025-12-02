@@ -50,7 +50,6 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.eval.Values;
 import net.hydromatic.morel.type.Type.Key;
 import net.hydromatic.morel.util.ComparableSingletonList;
-import net.hydromatic.morel.util.Pair;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -62,8 +61,7 @@ public class TypeSystem {
   final Map<BuiltIn.BuiltInType, Type> builtInTypes = new HashMap<>();
   final Map<Key, Type> typeByKey = new HashMap<>();
 
-  private final Map<String, Pair<DataType, Type.Key>> typeConstructorByName =
-      new HashMap<>();
+  private final Map<String, TypeCon> typeConstructorByName = new HashMap<>();
 
   public final NameGenerator nameGenerator = new NameGenerator();
 
@@ -229,7 +227,8 @@ public class TypeSystem {
 
           dataType.typeConstructors.forEach(
               (name, typeKey) ->
-                  typeConstructorByName.put(name, Pair.of(dataType, typeKey)));
+                  typeConstructorByName.put(
+                      name, TypeCon.of(dataType, name, typeKey)));
           dataTypeMap.put(nameKey, dataType);
         });
 
@@ -282,7 +281,8 @@ public class TypeSystem {
       // register its type constructors, so this DataType needs to register.
       tyCons.forEach(
           (name3, typeKey) ->
-              typeConstructorByName.put(name3, Pair.of(dataType, typeKey)));
+              typeConstructorByName.put(
+                  name3, TypeCon.of(dataType, name3, typeKey)));
     }
     return dataType;
   }
@@ -540,7 +540,7 @@ public class TypeSystem {
         });
   }
 
-  public @Nullable Pair<DataType, Type.Key> lookupTyCon(String tyConName) {
+  public @Nullable TypeCon lookupTyCon(String tyConName) {
     return typeConstructorByName.get(tyConName);
   }
 

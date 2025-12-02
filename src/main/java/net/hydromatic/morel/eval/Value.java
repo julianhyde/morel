@@ -19,13 +19,23 @@
 package net.hydromatic.morel.eval;
 
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.eval.Codes.optionSome;
+import static net.hydromatic.morel.util.Static.transformEager;
 
+import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Objects;
+import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.AbstractImmutableList;
+import org.apache.calcite.runtime.FlatLists;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * A value with an explicit type.
@@ -37,19 +47,22 @@ import net.hydromatic.morel.util.AbstractImmutableList;
  * <p>For example:
  *
  * <ul>
- *   <li>{@code Value(PrimitiveType.INT, 42)} represents an int
- *   <li>{@code Value(ListType(INT), [1,2,3])} represents an int list
+ *   <li>{@code Value(PrimitiveType.INT, 42)} represents an {@code int};
+ *   <li>{@code Value(ListType(INT), [1,2,3])} represents an {@code int list};
  *   <li>{@code Value(ListType(ValueType), [Value(...), ...])} represents a
  *       heterogeneous value list
  * </ul>
  */
 public class Value extends AbstractImmutableList<Object> {
+  private static final Value UNIT_VALUE =
+      new Value(PrimitiveType.UNIT, Unit.INSTANCE);
+
   public final Type type;
   public final Object value;
 
   private Value(Type type, Object value) {
     this.type = requireNonNull(type, "type");
-    this.value = requireNonNull(value);
+    this.value = requireNonNull(value, "value");
   }
 
   /** Creates a Value instance. */
@@ -59,7 +72,7 @@ public class Value extends AbstractImmutableList<Object> {
 
   /** Returns the {@code unit} instance. */
   public static Value unit() {
-    return new Value(PrimitiveType.UNIT, Unit.INSTANCE);
+    return UNIT_VALUE;
   }
 
   /** Returns a value that wraps a {@code bool}. */
@@ -89,14 +102,49 @@ public class Value extends AbstractImmutableList<Object> {
 
   /** Returns a value that wraps a list with a given element type. */
   public static Value ofList(
-      TypeSystem typeSystem, Type elementType, List<?> list) {
+      TypeSystem typeSystem, Type elementType, List<Value> list) {
     return new Value(typeSystem.listType(elementType), list);
+  }
+
+  /**
+   * Returns a value that wraps a list of values, perhaps with the same element
+   * type.
+   */
+  public static Value ofValueList(
+      TypeSystem typeSystem, List<Value> valueList) {
+    Type elementType = commonElementType(valueList);
+    if (elementType != null) {
+      final ListType listType = typeSystem.listType(elementType);
+      final List<Object> list = transformEager(valueList, v -> v.value);
+      return Value.of(listType, list);
+    } else {
+      // If we can't determine a common element type, fall back to 'value'
+      elementType = typeSystem.lookup("value");
+      return Value.ofList(typeSystem, elementType, valueList);
+    }
   }
 
   /** Returns a value that wraps a bag (treated as list for now). */
   public static Value ofBag(
       TypeSystem typeSystem, Type elementType, List<?> list) {
     return new Value(typeSystem.bagType(elementType), list);
+  }
+
+  /**
+   * Returns a value that wraps a bag of values, perhaps with the same element
+   * type.
+   */
+  public static Value ofValueBag(TypeSystem typeSystem, List<Value> valueList) {
+    Type elementType = commonElementType(valueList);
+    if (elementType != null) {
+      final Type bagType = typeSystem.bagType(elementType);
+      final List<Object> list = transformEager(valueList, v -> v.value);
+      return Value.of(bagType, list);
+    } else {
+      // If we can't determine a common element type, fall back to 'value'
+      elementType = typeSystem.lookup("value");
+      return Value.ofBag(typeSystem, elementType, valueList);
+    }
   }
 
   /** Returns a value that wraps a vector (treated as list for now). */
@@ -106,15 +154,64 @@ public class Value extends AbstractImmutableList<Object> {
     return new Value(typeSystem.vector(elementType), list);
   }
 
+  /**
+   * Returns a value that wraps a vector of values, perhaps with the same
+   * element type.
+   */
+  public static Value ofValueVector(
+      TypeSystem typeSystem, List<Value> valueList) {
+    Type elementType = commonElementType(valueList);
+    if (elementType != null) {
+      final Type vectorType = typeSystem.vector(elementType);
+      final List<Object> list = transformEager(valueList, v -> v.value);
+      return Value.of(vectorType, list);
+    } else {
+      // If we can't determine a common element type, fall back to 'value'
+      elementType = typeSystem.lookup("value");
+      return Value.ofVector(typeSystem, elementType, valueList);
+    }
+  }
+
   /** Returns a value that wraps an option NONE. */
   public static Value ofNone(TypeSystem typeSystem, Type elementType) {
     return new Value(typeSystem.option(elementType), Codes.OPTION_NONE);
   }
 
   /** Returns a value that wraps an option SOME. */
-  public static Value ofSome(
-      TypeSystem typeSystem, Type elementType, Object value) {
-    return new Value(typeSystem.option(elementType), value);
+  public static Value ofSome(TypeSystem typeSystem, Value value) {
+    return new Value(typeSystem.option(value.type), optionSome(value.value));
+  }
+
+  /**
+   * Returns a value that is a call to a constant (zero-argument constructor).
+   *
+   * <p>For example, given the datatype declaration {@code datatype foo = BAR |
+   * BAZ of int}, {@code CONST "BAR"} returns a Value with type {@code foo} and
+   * value {@code "BAR"}.
+   */
+  public static Value ofConstant(TypeSystem typeSystem, String conName) {
+    TypeCon typeCon = typeSystem.lookupTyCon(conName);
+    if (typeCon == null) {
+      throw new IllegalArgumentException("Unknown constructor: " + conName);
+    }
+    return new Value(typeCon.dataType, FlatLists.of(conName));
+  }
+
+  /**
+   * Returns a value that is a call to a constructor.
+   *
+   * <p>For example, given the datatype declaration {@code datatype foo = BAR |
+   * BAZ of int}, {@code CON ("BAZ", 3)} returns a Value with type {@code foo}
+   * and value {@code ("BAZ", 3)}.
+   */
+  public static Value ofConstructor(
+      TypeSystem typeSystem, String conName, Value conValue) {
+    @Nullable TypeCon typeCon = typeSystem.lookupTyCon(conName);
+    if (typeCon == null) {
+      throw new IllegalArgumentException("Unknown constructor: " + conName);
+    }
+    final Type type = typeSystem.apply(typeCon.dataType, conValue.type);
+    return new Value(type, FlatLists.of(conName, conValue));
   }
 
   @Override
@@ -122,52 +219,69 @@ public class Value extends AbstractImmutableList<Object> {
     return this;
   }
 
+  /**
+   * Converts this Value to a list with tag and value, the same format used for
+   * other sum types in Morel.
+   */
+  private List<Object> toFlatList() {
+    String tag = tag().name();
+    return type == PrimitiveType.UNIT
+        ? FlatLists.of(tag)
+        : FlatLists.of(tag, value);
+  }
+
+  @Override
+  public ListIterator<Object> listIterator() {
+    return toFlatList().listIterator();
+  }
+
+  @Override
+  public Iterator<Object> iterator() {
+    return toFlatList().iterator();
+  }
+
   @Override
   public int size() {
-    return Values.toList(this).size();
+    return type == PrimitiveType.UNIT ? 1 : 2;
   }
 
   @Override
   public Object[] toArray() {
-    return toList().toArray();
+    return toFlatList().toArray();
   }
 
   @Override
   public <T> T[] toArray(T[] a) {
-    return toList().toArray(a);
+    return toFlatList().toArray(a);
   }
 
   @Override
   public Object get(int index) {
-    return Values.toList(this).get(index);
+    return toFlatList().get(index);
   }
 
   @Override
   public int indexOf(Object o) {
-    return toList().indexOf(o);
+    return toFlatList().indexOf(o);
   }
 
   @Override
   public int lastIndexOf(Object o) {
-    return toList().lastIndexOf(o);
+    return toFlatList().lastIndexOf(o);
   }
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj) {
-      return true;
-    }
-    if (!(obj instanceof Value)) {
-      return false;
-    }
-    Value that = (Value) obj;
-    // Logical equality: compare the actual values, not the type representation
-    // This means refined and unrefined values are equal if they represent
-    // the same logical value.
-    // For now, delegate to value equality. In the future, we may need to
-    // normalize both sides (e.g., unwrap collections) for true logical
-    // equality.
-    return logicallyEqual(this, that);
+    return this == obj
+        || obj instanceof Value
+            // Logical equality: compare the actual values, not the type
+            // representation. This means refined and unrefined values are equal
+            // if
+            // they represent the same logical value. For now, delegate to value
+            // equality. In the future, we may need to normalize both sides
+            // (e.g.,
+            // unwrap collections) for true logical equality.
+            && logicallyEqual(this, (Value) obj);
   }
 
   /**
@@ -199,6 +313,65 @@ public class Value extends AbstractImmutableList<Object> {
   @Override
   public String toString() {
     return "Value(" + type + ", " + value + ")";
+  }
+
+  /** Returns the constructor tag for this value. */
+  private BuiltIn.Constructor tag() {
+    switch (type.op()) {
+      case ID:
+        switch ((PrimitiveType) type) {
+          case UNIT:
+            return BuiltIn.Constructor.VALUE_UNIT;
+          case BOOL:
+            return BuiltIn.Constructor.VALUE_BOOL;
+          case INT:
+            return BuiltIn.Constructor.VALUE_INT;
+          case REAL:
+            return BuiltIn.Constructor.VALUE_REAL;
+          case CHAR:
+            return BuiltIn.Constructor.VALUE_CHAR;
+          case STRING:
+            return BuiltIn.Constructor.VALUE_STRING;
+          default:
+            throw new IllegalArgumentException(
+                "No constructor for primitive type: " + type);
+        }
+
+      case LIST:
+        return BuiltIn.Constructor.VALUE_LIST;
+
+      case RECORD_TYPE:
+      case TUPLE_TYPE:
+        return BuiltIn.Constructor.VALUE_RECORD;
+
+      case DATA_TYPE:
+        final DataType dataType = (DataType) type;
+        if (dataType.name.equals("option")) {
+          return value == Codes.OPTION_NONE
+              ? BuiltIn.Constructor.VALUE_NONE
+              : BuiltIn.Constructor.VALUE_SOME;
+        }
+        // TODO: BuiltIn.Constructor.VALUE_CON
+        return BuiltIn.Constructor.VALUE_CONSTRUCT;
+
+      default:
+        throw new IllegalArgumentException(
+            "No constructor for primitive type: " + type);
+    }
+  }
+
+  private static @Nullable Type commonElementType(List<Value> list) {
+    if (list.isEmpty()) {
+      return null;
+    }
+    Type commonType = list.get(0).type;
+    for (int i = 1; i < list.size(); i++) {
+      final Type currentType = list.get(i).type;
+      if (!commonType.equals(currentType)) {
+        return null; // No common type
+      }
+    }
+    return commonType;
   }
 }
 

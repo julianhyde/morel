@@ -18,8 +18,9 @@
  */
 package net.hydromatic.morel.eval;
 
+import static java.lang.String.format;
+
 import com.google.common.collect.ImmutableList;
-import java.util.ArrayList;
 import java.util.List;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
@@ -52,6 +53,7 @@ public class Values {
    * @param typeSystem Type system for looking up types
    * @return Value instance with appropriate type
    */
+  @SuppressWarnings("unchecked")
   public static Value fromConstructor(
       String name, Object arg, TypeSystem typeSystem) {
     switch (name) {
@@ -68,47 +70,36 @@ public class Values {
       case "STRING":
         return Value.ofString((String) arg);
       case "LIST":
-        {
-          // arg is a list of Value instances
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofList(typeSystem, valueType, (List<?>) arg);
-        }
+        return Value.ofValueList(typeSystem, (List<Value>) arg);
       case "BAG":
-        {
-          // BAG is similar to LIST for now
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofBag(typeSystem, valueType, (List<?>) arg);
-        }
+        return Value.ofValueBag(typeSystem, (List<Value>) arg);
       case "VECTOR":
-        {
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofVector(typeSystem, valueType, (List<?>) arg);
-        }
+        return Value.ofValueVector(typeSystem, (List<Value>) arg);
       case "VALUE_NONE":
         {
           final Type valueType = typeSystem.lookup("value");
           return Value.ofNone(typeSystem, valueType);
         }
       case "VALUE_SOME":
-        {
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofSome(typeSystem, valueType, arg);
-        }
+        return Value.ofSome(typeSystem, (Value) arg);
       case "RECORD":
         {
           // arg is a list of (name, value) pairs
           // TODO: construct proper record type
           return Value.of(PrimitiveType.UNIT, arg); // TEMP
         }
-      case "CONST":
+      case "CONSTANT":
         // Nullary datatype constructor
-        return Value.of(PrimitiveType.STRING, arg); // TEMP
-      case "CON":
+        return Value.ofConstant(typeSystem, (String) arg);
+      case "CONSTRUCT":
         // Unary datatype constructor with value
-        return Value.of(PrimitiveType.STRING, arg); // TEMP
+        final List<Object> list = (List<Object>) arg;
+        final String conName = (String) list.get(0);
+        final Value conArg = (Value) list.get(1);
+        return Value.ofConstructor(typeSystem, conName, conArg);
       default:
         throw new IllegalArgumentException(
-            "Unknown VALUE constructor: " + name);
+            String.format("Unknown VALUE constructor: %s", name));
     }
   }
 
@@ -169,205 +160,10 @@ public class Values {
   }
 
   /**
-   * Converts a List representation (from parser) to a Value instance.
-   *
-   * <p>The parser creates Lists like ["INT", 42] or ["LIST", [...]]. This
-   * method converts them to Value instances with proper types.
-   *
-   * <p>The resulting Value uses general types (value list, value option, etc.)
-   * since the parser doesn't infer specific types.
-   */
-  static Value fromList(List list, TypeSystem typeSystem) {
-    if (list.isEmpty()) {
-      throw new IllegalArgumentException("Invalid value: empty list");
-    }
-
-    final String constructor = (String) list.get(0);
-    switch (constructor) {
-      case "UNIT":
-        return Value.unit();
-      case "BOOL":
-        return Value.ofBool((Boolean) list.get(1));
-      case "INT":
-        return Value.ofInt((Integer) list.get(1));
-      case "REAL":
-        return Value.ofReal((Float) list.get(1));
-      case "CHAR":
-        return Value.ofChar((Character) list.get(1));
-      case "STRING":
-        return Value.ofString((String) list.get(1));
-      case "LIST":
-        {
-          final List elements = (List) list.get(1);
-          final List<Value> values = new ArrayList<>();
-          for (Object elem : elements) {
-            values.add(fromList((List) elem, typeSystem));
-          }
-          // Parser produces general type: value list
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofList(typeSystem, valueType, values);
-        }
-      case "BAG":
-        {
-          final List elements = (List) list.get(1);
-          final List<Value> values = new ArrayList<>();
-          for (Object elem : elements) {
-            values.add(fromList((List) elem, typeSystem));
-          }
-          // BAG is a datatype constructor - need to look it up
-          // For now, treat similar to LIST
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofBag(typeSystem, valueType, values);
-        }
-      case "VECTOR":
-        {
-          final List elements = (List) list.get(1);
-          final List<Value> values = new ArrayList<>();
-          for (Object elem : elements) {
-            values.add(fromList((List) elem, typeSystem));
-          }
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofVector(typeSystem, valueType, values);
-        }
-      case "VALUE_NONE":
-        // NONE of value option
-        final Type valueType = typeSystem.lookup("value");
-        return Value.ofNone(typeSystem, valueType);
-      case "VALUE_SOME":
-        {
-          final Value inner = fromList((List) list.get(1), typeSystem);
-          final Type vType = typeSystem.lookup("value");
-          return Value.ofSome(typeSystem, vType, inner);
-        }
-      case "RECORD":
-        {
-          final List<List> fields = (List) list.get(1);
-          final List<Value> fieldValues = new ArrayList<>();
-          for (List field : fields) {
-            fieldValues.add(fromList((List) field.get(1), typeSystem));
-          }
-          // TODO: construct proper record type and value
-          return Value.of(PrimitiveType.UNIT, fieldValues); // TEMP
-        }
-      case "CONST":
-        // TODO: datatype constructor
-        return Value.of(PrimitiveType.STRING, list.get(1)); // TEMP
-      case "CON":
-        // TODO: datatype constructor with value
-        final List pair = (List) list.get(1);
-        return Value.of(PrimitiveType.STRING, pair.get(0)); // TEMP
-      default:
-        throw new IllegalArgumentException(
-            "Unknown constructor: " + constructor);
-    }
-  }
-
-  /**
-   * Converts a Value instance back to List representation.
-   *
-   * <p>This is the reverse of {@link #fromList}. Converts Value instances to
-   * the same List format that VALUE constructors produce, for consistent
-   * printing.
-   *
-   * <p>For example:
-   *
-   * <ul>
-   *   <li>{@code Value(INT, 42)} → {@code ["INT", 42]}
-   *   <li>{@code Value(LIST, [Value(INT,1), Value(INT,2)])} → {@code ["LIST",
-   *       [["INT",1], ["INT",2]]]}
-   * </ul>
-   */
-  public static List toList(Value value) {
-    final Type type = value.type;
-    final Object val = value.value;
-
-    // Handle primitive types
-    if (type == PrimitiveType.UNIT) {
-      return ImmutableList.of("UNIT");
-    }
-    if (type == PrimitiveType.BOOL) {
-      return ImmutableList.of("BOOL", val);
-    }
-    if (type == PrimitiveType.INT) {
-      return ImmutableList.of("INT", val);
-    }
-    if (type == PrimitiveType.REAL) {
-      return ImmutableList.of("REAL", val);
-    }
-    if (type == PrimitiveType.CHAR) {
-      return ImmutableList.of("CHAR", val);
-    }
-    if (type == PrimitiveType.STRING) {
-      return ImmutableList.of("STRING", val);
-    }
-
-    // Handle list types
-    if (type instanceof ListType) {
-      final List list = (List) val;
-      final List<List> elementLists = new ArrayList<>();
-      for (Object elem : list) {
-        if (elem instanceof Value) {
-          elementLists.add(toList((Value) elem));
-        } else {
-          // Refined list - wrap elements
-          final Type elementType = ((ListType) type).elementType;
-          elementLists.add(toList(Value.of(elementType, elem)));
-        }
-      }
-      // Determine constructor name based on list type
-      // TODO: distinguish LIST, BAG, VECTOR properly
-      return ImmutableList.of("LIST", elementLists);
-    }
-
-    // Handle option types
-    if (type instanceof DataType) {
-      final DataType dataType = (DataType) type;
-      if (dataType.name.equals("option")) {
-        if (val == null) {
-          return ImmutableList.of("VALUE_NONE");
-        } else if (val instanceof Value) {
-          return ImmutableList.of("VALUE_SOME", toList((Value) val));
-        } else {
-          // Refined option
-          final Type innerType = dataType.arguments.get(0);
-          return ImmutableList.of(
-              "VALUE_SOME", toList(Value.of(innerType, val)));
-        }
-      }
-      // Other datatypes (CONST, CON)
-      // TODO: implement properly
-      return ImmutableList.of("CONST", "TODO");
-    }
-
-    // Handle record types
-    if (type instanceof RecordType) {
-      final RecordType recordType = (RecordType) type;
-      final List recordValues = (List) val;
-      final List<List> fields = new ArrayList<>();
-      int i = 0;
-      for (java.util.Map.Entry<String, Type> entry :
-          recordType.argNameTypes().entrySet()) {
-        final String fieldName = entry.getKey();
-        final Type fieldType = entry.getValue();
-        final Object fieldValue = recordValues.get(i);
-        final List fieldValueList =
-            fieldValue instanceof Value
-                ? toList((Value) fieldValue)
-                : toList(Value.of(fieldType, fieldValue));
-        fields.add(ImmutableList.of(fieldName, fieldValueList));
-        i++;
-      }
-      return ImmutableList.of("RECORD", fields);
-    }
-
-    throw new IllegalArgumentException("Cannot convert value of type: " + type);
-  }
-
-  /**
    * Converts a Value to its string representation.
    *
-   * <p>Handles both refined (specific types like int list) and unrefined
-   * (general types like value list) representations.
+   * <p>Handles both refined (specific types like {@code int list}) and
+   * unrefined (general types like {@code value list}) representations.
    *
    * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PRINT
    */
@@ -840,8 +636,8 @@ public class Values {
         final Type valueType = typeSystem.lookup("value");
         return Value.ofBag(typeSystem, valueType, values.build());
       }
-      // Check for CONST format (CONST "name")
-      if (tryConsume("CONST")) {
+      // Check for CONSTRUCT format, e.g. CONSTRUCT "INL" (INT 5)
+      if (tryConsume("CONSTRUCT")) {
         skipWhitespace();
         expect("\"");
         final String constName = parseStringContent();
@@ -849,8 +645,8 @@ public class Values {
         // TODO: implement proper CONST support
         return Value.of(PrimitiveType.STRING, constName);
       }
-      // Check for CON format (CON ("name", value))
-      if (tryConsume("CON")) {
+      // Check for CONSTANT, e.g. CONSTANT "LESS"
+      if (tryConsume("CONSTANT")) {
         skipWhitespace();
         expect("(");
         skipWhitespace();
@@ -873,8 +669,7 @@ public class Values {
       } else if (tryConsume("VALUE_SOME")) {
         skipWhitespace();
         final Value value = parseValue();
-        final Type valueType = typeSystem.lookup("value");
-        return Value.ofSome(typeSystem, valueType, value);
+        return Value.ofSome(typeSystem, value);
       }
       throw new IllegalArgumentException(
           "Unknown identifier at position " + pos);
@@ -943,12 +738,11 @@ public class Values {
       skipWhitespace();
       if (!input.startsWith(expected, pos)) {
         throw new IllegalArgumentException(
-            "Expected '"
-                + expected
-                + "' at position "
-                + pos
-                + " but found: "
-                + input.substring(pos, Math.min(pos + 10, input.length())));
+            format(
+                "Expected '%s' at position %d but found: %s",
+                expected,
+                pos,
+                input.substring(pos, Math.min(pos + 10, input.length()))));
       }
       pos += expected.length();
     }

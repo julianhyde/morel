@@ -403,17 +403,6 @@ class Pretty {
     }
   }
 
-  /**
-   * Converts a Value instance to List representation for printing.
-   *
-   * <p>Value instances created by Value.parse() need to be converted to the
-   * same List format that VALUE constructors produce, so they print
-   * identically.
-   */
-  private List valueToList(Value v) {
-    return net.hydromatic.morel.eval.Values.toList(v);
-  }
-
   private StringBuilder prettyDataType(
       StringBuilder buf,
       int indent,
@@ -421,15 +410,7 @@ class Pretty {
       int depth,
       DataType dataType,
       Object value) {
-    // Special handling for VALUE datatype: convert Value instances to List
-    // representation so they print the same as constructor-created values
-    if (dataType.name.equals("value") && value instanceof Value) {
-      // Convert Value instance to List format for consistent printing
-      value = valueToList((Value) value);
-    }
-
-    final List<Object> list;
-    list = toList(value);
+    final List<Object> list = toList(value);
     if (dataType.name.equals("vector")) {
       final Type argType = dataType.arg(0);
       return printList(buf.append('#'), indent, lineEnd, depth, argType, list);

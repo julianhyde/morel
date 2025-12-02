@@ -16,7 +16,31 @@
  * language governing permissions and limitations under the
  * License.
  *)
+(*
 "this is a simple script; modify it for debugging test cases";
 > val it = "this is a simple script; modify it for debugging test cases" : string
+
+INT 3;
+> val it = 3 : int value
+
+LIST [INT 1, INT 2];
+> val it = LIST [INT 1,INT 2] : int list value
+
+VALUE_SOME (INT 5);
+> val it = VALUE_SOME (INT 5) : int option value
+*)
+
+CONSTANT "LESS";
+> val it = LESS : order value
+
+(*
+
+CONSTRUCT ("INL", INT 1);
+> val it = CONSTRUCT ("Cons",INT 1) : value
+
+CON ("SOME", INT 42);
+> val it = CON ("SOME",INT 42) : value
+
+*)
 
 (*) End dummy.smli
