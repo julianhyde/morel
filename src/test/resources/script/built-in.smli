@@ -4920,27 +4920,27 @@ Sys.plan ();
 
 (*) value datatype constructors exist
 UNIT;
-> val it = UNIT : value
+> val it = () : unit value
 BOOL true;
-> val it = BOOL true : value
+> val it = true : bool value
 INT 42;
-> val it = INT 42 : value
+> val it = 42 : int value
 REAL 3.14;
-> val it = REAL 3.14 : value
+> val it = 3.14 : real value
 CHAR #"x";
-> val it = CHAR #"x" : value
+> val it = #"x" : char value
 STRING "hello";
-> val it = STRING "hello" : value
+> val it = "hello" : string value
 LIST [INT 1, INT 2];
-> val it = LIST [INT 1,INT 2] : value
+> val it = LIST [INT 1,INT 2] : int list value
 BAG [INT 3];
-> val it = BAG [INT 3] : value
+> val it = BAG [INT 3] : int bag value
 VECTOR [STRING "a"];
-> val it = VECTOR [STRING "a"] : value
+> val it = VECTOR [STRING "a"] : string vector value
 VALUE_NONE;
-> val it = VALUE_NONE : value
+> val it = VALUE_NONE : value option value
 VALUE_SOME (INT 5);
-> val it = VALUE_SOME (INT 5) : value
+> val it = VALUE_SOME (INT 5) : int option value
 RECORD [("x", INT 1)];
 > val it = RECORD [("x",INT 1)] : value
 CONST "Nil";

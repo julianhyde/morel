@@ -18,8 +18,14 @@
  */
 package net.hydromatic.morel.eval;
 
+import static java.util.Objects.requireNonNull;
+
+import java.util.List;
 import java.util.Objects;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.AbstractImmutableList;
 
 /**
  * A value with an explicit type.
@@ -37,18 +43,113 @@ import net.hydromatic.morel.type.Type;
  *       heterogeneous value list
  * </ul>
  */
-public class Value {
+public class Value extends AbstractImmutableList<Object> {
   public final Type type;
   public final Object value;
 
   private Value(Type type, Object value) {
-    this.type = Objects.requireNonNull(type, "type");
-    this.value = value; // null is allowed for UNIT
+    this.type = requireNonNull(type, "type");
+    this.value = requireNonNull(value);
   }
 
   /** Creates a Value instance. */
   public static Value of(Type type, Object value) {
     return new Value(type, value);
+  }
+
+  /** Returns the {@code unit} instance. */
+  public static Value unit() {
+    return new Value(PrimitiveType.UNIT, Unit.INSTANCE);
+  }
+
+  /** Returns a value that wraps a {@code bool}. */
+  public static Value ofBool(boolean b) {
+    return new Value(PrimitiveType.BOOL, b);
+  }
+
+  /** Returns a value that wraps an {@code int}. */
+  public static Value ofInt(int i) {
+    return new Value(PrimitiveType.INT, i);
+  }
+
+  /** Returns a value that wraps a {@code real}. */
+  public static Value ofReal(float v) {
+    return new Value(PrimitiveType.REAL, v);
+  }
+
+  /** Returns a value that wraps a {@code string}. */
+  public static Value ofString(String s) {
+    return new Value(PrimitiveType.STRING, s);
+  }
+
+  /** Returns a value that wraps a {@code char}. */
+  public static Value ofChar(char c) {
+    return new Value(PrimitiveType.CHAR, c);
+  }
+
+  /** Returns a value that wraps a list with a given element type. */
+  public static Value ofList(
+      TypeSystem typeSystem, Type elementType, List<?> list) {
+    return new Value(typeSystem.listType(elementType), list);
+  }
+
+  /** Returns a value that wraps a bag (treated as list for now). */
+  public static Value ofBag(
+      TypeSystem typeSystem, Type elementType, List<?> list) {
+    return new Value(typeSystem.bagType(elementType), list);
+  }
+
+  /** Returns a value that wraps a vector (treated as list for now). */
+  public static Value ofVector(
+      TypeSystem typeSystem, Type elementType, List<?> list) {
+    // TODO: proper vector type when available
+    return new Value(typeSystem.vector(elementType), list);
+  }
+
+  /** Returns a value that wraps an option NONE. */
+  public static Value ofNone(TypeSystem typeSystem, Type elementType) {
+    return new Value(typeSystem.option(elementType), Codes.OPTION_NONE);
+  }
+
+  /** Returns a value that wraps an option SOME. */
+  public static Value ofSome(
+      TypeSystem typeSystem, Type elementType, Object value) {
+    return new Value(typeSystem.option(elementType), value);
+  }
+
+  @Override
+  protected List<Object> toList() {
+    return this;
+  }
+
+  @Override
+  public int size() {
+    return Values.toList(this).size();
+  }
+
+  @Override
+  public Object[] toArray() {
+    return toList().toArray();
+  }
+
+  @Override
+  public <T> T[] toArray(T[] a) {
+    return toList().toArray(a);
+  }
+
+  @Override
+  public Object get(int index) {
+    return Values.toList(this).get(index);
+  }
+
+  @Override
+  public int indexOf(Object o) {
+    return toList().indexOf(o);
+  }
+
+  @Override
+  public int lastIndexOf(Object o) {
+    return toList().lastIndexOf(o);
   }
 
   @Override
@@ -81,7 +182,7 @@ public class Value {
    *       (unrefined)
    * </ul>
    *
-   * These are logically equal even though they have different type and value
+   * <p>These are logically equal even though they have different type and value
    * representations.
    */
   private static boolean logicallyEqual(Value v1, Value v2) {

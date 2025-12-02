@@ -42,6 +42,133 @@ public class Values {
   }
 
   /**
+   * Creates a Value instance from a VALUE constructor name and argument.
+   *
+   * <p>Used by VALUE constructors (e.g., {@code INT 42}) to create Value
+   * instances at runtime.
+   *
+   * @param name Constructor name (e.g., "INT", "BOOL", "LIST")
+   * @param arg Constructor argument
+   * @param typeSystem Type system for looking up types
+   * @return Value instance with appropriate type
+   */
+  public static Value fromConstructor(
+      String name, Object arg, TypeSystem typeSystem) {
+    switch (name) {
+      case "UNIT":
+        return Value.unit();
+      case "BOOL":
+        return Value.ofBool((Boolean) arg);
+      case "INT":
+        return Value.ofInt((Integer) arg);
+      case "REAL":
+        return Value.ofReal((Float) arg);
+      case "CHAR":
+        return Value.ofChar((Character) arg);
+      case "STRING":
+        return Value.ofString((String) arg);
+      case "LIST":
+        {
+          // arg is a list of Value instances
+          final Type valueType = typeSystem.lookup("value");
+          return Value.ofList(typeSystem, valueType, (List<?>) arg);
+        }
+      case "BAG":
+        {
+          // BAG is similar to LIST for now
+          final Type valueType = typeSystem.lookup("value");
+          return Value.ofBag(typeSystem, valueType, (List<?>) arg);
+        }
+      case "VECTOR":
+        {
+          final Type valueType = typeSystem.lookup("value");
+          return Value.ofVector(typeSystem, valueType, (List<?>) arg);
+        }
+      case "VALUE_NONE":
+        {
+          final Type valueType = typeSystem.lookup("value");
+          return Value.ofNone(typeSystem, valueType);
+        }
+      case "VALUE_SOME":
+        {
+          final Type valueType = typeSystem.lookup("value");
+          return Value.ofSome(typeSystem, valueType, arg);
+        }
+      case "RECORD":
+        {
+          // arg is a list of (name, value) pairs
+          // TODO: construct proper record type
+          return Value.of(PrimitiveType.UNIT, arg); // TEMP
+        }
+      case "CONST":
+        // Nullary datatype constructor
+        return Value.of(PrimitiveType.STRING, arg); // TEMP
+      case "CON":
+        // Unary datatype constructor with value
+        return Value.of(PrimitiveType.STRING, arg); // TEMP
+      default:
+        throw new IllegalArgumentException(
+            "Unknown VALUE constructor: " + name);
+    }
+  }
+
+  /**
+   * Extracts the constructor name from a Value instance.
+   *
+   * <p>Returns the VALUE datatype constructor name (e.g., "INT", "LIST",
+   * "BOOL") for a given Value instance, or null if the Value doesn't correspond
+   * to a simple constructor.
+   *
+   * @param value Value instance
+   * @return Constructor name, or null if not applicable
+   */
+  public static String getConstructorName(Value value) {
+    final Type type = value.type;
+
+    // Primitive types
+    if (type == PrimitiveType.UNIT) {
+      return "UNIT";
+    }
+    if (type == PrimitiveType.BOOL) {
+      return "BOOL";
+    }
+    if (type == PrimitiveType.INT) {
+      return "INT";
+    }
+    if (type == PrimitiveType.REAL) {
+      return "REAL";
+    }
+    if (type == PrimitiveType.CHAR) {
+      return "CHAR";
+    }
+    if (type == PrimitiveType.STRING) {
+      return "STRING";
+    }
+
+    // List types - we can't distinguish LIST, BAG, VECTOR from type alone
+    // For now, assume LIST (this is a limitation)
+    if (type instanceof ListType) {
+      return "LIST";
+    }
+
+    // DataType for option
+    if (type instanceof DataType) {
+      final DataType dataType = (DataType) type;
+      if (dataType.name.equals("option")) {
+        return value.value == null ? "VALUE_NONE" : "VALUE_SOME";
+      }
+    }
+
+    // Record types
+    if (type instanceof RecordType) {
+      return "RECORD";
+    }
+
+    // For other types, we can't determine a simple constructor name
+    return null;
+  }
+
+  /**
    * Converts a List representation (from parser) to a Value instance.
    *
    * <p>The parser creates Lists like ["INT", 42] or ["LIST", [...]]. This
@@ -58,17 +185,17 @@ public class Values {
     final String constructor = (String) list.get(0);
     switch (constructor) {
       case "UNIT":
-        return Value.of(PrimitiveType.UNIT, Unit.INSTANCE);
+        return Value.unit();
       case "BOOL":
-        return Value.of(PrimitiveType.BOOL, list.get(1));
+        return Value.ofBool((Boolean) list.get(1));
       case "INT":
-        return Value.of(PrimitiveType.INT, list.get(1));
+        return Value.ofInt((Integer) list.get(1));
       case "REAL":
-        return Value.of(PrimitiveType.REAL, list.get(1));
+        return Value.ofReal((Float) list.get(1));
       case "CHAR":
-        return Value.of(PrimitiveType.CHAR, list.get(1));
+        return Value.ofChar((Character) list.get(1));
       case "STRING":
-        return Value.of(PrimitiveType.STRING, list.get(1));
+        return Value.ofString((String) list.get(1));
       case "LIST":
         {
           final List elements = (List) list.get(1);
@@ -78,7 +205,7 @@ public class Values {
           }
           // Parser produces general type: value list
           final Type valueType = typeSystem.lookup("value");
-          return Value.of(typeSystem.listType(valueType), values);
+          return Value.ofList(typeSystem, valueType, values);
         }
       case "BAG":
         {
@@ -90,8 +217,7 @@ public class Values {
           // BAG is a datatype constructor - need to look it up
           // For now, treat similar to LIST
           final Type valueType = typeSystem.lookup("value");
-          return Value.of(
-              typeSystem.listType(valueType), values); // TODO: proper bag type
+          return Value.ofBag(typeSystem, valueType, values);
         }
       case "VECTOR":
         {
@@ -101,23 +227,17 @@ public class Values {
             values.add(fromList((List) elem, typeSystem));
           }
           final Type valueType = typeSystem.lookup("value");
-          return Value.of(
-              typeSystem.listType(valueType),
-              values); // TODO: proper vector type
+          return Value.ofVector(typeSystem, valueType, values);
         }
       case "VALUE_NONE":
         // NONE of value option
         final Type valueType = typeSystem.lookup("value");
-        return Value.of(
-            typeSystem.option(valueType),
-            null); // TODO: proper option representation
+        return Value.ofNone(typeSystem, valueType);
       case "VALUE_SOME":
         {
           final Value inner = fromList((List) list.get(1), typeSystem);
           final Type vType = typeSystem.lookup("value");
-          return Value.of(
-              typeSystem.option(vType),
-              inner); // TODO: proper option representation
+          return Value.ofSome(typeSystem, vType, inner);
         }
       case "RECORD":
         {
@@ -140,6 +260,107 @@ public class Values {
         throw new IllegalArgumentException(
             "Unknown constructor: " + constructor);
     }
+  }
+
+  /**
+   * Converts a Value instance back to List representation.
+   *
+   * <p>This is the reverse of {@link #fromList}. Converts Value instances to
+   * the same List format that VALUE constructors produce, for consistent
+   * printing.
+   *
+   * <p>For example:
+   *
+   * <ul>
+   *   <li>{@code Value(INT, 42)} → {@code ["INT", 42]}
+   *   <li>{@code Value(LIST, [Value(INT,1), Value(INT,2)])} → {@code ["LIST",
+   *       [["INT",1], ["INT",2]]]}
+   * </ul>
+   */
+  public static List toList(Value value) {
+    final Type type = value.type;
+    final Object val = value.value;
+
+    // Handle primitive types
+    if (type == PrimitiveType.UNIT) {
+      return ImmutableList.of("UNIT");
+    }
+    if (type == PrimitiveType.BOOL) {
+      return ImmutableList.of("BOOL", val);
+    }
+    if (type == PrimitiveType.INT) {
+      return ImmutableList.of("INT", val);
+    }
+    if (type == PrimitiveType.REAL) {
+      return ImmutableList.of("REAL", val);
+    }
+    if (type == PrimitiveType.CHAR) {
+      return ImmutableList.of("CHAR", val);
+    }
+    if (type == PrimitiveType.STRING) {
+      return ImmutableList.of("STRING", val);
+    }
+
+    // Handle list types
+    if (type instanceof ListType) {
+      final List list = (List) val;
+      final List<List> elementLists = new ArrayList<>();
+      for (Object elem : list) {
+        if (elem instanceof Value) {
+          elementLists.add(toList((Value) elem));
+        } else {
+          // Refined list - wrap elements
+          final Type elementType = ((ListType) type).elementType;
+          elementLists.add(toList(Value.of(elementType, elem)));
+        }
+      }
+      // Determine constructor name based on list type
+      // TODO: distinguish LIST, BAG, VECTOR properly
+      return ImmutableList.of("LIST", elementLists);
+    }
+
+    // Handle option types
+    if (type instanceof DataType) {
+      final DataType dataType = (DataType) type;
+      if (dataType.name.equals("option")) {
+        if (val == null) {
+          return ImmutableList.of("VALUE_NONE");
+        } else if (val instanceof Value) {
+          return ImmutableList.of("VALUE_SOME", toList((Value) val));
+        } else {
+          // Refined option
+          final Type innerType = dataType.arguments.get(0);
+          return ImmutableList.of(
+              "VALUE_SOME", toList(Value.of(innerType, val)));
+        }
+      }
+      // Other datatypes (CONST, CON)
+      // TODO: implement properly
+      return ImmutableList.of("CONST", "TODO");
+    }
+
+    // Handle record types
+    if (type instanceof RecordType) {
+      final RecordType recordType = (RecordType) type;
+      final List recordValues = (List) val;
+      final List<List> fields = new ArrayList<>();
+      int i = 0;
+      for (java.util.Map.Entry<String, Type> entry :
+          recordType.argNameTypes().entrySet()) {
+        final String fieldName = entry.getKey();
+        final Type fieldType = entry.getValue();
+        final Object fieldValue = recordValues.get(i);
+        final List fieldValueList =
+            fieldValue instanceof Value
+                ? toList((Value) fieldValue)
+                : toList(Value.of(fieldType, fieldValue));
+        fields.add(ImmutableList.of(fieldName, fieldValueList));
+        i++;
+      }
+      return ImmutableList.of("RECORD", fields);
+    }
+
+    throw new IllegalArgumentException("Cannot convert value of type: " + type);
   }
 
   /**
@@ -320,30 +541,29 @@ public class Values {
    *
    * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PARSE
    */
-  public static Value parse(String s) {
-    final Parser parser = new Parser(s);
-    final List list = parser.parse();
-    // Convert List representation to Value with proper types
-    final TypeSystem typeSystem = new TypeSystem();
-    return fromList(list, typeSystem);
+  public static Value parse(String s, TypeSystem typeSystem) {
+    final Parser parser = new Parser(s, typeSystem);
+    return parser.parse();
   }
 
   /** Helper class for parsing value representations. */
   private static class Parser {
     private final String input;
+    private final TypeSystem typeSystem;
     private int pos;
 
-    Parser(String input) {
+    Parser(String input, TypeSystem typeSystem) {
       this.input = input;
+      this.typeSystem = typeSystem;
       this.pos = 0;
     }
 
-    List parse() {
+    Value parse() {
       skipWhitespace();
       return parseValue();
     }
 
-    private List parseValue() {
+    private Value parseValue() {
       skipWhitespace();
       if (pos >= input.length()) {
         throw new IllegalArgumentException("Unexpected end of input");
@@ -393,54 +613,45 @@ public class Values {
       }
     }
 
-    private List parseUnit() {
+    private Value parseUnit() {
       expect("()");
-      return ImmutableList.of("UNIT");
+      return (Value) Codes.VALUE_UNIT;
     }
 
-    private List parseBool() {
+    private Value parseBool() {
       if (tryConsume("true")) {
-        return ImmutableList.of("BOOL", true);
+        return Value.ofBool(true);
       } else if (tryConsume("false")) {
-        return ImmutableList.of("BOOL", false);
+        return Value.ofBool(false);
       } else {
         throw new IllegalArgumentException(
             "Expected 'true' or 'false' at position " + pos);
       }
     }
 
-    private List parseNumber() {
+    private Value parseNumber() {
       // Call parseReal and parseInt in succession to try both
       final String remaining = input.substring(pos);
 
-      // Try parseReal first (FLOAT_PATTERN handles both reals and integers)
-      final Ord<Float> realOrd = Codes.parseReal(remaining);
+      // First, parse as a real. With strict=true, will return null if the value
+      // looks like an int.
+      final Ord<Float> realOrd = Codes.parseReal(remaining, true);
       if (realOrd != null) {
-        // Determine what type it is by checking the consumed string
-        final String s2 = remaining.replace('~', '-');
-        final String consumed = s2.substring(0, realOrd.i);
-
-        // Check if it's actually a real (has decimal point or exponent)
-        if (consumed.contains(".")
-            || consumed.contains("e")
-            || consumed.contains("E")) {
-          pos += realOrd.i;
-          return ImmutableList.of("REAL", realOrd.e);
-        }
-        // Fall through to parseInt for integer case
+        pos += realOrd.i;
+        return Value.ofReal(realOrd.e);
       }
 
-      // Try parseInt (will match if it's an integer)
+      // Next, parse as an int.
       final Ord<Integer> intOrd = Codes.parseInt(remaining);
       if (intOrd != null) {
         pos += intOrd.i;
-        return ImmutableList.of("INT", intOrd.e);
+        return Value.ofInt(intOrd.e);
       }
 
       throw new IllegalArgumentException("Expected number at position " + pos);
     }
 
-    private List parseString() {
+    private Value parseString() {
       expect("\"");
       final StringBuilder sb = new StringBuilder();
       while (pos < input.length() && input.charAt(pos) != '"') {
@@ -477,10 +688,10 @@ public class Values {
         }
       }
       expect("\"");
-      return ImmutableList.of("STRING", sb.toString());
+      return Value.ofString(sb.toString());
     }
 
-    private List parseChar() {
+    private Value parseChar() {
       expect("#\"");
       if (pos >= input.length()) {
         throw new IllegalArgumentException("Incomplete character literal");
@@ -518,17 +729,19 @@ public class Values {
         pos++;
       }
       expect("\"");
-      return ImmutableList.of("CHAR", c);
+      return Value.ofChar(c);
     }
 
-    private List parseList() {
+    private Value parseList() {
       expect("[");
       skipWhitespace();
       if (tryConsume("]")) {
-        return ImmutableList.of("LIST", ImmutableList.of());
+        // Empty list of values
+        final Type valueType = typeSystem.lookup("value");
+        return Value.ofList(typeSystem, valueType, ImmutableList.of());
       }
 
-      final ImmutableList.Builder<List> values = ImmutableList.builder();
+      final ImmutableList.Builder<Value> values = ImmutableList.builder();
       values.add(parseValue());
       skipWhitespace();
       while (tryConsume(",")) {
@@ -537,17 +750,20 @@ public class Values {
         skipWhitespace();
       }
       expect("]");
-      return ImmutableList.of("LIST", values.build());
+      final Type valueType = typeSystem.lookup("value");
+      return Value.ofList(typeSystem, valueType, values.build());
     }
 
-    private List parseVector() {
+    private Value parseVector() {
       expect("#[");
       skipWhitespace();
       if (tryConsume("]")) {
-        return ImmutableList.of("VECTOR", ImmutableList.of());
+        // Empty vector of values
+        final Type valueType = typeSystem.lookup("value");
+        return Value.ofVector(typeSystem, valueType, ImmutableList.of());
       }
 
-      final ImmutableList.Builder<List> values = ImmutableList.builder();
+      final ImmutableList.Builder<Value> values = ImmutableList.builder();
       values.add(parseValue());
       skipWhitespace();
       while (tryConsume(",")) {
@@ -556,25 +772,31 @@ public class Values {
         skipWhitespace();
       }
       expect("]");
-      return ImmutableList.of("VECTOR", values.build());
+      final Type valueType = typeSystem.lookup("value");
+      return Value.ofVector(typeSystem, valueType, values.build());
     }
 
-    private List parseRecord() {
+    private Value parseRecord() {
       expect("{");
       skipWhitespace();
       if (tryConsume("}")) {
-        return ImmutableList.of("RECORD", ImmutableList.of());
+        // Empty record
+        // TODO: construct proper empty record type
+        return Value.of(PrimitiveType.UNIT, ImmutableList.of());
       }
 
-      final ImmutableList.Builder<List> fields = ImmutableList.builder();
+      final ImmutableList.Builder<String> fieldNames = ImmutableList.builder();
+      final ImmutableList.Builder<Value> fieldValues = ImmutableList.builder();
+
       // Parse first field
       skipWhitespace();
       final String fieldName = parseIdentifier();
       skipWhitespace();
       expect("=");
       skipWhitespace();
-      final List fieldValue = parseValue();
-      fields.add(ImmutableList.of(fieldName, fieldValue));
+      final Value fieldValue = parseValue();
+      fieldNames.add(fieldName);
+      fieldValues.add(fieldValue);
 
       skipWhitespace();
       while (tryConsume(",")) {
@@ -583,24 +805,30 @@ public class Values {
         skipWhitespace();
         expect("=");
         skipWhitespace();
-        final List value = parseValue();
-        fields.add(ImmutableList.of(name, value));
+        final Value value = parseValue();
+        fieldNames.add(name);
+        fieldValues.add(value);
         skipWhitespace();
       }
       expect("}");
-      return ImmutableList.of("RECORD", fields.build());
+
+      // TODO: construct proper RecordType from field names and types
+      // For now, use a temporary representation
+      return Value.of(PrimitiveType.UNIT, fieldValues.build());
     }
 
-    private List parseIdentifierValue() {
+    private Value parseIdentifierValue() {
       // Check for 'bag' prefix first
       if (tryConsume("bag")) {
         skipWhitespace();
         expect("[");
         skipWhitespace();
         if (tryConsume("]")) {
-          return ImmutableList.of("BAG", ImmutableList.of());
+          // Empty bag of values
+          final Type valueType = typeSystem.lookup("value");
+          return Value.ofBag(typeSystem, valueType, ImmutableList.of());
         }
-        final ImmutableList.Builder<List> values = ImmutableList.builder();
+        final ImmutableList.Builder<Value> values = ImmutableList.builder();
         values.add(parseValue());
         skipWhitespace();
         while (tryConsume(",")) {
@@ -609,7 +837,8 @@ public class Values {
           skipWhitespace();
         }
         expect("]");
-        return ImmutableList.of("BAG", values.build());
+        final Type valueType = typeSystem.lookup("value");
+        return Value.ofBag(typeSystem, valueType, values.build());
       }
       // Check for CONST format (CONST "name")
       if (tryConsume("CONST")) {
@@ -617,7 +846,8 @@ public class Values {
         expect("\"");
         final String constName = parseStringContent();
         expect("\"");
-        return ImmutableList.of("CONST", constName);
+        // TODO: implement proper CONST support
+        return Value.of(PrimitiveType.STRING, constName);
       }
       // Check for CON format (CON ("name", value))
       if (tryConsume("CON")) {
@@ -630,18 +860,21 @@ public class Values {
         skipWhitespace();
         expect(",");
         skipWhitespace();
-        final List conValue = parseValue();
+        final Value conValue = parseValue();
         skipWhitespace();
         expect(")");
-        return ImmutableList.of("CON", ImmutableList.of(conName, conValue));
+        // TODO: implement proper CON support
+        return Value.of(PrimitiveType.STRING, conName);
       }
       // Try VALUE_NONE and VALUE_SOME constructors
       if (tryConsume("VALUE_NONE")) {
-        return ImmutableList.of("VALUE_NONE");
+        final Type valueType = typeSystem.lookup("value");
+        return Value.ofNone(typeSystem, valueType);
       } else if (tryConsume("VALUE_SOME")) {
         skipWhitespace();
-        final List value = parseValue();
-        return ImmutableList.of("VALUE_SOME", value);
+        final Value value = parseValue();
+        final Type valueType = typeSystem.lookup("value");
+        return Value.ofSome(typeSystem, valueType, value);
       }
       throw new IllegalArgumentException(
           "Unknown identifier at position " + pos);

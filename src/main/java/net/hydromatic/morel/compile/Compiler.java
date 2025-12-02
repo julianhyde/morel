@@ -1185,7 +1185,10 @@ public class Compiler {
     }
 
     private Pretty.TypedVal getTypedVal(Binding binding, Core.NamedPat id) {
-      if (binding.value instanceof TypedValue) {
+      /* if (binding.value instanceof Value) {
+        Value typedValue = (Value) binding.value;
+        return new Pretty.TypedVal(id.name, typedValue.value, typedValue.type);
+      } else */ if (binding.value instanceof TypedValue) {
         TypedValue typedValue = (TypedValue) binding.value;
         return new Pretty.TypedVal(
             id.name,

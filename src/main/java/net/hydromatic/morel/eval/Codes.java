@@ -56,6 +56,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
+import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
@@ -2302,7 +2303,7 @@ public abstract class Codes {
    *
    * @see #optionSome(Object)
    */
-  private static final List OPTION_NONE = ImmutableList.of("NONE");
+  public static final List OPTION_NONE = ImmutableList.of("NONE");
 
   /**
    * Creates a value of {@code SOME v}.
@@ -2538,7 +2539,7 @@ public abstract class Codes {
    * @return Ord containing the parsed integer and character count, or null if
    *     the string does not start with a valid integer
    */
-  static Ord<Integer> parseInt(String s) {
+  static @Nullable Ord<Integer> parseInt(String s) {
     final String s2 = s.replace('~', '-');
     final Matcher matcher = INT_PATTERN.matcher(s2);
     if (!matcher.find(0)) {
@@ -2554,20 +2555,24 @@ public abstract class Codes {
   }
 
   /**
-   * Parses a real (float) from a string that may use Standard ML negation
-   * syntax.
+   * Parses a Morel {@code real} value (Java {@code float}) from a string that
+   * may use Standard ML negation syntax.
    *
-   * @param s String to parse (may use ~ or - for negation)
+   * @param s String to parse (may use either "~" or "-" for negation)
+   * @param strict Whether the string must be a real, not an integer
    * @return Ord containing the parsed float and character count, or null if the
    *     string does not start with a valid real number
    */
-  static Ord<Float> parseReal(String s) {
+  public static @Nullable Ord<Float> parseReal(String s, boolean strict) {
     final String s2 = s.replace('~', '-');
     final Matcher matcher = FLOAT_PATTERN.matcher(s2);
     if (!matcher.find(0)) {
       return null;
     }
     final String s3 = s2.substring(0, matcher.end());
+    if (strict && !s3.contains(".") && !s3.contains("e") && !s3.contains("E")) {
+      return null;
+    }
     try {
       final float value = Float.parseFloat(s3);
       return Ord.of(matcher.end(), value);
@@ -2581,7 +2586,7 @@ public abstract class Codes {
       new BaseApplicable1<List, String>(BuiltIn.REAL_FROM_STRING) {
         @Override
         public List<Float> apply(String s) {
-          final Ord<Float> ord = parseReal(s);
+          final Ord<Float> ord = parseReal(s, false);
           return ord == null ? OPTION_NONE : optionSome(ord.e);
         }
       };
@@ -3442,6 +3447,10 @@ public abstract class Codes {
         }
       };
 
+  /** Value of {@link BuiltIn.Constructor#VALUE_UNIT}. */
+  public static final List VALUE_UNIT =
+      Value.of(PrimitiveType.UNIT, Unit.INSTANCE);
+
   /** @see BuiltIn#VALUE_PARSE */
   private static final Applicable1 VALUE_PARSE = new ValueParser(null);
 
@@ -4009,27 +4018,10 @@ public abstract class Codes {
     requireNonNull(dataType);
     requireNonNull(name);
     // Special handling for VALUE datatype - create Value instances
-    if (dataType instanceof net.hydromatic.morel.type.DataType
-        && ((net.hydromatic.morel.type.DataType) dataType)
-            .name.equals("value")) {
-      return new ApplicableImpl(BuiltIn.Z_TY_CON) {
-        @Override
-        protected String name() {
-          return "tyCon";
-        }
-
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
-          final TypeSystem typeSystem = session.typeSystem;
-          if (typeSystem == null) {
-            // Fallback to List if no TypeSystem available (e.g., in tests)
-            return ImmutableList.of(name, arg);
-          }
-          // Create Value instance based on constructor name
-          return Values.fromConstructor(name, arg, typeSystem);
-        }
-      };
+    if (dataType instanceof DataType
+        && ((DataType) dataType).name.equals("value")) {
+      // VALUE constructor that creates Value instances
+      return new ValueTyCon(name);
     }
     // Standard datatype constructor - return List
     return new BaseApplicable1(BuiltIn.Z_TY_CON) {
@@ -4043,6 +4035,39 @@ public abstract class Codes {
         return ImmutableList.of(name, arg);
       }
     };
+  }
+
+  /**
+   * Type constructor for VALUE datatype that creates Value instances. Only
+   * implements Applicable (not Applicable1) to ensure apply(EvalEnv, Object) is
+   * always called, providing access to TypeSystem via Session.
+   */
+  static class ValueTyCon extends ApplicableImpl {
+    private final String tyConName;
+
+    ValueTyCon(String tyConName) {
+      super(BuiltIn.Z_TY_CON);
+      this.tyConName = tyConName;
+    }
+
+    @Override
+    protected String name() {
+      return "tyCon";
+    }
+
+    @Override
+    public Object apply(EvalEnv env, Object arg) {
+      final Session session = env.getSession();
+      final TypeSystem typeSystem = session.typeSystem;
+      if (typeSystem == null) {
+        throw new IllegalStateException(
+            "VALUE constructor "
+                + tyConName
+                + " requires TypeSystem but session.typeSystem is null");
+      }
+      // Create Value instance based on constructor name
+      return Values.fromConstructor(tyConName, arg, typeSystem);
+    }
   }
 
   /** Creates an empty evaluation environment. */

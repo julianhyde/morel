@@ -46,6 +46,8 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Unit;
+import net.hydromatic.morel.eval.Values;
 import net.hydromatic.morel.type.Type.Key;
 import net.hydromatic.morel.util.ComparableSingletonList;
 import net.hydromatic.morel.util.Pair;
@@ -81,9 +83,12 @@ public class TypeSystem {
   public Binding bindTyCon(DataType dataType, String tyConName) {
     final Type type = dataType.typeConstructors(this).get(tyConName);
     if (type == DummyType.INSTANCE) {
-      return Binding.of(
-          core.idPat(dataType, tyConName, 0),
-          Codes.constant(ComparableSingletonList.of(tyConName)));
+      Object o = ComparableSingletonList.of(tyConName);
+      if (dataType.name.equals(BuiltIn.Datatype.VALUE.mlName())) {
+        // Nullary VALUE constructors: create proper Value instance
+        o = Values.fromConstructor(tyConName, Unit.INSTANCE, this);
+      }
+      return Binding.of(core.idPat(dataType, tyConName, 0), Codes.constant(o));
     } else {
       final Type type2 = wrap(dataType, fnType(type, dataType));
       return Binding.of(

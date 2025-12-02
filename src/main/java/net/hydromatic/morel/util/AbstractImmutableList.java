@@ -28,7 +28,7 @@ import java.util.ListIterator;
  *
  * @param <E> Element type
  */
-abstract class AbstractImmutableList<E> implements List<E> {
+public abstract class AbstractImmutableList<E> implements List<E> {
   protected abstract List<E> toList();
 
   public Iterator<E> iterator() {
