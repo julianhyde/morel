@@ -251,7 +251,7 @@ public class Value extends AbstractImmutableList<Object> {
       }
     }
     final Type resultType =
-        typeSystem.apply(typeCon.dataType, typeArgsBuilder.build());
+        typeCon.dataType.substitute(typeSystem, typeArgsBuilder.build());
 
     return new Value(resultType, FlatLists.of(conName, conValue));
   }
