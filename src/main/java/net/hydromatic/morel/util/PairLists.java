@@ -194,7 +194,12 @@ class PairLists {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void sortKeys(Ordering<T> ordering) {
+    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
+      // Check if already sorted
+      if (ordering.isStrictlyOrdered(leftList())) {
+        return this;
+      }
+
       // Create a list of indices to sort
       final int n = size();
       final Integer[] indices = new Integer[n];
@@ -219,9 +224,7 @@ class PairLists {
         sorted.add(list.get(idx * 2 + 1)); // value
       }
 
-      // Replace the contents of the list
-      list.clear();
-      list.addAll(sorted);
+      return new MutablePairList<>(sorted);
     }
 
     @SuppressWarnings("unchecked")
@@ -547,8 +550,9 @@ class PairLists {
     }
 
     @Override
-    public void sortKeys(Ordering<T> ordering) {
+    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
       // Empty list is already sorted
+      return this;
     }
 
     @Override
@@ -677,8 +681,9 @@ class PairLists {
     }
 
     @Override
-    public void sortKeys(Ordering<T> ordering) {
+    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
       // Singleton list is already sorted
+      return this;
     }
 
     @Override
@@ -842,9 +847,39 @@ class PairLists {
       return new ArraySortedMap<>(elements, 0, elements.length / 2, ordering);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void sortKeys(Ordering<T> ordering) {
-      throw new UnsupportedOperationException("Cannot sort immutable PairList");
+    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
+      // Check if already sorted
+      if (ordering.isStrictlyOrdered(leftList())) {
+        return this;
+      }
+
+      // Create a list of indices to sort
+      final int n = size();
+      final Integer[] indices = new Integer[n];
+      for (int i = 0; i < n; i++) {
+        indices[i] = i;
+      }
+
+      // Sort indices by comparing the keys
+      Arrays.sort(
+          indices,
+          (i, j) -> {
+            T keyI = (T) elements[i * 2];
+            T keyJ = (T) elements[j * 2];
+            return ordering.compare(keyI, keyJ);
+          });
+
+      // Create a new array with elements in sorted order
+      final Object[] sorted = new Object[elements.length];
+      for (int i = 0; i < n; i++) {
+        int idx = indices[i];
+        sorted[i * 2] = elements[idx * 2]; // key
+        sorted[i * 2 + 1] = elements[idx * 2 + 1]; // value
+      }
+
+      return new ArrayImmutablePairList<>(sorted);
     }
 
     @SuppressWarnings("unchecked")
@@ -1039,9 +1074,13 @@ class PairLists {
     }
 
     @Override
-    public void sortKeys(Ordering<T> ordering) {
-      throw new UnsupportedOperationException(
-          "Cannot sort PairList backed by Map");
+    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
+      // Check if already sorted (e.g., if backed by a SortedMap)
+      if (ordering.isStrictlyOrdered(leftList())) {
+        return this;
+      }
+      // Convert to immutable and sort
+      return immutable().withSortedKeys(ordering);
     }
 
     @Override

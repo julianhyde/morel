@@ -92,7 +92,7 @@ public class Values {
                 (lists, consumer) ->
                     consumer.accept(
                         (String) lists.get(0), (Value) lists.get(1)));
-        nameValues.sortKeys(Ordering.natural());
+        nameValues = nameValues.withSortedKeys(Ordering.natural());
         return Value.ofRecord(typeSystem, nameValues);
       case "CONSTANT":
         // Nullary datatype constructor
