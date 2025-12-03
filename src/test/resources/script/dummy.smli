@@ -38,8 +38,6 @@ RECORD [("x", INT 1), ("y", BOOL true)];
 RECORD [("name", STRING "Alice"), ("age", INT 30)];
 > val it = {age=30,name="Alice"} : {age:int, name:string} value
 
-*)
-
 fun getInt v =
   case v of
     INT i => SOME i
@@ -49,14 +47,14 @@ fun getInt v =
 getInt (INT 42);
 > val it = SOME 42 : int option
 
-(*
+*)
 
 CONSTRUCT ("INL", INT 1);
 > val it = CONSTRUCT ("Cons",INT 1) : value
 
+(*
 CON ("SOME", INT 42);
 > val it = CON ("SOME",INT 42) : value
-
 *)
 
 (*) End dummy.smli

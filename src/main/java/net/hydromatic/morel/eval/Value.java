@@ -18,19 +18,19 @@
  */
 package net.hydromatic.morel.eval;
 
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.eval.Codes.optionSome;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Ordering;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Objects;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
@@ -39,6 +39,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.AbstractImmutableList;
+import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -209,6 +210,11 @@ public class Value extends AbstractImmutableList<Object> {
    * <p>For example, given the datatype declaration {@code datatype foo = BAR |
    * BAZ of int}, {@code CON ("BAZ", 3)} returns a Value with type {@code foo}
    * and value {@code ("BAZ", 3)}.
+   *
+   * <p>For parameterized datatypes like {@code datatype 'a option = NONE | SOME
+   * of 'a}, this method uses unification to determine the type parameters. For
+   * instance, {@code SOME (INT 42)} unifies {@code 'a} with {@code int},
+   * yielding type {@code int option}.
    */
   public static Value ofConstructor(
       TypeSystem typeSystem, String conName, Value conValue) {
@@ -216,30 +222,51 @@ public class Value extends AbstractImmutableList<Object> {
     if (typeCon == null) {
       throw new IllegalArgumentException("Unknown constructor: " + conName);
     }
-    final Type type = typeSystem.apply(typeCon.dataType, conValue.type);
-    return new Value(type, FlatLists.of(conName, conValue));
+
+    // Get the constructor's expected argument type (may contain type variables)
+    final Type constructorArgType = typeCon.argTypeKey.toType(typeSystem);
+
+    // Unify the expected type with the actual value's type to determine
+    // type variable substitutions
+    final java.util.Map<Integer, Type> substitution =
+        constructorArgType.unifyWith(conValue.type);
+
+    if (substitution == null) {
+      throw new IllegalArgumentException(
+          format(
+              "Constructor %s expects argument of type %s but got %s",
+              conName, constructorArgType, conValue.type));
+    }
+
+    // Apply the substitution to the datatype to get the result type
+    final ImmutableList<Type> typeArgs =
+        ImmutableList.copyOf(substitution.values());
+    final Type resultType = typeSystem.apply(typeCon.dataType, typeArgs);
+
+    return new Value(resultType, FlatLists.of(conName, conValue));
   }
 
   public static Value ofRecord(
       TypeSystem typeSystem, PairList<String, Value> nameValues) {
     final Type valueType = typeSystem.lookup(BuiltIn.Datatype.VALUE);
-    final List<String> names = nameValues.leftList();
+    final ImmutablePairList<String, Value> sortedNameValues =
+        nameValues.withSortedKeys(Ordering.natural());
+    final SortedMap<String, Value> sortedNameValueMap =
+        sortedNameValues.asSortedMap();
     if (nameValues.noneMatch((name, value) -> value.type == valueType)) {
       // None of the values are variants. Create a record over the raw values.
-      final ImmutableSortedMap<String, Value> nameValueMap =
-          nameValues.toImmutableSortedMap();
       final SortedMap<String, Type> nameTypes =
-          Maps.transformValues(nameValueMap, v -> v.type);
+          Maps.transformValues(sortedNameValueMap, v -> v.type);
       final Type recordType = typeSystem.recordType(nameTypes);
-      final ImmutableList.Builder<Object> rawValues = ImmutableList.builder();
-      nameValueMap.forEach((name, v) -> rawValues.add(v.value));
-      return new Value(recordType, rawValues.build());
+      final List<Object> rawValues =
+          sortedNameValues.transformEager((name, value) -> value.value);
+      return new Value(recordType, rawValues);
     } else {
       // Create a record whose fields all have type 'value'.
-      final SortedMap<String, Type> nameTypes = new TreeMap<>();
-      nameValues.forEach((name, value) -> nameTypes.put(name, valueType));
+      final SortedMap<String, Type> nameTypes =
+          Maps.transformValues(sortedNameValueMap, v -> valueType);
       final Type recordType = typeSystem.recordType(nameTypes);
-      return new Value(recordType, nameValues.rightList());
+      return new Value(recordType, sortedNameValues.rightList());
     }
   }
 
@@ -253,7 +280,7 @@ public class Value extends AbstractImmutableList<Object> {
    * other sum types in Morel.
    */
   private List<Object> toFlatList() {
-    String tag = tag().name();
+    String tag = tag().constructor;
     return type == PrimitiveType.UNIT
         ? FlatLists.of(tag)
         : FlatLists.of(tag, value);
