@@ -239,16 +239,15 @@ public class Value extends AbstractImmutableList<Object> {
     }
 
     // Apply the substitution to the datatype to get the result type.
-    // Build type args list in order by type variable ordinal.
+    // Build type args list in order by type variable ordinal, using the
+    // substituted type if available, otherwise the original type variable.
     final ImmutableList.Builder<Type> typeArgsBuilder = ImmutableList.builder();
     for (int i = 0; i < typeCon.dataType.arguments.size(); i++) {
-      final Type typeArg = substitution.get(i);
-      if (typeArg != null) {
-        typeArgsBuilder.add(typeArg);
-      } else {
-        // Type variable not constrained by constructor argument, use original
-        typeArgsBuilder.add(typeCon.dataType.arguments.get(i));
-      }
+      final Type substitutedType = substitution.get(i);
+      typeArgsBuilder.add(
+          substitutedType != null
+              ? substitutedType
+              : typeCon.dataType.arguments.get(i));
     }
     final Type resultType =
         typeCon.dataType.substitute(typeSystem, typeArgsBuilder.build());
