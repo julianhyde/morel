@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Ordering;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import java.util.AbstractCollection;
 import java.util.AbstractList;
 import java.util.AbstractSet;
 import java.util.Arrays;
@@ -1045,10 +1046,10 @@ class PairLists {
 
     ArraySortedMap(
         Object[] elements, int start, int end, Ordering<? super T> ordering) {
-      this.elements = elements;
+      this.elements = requireNonNull(elements);
       this.start = start;
       this.end = end;
-      this.ordering = ordering;
+      this.ordering = requireNonNull(ordering);
     }
 
     @Override
@@ -1137,6 +1138,16 @@ class PairLists {
       return result;
     }
 
+    private SortedMap<T, U> sub(int newStart, int newEnd) {
+      if (newStart == this.start && newEnd == this.end) {
+        return this;
+      }
+      if (newStart >= newEnd) {
+        return ImmutableSortedMap.of();
+      }
+      return new ArraySortedMap<>(elements, newStart, newEnd, ordering);
+    }
+
     @Override
     public SortedMap<T, U> subMap(T fromKey, T toKey) {
       if (ordering.compare(fromKey, toKey) > 0) {
@@ -1145,22 +1156,19 @@ class PairLists {
       }
       int newStart = findLowerBound(fromKey);
       int newEnd = findUpperBound(toKey);
-      if (newStart >= newEnd) {
-        newStart = newEnd = start; // Empty map
-      }
-      return new ArraySortedMap<>(elements, newStart, newEnd, ordering);
+      return sub(newStart, newEnd);
     }
 
     @Override
     public SortedMap<T, U> headMap(T toKey) {
       int newEnd = findUpperBound(toKey);
-      return new ArraySortedMap<>(elements, start, newEnd, ordering);
+      return sub(start, newEnd);
     }
 
     @Override
     public SortedMap<T, U> tailMap(T fromKey) {
       int newStart = findLowerBound(fromKey);
-      return new ArraySortedMap<>(elements, newStart, end, ordering);
+      return sub(newStart, end);
     }
 
     @SuppressWarnings("unchecked")
@@ -1226,7 +1234,7 @@ class PairLists {
 
     @Override
     public Collection<U> values() {
-      return new java.util.AbstractCollection<U>() {
+      return new AbstractCollection<U>() {
         @Override
         public int size() {
           return ArraySortedMap.this.size();
