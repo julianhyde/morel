@@ -22,10 +22,15 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.eval.Codes.optionSome;
 import static net.hydromatic.morel.util.Static.transformEager;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Maps;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Objects;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
@@ -34,6 +39,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.AbstractImmutableList;
+import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -212,6 +218,29 @@ public class Value extends AbstractImmutableList<Object> {
     }
     final Type type = typeSystem.apply(typeCon.dataType, conValue.type);
     return new Value(type, FlatLists.of(conName, conValue));
+  }
+
+  public static Value ofRecord(
+      TypeSystem typeSystem, PairList<String, Value> nameValues) {
+    final Type valueType = typeSystem.lookup(BuiltIn.Datatype.VALUE);
+    final List<String> names = nameValues.leftList();
+    if (nameValues.noneMatch((name, value) -> value.type == valueType)) {
+      // None of the values are variants. Create a record over the raw values.
+      final ImmutableSortedMap<String, Value> nameValueMap =
+          nameValues.toImmutableSortedMap();
+      final SortedMap<String, Type> nameTypes =
+          Maps.transformValues(nameValueMap, v -> v.type);
+      final Type recordType = typeSystem.recordType(nameTypes);
+      final ImmutableList.Builder<Object> rawValues = ImmutableList.builder();
+      nameValueMap.forEach((name, v) -> rawValues.add(v.value));
+      return new Value(recordType, rawValues.build());
+    } else {
+      // Create a record whose fields all have type 'value'.
+      final SortedMap<String, Type> nameTypes = new TreeMap<>();
+      nameValues.forEach((name, value) -> nameTypes.put(name, valueType));
+      final Type recordType = typeSystem.recordType(nameTypes);
+      return new Value(recordType, nameValues.rightList());
+    }
   }
 
   @Override

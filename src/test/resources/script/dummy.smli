@@ -28,10 +28,26 @@ LIST [INT 1, INT 2];
 
 VALUE_SOME (INT 5);
 > val it = VALUE_SOME (INT 5) : int option value
-*)
 
 CONSTANT "LESS";
 > val it = LESS : order value
+
+RECORD [("x", INT 1), ("y", BOOL true)];
+> val it = {x=1,y=true} : {x:int, y:bool} value
+
+RECORD [("name", STRING "Alice"), ("age", INT 30)];
+> val it = {age=30,name="Alice"} : {age:int, name:string} value
+
+*)
+
+fun getInt v =
+  case v of
+    INT i => SOME i
+  | _ => NONE;
+> val getInt = fn : value -> int option
+
+getInt (INT 42);
+> val it = SOME 42 : int option
 
 (*
 

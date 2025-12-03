@@ -121,19 +121,16 @@ VALUE_SOME (STRING "hello");
 
 (*) RECORD constructor - empty record
 RECORD [];
-> val it = RECORD [] : value
+> val it = () : unit value
 
-(*) RECORD constructor - simple record
-RECORD [("x", INT 1), ("y", INT 2)];
-> val it = RECORD [("x",INT 1),("y",INT 2)] : value
+(*) RECORD constructor
+RECORD [("x", INT 1), ("y", BOOL true)];
+> val it = {x=1,y=true} : {x:int, y:bool} value
 
-(*) RECORD constructor - nested record
-RECORD [("name", STRING "Alice"), ("age", INT 30)];
-> val it = RECORD [("name",STRING "Alice"),("age",INT 30)] : value
-
-(*) RECORD constructor - record with various types
-RECORD [("i", INT 42), ("b", BOOL true), ("s", STRING "test")];
-> val it = RECORD [("i",INT 42),("b",BOOL true),("s",STRING "test")] : value
+(*) RECORD constructor - various types, fields not in alphabetical order
+RECORD [("name", STRING "Alice"), ("age", INT 30), ("b", BOOL true), ("i", INT 42), ("pets", LIST [STRING "cat", STRING "dog"])];
+> val it = {age=30,b=true,i=42,name="Alice",pets=["cat","dog"]}
+>   : {age:int, b:bool, i:int, name:string, pets:string list} value
 
 (*) CONSTANT constructor - nullary constructor
 CONSTANT "LESS";

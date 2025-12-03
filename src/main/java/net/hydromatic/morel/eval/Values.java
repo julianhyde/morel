@@ -29,6 +29,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
+import net.hydromatic.morel.util.PairList;
 
 /**
  * Utilities for the Value structure - universal value representation for
@@ -83,11 +84,14 @@ public class Values {
       case "VALUE_SOME":
         return Value.ofSome(typeSystem, (Value) arg);
       case "RECORD":
-        {
-          // arg is a list of (name, value) pairs
-          // TODO: construct proper record type
-          return Value.of(PrimitiveType.UNIT, arg); // TEMP
-        }
+        // arg is a list of (name, value) pairs
+        PairList<String, Value> nameValues =
+            PairList.fromTransformed(
+                (List<List<Object>>) arg,
+                (lists, consumer) ->
+                    consumer.accept(
+                        (String) lists.get(0), (Value) lists.get(1)));
+        return Value.ofRecord(typeSystem, nameValues);
       case "CONSTANT":
         // Nullary datatype constructor
         return Value.ofConstant(typeSystem, (String) arg);
