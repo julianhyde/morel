@@ -21,6 +21,7 @@ package net.hydromatic.morel.eval;
 import static java.lang.String.format;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Ordering;
 import java.util.List;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
@@ -91,6 +92,7 @@ public class Values {
                 (lists, consumer) ->
                     consumer.accept(
                         (String) lists.get(0), (Value) lists.get(1)));
+        nameValues.sortKeys(Ordering.natural());
         return Value.ofRecord(typeSystem, nameValues);
       case "CONSTANT":
         // Nullary datatype constructor

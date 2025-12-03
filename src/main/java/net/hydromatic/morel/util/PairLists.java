@@ -194,6 +194,38 @@ class PairLists {
 
     @SuppressWarnings("unchecked")
     @Override
+    public void sortKeys(Ordering<T> ordering) {
+      // Create a list of indices to sort
+      final int n = size();
+      final Integer[] indices = new Integer[n];
+      for (int i = 0; i < n; i++) {
+        indices[i] = i;
+      }
+
+      // Sort indices by comparing the keys
+      Arrays.sort(
+          indices,
+          (i, j) -> {
+            T keyI = (T) list.get(i * 2);
+            T keyJ = (T) list.get(j * 2);
+            return ordering.compare(keyI, keyJ);
+          });
+
+      // Create a new list with elements in sorted order
+      final List<Object> sorted = new java.util.ArrayList<>(list.size());
+      for (int i = 0; i < n; i++) {
+        int idx = indices[i];
+        sorted.add(list.get(idx * 2)); // key
+        sorted.add(list.get(idx * 2 + 1)); // value
+      }
+
+      // Replace the contents of the list
+      list.clear();
+      list.addAll(sorted);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
     public Map.Entry<T, U> get(int index) {
       int x = index * 2;
       return new MapEntry<>((T) list.get(x), (U) list.get(x + 1));
@@ -515,6 +547,11 @@ class PairLists {
     }
 
     @Override
+    public void sortKeys(Ordering<T> ordering) {
+      // Empty list is already sorted
+    }
+
+    @Override
     public void forEach(BiConsumer<T, U> consumer) {}
 
     @Override
@@ -637,6 +674,11 @@ class PairLists {
       // A singleton map is always sorted.
       Object[] elements = {t, u};
       return new ArrayImmutablePairList<T, U>(elements).asSortedMap();
+    }
+
+    @Override
+    public void sortKeys(Ordering<T> ordering) {
+      // Singleton list is already sorted
     }
 
     @Override
@@ -798,6 +840,11 @@ class PairLists {
         throw new IllegalArgumentException("Keys are not distinct and sorted");
       }
       return new ArraySortedMap<>(elements, 0, elements.length / 2, ordering);
+    }
+
+    @Override
+    public void sortKeys(Ordering<T> ordering) {
+      throw new UnsupportedOperationException("Cannot sort immutable PairList");
     }
 
     @SuppressWarnings("unchecked")
@@ -989,6 +1036,12 @@ class PairLists {
     @Override
     public SortedMap<T, U> asSortedMap() {
       return (SortedMap<T, U>) map;
+    }
+
+    @Override
+    public void sortKeys(Ordering<T> ordering) {
+      throw new UnsupportedOperationException(
+          "Cannot sort PairList backed by Map");
     }
 
     @Override

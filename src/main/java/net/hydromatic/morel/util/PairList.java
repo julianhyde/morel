@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Ordering;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -276,6 +277,9 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
 
   /** Returns whether the predicate is true for no pairs in this list. */
   boolean noneMatch(BiPredicate<T, U> predicate);
+
+  /** Sorts this PairList in-place by the keys. */
+  void sortKeys(Ordering<T> ordering);
 
   /**
    * Action to be taken each step of an indexed iteration over a PairList.
