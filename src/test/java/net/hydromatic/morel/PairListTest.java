@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedMap;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -693,16 +694,31 @@ class PairListTest {
     assertThat(sortedMap.get("bb"), nullValue());
     assertThat(sortedMap.containsKey("z"), is(false));
     assertThat(sortedMap.get("z"), nullValue());
+
+    final SortedMap<String, Integer> sortedMap1 =
+        ImmutableSortedMap.of("a", 3, "b", 1, "c", 2);
+    checkSortedMap(sortedMap, sortedMap1);
+    checkSortedMap(sortedMap.headMap("bb"), sortedMap1.headMap("bb"));
+    checkSortedMap(sortedMap.tailMap("bb"), sortedMap1.tailMap("bb"));
+    checkSortedMap(sortedMap.headMap("a"), sortedMap1.headMap("a"));
+    checkSortedMap(sortedMap.tailMap("a"), sortedMap1.tailMap("a"));
+  }
+
+  private static void checkSortedMap(
+      SortedMap<String, Integer> m, SortedMap<String, Integer> m2) {
+    assertThat(m.keySet(), hasToString(m2.keySet().toString()));
+    assertThat(m.values(), hasToString(m2.values().toString()));
+    assertThat(m.entrySet(), hasSize(m2.size()));
+    assertThat(m.values(), hasSize(m2.size()));
+    assertThat(m, aMapWithSize(m2.size()));
+    assertThat(iterString(m.keySet()), is(iterString(m2.keySet())));
+    assertThat(iterString(m.values()), is(iterString(m2.values())));
+  }
+
+  private static String iterString(Iterable<?> iterable) {
     final StringBuilder b = new StringBuilder();
-    for (String s : sortedMap.keySet()) {
-      b.append(s);
-    }
-    assertThat(b, is("abc"));
-    b.setLength(0);
-    for (int s : sortedMap.values()) {
-      b.append(s);
-    }
-    assertThat(b, is("231"));
+    iterable.forEach(o -> b.append(o).append(';'));
+    return b.toString();
   }
 }
 

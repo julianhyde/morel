@@ -27,12 +27,14 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Ordering;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.util.AbstractList;
+import java.util.AbstractSet;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.RandomAccess;
 import java.util.Set;
 import java.util.SortedMap;
@@ -790,8 +792,11 @@ class PairLists {
     @SuppressWarnings("unchecked")
     @Override
     public SortedMap<T, U> asSortedMap() {
-      return new ArraySortedMap<T, U>(
-          this, (Ordering<? super T>) Ordering.natural());
+      Ordering<? super T> ordering = (Ordering<? super T>) Ordering.natural();
+      if (!ordering.isStrictlyOrdered(leftList())) {
+        throw new IllegalArgumentException("Keys are not distinct and sorted");
+      }
+      return new ArraySortedMap<>(elements, 0, elements.length, ordering);
     }
 
     @SuppressWarnings("unchecked")
@@ -1021,6 +1026,13 @@ class PairLists {
     }
   }
 
+  /**
+   * Implementation of {@link SortedMap} that is backed by an immutable array
+   * whose elements are alternating keys and values, and whose keys are sorted.
+   *
+   * @param <T> Key type
+   * @param <U> Value type
+   */
   static class ArraySortedMap<T, U> implements SortedMap<T, U> {
     private final Ordering<? super T> ordering;
     private final Object[] elements;
@@ -1033,12 +1045,6 @@ class PairLists {
       this.start = start;
       this.end = end;
       this.ordering = ordering;
-    }
-
-    /** Constructor for whole array. */
-    ArraySortedMap(
-        ArrayImmutablePairList<T, U> pairList, Ordering<? super T> ordering) {
-      this(pairList.elements, 0, pairList.elements.length, ordering);
     }
 
     @Override
@@ -1060,7 +1066,7 @@ class PairLists {
 
       while (low <= high) {
         int mid = (low + high) >>> 1;
-        // Ensure mid points to a key (even index)
+        // Ensure that mid points to a key (even index)
         mid = mid - (mid - start) % 2;
         T midVal = (T) elements[mid];
         int cmp = ordering.compare(midVal, (T) key);
@@ -1164,7 +1170,7 @@ class PairLists {
     @Override
     public T firstKey() {
       if (isEmpty()) {
-        throw new java.util.NoSuchElementException();
+        throw new NoSuchElementException();
       }
       return (T) elements[start];
     }
@@ -1173,14 +1179,14 @@ class PairLists {
     @Override
     public T lastKey() {
       if (isEmpty()) {
-        throw new java.util.NoSuchElementException();
+        throw new NoSuchElementException();
       }
       return (T) elements[end - 2];
     }
 
     @Override
     public Set<T> keySet() {
-      return new java.util.AbstractSet<T>() {
+      return new AbstractSet<T>() {
         @Override
         public int size() {
           return ArraySortedMap.this.size();
@@ -1210,7 +1216,7 @@ class PairLists {
             @Override
             public T next() {
               if (!hasNext()) {
-                throw new java.util.NoSuchElementException();
+                throw new NoSuchElementException();
               }
               T key = (T) elements[pos];
               pos += 2;
@@ -1261,7 +1267,7 @@ class PairLists {
 
     @Override
     public Set<Entry<T, U>> entrySet() {
-      return new java.util.AbstractSet<Entry<T, U>>() {
+      return new AbstractSet<Entry<T, U>>() {
         @Override
         public int size() {
           return ArraySortedMap.this.size();
@@ -1286,7 +1292,7 @@ class PairLists {
             @Override
             public Entry<T, U> next() {
               if (!hasNext()) {
-                throw new java.util.NoSuchElementException();
+                throw new NoSuchElementException();
               }
               T key = (T) elements[pos++];
               U value = (U) elements[pos++];
@@ -1329,7 +1335,7 @@ class PairLists {
 
     @SuppressWarnings("unchecked")
     @Override
-    public U get(Object key) {
+    public @Nullable U get(Object key) {
       try {
         int index = binarySearch(key);
         if (index >= 0) {
