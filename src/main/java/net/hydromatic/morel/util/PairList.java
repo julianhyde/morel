@@ -283,9 +283,9 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
    * ordering.
    *
    * <p>Returns {@code this} if the list is already immutable and sorted.
-   * Otherwise returns a new immutable sorted copy.
+   * Otherwise, returns a new immutable sorted copy.
    */
-  PairList<T, U> withSortedKeys(Ordering<T> ordering);
+  ImmutablePairList<T, U> withSortedKeys(Ordering<T> ordering);
 
   /**
    * Action to be taken each step of an indexed iteration over a PairList.

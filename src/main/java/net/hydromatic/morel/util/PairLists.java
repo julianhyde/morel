@@ -192,39 +192,14 @@ class PairLists {
       return immutable().asSortedMap();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
+    public ImmutablePairList<T, U> withSortedKeys(Ordering<T> ordering) {
       // Check if already sorted
       if (ordering.isStrictlyOrdered(leftList())) {
         return immutable();
       }
 
-      // Create a list of indices to sort
-      final int n = size();
-      final Integer[] indices = new Integer[n];
-      for (int i = 0; i < n; i++) {
-        indices[i] = i;
-      }
-
-      // Sort indices by comparing the keys
-      Arrays.sort(
-          indices,
-          (i, j) -> {
-            T keyI = (T) list.get(i * 2);
-            T keyJ = (T) list.get(j * 2);
-            return ordering.compare(keyI, keyJ);
-          });
-
-      // Create a new array with elements in sorted order
-      final Object[] sorted = new Object[list.size()];
-      for (int i = 0; i < n; i++) {
-        int idx = indices[i];
-        sorted[i * 2] = list.get(idx * 2); // key
-        sorted[i * 2 + 1] = list.get(idx * 2 + 1); // value
-      }
-
-      return new ArrayImmutablePairList<>(sorted);
+      return ArrayImmutablePairList.sortedCopyOf(list.toArray(), ordering);
     }
 
     @SuppressWarnings("unchecked")
@@ -550,7 +525,7 @@ class PairLists {
     }
 
     @Override
-    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
+    public ImmutablePairList<T, U> withSortedKeys(Ordering<T> ordering) {
       // Empty list is already sorted
       return this;
     }
@@ -681,7 +656,7 @@ class PairLists {
     }
 
     @Override
-    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
+    public ImmutablePairList<T, U> withSortedKeys(Ordering<T> ordering) {
       // Singleton list is already sorted
       return this;
     }
@@ -756,6 +731,44 @@ class PairLists {
      */
     ArrayImmutablePairList(Object[] elements) {
       this.elements = checkElementsNotNull(elements);
+    }
+
+    /**
+     * Creates a sorted copy of the given elements array.
+     *
+     * @param elements Array of alternating keys and values
+     * @param ordering Ordering to sort by
+     * @return A new ArrayImmutablePairList with elements sorted by key
+     */
+    @SuppressWarnings("unchecked")
+    static <T, U> ArrayImmutablePairList<T, U> sortedCopyOf(
+        Object[] elements, Ordering<T> ordering) {
+      final int n = elements.length / 2;
+
+      // Create a list of indices to sort
+      final Integer[] indices = new Integer[n];
+      for (int i = 0; i < n; i++) {
+        indices[i] = i;
+      }
+
+      // Sort indices by comparing the keys
+      Arrays.sort(
+          indices,
+          (i, j) -> {
+            T keyI = (T) elements[i * 2];
+            T keyJ = (T) elements[j * 2];
+            return ordering.compare(keyI, keyJ);
+          });
+
+      // Create a new array with elements in sorted order
+      final Object[] sorted = new Object[elements.length];
+      for (int i = 0; i < n; i++) {
+        int idx = indices[i];
+        sorted[i * 2] = elements[idx * 2]; // key
+        sorted[i * 2 + 1] = elements[idx * 2 + 1]; // value
+      }
+
+      return new ArrayImmutablePairList<>(sorted);
     }
 
     @Override
@@ -847,39 +860,14 @@ class PairLists {
       return new ArraySortedMap<>(elements, 0, elements.length / 2, ordering);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
+    public ImmutablePairList<T, U> withSortedKeys(Ordering<T> ordering) {
       // Check if already sorted
       if (ordering.isStrictlyOrdered(leftList())) {
         return this;
       }
 
-      // Create a list of indices to sort
-      final int n = size();
-      final Integer[] indices = new Integer[n];
-      for (int i = 0; i < n; i++) {
-        indices[i] = i;
-      }
-
-      // Sort indices by comparing the keys
-      Arrays.sort(
-          indices,
-          (i, j) -> {
-            T keyI = (T) elements[i * 2];
-            T keyJ = (T) elements[j * 2];
-            return ordering.compare(keyI, keyJ);
-          });
-
-      // Create a new array with elements in sorted order
-      final Object[] sorted = new Object[elements.length];
-      for (int i = 0; i < n; i++) {
-        int idx = indices[i];
-        sorted[i * 2] = elements[idx * 2]; // key
-        sorted[i * 2 + 1] = elements[idx * 2 + 1]; // value
-      }
-
-      return new ArrayImmutablePairList<>(sorted);
+      return sortedCopyOf(elements, ordering);
     }
 
     @SuppressWarnings("unchecked")
@@ -1074,11 +1062,7 @@ class PairLists {
     }
 
     @Override
-    public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
-      // Check if already sorted (e.g., if backed by a SortedMap)
-      if (ordering.isStrictlyOrdered(leftList())) {
-        return this;
-      }
+    public ImmutablePairList<T, U> withSortedKeys(Ordering<T> ordering) {
       // Convert to immutable and sort
       return immutable().withSortedKeys(ordering);
     }
