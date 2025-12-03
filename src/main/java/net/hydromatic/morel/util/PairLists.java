@@ -796,7 +796,7 @@ class PairLists {
       if (!ordering.isStrictlyOrdered(leftList())) {
         throw new IllegalArgumentException("Keys are not distinct and sorted");
       }
-      return new ArraySortedMap<>(elements, 0, elements.length, ordering);
+      return new ArraySortedMap<>(elements, 0, elements.length / 2, ordering);
     }
 
     @SuppressWarnings("unchecked")
@@ -1030,14 +1030,18 @@ class PairLists {
    * Implementation of {@link SortedMap} that is backed by an immutable array
    * whose elements are alternating keys and values, and whose keys are sorted.
    *
+   * <p>The {@code start} and {@code end} fields are pair indices (not element
+   * array indices). For example, if the map contains pairs 2-4 from a 10-pair
+   * array, {@code start = 2} and {@code end = 5} (exclusive).
+   *
    * @param <T> Key type
    * @param <U> Value type
    */
   static class ArraySortedMap<T, U> implements SortedMap<T, U> {
     private final Ordering<? super T> ordering;
     private final Object[] elements;
-    private final int start;
-    private final int end;
+    private final int start; // Pair index (inclusive)
+    private final int end; // Pair index (exclusive)
 
     ArraySortedMap(
         Object[] elements, int start, int end, Ordering<? super T> ordering) {
@@ -1056,25 +1060,22 @@ class PairLists {
      * Binary search for a key in the elements array.
      *
      * @param key Key to search for
-     * @return Index in elements array (even number, pointing to key position),
-     *     or negative insertion point if not found
+     * @return Pair index if found, or negative insertion point if not found
      */
     @SuppressWarnings("unchecked")
     private int binarySearch(Object key) {
       int low = start;
-      int high = end - 2; // Last key position
+      int high = end - 1; // Last pair index
 
       while (low <= high) {
         int mid = (low + high) >>> 1;
-        // Ensure that mid points to a key (even index)
-        mid = mid - (mid - start) % 2;
-        T midVal = (T) elements[mid];
+        T midVal = (T) elements[mid * 2];
         int cmp = ordering.compare(midVal, (T) key);
 
         if (cmp < 0) {
-          low = mid + 2;
+          low = mid + 1;
         } else if (cmp > 0) {
-          high = mid - 2;
+          high = mid - 1;
         } else {
           return mid; // key found
         }
@@ -1086,26 +1087,24 @@ class PairLists {
      * Binary search for the first key >= toKey.
      *
      * @param toKey Upper bound (exclusive)
-     * @return Index in elements array, or end if all keys < toKey
+     * @return Pair index, or end if all keys < toKey
      */
     @SuppressWarnings("unchecked")
     private int findUpperBound(T toKey) {
       int low = start;
-      int high = end - 2; // Last key position
+      int high = end - 1; // Last pair index
       int result = end;
 
       while (low <= high) {
         int mid = (low + high) >>> 1;
-        // Ensure mid points to a key (even index)
-        mid = mid - (mid - start) % 2;
-        T midVal = (T) elements[mid];
+        T midVal = (T) elements[mid * 2];
         int cmp = ordering.compare(midVal, toKey);
 
         if (cmp < 0) {
-          low = mid + 2;
+          low = mid + 1;
         } else {
           result = mid;
-          high = mid - 2;
+          high = mid - 1;
         }
       }
       return result;
@@ -1115,26 +1114,24 @@ class PairLists {
      * Binary search for the first key >= fromKey.
      *
      * @param fromKey Lower bound (inclusive)
-     * @return Index in elements array, or end if all keys < fromKey
+     * @return Pair index, or end if all keys < fromKey
      */
     @SuppressWarnings("unchecked")
     private int findLowerBound(T fromKey) {
       int low = start;
-      int high = end - 2; // Last key position
+      int high = end - 1; // Last pair index
       int result = end;
 
       while (low <= high) {
         int mid = (low + high) >>> 1;
-        // Ensure mid points to a key (even index)
-        mid = mid - (mid - start) % 2;
-        T midVal = (T) elements[mid];
+        T midVal = (T) elements[mid * 2];
         int cmp = ordering.compare(midVal, fromKey);
 
         if (cmp < 0) {
-          low = mid + 2;
+          low = mid + 1;
         } else {
           result = mid;
-          high = mid - 2;
+          high = mid - 1;
         }
       }
       return result;
@@ -1172,7 +1169,7 @@ class PairLists {
       if (isEmpty()) {
         throw new NoSuchElementException();
       }
-      return (T) elements[start];
+      return (T) elements[start * 2];
     }
 
     @SuppressWarnings("unchecked")
@@ -1181,7 +1178,7 @@ class PairLists {
       if (isEmpty()) {
         throw new NoSuchElementException();
       }
-      return (T) elements[end - 2];
+      return (T) elements[(end - 1) * 2];
     }
 
     @Override
@@ -1206,11 +1203,11 @@ class PairLists {
         @Override
         public Iterator<T> iterator() {
           return new Iterator<T>() {
-            int pos = start;
+            int pairIndex = start;
 
             @Override
             public boolean hasNext() {
-              return pos < end;
+              return pairIndex < end;
             }
 
             @Override
@@ -1218,8 +1215,8 @@ class PairLists {
               if (!hasNext()) {
                 throw new NoSuchElementException();
               }
-              T key = (T) elements[pos];
-              pos += 2;
+              T key = (T) elements[pairIndex * 2];
+              pairIndex++;
               return key;
             }
           };
@@ -1244,20 +1241,20 @@ class PairLists {
         @Override
         public Iterator<U> iterator() {
           return new Iterator<U>() {
-            int pos = start + 1;
+            int pairIndex = start;
 
             @Override
             public boolean hasNext() {
-              return pos < end;
+              return pairIndex < end;
             }
 
             @Override
             public U next() {
               if (!hasNext()) {
-                throw new java.util.NoSuchElementException();
+                throw new NoSuchElementException();
               }
-              U value = (U) elements[pos];
-              pos += 2;
+              U value = (U) elements[pairIndex * 2 + 1];
+              pairIndex++;
               return value;
             }
           };
@@ -1282,11 +1279,11 @@ class PairLists {
         @Override
         public Iterator<Entry<T, U>> iterator() {
           return new Iterator<Entry<T, U>>() {
-            int pos = start;
+            int pairIndex = start;
 
             @Override
             public boolean hasNext() {
-              return pos < end;
+              return pairIndex < end;
             }
 
             @Override
@@ -1294,8 +1291,9 @@ class PairLists {
               if (!hasNext()) {
                 throw new NoSuchElementException();
               }
-              T key = (T) elements[pos++];
-              U value = (U) elements[pos++];
+              T key = (T) elements[pairIndex * 2];
+              U value = (U) elements[pairIndex * 2 + 1];
+              pairIndex++;
               return new MapEntry<>(key, value);
             }
           };
@@ -1305,7 +1303,7 @@ class PairLists {
 
     @Override
     public int size() {
-      return (end - start) / 2;
+      return end - start;
     }
 
     @Override
@@ -1325,8 +1323,8 @@ class PairLists {
 
     @Override
     public boolean containsValue(Object value) {
-      for (int i = start + 1; i < end; i += 2) {
-        if (elements[i].equals(value)) {
+      for (int i = start; i < end; i++) {
+        if (elements[i * 2 + 1].equals(value)) {
           return true;
         }
       }
@@ -1337,9 +1335,9 @@ class PairLists {
     @Override
     public @Nullable U get(Object key) {
       try {
-        int index = binarySearch(key);
-        if (index >= 0) {
-          return (U) elements[index + 1];
+        int pairIndex = binarySearch(key);
+        if (pairIndex >= 0) {
+          return (U) elements[pairIndex * 2 + 1];
         }
         return null;
       } catch (ClassCastException e) {
