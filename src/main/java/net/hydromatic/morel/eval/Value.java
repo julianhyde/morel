@@ -238,10 +238,20 @@ public class Value extends AbstractImmutableList<Object> {
               conName, constructorArgType, conValue.type));
     }
 
-    // Apply the substitution to the datatype to get the result type
-    final ImmutableList<Type> typeArgs =
-        ImmutableList.copyOf(substitution.values());
-    final Type resultType = typeSystem.apply(typeCon.dataType, typeArgs);
+    // Apply the substitution to the datatype to get the result type.
+    // Build type args list in order by type variable ordinal.
+    final ImmutableList.Builder<Type> typeArgsBuilder = ImmutableList.builder();
+    for (int i = 0; i < typeCon.dataType.arguments.size(); i++) {
+      final Type typeArg = substitution.get(i);
+      if (typeArg != null) {
+        typeArgsBuilder.add(typeArg);
+      } else {
+        // Type variable not constrained by constructor argument, use original
+        typeArgsBuilder.add(typeCon.dataType.arguments.get(i));
+      }
+    }
+    final Type resultType =
+        typeSystem.apply(typeCon.dataType, typeArgsBuilder.build());
 
     return new Value(resultType, FlatLists.of(conName, conValue));
   }
