@@ -197,7 +197,7 @@ class PairLists {
     public PairList<T, U> withSortedKeys(Ordering<T> ordering) {
       // Check if already sorted
       if (ordering.isStrictlyOrdered(leftList())) {
-        return this;
+        return immutable();
       }
 
       // Create a list of indices to sort
@@ -216,15 +216,15 @@ class PairLists {
             return ordering.compare(keyI, keyJ);
           });
 
-      // Create a new list with elements in sorted order
-      final List<Object> sorted = new java.util.ArrayList<>(list.size());
+      // Create a new array with elements in sorted order
+      final Object[] sorted = new Object[list.size()];
       for (int i = 0; i < n; i++) {
         int idx = indices[i];
-        sorted.add(list.get(idx * 2)); // key
-        sorted.add(list.get(idx * 2 + 1)); // value
+        sorted[i * 2] = list.get(idx * 2); // key
+        sorted[i * 2 + 1] = list.get(idx * 2 + 1); // value
       }
 
-      return new MutablePairList<>(sorted);
+      return new ArrayImmutablePairList<>(sorted);
     }
 
     @SuppressWarnings("unchecked")

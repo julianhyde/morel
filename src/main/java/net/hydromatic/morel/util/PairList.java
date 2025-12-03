@@ -279,10 +279,11 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
   boolean noneMatch(BiPredicate<T, U> predicate);
 
   /**
-   * Returns a PairList with keys sorted according to the given ordering.
+   * Returns an immutable PairList with keys sorted according to the given
+   * ordering.
    *
-   * <p>Returns {@code this} if the list is already sorted or immutable and
-   * sorted. Otherwise returns a new sorted copy.
+   * <p>Returns {@code this} if the list is already immutable and sorted.
+   * Otherwise returns a new immutable sorted copy.
    */
   PairList<T, U> withSortedKeys(Ordering<T> ordering);
 
