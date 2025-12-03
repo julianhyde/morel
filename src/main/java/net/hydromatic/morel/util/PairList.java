@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -236,6 +237,14 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
     forEach((t, u) -> b.put((Comparable) t, u));
     return (ImmutableSortedMap<T, U>) b.build();
   }
+
+  /**
+   * Returns a view of this PairList as a {@link SortedMap}.
+   *
+   * <p>Throws if entries are not sorted by key. Makes an immutable copy if not
+   * already immutable.
+   */
+  SortedMap<T, U> asSortedMap();
 
   /**
    * Returns an ImmutablePairList whose contents are the same as this PairList.

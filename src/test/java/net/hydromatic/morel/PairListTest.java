@@ -22,8 +22,10 @@ import static net.hydromatic.morel.util.Static.anyMatch;
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.aMapWithSize;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.hasToString;
@@ -42,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.RandomAccess;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import net.hydromatic.morel.util.ImmutablePairList;
@@ -672,6 +675,34 @@ class PairListTest {
     t.accept(Collections.singletonList("abc"), "[<abc, 3>]");
     t.accept(Collections.singletonList(""), "[<, 0>]");
     t.accept(Collections.emptyList(), "[]");
+  }
+
+  @Test
+  void testAsSortedMap() {
+    final PairList<String, Integer> unsortedPairList =
+        PairList.copyOf("c", 3, "a", 1, "b", 2);
+    assertThrows(IllegalArgumentException.class, unsortedPairList::asSortedMap);
+
+    final PairList<String, Integer> pairList =
+        PairList.copyOf("a", 3, "b", 1, "c", 2);
+    SortedMap<String, Integer> sortedMap = pairList.asSortedMap();
+    assertThat(sortedMap, aMapWithSize(3));
+    assertThat(sortedMap.containsKey("b"), is(true));
+    assertThat(sortedMap.get("b"), is(1));
+    assertThat(sortedMap.containsKey("bb"), is(false));
+    assertThat(sortedMap.get("bb"), nullValue());
+    assertThat(sortedMap.containsKey("z"), is(false));
+    assertThat(sortedMap.get("z"), nullValue());
+    final StringBuilder b = new StringBuilder();
+    for (String s : sortedMap.keySet()) {
+      b.append(s);
+    }
+    assertThat(b, is("abc"));
+    b.setLength(0);
+    for (int s : sortedMap.values()) {
+      b.append(s);
+    }
+    assertThat(b, is("231"));
   }
 }
 
