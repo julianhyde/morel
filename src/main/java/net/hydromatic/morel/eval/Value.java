@@ -29,6 +29,7 @@ import com.google.common.collect.Ordering;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.Objects;
 import java.util.SortedMap;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -227,8 +228,8 @@ public class Value extends AbstractImmutableList<Object> {
     final Type constructorArgType = typeCon.argTypeKey.toType(typeSystem);
 
     // Unify the expected type with the actual value's type to determine
-    // type variable substitutions
-    final java.util.Map<Integer, Type> substitution =
+    // type variable substitutions.
+    final Map<Integer, Type> substitution =
         constructorArgType.unifyWith(conValue.type);
 
     if (substitution == null) {
@@ -279,11 +280,6 @@ public class Value extends AbstractImmutableList<Object> {
     }
   }
 
-  @Override
-  protected List<Object> toList() {
-    return this;
-  }
-
   /**
    * Converts this Value to a list with tag and value, the same format used for
    * other sum types in Morel.
@@ -292,7 +288,27 @@ public class Value extends AbstractImmutableList<Object> {
     String tag = tag().constructor;
     return type == PrimitiveType.UNIT
         ? FlatLists.of(tag)
-        : FlatLists.of(tag, value);
+        : FlatLists.of(tag, this);
+  }
+
+  @Override
+  public int size() {
+    // Equivalent to "toFlatList().size()"
+    return type == PrimitiveType.UNIT ? 1 : 2;
+  }
+
+  @Override
+  public Object[] toArray() {
+    // Equivalent to "toFlatList().toArray()"
+    String tag = tag().constructor;
+    return type == PrimitiveType.UNIT
+        ? new Object[] {tag}
+        : new Object[] {tag, this};
+  }
+
+  @Override
+  public <T> T[] toArray(T[] a) {
+    return toFlatList().toArray(a);
   }
 
   @Override
@@ -306,23 +322,35 @@ public class Value extends AbstractImmutableList<Object> {
   }
 
   @Override
-  public int size() {
-    return type == PrimitiveType.UNIT ? 1 : 2;
+  public ListIterator<Object> listIterator(int index) {
+    return toFlatList().listIterator(index);
   }
 
   @Override
-  public Object[] toArray() {
-    return toFlatList().toArray();
-  }
-
-  @Override
-  public <T> T[] toArray(T[] a) {
-    return toFlatList().toArray(a);
+  public List<Object> subList(int fromIndex, int toIndex) {
+    if (fromIndex == 1 && toIndex == 2 && type != PrimitiveType.UNIT) {
+      // Equivalent to "toFlatList().subList(fromIndex, toIndex)", but optimized
+      return FlatLists.of(this);
+    }
+    return toFlatList().subList(fromIndex, toIndex);
   }
 
   @Override
   public Object get(int index) {
-    return toFlatList().get(index);
+    // Equivalent to "toFlatList().get(index)", but optimized
+    switch (index) {
+      case 0:
+        return tag().constructor;
+      case 1:
+        if (type != PrimitiveType.UNIT) {
+          //          return value;
+          return this;
+        }
+        // fall through
+      default:
+        throw new IndexOutOfBoundsException(
+            "Index: " + index + ", Size: " + size());
+    }
   }
 
   @Override
