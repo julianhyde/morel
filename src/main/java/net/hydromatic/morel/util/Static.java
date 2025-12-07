@@ -396,6 +396,21 @@ public class Static {
     return i >= 0 && buf.indexOf(s, i) == i;
   }
 
+  /** First function. */
+  int f1(int x) {
+    return x + 1;
+  }
+
+  /** Third function. */
+  int f3(int x) {
+    return x + 3;
+  }
+
+  /** Fourth function. */
+  int f4(int x) {
+    return x + 4;
+  }
+
   /**
    * Creates an unmodifiable view on a list.
    *
