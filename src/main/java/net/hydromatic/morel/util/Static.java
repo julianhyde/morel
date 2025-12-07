@@ -401,6 +401,11 @@ public class Static {
     return x + 1;
   }
 
+  /** Second function. */
+  int f2(int x) {
+    return x + 2;
+  }
+
   /** Third function. */
   int f3(int x) {
     return x + 3;
