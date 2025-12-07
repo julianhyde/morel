@@ -762,10 +762,10 @@ class PairLists {
 
       // Create a new array with elements in sorted order
       final Object[] sorted = new Object[elements.length];
-      for (int i = 0; i < n; i++) {
-        int idx = indices[i];
-        sorted[i * 2] = elements[idx * 2]; // key
-        sorted[i * 2 + 1] = elements[idx * 2 + 1]; // value
+      int i = 0;
+      for (int index : indices) {
+        sorted[i++] = elements[index * 2]; // key
+        sorted[i++] = elements[index * 2 + 1]; // value
       }
 
       return new ArrayImmutablePairList<>(sorted);
