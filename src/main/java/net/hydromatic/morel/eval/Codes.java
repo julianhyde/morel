@@ -3451,78 +3451,43 @@ public abstract class Codes {
   public static final List VALUE_UNIT =
       Value.of(PrimitiveType.UNIT, Unit.INSTANCE);
 
-  /** Applicable that wraps a VALUE constructor to create Value objects. */
-  static class ValueConstructorApplicable extends BaseApplicable1<Value, Object>
-      implements Typed {
-    private final String constructorName;
-    private TypeSystem typeSystem;
-
-    ValueConstructorApplicable(String constructorName, TypeSystem typeSystem) {
-      super(null);
-      this.constructorName = constructorName;
-      this.typeSystem = typeSystem;
-    }
-
-    @Override
-    public Applicable withType(TypeSystem typeSystem, Type type) {
-      return new ValueConstructorApplicable(constructorName, typeSystem);
-    }
-
-    @Override
-    public Value apply(Object arg) {
-      return Values.fromConstructor(constructorName, arg, typeSystem);
-    }
-  }
-
   /** @see BuiltIn#VALUE_PARSE */
-  private static final Applicable1 VALUE_PARSE = new ValueParser(null);
+  private static final Typed VALUE_PARSE = new ValueParser(null);
 
-  /** Implementation of {@link #VALUE_PARSE}. */
+  /**
+   * Implementation of {@link #VALUE_PARSE}.
+   *
+   * <p>It implements {@link Typed} only because the implementation needs a
+   * {@link TypeSystem} value.
+   */
   static class ValueParser extends BaseApplicable1<Value, String>
       implements Typed {
-    private final TypeSystem typeSystem;
+    private final @Nullable TypeSystem typeSystem;
 
-    ValueParser(TypeSystem typeSystem) {
+    ValueParser(@Nullable TypeSystem typeSystem) {
       super(BuiltIn.VALUE_PARSE);
       this.typeSystem = typeSystem;
     }
 
     @Override
-    public Applicable withType(TypeSystem typeSystem, Type type) {
-      return new ValueParser(typeSystem);
+    public Applicable withType(TypeSystem typeSystem, Type ignored) {
+      return new ValueParser(requireNonNull(typeSystem));
     }
 
     @Override
     public Value apply(String s) {
-      // Parse to Value instance - matches what constructors now return
-      return Values.parse(s, typeSystem);
+      return Values.parse(s, requireNonNull(typeSystem));
     }
   }
 
   /** @see BuiltIn#VALUE_PRINT */
-  private static final Applicable1 VALUE_PRINT = new ValuePrinter(null);
-
-  /** Implementation of {@link #VALUE_PRINT}. */
-  static class ValuePrinter extends BaseApplicable1<String, Value>
-      implements Typed {
-    private final TypeSystem typeSystem;
-
-    ValuePrinter(TypeSystem typeSystem) {
-      super(BuiltIn.VALUE_PRINT);
-      this.typeSystem = typeSystem;
-    }
-
-    @Override
-    public Applicable withType(TypeSystem typeSystem, Type type) {
-      return new ValuePrinter(typeSystem);
-    }
-
-    @Override
-    public String apply(Value arg) {
-      // VALUE constructors now create Value instances directly
-      return Values.print(arg);
-    }
-  }
+  private static final Applicable1 VALUE_PRINT =
+      new BaseApplicable1<String, Value>(BuiltIn.VALUE_PRINT) {
+        @Override
+        public String apply(Value arg) {
+          return arg.print();
+        }
+      };
 
   /** @see BuiltIn#VECTOR_ALL */
   private static final Applicable2 VECTOR_ALL = all(BuiltIn.VECTOR_ALL);

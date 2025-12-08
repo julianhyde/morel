@@ -3909,21 +3909,12 @@ structure = "Value"
 name = "parse"
 specified = "morel"
 type = "string → value"
-implemented = false
 prototype = "parse s"
 description = """
-parses a string representation into a value.
+parses a value from its string representation.
 
-The string should be in the format produced by the `print` function.
-This enables round-tripping: `parse (print v) = v` for all values `v`.
-
-Examples:
-  `parse "()"` returns `UNIT`
-  `parse "true"` returns `BOOL true`
-  `parse "42"` returns `INT 42`
-  `parse "\"hello\""` returns `STRING "hello"`
-  `parse "[1, 2, 3]"` returns `LIST [INT 1, INT 2, INT 3]`
-  `parse "{x = 1, y = 2}"` returns `RECORD [("x", INT 1), ("y", INT 2)]`
+The string is in the format produced by the `print` function,
+and therefore `parse (print v) = v` for all values `v`.
 """
 
 [[functions]]
@@ -3933,21 +3924,11 @@ specified = "morel"
 type = "value → string"
 prototype = "print v"
 description = """
-converts a value to its compact string representation.
+converts a value to a string.
 
-The output is a valid Standard ML expression that can be parsed
-back into the same value using the `parse` function.
-
-Examples:
-  `print UNIT` returns `"()"`
-  `print (BOOL true)` returns `"true"`
-  `print (INT 42)` returns `"42"`
-  `print (STRING "hello")` returns `"\"hello\""`
-  `print (LIST [INT 1, INT 2, INT 3])` returns `"[1, 2, 3]"`
-  `print (RECORD [("x", INT 1), ("y", INT 2)])` returns `"{x = 1, y = 2}"`
-
-The output is compact (no unnecessary whitespace) for efficient
-transmission and storage.
+For example,
+`print (BOOL true)` returns `"BOOL true"`;
+`print (LIST [INT 1, INT 2])` returns `"LIST [INT 1, INT 2]"`.
 """
 
 # === Vector structure ===============================================

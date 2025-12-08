@@ -21,6 +21,7 @@ package net.hydromatic.morel.eval;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.eval.Codes.optionSome;
+import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -32,10 +33,14 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.SortedMap;
+import java.util.function.BiConsumer;
+import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeSystem;
@@ -217,8 +222,8 @@ public class Value extends AbstractImmutableList<Object> {
    *
    * <p>For parameterized datatypes like {@code datatype 'a option = NONE | SOME
    * of 'a}, this method uses unification to determine the type parameters. For
-   * instance, {@code CONSTRUCT ("SOME", INT 42)} unifies {@code 'a} with
-   * {@code int}, yielding type {@code int option}.
+   * instance, {@code CONSTRUCT ("SOME", INT 42)} unifies {@code 'a} with {@code
+   * int}, yielding type {@code int option}.
    */
   public static Value ofConstructor(
       TypeSystem typeSystem, String conName, Value conValue) {
@@ -282,6 +287,78 @@ public class Value extends AbstractImmutableList<Object> {
       final Type recordType = typeSystem.recordType(nameTypes);
       return new Value(recordType, sortedNameValues.rightList());
     }
+  }
+
+  public static boolean bindConsPat(
+      BiConsumer<Core.NamedPat, Object> envRef,
+      Value value,
+      Core.ConPat consPat) {
+    ListType listType = (ListType) value.type;
+    @SuppressWarnings("unchecked")
+    final List<Object> consValue = (List<Object>) value.value;
+    if (consValue.isEmpty()) {
+      return false;
+    }
+    final Value head = of(listType.elementType, consValue.get(0));
+    final List<Value> tail =
+        transformEager(
+            skip(consValue),
+            e -> e instanceof Value ? (Value) e : of(listType.elementType, e));
+    List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
+    return Closure.bindRecurse(patArgs.get(0), head, envRef)
+        && Closure.bindRecurse(patArgs.get(1), tail, envRef);
+  }
+
+  public static boolean bindConPat(
+      BiConsumer<Core.NamedPat, Object> envRef,
+      Value value,
+      Core.ConPat conPat) {
+    final String constructorName = Values.getConstructorName(value);
+    if (!constructorName.equals(conPat.tyCon)) {
+      return false;
+    }
+    // For list types, rewrap elements as Values if needed
+    // For record types, reconstruct (name, value) pairs
+    Object innerValue;
+    if (value.type instanceof ListType) {
+      final ListType listType = (ListType) value.type;
+      final List<?> list = (List<?>) value.value;
+      // Check if elements are already Values
+      if (!list.isEmpty() && !(list.get(0) instanceof Value)) {
+        // Elements are unwrapped, rewrap them
+        innerValue =
+            transformEager(
+                list,
+                e ->
+                    e instanceof Value
+                        ? (Value) e
+                        : of(listType.elementType, e));
+      } else {
+        innerValue = value.value;
+      }
+    } else if (value.type instanceof RecordType) {
+      final RecordType recordType = (RecordType) value.type;
+      final List<?> fieldValues = (List<?>) value.value;
+      // Reconstruct (name, value) pairs for pattern matching
+      // Pattern expects a list of [name, value] pairs
+      final ImmutableList.Builder<List<Object>> pairsBuilder =
+          ImmutableList.builder();
+      int i = 0;
+      for (Map.Entry<String, Type> entry : recordType.argNameTypes.entrySet()) {
+        final String name = entry.getKey();
+        final Type fieldType = entry.getValue();
+        final Object rawValue = fieldValues.get(i++);
+        final Value fieldValue =
+            rawValue instanceof Value
+                ? (Value) rawValue
+                : of(fieldType, rawValue);
+        pairsBuilder.add(ImmutableList.of(name, fieldValue));
+      }
+      innerValue = pairsBuilder.build();
+    } else {
+      innerValue = value.value;
+    }
+    return Closure.bindRecurse(conPat.pat, innerValue, envRef);
   }
 
   /**
@@ -469,6 +546,263 @@ public class Value extends AbstractImmutableList<Object> {
       }
     }
     return commonType;
+  }
+
+  /**
+   * Converts a Value to its string representation.
+   *
+   * <p>Handles both refined (specific types like {@code int list}) and
+   * unrefined (general types like {@code value list}) representations.
+   *
+   * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PRINT
+   */
+  public String print() {
+    // Handle primitive types
+    if (type.op() == Op.ID) {
+      switch ((PrimitiveType) type) {
+        case UNIT:
+          return "UNIT";
+        case BOOL:
+          return "BOOL " + value;
+        case INT:
+          final int intVal = (Integer) value;
+          return "INT "
+              + (intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal));
+        case REAL:
+          final float realVal = (Float) value;
+          return "REAL "
+              + (realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal));
+        case CHAR:
+          final Character ch = (Character) value;
+          return "CHAR #\"" + charEscape(ch) + "\"";
+        case STRING:
+          final String str = (String) value;
+          return "STRING \"" + stringEscape(str) + "\"";
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    // For more complex values, delegate to append. A single StringBuilder
+    // avoids excessive string concatenation.
+    StringBuilder buf = new StringBuilder();
+    append(buf);
+    return buf.toString();
+  }
+
+  /**
+   * Appends the string representation of this Value to a StringBuilder.
+   *
+   * @see #print()
+   */
+  private StringBuilder append(StringBuilder buf) {
+    if (type.op() == Op.ID) {
+      switch ((PrimitiveType) type) {
+        case UNIT:
+          return buf.append("UNIT");
+        case BOOL:
+          return buf.append("BOOL ").append(value);
+        case INT:
+          final int intVal = (Integer) value;
+          return buf.append("INT ")
+              .append(intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal));
+        case REAL:
+          final float realVal = (Float) value;
+          return buf.append("REAL ")
+              .append(realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal));
+        case CHAR:
+          final Character ch = (Character) value;
+          return buf.append("CHAR #\"").append(charEscape(ch)).append("\"");
+        case STRING:
+          final String str = (String) value;
+          return buf.append("STRING \"").append(stringEscape(str)).append("\"");
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    // Handle list types
+    if (type instanceof ListType) {
+      final ListType listType = (ListType) type;
+      return appendList(buf, "LIST [", value, listType.elementType, "]");
+    }
+
+    // Handle DataTypes (bag, vector, option, custom datatypes)
+    if (type instanceof DataType) {
+      final DataType dataType = (DataType) type;
+
+      final Type elementType;
+      switch (dataType.name) {
+        case "bag":
+          elementType = dataType.arguments.get(0);
+          return appendList(buf, "BAG [", value, elementType, "]");
+
+        case "vector":
+          elementType = dataType.arguments.get(0);
+          return appendList(buf, "VECTOR [", value, elementType, "]");
+
+        case "option":
+          if (value == Codes.OPTION_NONE) {
+            return buf.append("VALUE_NONE");
+          } else if (value instanceof Value) {
+            buf.append("VALUE_SOME ");
+            return ((Value) value).append(buf);
+          } else if (value instanceof List) {
+            // Refined option stored as ["SOME", innerValue]
+            final List<?> optionList = (List<?>) value;
+            if (optionList.size() == 2 && "SOME".equals(optionList.get(0))) {
+              final Object innerVal = optionList.get(1);
+              final Type innerType = dataType.arguments.get(0);
+              final Value innerValue =
+                  innerVal instanceof Value
+                      ? (Value) innerVal
+                      : Value.of(innerType, innerVal);
+              buf.append("VALUE_SOME ");
+              return innerValue.append(buf);
+            }
+            throw new IllegalArgumentException(
+                "Invalid option value: " + optionList);
+          } else {
+            // Refined option: single value (SOME case)
+            final Type innerType = dataType.arguments.get(0);
+            buf.append("VALUE_SOME ");
+            return Value.of(innerType, value).append(buf);
+          }
+      }
+
+      // Handle other datatype constructors
+      if (value instanceof List) {
+        final List<?> conList = (List<?>) value;
+        if (!conList.isEmpty() && conList.get(0) instanceof String) {
+          final String conName = (String) conList.get(0);
+          if (conList.size() == 1) {
+            // Nullary constructor - use CONSTANT
+            return buf.append("CONSTANT \"").append(conName).append("\"");
+          } else if (conList.size() == 2) {
+            // Unary constructor - use CONSTRUCT
+            final Object conArg = conList.get(1);
+            // conArg should be unwrapped due to ofConstructor change
+            // Need to determine its type - use datatype's argument type
+            final Value conArgValue;
+            if (conArg instanceof Value) {
+              conArgValue = (Value) conArg;
+            } else {
+              // Unwrapped value - wrap it with the datatype's argument type
+              final Type argType =
+                  dataType.arguments.isEmpty()
+                      ? PrimitiveType.UNIT
+                      : dataType.arguments.get(0);
+              conArgValue = Value.of(argType, conArg);
+            }
+            buf.append("CONSTRUCT (\"").append(conName).append("\", ");
+            conArgValue.append(buf);
+            return buf.append(')');
+          }
+        }
+      }
+      throw new IllegalArgumentException(
+          "Cannot print datatype value: " + dataType.name);
+    }
+
+    // Handle record types
+    if (type instanceof RecordType) {
+      final RecordType recordType = (RecordType) type;
+      @SuppressWarnings("unchecked")
+      final List<Object> recordValues = (List<Object>) value;
+      return appendRecordPairs(buf, "RECORD [", recordType, recordValues, "]");
+    }
+
+    throw new IllegalArgumentException("Cannot print value of type: " + type);
+  }
+
+  /** Helper for print: escapes a character for printing. */
+  private static String charEscape(Character ch) {
+    switch (ch) {
+      case '\n':
+        return "\\n";
+      case '\t':
+        return "\\t";
+      case '\r':
+        return "\\r";
+      case '\\':
+        return "\\\\";
+      case '"':
+        return "\\\"";
+      default:
+        return String.valueOf(ch);
+    }
+  }
+
+  /** Helper for print: escapes a string for printing. */
+  private static String stringEscape(String str) {
+    final StringBuilder buf = new StringBuilder();
+    for (int i = 0; i < str.length(); i++) {
+      buf.append(charEscape(str.charAt(i)));
+    }
+    return buf.toString();
+  }
+
+  /**
+   * Helper for print: prints a list of Value instances (unrefined) or raw
+   * values (refined).
+   */
+  @SuppressWarnings({"SameParameterValue", "rawtypes", "unchecked"})
+  private static StringBuilder appendList(
+      StringBuilder buf,
+      String prefix,
+      Object val,
+      Type elementType,
+      String suffix) {
+    buf.append(prefix);
+    final List list = (List) val;
+    if (!list.isEmpty() && list.get(0) instanceof Value) {
+      final List<Value> values = (List<Value>) list;
+      for (int i = 0; i < values.size(); i++) {
+        if (i > 0) {
+          buf.append(", ");
+        }
+        values.get(i).append(buf);
+      }
+    } else {
+      final List<Object> values = (List<Object>) list;
+      for (int i = 0; i < values.size(); i++) {
+        if (i > 0) {
+          buf.append(", ");
+        }
+        // Wrap each raw value in a Value instance for printing.
+        Value.of(elementType, values.get(i)).append(buf);
+      }
+    }
+    buf.append(suffix);
+    return buf;
+  }
+
+  /** Helper for print: prints record as list of (name, value) pairs. */
+  @SuppressWarnings("SameParameterValue")
+  private static StringBuilder appendRecordPairs(
+      StringBuilder buf,
+      String prefix,
+      RecordType recordType,
+      List<Object> values,
+      String suffix) {
+    buf.append(prefix);
+    final Map<String, Type> fields = recordType.argNameTypes();
+    int i = 0;
+    for (Map.Entry<String, Type> entry : fields.entrySet()) {
+      if (i > 0) {
+        buf.append(", ");
+      }
+      final String fieldName = entry.getKey();
+      final Type fieldType = entry.getValue();
+      final Object fieldValue = values.get(i);
+
+      buf.append("(\"").append(fieldName).append("\", ");
+      Value.of(fieldType, fieldValue).append(buf);
+      buf.append(")");
+      i++;
+    }
+    buf.append(suffix);
+    return buf;
   }
 }
 

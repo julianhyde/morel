@@ -645,8 +645,6 @@ class Pretty {
       this.name = name;
       this.o = o;
       this.type = type;
-      //      checkArgument(!(o instanceof Value), "unwrap value instances
-      // first");
     }
   }
 

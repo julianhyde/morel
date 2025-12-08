@@ -54,6 +54,19 @@ CONSTRUCT ("INL", INT 1);
 CONSTRUCT ("SOME", INT 42);
 > val it = SOME 42 : int option value
 
+
+fun testRoundTrip v =
+  let
+    val s = Value.print v
+    val v2 = Value.parse s
+  in
+    v = v2
+  end;
+> val testRoundTrip = fn : value -> bool
+
+testRoundTrip (VALUE_SOME (INT 42));
+> val it = true : bool
+
 (*
 *)
 

@@ -36,18 +36,16 @@ import net.hydromatic.morel.util.PairList;
  * embedded language interoperability.
  *
  * <p>Provides parsing and printing functions for the {@code value} datatype
- * defined in value.sig.
+ * defined in {@code value.sig}.
  */
 public class Values {
-  private Values() {
-    // Utility class, no instances
-  }
+  private Values() {}
 
   /**
-   * Creates a Value instance from a VALUE constructor name and argument.
+   * Creates a {@code Value} instance from a constructor name and argument.
    *
-   * <p>Used by VALUE constructors (e.g., {@code INT 42}) to create Value
-   * instances at runtime.
+   * <p>Used by value constructors (e.g., {@code INT 42}) to create {@code
+   * Value} instances at runtime.
    *
    * @param name Constructor name (e.g., "INT", "BOOL", "LIST")
    * @param arg Constructor argument
@@ -150,7 +148,7 @@ public class Values {
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
       if (dataType.name.equals("option")) {
-        return value.value == null ? "VALUE_NONE" : "VALUE_SOME";
+        return value.value == Codes.OPTION_NONE ? "VALUE_NONE" : "VALUE_SOME";
       }
     }
 
@@ -160,267 +158,7 @@ public class Values {
     }
 
     // For other types, we can't determine a simple constructor name
-    return null;
-  }
-
-  /**
-   * Converts a Value to its string representation.
-   *
-   * <p>Handles both refined (specific types like {@code int list}) and
-   * unrefined (general types like {@code value list}) representations.
-   *
-   * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PRINT
-   */
-  public static String print(Value value) {
-    final Type type = value.type;
-    final Object val = value.value;
-
-    // Handle primitive types
-    if (type == PrimitiveType.UNIT) {
-      return "UNIT";
-    }
-    if (type == PrimitiveType.BOOL) {
-      return "BOOL " + String.valueOf(val);
-    }
-    if (type == PrimitiveType.INT) {
-      final int intVal = (Integer) val;
-      return "INT " + (intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal));
-    }
-    if (type == PrimitiveType.REAL) {
-      final float realVal = (Float) val;
-      return "REAL "
-          + (realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal));
-    }
-    if (type == PrimitiveType.CHAR) {
-      final Character ch = (Character) val;
-      return "CHAR #\"" + charEscape(ch) + "\"";
-    }
-    if (type == PrimitiveType.STRING) {
-      final String str = (String) val;
-      return "STRING \"" + stringEscape(str) + "\"";
-    }
-
-    // Handle list types
-    if (type instanceof ListType) {
-      final List list = (List) val;
-      final ListType listType = (ListType) type;
-      final Type elementType = listType.elementType;
-
-      // Check if elements are Value instances (unrefined) or raw values
-      // (refined)
-      if (!list.isEmpty() && list.get(0) instanceof Value) {
-        // Unrefined: list of Value instances
-        return "LIST [" + printValueList((List<Value>) list) + "]";
-      } else {
-        // Refined: list of raw values (int, string, etc.)
-        return "LIST [" + printRefinedList(list, elementType) + "]";
-      }
-    }
-
-    // Handle DataTypes (bag, vector, option, custom datatypes)
-    if (type instanceof DataType) {
-      final DataType dataType = (DataType) type;
-
-      // Handle bag types
-      if (dataType.name.equals("bag")) {
-        final List list = (List) val;
-        final Type elementType = dataType.arguments.get(0);
-        if (!list.isEmpty() && list.get(0) instanceof Value) {
-          return "BAG [" + printValueList((List<Value>) list) + "]";
-        } else {
-          return "BAG [" + printRefinedList(list, elementType) + "]";
-        }
-      }
-
-      // Handle vector types
-      if (dataType.name.equals("vector")) {
-        final List list = (List) val;
-        final Type elementType = dataType.arguments.get(0);
-        if (!list.isEmpty() && list.get(0) instanceof Value) {
-          return "VECTOR #[" + printValueList((List<Value>) list) + "]";
-        } else {
-          return "VECTOR #[" + printRefinedList(list, elementType) + "]";
-        }
-      }
-
-      // Handle option types
-      if (dataType.name.equals("option")) {
-        if (val == null || val == Codes.OPTION_NONE) {
-          return "VALUE_NONE";
-        } else if (val instanceof Value) {
-          return "VALUE_SOME " + print((Value) val);
-        } else if (val instanceof List) {
-          // Refined option stored as ["SOME", innerValue]
-          final List<?> optionList = (List<?>) val;
-          if (optionList.size() == 2 && "SOME".equals(optionList.get(0))) {
-            final Object innerVal = optionList.get(1);
-            final Type innerType = dataType.arguments.get(0);
-            final Value innerValue =
-                innerVal instanceof Value
-                    ? (Value) innerVal
-                    : Value.of(innerType, innerVal);
-            return "VALUE_SOME " + print(innerValue);
-          }
-          throw new IllegalArgumentException(
-              "Invalid option value: " + optionList);
-        } else {
-          // Refined option: single value (SOME case)
-          final Type innerType = dataType.arguments.get(0);
-          return "VALUE_SOME " + print(Value.of(innerType, val));
-        }
-      }
-
-      // Handle other datatype constructors
-      if (val instanceof List) {
-        final List<?> conList = (List<?>) val;
-        if (!conList.isEmpty() && conList.get(0) instanceof String) {
-          final String conName = (String) conList.get(0);
-          if (conList.size() == 1) {
-            // Nullary constructor - use CONSTANT
-            return "CONSTANT \"" + conName + "\"";
-          } else if (conList.size() == 2) {
-            // Unary constructor - use CONSTRUCT
-            final Object conArg = conList.get(1);
-            // conArg should be unwrapped due to ofConstructor change
-            // Need to determine its type - use datatype's argument type
-            final Value conArgValue;
-            if (conArg instanceof Value) {
-              conArgValue = (Value) conArg;
-            } else {
-              // Unwrapped value - wrap it with the datatype's argument type
-              final Type argType =
-                  dataType.arguments.isEmpty()
-                      ? PrimitiveType.UNIT
-                      : dataType.arguments.get(0);
-              conArgValue = Value.of(argType, conArg);
-            }
-            return "CONSTRUCT (\""
-                + conName
-                + "\", "
-                + print(conArgValue)
-                + ")";
-          }
-        }
-      }
-      throw new IllegalArgumentException(
-          "Cannot print datatype value: " + dataType.name);
-    }
-
-    // Handle record types
-    if (type instanceof RecordType) {
-      final RecordType recordType = (RecordType) type;
-      final List recordValues = (List) val;
-      return "RECORD [" + printRecordPairs(recordType, recordValues) + "]";
-    }
-
-    throw new IllegalArgumentException("Cannot print value of type: " + type);
-  }
-
-  /** Helper for print: prints a list of Value instances (unrefined). */
-  private static String printValueList(List<Value> values) {
-    final StringBuilder buf = new StringBuilder();
-    for (int i = 0; i < values.size(); i++) {
-      if (i > 0) {
-        buf.append(", ");
-      }
-      buf.append(print(values.get(i)));
-    }
-    return buf.toString();
-  }
-
-  /**
-   * Prints list elements enclosed in brackets, handling both refined and
-   * unrefined lists.
-   */
-  private static String printListElements(List list, Type elementType) {
-    if (!list.isEmpty() && list.get(0) instanceof Value) {
-      // Unrefined list
-      return "[" + printValueList((List<Value>) list) + "]";
-    } else {
-      // Refined list
-      return "[" + printRefinedList(list, elementType) + "]";
-    }
-  }
-
-  /** Helper for print: prints a list of raw values (refined). */
-  private static String printRefinedList(List values, Type elementType) {
-    final StringBuilder buf = new StringBuilder();
-    for (int i = 0; i < values.size(); i++) {
-      if (i > 0) {
-        buf.append(", ");
-      }
-      // Wrap each raw value in a Value instance for printing
-      buf.append(print(Value.of(elementType, values.get(i))));
-    }
-    return buf.toString();
-  }
-
-  /** Helper for print: prints a record with field names and values. */
-  private static String printRecordValues(RecordType recordType, List values) {
-    final StringBuilder buf = new StringBuilder();
-    final java.util.Map<String, Type> fields = recordType.argNameTypes();
-    int i = 0;
-    for (java.util.Map.Entry<String, Type> entry : fields.entrySet()) {
-      if (i > 0) {
-        buf.append(", ");
-      }
-      final String fieldName = entry.getKey();
-      final Type fieldType = entry.getValue();
-      final Object fieldValue = values.get(i);
-
-      buf.append(fieldName).append(" = ");
-      buf.append(print(Value.of(fieldType, fieldValue)));
-      i++;
-    }
-    return buf.toString();
-  }
-
-  /** Helper for print: prints record as list of (name, value) pairs. */
-  private static String printRecordPairs(RecordType recordType, List values) {
-    final StringBuilder buf = new StringBuilder();
-    final java.util.Map<String, Type> fields = recordType.argNameTypes();
-    int i = 0;
-    for (java.util.Map.Entry<String, Type> entry : fields.entrySet()) {
-      if (i > 0) {
-        buf.append(", ");
-      }
-      final String fieldName = entry.getKey();
-      final Type fieldType = entry.getValue();
-      final Object fieldValue = values.get(i);
-
-      buf.append("(\"").append(fieldName).append("\", ");
-      buf.append(print(Value.of(fieldType, fieldValue)));
-      buf.append(")");
-      i++;
-    }
-    return buf.toString();
-  }
-
-  /** Helper for print: escapes a character for printing. */
-  private static String charEscape(Character ch) {
-    switch (ch) {
-      case '\n':
-        return "\\n";
-      case '\t':
-        return "\\t";
-      case '\r':
-        return "\\r";
-      case '\\':
-        return "\\\\";
-      case '"':
-        return "\\\"";
-      default:
-        return String.valueOf(ch);
-    }
-  }
-
-  /** Helper for print: escapes a string for printing. */
-  private static String stringEscape(String str) {
-    final StringBuilder buf = new StringBuilder();
-    for (int i = 0; i < str.length(); i++) {
-      buf.append(charEscape(str.charAt(i)));
-    }
-    return buf.toString();
+    throw new IllegalArgumentException("unknown type " + type);
   }
 
   /**
@@ -662,7 +400,7 @@ public class Values {
     }
 
     private Value parseVector() {
-      expect("#[");
+      expect("[");
       skipWhitespace();
       if (tryConsume("]")) {
         // Empty vector of values
@@ -686,8 +424,7 @@ public class Values {
       expect("{");
       skipWhitespace();
       if (tryConsume("}")) {
-        // Empty record
-        // TODO: construct proper empty record type
+        // Empty record.
         return Value.of(PrimitiveType.UNIT, ImmutableList.of());
       }
 
@@ -695,17 +432,7 @@ public class Values {
       final ImmutableList.Builder<Value> fieldValues = ImmutableList.builder();
 
       // Parse first field
-      skipWhitespace();
-      final String fieldName = parseIdentifier();
-      skipWhitespace();
-      expect("=");
-      skipWhitespace();
-      final Value fieldValue = parseValue();
-      fieldNames.add(fieldName);
-      fieldValues.add(fieldValue);
-
-      skipWhitespace();
-      while (tryConsume(",")) {
+      do {
         skipWhitespace();
         final String name = parseIdentifier();
         skipWhitespace();
@@ -715,7 +442,7 @@ public class Values {
         fieldNames.add(name);
         fieldValues.add(value);
         skipWhitespace();
-      }
+      } while (tryConsume(","));
       expect("}");
 
       // TODO: construct proper RecordType from field names and types
@@ -761,18 +488,15 @@ public class Values {
       }
       if (tryConsume("LIST")) {
         skipWhitespace();
-        final Value listValue = parseList();
-        return listValue; // parseList already returns a list of Values
+        return parseList(); // parseList already returns a list of Values
       }
       if (tryConsume("BAG")) {
         skipWhitespace();
-        final Value bagValue = parseBag();
-        return bagValue; // parseBag already returns a bag of Values
+        return parseBag(); // parseBag already returns a bag of Values
       }
       if (tryConsume("VECTOR")) {
         skipWhitespace();
-        final Value vectorValue = parseVector();
-        return vectorValue; // parseVector already returns a vector of Values
+        return parseVector(); // parseVector already returns a vector of Values
       }
       if (tryConsume("RECORD")) {
         skipWhitespace();
