@@ -3902,29 +3902,29 @@ description = """
 clears the current the value of `property`.
 """
 
-# === Value structure ================================================
+# === Variant structure ==============================================
 
 [[functions]]
-structure = "Value"
+structure = "Variant"
 name = "parse"
 specified = "morel"
-type = "string → value"
+type = "string → variant"
 prototype = "parse s"
 description = """
-parses a value from its string representation.
+parses a variant from its string representation.
 
 The string is in the format produced by the `print` function,
-and therefore `parse (print v) = v` for all values `v`.
+and therefore `parse (print v) = v` for all variant values `v`.
 """
 
 [[functions]]
-structure = "Value"
+structure = "Variant"
 name = "print"
 specified = "morel"
-type = "value → string"
+type = "variant → string"
 prototype = "print v"
 description = """
-converts a value to a string.
+converts a variant to a string.
 
 For example,
 `print (BOOL true)` returns `"BOOL true"`;

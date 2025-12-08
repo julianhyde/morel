@@ -22,6 +22,7 @@ import static java.lang.String.format;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -32,20 +33,20 @@ import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
 
 /**
- * Utilities for the Value structure - universal value representation for
+ * Utilities for the Variant structure - universal value representation for
  * embedded language interoperability.
  *
- * <p>Provides parsing and printing functions for the {@code value} datatype
- * defined in {@code value.sig}.
+ * <p>Provides parsing and printing functions for the {@code variant} datatype
+ * defined in {@code variant.sig}.
  */
-public class Values {
-  private Values() {}
+public class Variants {
+  private Variants() {}
 
   /**
-   * Creates a {@code Value} instance from a constructor name and argument.
+   * Creates a {@code Variant} instance from a constructor name and argument.
    *
-   * <p>Used by value constructors (e.g., {@code INT 42}) to create {@code
-   * Value} instances at runtime.
+   * <p>Used by variant constructors (e.g., {@code INT 42}) to create {@code
+   * Variant} instances at runtime.
    *
    * @param name Constructor name (e.g., "INT", "BOOL", "LIST")
    * @param arg Constructor argument
@@ -53,52 +54,52 @@ public class Values {
    * @return Value instance with appropriate type
    */
   @SuppressWarnings("unchecked")
-  public static Value fromConstructor(
+  public static Variant fromConstructor(
       String name, Object arg, TypeSystem typeSystem) {
     switch (name) {
       case "UNIT":
-        return Value.unit();
+        return Variant.unit();
       case "BOOL":
-        return Value.ofBool((Boolean) arg);
+        return Variant.ofBool((Boolean) arg);
       case "INT":
-        return Value.ofInt((Integer) arg);
+        return Variant.ofInt((Integer) arg);
       case "REAL":
-        return Value.ofReal((Float) arg);
+        return Variant.ofReal((Float) arg);
       case "CHAR":
-        return Value.ofChar((Character) arg);
+        return Variant.ofChar((Character) arg);
       case "STRING":
-        return Value.ofString((String) arg);
+        return Variant.ofString((String) arg);
       case "LIST":
-        return Value.ofValueList(typeSystem, (List<Value>) arg);
+        return Variant.ofVariantList(typeSystem, (List<Variant>) arg);
       case "BAG":
-        return Value.ofValueBag(typeSystem, (List<Value>) arg);
+        return Variant.ofVariantBag(typeSystem, (List<Variant>) arg);
       case "VECTOR":
-        return Value.ofValueVector(typeSystem, (List<Value>) arg);
-      case "VALUE_NONE":
+        return Variant.ofVariantVector(typeSystem, (List<Variant>) arg);
+      case "VARIANT_NONE":
         {
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofNone(typeSystem, valueType);
+          final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+          return Variant.ofNone(typeSystem, variantType);
         }
-      case "VALUE_SOME":
-        return Value.ofSome(typeSystem, (Value) arg);
+      case "VARIANT_SOME":
+        return Variant.ofSome(typeSystem, (Variant) arg);
       case "RECORD":
         // arg is a list of (name, value) pairs
-        PairList<String, Value> nameValues =
+        PairList<String, Variant> nameValues =
             PairList.fromTransformed(
                 (List<List<Object>>) arg,
                 (lists, consumer) ->
                     consumer.accept(
-                        (String) lists.get(0), (Value) lists.get(1)));
-        return Value.ofRecord(typeSystem, nameValues);
+                        (String) lists.get(0), (Variant) lists.get(1)));
+        return Variant.ofRecord(typeSystem, nameValues);
       case "CONSTANT":
         // Nullary datatype constructor
-        return Value.ofConstant(typeSystem, (String) arg);
+        return Variant.ofConstant(typeSystem, (String) arg);
       case "CONSTRUCT":
         // Unary datatype constructor with value
         final List<Object> list = (List<Object>) arg;
         final String conName = (String) list.get(0);
-        final Value conArg = (Value) list.get(1);
-        return Value.ofConstructor(typeSystem, conName, conArg);
+        final Variant conArg = (Variant) list.get(1);
+        return Variant.ofConstructor(typeSystem, conName, conArg);
       default:
         throw new IllegalArgumentException(
             String.format("Unknown VALUE constructor: %s", name));
@@ -115,7 +116,7 @@ public class Values {
    * @param value Value instance
    * @return Constructor name, or null if not applicable
    */
-  public static String getConstructorName(Value value) {
+  public static String getConstructorName(Variant value) {
     final Type type = value.type;
 
     // Primitive types
@@ -148,7 +149,9 @@ public class Values {
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
       if (dataType.name.equals("option")) {
-        return value.value == Codes.OPTION_NONE ? "VALUE_NONE" : "VALUE_SOME";
+        return value.value == Codes.OPTION_NONE
+            ? "VARIANT_NONE"
+            : "VARIANT_SOME";
       }
     }
 
@@ -164,9 +167,9 @@ public class Values {
   /**
    * Parses a string representation into a value.
    *
-   * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PARSE
+   * @see net.hydromatic.morel.compile.BuiltIn#VARIANT_PARSE
    */
-  public static Value parse(String s, TypeSystem typeSystem) {
+  public static Variant parse(String s, TypeSystem typeSystem) {
     final Parser parser = new Parser(s, typeSystem);
     return parser.parse();
   }
@@ -183,12 +186,12 @@ public class Values {
       this.pos = 0;
     }
 
-    Value parse() {
+    Variant parse() {
       skipWhitespace();
       return parseValue();
     }
 
-    private Value parseValue() {
+    private Variant parseValue() {
       skipWhitespace();
       if (pos >= input.length()) {
         throw new IllegalArgumentException("Unexpected end of input");
@@ -228,8 +231,8 @@ public class Values {
         case '9':
           return parseNumber();
         default:
-          // Check if it's an identifier (bag, CONST, CON, VALUE_NONE,
-          // VALUE_SOME)
+          // Check if it's an identifier (bag, CONST, CON, VARIANT_NONE,
+          // VARIANT_SOME)
           if (Character.isLetter(c)) {
             return parseIdentifierValue();
           }
@@ -238,23 +241,23 @@ public class Values {
       }
     }
 
-    private Value parseUnit() {
+    private Variant parseUnit() {
       expect("()");
-      return (Value) Codes.VALUE_UNIT;
+      return (Variant) Codes.VALUE_UNIT;
     }
 
-    private Value parseBool() {
+    private Variant parseBool() {
       if (tryConsume("true")) {
-        return Value.ofBool(true);
+        return Variant.ofBool(true);
       } else if (tryConsume("false")) {
-        return Value.ofBool(false);
+        return Variant.ofBool(false);
       } else {
         throw new IllegalArgumentException(
             "Expected 'true' or 'false' at position " + pos);
       }
     }
 
-    private Value parseNumber() {
+    private Variant parseNumber() {
       // Call parseReal and parseInt in succession to try both
       final String remaining = input.substring(pos);
 
@@ -263,20 +266,20 @@ public class Values {
       final Ord<Float> realOrd = Codes.parseReal(remaining, true);
       if (realOrd != null) {
         pos += realOrd.i;
-        return Value.ofReal(realOrd.e);
+        return Variant.ofReal(realOrd.e);
       }
 
       // Next, parse as an int.
       final Ord<Integer> intOrd = Codes.parseInt(remaining);
       if (intOrd != null) {
         pos += intOrd.i;
-        return Value.ofInt(intOrd.e);
+        return Variant.ofInt(intOrd.e);
       }
 
       throw new IllegalArgumentException("Expected number at position " + pos);
     }
 
-    private Value parseString() {
+    private Variant parseString() {
       expect("\"");
       final StringBuilder sb = new StringBuilder();
       while (pos < input.length() && input.charAt(pos) != '"') {
@@ -313,10 +316,10 @@ public class Values {
         }
       }
       expect("\"");
-      return Value.ofString(sb.toString());
+      return Variant.ofString(sb.toString());
     }
 
-    private Value parseChar() {
+    private Variant parseChar() {
       expect("#\"");
       if (pos >= input.length()) {
         throw new IllegalArgumentException("Incomplete character literal");
@@ -354,19 +357,19 @@ public class Values {
         pos++;
       }
       expect("\"");
-      return Value.ofChar(c);
+      return Variant.ofChar(c);
     }
 
-    private Value parseList() {
+    private Variant parseList() {
       expect("[");
       skipWhitespace();
       if (tryConsume("]")) {
         // Empty list of values
-        final Type valueType = typeSystem.lookup("value");
-        return Value.ofList(typeSystem, valueType, ImmutableList.of());
+        final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+        return Variant.ofList(typeSystem, variantType, ImmutableList.of());
       }
 
-      final ImmutableList.Builder<Value> values = ImmutableList.builder();
+      final ImmutableList.Builder<Variant> values = ImmutableList.builder();
       values.add(parseValue());
       skipWhitespace();
       while (tryConsume(",")) {
@@ -375,19 +378,19 @@ public class Values {
         skipWhitespace();
       }
       expect("]");
-      return Value.ofValueList(typeSystem, values.build());
+      return Variant.ofVariantList(typeSystem, values.build());
     }
 
-    private Value parseBag() {
+    private Variant parseBag() {
       expect("[");
       skipWhitespace();
       if (tryConsume("]")) {
         // Empty bag of values
-        final Type valueType = typeSystem.lookup("value");
-        return Value.ofBag(typeSystem, valueType, ImmutableList.of());
+        final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+        return Variant.ofBag(typeSystem, variantType, ImmutableList.of());
       }
 
-      final ImmutableList.Builder<Value> values = ImmutableList.builder();
+      final ImmutableList.Builder<Variant> values = ImmutableList.builder();
       values.add(parseValue());
       skipWhitespace();
       while (tryConsume(",")) {
@@ -396,19 +399,19 @@ public class Values {
         skipWhitespace();
       }
       expect("]");
-      return Value.ofValueBag(typeSystem, values.build());
+      return Variant.ofVariantBag(typeSystem, values.build());
     }
 
-    private Value parseVector() {
+    private Variant parseVector() {
       expect("[");
       skipWhitespace();
       if (tryConsume("]")) {
         // Empty vector of values
-        final Type valueType = typeSystem.lookup("value");
-        return Value.ofVector(typeSystem, valueType, ImmutableList.of());
+        final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+        return Variant.ofVector(typeSystem, variantType, ImmutableList.of());
       }
 
-      final ImmutableList.Builder<Value> values = ImmutableList.builder();
+      final ImmutableList.Builder<Variant> values = ImmutableList.builder();
       values.add(parseValue());
       skipWhitespace();
       while (tryConsume(",")) {
@@ -417,19 +420,20 @@ public class Values {
         skipWhitespace();
       }
       expect("]");
-      return Value.ofValueVector(typeSystem, values.build());
+      return Variant.ofVariantVector(typeSystem, values.build());
     }
 
-    private Value parseRecord() {
+    private Variant parseRecord() {
       expect("{");
       skipWhitespace();
       if (tryConsume("}")) {
         // Empty record.
-        return Value.of(PrimitiveType.UNIT, ImmutableList.of());
+        return Variant.of(PrimitiveType.UNIT, ImmutableList.of());
       }
 
       final ImmutableList.Builder<String> fieldNames = ImmutableList.builder();
-      final ImmutableList.Builder<Value> fieldValues = ImmutableList.builder();
+      final ImmutableList.Builder<Variant> fieldValues =
+          ImmutableList.builder();
 
       // Parse first field
       do {
@@ -438,7 +442,7 @@ public class Values {
         skipWhitespace();
         expect("=");
         skipWhitespace();
-        final Value value = parseValue();
+        final Variant value = parseValue();
         fieldNames.add(name);
         fieldValues.add(value);
         skipWhitespace();
@@ -447,44 +451,44 @@ public class Values {
 
       // TODO: construct proper RecordType from field names and types
       // For now, use a temporary representation
-      return Value.of(PrimitiveType.UNIT, fieldValues.build());
+      return Variant.of(PrimitiveType.UNIT, fieldValues.build());
     }
 
-    private Value parseIdentifierValue() {
+    private Variant parseIdentifierValue() {
       // Handle VALUE constructors: UNIT, BOOL, INT, REAL, CHAR, STRING, LIST,
       // BAG, VECTOR, etc.
       if (tryConsume("UNIT")) {
-        return Value.unit();
+        return Variant.unit();
       }
       if (tryConsume("BOOL")) {
         skipWhitespace();
         if (tryConsume("true")) {
-          return Value.ofBool(true);
+          return Variant.ofBool(true);
         } else if (tryConsume("false")) {
-          return Value.ofBool(false);
+          return Variant.ofBool(false);
         }
         throw new IllegalArgumentException(
             "Expected 'true' or 'false' after BOOL");
       }
       if (tryConsume("INT")) {
         skipWhitespace();
-        final Value numValue = parseNumber();
-        return Value.ofInt((Integer) numValue.value);
+        final Variant numValue = parseNumber();
+        return Variant.ofInt((Integer) numValue.value);
       }
       if (tryConsume("REAL")) {
         skipWhitespace();
-        final Value numValue = parseNumber();
-        return Value.ofReal((Float) numValue.value);
+        final Variant numValue = parseNumber();
+        return Variant.ofReal((Float) numValue.value);
       }
       if (tryConsume("CHAR")) {
         skipWhitespace();
-        final Value charValue = parseChar();
-        return Value.ofChar((Character) charValue.value);
+        final Variant charValue = parseChar();
+        return Variant.ofChar((Character) charValue.value);
       }
       if (tryConsume("STRING")) {
         skipWhitespace();
-        final Value strValue = parseString();
-        return Value.ofString((String) strValue.value);
+        final Variant strValue = parseString();
+        return Variant.ofString((String) strValue.value);
       }
       if (tryConsume("LIST")) {
         skipWhitespace();
@@ -504,9 +508,9 @@ public class Values {
         skipWhitespace();
         if (tryConsume("]")) {
           // Empty record
-          return Value.ofRecord(typeSystem, PairList.of());
+          return Variant.ofRecord(typeSystem, PairList.of());
         }
-        final PairList<String, Value> pairs = PairList.of();
+        final PairList<String, Variant> pairs = PairList.of();
         // Parse first pair
         expect("(");
         skipWhitespace();
@@ -516,7 +520,7 @@ public class Values {
         skipWhitespace();
         expect(",");
         skipWhitespace();
-        final Value value1 = parseValue();
+        final Variant value1 = parseValue();
         skipWhitespace();
         expect(")");
         pairs.add(name1, value1);
@@ -532,14 +536,14 @@ public class Values {
           skipWhitespace();
           expect(",");
           skipWhitespace();
-          final Value value = parseValue();
+          final Variant value = parseValue();
           skipWhitespace();
           expect(")");
           pairs.add(name, value);
           skipWhitespace();
         }
         expect("]");
-        return Value.ofRecord(typeSystem, pairs);
+        return Variant.ofRecord(typeSystem, pairs);
       }
       // Check for 'bag' prefix (old format)
       if (tryConsume("bag")) {
@@ -548,10 +552,10 @@ public class Values {
         skipWhitespace();
         if (tryConsume("]")) {
           // Empty bag of values
-          final Type valueType = typeSystem.lookup("value");
-          return Value.ofBag(typeSystem, valueType, ImmutableList.of());
+          final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+          return Variant.ofBag(typeSystem, variantType, ImmutableList.of());
         }
-        final ImmutableList.Builder<Value> values = ImmutableList.builder();
+        final ImmutableList.Builder<Variant> values = ImmutableList.builder();
         values.add(parseValue());
         skipWhitespace();
         while (tryConsume(",")) {
@@ -560,8 +564,8 @@ public class Values {
           skipWhitespace();
         }
         expect("]");
-        final Type valueType = typeSystem.lookup("value");
-        return Value.ofBag(typeSystem, valueType, values.build());
+        final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+        return Variant.ofBag(typeSystem, variantType, values.build());
       }
       // Check for CONSTRUCT format, e.g. CONSTRUCT ("INL", INT 5)
       if (tryConsume("CONSTRUCT")) {
@@ -574,7 +578,7 @@ public class Values {
         skipWhitespace();
         expect(",");
         skipWhitespace();
-        final Value conValue = parseValue();
+        final Variant conValue = parseValue();
         skipWhitespace();
         expect(")");
         return fromConstructor(conName, conValue, typeSystem);
@@ -587,14 +591,14 @@ public class Values {
         expect("\"");
         return fromConstructor("CONSTANT", conName, typeSystem);
       }
-      // Try VALUE_NONE and VALUE_SOME constructors
-      if (tryConsume("VALUE_NONE")) {
-        final Type valueType = typeSystem.lookup("value");
-        return Value.ofNone(typeSystem, valueType);
-      } else if (tryConsume("VALUE_SOME")) {
+      // Try VARIANT_NONE and VARIANT_SOME constructors
+      if (tryConsume("VARIANT_NONE")) {
+        final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+        return Variant.ofNone(typeSystem, variantType);
+      } else if (tryConsume("VARIANT_SOME")) {
         skipWhitespace();
-        final Value value = parseValue();
-        return Value.ofSome(typeSystem, value);
+        final Variant value = parseValue();
+        return Variant.ofSome(typeSystem, value);
       }
       throw new IllegalArgumentException(
           "Unknown identifier at position " + pos);
@@ -683,4 +687,4 @@ public class Values {
   }
 }
 
-// End Values.java
+// End Variants.java

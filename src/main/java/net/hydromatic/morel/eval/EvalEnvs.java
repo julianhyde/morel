@@ -259,10 +259,10 @@ public class EvalEnvs {
         case CON0_PAT:
           final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;
           // Handle Value instances for VALUE datatype
-          if (argValue instanceof Value) {
-            final Value value = (Value) argValue;
+          if (argValue instanceof Variant) {
+            final Variant value = (Variant) argValue;
             // Extract constructor name from Value
-            final String constructorName = Values.getConstructorName(value);
+            final String constructorName = Variants.getConstructorName(value);
             return constructorName != null
                 && constructorName.equals(con0Pat.tyCon);
           } else {
@@ -273,10 +273,10 @@ public class EvalEnvs {
         case CON_PAT:
           final Core.ConPat conPat = (Core.ConPat) pat;
           // Handle Value instances for VALUE datatype
-          if (argValue instanceof Value) {
-            final Value value = (Value) argValue;
+          if (argValue instanceof Variant) {
+            final Variant value = (Variant) argValue;
             // Extract constructor name and payload from Value
-            final String constructorName = Values.getConstructorName(value);
+            final String constructorName = Variants.getConstructorName(value);
             if (constructorName == null
                 || !constructorName.equals(conPat.tyCon)) {
               return false;

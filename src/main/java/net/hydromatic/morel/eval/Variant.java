@@ -65,164 +65,166 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * <p>For example:
  *
  * <ul>
- *   <li>{@code Value(PrimitiveType.INT, 42)} represents an {@code int};
- *   <li>{@code Value(ListType(INT), [1,2,3])} represents an {@code int list};
- *   <li>{@code Value(ListType(ValueType), [Value(...), ...])} represents a
+ *   <li>{@code Variant(PrimitiveType.INT, 42)} represents an {@code int};
+ *   <li>{@code Variant(ListType(INT), [1,2,3])} represents an {@code int list};
+ *   <li>{@code Variant(ListType(ValueType), [Value(...), ...])} represents a
  *       heterogeneous value list
  * </ul>
  */
-public class Value extends AbstractImmutableList<Object> {
-  private static final Value UNIT_VALUE =
-      new Value(PrimitiveType.UNIT, Unit.INSTANCE);
+public class Variant extends AbstractImmutableList<Object> {
+  private static final Variant UNIT_VARIANT =
+      new Variant(PrimitiveType.UNIT, Unit.INSTANCE);
 
   public final Type type;
   public final Object value;
 
-  private Value(Type type, Object value) {
+  private Variant(Type type, Object value) {
     this.type = requireNonNull(type, "type");
     this.value = requireNonNull(value, "value");
   }
 
   /** Creates a Value instance. */
-  public static Value of(Type type, Object value) {
-    return new Value(type, value);
+  public static Variant of(Type type, Object value) {
+    return new Variant(type, value);
   }
 
   /** Returns the {@code unit} instance. */
-  public static Value unit() {
-    return UNIT_VALUE;
+  public static Variant unit() {
+    return UNIT_VARIANT;
   }
 
-  /** Returns a value that wraps a {@code bool}. */
-  public static Value ofBool(boolean b) {
-    return new Value(PrimitiveType.BOOL, b);
+  /** Returns a variant that wraps a {@code bool}. */
+  public static Variant ofBool(boolean b) {
+    return new Variant(PrimitiveType.BOOL, b);
   }
 
-  /** Returns a value that wraps an {@code int}. */
-  public static Value ofInt(int i) {
-    return new Value(PrimitiveType.INT, i);
+  /** Returns a variant that wraps an {@code int}. */
+  public static Variant ofInt(int i) {
+    return new Variant(PrimitiveType.INT, i);
   }
 
-  /** Returns a value that wraps a {@code real}. */
-  public static Value ofReal(float v) {
-    return new Value(PrimitiveType.REAL, v);
+  /** Returns a variant that wraps a {@code real}. */
+  public static Variant ofReal(float v) {
+    return new Variant(PrimitiveType.REAL, v);
   }
 
-  /** Returns a value that wraps a {@code string}. */
-  public static Value ofString(String s) {
-    return new Value(PrimitiveType.STRING, s);
+  /** Returns a variant that wraps a {@code string}. */
+  public static Variant ofString(String s) {
+    return new Variant(PrimitiveType.STRING, s);
   }
 
-  /** Returns a value that wraps a {@code char}. */
-  public static Value ofChar(char c) {
-    return new Value(PrimitiveType.CHAR, c);
+  /** Returns a variant that wraps a {@code char}. */
+  public static Variant ofChar(char c) {
+    return new Variant(PrimitiveType.CHAR, c);
   }
 
-  /** Returns a value that wraps a list with a given element type. */
-  public static Value ofList(
-      TypeSystem typeSystem, Type elementType, List<Value> list) {
-    return new Value(typeSystem.listType(elementType), list);
-  }
-
-  /**
-   * Returns a value that wraps a list of values, perhaps with the same element
-   * type.
-   */
-  public static Value ofValueList(
-      TypeSystem typeSystem, List<Value> valueList) {
-    // Create a list value with the actual list type
-    Type elementType = commonElementType(valueList);
-    if (elementType != null) {
-      final ListType listType = typeSystem.listType(elementType);
-      final List<Object> list = transformEager(valueList, v -> v.value);
-      return Value.of(listType, list);
-    } else {
-      // If we can't determine a common element type, fall back to 'value'
-      elementType = typeSystem.lookup("value");
-      return Value.ofList(typeSystem, elementType, valueList);
-    }
-  }
-
-  /** Returns a value that wraps a bag (treated as list for now). */
-  public static Value ofBag(
-      TypeSystem typeSystem, Type elementType, List<?> list) {
-    return new Value(typeSystem.bagType(elementType), list);
+  /** Returns a variant that wraps a list with a given element type. */
+  public static Variant ofList(
+      TypeSystem typeSystem, Type elementType, List<Variant> list) {
+    return new Variant(typeSystem.listType(elementType), list);
   }
 
   /**
-   * Returns a value that wraps a bag of values, perhaps with the same element
-   * type.
-   */
-  public static Value ofValueBag(TypeSystem typeSystem, List<Value> valueList) {
-    // Create a bag value with the actual bag type
-    Type elementType = commonElementType(valueList);
-    if (elementType != null) {
-      final Type bagType = typeSystem.bagType(elementType);
-      final List<Object> list = transformEager(valueList, v -> v.value);
-      return Value.of(bagType, list);
-    } else {
-      // If we can't determine a common element type, fall back to 'value'
-      elementType = typeSystem.lookup("value");
-      return Value.ofBag(typeSystem, elementType, valueList);
-    }
-  }
-
-  /** Returns a value that wraps a vector (treated as list for now). */
-  public static Value ofVector(
-      TypeSystem typeSystem, Type elementType, List<?> list) {
-    // TODO: proper vector type when available
-    return new Value(typeSystem.vector(elementType), list);
-  }
-
-  /**
-   * Returns a value that wraps a vector of values, perhaps with the same
+   * Returns a variant that wraps a list of variants, perhaps with the same
    * element type.
    */
-  public static Value ofValueVector(
-      TypeSystem typeSystem, List<Value> valueList) {
-    // Create a vector value with the actual vector type
-    Type elementType = commonElementType(valueList);
+  public static Variant ofVariantList(
+      TypeSystem typeSystem, List<Variant> variantList) {
+    // Create a list value with the actual list type
+    Type elementType = commonElementType(variantList);
     if (elementType != null) {
-      final Type vectorType = typeSystem.vector(elementType);
-      final List<Object> list = transformEager(valueList, v -> v.value);
-      return Value.of(vectorType, list);
+      final ListType listType = typeSystem.listType(elementType);
+      final List<Object> list = transformEager(variantList, v -> v.value);
+      return Variant.of(listType, list);
     } else {
       // If we can't determine a common element type, fall back to 'value'
-      elementType = typeSystem.lookup("value");
-      return Value.ofVector(typeSystem, elementType, valueList);
+      elementType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+      return Variant.ofList(typeSystem, elementType, variantList);
     }
   }
 
-  /** Returns a value that wraps an option NONE. */
-  public static Value ofNone(TypeSystem typeSystem, Type elementType) {
-    return new Value(typeSystem.option(elementType), Codes.OPTION_NONE);
-  }
-
-  /** Returns a value that wraps an option SOME. */
-  public static Value ofSome(TypeSystem typeSystem, Value value) {
-    return new Value(typeSystem.option(value.type), optionSome(value.value));
+  /** Returns a variant that wraps a bag (treated as list for now). */
+  public static Variant ofBag(
+      TypeSystem typeSystem, Type elementType, List<?> list) {
+    return new Variant(typeSystem.bagType(elementType), list);
   }
 
   /**
-   * Returns a value that is a call to a constant (zero-argument constructor).
+   * Returns a variant that wraps a bag of variants, perhaps with the same
+   * element type.
+   */
+  public static Variant ofVariantBag(
+      TypeSystem typeSystem, List<Variant> variantList) {
+    // Create a bag value with the actual bag type
+    Type elementType = commonElementType(variantList);
+    if (elementType != null) {
+      final Type bagType = typeSystem.bagType(elementType);
+      final List<Object> list = transformEager(variantList, v -> v.value);
+      return Variant.of(bagType, list);
+    } else {
+      // If we can't determine a common element type, fall back to 'variant'
+      elementType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+      return Variant.ofBag(typeSystem, elementType, variantList);
+    }
+  }
+
+  /** Returns a variant that wraps a vector (treated as list for now). */
+  public static Variant ofVector(
+      TypeSystem typeSystem, Type elementType, List<?> list) {
+    // TODO: proper vector type when available
+    return new Variant(typeSystem.vector(elementType), list);
+  }
+
+  /**
+   * Returns a variant that wraps a vector of variants, perhaps with the same
+   * element type.
+   */
+  public static Variant ofVariantVector(
+      TypeSystem typeSystem, List<Variant> variantList) {
+    // Create a vector value with the actual vector type
+    Type elementType = commonElementType(variantList);
+    if (elementType != null) {
+      final Type vectorType = typeSystem.vector(elementType);
+      final List<Object> list = transformEager(variantList, v -> v.value);
+      return Variant.of(vectorType, list);
+    } else {
+      // If we can't determine a common element type, fall back to 'variant'
+      elementType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+      return Variant.ofVector(typeSystem, elementType, variantList);
+    }
+  }
+
+  /** Returns a variant that wraps an option NONE. */
+  public static Variant ofNone(TypeSystem typeSystem, Type elementType) {
+    return new Variant(typeSystem.option(elementType), Codes.OPTION_NONE);
+  }
+
+  /** Returns a variant that wraps an option SOME. */
+  public static Variant ofSome(TypeSystem typeSystem, Variant variant) {
+    return new Variant(
+        typeSystem.option(variant.type), optionSome(variant.value));
+  }
+
+  /**
+   * Returns a variant that is a call to a constant (zero-argument constructor).
    *
    * <p>For example, given the datatype declaration {@code datatype foo = BAR |
-   * BAZ of int}, {@code CONSTANT "BAR"} returns a Value with type {@code foo}
+   * BAZ of int}, {@code CONSTANT "BAR"} returns a Variant with type {@code foo}
    * and value {@code "BAR"}.
    */
-  public static Value ofConstant(TypeSystem typeSystem, String conName) {
+  public static Variant ofConstant(TypeSystem typeSystem, String conName) {
     TypeCon typeCon = typeSystem.lookupTyCon(conName);
     if (typeCon == null) {
       throw new IllegalArgumentException("Unknown constructor: " + conName);
     }
-    return new Value(typeCon.dataType, FlatLists.of(conName));
+    return new Variant(typeCon.dataType, FlatLists.of(conName));
   }
 
   /**
-   * Returns a value that is a call to a constructor.
+   * Returns a variant that is a call to a constructor.
    *
    * <p>For example, given the datatype declaration {@code datatype foo = BAR |
-   * BAZ of int}, {@code CONSTRUCT ("BAZ", INT 3)} returns a Value with type
+   * BAZ of int}, {@code CONSTRUCT ("BAZ", INT 3)} returns a Variant with type
    * {@code foo} and value {@code ("BAZ", 3)}.
    *
    * <p>For parameterized datatypes like {@code datatype 'a option = NONE | SOME
@@ -230,8 +232,8 @@ public class Value extends AbstractImmutableList<Object> {
    * instance, {@code CONSTRUCT ("SOME", INT 42)} unifies {@code 'a} with {@code
    * int}, yielding type {@code int option}.
    */
-  public static Value ofConstructor(
-      TypeSystem typeSystem, String conName, Value conValue) {
+  public static Variant ofConstructor(
+      TypeSystem typeSystem, String conName, Variant conVariant) {
     @Nullable TypeCon typeCon = typeSystem.lookupTyCon(conName);
     if (typeCon == null) {
       throw new IllegalArgumentException("Unknown constructor: " + conName);
@@ -243,13 +245,13 @@ public class Value extends AbstractImmutableList<Object> {
     // Unify the expected type with the actual value's type to determine
     // type variable substitutions.
     final Map<Integer, Type> substitution =
-        constructorArgType.unifyWith(conValue.type);
+        constructorArgType.unifyWith(conVariant.type);
 
     if (substitution == null) {
       throw new IllegalArgumentException(
           format(
               "Constructor %s expects argument of type %s but got %s",
-              conName, constructorArgType, conValue.type));
+              conName, constructorArgType, conVariant.type));
     }
 
     // Apply the substitution to the datatype to get the result type.
@@ -267,48 +269,52 @@ public class Value extends AbstractImmutableList<Object> {
         typeCon.dataType.substitute(typeSystem, typeArgsBuilder.build());
 
     // Unwrap the value before storing - consistent with optionSome behavior
-    return new Value(resultType, FlatLists.of(conName, conValue.value));
+    return new Variant(resultType, FlatLists.of(conName, conVariant.value));
   }
 
-  public static Value ofRecord(
-      TypeSystem typeSystem, PairList<String, Value> nameValues) {
-    final Type valueType = typeSystem.lookup(BuiltIn.Datatype.VALUE);
-    final ImmutablePairList<String, Value> sortedNameValues =
-        nameValues.withSortedKeys(Ordering.natural());
-    final SortedMap<String, Value> sortedNameValueMap =
-        sortedNameValues.asSortedMap();
-    if (nameValues.noneMatch((name, value) -> value.type == valueType)) {
+  public static Variant ofRecord(
+      TypeSystem typeSystem, PairList<String, Variant> nameVariants) {
+    final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
+    final ImmutablePairList<String, Variant> sortedNameVariants =
+        nameVariants.withSortedKeys(Ordering.natural());
+    final SortedMap<String, Variant> sortedNameVariantMap =
+        sortedNameVariants.asSortedMap();
+    if (nameVariants.noneMatch(
+        (name, variant) -> variant.type == variantType)) {
       // None of the values are variants. Create a record over the raw values.
       final SortedMap<String, Type> nameTypes =
-          Maps.transformValues(sortedNameValueMap, v -> v.type);
+          Maps.transformValues(sortedNameVariantMap, v -> v.type);
       final Type recordType = typeSystem.recordType(nameTypes);
       final List<Object> rawValues =
-          sortedNameValues.transformEager((name, value) -> value.value);
-      return new Value(recordType, rawValues);
+          sortedNameVariants.transformEager((name, variant) -> variant.value);
+      return new Variant(recordType, rawValues);
     } else {
-      // Create a record whose fields all have type 'value'.
+      // Create a record whose fields all have type 'variant'.
       final SortedMap<String, Type> nameTypes =
-          Maps.transformValues(sortedNameValueMap, v -> valueType);
+          Maps.transformValues(sortedNameVariantMap, v -> variantType);
       final Type recordType = typeSystem.recordType(nameTypes);
-      return new Value(recordType, sortedNameValues.rightList());
+      return new Variant(recordType, sortedNameVariants.rightList());
     }
   }
 
   public static boolean bindConsPat(
       BiConsumer<Core.NamedPat, Object> envRef,
-      Value value,
+      Variant variant,
       Core.ConPat consPat) {
-    ListType listType = (ListType) value.type;
+    ListType listType = (ListType) variant.type;
     @SuppressWarnings("unchecked")
-    final List<Object> consValue = (List<Object>) value.value;
+    final List<Object> consValue = (List<Object>) variant.value;
     if (consValue.isEmpty()) {
       return false;
     }
-    final Value head = of(listType.elementType, consValue.get(0));
-    final List<Value> tail =
+    final Variant head = of(listType.elementType, consValue.get(0));
+    final List<Variant> tail =
         transformEager(
             skip(consValue),
-            e -> e instanceof Value ? (Value) e : of(listType.elementType, e));
+            e ->
+                e instanceof Variant
+                    ? (Variant) e
+                    : of(listType.elementType, e));
     List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
     return Closure.bindRecurse(patArgs.get(0), head, envRef)
         && Closure.bindRecurse(patArgs.get(1), tail, envRef);
@@ -316,36 +322,36 @@ public class Value extends AbstractImmutableList<Object> {
 
   public static boolean bindConPat(
       BiConsumer<Core.NamedPat, Object> envRef,
-      Value value,
+      Variant variant,
       Core.ConPat conPat) {
-    final String constructorName = Values.getConstructorName(value);
+    final String constructorName = Variants.getConstructorName(variant);
     if (!constructorName.equals(conPat.tyCon)) {
       return false;
     }
-    // For list types, rewrap elements as Values if needed
-    // For record types, reconstruct (name, value) pairs
+    // For list types, rewrap elements as Variants if needed.
+    // For record types, reconstruct (name, value) pairs.
     Object innerValue;
-    if (value.type instanceof ListType) {
-      final ListType listType = (ListType) value.type;
-      final List<?> list = (List<?>) value.value;
-      // Check if elements are already Values
-      if (!list.isEmpty() && !(list.get(0) instanceof Value)) {
+    if (variant.type instanceof ListType) {
+      final ListType listType = (ListType) variant.type;
+      final List<?> list = (List<?>) variant.value;
+      // Check if elements are already Variants
+      if (!list.isEmpty() && !(list.get(0) instanceof Variant)) {
         // Elements are unwrapped, rewrap them
         innerValue =
             transformEager(
                 list,
                 e ->
-                    e instanceof Value
-                        ? (Value) e
+                    e instanceof Variant
+                        ? (Variant) e
                         : of(listType.elementType, e));
       } else {
-        innerValue = value.value;
+        innerValue = variant.value;
       }
-    } else if (value.type instanceof RecordType) {
-      final RecordType recordType = (RecordType) value.type;
-      final List<?> fieldValues = (List<?>) value.value;
-      // Reconstruct (name, value) pairs for pattern matching
-      // Pattern expects a list of [name, value] pairs
+    } else if (variant.type instanceof RecordType) {
+      final RecordType recordType = (RecordType) variant.type;
+      final List<?> fieldValues = (List<?>) variant.value;
+      // Reconstruct (name, variant) pairs for pattern matching.
+      // Pattern expects a list of [name, variant] pairs.
       final ImmutableList.Builder<List<Object>> pairsBuilder =
           ImmutableList.builder();
       int i = 0;
@@ -353,22 +359,22 @@ public class Value extends AbstractImmutableList<Object> {
         final String name = entry.getKey();
         final Type fieldType = entry.getValue();
         final Object rawValue = fieldValues.get(i++);
-        final Value fieldValue =
-            rawValue instanceof Value
-                ? (Value) rawValue
+        final Variant fieldValue =
+            rawValue instanceof Variant
+                ? (Variant) rawValue
                 : of(fieldType, rawValue);
         pairsBuilder.add(ImmutableList.of(name, fieldValue));
       }
       innerValue = pairsBuilder.build();
     } else {
-      innerValue = value.value;
+      innerValue = variant.value;
     }
     return Closure.bindRecurse(conPat.pat, innerValue, envRef);
   }
 
   /**
-   * Converts this Value to a list with tag and value, the same format used for
-   * other sum types in Morel.
+   * Converts this Variant to a list with tag and value, the same format used
+   * for other sum types in Morel.
    */
   private List<Object> toFlatList() {
     String tag = tag().constructor;
@@ -429,7 +435,6 @@ public class Value extends AbstractImmutableList<Object> {
         return tag().constructor;
       case 1:
         if (type != PrimitiveType.UNIT) {
-          //          return value;
           return this;
         }
         // fall through
@@ -452,34 +457,32 @@ public class Value extends AbstractImmutableList<Object> {
   @Override
   public boolean equals(Object obj) {
     return this == obj
-        || obj instanceof Value
+        || obj instanceof Variant
             // Logical equality: compare the actual values, not the type
-            // representation. This means refined and unrefined values are equal
-            // if
-            // they represent the same logical value. For now, delegate to value
-            // equality. In the future, we may need to normalize both sides
-            // (e.g.,
-            // unwrap collections) for true logical equality.
-            && logicallyEqual(this, (Value) obj);
+            // representation. This means refined and unrefined variants are
+            // equal if they represent the same logical value. For now, delegate
+            // to value equality. In the future, we may need to normalize both
+            // sides (e.g., unwrap collections) for true logical equality.
+            && logicallyEqual(this, (Variant) obj);
   }
 
   /**
-   * Checks logical equality between two values.
+   * Checks logical equality between two variants.
    *
    * <p>Refined and unrefined representations of the same logical value should
    * be equal. For example:
    *
    * <ul>
-   *   <li>{@code Value(ListType(INT), [1,2])} (refined)
-   *   <li>{@code Value(ListType(ValueType), [Value(INT,1), Value(INT,2)])}
-   *       (unrefined)
+   *   <li>{@code Variant(ListType(INT), [1,2])} (refined)
+   *   <li>{@code Variant(ListType(VariantType), [Variant(INT,1),
+   *       Variant(INT,2)])} (unrefined)
    * </ul>
    *
    * <p>These are logically equal even though they have different type and value
    * representations.
    */
-  private static boolean logicallyEqual(Value v1, Value v2) {
-    // For now, use structural equality on the wrapped values
+  private static boolean logicallyEqual(Variant v1, Variant v2) {
+    // For now, use structural equality on the wrapped values.
     // TODO: Implement proper logical equality that handles refined vs unrefined
     return Objects.equals(v1.value, v2.value);
   }
@@ -491,47 +494,46 @@ public class Value extends AbstractImmutableList<Object> {
 
   @Override
   public String toString() {
-    return "Value(" + type + ", " + value + ")";
+    return "Variant(" + type + ", " + value + ")";
   }
 
-  /** Returns the constructor tag for this value. */
+  /** Returns the constructor tag for this variant. */
   private BuiltIn.Constructor tag() {
     switch (type.op()) {
       case ID:
         switch ((PrimitiveType) type) {
           case UNIT:
-            return BuiltIn.Constructor.VALUE_UNIT;
+            return BuiltIn.Constructor.VARIANT_UNIT;
           case BOOL:
-            return BuiltIn.Constructor.VALUE_BOOL;
+            return BuiltIn.Constructor.VARIANT_BOOL;
           case INT:
-            return BuiltIn.Constructor.VALUE_INT;
+            return BuiltIn.Constructor.VARIANT_INT;
           case REAL:
-            return BuiltIn.Constructor.VALUE_REAL;
+            return BuiltIn.Constructor.VARIANT_REAL;
           case CHAR:
-            return BuiltIn.Constructor.VALUE_CHAR;
+            return BuiltIn.Constructor.VARIANT_CHAR;
           case STRING:
-            return BuiltIn.Constructor.VALUE_STRING;
+            return BuiltIn.Constructor.VARIANT_STRING;
           default:
             throw new IllegalArgumentException(
                 "No constructor for primitive type: " + type);
         }
 
       case LIST:
-        return BuiltIn.Constructor.VALUE_LIST;
+        return BuiltIn.Constructor.VARIANT_LIST;
 
       case RECORD_TYPE:
       case TUPLE_TYPE:
-        return BuiltIn.Constructor.VALUE_RECORD;
+        return BuiltIn.Constructor.VARIANT_RECORD;
 
       case DATA_TYPE:
         final DataType dataType = (DataType) type;
         if (dataType.name.equals("option")) {
           return value == Codes.OPTION_NONE
-              ? BuiltIn.Constructor.VALUE_NONE
-              : BuiltIn.Constructor.VALUE_SOME;
+              ? BuiltIn.Constructor.VARIANT_NONE
+              : BuiltIn.Constructor.VARIANT_SOME;
         }
-        // TODO: BuiltIn.Constructor.VALUE_CON
-        return BuiltIn.Constructor.VALUE_CONSTRUCT;
+        return BuiltIn.Constructor.VARIANT_CONSTRUCT;
 
       default:
         throw new IllegalArgumentException(
@@ -539,7 +541,7 @@ public class Value extends AbstractImmutableList<Object> {
     }
   }
 
-  private static @Nullable Type commonElementType(List<Value> list) {
+  private static @Nullable Type commonElementType(List<Variant> list) {
     if (list.isEmpty()) {
       return null;
     }
@@ -554,12 +556,12 @@ public class Value extends AbstractImmutableList<Object> {
   }
 
   /**
-   * Converts a Value to its string representation.
+   * Converts a Variant to its string representation.
    *
    * <p>Handles both refined (specific types like {@code int list}) and
-   * unrefined (general types like {@code value list}) representations.
+   * unrefined (general types like {@code variant list}) representations.
    *
-   * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PRINT
+   * @see net.hydromatic.morel.compile.BuiltIn#VARIANT_PRINT
    */
   public String print() {
     // Handle primitive types
@@ -586,7 +588,7 @@ public class Value extends AbstractImmutableList<Object> {
       }
     }
 
-    // For more complex values, delegate to append. A single StringBuilder
+    // For more complex variants, delegate to append. A single StringBuilder
     // avoids excessive string concatenation.
     StringBuilder buf = new StringBuilder();
     append(buf);
@@ -594,7 +596,7 @@ public class Value extends AbstractImmutableList<Object> {
   }
 
   /**
-   * Appends the string representation of this Value to a StringBuilder.
+   * Appends the string representation of this Variant to a StringBuilder.
    *
    * @see #print()
    */
@@ -647,30 +649,30 @@ public class Value extends AbstractImmutableList<Object> {
 
         case "option":
           if (value == Codes.OPTION_NONE) {
-            return buf.append("VALUE_NONE");
-          } else if (value instanceof Value) {
-            buf.append("VALUE_SOME ");
-            return ((Value) value).append(buf);
+            return buf.append("VARIANT_NONE");
+          } else if (value instanceof Variant) {
+            buf.append("VARIANT_SOME ");
+            return ((Variant) value).append(buf);
           } else if (value instanceof List) {
             // Refined option stored as ["SOME", innerValue]
             final List<?> optionList = (List<?>) value;
             if (optionList.size() == 2 && "SOME".equals(optionList.get(0))) {
               final Object innerVal = optionList.get(1);
               final Type innerType = dataType.arguments.get(0);
-              final Value innerValue =
-                  innerVal instanceof Value
-                      ? (Value) innerVal
-                      : Value.of(innerType, innerVal);
-              buf.append("VALUE_SOME ");
-              return innerValue.append(buf);
+              final Variant innerVariant =
+                  innerVal instanceof Variant
+                      ? (Variant) innerVal
+                      : Variant.of(innerType, innerVal);
+              buf.append("VARIANT_SOME ");
+              return innerVariant.append(buf);
             }
             throw new IllegalArgumentException(
                 "Invalid option value: " + optionList);
           } else {
             // Refined option: single value (SOME case)
             final Type innerType = dataType.arguments.get(0);
-            buf.append("VALUE_SOME ");
-            return Value.of(innerType, value).append(buf);
+            buf.append("VARIANT_SOME ");
+            return Variant.of(innerType, value).append(buf);
           }
       }
 
@@ -687,19 +689,19 @@ public class Value extends AbstractImmutableList<Object> {
             final Object conArg = conList.get(1);
             // conArg should be unwrapped due to ofConstructor change
             // Need to determine its type - use datatype's argument type
-            final Value conArgValue;
-            if (conArg instanceof Value) {
-              conArgValue = (Value) conArg;
+            final Variant conArgVariant;
+            if (conArg instanceof Variant) {
+              conArgVariant = (Variant) conArg;
             } else {
               // Unwrapped value - wrap it with the datatype's argument type
               final Type argType =
                   dataType.arguments.isEmpty()
                       ? PrimitiveType.UNIT
                       : dataType.arguments.get(0);
-              conArgValue = Value.of(argType, conArg);
+              conArgVariant = Variant.of(argType, conArg);
             }
             buf.append("CONSTRUCT (\"").append(conName).append("\", ");
-            conArgValue.append(buf);
+            conArgVariant.append(buf);
             return buf.append(')');
           }
         }
@@ -716,38 +718,11 @@ public class Value extends AbstractImmutableList<Object> {
       return appendRecordPairs(buf, "RECORD [", recordType, recordValues, "]");
     }
 
-    throw new IllegalArgumentException("Cannot print value of type: " + type);
-  }
-
-  /** Helper for print: escapes a character for printing. */
-  private static String charEscape(Character ch) {
-    switch (ch) {
-      case '\n':
-        return "\\n";
-      case '\t':
-        return "\\t";
-      case '\r':
-        return "\\r";
-      case '\\':
-        return "\\\\";
-      case '"':
-        return "\\\"";
-      default:
-        return String.valueOf(ch);
-    }
-  }
-
-  /** Helper for print: escapes a string for printing. */
-  private static String stringEscape(String str) {
-    final StringBuilder buf = new StringBuilder();
-    for (int i = 0; i < str.length(); i++) {
-      buf.append(charEscape(str.charAt(i)));
-    }
-    return buf.toString();
+    throw new IllegalArgumentException("Cannot print variant of type: " + type);
   }
 
   /**
-   * Helper for print: prints a list of Value instances (unrefined) or raw
+   * Helper for print: prints a list of Variant instances (unrefined) or raw
    * values (refined).
    */
   @SuppressWarnings({"SameParameterValue", "rawtypes", "unchecked"})
@@ -759,13 +734,13 @@ public class Value extends AbstractImmutableList<Object> {
       String suffix) {
     buf.append(prefix);
     final List list = (List) val;
-    if (!list.isEmpty() && list.get(0) instanceof Value) {
-      final List<Value> values = (List<Value>) list;
-      for (int i = 0; i < values.size(); i++) {
+    if (!list.isEmpty() && list.get(0) instanceof Variant) {
+      final List<Variant> variants = (List<Variant>) list;
+      for (int i = 0; i < variants.size(); i++) {
         if (i > 0) {
           buf.append(", ");
         }
-        values.get(i).append(buf);
+        variants.get(i).append(buf);
       }
     } else {
       final List<Object> values = (List<Object>) list;
@@ -773,8 +748,8 @@ public class Value extends AbstractImmutableList<Object> {
         if (i > 0) {
           buf.append(", ");
         }
-        // Wrap each raw value in a Value instance for printing.
-        Value.of(elementType, values.get(i)).append(buf);
+        // Wrap each raw value in a Variant instance for printing.
+        Variant.of(elementType, values.get(i)).append(buf);
       }
     }
     buf.append(suffix);
@@ -801,7 +776,7 @@ public class Value extends AbstractImmutableList<Object> {
       final Object fieldValue = values.get(i);
 
       buf.append("(\"").append(fieldName).append("\", ");
-      Value.of(fieldType, fieldValue).append(buf);
+      Variant.of(fieldType, fieldValue).append(buf);
       buf.append(")");
       i++;
     }
@@ -810,4 +785,4 @@ public class Value extends AbstractImmutableList<Object> {
   }
 }
 
-// End Value.java
+// End Variant.java

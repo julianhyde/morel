@@ -22,49 +22,49 @@
 *)
 
 INT 3;
-> val it = 3 : int value
+> val it = 3 : int variant
 
 LIST [INT 1, INT 2];
-> val it = [1,2] : int list value
+> val it = [1,2] : int list variant
 
-VALUE_SOME (INT 5);
-> val it = SOME 5 : int option value
+VARIANT_SOME (INT 5);
+> val it = SOME 5 : int option variant
 
 CONSTANT "LESS";
-> val it = LESS : order value
+> val it = LESS : order variant
 
 RECORD [("x", INT 1), ("y", BOOL true)];
-> val it = {x=1,y=true} : {x:int, y:bool} value
+> val it = {x=1,y=true} : {x:int, y:bool} variant
 
 RECORD [("name", STRING "Alice"), ("age", INT 30)];
-> val it = {age=30,name="Alice"} : {age:int, name:string} value
+> val it = {age=30,name="Alice"} : {age:int, name:string} variant
 
 fun getInt v =
   case v of
     INT i => SOME i
   | _ => NONE;
-> val getInt = fn : value -> int option
+> val getInt = fn : variant -> int option
 
 getInt (INT 42);
 > val it = SOME 42 : int option
 
 CONSTRUCT ("INL", INT 1);
-> val it = INL 1 : (int,'b) either value
+> val it = INL 1 : (int,'b) either variant
 
 CONSTRUCT ("SOME", INT 42);
-> val it = SOME 42 : int option value
+> val it = SOME 42 : int option variant
 
 
 fun testRoundTrip v =
   let
-    val s = Value.print v
-    val v2 = Value.parse s
+    val s = Variant.print v
+    val v2 = Variant.parse s
   in
     v = v2
   end;
-> val testRoundTrip = fn : value -> bool
+> val testRoundTrip = fn : variant -> bool
 
-testRoundTrip (VALUE_SOME (INT 42));
+testRoundTrip (VARIANT_SOME (INT 42));
 > val it = true : bool
 
 (*

@@ -3455,11 +3455,11 @@ public abstract class Codes {
         }
       };
 
-  /** Value of {@link BuiltIn.Constructor#VALUE_UNIT}. */
+  /** Value of {@link BuiltIn.Constructor#VARIANT_UNIT}. */
   public static final List VALUE_UNIT =
-      Value.of(PrimitiveType.UNIT, Unit.INSTANCE);
+      Variant.of(PrimitiveType.UNIT, Unit.INSTANCE);
 
-  /** @see BuiltIn#VALUE_PARSE */
+  /** @see BuiltIn#VARIANT_PARSE */
   private static final Typed VALUE_PARSE = new ValueParser(null);
 
   /**
@@ -3468,12 +3468,12 @@ public abstract class Codes {
    * <p>It implements {@link Typed} only because the implementation needs a
    * {@link TypeSystem} value.
    */
-  static class ValueParser extends BaseApplicable1<Value, String>
+  static class ValueParser extends BaseApplicable1<Variant, String>
       implements Typed {
     private final @Nullable TypeSystem typeSystem;
 
     ValueParser(@Nullable TypeSystem typeSystem) {
-      super(BuiltIn.VALUE_PARSE);
+      super(BuiltIn.VARIANT_PARSE);
       this.typeSystem = typeSystem;
     }
 
@@ -3483,16 +3483,16 @@ public abstract class Codes {
     }
 
     @Override
-    public Value apply(String s) {
-      return Values.parse(s, requireNonNull(typeSystem));
+    public Variant apply(String s) {
+      return Variants.parse(s, requireNonNull(typeSystem));
     }
   }
 
-  /** @see BuiltIn#VALUE_PRINT */
-  private static final Applicable1 VALUE_PRINT =
-      new BaseApplicable1<String, Value>(BuiltIn.VALUE_PRINT) {
+  /** @see BuiltIn#VARIANT_PRINT */
+  private static final Applicable1 VARIANT_PRINT =
+      new BaseApplicable1<String, Variant>(BuiltIn.VARIANT_PRINT) {
         @Override
-        public String apply(Value arg) {
+        public String apply(Variant arg) {
           return arg.print();
         }
       };
@@ -4002,10 +4002,9 @@ public abstract class Codes {
   public static Applicable tyCon(Type dataType, String name) {
     requireNonNull(dataType);
     requireNonNull(name);
-    // Special handling for VALUE datatype - create Value instances
+    // Special handling for "variant" datatype: create Variant instances.
     if (dataType instanceof DataType
-        && ((DataType) dataType).name.equals("value")) {
-      // VALUE constructor that creates Value instances
+        && ((DataType) dataType).name.equals("variant")) {
       return new ValueTyCon(name);
     }
     // Standard datatype constructor - return List
@@ -4023,9 +4022,12 @@ public abstract class Codes {
   }
 
   /**
-   * Type constructor for VALUE datatype that creates Value instances. Only
-   * implements Applicable (not Applicable1) to ensure apply(EvalEnv, Object) is
-   * always called, providing access to TypeSystem via Session.
+   * Type constructor for {@code variant} datatype that creates {@link Variant}
+   * instances.
+   *
+   * <p>To ensure {@code apply(EvalEnv, Object)} is always called, only
+   * implements {@link Applicable} (not {@link Applicable1}). This provides
+   * access to {@link TypeSystem} via {@link Session}.
    */
   static class ValueTyCon extends ApplicableImpl {
     private final String tyConName;
@@ -4046,12 +4048,12 @@ public abstract class Codes {
       final TypeSystem typeSystem = session.typeSystem;
       if (typeSystem == null) {
         throw new IllegalStateException(
-            "VALUE constructor "
+            "Variant constructor "
                 + tyConName
                 + " requires TypeSystem but session.typeSystem is null");
       }
       // Create Value instance based on constructor name
-      return Values.fromConstructor(tyConName, arg, typeSystem);
+      return Variants.fromConstructor(tyConName, arg, typeSystem);
     }
   }
 
@@ -4422,8 +4424,8 @@ public abstract class Codes {
           .put(BuiltIn.SYS_SHOW, SYS_SHOW)
           .put(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL)
           .put(BuiltIn.SYS_UNSET, SYS_UNSET)
-          .put(BuiltIn.VALUE_PARSE, VALUE_PARSE)
-          .put(BuiltIn.VALUE_PRINT, VALUE_PRINT)
+          .put(BuiltIn.VARIANT_PARSE, VALUE_PARSE)
+          .put(BuiltIn.VARIANT_PRINT, VARIANT_PRINT)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_APP, VECTOR_APP)
           .put(BuiltIn.VECTOR_APPI, VECTOR_APPI)

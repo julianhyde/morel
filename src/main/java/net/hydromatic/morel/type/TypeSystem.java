@@ -47,7 +47,7 @@ import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Unit;
-import net.hydromatic.morel.eval.Values;
+import net.hydromatic.morel.eval.Variants;
 import net.hydromatic.morel.type.Type.Key;
 import net.hydromatic.morel.util.ComparableSingletonList;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -82,9 +82,9 @@ public class TypeSystem {
     final Type type = dataType.typeConstructors(this).get(tyConName);
     if (type == DummyType.INSTANCE) {
       Object o = ComparableSingletonList.of(tyConName);
-      if (dataType.name.equals(BuiltIn.Datatype.VALUE.mlName())) {
+      if (dataType.name.equals(BuiltIn.Datatype.VARIANT.mlName())) {
         // Nullary VALUE constructors: create proper Value instance
-        o = Values.fromConstructor(tyConName, Unit.INSTANCE, this);
+        o = Variants.fromConstructor(tyConName, Unit.INSTANCE, this);
       }
       return Binding.of(core.idPat(dataType, tyConName, 0), Codes.constant(o));
     } else {

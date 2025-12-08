@@ -3344,20 +3344,20 @@ public enum BuiltIn {
   SYS_UNSET("Sys", "unset", "unset", ts -> ts.fnType(STRING, UNIT)),
 
   /**
-   * Function "Value.parse", of type "string &rarr; value".
+   * Function "Variant.parse", of type "string &rarr; variant".
    *
-   * <p>"parse s" parses a string representation into a value.
+   * <p>"parse s" parses a string representation into a variant.
    */
-  VALUE_PARSE(
-      "Value", "parse", ts -> ts.fnType(STRING, ts.lookup(Datatype.VALUE))),
+  VARIANT_PARSE(
+      "Variant", "parse", ts -> ts.fnType(STRING, ts.lookup(Datatype.VARIANT))),
 
   /**
-   * Function "Value.print", of type "value &rarr; string".
+   * Function "Variant.print", of type "variant &rarr; string".
    *
-   * <p>"print v" converts a value to its compact string representation.
+   * <p>"print v" converts a variant to its compact string representation.
    */
-  VALUE_PRINT(
-      "Value", "print", ts -> ts.fnType(ts.lookup(Datatype.VALUE), STRING)),
+  VARIANT_PRINT(
+      "Variant", "print", ts -> ts.fnType(ts.lookup(Datatype.VARIANT), STRING)),
 
   /**
    * Function "Vector.all" of type "(&alpha; &rarr; bool) &rarr; &alpha; vector
@@ -4154,42 +4154,42 @@ public enum BuiltIn {
      * Universal value representation for embedded language interoperability.
      *
      * <pre>{@code
-     * datatype value =
+     * datatype variant =
      *     UNIT
      *   | BOOL of bool
      *   | INT of int
      *   | REAL of real
      *   | CHAR of char
      *   | STRING of string
-     *   | LIST of value list
-     *   | BAG of value list
-     *   | VECTOR of value list
-     *   | VALUE_NONE
-     *   | VALUE_SOME of value
-     *   | RECORD of (string * value) list
+     *   | LIST of variant list
+     *   | BAG of variant list
+     *   | VECTOR of variant list
+     *   | VARIANT_NONE
+     *   | VARIANT_SOME of variant
+     *   | RECORD of (string * variant) list
      *   | CONSTANT of string
-     *   | CONSTRUCT of string * value
+     *   | CONSTRUCT of string * variant
      * }</pre>
      */
-    VALUE(
-        "value",
+    VARIANT(
+        "variant",
         false,
         0,
         h ->
-            h.tyCon(Constructor.VALUE_UNIT)
-                .tyCon(Constructor.VALUE_BOOL)
-                .tyCon(Constructor.VALUE_INT)
-                .tyCon(Constructor.VALUE_REAL)
-                .tyCon(Constructor.VALUE_CHAR)
-                .tyCon(Constructor.VALUE_STRING)
-                .tyCon(Constructor.VALUE_LIST)
-                .tyCon(Constructor.VALUE_BAG)
-                .tyCon(Constructor.VALUE_VECTOR)
-                .tyCon(Constructor.VALUE_NONE)
-                .tyCon(Constructor.VALUE_SOME)
-                .tyCon(Constructor.VALUE_RECORD)
-                .tyCon(Constructor.VALUE_CONSTRUCT)
-                .tyCon(Constructor.VALUE_CONSTANT));
+            h.tyCon(Constructor.VARIANT_UNIT)
+                .tyCon(Constructor.VARIANT_BOOL)
+                .tyCon(Constructor.VARIANT_INT)
+                .tyCon(Constructor.VARIANT_REAL)
+                .tyCon(Constructor.VARIANT_CHAR)
+                .tyCon(Constructor.VARIANT_STRING)
+                .tyCon(Constructor.VARIANT_LIST)
+                .tyCon(Constructor.VARIANT_BAG)
+                .tyCon(Constructor.VARIANT_VECTOR)
+                .tyCon(Constructor.VARIANT_NONE)
+                .tyCon(Constructor.VARIANT_SOME)
+                .tyCon(Constructor.VARIANT_RECORD)
+                .tyCon(Constructor.VARIANT_CONSTRUCT)
+                .tyCon(Constructor.VARIANT_CONSTANT));
 
     private final String mlName;
     private final boolean internal;
@@ -4265,29 +4265,31 @@ public enum BuiltIn {
     ORDER_EQUAL(Datatype.ORDER, "EQUAL"),
     ORDER_GREATER(Datatype.ORDER, "GREATER"),
     ORDER_LESS(Datatype.ORDER, "LESS"),
-    VALUE_BAG(Datatype.VALUE, "BAG", h -> Keys.list(Keys.name("value"))),
-    VALUE_BOOL(Datatype.VALUE, "BOOL", h -> BOOL.key()),
-    VALUE_CHAR(Datatype.VALUE, "CHAR", h -> CHAR.key()),
-    VALUE_CONSTANT(Datatype.VALUE, "CONSTANT", h -> STRING.key()),
-    VALUE_CONSTRUCT(
-        Datatype.VALUE,
+    VARIANT_BAG(Datatype.VARIANT, "BAG", h -> Keys.list(Keys.name("variant"))),
+    VARIANT_BOOL(Datatype.VARIANT, "BOOL", h -> BOOL.key()),
+    VARIANT_CHAR(Datatype.VARIANT, "CHAR", h -> CHAR.key()),
+    VARIANT_CONSTANT(Datatype.VARIANT, "CONSTANT", h -> STRING.key()),
+    VARIANT_CONSTRUCT(
+        Datatype.VARIANT,
         "CONSTRUCT",
-        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("value")))),
-    VALUE_INT(Datatype.VALUE, "INT", h -> INT.key()),
-    VALUE_LIST(Datatype.VALUE, "LIST", h -> Keys.list(Keys.name("value"))),
-    VALUE_NONE(Datatype.VALUE, "VALUE_NONE"),
-    VALUE_REAL(Datatype.VALUE, "REAL", h -> REAL.key()),
-    VALUE_RECORD(
-        Datatype.VALUE,
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("variant")))),
+    VARIANT_INT(Datatype.VARIANT, "INT", h -> INT.key()),
+    VARIANT_LIST(
+        Datatype.VARIANT, "LIST", h -> Keys.list(Keys.name("variant"))),
+    VARIANT_NONE(Datatype.VARIANT, "VARIANT_NONE"),
+    VARIANT_REAL(Datatype.VARIANT, "REAL", h -> REAL.key()),
+    VARIANT_RECORD(
+        Datatype.VARIANT,
         "RECORD",
         h ->
             Keys.list(
                 Keys.tuple(
-                    ImmutableList.of(STRING.key(), Keys.name("value"))))),
-    VALUE_SOME(Datatype.VALUE, "VALUE_SOME", h -> Keys.name("value")),
-    VALUE_STRING(Datatype.VALUE, "STRING", h -> STRING.key()),
-    VALUE_UNIT(Datatype.VALUE, "UNIT"),
-    VALUE_VECTOR(Datatype.VALUE, "VECTOR", h -> Keys.list(Keys.name("value")));
+                    ImmutableList.of(STRING.key(), Keys.name("variant"))))),
+    VARIANT_SOME(Datatype.VARIANT, "VARIANT_SOME", h -> Keys.name("variant")),
+    VARIANT_STRING(Datatype.VARIANT, "STRING", h -> STRING.key()),
+    VARIANT_UNIT(Datatype.VARIANT, "UNIT"),
+    VARIANT_VECTOR(
+        Datatype.VARIANT, "VECTOR", h -> Keys.list(Keys.name("variant")));
 
     public final Datatype datatype;
     public final String constructor;

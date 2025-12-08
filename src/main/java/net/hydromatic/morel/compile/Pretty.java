@@ -33,7 +33,7 @@ import java.util.List;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
-import net.hydromatic.morel.eval.Value;
+import net.hydromatic.morel.eval.Variant;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.AliasType;
@@ -95,8 +95,8 @@ class Pretty {
       Object value,
       int leftPrec,
       int rightPrec) {
-    if (value instanceof Value) {
-      Value v = (Value) value;
+    if (value instanceof Variant) {
+      Variant v = (Variant) value;
       return pretty1(
           buf, indent, lineEnd, depth, v.type, v.value, leftPrec, rightPrec);
     }
@@ -159,9 +159,9 @@ class Pretty {
       }
       buf.append(' ');
       final TypeVal typeVal;
-      if (typedVal.o instanceof Value) {
-        final Type type1 = ((Value) typedVal.o).type;
-        typeVal = new TypeVal(": ", typeSystem.unqualified(type1), " value");
+      if (typedVal.o instanceof Variant) {
+        final Type type1 = ((Variant) typedVal.o).type;
+        typeVal = new TypeVal(": ", typeSystem.unqualified(type1), " variant");
       } else {
         typeVal = new TypeVal(": ", typeSystem.unqualified(typedVal.type), "");
       }
@@ -435,8 +435,8 @@ class Pretty {
     requireNonNull(typeConArgType);
     if (list.size() == 2) {
       Object arg = list.get(1);
-      if (arg instanceof Value) {
-        arg = ((Value) arg).value;
+      if (arg instanceof Variant) {
+        arg = ((Variant) arg).value;
       }
       buf.append(' ');
       final boolean needParentheses =
