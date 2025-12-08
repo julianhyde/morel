@@ -3352,18 +3352,6 @@ public enum BuiltIn {
       "Value", "parse", ts -> ts.fnType(STRING, ts.lookup(Datatype.VALUE))),
 
   /**
-   * Function "Value.prettyPrint", of type "value &rarr; string".
-   *
-   * <p>"prettyPrint v" converts a value to a pretty-printed string
-   * representation with indentation and line breaks for better readability of
-   * nested structures.
-   */
-  VALUE_PRETTY_PRINT(
-      "Value",
-      "prettyPrint",
-      ts -> ts.fnType(ts.lookup(Datatype.VALUE), STRING)),
-
-  /**
    * Function "Value.print", of type "value &rarr; string".
    *
    * <p>"print v" converts a value to its compact string representation.

@@ -424,21 +424,6 @@ public class Values {
   }
 
   /**
-   * Converts a value to its pretty-printed string representation.
-   *
-   * <p>TODO: Implement proper pretty-printing using Pretty class when it
-   * becomes accessible. For now, delegates to print for consistent output.
-   *
-   * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PRETTY_PRINT
-   */
-  public static String prettyPrint(Value value, Session session) {
-    // For now, delegate to print
-    // Future enhancement: use Pretty class for formatted output with
-    // indentation and line breaks based on session settings
-    return print(value);
-  }
-
-  /**
    * Parses a string representation into a value.
    *
    * @see net.hydromatic.morel.compile.BuiltIn#VALUE_PARSE

@@ -364,12 +364,6 @@ Value.print deeplyNested;
 >   "LIST [LIST [RECORD [(\"active\", BOOL true), (\"name\", STRING \"Alice\"), (\"scores\", LIST [INT 95, INT 87, INT 92])], RECORD [(\"active\", BOOL false), (\"name\", STRING \"Bob\"), (\"scores\", LIST [INT 88, INT 90])]], LIST [RECORD [(\"active\", BOOL true), (\"name\", STRING \"Charlie\"), (\"scores\", LIST [INT 76, INT 82, INT 79, INT 85])]]]"
 >   : string
 
-(*) Test prettyPrint on deeply nested structure
-Value.prettyPrint deeplyNested;
-> val it =
->   "LIST [LIST [RECORD [(\"active\", BOOL true), (\"name\", STRING \"Alice\"), (\"scores\", LIST [INT 95, INT 87, INT 92])], RECORD [(\"active\", BOOL false), (\"name\", STRING \"Bob\"), (\"scores\", LIST [INT 88, INT 90])]], LIST [RECORD [(\"active\", BOOL true), (\"name\", STRING \"Charlie\"), (\"scores\", LIST [INT 76, INT 82, INT 79, INT 85])]]]"
->   : string
-
 (*) Parse the printed representation and verify it matches
 Value.parse (Value.print deeplyNested) = deeplyNested;
 > val it = true : bool

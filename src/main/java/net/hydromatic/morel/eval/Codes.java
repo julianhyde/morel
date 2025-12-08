@@ -3499,17 +3499,6 @@ public abstract class Codes {
     }
   }
 
-  /** @see BuiltIn#VALUE_PRETTY_PRINT */
-  private static final Applicable VALUE_PRETTY_PRINT =
-      new ApplicableImpl(BuiltIn.VALUE_PRETTY_PRINT) {
-        @Override
-        public String apply(EvalEnv env, Object arg) {
-          final Value value = (Value) arg;
-          final Session session = env.getSession();
-          return Values.prettyPrint(value, session);
-        }
-      };
-
   /** @see BuiltIn#VALUE_PRINT */
   private static final Applicable1 VALUE_PRINT = new ValuePrinter(null);
 
@@ -4462,7 +4451,6 @@ public abstract class Codes {
           .put(BuiltIn.SYS_UNSET, SYS_UNSET)
           .put(BuiltIn.VALUE_PARSE, VALUE_PARSE)
           .put(BuiltIn.VALUE_PRINT, VALUE_PRINT)
-          .put(BuiltIn.VALUE_PRETTY_PRINT, VALUE_PRETTY_PRINT)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_APP, VECTOR_APP)
           .put(BuiltIn.VECTOR_APPI, VECTOR_APPI)
