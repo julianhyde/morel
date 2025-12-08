@@ -70,7 +70,6 @@ sig
 
   val parse : string -> value
   val print : value -> string
-  val prettyPrint : value -> string
 end
 
 structure Value :> VALUE =
@@ -96,10 +95,6 @@ struct
       | DATATYPE (name, UNIT) => name
       | DATATYPE (name, v) => name ^ " " ^ print v
 
-  fun prettyPrint v =
-    (* Implemented in Java using Pretty.pretty() logic *)
-    raise Fail "prettyPrint implemented in Java"
-
   fun parse s = ... (* TODO: implement parser *)
 end
 ```
@@ -117,10 +112,9 @@ Create a Java class to represent the `value` datatype in the type system, simila
 Create Java classes representing value instances at runtime:
 - `ValueCode` - Code implementation for value operations
 - `ValuePrinter` - Implementation of the `print` function (compact format)
-- `ValuePrettyPrinter` - Implementation of the `prettyPrint` function using the existing `Pretty` class from `src/main/java/net/hydromatic/morel/compile/Pretty.java`
 - `ValueParser` - Implementation of the `parse` function
 
-**Note**: The `prettyPrint` function should leverage the existing `Pretty` class which already handles:
+**Note**: Normal value display uses the existing `Pretty` class which already handles:
 - Line width management and backtracking
 - Indentation (using spaces)
 - Depth control (`printDepth`, `printLength`, `stringDepth`)
@@ -135,7 +129,7 @@ Add entries to the `BuiltIn` enum for:
 - The `value` datatype and its constructors
 - The `VALUE` signature
 - The `Value` structure
-- The `parse`, `print`, and `prettyPrint` functions
+- The `parse` and `print` functions
 
 ### 5. Add Function Definitions to TOML
 
@@ -159,16 +153,6 @@ type = "value → string"
 prototype = "print v"
 description = """
 converts a value to its compact string representation.
-"""
-
-[[functions]]
-structure = "Value"
-name = "prettyPrint"
-type = "value → string"
-prototype = "prettyPrint v"
-description = """
-converts a value to a pretty-printed string representation with
-indentation and line breaks for better readability of nested structures.
 """
 ```
 
@@ -240,11 +224,9 @@ Once implemented, embedded languages (like Soufflé Datalog) can:
 
 - [ ] All value types can be constructed
 - [ ] `print` function correctly stringifies all value types in compact form
-- [ ] `prettyPrint` function correctly formats all value types with proper indentation
 - [ ] `parse` function correctly parses all stringified values
 - [ ] Round-trip property holds: `parse (print v) = v` for all values
-- [ ] Pretty-printed output is human-readable for complex nested structures
-- [ ] Tests pass for all value types (including pretty print formatting)
+- [ ] Tests pass for all value types
 - [ ] Documentation is complete
 - [ ] Integration with embedded languages is possible
 
@@ -252,15 +234,12 @@ Once implemented, embedded languages (like Soufflé Datalog) can:
 
 1. Standard ML definition and Java type representation: ~2-3 hours
 2. Java runtime support (print function): ~3-4 hours
-3. Java runtime support (prettyPrint function using Pretty.java): ~1-2 hours
 4. Parser implementation: ~8-12 hours (most complex)
 5. Built-in registration and TOML entries: ~1-2 hours
 6. Comprehensive testing: ~4-6 hours
 7. Documentation: ~2-3 hours
 
-Total: ~21-32 hours of development time
-
-**Note**: PrettyPrint implementation is simpler since it leverages existing `Pretty` class.
+Total: ~18-28 hours of development time
 
 ## Phase 2: Type + Object Representation with Refinement
 
@@ -386,13 +365,12 @@ refine (LIST [])
 **Completed:**
 1. ✅ Created `Value.java` class with Type and Object fields
 2. ✅ Implemented logical equality in Value.equals()
-3. ✅ Created `Values.fromList()` converter (partial - needs completion for RECORD, CONST, CON)
+3. ✅ Created `Values.fromConstructor()` converter (partial - needs completion for RECORD, CONSTANT, CONSTRUCT)
 4. ✅ Updated `Values.parse()` signature to return Value
-5. ✅ Parser creates TypeSystem and uses fromList
+5. ✅ Parser creates TypeSystem and uses fromConstructor
 6. ✅ Implemented `Values.print(Value)` with support for refined and unrefined values
-7. ✅ Updated `Values.prettyPrint(Value, Session)` (delegates to print)
-8. ✅ Updated Codes applicables: VALUE_PARSE, VALUE_PRINT, VALUE_PRETTY_PRINT
-9. ✅ Fixed option type detection (DataType instead of Type.Op)
+7. ✅ Updated Codes applicables: VALUE_PARSE, VALUE_PRINT
+8. ✅ Fixed option type detection (DataType instead of Type.Op)
 
 **Remaining Work:**
 
@@ -410,10 +388,10 @@ refine (LIST [])
 
 #### Medium Priority (Required for Full Functionality)
 
-2. **Complete Values.fromList() for missing types**
+2. **Complete Values.fromConstructor() for missing types**
    - RECORD: Construct RecordType and record value
-   - CONST: Lookup datatype constructor
-   - CON: Lookup datatype constructor with value
+   - CONSTANT: Lookup datatype constructor
+   - CONSTRUCT: Lookup datatype constructor with value
    - BAG: Use proper bag type (not just list)
    - VECTOR: Use proper vector type
 

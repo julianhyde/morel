@@ -4167,8 +4167,8 @@ public enum BuiltIn {
      *   | VALUE_NONE
      *   | VALUE_SOME of value
      *   | RECORD of (string * value) list
-     *   | CONST of string
-     *   | CON of string * value
+     *   | CONSTANT of string
+     *   | CONSTRUCT of string * value
      * }</pre>
      */
     VALUE(

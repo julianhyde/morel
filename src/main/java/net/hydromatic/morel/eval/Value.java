@@ -197,8 +197,8 @@ public class Value extends AbstractImmutableList<Object> {
    * Returns a value that is a call to a constant (zero-argument constructor).
    *
    * <p>For example, given the datatype declaration {@code datatype foo = BAR |
-   * BAZ of int}, {@code CONST "BAR"} returns a Value with type {@code foo} and
-   * value {@code "BAR"}.
+   * BAZ of int}, {@code CONSTANT "BAR"} returns a Value with type {@code foo}
+   * and value {@code "BAR"}.
    */
   public static Value ofConstant(TypeSystem typeSystem, String conName) {
     TypeCon typeCon = typeSystem.lookupTyCon(conName);
@@ -212,13 +212,13 @@ public class Value extends AbstractImmutableList<Object> {
    * Returns a value that is a call to a constructor.
    *
    * <p>For example, given the datatype declaration {@code datatype foo = BAR |
-   * BAZ of int}, {@code CON ("BAZ", 3)} returns a Value with type {@code foo}
-   * and value {@code ("BAZ", 3)}.
+   * BAZ of int}, {@code CONSTRUCT ("BAZ", INT 3)} returns a Value with type
+   * {@code foo} and value {@code ("BAZ", 3)}.
    *
    * <p>For parameterized datatypes like {@code datatype 'a option = NONE | SOME
    * of 'a}, this method uses unification to determine the type parameters. For
-   * instance, {@code SOME (INT 42)} unifies {@code 'a} with {@code int},
-   * yielding type {@code int option}.
+   * instance, {@code CONSTRUCT ("SOME", INT 42)} unifies {@code 'a} with
+   * {@code int}, yielding type {@code int option}.
    */
   public static Value ofConstructor(
       TypeSystem typeSystem, String conName, Value conValue) {

@@ -3928,33 +3928,6 @@ Examples:
 
 [[functions]]
 structure = "Value"
-name = "prettyPrint"
-specified = "morel"
-type = "value → string"
-implemented = false
-prototype = "prettyPrint v"
-description = """
-converts a value to a pretty-printed string representation with
-indentation and line breaks for better readability of nested structures.
-
-This function produces the same logical output as `print`, but formats
-it for human readability:
-- Nested structures are indented
-- Long lines are broken at appropriate points
-- Collections with many elements are formatted across multiple lines
-
-The exact formatting depends on configured line width, print depth,
-and other Pretty printer settings.
-
-Example:
-  `prettyPrint (RECORD [("name", STRING "Alice"), ("age", INT 30)])`
-  might produce:
-    `{name = "Alice",`
-    ` age = 30}`
-"""
-
-[[functions]]
-structure = "Value"
 name = "print"
 specified = "morel"
 type = "value → string"

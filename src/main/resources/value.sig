@@ -37,8 +37,8 @@ datatype value =
   | VALUE_NONE
   | VALUE_SOME of value
   | RECORD of (string * value) list
-  | CONST of string
-  | CON of string * value
+  | CONSTANT of string
+  | CONSTRUCT of string * value
 
 (* Value structure signature *)
 signature VALUE =
@@ -57,8 +57,8 @@ sig
     | VALUE_NONE
     | VALUE_SOME of value
     | RECORD of (string * value) list
-    | CONST of string
-    | CON of string * value
+    | CONSTANT of string
+    | CONSTRUCT of string * value
 
   (*
    * parse : string -> value
@@ -93,42 +93,8 @@ sig
    *   print (STRING "hello") = "\"hello\""
    *   print (LIST [INT 1, INT 2, INT 3]) = "[1, 2, 3]"
    *   print (RECORD [("x", INT 1), ("y", INT 2)]) = "{x = 1, y = 2}"
-   *
-   * The output is compact (no unnecessary whitespace) for efficient
-   * transmission and storage.
    *)
   val print : value -> string
-
-  (*
-   * prettyPrint : value -> string
-   *
-   * Converts a value to a pretty-printed string representation with
-   * indentation and line breaks for better readability of nested structures.
-   *
-   * This function produces the same logical output as print, but formats
-   * it for human readability:
-   * - Nested structures are indented
-   * - Long lines are broken at appropriate points
-   * - Collections with many elements are formatted across multiple lines
-   *
-   * Examples:
-   *   prettyPrint (LIST [INT 1, INT 2, INT 3])
-   *     might produce: "[1, 2, 3]" (short, stays on one line)
-   *
-   *   prettyPrint (RECORD [("name", STRING "Alice"),
-   *                        ("age", INT 30),
-   *                        ("address", RECORD [("city", STRING "NYC"),
-   *                                           ("zip", INT 10001)])])
-   *     might produce:
-   *       {name = "Alice",
-   *        age = 30,
-   *        address = {city = "NYC",
-   *                   zip = 10001}}
-   *
-   * The exact formatting depends on configured line width, print depth,
-   * and other Pretty printer settings.
-   *)
-  val prettyPrint : value -> string
 end
 
 (*
@@ -139,8 +105,8 @@ end
  *    This property is essential for reliable data exchange.
  *
  * 2. Nullary constructors:
- *    Nullary datatype constructors are represented as CONST name.
- *    For example, the constructor NIL would be CONST "NIL".
+ *    Nullary datatype constructors are represented as CONSTANT name.
+ *    For example, the constructor NIL would be CONSTANT "NIL".
  *
  * 3. Type information:
  *    Values do not carry explicit type information. The type system
