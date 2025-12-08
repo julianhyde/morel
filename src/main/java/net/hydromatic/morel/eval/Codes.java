@@ -994,12 +994,20 @@ public abstract class Codes {
       new BaseApplicable1<String, Integer>(BuiltIn.INT_TO_STRING) {
         @Override
         public String apply(Integer f) {
-          // Java's formatting is reasonably close to ML's formatting,
-          // if we replace minus signs.
-          final String s = Integer.toString(f);
-          return s.replace('-', '~');
+          return intToString(f);
         }
       };
+
+  /**
+   * Converts a Java {@code int} value to the format expected of Standard ML
+   * {@code int} values.
+   */
+  public static String intToString(int i) {
+    // Java's formatting is reasonably close to ML's formatting,
+    // if we replace minus signs.
+    final String s = Integer.toString(i);
+    return s.replace('-', '~');
+  }
 
   /** @see BuiltIn#INTERACT_USE */
   private static final Applicable INTERACT_USE =
@@ -4490,7 +4498,6 @@ public abstract class Codes {
    * Converts a Java {@code float} to the format expected of Standard ML {@code
    * real} values.
    */
-  @VisibleForTesting
   public static String floatToString(float f) {
     if (Float.isFinite(f)) {
       final String s = FLOAT_TO_STRING.apply(f);

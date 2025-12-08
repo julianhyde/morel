@@ -20,7 +20,12 @@ package net.hydromatic.morel.eval;
 
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.eval.Codes.appendFloat;
+import static net.hydromatic.morel.eval.Codes.floatToString;
+import static net.hydromatic.morel.eval.Codes.intToString;
 import static net.hydromatic.morel.eval.Codes.optionSome;
+import static net.hydromatic.morel.parse.Parsers.charToString;
+import static net.hydromatic.morel.parse.Parsers.stringToString;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transformEager;
 
@@ -566,18 +571,16 @@ public class Value extends AbstractImmutableList<Object> {
           return "BOOL " + value;
         case INT:
           final int intVal = (Integer) value;
-          return "INT "
-              + (intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal));
+          return "INT " + intToString(intVal);
         case REAL:
           final float realVal = (Float) value;
-          return "REAL "
-              + (realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal));
+          return "REAL " + floatToString(realVal);
         case CHAR:
-          final Character ch = (Character) value;
-          return "CHAR #\"" + charEscape(ch) + "\"";
+          final char ch = (Character) value;
+          return "CHAR #\"" + charToString(ch) + "\"";
         case STRING:
           final String str = (String) value;
-          return "STRING \"" + stringEscape(str) + "\"";
+          return "STRING \"" + stringToString(str) + "\"";
         default:
           throw new AssertionError();
       }
@@ -604,18 +607,19 @@ public class Value extends AbstractImmutableList<Object> {
           return buf.append("BOOL ").append(value);
         case INT:
           final int intVal = (Integer) value;
-          return buf.append("INT ")
-              .append(intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal));
+          return buf.append("INT ").append(intToString(intVal));
         case REAL:
+          buf.append("REAL ");
           final float realVal = (Float) value;
-          return buf.append("REAL ")
-              .append(realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal));
+          return appendFloat(buf, realVal);
         case CHAR:
-          final Character ch = (Character) value;
-          return buf.append("CHAR #\"").append(charEscape(ch)).append("\"");
+          final char ch = (Character) value;
+          return buf.append("CHAR #\"").append(charToString(ch)).append("\"");
         case STRING:
           final String str = (String) value;
-          return buf.append("STRING \"").append(stringEscape(str)).append("\"");
+          buf.append("STRING \"");
+          stringToString(str, buf);
+          return buf.append("\"");
         default:
           throw new AssertionError();
       }
