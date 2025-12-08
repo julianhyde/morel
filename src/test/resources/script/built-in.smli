@@ -4946,7 +4946,7 @@ RECORD [("x", INT 1)];
 CONSTANT "LESS";
 > val it = LESS : order value
 CONSTRUCT ("INL", INT 1);
-> val it = CONSTRUCT ("Cons",INT 1) : value
+> val it = INL 1 : (int,'b) either value
 
 (*) Value.print : value -> string (TODO: implement)
 (* Value.print;

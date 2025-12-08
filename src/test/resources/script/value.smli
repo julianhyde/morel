@@ -142,11 +142,12 @@ CONSTANT "missing";
 
 (*) CONSTRUCT constructor - unary constructor
 CONSTRUCT ("SOME", INT 42);
-> val it = CON ("SOME",INT 42) : value
+> val it = SOME 42 : int option value
 
 (*) CONSTRUCT constructor - constructor with tuple
+(* The "$list" isn't pretty. It's because CONS belongs to an internal datatype. *)
 CONSTRUCT ("CONS", RECORD [("1", INT 1), ("2", CONSTANT "NIL")]);
-> val it = CONSTRUCT ("CONS",RECORD [("1",INT 1),("2",CONSTANT "NIL")]) : value
+> val it = CONS (1,NIL) : (int * 'a $list) $list value
 
 (*) List of homogeneous records
 LIST [
@@ -366,7 +367,7 @@ Value.print deeplyNested;
 (*) Test prettyPrint on deeply nested structure
 Value.prettyPrint deeplyNested;
 > val it =
-> >   "[[{active = true, name = \"Alice\", scores = [95, 87, 92]}, {active = false, name = \"Bob\", scores = [88, 90]}], [{active = true, name = \"Charlie\", scores = [76, 82, 79, 85]}]]"
+>   "[[{active = true, name = \"Alice\", scores = [95, 87, 92]}, {active = false, name = \"Bob\", scores = [88, 90]}], [{active = true, name = \"Charlie\", scores = [76, 82, 79, 85]}]]"
 >   : string
 
 (*) Parse the printed representation and verify it matches

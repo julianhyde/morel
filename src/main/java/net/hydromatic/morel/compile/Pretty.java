@@ -434,7 +434,10 @@ class Pretty {
         dataType.typeConstructors(typeSystem).get(tyConName);
     requireNonNull(typeConArgType);
     if (list.size() == 2) {
-      final Object arg = list.get(1);
+      Object arg = list.get(1);
+      if (arg instanceof Value) {
+        arg = ((Value) arg).value;
+      }
       buf.append(' ');
       final boolean needParentheses =
           typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;

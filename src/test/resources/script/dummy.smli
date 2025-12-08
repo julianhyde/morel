@@ -50,7 +50,7 @@ getInt (INT 42);
 *)
 
 CONSTRUCT ("INL", INT 1);
-> val it = CONSTRUCT ("Cons",INT 1) : value
+> val it = INL 1 : (int,'b) either value
 
 (*
 CON ("SOME", INT 42);
