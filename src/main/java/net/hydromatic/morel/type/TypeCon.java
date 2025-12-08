@@ -37,6 +37,7 @@ import static java.util.Objects.requireNonNull;
  * <p>Datatype {@code option} has constructors:
  *
  * <table>
+ *   <caption>Type constructors for datatype option</caption>
  *   <tr><th>dataType</th><th>name</th><th>argTypeKey</th></tr>
  *   <tr><td>option</td><td>NONE</td><td>dummy</td></tr>
  *   <tr><td>option</td><td>SOME</td><td>Var(0)</td></tr>
@@ -45,6 +46,7 @@ import static java.util.Objects.requireNonNull;
  * <p>Datatype {@code either} has constructors:
  *
  * <table>
+ *   <caption>Type constructors for datatype either</caption>
  *   <tr><th>dataType</th><th>name</th><th>argTypeKey</th></tr>
  *   <tr><td>either</td><td>LEFT</td><td>Var(0)</td></tr>
  *   <tr><td>either</td><td>RIGHT</td><td>Var(1)</td></tr>
