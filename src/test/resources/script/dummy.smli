@@ -19,15 +19,16 @@
 (*
 "this is a simple script; modify it for debugging test cases";
 > val it = "this is a simple script; modify it for debugging test cases" : string
+*)
 
 INT 3;
 > val it = 3 : int value
 
 LIST [INT 1, INT 2];
-> val it = LIST [INT 1,INT 2] : int list value
+> val it = [1,2] : int list value
 
 VALUE_SOME (INT 5);
-> val it = VALUE_SOME (INT 5) : int option value
+> val it = SOME 5 : int option value
 
 CONSTANT "LESS";
 > val it = LESS : order value
@@ -47,14 +48,13 @@ fun getInt v =
 getInt (INT 42);
 > val it = SOME 42 : int option
 
-*)
-
 CONSTRUCT ("INL", INT 1);
 > val it = INL 1 : (int,'b) either value
 
+CONSTRUCT ("SOME", INT 42);
+> val it = SOME 42 : int option value
+
 (*
-CON ("SOME", INT 42);
-> val it = CON ("SOME",INT 42) : value
 *)
 
 (*) End dummy.smli

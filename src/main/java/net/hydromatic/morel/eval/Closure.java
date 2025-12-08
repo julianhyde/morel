@@ -220,9 +220,20 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
       case CON_PAT:
         final Core.ConPat conPat = (Core.ConPat) pat;
-        final List conValue = (List) argValue;
-        return conValue.get(0).equals(conPat.tyCon)
-            && bindRecurse(conPat.pat, conValue.get(1), envRef);
+        if (argValue instanceof Value) {
+          final Value value = (Value) argValue;
+          final String constructorName = Values.getConstructorName(value);
+          if (!constructorName.equals(conPat.tyCon)) {
+            return false;
+          }
+          final Object innerValue = value.value;
+          return bindRecurse(conPat.pat, innerValue, envRef);
+        } else {
+          // Old-style [tag, payload] representation
+          final List conValue = (List) argValue;
+          return conValue.get(0).equals(conPat.tyCon)
+              && bindRecurse(conPat.pat, conValue.get(1), envRef);
+        }
 
       default:
         throw new AssertionError("cannot compile " + pat.op + ": " + pat);
