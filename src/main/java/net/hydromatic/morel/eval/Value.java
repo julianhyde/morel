@@ -120,6 +120,7 @@ public class Value extends AbstractImmutableList<Object> {
    */
   public static Value ofValueList(
       TypeSystem typeSystem, List<Value> valueList) {
+    // Create a list value with the actual list type
     Type elementType = commonElementType(valueList);
     if (elementType != null) {
       final ListType listType = typeSystem.listType(elementType);
@@ -143,6 +144,7 @@ public class Value extends AbstractImmutableList<Object> {
    * type.
    */
   public static Value ofValueBag(TypeSystem typeSystem, List<Value> valueList) {
+    // Create a bag value with the actual bag type
     Type elementType = commonElementType(valueList);
     if (elementType != null) {
       final Type bagType = typeSystem.bagType(elementType);
@@ -168,6 +170,7 @@ public class Value extends AbstractImmutableList<Object> {
    */
   public static Value ofValueVector(
       TypeSystem typeSystem, List<Value> valueList) {
+    // Create a vector value with the actual vector type
     Type elementType = commonElementType(valueList);
     if (elementType != null) {
       final Type vectorType = typeSystem.vector(elementType);
@@ -253,7 +256,8 @@ public class Value extends AbstractImmutableList<Object> {
     final Type resultType =
         typeCon.dataType.substitute(typeSystem, typeArgsBuilder.build());
 
-    return new Value(resultType, FlatLists.of(conName, conValue));
+    // Unwrap the value before storing - consistent with optionSome behavior
+    return new Value(resultType, FlatLists.of(conName, conValue.value));
   }
 
   public static Value ofRecord(

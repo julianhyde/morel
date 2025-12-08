@@ -21,13 +21,18 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Static.skip;
+import static net.hydromatic.morel.util.Static.transformEager;
 
+import com.google.common.collect.ImmutableList;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ImmutablePairList;
 
 /**
@@ -202,16 +207,37 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
       case CONS_PAT:
         final Core.ConPat consPat = (Core.ConPat) pat;
-        @SuppressWarnings("unchecked")
-        final List<Object> consValue = (List) argValue;
-        if (consValue.isEmpty()) {
-          return false;
+        if (argValue instanceof Value) {
+          final Value value = (Value) argValue;
+          ListType listType = (ListType) value.type;
+          @SuppressWarnings("unchecked")
+          final List<Object> consValue = (List) value.value;
+          if (consValue.isEmpty()) {
+            return false;
+          }
+          final Value head = Value.of(listType.elementType, consValue.get(0));
+          final List<Value> tail =
+              transformEager(
+                  skip(consValue),
+                  e ->
+                      e instanceof Value
+                          ? (Value) e
+                          : Value.of(listType.elementType, e));
+          List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
+          return bindRecurse(patArgs.get(0), head, envRef)
+              && bindRecurse(patArgs.get(1), tail, envRef);
+        } else {
+          @SuppressWarnings("unchecked")
+          final List<Object> consValue = (List) argValue;
+          if (consValue.isEmpty()) {
+            return false;
+          }
+          final Object head = consValue.get(0);
+          final List<Object> tail = skip(consValue);
+          List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
+          return bindRecurse(patArgs.get(0), head, envRef)
+              && bindRecurse(patArgs.get(1), tail, envRef);
         }
-        final Object head = consValue.get(0);
-        final List<Object> tail = skip(consValue);
-        List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
-        return bindRecurse(patArgs.get(0), head, envRef)
-            && bindRecurse(patArgs.get(1), tail, envRef);
 
       case CON0_PAT:
         final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;
@@ -226,7 +252,48 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
           if (!constructorName.equals(conPat.tyCon)) {
             return false;
           }
-          final Object innerValue = value.value;
+          // For list types, rewrap elements as Values if needed
+          // For record types, reconstruct (name, value) pairs
+          Object innerValue;
+          if (value.type instanceof ListType) {
+            final ListType listType = (ListType) value.type;
+            final List<?> list = (List<?>) value.value;
+            // Check if elements are already Values
+            if (!list.isEmpty() && !(list.get(0) instanceof Value)) {
+              // Elements are unwrapped, rewrap them
+              innerValue =
+                  transformEager(
+                      list,
+                      e ->
+                          e instanceof Value
+                              ? (Value) e
+                              : Value.of(listType.elementType, e));
+            } else {
+              innerValue = value.value;
+            }
+          } else if (value.type instanceof RecordType) {
+            final RecordType recordType = (RecordType) value.type;
+            final List<?> fieldValues = (List<?>) value.value;
+            // Reconstruct (name, value) pairs for pattern matching
+            // Pattern expects a list of [name, value] pairs
+            final ImmutableList.Builder<List<Object>> pairsBuilder =
+                ImmutableList.builder();
+            int i = 0;
+            for (Map.Entry<String, Type> entry :
+                recordType.argNameTypes.entrySet()) {
+              final String name = entry.getKey();
+              final Type fieldType = entry.getValue();
+              final Object rawValue = fieldValues.get(i++);
+              final Value fieldValue =
+                  rawValue instanceof Value
+                      ? (Value) rawValue
+                      : Value.of(fieldType, rawValue);
+              pairsBuilder.add(ImmutableList.of(name, fieldValue));
+            }
+            innerValue = pairsBuilder.build();
+          } else {
+            innerValue = value.value;
+          }
           return bindRecurse(conPat.pat, innerValue, envRef);
         } else {
           // Old-style [tag, payload] representation

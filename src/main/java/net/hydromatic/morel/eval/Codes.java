@@ -3451,6 +3451,29 @@ public abstract class Codes {
   public static final List VALUE_UNIT =
       Value.of(PrimitiveType.UNIT, Unit.INSTANCE);
 
+  /** Applicable that wraps a VALUE constructor to create Value objects. */
+  static class ValueConstructorApplicable extends BaseApplicable1<Value, Object>
+      implements Typed {
+    private final String constructorName;
+    private TypeSystem typeSystem;
+
+    ValueConstructorApplicable(String constructorName, TypeSystem typeSystem) {
+      super(null);
+      this.constructorName = constructorName;
+      this.typeSystem = typeSystem;
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      return new ValueConstructorApplicable(constructorName, typeSystem);
+    }
+
+    @Override
+    public Value apply(Object arg) {
+      return Values.fromConstructor(constructorName, arg, typeSystem);
+    }
+  }
+
   /** @see BuiltIn#VALUE_PARSE */
   private static final Applicable1 VALUE_PARSE = new ValueParser(null);
 

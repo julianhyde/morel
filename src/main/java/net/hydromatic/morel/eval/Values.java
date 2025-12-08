@@ -177,26 +177,27 @@ public class Values {
 
     // Handle primitive types
     if (type == PrimitiveType.UNIT) {
-      return "()";
+      return "UNIT";
     }
     if (type == PrimitiveType.BOOL) {
-      return String.valueOf(val);
+      return "BOOL " + String.valueOf(val);
     }
     if (type == PrimitiveType.INT) {
       final int intVal = (Integer) val;
-      return intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal);
+      return "INT " + (intVal < 0 ? "~" + (-intVal) : String.valueOf(intVal));
     }
     if (type == PrimitiveType.REAL) {
       final float realVal = (Float) val;
-      return realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal);
+      return "REAL "
+          + (realVal < 0 ? "~" + (-realVal) : String.valueOf(realVal));
     }
     if (type == PrimitiveType.CHAR) {
       final Character ch = (Character) val;
-      return "#\"" + charEscape(ch) + "\"";
+      return "CHAR #\"" + charEscape(ch) + "\"";
     }
     if (type == PrimitiveType.STRING) {
       final String str = (String) val;
-      return "\"" + stringEscape(str) + "\"";
+      return "STRING \"" + stringEscape(str) + "\"";
     }
 
     // Handle list types
@@ -209,41 +210,107 @@ public class Values {
       // (refined)
       if (!list.isEmpty() && list.get(0) instanceof Value) {
         // Unrefined: list of Value instances
-        return "[" + printValueList((List<Value>) list) + "]";
+        return "LIST [" + printValueList((List<Value>) list) + "]";
       } else {
         // Refined: list of raw values (int, string, etc.)
-        return "[" + printRefinedList(list, elementType) + "]";
+        return "LIST [" + printRefinedList(list, elementType) + "]";
       }
     }
 
-    // Handle option types (which are DataTypes)
+    // Handle DataTypes (bag, vector, option, custom datatypes)
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
-      // Check if it's an option type by checking the constructor names
-      // Option has constructors NONE and SOME
+
+      // Handle bag types
+      if (dataType.name.equals("bag")) {
+        final List list = (List) val;
+        final Type elementType = dataType.arguments.get(0);
+        if (!list.isEmpty() && list.get(0) instanceof Value) {
+          return "BAG [" + printValueList((List<Value>) list) + "]";
+        } else {
+          return "BAG [" + printRefinedList(list, elementType) + "]";
+        }
+      }
+
+      // Handle vector types
+      if (dataType.name.equals("vector")) {
+        final List list = (List) val;
+        final Type elementType = dataType.arguments.get(0);
+        if (!list.isEmpty() && list.get(0) instanceof Value) {
+          return "VECTOR #[" + printValueList((List<Value>) list) + "]";
+        } else {
+          return "VECTOR #[" + printRefinedList(list, elementType) + "]";
+        }
+      }
+
+      // Handle option types
       if (dataType.name.equals("option")) {
-        if (val == null) {
+        if (val == null || val == Codes.OPTION_NONE) {
           return "VALUE_NONE";
         } else if (val instanceof Value) {
           return "VALUE_SOME " + print((Value) val);
+        } else if (val instanceof List) {
+          // Refined option stored as ["SOME", innerValue]
+          final List<?> optionList = (List<?>) val;
+          if (optionList.size() == 2 && "SOME".equals(optionList.get(0))) {
+            final Object innerVal = optionList.get(1);
+            final Type innerType = dataType.arguments.get(0);
+            final Value innerValue =
+                innerVal instanceof Value
+                    ? (Value) innerVal
+                    : Value.of(innerType, innerVal);
+            return "VALUE_SOME " + print(innerValue);
+          }
+          throw new IllegalArgumentException(
+              "Invalid option value: " + optionList);
         } else {
-          // Refined option: wrap the value
-          // For option types, the argument type is the first element of
-          // arguments
+          // Refined option: single value (SOME case)
           final Type innerType = dataType.arguments.get(0);
           return "VALUE_SOME " + print(Value.of(innerType, val));
         }
       }
-      // Handle other datatype constructors (CONST, CON)
-      // TODO: implement general datatype printing
-      return "CONST \"TODO\"";
+
+      // Handle other datatype constructors
+      if (val instanceof List) {
+        final List<?> conList = (List<?>) val;
+        if (!conList.isEmpty() && conList.get(0) instanceof String) {
+          final String conName = (String) conList.get(0);
+          if (conList.size() == 1) {
+            // Nullary constructor - use CONSTANT
+            return "CONSTANT \"" + conName + "\"";
+          } else if (conList.size() == 2) {
+            // Unary constructor - use CONSTRUCT
+            final Object conArg = conList.get(1);
+            // conArg should be unwrapped due to ofConstructor change
+            // Need to determine its type - use datatype's argument type
+            final Value conArgValue;
+            if (conArg instanceof Value) {
+              conArgValue = (Value) conArg;
+            } else {
+              // Unwrapped value - wrap it with the datatype's argument type
+              final Type argType =
+                  dataType.arguments.isEmpty()
+                      ? PrimitiveType.UNIT
+                      : dataType.arguments.get(0);
+              conArgValue = Value.of(argType, conArg);
+            }
+            return "CONSTRUCT (\""
+                + conName
+                + "\", "
+                + print(conArgValue)
+                + ")";
+          }
+        }
+      }
+      throw new IllegalArgumentException(
+          "Cannot print datatype value: " + dataType.name);
     }
 
     // Handle record types
     if (type instanceof RecordType) {
       final RecordType recordType = (RecordType) type;
       final List recordValues = (List) val;
-      return "{" + printRecordValues(recordType, recordValues) + "}";
+      return "RECORD [" + printRecordPairs(recordType, recordValues) + "]";
     }
 
     throw new IllegalArgumentException("Cannot print value of type: " + type);
@@ -259,6 +326,20 @@ public class Values {
       buf.append(print(values.get(i)));
     }
     return buf.toString();
+  }
+
+  /**
+   * Prints list elements enclosed in brackets, handling both refined and
+   * unrefined lists.
+   */
+  private static String printListElements(List list, Type elementType) {
+    if (!list.isEmpty() && list.get(0) instanceof Value) {
+      // Unrefined list
+      return "[" + printValueList((List<Value>) list) + "]";
+    } else {
+      // Refined list
+      return "[" + printRefinedList(list, elementType) + "]";
+    }
   }
 
   /** Helper for print: prints a list of raw values (refined). */
@@ -289,6 +370,27 @@ public class Values {
 
       buf.append(fieldName).append(" = ");
       buf.append(print(Value.of(fieldType, fieldValue)));
+      i++;
+    }
+    return buf.toString();
+  }
+
+  /** Helper for print: prints record as list of (name, value) pairs. */
+  private static String printRecordPairs(RecordType recordType, List values) {
+    final StringBuilder buf = new StringBuilder();
+    final java.util.Map<String, Type> fields = recordType.argNameTypes();
+    int i = 0;
+    for (java.util.Map.Entry<String, Type> entry : fields.entrySet()) {
+      if (i > 0) {
+        buf.append(", ");
+      }
+      final String fieldName = entry.getKey();
+      final Type fieldType = entry.getValue();
+      final Object fieldValue = values.get(i);
+
+      buf.append("(\"").append(fieldName).append("\", ");
+      buf.append(print(Value.of(fieldType, fieldValue)));
+      buf.append(")");
       i++;
     }
     return buf.toString();
@@ -550,8 +652,28 @@ public class Values {
         skipWhitespace();
       }
       expect("]");
-      final Type valueType = typeSystem.lookup("value");
-      return Value.ofList(typeSystem, valueType, values.build());
+      return Value.ofValueList(typeSystem, values.build());
+    }
+
+    private Value parseBag() {
+      expect("[");
+      skipWhitespace();
+      if (tryConsume("]")) {
+        // Empty bag of values
+        final Type valueType = typeSystem.lookup("value");
+        return Value.ofBag(typeSystem, valueType, ImmutableList.of());
+      }
+
+      final ImmutableList.Builder<Value> values = ImmutableList.builder();
+      values.add(parseValue());
+      skipWhitespace();
+      while (tryConsume(",")) {
+        skipWhitespace();
+        values.add(parseValue());
+        skipWhitespace();
+      }
+      expect("]");
+      return Value.ofValueBag(typeSystem, values.build());
     }
 
     private Value parseVector() {
@@ -572,8 +694,7 @@ public class Values {
         skipWhitespace();
       }
       expect("]");
-      final Type valueType = typeSystem.lookup("value");
-      return Value.ofVector(typeSystem, valueType, values.build());
+      return Value.ofValueVector(typeSystem, values.build());
     }
 
     private Value parseRecord() {
@@ -618,7 +739,100 @@ public class Values {
     }
 
     private Value parseIdentifierValue() {
-      // Check for 'bag' prefix first
+      // Handle VALUE constructors: UNIT, BOOL, INT, REAL, CHAR, STRING, LIST,
+      // BAG, VECTOR, etc.
+      if (tryConsume("UNIT")) {
+        return Value.unit();
+      }
+      if (tryConsume("BOOL")) {
+        skipWhitespace();
+        if (tryConsume("true")) {
+          return Value.ofBool(true);
+        } else if (tryConsume("false")) {
+          return Value.ofBool(false);
+        }
+        throw new IllegalArgumentException(
+            "Expected 'true' or 'false' after BOOL");
+      }
+      if (tryConsume("INT")) {
+        skipWhitespace();
+        final Value numValue = parseNumber();
+        return Value.ofInt((Integer) numValue.value);
+      }
+      if (tryConsume("REAL")) {
+        skipWhitespace();
+        final Value numValue = parseNumber();
+        return Value.ofReal((Float) numValue.value);
+      }
+      if (tryConsume("CHAR")) {
+        skipWhitespace();
+        final Value charValue = parseChar();
+        return Value.ofChar((Character) charValue.value);
+      }
+      if (tryConsume("STRING")) {
+        skipWhitespace();
+        final Value strValue = parseString();
+        return Value.ofString((String) strValue.value);
+      }
+      if (tryConsume("LIST")) {
+        skipWhitespace();
+        final Value listValue = parseList();
+        return listValue; // parseList already returns a list of Values
+      }
+      if (tryConsume("BAG")) {
+        skipWhitespace();
+        final Value bagValue = parseBag();
+        return bagValue; // parseBag already returns a bag of Values
+      }
+      if (tryConsume("VECTOR")) {
+        skipWhitespace();
+        final Value vectorValue = parseVector();
+        return vectorValue; // parseVector already returns a vector of Values
+      }
+      if (tryConsume("RECORD")) {
+        skipWhitespace();
+        expect("[");
+        skipWhitespace();
+        if (tryConsume("]")) {
+          // Empty record
+          return Value.ofRecord(typeSystem, PairList.of());
+        }
+        final PairList<String, Value> pairs = PairList.of();
+        // Parse first pair
+        expect("(");
+        skipWhitespace();
+        expect("\"");
+        final String name1 = parseStringContent();
+        expect("\"");
+        skipWhitespace();
+        expect(",");
+        skipWhitespace();
+        final Value value1 = parseValue();
+        skipWhitespace();
+        expect(")");
+        pairs.add(name1, value1);
+        skipWhitespace();
+        // Parse remaining pairs
+        while (tryConsume(",")) {
+          skipWhitespace();
+          expect("(");
+          skipWhitespace();
+          expect("\"");
+          final String name = parseStringContent();
+          expect("\"");
+          skipWhitespace();
+          expect(",");
+          skipWhitespace();
+          final Value value = parseValue();
+          skipWhitespace();
+          expect(")");
+          pairs.add(name, value);
+          skipWhitespace();
+        }
+        expect("]");
+        return Value.ofRecord(typeSystem, pairs);
+      }
+      // Check for 'bag' prefix (old format)
       if (tryConsume("bag")) {
         skipWhitespace();
         expect("[");
@@ -640,17 +854,8 @@ public class Values {
         final Type valueType = typeSystem.lookup("value");
         return Value.ofBag(typeSystem, valueType, values.build());
       }
-      // Check for CONSTRUCT format, e.g. CONSTRUCT "INL" (INT 5)
+      // Check for CONSTRUCT format, e.g. CONSTRUCT ("INL", INT 5)
       if (tryConsume("CONSTRUCT")) {
-        skipWhitespace();
-        expect("\"");
-        final String constName = parseStringContent();
-        expect("\"");
-        // TODO: implement proper CONST support
-        return Value.of(PrimitiveType.STRING, constName);
-      }
-      // Check for CONSTANT, e.g. CONSTANT "LESS"
-      if (tryConsume("CONSTANT")) {
         skipWhitespace();
         expect("(");
         skipWhitespace();
@@ -663,8 +868,15 @@ public class Values {
         final Value conValue = parseValue();
         skipWhitespace();
         expect(")");
-        // TODO: implement proper CON support
-        return Value.of(PrimitiveType.STRING, conName);
+        return fromConstructor(conName, conValue, typeSystem);
+      }
+      // Check for CONSTANT, e.g. CONSTANT "LESS"
+      if (tryConsume("CONSTANT")) {
+        skipWhitespace();
+        expect("\"");
+        final String conName = parseStringContent();
+        expect("\"");
+        return fromConstructor("CONSTANT", conName, typeSystem);
       }
       // Try VALUE_NONE and VALUE_SOME constructors
       if (tryConsume("VALUE_NONE")) {
