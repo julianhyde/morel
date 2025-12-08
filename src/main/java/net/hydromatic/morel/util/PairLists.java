@@ -1161,13 +1161,18 @@ class PairLists {
     }
 
     /**
-     * Binary search for the first key >= toKey.
+     * Binary search for the first key that is greater than or equal to the
+     * given key, using lower bound semantics.
      *
-     * @param toKey Upper bound (exclusive)
-     * @return Pair index, or end if all keys < toKey
+     * <p>This implements the standard lower_bound algorithm: finds the first
+     * position where {@code key} could be inserted while maintaining sorted
+     * order.
+     *
+     * @param key Search key
+     * @return Pair index, or end if all keys are less than {@code key}
      */
     @SuppressWarnings("unchecked")
-    private int findUpperBound(T toKey) {
+    private int lowerBound(T key) {
       int low = start;
       int high = end - 1; // Last pair index
       int result = end;
@@ -1175,34 +1180,7 @@ class PairLists {
       while (low <= high) {
         int mid = (low + high) >>> 1;
         T midVal = (T) elements[mid * 2];
-        int cmp = ordering.compare(midVal, toKey);
-
-        if (cmp < 0) {
-          low = mid + 1;
-        } else {
-          result = mid;
-          high = mid - 1;
-        }
-      }
-      return result;
-    }
-
-    /**
-     * Binary search for the first key >= fromKey.
-     *
-     * @param fromKey Lower bound (inclusive)
-     * @return Pair index, or end if all keys < fromKey
-     */
-    @SuppressWarnings("unchecked")
-    private int findLowerBound(T fromKey) {
-      int low = start;
-      int high = end - 1; // Last pair index
-      int result = end;
-
-      while (low <= high) {
-        int mid = (low + high) >>> 1;
-        T midVal = (T) elements[mid * 2];
-        int cmp = ordering.compare(midVal, fromKey);
+        int cmp = ordering.compare(midVal, key);
 
         if (cmp < 0) {
           low = mid + 1;
@@ -1230,20 +1208,20 @@ class PairLists {
         throw new IllegalArgumentException(
             "fromKey > toKey: " + fromKey + " > " + toKey);
       }
-      int newStart = findLowerBound(fromKey);
-      int newEnd = findUpperBound(toKey);
+      int newStart = lowerBound(fromKey);
+      int newEnd = lowerBound(toKey);
       return sub(newStart, newEnd);
     }
 
     @Override
     public SortedMap<T, U> headMap(T toKey) {
-      int newEnd = findUpperBound(toKey);
+      int newEnd = lowerBound(toKey);
       return sub(start, newEnd);
     }
 
     @Override
     public SortedMap<T, U> tailMap(T fromKey) {
-      int newStart = findLowerBound(fromKey);
+      int newStart = lowerBound(fromKey);
       return sub(newStart, end);
     }
 
