@@ -903,11 +903,14 @@ public enum BuiltIn {
   CHAR_TO_UPPER("Char", "toUpper", ts -> ts.fnType(CHAR, CHAR)),
 
   /**
-   * Function "Datalog.execute", of type "string &rarr; string".
+   * Function "Datalog.execute", of type "string &rarr; variant".
    *
-   * <p>Executes a Datalog program and returns formatted output.
+   * <p>Executes a Datalog program and returns formatted output as a variant.
    */
-  DATALOG_EXECUTE("Datalog", "execute", ts -> ts.fnType(STRING, STRING)),
+  DATALOG_EXECUTE(
+      "Datalog",
+      "execute",
+      ts -> ts.fnType(STRING, ts.lookup(Datatype.VARIANT))),
 
   /**
    * Function "Datalog.validate", of type "string &rarr; string".
