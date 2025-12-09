@@ -70,6 +70,10 @@ public class DatalogAst {
     public boolean hasDeclaration(String name) {
       return declarations.containsKey(name);
     }
+
+    public Iterable<Declaration> getDeclarations() {
+      return declarations.values();
+    }
   }
 
   /** Base class for all statements in a Datalog program. */
