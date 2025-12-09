@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel;
 
+import static net.hydromatic.morel.Ml.ml;
+import static net.hydromatic.morel.parse.Parsers.stringToString;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -484,18 +486,24 @@ public class DatalogTest {
   void testValidateThroughMorel() {
     // Test Datalog.validate integration with Morel - verify it compiles and has
     // correct type
-    String ml =
-        "Datalog.validate \".decl edge(x:number, y:number)\\nedge(1,2).\\n.output edge\"";
-    net.hydromatic.morel.Ml.ml(ml).assertType("string");
+    String program =
+        ".decl edge(x:number, y:number)\n" //
+            + "edge(1,2).\n"
+            + ".output edge\n";
+    String ml = "Datalog.validate \"" + stringToString(program) + "\"";
+    ml(ml).assertType("string");
   }
 
   @Test
   void testExecuteThroughMorel() {
     // Test Datalog.execute integration with Morel - verify it compiles and has
     // correct type
-    String ml =
-        "Datalog.execute \".decl edge(x:number, y:number)\\nedge(1,2).\\n.output edge\"";
-    net.hydromatic.morel.Ml.ml(ml).assertType("string");
+    String program =
+        ".decl edge(x:number, y:number)\n" //
+            + "edge(1,2).\n"
+            + ".output edge\n";
+    String ml = "Datalog.execute \"" + stringToString(program) + "\"";
+    ml(ml).assertType("variant");
   }
 }
 

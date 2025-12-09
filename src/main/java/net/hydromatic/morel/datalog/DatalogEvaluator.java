@@ -41,6 +41,7 @@ import net.hydromatic.morel.datalog.DatalogAst.Statement;
 import net.hydromatic.morel.datalog.DatalogAst.Term;
 import net.hydromatic.morel.datalog.DatalogAst.Variable;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Variant;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -58,14 +59,15 @@ public class DatalogEvaluator {
   }
 
   /**
-   * Executes a Datalog program and returns formatted output.
+   * Executes a Datalog program and returns structured output as a variant.
    *
    * @param program the Datalog program source code
    * @param session the Morel session
-   * @return formatted output for relations marked with .output
+   * @return variant containing structured data for relations marked with
+   *     .output
    * @throws DatalogException if the program is invalid
    */
-  public static String execute(String program, Session session) {
+  public static Variant execute(String program, Session session) {
     try {
       // 1. Parse Datalog program
       Program ast = DatalogParserImpl.parse(program);
@@ -96,26 +98,40 @@ public class DatalogEvaluator {
       // 4. Evaluate rules using semi-naive evaluation
       evaluateRules(rulesByRelation, tuplesByRelation);
 
-      // 5. Format output for each .output directive
-      StringBuilder result = new StringBuilder();
-      for (Output output : ast.getOutputs()) {
+      // 5. Build variant output for each .output directive
+      TypeSystem typeSystem = session.typeSystem;
+      List<Output> outputs = ast.getOutputs();
+
+      if (outputs.isEmpty()) {
+        // No outputs -> return unit
+        return Variant.unit();
+      }
+
+      // Build a record with one field per output relation
+      PairList<String, Variant> fields = PairList.of();
+
+      for (Output output : outputs) {
         String relationName = output.relationName;
+        Declaration decl = ast.getDeclaration(relationName);
         Set<Tuple> tuples =
             tuplesByRelation.getOrDefault(relationName, new HashSet<>());
 
-        // Output relation name
-        if (result.length() > 0) {
-          result.append("\n");
+        // Convert tuples to variant list
+        List<Variant> tupleVariants = new ArrayList<>();
+        for (Tuple tuple :
+            tuples.stream().sorted().collect(Collectors.toList())) {
+          tupleVariants.add(tupleToVariant(tuple, decl, typeSystem));
         }
-        result.append(relationName).append("\n");
 
-        // Output each tuple (sorted for deterministic output)
-        tuples.stream()
-            .sorted()
-            .forEach(tuple -> result.append(tuple.format()).append("\n"));
+        // Determine element type for the list
+        Type elementType = tupleElementType(decl, typeSystem);
+        Variant listVariant =
+            Variant.ofList(typeSystem, elementType, tupleVariants);
+        fields.add(relationName, listVariant);
       }
 
-      return result.toString().trim();
+      // Return a record variant
+      return Variant.ofRecord(typeSystem, fields);
 
     } catch (ParseException e) {
       throw new DatalogException(
@@ -362,6 +378,84 @@ public class DatalogEvaluator {
     }
 
     return newBinding;
+  }
+
+  /**
+   * Converts a tuple to a variant based on the relation declaration.
+   *
+   * <p>For arity-1 relations, returns a single value variant. For arity > 1,
+   * returns a record variant with field names from the declaration.
+   */
+  private static Variant tupleToVariant(
+      Tuple tuple, Declaration decl, TypeSystem typeSystem) {
+    List<Param> params = decl.params;
+    if (params.size() == 1) {
+      // Single value
+      return valueToVariant(
+          tuple.values.get(0), params.get(0).type, typeSystem);
+    } else {
+      // Multiple values - create a record with actual parameter names
+      PairList<String, Variant> recordFields = PairList.of();
+      for (int i = 0; i < params.size(); i++) {
+        String fieldName = params.get(i).name;
+        Variant fieldValue =
+            valueToVariant(tuple.values.get(i), params.get(i).type, typeSystem);
+        recordFields.add(fieldName, fieldValue);
+      }
+      return Variant.ofRecord(typeSystem, recordFields);
+    }
+  }
+
+  /**
+   * Determines the element type for a relation's output list.
+   *
+   * <p>For arity-1 relations, the element type is the param type. For arity >
+   * 1, the element type is a record type with field names from the declaration.
+   */
+  private static Type tupleElementType(
+      Declaration decl, TypeSystem typeSystem) {
+    List<Param> params = decl.params;
+    if (params.size() == 1) {
+      return datalogTypeToMorelType(params.get(0).type, typeSystem);
+    } else {
+      // Record type with actual parameter names (SortedMap required)
+      PairList<String, Type> fieldTypes = PairList.of();
+      for (Param param : params) {
+        fieldTypes.add(
+            param.name, datalogTypeToMorelType(param.type, typeSystem));
+      }
+      return typeSystem.recordType(fieldTypes.asSortedMap());
+    }
+  }
+
+  /** Converts a Datalog value to a Variant based on its declared type. */
+  private static Variant valueToVariant(
+      Object value, String datalogType, TypeSystem typeSystem) {
+    switch (datalogType) {
+      case "number":
+        return Variant.ofInt((Integer) value);
+      case "string":
+      case "symbol":
+        return Variant.ofString((String) value);
+      default:
+        throw new IllegalArgumentException(
+            "Unknown Datalog type: " + datalogType);
+    }
+  }
+
+  /** Converts a Datalog type name to a Morel Type. */
+  private static Type datalogTypeToMorelType(
+      String datalogType, TypeSystem typeSystem) {
+    switch (datalogType) {
+      case "number":
+        return PrimitiveType.INT;
+      case "string":
+      case "symbol":
+        return PrimitiveType.STRING;
+      default:
+        throw new IllegalArgumentException(
+            "Unknown Datalog type: " + datalogType);
+    }
   }
 
   /** Represents a tuple of values in a relation. */

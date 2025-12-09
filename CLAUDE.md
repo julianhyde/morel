@@ -179,16 +179,19 @@ Add a Datalog interface to Morel that translates Datalog programs to Morel Core 
 
 The `Datalog` structure provides two main functions:
 
-**`Datalog.execute : string -> string`**
+**`Datalog.execute : string -> variant`**
 - Takes a Datalog program as input
 - Parses, validates, and executes the program
-- Returns formatted output for relations marked with `.output`
+- Returns structured data for relations marked with `.output` as a variant
+  - For single output: returns a record with one field (the relation name) containing a list
+  - For multiple outputs: returns a record with multiple fields
+  - For no outputs: returns `unit`
 - Throws exception if program is invalid
 
 **`Datalog.validate : string -> string`**
 - Takes a Datalog program as input
 - Parses and validates without executing
-- Returns `"string"` if program is valid (indicating `execute` would return a string)
+- Returns type information if program is valid (e.g., `"{parent:(string * string) list}"`)
 - Returns `"Error: <message>"` if program is invalid
 - Useful for pre-flight checking and IDE integration
 
@@ -202,10 +205,10 @@ parent(\"alice\", \"bob\").
 ";
 
 Datalog.validate prog;
-(* Returns: "string" *)
+(* Returns: "{parent:(string * string) list}" *)
 
 Datalog.execute prog;
-(* Returns: "parent\nalice\tbob\n" *)
+(* Returns: {parent = [{x = "alice", y = "bob"}]} : {parent:{x:string, y:string} list} variant *)
 
 (* Validation catches errors *)
 val bad = "
@@ -401,7 +404,7 @@ Add to BuiltIn enum:
 DATALOG_EXECUTE(
   "Datalog",
   "execute",
-  ts -> ts.fnType(STRING, STRING)
+  ts -> ts.fnType(STRING, ts.lookup(Datatype.VARIANT))
 ),
 
 DATALOG_VALIDATE(
@@ -531,7 +534,7 @@ public static String validate(String program, Session session)
 - Useful for IDE integration, syntax checking, and type verification
 
 **Return Values**:
-- **Valid program**: Returns `"string"` (the return type of `execute`)
+- **Valid program**: Returns type information (e.g., `"{parent:(string * string) list}"`)
 - **Invalid program**: Returns `"Error: <detailed error message>"`
 
 **Use Cases**:
@@ -551,20 +554,20 @@ public static Type validateAndGetType(String program, Session session)
 This method:
 - Parses and validates the program (throws if invalid)
 - Returns the Morel `Type` representing the program's output
-- Currently always returns `PrimitiveType.STRING` since `execute` returns formatted strings
-- Could be extended in future to return structured types if execution model changes
+- Returns structured types based on the `.output` directives (e.g., record types with list fields)
+- `execute` returns a variant matching this type structure
 
 **Type Representation**:
 
-For programs with `.output` directives, the conceptual type structure is:
-- **No outputs**: `string` (empty)
-- **Single output**: `string` (formatted relation)
-- **Multiple outputs**: `string` (concatenated formatted relations)
+For programs with `.output` directives, the type structure is:
+- **No outputs**: `unit`
+- **Single output**: `{relation1: element_type list}` where element_type is the tuple/value type
+- **Multiple outputs**: `{relation1: type1 list, relation2: type2 list, ...}`
 
-Future enhancement could return structured types:
-- `{relation1: {field1: type1, field2: type2, ...} list, relation2: ...}`
-
-But for initial implementation, all outputs are formatted as strings.
+The execute function returns a variant matching this type structure:
+- Arity-1 relations: list of primitive values (e.g., `[1, 2]`)
+- Arity > 1 relations: list of records with field names from the declaration (e.g., `[{x = 1, y = 2}, ...]`)
+- Records use the actual parameter names from the `.decl` statement
 
 #### 7. Test Suite
 **File**: `src/test/resources/script/datalog.smli`
@@ -582,9 +585,8 @@ parent(\"bob\", \"charlie\").
 ";
 Datalog.execute program1;
 (* Expected output:
-parent
-alice\tbob
-bob\tcharlie
+   {parent = [{x = "alice", y = "bob"}, {x = "bob", y = "charlie"}]}
+   : {parent:{x:string, y:string} list} variant
 *)
 ```
 
@@ -603,10 +605,8 @@ ancestor(x, z) :- ancestor(x, y), parent(y, z).
 ";
 Datalog.execute program2;
 (* Expected output:
-ancestor
-alice\tbob
-bob\tcharlie
-alice\tcharlie
+   {ancestor = [{x = "alice", y = "bob"}, {x = "bob", y = "charlie"}, {x = "alice", y = "charlie"}]}
+   : {ancestor:{x:string, y:string} list} variant
 *)
 ```
 
@@ -633,10 +633,7 @@ sells(\"cask\", \"stout\", 4).
 happy(p) :- frequents(p, bar), likes(p, beer), sells(bar, beer, price).
 ";
 Datalog.execute program3;
-(* Expected output:
-happy
-shaggy
-*)
+(* Expected output: {happy = ["shaggy"]} : {happy:string list} variant *)
 ```
 
 4. **Safety Violation Tests**:
@@ -877,14 +874,12 @@ path(x, y) :- edge(x, y).
 path(x, z) :- path(x, y), edge(y, z).
 ";
 Datalog.validate prog;
-(* Expected: "string" *)
+(* Expected: "{path:(int * int) list}" *)
 
 Datalog.execute prog;
 (* Expected:
-path
-1\t2
-2\t3
-1\t3
+   {path = [{x = 1, y = 2}, {x = 1, y = 3}, {x = 2, y = 3}]}
+   : {path:{x:int, y:int} list} variant
 *)
 
 (* Validate before execute - error case *)
@@ -910,7 +905,7 @@ Datalog.execute badprog;
 @Test void testTypeChecking() { ... }
 @Test void testTranslation() { ... }
 @Test void testSchemaMismatch() { ... }  // Schema validation
-@Test void testValidateSuccess() { ... }  // Validate returns "string" for valid programs
+@Test void testValidateSuccess() { ... }  // Validate returns type info for valid programs
 @Test void testValidateErrors() { ... }  // Validate returns error messages
 @Test void testValidateMultiOutput() { ... }  // Validate with multiple .output directives
 @Test void testValidateAndGetType() { ... }  // Internal type inference method
