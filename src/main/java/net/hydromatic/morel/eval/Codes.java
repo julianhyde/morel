@@ -3456,30 +3456,30 @@ public abstract class Codes {
       };
 
   /** Value of {@link BuiltIn.Constructor#VARIANT_UNIT}. */
-  public static final List VALUE_UNIT =
+  public static final List VARIANT_UNIT =
       Variant.of(PrimitiveType.UNIT, Unit.INSTANCE);
 
   /** @see BuiltIn#VARIANT_PARSE */
-  private static final Typed VALUE_PARSE = new ValueParser(null);
+  private static final Typed VARIANT_PARSE = new VariantParser(null);
 
   /**
-   * Implementation of {@link #VALUE_PARSE}.
+   * Implementation of {@link #VARIANT_PARSE}.
    *
    * <p>It implements {@link Typed} only because the implementation needs a
    * {@link TypeSystem} value.
    */
-  static class ValueParser extends BaseApplicable1<Variant, String>
+  static class VariantParser extends BaseApplicable1<Variant, String>
       implements Typed {
     private final @Nullable TypeSystem typeSystem;
 
-    ValueParser(@Nullable TypeSystem typeSystem) {
+    VariantParser(@Nullable TypeSystem typeSystem) {
       super(BuiltIn.VARIANT_PARSE);
       this.typeSystem = typeSystem;
     }
 
     @Override
     public Applicable withType(TypeSystem typeSystem, Type ignored) {
-      return new ValueParser(requireNonNull(typeSystem));
+      return new VariantParser(requireNonNull(typeSystem));
     }
 
     @Override
@@ -3996,8 +3996,9 @@ public abstract class Codes {
   /**
    * Returns an applicable that constructs an instance of a datatype.
    *
-   * <p>For the VALUE datatype, creates Value instances. For other datatypes,
-   * creates Lists with two elements [constructorName, value].
+   * <p>For the {@code variant} datatype, creates a {@link Variant}. For other
+   * datatypes, creates a {@link List} with two elements [constructorName,
+   * value].
    */
   public static Applicable tyCon(Type dataType, String name) {
     requireNonNull(dataType);
@@ -4424,7 +4425,7 @@ public abstract class Codes {
           .put(BuiltIn.SYS_SHOW, SYS_SHOW)
           .put(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL)
           .put(BuiltIn.SYS_UNSET, SYS_UNSET)
-          .put(BuiltIn.VARIANT_PARSE, VALUE_PARSE)
+          .put(BuiltIn.VARIANT_PARSE, VARIANT_PARSE)
           .put(BuiltIn.VARIANT_PRINT, VARIANT_PRINT)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_APP, VECTOR_APP)

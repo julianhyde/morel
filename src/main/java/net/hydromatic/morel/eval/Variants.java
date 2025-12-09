@@ -23,10 +23,7 @@ import static java.lang.String.format;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.type.DataType;
-import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
@@ -102,70 +99,12 @@ public class Variants {
         return Variant.ofConstructor(typeSystem, conName, conArg);
       default:
         throw new IllegalArgumentException(
-            String.format("Unknown VALUE constructor: %s", name));
+            String.format("Unknown variant constructor: %s", name));
     }
   }
 
   /**
-   * Extracts the constructor name from a Value instance.
-   *
-   * <p>Returns the VALUE datatype constructor name (e.g., "INT", "LIST",
-   * "BOOL") for a given Value instance, or null if the Value doesn't correspond
-   * to a simple constructor.
-   *
-   * @param value Value instance
-   * @return Constructor name, or null if not applicable
-   */
-  public static String getConstructorName(Variant value) {
-    final Type type = value.type;
-
-    // Primitive types
-    if (type == PrimitiveType.UNIT) {
-      return "UNIT";
-    }
-    if (type == PrimitiveType.BOOL) {
-      return "BOOL";
-    }
-    if (type == PrimitiveType.INT) {
-      return "INT";
-    }
-    if (type == PrimitiveType.REAL) {
-      return "REAL";
-    }
-    if (type == PrimitiveType.CHAR) {
-      return "CHAR";
-    }
-    if (type == PrimitiveType.STRING) {
-      return "STRING";
-    }
-
-    // List types - we can't distinguish LIST, BAG, VECTOR from type alone
-    // For now, assume LIST (this is a limitation)
-    if (type instanceof ListType) {
-      return "LIST";
-    }
-
-    // DataType for option
-    if (type instanceof DataType) {
-      final DataType dataType = (DataType) type;
-      if (dataType.name.equals("option")) {
-        return value.value == Codes.OPTION_NONE
-            ? "VARIANT_NONE"
-            : "VARIANT_SOME";
-      }
-    }
-
-    // Record types
-    if (type instanceof RecordType) {
-      return "RECORD";
-    }
-
-    // For other types, we can't determine a simple constructor name
-    throw new IllegalArgumentException("unknown type " + type);
-  }
-
-  /**
-   * Parses a string representation into a value.
+   * Creates a Variant by parsing a string.
    *
    * @see net.hydromatic.morel.compile.BuiltIn#VARIANT_PARSE
    */
@@ -243,7 +182,7 @@ public class Variants {
 
     private Variant parseUnit() {
       expect("()");
-      return (Variant) Codes.VALUE_UNIT;
+      return (Variant) Codes.VARIANT_UNIT;
     }
 
     private Variant parseBool() {
@@ -309,11 +248,10 @@ public class Variants {
               sb.append(c);
               break;
           }
-          pos++;
         } else {
           sb.append(input.charAt(pos));
-          pos++;
         }
+        pos++;
       }
       expect("\"");
       return Variant.ofString(sb.toString());
@@ -351,11 +289,10 @@ public class Variants {
             c = escapeChar;
             break;
         }
-        pos++;
       } else {
         c = input.charAt(pos);
-        pos++;
       }
+      pos++;
       expect("\"");
       return Variant.ofChar(c);
     }
@@ -370,13 +307,10 @@ public class Variants {
       }
 
       final ImmutableList.Builder<Variant> values = ImmutableList.builder();
-      values.add(parseValue());
-      skipWhitespace();
-      while (tryConsume(",")) {
-        skipWhitespace();
+      do {
         values.add(parseValue());
         skipWhitespace();
-      }
+      } while (tryConsume(","));
       expect("]");
       return Variant.ofVariantList(typeSystem, values.build());
     }
@@ -391,13 +325,10 @@ public class Variants {
       }
 
       final ImmutableList.Builder<Variant> values = ImmutableList.builder();
-      values.add(parseValue());
-      skipWhitespace();
-      while (tryConsume(",")) {
-        skipWhitespace();
+      do {
         values.add(parseValue());
         skipWhitespace();
-      }
+      } while (tryConsume(","));
       expect("]");
       return Variant.ofVariantBag(typeSystem, values.build());
     }
@@ -412,13 +343,10 @@ public class Variants {
       }
 
       final ImmutableList.Builder<Variant> values = ImmutableList.builder();
-      values.add(parseValue());
-      skipWhitespace();
-      while (tryConsume(",")) {
-        skipWhitespace();
+      do {
         values.add(parseValue());
         skipWhitespace();
-      }
+      } while (tryConsume(","));
       expect("]");
       return Variant.ofVariantVector(typeSystem, values.build());
     }
@@ -455,7 +383,7 @@ public class Variants {
     }
 
     private Variant parseIdentifierValue() {
-      // Handle VALUE constructors: UNIT, BOOL, INT, REAL, CHAR, STRING, LIST,
+      // Handle variant constructors: UNIT, BOOL, INT, REAL, CHAR, STRING, LIST,
       // BAG, VECTOR, etc.
       if (tryConsume("UNIT")) {
         return Variant.unit();
@@ -511,37 +439,22 @@ public class Variants {
           return Variant.ofRecord(typeSystem, PairList.of());
         }
         final PairList<String, Variant> pairs = PairList.of();
-        // Parse first pair
-        expect("(");
-        skipWhitespace();
-        expect("\"");
-        final String name1 = parseStringContent();
-        expect("\"");
-        skipWhitespace();
-        expect(",");
-        skipWhitespace();
-        final Variant value1 = parseValue();
-        skipWhitespace();
-        expect(")");
-        pairs.add(name1, value1);
-        skipWhitespace();
-        // Parse remaining pairs
-        while (tryConsume(",")) {
+        do {
           skipWhitespace();
           expect("(");
           skipWhitespace();
           expect("\"");
-          final String name = parseStringContent();
+          final String name1 = parseStringContent();
           expect("\"");
           skipWhitespace();
           expect(",");
           skipWhitespace();
-          final Variant value = parseValue();
+          final Variant value1 = parseValue();
           skipWhitespace();
           expect(")");
-          pairs.add(name, value);
+          pairs.add(name1, value1);
           skipWhitespace();
-        }
+        } while (tryConsume(","));
         expect("]");
         return Variant.ofRecord(typeSystem, pairs);
       }
@@ -556,13 +469,10 @@ public class Variants {
           return Variant.ofBag(typeSystem, variantType, ImmutableList.of());
         }
         final ImmutableList.Builder<Variant> values = ImmutableList.builder();
-        values.add(parseValue());
-        skipWhitespace();
-        while (tryConsume(",")) {
-          skipWhitespace();
+        do {
           values.add(parseValue());
           skipWhitespace();
-        }
+        } while (tryConsume(","));
         expect("]");
         final Type variantType = typeSystem.lookup(BuiltIn.Datatype.VARIANT);
         return Variant.ofBag(typeSystem, variantType, values.build());

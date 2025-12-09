@@ -58,7 +58,8 @@ public class Session {
   /**
    * Type system for this session.
    *
-   * <p>Used by VALUE constructors to create properly-typed Value instances.
+   * <p>Used by variant constructors to create properly-typed instances of
+   * {@link Variant}.
    */
   public final @Nullable TypeSystem typeSystem;
 

@@ -258,36 +258,33 @@ public class EvalEnvs {
 
         case CON0_PAT:
           final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;
-          // Handle Value instances for VALUE datatype
+          // Handle instances for "variant" datatype.
           if (argValue instanceof Variant) {
             final Variant value = (Variant) argValue;
-            // Extract constructor name from Value
-            final String constructorName = Variants.getConstructorName(value);
-            return constructorName != null
-                && constructorName.equals(con0Pat.tyCon);
+            return value.constructor().constructor.equals(con0Pat.tyCon);
           } else {
-            final List con0Value = (List) argValue;
-            return con0Value.get(0).equals(con0Pat.tyCon);
+            @SuppressWarnings("unchecked")
+            final List<Object> list = (List<Object>) argValue;
+            return list.get(0).equals(con0Pat.tyCon);
           }
 
         case CON_PAT:
           final Core.ConPat conPat = (Core.ConPat) pat;
-          // Handle Value instances for VALUE datatype
+          // Handle instances for "variant" datatype.
           if (argValue instanceof Variant) {
             final Variant value = (Variant) argValue;
-            // Extract constructor name and payload from Value
-            final String constructorName = Variants.getConstructorName(value);
-            if (constructorName == null
-                || !constructorName.equals(conPat.tyCon)) {
+            // Extract constructor name and payload.
+            if (!value.constructor().constructor.equals(conPat.tyCon)) {
               return false;
             }
-            // Extract payload without converting to List representation
+            // Extract payload without converting to List representation.
             final Object payload = value.value;
             return bindRecurse(conPat.pat, payload);
           } else {
-            final List conValue = (List) argValue;
-            return conValue.get(0).equals(conPat.tyCon)
-                && bindRecurse(conPat.pat, conValue.get(1));
+            @SuppressWarnings("unchecked")
+            final List<Object> list = (List<Object>) argValue;
+            return list.get(0).equals(conPat.tyCon)
+                && bindRecurse(conPat.pat, list.get(1));
           }
 
         default:

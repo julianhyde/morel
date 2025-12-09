@@ -83,7 +83,7 @@ public class TypeSystem {
     if (type == DummyType.INSTANCE) {
       Object o = ComparableSingletonList.of(tyConName);
       if (dataType.name.equals(BuiltIn.Datatype.VARIANT.mlName())) {
-        // Nullary VALUE constructors: create proper Value instance
+        // Nullary variant constructors: create proper variant instance.
         o = Variants.fromConstructor(tyConName, Unit.INSTANCE, this);
       }
       return Binding.of(core.idPat(dataType, tyConName, 0), Codes.constant(o));

@@ -19,7 +19,6 @@
 (*
 "this is a simple script; modify it for debugging test cases";
 > val it = "this is a simple script; modify it for debugging test cases" : string
-*)
 
 INT 3;
 > val it = 3 : int variant
@@ -38,6 +37,7 @@ RECORD [("x", INT 1), ("y", BOOL true)];
 
 RECORD [("name", STRING "Alice"), ("age", INT 30)];
 > val it = {age=30,name="Alice"} : {age:int, name:string} variant
+*)
 
 fun getInt v =
   case v of
@@ -48,6 +48,7 @@ fun getInt v =
 getInt (INT 42);
 > val it = SOME 42 : int option
 
+(*
 CONSTRUCT ("INL", INT 1);
 > val it = INL 1 : (int,'b) either variant
 
@@ -67,7 +68,6 @@ fun testRoundTrip v =
 testRoundTrip (VARIANT_SOME (INT 42));
 > val it = true : bool
 
-(*
 *)
 
 (*) End dummy.smli

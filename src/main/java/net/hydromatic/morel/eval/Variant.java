@@ -324,8 +324,7 @@ public class Variant extends AbstractImmutableList<Object> {
       BiConsumer<Core.NamedPat, Object> envRef,
       Variant variant,
       Core.ConPat conPat) {
-    final String constructorName = Variants.getConstructorName(variant);
-    if (!constructorName.equals(conPat.tyCon)) {
+    if (!variant.constructor().constructor.equals(conPat.tyCon)) {
       return false;
     }
     // For list types, rewrap elements as Variants if needed.
@@ -370,6 +369,51 @@ public class Variant extends AbstractImmutableList<Object> {
       innerValue = variant.value;
     }
     return Closure.bindRecurse(conPat.pat, innerValue, envRef);
+  }
+
+  /** Returns this variant's constructor name. */
+  public BuiltIn.Constructor constructor() {
+    // Primitive types
+    if (type.op() == Op.ID) {
+      switch ((PrimitiveType) type) {
+        case UNIT:
+          return BuiltIn.Constructor.VARIANT_UNIT;
+        case BOOL:
+          return BuiltIn.Constructor.VARIANT_BOOL;
+        case INT:
+          return BuiltIn.Constructor.VARIANT_INT;
+        case REAL:
+          return BuiltIn.Constructor.VARIANT_REAL;
+        case CHAR:
+          return BuiltIn.Constructor.VARIANT_CHAR;
+        case STRING:
+          return BuiltIn.Constructor.VARIANT_STRING;
+      }
+    } else {
+      // List types - we can't distinguish LIST, BAG, VECTOR from type alone
+      // For now, assume LIST (this is a limitation)
+      if (type instanceof ListType) {
+        return BuiltIn.Constructor.VARIANT_LIST;
+      }
+
+      // DataType for option
+      if (type instanceof DataType) {
+        final DataType dataType = (DataType) type;
+        if (dataType.name.equals("option")) {
+          return value == Codes.OPTION_NONE
+              ? BuiltIn.Constructor.VARIANT_NONE
+              : BuiltIn.Constructor.VARIANT_SOME;
+        }
+      }
+
+      // Record types
+      if (type instanceof RecordType) {
+        return BuiltIn.Constructor.VARIANT_RECORD;
+      }
+    }
+
+    // For other types, we can't determine a simple constructor name
+    throw new IllegalArgumentException("unknown type " + type);
   }
 
   /**
