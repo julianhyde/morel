@@ -482,6 +482,7 @@ public class DatalogTest {
     assertThat(program.statements.size(), is(0));
   }
 
+  /** Tests calling {@code Datalog.validate}. */
   @Test
   void testValidateThroughMorel() {
     // Test Datalog.validate integration with Morel - verify it compiles and has
@@ -494,16 +495,16 @@ public class DatalogTest {
     ml(ml).assertType("string");
   }
 
+  /** Tests calling {@code Datalog.execute}. */
   @Test
   void testExecuteThroughMorel() {
-    // Test Datalog.execute integration with Morel - verify it compiles and has
-    // correct type
     String program =
         ".decl edge(x:number, y:number)\n" //
             + "edge(1,2).\n"
             + ".output edge\n";
     String ml = "Datalog.execute \"" + stringToString(program) + "\"";
-    ml(ml).assertType("variant");
+    String expected = "Variant({edge:{x:int, y:int} list}, [[[1, 2]]])";
+    ml(ml).assertType("variant").assertEval(hasToString(expected));
   }
 }
 

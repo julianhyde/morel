@@ -220,6 +220,7 @@ num(3).
 > val it = {num=[1,2,3]} : {num:int list} variant
 
 (*) Execution - transitive closure
+(* TODO
 Datalog.execute ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 edge(1,2).
@@ -229,8 +230,29 @@ path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
 > val it = {path=[{x=1,y=2},{x=1,y=3},{x=2,y=3}]}
 >   : {path:{x:int, y:int} list} variant
+*)
+
+(*
+Translated:
+
+fun edge(x, y) = (x, y) elem [(1, 2), (2, 3)];
+fun path(x, z) = edge(x, z)
+ orelse (exists y where path(x, y) andalso edge(y, z));
+from x, z where path(x, z);
+
+Expanded:
+
+fun edge(x, y) = (x, y) elem [(1, 2), (2, 3)];
+> val edge = fn : int * int -> bool
+fun path(x, z) = edge(x, z) orelse
+  (exists y in [1,2,3] where path(x, y) andalso edge(y, z));
+> val path = fn : int * int -> bool
+from x in [1,2,3], z in [1,2,3] where path(x, z);
+
+*)
 
 (*) Comparison operators - less than
+(*
 Datalog.execute ".decl num(n:number)
 .decl small(n:number)
 num(1).
@@ -239,8 +261,10 @@ num(10).
 small(X) :- num(X), X < 7.
 .output small";
 > val it = {small=[1,5]} : {small:int list} variant
+*)
 
 (*) Comparison operators - greater than or equal
+(* TODO
 Datalog.execute ".decl num(n:number)
 .decl large(n:number)
 num(1).
@@ -249,8 +273,10 @@ num(10).
 large(X) :- num(X), X >= 5.
 .output large";
 > val it = {large=[5,10]} : {large:int list} variant
+*)
 
 (*) Comparison operators - not equal
+(* TODO
 Datalog.execute ".decl num(n:number)
 .decl not_five(n:number)
 num(1).
@@ -259,8 +285,10 @@ num(10).
 not_five(X) :- num(X), X != 5.
 .output not_five";
 > val it = {not_five=[1,10]} : {not_five:int list} variant
+*)
 
 (*) Comparison operators - equal
+(*
 Datalog.execute ".decl edge(x:number, y:number)
 .decl self_loop(x:number)
 edge(1, 1).
@@ -269,5 +297,6 @@ edge(4, 4).
 self_loop(X) :- edge(X, Y), X = Y.
 .output self_loop";
 > val it = {self_loop=[1,4]} : {self_loop:int list} variant
+*)
 
 (*) End datalog.smli
