@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.datalog;
 
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,6 +27,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.compile.CompileException;
+import net.hydromatic.morel.compile.CompiledStatement;
+import net.hydromatic.morel.compile.Compiles;
+import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.datalog.DatalogAst.Atom;
 import net.hydromatic.morel.datalog.DatalogAst.BodyAtom;
 import net.hydromatic.morel.datalog.DatalogAst.CompOp;
@@ -42,6 +50,8 @@ import net.hydromatic.morel.datalog.DatalogAst.Term;
 import net.hydromatic.morel.datalog.DatalogAst.Variable;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Variant;
+import net.hydromatic.morel.parse.MorelParserImpl;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -54,6 +64,15 @@ import net.hydromatic.morel.util.PairList;
  * programs.
  */
 public class DatalogEvaluator {
+  /**
+   * Flag to control evaluation strategy.
+   *
+   * <p>When true, uses direct semi-naive evaluation with custom Tuple engine.
+   * When false (default), translates to Morel and executes through Morel's
+   * pipeline.
+   */
+  private static final boolean USE_DIRECT_EVALUATOR = false;
+
   private DatalogEvaluator() {
     // Utility class
   }
@@ -64,7 +83,7 @@ public class DatalogEvaluator {
    * @param program the Datalog program source code
    * @param session the Morel session
    * @return variant containing structured data for relations marked with
-   *     .output
+   *     {@code .output}
    * @throws DatalogException if the program is invalid
    */
   public static Variant execute(String program, Session session) {
@@ -75,68 +94,285 @@ public class DatalogEvaluator {
       // 2. Analyze for safety and stratification
       DatalogAnalyzer.analyze(ast);
 
-      // 3. Collect facts and rules by relation
-      Map<String, List<Rule>> rulesByRelation = new LinkedHashMap<>();
-      Map<String, Set<Tuple>> tuplesByRelation = new LinkedHashMap<>();
-
-      for (Statement stmt : ast.statements) {
-        if (stmt instanceof Fact) {
-          Fact fact = (Fact) stmt;
-          String relationName = fact.atom.name;
-          tuplesByRelation
-              .computeIfAbsent(relationName, k -> new HashSet<>())
-              .add(Tuple.fromAtom(fact.atom));
-        } else if (stmt instanceof Rule) {
-          Rule rule = (Rule) stmt;
-          String relationName = rule.head.name;
-          rulesByRelation
-              .computeIfAbsent(relationName, k -> new ArrayList<>())
-              .add(rule);
-        }
+      // 3. Choose evaluation strategy
+      if (USE_DIRECT_EVALUATOR) {
+        return executeDirectly(ast, session);
+      } else {
+        return executeViaMorel(ast, session);
       }
-
-      // 4. Evaluate rules using semi-naive evaluation
-      evaluateRules(rulesByRelation, tuplesByRelation);
-
-      // 5. Build variant output for each .output directive
-      TypeSystem typeSystem = session.typeSystem;
-      List<Output> outputs = ast.getOutputs();
-
-      if (outputs.isEmpty()) {
-        // No outputs -> return unit
-        return Variant.unit();
-      }
-
-      // Build a record with one field per output relation
-      PairList<String, Variant> fields = PairList.of();
-
-      for (Output output : outputs) {
-        String relationName = output.relationName;
-        Declaration decl = ast.getDeclaration(relationName);
-        Set<Tuple> tuples =
-            tuplesByRelation.getOrDefault(relationName, new HashSet<>());
-
-        // Convert tuples to variant list
-        List<Variant> tupleVariants = new ArrayList<>();
-        for (Tuple tuple :
-            tuples.stream().sorted().collect(Collectors.toList())) {
-          tupleVariants.add(tupleToVariant(tuple, decl, typeSystem));
-        }
-
-        // Determine element type for the list
-        Type elementType = tupleElementType(decl, typeSystem);
-        Variant listVariant =
-            Variant.ofList(typeSystem, elementType, tupleVariants);
-        fields.add(relationName, listVariant);
-      }
-
-      // Return a record variant
-      return Variant.ofRecord(typeSystem, fields);
 
     } catch (ParseException e) {
       throw new DatalogException(
           String.format("Parse error: %s", e.getMessage()), e);
     }
+  }
+
+  /**
+   * Executes via Morel translation (default strategy).
+   *
+   * <p>Translates the Datalog program to Morel source code and executes it
+   * through Morel's normal compilation pipeline.
+   */
+  private static Variant executeViaMorel(Program ast, Session session) {
+    // Translate Datalog AST to Morel source code
+    String morelSource = translateToMorelSource(ast);
+
+    try {
+      // Parse the Morel source
+      MorelParserImpl parser =
+          new MorelParserImpl(new StringReader(morelSource));
+      AstNode statement = parser.statementEofSafe();
+
+      // Compile the statement
+      TypeSystem typeSystem = new TypeSystem();
+      Environment env = Environments.empty();
+      List<CompileException> warnings = new ArrayList<>();
+      CompiledStatement compiled =
+          Compiles.prepareStatement(
+              typeSystem,
+              session,
+              env,
+              statement,
+              null,
+              warnings::add,
+              Tracers.empty());
+
+      // Evaluate and capture the binding
+      List<String> outLines = new ArrayList<>();
+      List<Binding> bindings = new ArrayList<>();
+      compiled.eval(session, env, outLines::add, bindings::add);
+
+      // The last binding should be "it" with the variant value
+      if (bindings.isEmpty()) {
+        throw new DatalogException("No bindings produced from Morel execution");
+      }
+
+      Object result = bindings.get(bindings.size() - 1).value;
+
+      // Wrap the result in a Variant using the compiled statement's type
+      Type resultType = compiled.getType();
+      return Variant.of(resultType, result);
+    } catch (Exception e) {
+      throw new DatalogException(
+          String.format(
+              "Error executing Morel translation: %s\n"
+                  + "Generated Morel code:\n"
+                  + "%s",
+              e.getMessage(), morelSource),
+          e);
+    }
+  }
+
+  /**
+   * Translates a Datalog program to Morel source code.
+   *
+   * <p>Translation strategy:
+   *
+   * <ul>
+   *   <li>Facts → List literals
+   *   <li>Rules → from expressions (or recursive fixpoint for transitive
+   *       closure)
+   *   <li>Output → return record with output relations
+   * </ul>
+   */
+  private static String translateToMorelSource(Program ast) {
+    StringBuilder morel = new StringBuilder();
+
+    // Group facts by relation
+    Map<String, List<Fact>> factsByRelation = new LinkedHashMap<>();
+    Map<String, List<Rule>> rulesByRelation = new LinkedHashMap<>();
+
+    for (Statement stmt : ast.statements) {
+      if (stmt instanceof Fact) {
+        Fact fact = (Fact) stmt;
+        factsByRelation
+            .computeIfAbsent(fact.atom.name, k -> new ArrayList<>())
+            .add(fact);
+      } else if (stmt instanceof Rule) {
+        Rule rule = (Rule) stmt;
+        rulesByRelation
+            .computeIfAbsent(rule.head.name, k -> new ArrayList<>())
+            .add(rule);
+      }
+    }
+
+    // Start let expression
+    morel.append("let\n");
+
+    // Generate val declarations for each relation
+    for (Declaration decl : ast.getDeclarations()) {
+      List<Fact> facts =
+          factsByRelation.getOrDefault(decl.name, new ArrayList<>());
+      List<Rule> rules =
+          rulesByRelation.getOrDefault(decl.name, new ArrayList<>());
+
+      if (!facts.isEmpty() && rules.isEmpty()) {
+        // Facts only - simple list literal
+        morel.append("  val ").append(decl.name).append(" = ");
+        morel.append(translateFactsToList(decl, facts));
+        morel.append("\n");
+      } else if (!rules.isEmpty()) {
+        // Has rules - need more complex translation
+        // For now, throw error for unsupported features
+        throw new UnsupportedOperationException(
+            "Rules not yet supported in Morel translation: " + decl.name);
+      }
+    }
+
+    // in clause with output record
+    morel.append("in\n").append("  ");
+
+    List<Output> outputs = ast.getOutputs();
+    if (outputs.isEmpty()) {
+      morel.append("()");
+    } else if (outputs.size() == 1) {
+      morel
+          .append("{")
+          .append(outputs.get(0).relationName)
+          .append("=")
+          .append(outputs.get(0).relationName)
+          .append("}");
+    } else {
+      morel.append("{");
+      for (int i = 0; i < outputs.size(); i++) {
+        if (i > 0) {
+          morel.append(", ");
+        }
+        String relName = outputs.get(i).relationName;
+        morel.append(relName).append("=").append(relName);
+      }
+      morel.append("}");
+    }
+
+    // end clause
+    morel.append("\n").append("end");
+
+    return morel.toString();
+  }
+
+  /**
+   * Translates a list of facts to a Morel list literal.
+   *
+   * <p>Example: {@code edge(1,2). edge(2,3).} becomes {@code [(1,2), (2,3)]}
+   */
+  private static String translateFactsToList(
+      Declaration decl, List<Fact> facts) {
+    StringBuilder sb = new StringBuilder("[");
+
+    for (int i = 0; i < facts.size(); i++) {
+      if (i > 0) {
+        sb.append(", ");
+      }
+      Fact fact = facts.get(i);
+
+      if (decl.arity() == 1) {
+        // Single value - no tuple
+        sb.append(termToMorel(fact.atom.terms.get(0)));
+      } else {
+        // Multiple values - record with field names
+        sb.append("{");
+        for (int j = 0; j < fact.atom.terms.size(); j++) {
+          if (j > 0) {
+            sb.append(", ");
+          }
+          Param param = decl.params.get(j);
+          sb.append(param.name).append("=");
+          sb.append(termToMorel(fact.atom.terms.get(j)));
+        }
+        sb.append("}");
+      }
+    }
+
+    sb.append("]");
+    return sb.toString();
+  }
+
+  /** Converts a Datalog term to Morel syntax. */
+  private static String termToMorel(Term term) {
+    if (term instanceof Constant) {
+      Constant constant = (Constant) term;
+      Object value = constant.value;
+
+      if (value instanceof Number) {
+        return value.toString();
+      } else if (value instanceof String) {
+        // Escape the string for Morel
+        return "\""
+            + ((String) value).replace("\\", "\\\\").replace("\"", "\\\"")
+            + "\"";
+      }
+    } else if (term instanceof Variable) {
+      // Variables in facts are treated as symbols (strings)
+      Variable var = (Variable) term;
+      return "\"" + var.name + "\"";
+    }
+    throw new IllegalArgumentException("Cannot convert term to Morel: " + term);
+  }
+
+  /**
+   * Executes directly using semi-naive evaluation (legacy strategy).
+   *
+   * <p>Uses a custom Tuple-based engine for evaluation.
+   */
+  private static Variant executeDirectly(Program ast, Session session) {
+    TypeSystem typeSystem = session.typeSystem;
+
+    // Collect facts and rules by relation
+    Map<String, List<Rule>> rulesByRelation = new LinkedHashMap<>();
+    Map<String, Set<Tuple>> tuplesByRelation = new LinkedHashMap<>();
+
+    for (Statement stmt : ast.statements) {
+      if (stmt instanceof Fact) {
+        Fact fact = (Fact) stmt;
+        String relationName = fact.atom.name;
+        tuplesByRelation
+            .computeIfAbsent(relationName, k -> new HashSet<>())
+            .add(Tuple.fromAtom(fact.atom));
+      } else if (stmt instanceof Rule) {
+        Rule rule = (Rule) stmt;
+        String relationName = rule.head.name;
+        rulesByRelation
+            .computeIfAbsent(relationName, k -> new ArrayList<>())
+            .add(rule);
+      }
+    }
+
+    // Evaluate rules using semi-naive evaluation
+    evaluateRules(rulesByRelation, tuplesByRelation);
+
+    // Build variant output for each .output directive
+    List<Output> outputs = ast.getOutputs();
+
+    if (outputs.isEmpty()) {
+      // No outputs -> return unit
+      return Variant.unit();
+    }
+
+    // Build a record with one field per output relation
+    PairList<String, Variant> fields = PairList.of();
+
+    for (Output output : outputs) {
+      String relationName = output.relationName;
+      Declaration decl = ast.getDeclaration(relationName);
+      Set<Tuple> tuples =
+          tuplesByRelation.getOrDefault(relationName, new HashSet<>());
+
+      // Convert tuples to variant list
+      List<Variant> tupleVariants = new ArrayList<>();
+      for (Tuple tuple :
+          tuples.stream().sorted().collect(Collectors.toList())) {
+        tupleVariants.add(tupleToVariant(tuple, decl, typeSystem));
+      }
+
+      // Determine element type for the list
+      Type elementType = tupleElementType(decl, typeSystem);
+      Variant listVariant =
+          Variant.ofList(typeSystem, elementType, tupleVariants);
+      fields.add(relationName, listVariant);
+    }
+
+    // Return a record variant
+    return Variant.ofRecord(typeSystem, fields);
   }
 
   /**
