@@ -24,46 +24,60 @@ Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
 (*) Basic validation - valid program
-Datalog.validate ".decl edge(x:number, y:number)
+val program = ".decl edge(x:number, y:number)
 edge(1,2).
 edge(2,3).
 .output edge";
-> val it = "{edge:(int * int) list}" : string
+> val program =
+>   ".decl edge(x:number, y:number)\nedge(1,2).\nedge(2,3).\n.output edge"
+>   : string
+
+Datalog.validate program;
+> val it = "{edge:{x:int, y:int} list}" : string
+
+Datalog.translate program;
+> val it =
+>   SOME "let\n  val edge = [{x=1, y=2}, {x=2, y=3}]\nin\n  {edge=edge}\nend"
+>   : string option
 
 (*) Basic validation - parse error
 Datalog.validate ".decl edge(x:number";
 > val it =
->   "Error: Parse error: Encountered \"<EOF>\" at line 1, column 19.\nWas expecting one of:\n    \")\" ...\n    \",\" ...\n    "
+>   "Parse error: Encountered \"<EOF>\" at line 1, column 19.\nWas expecting one of:\n    \")\" ...\n    \",\" ...\n    "
 >   : string
 
 (*) Schema validation - arity mismatch in fact
 Datalog.validate ".decl edge(x:number, y:number)
 edge(1,2,3).";
-> val it = "Error: Atom edge/3 does not match declaration edge/2" : string
+> val it = "Compilation error: Atom edge/3 does not match declaration edge/2"
+>   : string
 
 (*) Schema validation - arity mismatch in rule head
 Datalog.validate ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 path(X,Y,Z) :- edge(X,Y).";
-> val it = "Error: Atom path/3 does not match declaration path/2" : string
+> val it = "Compilation error: Atom path/3 does not match declaration path/2"
+>   : string
 
 (*) Schema validation - arity mismatch in rule body
 Datalog.validate ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 path(X,Y) :- edge(X).";
-> val it = "Error: Atom edge/1 does not match declaration edge/2" : string
+> val it = "Compilation error: Atom edge/1 does not match declaration edge/2"
+>   : string
 
 (*) Schema validation - undeclared relation
 Datalog.validate ".decl edge(x:number, y:number)
 path(1,2).";
-> val it = "Error: Relation 'path' used in fact but not declared" : string
+> val it = "Compilation error: Relation 'path' used in fact but not declared"
+>   : string
 
 (*) Safety - unsafe rule (variable in head not in body)
 Datalog.validate ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 path(X,Y) :- edge(X,Z).";
 > val it =
->   "Error: Rule is unsafe. Variable 'Y' in head does not appear in positive body atom"
+>   "Compilation error: Rule is unsafe. Variable 'Y' in head does not appear in positive body atom"
 >   : string
 
 (*) Safety - unsafe negation (variable only in negated atom)
@@ -71,7 +85,7 @@ Datalog.validate ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 path(X,Y) :- edge(X,Z), !edge(Y,W).";
 > val it =
->   "Error: Rule is unsafe. Variable 'Y' in head does not appear in positive body atom"
+>   "Compilation error: Rule is unsafe. Variable 'Y' in head does not appear in positive body atom"
 >   : string
 
 (*) Stratification - negation cycle
@@ -82,7 +96,7 @@ edge(1,2).
 p(X) :- edge(X,Y), !q(X).
 q(X) :- edge(X,Y), !p(X).";
 > val it =
->   "Error: Program is not stratified. Negation cycle detected involving relation: p"
+>   "Compilation error: Program is not stratified. Negation cycle detected involving relation: p"
 >   : string
 
 (*) Stratification - valid stratified program
@@ -92,7 +106,9 @@ edge(1,2).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> val it = "{path:(int * int) list}" : string
+> val it =
+>   "Compilation error: Rules not yet supported in Morel translation: path"
+>   : string
 
 (*) Multiple .output directives
 Datalog.validate ".decl edge(x:number, y:number)
@@ -101,7 +117,9 @@ edge(1,2).
 path(X,Y) :- edge(X,Y).
 .output edge
 .output path";
-> val it = "{edge:(int * int) list, path:(int * int) list}" : string
+> val it =
+>   "Compilation error: Rules not yet supported in Morel translation: path"
+>   : string
 
 (*) Basic facts - number type
 Datalog.validate ".decl num(n:number)
@@ -130,20 +148,42 @@ Datalog.validate ".decl employee(name:string, age:number, dept:symbol)
 employee(\"Alice\", 30, engineering).
 employee(\"Bob\", 25, sales).
 .output employee";
-> val it = "{employee:(string * int * string) list}" : string
+> val it = "{employee:{age:int, dept:string, name:string} list}" : string
+
+(*) Basic facts - more than one output
+Datalog.validate ".decl employee(name:string, age:number, dept:number)
+.decl department(name:string, dept:number)
+employee(\"Alice\", 30, 10).
+employee(\"Bob\", 25, 20).
+department(\"Sales\", 20).
+department(\"Engineering\", 10).
+.output employee
+.output department";
+> val it =
+>   "{department:{dept:int, name:string} list, employee:{age:int, dept:int, name:string} list}"
+>   : string
+
+(*) Basic facts - no output
+Datalog.validate ".decl employee(name:string, age:number, dept:number)
+.decl department(name:string, dept:number)
+employee(\"Alice\", 30, 10).
+employee(\"Bob\", 25, 20).
+department(\"Sales\", 20).
+department(\"Engineering\", 10).";
+> val it = "unit" : string
 
 (*) Type mismatch - number for string
 Datalog.validate ".decl person(name:string)
 person(42).";
 > val it =
->   "Error: Type mismatch in fact person(...): expected string, got number for parameter name"
+>   "Compilation error: Type mismatch in fact person(...): expected string, got number for parameter name"
 >   : string
 
 (*) Type mismatch - string for number
 Datalog.validate ".decl num(n:number)
 num(\"hello\").";
 > val it =
->   "Error: Type mismatch in fact num(...): expected number, got symbol for parameter n"
+>   "Compilation error: Type mismatch in fact num(...): expected number, got symbol for parameter n"
 >   : string
 
 (*) Variables in facts are allowed
@@ -160,7 +200,9 @@ edge(3,4).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> val it = "{path:(int * int) list}" : string
+> val it =
+>   "Compilation error: Rules not yet supported in Morel translation: path"
+>   : string
 
 (*) Simple rule - join
 Datalog.validate ".decl parent(p:string, c:string)
@@ -169,7 +211,9 @@ parent(\"Alice\", \"Bob\").
 parent(\"Alice\", \"Carol\").
 sibling(X,Y) :- parent(P,X), parent(P,Y).
 .output sibling";
-> val it = "{sibling:(string * string) list}" : string
+> val it =
+>   "Compilation error: Rules not yet supported in Morel translation: sibling"
+>   : string
 
 (*) Negation - set difference
 Datalog.validate ".decl student(name:string)
@@ -180,7 +224,9 @@ student(\"Bob\").
 graduate(\"Alice\").
 undergraduate(X) :- student(X), !graduate(X).
 .output undergraduate";
-> val it = "{undergraduate:string list}" : string
+> val it =
+>   "Compilation error: Rules not yet supported in Morel translation: undergraduate"
+>   : string
 
 (*) Complex example - ancestor queries
 Datalog.validate ".decl parent(p:string, c:string)
@@ -195,13 +241,13 @@ descendant(P,D) :- ancestor(D,P).
 .output ancestor
 .output descendant";
 > val it =
->   "{ancestor:(string * string) list, descendant:(string * string) list}"
+>   "Compilation error: Rules not yet supported in Morel translation: ancestor"
 >   : string
 
 (*) Empty relation
 Datalog.validate ".decl empty(x:number)
 .output empty";
-> val it = "{empty:int list}" : string
+> val it = "{empty:'a list}" : string
 
 (*) Comments in Datalog
 Datalog.validate "// Line comment
@@ -209,7 +255,7 @@ Datalog.validate "// Line comment
 /* Block comment */
 edge(1,2).
 .output edge";
-> val it = "{edge:(int * int) list}" : string
+> val it = "{edge:{x:int, y:int} list}" : string
 
 (*) Execution - basic facts
 Datalog.execute ".decl num(n:number)

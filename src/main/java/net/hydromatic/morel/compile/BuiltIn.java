@@ -906,6 +906,15 @@ public enum BuiltIn {
       ts -> ts.fnType(STRING, ts.lookup(Datatype.VARIANT))),
 
   /**
+   * Function "Datalog.translate", of type "string &rarr; string option".
+   *
+   * <p>Translates a Datalog program to Morel source code, returning SOME(code)
+   * if valid or NONE if invalid.
+   */
+  DATALOG_TRANSLATE(
+      "Datalog", "translate", ts -> ts.fnType(STRING, ts.option(STRING))),
+
+  /**
    * Function "Datalog.validate", of type "string &rarr; string".
    *
    * <p>Validates a Datalog program and returns type information or error
