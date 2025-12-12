@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
-import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
@@ -58,12 +57,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * from e in #emps scott
  * }</pre>
  */
-class SuchThatShuttle extends Shuttle {
-  final @Nullable Environment env;
+class SuchThatShuttle extends EnvShuttle {
+  SuchThatShuttle(TypeSystem typeSystem, Environment env) {
+    super(typeSystem, env);
+  }
 
-  SuchThatShuttle(TypeSystem typeSystem, @Nullable Environment env) {
-    super(typeSystem);
-    this.env = env;
+  @Override
+  protected EnvShuttle push(Environment env) {
+    return new SuchThatShuttle(typeSystem, env);
   }
 
   static boolean containsUnbounded(Core.Decl decl) {
