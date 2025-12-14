@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.compile;
 
+import static java.util.Objects.requireNonNull;
+
 import java.util.ArrayList;
 import java.util.List;
 import net.hydromatic.morel.ast.Core;
@@ -32,7 +34,7 @@ abstract class EnvShuttle extends Shuttle {
   /** Creates an EnvShuttle. */
   protected EnvShuttle(TypeSystem typeSystem, Environment env) {
     super(typeSystem);
-    this.env = env;
+    this.env = requireNonNull(env);
   }
 
   /** Creates a shuttle the same as this but with a new environment. */

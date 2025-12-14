@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import net.hydromatic.morel.ast.Core;
@@ -140,11 +141,12 @@ public class Extents {
    */
   public static Analysis create(
       TypeSystem typeSystem,
+      Environment env,
       Core.Pat pat,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Iterable<? extends Core.FromStep> followingSteps,
       PairList<Core.IdPat, Core.Exp> idPats) {
-    final Extent extent = new Extent(typeSystem, pat, boundPats, idPats);
+    final Extent extent = new Extent(typeSystem, env, pat, boundPats, idPats);
     final List<Core.Exp> remainingFilters = new ArrayList<>();
 
     final ExtentMap map = new ExtentMap();
@@ -247,6 +249,7 @@ public class Extents {
                   final Analysis analysis =
                       create(
                           typeSystem,
+                          Environments.empty(),
                           scan.pat,
                           ImmutableSortedMap.of(),
                           followingSteps,
@@ -396,6 +399,7 @@ public class Extents {
 
   private static class Extent {
     private final TypeSystem typeSystem;
+    private final Environment env;
     final Set<Core.NamedPat> goalPats;
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
 
@@ -415,13 +419,15 @@ public class Extents {
 
     Extent(
         TypeSystem typeSystem,
+        Environment env,
         Core.Pat pat,
         SortedMap<Core.NamedPat, Core.Exp> boundPats,
         PairList<Core.IdPat, Core.Exp> idPats) {
-      this.typeSystem = typeSystem;
+      this.typeSystem = requireNonNull(typeSystem);
+      this.env = requireNonNull(env);
       this.goalPats = ImmutableSet.copyOf(flatten(pat));
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
-      this.idPats = idPats;
+      this.idPats = requireNonNull(idPats);
     }
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
@@ -432,12 +438,39 @@ public class Extents {
           apply = (Core.Apply) filter;
           switch (apply.fn.op) {
             case FN_LITERAL:
-              BuiltIn builtIn = ((Core.Literal) apply.fn).unwrap(BuiltIn.class);
+              Core.Literal literal = (Core.Literal) apply.fn;
+              // Check if it's a user-defined function
+              if (literal.value instanceof Core.Fn && env != null) {
+                final Optional<PredicateInverter.Result> resultOpt =
+                    PredicateInverter.invert(
+                        typeSystem, env, filter, goalPats, boundPats);
+                resultOpt.ifPresent(
+                    result ->
+                        result.satisfiedPats.forEach(
+                            pat ->
+                                map.computeIfAbsent(pat, p -> PairList.of())
+                                    .add(result.generator, filter)));
+                break;
+              }
+              BuiltIn builtIn = literal.unwrap(BuiltIn.class);
               final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map2;
               switch (builtIn) {
                 case Z_ANDALSO:
                   // Expression is 'andalso'. Visit each pattern, and 'and' the
                   // filters (intersect the extents).
+                  // First try PredicateInverter
+                  final Optional<PredicateInverter.Result> andalsoResultOpt =
+                      PredicateInverter.invert(
+                          typeSystem, env, filter, goalPats, boundPats);
+                  if (andalsoResultOpt.isPresent()) {
+                    final PredicateInverter.Result andalsoResult =
+                        andalsoResultOpt.get();
+                    andalsoResult.satisfiedPats.forEach(
+                        pat ->
+                            map.computeIfAbsent(pat, p -> PairList.of())
+                                .add(andalsoResult.generator, filter));
+                    break;
+                  }
                   map2 = new LinkedHashMap<>();
                   apply.arg.forEachArg((arg, i) -> g3(map2, arg));
                   map2.forEach(
@@ -533,6 +566,24 @@ public class Extents {
                   }
                   break;
               }
+              break;
+
+            case ID:
+              // User-defined function call. Try to invert.
+              final Optional<PredicateInverter.Result> resultOpt2 =
+                  PredicateInverter.invert(
+                      typeSystem, env, filter, goalPats, boundPats);
+              // Add the generator to the map for each satisfied pattern
+              resultOpt2.ifPresent(
+                  result2 ->
+                      result2.satisfiedPats.forEach(
+                          pat ->
+                              map.computeIfAbsent(pat, p -> PairList.of())
+                                  .add(result2.generator, filter)));
+              break;
+
+            default:
+              break;
           }
           break;
 
