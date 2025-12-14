@@ -87,7 +87,40 @@ where b = (i mod 2 = 0);
 >
 > val it : {b:bool, i:int} bag
 
-(* Predicate inversion. *)
+(* -- andalso becomes join ------------------------------ *)
+val nums = [1, 2, 3, 4, 5];
+> val nums = [1,2,3,4,5] : int list
+
+fun isNum n = n elem nums;
+> val isNum = fn : int -> bool
+
+fun isEven n = n mod 2 = 0;
+> val isEven = fn : int -> bool
+
+let (* TODO remove 'let' when we have fixed inlining *)
+  fun isNum n = n elem nums
+  fun isEven n = n mod 2 = 0
+in
+  from n where isNum n andalso isEven n
+end;
+> val it = [2,4] : int bag
+
+(* -- orelse becomes union ------------------------------ *)
+fun isSmall n = n elem [1, 2];
+> val isSmall = fn : int -> bool
+
+fun isLarge n = n elem [10, 20];
+> val isLarge = fn : int -> bool
+
+let (* TODO remove 'let' when we have fixed inlining *)
+  fun isSmall n = n elem [1, 2]
+  fun isLarge n = n elem [10, 20]
+in
+  from n where isSmall n orelse isLarge n
+end;
+> val it = [1,2,10,20] : int bag
+
+(* -- Predicate inversion ------------------------------- *)
 
 (* In the following case, we solve for x given a value of y. This
    requires predicate-inversion because it cannot be solved using
@@ -479,17 +512,27 @@ from i where isBetween (i, 5, 8);
 (* ------------------------------------------------------ *)
 (* Convenience function that converts a predicate to a
  * relation. *)
-(*
 fun enumerate predicate =
   from r where predicate r;
-*)
-(* TODO should print
-val enumerate = fn : ('a -> bool) -> 'a list
-*)
-(*) TODO should return non-empty list
-(*
-enumerate isEmp;
-*)
+> val enumerate = fn : ('a -> bool) -> 'a bag
+
+(* TODO: Remove the 'let', when inlining is working. *)
+let
+  fun isClerk e =
+    e elem scott.emps andalso e.job = "CLERK"
+  fun enumerate predicate =
+    from r where predicate r
+in
+  enumerate isClerk
+end;
+> comm deptno empno ename  hiredate   job   mgr  sal
+> ---- ------ ----- ------ ---------- ----- ---- ------
+> 0.0  20     7369  SMITH  1980-12-17 CLERK 7902 800.0
+> 0.0  20     7876  ADAMS  1987-05-23 CLERK 7788 1100.0
+> 0.0  30     7900  JAMES  1981-12-03 CLERK 7698 950.0
+> 0.0  10     7934  MILLER 1982-01-23 CLERK 7782 1300.0
+>
+> val it : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
 
 (* ------------------------------------------------------ *)
 (* The following example from Souffle,
@@ -560,6 +603,24 @@ val edges = [(1, 2), (2, 3), (1, 4), (4, 2), (4, 3)];
 > val edges = [(1,2),(2,3),(1,4),(4,2),(4,3)] : (int * int) list
 fun edge (x, y) = (x, y) elem edges;
 > val edge = fn : int * int -> bool
+
+fun edge (x, y) = (x, y) elem edges;
+> val edge = fn : int * int -> bool
+
+let (* TODO remove 'let' when we have fixed inlining *)
+  fun edge (x, y) = (x, y) elem edges
+in
+  from x, y where edge (x, y)
+end;
+> x y
+> - -
+> 1 2
+> 2 3
+> 1 4
+> 4 2
+> 4 3
+>
+> val it : {x:int, y:int} bag
 
 (*) Return points that are 2 hops apart.
 (*
