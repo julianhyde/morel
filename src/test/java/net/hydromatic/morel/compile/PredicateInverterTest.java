@@ -71,6 +71,9 @@ public class PredicateInverterTest {
     final Core.IdPat yPat = core.idPat(intType, "y", 0);
     final Core.Id yId = core.id(yPat);
 
+    final Core.IdPat pPat = core.idPat(stringType, "p", 0);
+    final Core.Id pId = core.id(pPat);
+
     final Core.IdPat sPat = core.idPat(stringType, "s", 0);
     final Core.Id sId = core.id(sPat);
 
@@ -197,55 +200,45 @@ public class PredicateInverterTest {
   }
 
   /**
-   * Test 2: Invert 'String.isPrefix s "abcd"' to '["","a","ab","abc","abcd"]'.
-   *
-   * <p>Given the predicate {@code String.isPrefix s "abcd"}, invert it to
-   * generate all possible prefixes of "abcd".
+   * Tests that predicate {@code String.isPrefix p s} inverts to {@code
+   * List.tabulate(String.size s + 1, fn i => String.substring(s, 0, i))} so
+   * that {@code generate "abcd"} returns {@code ["","a","ab","abc","abcd"]}.
    */
   @Test
   void testInvertStringIsPrefix() {
     final Fixture f = new Fixture();
 
-    // Build: String.isPrefix s "abcd"
-    // This is represented as: String_isPrefix (s, "abcd")
+    // The expression "String.isPrefix p s"
     final Core.Exp stringIsPrefixFn =
         core.functionLiteral(f.typeSystem, BuiltIn.STRING_IS_PREFIX);
     final Core.Exp predicate =
         core.apply(
-            Pos.ZERO,
-            core.apply(Pos.ZERO, stringIsPrefixFn, f.sId),
-            f.stringLiteral("abcd"));
+            Pos.ZERO, core.apply(Pos.ZERO, stringIsPrefixFn, f.pId), f.sId);
 
     // Invert to generate s
     final Optional<Result> resultOpt =
         PredicateInverter.invert(
             f.typeSystem,
-            null,
+            Environments.empty(),
             predicate,
-            ImmutableSet.of(f.sPat),
+            ImmutableSet.of(f.pPat),
             ImmutableSortedMap.of());
 
-    // Should successfully invert to ["", "a", "ab", "abc", "abcd"]
-    assumeTrue(false, "TODO enable test");
+    // Should successfully invert to List.tabulate expression
     assertTrue(
         resultOpt.isPresent(),
         "Should successfully invert 'String.isPrefix s \"abcd\"'");
     final Result result = resultOpt.get();
 
-    // Expected: ["", "a", "ab", "abc", "abcd"]
-    final Core.Exp expected =
-        core.list(
-            f.typeSystem,
-            f.stringLiteral(""),
-            f.stringLiteral("a"),
-            f.stringLiteral("ab"),
-            f.stringLiteral("abc"),
-            f.stringLiteral("abcd"));
+    // Expected: List.tabulate(String.size s + 1, fn i => String.substring(s, 0,
+    // i))
+    String expected =
+        "#tabulate List (op + (#size String s, 1), fn i => #substring String (s, 0, i))";
 
-    assertThat(result.generator, hasToString(expected.toString()));
+    assertThat(result.generator, hasToString(expected));
     assertThat(result.mayHaveDuplicates, is(false));
     assertThat(result.isSupersetOfSolution, is(false));
-    assertThat(result.satisfiedPats, is(ImmutableSet.of(f.sPat)));
+    assertThat(result.satisfiedPats, is(ImmutableSet.of(f.pPat)));
   }
 
   /**
@@ -446,18 +439,18 @@ public class PredicateInverterTest {
   }
 
   /**
-   * Test 5: Invert 'x > y andalso x < y + 10' to generate y values when x is
-   * known to be 3, 5, or 7.
+   * Tests that {@code x > y andalso x < y + 10} can be inverted to generate y
+   * values when x is known to be 3, 5, or 7.
    *
    * <p>Given x is bound to [3, 5, 7], we want to find all y such that:
    *
    * <ul>
-   *   <li>3 > y andalso 3 < y + 10, which gives y in (-infinity, 3) intersect
-   *       (-7, infinity) = (-7, 3)
-   *   <li>5 > y andalso 5 < y + 10, which gives y in (-infinity, 5) intersect
-   *       (-5, infinity) = (-5, 5)
-   *   <li>7 > y andalso 7 < y + 10, which gives y in (-infinity, 7) intersect
-   *       (-3, infinity) = (-3, 7)
+   *   <li>{@code 3 > y andalso 3 < y + 10}, which gives y in (-infinity, 3)
+   *       intersect (-7, infinity) = (-7, 3)
+   *   <li>{@code 5 > y andalso 5 < y + 10}, which gives y in (-infinity, 5)
+   *       intersect (-5, infinity) = (-5, 5)
+   *   <li>{@code 7 > y andalso 7 < y + 10}, which gives y in (-infinity, 7)
+   *       intersect (-3, infinity) = (-3, 7)
    * </ul>
    *
    * <p>For integer values:
@@ -524,11 +517,11 @@ public class PredicateInverterTest {
   }
 
   /**
-   * Test 6: Invert 'x > y andalso x < y + 10' to generate x values when y is
-   * given.
+   * Tests that {@code x > y andalso x < y + 10} can be inverted to generate x
+   * values when y is given.
    *
    * <p>Given y is bound to some value (or set of values), we want to find all x
-   * such that: y < x < y + 10.
+   * such that: {@code y < x < y + 10}.
    *
    * <p>For example, if y = 5, then x in {6, 7, 8, 9, 10, 11, 12, 13, 14}.
    *
