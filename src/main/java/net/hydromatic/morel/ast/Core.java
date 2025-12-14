@@ -2166,19 +2166,29 @@ public class Core {
     }
 
     /**
-     * Creates an Apply with the same function. If the arguments are the same,
-     * returns this Apply.
+     * Creates an Apply with the same function and a list of new arguments. If
+     * the arguments are the same, returns this Apply.
+     */
+    public Apply withArgs(List<Exp> args) {
+      if (args.size() == 1) {
+        return copy(fn, args.get(0));
+      }
+      if (args.equals(args())) {
+        return this;
+      }
+      final Tuple newArg = core.tuple((RecordLikeType) this.arg.type, args);
+      return core.apply(pos, type, fn, newArg);
+    }
+
+    /**
+     * Creates an Apply with the same function and new arguments. If the
+     * arguments are the same, returns this Apply.
      */
     public Apply withArgs(Exp arg0, Exp... args) {
       if (args.length == 0) {
         return copy(fn, arg0);
       }
-      final List<Exp> argsList = Lists.asList(arg0, args);
-      if (argsList.equals(args())) {
-        return this;
-      }
-      final Tuple newArg = core.tuple((RecordLikeType) this.arg.type, argsList);
-      return core.apply(pos, type, fn, newArg);
+      return withArgs(Lists.asList(arg0, args));
     }
 
     @Override
