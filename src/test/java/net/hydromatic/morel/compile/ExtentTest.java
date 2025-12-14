@@ -104,6 +104,7 @@ public class ExtentTest {
       final Extents.Analysis analysis =
           Extents.create(
               typeSystem,
+              Environments.empty(),
               pat,
               ImmutableSortedMap.of(),
               ImmutableList.of(core.where(Core.StepEnv.EMPTY, filterExp)),
@@ -327,6 +328,7 @@ public class ExtentTest {
           Extents.Analysis analysis =
               Extents.create(
                   f.typeSystem,
+                  Environments.empty(),
                   pat,
                   ImmutableSortedMap.of(),
                   fromBuilder.build().steps,
@@ -412,6 +414,7 @@ public class ExtentTest {
     Extents.Analysis analysis =
         Extents.create(
             f.typeSystem,
+            Environments.empty(),
             pat,
             ImmutableSortedMap.of(),
             fromBuilder.build().steps,

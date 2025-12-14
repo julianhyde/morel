@@ -1612,7 +1612,7 @@ fun isAncestor (x, z) =
     orelse (exists y
       where isAncestor(x, y)
         andalso (y, z) elem parents);
-> com.google.common.base.VerifyException: not found [isAncestor]
+> java.lang.UnsupportedOperationException
 
 from a
   where isAncestor(a, "arwen");
