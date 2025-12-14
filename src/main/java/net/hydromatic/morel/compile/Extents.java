@@ -440,7 +440,7 @@ public class Extents {
             case FN_LITERAL:
               Core.Literal literal = (Core.Literal) apply.fn;
               // Check if it's a user-defined function
-              if (literal.value instanceof Core.Fn && env != null) {
+              if (literal.value instanceof Core.Fn) {
                 final Optional<PredicateInverter.Result> resultOpt =
                     PredicateInverter.invert(
                         typeSystem, env, filter, goalPats, boundPats);
@@ -459,16 +459,17 @@ public class Extents {
                   // Expression is 'andalso'. Visit each pattern, and 'and' the
                   // filters (intersect the extents).
                   // First try PredicateInverter
-                  final Optional<PredicateInverter.Result> andalsoResultOpt =
+                  final Optional<PredicateInverter.Result> result =
                       PredicateInverter.invert(
                           typeSystem, env, filter, goalPats, boundPats);
-                  if (andalsoResultOpt.isPresent()) {
-                    final PredicateInverter.Result andalsoResult =
-                        andalsoResultOpt.get();
-                    andalsoResult.satisfiedPats.forEach(
-                        pat ->
-                            map.computeIfAbsent(pat, p -> PairList.of())
-                                .add(andalsoResult.generator, filter));
+                  if (result.isPresent()) {
+                    result
+                        .get()
+                        .satisfiedPats
+                        .forEach(
+                            pat ->
+                                map.computeIfAbsent(pat, p -> PairList.of())
+                                    .add(result.get().generator, filter));
                     break;
                   }
                   map2 = new LinkedHashMap<>();
@@ -565,6 +566,19 @@ public class Extents {
                       break;
                   }
                   break;
+
+                default:
+                  // For other built-in functions, try PredicateInverter
+                  final Optional<PredicateInverter.Result> resultOpt3 =
+                      PredicateInverter.invert(
+                          typeSystem, env, filter, goalPats, boundPats);
+                  resultOpt3.ifPresent(
+                      result3 ->
+                          result3.satisfiedPats.forEach(
+                              pat ->
+                                  map.computeIfAbsent(pat, p -> PairList.of())
+                                      .add(result3.generator, filter)));
+                  break;
               }
               break;
 
@@ -580,6 +594,20 @@ public class Extents {
                           pat ->
                               map.computeIfAbsent(pat, p -> PairList.of())
                                   .add(result2.generator, filter)));
+              break;
+
+            case APPLY:
+              // Curried function application (e.g., String.isPrefix s "abcd").
+              // Try to invert.
+              final Optional<PredicateInverter.Result> resultOpt4 =
+                  PredicateInverter.invert(
+                      typeSystem, env, filter, goalPats, boundPats);
+              resultOpt4.ifPresent(
+                  result4 ->
+                      result4.satisfiedPats.forEach(
+                          pat ->
+                              map.computeIfAbsent(pat, p -> PairList.of())
+                                  .add(result4.generator, filter)));
               break;
 
             default:

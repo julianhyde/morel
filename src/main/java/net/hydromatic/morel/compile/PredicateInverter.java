@@ -110,6 +110,31 @@ public class PredicateInverter {
         return result(collection, ImmutableList.of(predicate), goalPats);
       }
 
+      // Check for String.isPrefix pattern expr
+      // This is represented as: APPLY(APPLY(STRING_IS_PREFIX, pattern), expr)
+      if (apply.fn.op == Op.APPLY) {
+        Core.Apply innerApply = (Core.Apply) apply.fn;
+        if (innerApply.isCallTo(BuiltIn.STRING_IS_PREFIX)) {
+          Core.Exp patternArg = innerApply.arg;
+          Core.Exp stringArg = apply.arg;
+
+          // Check if patternArg is a goal pattern (e.g., Id(s))
+          if (patternArg.op == Op.ID) {
+            Core.Id id = (Core.Id) patternArg;
+
+            if (goalPats.contains(id.idPat)) {
+              // Generate: List.tabulate(String.size s + 1, fn i =>
+              // String.substring(s, 0, i))
+              Core.Exp generator = generateStringPrefixes(stringArg);
+              return result(
+                  generator,
+                  ImmutableList.of(predicate),
+                  ImmutableSet.of(id.idPat));
+            }
+          }
+        }
+      }
+
       // Check for andalso (conjunction)
       if (apply.isCallTo(BuiltIn.Z_ANDALSO)) {
         return invertAndAlso(apply, goalPats, boundPats);
@@ -229,9 +254,9 @@ public class PredicateInverter {
   }
 
   /**
-   * Inverts a conjunction (andalso).
+   * Inverts a conjunction ({@code andalso}).
    *
-   * <p>Handles specific patterns like: x > y andalso x < y + 10
+   * <p>Handles specific patterns like {@code x > y andalso x < y + 10}.
    */
   private Optional<Result> invertAndAlso(
       Core.Apply andAlso,
@@ -318,6 +343,51 @@ public class PredicateInverter {
     exp.accept(envVisitor);
     referencedPats.retainAll(pats);
     return !referencedPats.isEmpty();
+  }
+
+  /**
+   * Generates an expression that produces all prefixes of a string.
+   *
+   * <p>For example, {@code generateStringPrefixes(s)} generates {@code
+   * List.tabulate(String.size s + 1, fn i => String.substring(s, 0, i))}.
+   *
+   * @param stringExp The string expression to generate prefixes for
+   * @return An expression that generates all prefixes
+   */
+  private Core.Exp generateStringPrefixes(Core.Exp stringExp) {
+    final Type stringType = PrimitiveType.STRING;
+    final Type intType = PrimitiveType.INT;
+
+    // String.size s
+    final Core.Exp sizeCall =
+        core.call(typeSystem, BuiltIn.STRING_SIZE, stringExp);
+
+    // String.size s + 1
+    final Core.Exp count =
+        core.call(
+            typeSystem,
+            BuiltIn.OP_PLUS,
+            intType,
+            Pos.ZERO,
+            sizeCall,
+            core.intLiteral(BigDecimal.ONE));
+
+    // fn i => String.substring(s, 0, i)
+    final Core.IdPat iPat = core.idPat(intType, "i", 0);
+    final Core.Exp substringCall =
+        core.call(
+            typeSystem,
+            BuiltIn.STRING_SUBSTRING,
+            stringExp,
+            core.intLiteral(BigDecimal.ZERO),
+            core.id(iPat));
+
+    final Core.Fn fn =
+        core.fn(typeSystem.fnType(intType, stringType), iPat, substringCall);
+
+    // List.tabulate(count, fn)
+    return core.call(
+        typeSystem, BuiltIn.LIST_TABULATE, stringType, Pos.ZERO, count, fn);
   }
 
   /**

@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
 
+import com.google.common.collect.ImmutableList;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +29,6 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.FnType;
-import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.TypeSystem;
 
 /** Simplifier of expressions. */
@@ -117,8 +117,19 @@ class Simplifier {
             caseExp.pos, caseExp.type, simplifiedExp, simplifiedMatches);
       case APPLY:
         final Core.Apply apply = (Core.Apply) exp;
-        final List<Core.Exp> args =
-            transformEager(apply.args(), this::simplify);
+
+        // Simplify the arguments.
+        final List<Core.Exp> args;
+        final List<Core.Exp> originalArgs;
+        if (apply.arg.op == Op.TUPLE) {
+          args = transformEager(apply.args(), this::simplify);
+          originalArgs = apply.args();
+        } else {
+          // Single argument function
+          args = ImmutableList.of(simplify(apply.arg));
+          originalArgs = ImmutableList.of(apply.arg);
+        }
+
         if (apply.isCallTo(BuiltIn.OP_MINUS)
             || apply.isCallTo(BuiltIn.Z_MINUS_INT)) {
           // Check for
@@ -252,10 +263,9 @@ class Simplifier {
           }
           return apply;
         }
-        if (!args.equals(apply.args())) {
-          final Core.Exp newArg =
-              core.tuple((RecordLikeType) apply.arg.type, args);
-          return core.apply(apply.pos, apply.type, apply.fn, newArg);
+        // Reconstruct the Apply if args changed
+        if (!args.equals(originalArgs)) {
+          return apply.withArgs(args);
         }
         return exp;
       default:
