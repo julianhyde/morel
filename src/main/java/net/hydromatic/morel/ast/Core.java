@@ -35,6 +35,7 @@ import static org.apache.calcite.util.Util.first;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -2189,6 +2190,22 @@ public class Core {
       return fn == this.fn && arg == this.arg
           ? this
           : core.apply(pos, type, fn, arg);
+    }
+
+    /**
+     * Creates an Apply with the same function. If the arguments are the same,
+     * returns this Apply.
+     */
+    public Apply withArgs(Exp arg0, Exp... args) {
+      if (args.length == 0) {
+        return copy(fn, arg0);
+      }
+      final List<Exp> argsList = Lists.asList(arg0, args);
+      if (argsList.equals(args())) {
+        return this;
+      }
+      final Tuple newArg = core.tuple((RecordLikeType) this.arg.type, argsList);
+      return core.apply(pos, type, fn, newArg);
     }
 
     @Override

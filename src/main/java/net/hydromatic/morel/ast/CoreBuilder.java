@@ -574,24 +574,12 @@ public enum CoreBuilder {
   }
 
   /**
-   * Creates a {@link Core.Apply} with two or more arguments, packing the
-   * arguments into a tuple.
+   * Creates a {@link Core.Apply}, assuming that the expression has a function
+   * type.
    */
-  public Core.Apply apply(
-      Pos pos,
-      TypeSystem typeSystem,
-      BuiltIn builtIn,
-      Core.Exp arg0,
-      Core.Exp arg1,
-      Core.Exp... args) {
-    final Core.Literal fn = functionLiteral(typeSystem, builtIn);
-    FnType fnType = (FnType) fn.type;
-    TupleType tupleType = (TupleType) fnType.paramType;
-    return apply(
-        pos,
-        fnType.resultType,
-        fn,
-        tuple(tupleType, Lists.asList(arg0, arg1, args)));
+  public Core.Apply apply(Pos pos, Core.Exp fn, Core.Exp arg) {
+    final FnType fnType = (FnType) fn.type;
+    return apply(pos, fnType.resultType, fn, arg);
   }
 
   public Core.Case ifThenElse(
@@ -992,7 +980,7 @@ public enum CoreBuilder {
   }
 
   /** Calls a built-in function. */
-  private Core.Apply call(
+  public Core.Apply call(
       TypeSystem typeSystem, BuiltIn builtIn, Core.Exp... args) {
     final Core.Literal literal = functionLiteral(typeSystem, builtIn);
     final FnType fnType = (FnType) literal.type;

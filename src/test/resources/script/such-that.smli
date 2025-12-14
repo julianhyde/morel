@@ -16,19 +16,36 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Tests for queries with unbounded variables.  (Originally, such
- * queries used a 'suchthat' keyword, but that keyword has since been
- * removed.)
+ * Tests for queries with unbounded variables (also called 'domain
+ * variables' because they range over a domain such as integers
+ * or positive integers).
+ *
+ * Originally, such queries used a 'suchthat' keyword, but that
+ * keyword has since been removed.
  *)
+Sys.set ("output", "tabular");
+> val it = () : unit
 
 (* Convert predicates into ranges --------------------------------- *)
 
 from i where i > 0 andalso i < 10;
 > val it = [1,2,3,4,5,6,7,8,9] : int bag
 from i where i > 0 andalso i < 4 yield {j = i + 1};
-> val it = [{j=2},{j=3},{j=4}] : {j:int} bag
+> j
+> -
+> 2
+> 3
+> 4
+>
+> val it : {j:int} bag
 from i where i > 0 andalso i < 4 yield {j = i + 1} order DESC j;
-> val it = [{j=4},{j=3},{j=2}] : {j:int} list
+> j
+> -
+> 4
+> 3
+> 2
+>
+> val it : {j:int} list
 from i where i > 0 andalso i < 10 andalso i mod 3 = 2;
 > val it = [2,5,8] : int bag
 from i where i = 0 orelse i = 12;
@@ -39,16 +56,59 @@ from i
 where i > 0 andalso i < 10
 join b
 where b = true;
-> val it =
->   [{b=true,i=1},{b=true,i=2},{b=true,i=3},{b=true,i=4},{b=true,i=5},
->    {b=true,i=6},{b=true,i=7},{b=true,i=8},{b=true,i=9}] : {b:bool, i:int} bag
+> b    i
+> ---- -
+> true 1
+> true 2
+> true 3
+> true 4
+> true 5
+> true 6
+> true 7
+> true 8
+> true 9
+>
+> val it : {b:bool, i:int} bag
 from i
 where i > 0 andalso i < 10
 join b
 where b = (i mod 2 = 0);
-> val it =
->   [{b=false,i=1},{b=true,i=2},{b=false,i=3},{b=true,i=4},{b=false,i=5},
->    {b=true,i=6},{b=false,i=7},{b=true,i=8},{b=false,i=9}] : {b:bool, i:int} bag
+> b     i
+> ----- -
+> false 1
+> true  2
+> false 3
+> true  4
+> false 5
+> true  6
+> false 7
+> true  8
+> false 9
+>
+> val it : {b:bool, i:int} bag
+
+(* Predicate inversion. *)
+
+(* In the following case, we solve for x given a value of y. This
+   requires predicate-inversion because it cannot be solved using
+   ranges alone. *)
+from x, y in [0, 2, 9] where x > y andalso x < y + 5;
+> x  y
+> -- -
+> 1  0
+> 2  0
+> 3  0
+> 4  0
+> 3  2
+> 4  2
+> 5  2
+> 6  2
+> 10 9
+> 11 9
+> 12 9
+> 13 9
+>
+> val it : {x:int, y:int} bag
 
 (*) Unbound variables in declared 'join';
 (*) condition on 'j' occurs after 'join'
@@ -58,12 +118,26 @@ join k, m
 where j > 4 andalso j < 7
   andalso k > 8 andalso k < 11
   andalso m > 12 andalso m < 15;
-> val it =
->   [{i=1,j=5,k=9,m=13},{i=1,j=5,k=9,m=14},{i=1,j=5,k=10,m=13},
->    {i=1,j=5,k=10,m=14},{i=1,j=6,k=9,m=13},{i=1,j=6,k=9,m=14},
->    {i=1,j=6,k=10,m=13},{i=1,j=6,k=10,m=14},{i=2,j=5,k=9,m=13},
->    {i=2,j=5,k=9,m=14},{i=2,j=5,k=10,m=13},{i=2,j=5,k=10,m=14},...]
->   : {i:int, j:int, k:int, m:int} bag
+> i j k  m
+> - - -- --
+> 1 5 9  13
+> 1 5 9  14
+> 1 5 10 13
+> 1 5 10 14
+> 1 6 9  13
+> 1 6 9  14
+> 1 6 10 13
+> 1 6 10 14
+> 2 5 9  13
+> 2 5 9  14
+> 2 5 10 13
+> 2 5 10 14
+> 2 6 9  13
+> 2 6 9  14
+> 2 6 10 13
+> 2 6 10 14
+>
+> val it : {i:int, j:int, k:int, m:int} bag
 
 (* Unbounded variables with `take` and other clauses -------------- *)
 
@@ -73,8 +147,12 @@ from i
   yield {i, odd = i mod 2 = 1}
   group odd compute count over ()
   order odd;
-> val it = [{count=34,odd=false},{count=50,odd=true}]
->   : {count:int, odd:bool} list
+> count odd
+> ----- -----
+> 34    false
+> 50    true
+>
+> val it : {count:int, odd:bool} list
 
 from i
   where i >= 0 andalso i <= 100
@@ -131,40 +209,64 @@ forall i
 (*) 'on' in 'from'
 from i in [1, 2, 3],
   j in [2, 3, 4] on j = i;
-> val it = [{i=2,j=2},{i=3,j=3}] : {i:int, j:int} list
+> i j
+> - -
+> 2 2
+> 3 3
+>
+> val it : {i:int, j:int} list
 
 from a in [1, 2],
     b in [3, 4, 5] on a + b = 6
 where b < 5
 join c in [6, 7] on b + c = 10,
     d in [7, 8];
-> val it = [{a=2,b=4,c=6,d=7},{a=2,b=4,c=6,d=8}]
->   : {a:int, b:int, c:int, d:int} list
+> a b c d
+> - - - -
+> 2 4 6 7
+> 2 4 6 8
+>
+> val it : {a:int, b:int, c:int, d:int} list
 
 from dno, name, loc
 where {deptno = dno, dname = name, loc} elem scott.depts
   andalso dno > 20;
-> val it =
->   [{dno=30,loc="CHICAGO",name="SALES"},{dno=40,loc="BOSTON",name="OPERATIONS"}]
->   : {dno:int, loc:string, name:string} bag
+> dno loc     name
+> --- ------- ----------
+> 30  CHICAGO SALES
+> 40  BOSTON  OPERATIONS
+>
+> val it : {dno:int, loc:string, name:string} bag
 
 (*) As previous but with a literal in the record.
 from dno, name
 where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.depts
   andalso dno > 20;
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
 
 (*) Equivalent to previous, rephrasing 'suchthat' as 'where'
 from dno, name
 where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.depts
   andalso dno > 20;
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
 
 (*) Equivalent to previous, splitting 'where'
 from dno, name
 where {deptno = dno, dname = name, loc = "CHICAGO"} elem scott.depts
 where dno > 20;
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
 
 (*) Variables 'dno', 'name' are infinite until constrained by conditions.
 from v, dno, name
@@ -173,7 +275,11 @@ where v.deptno = dno
 where name = v.dname
 where v.loc = "CHICAGO"
 yield {dno, name = #dname v};
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
 
 (*) Forward references are required. 'dno' is infinite until we see the
 (*) condition 'v.deptno = dno', and at that point we haven't declared
@@ -184,7 +290,11 @@ where v.deptno = dno
 where name = v.dname
 where v.loc = "CHICAGO"
 yield {dno = #deptno v, name = #dname v};
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
 
 (*) An extra condition on 'dno' yields empty result.
 from dno, name, v
@@ -194,7 +304,10 @@ where name = v.dname
 where v.loc = "CHICAGO"
 where dno = 20
 yield {dno = #deptno v, name = #dname v};
-> val it = [] : {dno:int, name:string} bag
+> dno name
+> --- ----
+>
+> val it : {dno:int, name:string} bag
 
 (*) Inequality on 'dno'
 from dno, name, v
@@ -204,7 +317,11 @@ where name = v.dname
 where v.loc = "CHICAGO"
 where dno > 20
 yield {dno = #deptno v, name = #dname v};
-> val it = [{dno=30,name="SALES"}] : {dno:int, name:string} bag
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
 
 (*) We can iterate over a finite datatype
 from i
@@ -391,17 +508,22 @@ enumerate isEmp;
 val edges = [
  {x = 1, y = 2},
  {x = 2, y = 3}];
-> val edges = [{x=1,y=2},{x=2,y=3}] : {x:int, y:int} list
+> x y
+> - -
+> 1 2
+> 2 3
+>
+> val edges : {x:int, y:int} list
 fun edge (x, y) = {x, y} elem edges;
 > val edge = fn : int * int -> bool
 fun path (x, y) =
   edge (x, y) orelse
   (exists z where path (x, z) andalso edge (z, y));
 > val path = fn : int * int -> bool
-(* TODO *)
+(* TODO
 from p where path p;
 > val it = [(1,2),(2,3),(1,3)] : (int * int) list
-(* *)
+*)
 
 (* More edges *)
 (*
@@ -455,10 +577,15 @@ val barPatrons = [
   {bar = "cask", patron = "scooby"},
   {bar = "cask", patron = "shaggy"},
   {bar = "cask", patron = "velma"}];
-> val barPatrons =
->   [{bar="squirrel",patron="shaggy"},{bar="cask",patron="fred"},
->    {bar="cask",patron="scooby"},{bar="cask",patron="shaggy"},
->    {bar="cask",patron="velma"}] : {bar:string, patron:string} list
+> bar      patron
+> -------- ------
+> squirrel shaggy
+> cask     fred
+> cask     scooby
+> cask     shaggy
+> cask     velma
+>
+> val barPatrons : {bar:string, patron:string} list
 
 val barBeers = [
   {bar =  "squirrel", beer =  "ipa", price =  2},
@@ -466,18 +593,27 @@ val barBeers = [
   {bar =  "squirrel", beer =  "amber", price =  3},
   {bar =  "cask", beer =  "stout", price =  4},
   {bar =  "cask", beer =  "ipa", price =  5}];
-> val barBeers =
->   [{bar="squirrel",beer="ipa",price=2},{bar="squirrel",beer="pale",price=2},
->    {bar="squirrel",beer="amber",price=3},{bar="cask",beer="stout",price=4},
->    {bar="cask",beer="ipa",price=5}] : {bar:string, beer:string, price:int} list
+> bar      beer  price
+> -------- ----- -----
+> squirrel ipa   2
+> squirrel pale  2
+> squirrel amber 3
+> cask     stout 4
+> cask     ipa   5
+>
+> val barBeers : {bar:string, beer:string, price:int} list
 
 val patronBeers = [
   {patron =  "shaggy", beer = "amber"},
   {patron =  "fred", beer = "amber"},
   {patron =  "velma", beer = "stout"}];
-> val patronBeers =
->   [{beer="amber",patron="shaggy"},{beer="amber",patron="fred"},
->    {beer="stout",patron="velma"}] : {beer:string, patron:string} list
+> beer  patron
+> ----- ------
+> amber shaggy
+> amber fred
+> stout velma
+>
+> val patronBeers : {beer:string, patron:string} list
 
 fun frequents (patron, bar) =
   {patron, bar} elem barPatrons;
@@ -755,11 +891,21 @@ andalso 100 * b + 150 * c <= 500   (*) butter
 andalso 75 * c <= 500              (*) cocoa
 yield {b, c, profit = 400 * b + 450 * c}
 order DESC profit;
-> val it =
->   [{b=2,c=2,profit=1700},{b=3,c=1,profit=1650},{b=0,c=3,profit=1350},
->    {b=1,c=2,profit=1300},{b=2,c=1,profit=1250},{b=3,c=0,profit=1200},
->    {b=0,c=2,profit=900},{b=1,c=1,profit=850},{b=2,c=0,profit=800},
->    {b=0,c=1,profit=450},{b=1,c=0,profit=400},{b=0,c=0,profit=0}]
->   : {b:int, c:int, profit:int} list
+> b c profit
+> - - ------
+> 2 2 1700
+> 3 1 1650
+> 0 3 1350
+> 1 2 1300
+> 2 1 1250
+> 3 0 1200
+> 0 2 900
+> 1 1 850
+> 2 0 800
+> 0 1 450
+> 1 0 400
+> 0 0 0
+>
+> val it : {b:int, c:int, profit:int} list
 
 (*) End such-that.smli

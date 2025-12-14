@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.skip;
 
@@ -39,7 +40,6 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.util.Holder;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Converts unbounded variables to bounded variables.
@@ -94,11 +94,13 @@ class SuchThatShuttle extends EnvShuttle {
    */
   static class FromVisitor {
     final TypeSystem typeSystem;
+    final Environment initialEnv;
     final FromBuilder fromBuilder;
     final List<Core.Exp> satisfiedFilters = new ArrayList<>();
 
-    FromVisitor(TypeSystem typeSystem, @Nullable Environment env) {
-      this.typeSystem = typeSystem;
+    FromVisitor(TypeSystem typeSystem, Environment env) {
+      this.typeSystem = requireNonNull(typeSystem);
+      this.initialEnv = requireNonNull(env);
       this.fromBuilder = core.fromBuilder(typeSystem, env);
     }
 
@@ -215,6 +217,7 @@ class SuchThatShuttle extends EnvShuttle {
       final Extents.Analysis analysis =
           Extents.create(
               typeSystem,
+              initialEnv,
               scan.pat,
               ImmutableSortedMap.of(),
               laterSteps,
