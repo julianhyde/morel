@@ -176,7 +176,7 @@ public class Inliner extends EnvShuttle {
       final Core.Match match = matchList.get(0);
       final Map<Core.Id, Core.Id> substitution = getSub(exp, match);
       if (substitution != null) {
-        return Replacer.substitute(typeSystem, substitution, match.exp);
+        return Replacer.substitute(typeSystem, env, substitution, match.exp);
       }
     }
     if (exp.type != caseOf.exp.type) {
