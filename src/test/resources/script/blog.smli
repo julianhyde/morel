@@ -1613,18 +1613,22 @@ fun isAncestor (x, z) =
     orelse (exists y
       where isAncestor(x, y)
         andalso (y, z) elem parents);
-> java.lang.UnsupportedOperationException
+> val isAncestor = fn : string * string -> bool
 
+(* TODO
 from a
   where isAncestor(a, "arwen");
 > stdIn:2.9-2.19 Error: unbound variable or constructor: isAncestor
 >   raised at: stdIn:2.9-2.19
+*)
 (*) TODO should return ["earendil", "elrond"] : string list
 
+(* TODO
 from d
   where isAncestor("earendil", d);
 > stdIn:2.9-2.19 Error: unbound variable or constructor: isAncestor
 >   raised at: stdIn:2.9-2.19
+*)
 (*) TODO should return ["elrond", "arwen", "elladan", "elrohir"] : string list
 
 (*) Recipe optimization

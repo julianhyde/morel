@@ -38,10 +38,10 @@ public class Replacer extends EnvShuttle {
 
   static Core.Exp substitute(
       TypeSystem typeSystem,
+      Environment env,
       Map<Core.Id, ? extends Core.Exp> substitution,
       Core.Exp exp) {
-    final Replacer replacer =
-        new Replacer(typeSystem, Environments.empty(), substitution);
+    final Replacer replacer = new Replacer(typeSystem, env, substitution);
     return exp.accept(replacer);
   }
 
