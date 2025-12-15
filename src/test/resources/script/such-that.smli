@@ -105,6 +105,55 @@ in
 end;
 > val it = [2,4] : int bag
 
+(*) Case
+from x where case x of y => y elem [1,2];
+> val it = [1,2] : int bag
+
+(*) Pattern
+from x, y where (x, y) elem [(1,true),(2,false)];
+> x y
+> - -----
+> 1 true
+> 2 false
+>
+> val it : {x:int, y:bool} bag
+
+(*) Reversed pattern
+from x, y where (y, x) elem [(1,true),(2,false)];
+> x     y
+> ----- -
+> true  1
+> false 2
+>
+> val it : {x:bool, y:int} bag
+
+(*) Reversed pattern via case
+from x, y where case (y, x) of (a, b) => (a, b) elem [(1,true),(2,false)];
+> x     y
+> ----- -
+> true  1
+> false 2
+>
+> val it : {x:bool, y:int} bag
+
+(*) Record pattern
+from x, y where {y, x} elem [{y=1,x=true},{y=2,x=false}];
+> x     y
+> ----- -
+> true  1
+> false 2
+>
+> val it : {x:bool, y:int} bag
+
+from x where (x, "b") elem [(1,"a"),(2,"b")];
+> val it = [2] : int bag
+
+from x where (1, x) elem [(1,"a"),(2,"b")];
+> val it = ["a"] : string bag
+
+from x where (1, x, true) elem [(1,"a",false),(2,"b",true),(1,"c",true)];
+> val it = ["c"] : string bag
+
 (* -- orelse becomes union ------------------------------ *)
 fun isSmall n = n elem [1, 2];
 > val isSmall = fn : int -> bool

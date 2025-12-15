@@ -589,6 +589,15 @@ public class PredicateInverterTest {
   }
 
   /**
+   * Tests that {@code case x of 1 => true | 3 => true | _ => false} can be
+   * inverted to generate {@code [1, 3]} as the possible x values.
+   */
+  @Test
+  void testInvertCase() {
+    assumeTrue(false, "TODO enable test");
+  }
+
+  /**
    * Test 7: Verify that uninvertible predicates return empty.
    *
    * <p>For example, {@code x * x = 25} cannot be easily inverted to generate x

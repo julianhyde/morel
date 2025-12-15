@@ -198,11 +198,10 @@ class SuchThatShuttle extends EnvShuttle {
           nameExps.add(id.name, core.id(id));
         }
       }
+      final boolean atom = nameExps.size() == 1;
       Core.Exp exp =
-          nameExps.size() == 1
-              ? nameExps.get(0).getValue()
-              : core.record(typeSystem, nameExps);
-      fromBuilder.yield_(false, null, exp, env.atom);
+          atom ? nameExps.right(0) : core.record(typeSystem, nameExps);
+      fromBuilder.yield_(false, null, exp, atom);
       idPats.clear();
     }
 

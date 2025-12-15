@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.skip;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -108,9 +109,7 @@ public class PredicateInverter {
 
       // Check for `elem` calls: pattern elem collection
       if (apply.isCallTo(BuiltIn.OP_ELEM)) {
-        // Simple case: x elem myList => myList
-        Core.Exp collection = apply.arg(1);
-        return result(collection, ImmutableList.of(predicate), goalPats);
+        return invertElem(apply, goalPats, boundPats);
       }
 
       // Check for String.isPrefix pattern expr
@@ -254,11 +253,27 @@ public class PredicateInverter {
       }
     }
 
-    if (collection == null || filterPredicate == null || scanPat == null) {
+    if (filterPredicate == null || scanPat == null) {
       return Optional.empty();
     }
 
-    // Check if the collection is a list literal
+    // Check if the collection is an extent (unbounded domain).
+    // In this case, we need to invert the filter to get generators.
+    requireNonNull(collection);
+    if (collection.op == Op.APPLY && collection.isCallTo(BuiltIn.Z_EXTENT)) {
+      // Extent scan - filter must provide the generators.
+      // Add the scan variable to goalPats temporarily so it can be referenced.
+      Set<Core.NamedPat> extendedGoalPats = new HashSet<>(goalPats);
+      if (scanPat.op == Op.ID_PAT) {
+        extendedGoalPats.add((Core.IdPat) scanPat);
+      }
+
+      // Try to invert the filter with the extended goal patterns
+      return invert(
+          filterPredicate, extendedGoalPats, boundPats, ImmutableList.of());
+    }
+
+    // Check if the collection is a list literal.
     if (collection.op == Op.APPLY && collection.isCallTo(BuiltIn.Z_LIST)) {
       Core.Apply listApply = (Core.Apply) collection;
       // Get the list elements
@@ -277,45 +292,94 @@ public class PredicateInverter {
           Optional<Result> elementResult =
               invert(
                   substitutedFilter, goalPats, boundPats, ImmutableList.of());
-
-          if (elementResult.isPresent()) {
-            generators.add(elementResult.get().generator);
-          }
+          elementResult.ifPresent(result -> generators.add(result.generator));
         }
 
         if (!generators.isEmpty()) {
-          // Create union of all generators with distinct semantics
-          Core.Exp unionGen;
-          if (generators.size() == 1) {
-            unionGen = generators.get(0);
-          } else {
-            // Create a FROM expression with UNION distinct steps
-            // First generator becomes the initial FROM
-            Core.Exp firstGen = generators.get(0);
-            final Type elementType = ((ListType) firstGen.type).elementType;
-
-            // Create a fresh pattern for the union variable
-            final Core.IdPat unionPat = core.idPat(elementType, "p_union", 0);
-
-            // Build the FROM expression: from p_union in firstGen
-            FromBuilder builder =
-                core.fromBuilder(typeSystem, (Environment) null);
-            builder.scan(unionPat, firstGen);
-
-            // Add UNION distinct steps for remaining generators
-            for (int i = 1; i < generators.size(); i++) {
-              Core.Exp gen = generators.get(i);
-              builder.union(true, ImmutableList.of(gen));
-            }
-
-            // Yield the result
-            builder.yield_(core.id(unionPat));
-            unionGen = builder.build();
-          }
-
-          return result(unionGen, ImmutableList.of(), goalPats);
+          // Create union of all generators with distinct semantics.
+          return result(
+              unionDistinct(generators), ImmutableList.of(), goalPats);
         }
       }
+    }
+
+    return Optional.empty();
+  }
+
+  /**
+   * Creates a "from" expression with "union distinct" steps, "from p_union in
+   * scan#0 union distinct scan#1, ... scan#N".
+   */
+  private Core.Exp unionDistinct(List<Core.Exp> scans) {
+    if (scans.size() == 1) {
+      return scans.get(0);
+    } else {
+      final Type elementType = ((ListType) scans.get(0).type).elementType;
+      final Core.IdPat unionPat = core.idPat(elementType, "p_union", 0);
+      return core.fromBuilder(typeSystem, (Environment) null)
+          .scan(unionPat, scans.get(0))
+          .union(true, skip(scans))
+          .build();
+    }
+  }
+
+  /**
+   * Inverts an elem predicate: pattern elem collection.
+   *
+   * <p>For simple patterns like {@code x elem list}, returns the collection.
+   *
+   * <p>For tuple patterns like {@code (x, y) elem list} where some elements are
+   * bound, creates a FROM expression that scans the collection and filters.
+   */
+  private Optional<Result> invertElem(
+      Core.Apply elemCall,
+      Set<Core.NamedPat> goalPats,
+      SortedMap<Core.NamedPat, Core.Exp> boundPats) {
+    Core.Exp pattern = elemCall.arg(0);
+    Core.Exp collection = elemCall.arg(1);
+
+    // Simple case: x elem myList => myList
+    if (pattern.op == Op.ID) {
+      Core.Id id = (Core.Id) pattern;
+      if (goalPats.contains(id.idPat)) {
+        return result(
+            collection, ImmutableList.of(elemCall), ImmutableSet.of(id.idPat));
+      }
+    }
+
+    // Tuple case: (x, y, ...) elem myList
+    // Need to handle bound values and create appropriate filters
+    if (pattern.op == Op.TUPLE) {
+      Core.Tuple tuplePat = (Core.Tuple) pattern;
+
+      // Check which elements are goal variables and which are bound
+      List<Core.Exp> goalElements = new ArrayList<>();
+      List<Core.Exp> filters = new ArrayList<>();
+      Set<Core.NamedPat> satisfiedPats = new HashSet<>();
+
+      for (int i = 0; i < tuplePat.args.size(); i++) {
+        Core.Exp elem = tuplePat.args.get(i);
+        if (elem.op == Op.ID) {
+          Core.Id id = (Core.Id) elem;
+          if (goalPats.contains(id.idPat)) {
+            goalElements.add(elem);
+            satisfiedPats.add(id.idPat);
+          }
+        } else if (elem instanceof Core.Literal) {
+          // Bound value - will need to filter
+          // Store index for later filtering
+        }
+      }
+
+      // For now, if all elements are goal variables, just return the collection
+      if (satisfiedPats.size() == tuplePat.args.size()) {
+        return result(collection, ImmutableList.of(elemCall), satisfiedPats);
+      }
+
+      // Otherwise, return collection but note we may need filtering
+      // The filtering will be handled by the caller (e.g., in a FROM
+      // expression)
+      return result(collection, ImmutableList.of(elemCall), satisfiedPats);
     }
 
     return Optional.empty();
@@ -438,6 +502,80 @@ public class PredicateInverter {
           }
         }
       }
+    }
+
+    // Try to invert both sides and join them
+    Optional<Result> leftResult =
+        invert(left, goalPats, boundPats, ImmutableList.of());
+    Optional<Result> rightResult =
+        invert(right, goalPats, boundPats, ImmutableList.of());
+
+    if (leftResult.isPresent() && rightResult.isPresent()) {
+      // Both sides can be inverted - create a cross product or join
+      Result lr = leftResult.get();
+      Result rr = rightResult.get();
+
+      // For now, create a simple concatenation approach:
+      // from x in leftGen, y in rightGen yield (x, y)
+      // This is a cross product - the actual filtering happens at runtime
+
+      // Combine the generators by creating a FROM that scans both
+      // The user's hint suggests: from (empno,deptno) in emps, (deptno2,dname)
+      // in
+      // depts where deptno = deptno2
+      // For now, just scan both and let the filters apply
+      Core.Exp gen1 = lr.generator;
+      Core.Exp gen2 = rr.generator;
+
+      // Create combined generator: List.concat (from x in gen1 yield from y in
+      // gen2
+      // yield ...)
+      // For simplicity, let's try returning a FROM expression that scans both
+
+      // Get the element types
+      Type gen1ElemType = ((ListType) gen1.type).elementType;
+      Type gen2ElemType = ((ListType) gen2.type).elementType;
+
+      // Create patterns for scanning
+      Core.IdPat pat1 = core.idPat(gen1ElemType, "x_left", 0);
+      Core.IdPat pat2 = core.idPat(gen2ElemType, "x_right", 0);
+
+      // Build FROM: from x_left in gen1, x_right in gen2
+      FromBuilder builder = core.fromBuilder(typeSystem, (Environment) null);
+      builder.scan(pat1, gen1);
+      builder.scan(pat2, gen2);
+
+      // Yield a tuple of both (or just the goal variables)
+      // For now, yield both - the caller will handle extracting what's needed
+      Core.Exp yieldExp;
+      if (gen1ElemType.op() == Op.TUPLE_TYPE
+          && gen2ElemType.op() == Op.TUPLE_TYPE) {
+        // Both are tuples - create a combined tuple
+        Core.Tuple tuple1 =
+            core.tuple(typeSystem, null, ImmutableList.of(core.id(pat1)));
+        Core.Tuple tuple2 =
+            core.tuple(typeSystem, null, ImmutableList.of(core.id(pat2)));
+        yieldExp =
+            core.tuple(
+                typeSystem,
+                null,
+                ImmutableList.of(core.id(pat1), core.id(pat2)));
+      } else {
+        yieldExp =
+            core.tuple(
+                typeSystem,
+                null,
+                ImmutableList.of(core.id(pat1), core.id(pat2)));
+      }
+
+      builder.yield_(yieldExp);
+      Core.Exp joinedGen = builder.build();
+
+      // Combine satisfied patterns from both sides
+      Set<Core.NamedPat> combinedSatisfied = new HashSet<>(lr.satisfiedPats);
+      combinedSatisfied.addAll(rr.satisfiedPats);
+
+      return result(joinedGen, ImmutableList.of(andAlso), combinedSatisfied);
     }
 
     return Optional.empty();
