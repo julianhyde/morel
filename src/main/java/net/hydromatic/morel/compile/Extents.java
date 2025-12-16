@@ -142,11 +142,13 @@ public class Extents {
   public static Analysis create(
       TypeSystem typeSystem,
       Environment env,
+      boolean invert,
       Core.Pat pat,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Iterable<? extends Core.FromStep> followingSteps,
       PairList<Core.IdPat, Core.Exp> idPats) {
-    final Extent extent = new Extent(typeSystem, env, pat, boundPats, idPats);
+    final Extent extent =
+        new Extent(typeSystem, env, invert, pat, boundPats, idPats);
     final List<Core.Exp> remainingFilters = new ArrayList<>();
 
     final ExtentMap map = new ExtentMap();
@@ -250,6 +252,7 @@ public class Extents {
                       create(
                           typeSystem,
                           Environments.empty(),
+                          true,
                           scan.pat,
                           ImmutableSortedMap.of(),
                           followingSteps,
@@ -400,6 +403,7 @@ public class Extents {
   private static class Extent {
     private final TypeSystem typeSystem;
     private final Environment env;
+    private final boolean invert;
     final Set<Core.NamedPat> goalPats;
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
 
@@ -420,11 +424,13 @@ public class Extents {
     Extent(
         TypeSystem typeSystem,
         Environment env,
+        boolean invert,
         Core.Pat pat,
         SortedMap<Core.NamedPat, Core.Exp> boundPats,
         PairList<Core.IdPat, Core.Exp> idPats) {
       this.typeSystem = requireNonNull(typeSystem);
       this.env = requireNonNull(env);
+      this.invert = invert;
       this.goalPats = ImmutableSet.copyOf(flatten(pat));
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
       this.idPats = requireNonNull(idPats);
@@ -432,6 +438,7 @@ public class Extents {
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
     void g3(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map, Core.Exp filter) {
+      boolean tryInvert = false;
       final Core.Apply apply;
       switch (filter.op) {
         case APPLY:
@@ -441,15 +448,7 @@ public class Extents {
               Core.Literal literal = (Core.Literal) apply.fn;
               // Check if it's a user-defined function
               if (literal.value instanceof Core.Fn) {
-                final Optional<PredicateInverter.Result> resultOpt =
-                    PredicateInverter.invert(
-                        typeSystem, env, filter, goalPats, boundPats);
-                resultOpt.ifPresent(
-                    result ->
-                        result.satisfiedPats.forEach(
-                            pat ->
-                                map.computeIfAbsent(pat, p -> PairList.of())
-                                    .add(result.generator, filter)));
+                tryInvert = true;
                 break;
               }
               BuiltIn builtIn = literal.unwrap(BuiltIn.class);
@@ -462,14 +461,18 @@ public class Extents {
                   final Optional<PredicateInverter.Result> result =
                       PredicateInverter.invert(
                           typeSystem, env, filter, goalPats, boundPats);
-                  if (result.isPresent()) {
+                  if (invert && result.isPresent()) {
                     result
                         .get()
                         .satisfiedPats
                         .forEach(
                             pat ->
                                 map.computeIfAbsent(pat, p -> PairList.of())
-                                    .add(result.get().generator, filter));
+                                    .add(
+                                        result.get().generator,
+                                        core.andAlso(
+                                            typeSystem,
+                                            result.get().satisfiedFilters)));
                     break;
                   }
                   map2 = new LinkedHashMap<>();
@@ -569,45 +572,20 @@ public class Extents {
 
                 default:
                   // For other built-in functions, try PredicateInverter
-                  final Optional<PredicateInverter.Result> resultOpt3 =
-                      PredicateInverter.invert(
-                          typeSystem, env, filter, goalPats, boundPats);
-                  resultOpt3.ifPresent(
-                      result3 ->
-                          result3.satisfiedPats.forEach(
-                              pat ->
-                                  map.computeIfAbsent(pat, p -> PairList.of())
-                                      .add(result3.generator, filter)));
+                  tryInvert = true;
                   break;
               }
               break;
 
             case ID:
               // User-defined function call. Try to invert.
-              final Optional<PredicateInverter.Result> resultOpt2 =
-                  PredicateInverter.invert(
-                      typeSystem, env, filter, goalPats, boundPats);
-              // Add the generator to the map for each satisfied pattern
-              resultOpt2.ifPresent(
-                  result2 ->
-                      result2.satisfiedPats.forEach(
-                          pat ->
-                              map.computeIfAbsent(pat, p -> PairList.of())
-                                  .add(result2.generator, filter)));
+              tryInvert = true;
               break;
 
             case APPLY:
               // Curried function application (e.g., String.isPrefix s "abcd").
               // Try to invert.
-              final Optional<PredicateInverter.Result> resultOpt4 =
-                  PredicateInverter.invert(
-                      typeSystem, env, filter, goalPats, boundPats);
-              resultOpt4.ifPresent(
-                  result4 ->
-                      result4.satisfiedPats.forEach(
-                          pat ->
-                              map.computeIfAbsent(pat, p -> PairList.of())
-                                  .add(result4.generator, filter)));
+              tryInvert = true;
               break;
 
             default:
@@ -617,6 +595,18 @@ public class Extents {
 
         default:
           break;
+      }
+
+      if (tryInvert) {
+        final Optional<PredicateInverter.Result> resultOpt =
+            PredicateInverter.invert(
+                typeSystem, env, filter, goalPats, boundPats);
+        resultOpt.ifPresent(
+            result ->
+                result.satisfiedPats.forEach(
+                    pat ->
+                        map.computeIfAbsent(pat, p -> PairList.of())
+                            .add(result.generator, filter)));
       }
     }
 
