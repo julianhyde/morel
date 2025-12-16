@@ -217,6 +217,7 @@ class SuchThatShuttle extends EnvShuttle {
           Extents.create(
               typeSystem,
               initialEnv,
+              true,
               scan.pat,
               ImmutableSortedMap.of(),
               laterSteps,

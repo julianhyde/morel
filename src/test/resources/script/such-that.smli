@@ -192,6 +192,30 @@ from x, y in [0, 2, 9] where x > y andalso x < y + 5;
 >
 > val it : {x:int, y:int} bag
 
+from b where b > false;
+> val it = [true] : bool bag
+
+from b where b > false andalso true;
+> val it = [true] : bool bag
+
+from b where b > false andalso false;
+> val it = [] : bool bag
+
+(*) With spurious 'andalso true'
+from x, y in [2,3] where x > y andalso true andalso x < 5;
+> x y
+> - -
+> 3 2
+> 4 2
+> 4 3
+>
+> val it : {x:int, y:int} bag
+
+(* TODO: Merge consecutive 'where', so that this is equivalent to previous.
+from x, y in [2,3] where x > y andalso true where x < 5;
+> val it = [{x=3,y=2},{x=4,y=2},{x=4,y=3}] : {x:int, y:int} bag
+*)
+
 (*) Unbound variables in declared 'join';
 (*) condition on 'j' occurs after 'join'
 from i, j

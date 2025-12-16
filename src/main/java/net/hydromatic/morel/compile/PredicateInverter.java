@@ -46,6 +46,7 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ConsList;
+import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 /**
  * Inverts predicates into generator expressions.
@@ -97,6 +98,17 @@ public class PredicateInverter {
         .invert(predicate, goalPats, boundPats, ImmutableList.of());
   }
 
+  /**
+   * Inverts a predicate.
+   *
+   * @param predicate The boolean expression to invert
+   * @param goalPats Variables to generate (unbound variables we want to
+   *     produce)
+   * @param boundPats Variables already bound with their extents/values
+   * @param active Functions that are being expanded (further up the call stack)
+   * @return Inversion result with generator and metadata, or empty if the
+   *     expression has no inverse
+   */
   private Optional<Result> invert(
       Core.Exp predicate,
       Set<Core.NamedPat> goalPats,
@@ -130,6 +142,7 @@ public class PredicateInverter {
               Core.Exp generator = generateStringPrefixes(stringArg);
               return result(
                   generator,
+                  ImmutableList.of(),
                   ImmutableList.of(predicate),
                   ImmutableSet.of(id.idPat));
             }
@@ -139,11 +152,12 @@ public class PredicateInverter {
 
       // Check for andalso (conjunction)
       if (apply.isCallTo(BuiltIn.Z_ANDALSO)) {
-        return invertAndAlso(apply, goalPats, boundPats);
+        return invertAnds(
+            core.decomposeAnd(apply), goalPats, boundPats, active);
       }
 
       // Check for user-defined function literals (already compiled)
-      if (apply.fn.op == Op.FN_LITERAL && env != null) {
+      if (apply.fn.op == Op.FN_LITERAL) {
         Core.Literal literal = (Core.Literal) apply.fn;
         if (literal.value instanceof Core.Fn) {
           Core.Fn fn = (Core.Fn) literal.value;
@@ -157,7 +171,7 @@ public class PredicateInverter {
       }
 
       // Check for user-defined function calls (ID references)
-      if (apply.fn.op == Op.ID && env != null) {
+      if (apply.fn.op == Op.ID) {
         Core.Id fnId = (Core.Id) apply.fn;
         // Look up function definition in environment
         Core.NamedPat fnPat = fnId.idPat;
@@ -298,7 +312,10 @@ public class PredicateInverter {
         if (!generators.isEmpty()) {
           // Create union of all generators with distinct semantics.
           return result(
-              unionDistinct(generators), ImmutableList.of(), goalPats);
+              unionDistinct(generators),
+              ImmutableList.of(),
+              ImmutableList.of(),
+              goalPats);
         }
       }
     }
@@ -343,19 +360,22 @@ public class PredicateInverter {
       Core.Id id = (Core.Id) pattern;
       if (goalPats.contains(id.idPat)) {
         return result(
-            collection, ImmutableList.of(elemCall), ImmutableSet.of(id.idPat));
+            collection,
+            ImmutableList.of(),
+            ImmutableList.of(elemCall),
+            ImmutableSet.of(id.idPat));
       }
     }
 
-    // Tuple case: (x, y, ...) elem myList
-    // Need to handle bound values and create appropriate filters
+    // Tuple case: (x, y, ...) elem myList.
+    // Need to handle bound values and create appropriate filters.
     if (pattern.op == Op.TUPLE) {
       Core.Tuple tuplePat = (Core.Tuple) pattern;
 
-      // Check which elements are goal variables and which are bound
-      List<Core.Exp> goalElements = new ArrayList<>();
-      List<Core.Exp> filters = new ArrayList<>();
-      Set<Core.NamedPat> satisfiedPats = new HashSet<>();
+      // Check which elements are goal variables and which are bound.
+      final List<Core.Exp> goalElements = new ArrayList<>();
+      final List<Core.Exp> remainingFilters = new ArrayList<>();
+      final Set<Core.NamedPat> satisfiedPats = new HashSet<>();
 
       for (int i = 0; i < tuplePat.args.size(); i++) {
         Core.Exp elem = tuplePat.args.get(i);
@@ -365,21 +385,18 @@ public class PredicateInverter {
             goalElements.add(elem);
             satisfiedPats.add(id.idPat);
           }
-        } else if (elem instanceof Core.Literal) {
-          // Bound value - will need to filter
-          // Store index for later filtering
+        } else {
+          // Need to filter later.
+          remainingFilters.add(core.equal(typeSystem, elem, elem));
         }
       }
 
       // For now, if all elements are goal variables, just return the collection
-      if (satisfiedPats.size() == tuplePat.args.size()) {
-        return result(collection, ImmutableList.of(elemCall), satisfiedPats);
-      }
-
-      // Otherwise, return collection but note we may need filtering
-      // The filtering will be handled by the caller (e.g., in a FROM
-      // expression)
-      return result(collection, ImmutableList.of(elemCall), satisfiedPats);
+      return result(
+          collection,
+          ImmutableList.of(),
+          ImmutableList.of(elemCall),
+          satisfiedPats);
     }
 
     return Optional.empty();
@@ -447,62 +464,91 @@ public class PredicateInverter {
   }
 
   /**
-   * Inverts a conjunction ({@code andalso}).
+   * Inverts a conjunction of predicates.
    *
-   * <p>Handles specific patterns like {@code x > y andalso x < y + 10}.
+   * <p>Handles patterns like:
+   *
+   * <ul>
+   *   <li>Range constraints: {@code x > y andalso x < z}
+   *   <li>Multiple predicates: {@code P1 andalso P2 andalso ...}
+   *   <li>Mixed predicates: {@code x < z andalso x <> 3 andalso x > y}
+   * </ul>
    */
-  private Optional<Result> invertAndAlso(
-      Core.Apply andAlso,
+  private Optional<Result> invertAnds(
+      List<Core.Exp> predicates,
       Set<Core.NamedPat> goalPats,
-      SortedMap<Core.NamedPat, Core.Exp> boundPats) {
+      SortedMap<Core.NamedPat, Core.Exp> boundPats,
+      List<Core.Exp> active) {
+    if (predicates.size() < 2) {
+      // If flatten created a degenerate case, it's someone else's problem.
+      return invert(
+          core.andAlso(typeSystem, predicates), goalPats, boundPats, active);
+    }
 
-    // Try to match pattern: x > y andalso x < y + 10
-    // to generate: List.tabulate(9, fn k => y + 1 + k)
-    Core.Exp left = andAlso.arg(0);
-    Core.Exp right = andAlso.arg(1);
+    for (int i = 0; i < predicates.size(); i++) {
+      if (predicates.get(i).op != Op.APPLY) {
+        continue;
+      }
+      final Core.Apply lowerBound = (Core.Apply) predicates.get(i);
+      if (lowerBound.isCallTo(BuiltIn.OP_GT)
+          || lowerBound.isCallTo(BuiltIn.OP_GE)) {
+        final boolean lowerStrict = lowerBound.isCallTo(BuiltIn.OP_GT);
+        for (int j = 0; j < predicates.size(); j++) {
+          if (j == i) {
+            continue;
+          }
+          if (predicates.get(j).op != Op.APPLY) {
+            continue;
+          }
+          final Core.Apply upperBound = (Core.Apply) predicates.get(j);
+          if (upperBound.isCallTo(BuiltIn.OP_LT)
+              || upperBound.isCallTo(BuiltIn.OP_LE)) {
+            final boolean upperStrict = upperBound.isCallTo(BuiltIn.OP_LT);
 
-    // Check if we have x > y and x < y + 10
-    if (left.op == Op.APPLY && right.op == Op.APPLY) {
-      Core.Apply leftApply = (Core.Apply) left;
-      Core.Apply rightApply = (Core.Apply) right;
+            // Pattern: x > y andalso x < (y + 10)
+            final Core.Exp xId = lowerBound.arg(0);
+            final Core.Exp lower = lowerBound.arg(1);
+            final Core.Exp xId2 = upperBound.arg(0);
+            final Core.Exp upper = upperBound.arg(1);
 
-      if ((leftApply.isCallTo(BuiltIn.OP_GT)
-              || leftApply.isCallTo(BuiltIn.OP_GE))
-          && (rightApply.isCallTo(BuiltIn.OP_LT)
-              || rightApply.isCallTo(BuiltIn.OP_LE))) {
-        // Pattern: x > y andalso x < (y + 10)
-        final Core.Exp xId = leftApply.arg(0);
-        final Core.Exp lower = leftApply.arg(1);
-        final Core.Exp xId2 = rightApply.arg(0);
-        final Core.Exp upper = rightApply.arg(1);
+            // Verify that x appears on both sides.
+            if (xId.op == Op.ID
+                && xId2.op == Op.ID
+                && ((Core.Id) xId).idPat.equals(((Core.Id) xId2).idPat)
+                && goalPats.contains(((Core.Id) xId).idPat)) {
+              Core.NamedPat xPat = ((Core.Id) xId).idPat;
 
-        final boolean lowerStrict = leftApply.isCallTo(BuiltIn.OP_GT);
-        final boolean upperStrict = rightApply.isCallTo(BuiltIn.OP_LT);
+              // Check if x is the goal and y is bound (or y is not in
+              // goalPats, meaning it's already processed).
+              if (!referencesAny(lower, goalPats)
+                  && !referencesAny(upper, goalPats)) {
+                // Pattern matched! Generate:
+                //   List.tabulate(upper - lower, fn k => lower + k)
+                // which is the range
+                //  [lower, upper]
+                Core.Exp generator =
+                    generateRange(lower, lowerStrict, upper, upperStrict);
 
-        // Verify x appears in both sides
-        if (xId.op == Op.ID
-            && xId2.op == Op.ID
-            && ((Core.Id) xId).idPat.equals(((Core.Id) xId2).idPat)
-            && goalPats.contains(((Core.Id) xId).idPat)) {
-          Core.NamedPat xPat = ((Core.Id) xId).idPat;
-
-          // Check if x is the goal and y is bound (or y is not in goalPats,
-          // meaning it's already processed)
-          if (!referencesAny(lower, goalPats)
-              && !referencesAny(upper, goalPats)) {
-            // Pattern matched! Generate:
-            //   List.tabulate(upper - lower, fn k => lower + k)
-            // which is the range
-            //  [lower, upper]
-            Core.Exp generator =
-                generateRange(lower, lowerStrict, upper, upperStrict);
-
-            return result(
-                generator, ImmutableList.of(andAlso), ImmutableSet.of(xPat));
+                final List<Core.Exp> remainingPredicates =
+                    new ArrayList<>(predicates);
+                remainingPredicates.remove(lowerBound);
+                remainingPredicates.remove(upperBound);
+                return result(
+                    generator,
+                    remainingPredicates,
+                    ImmutableList.of(lowerBound, upperBound),
+                    ImmutableSet.of(xPat));
+              }
+            }
           }
         }
       }
     }
+
+    // Try to match pattern: x > y andalso x < y + 10
+    // to generate: List.tabulate(9, fn k => y + 1 + k)
+    Core.Exp left = predicates.get(0);
+    Core.Exp right = predicates.get(1);
 
     // Try to invert both sides and join them
     Optional<Result> leftResult =
@@ -575,7 +621,8 @@ public class PredicateInverter {
       Set<Core.NamedPat> combinedSatisfied = new HashSet<>(lr.satisfiedPats);
       combinedSatisfied.addAll(rr.satisfiedPats);
 
-      return result(joinedGen, ImmutableList.of(andAlso), combinedSatisfied);
+      return result(
+          joinedGen, ImmutableList.of(), predicates, combinedSatisfied);
     }
 
     return Optional.empty();
@@ -583,13 +630,14 @@ public class PredicateInverter {
 
   private Optional<Result> result(
       Core.Exp generator,
+      Iterable<? extends Core.Exp> remainingFilters,
       Iterable<? extends Core.Exp> satisfiedFilters,
       Iterable<? extends Core.NamedPat> satisfiedPats) {
     return Optional.of(
         new Result(
             Simplifier.simplify(typeSystem, generator),
             false,
-            false,
+            remainingFilters,
             satisfiedPats,
             satisfiedFilters));
   }
@@ -727,10 +775,10 @@ public class PredicateInverter {
     public final boolean mayHaveDuplicates;
 
     /**
-     * Whether the generator may contain elements that do not match the
-     * constraint. If so, the original filter must still be checked.
+     * Filters that still need to be checked. Empty if the generator generates
+     * only values that comply with all filters.
      */
-    public final boolean isSupersetOfSolution;
+    public final List<? extends Core.Exp> remainingFilters;
 
     /** Which goal variables are actually produced by this generator */
     public final Set<Core.NamedPat> satisfiedPats;
@@ -741,12 +789,12 @@ public class PredicateInverter {
     private Result(
         Core.Exp generator,
         boolean mayHaveDuplicates,
-        boolean isSupersetOfSolution,
+        @MonotonicNonNull Iterable<? extends Core.Exp> remainingFilters,
         Iterable<? extends Core.NamedPat> satisfiedPats,
         Iterable<? extends Core.Exp> satisfiedFilters) {
       this.generator = requireNonNull(generator);
       this.mayHaveDuplicates = mayHaveDuplicates;
-      this.isSupersetOfSolution = isSupersetOfSolution;
+      this.remainingFilters = ImmutableList.copyOf(remainingFilters);
       this.satisfiedPats = ImmutableSet.copyOf(satisfiedPats);
       this.satisfiedFilters = ImmutableList.copyOf(satisfiedFilters);
     }

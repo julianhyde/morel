@@ -22,6 +22,7 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasToString;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -195,7 +196,7 @@ public class PredicateInverterTest {
 
     assertThat(result.generator, hasToString("myList"));
     assertThat(result.mayHaveDuplicates, is(false));
-    assertThat(result.isSupersetOfSolution, is(false));
+    assertThat(result.remainingFilters, empty());
     assertThat(result.satisfiedPats, is(ImmutableSet.of(f.xPat)));
   }
 
@@ -237,7 +238,7 @@ public class PredicateInverterTest {
 
     assertThat(result.generator, hasToString(expected));
     assertThat(result.mayHaveDuplicates, is(false));
-    assertThat(result.isSupersetOfSolution, is(false));
+    assertThat(result.remainingFilters, empty());
     assertThat(result.satisfiedPats, is(ImmutableSet.of(f.pPat)));
   }
 
@@ -309,7 +310,7 @@ public class PredicateInverterTest {
     final Optional<Result> resultOpt =
         PredicateInverter.invert(
             f.typeSystem,
-            null,
+            Environments.empty(),
             conjunction,
             ImmutableSet.of(f.empnoPat, f.dnamePat),
             ImmutableSortedMap.of());
@@ -354,7 +355,7 @@ public class PredicateInverterTest {
     final Optional<Result> resultOpt =
         PredicateInverter.invert(
             f.typeSystem,
-            null,
+            Environments.empty(),
             edgeCall,
             ImmutableSet.of(f.xPat, f.yPat),
             ImmutableSortedMap.of());
@@ -425,7 +426,7 @@ public class PredicateInverterTest {
     final Optional<Result> resultOpt =
         PredicateInverter.invert(
             f.typeSystem,
-            null,
+            Environments.empty(),
             functionCall,
             ImmutableSet.of(f.xPat, f.yPat),
             ImmutableSortedMap.of());
@@ -585,7 +586,7 @@ public class PredicateInverterTest {
     String expected = "#tabulate List (9, fn k => y + 1 + k)";
     assertThat(result.generator, hasToString(expected));
     assertThat(result.mayHaveDuplicates, is(false));
-    assertThat(result.isSupersetOfSolution, is(false));
+    assertThat(result.remainingFilters, empty());
   }
 
   /**
