@@ -2173,11 +2173,7 @@ public class Core {
       if (args.size() == 1) {
         return copy(fn, args.get(0));
       }
-      if (args.equals(args())) {
-        return this;
-      }
-      final Tuple newArg = core.tuple((RecordLikeType) this.arg.type, args);
-      return core.apply(pos, type, fn, newArg);
+      return withTupleArgs(args);
     }
 
     /**
@@ -2189,6 +2185,14 @@ public class Core {
         return copy(fn, arg0);
       }
       return withArgs(Lists.asList(arg0, args));
+    }
+
+    private Apply withTupleArgs(List<Exp> args) {
+      if (args.equals(args())) {
+        return this;
+      }
+      final Tuple newArg = core.tuple((RecordLikeType) this.arg.type, args);
+      return core.apply(pos, type, fn, newArg);
     }
 
     @Override

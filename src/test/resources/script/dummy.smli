@@ -16,7 +16,47 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
+(*
+let
+  val emps =
+    [(7369, 20), (7499, 30), (7521, 30),
+      (7566, 20), (7698, 30), (7782, 10),
+      (7788, 20), (7839, 10), (7844, 30),
+      (7876, 20), (7900, 30), (7934, 10)];
+  val depts =
+    [(10, "Accounting"), (20, "Research"),
+      (30, "Sales"), (40, "Operations")]
+  fun emp_deptno(empno, deptno) = (empno, deptno) elem emps
+  fun dept_name(deptno, dname) = (deptno, dname) elem depts
+  fun emp_dname(empno, dname) =
+      exists deptno
+        where emp_deptno(empno, deptno)
+        andalso dept_name(deptno, dname)
+in
+  from empno where emp_dname(empno, "Research")
+end;
+*)
+(*
+let
+  fun emp_dname (empno, dname) =
+      exists deptno
+        where (empno, deptno) elem [(3, 20), (4, 30), (5, 20)]
+        andalso (deptno, dname) elem [(10, "Accounting"), (20, "Research"), (30, "Sales")]
+in
+  from empno where emp_dname(empno, "Research")
+end;
+*)
+(*
+let
+  fun emp_dname (empno, dname) =
+      exists deptno
+        where (empno, deptno) elem [(3, 20), (4, 30), (5, 20)]
+        andalso (deptno, dname) elem [(10, "Accounting"), (20, "Research"), (30, "Sales")]
+in
+  from empno, dname where emp_dname(empno, dname)
+end;
+*)
+from i where i > 0 andalso i < 10 andalso i mod 3 = 2;
+> val it = [2,5,8] : int bag
 
 (*) End dummy.smli
