@@ -323,9 +323,11 @@ public enum CoreBuilder {
     return new Core.TuplePat(type, ImmutableList.copyOf(args));
   }
 
-  public Core.TuplePat tuplePat(TypeSystem typeSystem, List<Core.Pat> args) {
-    return tuplePat(
-        typeSystem.tupleType(transform(args, Core.Pat::type)), args);
+  public Core.TuplePat tuplePat(
+      TypeSystem typeSystem, List<? extends Core.Pat> args) {
+    RecordLikeType tupleType =
+        typeSystem.tupleType(transform(args, Core.Pat::type));
+    return tuplePat(tupleType, args);
   }
 
   public Core.ListPat listPat(Type type, Iterable<? extends Core.Pat> args) {

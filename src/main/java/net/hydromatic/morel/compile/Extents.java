@@ -39,7 +39,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import net.hydromatic.morel.ast.Core;
@@ -384,7 +383,7 @@ public class Extents {
 
     private Analysis(
         SortedMap<Core.NamedPat, Core.Exp> boundPats,
-        Set<Core.NamedPat> goalPats,
+        Collection<Core.NamedPat> goalPats,
         Core.Exp extentExp,
         List<Core.Exp> satisfiedFilters,
         List<Core.Exp> remainingFilters) {
@@ -404,7 +403,7 @@ public class Extents {
     private final TypeSystem typeSystem;
     private final Environment env;
     private final boolean invert;
-    final Set<Core.NamedPat> goalPats;
+    final List<Core.NamedPat> goalPats;
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
 
     /**
@@ -431,7 +430,7 @@ public class Extents {
       this.typeSystem = requireNonNull(typeSystem);
       this.env = requireNonNull(env);
       this.invert = invert;
-      this.goalPats = ImmutableSet.copyOf(flatten(pat));
+      this.goalPats = ImmutableList.copyOf(flatten(pat));
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
       this.idPats = requireNonNull(idPats);
     }
@@ -458,21 +457,35 @@ public class Extents {
                   // Expression is 'andalso'. Visit each pattern, and 'and' the
                   // filters (intersect the extents).
                   // First try PredicateInverter
-                  final Optional<PredicateInverter.Result> result =
+                  // Convert boundPats to generators
+                  final Map<Core.NamedPat, PredicateInverter.Generator>
+                      generators = new LinkedHashMap<>();
+                  boundPats.forEach(
+                      (pat, exp) ->
+                          generators.put(
+                              pat,
+                              new PredicateInverter.Generator(
+                                  pat,
+                                  exp,
+                                  PredicateInverter.Cardinality.FINITE,
+                                  ImmutableList.of(),
+                                  ImmutableSet.of())));
+                  final PredicateInverter.Result result =
                       PredicateInverter.invert(
-                          typeSystem, env, filter, goalPats, boundPats);
-                  if (invert && result.isPresent()) {
-                    result
-                        .get()
-                        .satisfiedPats
-                        .forEach(
-                            pat ->
-                                map.computeIfAbsent(pat, p -> PairList.of())
-                                    .add(
-                                        result.get().generator,
-                                        core.andAlso(
-                                            typeSystem,
-                                            result.get().satisfiedFilters)));
+                          typeSystem, env, filter, goalPats, generators);
+                  if (invert
+                      && result.generator.cardinality
+                          != PredicateInverter.Cardinality.INFINITE) {
+                    // The generator produces tuples for all goalPats
+                    // Add remaining filters if any
+                    final Core.Exp combinedFilter =
+                        core.andAlso(typeSystem, result.remainingFilters);
+                    goalPats.forEach(
+                        pat ->
+                            map.computeIfAbsent(pat, p -> PairList.of())
+                                .add(
+                                    result.generator.expression,
+                                    combinedFilter));
                     break;
                   }
                   map2 = new LinkedHashMap<>();
@@ -598,15 +611,37 @@ public class Extents {
       }
 
       if (tryInvert) {
-        final Optional<PredicateInverter.Result> resultOpt =
+        // Convert boundPats to generators
+        final Map<Core.NamedPat, PredicateInverter.Generator> generators =
+            new LinkedHashMap<>();
+        boundPats.forEach(
+            (pat, exp) ->
+                generators.put(
+                    pat,
+                    new PredicateInverter.Generator(
+                        pat,
+                        exp,
+                        PredicateInverter.Cardinality.FINITE,
+                        ImmutableList.of(),
+                        ImmutableSet.of())));
+        final PredicateInverter.Result result =
             PredicateInverter.invert(
-                typeSystem, env, filter, goalPats, boundPats);
-        resultOpt.ifPresent(
-            result ->
-                result.satisfiedPats.forEach(
-                    pat ->
-                        map.computeIfAbsent(pat, p -> PairList.of())
-                            .add(result.generator, filter)));
+                typeSystem, env, filter, goalPats, generators);
+        // Check if inversion succeeded (didn't just return fallback)
+        final boolean inversionSucceeded =
+            result.remainingFilters.size() != 1
+                || !result.remainingFilters.get(0).equals(filter);
+        if (inversionSucceeded) {
+          // The generator produces tuples for all goalPats
+          final Core.Exp combinedFilter =
+              result.remainingFilters.isEmpty()
+                  ? core.boolLiteral(true)
+                  : core.andAlso(typeSystem, result.remainingFilters);
+          goalPats.forEach(
+              pat ->
+                  map.computeIfAbsent(pat, p -> PairList.of())
+                      .add(result.generator.expression, combinedFilter));
+        }
       }
     }
 

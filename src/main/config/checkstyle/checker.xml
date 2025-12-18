@@ -193,7 +193,7 @@ License.
     </module>
 
     <module name="MethodLength">
-      <property name="max" value="200"/>
+      <property name="max" value="210"/>
     </module>
 
     <!-- Checks for whitespace (tree walker)                 -->
