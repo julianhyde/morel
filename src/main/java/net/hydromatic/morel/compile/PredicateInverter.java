@@ -18,35 +18,41 @@
  */
 package net.hydromatic.morel.compile;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Collections.disjoint;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.skip;
+import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Range;
 import java.math.BigDecimal;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.SortedMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
-import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ConsList;
-import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 /**
  * Inverts predicates into generator expressions.
@@ -67,12 +73,6 @@ public class PredicateInverter {
   private final TypeSystem typeSystem;
   private final Environment env;
 
-  /** Variable definitions discovered during inversion (e.g., x = expr) */
-  private final Map<Core.NamedPat, Core.Exp> definitions = new HashMap<>();
-
-  /** Memoization table for recursive predicate inversions */
-  private final Map<Core.Id, Result> memo = new HashMap<>();
-
   private PredicateInverter(TypeSystem typeSystem, Environment env) {
     this.typeSystem = requireNonNull(typeSystem);
     this.env = env;
@@ -82,37 +82,35 @@ public class PredicateInverter {
    * Inverts a predicate to generate tuples.
    *
    * @param predicate The boolean expression to invert
-   * @param goalPats Variables to generate (unbound variables we want to
-   *     produce)
-   * @param boundPats Variables already bound with their extents/values
-   * @return Inversion result with generator and metadata, or empty if the
-   *     expression has no inverse
+   * @param goalPats Variables in the output tuple (what we want to generate)
+   * @param generators Generators for ALL variables in scope (including extents)
+   * @return Inversion result with improved generator, or fallback to cartesian
+   *     product
    */
-  public static Optional<Result> invert(
+  public static Result invert(
       TypeSystem typeSystem,
       Environment env,
       Core.Exp predicate,
-      Set<Core.NamedPat> goalPats,
-      SortedMap<Core.NamedPat, Core.Exp> boundPats) {
+      List<Core.NamedPat> goalPats,
+      Map<Core.NamedPat, Generator> generators) {
     return new PredicateInverter(typeSystem, env)
-        .invert(predicate, goalPats, boundPats, ImmutableList.of());
+        .invert(predicate, goalPats, generators, ImmutableList.of());
   }
 
   /**
    * Inverts a predicate.
    *
    * @param predicate The boolean expression to invert
-   * @param goalPats Variables to generate (unbound variables we want to
-   *     produce)
-   * @param boundPats Variables already bound with their extents/values
+   * @param goalPats Variables in the output tuple (what we want to generate)
+   * @param generators Generators for ALL variables in scope (including extents)
    * @param active Functions that are being expanded (further up the call stack)
-   * @return Inversion result with generator and metadata, or empty if the
-   *     expression has no inverse
+   * @return Inversion result with improved generator, or fallback to cartesian
+   *     product
    */
-  private Optional<Result> invert(
+  private Result invert(
       Core.Exp predicate,
-      Set<Core.NamedPat> goalPats,
-      SortedMap<Core.NamedPat, Core.Exp> boundPats,
+      List<Core.NamedPat> goalPats,
+      Map<Core.NamedPat, Generator> generators,
       List<Core.Exp> active) {
 
     // Handle function application
@@ -121,7 +119,7 @@ public class PredicateInverter {
 
       // Check for `elem` calls: pattern elem collection
       if (apply.isCallTo(BuiltIn.OP_ELEM)) {
-        return invertElem(apply, goalPats, boundPats);
+        return invertElem(apply, goalPats, generators);
       }
 
       // Check for String.isPrefix pattern expr
@@ -132,19 +130,15 @@ public class PredicateInverter {
           Core.Exp patternArg = innerApply.arg;
           Core.Exp stringArg = apply.arg;
 
-          // Check if patternArg is a goal pattern (e.g., Id(s))
+          // Check if patternArg is an output pattern (e.g., Id(s))
           if (patternArg.op == Op.ID) {
             Core.Id id = (Core.Id) patternArg;
 
             if (goalPats.contains(id.idPat)) {
               // Generate: List.tabulate(String.size s + 1, fn i =>
               // String.substring(s, 0, i))
-              Core.Exp generator = generateStringPrefixes(stringArg);
-              return result(
-                  generator,
-                  ImmutableList.of(),
-                  ImmutableList.of(predicate),
-                  ImmutableSet.of(id.idPat));
+              Generator generator = generateStringPrefixes(id.idPat, stringArg);
+              return result(generator, ImmutableList.of());
             }
           }
         }
@@ -152,8 +146,8 @@ public class PredicateInverter {
 
       // Check for andalso (conjunction)
       if (apply.isCallTo(BuiltIn.Z_ANDALSO)) {
-        return invertAnds(
-            core.decomposeAnd(apply), goalPats, boundPats, active);
+        final List<Core.Exp> predicates = core.decomposeAnd(apply);
+        return invertAnds(predicates, goalPats, generators, active);
       }
 
       // Check for user-defined function literals (already compiled)
@@ -166,7 +160,7 @@ public class PredicateInverter {
           Core.Exp substitutedBody = substituteArg(fn.idPat, apply.arg, fn.exp);
 
           // Try to invert the substituted body
-          return invert(substitutedBody, goalPats, boundPats, active);
+          return invert(substitutedBody, goalPats, generators, active);
         }
       }
 
@@ -180,7 +174,7 @@ public class PredicateInverter {
         if (active.contains(fnId)) {
           // Can't invert recursive calls directly - would need special handling
           // like Relational.iterate for transitive closure
-          return Optional.empty();
+          throw new AssertionError("TODO");
         }
 
         Binding binding = env.getOpt(fnPat);
@@ -198,7 +192,7 @@ public class PredicateInverter {
             return invert(
                 substitutedBody,
                 goalPats,
-                boundPats,
+                generators,
                 ConsList.of(fnId, active));
           }
         }
@@ -217,11 +211,11 @@ public class PredicateInverter {
         // Try to extract the pattern and invert
         // For now, handle simple case: from s in collection where pred(p, s)
         // This would be represented as a FROM with a WHERE clause
-        return invertExists(fromExp, goalPats, boundPats);
+        return invertExists((Core.From) fromExp, goalPats, generators);
       }
     }
 
-    return Optional.empty();
+    return result(generatorFor(goalPats, generators), ImmutableList.of());
   }
 
   /**
@@ -231,25 +225,18 @@ public class PredicateInverter {
    * <p>Returns the union of all values that satisfy the predicate for at least
    * one element in the collection.
    */
-  private Optional<Result> invertExists(
-      Core.Exp fromExp,
-      Set<Core.NamedPat> goalPats,
-      SortedMap<Core.NamedPat, Core.Exp> boundPats) {
-    // For a from expression like: from s in collection where String.isPrefix p
-    // s
-    // We want to find all p that are prefixes of at least one s in collection
+  private Result invertExists(
+      Core.From from,
+      List<Core.NamedPat> goalPats,
+      Map<Core.NamedPat, Generator> generators) {
+    // For a query like "from s in collection where String.isPrefix p s",
+    // we want to find all p that are prefixes of at least one s in collection.
 
     // If fromExp is a FROM with scan and where steps:
     // - Extract the collection being scanned
     // - Extract the filter predicate
     // - For each element in the collection, invert the predicate
     // - Return the union of all inverted results
-
-    if (fromExp.op != Op.FROM) {
-      return Optional.empty();
-    }
-
-    Core.From from = (Core.From) fromExp;
 
     // Look for the scan step to get the collection
     Core.Exp collection = null;
@@ -268,7 +255,7 @@ public class PredicateInverter {
     }
 
     if (filterPredicate == null || scanPat == null) {
-      return Optional.empty();
+      throw new AssertionError();
     }
 
     // Check if the collection is an extent (unbounded domain).
@@ -276,15 +263,30 @@ public class PredicateInverter {
     requireNonNull(collection);
     if (collection.op == Op.APPLY && collection.isCallTo(BuiltIn.Z_EXTENT)) {
       // Extent scan - filter must provide the generators.
-      // Add the scan variable to goalPats temporarily so it can be referenced.
-      Set<Core.NamedPat> extendedGoalPats = new HashSet<>(goalPats);
+      // Add the scan variable to outputPats temporarily so it can be
+      // referenced.
+      List<Core.NamedPat> extendedOutputPats = new ArrayList<>(goalPats);
+      Map<Core.NamedPat, Generator> extendedGenerators =
+          new HashMap<>(generators);
       if (scanPat.op == Op.ID_PAT) {
-        extendedGoalPats.add((Core.IdPat) scanPat);
+        Core.IdPat scanIdPat = (Core.IdPat) scanPat;
+        extendedOutputPats.add(scanIdPat);
+        // Add an infinite extent generator for the scan variable
+        extendedGenerators.put(
+            scanIdPat,
+            generator(
+                toTuple(goalPats),
+                collection,
+                Cardinality.INFINITE,
+                ImmutableList.of()));
       }
 
-      // Try to invert the filter with the extended goal patterns
+      // Try to invert the filter with the extended patterns and generators
       return invert(
-          filterPredicate, extendedGoalPats, boundPats, ImmutableList.of());
+          filterPredicate,
+          extendedOutputPats,
+          extendedGenerators,
+          ImmutableList.of());
     }
 
     // Check if the collection is a list literal.
@@ -293,50 +295,105 @@ public class PredicateInverter {
       // Get the list elements
       if (listApply.arg.op == Op.TUPLE) {
         Core.Tuple tuple = (Core.Tuple) listApply.arg;
-        List<Core.Exp> generators = new ArrayList<>();
+        List<Generator> resultGenerators = new ArrayList<>();
 
         // For each element in the collection, substitute it into the filter
-        // and try to invert
+        // and try to invert.
         for (Core.Exp element : tuple.args) {
-          // Substitute scanPat with element in filterPredicate
+          // Substitute scanPat with element in filterPredicate.
           Core.Exp substitutedFilter =
               substituteArg(scanPat, element, filterPredicate);
 
-          // Try to invert the substituted filter
-          Optional<Result> elementResult =
+          // Try to invert the substituted filter.
+          Result elementResult =
               invert(
-                  substitutedFilter, goalPats, boundPats, ImmutableList.of());
-          elementResult.ifPresent(result -> generators.add(result.generator));
+                  substitutedFilter, goalPats, generators, ImmutableList.of());
+          // Only add if it improved (no remaining filters)
+          if (elementResult.remainingFilters.isEmpty()) {
+            resultGenerators.add(elementResult.generator);
+          }
         }
 
-        if (!generators.isEmpty()) {
+        if (!resultGenerators.isEmpty()) {
           // Create union of all generators with distinct semantics.
-          return result(
-              unionDistinct(generators),
-              ImmutableList.of(),
-              ImmutableList.of(),
-              goalPats);
+          return result(unionDistinct(resultGenerators), ImmutableList.of());
         }
       }
     }
 
-    return Optional.empty();
+    return result(
+        generatorFor(goalPats, generators),
+        ImmutableList.of(
+            core.call(typeSystem, BuiltIn.RELATIONAL_NON_EMPTY, from)));
+  }
+
+  private Generator generatorFor(
+      List<Core.NamedPat> goalPats, Map<Core.NamedPat, Generator> generators) {
+    final Core.Pat goalPat = toTuple(goalPats);
+    switch (goalPats.size()) {
+      case 0:
+        // No patterns. The generator is '[()]'.
+        return generator(
+            goalPat,
+            core.list(typeSystem, core.unitLiteral()),
+            Cardinality.SINGLE,
+            ImmutableList.of());
+
+      case 1:
+        // One pattern. The generator is the one in the dictionary.
+        return requireNonNull(generators.get(goalPats.get(0)));
+
+      default:
+        // More than one pattern. The generator is a Cartesian product.
+        final FromBuilder fromBuilder = core.fromBuilder(typeSystem, env);
+        final ImmutableSet.Builder<Core.NamedPat> freeVars =
+            ImmutableSet.builder();
+        Cardinality c = Cardinality.SINGLE;
+        for (Core.NamedPat p : goalPats) {
+          Generator generator = generators.get(p);
+          c = c.max(generator.cardinality);
+          freeVars.addAll(generator.freeVars);
+          fromBuilder.scan(p, generator.expression);
+        }
+        return new Generator(
+            goalPat,
+            fromBuilder.build(),
+            c,
+            ImmutableList.of(),
+            freeVars.build());
+    }
+  }
+
+  private Generator generator(
+      Core.Pat goalPat,
+      Core.Exp exp,
+      Cardinality cardinality,
+      Iterable<? extends Core.Exp> filters) {
+    final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
+    final Set<Core.NamedPat> freeVars = freeVarsIn(simplified);
+    return new Generator(goalPat, simplified, cardinality, filters, freeVars);
   }
 
   /**
    * Creates a "from" expression with "union distinct" steps, "from p_union in
    * scan#0 union distinct scan#1, ... scan#N".
    */
-  private Core.Exp unionDistinct(List<Core.Exp> scans) {
-    if (scans.size() == 1) {
-      return scans.get(0);
+  private Generator unionDistinct(List<Generator> generators) {
+    checkArgument(!generators.isEmpty());
+    final Generator generator0 = generators.get(0);
+    if (generators.size() == 1) {
+      return generator0;
     } else {
-      final Type elementType = ((ListType) scans.get(0).type).elementType;
+      final Type elementType =
+          ((ListType) generator0.expression.type).elementType;
       final Core.IdPat unionPat = core.idPat(elementType, "p_union", 0);
-      return core.fromBuilder(typeSystem, (Environment) null)
-          .scan(unionPat, scans.get(0))
-          .union(true, skip(scans))
-          .build();
+      final Core.From exp =
+          core.fromBuilder(typeSystem, (Environment) null)
+              .scan(unionPat, generator0.expression)
+              .union(true, transformEager(skip(generators), g -> g.expression))
+              .build();
+      return generator(
+          generator0.goalPat, exp, Cardinality.FINITE, ImmutableList.of());
     }
   }
 
@@ -348,10 +405,10 @@ public class PredicateInverter {
    * <p>For tuple patterns like {@code (x, y) elem list} where some elements are
    * bound, creates a FROM expression that scans the collection and filters.
    */
-  private Optional<Result> invertElem(
+  private Result invertElem(
       Core.Apply elemCall,
-      Set<Core.NamedPat> goalPats,
-      SortedMap<Core.NamedPat, Core.Exp> boundPats) {
+      List<Core.NamedPat> goalPats,
+      Map<Core.NamedPat, Generator> generators) {
     Core.Exp pattern = elemCall.arg(0);
     Core.Exp collection = elemCall.arg(1);
 
@@ -359,47 +416,116 @@ public class PredicateInverter {
     if (pattern.op == Op.ID) {
       Core.Id id = (Core.Id) pattern;
       if (goalPats.contains(id.idPat)) {
-        return result(
-            collection,
-            ImmutableList.of(),
-            ImmutableList.of(elemCall),
-            ImmutableSet.of(id.idPat));
+        final Generator generator =
+            generator(
+                toTuple(goalPats),
+                collection,
+                Cardinality.FINITE,
+                ImmutableList.of());
+        return result(generator, ImmutableList.of());
       }
     }
 
-    // Tuple case: (x, y, ...) elem myList.
-    // Need to handle bound values and create appropriate filters.
+    // If the expression is "(a, b, c, "foo") elem myList"
+    // and the goal is "(c, b)"
+    // then the generator is "from (a, b, c, "foo") in myList yield {c, b}".
     if (pattern.op == Op.TUPLE) {
-      Core.Tuple tuplePat = (Core.Tuple) pattern;
+      final Core.Tuple tuple = (Core.Tuple) pattern;
+      final Core.Pat pat = toPat(tuple);
 
-      // Check which elements are goal variables and which are bound.
-      final List<Core.Exp> goalElements = new ArrayList<>();
-      final List<Core.Exp> remainingFilters = new ArrayList<>();
-      final Set<Core.NamedPat> satisfiedPats = new HashSet<>();
-
-      for (int i = 0; i < tuplePat.args.size(); i++) {
-        Core.Exp elem = tuplePat.args.get(i);
-        if (elem.op == Op.ID) {
-          Core.Id id = (Core.Id) elem;
-          if (goalPats.contains(id.idPat)) {
-            goalElements.add(elem);
-            satisfiedPats.add(id.idPat);
-          }
-        } else {
-          // Need to filter later.
-          remainingFilters.add(core.equal(typeSystem, elem, elem));
-        }
-      }
-
-      // For now, if all elements are goal variables, just return the collection
-      return result(
-          collection,
-          ImmutableList.of(),
-          ImmutableList.of(elemCall),
-          satisfiedPats);
+      final FromBuilder fromBuilder = core.fromBuilder(typeSystem, env);
+      fromBuilder.scan(pat, elemCall.arg(1));
+      fromBuilder.yield_(tuple);
+      final Generator generator =
+          generator(
+              toTuple(goalPats),
+              collection,
+              Cardinality.FINITE,
+              ImmutableList.of());
+      return result(generator, ImmutableList.of());
     }
 
-    return Optional.empty();
+    // TODO: Handle if some but not all of goalPats are covered in elemCall.
+    // TODO: Deal with repeated IDs, like "(c, b, c) elem myList"
+    // TODO: Deal with "() elem myList"
+
+    return result(
+        generatorFor(goalPats, generators), ImmutableList.of(elemCall));
+  }
+
+  /**
+   * Converts an expression to the equivalent pattern.
+   *
+   * @see Op#toPat()
+   */
+  private Core.Pat toPat(Core.Exp exp) {
+    switch (exp.op) {
+      case ID:
+        return ((Core.Id) exp).idPat;
+
+      case TUPLE:
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        if (tuple.type.op() == Op.RECORD_TYPE) {
+          return core.recordPat(
+              (RecordType) tuple.type(),
+              transformEager(tuple.args, this::toPat));
+        } else {
+          return core.tuplePat(
+              tuple.type(), transformEager(tuple.args, this::toPat));
+        }
+
+      case BOOL_LITERAL:
+      case CHAR_LITERAL:
+      case INT_LITERAL:
+      case REAL_LITERAL:
+      case STRING_LITERAL:
+      case UNIT_LITERAL:
+        final Core.Literal literal = (Core.Literal) exp;
+        return core.literalPat(exp.op.toPat(), exp.type, literal.value);
+
+      default:
+        throw new AssertionError("cannot convert " + exp + " to pattern");
+    }
+  }
+
+  private Core.Exp toExp(Core.Pat pat) {
+    switch (pat.op) {
+      case ID_PAT:
+        return core.id((Core.NamedPat) pat);
+
+      default:
+        throw new AssertionError("cannot convert " + pat + " to expression");
+    }
+  }
+
+  private Set<Core.NamedPat> freeVarsIn(Core.Exp... exps) {
+    final ImmutableSet.Builder<Core.NamedPat> list = ImmutableSet.builder();
+    for (Core.Exp exp : exps) {
+      forEachFreeVarIn(exp, list::add);
+    }
+    return list.build();
+  }
+
+  private void forEachFreeVarIn(
+      Core.Exp exp, Consumer<Core.NamedPat> consumer) {
+    class MyEnvVisitor extends EnvVisitor {
+      MyEnvVisitor(Environment env, Deque<FromContext> fromStack) {
+        super(PredicateInverter.this.typeSystem, env, fromStack);
+      }
+
+      @Override
+      protected EnvVisitor push(Environment env) {
+        return new MyEnvVisitor(env, fromStack);
+      }
+
+      @Override
+      protected void visit(Core.Id id) {
+        consumer.accept(id.idPat);
+      }
+    }
+
+    exp.accept(
+        new MyEnvVisitor(PredicateInverter.this.env, new ArrayDeque<>()));
   }
 
   /**
@@ -474,15 +600,15 @@ public class PredicateInverter {
    *   <li>Mixed predicates: {@code x < z andalso x <> 3 andalso x > y}
    * </ul>
    */
-  private Optional<Result> invertAnds(
+  private Result invertAnds(
       List<Core.Exp> predicates,
-      Set<Core.NamedPat> goalPats,
-      SortedMap<Core.NamedPat, Core.Exp> boundPats,
+      List<Core.NamedPat> goalPats,
+      Map<Core.NamedPat, Generator> generators,
       List<Core.Exp> active) {
     if (predicates.size() < 2) {
       // If flatten created a degenerate case, it's someone else's problem.
       return invert(
-          core.andAlso(typeSystem, predicates), goalPats, boundPats, active);
+          core.andAlso(typeSystem, predicates), goalPats, generators, active);
     }
 
     for (int i = 0; i < predicates.size(); i++) {
@@ -518,26 +644,21 @@ public class PredicateInverter {
                 && goalPats.contains(((Core.Id) xId).idPat)) {
               Core.NamedPat xPat = ((Core.Id) xId).idPat;
 
-              // Check if x is the goal and y is bound (or y is not in
-              // goalPats, meaning it's already processed).
-              if (!referencesAny(lower, goalPats)
-                  && !referencesAny(upper, goalPats)) {
+              // Check if x is the output and y is bound (or y is not in
+              // outputPats, meaning it's already processed).
+              if (disjoint(freeVarsIn(lower, upper), goalPats)) {
                 // Pattern matched! Generate:
                 //   List.tabulate(upper - lower, fn k => lower + k)
                 // which is the range
                 //  [lower, upper]
-                Core.Exp generator =
-                    generateRange(lower, lowerStrict, upper, upperStrict);
+                final Generator generator =
+                    generateRange(xPat, lower, lowerStrict, upper, upperStrict);
 
                 final List<Core.Exp> remainingPredicates =
                     new ArrayList<>(predicates);
                 remainingPredicates.remove(lowerBound);
                 remainingPredicates.remove(upperBound);
-                return result(
-                    generator,
-                    remainingPredicates,
-                    ImmutableList.of(lowerBound, upperBound),
-                    ImmutableSet.of(xPat));
+                return result(generator, remainingPredicates);
               }
             }
           }
@@ -551,15 +672,16 @@ public class PredicateInverter {
     Core.Exp right = predicates.get(1);
 
     // Try to invert both sides and join them
-    Optional<Result> leftResult =
-        invert(left, goalPats, boundPats, ImmutableList.of());
-    Optional<Result> rightResult =
-        invert(right, goalPats, boundPats, ImmutableList.of());
+    Result leftResult = invert(left, goalPats, generators, ImmutableList.of());
+    Result rightResult =
+        invert(right, goalPats, generators, ImmutableList.of());
 
-    if (leftResult.isPresent() && rightResult.isPresent()) {
+    // Only join if both sides improved (no remaining filters)
+    if (leftResult.remainingFilters.isEmpty()
+        && rightResult.remainingFilters.isEmpty()) {
       // Both sides can be inverted - create a cross product or join
-      Result lr = leftResult.get();
-      Result rr = rightResult.get();
+      Result lr = leftResult;
+      Result rr = rightResult;
 
       // For now, create a simple concatenation approach:
       // from x in leftGen, y in rightGen yield (x, y)
@@ -570,8 +692,8 @@ public class PredicateInverter {
       // in
       // depts where deptno = deptno2
       // For now, just scan both and let the filters apply
-      Core.Exp gen1 = lr.generator;
-      Core.Exp gen2 = rr.generator;
+      Generator gen1 = lr.generator;
+      Generator gen2 = rr.generator;
 
       // Create combined generator: List.concat (from x in gen1 yield from y in
       // gen2
@@ -579,8 +701,8 @@ public class PredicateInverter {
       // For simplicity, let's try returning a FROM expression that scans both
 
       // Get the element types
-      Type gen1ElemType = ((ListType) gen1.type).elementType;
-      Type gen2ElemType = ((ListType) gen2.type).elementType;
+      Type gen1ElemType = ((ListType) gen1.expression.type).elementType;
+      Type gen2ElemType = ((ListType) gen2.expression.type).elementType;
 
       // Create patterns for scanning
       Core.IdPat pat1 = core.idPat(gen1ElemType, "x_left", 0);
@@ -588,8 +710,8 @@ public class PredicateInverter {
 
       // Build FROM: from x_left in gen1, x_right in gen2
       FromBuilder builder = core.fromBuilder(typeSystem, (Environment) null);
-      builder.scan(pat1, gen1);
-      builder.scan(pat2, gen2);
+      builder.scan(pat1, gen1.expression);
+      builder.scan(pat2, gen2.expression);
 
       // Yield a tuple of both (or just the goal variables)
       // For now, yield both - the caller will handle extracting what's needed
@@ -617,47 +739,53 @@ public class PredicateInverter {
       builder.yield_(yieldExp);
       Core.Exp joinedGen = builder.build();
 
-      // Combine satisfied patterns from both sides
-      Set<Core.NamedPat> combinedSatisfied = new HashSet<>(lr.satisfiedPats);
-      combinedSatisfied.addAll(rr.satisfiedPats);
-
       return result(
-          joinedGen, ImmutableList.of(), predicates, combinedSatisfied);
+          generator(
+              toTuple(goalPats),
+              joinedGen,
+              Cardinality.FINITE,
+              ImmutableList.of()),
+          ImmutableList.of());
     }
 
-    return Optional.empty();
+    return result(generatorFor(goalPats, generators), predicates);
   }
 
-  private Optional<Result> result(
-      Core.Exp generator,
-      Iterable<? extends Core.Exp> remainingFilters,
-      Iterable<? extends Core.Exp> satisfiedFilters,
-      Iterable<? extends Core.NamedPat> satisfiedPats) {
-    return Optional.of(
-        new Result(
-            Simplifier.simplify(typeSystem, generator),
-            false,
-            remainingFilters,
-            satisfiedPats,
-            satisfiedFilters));
+  private Core.Pat toTuple(List<Core.NamedPat> pats) {
+    return pats.size() == 1 ? pats.get(0) : core.tuplePat(typeSystem, pats);
+  }
+
+  private Result result(
+      Generator generator, Iterable<? extends Core.Exp> remainingFilters) {
+    return new Result(generator, remainingFilters);
+  }
+
+  /** Creates an extent generator for a pattern with infinite cardinality. */
+  private Generator createExtentGenerator(Core.NamedPat pat) {
+    final Core.Exp extentExp =
+        core.extent(typeSystem, pat.type, ImmutableRangeSet.of(Range.all()));
+    return new Generator(
+        pat,
+        extentExp,
+        Cardinality.INFINITE,
+        ImmutableList.of(),
+        ImmutableSet.of());
   }
 
   /** Returns whether an expression references any of the given patterns. */
-  private boolean referencesAny(Core.Exp exp, Set<Core.NamedPat> pats) {
+  private boolean referencesNone(Core.Exp exp, Collection<Core.NamedPat> pats) {
     if (pats.isEmpty()) {
       return false; // short-cut
     }
-    final Set<Core.NamedPat> referencedPats = new HashSet<>();
-    final Visitor envVisitor =
-        new Visitor() {
-          @Override
-          protected void visit(Core.Id id) {
-            referencedPats.add(id.idPat);
+    final AtomicBoolean b = new AtomicBoolean(true);
+    forEachFreeVarIn(
+        exp,
+        pat -> {
+          if (pats.contains(pat)) {
+            b.set(false);
           }
-        };
-    exp.accept(envVisitor);
-    referencedPats.retainAll(pats);
-    return !referencedPats.isEmpty();
+        });
+    return b.get();
   }
 
   /**
@@ -666,10 +794,12 @@ public class PredicateInverter {
    * <p>For example, {@code generateStringPrefixes(s)} generates {@code
    * List.tabulate(String.size s + 1, fn i => String.substring(s, 0, i))}.
    *
+   * @param idPat Pattern
    * @param stringExp The string expression to generate prefixes for
    * @return An expression that generates all prefixes
    */
-  private Core.Exp generateStringPrefixes(Core.Exp stringExp) {
+  private Generator generateStringPrefixes(
+      Core.NamedPat idPat, Core.Exp stringExp) {
     final Type stringType = PrimitiveType.STRING;
     final Type intType = PrimitiveType.INT;
 
@@ -701,8 +831,12 @@ public class PredicateInverter {
         core.fn(typeSystem.fnType(intType, stringType), iPat, substringCall);
 
     // List.tabulate(count, fn)
-    return core.call(
-        typeSystem, BuiltIn.LIST_TABULATE, stringType, Pos.ZERO, count, fn);
+    return generator(
+        idPat,
+        core.call(
+            typeSystem, BuiltIn.LIST_TABULATE, stringType, Pos.ZERO, count, fn),
+        Cardinality.FINITE,
+        ImmutableList.of());
   }
 
   /**
@@ -711,6 +845,7 @@ public class PredicateInverter {
    * <p>For example, {@code generateRange(3, true, 8, false)} generates a range
    * {@code 3 < x <= 8}, which yields the values {@code [4, 5, 6, 7, 8]}.
    *
+   * @param pat Goal pattern
    * @param lower Lower bound
    * @param lowerStrict Whether the lower bound is strict (exclusive): true for
    *     {@code x > lower}, false for {@code x >= lower}
@@ -718,7 +853,8 @@ public class PredicateInverter {
    * @param upperStrict Whether the upper bound is strict (exclusive): true for
    *     {@code x < upper}, false for {@code x <= upper}
    */
-  private Core.Exp generateRange(
+  private Generator generateRange(
+      Core.NamedPat pat,
       Core.Exp lower,
       boolean lowerStrict,
       Core.Exp upper,
@@ -759,44 +895,93 @@ public class PredicateInverter {
         core.call(
             typeSystem, BuiltIn.Z_PLUS_INT, lower, CoreBuilder.core.id(kPat));
     final Core.Fn fn = core.fn(typeSystem.fnType(type, type), kPat, lowerPlusK);
-    return core.call(
-        typeSystem, BuiltIn.LIST_TABULATE, type, Pos.ZERO, count, fn);
+    return generator(
+        pat,
+        core.call(typeSystem, BuiltIn.LIST_TABULATE, type, Pos.ZERO, count, fn),
+        Cardinality.FINITE,
+        ImmutableList.of());
   }
 
-  /** Result of successfully inverting a predicate. */
+  /** Cardinality of a generator per binding of its free variables. */
+  public enum Cardinality {
+    /** Produces exactly one value (e.g., x = 5) */
+    SINGLE,
+    /** Produces a finite number of values (e.g., x elem [1,2,3]) */
+    FINITE,
+    /** Produces an infinite number of values (e.g., unbounded extent) */
+    INFINITE;
+
+    /** Returns this or o, whichever has the greater cardiality. */
+    Cardinality max(Cardinality o) {
+      return this.ordinal() >= o.ordinal() ? this : o;
+    }
+  }
+
+  /**
+   * A generator produces values for variables.
+   *
+   * <p>It consists of:
+   *
+   * <ul>
+   *   <li>An expression that generates values
+   *   <li>Cardinality metadata (single/finite/infinite per binding of free
+   *       variables)
+   *   <li>A list of predicates that values satisfy
+   *   <li>Free variables referenced in the expression
+   * </ul>
+   */
+  public static class Generator {
+    /** Pattern that the expression generates values for. */
+    public final Core.Pat goalPat;
+
+    /** The generator expression */
+    public final Core.Exp expression;
+
+    /** Cardinality per binding of free variables */
+    public final Cardinality cardinality;
+
+    /**
+     * A list of constraints that the values from the generator satisfy (without
+     * any checking or filtering). We keep constraints because they may allow us
+     * to remove filters.
+     */
+    public final List<Core.Exp> constraints;
+
+    /** Non-output variables referenced in the expression */
+    public final Set<Core.NamedPat> freeVars;
+
+    Generator(
+        Core.Pat goalPat,
+        Core.Exp expression,
+        Cardinality cardinality,
+        Iterable<? extends Core.Exp> constraints,
+        Iterable<? extends Core.NamedPat> freeVars) {
+      this.goalPat = requireNonNull(goalPat);
+      this.expression = requireNonNull(expression);
+      this.cardinality = requireNonNull(cardinality);
+      this.constraints = ImmutableList.copyOf(constraints);
+      this.freeVars = ImmutableSet.copyOf(freeVars);
+    }
+  }
+
+  /** Result of inverting a predicate. */
   public static class Result {
     /**
      * An expression that generates a list of all values of the patterns for
      * which the predicate evaluates to true.
      */
-    public final Core.Exp generator;
-
-    /** Whether the generator may produce duplicates */
-    public final boolean mayHaveDuplicates;
+    public final Generator generator;
 
     /**
-     * Filters that still need to be checked. Empty if the generator generates
-     * only values that comply with all filters.
+     * Filters that still need to be checked at runtime. Empty if the generator
+     * generates only values that satisfy all predicates.
      */
-    public final List<? extends Core.Exp> remainingFilters;
+    public final List<Core.Exp> remainingFilters;
 
-    /** Which goal variables are actually produced by this generator */
-    public final Set<Core.NamedPat> satisfiedPats;
-
-    /** Filters that were incorporated into the generator */
-    public final List<Core.Exp> satisfiedFilters;
-
-    private Result(
-        Core.Exp generator,
-        boolean mayHaveDuplicates,
-        @MonotonicNonNull Iterable<? extends Core.Exp> remainingFilters,
-        Iterable<? extends Core.NamedPat> satisfiedPats,
-        Iterable<? extends Core.Exp> satisfiedFilters) {
+    public Result(
+        Generator generator, Iterable<? extends Core.Exp> remainingFilters) {
       this.generator = requireNonNull(generator);
-      this.mayHaveDuplicates = mayHaveDuplicates;
       this.remainingFilters = ImmutableList.copyOf(remainingFilters);
-      this.satisfiedPats = ImmutableSet.copyOf(satisfiedPats);
-      this.satisfiedFilters = ImmutableList.copyOf(satisfiedFilters);
     }
   }
 }
