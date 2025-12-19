@@ -235,7 +235,8 @@ public class Extents {
     return rangeExtent.iterable == null;
   }
 
-  public static Core.Decl infinitePats(TypeSystem typeSystem, Core.Decl node) {
+  public static Core.Decl infinitePats(
+      TypeSystem typeSystem, Environment env, Core.Decl node) {
     return node.accept(
         new Shuttle(typeSystem) {
           @Override
@@ -250,7 +251,7 @@ public class Extents {
                   final Analysis analysis =
                       create(
                           typeSystem,
-                          Environments.empty(),
+                          env,
                           true,
                           scan.pat,
                           ImmutableSortedMap.of(),
@@ -383,7 +384,7 @@ public class Extents {
 
     private Analysis(
         SortedMap<Core.NamedPat, Core.Exp> boundPats,
-        Collection<Core.NamedPat> goalPats,
+        List<Core.NamedPat> goalPats,
         Core.Exp extentExp,
         List<Core.Exp> satisfiedFilters,
         List<Core.Exp> remainingFilters) {
@@ -432,11 +433,128 @@ public class Extents {
       this.invert = invert;
       this.goalPats = ImmutableList.copyOf(flatten(pat));
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
-      this.idPats = requireNonNull(idPats);
+      this.idPats = idPats;
     }
 
     @SuppressWarnings("SwitchStatementWithTooFewBranches")
     void g3(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map, Core.Exp filter) {
+      final Core.Apply apply;
+      switch (filter.op) {
+        case APPLY:
+          apply = (Core.Apply) filter;
+          switch (apply.fn.op) {
+            case FN_LITERAL:
+              BuiltIn builtIn = ((Core.Literal) apply.fn).unwrap(BuiltIn.class);
+              final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map2;
+              switch (builtIn) {
+                case Z_ANDALSO:
+                  // Expression is 'andalso'. Visit each pattern, and 'and' the
+                  // filters (intersect the extents).
+                  map2 = new LinkedHashMap<>();
+                  apply.arg.forEachArg((arg, i) -> g3(map2, arg));
+                  map2.forEach(
+                      (pat, foo) ->
+                          map.computeIfAbsent(pat, p -> PairList.of())
+                              .addAll(foo));
+                  break;
+
+                case Z_ORELSE:
+                  // Expression is 'orelse'. Visit each pattern, and intersect
+                  // the constraints (union the generators).
+                  map2 = new LinkedHashMap<>();
+                  final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map3 =
+                      new LinkedHashMap<>();
+                  apply.arg.forEachArg(
+                      (arg, i) -> {
+                        g3(map3, arg);
+                        map3.forEach(
+                            (pat, foo) ->
+                                map2.computeIfAbsent(pat, p -> PairList.of())
+                                    .add(reduceAnd(typeSystem, foo)));
+                        map3.clear();
+                      });
+                  map2.forEach(
+                      (pat, foo) -> {
+                        final PairList<Core.Exp, Core.Exp> foo1 =
+                            map.computeIfAbsent(pat, p -> PairList.of());
+                        if (foo1.isEmpty()) {
+                          // [] union [x2, x3, x4]
+                          //  =>
+                          // [x2, x3, x4]
+                          foo1.add(reduceOr(typeSystem, foo));
+                        } else {
+                          // [x0, x1] union [x2, x3, x4]
+                          //  =>
+                          // [union(intersect(x0, x1), intersect(x2, x3, x4))]
+                          PairList<Core.Exp, Core.Exp> intersectExtents =
+                              PairList.of();
+                          intersectExtents.add(reduceAnd(typeSystem, foo1));
+                          intersectExtents.add(reduceAnd(typeSystem, foo));
+                          foo1.clear();
+                          foo1.add(reduceOr(typeSystem, intersectExtents));
+                        }
+                      });
+                  break;
+
+                case OP_EQ:
+                case OP_NE:
+                case OP_GE:
+                case OP_GT:
+                case OP_LT:
+                case OP_LE:
+                  g4(
+                      builtIn,
+                      apply.arg(0),
+                      apply.arg(1),
+                      (pat, filter2, extent) ->
+                          map.computeIfAbsent(pat, p -> PairList.of())
+                              .add(extent, filter2));
+                  break;
+
+                case OP_ELEM:
+                  switch (apply.arg(0).op) {
+                    case ID:
+                      final Core.NamedPat pat = ((Core.Id) apply.arg(0)).idPat;
+                      map.computeIfAbsent(pat, p1 -> PairList.of())
+                          .add(apply.arg(1), apply);
+                      break;
+
+                    case TUPLE:
+                      final Core.Tuple tuple = (Core.Tuple) apply.arg(0);
+                      final Core.Id id =
+                          core.id(createId(tuple.type, apply.arg(1)));
+                      final Core.Exp elem =
+                          core.elem(typeSystem, id, apply.arg(1));
+                      g3(
+                          map,
+                          core.andAlso(
+                              typeSystem,
+                              elem,
+                              core.equal(typeSystem, id, tuple)));
+                      final List<Core.Exp> conjunctions = new ArrayList<>();
+                      conjunctions.add(core.elem(typeSystem, id, apply.arg(1)));
+                      tuple.forEach(
+                          (i, name, arg) ->
+                              conjunctions.add(
+                                  core.equal(
+                                      typeSystem,
+                                      core.field(typeSystem, id, i),
+                                      arg)));
+                      g3(map, core.andAlso(typeSystem, conjunctions));
+                      break;
+                  }
+                  break;
+              }
+          }
+          break;
+
+        default:
+          break;
+      }
+    }
+
+    @SuppressWarnings("SwitchStatementWithTooFewBranches")
+    void g3b(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map, Core.Exp filter) {
       boolean tryInvert = false;
       final Core.Apply apply;
       switch (filter.op) {
