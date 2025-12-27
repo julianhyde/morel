@@ -480,7 +480,7 @@ public class PredicateInverterTest {
                 new PredicateInverter.Generator(
                     f.xPat,
                     xExtent,
-                    PredicateInverter.Cardinality.FINITE,
+                    Generator.Cardinality.FINITE,
                     ImmutableList.of(),
                     ImmutableSet.of())));
 
@@ -545,7 +545,7 @@ public class PredicateInverterTest {
                 new PredicateInverter.Generator(
                     f.yPat,
                     yExtent,
-                    PredicateInverter.Cardinality.FINITE,
+                    Generator.Cardinality.FINITE,
                     ImmutableList.of(),
                     ImmutableSet.of())));
 

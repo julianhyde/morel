@@ -681,9 +681,17 @@ public class Core {
       return false;
     }
 
+    /**
+     * Returns the {@link BuiltIn} that this is a call to, or {@link
+     * BuiltIn#FALSE} if not a call.
+     */
+    public BuiltIn builtIn() {
+      return BuiltIn.FALSE;
+    }
+
     /** Returns whether this expression is a call to the given built-in. */
     public boolean isCallTo(BuiltIn builtIn) {
-      return false;
+      return builtIn() == builtIn;
     }
 
     /**
@@ -2229,9 +2237,11 @@ public class Core {
     }
 
     @Override
-    public boolean isCallTo(BuiltIn builtIn) {
-      return fn.op == Op.FN_LITERAL
-          && ((Literal) fn).unwrap(BuiltIn.class) == builtIn;
+    public BuiltIn builtIn() {
+      if (fn.op == Op.FN_LITERAL) {
+        return ((Literal) fn).unwrap(BuiltIn.class);
+      }
+      return super.builtIn();
     }
 
     @Override

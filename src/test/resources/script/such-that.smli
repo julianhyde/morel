@@ -48,6 +48,10 @@ from i where i > 0 andalso i < 4 yield {j = i + 1} order DESC j;
 > val it : {j:int} list
 from i where i > 0 andalso i < 10 andalso i mod 3 = 2;
 > val it = [2,5,8] : int bag
+from i where i = 0;
+> val it = [0] : int bag
+from s where s = "abc";
+> val it = ["abc"] : string bag
 from i where i = 0 orelse i = 12;
 > val it = [0,12] : int bag
 from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
