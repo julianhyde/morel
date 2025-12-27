@@ -22,21 +22,33 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ImmutablePairList;
+import net.hydromatic.morel.util.PairList;
 
 /** Simplifier of expressions. */
 class Simplifier {
   private final TypeSystem typeSystem;
+  private final PairList<Core.Pat, Generator> generators;
+
+  Simplifier(
+      TypeSystem typeSystem,
+      Map<? extends Core.Pat, ? extends Generator> generators) {
+    this.typeSystem = typeSystem;
+    this.generators = ImmutablePairList.copyOf(generators.entrySet());
+  }
 
   Simplifier(TypeSystem typeSystem) {
-    this.typeSystem = typeSystem;
+    this(typeSystem, ImmutableMap.of());
   }
 
   /**
@@ -87,6 +99,9 @@ class Simplifier {
   }
 
   Core.Exp simplify(Core.Exp exp) {
+    for (Map.Entry<Core.Pat, Generator> entry : generators) {
+      exp = entry.getValue().simplify(entry.getKey(), exp);
+    }
     switch (exp.op) {
       case FN:
         final Core.Fn fn = (Core.Fn) exp;

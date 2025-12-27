@@ -237,6 +237,9 @@ public class Extents {
 
   public static Core.Decl infinitePats(
       TypeSystem typeSystem, Environment env, Core.Decl node) {
+    if (true) {
+      return node;
+    }
     return node.accept(
         new Shuttle(typeSystem) {
           @Override
@@ -585,7 +588,7 @@ public class Extents {
                               new PredicateInverter.Generator(
                                   pat,
                                   exp,
-                                  PredicateInverter.Cardinality.FINITE,
+                                  Generator.Cardinality.FINITE,
                                   ImmutableList.of(),
                                   ImmutableSet.of())));
                   final PredicateInverter.Result result =
@@ -593,7 +596,7 @@ public class Extents {
                           typeSystem, env, filter, goalPats, generators);
                   if (invert
                       && result.generator.cardinality
-                          != PredicateInverter.Cardinality.INFINITE) {
+                          != Generator.Cardinality.INFINITE) {
                     // The generator produces tuples for all goalPats
                     // Add remaining filters if any
                     final Core.Exp combinedFilter =
@@ -739,7 +742,7 @@ public class Extents {
                     new PredicateInverter.Generator(
                         pat,
                         exp,
-                        PredicateInverter.Cardinality.FINITE,
+                        Generator.Cardinality.FINITE,
                         ImmutableList.of(),
                         ImmutableSet.of())));
         final PredicateInverter.Result result =
