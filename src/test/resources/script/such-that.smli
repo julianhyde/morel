@@ -91,6 +91,14 @@ where b = (i mod 2 = 0);
 >
 > val it : {b:bool, i:int} bag
 
+(* -- elem ---------------------------------------------- *)
+let
+  val nums = [1, 2, 3, 4, 5]
+in
+  from n where n elem nums
+end;
+> val it = [1,2,3,4,5] : int bag
+
 (* -- andalso becomes join ------------------------------ *)
 val nums = [1, 2, 3, 4, 5];
 > val nums = [1,2,3,4,5] : int list
