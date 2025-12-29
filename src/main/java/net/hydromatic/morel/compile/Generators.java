@@ -29,6 +29,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.Type;
@@ -47,6 +48,12 @@ class Generators {
       Core.Pat pat,
       boolean ordered,
       List<Core.Exp> constraints) {
+    final Generator generator0 =
+        maybeElem(typeSystem, pat, ordered, constraints);
+    if (generator0 != null) {
+      return generator0;
+    }
+
     final Generator generator1 =
         maybePoint(typeSystem, pat, ordered, constraints);
     if (generator1 != null) {
@@ -63,6 +70,19 @@ class Generators {
   }
 
   @Nullable
+  static Generator maybeElem(
+      TypeSystem typeSystem,
+      Core.Pat pat,
+      boolean ordered,
+      List<Core.Exp> constraints) {
+    final Core.@Nullable Exp collection = elem(pat, constraints);
+    if (collection == null) {
+      return null;
+    }
+    return CollectionGenerator.create(typeSystem, ordered, collection);
+  }
+
+  @Nullable
   static Generator maybePoint(
       TypeSystem typeSystem,
       Core.Pat pat,
@@ -72,20 +92,7 @@ class Generators {
     if (value == null) {
       return null;
     }
-    return generatePoint(typeSystem, ordered, value);
-  }
-
-  /**
-   * Creates an expression that generates a single value.
-   *
-   * @param ordered If true, generate a `list`, otherwise a `bag`
-   * @param lower Lower bound
-   */
-  static Generator generatePoint(
-      TypeSystem typeSystem, boolean ordered, Core.Exp lower) {
-    final Core.Exp exp =
-        ordered ? core.list(typeSystem, lower) : core.bag(typeSystem, lower);
-    return new PointGenerator(exp, lower);
+    return PointGenerator.create(typeSystem, ordered, value);
   }
 
   /**
@@ -257,6 +264,18 @@ class Generators {
     return null;
   }
 
+  /** If there is a predicate "pat elem collection", returns "collection". */
+  static Core.@Nullable Exp elem(Core.Pat pat, List<Core.Exp> predicates) {
+    for (Core.Exp predicate : predicates) {
+      if (predicate.isCallTo(BuiltIn.OP_ELEM)) {
+        if (references(predicate.arg(0), pat)) {
+          return predicate.arg(1);
+        }
+      }
+    }
+    return null;
+  }
+
   /**
    * If there is a predicate "pat > exp" or "pat >= exp", returns "exp" and
    * whether the comparison is strict.
@@ -395,6 +414,19 @@ class Generators {
       this.point = point;
     }
 
+    /**
+     * Creates an expression that generates a single value.
+     *
+     * @param ordered If true, generate a `list`, otherwise a `bag`
+     * @param lower Lower bound
+     */
+    static Generator create(
+        TypeSystem typeSystem, boolean ordered, Core.Exp lower) {
+      final Core.Exp exp =
+          ordered ? core.list(typeSystem, lower) : core.bag(typeSystem, lower);
+      return new PointGenerator(exp, lower);
+    }
+
     @Override
     Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
       // Simplify "p = point" to true.
@@ -443,6 +475,51 @@ class Generators {
 
     @Override
     Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+      return exp;
+    }
+  }
+
+  /**
+   * Generator that returns the contents of a collection.
+   *
+   * <p>The inverse of {@code p elem collection} is {@code collection}.
+   */
+  static class CollectionGenerator extends Generator {
+    private Core.Exp collection;
+
+    private CollectionGenerator(Core.Exp collection) {
+      super(collection, Cardinality.FINITE);
+      checkArgument(collection.type.isCollection());
+    }
+
+    static CollectionGenerator create(TypeSystem typeSystem, boolean ordered,
+        Core.Exp collection) {
+      // Convert the collection to a list or bag, per "ordered".
+      final Core.Exp collection2;
+      if (ordered == (collection.type instanceof ListType)) {
+        collection2 = collection;
+      } else {
+        final BuiltIn builtIn = ordered ? BuiltIn.BAG_FROM_LIST : BuiltIn.BAG_TO_LIST;
+        final Type elementType = collection.type.arg(0);
+        final Type collectionType = ordered ? typeSystem.listType(elementType) :
+            typeSystem.bagType(elementType);
+        collection2 = core.apply(Pos.ZERO,
+            collectionType,
+            core.functionLiteral(typeSystem,
+                builtIn),
+            collection);
+      }
+      return new CollectionGenerator(collection2);
+    }
+
+    @Override
+    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+      if (exp.isCallTo(BuiltIn.OP_ELEM)
+      && references(exp.arg(0), pat)
+      && exp.arg(1).equals(this.collection)) {
+        // "p elem collection" simplifies to "true"
+        return core.boolLiteral(true);
+      }
       return exp;
     }
   }
