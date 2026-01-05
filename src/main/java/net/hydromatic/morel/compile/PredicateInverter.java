@@ -47,7 +47,6 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
@@ -380,8 +379,7 @@ public class PredicateInverter {
     if (generators.size() == 1) {
       return generator0;
     } else {
-      final Type elementType =
-          ((ListType) generator0.expression.type).elementType;
+      final Type elementType = generator0.expression.type.elementType();
       final Core.IdPat unionPat = core.idPat(elementType, "p_union", 0);
       final Core.From exp =
           core.fromBuilder(typeSystem, (Environment) null)
@@ -693,8 +691,8 @@ public class PredicateInverter {
       // For simplicity, let's try returning a FROM expression that scans both
 
       // Get the element types
-      Type gen1ElemType = gen1.expression.type.arg(0);
-      Type gen2ElemType = gen2.expression.type.arg(0);
+      Type gen1ElemType = gen1.expression.type.elementType();
+      Type gen2ElemType = gen2.expression.type.elementType();
 
       // Create patterns for scanning
       Core.IdPat pat1 = core.idPat(gen1ElemType, "x_left", 0);
