@@ -22,7 +22,8 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.Multimap;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,22 +34,20 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
-import net.hydromatic.morel.util.PairList;
 
 /** Simplifier of expressions. */
 class Simplifier {
   private final TypeSystem typeSystem;
-  private final PairList<Core.Pat, Generator> generators;
+  private final ImmutablePairList<Core.NamedPat, Generator> generators;
 
   Simplifier(
-      TypeSystem typeSystem,
-      Map<? extends Core.Pat, ? extends Generator> generators) {
+      TypeSystem typeSystem, Multimap<Core.NamedPat, Generator> generators) {
     this.typeSystem = typeSystem;
-    this.generators = ImmutablePairList.copyOf(generators.entrySet());
+    this.generators = ImmutablePairList.copyOf(generators.entries());
   }
 
   Simplifier(TypeSystem typeSystem) {
-    this(typeSystem, ImmutableMap.of());
+    this(typeSystem, ImmutableMultimap.of());
   }
 
   /**
@@ -99,7 +98,7 @@ class Simplifier {
   }
 
   Core.Exp simplify(Core.Exp exp) {
-    for (Map.Entry<Core.Pat, Generator> entry : generators) {
+    for (Map.Entry<Core.NamedPat, Generator> entry : generators) {
       exp = entry.getValue().simplify(entry.getKey(), exp);
     }
     switch (exp.op) {

@@ -145,6 +145,25 @@ public class Core {
           };
       return unparse(w);
     }
+
+    /** Returns all named patterns in this pattern. */
+    public List<NamedPat> expand() {
+      final ImmutableList.Builder<NamedPat> list = ImmutableList.builder();
+      accept(
+          new Visitor() {
+            @Override
+            protected void visit(Core.IdPat idPat) {
+              list.add(idPat);
+            }
+
+            @Override
+            protected void visit(Core.AsPat asPat) {
+              list.add(asPat);
+              super.visit(asPat);
+            }
+          });
+      return list.build();
+    }
   }
 
   /**
@@ -245,6 +264,11 @@ public class Core {
     @Override
     public void accept(Visitor visitor) {
       visitor.visit(this);
+    }
+
+    @Override
+    public List<NamedPat> expand() {
+      return ImmutableList.of(this);
     }
 
     @Override

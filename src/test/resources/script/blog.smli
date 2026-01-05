@@ -1563,7 +1563,7 @@ from (parent, child) in parents
 >   [{child="arwen",parent="elrond"},{child="elladan",parent="elrond"},
 >    {child="elrohir",parent="elrond"}] : {child:string, parent:string} list
 
-(*) TODO Fix the UnsupportedOperationException
+(*) TODO Fix the IllegalArgumentException
 fun ancestors () =
   from (x, y) in parents
     union
@@ -1571,7 +1571,7 @@ fun ancestors () =
         (y2, z) in ancestors ()
       where y = y2
       yield (x, z));
-> java.lang.UnsupportedOperationException
+> java.lang.IllegalArgumentException: not a collection type: 'a
 
 (* Morel "forwards" relation *)
 (* Relation defined using algebra. *)

@@ -778,6 +778,29 @@ public enum CoreBuilder {
     return bag(typeSystem, arg0.type, Lists.asList(arg0, args));
   }
 
+  /** Converts a collection to ordered (list) or unordered (bag). */
+  public static Core.Exp withOrdered(
+      boolean ordered, Core.Exp collection, TypeSystem typeSystem) {
+    if (ordered == (collection.type instanceof ListType)) {
+      return collection;
+    }
+    final Type elementType = collection.type.elementType();
+    final BuiltIn builtIn;
+    final Type collectionType;
+    if (ordered) {
+      builtIn = BuiltIn.BAG_TO_LIST;
+      collectionType = typeSystem.listType(elementType);
+    } else {
+      builtIn = BuiltIn.BAG_FROM_LIST;
+      collectionType = typeSystem.bagType(elementType);
+    }
+    return core.apply(
+        Pos.ZERO,
+        collectionType,
+        core.functionLiteral(typeSystem, builtIn),
+        collection);
+  }
+
   /**
    * Creates an extent. It returns a list of all values of a given type that
    * fall into a given range-set. The range-set might consist of just {@link

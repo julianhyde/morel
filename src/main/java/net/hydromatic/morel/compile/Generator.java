@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import java.util.List;
 import net.hydromatic.morel.ast.Core;
 
 /**
@@ -27,10 +28,13 @@ import net.hydromatic.morel.ast.Core;
  */
 abstract class Generator {
   final Core.Exp exp;
+  final List<Core.NamedPat> patList;
   final Cardinality cardinality;
 
-  Generator(Core.Exp exp, Cardinality cardinality) {
+  Generator(
+      Core.Exp exp, List<Core.NamedPat> patList, Cardinality cardinality) {
     this.exp = exp;
+    this.patList = patList;
     this.cardinality = cardinality;
   }
 
