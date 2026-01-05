@@ -840,7 +840,8 @@ public enum CoreBuilder {
             core.listIntersect(
                 typeSystem,
                 plus(
-                    core.extent(typeSystem, listType.arg(0), rangeSetMap),
+                    core.extent(
+                        typeSystem, listType.elementType(), rangeSetMap),
                     remainingExps));
         return Pair.of(exp, remainingExps);
     }
@@ -878,7 +879,8 @@ public enum CoreBuilder {
             core.listConcat(
                 typeSystem,
                 plus(
-                    core.extent(typeSystem, listType.arg(0), rangeSetMap),
+                    core.extent(
+                        typeSystem, listType.elementType(), rangeSetMap),
                     remainingExps));
         return Pair.of(exp, remainingExps);
     }
@@ -1079,7 +1081,8 @@ public enum CoreBuilder {
   }
 
   public Core.Exp only(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
-    return call(typeSystem, BuiltIn.RELATIONAL_ONLY, a0.type.arg(0), pos, a0);
+    return call(
+        typeSystem, BuiltIn.RELATIONAL_ONLY, a0.type.elementType(), pos, a0);
   }
 
   public Core.Exp nonEmpty(TypeSystem typeSystem, Pos pos, Core.Exp a0) {

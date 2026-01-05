@@ -110,7 +110,7 @@ class Generators {
     Core.Exp arg =
         core.list(
             typeSystem,
-            collectionType.arg(0),
+            collectionType.elementType(),
             Static.transformEager(generators, g -> g.exp));
     final Core.Exp exp = core.apply(Pos.ZERO, collectionType, fn, arg);
     return new UnionGenerator(exp, generators);
@@ -492,22 +492,26 @@ class Generators {
       checkArgument(collection.type.isCollection());
     }
 
-    static CollectionGenerator create(TypeSystem typeSystem, boolean ordered,
-        Core.Exp collection) {
+    static CollectionGenerator create(
+        TypeSystem typeSystem, boolean ordered, Core.Exp collection) {
       // Convert the collection to a list or bag, per "ordered".
       final Core.Exp collection2;
       if (ordered == (collection.type instanceof ListType)) {
         collection2 = collection;
       } else {
-        final BuiltIn builtIn = ordered ? BuiltIn.BAG_FROM_LIST : BuiltIn.BAG_TO_LIST;
-        final Type elementType = collection.type.arg(0);
-        final Type collectionType = ordered ? typeSystem.listType(elementType) :
-            typeSystem.bagType(elementType);
-        collection2 = core.apply(Pos.ZERO,
-            collectionType,
-            core.functionLiteral(typeSystem,
-                builtIn),
-            collection);
+        final BuiltIn builtIn =
+            ordered ? BuiltIn.BAG_FROM_LIST : BuiltIn.BAG_TO_LIST;
+        final Type elementType = collection.type.elementType();
+        final Type collectionType =
+            ordered
+                ? typeSystem.listType(elementType)
+                : typeSystem.bagType(elementType);
+        collection2 =
+            core.apply(
+                Pos.ZERO,
+                collectionType,
+                core.functionLiteral(typeSystem, builtIn),
+                collection);
       }
       return new CollectionGenerator(collection2);
     }
@@ -515,8 +519,8 @@ class Generators {
     @Override
     Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
       if (exp.isCallTo(BuiltIn.OP_ELEM)
-      && references(exp.arg(0), pat)
-      && exp.arg(1).equals(this.collection)) {
+          && references(exp.arg(0), pat)
+          && exp.arg(1).equals(this.collection)) {
         // "p elem collection" simplifies to "true"
         return core.boolLiteral(true);
       }
