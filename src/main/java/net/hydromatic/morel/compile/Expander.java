@@ -24,22 +24,28 @@ import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.skip;
 
 import com.google.common.collect.ImmutableList;
-import java.util.LinkedHashMap;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.MultimapBuilder;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.PairList;
 
 /** Expands generators. */
 public class Expander {
-  private final Root root;
+  private final Generators.Cache cache;
   private final List<Core.Exp> constraints;
 
-  private Expander(Root root, List<Core.Exp> constraints) {
-    this.root = root;
+  private Expander(Generators.Cache cache, List<Core.Exp> constraints) {
+    this.cache = cache;
     this.constraints = constraints;
   }
 
@@ -49,9 +55,11 @@ public class Expander {
    */
   public static Core.Exp expandFrom(
       TypeSystem typeSystem, Environment env, Core.From from) {
-    final Root root = new Root(typeSystem);
-    final Expander expander = new Expander(root, ImmutableList.of());
-    final Map<Core.Pat, Generator> generators = new LinkedHashMap<>();
+    final Generators.Cache cache = new Generators.Cache(typeSystem);
+    final Expander expander = new Expander(cache, ImmutableList.of());
+    final Multimap<Core.NamedPat, Generator> generators =
+        MultimapBuilder.hashKeys().arrayListValues().build();
+    final Set<Core.NamedPat> done = new HashSet<>();
 
     // First, deduce generators.
     expandSteps(from.steps, expander, generators);
@@ -61,13 +69,63 @@ public class Expander {
     return from.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.Scan visit(Core.Scan scan) {
-            final Generator generator = generators.get(scan.pat);
-            if (generator != null) {
-              scan =
-                  scan.copy(scan.env, scan.pat, generator.exp, scan.condition);
+          protected Core.Exp visit(Core.From from) {
+            final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+            final Map<Core.Id, Core.Exp> substitution = new HashMap<>();
+            for (Core.FromStep step : from.steps) {
+              if (step.op == Op.SCAN) {
+                final Core.Scan scan = (Core.Scan) step;
+                for (Core.NamedPat namedPat : scan.pat.expand()) {
+                  if (done.contains(namedPat)) {
+                    continue;
+                  }
+                  Generator bestGenerator = null;
+                  for (Generator generator : generators.get(namedPat)) {
+                    bestGenerator = generator;
+                  }
+                  if (bestGenerator == null) {
+                    fromBuilder.scan(scan.pat, scan.exp, scan.condition);
+                  } else {
+                    done.addAll(bestGenerator.patList);
+                    if (bestGenerator instanceof Generators.SubGenerator) {
+                      // The query "from x, y where (x, y) elem links" creates a
+                      // sub-generator for "x" with expression "z.1", and its
+                      // parent "z as (x, y)" with expression "links".
+                      // The expanded query is
+                      // "from z in links, x in [z.1], y in [z.2] yield {x, y}".
+                      final Generators.SubGenerator subGenerator =
+                          (Generators.SubGenerator) bestGenerator;
+                      Core.Pat pat = getPat(subGenerator.patList);
+                      fromBuilder.scan(
+                          pat, subGenerator.parent.exp, core.boolLiteral(true));
+                      // fromBuilder.scan(scan.pat,
+                      //     subGenerator.exp,
+                      //     scan.condition);
+                      substitution.put(
+                          core.id((Core.NamedPat) scan.pat), subGenerator.exp);
+                    } else {
+                      fromBuilder.scan(
+                          getPat(bestGenerator.patList),
+                          bestGenerator.exp,
+                          scan.condition);
+                    }
+                  }
+                }
+              } else {
+                step = Replacer.substitute(typeSystem, env, substitution, step);
+                fromBuilder.addAll(ImmutableList.of(step));
+              }
             }
-            return super.visit(scan);
+
+            final Core.From from2 = fromBuilder.build();
+            return from2.equals(from) ? from : from2;
+          }
+
+          /** Converts a list of patterns to a tuple or a single pattern. */
+          private Core.Pat getPat(List<Core.NamedPat> patList) {
+            return patList.size() == 1
+                ? patList.get(0)
+                : core.tuplePat(typeSystem, patList);
           }
 
           @Override
@@ -85,7 +143,7 @@ public class Expander {
   static void expandSteps(
       List<Core.FromStep> steps,
       Expander expander,
-      Map<Core.Pat, Generator> generators) {
+      Multimap<Core.NamedPat, Generator> generators) {
     if (steps.isEmpty()) {
       return;
     }
@@ -93,11 +151,11 @@ public class Expander {
     switch (step0.op) {
       case SCAN:
         final Core.Scan scan = (Core.Scan) step0;
-        final Generator generator = Generators.maybeExtent(scan.exp);
+        final Generator generator = Generators.maybeExtent(scan.pat, scan.exp);
         if (generator != null) {
           // The first attempt at a generator is the extent of the type.
           // Usually finite, but finite for types like 'bool option'.
-          generators.put(scan.pat, generator);
+          scan.pat.expand().forEach(p -> generators.put(p, generator));
         }
         break;
 
@@ -120,23 +178,23 @@ public class Expander {
    * generator with a finite generator, or a finite generator with one that is a
    * single value or is empty.
    */
-  private void improveGenerators(Map<Core.Pat, Generator> generators) {
-    final PairList<Core.Pat, Generator> improved = PairList.of();
+  private void improveGenerators(
+      Multimap<Core.NamedPat, Generator> generators) {
+    final List<Generator> improved = new ArrayList<>();
 
     generators.forEach(
         (pat, generator) -> {
-          if (generator.cardinality == Generator.Cardinality.INFINITE
-              && pat instanceof Core.NamedPat) {
+          if (generator.cardinality == Generator.Cardinality.INFINITE) {
             final boolean ordered = generator.exp.type instanceof ListType;
 
             final Generator generator1 =
-                maybeGenerator(root.typeSystem, pat, ordered, constraints);
+                maybeGenerator(cache, pat, ordered, constraints);
             if (generator1 != null) {
-              improved.add(pat, generator1);
+              improved.add(generator1);
             }
           }
         });
-    improved.forEach(generators::put);
+    improved.forEach(g -> g.patList.forEach(p2 -> generators.put(p2, g)));
   }
 
   private Expander plusConstraint(Core.Exp constraint) {
@@ -144,16 +202,7 @@ public class Expander {
   }
 
   private Expander withConstraints(List<Core.Exp> constraints) {
-    return new Expander(root, constraints);
-  }
-
-  /** Root expander. */
-  static class Root {
-    final TypeSystem typeSystem;
-
-    Root(TypeSystem typeSystem) {
-      this.typeSystem = typeSystem;
-    }
+    return new Expander(cache, constraints);
   }
 }
 
