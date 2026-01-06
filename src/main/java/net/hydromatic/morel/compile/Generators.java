@@ -99,7 +99,7 @@ class Generators {
               requireNonNull(wholePat(cache.typeSystem, predicate.arg(0)));
           final Generator generator =
               CollectionGenerator.create(
-                  cache, ordered, expPat.pat.expand(), collection);
+                  cache, ordered, expPat.pat, collection);
           newGenerators.accept(expPat.pat, generator);
 
           if (!expPat.pat.equals(goalPat) && "x".isEmpty()) {
@@ -425,8 +425,10 @@ class Generators {
         if (slot < 0) {
           return null;
         }
-        final Core.TuplePat tuplePat =
-            core.tuplePat((RecordLikeType) exp.type, patList);
+        final Core.Pat tuplePat =
+            (exp.type instanceof RecordType)
+                ? core.recordPat((RecordType) exp.type, patList)
+                : core.tuplePat((RecordLikeType) exp.type, patList);
         final Core.IdPat idPat = core.idPat(exp.type, "z", 0); // "r as (p, q)"
         final Core.Id id = core.id(idPat);
         final Core.Exp exp2 = core.field(typeSystem, id, slot);
@@ -528,7 +530,7 @@ class Generators {
         boolean lowerStrict,
         Core.Exp upper,
         boolean upperStrict) {
-      super(exp, ImmutableList.of(pat), Cardinality.FINITE);
+      super(exp, pat, Cardinality.FINITE);
       this.lower = lower;
       this.lowerStrict = lowerStrict;
       this.upper = upper;
@@ -577,7 +579,7 @@ class Generators {
     private final Core.Exp point;
 
     PointGenerator(Core.Pat pat, Core.Exp exp, Core.Exp point) {
-      super(exp, pat.expand(), Cardinality.SINGLE);
+      super(exp, pat, Cardinality.SINGLE);
       this.point = point;
     }
 
@@ -619,7 +621,7 @@ class Generators {
     private final List<Generator> generators;
 
     UnionGenerator(Core.Exp exp, List<Generator> generators) {
-      super(exp, firstGenerator(generators).patList, Cardinality.FINITE);
+      super(exp, firstGenerator(generators).pat, Cardinality.FINITE);
       this.generators = ImmutableList.copyOf(generators);
     }
 
@@ -644,7 +646,7 @@ class Generators {
   static class ExtentGenerator extends Generator {
     private ExtentGenerator(
         Core.Pat pat, Core.Exp exp, Cardinality cardinality) {
-      super(exp, pat.expand(), cardinality);
+      super(exp, pat, cardinality);
     }
 
     /** Creates an extent generator. */
@@ -674,23 +676,19 @@ class Generators {
   static class CollectionGenerator extends Generator {
     final Core.Exp collection;
 
-    private CollectionGenerator(
-        List<Core.NamedPat> patList, Core.Exp collection) {
-      super(collection, patList, Cardinality.FINITE);
+    private CollectionGenerator(Core.Pat pat, Core.Exp collection) {
+      super(collection, pat, Cardinality.FINITE);
       this.collection = collection;
       checkArgument(collection.type.isCollection());
     }
 
     static CollectionGenerator create(
-        Cache cache,
-        boolean ordered,
-        List<Core.NamedPat> patList,
-        Core.Exp collection) {
+        Cache cache, boolean ordered, Core.Pat pat, Core.Exp collection) {
       // Convert the collection to a list or bag, per "ordered".
       final TypeSystem typeSystem = cache.typeSystem;
       final Core.Exp collection2 =
           CoreBuilder.withOrdered(ordered, collection, typeSystem);
-      return new CollectionGenerator(patList, collection2);
+      return new CollectionGenerator(pat, collection2);
     }
 
     @Override
@@ -708,19 +706,19 @@ class Generators {
   static class SubGenerator extends Generator {
     final Generator parent;
 
-    SubGenerator(
-        Generator parent,
-        Core.Exp exp,
-        Iterable<? extends Core.NamedPat> parentPats) {
-      super(exp, ImmutableList.copyOf(parentPats), parent.cardinality);
+    SubGenerator(Generator parent, Core.Exp exp, Core.Pat parentPat) {
+      super(exp, parentPat, parent.cardinality);
       this.parent = parent;
     }
 
     static Generator create(
         TypeSystem typeSystem, Generator parent, ExpPat expPat) {
       //      Core.Exp listExp = core.list(typeSystem, expPat.exp);
-      return new SubGenerator(
-          parent, expPat.exp, ImmutableList.copyOf(expPat.patSet));
+      final Core.Pat pat =
+          expPat.patSet.size() == 1
+              ? expPat.patSet.iterator().next()
+              : core.tuplePat(typeSystem, ImmutableList.copyOf(expPat.patSet));
+      return new SubGenerator(parent, expPat.exp, pat);
     }
 
     @Override

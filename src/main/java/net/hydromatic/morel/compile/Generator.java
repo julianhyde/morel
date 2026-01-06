@@ -18,7 +18,8 @@
  */
 package net.hydromatic.morel.compile;
 
-import java.util.List;
+import static java.util.Objects.requireNonNull;
+
 import net.hydromatic.morel.ast.Core;
 
 /**
@@ -28,14 +29,13 @@ import net.hydromatic.morel.ast.Core;
  */
 abstract class Generator {
   final Core.Exp exp;
-  final List<Core.NamedPat> patList;
+  final Core.Pat pat;
   final Cardinality cardinality;
 
-  Generator(
-      Core.Exp exp, List<Core.NamedPat> patList, Cardinality cardinality) {
-    this.exp = exp;
-    this.patList = patList;
-    this.cardinality = cardinality;
+  Generator(Core.Exp exp, Core.Pat pat, Cardinality cardinality) {
+    this.exp = requireNonNull(exp);
+    this.pat = requireNonNull(pat);
+    this.cardinality = requireNonNull(cardinality);
   }
 
   /**

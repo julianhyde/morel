@@ -86,7 +86,7 @@ public class Expander {
                   if (bestGenerator == null) {
                     fromBuilder.scan(scan.pat, scan.exp, scan.condition);
                   } else {
-                    done.addAll(bestGenerator.patList);
+                    done.addAll(bestGenerator.pat.expand());
                     if (bestGenerator instanceof Generators.SubGenerator) {
                       // The query "from x, y where (x, y) elem links" creates a
                       // sub-generator for "x" with expression "z.1", and its
@@ -95,9 +95,10 @@ public class Expander {
                       // "from z in links, x in [z.1], y in [z.2] yield {x, y}".
                       final Generators.SubGenerator subGenerator =
                           (Generators.SubGenerator) bestGenerator;
-                      Core.Pat pat = getPat(subGenerator.patList);
                       fromBuilder.scan(
-                          pat, subGenerator.parent.exp, core.boolLiteral(true));
+                          subGenerator.pat,
+                          subGenerator.parent.exp,
+                          core.boolLiteral(true));
                       // fromBuilder.scan(scan.pat,
                       //     subGenerator.exp,
                       //     scan.condition);
@@ -105,9 +106,7 @@ public class Expander {
                           core.id((Core.NamedPat) scan.pat), subGenerator.exp);
                     } else {
                       fromBuilder.scan(
-                          getPat(bestGenerator.patList),
-                          bestGenerator.exp,
-                          scan.condition);
+                          bestGenerator.pat, bestGenerator.exp, scan.condition);
                     }
                   }
                 }
@@ -194,7 +193,7 @@ public class Expander {
             }
           }
         });
-    improved.forEach(g -> g.patList.forEach(p2 -> generators.put(p2, g)));
+    improved.forEach(g -> g.pat.expand().forEach(p2 -> generators.put(p2, g)));
   }
 
   private Expander plusConstraint(Core.Exp constraint) {
