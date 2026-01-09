@@ -28,6 +28,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +92,14 @@ class SuchThatShuttle extends EnvShuttle {
   protected Core.Exp visit0(Core.From from) {
     final Core.From from2 = new FromVisitor(typeSystem, env).visit(from);
     return from2.equals(from) ? from : from2;
+  }
+
+  static Set<Core.NamedPat> freePats(TypeSystem typeSystem, Core.Exp exp) {
+    final Set<Core.NamedPat> set = new HashSet<>();
+    exp.accept(
+        new FreeFinder(
+            typeSystem, Environments.empty(), new ArrayDeque<>(), set::add));
+    return set;
   }
 
   /**

@@ -18,8 +18,13 @@
  */
 package net.hydromatic.morel.compile;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
+import static org.apache.calcite.util.Util.isDistinct;
 
+import com.google.common.collect.ImmutableList;
+import java.util.List;
+import java.util.Set;
 import net.hydromatic.morel.ast.Core;
 
 /**
@@ -31,9 +36,16 @@ abstract class Generator {
   final Core.Exp exp;
   final Core.Pat pat;
   final Cardinality cardinality;
+  final List<Core.NamedPat> freePats;
 
-  Generator(Core.Exp exp, Core.Pat pat, Cardinality cardinality) {
+  Generator(
+      Core.Exp exp,
+      Iterable<? extends Core.NamedPat> freePats,
+      Core.Pat pat,
+      Cardinality cardinality) {
     this.exp = requireNonNull(exp);
+    this.freePats = ImmutableList.copyOf(freePats);
+    checkArgument(freePats instanceof Set || isDistinct(this.freePats));
     this.pat = requireNonNull(pat);
     this.cardinality = requireNonNull(cardinality);
   }

@@ -24,7 +24,6 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
 import java.math.BigDecimal;
@@ -33,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.Op;
@@ -101,14 +101,6 @@ class Generators {
               CollectionGenerator.create(
                   cache, ordered, expPat.pat, collection);
           newGenerators.accept(expPat.pat, generator);
-
-          if (!expPat.pat.equals(goalPat) && "x".isEmpty()) {
-            // Register a generator for "p" which is derived from the generator
-            // for "r as (p, q)". Each use of "p" should be replaced by "r.1".
-            final Generator subGenerator =
-                SubGenerator.create(cache.typeSystem, generator, expPat);
-            newGenerators.accept(goalPat, subGenerator);
-          }
         }
       }
     }
@@ -143,7 +135,9 @@ class Generators {
             collectionType.elementType(),
             transformEager(generators, g -> g.exp));
     final Core.Exp exp = core.apply(Pos.ZERO, collectionType, fn, arg);
-    return new UnionGenerator(exp, generators);
+    final Set<Core.NamedPat> freePats =
+        SuchThatShuttle.freePats(cache.typeSystem, exp);
+    return new UnionGenerator(exp, freePats, generators);
   }
 
   @Nullable
@@ -261,16 +255,19 @@ class Generators {
     BuiltIn tabulate = ordered ? BuiltIn.LIST_TABULATE : BuiltIn.BAG_TABULATE;
     Core.Apply exp = core.call(typeSystem, tabulate, type, Pos.ZERO, count, fn);
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
-    //      final Set<Core.NamedPat> freeVars = freeVarsIn(simplified);
+    final Set<Core.NamedPat> freePats =
+        SuchThatShuttle.freePats(typeSystem, simplified);
     return new RangeGenerator(
-        pat, simplified, lower, lowerStrict, upper, upperStrict);
+        pat, simplified, freePats, lower, lowerStrict, upper, upperStrict);
   }
 
   /** Returns an extent generator, or null if expression is not an extent. */
-  public static @Nullable Generator maybeExtent(Core.Pat pat, Core.Exp exp) {
-    return !exp.isCallTo(BuiltIn.Z_EXTENT)
-        ? null
-        : ExtentGenerator.create(pat, exp);
+  public static @Nullable Generator maybeExtent(
+      TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
+    if (!exp.isCallTo(BuiltIn.Z_EXTENT)) {
+      return null;
+    }
+    return ExtentGenerator.create(typeSystem, pat, exp);
   }
 
   /** If there is a predicate "pat = exp" or "exp = pat", returns "exp". */
@@ -289,13 +286,13 @@ class Generators {
   }
 
   /**
-   * If there is a predicate "pat > exp" or "pat >= exp", returns "exp" and
+   * If there is a predicate "pat &gt; exp" or "pat &ge; exp", returns "exp" and
    * whether the comparison is strict.
    *
-   * <p>We do not attempt to find the strongest such constraint. Clearly "p >
-   * 10" is stronger than "p >= 0". But is "p > x" stronger than "p >= y"? If
-   * the goal is to convert an infinite generator to a finite generator, any
-   * constraint will do.
+   * <p>We do not attempt to find the strongest such constraint. Clearly "p &gt;
+   * 10" is stronger than "p &ge; 0". But is "p &gt; x" stronger than "p &ge;
+   * y"? If the goal is to convert an infinite generator to a finite generator,
+   * any constraint is good enough.
    */
   static @Nullable Pair<Core.Exp, Boolean> lowerBound(
       Core.Pat pat, List<Core.Exp> predicates) {
@@ -323,8 +320,8 @@ class Generators {
   }
 
   /**
-   * If there is a constraint "pat < exp" or "pat <= exp", returns "exp" and
-   * whether the comparison is strict.
+   * If there is a constraint "pat &lt; exp" or "pat &le; exp", returns "exp"
+   * and whether the comparison is strict.
    *
    * <p>Analogous to {@link #lowerBound(Core.Pat, List)}.
    */
@@ -391,15 +388,17 @@ class Generators {
    * have called {@link #containsRef(Core.Exp, Core.Pat)} first.
    *
    * <p>Examples:
-   * <li>{@code wholePat(id(p), idPat(p)} returns pattern {@code idPat(p)} and
-   *     expression {@code id(p)}
-   * <li>{@code wholePat(tuple(id(p), id(q)), idPat(p)} returns pattern {@code
-   *     idPat(r)} and expression {@code r.1}
-   * <li>{@code wholePat(tuple(id(p), id(p)), idPat(p)} is illegal because it
-   *     contains {@code p} more than once
-   * <li>{@code wholePat(tuple(id(p), literal("elrond")), idPat(p))} returns
-   *     pattern {@code idPat(p)}, expression {@code id(p)}, and a filter {@code
-   *     id(q) = literal("elrond")}. We currently ignore filters.
+   *
+   * <ul>
+   *   <li>{@code wholePat(id(p), idPat(p)} returns pattern {@code idPat(p)} and
+   *       expression {@code id(p)}
+   *   <li>{@code wholePat(tuple(id(p), id(q)), idPat(p)} returns pattern {@code
+   *       idPat(r)} and expression {@code r.1}
+   *   <li>{@code wholePat(tuple(id(p), id(p)), idPat(p)} is illegal because it
+   *       contains {@code p} more than once
+   *   <li>{@code wholePat(tuple(id(p), literal("elrond")), idPat(p))} returns
+   *       pattern {@code idPat(p)}, expression {@code id(p)}, and a filter
+   *       {@code id(q) = literal("elrond")}. We currently ignore filters.
    * </ul>
    */
   private static @Nullable ExpPat wholePat(
@@ -407,18 +406,15 @@ class Generators {
     switch (exp.op) {
       case ID:
         Core.Id id1 = (Core.Id) exp;
-        return ExpPat.of(exp, id1.idPat, ImmutableSet.of(id1.idPat));
+        return ExpPat.of(exp, id1.idPat);
 
       case TUPLE:
         int slot = -1;
         final List<Core.Pat> patList = new ArrayList<>();
-        final ImmutableSet.Builder<Core.NamedPat> patSet =
-            ImmutableSet.builder();
         for (Ord<Core.Exp> arg : Ord.zip(((Core.Tuple) exp).args)) {
           final @Nullable ExpPat p = wholePat(typeSystem, arg.e);
           if (p != null) {
             slot = arg.i;
-            patSet.addAll(p.patSet);
           }
           patList.add(toPat(arg.e));
         }
@@ -432,46 +428,7 @@ class Generators {
         final Core.IdPat idPat = core.idPat(exp.type, "z", 0); // "r as (p, q)"
         final Core.Id id = core.id(idPat);
         final Core.Exp exp2 = core.field(typeSystem, id, slot);
-        return ExpPat.of(exp2, tuplePat, patSet.build());
-
-      default:
-        return null;
-    }
-  }
-
-  private static @Nullable ExpPat wholePat_(
-      TypeSystem typeSystem, Core.Exp exp, Core.Pat pat) {
-    switch (exp.op) {
-      case ID:
-        if (((Core.Id) exp).idPat.equals(pat)) {
-          final Core.NamedPat namedPat = (Core.NamedPat) pat;
-          return ExpPat.of(exp, pat, ImmutableSet.of(namedPat));
-        } else {
-          return null;
-        }
-
-      case TUPLE:
-        int slot = -1;
-        final List<Core.Pat> patList = new ArrayList<>();
-        final ImmutableSet.Builder<Core.NamedPat> patSet =
-            ImmutableSet.builder();
-        for (Ord<Core.Exp> arg : Ord.zip(((Core.Tuple) exp).args)) {
-          final @Nullable ExpPat p = wholePat(typeSystem, arg.e);
-          if (p != null) {
-            slot = arg.i;
-            patSet.addAll(p.patSet);
-          }
-          patList.add(toPat(arg.e));
-        }
-        if (slot < 0) {
-          return null;
-        }
-        final Core.TuplePat tuplePat =
-            core.tuplePat((RecordLikeType) exp.type, patList);
-        final Core.IdPat idPat = core.idPat(exp.type, "z", 0); // "r as (p, q)"
-        final Core.Id id = core.id(idPat);
-        final Core.Exp exp2 = core.field(typeSystem, id, slot);
-        return ExpPat.of(exp2, tuplePat, patSet.build());
+        return ExpPat.of(exp2, tuplePat);
 
       default:
         return null;
@@ -526,11 +483,12 @@ class Generators {
     RangeGenerator(
         Core.NamedPat pat,
         Core.Exp exp,
+        Iterable<? extends Core.NamedPat> freePats,
         Core.Exp lower,
         boolean lowerStrict,
         Core.Exp upper,
         boolean upperStrict) {
-      super(exp, pat, Cardinality.FINITE);
+      super(exp, freePats, pat, Cardinality.FINITE);
       this.lower = lower;
       this.lowerStrict = lowerStrict;
       this.upper = upper;
@@ -578,8 +536,12 @@ class Generators {
   static class PointGenerator extends Generator {
     private final Core.Exp point;
 
-    PointGenerator(Core.Pat pat, Core.Exp exp, Core.Exp point) {
-      super(exp, pat, Cardinality.SINGLE);
+    PointGenerator(
+        Core.Pat pat,
+        Core.Exp exp,
+        Iterable<? extends Core.NamedPat> freePats,
+        Core.Exp point) {
+      super(exp, freePats, pat, Cardinality.SINGLE);
       this.point = point;
     }
 
@@ -595,7 +557,9 @@ class Generators {
           ordered
               ? core.list(cache.typeSystem, lower)
               : core.bag(cache.typeSystem, lower);
-      return new PointGenerator(pat, exp, lower);
+      final Set<Core.NamedPat> freePats =
+          SuchThatShuttle.freePats(cache.typeSystem, exp);
+      return new PointGenerator(pat, exp, freePats, lower);
     }
 
     @Override
@@ -620,8 +584,11 @@ class Generators {
   static class UnionGenerator extends Generator {
     private final List<Generator> generators;
 
-    UnionGenerator(Core.Exp exp, List<Generator> generators) {
-      super(exp, firstGenerator(generators).pat, Cardinality.FINITE);
+    UnionGenerator(
+        Core.Exp exp,
+        Iterable<? extends Core.NamedPat> freePats,
+        List<Generator> generators) {
+      super(exp, freePats, firstGenerator(generators).pat, Cardinality.FINITE);
       this.generators = ImmutableList.copyOf(generators);
     }
 
@@ -645,12 +612,15 @@ class Generators {
    */
   static class ExtentGenerator extends Generator {
     private ExtentGenerator(
-        Core.Pat pat, Core.Exp exp, Cardinality cardinality) {
-      super(exp, pat, cardinality);
+        Core.Pat pat,
+        Core.Exp exp,
+        Iterable<? extends Core.NamedPat> freePats,
+        Cardinality cardinality) {
+      super(exp, freePats, pat, cardinality);
     }
 
     /** Creates an extent generator. */
-    static Generator create(Core.Pat pat, Core.Exp exp) {
+    static Generator create(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       checkArgument(exp.isCallTo(BuiltIn.Z_EXTENT));
       final Core.Apply apply = (Core.Apply) exp;
       final Core.Literal literal = (Core.Literal) apply.arg;
@@ -659,7 +629,9 @@ class Generators {
           rangeExtent.iterable == null
               ? Cardinality.INFINITE
               : Cardinality.FINITE;
-      return new ExtentGenerator(pat, exp, cardinality);
+      final Set<Core.NamedPat> freePats =
+          SuchThatShuttle.freePats(typeSystem, exp);
+      return new ExtentGenerator(pat, exp, freePats, cardinality);
     }
 
     @Override
@@ -676,8 +648,11 @@ class Generators {
   static class CollectionGenerator extends Generator {
     final Core.Exp collection;
 
-    private CollectionGenerator(Core.Pat pat, Core.Exp collection) {
-      super(collection, pat, Cardinality.FINITE);
+    private CollectionGenerator(
+        Core.Pat pat,
+        Core.Exp collection,
+        Iterable<? extends Core.NamedPat> freePats) {
+      super(collection, freePats, pat, Cardinality.FINITE);
       this.collection = collection;
       checkArgument(collection.type.isCollection());
     }
@@ -688,7 +663,9 @@ class Generators {
       final TypeSystem typeSystem = cache.typeSystem;
       final Core.Exp collection2 =
           CoreBuilder.withOrdered(ordered, collection, typeSystem);
-      return new CollectionGenerator(pat, collection2);
+      final Set<Core.NamedPat> freePats =
+          SuchThatShuttle.freePats(cache.typeSystem, collection2);
+      return new CollectionGenerator(pat, collection2, freePats);
     }
 
     @Override
@@ -703,30 +680,6 @@ class Generators {
     }
   }
 
-  static class SubGenerator extends Generator {
-    final Generator parent;
-
-    SubGenerator(Generator parent, Core.Exp exp, Core.Pat parentPat) {
-      super(exp, parentPat, parent.cardinality);
-      this.parent = parent;
-    }
-
-    static Generator create(
-        TypeSystem typeSystem, Generator parent, ExpPat expPat) {
-      //      Core.Exp listExp = core.list(typeSystem, expPat.exp);
-      final Core.Pat pat =
-          expPat.patSet.size() == 1
-              ? expPat.patSet.iterator().next()
-              : core.tuplePat(typeSystem, ImmutableList.copyOf(expPat.patSet));
-      return new SubGenerator(parent, expPat.exp, pat);
-    }
-
-    @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
-      return exp;
-    }
-  }
-
   /** Generators that have been created to date. */
   static class Cache {
     final TypeSystem typeSystem;
@@ -736,22 +689,36 @@ class Generators {
     Cache(TypeSystem typeSystem) {
       this.typeSystem = requireNonNull(typeSystem);
     }
+
+    @Nullable
+    Generator bestGenerator(Core.NamedPat namedPat) {
+      Generator bestGenerator = null;
+      for (Generator generator : generators.get(namedPat)) {
+        bestGenerator = generator;
+      }
+      return bestGenerator;
+    }
+
+    void forEachGenerator(
+        Core.NamedPat namedPat, Consumer<Generator> consumer) {
+      Generator generator = bestGenerator(namedPat);
+      requireNonNull(generator);
+      consumer.accept(generator);
+    }
   }
 
   /** An expression and a pattern. */
   static class ExpPat {
     final Core.Exp exp;
     final Core.Pat pat;
-    final Set<Core.NamedPat> patSet;
 
-    ExpPat(Core.Exp exp, Core.Pat pat, Set<Core.NamedPat> patSet) {
+    ExpPat(Core.Exp exp, Core.Pat pat) {
       this.exp = requireNonNull(exp);
       this.pat = requireNonNull(pat);
-      this.patSet = ImmutableSet.copyOf(patSet);
     }
 
-    static ExpPat of(Core.Exp exp, Core.Pat pat, Set<Core.NamedPat> pats) {
-      return new ExpPat(exp, pat, pats);
+    static ExpPat of(Core.Exp exp, Core.Pat pat) {
+      return new ExpPat(exp, pat);
     }
 
     @Override
