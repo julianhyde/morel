@@ -29,7 +29,6 @@ from x where hasEdgeFrom x;
 *)
 
 (* Test 5: Recursive predicate (transitive closure) *)
-(* This is the hard case requiring fixpoint iteration
 fun path (x, y) =
   edge (x, y)
   orelse exists z where path (x, z) andalso edge (z, y);
