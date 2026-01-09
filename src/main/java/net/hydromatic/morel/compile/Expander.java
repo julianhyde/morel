@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import static com.google.common.collect.Iterables.getLast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.compile.Generators.maybeGenerator;
 import static net.hydromatic.morel.util.Static.append;
@@ -179,18 +180,13 @@ public class Expander {
       return;
     }
     final Generators.Cache cache = expander.cache;
-    final Multimap<Core.NamedPat, Generator> generators = cache.generators;
     final Core.FromStep step0 = steps.get(0);
     switch (step0.op) {
       case SCAN:
         final Core.Scan scan = (Core.Scan) step0;
-        final Generator generator =
-            Generators.maybeExtent(cache.typeSystem, scan.pat, scan.exp);
-        if (generator != null) {
-          // The first attempt at a generator is the extent of the type.
-          // Usually finite, but finite for types like 'bool option'.
-          scan.pat.expand().forEach(p -> generators.put(p, generator));
-        }
+        // The first attempt at a generator is the extent of the type.
+        // Usually finite, but finite for types like 'bool option'.
+        Generators.maybeExtent(cache, scan.pat, scan.exp);
         break;
 
       case WHERE:
@@ -198,7 +194,7 @@ public class Expander {
         final List<Core.Exp> conditions = core.decomposeAnd(where.exp);
         for (Core.Exp condition : conditions) {
           expander = expander.plusConstraint(condition);
-          expander.improveGenerators(generators);
+          expander.improveGenerators(cache.generators);
         }
         break;
     }
@@ -214,21 +210,24 @@ public class Expander {
    */
   private void improveGenerators(
       Multimap<Core.NamedPat, Generator> generators) {
-    final List<Generator> improved = new ArrayList<>();
-
+    // Create a snapshot of the generators map, to avoid concurrent
+    // modification.
+    final PairList<Core.NamedPat, Generator> infiniteGenerators = PairList.of();
     generators.forEach(
         (pat, generator) -> {
           if (generator.cardinality == Generator.Cardinality.INFINITE) {
-            final boolean ordered = generator.exp.type instanceof ListType;
-
-            final Generator generator1 =
-                maybeGenerator(cache, pat, ordered, constraints);
-            if (generator1 != null) {
-              improved.add(generator1);
-            }
+            infiniteGenerators.add(pat, generator);
           }
         });
-    improved.forEach(g -> g.pat.expand().forEach(p2 -> generators.put(p2, g)));
+
+    infiniteGenerators.forEach(
+        (pat, generator) -> {
+          final boolean ordered = generator.exp.type instanceof ListType;
+          if (maybeGenerator(cache, pat, ordered, constraints)) {
+            Generator g = getLast(cache.generators.get(pat));
+            g.pat.expand().forEach(p2 -> generators.put(p2, g));
+          }
+        });
   }
 
   private Expander plusConstraint(Core.Exp constraint) {
@@ -261,8 +260,7 @@ public class Expander {
      */
     private static PairList<Core.FromStep, Set<Core.NamedPat>> getStepVars(
         Core.From from, TypeSystem typeSystem) {
-      final PairList<Core.FromStep, Set<Core.NamedPat>> list =
-          PairList.of();
+      final PairList<Core.FromStep, Set<Core.NamedPat>> list = PairList.of();
       final Environment env = Environments.empty();
       final FreeFinder visitor =
           new FreeFinder(
