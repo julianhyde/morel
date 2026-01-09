@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.Iterables.getLast;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
@@ -29,10 +30,7 @@ import com.google.common.collect.MultimapBuilder;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.Op;
@@ -45,35 +43,24 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
-import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Implementations of {@link Generator}, and supporting methods. */
 class Generators {
   private Generators() {}
 
-  @Nullable
-  static Generator maybeGenerator(
+  static boolean maybeGenerator(
       Cache cache, Core.Pat pat, boolean ordered, List<Core.Exp> constraints) {
-    final PairList<Core.Pat, Generator> generators = PairList.of();
-
-    maybeElem(cache, pat, ordered, constraints, generators::add);
-    if (!generators.isEmpty()) {
-      final Map<Core.Pat, Generator> map = generators.toImmutableMap();
-      if (map.containsKey(pat)) {
-        return map.get(pat);
-      }
-      return generators.right(0);
+    if (maybeElem(cache, pat, ordered, constraints)) {
+      return true;
     }
 
-    final Generator generator1 = maybePoint(cache, pat, ordered, constraints);
-    if (generator1 != null) {
-      return generator1;
+    if (maybePoint(cache, pat, ordered, constraints)) {
+      return true;
     }
 
-    final Generator generator2 = maybeRange(cache, pat, ordered, constraints);
-    if (generator2 != null) {
-      return generator2;
+    if (maybeRange(cache, pat, ordered, constraints)) {
+      return true;
     }
 
     return maybeUnion(cache, pat, ordered, constraints);
@@ -83,12 +70,11 @@ class Generators {
    * For each predicate "pat elem collection", adds a generator based on
    * "collection".
    */
-  static void maybeElem(
+  static boolean maybeElem(
       Cache cache,
       Core.Pat goalPat,
       boolean ordered,
-      List<Core.Exp> predicates,
-      BiConsumer<Core.Pat, Generator> newGenerators) {
+      List<Core.Exp> predicates) {
     for (Core.Exp predicate : predicates) {
       if (predicate.isCallTo(BuiltIn.OP_ELEM)) {
         if (containsRef(predicate.arg(0), goalPat)) {
@@ -97,23 +83,22 @@ class Generators {
           final Core.Exp collection = predicate.arg(1);
           final ExpPat expPat =
               requireNonNull(wholePat(cache.typeSystem, predicate.arg(0)));
-          final Generator generator =
-              CollectionGenerator.create(
-                  cache, ordered, expPat.pat, collection);
-          newGenerators.accept(expPat.pat, generator);
+          CollectionGenerator.create(cache, ordered, expPat.pat, collection);
+          return true;
         }
       }
     }
+    return false;
   }
 
-  @Nullable
-  static Generator maybePoint(
+  static boolean maybePoint(
       Cache cache, Core.Pat pat, boolean ordered, List<Core.Exp> constraints) {
     final Core.@Nullable Exp value = point(pat, constraints);
-    if (value == null) {
-      return null;
+    if (value != null) {
+      PointGenerator.create(cache, pat, ordered, value);
+      return true;
     }
-    return PointGenerator.create(cache, pat, ordered, value);
+    return false;
   }
 
   /**
@@ -122,6 +107,7 @@ class Generators {
    * @param ordered If true, generate a `list`, otherwise a `bag`
    * @param generators Generators
    */
+  @SuppressWarnings("UnusedReturnValue")
   static Generator generateUnion(
       Cache cache, boolean ordered, List<Generator> generators) {
     final Core.Exp fn =
@@ -137,60 +123,54 @@ class Generators {
     final Core.Exp exp = core.apply(Pos.ZERO, collectionType, fn, arg);
     final Set<Core.NamedPat> freePats =
         SuchThatShuttle.freePats(cache.typeSystem, exp);
-    return new UnionGenerator(exp, freePats, generators);
+    return cache.add(new UnionGenerator(exp, freePats, generators));
   }
 
-  @Nullable
-  static Generator maybeUnion(
-      Cache typeSystem,
-      Core.Pat pat,
-      boolean ordered,
-      List<Core.Exp> constraints) {
-    constraints:
+  static boolean maybeUnion(
+      Cache cache, Core.Pat pat, boolean ordered, List<Core.Exp> constraints) {
+    next_constraint:
     for (Core.Exp constraint : constraints) {
       if (constraint.isCallTo(BuiltIn.Z_ORELSE)) {
         final List<Core.Exp> orList = core.decomposeOr(constraint);
         final List<Generator> generators = new ArrayList<>();
         for (Core.Exp exp : orList) {
           final List<Core.Exp> andList = core.decomposeAnd(exp);
-          final Generator generator =
-              maybeGenerator(typeSystem, pat, ordered, andList);
-          if (generator == null) {
-            continue constraints;
+          if (!maybeGenerator(cache, pat, ordered, andList)) {
+            continue next_constraint;
           }
-          generators.add(generator);
+          generators.add(getLast(cache.generators.get((Core.NamedPat) pat)));
         }
-        return generateUnion(typeSystem, ordered, generators);
+        generateUnion(cache, ordered, generators);
+        return true;
       }
     }
-    return null;
+    return false;
   }
 
-  @Nullable
-  static Generator maybeRange(
+  static boolean maybeRange(
       Cache cache, Core.Pat pat, boolean ordered, List<Core.Exp> constraints) {
     if (pat.type != PrimitiveType.INT) {
-      return null;
+      return false;
     }
     final @Nullable Pair<Core.Exp, Boolean> lower =
         lowerBound(pat, constraints);
     if (lower == null) {
-      return null;
+      return false;
     }
     final @Nullable Pair<Core.Exp, Boolean> upper =
         upperBound(pat, constraints);
     if (upper == null) {
-      return null;
+      return false;
     }
-    Core.NamedPat namedPat = (Core.NamedPat) pat;
-    return Generators.generateRange(
+    Generators.generateRange(
         cache,
         ordered,
-        namedPat,
+        (Core.NamedPat) pat,
         lower.left,
         lower.right,
         upper.left,
         upper.right);
+    return true;
   }
 
   /**
@@ -257,17 +237,19 @@ class Generators {
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
     final Set<Core.NamedPat> freePats =
         SuchThatShuttle.freePats(typeSystem, simplified);
-    return new RangeGenerator(
-        pat, simplified, freePats, lower, lowerStrict, upper, upperStrict);
+    return cache.add(
+        new RangeGenerator(
+            pat, simplified, freePats, lower, lowerStrict, upper, upperStrict));
   }
 
   /** Returns an extent generator, or null if expression is not an extent. */
-  public static @Nullable Generator maybeExtent(
-      TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
-    if (!exp.isCallTo(BuiltIn.Z_EXTENT)) {
-      return null;
+  @SuppressWarnings("UnusedReturnValue")
+  public static boolean maybeExtent(Cache cache, Core.Pat pat, Core.Exp exp) {
+    if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
+      ExtentGenerator.create(cache, pat, exp);
+      return true;
     }
-    return ExtentGenerator.create(typeSystem, pat, exp);
+    return false;
   }
 
   /** If there is a predicate "pat = exp" or "exp = pat", returns "exp". */
@@ -476,23 +458,19 @@ class Generators {
    */
   static class RangeGenerator extends Generator {
     private final Core.Exp lower;
-    private final boolean lowerStrict;
     private final Core.Exp upper;
-    private final boolean upperStrict;
 
     RangeGenerator(
         Core.NamedPat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Core.Exp lower,
-        boolean lowerStrict,
+        boolean ignoreLowerStrict,
         Core.Exp upper,
-        boolean upperStrict) {
+        boolean ignoreUpperStrict) {
       super(exp, freePats, pat, Cardinality.FINITE);
       this.lower = lower;
-      this.lowerStrict = lowerStrict;
       this.upper = upper;
-      this.upperStrict = upperStrict;
     }
 
     @Override
@@ -551,6 +529,7 @@ class Generators {
      * @param ordered If true, generate a `list`, otherwise a `bag`
      * @param lower Lower bound
      */
+    @SuppressWarnings("UnusedReturnValue")
     static Generator create(
         Cache cache, Core.Pat pat, boolean ordered, Core.Exp lower) {
       final Core.Exp exp =
@@ -559,7 +538,7 @@ class Generators {
               : core.bag(cache.typeSystem, lower);
       final Set<Core.NamedPat> freePats =
           SuchThatShuttle.freePats(cache.typeSystem, exp);
-      return new PointGenerator(pat, exp, freePats, lower);
+      return cache.add(new PointGenerator(pat, exp, freePats, lower));
     }
 
     @Override
@@ -620,7 +599,8 @@ class Generators {
     }
 
     /** Creates an extent generator. */
-    static Generator create(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
+    @SuppressWarnings("UnusedReturnValue")
+    static Generator create(Cache cache, Core.Pat pat, Core.Exp exp) {
       checkArgument(exp.isCallTo(BuiltIn.Z_EXTENT));
       final Core.Apply apply = (Core.Apply) exp;
       final Core.Literal literal = (Core.Literal) apply.arg;
@@ -630,8 +610,8 @@ class Generators {
               ? Cardinality.INFINITE
               : Cardinality.FINITE;
       final Set<Core.NamedPat> freePats =
-          SuchThatShuttle.freePats(typeSystem, exp);
-      return new ExtentGenerator(pat, exp, freePats, cardinality);
+          SuchThatShuttle.freePats(cache.typeSystem, exp);
+      return cache.add(new ExtentGenerator(pat, exp, freePats, cardinality));
     }
 
     @Override
@@ -657,6 +637,7 @@ class Generators {
       checkArgument(collection.type.isCollection());
     }
 
+    @SuppressWarnings("UnusedReturnValue")
     static CollectionGenerator create(
         Cache cache, boolean ordered, Core.Pat pat, Core.Exp collection) {
       // Convert the collection to a list or bag, per "ordered".
@@ -665,7 +646,7 @@ class Generators {
           CoreBuilder.withOrdered(ordered, collection, typeSystem);
       final Set<Core.NamedPat> freePats =
           SuchThatShuttle.freePats(cache.typeSystem, collection2);
-      return new CollectionGenerator(pat, collection2, freePats);
+      return cache.add(new CollectionGenerator(pat, collection2, freePats));
     }
 
     @Override
@@ -699,11 +680,19 @@ class Generators {
       return bestGenerator;
     }
 
-    void forEachGenerator(
-        Core.NamedPat namedPat, Consumer<Generator> consumer) {
-      Generator generator = bestGenerator(namedPat);
-      requireNonNull(generator);
-      consumer.accept(generator);
+    /**
+     * Registers a generator, adding it to the index of each constituent
+     * pattern.
+     *
+     * <p>For example, if {@code g} is {@code CollectionGenerator((s, t) elem
+     * links)}, then {@code add(g)} will add {@code (s, g), (t, g)} to the
+     * generators index.
+     */
+    public <G extends Generator> G add(G generator) {
+      for (Core.NamedPat namedPat : generator.pat.expand()) {
+        generators.put(namedPat, generator);
+      }
+      return generator;
     }
   }
 
