@@ -849,10 +849,8 @@ public enum CoreBuilder {
             new ArrayList<>();
         final List<Core.Exp> remainingExps = new ArrayList<>();
         for (Core.Exp exp : exps) {
-          if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
-            final Core.Literal argLiteral =
-                (Core.Literal) ((Core.Apply) exp).arg;
-            final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
+          if (exp.isExtent()) {
+            final RangeExtent list = exp.getRangeExtent();
             rangeSetMaps.add(list.rangeSetMap);
             continue;
           }
@@ -887,12 +885,8 @@ public enum CoreBuilder {
             new ArrayList<>();
         final List<Core.Exp> remainingExps = new ArrayList<>();
         for (Core.Exp exp : exps) {
-          if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
-            final Core.Literal argLiteral =
-                (Core.Literal) ((Core.Apply) exp).arg;
-            final Core.Wrapper wrapper = (Core.Wrapper) argLiteral.value;
-            final RangeExtent list = wrapper.unwrap(RangeExtent.class);
-            rangeSetMaps.add(list.rangeSetMap);
+          if (exp.isExtent()) {
+            rangeSetMaps.add(exp.getRangeExtent().rangeSetMap);
             continue;
           }
           remainingExps.add(exp);
@@ -942,8 +936,7 @@ public enum CoreBuilder {
         if (apply.isCallTo(BuiltIn.LIST_CONCAT)
             && apply.arg.isCallTo(BuiltIn.Z_LIST)) {
           final Core.Apply apply2 = (Core.Apply) apply.arg;
-          if (allMatch(
-              apply2.args(), exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
+          if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 unionExtents(typeSystem, apply2.args());
             if (pair.right.isEmpty()) {
@@ -956,8 +949,7 @@ public enum CoreBuilder {
             && ((Core.Apply) apply.arg).arg.isCallTo(BuiltIn.Z_LIST)) {
           final Core.Apply apply1 = (Core.Apply) apply.arg;
           final Core.Apply apply2 = (Core.Apply) apply1.arg;
-          if (allMatch(
-              apply2.args(), exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
+          if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 unionExtents(typeSystem, apply2.args());
             if (pair.right.isEmpty()) {
@@ -968,8 +960,7 @@ public enum CoreBuilder {
         if (apply.isCallTo(BuiltIn.LIST_INTERSECT)
             && apply.arg.isCallTo(BuiltIn.Z_LIST)) {
           final Core.Apply apply2 = (Core.Apply) apply.arg;
-          if (allMatch(
-              apply2.args(), exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
+          if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 intersectExtents(typeSystem, apply2.args());
             if (pair.right.isEmpty()) {

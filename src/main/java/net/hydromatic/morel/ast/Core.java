@@ -61,6 +61,7 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -724,6 +725,22 @@ public class Core {
      */
     public boolean isCallTo(BuiltIn.Constructor constructor) {
       return false;
+    }
+
+    /**
+     * Returns whether this expression iterates over the values of a type. Some
+     * extents are infinite.
+     */
+    public boolean isExtent() {
+      return isCallTo(BuiltIn.Z_EXTENT);
+    }
+
+    /** Returns the extent, or throws if not {@link #isExtent()}. */
+    public RangeExtent getRangeExtent() {
+      checkArgument(isExtent());
+      final Apply apply = (Apply) this;
+      final Core.Literal argLiteral = (Core.Literal) apply.arg;
+      return argLiteral.unwrap(RangeExtent.class);
     }
   }
 
