@@ -378,7 +378,7 @@ public class Static {
       return ImmutableList.of();
     }
     final ImmutableList.Builder<E> list2 = ImmutableList.builder();
-    intersect(list0, list1, list2::add);
+    forEachInIntersection(list0, list1, list2::add);
     return list2.build();
   }
 
@@ -386,7 +386,7 @@ public class Static {
    * Calls a consumer for each element that is in both {@code list0} and {@code
    * list1}, in the order that it occurs in {@code list1}.
    */
-  public static <E> void intersect(
+  public static <E> void forEachInIntersection(
       List<E> list0, Iterable<? extends E> list1, Consumer<E> consumer) {
     final Set<E> set = new HashSet<>(list0);
     for (E e : list1) {
