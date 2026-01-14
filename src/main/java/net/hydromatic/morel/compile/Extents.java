@@ -46,7 +46,6 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
-import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
@@ -226,13 +225,7 @@ public class Extents {
 
   /** Returns whether an expression is an infinite extent. */
   public static boolean isInfinite(Core.Exp exp) {
-    if (!exp.isCallTo(BuiltIn.Z_EXTENT)) {
-      return false;
-    }
-    final Core.Apply apply = (Core.Apply) exp;
-    final Core.Literal literal = (Core.Literal) apply.arg;
-    final RangeExtent rangeExtent = literal.unwrap(RangeExtent.class);
-    return rangeExtent.iterable == null;
+    return exp.isExtent() && exp.getRangeExtent().iterable == null;
   }
 
   public static Core.Decl infinitePats(
@@ -867,8 +860,8 @@ public class Extents {
    * Reduces a list of extent-filter pairs [e0, f0, e1, f1, ...] to an
    * extent-filter pair [e0 intersect e1 ..., f0 andalso f1 ...].
    *
-   * <p>If any of the e<sub>i</sub> are calls to {@link BuiltIn#Z_EXTENT
-   * extent}, merges them into a single extent. For example, in
+   * <p>If any of the e<sub>i</sub> are extents (see {@link
+   * Core.Exp#isExtent()}), merges them into a single extent. For example, in
    *
    * <pre>{@code
    * [extent "int: (0, inf)", x > 0,

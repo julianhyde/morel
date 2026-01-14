@@ -245,7 +245,7 @@ class Generators {
   /** Returns an extent generator, or null if expression is not an extent. */
   @SuppressWarnings("UnusedReturnValue")
   public static boolean maybeExtent(Cache cache, Core.Pat pat, Core.Exp exp) {
-    if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
+    if (exp.isExtent()) {
       ExtentGenerator.create(cache, pat, exp);
       return true;
     }
@@ -601,10 +601,7 @@ class Generators {
     /** Creates an extent generator. */
     @SuppressWarnings("UnusedReturnValue")
     static Generator create(Cache cache, Core.Pat pat, Core.Exp exp) {
-      checkArgument(exp.isCallTo(BuiltIn.Z_EXTENT));
-      final Core.Apply apply = (Core.Apply) exp;
-      final Core.Literal literal = (Core.Literal) apply.arg;
-      final RangeExtent rangeExtent = literal.unwrap(RangeExtent.class);
+      final RangeExtent rangeExtent = exp.getRangeExtent();
       final Cardinality cardinality =
           rangeExtent.iterable == null
               ? Cardinality.INFINITE

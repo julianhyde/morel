@@ -254,7 +254,7 @@ public class PredicateInverter {
     // Check if the collection is an extent (unbounded domain).
     // In this case, we need to invert the filter to get generators.
     requireNonNull(collection);
-    if (collection.op == Op.APPLY && collection.isCallTo(BuiltIn.Z_EXTENT)) {
+    if (collection.isExtent()) {
       // Extent scan - filter must provide the generators.
       // Add the scan variable to outputPats temporarily so it can be
       // referenced.
