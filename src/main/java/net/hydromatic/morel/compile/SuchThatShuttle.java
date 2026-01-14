@@ -85,10 +85,13 @@ class SuchThatShuttle extends EnvShuttle {
 
   @Override
   protected Core.Exp visit(Core.From from) {
-    final Core.Exp from2 = Expander.expandFrom(typeSystem, env, from);
-    return from2.equals(from) ? from : from2;
+    final Core.From from2 = Expander.expandFrom(typeSystem, env, from);
+
+    // Expand subqueries.
+    return super.visit(from2);
   }
 
+  // TODO: This is obsolete. Remove it.
   protected Core.Exp visit0(Core.From from) {
     final Core.From from2 = new FromVisitor(typeSystem, env).visit(from);
     return from2.equals(from) ? from : from2;
