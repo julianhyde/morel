@@ -22,6 +22,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getLast;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.skip;
+import static net.hydromatic.morel.util.Static.skipLast;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -63,7 +65,81 @@ class Generators {
       return true;
     }
 
+    if (maybeExists(cache, pat, constraints)) {
+      return true;
+    }
+
     return maybeUnion(cache, pat, ordered, constraints);
+  }
+
+  /**
+   * For each predicate "exists ... where pat ...", adds a generator for "pat".
+   *
+   * <p>Because we're in core, {@code exists} has been translated to a call to
+   * {@link BuiltIn#RELATIONAL_NON_EMPTY}. The above query will look like
+   * "Relational.nonEmpty (from ... where pat ...)".
+   *
+   * <p>Pattern can occur in other places than a {@code where} clause, but it
+   * must be in a location that is <b>monotonic</b>. That is, where adding a
+   * value to the generator can never cause the query to emit fewer rows.
+   */
+  private static boolean maybeExists(
+      Cache cache, Core.Pat pat, List<Core.Exp> constraints) {
+    constraint_loop:
+    for (int j = 0; j < constraints.size(); j++) {
+      final Core.Exp constraint = constraints.get(j);
+      if (constraint.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)) {
+        final Core.Apply apply = (Core.Apply) constraint;
+        if (apply.arg instanceof Core.From) {
+          final Core.From from = (Core.From) apply.arg;
+
+          // Create a copy of constraints with this constraint removed.
+          // When we encounter a "where" step, we will add more constraints.
+          final List<Core.Exp> constraints2 = new ArrayList<>(constraints);
+          //noinspection SuspiciousListRemoveInLoop
+          constraints2.remove(j);
+
+          for (Core.FromStep step : from.steps) {
+            switch (step.op) {
+              case SCAN:
+                break;
+              case WHERE:
+                constraints2.add(((Core.Where) step).exp);
+                if (maybeGenerator(cache, pat, false, constraints2)) {
+                  return true;
+                }
+                break;
+              default:
+                continue constraint_loop;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Returns a list without the {@code i}<sup>th</sup> element.
+   *
+   * <p>For example, {@code skipMid(["a", "b", "c"], 1)} evaluates to {@code
+   * ["a", "c"]}.
+   */
+  // TODO: Improve this method if used, remove it if not
+  static <E> List<E> skipMid(List<E> list, int i) {
+    if (i == 0) {
+      return skip(list);
+    } else if (i == list.size() - 1) {
+      return skipLast(list);
+    } else {
+      final ImmutableList.Builder<E> list2 = ImmutableList.builder();
+      for (int j = 0; j < list.size(); j++) {
+        if (j != i) {
+          list2.add(list.get(j));
+        }
+      }
+      return list2.build();
+    }
   }
 
   /**

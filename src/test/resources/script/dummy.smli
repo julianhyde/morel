@@ -88,6 +88,15 @@ from x, y where (x, y) elem [(1,true),(2,false)];
 *)
 
 (*
+from x
+  where exists y
+    where (x, y) elem [(1, 2), (1, 3), (4, 3)];
+> val it = [1, 4] : int list
+
+exists x
+  where (exists y
+    where (x, y) elem [(1, 2), (1, 3), (4, 3)]);
+> val it = true : bool
 *)
 
 (*) End dummy.smli

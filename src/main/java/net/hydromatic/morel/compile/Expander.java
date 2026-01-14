@@ -22,7 +22,7 @@ import static com.google.common.collect.Iterables.getLast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.compile.Generators.maybeGenerator;
 import static net.hydromatic.morel.util.Static.append;
-import static net.hydromatic.morel.util.Static.intersect;
+import static net.hydromatic.morel.util.Static.forEachInIntersection;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transformEager;
 
@@ -31,6 +31,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,75 +59,132 @@ public class Expander {
   /**
    * Converts all unbounded variables in a query to bounded, introducing
    * generators by inverting predicates.
+   *
+   * <p>Returns {@code from} unchanged if no expansion is required.
    */
-  public static Core.Exp expandFrom(
+  public static Core.From expandFrom(
       TypeSystem typeSystem, Environment env, Core.From from) {
+    final Core.From outerFrom = from;
     final Generators.Cache cache = new Generators.Cache(typeSystem);
     final Expander expander = new Expander(cache, ImmutableList.of());
 
     // First, deduce generators.
     expandSteps(from.steps, expander);
 
-    // Second, substitute generators.
-    final Simplifier simplifier = new Simplifier(typeSystem, cache.generators);
-    return from.accept(
-        new Shuttle(typeSystem) {
-          @Override
-          protected Core.Exp visit(Core.From from) {
-            return expandFrom2(cache, env, from);
-          }
-
-          @Override
-          protected Core.Exp visit(Core.Apply apply) {
-            Core.Exp exp1 = super.visit(apply);
-            final Core.Exp exp2 = simplifier.simplify(exp1);
-            if (exp2 == apply) {
-              return apply;
-            }
-            return exp2.accept(this);
-          }
-        });
-  }
-
-  private static Core.From expandFrom2(
-      Generators.Cache cache, Environment env, Core.From from) {
-    // Build the set of patterns that are assigned in some scan.
-    final TypeSystem typeSystem = cache.typeSystem;
-    final Set<Core.NamedPat> done = new HashSet<>();
-    final Set<Core.NamedPat> allPats = new HashSet<>();
-    final Map<Core.NamedPat, Generator> generatorMap = new HashMap<>();
+    // Second, check that we found a generator for each pattern (infinite
+    // extent).
+    final StepVarSet stepVars = StepVarSet.create(from, typeSystem);
     for (Core.FromStep step : from.steps) {
       if (step.op == Op.SCAN) {
         final Core.Scan scan = (Core.Scan) step;
-        final List<Core.NamedPat> namedPats = scan.pat.expand();
-        allPats.addAll(namedPats);
-
-        if (scan.exp.isCallTo(BuiltIn.Z_EXTENT)) {
+        if (scan.exp.isExtent()) {
+          final List<Core.NamedPat> namedPats = scan.pat.expand();
           for (Core.NamedPat namedPat : namedPats) {
+            if (!stepVars.usedPats.contains(namedPat)) {
+              // Ignore patterns that are not used. For example, "y" is unused
+              // in "exists x, y where x elem [1,2,3]".
+              continue;
+            }
             final Generator generator = cache.bestGenerator(namedPat);
-            if (generator != null) {
-              generatorMap.put(namedPat, generator);
+            if (generator == null
+                || generator.cardinality == Generator.Cardinality.INFINITE) {
+              throw new IllegalArgumentException(
+                  "pattern " + namedPat + " is not grounded");
             }
           }
         }
       }
     }
 
-    final PairList<Core.FromStep, Set<Core.NamedPat>> stepVars =
-        FreeFinder.getStepVars(from, typeSystem);
+    // Third, substitute generators.
+    if (true) {
+      Core.From from2 = expandFrom2(cache, env, stepVars);
+      return from2.equals(from) ? from : from2;
+    }
+
+    final Simplifier simplifier = new Simplifier(typeSystem, cache.generators);
+    return (Core.From)
+        from.accept(
+            new Shuttle(typeSystem) {
+              @Override
+              protected Core.Exp visit(Core.From from) {
+                final Core.From from2;
+                if (from == outerFrom) {
+                  from2 = expandFrom2(cache, env, stepVars);
+                } else if (false) {
+                  // Don't recurse into subqueries.
+                  return from;
+                } else {
+                  final StepVarSet stepVars2 =
+                      StepVarSet.create(from, typeSystem);
+                  from2 = expandFrom2(cache, env, stepVars2);
+                }
+                System.out.println(from);
+                System.out.println(from2);
+                System.out.println("---");
+                return from2;
+              }
+
+              @Override
+              protected Core.Exp visit(Core.Apply apply) {
+                Core.Exp exp1 = super.visit(apply);
+                final Core.Exp exp2 = simplifier.simplify(exp1);
+                if (exp2 == apply) {
+                  return apply;
+                }
+                return exp2.accept(this);
+              }
+            });
+  }
+
+  private static Core.From expandFrom2(
+      Generators.Cache cache, Environment env, StepVarSet stepVarSet) {
+    // Build the set of patterns that are assigned in some scan.
+    final TypeSystem typeSystem = cache.typeSystem;
+    final Set<Core.NamedPat> done = new HashSet<>();
+    final Set<Core.NamedPat> allPats = new HashSet<>();
+    final Map<Core.NamedPat, Generator> generatorMap = new HashMap<>();
+    stepVarSet.stepVars.forEach(
+        (step, vars) -> {
+          if (step.op == Op.SCAN) {
+            final Core.Scan scan = (Core.Scan) step;
+            final List<Core.NamedPat> namedPats = scan.pat.expand();
+            if (scan.exp.isExtent()) {
+              for (Core.NamedPat namedPat : namedPats) {
+                if (!stepVarSet.usedPats.contains(namedPat)) {
+                  // Ignore patterns that are not used. For example, "y" is
+                  // unused in "exists x, y where x elem [1,2,3]".
+                  continue;
+                }
+                final Generator generator = cache.bestGenerator(namedPat);
+                if (generator != null) {
+                  generatorMap.put(namedPat, generator);
+                }
+              }
+              allPats.addAll(namedPats);
+            }
+          }
+        });
 
     final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
     final Map<Core.Id, Core.Exp> substitution = new HashMap<>();
-    stepVars.forEach(
+    stepVarSet.stepVars.forEach(
         (step, freePats) -> {
           // Pull forward any generators.
           for (Core.NamedPat freePat : freePats) {
             addGeneratorScan(done, freePat, generatorMap, allPats, fromBuilder);
           }
 
-          if (step.op == Op.SCAN) {
+          if (step instanceof Core.Scan) {
             final Core.Scan scan = (Core.Scan) step;
-            if (scan.exp.isCallTo(BuiltIn.Z_EXTENT)) {
+            if (scan.exp.isExtent()) {
+              for (Core.NamedPat p : scan.pat.expand()) {
+                // Skip scan variables that are not used, e.g. "y" in
+                // "exists x, y where x elem [1, 2]".
+                if (stepVarSet.usedPats.contains(p)) {
+                  addGeneratorScan(done, p, generatorMap, allPats, fromBuilder);
+                }
+              }
               return;
             }
             // The pattern(s) defined in the scan are now available to
@@ -139,8 +197,7 @@ public class Expander {
           fromBuilder.addAll(ImmutableList.of(step));
         });
 
-    final Core.From from2 = fromBuilder.build();
-    return from2.equals(from) ? from : from2;
+    return fromBuilder.build();
   }
 
   /**
@@ -204,9 +261,9 @@ public class Expander {
   /**
    * Tries to improve the existing generators.
    *
-   * <p>This means replacing them with a lower cardinality - an infinite
-   * generator with a finite generator, or a finite generator with one that is a
-   * single value or is empty.
+   * <p>This means replacing each generator with one of lower cardinality - an
+   * infinite generator with a finite generator, or a finite generator with one
+   * that is a single value or is empty.
    */
   private void improveGenerators(
       Multimap<Core.NamedPat, Generator> generators) {
@@ -254,25 +311,18 @@ public class Expander {
       this.stepVars = stepVars;
     }
 
-    /**
-     * Given a query, returns a list of the steps and the variables from the
-     * step environment used by each step.
-     */
-    private static PairList<Core.FromStep, Set<Core.NamedPat>> getStepVars(
-        Core.From from, TypeSystem typeSystem) {
-      final PairList<Core.FromStep, Set<Core.NamedPat>> list = PairList.of();
-      final Environment env = Environments.empty();
-      final FreeFinder visitor =
-          new FreeFinder(
-              typeSystem, env, new ArrayDeque<>(), new ArrayList<>(), list);
-      from.accept(visitor);
-      return list;
-    }
-
     @Override
     protected EnvVisitor push(Environment env) {
       return new FreeFinder(typeSystem, env, fromStack, freePats, stepVars);
     }
+
+    //    @Override
+    //    protected void visit(Core.From from) {
+    // Recurse into the root query, not into subqueries.
+    //      if (fromStack.isEmpty()) {
+    //        super.visit(from);
+    //      }
+    //    }
 
     @Override
     protected void visit(Core.Id id) {
@@ -281,15 +331,47 @@ public class Expander {
 
     @Override
     public void visitStep(Core.FromStep step, Core.StepEnv stepEnv) {
+      if (!fromStack.isEmpty()) {
+        super.visitStep(step, stepEnv);
+        return;
+      }
       freePats.clear();
       super.visitStep(step, stepEnv);
       final ImmutableSet.Builder<Core.NamedPat> namedPats =
           ImmutableSet.builder();
-      intersect(
+      forEachInIntersection(
           freePats,
           transformEager(stepEnv.bindings, b -> b.id),
           namedPats::add);
       stepVars.add(step, namedPats.build());
+    }
+  }
+
+  /** Analysis of the variables used in each step of a query. */
+  static class StepVarSet {
+    private final PairList<Core.FromStep, Set<Core.NamedPat>> stepVars;
+    private final Set<Core.NamedPat> usedPats;
+
+    StepVarSet(PairList<Core.FromStep, Set<Core.NamedPat>> stepVars) {
+      this.stepVars = stepVars.immutable();
+      this.usedPats =
+          stepVars.rightList().stream()
+              .flatMap(Collection::stream)
+              .collect(ImmutableSet.toImmutableSet());
+    }
+
+    /**
+     * Given a query, returns a list of the steps and the variables from the
+     * step environment used by each step.
+     */
+    static StepVarSet create(Core.From from, TypeSystem typeSystem) {
+      final PairList<Core.FromStep, Set<Core.NamedPat>> list = PairList.of();
+      final Environment env = Environments.empty();
+      final FreeFinder visitor =
+          new FreeFinder(
+              typeSystem, env, new ArrayDeque<>(), new ArrayList<>(), list);
+      from.accept(visitor);
+      return new StepVarSet(list);
     }
   }
 }

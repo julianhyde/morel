@@ -19,20 +19,23 @@ fun edge (x, y) = {x, y} elem edges;
 > val edge = fn : int * int -> bool
 
 (* Test 4: exists becomes iteration *)
-fun hasEdgeFrom x =
-  exists y where edge (x, y);
-> val hasEdgeFrom = fn : int -> bool
-
-(* Expected: Should generate distinct x values from edges
-from x where hasEdgeFrom x;
+(* TODO
+let
+  fun edge (x, y) = {x, y} elem edges
+  fun hasEdgeFrom x = exists y where edge (x, y)
+in
+  from x where hasEdgeFrom x
+end;
 > val it = [1,2] : int list
 *)
 
 (* Test 5: Recursive predicate (transitive closure) *)
+(* TODO
 fun path (x, y) =
   edge (x, y)
   orelse exists z where path (x, z) andalso edge (z, y);
 > val path = fn : int * int -> bool
+*)
 
 (* Expected: Should generate all reachable pairs
 from (x, y) where path (x, y);

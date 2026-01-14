@@ -231,7 +231,7 @@ public class Extents {
   public static Core.Decl infinitePats(
       TypeSystem typeSystem, Environment env, Core.Decl node) {
     if (true) {
-      return node;
+      return node; // TODO:
     }
     return node.accept(
         new Shuttle(typeSystem) {
