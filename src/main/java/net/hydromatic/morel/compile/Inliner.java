@@ -185,24 +185,42 @@ public class Inliner extends EnvShuttle {
     // becomes
     //   "two"
     // Only do this when analysis is available (full inlining mode).
-    if (analysis != null
-        && exp instanceof Core.Literal
-        && isSimpleLiteral(exp.op)) {
+    if (analysis != null && exp instanceof Core.Literal) {
       final Core.Literal literal = (Core.Literal) exp;
-      for (Core.Match match : matchList) {
-        if (match.pat instanceof Core.LiteralPat) {
-          final Core.LiteralPat literalPat = (Core.LiteralPat) match.pat;
-          if (literal.value.equals(literalPat.value)) {
+      if (isSimpleLiteral(exp.op)) {
+        // Simple literal (int, string, bool, etc.)
+        for (Core.Match match : matchList) {
+          if (match.pat instanceof Core.LiteralPat) {
+            final Core.LiteralPat literalPat = (Core.LiteralPat) match.pat;
+            if (literal.value.equals(literalPat.value)) {
+              return match.exp;
+            }
+          } else if (match.pat instanceof Core.WildcardPat) {
             return match.exp;
+          } else if (match.pat instanceof Core.IdPat) {
+            // Pattern like "x => x + 1" where x binds to the literal.
+            // Convert to: let x = <literal> in <match.exp>
+            final Core.IdPat idPat = (Core.IdPat) match.pat;
+            return core.let(
+                core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
           }
-        } else if (match.pat instanceof Core.WildcardPat) {
-          return match.exp;
-        } else if (match.pat instanceof Core.IdPat) {
-          // Pattern like "x => x + 1" where x binds to the literal.
-          // Convert to: let x = <literal> in <match.exp>
-          final Core.IdPat idPat = (Core.IdPat) match.pat;
-          return core.let(
-              core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
+        }
+      } else if (isNullaryConstructor(literal)) {
+        // Nullary constructor (enum value like LESS, NONE, etc.)
+        final String tyConName = getNullaryConstructorName(literal);
+        for (Core.Match match : matchList) {
+          if (match.pat instanceof Core.Con0Pat) {
+            final Core.Con0Pat con0Pat = (Core.Con0Pat) match.pat;
+            if (con0Pat.tyCon.equals(tyConName)) {
+              return match.exp;
+            }
+          } else if (match.pat instanceof Core.WildcardPat) {
+            return match.exp;
+          } else if (match.pat instanceof Core.IdPat) {
+            final Core.IdPat idPat = (Core.IdPat) match.pat;
+            return core.let(
+                core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
+          }
         }
       }
     }
@@ -262,6 +280,23 @@ public class Inliner extends EnvShuttle {
       default:
         return false;
     }
+  }
+
+  /**
+   * Returns whether the literal is a nullary constructor (enum value like LESS,
+   * NONE, etc.). These are represented as VALUE_LITERAL with a single-element
+   * list containing the constructor name.
+   */
+  private static boolean isNullaryConstructor(Core.Literal literal) {
+    return literal.op == Op.VALUE_LITERAL
+        && literal.value instanceof List
+        && ((List<?>) literal.value).size() == 1
+        && ((List<?>) literal.value).get(0) instanceof String;
+  }
+
+  /** Returns the constructor name from a nullary constructor literal. */
+  private static String getNullaryConstructorName(Core.Literal literal) {
+    return (String) ((List<?>) literal.value).get(0);
   }
 
   @Override
