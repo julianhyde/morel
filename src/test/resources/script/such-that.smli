@@ -379,6 +379,20 @@ from x
   where exists y
     where (x, y) elem [(1, 2), (1, 3), (4, 3)];
 > val it = [1, 4] : int list
+
+(*) The same query with parentheses.
+exists x
+  where (exists y
+    where (x, y) elem [(1, 2), (1, 3), (4, 3)]);
+> val it = true : bool
+*)
+
+(* TODO
+(*) Be sure to eliminate duplicates. (_, 2, 3) occurs twice in the list.
+from y
+  where exists x
+    where (x, y, 3) elem [(1, 2, 3), (2, 3, 4), (5, 4, 3), (4, 2, 3)];
+> val it = [2, 4] : int list
 *)
 
 (*) 'on' in 'from'
@@ -402,6 +416,10 @@ join c in [6, 7] on b + c = 10,
 > 2 4 6 8
 >
 > val it : {a:int, b:int, c:int, d:int} list
+
+useSilently "scott.smli";
+> [opening scott.smli]
+> val it = () : unit
 
 from dno, name, loc
 where {deptno = dno, dname = name, loc} elem scott.depts
@@ -646,10 +664,11 @@ from i where isBetween (i, 5, 8);
  * Convenience function that converts a predicate to a relation.
  *)
 
-(*
+(* TODO. Currently throws 'pattern r is not grounded'
 fun enumerate predicate =
   from r where predicate r;
 > val enumerate = fn : ('a -> bool) -> 'a bag
+*)
 
 (* TODO: Remove the 'let', when inlining is working. *)
 let
@@ -718,11 +737,11 @@ val edges = [
 > val edges : {x:int, y:int} list
 fun edge (x, y) = {x, y} elem edges;
 > val edge = fn : int * int -> bool
+(* TODO
 fun path (x, y) =
   edge (x, y) orelse
   (exists z where path (x, z) andalso edge (z, y));
 > val path = fn : int * int -> bool
-(* TODO
 from p where path p;
 > val it = [(1,2),(2,3),(1,3)] : (int * int) list
 *)
@@ -1127,5 +1146,294 @@ order DESC profit;
 > 0 0 0
 >
 > val it : {b:int, c:int, profit:int} list
+
+(* ------------------------------------------------------ *)
+(* Extracted testFromSuchThat* tests from MainTest.java *)
+
+Sys.set ("stringDepth", 1000);
+> val it = () : unit
+
+(* testFromSuchThat - Basic function with elem predicate *)
+let
+  val emps = [
+    {id = 100, name = "Fred", deptno = 10},
+    {id = 101, name = "Velma", deptno = 20},
+    {id = 102, name = "Shaggy", deptno = 30},
+    {id = 103, name = "Scooby", deptno = 30}]
+  fun hasEmpNameInDept (n, d) =
+    (n, d) elem (from e in emps yield (e.name, e.deptno))
+in
+  from n, d
+    where hasEmpNameInDept (n, d)
+    where d = 30
+    yield {d, n}
+end;
+> d  n
+> -- ------
+> 30 Shaggy
+> 30 Scooby
+>
+> val it : {d:int, n:string} bag
+(*) Expected code:
+(*) "from(sink
+(*)   join(pat e, exp tuple(
+(*)   tuple(constant(10), constant(100), constant(Fred)),
+(*)   tuple(constant(20), constant(101), constant(Velma)),
+(*)   tuple(constant(30), constant(102), constant(Shaggy)),
+(*)   tuple(constant(30), constant(103), constant(Scooby))),
+(*)  sink yield(codes [tuple(apply(fnValue nth:2, argCode get(name e)), apply(fnValue nth:0, argCode get(name e)))], sink join(pat n_1, exp tuple( apply(fnValue nth:0, argCode get(name v$1))), sink join(pat d_1, exp tuple(constant(30)), sink where(condition apply2(fnValue elem,
+(*)                             tuple(get(name n), get(name d)), from(sink join(pat e, exp tuple(
+(*)   tuple(constant(10), constant(100), constant(Fred)),
+(*)   tuple(constant(20), constant(101), constant(Velma)),
+(*)   tuple(constant(30), constant(102), constant(Shaggy)),
+(*)   tuple(constant(30), constant(103), constant(Scooby))), sink yield(codes [tuple(apply(fnValue nth:2, argCode get(name e)), apply(fnValue nth:0, argCode get(name e)))], sink apply(fnValue $.extent, argCode constant(()))))), sink where(condition apply2(fnValue =, get(name d), constant(30)), sink collect(tuple(get(name d), get(name n)))))))))))"
+(*
+Sys.planEx "code";
+> [actual output would appear here]
+*)
+
+(* testFromSuchThat2 - Complex function with division and elem *)
+(* TODO - currently not fully working *)
+(*
+let
+  fun hasJob (d, job) =
+    (d div 2, job)
+      elem (from e in scott.emps yield (e.deptno, e.job))
+in
+  from d in scott.depts, j
+    where hasJob (d.deptno, j)
+    yield j
+end;
+> val it : string bag
+(*) Expected code:
+(*) "from(sink join(pat d_1,
+(*)     exp apply(fnValue nth:1, argCode get(name scott)),
+(*)   sink join(pat j,
+(*)       exp apply(
+(*)         fnCode apply(fnValue List.filter,
+(*)           argCode match(j,
+(*)             apply(fnCode match((d, job),
+(*)               apply2(fnValue elem,
+(*)                 tuple(apply2(fnValue div, get(name d), constant(2)),
+(*)                 get(name job)),
+(*)               from(
+(*)               sink join(pat e,
+(*)                 exp apply(fnValue nth:2, argCode get(name scott)),
+(*)                 sink collect(
+(*)                   tuple(apply(fnValue nth:1, argCode get(name e)),
+(*)                     apply(fnValue nth:5, argCode get(name e)))))))),
+(*)               argCode tuple(
+(*)                 apply(fnValue nth:0, argCode get(name d)),
+(*)                 get(name j))))),
+(*)         argCode apply(fnValue $.extent, argCode constant(()))),
+(*)     sink collect(get(name j)))))"
+(*
+Sys.planEx "code";
+> [actual output would appear here]
+*)
+*)
+
+(* testFromSuchThat2b - Simple "d elem list" pattern *)
+from d where d elem scott.depts;
+> deptno dname      loc
+> ------ ---------- --------
+> 10     ACCOUNTING NEW YORK
+> 20     RESEARCH   DALLAS
+> 30     SALES      CHICAGO
+> 40     OPERATIONS BOSTON
+>
+> val it : {deptno:int, dname:string, loc:string} bag
+(*
+Sys.planEx "0";
+> val it =
+>   "val it_66 = from d_3 : {deptno:int, dname:string, loc:string} where op elem$0 (d_3, #depts scott)"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   "val it = from d in #depts scott"
+>   : string
+*)
+
+(* testFromSuchThat2c - Record pattern with field renaming *)
+from loc, deptno, name
+where {deptno, loc, dname = name} elem scott.depts;
+> deptno loc      name
+> ------ -------- ----------
+> 10     NEW YORK ACCOUNTING
+> 20     DALLAS   RESEARCH
+> 30     CHICAGO  SALES
+> 40     BOSTON   OPERATIONS
+>
+> val it : {deptno:int, loc:string, name:string} bag
+(*
+Sys.planEx "-1";
+> val it =
+>   "val it = from v$0 in #depts scott join loc in [#loc v$0] join deptno in [#deptno v$0] join name in [#dname v$0] where op elem ({deptno = deptno, dname = name, loc = loc}, #depts scott) yield {deptno = deptno, loc = loc, name = name}"
+>   : string
+*)
+
+(* testFromSuchThat2d - Record pattern with literal and additional
+   constraint. Same as testFromSuchThat2c but with a literal. *)
+from dno, name
+  where {deptno = dno, dname = name, loc = "CHICAGO"}
+      elem scott.depts
+    andalso dno > 20;
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
+(*
+Sys.planEx "0";
+> val it =
+>   "val it = from dno : int join name : string where op elem$0 ({deptno = dno, dname = name, loc = \"CHICAGO\"}, #depts scott) andalso dno > 20"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   "val it = from v$0 in #depts scott join dno in [#deptno v$0] join name in [#dname v$0] where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"}, #depts scott) andalso dno > 20 yield {dno = dno, name = name}"
+>   : string
+*)
+
+(* testFromSuchThat2d3 - Forward references with equality constraint *)
+from dno, name, v
+where v elem scott.depts
+where v.deptno = dno
+where name = v.dname
+where v.loc = "CHICAGO"
+where dno = 30
+yield {dno = #deptno v, name = #dname v};
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
+(*
+Sys.planEx "0";
+> val it =
+>   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem$0 (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   "val it = from dno in [30] unorder join v in #depts scott join name in [#dname v] where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
+>   : string
+*)
+
+(* testFromSuchThat2d4 - Forward references with inequality constraint *)
+from dno, name, v
+where v elem scott.depts
+where v.deptno = dno
+where name = v.dname
+where v.loc = "CHICAGO"
+where dno > 25
+yield {dno = #deptno v, name = #dname v};
+> dno name
+> --- -----
+> 30  SALES
+>
+> val it : {dno:int, name:string} bag
+(*
+Sys.planEx "0";
+> val it =
+>   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem$0 (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   "val it = from v in #depts scott join dno in [#deptno v] join name in [#dname v] where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
+>   : string
+*)
+
+(* testFromSuchThat2e - Function inlining with elem predicate.
+ * As testFromSuchThat2d but using a function. (Simple enough
+ * that the function can be handled by inlining. *)
+let
+  fun isDept d =
+    d elem scott.depts
+in
+  from d
+    where isDept d andalso d.deptno = 20
+    yield d.dname
+end;
+> val it = ["RESEARCH"] : string bag
+(*
+Sys.planEx "0";
+> val it =
+>   "val it = let val isDept = fn d => op elem$0 (d, #depts scott) in from d_1 : {deptno:int, dname:string, loc:string} where isDept d_1 andalso #deptno d_1 = 20 yield #dname d_1 end"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   "val it = from d_1 in #depts scott where #deptno d_1 = 20 yield #dname d_1"
+>   : string
+*)
+
+(* testFromSuchThat2f - Join via suchthat with two functions *)
+let
+  fun isDept d =
+    d elem scott.depts
+  fun isEmp e =
+    e elem scott.emps
+in
+  from d, e
+    where isDept d
+    andalso isEmp e
+    andalso d.deptno = e.deptno
+    andalso d.deptno = 20
+    yield d.dname
+end;
+> val it = ["RESEARCH","RESEARCH","RESEARCH","RESEARCH","RESEARCH"] : string bag
+(*
+Sys.planEx "0";
+> val it =
+>   "val it = let val isDept = fn d => op elem$0 (d, #depts scott) in let val isEmp = fn e => op elem$0 (e, #emps scott) in from d_1 : {deptno:int, dname:string, loc:string} join e_1 : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} where isDept d_1 andalso isEmp e_1 andalso #deptno d_1 = #deptno e_1 andalso #deptno d_1 = 20 yield #dname d_1 end end"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   "val it = from d_1 in #depts scott join e_1 in #emps scott where #deptno d_1 = #deptno e_1 andalso #deptno d_1 = 20 yield #dname d_1"
+>   : string
+*)
+
+(* testFromSuchThat3 - Smaller version of testFromSuchThat *)
+let
+  val emps = [
+    {id = 102, name = "Shaggy", deptno = 30},
+    {id = 103, name = "Scooby", deptno = 30}]
+  fun hasEmpNameInDept (n, d) =
+    (n, d) elem (from e in emps yield (e.name, e.deptno))
+in
+  from n, d
+    where hasEmpNameInDept (n, d)
+    where d = 30
+    yield {d, n}
+end;
+> d  n
+> -- ------
+> 30 Shaggy
+> 30 Scooby
+>
+> val it : {d:int, n:string} bag
+(*) Expected code:
+(*) "from(sink
+(*)   join(pat (n_1, d_1),
+(*)   exp apply(
+(*)     fnCode apply(fnValue List.filter,
+(*)       argCode match(v$0,
+(*)         apply(fnCode match((n_1, d_1),
+(*)             apply(fnCode match((n, d),
+(*)                 apply2(fnValue elem,
+(*)                   tuple(get(name n), get(name d)),
+(*)                   from(sink
+(*)                     join(pat e, exp tuple(
+(*)   tuple(constant(30), constant(102), constant(Shaggy)),
+(*)   tuple(constant(30), constant(103), constant(Scooby))),
+(*)       sink collect(tuple(apply(fnValue nth:2, argCode get(name e)),
+(*)         apply(fnValue nth:0, argCode get(name e)))))))),
+(*)                argCode tuple(get(name n), get(name d)))),
+(*)             argCode get(name v$0)))),
+(*)           argCode apply(fnValue $.extent, argCode constant(()))),
+(*)         sink where(condition apply2(fnValue =, get(name d), constant(30)),
+(*)           sink collect(tuple(get(name d), get(name n))))))"
+(*
+Sys.planEx "code";
+> [actual output would appear here]
+*)
 
 (*) End such-that.smli
