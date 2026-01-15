@@ -179,49 +179,29 @@ public class Inliner extends EnvShuttle {
         return Replacer.substitute(typeSystem, substitution, match.exp);
       }
     }
-    // If exp is a simple literal (int, string, bool, char, real), find the
-    // matching branch and return it directly. For example,
+    // If exp is a literal (simple or nullary constructor), find the matching
+    // branch and return it directly. For example,
     //   case 2 of 1 => "one" | 2 => "two" | _ => "large"
     // becomes
     //   "two"
     // Only do this when analysis is available (full inlining mode).
     if (analysis != null && exp instanceof Core.Literal) {
       final Core.Literal literal = (Core.Literal) exp;
-      if (isSimpleLiteral(exp.op)) {
-        // Simple literal (int, string, bool, etc.)
-        for (Core.Match match : matchList) {
-          if (match.pat instanceof Core.LiteralPat) {
-            final Core.LiteralPat literalPat = (Core.LiteralPat) match.pat;
-            if (literal.value.equals(literalPat.value)) {
-              return match.exp;
-            }
-          } else if (match.pat instanceof Core.WildcardPat) {
+      for (Core.Match match : matchList) {
+        final Boolean matches = literalMatchesPattern(literal, match.pat);
+        if (matches != null) {
+          if (matches) {
             return match.exp;
-          } else if (match.pat instanceof Core.IdPat) {
-            // Pattern like "x => x + 1" where x binds to the literal.
-            // Convert to: let x = <literal> in <match.exp>
-            final Core.IdPat idPat = (Core.IdPat) match.pat;
-            return core.let(
-                core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
           }
+          // Pattern doesn't match; try next pattern
+        } else if (match.pat instanceof Core.IdPat) {
+          // Pattern like "x => x + 1" where x binds to the literal.
+          // Convert to: let x = <literal> in <match.exp>
+          final Core.IdPat idPat = (Core.IdPat) match.pat;
+          return core.let(
+              core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
         }
-      } else if (isNullaryConstructor(literal)) {
-        // Nullary constructor (enum value like LESS, NONE, etc.)
-        final String tyConName = getNullaryConstructorName(literal);
-        for (Core.Match match : matchList) {
-          if (match.pat instanceof Core.Con0Pat) {
-            final Core.Con0Pat con0Pat = (Core.Con0Pat) match.pat;
-            if (con0Pat.tyCon.equals(tyConName)) {
-              return match.exp;
-            }
-          } else if (match.pat instanceof Core.WildcardPat) {
-            return match.exp;
-          } else if (match.pat instanceof Core.IdPat) {
-            final Core.IdPat idPat = (Core.IdPat) match.pat;
-            return core.let(
-                core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
-          }
-        }
+        // Unknown pattern type; try next pattern
       }
     }
     if (exp.type != caseOf.exp.type) {
@@ -297,6 +277,32 @@ public class Inliner extends EnvShuttle {
   /** Returns the constructor name from a nullary constructor literal. */
   private static String getNullaryConstructorName(Core.Literal literal) {
     return (String) ((List<?>) literal.value).get(0);
+  }
+
+  /**
+   * Returns whether a literal value matches a pattern.
+   *
+   * @return {@link Boolean#TRUE} if the pattern definitely matches, {@link
+   *     Boolean#FALSE} if the pattern definitely does not match, or null if the
+   *     match cannot be determined (e.g., pattern is IdPat or a complex pattern
+   *     type)
+   */
+  private static @Nullable Boolean literalMatchesPattern(
+      Core.Literal literal, Core.Pat pat) {
+    if (pat instanceof Core.WildcardPat) {
+      return true;
+    }
+    if (isSimpleLiteral(literal.op)) {
+      if (pat instanceof Core.LiteralPat) {
+        return literal.value.equals(((Core.LiteralPat) pat).value);
+      }
+    } else if (isNullaryConstructor(literal)) {
+      if (pat instanceof Core.Con0Pat) {
+        final String tyConName = getNullaryConstructorName(literal);
+        return ((Core.Con0Pat) pat).tyCon.equals(tyConName);
+      }
+    }
+    return null;
   }
 
   @Override
