@@ -85,6 +85,10 @@ from x, y where (x, y) elem [(1,true),(2,false)];
 >
 > val it : {x:int, y:bool} bag
 
+exists w, x, y
+  where (x, 2) elem [(1, 2), (1, 3), (4, 3)];
+> val it = true : bool
+
 *)
 
 (*
