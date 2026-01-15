@@ -179,6 +179,33 @@ public class Inliner extends EnvShuttle {
         return Replacer.substitute(typeSystem, substitution, match.exp);
       }
     }
+    // If exp is a simple literal (int, string, bool, char, real), find the
+    // matching branch and return it directly. For example,
+    //   case 2 of 1 => "one" | 2 => "two" | _ => "large"
+    // becomes
+    //   "two"
+    // Only do this when analysis is available (full inlining mode).
+    if (analysis != null
+        && exp instanceof Core.Literal
+        && isSimpleLiteral(exp.op)) {
+      final Core.Literal literal = (Core.Literal) exp;
+      for (Core.Match match : matchList) {
+        if (match.pat instanceof Core.LiteralPat) {
+          final Core.LiteralPat literalPat = (Core.LiteralPat) match.pat;
+          if (literal.value.equals(literalPat.value)) {
+            return match.exp;
+          }
+        } else if (match.pat instanceof Core.WildcardPat) {
+          return match.exp;
+        } else if (match.pat instanceof Core.IdPat) {
+          // Pattern like "x => x + 1" where x binds to the literal.
+          // Convert to: let x = <literal> in <match.exp>
+          final Core.IdPat idPat = (Core.IdPat) match.pat;
+          return core.let(
+              core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
+        }
+      }
+    }
     if (exp.type != caseOf.exp.type) {
       // Type has become less general. For example,
       //   case x of NONE => [] | SOME y => [y]
@@ -219,6 +246,22 @@ public class Inliner extends EnvShuttle {
       }
     }
     return null;
+  }
+
+  /**
+   * Returns whether {@code op} is a simple literal type (not VALUE_LITERAL).
+   */
+  private static boolean isSimpleLiteral(Op op) {
+    switch (op) {
+      case INT_LITERAL:
+      case STRING_LITERAL:
+      case BOOL_LITERAL:
+      case CHAR_LITERAL:
+      case REAL_LITERAL:
+        return true;
+      default:
+        return false;
+    }
   }
 
   @Override

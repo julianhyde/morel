@@ -2305,12 +2305,16 @@ Option.valOf (SOME 1);
 Option.valOf NONE;
 > uncaught exception Option
 >   raised at: stdIn:1.1-1.18
+Sys.set ("inlinePassCount", 0);
+> val it = () : unit
 val noneInt = if true then NONE else SOME 0;
 > val noneInt = NONE : int option
 Sys.plan ();
 > val it =
 >   "apply(fnCode match(true, constant([NONE]), _, apply(fnValue tyCon, argCode constant(0))), argCode constant(true))"
 >   : string
+Sys.unset "inlinePassCount";
+> val it = () : unit
 Option.valOf noneInt;
 > uncaught exception Option
 >   raised at: stdIn:1.1-1.21
