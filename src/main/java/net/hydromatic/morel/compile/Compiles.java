@@ -305,7 +305,7 @@ public abstract class Compiles {
           mayContainUnbounded = false;
         }
       }
-      coreDecl = Extents.infinitePats(typeSystem, coreDecl);
+      coreDecl = Extents.infinitePats(typeSystem, env, coreDecl);
       if (coreDecl == coreDecl2) {
         break;
       }
