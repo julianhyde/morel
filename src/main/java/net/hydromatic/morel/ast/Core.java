@@ -144,6 +144,17 @@ public class Core {
           };
       return unparse(w);
     }
+
+    /**
+     * Returns whether this pattern is a constant.
+     *
+     * <p>Examples include literal patterns {@code 1}, {@code true},
+     * constructors applied to constants, records and tuples whose arguments are
+     * constant.
+     */
+    public boolean isConstant() {
+      return false;
+    }
   }
 
   /**
@@ -303,6 +314,11 @@ public class Core {
     public void accept(Visitor visitor) {
       visitor.visit(this);
     }
+
+    @Override
+    public boolean isConstant() {
+      return true;
+    }
   }
 
   /**
@@ -442,6 +458,12 @@ public class Core {
           ? this
           : new ConPat(op, type, tyCon, pat);
     }
+
+    @Override
+    public boolean isConstant() {
+      // A constructor is constant if its argument is constant. E.g. "SOME 1".
+      return this.pat.isConstant();
+    }
   }
 
   /**
@@ -478,6 +500,11 @@ public class Core {
     @Override
     public void accept(Visitor visitor) {
       visitor.visit(this);
+    }
+
+    @Override
+    public boolean isConstant() {
+      return true;
     }
   }
 
@@ -542,6 +569,11 @@ public class Core {
       }
       return names.build();
     }
+
+    @Override
+    public boolean isConstant() {
+      return allMatch(args, Pat::isConstant);
+    }
   }
 
   /**
@@ -577,6 +609,12 @@ public class Core {
 
     public ListPat copy(TypeSystem typeSystem, List<Pat> args) {
       return args.equals(this.args) ? this : core.listPat(typeSystem, args);
+    }
+
+    @Override
+    public boolean isConstant() {
+      // A list of constants is constant
+      return allMatch(args, Pat::isConstant);
     }
   }
 
@@ -625,6 +663,12 @@ public class Core {
       return args.equals(this.args)
           ? this
           : core.recordPat(typeSystem, argNames, args);
+    }
+
+    @Override
+    public boolean isConstant() {
+      // A record with all constant fields is constant
+      return allMatch(args, Pat::isConstant);
     }
   }
 

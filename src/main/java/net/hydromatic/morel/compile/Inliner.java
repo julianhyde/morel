@@ -31,11 +31,12 @@ import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
-import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable1;
+import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.EvalEnvs;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -43,6 +44,7 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Shuttle that inlines constant values. */
@@ -187,63 +189,29 @@ public class Inliner extends EnvShuttle {
     // becomes
     //   "two"
     // Only do this when analysis is available (full inlining mode).
-    if (analysis != null && exp instanceof Core.Literal) {
-      final Core.Literal literal = (Core.Literal) exp;
+    final Object runtimeValue = getObject(exp);
+    if (analysis != null && runtimeValue != null) {
       for (Core.Match match : matchList) {
-        final Boolean matches = literalMatchesPattern(literal, match.pat);
-        if (matches != null) {
-          if (matches) {
-            return match.exp;
-          }
-          // Pattern doesn't match; try next pattern
-        } else if (match.pat instanceof Core.IdPat) {
-          // Pattern like "x => x + 1" where x binds to the literal.
-          // Convert to: let x = <literal> in <match.exp>
-          final Core.IdPat idPat = (Core.IdPat) match.pat;
-          return core.let(
-              core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
+        PairList<Core.NamedPat, Object> binds = PairList.of();
+        if (Closure.bindRecurse(match.pat, runtimeValue, binds::add)) {
+          final Core.Exp[] exps = {match.exp};
+          binds.forEach(
+              (pat, value) -> {
+                // Pattern like "x => x + 1" where x binds to the literal.
+                // Convert to: let x = <literal> in <match.exp>
+                final Core.Literal literal1 =
+                    core.literal((PrimitiveType) pat.type, value);
+                exps[0] =
+                    core.let(
+                        core.nonRecValDecl(caseOf.pos, pat, null, literal1),
+                        exps[0]);
+              });
+          return exps[0];
         }
         // Unknown pattern type; try next pattern
       }
     }
-    // If exp is a constructor application like SOME "a", try to match against
-    // ConPat patterns. Only apply this optimization if the result type is a
-    // DataType and the fn is a constructor of that DataType.
-    if (analysis != null && exp instanceof Core.Apply) {
-      final Core.Apply apply = (Core.Apply) exp;
-      if (apply.fn instanceof Core.Id && apply.type instanceof DataType) {
-        final String conName = ((Core.Id) apply.fn).idPat.name;
-        final DataType dataType = (DataType) apply.type;
-        if (dataType.typeConstructors.containsKey(conName)) {
-          for (Core.Match match : matchList) {
-            final Boolean matches =
-                constructorAppMatchesPattern(conName, apply.arg, match.pat);
-            if (matches != null) {
-              if (matches) {
-                // If the pattern is a ConPat with an IdPat inside, create a
-                // binding
-                if (match.pat instanceof Core.ConPat) {
-                  final Core.ConPat conPat = (Core.ConPat) match.pat;
-                  final Core.NonRecValDecl binding =
-                      extractBinding(apply.arg, conPat.pat, caseOf.pos);
-                  if (binding != null) {
-                    return core.let(binding, match.exp);
-                  }
-                }
-                return match.exp;
-              }
-              // Pattern doesn't match; try next pattern
-            } else if (match.pat instanceof Core.IdPat) {
-              // Pattern like "x => ..." where x binds to the constructor app.
-              final Core.IdPat idPat = (Core.IdPat) match.pat;
-              return core.let(
-                  core.nonRecValDecl(caseOf.pos, idPat, null, exp), match.exp);
-            }
-            // Unknown pattern type; try next pattern
-          }
-        }
-      }
-    }
+
     if (exp.type != caseOf.exp.type) {
       // Type has become less general. For example,
       //   case x of NONE => [] | SOME y => [y]
@@ -261,6 +229,39 @@ public class Inliner extends EnvShuttle {
       return core.caseOf(caseOf.pos, type, exp, matchList);
     }
     return caseOf.copy(exp, matchList);
+  }
+
+  private static @Nullable Object getObject(Core.Exp exp) {
+    switch (exp.op) {
+      case BOOL_LITERAL:
+        return ((Core.Literal) exp).unwrap(Boolean.class);
+      case CHAR_LITERAL:
+        return ((Core.Literal) exp).unwrap(Character.class);
+      case STRING_LITERAL:
+        return ((Core.Literal) exp).unwrap(String.class);
+      case REAL_LITERAL:
+        return ((Core.Literal) exp).unwrap(Float.class);
+      case INT_LITERAL:
+        return ((Core.Literal) exp).unwrap(Integer.class);
+      case VALUE_LITERAL:
+        return ((Core.Literal) exp).unwrap(List.class);
+      case APPLY:
+        final Core.Apply apply = (Core.Apply) exp;
+        if (apply.fn instanceof Core.Id && apply.type instanceof DataType) {
+          final String conName = ((Core.Id) apply.fn).idPat.name;
+          final DataType dataType = (DataType) apply.type;
+          if (dataType.typeConstructors.containsKey(conName)) {
+            final Applicable tyCon = Codes.tyCon(apply.type, conName);
+            final @Nullable Object arg = getObject(apply.arg);
+            if (arg != null) {
+              return tyCon.apply(EvalEnvs.empty(), arg);
+            }
+          }
+        }
+        // fall through
+      default:
+        return null;
+    }
   }
 
   private @Nullable Map<Core.Id, Core.Id> getSub(
@@ -282,197 +283,6 @@ public class Inliner extends EnvShuttle {
                 builder.put(core.id((Core.IdPat) pat), (Core.Id) arg));
         return builder.build();
       }
-    }
-    return null;
-  }
-
-  /**
-   * Returns whether {@code op} is a simple literal type (not VALUE_LITERAL).
-   */
-  private static boolean isSimpleLiteral(Op op) {
-    switch (op) {
-      case INT_LITERAL:
-      case STRING_LITERAL:
-      case BOOL_LITERAL:
-      case CHAR_LITERAL:
-      case REAL_LITERAL:
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  /**
-   * Returns whether the literal is a nullary constructor (enum value like LESS,
-   * NONE, etc.). These are represented as VALUE_LITERAL with a single-element
-   * list containing the constructor name.
-   */
-  private static boolean isNullaryConstructor(Core.Literal literal) {
-    if (literal.op != Op.VALUE_LITERAL) {
-      return false;
-    }
-    final List list = literal.unwrap(List.class);
-    return list != null && list.size() == 1 && list.get(0) instanceof String;
-  }
-
-  /**
-   * Returns whether the literal is a constructor application (like SOME "a").
-   * These are represented as VALUE_LITERAL with a two-element list containing
-   * the constructor name and the argument value.
-   */
-  private static boolean isConstructorApplication(Core.Literal literal) {
-    if (literal.op != Op.VALUE_LITERAL) {
-      return false;
-    }
-    final List list = literal.unwrap(List.class);
-    return list != null && list.size() == 2 && list.get(0) instanceof String;
-  }
-
-  /** Returns the constructor name from a nullary constructor literal. */
-  private static String getNullaryConstructorName(Core.Literal literal) {
-    return (String) literal.unwrap(List.class).get(0);
-  }
-
-  /** Returns the constructor name from a constructor application literal. */
-  private static String getConstructorName(Core.Literal literal) {
-    return (String) literal.unwrap(List.class).get(0);
-  }
-
-  /** Returns the argument value from a constructor application literal. */
-  private static Object getConstructorArg(Core.Literal literal) {
-    return literal.unwrap(List.class).get(1);
-  }
-
-  /**
-   * Returns whether a literal value matches a pattern.
-   *
-   * @return {@link Boolean#TRUE} if the pattern definitely matches, {@link
-   *     Boolean#FALSE} if the pattern definitely does not match, or null if the
-   *     match cannot be determined (e.g., pattern is IdPat or a complex pattern
-   *     type)
-   */
-  private static @Nullable Boolean literalMatchesPattern(
-      Core.Literal literal, Core.Pat pat) {
-    if (pat instanceof Core.WildcardPat) {
-      return true;
-    }
-    if (isSimpleLiteral(literal.op)) {
-      if (pat instanceof Core.LiteralPat) {
-        return literal.value.equals(((Core.LiteralPat) pat).value);
-      }
-    } else if (isNullaryConstructor(literal)) {
-      if (pat instanceof Core.Con0Pat) {
-        final String tyConName = getNullaryConstructorName(literal);
-        return ((Core.Con0Pat) pat).tyCon.equals(tyConName);
-      }
-      if (pat instanceof Core.ConPat) {
-        // Nullary constructor can't match a ConPat (which expects an argument)
-        return false;
-      }
-    } else if (isConstructorApplication(literal)) {
-      final String conName = getConstructorName(literal);
-      final Object argValue = getConstructorArg(literal);
-      if (pat instanceof Core.Con0Pat) {
-        // Constructor application can't match nullary constructor pattern
-        return false;
-      }
-      if (pat instanceof Core.ConPat) {
-        final Core.ConPat conPat = (Core.ConPat) pat;
-        if (!conPat.tyCon.equals(conName)) {
-          return false; // Different constructors
-        }
-        // Same constructor; check if argument matches sub-pattern
-        return valueMatchesPattern(argValue, conPat.pat);
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Returns whether a runtime value matches a pattern.
-   *
-   * @return {@link Boolean#TRUE} if definitely matches, {@link Boolean#FALSE}
-   *     if definitely does not match, or null if cannot be determined
-   */
-  private static @Nullable Boolean valueMatchesPattern(
-      Object value, Core.Pat pat) {
-    if (pat instanceof Core.WildcardPat) {
-      return true;
-    }
-    if (pat instanceof Core.LiteralPat) {
-      return value.equals(((Core.LiteralPat) pat).value);
-    }
-    // IdPat always matches (but we can't determine substitutions statically)
-    // so return null to indicate this needs runtime handling
-    return null;
-  }
-
-  /**
-   * Returns whether a constructor application matches a pattern.
-   *
-   * @param conName the constructor name (e.g., "SOME")
-   * @param arg the argument expression
-   * @param pat the pattern to match against
-   * @return {@link Boolean#TRUE} if definitely matches, {@link Boolean#FALSE}
-   *     if definitely does not match, or null if cannot be determined
-   */
-  private static @Nullable Boolean constructorAppMatchesPattern(
-      String conName, Core.Exp arg, Core.Pat pat) {
-    if (pat instanceof Core.WildcardPat) {
-      return true;
-    }
-    if (pat instanceof Core.Con0Pat) {
-      // Constructor application can't match nullary constructor pattern
-      return false;
-    }
-    if (pat instanceof Core.ConPat) {
-      final Core.ConPat conPat = (Core.ConPat) pat;
-      if (!conPat.tyCon.equals(conName)) {
-        return false; // Different constructors
-      }
-      // Same constructor; check if argument matches sub-pattern
-      return expMatchesPattern(arg, conPat.pat);
-    }
-    return null;
-  }
-
-  /**
-   * Returns whether an expression matches a pattern.
-   *
-   * @return {@link Boolean#TRUE} if definitely matches, {@link Boolean#FALSE}
-   *     if definitely does not match, or null if cannot be determined
-   */
-  private static @Nullable Boolean expMatchesPattern(
-      Core.Exp exp, Core.Pat pat) {
-    if (pat instanceof Core.WildcardPat) {
-      return true;
-    }
-    if (pat instanceof Core.IdPat) {
-      // IdPat always matches, but requires binding
-      return true;
-    }
-    if (exp instanceof Core.Literal && pat instanceof Core.LiteralPat) {
-      final Core.Literal literal = (Core.Literal) exp;
-      if (isSimpleLiteral(literal.op)) {
-        return literal.value.equals(((Core.LiteralPat) pat).value);
-      }
-    }
-    // Other patterns - cannot determine statically
-    return null;
-  }
-
-  /**
-   * Extracts a binding from a pattern match if needed.
-   *
-   * @param arg the argument expression being matched
-   * @param pat the sub-pattern inside the ConPat
-   * @param pos position for the binding
-   * @return a NonRecValDecl binding, or null if no binding needed
-   */
-  private static Core.@Nullable NonRecValDecl extractBinding(
-      Core.Exp arg, Core.Pat pat, Pos pos) {
-    if (pat instanceof Core.IdPat) {
-      return core.nonRecValDecl(pos, (Core.IdPat) pat, null, arg);
     }
     return null;
   }
