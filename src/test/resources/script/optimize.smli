@@ -159,9 +159,7 @@ Sys.planEx "~1";
 >   "val it_36 = let val ordering = LESS in case ordering of LESS => \"LESS\" | GREATER => \"GREATER\" | _ => \"?\" end"
 >   : string
 Sys.planEx "0";
-> val it =
->   "val it_36 = case LESS of LESS => \"LESS\" | GREATER => \"GREATER\" | _ => \"?\""
->   : string
+> val it = "val it_36 = \"LESS\"" : string
 
 (*) Option case
 let
@@ -178,9 +176,7 @@ Sys.planEx "~1";
 >   "val it_39 = let val someA = SOME \"a\" in case someA of SOME(\"0\") => \"some0\" | SOME(s_2) => \"some:\" ^ s_2 | NONE => \"none\" end"
 >   : string
 Sys.planEx "0";
-> val it =
->   "val it_39 = case SOME \"a\" of SOME(\"0\") => \"some0\" | SOME(s_2) => op ^ (\"some:\", s_2) | NONE => \"none\""
->   : string
+> val it = "val it_39 = op ^ (\"some:\", \"a\")" : string
 
 let
   val none = NONE
@@ -196,8 +192,6 @@ Sys.planEx "~1";
 >   "val it_42 = let val none = NONE in case none of SOME(\"0\") => \"some0\" | SOME(s_3) => \"some:\" ^ s_3 | NONE => \"none\" end"
 >   : string
 Sys.planEx "0";
-> val it =
->   "val it_42 = case NONE of SOME(\"0\") => \"some0\" | SOME(s_3) => op ^ (\"some:\", s_3) | NONE => \"none\""
->   : string
+> val it = "val it_42 = \"none\"" : string
 
 (*) End optimize.smli
