@@ -238,6 +238,33 @@ public class Inliner extends EnvShuttle {
     return caseOf.copy(exp, matchList);
   }
 
+  private @Nullable Map<Core.Id, Core.Exp> getSub(
+      Core.Exp exp, Core.Match match) {
+    if (match.pat.op == Op.ID_PAT && isAtomic(exp)) {
+      return ImmutableMap.of(core.id((Core.IdPat) match.pat), exp);
+    }
+    if (exp.op == Op.TUPLE && match.pat.op == Op.TUPLE_PAT) {
+      final Core.Tuple tuple = (Core.Tuple) exp;
+      final Core.TuplePat tuplePat = (Core.TuplePat) match.pat;
+      if (allMatch(tuple.args, Inliner::isAtomic)
+          && allMatch(tuplePat.args, arg -> arg.op == Op.ID_PAT)) {
+        final ImmutableMap.Builder<Core.Id, Core.Exp> builder =
+            ImmutableMap.builder();
+        forEach(
+            tuple.args,
+            tuplePat.args,
+            (arg, pat) -> builder.put(core.id((Core.IdPat) pat), arg));
+        return builder.build();
+      }
+    }
+    return null;
+  }
+
+  /** Returns whether an expression can be inlined without expansion. */
+  static boolean isAtomic(Core.Exp exp) {
+    return exp instanceof Core.Literal || exp instanceof Core.Id;
+  }
+
   /**
    * Returns the runtime value of a constant expression, or null if it is not
    * constant. Examples of constant expressions include literals {@code 1},
@@ -329,33 +356,6 @@ public class Inliner extends EnvShuttle {
                 "cannot convert value [%s] of type [%s] to expression",
                 value, type));
     }
-  }
-
-  /** Returns whether an expression can be inlined without expansion. */
-  static boolean isAtomic(Core.Exp exp) {
-    return exp instanceof Core.Literal || exp instanceof Core.Id;
-  }
-
-  private @Nullable Map<Core.Id, Core.Exp> getSub(
-      Core.Exp exp, Core.Match match) {
-    if (match.pat.op == Op.ID_PAT && isAtomic(exp)) {
-      return ImmutableMap.of(core.id((Core.IdPat) match.pat), exp);
-    }
-    if (exp.op == Op.TUPLE && match.pat.op == Op.TUPLE_PAT) {
-      final Core.Tuple tuple = (Core.Tuple) exp;
-      final Core.TuplePat tuplePat = (Core.TuplePat) match.pat;
-      if (allMatch(tuple.args, Inliner::isAtomic)
-          && allMatch(tuplePat.args, arg -> arg.op == Op.ID_PAT)) {
-        final ImmutableMap.Builder<Core.Id, Core.Exp> builder =
-            ImmutableMap.builder();
-        forEach(
-            tuple.args,
-            tuplePat.args,
-            (arg, pat) -> builder.put(core.id((Core.IdPat) pat), arg));
-        return builder.build();
-      }
-    }
-    return null;
   }
 
   @Override
