@@ -23,6 +23,8 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.allMatch;
+import static net.hydromatic.morel.util.Static.transform;
+import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -31,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Closure;
@@ -42,10 +45,13 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.NonNull;
 
 /** Shuttle that inlines constant values. */
 public class Inliner extends EnvShuttle {
@@ -199,8 +205,8 @@ public class Inliner extends EnvShuttle {
               (pat, value) -> {
                 // Pattern like "x => x + 1" where x binds to the literal.
                 // Convert to: let x = <literal> in <match.exp>
-                final Core.Literal literal1 =
-                    core.literal((PrimitiveType) pat.type, value);
+                final Core.Exp literal1 =
+                    valueToExp(typeSystem, pat.type, value);
                 exps[0] =
                     core.let(
                         core.nonRecValDecl(caseOf.pos, pat, null, literal1),
@@ -231,20 +237,67 @@ public class Inliner extends EnvShuttle {
     return caseOf.copy(exp, matchList);
   }
 
+  private static Core.Exp valueToExp(TypeSystem typeSystem, Type type, Object value) {
+    final List<Object> list;
+    switch (type.op()) {
+      case ID:
+        return core.literal((PrimitiveType) type, value);
+
+      case DATA_TYPE:
+        list = (List<Object>) value;
+        String name = (String) list.get(0);
+        final Core.IdPat idPat = core.idPat(type, name, 0);
+        Core.Id id = core.id(idPat);
+        if (list.size() == 1) {
+          return core.valueLiteral(id, list.get(0));
+        }
+        Type argType = ((DataType) type).typeConstructors(typeSystem).get(name);
+        Core.Exp arg = valueToExp(typeSystem, argType, list.get(1));
+        return core.apply(Pos.ZERO, type,
+            id,
+            arg);
+
+      case TUPLE_TYPE:
+        final TupleType tupleType = (TupleType) type;
+        list = (List<Object>) value;
+        final ImmutableList.Builder<Core.Exp> args = ImmutableList.builder();
+        Pair.forEach(tupleType.argTypes, list, (t, v) -> args.add(valueToExp(typeSystem, t, v)));
+        return core.tuple(tupleType, args.build());
+
+      default:
+        throw new AssertionError("TODO: " + type + ": " + type.op());
+    }
+  }
+
+  /** Returns the runtime value of a constant expression, or null if it is
+   * not constant. Examples of constant expressions include literals {@code 1},
+   * {@code "xyz"}, {@code true} and datatype constructors {@code NONE},
+   * {@code SOME 1}. */
   private static @Nullable Object getObject(Core.Exp exp) {
     switch (exp.op) {
       case BOOL_LITERAL:
-        return ((Core.Literal) exp).unwrap(Boolean.class);
       case CHAR_LITERAL:
-        return ((Core.Literal) exp).unwrap(Character.class);
       case STRING_LITERAL:
-        return ((Core.Literal) exp).unwrap(String.class);
+      case UNIT_LITERAL:
+        return ((Core.Literal) exp).value;
       case REAL_LITERAL:
-        return ((Core.Literal) exp).unwrap(Float.class);
+        return ((Core.Literal) exp).unwrap(Double.class);
       case INT_LITERAL:
         return ((Core.Literal) exp).unwrap(Integer.class);
       case VALUE_LITERAL:
         return ((Core.Literal) exp).unwrap(List.class);
+      case TUPLE:
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        final ImmutableList.Builder<Object> args = ImmutableList.builder();
+        for (Core.Exp arg : tuple.args) {
+          Object object = getObject(arg);
+          if (object == null) {
+            return null;
+          }
+          args.add(object);
+        }
+        return args.build();
+
       case APPLY:
         final Core.Apply apply = (Core.Apply) exp;
         if (apply.fn instanceof Core.Id && apply.type instanceof DataType) {

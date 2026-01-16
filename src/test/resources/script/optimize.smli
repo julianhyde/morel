@@ -125,7 +125,20 @@ let val c = #"a" in case c of #"a" => 1 | #"b" => 2 | _ => 3 end;
 Sys.plan ();
 > val it = "constant(1)" : string
 
-(*) Tuple case (not optimized).
+(*) Real case.
+let val r = 1.0 in case r of 0.0 => 0 | 1.0 => 1 | _ => 2 end;
+> val it = 1 : int
+Sys.planEx "0";
+> val it = "val it_33 = 1" : string
+
+(*) Unit case.
+let val u = () in case u of () => "unit" | _ => "not unit" end;
+> stdIn:1.44-1.59 Error: match redundant
+>   raised at: stdIn:1.44-1.59
+Sys.planEx "0";
+> val it = "val it_35 = \"unit\"" : string
+
+(*) Tuple case.
 let
   val t = (1, "a")
 in
@@ -137,12 +150,27 @@ end;
 > val it = "one:a" : string
 Sys.planEx "~1";
 > val it =
->   "val it_33 = let val t = (1, \"a\") in case t of (0, _) => \"zero\" | (1, s_1) => \"one:\" ^ s_1 | _ => \"other\" end"
+>   "val it_37 = let val t = (1, \"a\") in case t of (0, _) => \"zero\" | (1, s_1) => \"one:\" ^ s_1 | _ => \"other\" end"
 >   : string
 Sys.planEx "0";
+> val it = "val it_37 = op ^ (\"one:\", \"a\")" : string
+
+(*) Record case.
+let
+  val t = {a = 1, b = "a"}
+in
+  case t of
+     {a = 0, ...} => "zero"
+   | {a = 1, b = s} => "one:" ^ s
+   | _ => "other"
+end;
+> val it = "one:a" : string
+Sys.planEx "~1";
 > val it =
->   "val it_33 = case (1, \"a\") of (0, _) => \"zero\" | (1, s_1) => op ^ (\"one:\", s_1) | _ => \"other\""
+>   "val it_40 = let val t_1 = {a = 1, b = \"a\"} in case t_1 of {a = 0, b = _} => \"zero\" | {a = 1, b = s_2} => \"one:\" ^ s_2 | _ => \"other\" end"
 >   : string
+Sys.planEx "0";
+> val it = "val it_40 = op ^ (\"one:\", \"a\")" : string
 
 (*) Enum case
 let
@@ -156,12 +184,12 @@ end;
 > val it = "LESS" : string
 Sys.planEx "~1";
 > val it =
->   "val it_36 = let val ordering = LESS in case ordering of LESS => \"LESS\" | GREATER => \"GREATER\" | _ => \"?\" end"
+>   "val it_43 = let val ordering = LESS in case ordering of LESS => \"LESS\" | GREATER => \"GREATER\" | _ => \"?\" end"
 >   : string
 Sys.planEx "0";
-> val it = "val it_36 = \"LESS\"" : string
+> val it = "val it_43 = \"LESS\"" : string
 
-(*) Option case
+(*) Option case (an enum with one argument).
 let
   val someA = SOME "a"
 in
@@ -173,10 +201,10 @@ end;
 > val it = "some:a" : string
 Sys.planEx "~1";
 > val it =
->   "val it_39 = let val someA = SOME \"a\" in case someA of SOME(\"0\") => \"some0\" | SOME(s_2) => \"some:\" ^ s_2 | NONE => \"none\" end"
+>   "val it_46 = let val someA = SOME \"a\" in case someA of SOME(\"0\") => \"some0\" | SOME(s_3) => \"some:\" ^ s_3 | NONE => \"none\" end"
 >   : string
 Sys.planEx "0";
-> val it = "val it_39 = op ^ (\"some:\", \"a\")" : string
+> val it = "val it_46 = op ^ (\"some:\", \"a\")" : string
 
 let
   val none = NONE
@@ -189,9 +217,38 @@ end;
 > val it = "none" : string
 Sys.planEx "~1";
 > val it =
->   "val it_42 = let val none = NONE in case none of SOME(\"0\") => \"some0\" | SOME(s_3) => \"some:\" ^ s_3 | NONE => \"none\" end"
+>   "val it_49 = let val none = NONE in case none of SOME(\"0\") => \"some0\" | SOME(s_4) => \"some:\" ^ s_4 | NONE => \"none\" end"
 >   : string
 Sys.planEx "0";
-> val it = "val it_42 = \"none\"" : string
+> val it = "val it_49 = \"none\"" : string
+
+(*) Either case (an enum with two type parameters).
+let
+  val left = INL "a"
+in
+  case left of INL s => "left:" ^ s | INR s => "right:" ^ s
+end;
+> val it = "left:a" : string
+Sys.planEx "~1";
+> val it =
+>   "val it_52 = let val left = INL \"a\" in case left of INL(s_5) => \"left:\" ^ s_5 | INR(s_6) => \"right:\" ^ s_6 end"
+>   : string
+Sys.planEx "0";
+> val it = "val it_52 = op ^ (\"left:\", \"a\")" : string
+
+(*) Tree case (an enum with a tuple value)
+let
+  datatype tree = EMPTY | NODE of (tree, int, string)
+  val v = NODE (NODE (EMPTY, 1, "a"), 2, "b")
+in
+  case v of EMPTY => "empty" | NODE (t, i, s) => s
+end;
+> val it = "b" : string
+Sys.planEx "~1";
+> val it =
+>   "val it_55 = local datatype tree in let val v = NODE (NODE (EMPTY, 1, \"a\"), 2, \"b\") in case v of EMPTY => \"empty\" | NODE((t_2, i, s_7)) => s_7 end end"
+>   : string
+Sys.planEx "0";
+> val it = "val it_55 = local datatype tree in \"b\" end" : string
 
 (*) End optimize.smli

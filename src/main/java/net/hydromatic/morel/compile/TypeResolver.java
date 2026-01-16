@@ -1897,7 +1897,7 @@ public class TypeResolver {
     Type.Key toTypeKey(Ast.Type type) {
       switch (type.op) {
         case TUPLE_TYPE:
-          final Ast.TupleType tupleType = (Ast.TupleType) type;
+          final Ast.CompositeType tupleType = (Ast.CompositeType) type;
           return Keys.tuple(toTypeKeys(tupleType.types));
 
         case RECORD_TYPE:
