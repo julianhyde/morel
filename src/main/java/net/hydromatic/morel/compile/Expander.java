@@ -25,9 +25,12 @@ import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.forEachInIntersection;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transformEager;
+import static net.hydromatic.morel.util.Static.transformToMap;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -42,6 +45,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
@@ -172,7 +176,8 @@ public class Expander {
         (step, freePats) -> {
           // Pull forward any generators.
           for (Core.NamedPat freePat : freePats) {
-            addGeneratorScan(done, freePat, generatorMap, allPats, fromBuilder);
+            addGeneratorScan(
+                typeSystem, done, freePat, generatorMap, allPats, fromBuilder);
           }
 
           if (step instanceof Core.Scan) {
@@ -182,8 +187,16 @@ public class Expander {
                 // Skip scan variables that are not used, e.g. "y" in
                 // "exists x, y where x elem [1, 2]".
                 if (stepVarSet.usedPats.contains(p)) {
-                  addGeneratorScan(done, p, generatorMap, allPats, fromBuilder);
+                  addGeneratorScan(
+                      typeSystem, done, p, generatorMap, allPats, fromBuilder);
                 }
+              }
+              if (scan.env.atom
+                  && fromBuilder.stepEnv().bindings.size() == 1
+                  && !fromBuilder.stepEnv().atom) {
+                final Binding binding =
+                    Iterables.getOnlyElement(fromBuilder.stepEnv().bindings);
+                fromBuilder.yield_(core.id(binding.id));
               }
               return;
             }
@@ -210,6 +223,7 @@ public class Expander {
    * those variables' generators first.
    */
   private static void addGeneratorScan(
+      TypeSystem typeSystem,
       Set<Core.NamedPat> done,
       Core.NamedPat freePat,
       Map<Core.NamedPat, Generator> generatorMap,
@@ -224,12 +238,51 @@ public class Expander {
 
     // Make sure all dependencies have a scan.
     for (Core.NamedPat p : generator.freePats) {
-      addGeneratorScan(done, p, generatorMap, allPats, fromBuilder);
+      addGeneratorScan(typeSystem, done, p, generatorMap, allPats, fromBuilder);
+    }
+
+    // The patterns we need (requiredPats) are those provided by the generator,
+    // which are used in later steps (allPats),
+    // and are not provided by earlier steps (done).
+    final List<Core.NamedPat> expandedPats = generator.pat.expand();
+    final List<Core.NamedPat> requiredPats =
+        new ArrayList<>(expandedPats.size());
+    for (Core.NamedPat p : expandedPats) {
+      if (allPats.contains(p) && !done.contains(p)) {
+        requiredPats.add(p);
+      }
     }
 
     // Now all dependencies are done, add a scan for the generator.
-    fromBuilder.scan(generator.pat, generator.exp);
-    done.addAll(generator.pat.expand());
+    if (expandedPats.equals(requiredPats)) {
+      // Add "join (x, y, z) in collection".
+      fromBuilder.scan(generator.pat, generator.exp);
+    } else {
+      // Add "join (x, z) in (from (x, y, z) in collection yield {x, z})".
+      final FromBuilder fromBuilder2 = core.fromBuilder(typeSystem);
+      fromBuilder2.scan(generator.pat, generator.exp);
+      ImmutableMap<String, Core.Exp> nameExps =
+          transformToMap(requiredPats, (p, c) -> c.accept(p.name, core.id(p)));
+      fromBuilder2.yield_(core.record(typeSystem, nameExps));
+      fromBuilder2.distinct();
+
+      final Core.Pat recordPat =
+          core.recordPat(
+              typeSystem,
+              transformToMap(requiredPats, (p, c) -> c.accept(p.name, p)));
+      fromBuilder.scan(recordPat, fromBuilder2.build());
+    }
+    done.addAll(requiredPats);
+  }
+
+  /** Returns either "p" or "(p, q, r)". */
+  static Core.Pat singleOrTuplePat(
+      TypeSystem typeSystem, List<Core.NamedPat> namedPats) {
+    if (namedPats.size() == 1) {
+      return namedPats.get(0);
+    } else {
+      return core.tuplePat(typeSystem, namedPats);
+    }
   }
 
   static void expandSteps(List<Core.FromStep> steps, Expander expander) {

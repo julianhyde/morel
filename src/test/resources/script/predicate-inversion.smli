@@ -19,15 +19,13 @@ fun edge (x, y) = {x, y} elem edges;
 > val edge = fn : int * int -> bool
 
 (* Test 4: exists becomes iteration *)
-(* TODO
 let
   fun edge (x, y) = {x, y} elem edges
   fun hasEdgeFrom x = exists y where edge (x, y)
 in
   from x where hasEdgeFrom x
 end;
-> val it = [1,2] : int list
-*)
+> val it = [1,2] : int bag
 
 (* Test 5: Recursive predicate (transitive closure) *)
 (* TODO
