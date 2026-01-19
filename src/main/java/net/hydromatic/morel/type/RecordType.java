@@ -34,7 +34,7 @@ import net.hydromatic.morel.util.PairList;
 
 /** Record type. */
 public class RecordType extends BaseType implements RecordLikeType {
-  public final SortedMap<String, Type> argNameTypes;
+  public final ImmutableSortedMap<String, Type> argNameTypes;
 
   RecordType(SortedMap<String, Type> argNameTypes) {
     super(Op.RECORD_TYPE);
