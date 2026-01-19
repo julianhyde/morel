@@ -374,26 +374,22 @@ exists x
     where (x, y) elem [(1, 2), (1, 3), (4, 3)]);
 > val it = true : bool
 
-(*TODO
-from x
-  where exists y
-    where (x, y) elem [(1, 2), (1, 3), (4, 3)];
-> val it = [1, 4] : int list
-
 (*) The same query with parentheses.
 exists x
   where (exists y
     where (x, y) elem [(1, 2), (1, 3), (4, 3)]);
 > val it = true : bool
-*)
 
-(* TODO
+from x
+  where exists y
+    where (x, y) elem [(1, 2), (1, 3), (4, 3)];
+> val it = [1,4] : int bag
+
 (*) Be sure to eliminate duplicates. (_, 2, 3) occurs twice in the list.
 from y
   where exists x
     where (x, y, 3) elem [(1, 2, 3), (2, 3, 4), (5, 4, 3), (4, 2, 3)];
-> val it = [2, 4] : int list
-*)
+> val it = [2,4] : int bag
 
 (*) 'on' in 'from'
 from i in [1, 2, 3],
