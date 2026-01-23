@@ -172,9 +172,12 @@ public class PredicateInverter {
 
         // Check if we're already trying to invert this function (recursion)
         if (active.contains(fnId)) {
-          // Can't invert recursive calls directly - would need special handling
-          // like Relational.iterate for transitive closure
-          throw new AssertionError("TODO");
+          // Can't invert recursive calls directly yet
+          // TODO: Implement Relational.iterate for transitive closure (Issue
+          // #217)
+          // For now, return generatorFor(goalPats) to fall back to cartesian
+          // product
+          return result(generatorFor(goalPats), ImmutableList.of());
         }
 
         Binding binding = env.getOpt(fnPat);
