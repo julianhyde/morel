@@ -1,279 +1,345 @@
-# Morel Phase 5: Predicate Inversion - Audit Complete
+# Morel Phase 5: Path C Full Refinement - Execution Plan
 
-**Last Updated**: 2026-01-24 15:43 UTC
-**Current Phase**: Phase 5 - Plan Audit Complete, Execution Decision Pending
-**Status**: Ready for Phase 5a-prime quick test
+**Last Updated**: 2026-01-24 16:00 UTC
+**Current Phase**: Phase 5 - Path C Full Refinement Selected
+**Status**: Ready for Phase 5a-prime quick test (CRITICAL GATE)
 
 ---
 
 ## Current Situation
 
 **COMPLETED**:
-- ✅ Phase 3-4: Comprehensive research on Mode Analysis and Core.Apply approaches
-- ✅ Substantive-critic: Independent review of research documents (7 critical issues identified)
-- ✅ Phase 5 Decision: Core.Apply Generation recommended (4.3/5 viability)
-- ✅ Phase 5 Planning: Four beads created with detailed specifications (morel-wvh, morel-c2z, morel-9af, morel-aga)
-- ✅ Plan Audit: Comprehensive audit completed identifying 14 critical issues
+- Phase 3-4: Comprehensive research on Mode Analysis and Core.Apply approaches
+- Substantive-critic: Independent review identifying 7 critical issues
+- Phase 5 Decision: Core.Apply Generation recommended (4.3/5 viability)
+- Plan Audit: Comprehensive audit identifying 14 critical issues
+- Path C Selection: Full plan refinement chosen to achieve 85%+ confidence
+- Bead Creation: 11 new beads for refinement work
 
-**PENDING**:
-- ⏳ Phase 5a-prime: 30-minute quick empirical test (CRITICAL GATE)
-- ⏳ Decision: Path A (immediate) / Path B (adjust plan) / Path C (full refinement)
-- ⏳ Phase 5 Execution: Based on Phase 5a-prime results
-
----
-
-## Critical: Phase 5a-prime Quick Test
-
-**What**: 30-minute empirical validation of the core assumption
-**Why**: Answers the single most important question: "Can PredicateInverter access runtime-bound variables during compilation?"
-**When**: DO THIS NEXT, before any other Phase 5 work
-**Outcome**: GO / INVESTIGATE / NO-GO decision
-
-### Steps
-1. Add debug logging to PredicateInverter:
-   ```java
-   System.err.println("Environment bindings: " + env);
-   // Check if 'edges' binding is visible
-   ```
-
-2. Run test case:
-   ```bash
-   ./mvnw test -Dtest=ScriptTest -Dtest.scm=such-that.smli
-   ```
-
-3. Observe output:
-   - ✅ `'edges' binding present: true` → GO
-   - ⚠️ Binding missing but fixable → INVESTIGATE
-   - ❌ Fundamental failure → NO-GO
-
-### Why This Matters
-- Current plan: 2-4 hours reading code to answer this
-- Phase 5a-prime: 30 minutes empirical test
-- **If assumption is wrong**: Saves 2-4 hours
-- **If assumption is right**: Proceed with confidence
+**IN PROGRESS**:
+- Phase 5a-prime: 30-minute quick empirical test (CRITICAL GATE)
+- Full Refinement: 8 analysis documents to create
+- Second Audit: Validate refined plan
 
 ---
 
-## Decision Framework: Three Paths
+## Path C: Full Plan Refinement
 
-### Path A: Proceed Immediately (NOT RECOMMENDED)
-Skip Phase 5a-prime, start formal Phase 5a validation immediately
-- **Confidence**: 60%
-- **Timeline**: 3-4 days (optimistic)
-- **Risk**: HIGH
-- **Recommendation**: NOT RECOMMENDED
+### Why Path C?
 
-### Path B: Phase 5a-prime + Key Modifications ✅ **RECOMMENDED**
-Execute Phase 5a-prime (30 min), then implement audit recommendations
-- **Confidence**: 75% (with Phase 5a-prime success)
-- **Timeline**: 7-11 days validation (realistic with contingency)
-- **Risk**: MEDIUM
-- **Effort**: 2 hours planning overhead
-- **Recommendation**: ✅ BEST BALANCE
+The audit identified 14 critical issues that need addressing:
+1. Documentation-focused validation (not empirical)
+2. Vague GO/NO-GO criteria
+3. Missing contingency plan
+4. Phase 5d scope unclear
+5. Missing failure mode analysis
+6. Single test case insufficient
+7. Missing specification connection
+8. Phase ordering has dependencies
+9. Timeline lacks contingency
+10. Fallback plan inadequate
+11. Missing type system validation
+12. Missing step function validation
+13. Missing integration point analysis
+14. Quality gates insufficient
 
-### Path C: Full Plan Refinement
-Implement all 14 audit recommendations before Phase 5 execution
-- **Confidence**: 85%
-- **Timeline**: 8-14 days (significant planning)
-- **Risk**: LOW
-- **Effort**: 12 hours planning
-- **Recommendation**: For maximum confidence, but slower
-
-**⚡ RECOMMENDED**: Start with Path B - Execute Phase 5a-prime immediately, then decide
+**Target**: Achieve 85%+ confidence (up from current 60%)
 
 ---
 
-## Audit Findings Summary
+## Execution Timeline
 
-### Plan Verdict: CONDITIONAL GO
-**Strategic**: ✅ SOUND (Core.Apply over Mode Analysis correct)
-**Tactical**: ❌ INSUFFICIENT (documentation-heavy, vague criteria, missing contingencies)
+### Day 1: Critical Gate + Initial Refinement
 
-### Critical Issues Found (14 total)
-- Phase 5a is documentation-focused, not empirical
-- GO/NO-GO criteria vague and unmeasurable
-- Fallback plan inadequate (explicit syntax never researched)
-- Phase 5d scope unclear (code may already exist)
-- Timeline lacks contingency buffer
-- Missing failure mode analysis
-- Type system validation missing
-- Single test case insufficient
-- Phase ordering has dependencies
+**Phase 5a-prime (30-60 min)** - CRITICAL GATE
+- Bead: `morel-6a8`
+- Add debug logging to PredicateInverter
+- Run such-that.smli test
+- Decision: GO / INVESTIGATE / NO-GO
 
-### Key Recommendations
-1. Execute Phase 5a-prime quick test FIRST (30 minutes)
-2. Reorder phases: 5b → 5a → 5d → 5c (dependencies require this)
-3. Expand Phase 5a scope (add type system, step function, integration validation)
-4. Use realistic timeline: 7-11 days (not 3-4)
-5. Research explicit syntax as fallback (in parallel)
+**If GO or INVESTIGATE, continue with:**
 
-### Confidence Assessment
-| Aspect | Current | With Mods | After 5a-prime |
-|--------|---------|-----------|----------------|
-| Approach | 60% | 70% | 85% |
-| Timeline | 40% (optimistic) | 70% (realistic) | 85% (validated) |
-| Quality | 60% | 75% | 90% |
+**B1: Scope Analysis (30 min)** - `morel-px9`
+- Read PredicateInverter.java:464-555
+- Document existing code vs requirements
+- Deliverable: PHASE-5D-SCOPE-ANALYSIS.md
+
+**B3: GO/NO-GO Criteria (1h)** - `morel-fds`
+- Define measurable thresholds
+- Create decision tree
+- Deliverable: PHASE-5A-SUCCESS-CRITERIA.md
+
+### Day 1-2: Full Refinement
+
+**B2: Failure Mode Analysis (2-3h)** - `morel-m4a`
+- Identify 10-15 failure modes
+- Create risk register
+- Deliverable: FAILURE-MODE-ANALYSIS.md
+
+**B4: Phase Ordering Review (1.5h)** - `morel-a02`
+- Evaluate audit recommendation
+- Update bead dependencies
+- Deliverable: PHASE-ORDERING-JUSTIFICATION.md
+
+**B5: Contingency Budget (1h)** - `morel-a25`
+- Define SMALL/MEDIUM/LARGE fix budgets
+- Deliverable: CONTINGENCY-BUDGET.md
+
+**B7: Integration Analysis (1-2h)** - `morel-vhd`
+- Find Extents.java integration point
+- Verify environment availability
+- Deliverable: INTEGRATION-POINT-ANALYSIS.md
+
+**B8: Type System Analysis (1-2h)** - `morel-3f8`
+- Analyze Core.Apply type handling
+- Deliverable: TYPE-SYSTEM-ANALYSIS.md
+
+### Parallel Track (Days 1-2)
+
+**B6: Explicit Syntax Research (1-2d)** - `morel-l2u`
+- Design WITH RECURSIVE syntax
+- Estimate implementation complexity
+- Deliverable: EXPLICIT-SYNTAX-DESIGN.md
+
+### Day 2-3: Second Audit
+
+**Second Audit (2-4h)** - `morel-zpi`
+- Compile all refinement documents
+- Spawn plan-auditor agent
+- Validate 85%+ confidence achieved
+- Deliverable: PHASE-5-DECISION-AUDIT-2.md
 
 ---
 
-## Key Documents Created
+## Bead Summary
 
-### Audit Results
-- **PHASE-5-DECISION-AUDIT.md** (.pm/ directory)
-  - Comprehensive audit report with 14 issues documented
-  - Detailed recommendations for each issue
-  - Risk register and mitigation strategies
-  - Timeline estimates (realistic: 7-11 days vs claimed 3-4)
+### Critical Path Beads (P0)
 
-### Decision & Planning
-- **PHASE-5-DECISION.md** - Final decision: Core.Apply recommended
-- **PHASE-5A-BEAD-SPECIFICATIONS.md** - Complete bead specifications (4 beads)
-- **PHASE-5-PLAN-AUDIT-SUMMARY.md** - Preliminary audit findings
+| Bead | Task | Status | Blocks |
+|------|------|--------|--------|
+| morel-6a8 | Phase 5a-prime Quick Test | READY | All refinement |
+| morel-a4y | Full Refinement Epic | BLOCKED by 6a8 | Second audit |
+| morel-zpi | Second Audit Request | BLOCKED by a4y | Phase 5 execution |
 
-### Research Synthesis
-- **linkcode-pattern-design.md** - Phase 4 research synthesis
-- **mode-analysis-design.md** - Phase 3 research synthesis
+### Refinement Task Beads (P1)
 
-### Beads Status
-- **morel-wvh** (5a): Environment Scoping Validation - READY
-- **morel-c2z** (5b): Pattern Coverage Specification - READY
-- **morel-9af** (5c): Comprehensive Test Plan - READY
-- **morel-aga** (5d): Prototype Validation & POC - READY
+| Bead | Task | Duration | Depends On |
+|------|------|----------|------------|
+| morel-px9 | Scope Analysis (B1) | 30 min | 6a8 |
+| morel-fds | GO/NO-GO Criteria (B3) | 1h | - |
+| morel-m4a | Failure Mode Analysis (B2) | 2-3h | px9 |
+| morel-a02 | Phase Ordering (B4) | 1.5h | fds |
+| morel-a25 | Contingency Budget (B5) | 1h | m4a |
+| morel-l2u | Explicit Syntax (B6) | 1-2d | - (parallel) |
+| morel-vhd | Integration Analysis (B7) | 1-2h | px9 |
+| morel-3f8 | Type System Analysis (B8) | 1-2h | vhd |
+
+### Existing Phase 5 Beads (Updated)
+
+| Bead | Task | Status | Now Depends On |
+|------|------|--------|----------------|
+| morel-wvh | Phase 5a Validation | BLOCKED by 6a8 | 5a-prime result |
+| morel-c2z | Phase 5b Pattern Spec | BLOCKED by wvh | Phase ordering TBD |
+| morel-9af | Phase 5c Test Plan | BLOCKED by wvh | Phase ordering TBD |
+| morel-aga | Phase 5d Prototype | BLOCKED by c2z, 9af | Scope analysis |
 
 ---
 
-## Next Immediate Actions
+## Immediate Action: Phase 5a-prime
 
-### IMMEDIATE (Next 30 minutes)
-```bash
-# 1. Add debug logging to PredicateInverter
-# 2. Run test:
-./mvnw test -Dtest=ScriptTest -Dtest.scm=such-that.smli
+### Execute Now (30 minutes)
 
-# 3. Check stderr for: "edges" binding present: true/false
+**Step 1**: Add debug logging to PredicateInverter.java
+
+```java
+// In constructor (~line 91):
+PredicateInverter(TypeSystem typeSystem, Environment env) {
+  this.typeSystem = requireNonNull(typeSystem);
+  this.env = requireNonNull(env);
+
+  // DEBUG: Log environment bindings
+  System.err.println("=== PredicateInverter Environment ===");
+  env.forEachBinding((name, binding) -> {
+    System.err.println("  " + name + ": " + binding.value.type);
+  });
+  System.err.println("=====================================");
+}
 ```
 
-### THEN (Based on Phase 5a-prime Results)
-
-**If GO** (environment scoping works):
-1. Review audit report (.pm/PHASE-5-DECISION-AUDIT.md)
-2. Choose Path B or C
-3. Update Phase 5 plan with recommendations
-4. Execute Phase 5b (pattern specification)
-
-**If INVESTIGATE** (fixable issues):
-1. Debug identified problems
-2. Estimate fix time
-3. If < 2 hours: Fix and proceed
-4. If > 2 hours: Consider Path C (full refinement)
-
-**If NO-GO** (fundamental failure):
-1. STOP Phase 5 execution
-2. Research explicit syntax as fallback (1-2 days)
-3. Decide: Pivot or continue with modifications
-
----
-
-## Beads Ready to Work
-
-All four Phase 5 beads are fully specified and ready:
+**Step 2**: Run test
 
 ```bash
-bd ready  # Show available work
+./mvnw test -Dtest=ScriptTest -Dmorel.script=such-that.smli 2>&1 | tee /tmp/5a-prime.txt
+```
 
-# Phase 5a-prime (prerequisite for all others)
-bd show morel-wvh
+**Step 3**: Analyze output
 
-# After 5a-prime succeeds:
-bd claim morel-c2z  # Pattern specification
-bd claim morel-9af  # Test plan
-bd claim morel-aga  # Prototype
+Look for:
+```
+=== PredicateInverter Environment ===
+  edges: (int * int) list    <-- THIS IS THE KEY
+  edge: int * int -> bool
+  path: int * int -> bool
+=====================================
+```
+
+### Decision Tree
+
+```
+                    Phase 5a-prime Result
+                           |
+          +----------------+----------------+
+          |                |                |
+         GO            INVESTIGATE        NO-GO
+          |                |                |
+    edges present    edges missing     Not called
+          |          but fixable           |
+          v                |                v
+    Proceed to          Add 1-2d       STOP Core.Apply
+    B1-B8             investigation       |
+          |                |                v
+          v                v          Pivot to
+    Second Audit    Fix then continue   Explicit Syntax
+                                       (B6 critical path)
 ```
 
 ---
 
-## Key Learnings from Audit
+## Decision Points
 
-1. **Empirical validation matters**: 30-min quick test > 2-4 hours documentation
-2. **Confidence needs evidence**: Claims of 85% were not justified
-3. **Timeline realism**: Add 30% contingency for software complexity
-4. **Fallbacks need research**: "Explicit syntax" is not a fallback unless studied
-5. **Risk management**: Identify failure modes before execution
+### After Phase 5a-prime
 
----
+**GO**: Proceed with full refinement (B1-B8), then second audit
+**INVESTIGATE**: Debug environment issue, then continue
+**NO-GO**: Pivot to explicit syntax research (B6 becomes critical path)
 
-## Success Metrics for Phase 5
+### After Second Audit
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Validation approach | Documentation | Empirical-first |
-| GO/NO-GO clarity | Vague | Specific & measurable |
-| Timeline buffer | 0% | 30% contingency |
-| Confidence level | 60% (unjustified) | 75%+ (evidence-based) |
-| Risk management | Minimal | Comprehensive |
+**PASS (85%+ confidence)**: Proceed with Phase 5 execution
+**CONDITIONAL PASS (75-84%)**: Address remaining issues, then proceed
+**FAIL (<75%)**: Re-evaluate approach, consider Mode Analysis or explicit syntax
 
 ---
 
-## Recommended Reading Order
+## Deliverables Checklist
 
-1. **PHASE-5-NEXT-ACTIONS.md** (Memory Bank) - Quick decision guide
-2. **PHASE-5-DECISION-AUDIT.md** - Full audit report
-3. **PHASE-5-DECISION.md** - Original decision document
-4. **PHASE-5A-BEAD-SPECIFICATIONS.md** - Bead details
+### Phase 5a-prime
+- [ ] Debug logging added to PredicateInverter
+- [ ] Test executed
+- [ ] Result documented in PHASE-5A-PRIME-RESULT.md
+- [ ] GO/INVESTIGATE/NO-GO decision made
+
+### Refinement Documents (B1-B8)
+- [ ] PHASE-5D-SCOPE-ANALYSIS.md
+- [ ] FAILURE-MODE-ANALYSIS.md
+- [ ] PHASE-5A-SUCCESS-CRITERIA.md
+- [ ] PHASE-ORDERING-JUSTIFICATION.md
+- [ ] CONTINGENCY-BUDGET.md
+- [ ] EXPLICIT-SYNTAX-DESIGN.md
+- [ ] INTEGRATION-POINT-ANALYSIS.md
+- [ ] TYPE-SYSTEM-ANALYSIS.md
+
+### Second Audit
+- [ ] All 8 documents complete
+- [ ] PHASE-5-DECISION-AUDIT-2.md
+- [ ] Confidence >= 85%
+- [ ] Go/no-go recommendation clear
 
 ---
 
-## Timeline Estimate (Path B - Recommended)
+## Success Criteria for Path C
 
-- **Phase 5a-prime**: 30 min (quick test)
-- **Plan refinement**: 1-2 hours (if GO)
-- **Phase 5b**: 6-10 hours (pattern spec)
-- **Phase 5a**: 11-15 hours (multi-component validation)
-- **Phase 5d**: 4-6 days (debug & integrate)
-- **Phase 5c**: 1.5-2.5 days (comprehensive testing)
-- **Total Validation**: 7-11 days (with contingency)
+**Plan Quality**:
+- All 14 audit issues have documented resolution
+- Failure modes identified with mitigations (10+ modes)
+- GO/NO-GO criteria are measurable
+- Phase ordering justified
+- Contingency budget defined
+- Fallback researched (not just mentioned)
+- Quality gates comprehensive
+- Timeline realistic (30% buffer)
 
-**Full Implementation**: 4-6 weeks total (Phase 5 + full build)
+**Second Audit Verdict**:
+- Overall confidence: >= 85%
+- Strategic direction: SOUND
+- Tactical execution: WELL-PLANNED
+- Risk management: COMPREHENSIVE
+- Go/no-go recommendation: CLEAR
 
 ---
 
-## Confidence After This Phase
+## Timeline Summary
 
-**If Phase 5a-prime succeeds**: 75% confidence in approach
-**After Phase 5a completion**: 85% confidence in approach
-**After Phase 5d completion**: 95% confidence in approach
+| Phase | Duration | Target |
+|-------|----------|--------|
+| Phase 5a-prime | 30-60 min | Day 1 AM |
+| B1-B5, B7-B8 | 8-10 hours | Day 1-2 |
+| B6 (parallel) | 1-2 days | Day 1-2 |
+| Second Audit | 2-4 hours | Day 2-3 |
+| **Total Refinement** | **2-3 days** | |
+| Phase 5 Execution | 7-11 days | Week 2-3 |
+| **Total to Validation** | **9-15 days** | |
 
 ---
 
 ## For Session Continuity
 
 **If resuming this session**:
-1. Run Phase 5a-prime quick test (you are here!)
-2. Review audit report based on results
-3. Choose Path A/B/C
-4. Proceed with Phase 5 execution
+1. Check: Did Phase 5a-prime run? (`bd show morel-6a8`)
+2. If not: Execute Phase 5a-prime NOW
+3. If yes: Check result and continue with B1-B8
 
-**If resuming later**:
+**If starting fresh**:
 1. Read this CONTINUATION.md
-2. Check `.pm/execution_state.json` for current status
-3. Review audit findings in PHASE-5-DECISION-AUDIT.md
-4. Determine: Did Phase 5a-prime run? What were results?
-5. Continue from there
+2. Read PHASE-5-REFINEMENT-PLAN.md for detailed execution plan
+3. Execute `bd ready` to see available work
+4. Start with morel-6a8 (Phase 5a-prime)
 
 ---
 
-## Critical Success Factor
+## Quick Commands
 
-✅ **EXECUTE PHASE 5A-PRIME IMMEDIATELY**
+```bash
+# Check current state
+bd ready
+
+# Start Phase 5a-prime
+bd update morel-6a8 --status=in_progress
+
+# After 5a-prime completes
+bd close morel-6a8 --reason="GO: edges binding verified"
+
+# Start refinement
+bd update morel-px9 --status=in_progress
+```
+
+---
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| .pm/PHASE-5-REFINEMENT-PLAN.md | Detailed execution plan |
+| .pm/PHASE-5-DECISION-AUDIT.md | First audit results (14 issues) |
+| .pm/PHASE-5-DECISION.md | Original decision document |
+| .pm/PHASE-5A-BEAD-SPECIFICATIONS.md | Phase 5 bead details |
+
+---
+
+## EXECUTE NOW
+
+**morel-6a8: Phase 5a-prime Quick Empirical Test**
 
 This 30-minute test is the gate for everything else. It provides empirical evidence that makes the entire Phase 5 validation plan credible.
 
-**Do not skip this. Do not defer this. Run it now.**
+```bash
+bd update morel-6a8 --status=in_progress
+# Add debug logging, run test, record result
+bd close morel-6a8 --reason="[GO/INVESTIGATE/NO-GO]: [evidence]"
+```
 
 ---
 
-**Status**: Phase 5 Audit COMPLETE ✅ | Ready for Phase 5a-prime | Decision pending
-
-**Next Milestone**: Phase 5a-prime results
-**Expected**: 30 minutes to 1 hour from now
-**Then**: Path A/B/C decision + Phase 5 execution
+**Status**: Path C Selected | Phase 5a-prime READY | Refinement beads created
+**Next Milestone**: Phase 5a-prime result (30 min)
+**Then**: Full refinement (B1-B8) + Second audit
