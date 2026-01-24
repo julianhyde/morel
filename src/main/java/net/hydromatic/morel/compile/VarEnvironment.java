@@ -203,3 +203,5 @@ public class VarEnvironment {
             .collect(java.util.stream.Collectors.toList()));
   }
 }
+
+// End VarEnvironment.java
