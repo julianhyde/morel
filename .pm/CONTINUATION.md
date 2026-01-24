@@ -1,8 +1,51 @@
 # Morel Predicate Inversion: Continuation Context
 
 **Last Updated**: 2026-01-24
-**Current Phase**: Phase 2 Complete → Phase 3 Ready (Awaiting Synthesis Docs)
-**Status**: Strategic plan complete, PM infrastructure ready, synthesis documents in progress
+**Current Phase**: Phase 2-5 Planning Complete → Phase 2 Ready for Execution
+**Status**: Evidence-based implementation plan created for Option 2/3 decision
+
+---
+
+## Current State: Phase 2-5 Implementation Plan
+
+**Key Document**: `.pm/PHASE-2-5-IMPLEMENTATION-PLAN.md`
+
+### Why This Plan Exists
+
+Phase 1 (Option 1 cardinality check) revealed an **architectural blocker**:
+- Deferred grounding in Expander is tightly coupled to Relational.iterate
+- Simple fallbacks using infinite extents fail at runtime
+- This is a compile-time/runtime boundary problem (same as SQL WITH RECURSIVE)
+
+### The 5-Phase Evidence-Based Approach
+
+| Phase | Duration | Status | Description |
+|-------|----------|--------|-------------|
+| 1 | 2-4 hours | BLOCKED | Option 1 implementation (revealed blocker) |
+| 2 | 1 day | READY | Define performance criteria |
+| 3 | 2-3 days | PENDING | Research Mode Analysis |
+| 4 | 2-3 days | PENDING | Research LinkCode Pattern (PARALLEL with 3) |
+| 5 | 1 day | PENDING | Informed decision with matrix |
+
+### Next Immediate Action
+
+**Execute Phase 2**: Define quantitative performance criteria
+- Establish input size thresholds (small/medium/large)
+- Define latency acceptance criteria
+- Create benchmark test harness
+- Document decision trigger
+
+### Two Options Being Evaluated
+
+**Option 2: Mode Analysis**
+- Track which arguments are inputs vs outputs
+- Generate mode-aware code
+- Similar to Mercury/Prolog mode declarations
+
+**Option 3: LinkCode Pattern**
+- Extend Morel's existing LinkCode mechanism
+- Defer base case evaluation to runtime
+- Similar to SQL WITH RECURSIVE
 
 ---
 
