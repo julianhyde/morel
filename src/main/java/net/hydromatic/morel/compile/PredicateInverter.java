@@ -123,30 +123,6 @@ public class PredicateInverter {
   private Result invert(
       Core.Exp predicate, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
 
-    // DEBUG: Phase 5a-prime - Check environment bindings
-    // This validates whether PredicateInverter can access runtime-bound
-    // variables like 'edges' during recursive predicate inversion
-    if (active.isEmpty() && predicate.op == Op.APPLY) {
-      System.err.println(
-          "=== PHASE-5A-PRIME: PredicateInverter Environment Debug ===");
-      System.err.println("Environment type: " + env.getClass().getSimpleName());
-      // Test if we can access function bindings through the environment
-      Core.Apply apply = (Core.Apply) predicate;
-      if (apply.fn.op == Op.ID) {
-        Core.Id fnId = (Core.Id) apply.fn;
-        Core.NamedPat fnPat = fnId.idPat;
-        Binding binding = env.getOpt(fnPat);
-        System.err.println("Checking function binding: " + fnPat.name);
-        System.err.println("Binding accessible: " + (binding != null));
-        if (binding != null) {
-          System.err.println("  → GO: environment scoping works!");
-        } else {
-          System.err.println("  → NO-GO: binding not found in environment");
-        }
-      }
-      System.err.println("=== End Debug ===\n");
-    }
-
     // Handle function application
     if (predicate.op == Op.APPLY) {
       Core.Apply apply = (Core.Apply) predicate;
@@ -185,7 +161,12 @@ public class PredicateInverter {
       }
 
       // Check for orelse (disjunction)
-      // Only handle transitive closure pattern in recursive context
+      // Only handle transitive closure pattern in recursive contexts.
+      // Non-TC orelse patterns fall through to default handler (returns
+      // INFINITE extent).
+      // This design choice optimizes for the common case (TC patterns) while
+      // allowing future enhancement to support general disjunction union (Phase
+      // 6a).
       if (apply.isCallTo(BuiltIn.Z_ORELSE) && !active.isEmpty()) {
         Result tcResult =
             tryInvertTransitiveClosure(apply, null, null, goalPats, active);
