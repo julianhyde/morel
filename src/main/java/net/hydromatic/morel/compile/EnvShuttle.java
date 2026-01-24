@@ -73,8 +73,12 @@ abstract class EnvShuttle extends Shuttle {
 
   @Override
   protected Core.Exp visit(Core.Let let) {
+    System.err.println("DEBUG EnvShuttle.visit(Let): decl = " + let.decl.op);
     final List<Binding> bindings = new ArrayList<>();
     Compiles.bindPattern(typeSystem, bindings, let.decl);
+    System.err.println(
+        "DEBUG EnvShuttle.visit(Let): bindings after bindPattern = "
+            + bindings);
     return let.copy(let.decl.accept(this), let.exp.accept(bind(bindings)));
   }
 
@@ -89,6 +93,7 @@ abstract class EnvShuttle extends Shuttle {
   protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
     final List<Binding> bindings = new ArrayList<>();
     recValDecl.list.forEach(decl -> Compiles.acceptBinding(decl.pat, bindings));
+    //    Compiles.bindPattern(typeSystem, bindings, recValDecl);
     return recValDecl.copy(bind(bindings).visitList(recValDecl.list));
   }
 

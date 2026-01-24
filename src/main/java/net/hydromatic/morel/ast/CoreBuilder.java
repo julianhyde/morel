@@ -781,7 +781,7 @@ public enum CoreBuilder {
   }
 
   /** Converts a collection to ordered (list) or unordered (bag). */
-  public static Core.Exp withOrdered(
+  public Core.Exp withOrdered(
       boolean ordered, Core.Exp collection, TypeSystem typeSystem) {
     if (ordered == (collection.type instanceof ListType)) {
       return collection;

@@ -69,7 +69,7 @@ public class Expander {
   public static Core.From expandFrom(
       TypeSystem typeSystem, Environment env, Core.From from) {
     final Core.From outerFrom = from;
-    final Generators.Cache cache = new Generators.Cache(typeSystem);
+    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     final Expander expander = new Expander(cache, ImmutableList.of());
 
     // First, deduce generators.
