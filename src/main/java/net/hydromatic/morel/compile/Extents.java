@@ -152,7 +152,7 @@ public class Extents {
     final ExtentMap map = new ExtentMap();
     for (Core.FromStep step : followingSteps) {
       if (step instanceof Core.Where) {
-        extent.g3(map.map, ((Core.Where) step).exp);
+        extent.g3b(map.map, ((Core.Where) step).exp);
       }
     }
     extent.definitions.forEach(

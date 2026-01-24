@@ -123,6 +123,30 @@ public class PredicateInverter {
   private Result invert(
       Core.Exp predicate, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
 
+    // DEBUG: Phase 5a-prime - Check environment bindings
+    // This validates whether PredicateInverter can access runtime-bound
+    // variables like 'edges' during recursive predicate inversion
+    if (active.isEmpty() && predicate.op == Op.APPLY) {
+      System.err.println(
+          "=== PHASE-5A-PRIME: PredicateInverter Environment Debug ===");
+      System.err.println("Environment type: " + env.getClass().getSimpleName());
+      // Test if we can access function bindings through the environment
+      Core.Apply apply = (Core.Apply) predicate;
+      if (apply.fn.op == Op.ID) {
+        Core.Id fnId = (Core.Id) apply.fn;
+        Core.NamedPat fnPat = fnId.idPat;
+        Binding binding = env.getOpt(fnPat);
+        System.err.println("Checking function binding: " + fnPat.name);
+        System.err.println("Binding accessible: " + (binding != null));
+        if (binding != null) {
+          System.err.println("  → GO: environment scoping works!");
+        } else {
+          System.err.println("  → NO-GO: binding not found in environment");
+        }
+      }
+      System.err.println("=== End Debug ===\n");
+    }
+
     // Handle function application
     if (predicate.op == Op.APPLY) {
       Core.Apply apply = (Core.Apply) predicate;
@@ -158,6 +182,18 @@ public class PredicateInverter {
       if (apply.isCallTo(BuiltIn.Z_ANDALSO)) {
         final List<Core.Exp> predicates = core.decomposeAnd(apply);
         return invertAnds(predicates, goalPats, active);
+      }
+
+      // Check for orelse (disjunction)
+      // Only handle transitive closure pattern in recursive context
+      if (apply.isCallTo(BuiltIn.Z_ORELSE) && !active.isEmpty()) {
+        Result tcResult =
+            tryInvertTransitiveClosure(apply, null, null, goalPats, active);
+        if (tcResult != null) {
+          return tcResult;
+        }
+        // If transitive closure pattern doesn't match, fall through to default
+        // handling
       }
 
       // Check for user-defined function literals (already compiled)
