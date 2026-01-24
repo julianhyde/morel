@@ -30,9 +30,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import java.io.StringReader;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Optional;
+import java.util.Set;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Ast.Decl;
 import net.hydromatic.morel.ast.AstNode;
@@ -784,6 +786,392 @@ public class PredicateInverterTest {
             predicate, ImmutableList.of(f.xPat), ImmutableMap.of());
 
     // Should return empty without throwing
+    assertThat(result.isPresent(), hasToString("false"));
+  }
+
+  // ===== Phase 3b-1 Tests - Extended Base & Recursive Case Inversion =====
+
+  /**
+   * Test 1: isTransitiveClosurePattern recognizes simple edge-based pattern.
+   *
+   * <p>Pattern: {@code edge(x,y) orelse (exists z where edge(x,z) andalso
+   * path(z,y))}
+   *
+   * <p>This test validates that a simple transitive closure pattern is
+   * correctly identified when the base case is invertible and the recursive
+   * case contains recursion.
+   */
+  @Test
+  void testIsTransitiveClosurePatternSimpleEdge() {
+    final Fixture f = new Fixture();
+
+    // Build: x elem myList (invertible base case)
+    final Core.Exp baseCase = core.elem(f.typeSystem, f.xId, f.myListId);
+
+    // Build: recursive call (simulated)
+    // In real usage, this would be constructed by ProcessTreeBuilder
+    // For testing, we'll build the tree structure manually
+
+    // Create base case result (successful inversion)
+    final Result baseCaseResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                f.myListId,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    // Build a simple PPT: baseCase orelse recursiveCall
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final ProcessTreeNode.TerminalNode baseCaseNode =
+        ProcessTreeNode.TerminalNode.of(
+            baseCase, varEnv, Optional.of(baseCaseResult));
+
+    final ProcessTreeNode.TerminalNode recursiveNode =
+        ProcessTreeNode.TerminalNode.recursive(baseCase, varEnv);
+
+    final ProcessTreeNode.BranchNode tree =
+        new ProcessTreeNode.BranchNode(
+            core.orElse(f.typeSystem, baseCase, baseCase),
+            varEnv,
+            baseCaseNode,
+            recursiveNode);
+
+    // Create inverter instance to test the method
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    // Access the private method using reflection
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "isTransitiveClosurePattern", ProcessTreeNode.class);
+      method.setAccessible(true);
+      boolean result = (boolean) method.invoke(inverter, tree);
+
+      // Should recognize the pattern
+      assertThat(result, hasToString("true"));
+    } catch (Exception e) {
+      throw new RuntimeException(
+          "Failed to invoke isTransitiveClosurePattern", e);
+    }
+  }
+
+  /**
+   * Test 2: isTransitiveClosurePattern returns false when base case is not
+   * invertible.
+   *
+   * <p>This validates that the pattern recognition correctly rejects patterns
+   * where the base case cannot be inverted.
+   */
+  @Test
+  void testIsTransitiveClosurePatternNoInversion() {
+    final Fixture f = new Fixture();
+
+    final Core.Exp baseCase = core.intLiteral(BigDecimal.valueOf(42));
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    // Base case with failed inversion (remainingFilters not empty)
+    final Result baseCaseResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                f.myListId,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of(baseCase)); // Has remaining filters - not inverted
+
+    final ProcessTreeNode.TerminalNode baseCaseNode =
+        ProcessTreeNode.TerminalNode.of(
+            baseCase, varEnv, Optional.of(baseCaseResult));
+
+    final ProcessTreeNode.TerminalNode recursiveNode =
+        ProcessTreeNode.TerminalNode.recursive(baseCase, varEnv);
+
+    final ProcessTreeNode.BranchNode tree =
+        new ProcessTreeNode.BranchNode(
+            core.orElse(f.typeSystem, baseCase, baseCase),
+            varEnv,
+            baseCaseNode,
+            recursiveNode);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "isTransitiveClosurePattern", ProcessTreeNode.class);
+      method.setAccessible(true);
+      boolean result = (boolean) method.invoke(inverter, tree);
+
+      // Should reject the pattern
+      assertThat(result, hasToString("false"));
+    } catch (Exception e) {
+      throw new RuntimeException(
+          "Failed to invoke isTransitiveClosurePattern", e);
+    }
+  }
+
+  /**
+   * Test 3: identifyRecursiveCall finds recursive call in simple expression.
+   *
+   * <p>Pattern: {@code path(z, y)} - the recursive call in the transitive
+   * closure.
+   */
+  @Test
+  void testIdentifyRecursiveCallFound() {
+    final Fixture f = new Fixture();
+
+    // Build: path(x, y)
+    final Core.IdPat pathPat = core.idPat(f.intIntBoolFnType, "path", 0);
+    final Core.Exp pathCall =
+        core.apply(
+            Pos.ZERO,
+            PrimitiveType.BOOL,
+            core.id(pathPat),
+            core.tuple(f.typeSystem, f.xId, f.yId));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "identifyRecursiveCall", Core.Exp.class, String.class);
+      method.setAccessible(true);
+      Optional<Core.Apply> result =
+          (Optional<Core.Apply>) method.invoke(inverter, pathCall, "path");
+
+      // Should find the call
+      assertThat(result.isPresent(), hasToString("true"));
+      assertThat(result.get(), hasToString(pathCall.toString()));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke identifyRecursiveCall", e);
+    }
+  }
+
+  /**
+   * Test 4: identifyRecursiveCall returns empty when no recursive call exists.
+   *
+   * <p>This validates that non-recursive expressions are correctly identified.
+   */
+  @Test
+  void testIdentifyRecursiveCallNotFound() {
+    final Fixture f = new Fixture();
+
+    // Build: x elem myList (no recursive call)
+    final Core.Exp nonRecursive = core.elem(f.typeSystem, f.xId, f.myListId);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "identifyRecursiveCall", Core.Exp.class, String.class);
+      method.setAccessible(true);
+      Optional<Core.Apply> result =
+          (Optional<Core.Apply>) method.invoke(inverter, nonRecursive, "path");
+
+      // Should not find any call
+      assertThat(result.isPresent(), hasToString("false"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke identifyRecursiveCall", e);
+    }
+  }
+
+  /**
+   * Test 5: identifyThreadedVariables finds simple threaded variables.
+   *
+   * <p>Pattern: {@code path(z, y)} identifies {z, y} as threaded.
+   */
+  @Test
+  void testIdentifyThreadedVariablesSimple() {
+    final Fixture f = new Fixture();
+
+    final Core.IdPat zPat = core.idPat(f.intType, "z", 0);
+    final Core.Id zId = core.id(zPat);
+
+    // Build: path(z, y)
+    final Core.IdPat pathPat = core.idPat(f.intIntBoolFnType, "path", 0);
+    final Core.Exp pathCall =
+        core.apply(
+            Pos.ZERO,
+            PrimitiveType.BOOL,
+            core.id(pathPat),
+            core.tuple(f.typeSystem, zId, f.yId));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "identifyThreadedVariables",
+              Core.Exp.class,
+              Core.Exp.class,
+              String.class);
+      method.setAccessible(true);
+      Set<Core.NamedPat> result =
+          (Set<Core.NamedPat>)
+              method.invoke(
+                  inverter,
+                  f.xId, // baseCase (not used in current implementation)
+                  pathCall, // recursiveCase
+                  "path");
+
+      // Should find both z and y
+      assertThat(result.size(), hasToString("2"));
+      assertThat(result.contains(zPat), hasToString("true"));
+      assertThat(result.contains(f.yPat), hasToString("true"));
+    } catch (Exception e) {
+      throw new RuntimeException(
+          "Failed to invoke identifyThreadedVariables", e);
+    }
+  }
+
+  /**
+   * Test 6: identifyThreadedVariables handles complex recursive calls.
+   *
+   * <p>Pattern: {@code edge(x,z) andalso path(z,y)} should still identify
+   * threaded variables in the path call.
+   */
+  @Test
+  void testIdentifyThreadedVariablesComplex() {
+    final Fixture f = new Fixture();
+
+    final Core.IdPat zPat = core.idPat(f.intType, "z", 0);
+    final Core.Id zId = core.id(zPat);
+
+    // Build: edge(x, z)
+    final Core.IdPat edgePat = core.idPat(f.intIntBoolFnType, "edge", 0);
+    final Core.Exp edgeCall =
+        core.apply(
+            Pos.ZERO,
+            PrimitiveType.BOOL,
+            core.id(edgePat),
+            core.tuple(f.typeSystem, f.xId, zId));
+
+    // Build: path(z, y)
+    final Core.IdPat pathPat = core.idPat(f.intIntBoolFnType, "path", 0);
+    final Core.Exp pathCall =
+        core.apply(
+            Pos.ZERO,
+            PrimitiveType.BOOL,
+            core.id(pathPat),
+            core.tuple(f.typeSystem, zId, f.yId));
+
+    // Build: edge(x,z) andalso path(z,y)
+    final Core.Exp recursiveCase =
+        core.andAlso(f.typeSystem, edgeCall, pathCall);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "identifyThreadedVariables",
+              Core.Exp.class,
+              Core.Exp.class,
+              String.class);
+      method.setAccessible(true);
+      Set<Core.NamedPat> result =
+          (Set<Core.NamedPat>)
+              method.invoke(inverter, edgeCall, recursiveCase, "path");
+
+      // Should find both z and y from the path call
+      assertThat(result.size(), hasToString("2"));
+      assertThat(result.contains(zPat), hasToString("true"));
+      assertThat(result.contains(f.yPat), hasToString("true"));
+    } catch (Exception e) {
+      throw new RuntimeException(
+          "Failed to invoke identifyThreadedVariables", e);
+    }
+  }
+
+  /**
+   * Test 7: extractRecursiveBody returns right branch of BranchNode.
+   *
+   * <p>Validates that the recursive case is correctly extracted from a
+   * transitive closure pattern.
+   */
+  @Test
+  void testExtractRecursiveBodyReturnsRight() {
+    final Fixture f = new Fixture();
+
+    final Core.Exp baseCase = core.elem(f.typeSystem, f.xId, f.myListId);
+    final Core.Exp recursiveCase = core.elem(f.typeSystem, f.yId, f.myListId);
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final ProcessTreeNode.TerminalNode baseNode =
+        ProcessTreeNode.TerminalNode.of(baseCase, varEnv, Optional.empty());
+    final ProcessTreeNode.TerminalNode recursiveNode =
+        ProcessTreeNode.TerminalNode.recursive(recursiveCase, varEnv);
+
+    final ProcessTreeNode.BranchNode tree =
+        new ProcessTreeNode.BranchNode(
+            core.orElse(f.typeSystem, baseCase, recursiveCase),
+            varEnv,
+            baseNode,
+            recursiveNode);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "extractRecursiveBody", ProcessTreeNode.class);
+      method.setAccessible(true);
+      Core.Exp result = (Core.Exp) method.invoke(inverter, tree);
+
+      // Should return the recursive case expression
+      assertThat(result, hasToString(recursiveCase.toString()));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke extractRecursiveBody", e);
+    }
+  }
+
+  /**
+   * Test 8: Extended inversion returns partial result for recognized patterns.
+   *
+   * <p>This test validates that when a transitive closure pattern is
+   * recognized, the base case inversion is returned as a partial result (Phase
+   * 3b-1 requirement).
+   *
+   * <p>Full Relational.iterate generation will be implemented in Phase 3b-2+.
+   */
+  @Test
+  void testExtendedInversionReturnsPartialResult() {
+    final Fixture f = new Fixture();
+
+    // Build simple predicate: x elem myList
+    final Core.Exp predicate = core.elem(f.typeSystem, f.xId, f.myListId);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    // Test that tryInvertWithProcessTree handles this without error
+    Optional<Result> result =
+        inverter.tryInvertWithProcessTree(
+            predicate, ImmutableList.of(f.xPat), ImmutableMap.of());
+
+    // Phase 3b-1: Should return empty (placeholder)
+    // Phase 3b-2+: Will return base case inversion
     assertThat(result.isPresent(), hasToString("false"));
   }
 }

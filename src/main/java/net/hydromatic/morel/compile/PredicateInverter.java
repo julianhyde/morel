@@ -523,6 +523,177 @@ public class PredicateInverter {
   }
 
   /**
+   * Validates that a ProcessTreeNode matches the transitive closure pattern.
+   *
+   * <p>Pattern: {@code baseCase orelse recursiveCase} where:
+   *
+   * <ul>
+   *   <li>baseCase is a TerminalNode with successful inversion
+   *   <li>recursiveCase contains a recursive call
+   * </ul>
+   *
+   * @param tree The ProcessTreeNode to check
+   * @return True if tree matches transitive closure pattern
+   */
+  private boolean isTransitiveClosurePattern(ProcessTreeNode tree) {
+    if (!(tree instanceof ProcessTreeNode.BranchNode)) {
+      return false;
+    }
+
+    ProcessTreeNode.BranchNode branch = (ProcessTreeNode.BranchNode) tree;
+
+    // Left must be invertible terminal
+    if (!branch.left.isTerminal()) {
+      return false;
+    }
+    ProcessTreeNode.TerminalNode leftTerm =
+        (ProcessTreeNode.TerminalNode) branch.left;
+    if (!leftTerm.isInverted()) {
+      return false; // Must have inversion result
+    }
+
+    // Right must contain recursion
+    if (!branch.right.isRecursiveCall() && !containsRecursion(branch.right)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Recursively checks if a node contains a recursive call.
+   *
+   * @param node The node to check
+   * @return True if node or any descendant is a recursive call
+   */
+  private boolean containsRecursion(ProcessTreeNode node) {
+    if (node.isRecursiveCall()) {
+      return true;
+    }
+    if (node instanceof ProcessTreeNode.BranchNode) {
+      ProcessTreeNode.BranchNode b = (ProcessTreeNode.BranchNode) node;
+      return containsRecursion(b.left) || containsRecursion(b.right);
+    }
+    if (node instanceof ProcessTreeNode.SequenceNode) {
+      ProcessTreeNode.SequenceNode s = (ProcessTreeNode.SequenceNode) node;
+      return s.children.stream().anyMatch(this::containsRecursion);
+    }
+    return false;
+  }
+
+  /**
+   * Extracts the recursive case body from a transitive closure pattern.
+   *
+   * <p>For a BranchNode representing {@code baseCase orelse recursiveCase},
+   * returns the expression from the recursive case (right branch).
+   *
+   * @param tree The BranchNode containing the pattern
+   * @return The recursive case expression
+   */
+  private Core.Exp extractRecursiveBody(ProcessTreeNode tree) {
+    if (!(tree instanceof ProcessTreeNode.BranchNode)) {
+      throw new IllegalArgumentException("Expected BranchNode, got " + tree);
+    }
+    ProcessTreeNode.BranchNode branch = (ProcessTreeNode.BranchNode) tree;
+    return branch.right.term();
+  }
+
+  /**
+   * Identifies the recursive function call in an expression.
+   *
+   * <p>Searches recursively through expression structure to find a function
+   * application where the function is an ID matching the given function name.
+   *
+   * @param exp The expression to search
+   * @param functionName The name of the recursive function to find
+   * @return The recursive Apply node, or empty if not found
+   */
+  private Optional<Core.Apply> identifyRecursiveCall(
+      Core.Exp exp, String functionName) {
+    if (exp.op == Op.APPLY) {
+      Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn.op == Op.ID) {
+        Core.Id fnId = (Core.Id) apply.fn;
+        if (fnId.idPat.name.equals(functionName)) {
+          return Optional.of(apply);
+        }
+      }
+    }
+
+    // Recursively search in sub-expressions
+    if (exp.op == Op.APPLY) {
+      Core.Apply app = (Core.Apply) exp;
+      if (app.isCallTo(BuiltIn.Z_ANDALSO)) {
+        Optional<Core.Apply> left =
+            identifyRecursiveCall(app.arg(0), functionName);
+        if (left.isPresent()) {
+          return left;
+        }
+        return identifyRecursiveCall(app.arg(1), functionName);
+      }
+      if (app.isCallTo(BuiltIn.Z_ORELSE)) {
+        Optional<Core.Apply> left =
+            identifyRecursiveCall(app.arg(0), functionName);
+        if (left.isPresent()) {
+          return left;
+        }
+        return identifyRecursiveCall(app.arg(1), functionName);
+      }
+    }
+
+    // Check FROM expressions (exists patterns)
+    if (exp.op == Op.FROM) {
+      Core.From from = (Core.From) exp;
+      for (Core.FromStep step : from.steps) {
+        if (step.op == Op.WHERE) {
+          Core.Where where = (Core.Where) step;
+          Optional<Core.Apply> result =
+              identifyRecursiveCall(where.exp, functionName);
+          if (result.isPresent()) {
+            return result;
+          }
+        }
+      }
+    }
+
+    return Optional.empty();
+  }
+
+  /**
+   * Identifies variables that are threaded through recursion.
+   *
+   * <p>Threaded variables are those that appear as arguments to the recursive
+   * call. For example, in {@code path(z, y)}, both z and y are threaded.
+   *
+   * <p>This is used to determine which variables need to be preserved during
+   * iteration and which are intermediate join variables.
+   *
+   * @param baseCase The base case expression (not currently used, reserved for
+   *     future enhancements)
+   * @param recursiveCase The recursive case expression
+   * @param functionName The name of the recursive function
+   * @return Set of patterns threaded through the recursive call
+   */
+  private Set<Core.NamedPat> identifyThreadedVariables(
+      Core.Exp baseCase, Core.Exp recursiveCase, String functionName) {
+    // Find recursive call in recursive case
+    Optional<Core.Apply> recursiveCall =
+        identifyRecursiveCall(recursiveCase, functionName);
+    if (!recursiveCall.isPresent()) {
+      return ImmutableSet.of();
+    }
+
+    Core.Apply call = recursiveCall.get();
+    ImmutableSet.Builder<Core.NamedPat> threaded = ImmutableSet.builder();
+
+    // Extract patterns from call arguments
+    // Recursively collect all NamedPats from the argument expression
+    forEachFreeVarIn(call.arg, pat -> threaded.add(pat));
+
+    return threaded.build();
+  }
+
+  /**
    * Inverts an elem predicate: pattern elem collection.
    *
    * <p>For simple patterns like {@code x elem list}, returns the collection.
