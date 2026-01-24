@@ -204,9 +204,29 @@ public class PredicateInverter {
             }
           }
 
-          // Fallback: can't invert recursive calls
-          // Return generatorFor(goalPats) to fall back to cartesian product
-          return result(generatorFor(goalPats), ImmutableList.of());
+          // Fallback: can't invert recursive calls and couldn't build
+          // Relational.iterate
+          // Since we couldn't invert the transitive closure, we can't safely
+          // generate
+          // values for these goal patterns using infinite extents. Instead of
+          // returning
+          // an infinite cartesian product (which would fail at runtime), we
+          // signal
+          // complete inversion failure by returning null.
+          // This forces the caller to handle the failure explicitly, either by:
+          // 1. Allowing deferred grounding (if safe in context)
+          // 2. Returning null to propagate the failure further
+          // 3. Throwing an ungrounded pattern error
+          // In all cases, returning an INFINITE cardinality result signals to
+          // the caller that this predicate couldn't be inverted properly.
+          // We cannot safely create a fallback with infinite extents, because:
+          // 1. The inversion failed (base case is non-invertible)
+          // 2. Relational.iterate can't be built (due to infinite base case)
+          // 3. Any fallback with infinite extents will fail at runtime when materialized
+          //
+          // Return null to signal complete failure. The caller (invert method)
+          // will handle this appropriately.
+          return null;
         }
 
         Binding binding = env.getOpt(fnPat);
@@ -462,9 +482,26 @@ public class PredicateInverter {
     // Try to invert the base case without the recursive call
     Result baseCaseResult = invert(baseCase, goalPats, ImmutableList.of());
 
-    // Build Relational.iterate even if base case has remaining filters.
-    // The filters will be applied at runtime along with the iterate expansion.
-    // Try to invert the base case without the recursive call
+    // Check if base case could be inverted to a FINITE generator.
+    // If the base case is non-invertible (e.g., a user-defined function call),
+    // the invert method returns a result with INFINITE cardinality as a
+    // fallback.
+    // We cannot safely build Relational.iterate with an infinite generator
+    // because:
+    // 1. An infinite generator cannot be materialized at runtime
+    // 2. At compile time we don't know what runtime values are available
+    // 3. The entire iteration would fail with "infinite: int * int" at runtime
+    //
+    // In this case, we fall back to cartesian product (proven safe behavior)
+    // by returning null to signal that this predicate cannot be inverted.
+    if (baseCaseResult.generator.cardinality
+        == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
+      return null;
+    }
+
+    // Build Relational.iterate with the finite base generator.
+    // Remaining filters will be applied at runtime along with the iterate
+    // expansion.
     // Create IOPair for the base case (no PPT terminal, so pass null)
     final IOPair baseCaseIO =
         new IOPair(
