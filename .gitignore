@@ -26,6 +26,9 @@ settings.xml
 # test output
 *.smli.out
 
+# project management (local planning, not for upstream)
+.pm/
+
 # eclipse
 .project
 .buildpath
