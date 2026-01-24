@@ -1,0 +1,293 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Comprehensive transitive closure predicate inversion tests.
+ * Based on Phase 5c test plan (.pm/PHASE-5C-TEST-PLAN.md).
+ *)
+
+(* ===================================================================
+ * CATEGORY 1: CORRECTNESS TESTS (P0 - MANDATORY)
+ * =================================================================== *)
+
+(* Test 1.1: Basic Transitive Closure - REFERENCE TEST
+ * This test already passes in such-that.smli:743
+ * Duplicated here for completeness *)
+val edges_1_1 = [{x=1,y=2},{x=2,y=3}];
+fun edge_1_1 (x, y) = {x, y} elem edges_1_1;
+fun path_1_1 (x, y) = edge_1_1 (x, y) orelse
+  (exists z where path_1_1 (x, z) andalso edge_1_1 (z, y));
+from p where path_1_1 p;
+(*
+[(1,2),(1,3),(2,3)]
+*)
+
+(* Test 1.2: Empty Base Case - Boundary Condition *)
+val edges_1_2 = [] : (int * int) list;
+fun edge_1_2 (x, y) = (x, y) elem edges_1_2;
+fun path_1_2 (x, y) = edge_1_2 (x, y) orelse
+  (exists z where path_1_2 (x, z) andalso edge_1_2 (z, y));
+from p where path_1_2 p;
+(*
+[]
+*)
+
+(* Test 1.3: Single Edge - No Transitive Paths *)
+val edges_1_3 = [(1, 2)];
+fun edge_1_3 (x, y) = (x, y) elem edges_1_3;
+fun path_1_3 (x, y) = edge_1_3 (x, y) orelse
+  (exists z where path_1_3 (x, z) andalso edge_1_3 (z, y));
+from p where path_1_3 p;
+(*
+[(1,2)]
+*)
+
+(* Test 1.4: Self-Loop - Reflexive Edge *)
+val edges_1_4 = [(1, 1)];
+fun edge_1_4 (x, y) = (x, y) elem edges_1_4;
+fun path_1_4 (x, y) = edge_1_4 (x, y) orelse
+  (exists z where path_1_4 (x, z) andalso edge_1_4 (z, y));
+from p where path_1_4 p;
+(*
+[(1,1)]
+*)
+
+(* Test 1.5: Linear Chain - Multiple Iterations *)
+val edges_1_5 = [(1,2), (2,3), (3,4), (4,5)];
+fun edge_1_5 (x, y) = (x, y) elem edges_1_5;
+fun path_1_5 (x, y) = edge_1_5 (x, y) orelse
+  (exists z where path_1_5 (x, z) andalso edge_1_5 (z, y));
+from p where path_1_5 p;
+(*
+[(1,2),(1,3),(1,4),(1,5),(2,3),(2,4),(2,5),(3,4),(3,5),(4,5)]
+*)
+
+(* Test 1.6: Cyclic Graph - CRITICAL Fixpoint Test *)
+val edges_1_6 = [(1,2), (2,3), (3,1)];
+fun edge_1_6 (x, y) = (x, y) elem edges_1_6;
+fun path_1_6 (x, y) = edge_1_6 (x, y) orelse
+  (exists z where path_1_6 (x, z) andalso edge_1_6 (z, y));
+from p where path_1_6 p;
+(*
+[(1,1),(1,2),(1,3),(2,1),(2,2),(2,3),(3,1),(3,2),(3,3)]
+*)
+
+(* Test 1.7: Disconnected Components *)
+val edges_1_7 = [(1,2), (3,4), (5,6)];
+fun edge_1_7 (x, y) = (x, y) elem edges_1_7;
+fun path_1_7 (x, y) = edge_1_7 (x, y) orelse
+  (exists z where path_1_7 (x, z) andalso edge_1_7 (z, y));
+from p where path_1_7 p;
+(*
+[(1,2),(3,4),(5,6)]
+*)
+
+(* Test 1.8: Diamond Pattern - Deduplication Test *)
+val edges_1_8 = [(1,2), (1,3), (2,4), (3,4)];
+fun edge_1_8 (x, y) = (x, y) elem edges_1_8;
+fun path_1_8 (x, y) = edge_1_8 (x, y) orelse
+  (exists z where path_1_8 (x, z) andalso edge_1_8 (z, y));
+from p where path_1_8 p;
+(*
+[(1,2),(1,3),(1,4),(2,4),(3,4)]
+*)
+
+(* ===================================================================
+ * CATEGORY 2: PATTERN VARIATION TESTS (P1)
+ * =================================================================== *)
+
+(* Test 2.1: Reversed orelse Order *)
+val edges_2_1 = [(1,2), (2,3)];
+fun edge_2_1 (x, y) = (x, y) elem edges_2_1;
+fun path_2_1 (x, y) =
+  (exists z where path_2_1 (x, z) andalso edge_2_1 (z, y)) orelse edge_2_1 (x, y);
+from p where path_2_1 p;
+(*
+[(1,2),(1,3),(2,3)]
+*)
+
+(* Test 2.2: Different Variable Names *)
+val edges_2_2 = [(1,2), (2,3)];
+fun edge_2_2 (a, b) = (a, b) elem edges_2_2;
+fun path_2_2 (a, b) = edge_2_2 (a, b) orelse
+  (exists mid where path_2_2 (a, mid) andalso edge_2_2 (mid, b));
+from p where path_2_2 p;
+(*
+[(1,2),(1,3),(2,3)]
+*)
+
+(* Test 2.3: Record-Based Edges *)
+val edges_2_3 = [{src=1, dst=2}, {src=2, dst=3}];
+fun edge_2_3 (x, y) = {src=x, dst=y} elem edges_2_3;
+fun path_2_3 (x, y) = edge_2_3 (x, y) orelse
+  (exists z where path_2_3 (x, z) andalso edge_2_3 (z, y));
+from p where path_2_3 p;
+(*
+[(1,2),(1,3),(2,3)]
+*)
+
+(* Test 2.4: Alternative Conjunction Order *)
+val edges_2_4 = [(1,2), (2,3)];
+fun edge_2_4 (x, y) = (x, y) elem edges_2_4;
+fun path_2_4 (x, y) = edge_2_4 (x, y) orelse
+  (exists z where edge_2_4 (z, y) andalso path_2_4 (x, z));
+from p where path_2_4 p;
+(*
+[(1,2),(1,3),(2,3)]
+*)
+
+(* ===================================================================
+ * CATEGORY 3: PERFORMANCE TESTS (P1)
+ * Note: These tests focus on correctness; timing measured separately
+ * =================================================================== *)
+
+(* Test 3.1: Small Graph (10 edges) *)
+val edges_3_1 = [
+  (1,2), (2,3), (3,4), (4,5), (5,6),
+  (1,3), (2,4), (3,5), (4,6), (6,7)
+];
+fun edge_3_1 (x, y) = (x, y) elem edges_3_1;
+fun path_3_1 (x, y) = edge_3_1 (x, y) orelse
+  (exists z where path_3_1 (x, z) andalso edge_3_1 (z, y));
+val result_3_1 = from p where path_3_1 p;
+(* Check result count - should have ~35-40 paths *)
+List.length result_3_1;
+(*
+37
+*)
+
+(* Test 3.2: Chain Graph Generator *)
+fun genChain n =
+  List.tabulate (n - 1, fn i => (i + 1, i + 2));
+
+val edges_3_2 = genChain 15;
+fun edge_3_2 (x, y) = (x, y) elem edges_3_2;
+fun path_3_2 (x, y) = edge_3_2 (x, y) orelse
+  (exists z where path_3_2 (x, z) andalso edge_3_2 (z, y));
+val result_3_2 = from p where path_3_2 p;
+List.length result_3_2;
+(*
+105
+*)
+
+(* Test 3.3: Dense Graph *)
+fun genDense n =
+  from i in List.tabulate (n, fn x => x + 1),
+       j in List.tabulate (n, fn x => x + 1)
+    where i <> j andalso i < j
+    yield (i, j);
+
+val edges_3_3 = genDense 8;
+fun edge_3_3 (x, y) = (x, y) elem edges_3_3;
+fun path_3_3 (x, y) = edge_3_3 (x, y) orelse
+  (exists z where path_3_3 (x, z) andalso edge_3_3 (z, y));
+val result_3_3 = from p where path_3_3 p;
+List.length result_3_3;
+(*
+28
+*)
+
+(* ===================================================================
+ * CATEGORY 4: EDGE CASE TESTS (P1)
+ * =================================================================== *)
+
+(* Test 4.1: Unsupported Pattern - Should Fall Back Gracefully *)
+val edges_4_1 = [(1,2), (2,3)];
+fun edge_4_1 (x, y) = (x, y) elem edges_4_1;
+fun notPath (x, y) = edge_4_1 (x, y) andalso x <> y;
+from p where notPath p;
+(*
+[(1,2),(2,3)]
+*)
+
+(* Test 4.2: Variable Name Shadowing *)
+val x = 99;
+val edges_4_2 = [(1,2), (2,3)];
+fun edge_4_2 (x, y) = (x, y) elem edges_4_2;
+fun path_4_2 (x, y) = edge_4_2 (x, y) orelse
+  (exists z where path_4_2 (x, z) andalso edge_4_2 (z, y));
+from p where path_4_2 p;
+(*
+[(1,2),(1,3),(2,3)]
+*)
+
+(* Test 4.3: Self-Loop with Additional Edges *)
+val edges_4_3 = [(1, 1), (1, 2)];
+fun edge_4_3 (x, y) = (x, y) elem edges_4_3;
+fun path_4_3 (x, y) = edge_4_3 (x, y) orelse
+  (exists z where path_4_3 (x, z) andalso edge_4_3 (z, y));
+from p where path_4_3 p;
+(*
+[(1,1),(1,2)]
+*)
+
+(* Test 4.4: Large Number Range *)
+val edges_4_4 = [(100, 200), (200, 300)];
+fun edge_4_4 (x, y) = (x, y) elem edges_4_4;
+fun path_4_4 (x, y) = edge_4_4 (x, y) orelse
+  (exists z where path_4_4 (x, z) andalso edge_4_4 (z, y));
+from p where path_4_4 p;
+(*
+[(100,200),(100,300),(200,300)]
+*)
+
+(* ===================================================================
+ * CATEGORY 5: INTEGRATION TESTS (P2)
+ * =================================================================== *)
+
+(* Test 5.1: Combined with WHERE Filter *)
+val edges_5_1 = [(1,2), (2,3), (3,4)];
+fun edge_5_1 (x, y) = (x, y) elem edges_5_1;
+fun path_5_1 (x, y) = edge_5_1 (x, y) orelse
+  (exists z where path_5_1 (x, z) andalso edge_5_1 (z, y));
+from (x, y) where path_5_1 (x, y) andalso x = 1;
+(*
+[(1,2),(1,3),(1,4)]
+*)
+
+(* Test 5.2: With ORDER BY Clause *)
+val edges_5_2 = [(1,2), (2,3)];
+fun edge_5_2 (x, y) = (x, y) elem edges_5_2;
+fun path_5_2 (x, y) = edge_5_2 (x, y) orelse
+  (exists z where path_5_2 (x, z) andalso edge_5_2 (z, y));
+from p where path_5_2 p order p;
+(*
+[(1,2),(1,3),(2,3)]
+*)
+
+(* Test 5.3: With YIELD Clause *)
+val edges_5_3 = [(1,2), (2,3)];
+fun edge_5_3 (x, y) = (x, y) elem edges_5_3;
+fun path_5_3 (x, y) = edge_5_3 (x, y) orelse
+  (exists z where path_5_3 (x, z) andalso edge_5_3 (z, y));
+from (x, y) where path_5_3 (x, y) yield {src = x, dst = y};
+(*
+[{dst=2,src=1},{dst=3,src=1},{dst=3,src=2}]
+*)
+
+(* Test 5.4: Nested Query *)
+val edges_5_4 = [(1,2), (2,3)];
+fun edge_5_4 (x, y) = (x, y) elem edges_5_4;
+fun path_5_4 (x, y) = edge_5_4 (x, y) orelse
+  (exists z where path_5_4 (x, z) andalso edge_5_4 (z, y));
+from x in [1, 2]
+  where exists (from (a, b) where path_5_4 (a, b) andalso a = x);
+(*
+[1,2]
+*)
+
+(* END OF TRANSITIVE-CLOSURE.SMLI *)

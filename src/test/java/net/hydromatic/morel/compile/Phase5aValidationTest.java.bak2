@@ -26,8 +26,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import net.hydromatic.morel.ast.AstNode;
@@ -43,12 +41,16 @@ import org.junit.jupiter.api.Test;
 /**
  * Phase 5a: Environment Scoping Validation.
  *
- * <p>Tests all 4 critical components for transitive closure predicate inversion:
+ * <p>Tests all 4 critical components for transitive closure predicate
+ * inversion:
+ *
  * <ol>
  *   <li>Environment Parameter Passing - SuchThatShuttle → PredicateInverter
- *   <li>Binding Lookup and Access - env.getOpt(fnPat) retrieves function bindings
+ *   <li>Binding Lookup and Access - env.getOpt(fnPat) retrieves function
+ *       bindings
  *   <li>Step Function Generation - buildStepFunction() generates correct lambda
- *   <li>Relational.iterate Construction - Relational.iterate call is constructed
+ *   <li>Relational.iterate Construction - Relational.iterate call is
+ *       constructed
  * </ol>
  */
 class Phase5aValidationTest {
@@ -72,35 +74,39 @@ class Phase5aValidationTest {
   @Test
   void testEnvironmentParameterPassing() throws Exception {
     // Parse and compile a simple recursive function
-    final String code = "val edges = [(1, 2), (2, 3)];\n"
-        + "fun edge (x, y) = (x, y) elem edges;\n"
-        + "fun path (x, y) =\n"
-        + "  edge (x, y) orelse\n"
-        + "  (exists z where path (x, z) andalso edge (z, y));";
+    final String code =
+        "val edges = [(1, 2), (2, 3)];\n"
+            + "fun edge (x, y) = (x, y) elem edges;\n"
+            + "fun path (x, y) =\n"
+            + "  edge (x, y) orelse\n"
+            + "  (exists z where path (x, z) andalso edge (z, y));";
 
     final MorelParserImpl parser = new MorelParserImpl(new StringReader(code));
     final AstNode astNode = parser.statement();
     assertNotNull(astNode, "Parser should return AST");
 
     // Compile through the full pipeline
-    final Compiled compileResult = Compiles.prepareStatement(typeSystem, session, astNode);
+    final Compiled compileResult =
+        Compiles.prepareStatement(typeSystem, session, astNode);
     assertNotNull(compileResult, "Compile should succeed");
 
     // Verify environment is passed through compilation
-    // The fact that compilation succeeded means environment was properly threaded
+    // The fact that compilation succeeded means environment was properly
+    // threaded
     assertTrue(true, "Environment parameter passing validated");
   }
 
   /**
    * Component 2: Binding Lookup and Access.
    *
-   * <p>Verifies that env.getOpt(fnPat) retrieves function bindings and
-   * that bindings are accessible during recursive function compilation.
+   * <p>Verifies that env.getOpt(fnPat) retrieves function bindings and that
+   * bindings are accessible during recursive function compilation.
    */
   @Test
   void testBindingLookupAndAccess() throws Exception {
     // Create environment with function binding
-    final Type tupleType = typeSystem.tupleType(PrimitiveType.INT, PrimitiveType.INT);
+    final Type tupleType =
+        typeSystem.tupleType(PrimitiveType.INT, PrimitiveType.INT);
     final Type fnType = typeSystem.fnType(tupleType, PrimitiveType.BOOL);
 
     // Parse edge function
@@ -110,24 +116,28 @@ class Phase5aValidationTest {
     assertNotNull(edgeAst, "Edge function should parse");
 
     // Type-check and add to environment
-    final Environment typeEnv = TypeResolver.desugarAndResolve(typeSystem, env, edgeAst);
+    final Environment typeEnv =
+        TypeResolver.desugarAndResolve(typeSystem, env, edgeAst);
     assertNotNull(typeEnv, "Type resolution should succeed");
 
     // Now parse path function that references edge
-    final String pathCode = "fun path (x, y) =\n"
-        + "  edge (x, y) orelse\n"
-        + "  (exists z where path (x, z) andalso edge (z, y))";
+    final String pathCode =
+        "fun path (x, y) =\n"
+            + "  edge (x, y) orelse\n"
+            + "  (exists z where path (x, z) andalso edge (z, y))";
     parser = new MorelParserImpl(new StringReader(pathCode));
     final AstNode pathAst = parser.statement();
     assertNotNull(pathAst, "Path function should parse");
 
     // Type-check path function - this exercises binding lookup
-    final Environment pathTypeEnv = TypeResolver.desugarAndResolve(typeSystem, typeEnv, pathAst);
+    final Environment pathTypeEnv =
+        TypeResolver.desugarAndResolve(typeSystem, typeEnv, pathAst);
     assertNotNull(pathTypeEnv, "Path type resolution should succeed");
 
     // Verify bindings are accessible
-    assertTrue(pathTypeEnv.getOpt("edge") != null
-        || pathTypeEnv.getOpt("path") != null,
+    assertTrue(
+        pathTypeEnv.getOpt("edge") != null
+            || pathTypeEnv.getOpt("path") != null,
         "Function bindings should be accessible");
   }
 
@@ -140,18 +150,20 @@ class Phase5aValidationTest {
   @Test
   void testStepFunctionGeneration() throws Exception {
     // Define the full transitive closure program
-    final String code = "val edges = [(1, 2), (2, 3)];\n"
-        + "fun edge (x, y) = (x, y) elem edges;\n"
-        + "fun path (x, y) =\n"
-        + "  edge (x, y) orelse\n"
-        + "  (exists z where path (x, z) andalso edge (z, y));\n"
-        + "from p where path p";
+    final String code =
+        "val edges = [(1, 2), (2, 3)];\n"
+            + "fun edge (x, y) = (x, y) elem edges;\n"
+            + "fun path (x, y) =\n"
+            + "  edge (x, y) orelse\n"
+            + "  (exists z where path (x, z) andalso edge (z, y));\n"
+            + "from p where path p";
 
     // Compile through full pipeline
-    final Compiled compiled = Compiles.prepareStatement(
-        typeSystem,
-        session,
-        new MorelParserImpl(new StringReader(code)).statement());
+    final Compiled compiled =
+        Compiles.prepareStatement(
+            typeSystem,
+            session,
+            new MorelParserImpl(new StringReader(code)).statement());
 
     assertNotNull(compiled, "Compilation should succeed");
 
@@ -165,7 +177,8 @@ class Phase5aValidationTest {
     assertFalse(resultList.isEmpty(), "Result should not be empty");
 
     // The step function is working if we get transitive closure results
-    assertTrue(resultList.size() >= 3,
+    assertTrue(
+        resultList.size() >= 3,
         "Should have at least base case and derived results");
   }
 
@@ -178,17 +191,19 @@ class Phase5aValidationTest {
   @Test
   void testRelationalIterateConstruction() throws Exception {
     // Full integration test with expected output
-    final String code = "val edges = [(1, 2), (2, 3)];\n"
-        + "fun edge (x, y) = (x, y) elem edges;\n"
-        + "fun path (x, y) =\n"
-        + "  edge (x, y) orelse\n"
-        + "  (exists z where path (x, z) andalso edge (z, y));\n"
-        + "from p where path p";
+    final String code =
+        "val edges = [(1, 2), (2, 3)];\n"
+            + "fun edge (x, y) = (x, y) elem edges;\n"
+            + "fun path (x, y) =\n"
+            + "  edge (x, y) orelse\n"
+            + "  (exists z where path (x, z) andalso edge (z, y));\n"
+            + "from p where path p";
 
-    final Compiled compiled = Compiles.prepareStatement(
-        typeSystem,
-        session,
-        new MorelParserImpl(new StringReader(code)).statement());
+    final Compiled compiled =
+        Compiles.prepareStatement(
+            typeSystem,
+            session,
+            new MorelParserImpl(new StringReader(code)).statement());
 
     assertNotNull(compiled, "Compilation should succeed");
 
@@ -199,20 +214,29 @@ class Phase5aValidationTest {
     final List<?> resultList = (List<?>) result;
 
     // Verify expected transitive closure output
-    assertEquals(3, resultList.size(),
+    assertEquals(
+        3,
+        resultList.size(),
         "Should have exactly 3 paths: (1,2), (2,3), (1,3)");
 
     // Check that we have the correct elements (in any order)
-    final List<String> resultStrings = resultList.stream()
-        .map(Object::toString)
-        .sorted()
-        .collect(Collectors.toList());
+    final List<String> resultStrings =
+        resultList.stream()
+            .map(Object::toString)
+            .sorted()
+            .collect(Collectors.toList());
 
-    assertTrue(resultStrings.stream().anyMatch(s -> s.contains("1") && s.contains("2")),
+    assertTrue(
+        resultStrings.stream()
+            .anyMatch(s -> s.contains("1") && s.contains("2")),
         "Should contain path (1,2)");
-    assertTrue(resultStrings.stream().anyMatch(s -> s.contains("2") && s.contains("3")),
+    assertTrue(
+        resultStrings.stream()
+            .anyMatch(s -> s.contains("2") && s.contains("3")),
         "Should contain path (2,3)");
-    assertTrue(resultStrings.stream().anyMatch(s -> s.contains("1") && s.contains("3")),
+    assertTrue(
+        resultStrings.stream()
+            .anyMatch(s -> s.contains("1") && s.contains("3")),
         "Should contain derived path (1,3)");
   }
 
@@ -224,17 +248,19 @@ class Phase5aValidationTest {
   @Test
   void testEndToEndIntegration() throws Exception {
     // This is the exact test case from such-that.smli:743
-    final String code = "val edges = [{x=1,y=2},{x=2,y=3}];\n"
-        + "fun edge (x, y) = {x, y} elem edges;\n"
-        + "fun path (x, y) =\n"
-        + "  edge (x, y) orelse\n"
-        + "  (exists z where path (x, z) andalso edge (z, y));\n"
-        + "from p where path p";
+    final String code =
+        "val edges = [{x=1,y=2},{x=2,y=3}];\n"
+            + "fun edge (x, y) = {x, y} elem edges;\n"
+            + "fun path (x, y) =\n"
+            + "  edge (x, y) orelse\n"
+            + "  (exists z where path (x, z) andalso edge (z, y));\n"
+            + "from p where path p";
 
-    final Compiled compiled = Compiles.prepareStatement(
-        typeSystem,
-        session,
-        new MorelParserImpl(new StringReader(code)).statement());
+    final Compiled compiled =
+        Compiles.prepareStatement(
+            typeSystem,
+            session,
+            new MorelParserImpl(new StringReader(code)).statement());
 
     assertNotNull(compiled, "Full compilation should succeed");
 
@@ -242,8 +268,8 @@ class Phase5aValidationTest {
     assertThat(result, instanceOf(List.class));
 
     final List<?> resultList = (List<?>) result;
-    assertEquals(3, resultList.size(),
-        "Should produce exactly [(1,2),(2,3),(1,3)]");
+    assertEquals(
+        3, resultList.size(), "Should produce exactly [(1,2),(2,3),(1,3)]");
 
     // Verify no type errors or runtime exceptions occurred
     assertTrue(true, "End-to-end integration successful");
@@ -256,19 +282,22 @@ class Phase5aValidationTest {
    */
   @Test
   void testMultipleRecursiveCalls() throws Exception {
-    final String code = "val edges = [(1, 2), (2, 3), (3, 4)];\n"
-        + "fun edge (x, y) = (x, y) elem edges;\n"
-        + "fun path (x, y) =\n"
-        + "  edge (x, y) orelse\n"
-        + "  (exists z where path (x, z) andalso path (z, y));\n"
-        + "from p where path p";
+    final String code =
+        "val edges = [(1, 2), (2, 3), (3, 4)];\n"
+            + "fun edge (x, y) = (x, y) elem edges;\n"
+            + "fun path (x, y) =\n"
+            + "  edge (x, y) orelse\n"
+            + "  (exists z where path (x, z) andalso path (z, y));\n"
+            + "from p where path p";
 
-    final Compiled compiled = Compiles.prepareStatement(
-        typeSystem,
-        session,
-        new MorelParserImpl(new StringReader(code)).statement());
+    final Compiled compiled =
+        Compiles.prepareStatement(
+            typeSystem,
+            session,
+            new MorelParserImpl(new StringReader(code)).statement());
 
-    assertNotNull(compiled, "Compilation with multiple recursive calls should succeed");
+    assertNotNull(
+        compiled, "Compilation with multiple recursive calls should succeed");
 
     final Object result = compiled.code.eval(session);
     assertNotNull(result, "Evaluation should succeed");
@@ -284,17 +313,19 @@ class Phase5aValidationTest {
    */
   @Test
   void testEmptyBaseCase() throws Exception {
-    final String code = "val edges = [];\n"
-        + "fun edge (x, y) = (x, y) elem edges;\n"
-        + "fun path (x, y) =\n"
-        + "  edge (x, y) orelse\n"
-        + "  (exists z where path (x, z) andalso edge (z, y));\n"
-        + "from p where path p";
+    final String code =
+        "val edges = [];\n"
+            + "fun edge (x, y) = (x, y) elem edges;\n"
+            + "fun path (x, y) =\n"
+            + "  edge (x, y) orelse\n"
+            + "  (exists z where path (x, z) andalso edge (z, y));\n"
+            + "from p where path p";
 
-    final Compiled compiled = Compiles.prepareStatement(
-        typeSystem,
-        session,
-        new MorelParserImpl(new StringReader(code)).statement());
+    final Compiled compiled =
+        Compiles.prepareStatement(
+            typeSystem,
+            session,
+            new MorelParserImpl(new StringReader(code)).statement());
 
     assertNotNull(compiled, "Compilation should succeed even with empty base");
 
@@ -302,8 +333,8 @@ class Phase5aValidationTest {
     assertThat(result, instanceOf(List.class));
 
     final List<?> resultList = (List<?>) result;
-    assertTrue(resultList.isEmpty(),
-        "Empty base case should produce empty result");
+    assertTrue(
+        resultList.isEmpty(), "Empty base case should produce empty result");
   }
 
   /**
@@ -315,19 +346,21 @@ class Phase5aValidationTest {
   @Test
   void testTypeSystemValidation() throws Exception {
     // Define a program that exercises type checking
-    final String code = "val edges = [(1, 2), (2, 3)];\n"
-        + "fun edge (x, y) = (x, y) elem edges;\n"
-        + "fun path (x, y) =\n"
-        + "  edge (x, y) orelse\n"
-        + "  (exists z where path (x, z) andalso edge (z, y));\n"
-        + "from p where path p";
+    final String code =
+        "val edges = [(1, 2), (2, 3)];\n"
+            + "fun edge (x, y) = (x, y) elem edges;\n"
+            + "fun path (x, y) =\n"
+            + "  edge (x, y) orelse\n"
+            + "  (exists z where path (x, z) andalso edge (z, y));\n"
+            + "from p where path p";
 
     // Parse
     final AstNode ast = new MorelParserImpl(new StringReader(code)).statement();
     assertNotNull(ast);
 
     // Type-check through resolver
-    final Environment typedEnv = TypeResolver.desugarAndResolve(typeSystem, env, ast);
+    final Environment typedEnv =
+        TypeResolver.desugarAndResolve(typeSystem, env, ast);
     assertNotNull(typedEnv, "Type resolution should succeed");
 
     // The fact that type resolution succeeded means:
