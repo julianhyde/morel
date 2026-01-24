@@ -463,10 +463,55 @@ public class PredicateInverter {
 
     if (baseCaseResult.remainingFilters.isEmpty()) {
       // Successfully inverted the base case
-      // Now we would build the step function, but for now just use the base
-      // case
-      // as a fallback
-      return baseCaseResult;
+      // Now build Relational.iterate call
+
+      // Create IOPair for the base case (no PPT terminal, so pass null)
+      final IOPair baseCaseIO =
+          new IOPair(
+              ImmutableMap.of(), baseCaseResult.generator.expression, null);
+
+      // Create TabulationResult with the base case
+      // Use FINITE cardinality since transitive closure is finite for finite
+      // input
+      final TabulationResult tabulation =
+          new TabulationResult(
+              ImmutableList.of(baseCaseIO),
+              net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+              true); // may have duplicates
+
+      // Create VarEnvironment for step function construction
+      final VarEnvironment varEnv = VarEnvironment.initial(goalPats, env);
+
+      // Build step function: fn (old, new) => FROM ...
+      final Core.Exp stepFunction = buildStepFunction(tabulation, varEnv);
+
+      // Construct Relational.iterate call
+      // Pattern: Relational.iterate baseGenerator stepFunction
+      final Core.Exp baseGenerator = baseCaseResult.generator.expression;
+
+      // Get the RELATIONAL_ITERATE built-in as a function literal
+      final Core.Exp iterateFn =
+          core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
+
+      // Apply iterate to base generator
+      final Core.Exp iterateWithBase =
+          core.apply(Pos.ZERO, iterateFn, baseGenerator);
+
+      // Apply the result to the step function
+      final Core.Exp relationalIterate =
+          core.apply(Pos.ZERO, iterateWithBase, stepFunction);
+
+      // Create a Generator wrapping the Relational.iterate call
+      final Generator iterateGenerator =
+          new Generator(
+              baseCaseResult.generator.goalPat,
+              relationalIterate,
+              net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+              baseCaseResult.generator.constraints,
+              baseCaseResult.generator.freeVars);
+
+      // Return result with no remaining filters (iterate handles everything)
+      return result(iterateGenerator, ImmutableList.of());
     }
 
     return null;
@@ -1605,24 +1650,26 @@ public class PredicateInverter {
       baseComponents = new Type[] {baseElemType};
     }
 
-    // Create patterns for base scan: (x, z)
+    // Create patterns for new scan: (x, z)
+    // This scans the newly discovered results from the previous iteration
     final Core.IdPat xPat = core.idPat(baseComponents[0], "x", 0);
     final Core.IdPat zPat =
         baseComponents.length > 1
             ? core.idPat(baseComponents[1], "z", 0)
             : core.idPat(baseComponents[0], "z", 0);
-    final Core.Pat baseScanPat =
+    final Core.Pat newScanPat =
         baseComponents.length > 1
             ? core.tuplePat(typeSystem, ImmutableList.of(xPat, zPat))
             : xPat;
 
-    // Create patterns for new scan: (z2, y)
+    // Create patterns for base scan: (z2, y)
+    // This scans the base edges/relations
     final Core.IdPat z2Pat = core.idPat(baseComponents[0], "z2", 0);
     final Core.IdPat yPat =
         baseComponents.length > 1
             ? core.idPat(baseComponents[1], "y", 0)
             : core.idPat(baseComponents[0], "y", 0);
-    final Core.Pat newScanPat =
+    final Core.Pat baseScanPat =
         baseComponents.length > 1
             ? core.tuplePat(typeSystem, ImmutableList.of(z2Pat, yPat))
             : z2Pat;
@@ -1633,11 +1680,11 @@ public class PredicateInverter {
     final FromBuilder builder =
         core.fromBuilder(typeSystem, (Environment) null);
 
-    // Scan base generator: from (x, z) in baseGen
-    builder.scan(baseScanPat, baseGen);
-
-    // Scan new results: (z2, y) in newTuples
+    // Scan new results first: from (x, z) in newTuples
     builder.scan(newScanPat, core.id(newPat));
+
+    // Scan base generator: (z2, y) in baseGen
+    builder.scan(baseScanPat, baseGen);
 
     // Add WHERE clause: z = z2 (join on intermediate variable)
     if (baseComponents.length > 1) {
