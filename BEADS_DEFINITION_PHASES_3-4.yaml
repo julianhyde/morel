@@ -1,0 +1,954 @@
+# Morel Predicate Inversion: Implementation Beads for Phases 3-4
+# Version: 1.0
+# Created: 2026-01-23
+# Format: YAML for project-management-setup tool
+#
+# Usage: Load with project-management-setup tool to create all beads
+
+project_name: Morel Predicate Inversion (Issue #217)
+phase: 3-4_Full_Implementation
+description: "Complete Relational.iterate generation and mode analysis"
+
+# Global metadata
+metadata:
+  knowledge_base:
+    - algorithm-synthesis-ura-to-morel.md
+    - mode-analysis-synthesis.md
+    - complete-knowledge-base-summary.md
+    - predicate-inversion-knowledge-integration.md
+  main_design_doc: PREDICATE_INVERSION_DESIGN.md
+  strategic_plan: STRATEGIC_PLAN_PHASES_3-4.md
+  main_implementation: src/main/java/net/hydromatic/morel/compile/PredicateInverter.java
+  test_suite: src/test/resources/script/such-that.smli
+  baseline_tests: 301
+
+# ============================================================================
+# PHASE 3: FULL RELATIONAL.ITERATE GENERATION
+# ============================================================================
+
+epics:
+  - id: phase-3
+    title: "Phase 3: Full Relational.iterate Generation"
+    type: epic
+    priority: P0
+    complexity: L
+    status: ready
+    description: |
+      Generate correct, performant Relational.iterate expressions for transitive closure predicates.
+      This phase consists of three sub-epics: PPT Construction (3a), Tabulation (3b), Code Gen (3c).
+    dependencies: []
+    beads:
+      - 3a-EXTRACT
+      - 3a-JOINVAR
+      - 3a-PATTERN
+      - 3b-SUBST
+      - 3b-INCREMENT
+      - 3b-JOIN
+      - 3b-TUPLE
+      - 3c-ITERATE
+      - 3c-COMPILE
+      - 3c-TRANSITIVE
+      - 3c-REGRESSION
+
+  # ========================================================================
+  # PHASE 3a: PERFECT PROCESS TREE CONSTRUCTION
+  # ========================================================================
+
+  - id: 3a-EXTRACT
+    title: "3a-1: Extract base case and recursive case from function definition"
+    type: task
+    priority: P0
+    complexity: S
+    status: ready
+    description: |
+      Extract the base case and recursive case components from a recursive function definition.
+
+      Example: From definition:
+        fun path (x, y) = edge (x, y) orelse (exists z where edge (x, z) andalso path (z, y))
+
+      Extract:
+        - Base case: edge(x, y)
+        - Recursive case: exists z where edge(x, z) andalso path(z, y)
+    acceptance_criteria:
+      - "Can extract base case: edge(x,y) from path definition"
+      - "Can extract step case: edge(x,z) andalso path(z,y)"
+      - "Handles orelse at top level"
+      - "Unit tests for 5+ recursive patterns pass"
+      - "Preserves variable scoping and bindings"
+    implementation_notes: |
+      - Location: PredicateInverter.extractCaseComponents() method
+      - Should handle: orelse at top level, exists quantifier in recursive case
+      - Return: (baseCaseExp, recursiveCaseExp) tuple
+      - Fallback: Return None if pattern doesn't match
+    knowledge_references:
+      - PREDICATE_INVERSION_DESIGN.md: Example 6 (transitive closure)
+      - algorithm-synthesis-ura-to-morel.md: PPT structure section
+    dependencies: []
+    assigned_to: null
+    created_at: "2026-01-23"
+
+  - id: 3a-JOINVAR
+    title: "3a-2: Identify join variables in recursive pattern"
+    type: task
+    priority: P0
+    complexity: S
+    status: ready
+    description: |
+      Identify the join variable(s) that connect the base case to the recursive case.
+
+      Example: In path(x,y) with pattern:
+        edge(x,z) andalso path(z,y)
+
+      The join variable is: z (used to connect base case edge(x,z) to recursive path(z,y))
+    acceptance_criteria:
+      - "Identifies shared variable(s) between base and step case"
+      - "Handles single join variable (e.g., z in path example)"
+      - "Detects multiple join variables"
+      - "Detects impossible patterns (no common variable) and returns None"
+      - "Correctly traces variable flow through expressions"
+    implementation_notes: |
+      - Location: PredicateInverter.identifyJoinVariable() method
+      - Use free variable analysis to find common variables
+      - Return: Set<Core.NamedPat> of join variables
+      - Edge case: Multiple joins should be ordered consistently
+    knowledge_references:
+      - algorithm-synthesis-ura-to-morel.md: Variable tracking section
+    dependencies:
+      - 3a-EXTRACT
+
+  - id: 3a-PATTERN
+    title: "3a-3: Implement pattern matcher for recursive structures"
+    type: task
+    priority: P0
+    complexity: M
+    status: ready
+    description: |
+      Implement pattern matcher that recognizes transitive closure patterns and validates
+      them for recursive predicate inversion.
+
+      Patterns to recognize:
+        1. P1 orelse (exists z where P2 andalso f(...))
+        2. P1 orelse (exists z where f(...) andalso P2)
+
+      Where P1 and P2 are invertible predicates and f(...) is the recursive call.
+    acceptance_criteria:
+      - "Recognizes P1 orelse (exists z where P2 andalso f(...))"
+      - "Recognizes P1 orelse (exists z where f(...) andalso P2)"
+      - "Detects when pattern doesn't match and returns None"
+      - "Pattern matching passes 100% on test cases"
+      - "Handles variable substitution correctly"
+      - "Validates recursive call matches function name and arity"
+    implementation_notes: |
+      - Location: PredicateInverter.matchRecursivePattern() method
+      - Input: Core.Exp (function body), functionName, arity
+      - Output: RecursivePattern record with:
+        - baseCase: Core.Exp
+        - stepCase: Core.Exp
+        - joinVariables: Set<Core.NamedPat>
+        - recursiveCall: Core.Exp
+      - Or: Optional.empty() if no match
+    test_cases:
+      - "Simple transitive closure (path)"
+      - "Transitive closure with reordered andalso"
+      - "Nested exists clauses"
+      - "Multiple recursive calls (should fail)"
+      - "Non-orelse structure (should fail)"
+    knowledge_references:
+      - PREDICATE_INVERSION_DESIGN.md: Example 6
+      - algorithm-synthesis-ura-to-morel.md: Pattern recognition section
+    dependencies:
+      - 3a-EXTRACT
+      - 3a-JOINVAR
+
+  # ========================================================================
+  # PHASE 3b: TABULATION INFRASTRUCTURE
+  # ========================================================================
+
+  - id: 3b-SUBST
+    title: "3b-1: Implement variable substitution in iteration context"
+    type: task
+    priority: P0
+    complexity: M
+    status: ready
+    description: |
+      Implement variable substitution for generated expressions in the context of
+      fixed-point iteration. Handles renaming and rewriting expressions as iteration
+      variables are bound.
+
+      Example: When generating step function, substitute (z2, y) for (z, y) in:
+        from (x, z) in prev yield (x, y)
+    acceptance_criteria:
+      - "Substitutes bound variables in generated expressions"
+      - "Handles nested variable references"
+      - "Maintains type correctness after substitution"
+      - "Unit tests for 10+ substitution scenarios pass"
+      - "Handles record field substitution"
+      - "Preserves expression structure (no unnecessary wrapping)"
+    implementation_notes: |
+      - Location: PredicateInverter.substituteVariables() method
+      - Input: Core.Exp, Map<Core.NamedPat, Core.NamedPat> substitution
+      - Output: Core.Exp with variables substituted
+      - Use existing Shuttle infrastructure for traversal
+      - Must preserve type annotations
+    test_cases:
+      - "Simple variable rename"
+      - "Multiple variables in same expression"
+      - "Nested structure substitution"
+      - "Tuple destructuring substitution"
+      - "Function argument substitution"
+    knowledge_references:
+      - algorithm-synthesis-ura-to-morel.md: Substitution algorithms
+      - PREDICATE_INVERSION_DESIGN.md: Variable scoping section
+    dependencies:
+      - 3a-PATTERN
+
+  - id: 3b-INCREMENT
+    title: "3b-2: Build incremental computation model"
+    type: task
+    priority: P0
+    complexity: M
+    status: ready
+    description: |
+      Build the incremental computation model where each iteration step combines:
+        - Previous results (from prior iterations)
+        - Current iteration results (new tuples found in this iteration)
+
+      Generate step function with signature:
+        fn (old, new) => from ... where ... yield ...
+    acceptance_criteria:
+      - "Generates step function: fn (old, new) => ..."
+      - "Step function takes exactly two parameters (previous, current)"
+      - "Step function returns new tuples for next iteration"
+      - "Iteration terminates when no new tuples added"
+      - "Properly handles variable scoping in closure"
+      - "Type checking passes for step function"
+    implementation_notes: |
+      - Location: PredicateInverter.buildStepFunction() method
+      - Input: baseGenerator (inverted base case), stepCase (inverted step case)
+      - Output: Core.Exp representing lambda with signature: 'a bag * 'a bag -> 'a bag
+      - Pattern: fn (oldResults, newResults) => ... (from expression building join)
+      - Must use fromBuilder to construct the from expression
+    test_cases:
+      - "Single variable iteration"
+      - "Tuple iteration"
+      - "Record type iteration"
+      - "Nested from clause construction"
+    knowledge_references:
+      - algorithm-synthesis-ura-to-morel.md: Incremental computation
+      - PREDICATE_INVERSION_DESIGN.md: Example 6 structure
+    dependencies:
+      - 3b-SUBST
+
+  - id: 3b-JOIN
+    title: "3b-3: Implement join expression generation"
+    type: task
+    priority: P0
+    complexity: M
+    status: ready
+    description: |
+      Generate the join expression that connects previous iteration results with
+      the step case generator.
+
+      Example structure:
+        from (x, z) in newResults,
+             (z2, y) in baseGenerator
+          where z = z2
+          yield (x, y)
+
+      Where z is the join variable.
+    acceptance_criteria:
+      - "Generates from ... in ... , ... in ... where ... yield ..."
+      - "Join condition correctly unifies iteration variables"
+      - "Handles projection (selecting output columns)"
+      - "Integration tests with real data pass"
+      - "Correctly orders from clauses (new results first)"
+      - "Join condition is minimal and efficient"
+    implementation_notes: |
+      - Location: PredicateInverter.buildJoinExpression() method
+      - Input:
+        - newResults: previous iteration result generator
+        - baseGenerator: inverted base case generator
+        - joinVariables: Set<Core.NamedPat> to join on
+        - outputPats: List<Core.NamedPat> desired in output
+      - Output: Core.Exp representing the from expression
+      - Use FromBuilder for construction
+      - Yield clause should produce tuple matching outputPats
+    test_cases:
+      - "Single join variable"
+      - "Multiple join variables"
+      - "Different output tuple structure"
+      - "Record type handling"
+    knowledge_references:
+      - PREDICATE_INVERSION_DESIGN.md: Example 5 (join semantics)
+      - algorithm-synthesis-ura-to-morel.md: Join construction
+    dependencies:
+      - 3b-INCREMENT
+
+  - id: 3b-TUPLE
+    title: "3b-4: Handle tuple composition and destructuring"
+    type: task
+    priority: P0
+    complexity: S
+    status: ready
+    description: |
+      Handle correct construction and decomposition of output tuples throughout
+      the iteration process. Ensures type consistency between base case, step case,
+      and final output.
+    acceptance_criteria:
+      - "Correctly builds output tuple from join results"
+      - "Handles record types vs tuple types"
+      - "Maintains field names and types"
+      - "Unit tests for 5+ tuple scenarios pass"
+      - "Properly destructures input tuples in from clause"
+      - "Yields clause produces correct output type"
+    implementation_notes: |
+      - Location: PredicateInverter.buildOutputTuple() method
+      - Input: outputPats, baseType, resultType
+      - Output: Core.Exp representing tuple construction
+      - Must use core builder for syntactic correctness
+      - Handle both (x,y) syntax and {x, y} syntax
+    test_cases:
+      - "Simple pair tuple"
+      - "Three-element tuple"
+      - "Record type with named fields"
+      - "Nested record structure"
+      - "Type mismatch detection"
+    knowledge_references:
+      - PREDICATE_INVERSION_DESIGN.md: Generator metadata section
+    dependencies:
+      - 3b-JOIN
+
+  # ========================================================================
+  # PHASE 3c: CODE GENERATION & VALIDATION
+  # ========================================================================
+
+  - id: 3c-ITERATE
+    title: "3c-1: Generate Relational.iterate structure"
+    type: task
+    priority: P0
+    complexity: M
+    status: ready
+    description: |
+      Generate the complete Relational.iterate structure combining:
+        1. Base generator (inverted base case)
+        2. Step function (from Phase 3b)
+
+      Final structure: Relational.iterate(baseGen)(stepFn)
+    acceptance_criteria:
+      - "Generates Relational.iterate(base)(stepFn) syntax"
+      - "Base generator is correctly inverted from base case"
+      - "Step function has correct signature"
+      - "Type checking passes for generated expression"
+      - "Function application is syntactically correct"
+      - "Expression is directly usable as a Core.Exp"
+    implementation_notes: |
+      - Location: PredicateInverter.buildIterateExpression() method
+      - Input: baseGenerator, stepFunction
+      - Output: Core.Exp representing complete iterate call
+      - Use core.apply() for function application
+      - Type: 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
+      - Must get Relational.iterate from BuiltIn or environment
+    test_cases:
+      - "Basic transitive closure"
+      - "Single variable output"
+      - "Tuple output"
+    knowledge_references:
+      - PREDICATE_INVERSION_DESIGN.md: Example 6 structure
+    dependencies:
+      - 3b-TUPLE
+
+  - id: 3c-COMPILE
+    title: "3c-2: Validate generated code compiles"
+    type: task
+    priority: P0
+    complexity: S
+    status: ready
+    description: |
+      Validate that the generated Core.Exp expression compiles correctly without
+      type errors. Integration with existing type checking infrastructure.
+    acceptance_criteria:
+      - "Generated Core.Exp compiles without errors"
+      - "No type errors in generated code"
+      - "All type variables properly inferred"
+      - "Compilation tests pass"
+      - "Error messages are clear if compilation fails"
+    implementation_notes: |
+      - Location: Add test in PredicateInverterTest
+      - Use existing compile infrastructure
+      - Check: TypeChecker.check() succeeds
+      - Capture and validate any type errors
+    test_cases:
+      - "Simple iterate"
+      - "Complex tuple type"
+      - "Record type iteration"
+    knowledge_references:
+      - src/main/java/net/hydromatic/morel/type/TypeChecker.java
+    dependencies:
+      - 3c-ITERATE
+
+  - id: 3c-TRANSITIVE
+    title: "3c-3: Test transitive closure on dummy.smli"
+    type: task
+    priority: P0
+    complexity: S
+    status: ready
+    description: |
+      Execute the transitive closure test case from dummy.smli.
+
+      Expected input:
+        fun path (x, y) = edge (x, y) orelse
+          (exists z where edge (x, z) andalso path (z, y))
+        from p where path p
+
+      Expected output:
+        [(1,2),(2,3),(1,3)]
+
+      The edges are: (1,2), (2,3)
+      The closure is: (1,2), (2,3), (1,3)
+    acceptance_criteria:
+      - "dummy.smli test case passes"
+      - "Result contains all transitive edges"
+      - "No duplicate results"
+      - "Performance acceptable (< 1s for small graph)"
+      - "Correct tuple ordering in output"
+    implementation_notes: |
+      - Location: ScriptTest with dummy.smli
+      - Verify with expected output
+      - May need to sort/normalize output for comparison
+    test_cases:
+      - "Basic two-hop transitive closure"
+      - "Extended chain (3+ hops)"
+      - "Diamond pattern (multiple paths)"
+    knowledge_references:
+      - src/test/resources/script/dummy.smli
+    dependencies:
+      - 3c-COMPILE
+
+  - id: 3c-REGRESSION
+    title: "3c-4: Regression test against such-that.smli"
+    type: task
+    priority: P0
+    complexity: S
+    status: ready
+    description: |
+      Ensure all 159 existing tests still pass and no performance regressions
+      occur. Also add new transitive closure test cases to such-that.smli.
+    acceptance_criteria:
+      - "All 159 existing tests still pass"
+      - "No performance degradation measured"
+      - "New transitive closure tests pass (such-that.smli line 402+)"
+      - "Edge cases handled gracefully"
+      - "Test output matches expected results"
+    implementation_notes: |
+      - Location: mvn test -Dtest=ScriptTest
+      - Run full suite and capture baseline
+      - Add new test case for transitive closure
+      - Verify performance: same time as baseline within margin
+    test_cases:
+      - "All Phase 1-2 tests (regression)"
+      - "New transitive closure in such-that.smli"
+      - "Multi-hop paths"
+      - "Circular references (if applicable)"
+    knowledge_references:
+      - src/test/resources/script/such-that.smli
+    dependencies:
+      - 3c-TRANSITIVE
+
+# ============================================================================
+# PHASE 4: MODE ANALYSIS AND SMART GENERATOR SELECTION
+# ============================================================================
+
+  - id: phase-4
+    title: "Phase 4: Mode Analysis and Smart Generator Selection"
+    type: epic
+    priority: P1
+    complexity: L
+    status: ready
+    description: |
+      Enable predicates to generate values in multiple "modes" (directions).
+      This phase consists of two sub-epics: Mode Analysis (4a) and Smart Selection (4b).
+      Phase 4c (Magic Sets) is optional.
+    dependencies:
+      - phase-3
+    beads:
+      - 4a-MODE-DATA
+      - 4a-INFER
+      - 4a-INTEGRATE
+      - 4a-MULTI
+      - 4b-SELECT
+      - 4b-SCENARIO
+      - 4b-SUITE
+
+  # ========================================================================
+  # PHASE 4a: MODE ANALYSIS INFRASTRUCTURE
+  # ========================================================================
+
+  - id: 4a-MODE-DATA
+    title: "4a-1: Implement mode system data structures"
+    type: task
+    priority: P1
+    complexity: M
+    status: ready
+    description: |
+      Implement data structures to represent and track variable modes throughout
+      predicate analysis.
+
+      Modes:
+        - IN: Variable is input (bound before predicate)
+        - OUT: Variable is output (determined by predicate)
+        - BOTH: Can be either (flexible)
+        - IGNORE: Not relevant to this analysis
+    acceptance_criteria:
+      - "Mode enum with IN, OUT, BOTH, IGNORE"
+      - "Mode vector for predicates"
+      - "Mode inference rule definitions"
+      - "Unit tests for 10+ mode configurations"
+      - "Mode representation is immutable and hashable"
+    implementation_notes: |
+      - Location: New file src/main/java/net/hydromatic/morel/compile/ModeSystem.java
+      - Classes:
+        - enum Mode { IN, OUT, BOTH, IGNORE }
+        - class ModeVector(Map<Core.NamedPat, Mode>)
+        - class ModeInferenceRule
+      - Must be thread-safe and serializable for caching
+    test_cases:
+      - "Single variable modes"
+      - "Multiple variable mode vector"
+      - "Mode combination rules"
+      - "Mode equality and hashing"
+    knowledge_references:
+      - mode-analysis-synthesis.md: Mode system definition
+      - Hanus_2022_From_Logic_to_Functional_Logic_Programs.pdf: Mode system
+    dependencies:
+      - phase-3
+
+  - id: 4a-INFER
+    title: "4a-2: Implement mode inference algorithm"
+    type: task
+    priority: P1
+    complexity: M
+    status: ready
+    description: |
+      Implement Hanus-style mode inference algorithm to automatically determine
+      which variables can be generated in different input/output configurations.
+
+      Algorithm:
+        1. Build mode inference rules for each predicate
+        2. Apply rules iteratively until fixpoint
+        3. Detect conflicting modes
+        4. Report all valid modes
+    acceptance_criteria:
+      - "Applies Hanus inference rules to determine modes"
+      - "Handles built-in predicates (>, <, elem, etc.)"
+      - "Handles user-defined predicates"
+      - "Detects inconsistent mode requirements"
+      - "Unit tests pass (from Hanus paper examples)"
+      - "Efficient (memoization of mode computations)"
+    implementation_notes: |
+      - Location: New class ModeAnalyzer
+      - Input: Core.Exp predicate, Map<Core.NamedPat, Mode> assumptions
+      - Output: Set<ModeVector> valid modes
+      - Use fixed-point iteration (like saturating assignment)
+      - Handle built-in mode signatures in BuiltIn class
+    test_cases:
+      - "elem predicate: OUT when collection IN"
+      - "Comparison: no solutions if both IN with different values"
+      - "Conjunction: modes propagate through AND"
+      - "Disjunction: union of modes from branches"
+      - "Negation: reverses I/O roles"
+    knowledge_references:
+      - mode-analysis-synthesis.md: Mode inference algorithm
+      - Hanus_2022_From_Logic_to_Functional_Logic_Programs.pdf: Sections 3-4
+    dependencies:
+      - 4a-MODE-DATA
+
+  - id: 4a-INTEGRATE
+    title: "4a-3: Integrate mode analysis with PredicateInverter"
+    type: task
+    priority: P1
+    complexity: M
+    status: ready
+    description: |
+      Integrate ModeAnalyzer with existing PredicateInverter to use mode
+      information for selecting inversion strategies.
+    acceptance_criteria:
+      - "PredicateInverter accepts mode constraints"
+      - "Uses mode info to select inversion strategy"
+      - "Falls back gracefully for unsupported modes"
+      - "Integration tests pass"
+      - "Existing code paths unaffected (backwards compatible)"
+    implementation_notes: |
+      - Location: Modify PredicateInverter.invert() signature
+      - Add parameter: Optional<ModeVector> requiredMode
+      - Use mode to decide: can we invert? should we try different approach?
+      - If mode impossible: return fallback (cartesian product)
+      - If mode constrains solution space: use mode-specific algorithm
+    test_cases:
+      - "Mode-specific inversion paths"
+      - "Fallback for impossible modes"
+      - "Performance with mode hints"
+    knowledge_references:
+      - mode-analysis-synthesis.md: Integration section
+    dependencies:
+      - 4a-INFER
+
+  - id: 4a-MULTI
+    title: "4a-4: Support multiple modes for single predicate"
+    type: task
+    priority: P1
+    complexity: S
+    status: ready
+    description: |
+      Enable PredicateInverter to generate solutions for all valid modes of a
+      predicate, not just the initially assumed mode.
+    acceptance_criteria:
+      - "Can generate all valid modes for a predicate"
+      - "Mode selection is deterministic and documented"
+      - "Multiple mode tests pass"
+      - "Edge cases (no valid modes) handled"
+      - "Error messages explain mode incompatibility"
+    implementation_notes: |
+      - Location: PredicateInverter.getAllModes() method
+      - Input: Core.Exp predicate, Set<Core.NamedPat> outputPats
+      - Output: List<(ModeVector, Result)> all valid mode solutions
+      - Can use ModeAnalyzer.inferModes() first
+    test_cases:
+      - "Path predicate: multiple valid modes"
+      - "Elem predicate: single valid mode"
+      - "Comparison: possibly no valid modes"
+    knowledge_references:
+      - mode-analysis-synthesis.md: Multi-mode queries
+    dependencies:
+      - 4a-INTEGRATE
+
+  # ========================================================================
+  # PHASE 4b: SMART GENERATOR SELECTION
+  # ========================================================================
+
+  - id: 4b-SELECT
+    title: "4b-1: Use mode analysis to choose best generator"
+    type: task
+    priority: P1
+    complexity: M
+    status: ready
+    description: |
+      Select the best generator based on actual variable bindings and mode analysis.
+
+      Example:
+        - path(1, y): Mode {x: IN, y: OUT} → generate y values reachable from 1
+        - path(x, 5): Mode {x: OUT, y: IN} → generate x values that reach 5
+        - path(x, y): Mode {x: OUT, y: OUT} → generate all transitive edges
+    acceptance_criteria:
+      - "For each valid mode, generates appropriate generator"
+      - "Selects generator based on actual variable bindings"
+      - "Avoids impossible modes (throws error)"
+      - "Unit tests for 5+ mode selection scenarios pass"
+      - "Selection algorithm is documented and maintainable"
+    implementation_notes: |
+      - Location: PredicateInverter.selectModeAndInvert() method
+      - Input: Core.Exp predicate, Map<Core.NamedPat, Generator> generators
+      - Process:
+        1. Use generators to determine which variables are bound
+        2. Call ModeAnalyzer.inferModes()
+        3. Filter to valid modes for given variable bindings
+        4. Select best mode (heuristic or cost-based)
+        5. Invert with that mode
+      - Output: Result (generator expression)
+    test_cases:
+      - "Single variable bound"
+      - "Multiple variables bound"
+      - "No variables bound"
+      - "Impossible mode combination"
+    knowledge_references:
+      - mode-analysis-synthesis.md: Mode selection strategy
+    dependencies:
+      - 4a-MULTI
+
+  - id: 4b-SCENARIO
+    title: "4b-2: Handle multi-mode generation scenarios"
+    type: task
+    priority: P1
+    complexity: S
+    status: ready
+    description: |
+      Handle realistic scenarios where multiple variables may or may not be bound
+      at runtime, and select appropriate generators dynamically.
+    acceptance_criteria:
+      - "Correctly generates when multiple variables bound"
+      - "Generates when single variable bound"
+      - "Generates when all variables unbound (if possible)"
+      - "Integration tests pass"
+      - "Performance acceptable for all scenarios"
+    implementation_notes: |
+      - Location: Test scenarios in such-that.smli
+      - Cover all combinations of bind/unbound for 2-3 variable predicates
+      - Test with real data
+    test_cases:
+      - "path(1, y): find reachable from 1"
+      - "path(x, 5): find sources reaching 5"
+      - "path(x, y): all transitive edges"
+      - "path(1, 5): check if path exists (boolean query)"
+    knowledge_references:
+      - mode-analysis-synthesis.md: Scenario handling
+    dependencies:
+      - 4b-SELECT
+
+  - id: 4b-SUITE
+    title: "4b-3: Test multi-mode cases against test suite"
+    type: task
+    priority: P1
+    complexity: S
+    status: ready
+    description: |
+      Add comprehensive multi-mode test cases to such-that.smli and validate
+      all 159+ tests pass with new mode analysis infrastructure.
+    acceptance_criteria:
+      - "Multi-mode test cases in such-that.smli pass"
+      - "All Phase 3 tests still pass (no regression)"
+      - "Performance acceptable"
+      - "Code is maintainable and documented"
+      - "Test output matches expected results"
+    implementation_notes: |
+      - Location: New section in src/test/resources/script/such-that.smli
+      - Test format: same as existing script tests
+      - Include: multi-mode path predicate tests
+      - Run: mvn test -Dtest=ScriptTest
+    test_cases:
+      - "Forward mode: path(1, y)"
+      - "Backward mode: path(x, 5)"
+      - "All mode: path(x, y)"
+      - "Join modes with multiple predicates"
+      - "Error cases: impossible modes"
+    knowledge_references:
+      - src/test/resources/script/such-that.smli
+    dependencies:
+      - 4b-SCENARIO
+
+# ============================================================================
+# OPTIONAL: PHASE 4c - MAGIC SETS OPTIMIZATION
+# ============================================================================
+
+  - id: 4c-DEFER
+    title: "4c-DEFER: Magic Sets Optimization (Deferred)"
+    type: epic
+    priority: P3
+    complexity: L
+    status: deferred
+    description: |
+      Advanced optimization technique for complex predicates using magic sets.
+      DEFERRED until Phase 4a/4b performance validated.
+
+      Decision point: After Phase 4b, evaluate if magic sets would improve performance.
+      If performance acceptable, mark as complete. Otherwise, schedule for future work.
+    dependencies:
+      - 4b-SUITE
+    beads: []
+    notes: |
+      - Research required: Study magic set transformation in Flix (Madsen 2024)
+      - Implementation complexity: HIGH (3-4 weeks)
+      - Decision: EVALUATE AFTER PHASE 4B
+      - If deferred: Document in HISTORY.md and close as "won't implement"
+
+# ============================================================================
+# QUALITY GATES AND VALIDATION BEADS
+# ============================================================================
+
+quality_gates:
+  - id: gate-phase-3-complete
+    title: "Quality Gate: Phase 3 Complete"
+    trigger_on: 3c-REGRESSION
+    criteria:
+      - "All 159 Phase 1-2 tests still pass"
+      - "Transitive closure test (dummy.smli) passes"
+      - "Generated code is type-correct and compiles"
+      - "Code review passed for all Phase 3 epics"
+      - "Documentation updated with Phase 3 capabilities"
+    owner: code-review-expert
+    status: pending
+
+  - id: gate-phase-4a-complete
+    title: "Quality Gate: Phase 4a Complete"
+    trigger_on: 4a-MULTI
+    criteria:
+      - "Mode analysis infrastructure implemented"
+      - "Mode inference tests pass (from Hanus examples)"
+      - "Integration with PredicateInverter complete"
+      - "Code review passed"
+      - "Documentation updated"
+    owner: code-review-expert
+    status: pending
+
+  - id: gate-phase-4b-complete
+    title: "Quality Gate: Phase 4b Complete"
+    trigger_on: 4b-SUITE
+    criteria:
+      - "Multi-mode generation working"
+      - "All 159+ tests pass"
+      - "Performance acceptable"
+      - "Code review passed"
+      - "Ready for release"
+    owner: test-validator
+    status: pending
+
+  - id: gate-phase-4c-decision
+    title: "Decision Point: Phase 4c Necessity"
+    trigger_on: gate-phase-4b-complete
+    criteria:
+      - "Evaluate performance metrics"
+      - "Compare against Phase 1-2 baseline"
+      - "Decide: implement magic sets or mark as deferred?"
+    owner: strategic-planner
+    status: pending
+
+# ============================================================================
+# IMPLEMENTATION SCHEDULE
+# ============================================================================
+
+schedule:
+  sprint_1:
+    title: "Sprint 1: Phase 3a (Extraction & Pattern Matching)"
+    duration_days: 3-4
+    beads:
+      - 3a-EXTRACT
+      - 3a-JOINVAR
+      - 3a-PATTERN
+    deliverable: "Pattern matching works for standard transitive closure"
+    success_metric: "Unit tests pass for pattern recognition"
+
+  sprint_2:
+    title: "Sprint 2: Phase 3b (Tabulation)"
+    duration_days: 4-5
+    beads:
+      - 3b-SUBST
+      - 3b-INCREMENT
+      - 3b-JOIN
+      - 3b-TUPLE
+    deliverable: "Iteration infrastructure complete"
+    success_metric: "Integration tests pass, join generation works"
+
+  sprint_3:
+    title: "Sprint 3: Phase 3c (Code Generation)"
+    duration_days: 3-4
+    beads:
+      - 3c-ITERATE
+      - 3c-COMPILE
+      - 3c-TRANSITIVE
+      - 3c-REGRESSION
+    deliverable: "Transitive closure test case passes"
+    success_metric: "dummy.smli passes, all 159 tests still pass"
+
+  phase_3_review:
+    title: "Phase 3 Review & Testing"
+    duration_days: 2
+    activities:
+      - Code review against quality checklist
+      - Performance testing
+      - Edge case validation
+      - Documentation review
+    gate: gate-phase-3-complete
+
+  sprint_4:
+    title: "Sprint 4: Phase 4a (Mode Analysis)"
+    duration_days: 4-5
+    beads:
+      - 4a-MODE-DATA
+      - 4a-INFER
+      - 4a-INTEGRATE
+      - 4a-MULTI
+    deliverable: "Mode system working end-to-end"
+    success_metric: "Mode inference tests pass"
+
+  sprint_5:
+    title: "Sprint 5: Phase 4b (Smart Selection)"
+    duration_days: 3-4
+    beads:
+      - 4b-SELECT
+      - 4b-SCENARIO
+      - 4b-SUITE
+    deliverable: "Multi-mode generation working"
+    success_metric: "Multi-mode tests pass, 159+ tests still pass"
+
+  final_validation:
+    title: "Final Validation"
+    duration_days: 2
+    activities:
+      - Comprehensive testing
+      - Documentation review
+      - Performance benchmarking
+      - Phase 4c decision point
+    gates:
+      - gate-phase-4b-complete
+      - gate-phase-4c-decision
+
+# ============================================================================
+# RISK MITIGATION
+# ============================================================================
+
+risks:
+  - id: risk-pattern-not-matching
+    title: "Pattern not matching arbitrary recursion"
+    probability: M
+    impact: H
+    mitigation: |
+      - Design pattern matcher to handle common variations
+      - Fall back to default generator for unsupported patterns
+      - Document supported patterns clearly
+      - Test against diverse recursive patterns
+
+  - id: risk-performance-regression
+    title: "Performance regression"
+    probability: M
+    impact: H
+    mitigation: |
+      - Maintain baseline test suite (159 tests)
+      - Benchmark before and after
+      - Implement early termination for iterate
+      - Profile generated code
+
+  - id: risk-type-inference
+    title: "Type inference failures"
+    probability: L
+    impact: H
+    mitigation: |
+      - Test with multiple type systems
+      - Validate type checking in each phase
+      - Use existing type system infrastructure
+
+  - id: risk-scope-creep
+    title: "Scope creep into Phase 4c"
+    probability: M
+    impact: M
+    mitigation: |
+      - Mark Phase 4c as OPTIONAL
+      - Define clear decision point
+      - Focus on Phase 4a/4b first
+
+# ============================================================================
+# SUCCESS CRITERIA
+# ============================================================================
+
+success_criteria:
+  phase_3:
+    - "All 159 existing tests pass"
+    - "Transitive closure test case (dummy.smli) passes"
+    - "Generated code compiles and has correct semantics"
+    - "Code review passes for all epics"
+    - "Documentation updated with new capabilities"
+
+  phase_4a:
+    - "Mode analysis infrastructure implemented"
+    - "Mode inference tests pass (from Hanus examples)"
+    - "Integration with PredicateInverter complete"
+    - "Code review passes"
+
+  phase_4b:
+    - "Multi-mode generation working"
+    - "All 159+ tests pass"
+    - "Performance acceptable"
+    - "Code review passes"
+
+  overall:
+    - "Issue #217 resolved"
+    - "Comprehensive test coverage"
+    - "Maintainable, documented code"
+    - "Performance meets requirements"
