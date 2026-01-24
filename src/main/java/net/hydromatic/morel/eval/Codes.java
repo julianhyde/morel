@@ -3423,6 +3423,10 @@ public abstract class Codes {
                     session,
                     phase);
             return coreAtPhase.toString();
+          } catch (NumberFormatException e) {
+            return "Invalid phase: "
+                + phase
+                + ". Use '0', '-1', or a pass number.";
           } catch (Exception e) {
             return "Error re-planning: " + e.getMessage();
           }

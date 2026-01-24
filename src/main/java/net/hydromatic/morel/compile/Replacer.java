@@ -26,21 +26,38 @@ import net.hydromatic.morel.type.TypeSystem;
 
 /** Replaces identifiers with other identifiers. */
 public class Replacer extends EnvShuttle {
-  private final Map<Core.Id, Core.Id> substitution;
+  private final Map<Core.Id, ? extends Core.Exp> substitution;
 
   private Replacer(
       TypeSystem typeSystem,
       Environment env,
-      Map<Core.Id, Core.Id> substitution) {
+      Map<Core.Id, ? extends Core.Exp> substitution) {
     super(typeSystem, env);
     this.substitution = requireNonNull(substitution);
   }
 
   static Core.Exp substitute(
-      TypeSystem typeSystem, Map<Core.Id, Core.Id> substitution, Core.Exp exp) {
-    final Replacer replacer =
-        new Replacer(typeSystem, Environments.empty(), substitution);
+      TypeSystem typeSystem,
+      Environment env,
+      Map<Core.Id, Core.Id> substitution,
+      Core.Exp exp) {
+    if (substitution.isEmpty()) {
+      return exp;
+    }
+    final Replacer replacer = new Replacer(typeSystem, env, substitution);
     return exp.accept(replacer);
+  }
+
+  static Core.FromStep substitute(
+      TypeSystem typeSystem,
+      Environment env,
+      Map<Core.Id, Core.Exp> substitution,
+      Core.FromStep step) {
+    if (substitution.isEmpty()) {
+      return step;
+    }
+    final Replacer replacer = new Replacer(typeSystem, env, substitution);
+    return step.accept(replacer);
   }
 
   @Override
@@ -50,8 +67,8 @@ public class Replacer extends EnvShuttle {
 
   @Override
   protected Core.Exp visit(Core.Id id) {
-    final Core.Id id2 = substitution.get(id);
-    return id2 != null ? id2 : id;
+    final Core.Exp exp = substitution.get(id);
+    return exp != null ? exp : id;
   }
 }
 

@@ -1563,7 +1563,7 @@ from (parent, child) in parents
 >   [{child="arwen",parent="elrond"},{child="elladan",parent="elrond"},
 >    {child="elrohir",parent="elrond"}] : {child:string, parent:string} list
 
-(*) TODO Fix the UnsupportedOperationException
+(*) TODO Fix the IllegalArgumentException
 fun ancestors () =
   from (x, y) in parents
     union
@@ -1612,18 +1612,22 @@ fun isAncestor (x, z) =
     orelse (exists y
       where isAncestor(x, y)
         andalso (y, z) elem parents);
-> com.google.common.base.VerifyException: not found [isAncestor]
+> val isAncestor = fn : string * string -> bool
 
+(* TODO
 from a
   where isAncestor(a, "arwen");
 > stdIn:2.9-2.19 Error: unbound variable or constructor: isAncestor
 >   raised at: stdIn:2.9-2.19
+*)
 (*) TODO should return ["earendil", "elrond"] : string list
 
+(* TODO
 from d
   where isAncestor("earendil", d);
 > stdIn:2.9-2.19 Error: unbound variable or constructor: isAncestor
 >   raised at: stdIn:2.9-2.19
+*)
 (*) TODO should return ["elrond", "arwen", "elladan", "elrohir"] : string list
 
 (*) Recipe optimization

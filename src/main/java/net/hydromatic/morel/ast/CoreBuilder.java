@@ -19,6 +19,7 @@
 package net.hydromatic.morel.ast;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.Maps.transformValues;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.allMatch;
@@ -39,7 +40,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.BiFunction;
@@ -323,9 +323,11 @@ public enum CoreBuilder {
     return new Core.TuplePat(type, ImmutableList.copyOf(args));
   }
 
-  public Core.TuplePat tuplePat(TypeSystem typeSystem, List<Core.Pat> args) {
-    return tuplePat(
-        typeSystem.tupleType(transform(args, Core.Pat::type)), args);
+  public Core.TuplePat tuplePat(
+      TypeSystem typeSystem, List<? extends Core.Pat> args) {
+    RecordLikeType tupleType =
+        typeSystem.tupleType(transform(args, Core.Pat::type));
+    return tuplePat(tupleType, args);
   }
 
   public Core.ListPat listPat(Type type, Iterable<? extends Core.Pat> args) {
@@ -349,13 +351,15 @@ public enum CoreBuilder {
   }
 
   public Core.Pat recordPat(
-      TypeSystem typeSystem, Set<String> argNames, List<Core.Pat> args) {
-    final ImmutableSortedMap.Builder<String, Type> argNameTypes =
-        ImmutableSortedMap.orderedBy(ORDERING);
-    forEach(
-        argNames, args, (argName, arg) -> argNameTypes.put(argName, arg.type));
+      TypeSystem typeSystem, Map<String, Core.Pat> namePats) {
+    // Ensure sorted. If the names need to be permuted, apply the same
+    // permutation to patterns and types.
+    final ImmutableSortedMap<String, Core.Pat> sortedNamePats =
+        ImmutableSortedMap.copyOf(namePats, ORDERING);
+    final RecordLikeType recordType =
+        typeSystem.recordType(transformValues(sortedNamePats, Core.Pat::type));
     return recordPat(
-        (RecordType) typeSystem.recordType(argNameTypes.build()), args);
+        (RecordType) recordType, ImmutableList.copyOf(sortedNamePats.values()));
   }
 
   public Core.Tuple tuple(
@@ -572,24 +576,12 @@ public enum CoreBuilder {
   }
 
   /**
-   * Creates a {@link Core.Apply} with two or more arguments, packing the
-   * arguments into a tuple.
+   * Creates a {@link Core.Apply}, assuming that the expression has a function
+   * type.
    */
-  public Core.Apply apply(
-      Pos pos,
-      TypeSystem typeSystem,
-      BuiltIn builtIn,
-      Core.Exp arg0,
-      Core.Exp arg1,
-      Core.Exp... args) {
-    final Core.Literal fn = functionLiteral(typeSystem, builtIn);
-    FnType fnType = (FnType) fn.type;
-    TupleType tupleType = (TupleType) fnType.paramType;
-    return apply(
-        pos,
-        fnType.resultType,
-        fn,
-        tuple(tupleType, Lists.asList(arg0, arg1, args)));
+  public Core.Apply apply(Pos pos, Core.Exp fn, Core.Exp arg) {
+    final FnType fnType = (FnType) fn.type;
+    return apply(pos, fnType.resultType, fn, arg);
   }
 
   public Core.Case ifThenElse(
@@ -788,6 +780,29 @@ public enum CoreBuilder {
     return bag(typeSystem, arg0.type, Lists.asList(arg0, args));
   }
 
+  /** Converts a collection to ordered (list) or unordered (bag). */
+  public static Core.Exp withOrdered(
+      boolean ordered, Core.Exp collection, TypeSystem typeSystem) {
+    if (ordered == (collection.type instanceof ListType)) {
+      return collection;
+    }
+    final Type elementType = collection.type.elementType();
+    final BuiltIn builtIn;
+    final Type collectionType;
+    if (ordered) {
+      builtIn = BuiltIn.BAG_TO_LIST;
+      collectionType = typeSystem.listType(elementType);
+    } else {
+      builtIn = BuiltIn.BAG_FROM_LIST;
+      collectionType = typeSystem.bagType(elementType);
+    }
+    return core.apply(
+        Pos.ZERO,
+        collectionType,
+        core.functionLiteral(typeSystem, builtIn),
+        collection);
+  }
+
   /**
    * Creates an extent. It returns a list of all values of a given type that
    * fall into a given range-set. The range-set might consist of just {@link
@@ -834,10 +849,8 @@ public enum CoreBuilder {
             new ArrayList<>();
         final List<Core.Exp> remainingExps = new ArrayList<>();
         for (Core.Exp exp : exps) {
-          if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
-            final Core.Literal argLiteral =
-                (Core.Literal) ((Core.Apply) exp).arg;
-            final RangeExtent list = argLiteral.unwrap(RangeExtent.class);
+          if (exp.isExtent()) {
+            final RangeExtent list = exp.getRangeExtent();
             rangeSetMaps.add(list.rangeSetMap);
             continue;
           }
@@ -872,12 +885,8 @@ public enum CoreBuilder {
             new ArrayList<>();
         final List<Core.Exp> remainingExps = new ArrayList<>();
         for (Core.Exp exp : exps) {
-          if (exp.isCallTo(BuiltIn.Z_EXTENT)) {
-            final Core.Literal argLiteral =
-                (Core.Literal) ((Core.Apply) exp).arg;
-            final Core.Wrapper wrapper = (Core.Wrapper) argLiteral.value;
-            final RangeExtent list = wrapper.unwrap(RangeExtent.class);
-            rangeSetMaps.add(list.rangeSetMap);
+          if (exp.isExtent()) {
+            rangeSetMaps.add(exp.getRangeExtent().rangeSetMap);
             continue;
           }
           remainingExps.add(exp);
@@ -927,8 +936,7 @@ public enum CoreBuilder {
         if (apply.isCallTo(BuiltIn.LIST_CONCAT)
             && apply.arg.isCallTo(BuiltIn.Z_LIST)) {
           final Core.Apply apply2 = (Core.Apply) apply.arg;
-          if (allMatch(
-              apply2.args(), exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
+          if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 unionExtents(typeSystem, apply2.args());
             if (pair.right.isEmpty()) {
@@ -941,8 +949,7 @@ public enum CoreBuilder {
             && ((Core.Apply) apply.arg).arg.isCallTo(BuiltIn.Z_LIST)) {
           final Core.Apply apply1 = (Core.Apply) apply.arg;
           final Core.Apply apply2 = (Core.Apply) apply1.arg;
-          if (allMatch(
-              apply2.args(), exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
+          if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 unionExtents(typeSystem, apply2.args());
             if (pair.right.isEmpty()) {
@@ -953,8 +960,7 @@ public enum CoreBuilder {
         if (apply.isCallTo(BuiltIn.LIST_INTERSECT)
             && apply.arg.isCallTo(BuiltIn.Z_LIST)) {
           final Core.Apply apply2 = (Core.Apply) apply.arg;
-          if (allMatch(
-              apply2.args(), exp1 -> exp1.isCallTo(BuiltIn.Z_EXTENT))) {
+          if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 intersectExtents(typeSystem, apply2.args());
             if (pair.right.isEmpty()) {
@@ -990,7 +996,7 @@ public enum CoreBuilder {
   }
 
   /** Calls a built-in function. */
-  private Core.Apply call(
+  public Core.Apply call(
       TypeSystem typeSystem, BuiltIn builtIn, Core.Exp... args) {
     final Core.Literal literal = functionLiteral(typeSystem, builtIn);
     final FnType fnType = (FnType) literal.type;

@@ -104,6 +104,8 @@ public class ExtentTest {
       final Extents.Analysis analysis =
           Extents.create(
               typeSystem,
+              Environments.empty(),
+              false,
               pat,
               ImmutableSortedMap.of(),
               ImmutableList.of(core.where(Core.StepEnv.EMPTY, filterExp)),
@@ -202,11 +204,7 @@ public class ExtentTest {
     Core.Exp exp2 = core.lessThan(f.typeSystem, core.id(xPat), ten);
     Core.Exp exp3 = core.notEqual(f.typeSystem, core.id(xPat), five);
     final Core.Exp exp =
-        core.andAlso(
-            f.typeSystem,
-            exp0,
-            core.andAlso(
-                f.typeSystem, exp1, core.andAlso(f.typeSystem, exp2, exp3)));
+        core.andAlso(f.typeSystem, ImmutableList.of(exp0, exp1, exp2, exp3));
     Core.Exp x = f.extent(xPat, exp);
     assertThat(x, instanceOf(Core.Apply.class));
     assertThat(((Core.Apply) x).fn, instanceOf(Core.Literal.class));
@@ -327,6 +325,8 @@ public class ExtentTest {
           Extents.Analysis analysis =
               Extents.create(
                   f.typeSystem,
+                  Environments.empty(),
+                  true,
                   pat,
                   ImmutableSortedMap.of(),
                   fromBuilder.build().steps,
@@ -412,6 +412,8 @@ public class ExtentTest {
     Extents.Analysis analysis =
         Extents.create(
             f.typeSystem,
+            Environments.empty(),
+            true,
             pat,
             ImmutableSortedMap.of(),
             fromBuilder.build().steps,

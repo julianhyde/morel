@@ -16,7 +16,91 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
+Sys.set ("output", "tabular");
+> val it = () : unit
+(*
+let
+  val emps =
+    [(7369, 20), (7499, 30), (7521, 30),
+      (7566, 20), (7698, 30), (7782, 10),
+      (7788, 20), (7839, 10), (7844, 30),
+      (7876, 20), (7900, 30), (7934, 10)];
+  val depts =
+    [(10, "Accounting"), (20, "Research"),
+      (30, "Sales"), (40, "Operations")]
+  fun emp_deptno(empno, deptno) = (empno, deptno) elem emps
+  fun dept_name(deptno, dname) = (deptno, dname) elem depts
+  fun emp_dname(empno, dname) =
+      exists deptno
+        where emp_deptno(empno, deptno)
+        andalso dept_name(deptno, dname)
+in
+  from empno where emp_dname(empno, "Research")
+end;
+*)
+(*
+let
+  fun emp_dname (empno, dname) =
+      exists deptno
+        where (empno, deptno) elem [(3, 20), (4, 30), (5, 20)]
+        andalso (deptno, dname) elem [(10, "Accounting"), (20, "Research"), (30, "Sales")]
+in
+  from empno where emp_dname(empno, "Research")
+end;
+*)
+(*
+let
+  fun emp_dname (empno, dname) =
+      exists deptno
+        where (empno, deptno) elem [(3, 20), (4, 30), (5, 20)]
+        andalso (deptno, dname) elem [(10, "Accounting"), (20, "Research"), (30, "Sales")]
+in
+  from empno, dname where emp_dname(empno, dname)
+end;
+from i where i > 0 andalso i < 10;
+> val it = [1,2,3,4,5,6,7,8,9] : int bag
+from i where i = 0 orelse i = 12;
+> val it = [0,12] : int bag
+from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
+> val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int bag
+
+let
+  val nums = [1, 2, 3, 4, 5]
+  fun isNum n = n elem nums
+  fun isEven n = n mod 2 = 0
+in
+  from n where isNum n andalso isEven n
+end;
+> val it = [2,4] : int bag
+
+from i where i > 0 andalso i < 10 andalso i mod 3 = 2;
+> val it = [2,5,8] : int bag
+
+(*) Pattern
+from x, y where (x, y) elem [(1,true),(2,false)];
+> x y
+> - -----
+> 1 true
+> 2 false
+>
+> val it : {x:int, y:bool} bag
+
+exists w, x, y
+  where (x, 2) elem [(1, 2), (1, 3), (4, 3)];
+> val it = true : bool
+
+*)
+
+(*
+from x
+  where exists y
+    where (x, y) elem [(1, 2), (1, 3), (4, 3)];
+> val it = [1, 4] : int list
+
+exists x
+  where (exists y
+    where (x, y) elem [(1, 2), (1, 3), (4, 3)]);
+> val it = true : bool
+*)
 
 (*) End dummy.smli

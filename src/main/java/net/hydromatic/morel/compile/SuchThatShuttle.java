@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.skip;
 
@@ -27,6 +28,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -34,13 +36,11 @@ import java.util.Set;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
-import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.util.Holder;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Converts unbounded variables to bounded variables.
@@ -58,12 +58,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * from e in #emps scott
  * }</pre>
  */
-class SuchThatShuttle extends Shuttle {
-  final @Nullable Environment env;
+class SuchThatShuttle extends EnvShuttle {
+  SuchThatShuttle(TypeSystem typeSystem, Environment env) {
+    super(typeSystem, env);
+  }
 
-  SuchThatShuttle(TypeSystem typeSystem, @Nullable Environment env) {
-    super(typeSystem);
-    this.env = env;
+  @Override
+  protected EnvShuttle push(Environment env) {
+    return new SuchThatShuttle(typeSystem, env);
   }
 
   static boolean containsUnbounded(Core.Decl decl) {
@@ -83,8 +85,24 @@ class SuchThatShuttle extends Shuttle {
 
   @Override
   protected Core.Exp visit(Core.From from) {
+    final Core.From from2 = Expander.expandFrom(typeSystem, env, from);
+
+    // Expand subqueries.
+    return super.visit(from2);
+  }
+
+  // TODO: This is obsolete. Remove it.
+  protected Core.Exp visit0(Core.From from) {
     final Core.From from2 = new FromVisitor(typeSystem, env).visit(from);
     return from2.equals(from) ? from : from2;
+  }
+
+  static Set<Core.NamedPat> freePats(TypeSystem typeSystem, Core.Exp exp) {
+    final Set<Core.NamedPat> set = new HashSet<>();
+    exp.accept(
+        new FreeFinder(
+            typeSystem, Environments.empty(), new ArrayDeque<>(), set::add));
+    return set;
   }
 
   /**
@@ -93,11 +111,13 @@ class SuchThatShuttle extends Shuttle {
    */
   static class FromVisitor {
     final TypeSystem typeSystem;
+    final Environment initialEnv;
     final FromBuilder fromBuilder;
     final List<Core.Exp> satisfiedFilters = new ArrayList<>();
 
-    FromVisitor(TypeSystem typeSystem, @Nullable Environment env) {
-      this.typeSystem = typeSystem;
+    FromVisitor(TypeSystem typeSystem, Environment env) {
+      this.typeSystem = requireNonNull(typeSystem);
+      this.initialEnv = requireNonNull(env);
       this.fromBuilder = core.fromBuilder(typeSystem, env);
     }
 
@@ -195,11 +215,10 @@ class SuchThatShuttle extends Shuttle {
           nameExps.add(id.name, core.id(id));
         }
       }
+      final boolean atom = nameExps.size() == 1;
       Core.Exp exp =
-          nameExps.size() == 1
-              ? nameExps.get(0).getValue()
-              : core.record(typeSystem, nameExps);
-      fromBuilder.yield_(false, null, exp, env.atom);
+          atom ? nameExps.right(0) : core.record(typeSystem, nameExps);
+      fromBuilder.yield_(false, null, exp, atom);
       idPats.clear();
     }
 
@@ -214,6 +233,8 @@ class SuchThatShuttle extends Shuttle {
       final Extents.Analysis analysis =
           Extents.create(
               typeSystem,
+              initialEnv,
+              true,
               scan.pat,
               ImmutableSortedMap.of(),
               laterSteps,

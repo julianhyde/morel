@@ -157,6 +157,34 @@ public abstract class Compiles {
       checkPatternCoverage(typeSystem, coreDecl0, warningConsumer);
     }
 
+    // Create enriched environment with function placeholders before
+    // SuchThatShuttle.
+    // This allows PredicateInverter to detect recursive calls during
+    // compilation.
+    // Similar to how TypeResolver and Resolver already handle recursive
+    // functions,
+    // we bind the function names in the environment so that pattern inversion
+    // can
+    // see them.
+    Environment enrichedEnv = env;
+    final List<Binding> functionPlaceholders = new ArrayList<>();
+    if ((coreDecl0.op == Op.REC_VAL_DECL || coreDecl0.op == Op.VAL_DECL)
+        && coreDecl0 instanceof Core.ValDecl) {
+      ((Core.ValDecl) coreDecl0)
+          .forEachBinding(
+              (pat, exp, overloadPat, pos) -> {
+                // Add placeholder binding so PredicateInverter can detect
+                // recursive
+                // calls
+                if (pat instanceof Core.IdPat) {
+                  functionPlaceholders.add(Binding.of((Core.IdPat) pat, exp));
+                }
+              });
+      if (!functionPlaceholders.isEmpty()) {
+        enrichedEnv = env.bindAll(functionPlaceholders);
+      }
+    }
+
     // Ensures that once we discover that there are no unbounded variables,
     // we stop looking; makes things a bit more efficient.
     boolean mayContainUnbounded = true;
@@ -191,12 +219,13 @@ public abstract class Compiles {
         final Core.Decl coreDecl2 = coreDecl;
         if (mayContainUnbounded) {
           if (SuchThatShuttle.containsUnbounded(coreDecl)) {
-            coreDecl = coreDecl.accept(new SuchThatShuttle(typeSystem, env));
+            coreDecl =
+                coreDecl.accept(new SuchThatShuttle(typeSystem, enrichedEnv));
           } else {
             mayContainUnbounded = false;
           }
         }
-        coreDecl = Extents.infinitePats(typeSystem, coreDecl);
+        coreDecl = Extents.infinitePats(typeSystem, env, coreDecl);
         if (coreDecl == coreDecl2) {
           break;
         }
@@ -305,7 +334,7 @@ public abstract class Compiles {
           mayContainUnbounded = false;
         }
       }
-      coreDecl = Extents.infinitePats(typeSystem, coreDecl);
+      coreDecl = Extents.infinitePats(typeSystem, env, coreDecl);
       if (coreDecl == coreDecl2) {
         break;
       }

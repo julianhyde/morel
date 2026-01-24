@@ -46,7 +46,6 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
-import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
@@ -140,17 +139,20 @@ public class Extents {
    */
   public static Analysis create(
       TypeSystem typeSystem,
+      Environment env,
+      boolean invert,
       Core.Pat pat,
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Iterable<? extends Core.FromStep> followingSteps,
       PairList<Core.IdPat, Core.Exp> idPats) {
-    final Extent extent = new Extent(typeSystem, pat, boundPats, idPats);
+    final Extent extent =
+        new Extent(typeSystem, env, invert, pat, boundPats, idPats);
     final List<Core.Exp> remainingFilters = new ArrayList<>();
 
     final ExtentMap map = new ExtentMap();
     for (Core.FromStep step : followingSteps) {
       if (step instanceof Core.Where) {
-        extent.g3(map.map, ((Core.Where) step).exp);
+        extent.g3b(map.map, ((Core.Where) step).exp);
       }
     }
     extent.definitions.forEach(
@@ -223,16 +225,14 @@ public class Extents {
 
   /** Returns whether an expression is an infinite extent. */
   public static boolean isInfinite(Core.Exp exp) {
-    if (!exp.isCallTo(BuiltIn.Z_EXTENT)) {
-      return false;
-    }
-    final Core.Apply apply = (Core.Apply) exp;
-    final Core.Literal literal = (Core.Literal) apply.arg;
-    final RangeExtent rangeExtent = literal.unwrap(RangeExtent.class);
-    return rangeExtent.iterable == null;
+    return exp.isExtent() && exp.getRangeExtent().iterable == null;
   }
 
-  public static Core.Decl infinitePats(TypeSystem typeSystem, Core.Decl node) {
+  public static Core.Decl infinitePats(
+      TypeSystem typeSystem, Environment env, Core.Decl node) {
+    if (true) {
+      return node; // TODO:
+    }
     return node.accept(
         new Shuttle(typeSystem) {
           @Override
@@ -247,6 +247,8 @@ public class Extents {
                   final Analysis analysis =
                       create(
                           typeSystem,
+                          env,
+                          true,
                           scan.pat,
                           ImmutableSortedMap.of(),
                           followingSteps,
@@ -378,7 +380,7 @@ public class Extents {
 
     private Analysis(
         SortedMap<Core.NamedPat, Core.Exp> boundPats,
-        Set<Core.NamedPat> goalPats,
+        List<Core.NamedPat> goalPats,
         Core.Exp extentExp,
         List<Core.Exp> satisfiedFilters,
         List<Core.Exp> remainingFilters) {
@@ -396,7 +398,9 @@ public class Extents {
 
   private static class Extent {
     private final TypeSystem typeSystem;
-    final Set<Core.NamedPat> goalPats;
+    private final Environment env;
+    private final boolean invert;
+    final List<Core.NamedPat> goalPats;
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
 
     /**
@@ -415,11 +419,15 @@ public class Extents {
 
     Extent(
         TypeSystem typeSystem,
+        Environment env,
+        boolean invert,
         Core.Pat pat,
         SortedMap<Core.NamedPat, Core.Exp> boundPats,
         PairList<Core.IdPat, Core.Exp> idPats) {
-      this.typeSystem = typeSystem;
-      this.goalPats = ImmutableSet.copyOf(flatten(pat));
+      this.typeSystem = requireNonNull(typeSystem);
+      this.env = requireNonNull(env);
+      this.invert = invert;
+      this.goalPats = ImmutableList.copyOf(flatten(pat));
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
       this.idPats = idPats;
     }
@@ -541,6 +549,216 @@ public class Extents {
       }
     }
 
+    @SuppressWarnings("SwitchStatementWithTooFewBranches")
+    void g3b(Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map, Core.Exp filter) {
+      boolean tryInvert = false;
+      final Core.Apply apply;
+      switch (filter.op) {
+        case APPLY:
+          apply = (Core.Apply) filter;
+          switch (apply.fn.op) {
+            case FN_LITERAL:
+              Core.Literal literal = (Core.Literal) apply.fn;
+              // Check if it's a user-defined function
+              if (literal.value instanceof Core.Fn) {
+                tryInvert = true;
+                break;
+              }
+              BuiltIn builtIn = literal.unwrap(BuiltIn.class);
+              final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map2;
+              switch (builtIn) {
+                case Z_ANDALSO:
+                  // Expression is 'andalso'. Visit each pattern, and 'and' the
+                  // filters (intersect the extents).
+                  // First try PredicateInverter
+                  // Convert boundPats to generators
+                  final Map<Core.NamedPat, PredicateInverter.Generator>
+                      generators = new LinkedHashMap<>();
+                  boundPats.forEach(
+                      (pat, exp) ->
+                          generators.put(
+                              pat,
+                              new PredicateInverter.Generator(
+                                  pat,
+                                  exp,
+                                  Generator.Cardinality.FINITE,
+                                  ImmutableList.of(),
+                                  ImmutableSet.of())));
+                  final PredicateInverter.Result result =
+                      PredicateInverter.invert(
+                          typeSystem, env, filter, goalPats, generators);
+                  if (invert
+                      && result.generator.cardinality
+                          != Generator.Cardinality.INFINITE) {
+                    // The generator produces tuples for all goalPats
+                    // Add remaining filters if any
+                    final Core.Exp combinedFilter =
+                        core.andAlso(typeSystem, result.remainingFilters);
+                    goalPats.forEach(
+                        pat ->
+                            map.computeIfAbsent(pat, p -> PairList.of())
+                                .add(
+                                    result.generator.expression,
+                                    combinedFilter));
+                    break;
+                  }
+                  map2 = new LinkedHashMap<>();
+                  apply.arg.forEachArg((arg, i) -> g3(map2, arg));
+                  map2.forEach(
+                      (pat, foo) ->
+                          map.computeIfAbsent(pat, p -> PairList.of())
+                              .addAll(foo));
+                  break;
+
+                case Z_ORELSE:
+                  // Expression is 'orelse'. Visit each pattern, and intersect
+                  // the constraints (union the generators).
+                  map2 = new LinkedHashMap<>();
+                  final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map3 =
+                      new LinkedHashMap<>();
+                  apply.arg.forEachArg(
+                      (arg, i) -> {
+                        g3(map3, arg);
+                        map3.forEach(
+                            (pat, foo) ->
+                                map2.computeIfAbsent(pat, p -> PairList.of())
+                                    .add(reduceAnd(typeSystem, foo)));
+                        map3.clear();
+                      });
+                  map2.forEach(
+                      (pat, foo) -> {
+                        final PairList<Core.Exp, Core.Exp> foo1 =
+                            map.computeIfAbsent(pat, p -> PairList.of());
+                        if (foo1.isEmpty()) {
+                          // [] union [x2, x3, x4]
+                          //  =>
+                          // [x2, x3, x4]
+                          foo1.add(reduceOr(typeSystem, foo));
+                        } else {
+                          // [x0, x1] union [x2, x3, x4]
+                          //  =>
+                          // [union(intersect(x0, x1), intersect(x2, x3, x4))]
+                          PairList<Core.Exp, Core.Exp> intersectExtents =
+                              PairList.of();
+                          intersectExtents.add(reduceAnd(typeSystem, foo1));
+                          intersectExtents.add(reduceAnd(typeSystem, foo));
+                          foo1.clear();
+                          foo1.add(reduceOr(typeSystem, intersectExtents));
+                        }
+                      });
+                  break;
+
+                case OP_EQ:
+                case OP_NE:
+                case OP_GE:
+                case OP_GT:
+                case OP_LT:
+                case OP_LE:
+                  g4(
+                      builtIn,
+                      apply.arg(0),
+                      apply.arg(1),
+                      (pat, filter2, extent) ->
+                          map.computeIfAbsent(pat, p -> PairList.of())
+                              .add(extent, filter2));
+                  break;
+
+                case OP_ELEM:
+                  switch (apply.arg(0).op) {
+                    case ID:
+                      final Core.NamedPat pat = ((Core.Id) apply.arg(0)).idPat;
+                      map.computeIfAbsent(pat, p1 -> PairList.of())
+                          .add(apply.arg(1), apply);
+                      break;
+
+                    case TUPLE:
+                      final Core.Tuple tuple = (Core.Tuple) apply.arg(0);
+                      final Core.Id id =
+                          core.id(createId(tuple.type, apply.arg(1)));
+                      final Core.Exp elem =
+                          core.elem(typeSystem, id, apply.arg(1));
+                      g3(
+                          map,
+                          core.andAlso(
+                              typeSystem,
+                              elem,
+                              core.equal(typeSystem, id, tuple)));
+                      final List<Core.Exp> conjunctions = new ArrayList<>();
+                      conjunctions.add(core.elem(typeSystem, id, apply.arg(1)));
+                      tuple.forEach(
+                          (i, name, arg) ->
+                              conjunctions.add(
+                                  core.equal(
+                                      typeSystem,
+                                      core.field(typeSystem, id, i),
+                                      arg)));
+                      g3(map, core.andAlso(typeSystem, conjunctions));
+                      break;
+                  }
+                  break;
+
+                default:
+                  // For other built-in functions, try PredicateInverter
+                  tryInvert = true;
+                  break;
+              }
+              break;
+
+            case ID:
+              // User-defined function call. Try to invert.
+              tryInvert = true;
+              break;
+
+            case APPLY:
+              // Curried function application (e.g., String.isPrefix s "abcd").
+              // Try to invert.
+              tryInvert = true;
+              break;
+
+            default:
+              break;
+          }
+          break;
+
+        default:
+          break;
+      }
+
+      if (tryInvert) {
+        // Convert boundPats to generators
+        final Map<Core.NamedPat, PredicateInverter.Generator> generators =
+            new LinkedHashMap<>();
+        boundPats.forEach(
+            (pat, exp) ->
+                generators.put(
+                    pat,
+                    new PredicateInverter.Generator(
+                        pat,
+                        exp,
+                        Generator.Cardinality.FINITE,
+                        ImmutableList.of(),
+                        ImmutableSet.of())));
+        final PredicateInverter.Result result =
+            PredicateInverter.invert(
+                typeSystem, env, filter, goalPats, generators);
+        // Check if inversion succeeded (didn't just return fallback)
+        final boolean inversionSucceeded =
+            result.remainingFilters.size() != 1
+                || !result.remainingFilters.get(0).equals(filter);
+        if (inversionSucceeded) {
+          // The generator produces tuples for all goalPats
+          final Core.Exp combinedFilter =
+              result.remainingFilters.isEmpty()
+                  ? core.boolLiteral(true)
+                  : core.andAlso(typeSystem, result.remainingFilters);
+          goalPats.forEach(
+              pat ->
+                  map.computeIfAbsent(pat, p -> PairList.of())
+                      .add(result.generator.expression, combinedFilter));
+        }
+      }
+    }
+
     private void g4(
         BuiltIn builtIn,
         Core.Exp arg0,
@@ -642,8 +860,8 @@ public class Extents {
    * Reduces a list of extent-filter pairs [e0, f0, e1, f1, ...] to an
    * extent-filter pair [e0 intersect e1 ..., f0 andalso f1 ...].
    *
-   * <p>If any of the e<sub>i</sub> are calls to {@link BuiltIn#Z_EXTENT
-   * extent}, merges them into a single extent. For example, in
+   * <p>If any of the e<sub>i</sub> are extents (see {@link
+   * Core.Exp#isExtent()}), merges them into a single extent. For example, in
    *
    * <pre>{@code
    * [extent "int: (0, inf)", x > 0,
