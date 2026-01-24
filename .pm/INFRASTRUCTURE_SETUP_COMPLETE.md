@@ -14,7 +14,7 @@ Comprehensive project management infrastructure for Morel predicate inversion, e
 
 | File | Purpose | Read First? | Size | Status |
 |------|---------|------------|------|--------|
-| **README.md** | .pm/ directory guide & quick start | ✓ | ~6KB | ✓ CREATED |
+| **PROJECT_MANAGEMENT.md** | .pm/ directory guide & quick start | ✓ | ~6KB | ✓ CREATED |
 | **PROJECT_MANAGEMENT_SUMMARY.md** | High-level overview & FAQ | ✓ | ~7KB | ✓ CREATED |
 | **CONTINUATION.md** | Current state + next actions | ✓✓ | ~5KB | ✓ CREATED |
 | **CONTEXT_PROTOCOL.md** | How to resume work | ✓ on break | ~13KB | ✓ EXISTING |
@@ -32,7 +32,7 @@ Comprehensive project management infrastructure for Morel predicate inversion, e
 ```
 .pm/
 ├── Core Documentation (9 files)
-│   ├── README.md
+│   ├── PROJECT_MANAGEMENT.md
 │   ├── PROJECT_MANAGEMENT_SUMMARY.md
 │   ├── CONTINUATION.md (NEW)
 │   ├── CONTEXT_PROTOCOL.md
@@ -218,7 +218,7 @@ Phase End:
 2. **PHASES.md** - Phase overview (read at phase start)
 3. **KNOWLEDGE_INDEX.md** - Find information (reference as needed)
 4. **AGENT_INSTRUCTIONS.md** - Spawn help (before using agents)
-5. **README.md** - Overall guide (when confused)
+5. **PROJECT_MANAGEMENT.md** - Overall guide (when confused)
 
 ---
 
@@ -243,7 +243,7 @@ Phase End:
 - [x] Knowledge integration: Index + memory bank plan
 - [x] Quality gates: Criteria specified for 2 gates
 - [x] Examples provided: Yes (multiple per file)
-- [x] Troubleshooting guides: Yes (METHODOLOGY.md, README.md)
+- [x] Troubleshooting guides: Yes (METHODOLOGY.md, PROJECT_MANAGEMENT.md)
 
 ---
 
@@ -251,7 +251,7 @@ Phase End:
 
 | File | Lines | Purpose | Read When |
 |------|-------|---------|-----------|
-| README.md | 450 | .pm/ guide | Confused about structure |
+| PROJECT_MANAGEMENT.md | 450 | .pm/ guide | Confused about structure |
 | PROJECT_MANAGEMENT_SUMMARY.md | 500 | High-level overview | First time or status check |
 | CONTINUATION.md | 280 | Current state | Every session start |
 | CONTEXT_PROTOCOL.md | 490 | Resume work | Returning from break |
@@ -354,7 +354,7 @@ Expected Time: 30-60 min to create all 6 beads
 ## For Questions or Issues
 
 ### "The infrastructure doesn't have X"
-- Check README.md (general guidance)
+- Check PROJECT_MANAGEMENT.md (general guidance)
 - Check KNOWLEDGE_INDEX.md (finding information)
 - Check PHASES.md (phase/epic details)
 - Check AGENT_INSTRUCTIONS.md (agent usage)
@@ -392,7 +392,7 @@ Expected Time: 30-60 min to create all 6 beads
 **Team**: Solo developer (Hal Hildebrand) + agent support
 
 **Key Files to Read** (in order):
-1. `.pm/README.md` (understanding .pm/)
+1. `.pm/PROJECT_MANAGEMENT.md` (understanding .pm/)
 2. `.pm/CONTINUATION.md` (current state)
 3. `.pm/PHASES.md` (phase breakdown)
 4. `.pm/AGENT_INSTRUCTIONS.md` (spawning agents)

@@ -37,7 +37,7 @@
 
 ```
 .pm/
-├── README.md (THIS FILE)
+├── PROJECT_MANAGEMENT.md (THIS FILE)
 ├── CONTEXT_PROTOCOL.md (How to resume work)
 ├── CONTINUATION.md (Current state + next actions)
 ├── METHODOLOGY.md (Engineering discipline)
