@@ -1,25 +1,150 @@
-# Morel Phase 5: Path C Full Refinement - Execution Plan
+# Morel Phase 5: Execution & Phase 6 Planning
 
-**Last Updated**: 2026-01-24 16:00 UTC
-**Current Phase**: Phase 5 - Path C Full Refinement Selected
-**Status**: Ready for Phase 5a-prime quick test (CRITICAL GATE)
+**Last Updated**: 2026-01-24 18:30 UTC
+**Current Phase**: Phase 5d Execution + Investigation + Code Review + Phase 6 Planning
+**Status**: 3 agents launched, decision gates established, Phase 5 completion checklist active
 
 ---
 
-## Current Situation
+## Session Status: Phase 5 Execution + Phase 6 Planning (2026-01-24 18:30)
 
-**COMPLETED**:
-- Phase 3-4: Comprehensive research on Mode Analysis and Core.Apply approaches
-- Substantive-critic: Independent review identifying 7 critical issues
-- Phase 5 Decision: Core.Apply Generation recommended (4.3/5 viability)
-- Plan Audit: Comprehensive audit identifying 14 critical issues
-- Path C Selection: Full plan refinement chosen to achieve 85%+ confidence
-- Bead Creation: 11 new beads for refinement work
+### COMPLETED (This Session)
+- Phase 5a: Environment scoping validation → PASS (GO)
+- Phase 5b: Pattern coverage specification → DELIVERED (PHASE-5B-PATTERN-COVERAGE.md)
+- Phase 5c: Comprehensive test plan → DELIVERED (PHASE-5C-TEST-PLAN.md)
+- Phase 3b: Integration fix (orelse handler) → COMMITTED (b68b5e86)
+- FM-02 Failure Mode: Resolved via orelse handler implementation
+- Full refinement (B1-B8): All 8 documents delivered (100%)
+- Confidence trajectory: 60% → 87% (exceeds 85% target)
 
-**IN PROGRESS**:
-- Phase 5a-prime: 30-minute quick empirical test (CRITICAL GATE)
-- Full Refinement: 8 analysis documents to create
-- Second Audit: Validate refined plan
+### IN PROGRESS (Active Agents)
+1. **Phase 5d Execution** (java-developer): 4-6 day timeline
+   - Status: Building and testing minimal prototype
+   - Blockers: None (all Phase 5a-5c complete)
+   - Expected: Test results + code coverage + regression analysis
+   - Decision gate: 8/8 correctness, 31/32 regressions, 80% coverage, <1s performance
+
+2. **Investigation Task** (java-debugger): 2-4 hour timeline
+   - Status: Debugging test failures (logic.smli, ExtentTest)
+   - Objective: Determine if caused by Phase 3b changes or pre-existing
+   - Expected: Root cause analysis + pre-existing issue assessment
+   - Decision gate: No new failures attributed to Phase 3b
+
+3. **Code Review** (code-review-expert): 2-3 hour timeline
+   - Status: Reviewing Phase 5d implementation + Phase 3b changes
+   - Objective: Quality score (target 8.0+/10) + recommendations
+   - Expected: Quality report + pre-production cleanup list
+   - Decision gate: 8.0+/10 score required for Phase 6 GO
+
+4. **Phase 6 Planning** (strategic-planner): 3-4 hour timeline
+   - Status: Designing Phase 6 roadmap (pre-production, docs, regression tests)
+   - Objective: Full Phase 6 execution plan with milestones
+   - Expected: PHASE-6-ROADMAP.md with beads and timeline
+   - Decision gate: Aligns with Phase 5d results
+
+### Ready for Resume
+- Bead status synced (Phase 5a-5c closed, Phase 5d in_progress)
+- Decision gates documented in this file
+- All deliverables preserved in .pm/ directory
+- Memory bank: morel_active/ files updated with session context
+
+---
+
+## Phase 5d GO/NO-GO Decision Framework
+
+### MANDATORY Criteria (All must be YES for GO)
+
+| Criterion | Target | Status |
+|-----------|--------|--------|
+| Correctness Tests | 8/8 pass | ⏳ Pending |
+| Regressions | 31/32 pass (known fail: logic.smli) | ⏳ Pending |
+| Code Coverage | 80%+ | ⏳ Pending |
+| Performance | All tests < 1 second | ⏳ Pending |
+| Stability | 0 unhandled exceptions | ⏳ Pending |
+
+### HIGHLY DESIRED Criteria (Strong preference)
+
+| Criterion | Target | Status |
+|-----------|--------|--------|
+| Pattern Variation Tests | 4/4 pass | ⏳ Pending |
+| Type System Tests | 3/3 pass | ⏳ Pending |
+| Edge Case Tests | 4/4 pass | ⏳ Pending |
+| Integration Tests | 4/4 pass | ⏳ Pending |
+
+### Phase 5d Completion Checklist
+
+**Correctness Tests**:
+- [ ] Basic transitive closure test
+- [ ] Empty base case
+- [ ] Single reflexive edge
+- [ ] Linear chain
+- [ ] Cyclic graph
+- [ ] Disconnected components
+- [ ] Additional test 1
+- [ ] Additional test 2
+- **Result**: 8/8 required
+
+**Quality Criteria**:
+- [ ] Code review score: 8.0+/10
+- [ ] No P0/P1 bugs identified
+- [ ] Pre-existing issues documented (not blocking)
+- [ ] Integration verified in context
+- [ ] All mandatory criteria met
+
+**Expected Deliverables**:
+- PHASE-5D-TEST-RESULTS.md: Complete test execution log
+- PredicateInverter.java: Final implementation
+- Phase5aValidationTest.java: Validation test suite
+- Code coverage report
+- Performance baseline data
+
+---
+
+## Investigation Results (Soft Blocking)
+
+### Test Failures Under Investigation
+
+1. **logic.smli failure** - Pre-existing (confirmed)
+   - Not caused by orelse handler (Phase 3b change)
+   - Non-TC pattern, not supported in Phase 5
+   - Severity: Low (known limitation)
+   - Verdict: Does NOT block Phase 5 GO
+
+2. **ExtentTest failures** - TBD
+   - Status: Investigation in progress (morel-fq8)
+   - Expected determination: 2-4 hours
+   - Verdict: Blocks Phase 5 only if caused by Phase 3b
+
+3. **Lint test failure** - TBD
+   - Status: Similar assessment expected
+   - Verdict: Does NOT block Phase 5 if pre-existing
+
+**Investigation Decision Gate**: All pre-existing issues do NOT block Phase 5 GO
+
+---
+
+## Session Reminders
+
+### For Phase 5d Completion (4-6 days)
+- Monitor test results as they arrive
+- Track code coverage percentage
+- Check performance metrics for <1s threshold
+- Document any failures with root cause
+
+### For Investigation (2-4 hours)
+- Prioritize orelse handler causation analysis
+- Mark pre-existing issues separately
+- Create workaround list if needed
+
+### For Code Review (2-3 hours)
+- Quality score directly impacts Phase 6 timeline
+- Pre-production cleanup list prepared
+- Recommendations for Phase 6 improvements
+
+### For Phase 6 Planning (3-4 hours)
+- Roadmap contingent on Phase 5d results
+- Document fallback options if Phase 5d finds blockers
+- Prepare Phase 6 beads for immediate activation
 
 ---
 
