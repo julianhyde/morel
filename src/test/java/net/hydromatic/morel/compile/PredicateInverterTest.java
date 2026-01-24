@@ -1818,6 +1818,358 @@ public class PredicateInverterTest {
       throw new RuntimeException("Failed to invoke tabulate", e);
     }
   }
+
+  // ===== Phase 3b-3 Tests - Step Function Generation =====
+
+  /**
+   * Test 1: buildStepFunction generates step function successfully.
+   *
+   * <p>Given a simple tabulation result with one I-O pair, buildStepFunction
+   * should successfully generate a lambda expression without throwing
+   * exceptions.
+   */
+  @Test
+  void testBuildStepFunctionSimple() {
+    final Fixture f = new Fixture();
+
+    // Create a simple tabulation result
+    final Core.Exp edgesList =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
+            core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat, f.yPat),
+            ImmutableMap.of(),
+            Environments.empty());
+
+    final ProcessTreeNode.TerminalNode dummySource =
+        ProcessTreeNode.TerminalNode.of(edgesList, varEnv, Optional.empty());
+
+    final PredicateInverter.IOPair ioPair =
+        new PredicateInverter.IOPair(ImmutableMap.of(), edgesList, dummySource);
+
+    final PredicateInverter.TabulationResult tabulation =
+        new PredicateInverter.TabulationResult(
+            ImmutableList.of(ioPair), Generator.Cardinality.FINITE, false);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "buildStepFunction",
+              PredicateInverter.TabulationResult.class,
+              VarEnvironment.class);
+      method.setAccessible(true);
+      Core.Exp result = (Core.Exp) method.invoke(inverter, tabulation, varEnv);
+
+      // Should produce a function expression
+      assertThat(result.op, hasToString("FN"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke buildStepFunction", e);
+    }
+  }
+
+  /**
+   * Test 2: buildStepFunction produces correct function type.
+   *
+   * <p>The generated step function should have type (bag, bag) -> bag where bag
+   * is the type of the base generator.
+   */
+  @Test
+  void testBuildStepFunctionCorrectType() {
+    final Fixture f = new Fixture();
+
+    // Create tabulation result with edges list
+    final Core.Exp edgesList =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)));
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat, f.yPat),
+            ImmutableMap.of(),
+            Environments.empty());
+
+    final ProcessTreeNode.TerminalNode dummySource =
+        ProcessTreeNode.TerminalNode.of(edgesList, varEnv, Optional.empty());
+
+    final PredicateInverter.IOPair ioPair =
+        new PredicateInverter.IOPair(ImmutableMap.of(), edgesList, dummySource);
+
+    final PredicateInverter.TabulationResult tabulation =
+        new PredicateInverter.TabulationResult(
+            ImmutableList.of(ioPair), Generator.Cardinality.FINITE, false);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "buildStepFunction",
+              PredicateInverter.TabulationResult.class,
+              VarEnvironment.class);
+      method.setAccessible(true);
+      Core.Exp result = (Core.Exp) method.invoke(inverter, tabulation, varEnv);
+
+      // Check that the type is a function type
+      assertThat(result.type.op(), hasToString("FUNCTION_TYPE"));
+
+      // The function should take a tuple of two bags
+      final net.hydromatic.morel.type.FnType fnType =
+          (net.hydromatic.morel.type.FnType) result.type;
+      final Type paramType = fnType.paramType;
+      assertThat(paramType.op(), hasToString("TUPLE_TYPE"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke buildStepFunction", e);
+    }
+  }
+
+  /**
+   * Test 3: buildStepLambda produces correct lambda structure.
+   *
+   * <p>The lambda should have a tuple parameter pattern (old, new) and a FROM
+   * expression as the body.
+   */
+  @Test
+  void testBuildStepLambdaCorrectStructure() {
+    final Fixture f = new Fixture();
+
+    final Core.Exp edgesList =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)));
+
+    final Set<Core.NamedPat> threadedVars = ImmutableSet.of(f.xPat, f.yPat);
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat, f.yPat),
+            ImmutableMap.of(),
+            Environments.empty());
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "buildStepLambda",
+              Core.Exp.class,
+              Set.class,
+              VarEnvironment.class);
+      method.setAccessible(true);
+      Core.Exp result =
+          (Core.Exp) method.invoke(inverter, edgesList, threadedVars, varEnv);
+
+      // Should be a FN expression
+      assertThat(result.op, hasToString("FN"));
+
+      final Core.Fn fn = (Core.Fn) result;
+
+      // Parameter should be an ID pattern (simple parameter)
+      assertThat(fn.idPat.op, hasToString("ID_PAT"));
+
+      // Body should be a CASE expression (for tuple destructuring)
+      assertThat(fn.exp.op, hasToString("CASE"));
+
+      final Core.Case caseExp = (Core.Case) fn.exp;
+
+      // Case should have one match with a TUPLE_PAT
+      assertThat(caseExp.matchList.size(), hasToString("1"));
+      final Core.Match match = caseExp.matchList.get(0);
+      assertThat(match.pat.op, hasToString("TUPLE_PAT"));
+
+      // Match body should be a FROM expression
+      assertThat(match.exp.op, hasToString("FROM"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke buildStepLambda", e);
+    }
+  }
+
+  /**
+   * Test 4: buildStepBody creates FROM expression with SCAN, WHERE, YIELD.
+   *
+   * <p>The FROM expression should scan both the base generator and new results,
+   * add a WHERE clause for the join, and yield the result tuple.
+   */
+  @Test
+  void testBuildStepBodyFromExpression() {
+    final Fixture f = new Fixture();
+
+    final Core.Exp edgesList =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)));
+
+    final Type bagType = edgesList.type;
+    final Core.IdPat oldPat = core.idPat(bagType, "oldTuples", 0);
+    final Core.IdPat newPat = core.idPat(bagType, "newTuples", 0);
+
+    final Set<Core.NamedPat> threadedVars = ImmutableSet.of(f.xPat, f.yPat);
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat, f.yPat),
+            ImmutableMap.of(),
+            Environments.empty());
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "buildStepBody",
+              Core.Exp.class,
+              Core.NamedPat.class,
+              Core.NamedPat.class,
+              Set.class,
+              VarEnvironment.class);
+      method.setAccessible(true);
+      Core.Exp result =
+          (Core.Exp)
+              method.invoke(
+                  inverter, edgesList, oldPat, newPat, threadedVars, varEnv);
+
+      // Should be a FROM expression
+      assertThat(result.op, hasToString("FROM"));
+
+      final Core.From from = (Core.From) result;
+
+      // Should have at least 2 steps: scan base, scan new
+      assertThat(from.steps.size() >= 2, hasToString("true"));
+
+      // First step should be SCAN
+      assertThat(from.steps.get(0).op, hasToString("SCAN"));
+
+      // Second step should be SCAN
+      assertThat(from.steps.get(1).op, hasToString("SCAN"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke buildStepBody", e);
+    }
+  }
+
+  /**
+   * Test 5: identifyJoinVariable returns first threaded variable.
+   *
+   * <p>Given a set of threaded variables, identifyJoinVariable should return
+   * one of them (currently returns the first).
+   */
+  @Test
+  void testIdentifyJoinVariableSimple() {
+    final Fixture f = new Fixture();
+
+    final Set<Core.NamedPat> threadedVars = ImmutableSet.of(f.xPat, f.yPat);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "identifyJoinVariable", Set.class);
+      method.setAccessible(true);
+      Core.NamedPat result =
+          (Core.NamedPat) method.invoke(inverter, threadedVars);
+
+      // Should return one of the threaded variables
+      assertThat(threadedVars.contains(result), hasToString("true"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke identifyJoinVariable", e);
+    }
+  }
+
+  /**
+   * Test 6: End-to-end integration test.
+   *
+   * <p>Given a complete tabulation result, buildStepFunction should generate a
+   * compilable step function that can be used with Relational.iterate.
+   */
+  @Test
+  void testStepFunctionIntegration() {
+    final Fixture f = new Fixture();
+
+    // Create realistic tabulation result for path(x,y) transitive closure
+    final Core.Exp edgesList =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
+            core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat, f.yPat),
+            ImmutableMap.of(),
+            Environments.empty());
+
+    final ProcessTreeNode.TerminalNode dummySource =
+        ProcessTreeNode.TerminalNode.of(edgesList, varEnv, Optional.empty());
+
+    final PredicateInverter.Generator generator =
+        new PredicateInverter.Generator(
+            core.tuplePat(f.typeSystem, ImmutableList.of(f.xPat, f.yPat)),
+            edgesList,
+            Generator.Cardinality.FINITE,
+            ImmutableList.of(),
+            ImmutableSet.of());
+
+    final PredicateInverter.IOPair ioPair =
+        new PredicateInverter.IOPair(ImmutableMap.of(), edgesList, dummySource);
+
+    final PredicateInverter.TabulationResult tabulation =
+        new PredicateInverter.TabulationResult(
+            ImmutableList.of(ioPair), Generator.Cardinality.FINITE, false);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "buildStepFunction",
+              PredicateInverter.TabulationResult.class,
+              VarEnvironment.class);
+      method.setAccessible(true);
+      Core.Exp stepFunction =
+          (Core.Exp) method.invoke(inverter, tabulation, varEnv);
+
+      // Should successfully generate a step function
+      assertThat(stepFunction, not(hasToString("null")));
+      assertThat(stepFunction.op, hasToString("FN"));
+
+      // The step function should be a valid lambda expression
+      final Core.Fn fn = (Core.Fn) stepFunction;
+
+      // Parameter should be an ID pattern (simple parameter)
+      assertThat(fn.idPat.op, hasToString("ID_PAT"));
+
+      // Body should be a CASE expression (for tuple destructuring)
+      assertThat(fn.exp.op, hasToString("CASE"));
+
+      final Core.Case caseExp = (Core.Case) fn.exp;
+
+      // Case should have one match with a TUPLE_PAT
+      assertThat(caseExp.matchList.size(), hasToString("1"));
+      final Core.Match match = caseExp.matchList.get(0);
+      assertThat(match.pat.op, hasToString("TUPLE_PAT"));
+
+      // Match body should be a FROM expression
+      assertThat(match.exp.op, hasToString("FROM"));
+
+      // Validate the FROM expression structure
+      final Core.From from = (Core.From) match.exp;
+      assertThat(from.steps.size() >= 2, hasToString("true"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed integration test", e);
+    }
+  }
 }
 
 // End PredicateInverterTest.java

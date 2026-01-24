@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,6 +51,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -1257,6 +1259,433 @@ public class PredicateInverter {
       this.generator = requireNonNull(generator);
       this.remainingFilters = ImmutableList.copyOf(remainingFilters);
     }
+  }
+
+  /**
+   * Result of tabulating a Perfect Process Tree (PPT).
+   *
+   * <p>Tabulation (URA Step 2) traverses the PPT and collects input-output
+   * (I-O) pairs from terminal nodes. These pairs represent concrete mappings
+   * that will be used to generate Relational.iterate calls.
+   *
+   * <p>The PPT represents all computation paths through a recursive function.
+   * Terminal nodes represent base cases with inversion results. Tabulation
+   * extracts these terminal results and tracks cardinality.
+   */
+  public static class TabulationResult {
+    /** Collected input-output pairs from PPT terminals. */
+    public final List<IOPair> ioMappings;
+
+    /** Cardinality of the outputs. */
+    public final net.hydromatic.morel.compile.Generator.Cardinality cardinality;
+
+    /** Whether duplicates are possible. */
+    public final boolean mayHaveDuplicates;
+
+    public TabulationResult(
+        Iterable<IOPair> ioMappings,
+        net.hydromatic.morel.compile.Generator.Cardinality cardinality,
+        boolean mayHaveDuplicates) {
+      this.ioMappings = ImmutableList.copyOf(ioMappings);
+      this.cardinality = requireNonNull(cardinality);
+      this.mayHaveDuplicates = mayHaveDuplicates;
+    }
+  }
+
+  /**
+   * An input-output pair from a PPT terminal node.
+   *
+   * <p>Represents a concrete mapping from input bindings to output expressions
+   * discovered during PPT traversal.
+   */
+  public static class IOPair {
+    /** Input binding for this I-O pair. */
+    public final ImmutableMap<Core.NamedPat, Core.Exp> inputBinding;
+
+    /** Output expression from this terminal. */
+    public final Core.Exp output;
+
+    /** Which terminal node produced this pair. */
+    public final ProcessTreeNode.TerminalNode source;
+
+    public IOPair(
+        Map<Core.NamedPat, Core.Exp> inputBinding,
+        Core.Exp output,
+        ProcessTreeNode.TerminalNode source) {
+      this.inputBinding = ImmutableMap.copyOf(inputBinding);
+      this.output = requireNonNull(output);
+      this.source = requireNonNull(source);
+    }
+  }
+
+  /**
+   * Tabulates a Perfect Process Tree to extract I-O pairs.
+   *
+   * <p>This is URA Step 2: traverse the PPT depth-first and collect terminal
+   * nodes with successful inversions. The result includes:
+   *
+   * <ul>
+   *   <li>I-O pairs mapping inputs to outputs
+   *   <li>Overall cardinality (SINGLE, FINITE, or INFINITE)
+   *   <li>Duplicate detection flag
+   * </ul>
+   *
+   * @param ppt The Perfect Process Tree root node
+   * @param env The variable environment
+   * @return Tabulation result with I-O pairs and metadata
+   */
+  private TabulationResult tabulate(ProcessTreeNode ppt, VarEnvironment env) {
+    // Traverse PPT depth-first, collect terminals
+    final List<IOPair> pairs = new ArrayList<>();
+    final List<net.hydromatic.morel.compile.Generator.Cardinality>
+        cardinalities = new ArrayList<>();
+    final Set<String> seenOutputs = new HashSet<>();
+
+    traversePPT(ppt, env, pairs, cardinalities, seenOutputs);
+
+    // Compute overall cardinality
+    final net.hydromatic.morel.compile.Generator.Cardinality
+        overallCardinality = computeCardinality(cardinalities);
+
+    // Detect duplicates (same output from different input classes)
+    final boolean mayHaveDuplicates = detectDuplicates(pairs);
+
+    return new TabulationResult(pairs, overallCardinality, mayHaveDuplicates);
+  }
+
+  /**
+   * Depth-first traversal of PPT collecting terminal nodes.
+   *
+   * <p>Recursively visits all nodes in the PPT and extracts I-O pairs from
+   * terminals with successful inversions.
+   *
+   * @param node The current node to traverse
+   * @param env The variable environment
+   * @param collector List to collect I-O pairs into
+   * @param cardinalities List to collect cardinalities from terminals
+   * @param seenOutputs Set of output strings for duplicate detection
+   */
+  private void traversePPT(
+      ProcessTreeNode node,
+      VarEnvironment env,
+      List<IOPair> collector,
+      List<net.hydromatic.morel.compile.Generator.Cardinality> cardinalities,
+      Set<String> seenOutputs) {
+
+    if (node.isTerminal()) {
+      final ProcessTreeNode.TerminalNode terminal =
+          (ProcessTreeNode.TerminalNode) node;
+
+      // Terminal must have inversion result
+      if (terminal.isInverted()) {
+        // Extract generator result
+        final Result invResult = terminal.inversionResult.get();
+        final PredicateInverter.Generator gen = invResult.generator;
+
+        // Convert boundVars map from Generator to Exp
+        final ImmutableMap.Builder<Core.NamedPat, Core.Exp> inputBuilder =
+            ImmutableMap.builder();
+        for (Map.Entry<Core.NamedPat, PredicateInverter.Generator> entry :
+            env.boundVars.entrySet()) {
+          inputBuilder.put(entry.getKey(), entry.getValue().expression);
+        }
+
+        // Create I-O pair
+        final IOPair pair =
+            new IOPair(inputBuilder.build(), gen.expression, terminal);
+
+        collector.add(pair);
+        cardinalities.add(gen.cardinality);
+        seenOutputs.add(gen.expression.toString());
+      }
+    } else if (node instanceof ProcessTreeNode.BranchNode) {
+      final ProcessTreeNode.BranchNode branch =
+          (ProcessTreeNode.BranchNode) node;
+
+      // Traverse both branches
+      traversePPT(branch.left, env, collector, cardinalities, seenOutputs);
+      traversePPT(branch.right, env, collector, cardinalities, seenOutputs);
+
+    } else if (node instanceof ProcessTreeNode.SequenceNode) {
+      final ProcessTreeNode.SequenceNode seq =
+          (ProcessTreeNode.SequenceNode) node;
+
+      // For sequences, process all children with current environment
+      for (ProcessTreeNode child : seq.children) {
+        traversePPT(child, env, collector, cardinalities, seenOutputs);
+      }
+    }
+  }
+
+  /**
+   * Determines overall cardinality from individual cardinalities.
+   *
+   * <p>Rules:
+   *
+   * <ul>
+   *   <li>If any is INFINITE, overall is INFINITE
+   *   <li>If all are SINGLE, overall is SINGLE
+   *   <li>Otherwise FINITE
+   * </ul>
+   *
+   * @param cardinalities List of cardinalities from terminals
+   * @return Overall cardinality
+   */
+  private net.hydromatic.morel.compile.Generator.Cardinality computeCardinality(
+      List<net.hydromatic.morel.compile.Generator.Cardinality> cardinalities) {
+    if (cardinalities.isEmpty()) {
+      return net.hydromatic.morel.compile.Generator.Cardinality
+          .FINITE; // Default
+    }
+
+    // If any is INFINITE, overall is INFINITE
+    if (cardinalities.contains(
+        net.hydromatic.morel.compile.Generator.Cardinality.INFINITE)) {
+      return net.hydromatic.morel.compile.Generator.Cardinality.INFINITE;
+    }
+
+    // If all are SINGLE, overall is SINGLE
+    if (cardinalities.stream()
+        .allMatch(
+            c ->
+                c
+                    == net.hydromatic.morel.compile.Generator.Cardinality
+                        .SINGLE)) {
+      return net.hydromatic.morel.compile.Generator.Cardinality.SINGLE;
+    }
+
+    // Otherwise FINITE
+    return net.hydromatic.morel.compile.Generator.Cardinality.FINITE;
+  }
+
+  /**
+   * Detects if same output can occur from different input classes.
+   *
+   * <p>Simple heuristic: check if any output expression appears multiple times.
+   *
+   * @param pairs List of I-O pairs
+   * @return True if duplicates are possible
+   */
+  private boolean detectDuplicates(List<IOPair> pairs) {
+    // Simple heuristic: check if any output expression appears multiple times
+    final Set<String> outputStrings = new HashSet<>();
+    for (IOPair pair : pairs) {
+      final String outStr = pair.output.toString();
+      if (outputStrings.contains(outStr)) {
+        return true; // Duplicate found
+      }
+      outputStrings.add(outStr);
+    }
+    return false;
+  }
+
+  // ===== Phase 3b-3: Step Function Generation =====
+
+  /**
+   * Builds the step function for Relational.iterate.
+   *
+   * <p>The step function takes two parameters (oldTuples, newTuples) and
+   * produces newly derived tuples by joining the base case with new results.
+   *
+   * <p>For transitive closure {@code path(x,y) = edge(x,y) orelse (exists z
+   * where edge(x,z) andalso path(z,y))}, generates:
+   *
+   * <pre>{@code
+   * fn (oldPaths, newPaths) =>
+   *   from (x, z) in edges,
+   *        (z2, y) in newPaths
+   *     where z = z2
+   *     yield (x, y)
+   * }</pre>
+   *
+   * @param tabulation The tabulation result containing I-O mappings
+   * @param env The variable environment
+   * @return Lambda expression for the step function
+   */
+  private Core.Exp buildStepFunction(
+      TabulationResult tabulation, VarEnvironment env) {
+    if (tabulation.ioMappings.isEmpty()) {
+      throw new IllegalArgumentException(
+          "Cannot build step function for empty tabulation");
+    }
+
+    // Get base case generator from first I-O pair
+    final IOPair baseCase = tabulation.ioMappings.get(0);
+    final Core.Exp baseGenerator = baseCase.output;
+
+    // Determine threaded variables (variables preserved through recursion)
+    final Set<Core.NamedPat> threadedVars = env.unboundGoals();
+
+    // Build the lambda function
+    return buildStepLambda(baseGenerator, threadedVars, env);
+  }
+
+  /**
+   * Builds the lambda expression for the step function.
+   *
+   * <p>Creates a function {@code fn (old, new) => FROM ...} where the FROM
+   * expression joins the base generator with new results.
+   *
+   * @param baseGen The base case generator expression
+   * @param threadedVars Variables threaded through recursion
+   * @param env The variable environment
+   * @return Lambda expression
+   */
+  private Core.Exp buildStepLambda(
+      Core.Exp baseGen, Set<Core.NamedPat> threadedVars, VarEnvironment env) {
+
+    // Determine the element type from the base generator
+    final Type elementType = baseGen.type.elementType();
+    final Type bagType = baseGen.type;
+
+    // Create parameter patterns for the lambda: (old, new)
+    final Core.IdPat oldPat = core.idPat(bagType, "oldTuples", 0);
+    final Core.IdPat newPat = core.idPat(bagType, "newTuples", 0);
+
+    // Build the FROM expression that forms the body
+    final Core.Exp fromExp =
+        buildStepBody(baseGen, oldPat, newPat, threadedVars, env);
+
+    // Create the tuple pattern for lambda parameters: (old, new)
+    final Core.TuplePat paramPat =
+        core.tuplePat(typeSystem, ImmutableList.of(oldPat, newPat));
+
+    // Determine function type: (bag, bag) -> bag
+    final Type paramType = typeSystem.tupleType(bagType, bagType);
+    final net.hydromatic.morel.type.FnType fnType =
+        typeSystem.fnType(paramType, bagType);
+
+    // Create lambda parameter (simple IdPat)
+    final Core.IdPat lambdaParam = core.idPat(paramType, "stepFnParam", 0);
+
+    // Create lambda: fn v => case v of (old, new) => fromExp
+    final Core.Match match = core.match(Pos.ZERO, paramPat, fromExp);
+    final Core.Case caseExp =
+        core.caseOf(
+            Pos.ZERO, bagType, core.id(lambdaParam), ImmutableList.of(match));
+
+    return core.fn(fnType, lambdaParam, caseExp);
+  }
+
+  /**
+   * Builds the FROM expression inside the step function.
+   *
+   * <p>Pattern: {@code from (x,z) in base, (z2,y) in new where z=z2 yield
+   * (x,y)}.
+   *
+   * <p>The FROM scans both the base generator and the new results, joins them
+   * on the intermediate variable, and yields the result tuple.
+   *
+   * @param baseGen The base case generator
+   * @param oldPat Pattern for old results (unused in simple transitive closure)
+   * @param newPat Pattern for new results
+   * @param threadedVars Variables threaded through recursion
+   * @param env The variable environment
+   * @return FROM expression
+   */
+  private Core.Exp buildStepBody(
+      Core.Exp baseGen,
+      Core.NamedPat oldPat,
+      Core.NamedPat newPat,
+      Set<Core.NamedPat> threadedVars,
+      VarEnvironment env) {
+
+    // Determine the base element type (should be a tuple type like (int, int))
+    final Type baseElemType = baseGen.type.elementType();
+
+    // For transitive closure pattern (x, z) from edges
+    // We need to decompose the tuple type to get individual variable types
+    final Type[] baseComponents;
+    if (baseElemType.op() == Op.TUPLE_TYPE) {
+      final RecordLikeType recordLikeType = (RecordLikeType) baseElemType;
+      final List<Type> argTypes = recordLikeType.argTypes();
+      baseComponents = argTypes.toArray(new Type[0]);
+    } else {
+      // Simple case: single element type
+      baseComponents = new Type[] {baseElemType};
+    }
+
+    // Create patterns for base scan: (x, z)
+    final Core.IdPat xPat = core.idPat(baseComponents[0], "x", 0);
+    final Core.IdPat zPat =
+        baseComponents.length > 1
+            ? core.idPat(baseComponents[1], "z", 0)
+            : core.idPat(baseComponents[0], "z", 0);
+    final Core.Pat baseScanPat =
+        baseComponents.length > 1
+            ? core.tuplePat(typeSystem, ImmutableList.of(xPat, zPat))
+            : xPat;
+
+    // Create patterns for new scan: (z2, y)
+    final Core.IdPat z2Pat = core.idPat(baseComponents[0], "z2", 0);
+    final Core.IdPat yPat =
+        baseComponents.length > 1
+            ? core.idPat(baseComponents[1], "y", 0)
+            : core.idPat(baseComponents[0], "y", 0);
+    final Core.Pat newScanPat =
+        baseComponents.length > 1
+            ? core.tuplePat(typeSystem, ImmutableList.of(z2Pat, yPat))
+            : z2Pat;
+
+    // Build FROM expression
+    // Note: Pass null for environment because oldPat and newPat are bound by
+    // the Case pattern match, not the Environment
+    final FromBuilder builder =
+        core.fromBuilder(typeSystem, (Environment) null);
+
+    // Scan base generator: from (x, z) in baseGen
+    builder.scan(baseScanPat, baseGen);
+
+    // Scan new results: (z2, y) in newTuples
+    builder.scan(newScanPat, core.id(newPat));
+
+    // Add WHERE clause: z = z2 (join on intermediate variable)
+    if (baseComponents.length > 1) {
+      // OP_EQ is polymorphic, so we need to provide the type parameter
+      final Type zType = zPat.type;
+      final Core.Exp whereClause =
+          core.call(
+              typeSystem,
+              BuiltIn.OP_EQ,
+              zType,
+              Pos.ZERO,
+              core.id(zPat),
+              core.id(z2Pat));
+      builder.where(whereClause);
+    }
+
+    // Add YIELD clause: (x, y)
+    final Core.Exp yieldExp;
+    if (baseComponents.length > 1) {
+      yieldExp = core.tuple(typeSystem, core.id(xPat), core.id(yPat));
+    } else {
+      yieldExp = core.id(xPat);
+    }
+    builder.yield_(yieldExp);
+
+    return builder.build();
+  }
+
+  /**
+   * Identifies the join variable from threaded variables.
+   *
+   * <p>The join variable is the intermediate variable that appears in both:
+   *
+   * <ul>
+   *   <li>Second position of base case output (z in (x,z))
+   *   <li>First position of recursive call argument (z in path(z,y))
+   * </ul>
+   *
+   * <p>For now, uses a simple heuristic: returns the first threaded variable.
+   *
+   * @param threadedVars Variables threaded through recursion
+   * @return The join variable
+   */
+  private Core.NamedPat identifyJoinVariable(Set<Core.NamedPat> threadedVars) {
+    if (threadedVars.isEmpty()) {
+      throw new IllegalArgumentException("No join variable identified");
+    }
+    return threadedVars.iterator().next();
   }
 }
 
