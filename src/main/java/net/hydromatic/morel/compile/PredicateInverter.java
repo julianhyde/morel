@@ -34,6 +34,7 @@ import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -373,18 +374,18 @@ public class PredicateInverter {
         final FromBuilder fromBuilder = core.fromBuilder(typeSystem, env);
         final ImmutableSet.Builder<Core.NamedPat> freeVars =
             ImmutableSet.builder();
-        net.hydromatic.morel.compile.Generator.Cardinality c =
+        net.hydromatic.morel.compile.Generator.Cardinality cardinality =
             net.hydromatic.morel.compile.Generator.Cardinality.SINGLE;
-        for (Core.NamedPat p : goalPats) {
-          Generator generator = generatorFor(ImmutableList.of(p));
-          c = c.max(generator.cardinality);
+        for (Core.NamedPat pattern : goalPats) {
+          Generator generator = generatorFor(ImmutableList.of(pattern));
+          cardinality = cardinality.max(generator.cardinality);
           freeVars.addAll(generator.freeVars);
-          fromBuilder.scan(p, generator.expression);
+          fromBuilder.scan(pattern, generator.expression);
         }
         return new Generator(
-            goalPat,
+            goalPats.get(goalPats.size() - 1),
             fromBuilder.build(),
-            c,
+            cardinality,
             ImmutableList.of(),
             freeVars.build());
     }
@@ -524,17 +525,28 @@ public class PredicateInverter {
    * (PPT) and analyze the predicate structure. It's the integration point
    * between PredicateInverter and ProcessTreeBuilder.
    *
-   * <p>Phase 3a: This method constructs the PPT but returns empty. Full
-   * tabulation and Relational.iterate generation will be implemented in Phase
-   * 4.
+   * <p><b>PHASE 4 PLACEHOLDER:</b> Currently constructs PPT successfully but
+   * always returns empty. Full implementation requires:
+   *
+   * <ul>
+   *   <li>PPT tabulation to build I-O pairs
+   *   <li>Mode analysis for smart generator selection
+   *   <li>Generation of Relational.iterate calls from PPT structure
+   * </ul>
+   *
+   * <p>Phase 3b uses direct AST pattern matching instead (see {@link
+   * #tryInvertTransitiveClosure}). This method will be fully implemented in
+   * Phase 4 to handle all recursive predicates via PPT analysis.
    *
    * <p>Package-private for testing.
    *
    * @param predicate The predicate expression to analyze
    * @param goalPatterns Variables to generate values for
    * @param boundGenerators Generators for bound variables
-   * @return Inversion result, or empty if PPT construction failed
+   * @return Always returns empty in Phase 3b; will return inversion result in
+   *     Phase 4
    */
+  @SuppressWarnings("unused") // Phase 4 implementation placeholder
   Optional<Result> tryInvertWithProcessTree(
       Core.Exp predicate,
       List<Core.NamedPat> goalPatterns,
@@ -715,14 +727,12 @@ public class PredicateInverter {
    * <p>This is used to determine which variables need to be preserved during
    * iteration and which are intermediate join variables.
    *
-   * @param baseCase The base case expression (not currently used, reserved for
-   *     future enhancements)
    * @param recursiveCase The recursive case expression
    * @param functionName The name of the recursive function
    * @return Set of patterns threaded through the recursive call
    */
   private Set<Core.NamedPat> identifyThreadedVariables(
-      Core.Exp baseCase, Core.Exp recursiveCase, String functionName) {
+      Core.Exp recursiveCase, String functionName) {
     // Find recursive call in recursive case
     Optional<Core.Apply> recursiveCall =
         identifyRecursiveCall(recursiveCase, functionName);
@@ -1723,16 +1733,22 @@ public class PredicateInverter {
    *   <li>First position of recursive call argument (z in path(z,y))
    * </ul>
    *
-   * <p>For now, uses a simple heuristic: returns the first threaded variable.
+   * <p>Uses deterministic ordering by variable name to ensure consistent code
+   * generation across multiple runs. Returns the variable that comes first in
+   * lexicographic order.
    *
    * @param threadedVars Variables threaded through recursion
-   * @return The join variable
+   * @return The join variable (first in lexicographic order by name)
    */
   private Core.NamedPat identifyJoinVariable(Set<Core.NamedPat> threadedVars) {
     if (threadedVars.isEmpty()) {
       throw new IllegalArgumentException("No join variable identified");
     }
-    return threadedVars.iterator().next();
+    // Sort by name for deterministic behavior
+    return threadedVars.stream()
+        .min(Comparator.comparing(pat -> pat.name))
+        .orElseThrow(
+            () -> new IllegalArgumentException("No join variable identified"));
   }
 }
 

@@ -226,8 +226,8 @@ public class ProcessTreeBuilder {
 
     // Build child nodes
     List<ProcessTreeNode> children = new ArrayList<>();
-    for (Core.Exp c : conjuncts) {
-      children.add(build(c, envWithJoins));
+    for (Core.Exp conjunct : conjuncts) {
+      children.add(build(conjunct, envWithJoins));
     }
 
     return new SequenceNode(andAlsoApply, envWithJoins, children);

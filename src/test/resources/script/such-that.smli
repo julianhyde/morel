@@ -733,7 +733,7 @@ val edges = [
 > val edges : {x:int, y:int} list
 fun edge (x, y) = {x, y} elem edges;
 > val edge = fn : int * int -> bool
-(* TODO
+(* TODO: Re-enable after fixing Phase 3b runtime bug (pattern z is not grounded)
 fun path (x, y) =
   edge (x, y) orelse
   (exists z where path (x, z) andalso edge (z, y));

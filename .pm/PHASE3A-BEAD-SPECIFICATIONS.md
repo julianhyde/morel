@@ -1,9 +1,9 @@
 # Phase 3a Bead Specifications - Complete Audit
 
-**Document Date**: 2026-01-24  
-**Phase**: 3a (ProcessTreeNode Construction)  
-**Status**: Fully Enriched - Ready for Implementation  
-**Total Beads**: 5  
+**Document Date**: 2026-01-24
+**Phase**: 3a (ProcessTreeNode Construction)
+**Status**: Fully Enriched - Ready for Implementation
+**Total Beads**: 5
 **Sequence**: Linear (each blocks the next)
 
 ---
@@ -50,7 +50,7 @@
    - Method: isInverted() checks if inversionResult is empty
 
 3. **BranchNode** (for orelse):
-   - Fields: term, env, left, right  
+   - Fields: term, env, left, right
    - Methods: hasInvertibleBaseCase(), hasRecursiveCase()
    - Helper: containsRecursive() traverses children
 
@@ -183,13 +183,13 @@
      - Check: has WHERE step
      - Check: does NOT have YIELD step
      - Return: hasWhere && !hasYield
-   
+
    - **extractWhereClause(Core.From)**:
      - Find all WHERE steps
      - Single WHERE: return directly
      - Multiple WHERE: combine with andalso
      - Return null if no WHERE
-   
+
    - **Test Case**:
      ```
      exists z where edge(x,z) andalso path(z,y)
