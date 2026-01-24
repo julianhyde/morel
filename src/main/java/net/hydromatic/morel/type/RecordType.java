@@ -108,7 +108,7 @@ public class RecordType extends BaseType implements RecordLikeType {
     final ImmutableSortedMap.Builder<String, V> builder =
         ImmutableSortedMap.orderedBy(ORDERING);
     builder.put(name, v0);
-    for (int i = 0; i < entries.length / 2; i += 2) {
+    for (int i = 0; i < entries.length; i += 2) {
       builder.put((String) entries[i], (V) entries[i + 1]);
     }
     return builder.build();

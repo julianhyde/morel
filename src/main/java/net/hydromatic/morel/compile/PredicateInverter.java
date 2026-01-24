@@ -829,23 +829,34 @@ public class PredicateInverter {
       }
     }
 
-    // If the expression is "(a, b, c, "foo") elem myList"
-    // and the goal is "(c, b)"
-    // then the generator is "from (a, b, c, "foo") in myList yield {c, b}".
+    // Handle tuple elem patterns like (x, y) elem list
+    // But only if:
+    // 1. The pattern contains only variable IDs (no literals/constants), AND
+    // 2. The pattern is a simple tuple (not a record with named fields)
+    // Record patterns (e.g., {deptno=x, dname=y} elem depts) should fall
+    // through
+    // to Extents.g3 which produces field extraction pattern (#deptno v$0).
     if (pattern.op == Op.TUPLE) {
       final Core.Tuple tuple = (Core.Tuple) pattern;
-      final Core.Pat pat = toPat(tuple);
-
-      final FromBuilder fromBuilder = core.fromBuilder(typeSystem, env);
-      fromBuilder.scan(pat, collection);
-      fromBuilder.yield_(tuple);
-      final Generator generator =
-          generator(
-              toTuple(goalPats),
-              fromBuilder.build(),
-              net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-              ImmutableList.of());
-      return result(generator, ImmutableList.of());
+      // Only handle simple tuples (not records) with all IDs
+      boolean isRecord = tuple.type.op() == Op.RECORD_TYPE;
+      if (!isRecord && containsOnlyIds(tuple)) {
+        final Core.Pat pat = toPat(tuple);
+        // Use no-validation fromBuilder since collection references outer-scope
+        // vars
+        final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+        fromBuilder.scan(pat, collection);
+        fromBuilder.yield_(tuple);
+        final Generator generator =
+            generator(
+                toTuple(goalPats),
+                fromBuilder.build(),
+                net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                ImmutableList.of());
+        return result(generator, ImmutableList.of());
+      }
+      // Fall through for patterns with constants - let g3 handle with field
+      // extraction
     }
 
     // TODO: Handle if some but not all of goalPats are covered in elemCall.
@@ -853,6 +864,31 @@ public class PredicateInverter {
     // TODO: Deal with "() elem myList"
 
     return result(generatorFor(goalPats), ImmutableList.of(elemCall));
+  }
+
+  /**
+   * Checks if a tuple expression contains only ID references (no literals).
+   * Used to determine if we can handle the tuple elem pattern directly, or
+   * should fall through to g3's field extraction approach.
+   */
+  private boolean containsOnlyIds(Core.Tuple tuple) {
+    for (Core.Exp arg : tuple.args) {
+      switch (arg.op) {
+        case ID:
+          // This is fine - continue checking
+          break;
+        case TUPLE:
+          // Nested tuple - check recursively
+          if (!containsOnlyIds((Core.Tuple) arg)) {
+            return false;
+          }
+          break;
+        default:
+          // Literal or other expression - not pure IDs
+          return false;
+      }
+    }
+    return true;
   }
 
   /**

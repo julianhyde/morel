@@ -2,6 +2,23 @@
 
 Welcome to Beads! This repository uses **Beads** for issue tracking - a modern, AI-native tool designed to live directly in your codebase alongside your code.
 
+## Project Information
+
+This Beads instance is used in the Morel project. For Morel project information:
+
+```xml
+<dependency>
+  <groupId>net.hydromatic</groupId>
+  <artifactId>morel</artifactId>
+  <version>0.7.0</version>
+</dependency>
+```
+
+Running Morel:
+```
+morel-java version 0.7.0 (java version "21", JLine terminal, xterm-256color)
+```
+
 ## What is Beads?
 
 Beads is issue tracking that lives in your repo, making it perfect for AI coding agents and developers who want their issues close to their code. No web UI required - everything works through the CLI and integrates seamlessly with git.
