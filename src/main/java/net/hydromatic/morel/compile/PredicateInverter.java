@@ -26,6 +26,7 @@ import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Range;
@@ -37,6 +38,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -80,6 +82,11 @@ public class PredicateInverter {
     this.typeSystem = requireNonNull(typeSystem);
     this.env = requireNonNull(env);
     this.generators = new HashMap<>(initialGenerators);
+  }
+
+  /** Package-private constructor for testing. */
+  PredicateInverter(TypeSystem typeSystem, Environment env) {
+    this(typeSystem, env, ImmutableMap.of());
   }
 
   /**
@@ -461,6 +468,58 @@ public class PredicateInverter {
     }
 
     return null;
+  }
+
+  /**
+   * Attempts to invert a predicate using ProcessTreeBuilder analysis.
+   *
+   * <p>This method uses ProcessTreeBuilder to construct a Perfect Process Tree
+   * (PPT) and analyze the predicate structure. It's the integration point
+   * between PredicateInverter and ProcessTreeBuilder.
+   *
+   * <p>Phase 3a: This method constructs the PPT but returns empty. Full
+   * tabulation and Relational.iterate generation will be implemented in Phase
+   * 4.
+   *
+   * <p>Package-private for testing.
+   *
+   * @param predicate The predicate expression to analyze
+   * @param goalPatterns Variables to generate values for
+   * @param boundGenerators Generators for bound variables
+   * @return Inversion result, or empty if PPT construction failed
+   */
+  Optional<Result> tryInvertWithProcessTree(
+      Core.Exp predicate,
+      List<Core.NamedPat> goalPatterns,
+      Map<Core.NamedPat, Generator> boundGenerators) {
+
+    try {
+      // Create VarEnvironment from goal patterns and bound generators
+      VarEnvironment varEnv =
+          VarEnvironment.initial(
+              goalPatterns,
+              boundGenerators.isEmpty()
+                  ? ImmutableMap.of()
+                  : ImmutableMap.copyOf(boundGenerators),
+              env);
+
+      // Build PPT using ProcessTreeBuilder
+      // Pass null for inverter to avoid infinite recursion
+      ProcessTreeBuilder builder =
+          new ProcessTreeBuilder(typeSystem, null, ImmutableSet.of());
+      ProcessTreeNode ppt = builder.build(predicate, varEnv);
+
+      // Phase 3a: PPT construction succeeded
+      // Phase 4 TODO: Tabulate PPT to build I-O pairs
+      // Phase 4 TODO: Use tabulation results to generate Relational.iterate
+
+      // For now, return empty (placeholder for Phase 4)
+      return Optional.empty();
+
+    } catch (Exception e) {
+      // PPT construction failed - not a valid transitive closure
+      return Optional.empty();
+    }
   }
 
   /**

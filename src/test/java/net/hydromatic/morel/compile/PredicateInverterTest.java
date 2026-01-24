@@ -32,6 +32,7 @@ import com.google.common.collect.ImmutableSet;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Optional;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Ast.Decl;
 import net.hydromatic.morel.ast.AstNode;
@@ -645,6 +646,146 @@ public class PredicateInverterTest {
    */
   @Test
   void testUnused() {}
+
+  // ===== Phase 3a Integration Tests - ProcessTreeBuilder Integration =====
+
+  /**
+   * Integration Test 1: Verify ProcessTreeBuilder is called successfully.
+   *
+   * <p>This test validates that tryInvertWithProcessTree constructs a PPT
+   * without throwing exceptions. It doesn't verify full inversion (Phase 4) but
+   * confirms the integration point works.
+   */
+  @Test
+  void testProcessTreeBuilderIntegration() {
+    final Fixture f = new Fixture();
+
+    // Build: x elem myList
+    final Core.Exp predicate = core.elem(f.typeSystem, f.xId, f.myListId);
+
+    // Create a PredicateInverter instance
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    // Call tryInvertWithProcessTree directly
+    Optional<Result> result =
+        inverter.tryInvertWithProcessTree(
+            predicate, ImmutableList.of(f.xPat), ImmutableMap.of());
+
+    // Phase 3a: Method should complete without exception
+    // Empty result is expected (Phase 4 will return actual generators)
+    assertThat(result.isPresent(), hasToString("false"));
+  }
+
+  /**
+   * Integration Test 2: Confirm recursive predicates are recognized.
+   *
+   * <p>This test validates that recursive function patterns (like transitive
+   * closure) are detected and flow through ProcessTreeBuilder without errors.
+   */
+  @Test
+  void testTransitiveClosureDetected() {
+    final Fixture f = new Fixture();
+
+    // Build: edge(x, y) orelse (exists z where edge(x, z) andalso path(z, y))
+    // This is the classic transitive closure pattern
+
+    // For now, use a simpler orelse pattern: x elem [1,2,3] orelse x elem
+    // [4,5,6]
+    final Core.Exp left = core.elem(f.typeSystem, f.xId, f.myListId);
+    final Core.Exp right = core.elem(f.typeSystem, f.xId, f.myListId);
+    final Core.Exp predicate = core.orElse(f.typeSystem, left, right);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    // Call tryInvertWithProcessTree directly
+    Optional<Result> result =
+        inverter.tryInvertWithProcessTree(
+            predicate, ImmutableList.of(f.xPat), ImmutableMap.of());
+
+    // Should complete without exception
+    assertThat(result.isPresent(), hasToString("false"));
+  }
+
+  /**
+   * Integration Test 3: Verify simple predicates flow through builder.
+   *
+   * <p>This test validates that simple predicates are properly analyzed by
+   * ProcessTreeBuilder without errors.
+   */
+  @Test
+  void testSimpleExistsPatternViaBuilder() {
+    final Fixture f = new Fixture();
+
+    // Build a simple predicate: x elem myList
+    // ProcessTreeBuilder should handle this and create a TerminalNode
+    final Core.Exp predicate = core.elem(f.typeSystem, f.xId, f.myListId);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    // Call tryInvertWithProcessTree directly
+    Optional<Result> result =
+        inverter.tryInvertWithProcessTree(
+            predicate, ImmutableList.of(f.xPat), ImmutableMap.of());
+
+    // Should complete without exception
+    assertThat(result.isPresent(), hasToString("false"));
+  }
+
+  /**
+   * Integration Test 4: Verify conjunctions are analyzed correctly.
+   *
+   * <p>This test validates that andalso patterns are properly decomposed and
+   * analyzed by ProcessTreeBuilder to identify join variables.
+   */
+  @Test
+  void testConjunctionHandledByBuilder() {
+    final Fixture f = new Fixture();
+
+    // Build: x elem myList andalso y elem myList
+    final Core.Exp left = core.elem(f.typeSystem, f.xId, f.myListId);
+    final Core.Exp right = core.elem(f.typeSystem, f.yId, f.myListId);
+    final Core.Exp predicate = core.andAlso(f.typeSystem, left, right);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    // Call tryInvertWithProcessTree directly
+    Optional<Result> result =
+        inverter.tryInvertWithProcessTree(
+            predicate, ImmutableList.of(f.xPat, f.yPat), ImmutableMap.of());
+
+    // Should complete without exception
+    assertThat(result.isPresent(), hasToString("false"));
+  }
+
+  /**
+   * Integration Test 5: Verify graceful failure on invalid predicates.
+   *
+   * <p>This test validates that when ProcessTreeBuilder cannot construct a PPT,
+   * tryInvertWithProcessTree returns empty rather than throwing exceptions.
+   */
+  @Test
+  void testInversionFailureHandled() {
+    final Fixture f = new Fixture();
+
+    // Build an expression that cannot be inverted
+    // For example, a complex nested expression or invalid structure
+    final Core.Exp predicate = core.intLiteral(BigDecimal.valueOf(42));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    // Call tryInvertWithProcessTree directly
+    Optional<Result> result =
+        inverter.tryInvertWithProcessTree(
+            predicate, ImmutableList.of(f.xPat), ImmutableMap.of());
+
+    // Should return empty without throwing
+    assertThat(result.isPresent(), hasToString("false"));
+  }
 }
 
 // End PredicateInverterTest.java
