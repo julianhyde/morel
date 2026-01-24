@@ -1174,6 +1174,650 @@ public class PredicateInverterTest {
     // Phase 3b-2+: Will return base case inversion
     assertThat(result.isPresent(), hasToString("false"));
   }
+
+  // ===== Phase 3b-2 Tests - Tabulation Algorithm =====
+
+  /**
+   * Test 1: Tabulate single terminal node returns one I-O pair.
+   *
+   * <p>Given a simple PPT with one terminal node containing an inversion
+   * result, tabulation should extract one I-O pair.
+   */
+  @Test
+  void testTabulateSimpleTerminal() {
+    final Fixture f = new Fixture();
+
+    // Create a simple inversion result: x elem myList => myList
+    final Result inversionResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                f.myListId,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp predicate = core.elem(f.typeSystem, f.xId, f.myListId);
+    final ProcessTreeNode.TerminalNode terminal =
+        ProcessTreeNode.TerminalNode.of(
+            predicate, varEnv, Optional.of(inversionResult));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, terminal, varEnv);
+
+      // Should have exactly one I-O pair
+      assertThat(result.ioMappings.size(), hasToString("1"));
+      // Output should be myList
+      assertThat(result.ioMappings.get(0).output, hasToString("myList"));
+      // Cardinality should be FINITE
+      assertThat(result.cardinality, hasToString("FINITE"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 2: Tabulate branch with two terminals returns two pairs.
+   *
+   * <p>Given a BranchNode (orelse) with two terminal children, tabulation
+   * should collect I-O pairs from both terminals.
+   */
+  @Test
+  void testTabulateBranchWithTwoTerminals() {
+    final Fixture f = new Fixture();
+
+    // Left terminal: x elem [1,2]
+    final Core.Exp leftList =
+        core.list(f.typeSystem, f.intLiteral(1), f.intLiteral(2));
+    final Result leftResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                leftList,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    // Right terminal: x elem [3,4]
+    final Core.Exp rightList =
+        core.list(f.typeSystem, f.intLiteral(3), f.intLiteral(4));
+    final Result rightResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                rightList,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp leftPred = core.elem(f.typeSystem, f.xId, leftList);
+    final Core.Exp rightPred = core.elem(f.typeSystem, f.xId, rightList);
+
+    final ProcessTreeNode.TerminalNode leftNode =
+        ProcessTreeNode.TerminalNode.of(
+            leftPred, varEnv, Optional.of(leftResult));
+    final ProcessTreeNode.TerminalNode rightNode =
+        ProcessTreeNode.TerminalNode.of(
+            rightPred, varEnv, Optional.of(rightResult));
+
+    final ProcessTreeNode.BranchNode branch =
+        new ProcessTreeNode.BranchNode(
+            core.orElse(f.typeSystem, leftPred, rightPred),
+            varEnv,
+            leftNode,
+            rightNode);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, branch, varEnv);
+
+      // Should have two I-O pairs
+      assertThat(result.ioMappings.size(), hasToString("2"));
+      // Cardinality should be FINITE
+      assertThat(result.cardinality, hasToString("FINITE"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 3: Tabulate sequence with multiple terminals returns all pairs.
+   *
+   * <p>Given a SequenceNode (andalso) with multiple children, tabulation should
+   * collect I-O pairs from all terminals.
+   */
+  @Test
+  void testTabulateSequenceMultipleTerminals() {
+    final Fixture f = new Fixture();
+
+    // First terminal: x elem [1,2]
+    final Core.Exp list1 =
+        core.list(f.typeSystem, f.intLiteral(1), f.intLiteral(2));
+    final Result result1 =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                list1,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    // Second terminal: y elem [3,4]
+    final Core.Exp list2 =
+        core.list(f.typeSystem, f.intLiteral(3), f.intLiteral(4));
+    final Result result2 =
+        new Result(
+            new PredicateInverter.Generator(
+                f.yPat,
+                list2,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat, f.yPat),
+            ImmutableMap.of(),
+            Environments.empty());
+
+    final Core.Exp pred1 = core.elem(f.typeSystem, f.xId, list1);
+    final Core.Exp pred2 = core.elem(f.typeSystem, f.yId, list2);
+
+    final ProcessTreeNode.TerminalNode node1 =
+        ProcessTreeNode.TerminalNode.of(pred1, varEnv, Optional.of(result1));
+    final ProcessTreeNode.TerminalNode node2 =
+        ProcessTreeNode.TerminalNode.of(pred2, varEnv, Optional.of(result2));
+
+    final ProcessTreeNode.SequenceNode sequence =
+        new ProcessTreeNode.SequenceNode(
+            core.andAlso(f.typeSystem, pred1, pred2),
+            varEnv,
+            ImmutableList.of(node1, node2));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, sequence, varEnv);
+
+      // Should have two I-O pairs (one from each child)
+      assertThat(result.ioMappings.size(), hasToString("2"));
+      // Cardinality should be FINITE
+      assertThat(result.cardinality, hasToString("FINITE"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 4: Tabulate recognizes SINGLE cardinality.
+   *
+   * <p>When a terminal has SINGLE cardinality, the overall result should be
+   * SINGLE.
+   */
+  @Test
+  void testTabulateCardinalitySingle() {
+    final Fixture f = new Fixture();
+
+    final Core.Exp singletonList = core.list(f.typeSystem, f.intLiteral(42));
+    final Result inversionResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                singletonList,
+                Generator.Cardinality.SINGLE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp predicate = core.elem(f.typeSystem, f.xId, singletonList);
+    final ProcessTreeNode.TerminalNode terminal =
+        ProcessTreeNode.TerminalNode.of(
+            predicate, varEnv, Optional.of(inversionResult));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, terminal, varEnv);
+
+      // Cardinality should be SINGLE
+      assertThat(result.cardinality, hasToString("SINGLE"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 5: Tabulate recognizes FINITE cardinality.
+   *
+   * <p>When a terminal has FINITE cardinality, the overall result should be
+   * FINITE.
+   */
+  @Test
+  void testTabulateCardinalityFinite() {
+    final Fixture f = new Fixture();
+
+    final Core.Exp finiteList =
+        core.list(
+            f.typeSystem, f.intLiteral(1), f.intLiteral(2), f.intLiteral(3));
+    final Result inversionResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                finiteList,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp predicate = core.elem(f.typeSystem, f.xId, finiteList);
+    final ProcessTreeNode.TerminalNode terminal =
+        ProcessTreeNode.TerminalNode.of(
+            predicate, varEnv, Optional.of(inversionResult));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, terminal, varEnv);
+
+      // Cardinality should be FINITE
+      assertThat(result.cardinality, hasToString("FINITE"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 6: Tabulate recognizes INFINITE cardinality.
+   *
+   * <p>When a terminal has INFINITE cardinality, the overall result should be
+   * INFINITE.
+   */
+  @Test
+  void testTabulateCardinalityInfinite() {
+    final Fixture f = new Fixture();
+
+    // Create an extent expression (infinite cardinality)
+    final Core.Exp extentExpr =
+        core.extent(
+            f.typeSystem,
+            f.intType,
+            com.google.common.collect.ImmutableRangeSet.of(
+                com.google.common.collect.Range.all()));
+    final Result inversionResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                extentExpr,
+                Generator.Cardinality.INFINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp predicate = core.elem(f.typeSystem, f.xId, extentExpr);
+    final ProcessTreeNode.TerminalNode terminal =
+        ProcessTreeNode.TerminalNode.of(
+            predicate, varEnv, Optional.of(inversionResult));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, terminal, varEnv);
+
+      // Cardinality should be INFINITE
+      assertThat(result.cardinality, hasToString("INFINITE"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 7: Tabulate handles mixed cardinalities correctly.
+   *
+   * <p>When terminals have different cardinalities (SINGLE and FINITE), the
+   * overall result should be FINITE (the max).
+   */
+  @Test
+  void testTabulateCardinalityMixed() {
+    final Fixture f = new Fixture();
+
+    // Left terminal: SINGLE cardinality
+    final Core.Exp singletonList = core.list(f.typeSystem, f.intLiteral(1));
+    final Result leftResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                singletonList,
+                Generator.Cardinality.SINGLE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    // Right terminal: FINITE cardinality
+    final Core.Exp finiteList =
+        core.list(
+            f.typeSystem, f.intLiteral(2), f.intLiteral(3), f.intLiteral(4));
+    final Result rightResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                finiteList,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp leftPred = core.elem(f.typeSystem, f.xId, singletonList);
+    final Core.Exp rightPred = core.elem(f.typeSystem, f.xId, finiteList);
+
+    final ProcessTreeNode.TerminalNode leftNode =
+        ProcessTreeNode.TerminalNode.of(
+            leftPred, varEnv, Optional.of(leftResult));
+    final ProcessTreeNode.TerminalNode rightNode =
+        ProcessTreeNode.TerminalNode.of(
+            rightPred, varEnv, Optional.of(rightResult));
+
+    final ProcessTreeNode.BranchNode branch =
+        new ProcessTreeNode.BranchNode(
+            core.orElse(f.typeSystem, leftPred, rightPred),
+            varEnv,
+            leftNode,
+            rightNode);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, branch, varEnv);
+
+      // Cardinality should be FINITE (max of SINGLE and FINITE)
+      assertThat(result.cardinality, hasToString("FINITE"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 8: Tabulate detects duplicates when same output appears twice.
+   *
+   * <p>When two terminals produce the same output expression, mayHaveDuplicates
+   * should be true.
+   */
+  @Test
+  void testTabulateDetectsDuplicatesSingle() {
+    final Fixture f = new Fixture();
+
+    // Both terminals produce the same output: myList
+    final Result leftResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                f.myListId,
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final Result rightResult =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                f.myListId, // Same output as left
+                Generator.Cardinality.FINITE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp leftPred = core.elem(f.typeSystem, f.xId, f.myListId);
+    final Core.Exp rightPred = core.elem(f.typeSystem, f.xId, f.myListId);
+
+    final ProcessTreeNode.TerminalNode leftNode =
+        ProcessTreeNode.TerminalNode.of(
+            leftPred, varEnv, Optional.of(leftResult));
+    final ProcessTreeNode.TerminalNode rightNode =
+        ProcessTreeNode.TerminalNode.of(
+            rightPred, varEnv, Optional.of(rightResult));
+
+    final ProcessTreeNode.BranchNode branch =
+        new ProcessTreeNode.BranchNode(
+            core.orElse(f.typeSystem, leftPred, rightPred),
+            varEnv,
+            leftNode,
+            rightNode);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, branch, varEnv);
+
+      // Should detect duplicates
+      assertThat(result.mayHaveDuplicates, hasToString("true"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 9: Tabulate detects duplicates in complex tree.
+   *
+   * <p>Given a more complex tree structure with multiple terminals, some
+   * producing duplicate outputs, duplicates should be detected.
+   */
+  @Test
+  void testTabulateDetectsDuplicatesNonemptyPairs() {
+    final Fixture f = new Fixture();
+
+    // Create three terminals: two with duplicate outputs, one unique
+    final Core.Exp list1 = core.list(f.typeSystem, f.intLiteral(1));
+    final Core.Exp list2 =
+        core.list(f.typeSystem, f.intLiteral(1)); // Duplicate
+    final Core.Exp list3 = core.list(f.typeSystem, f.intLiteral(2)); // Unique
+
+    final Result result1 =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                list1,
+                Generator.Cardinality.SINGLE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final Result result2 =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                list2, // Same as list1
+                Generator.Cardinality.SINGLE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final Result result3 =
+        new Result(
+            new PredicateInverter.Generator(
+                f.xPat,
+                list3,
+                Generator.Cardinality.SINGLE,
+                ImmutableList.of(),
+                ImmutableSet.of()),
+            ImmutableList.of());
+
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp pred1 = core.elem(f.typeSystem, f.xId, list1);
+    final Core.Exp pred2 = core.elem(f.typeSystem, f.xId, list2);
+    final Core.Exp pred3 = core.elem(f.typeSystem, f.xId, list3);
+
+    final ProcessTreeNode.TerminalNode node1 =
+        ProcessTreeNode.TerminalNode.of(pred1, varEnv, Optional.of(result1));
+    final ProcessTreeNode.TerminalNode node2 =
+        ProcessTreeNode.TerminalNode.of(pred2, varEnv, Optional.of(result2));
+    final ProcessTreeNode.TerminalNode node3 =
+        ProcessTreeNode.TerminalNode.of(pred3, varEnv, Optional.of(result3));
+
+    // Create a sequence with all three nodes
+    final ProcessTreeNode.SequenceNode sequence =
+        new ProcessTreeNode.SequenceNode(
+            core.andAlso(
+                f.typeSystem, core.andAlso(f.typeSystem, pred1, pred2), pred3),
+            varEnv,
+            ImmutableList.of(node1, node2, node3));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, sequence, varEnv);
+
+      // Should detect duplicates (list1 and list2 produce same output)
+      assertThat(result.mayHaveDuplicates, hasToString("true"));
+      // Should have three I-O pairs
+      assertThat(result.ioMappings.size(), hasToString("3"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
+
+  /**
+   * Test 10: Tabulate handles non-inverted terminals gracefully.
+   *
+   * <p>When a terminal node has no inversion result (failed to invert),
+   * tabulation should skip it without throwing exceptions.
+   */
+  @Test
+  void testTabulateThrowsOnNonterminal() {
+    final Fixture f = new Fixture();
+
+    // Create a terminal without inversion result
+    final VarEnvironment varEnv =
+        VarEnvironment.initial(
+            ImmutableList.of(f.xPat), ImmutableMap.of(), Environments.empty());
+
+    final Core.Exp predicate = core.elem(f.typeSystem, f.xId, f.myListId);
+    final ProcessTreeNode.TerminalNode terminal =
+        ProcessTreeNode.TerminalNode.of(predicate, varEnv, Optional.empty());
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    try {
+      Method method =
+          PredicateInverter.class.getDeclaredMethod(
+              "tabulate", ProcessTreeNode.class, VarEnvironment.class);
+      method.setAccessible(true);
+      PredicateInverter.TabulationResult result =
+          (PredicateInverter.TabulationResult)
+              method.invoke(inverter, terminal, varEnv);
+
+      // Should have zero I-O pairs (terminal not inverted)
+      assertThat(result.ioMappings.size(), hasToString("0"));
+      // Cardinality should be default (FINITE for empty)
+      assertThat(result.cardinality, hasToString("FINITE"));
+      // No duplicates
+      assertThat(result.mayHaveDuplicates, hasToString("false"));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke tabulate", e);
+    }
+  }
 }
 
 // End PredicateInverterTest.java
