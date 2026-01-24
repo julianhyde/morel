@@ -3,132 +3,178 @@
   "repository": "https://github.com/Hellblazer/morel",
   "branch": "217-phase1-transitive-closure",
   "created": "2026-01-23",
-  "last_updated": "2026-01-23",
+  "last_updated": "2026-01-24",
   "phases": {
-    "phase_1": {
-      "name": "Recursive Function Handling",
-      "status": "completed",
-      "commit": "a139bf6e",
-      "description": "Handle recursive functions gracefully instead of crashing",
-      "tests_passing": 159
-    },
-    "phase_2": {
-      "name": "Pattern Detection & Base Case Extraction",
-      "status": "completed",
-      "commit": "1ed6e6dc",
-      "description": "Detect transitive closure patterns and extract base cases",
-      "tests_passing": 159
-    },
     "phase_3": {
-      "name": "Full Relational.iterate Generation",
-      "status": "ready_for_implementation",
-      "duration_weeks": 3,
-      "description": "Build PPT, tabulate I-O pairs, generate Relational.iterate",
-      "epics": 6,
-      "target_tests": [
-        "such-that.smli:737-742"
-      ]
+      "name": "Mode Analysis Research",
+      "status": "completed",
+      "commit": "ab504b8",
+      "description": "Comprehensive research on Mode Analysis approach for predicate inversion",
+      "duration": "2-3 days",
+      "outcome": "Rejected (2.8/5 viability) - Incompatibility with first-class functions"
     },
     "phase_4": {
-      "name": "Mode Analysis & Smart Generator Selection",
-      "status": "pending_phase_3",
-      "duration_weeks": 2.5,
-      "description": "Implement mode inference and dependency resolution",
-      "epics": 5,
-      "depends_on": "phase_3"
+      "name": "Core.Apply/LinkCode Research",
+      "status": "completed",
+      "commit": "aa2be7d",
+      "description": "Research LinkCode pattern and Core.Apply generation for transitive closure",
+      "duration": "2-3 days",
+      "outcome": "Recommended (4.3/5 viability) - 3x simpler than Mode Analysis"
     },
-    "phase_4b": {
-      "name": "Advanced Optimization (Optional)",
-      "status": "optional",
-      "duration_weeks": 1.5,
-      "description": "Magic sets, filter push-down, semi-naive evaluation",
-      "epics": 3,
-      "depends_on": "phase_4"
+    "phase_5_research": {
+      "name": "Phase 5: Research Review & Decision",
+      "status": "completed",
+      "commit": "a094806",
+      "description": "Substantive-critic review of Phase 3-4 research documents",
+      "findings": 7,
+      "outcome": "Core.Apply decision is sound; requires validation of 3 critical assumptions"
+    },
+    "phase_5_planning": {
+      "name": "Phase 5: Planning & Bead Creation",
+      "status": "completed",
+      "commit": "f995d39a",
+      "description": "Create Phase 5a-5d beads with detailed specifications",
+      "beads_created": 4,
+      "outcome": "Four fully-enriched beads ready: morel-wvh, morel-c2z, morel-9af, morel-aga"
+    },
+    "phase_5_audit": {
+      "name": "Phase 5: Comprehensive Plan Audit",
+      "status": "completed",
+      "commit": "0395aaac",
+      "description": "Plan-auditor audit of Phase 5 validation plan",
+      "issues_found": 14,
+      "verdict": "CONDITIONAL GO - Strategic direction sound, tactical execution needs refinement",
+      "key_recommendation": "Execute Phase 5a-prime quick test (30 min) before formal Phase 5a",
+      "confidence_improvement": "60% (current plan) → 75% (with audit modifications) → 85% (after Phase 5a-prime success)"
+    },
+    "phase_5a_prime": {
+      "name": "Phase 5a-prime: Quick Empirical Test",
+      "status": "ready_for_execution",
+      "duration": "30 minutes",
+      "critical": true,
+      "description": "Empirical validation of core assumption: Can PredicateInverter access runtime-bound variables?",
+      "decision_gate": "GO / INVESTIGATE / NO-GO determines Phase 5 execution path"
+    },
+    "phase_5a": {
+      "name": "Phase 5a: Environment Scoping Validation",
+      "status": "pending_5a_prime",
+      "bead": "morel-wvh",
+      "duration": "11-15 hours",
+      "description": "Full multi-component validation of environment scoping, step functions, type system, integration",
+      "depends_on": "phase_5a_prime = GO"
+    },
+    "phase_5b": {
+      "name": "Phase 5b: Pattern Coverage Specification",
+      "status": "pending_5a_prime",
+      "bead": "morel-c2z",
+      "duration": "6-10 hours",
+      "description": "Specify exactly which recursive patterns will be optimized",
+      "depends_on": "phase_5a_prime = GO"
+    },
+    "phase_5c": {
+      "name": "Phase 5c: Comprehensive Test Plan",
+      "status": "pending_5a_prime",
+      "bead": "morel-9af",
+      "duration": "1.5-2.5 days",
+      "description": "Create comprehensive test suite with 6+ correctness tests, performance tests, edge cases",
+      "depends_on": "phase_5a = PASS and phase_5b = PASS"
+    },
+    "phase_5d": {
+      "name": "Phase 5d: Prototype Validation & Integration",
+      "status": "pending_5a_prime",
+      "bead": "morel-aga",
+      "duration": "4-6 days",
+      "description": "Debug and integrate existing PredicateInverter code into Extents.java",
+      "depends_on": "phase_5a = PASS and phase_5b = PASS and phase_5c = PASS"
     }
   },
   "current_state": {
-    "phase": "phase_2_complete",
-    "next_action": "Create beads for Phase 3 epics",
-    "ready_beads": [],
-    "in_progress_beads": [],
-    "blockers": []
+    "phase": "phase_5_audit_complete",
+    "next_action": "Execute Phase 5a-prime quick empirical test (30 min)",
+    "critical_gate": "Phase 5a-prime: Validate environment scoping assumption",
+    "decision_paths": {
+      "path_A": "Proceed immediately (60% confidence, HIGH risk) - NOT RECOMMENDED",
+      "path_B": "Phase 5a-prime + key modifications (75% confidence, MEDIUM risk) - RECOMMENDED",
+      "path_C": "Full plan refinement (85% confidence, LOW risk)"
+    },
+    "ready_beads": [
+      "morel-wvh (Phase 5a)",
+      "morel-c2z (Phase 5b)",
+      "morel-9af (Phase 5c)",
+      "morel-aga (Phase 5d)"
+    ],
+    "blockers": [
+      "Phase 5a-prime results pending"
+    ]
   },
   "metrics": {
-    "tests_passing": 159,
-    "tests_total": 159,
-    "test_coverage_target": 0.85,
-    "code_files_total": 1,
-    "new_code_files": 0
+    "research_phases_completed": 2,
+    "decision_gate_passed": true,
+    "planning_complete": true,
+    "audit_complete": true,
+    "beads_enriched": 4,
+    "audit_issues_found": 14,
+    "confidence_baseline": "60%",
+    "confidence_with_audit_mods": "70%",
+    "confidence_target_after_5a_prime": "85%"
   },
   "success_criteria": {
-    "phase_3": [
-      "Transitive closure test (such-that.smli:737-742) passing",
-      "All 159 existing tests still passing",
-      "Code review approved with < 2 requested changes",
-      "Test coverage >= 85% for new code",
-      "Performance: Phase 3 queries run in < 10ms"
+    "phase_5a_prime": [
+      "Add debug logging to PredicateInverter",
+      "Run such-that.smli:737-744 test case",
+      "Clear GO/NO-GO decision based on environment binding visibility",
+      "Results documented"
     ],
-    "phase_4": [
-      "8+ new mode analysis tests passing",
-      "All 159 + Phase 3 tests still passing",
-      "Code review approved with < 2 requested changes",
-      "Test coverage >= 85% for Phase 4 code",
-      "Performance: Mode analysis adds < 5% overhead"
+    "phase_5_validation": [
+      "Phase 5a: All validation components pass (environment, step function, type system, integration)",
+      "Phase 5b: Pattern specification complete with clear supported/unsupported patterns",
+      "Phase 5c: Comprehensive test plan with 6+ correctness tests, performance tests, edge cases",
+      "Phase 5d: Prototype passes all Phase 5c tests, no regressions",
+      "Quality gates met: 80%+ code coverage, performance targets met, code review approved"
     ]
   },
-  "knowledge_base": {
-    "memory_bank_project": "morel_active",
-    "synthesis_documents": [
-      "predicate-inversion-knowledge-integration.md",
-      "algorithm-synthesis-ura-to-morel.md",
-      "mode-analysis-synthesis.md",
-      "complete-knowledge-base-summary.md",
-      "phase-3-4-strategic-plan.md",
-      "phase-3-4-bead-definitions.md",
-      "phase-3-4-execution-guide.md"
-    ],
-    "papers_integrated": 6,
-    "papers": [
-      "Abramov & Gl\u00fcck (2002) - Universal Resolving Algorithm",
-      "Arntzenius & Krishnaswami (2016) - Datafun",
-      "Madsen (2024) - Flix",
-      "Pacak & Erdweg (2022) - Functional Programming with Datalog",
-      "Hanus (2022) - From Logic to Functional Logic Programs",
-      "Pratten & Mathieson (2023) - Relational Expressions"
-    ]
+  "key_documents": {
+    "audit_report": ".pm/PHASE-5-DECISION-AUDIT.md (1110 lines, comprehensive analysis)",
+    "decision_document": ".pm/PHASE-5-DECISION.md (Final decision with validation roadmap)",
+    "bead_specifications": ".pm/PHASE-5A-BEAD-SPECIFICATIONS.md (Complete specs for 4 beads)",
+    "next_actions": "Memory Bank morel_active/PHASE-5-NEXT-ACTIONS.md (Decision framework)",
+    "continuation": ".pm/CONTINUATION.md (Session resumption context)"
+  },
+  "audit_findings_summary": {
+    "plan_verdict": "CONDITIONAL GO",
+    "strategic_direction": "SOUND (Core.Apply > Mode Analysis)",
+    "tactical_execution": "NEEDS REFINEMENT",
+    "critical_issues": 14,
+    "key_recommendation": "Execute Phase 5a-prime quick test before formal Phase 5 validation",
+    "timeline_revision": "3-4 days (claimed) → 7-11 days (realistic with contingency)",
+    "confidence_gain": "Phase 5a-prime provides empirical proof vs documentation review"
   },
   "team": {
     "primary_developer": "Hal Hildebrand",
     "agents": [
-      "java-developer (implementation)",
-      "java-architect-planner (design)",
+      "substantive-critic (independent research review)",
+      "plan-auditor (plan validation)",
+      "java-developer (Phase 5 execution)",
       "code-review-expert (quality)",
-      "test-validator (test coverage)",
-      "plan-auditor (quality gates)"
+      "test-validator (test coverage)"
     ]
   },
   "integration": {
     "chromadb": {
       "enabled": true,
-      "documents_created": [
-        "research::predicate-inversion::abramov-gluck",
-        "research::predicate-inversion::datafun",
-        "research::predicate-inversion::flix",
-        "research::predicate-inversion::hanus",
-        "research::predicate-inversion::pacak-erdweg",
-        "research::predicate-inversion::pratten-mathieson"
-      ]
+      "documents_created": 10,
+      "status": "research synthesis documents indexed"
     },
     "memory_bank": {
       "enabled": true,
       "project": "morel_active",
-      "location": "/Users/hal.hildebrand/git/.claude/memory_bank/"
+      "files": [
+        "PHASE-5-AUDIT-SYNTHESIS.md",
+        "PHASE-5-NEXT-ACTIONS.md"
+      ]
     },
-    "research_directory": {
-      "enabled": true,
-      "location": "/Users/hal.hildebrand/Documents/Predicate Inversion Research/",
-      "papers_count": 5
-    }
+    "git_commits": 5,
+    "last_commit": "Update CONTINUATION.md with Phase 5 audit completion status"
   },
-  "updated": "2026-01-24T15:25:46.001043+00:00"
+  "updated": "2026-01-24T15:43:00+00:00"
 }
