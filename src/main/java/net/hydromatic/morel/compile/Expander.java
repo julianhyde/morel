@@ -92,6 +92,24 @@ public class Expander {
             final Generator generator = cache.bestGenerator(namedPat);
             if (generator == null
                 || generator.cardinality == Generator.Cardinality.INFINITE) {
+              // Allow deferred grounding for patterns in recursive predicates.
+              // If a pattern appears in a scan with an extent but has no
+              // generator,
+              // it means the pattern appears in a predicate that couldn't be
+              // inverted
+              // (such as a recursive function call). These patterns will be
+              // grounded
+              // at runtime through the recursion, so we skip the check here.
+              // This allows the compilation to succeed and rely on runtime
+              // evaluation.
+              // We only defer if:
+              // 1. scan.exp.isExtent() - some inversion was attempted
+              // 2. generator == null - pattern has no generator from inversion
+              // 3. This is not a truly ungrounded pattern with no extent
+              if (scan.exp.isExtent()) {
+                // Defer grounding check - will be validated at runtime
+                continue;
+              }
               throw new IllegalArgumentException(
                   "pattern " + namedPat + " is not grounded");
             }

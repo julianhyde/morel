@@ -462,60 +462,57 @@ public class PredicateInverter {
     // Try to invert the base case without the recursive call
     Result baseCaseResult = invert(baseCase, goalPats, ImmutableList.of());
 
-    if (baseCaseResult.remainingFilters.isEmpty()) {
-      // Successfully inverted the base case
-      // Now build Relational.iterate call
+    // Build Relational.iterate even if base case has remaining filters.
+    // The filters will be applied at runtime along with the iterate expansion.
+    // Try to invert the base case without the recursive call
+    // Create IOPair for the base case (no PPT terminal, so pass null)
+    final IOPair baseCaseIO =
+        new IOPair(
+            ImmutableMap.of(), baseCaseResult.generator.expression, null);
 
-      // Create IOPair for the base case (no PPT terminal, so pass null)
-      final IOPair baseCaseIO =
-          new IOPair(
-              ImmutableMap.of(), baseCaseResult.generator.expression, null);
+    // Create TabulationResult with the base case
+    // Use FINITE cardinality since transitive closure is finite for finite
+    // input
+    final TabulationResult tabulation =
+        new TabulationResult(
+            ImmutableList.of(baseCaseIO),
+            net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+            true); // may have duplicates
 
-      // Create TabulationResult with the base case
-      // Use FINITE cardinality since transitive closure is finite for finite
-      // input
-      final TabulationResult tabulation =
-          new TabulationResult(
-              ImmutableList.of(baseCaseIO),
-              net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-              true); // may have duplicates
+    // Create VarEnvironment for step function construction
+    final VarEnvironment varEnv = VarEnvironment.initial(goalPats, env);
 
-      // Create VarEnvironment for step function construction
-      final VarEnvironment varEnv = VarEnvironment.initial(goalPats, env);
+    // Build step function: fn (old, new) => FROM ...
+    final Core.Exp stepFunction = buildStepFunction(tabulation, varEnv);
 
-      // Build step function: fn (old, new) => FROM ...
-      final Core.Exp stepFunction = buildStepFunction(tabulation, varEnv);
+    // Construct Relational.iterate call
+    // Pattern: Relational.iterate baseGenerator stepFunction
+    final Core.Exp baseGenerator = baseCaseResult.generator.expression;
 
-      // Construct Relational.iterate call
-      // Pattern: Relational.iterate baseGenerator stepFunction
-      final Core.Exp baseGenerator = baseCaseResult.generator.expression;
+    // Get the RELATIONAL_ITERATE built-in as a function literal
+    final Core.Exp iterateFn =
+        core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
 
-      // Get the RELATIONAL_ITERATE built-in as a function literal
-      final Core.Exp iterateFn =
-          core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
+    // Apply iterate to base generator
+    final Core.Exp iterateWithBase =
+        core.apply(Pos.ZERO, iterateFn, baseGenerator);
 
-      // Apply iterate to base generator
-      final Core.Exp iterateWithBase =
-          core.apply(Pos.ZERO, iterateFn, baseGenerator);
+    // Apply the result to the step function
+    final Core.Exp relationalIterate =
+        core.apply(Pos.ZERO, iterateWithBase, stepFunction);
 
-      // Apply the result to the step function
-      final Core.Exp relationalIterate =
-          core.apply(Pos.ZERO, iterateWithBase, stepFunction);
+    // Create a Generator wrapping the Relational.iterate call
+    final Generator iterateGenerator =
+        new Generator(
+            baseCaseResult.generator.goalPat,
+            relationalIterate,
+            net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+            baseCaseResult.generator.constraints,
+            baseCaseResult.generator.freeVars);
 
-      // Create a Generator wrapping the Relational.iterate call
-      final Generator iterateGenerator =
-          new Generator(
-              baseCaseResult.generator.goalPat,
-              relationalIterate,
-              net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-              baseCaseResult.generator.constraints,
-              baseCaseResult.generator.freeVars);
-
-      // Return result with no remaining filters (iterate handles everything)
-      return result(iterateGenerator, ImmutableList.of());
-    }
-
-    return null;
+    // Return result with remaining filters from base case
+    // These will be applied at runtime
+    return result(iterateGenerator, baseCaseResult.remainingFilters);
   }
 
   /**
