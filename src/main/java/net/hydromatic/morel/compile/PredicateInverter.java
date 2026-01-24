@@ -222,7 +222,8 @@ public class PredicateInverter {
           // We cannot safely create a fallback with infinite extents, because:
           // 1. The inversion failed (base case is non-invertible)
           // 2. Relational.iterate can't be built (due to infinite base case)
-          // 3. Any fallback with infinite extents will fail at runtime when materialized
+          // 3. Any fallback with infinite extents will fail at runtime when
+          // materialized
           //
           // Return null to signal complete failure. The caller (invert method)
           // will handle this appropriately.
@@ -492,8 +493,9 @@ public class PredicateInverter {
     // 2. At compile time we don't know what runtime values are available
     // 3. The entire iteration would fail with "infinite: int * int" at runtime
     //
-    // In this case, we fall back to cartesian product (proven safe behavior)
-    // by returning null to signal that this predicate cannot be inverted.
+    // In this case, we cannot safely build Relational.iterate with an infinite
+    // base case. Return null to signal that transitive closure pattern matching
+    // failed, causing the caller to skip this optimization.
     if (baseCaseResult.generator.cardinality
         == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
       return null;
@@ -818,12 +820,12 @@ public class PredicateInverter {
       final Core.Pat pat = toPat(tuple);
 
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem, env);
-      fromBuilder.scan(pat, elemCall.arg(1));
+      fromBuilder.scan(pat, collection);
       fromBuilder.yield_(tuple);
       final Generator generator =
           generator(
               toTuple(goalPats),
-              collection,
+              fromBuilder.build(),
               net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
               ImmutableList.of());
       return result(generator, ImmutableList.of());
