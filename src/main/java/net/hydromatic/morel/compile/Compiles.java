@@ -489,6 +489,11 @@ public abstract class Compiles {
     valDecl.forEachBinding(
         (pat, exp, overloadPat, pos) -> {
           if (pat instanceof Core.IdPat) {
+            System.err.println(
+                "DEBUG bindPattern: binding "
+                    + pat
+                    + " with exp = "
+                    + (exp != null ? exp.op : "null"));
             bindings.add(
                 overloadPat == null
                     ? Binding.of(pat, exp)
@@ -524,6 +529,8 @@ public abstract class Compiles {
 
   public static void acceptBinding(
       Core.NamedPat namedPat, List<Binding> bindings) {
+    System.err.println(
+        "DEBUG acceptBinding: binding " + namedPat + " WITHOUT exp");
     bindings.add(Binding.of(namedPat));
   }
 
