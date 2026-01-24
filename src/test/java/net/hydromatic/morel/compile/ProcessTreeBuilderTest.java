@@ -45,11 +45,23 @@ class ProcessTreeBuilderTest {
   private PredicateInverter inverter;
   private Set<Core.Exp> activeFunctions;
 
+  // Function types for testing
+  private net.hydromatic.morel.type.Type intIntBoolFnType;
+  private net.hydromatic.morel.type.Type tupleTwoIntsType;
+
   @BeforeEach
   void setUp() {
     typeSystem = new TypeSystem();
+    // Register built-in types (required for bag, list, etc.)
+    BuiltIn.dataTypes(typeSystem, new java.util.ArrayList<>());
+
     env = Environments.empty();
     activeFunctions = new HashSet<>();
+
+    // Create function types for user-defined functions
+    tupleTwoIntsType =
+        typeSystem.tupleType(PrimitiveType.INT, PrimitiveType.INT);
+    intIntBoolFnType = typeSystem.fnType(tupleTwoIntsType, PrimitiveType.BOOL);
   }
 
   // Helper methods
@@ -76,6 +88,22 @@ class ProcessTreeBuilderTest {
 
   private Core.Exp boolLiteral(boolean value) {
     return core.boolLiteral(value);
+  }
+
+  // Create a proper function pattern with function type
+  private Core.IdPat functionPat(String name) {
+    return core.idPat(intIntBoolFnType, name, 0);
+  }
+
+  // Create a function reference (ID expression)
+  private Core.Id functionRef(String name) {
+    return core.id(functionPat(name));
+  }
+
+  // Create a non-constant predicate to avoid core.andAlso() optimization
+  private Core.Exp predicate(String varName) {
+    Core.NamedPat pat = namedPat(varName);
+    return core.id(pat);
   }
 
   // ========== Basic Tree Construction Tests (4 tests) ==========
@@ -115,8 +143,8 @@ class ProcessTreeBuilderTest {
   @Test
   void testBuildSequenceNode() {
     // Conjunction with multiple conditions should create SequenceNode
-    Core.Exp cond1 = boolLiteral(true);
-    Core.Exp cond2 = boolLiteral(false);
+    Core.Exp cond1 = predicate("a");
+    Core.Exp cond2 = predicate("b");
     Core.Exp conjunction = core.andAlso(typeSystem, cond1, cond2);
     VarEnvironment env = emptyEnv();
 
@@ -131,9 +159,9 @@ class ProcessTreeBuilderTest {
   void testBuildWithComplexNesting() {
     // Nested (A orelse B) andalso C should create SequenceNode with
     // BranchNode child
-    Core.Exp a = boolLiteral(true);
-    Core.Exp b = boolLiteral(false);
-    Core.Exp c = boolLiteral(true);
+    Core.Exp a = predicate("a");
+    Core.Exp b = predicate("b");
+    Core.Exp c = predicate("c");
     Core.Exp aOrB = core.orElse(typeSystem, a, b);
     Core.Exp complex = core.andAlso(typeSystem, aOrB, c);
     VarEnvironment env = emptyEnv();
@@ -232,8 +260,8 @@ class ProcessTreeBuilderTest {
   @Test
   void testIsExistsPatternMultipleWhereClauses() {
     // Multiple WHERE clauses should be combined with andalso
-    Core.Exp where1 = boolLiteral(true);
-    Core.Exp where2 = boolLiteral(false);
+    Core.Exp where1 = predicate("a");
+    Core.Exp where2 = predicate("b");
 
     Core.From multiWhere =
         core.fromBuilder(typeSystem).where(where1).where(where2).build();
@@ -279,14 +307,14 @@ class ProcessTreeBuilderTest {
   @Test
   void testIsExistsPatternRecursionDetectionMatches() {
     // Ensure recursion detection aligns with PredicateInverter expectations
-    Core.NamedPat pathFn = namedPat("path");
-    activeFunctions.add(core.id(pathFn));
+    Core.Id pathFn = functionRef("path");
+    activeFunctions.add(pathFn);
 
     // Recursive call: path(z, y)
     Core.Exp recursiveCall =
         core.apply(
             net.hydromatic.morel.ast.Pos.ZERO,
-            core.id(pathFn),
+            pathFn,
             core.tuple(typeSystem, intLiteral(1), intLiteral(2)));
 
     VarEnvironment env = emptyEnv();
@@ -303,11 +331,11 @@ class ProcessTreeBuilderTest {
   @Test
   void testDetectSimpleBaseCase() {
     // edge(x, y) should be directly invertible
-    Core.NamedPat edgeFn = namedPat("edge");
+    Core.Id edgeFn = functionRef("edge");
     Core.Exp baseCase =
         core.apply(
             net.hydromatic.morel.ast.Pos.ZERO,
-            core.id(edgeFn),
+            edgeFn,
             core.tuple(typeSystem, intLiteral(1), intLiteral(2)));
 
     VarEnvironment env = emptyEnv();
@@ -322,13 +350,15 @@ class ProcessTreeBuilderTest {
   @Test
   void testDetectRecursiveCall() {
     // Function that calls itself should be detected in disjunction right side
-    Core.NamedPat pathFn = namedPat("path");
-    activeFunctions.add(core.id(pathFn));
+    Core.Id pathFn = functionRef("path");
+    activeFunctions.add(pathFn);
 
     Core.Exp baseCase = boolLiteral(true);
     Core.Exp recursiveCall =
         core.apply(
-            net.hydromatic.morel.ast.Pos.ZERO, core.id(pathFn), intLiteral(1));
+            net.hydromatic.morel.ast.Pos.ZERO,
+            pathFn,
+            core.tuple(typeSystem, intLiteral(1), intLiteral(2)));
     Core.Exp disjunction = core.orElse(typeSystem, baseCase, recursiveCall);
 
     VarEnvironment env = emptyEnv();
@@ -347,14 +377,7 @@ class ProcessTreeBuilderTest {
     Core.Exp list = core.list(typeSystem, intLiteral(1), intLiteral(2));
 
     // Create elem call: x elem [1, 2]
-    Core.Exp elemCall =
-        core.apply(
-            net.hydromatic.morel.ast.Pos.ZERO,
-            core.apply(
-                net.hydromatic.morel.ast.Pos.ZERO,
-                core.functionLiteral(typeSystem, BuiltIn.OP_ELEM),
-                core.id(x)),
-            list);
+    Core.Exp elemCall = core.elem(typeSystem, core.id(x), list);
 
     VarEnvironment env = envWithGoals(x);
     ProcessTreeNode node = builder().build(elemCall, env);
@@ -365,14 +388,15 @@ class ProcessTreeBuilderTest {
   @Test
   void testDetectComplexRecursivePattern() {
     // Nested function calls should be detected
-    Core.NamedPat pathFn = namedPat("path");
-    activeFunctions.add(core.id(pathFn));
+    Core.Id pathFn = functionRef("path");
+    activeFunctions.add(pathFn);
 
     Core.Exp innerCall =
         core.apply(
-            net.hydromatic.morel.ast.Pos.ZERO, core.id(pathFn), intLiteral(1));
-    Core.Exp conjunction =
-        core.andAlso(typeSystem, boolLiteral(true), innerCall);
+            net.hydromatic.morel.ast.Pos.ZERO,
+            pathFn,
+            core.tuple(typeSystem, intLiteral(1), intLiteral(2)));
+    Core.Exp conjunction = core.andAlso(typeSystem, predicate("a"), innerCall);
 
     VarEnvironment env = emptyEnv();
     ProcessTreeNode node = builder().build(conjunction, env);
@@ -387,8 +411,8 @@ class ProcessTreeBuilderTest {
   @Test
   void testHandleConjunctionTwoConditions() {
     // A andalso B should create SequenceNode with 2 children
-    Core.Exp a = boolLiteral(true);
-    Core.Exp b = boolLiteral(false);
+    Core.Exp a = predicate("a");
+    Core.Exp b = predicate("b");
     Core.Exp conjunction = core.andAlso(typeSystem, a, b);
 
     VarEnvironment env = emptyEnv();
@@ -402,9 +426,9 @@ class ProcessTreeBuilderTest {
   @Test
   void testHandleConjunctionThreeOrMore() {
     // A andalso B andalso C should create SequenceNode with 3 children
-    Core.Exp a = boolLiteral(true);
-    Core.Exp b = boolLiteral(false);
-    Core.Exp c = boolLiteral(true);
+    Core.Exp a = predicate("a");
+    Core.Exp b = predicate("b");
+    Core.Exp c = predicate("c");
     List<Core.Exp> exprs = ImmutableList.of(a, b, c);
     Core.Exp conjunction = core.andAlso(typeSystem, exprs);
 
@@ -420,8 +444,8 @@ class ProcessTreeBuilderTest {
   void testConjunctionWithInvertibility() {
     // Some conjuncts invertible, some not
     Core.NamedPat x = namedPat("x");
-    Core.Exp invertible = boolLiteral(true); // Simple literal
-    Core.Exp nonInvertible = boolLiteral(false);
+    Core.Exp invertible = predicate("x"); // Variable reference
+    Core.Exp nonInvertible = predicate("y");
     Core.Exp conjunction = core.andAlso(typeSystem, invertible, nonInvertible);
 
     VarEnvironment env = envWithGoals(x);
@@ -461,28 +485,28 @@ class ProcessTreeBuilderTest {
     Core.NamedPat x = namedPat("x");
     Core.NamedPat y = namedPat("y");
     Core.NamedPat z = namedPat("z");
-    Core.NamedPat edgeFn = namedPat("edge");
-    Core.NamedPat pathFn = namedPat("path");
+    Core.Id edgeFn = functionRef("edge");
+    Core.Id pathFn = functionRef("path");
 
-    activeFunctions.add(core.id(pathFn));
+    activeFunctions.add(pathFn);
 
     // Base case: edge(x, y)
     Core.Exp baseCase =
         core.apply(
             net.hydromatic.morel.ast.Pos.ZERO,
-            core.id(edgeFn),
+            edgeFn,
             core.tuple(typeSystem, core.id(x), core.id(y)));
 
     // Recursive case components: edge(x, z) andalso path(z, y)
     Core.Exp edgeXZ =
         core.apply(
             net.hydromatic.morel.ast.Pos.ZERO,
-            core.id(edgeFn),
+            edgeFn,
             core.tuple(typeSystem, core.id(x), core.id(z)));
     Core.Exp pathZY =
         core.apply(
             net.hydromatic.morel.ast.Pos.ZERO,
-            core.id(pathFn),
+            pathFn,
             core.tuple(typeSystem, core.id(z), core.id(y)));
     Core.Exp conjunction = core.andAlso(typeSystem, edgeXZ, pathZY);
 
@@ -510,6 +534,241 @@ class ProcessTreeBuilderTest {
 
     // Should have recursive call in sequence
     assertTrue(rightSeq.recursiveChildren().size() > 0);
+  }
+
+  // ========== Comprehensive Integration Tests (2 tests) ==========
+
+  @Test
+  void testIntegrationComplexTransitiveClosureWithUnboundVariables() {
+    // INTEGRATION TEST: Verify that the entire pipeline (ProcessTreeBuilder →
+    // VarEnvironment tracking → ProcessTreeNode structure) correctly handles
+    // transitive closure with unbound variables requiring generators.
+    //
+    // Scenario: fun path (x, y) = edge (x, y) orelse
+    //             (exists z where edge (x, z) andalso path (z, y))
+    //           from p where path p
+    //
+    // Expected: ProcessTreeBuilder builds correct BranchNode structure,
+    // VarEnvironment tracks unbound goals, ProcessTreeNode hierarchy matches
+    // expected structure for transitive closure.
+
+    Core.NamedPat x = namedPat("x");
+    Core.NamedPat y = namedPat("y");
+    Core.NamedPat z = namedPat("z");
+    Core.Id edgeFn = functionRef("edge");
+    Core.Id pathFn = functionRef("path");
+
+    activeFunctions.add(pathFn);
+
+    // Base case: edge(x, y)
+    Core.Exp baseCase =
+        core.apply(
+            net.hydromatic.morel.ast.Pos.ZERO,
+            edgeFn,
+            core.tuple(typeSystem, core.id(x), core.id(y)));
+
+    // Recursive case: edge(x, z) andalso path(z, y)
+    Core.Exp edgeXZ =
+        core.apply(
+            net.hydromatic.morel.ast.Pos.ZERO,
+            edgeFn,
+            core.tuple(typeSystem, core.id(x), core.id(z)));
+    Core.Exp pathZY =
+        core.apply(
+            net.hydromatic.morel.ast.Pos.ZERO,
+            pathFn,
+            core.tuple(typeSystem, core.id(z), core.id(y)));
+    Core.Exp conjunction = core.andAlso(typeSystem, edgeXZ, pathZY);
+
+    // Wrap in exists: exists z where (conjunction)
+    Core.From existsPattern =
+        core.fromBuilder(typeSystem).where(conjunction).build();
+
+    // Full pattern: baseCase orelse existsPattern
+    Core.Exp fullPattern = core.orElse(typeSystem, baseCase, existsPattern);
+
+    // Create environment with unbound goals x and y
+    VarEnvironment initialEnv = envWithGoals(x, y);
+
+    // Verify initial state
+    assertEquals(2, initialEnv.unboundGoals().size());
+    assertTrue(initialEnv.unboundGoals().contains(x));
+    assertTrue(initialEnv.unboundGoals().contains(y));
+
+    // Build the process tree
+    ProcessTreeNode tree = builder().build(fullPattern, initialEnv);
+
+    // Verify tree structure: should be BranchNode (baseCase orelse
+    // recursiveCase)
+    assertTrue(
+        tree instanceof ProcessTreeNode.BranchNode,
+        "Root should be BranchNode for disjunction");
+    ProcessTreeNode.BranchNode rootBranch = (ProcessTreeNode.BranchNode) tree;
+
+    // Verify left branch (base case): edge(x, y)
+    assertTrue(
+        rootBranch.left instanceof ProcessTreeNode.TerminalNode,
+        "Base case should be TerminalNode");
+    ProcessTreeNode.TerminalNode baseCaseNode =
+        (ProcessTreeNode.TerminalNode) rootBranch.left;
+    assertFalse(baseCaseNode.isRecursive, "Base case should not be recursive");
+
+    // Verify right branch (recursive case): unwrapped exists → SequenceNode
+    assertTrue(
+        rootBranch.right instanceof ProcessTreeNode.SequenceNode,
+        "Recursive case should be SequenceNode after exists unwrapping");
+    ProcessTreeNode.SequenceNode recursiveSeq =
+        (ProcessTreeNode.SequenceNode) rootBranch.right;
+
+    // Verify sequence has 2 children: edge(x, z) and path(z, y)
+    assertEquals(
+        2,
+        recursiveSeq.children.size(),
+        "Recursive case should have 2 conjuncts");
+
+    // Verify one child is recursive (path call)
+    List<ProcessTreeNode.TerminalNode> recursiveChildren =
+        recursiveSeq.recursiveChildren();
+    assertEquals(
+        1, recursiveChildren.size(), "Should have exactly 1 recursive child");
+    ProcessTreeNode.TerminalNode recursiveCall = recursiveChildren.get(0);
+    assertTrue(
+        recursiveCall.isRecursive, "Path call should be marked recursive");
+
+    // Verify environment tracking: initial goals remain unbound until inversion
+    assertEquals(
+        2,
+        baseCaseNode.env().unboundGoals().size(),
+        "Base case should inherit unbound goals");
+    assertEquals(
+        2,
+        recursiveSeq.env().unboundGoals().size(),
+        "Recursive case should inherit unbound goals");
+
+    // Verify overall branch structure
+    assertTrue(
+        rootBranch.hasRecursiveCase(),
+        "Branch should detect recursive case in right child");
+  }
+
+  @Test
+  void testIntegrationProcessTreeNodeWithVarEnvironmentStateTracking() {
+    // INTEGRATION TEST: Verify that VarEnvironment state is correctly updated
+    // throughout PPT construction as variables become bound.
+    //
+    // Scenario:
+    // - Start with unbound goals [x, y, z]
+    // - Process base case: binds x and y from edge relation
+    // - Process recursive case: tracks z as join variable
+    // - Verify final environment state
+    //
+    // Expected:
+    // - Initial environment has 3 unbound goals
+    // - After tree construction: variables remain unbound (inversion happens
+    // later)
+    // - Tree structure reflects all state transitions
+
+    Core.NamedPat x = namedPat("x");
+    Core.NamedPat y = namedPat("y");
+    Core.NamedPat z = namedPat("z");
+
+    // Create initial environment with 3 unbound goals
+    VarEnvironment initialEnv = envWithGoals(x, y, z);
+
+    // Verify initial state
+    assertEquals(3, initialEnv.unboundGoals().size());
+    assertTrue(initialEnv.unboundGoals().contains(x));
+    assertTrue(initialEnv.unboundGoals().contains(y));
+    assertTrue(initialEnv.unboundGoals().contains(z));
+
+    // Build a simple predicate: x andalso y andalso z
+    Core.Exp predX = core.id(x);
+    Core.Exp predY = core.id(y);
+    Core.Exp predZ = core.id(z);
+    Core.Exp conjunction =
+        core.andAlso(typeSystem, ImmutableList.of(predX, predY, predZ));
+
+    // Build tree
+    ProcessTreeNode tree = builder().build(conjunction, initialEnv);
+
+    // Verify structure: SequenceNode with 3 children
+    assertTrue(
+        tree instanceof ProcessTreeNode.SequenceNode,
+        "Root should be SequenceNode for conjunction");
+    ProcessTreeNode.SequenceNode seq = (ProcessTreeNode.SequenceNode) tree;
+    assertEquals(3, seq.children.size(), "Should have 3 conjuncts");
+
+    // Verify each child is a TerminalNode with correct environment
+    for (int i = 0; i < 3; i++) {
+      ProcessTreeNode child = seq.children.get(i);
+      assertTrue(
+          child instanceof ProcessTreeNode.TerminalNode,
+          "Child " + i + " should be TerminalNode");
+      ProcessTreeNode.TerminalNode terminal =
+          (ProcessTreeNode.TerminalNode) child;
+
+      // Each terminal should inherit the environment with unbound goals
+      assertEquals(
+          3,
+          terminal.env().unboundGoals().size(),
+          "Terminal " + i + " should have 3 unbound goals");
+    }
+
+    // Verify environment immutability: original environment unchanged
+    assertEquals(
+        3,
+        initialEnv.unboundGoals().size(),
+        "Original environment should be unchanged");
+
+    // Test with a more complex pattern: disjunction with conjunction
+    Core.Exp disjunction = core.orElse(typeSystem, predX, conjunction);
+    ProcessTreeNode complexTree = builder().build(disjunction, initialEnv);
+
+    // Verify structure: BranchNode with TerminalNode left, SequenceNode right
+    assertTrue(
+        complexTree instanceof ProcessTreeNode.BranchNode,
+        "Root should be BranchNode");
+    ProcessTreeNode.BranchNode branch =
+        (ProcessTreeNode.BranchNode) complexTree;
+
+    assertTrue(
+        branch.left instanceof ProcessTreeNode.TerminalNode,
+        "Left should be TerminalNode");
+    assertTrue(
+        branch.right instanceof ProcessTreeNode.SequenceNode,
+        "Right should be SequenceNode");
+
+    // Verify environment propagation through branches
+    ProcessTreeNode.TerminalNode leftTerminal =
+        (ProcessTreeNode.TerminalNode) branch.left;
+    ProcessTreeNode.SequenceNode rightSeq =
+        (ProcessTreeNode.SequenceNode) branch.right;
+
+    assertEquals(
+        3,
+        leftTerminal.env().unboundGoals().size(),
+        "Left terminal should have 3 unbound goals");
+    assertEquals(
+        3,
+        rightSeq.env().unboundGoals().size(),
+        "Right sequence should have 3 unbound goals");
+
+    // Verify environment sharing: both branches reference same initial
+    // environment
+    assertEquals(
+        initialEnv,
+        leftTerminal.env(),
+        "Left terminal should reference initial environment");
+    assertEquals(
+        initialEnv,
+        rightSeq.env(),
+        "Right sequence should reference initial environment");
+
+    // Verify no modifications leaked through
+    assertEquals(
+        3,
+        initialEnv.unboundGoals().size(),
+        "Initial environment should still have 3 unbound goals");
   }
 }
 
