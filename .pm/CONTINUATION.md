@@ -1,258 +1,279 @@
-# Morel Predicate Inversion: Continuation Context
+# Morel Phase 5: Predicate Inversion - Audit Complete
 
-**Last Updated**: 2026-01-24
-**Current Phase**: Phase 2-5 Planning Complete → Phase 2 Ready for Execution
-**Status**: Evidence-based implementation plan created for Option 2/3 decision
-
----
-
-## Current State: Phase 2-5 Implementation Plan
-
-**Key Document**: `.pm/PHASE-2-5-IMPLEMENTATION-PLAN.md`
-
-### Why This Plan Exists
-
-Phase 1 (Option 1 cardinality check) revealed an **architectural blocker**:
-- Deferred grounding in Expander is tightly coupled to Relational.iterate
-- Simple fallbacks using infinite extents fail at runtime
-- This is a compile-time/runtime boundary problem (same as SQL WITH RECURSIVE)
-
-### The 5-Phase Evidence-Based Approach
-
-| Phase | Duration | Status | Description |
-|-------|----------|--------|-------------|
-| 1 | 2-4 hours | BLOCKED | Option 1 implementation (revealed blocker) |
-| 2 | 1 day | READY | Define performance criteria |
-| 3 | 2-3 days | PENDING | Research Mode Analysis |
-| 4 | 2-3 days | PENDING | Research LinkCode Pattern (PARALLEL with 3) |
-| 5 | 1 day | PENDING | Informed decision with matrix |
-
-### Next Immediate Action
-
-**Execute Phase 2**: Define quantitative performance criteria
-- Establish input size thresholds (small/medium/large)
-- Define latency acceptance criteria
-- Create benchmark test harness
-- Document decision trigger
-
-### Two Options Being Evaluated
-
-**Option 2: Mode Analysis**
-- Track which arguments are inputs vs outputs
-- Generate mode-aware code
-- Similar to Mercury/Prolog mode declarations
-
-**Option 3: LinkCode Pattern**
-- Extend Morel's existing LinkCode mechanism
-- Defer base case evaluation to runtime
-- Similar to SQL WITH RECURSIVE
+**Last Updated**: 2026-01-24 15:43 UTC
+**Current Phase**: Phase 5 - Plan Audit Complete, Execution Decision Pending
+**Status**: Ready for Phase 5a-prime quick test
 
 ---
 
-## What Was Completed
+## Current Situation
 
-### Phase 1-2: Recursive Function Handling & Pattern Detection (COMPLETE)
-- PredicateInverter class created with basic structure
-- Graceful handling of recursive functions (no crashes)
-- Pattern detection for transitive closure (`baseCase orelse recursiveCase`)
-- Base case extraction (e.g., `edge(x,y)` from complex recursive predicate)
-- Mode detection (which variables can be generated, which required)
-- **Baseline Tests**: 301 passing (verified 2026-01-23)
-  - Test breakdown in `.pm/metrics/baseline-phase-2.json`
-  - ScriptTest: 32, MainTest: 127, AlgebraTest: 29, PredicateInverterTest: 11, Others: 102
-  - Execution time: 18.906 seconds
-- Code review approved for Phases 1-2
+**COMPLETED**:
+- ✅ Phase 3-4: Comprehensive research on Mode Analysis and Core.Apply approaches
+- ✅ Substantive-critic: Independent review of research documents (7 critical issues identified)
+- ✅ Phase 5 Decision: Core.Apply Generation recommended (4.3/5 viability)
+- ✅ Phase 5 Planning: Four beads created with detailed specifications (morel-wvh, morel-c2z, morel-9af, morel-aga)
+- ✅ Plan Audit: Comprehensive audit completed identifying 14 critical issues
 
-**Recent Commits**:
-- `e032e620` - Eliminate duplicates
-- `6921301f` - Add method `Static.transformToMap`
-- `0daf6285` - Change signature of method `CoreBuilder.recordPat`
+**PENDING**:
+- ⏳ Phase 5a-prime: 30-minute quick empirical test (CRITICAL GATE)
+- ⏳ Decision: Path A (immediate) / Path B (adjust plan) / Path C (full refinement)
+- ⏳ Phase 5 Execution: Based on Phase 5a-prime results
 
 ---
 
-## Key Learnings
+## Critical: Phase 5a-prime Quick Test
 
-### L1: Pattern Decomposition
-- Transitive closure patterns split cleanly: base case + recursive case
-- Base case is directly invertible using existing infrastructure
-- Recursive case contains the actual iteration logic
+**What**: 30-minute empirical validation of the core assumption
+**Why**: Answers the single most important question: "Can PredicateInverter access runtime-bound variables during compilation?"
+**When**: DO THIS NEXT, before any other Phase 5 work
+**Outcome**: GO / INVESTIGATE / NO-GO decision
 
-### L2: Mode Tracking
-- Essential to track which variables are generated vs required
-- Affects how we build joins and dependency resolution
-- Will be critical for Phase 4 mode analysis
+### Steps
+1. Add debug logging to PredicateInverter:
+   ```java
+   System.err.println("Environment bindings: " + env);
+   // Check if 'edges' binding is visible
+   ```
 
-### L3: Duplicate Management
-- Recursive patterns inherently produce duplicates
-- Need tabulation + duplicate detection in Phase 3
-- Field `mayHaveDuplicates` in InversionResult properly tracks this
+2. Run test case:
+   ```bash
+   ./mvnw test -Dtest=ScriptTest -Dtest.scm=such-that.smli
+   ```
 
----
+3. Observe output:
+   - ✅ `'edges' binding present: true` → GO
+   - ⚠️ Binding missing but fixable → INVESTIGATE
+   - ❌ Fundamental failure → NO-GO
 
-## Active Hypotheses
-
-### H1: PPT Construction Via Visitor Pattern
-- **Status**: Candidate for Phase 3.1
-- **Hypothesis**: Visitor pattern enables clean separation of PPT traversal from code generation
-- **Validation**: Design review required before implementation
-- **Evidence Needed**: Performance analysis, edge case testing
-
-### H2: Greedy Predicate Ordering
-- **Status**: Candidate for Phase 4
-- **Hypothesis**: Greedy algorithm (order by cardinality) sufficient for good mode selection
-- **Validation**: Compare against optimal for 20+ test cases
-- **Evidence Needed**: Benchmark results, comparison with mode-based ordering
-
-### H3: Relational.iterate Expressiveness
-- **Status**: Planning
-- **Hypothesis**: Relational.iterate can express all well-defined recursive predicates
-- **Validation**: Test against 5+ different recursive patterns
-- **Evidence Needed**: All Phase 3.5 integration tests passing
+### Why This Matters
+- Current plan: 2-4 hours reading code to answer this
+- Phase 5a-prime: 30 minutes empirical test
+- **If assumption is wrong**: Saves 2-4 hours
+- **If assumption is right**: Proceed with confidence
 
 ---
 
-## Current Blockers
+## Decision Framework: Three Paths
 
-**BLOCKING**: Synthesis documents (ETA: 2-3 days)
-- Agent a80563e (deep-research-synthesizer) creating 4 synthesis documents
-- Once complete: paper accessibility verification (1 day)
-- Then: BEADS refinement + load (4 hours)
-- Then: Phase 3a design can start (2-3 days)
+### Path A: Proceed Immediately (NOT RECOMMENDED)
+Skip Phase 5a-prime, start formal Phase 5a validation immediately
+- **Confidence**: 60%
+- **Timeline**: 3-4 days (optimistic)
+- **Risk**: HIGH
+- **Recommendation**: NOT RECOMMENDED
 
----
+### Path B: Phase 5a-prime + Key Modifications ✅ **RECOMMENDED**
+Execute Phase 5a-prime (30 min), then implement audit recommendations
+- **Confidence**: 75% (with Phase 5a-prime success)
+- **Timeline**: 7-11 days validation (realistic with contingency)
+- **Risk**: MEDIUM
+- **Effort**: 2 hours planning overhead
+- **Recommendation**: ✅ BEST BALANCE
 
-## Next Actions (Priority Order)
+### Path C: Full Plan Refinement
+Implement all 14 audit recommendations before Phase 5 execution
+- **Confidence**: 85%
+- **Timeline**: 8-14 days (significant planning)
+- **Risk**: LOW
+- **Effort**: 12 hours planning
+- **Recommendation**: For maximum confidence, but slower
 
-### Immediate (Today)
-
-1. **Create Phase 3 beads** (using orchestrator)
-   - 6 epic beads as per `phase-3-4-bead-definitions.md`
-   - Set dependencies correctly
-   - Assign complexity/time estimates
-
-2. **Create Memory Bank project** `morel_active`
-   - Copy synthesis documents from synthesis work
-   - Organize into phase-specific files
-   - Create index
-
-### This Week
-
-3. **Phase 3.1: PPT Design** (2-3 days)
-   - Architect designs ProcessTreeNode hierarchy
-   - Review with java-architect-planner
-   - Validate with plan-auditor
-
-4. **Phase 3.1: PPT Implementation** (3-4 days)
-   - java-developer implements classes
-   - Tests written first
-   - Code review + 85% coverage target
-
-### Next Week
-
-5. **Phase 3.2: Extended Inversion** (3-4 days)
-6. **Phase 3.3: Tabulation** (2-3 days)
-7. **Phase 3.4: Step Function Generation** (2-3 days)
-
-### Gate: Phase 3.5 Integration (Week 3)
-
-8. **Phase 3.5: Full Relational.iterate Integration** (2 days)
-   - Wire everything together
-   - Transitive closure test validation
-   - Quality gate review
+**⚡ RECOMMENDED**: Start with Path B - Execute Phase 5a-prime immediately, then decide
 
 ---
 
-## Metrics Summary
+## Audit Findings Summary
 
-| Metric | Value | Target |
-|--------|-------|--------|
-| Tests Passing | 301/301 | 301+ |
-| Test Coverage | ~75% | 85%+ for new code |
-| Phase Completion | 2/4 | 4/4 |
-| Blockers | 1 (synthesis docs) | 0 |
-| Code Review Approved | P1-P2 | P1-P4 |
-| Strategic Plan | COMPLETE | ✅ |
-| PM Infrastructure | COMPLETE | ✅ |
-| Synthesis Docs | IN PROGRESS | ⏳ ETA 2-3 days |
+### Plan Verdict: CONDITIONAL GO
+**Strategic**: ✅ SOUND (Core.Apply over Mode Analysis correct)
+**Tactical**: ❌ INSUFFICIENT (documentation-heavy, vague criteria, missing contingencies)
 
----
+### Critical Issues Found (14 total)
+- Phase 5a is documentation-focused, not empirical
+- GO/NO-GO criteria vague and unmeasurable
+- Fallback plan inadequate (explicit syntax never researched)
+- Phase 5d scope unclear (code may already exist)
+- Timeline lacks contingency buffer
+- Missing failure mode analysis
+- Type system validation missing
+- Single test case insufficient
+- Phase ordering has dependencies
 
-## Files Modified in Last Session
+### Key Recommendations
+1. Execute Phase 5a-prime quick test FIRST (30 minutes)
+2. Reorder phases: 5b → 5a → 5d → 5c (dependencies require this)
+3. Expand Phase 5a scope (add type system, step function, integration validation)
+4. Use realistic timeline: 7-11 days (not 3-4)
+5. Research explicit syntax as fallback (in parallel)
 
-- `PredicateInverter.java`: Complete Phase 2 implementation
-- `PredicateInverterTest.java`: 7 passing tests
-- `.pm/execution_state.json`: Updated phase tracking
-- `CLAUDE.md`: Design context updated
-
----
-
-## Knowledge Base Ready
-
-**Memory Bank**: morel_active (CREATE NEEDED)
-- predicate-inversion-knowledge-integration.md (template ready)
-- algorithm-synthesis-ura-to-morel.md (template ready)
-- mode-analysis-synthesis.md (template ready)
-- phase-3-4-bead-definitions.md (template ready)
-- phase-3-4-execution-guide.md (template ready)
-
-**ChromaDB**: 6 papers already indexed (from prior work)
-
-**Research**: 5 PDFs available in `/Users/hal.hildebrand/Documents/Predicate Inversion Research/`
+### Confidence Assessment
+| Aspect | Current | With Mods | After 5a-prime |
+|--------|---------|-----------|----------------|
+| Approach | 60% | 70% | 85% |
+| Timeline | 40% (optimistic) | 70% (realistic) | 85% (validated) |
+| Quality | 60% | 75% | 90% |
 
 ---
 
-## For Next Session Resume
+## Key Documents Created
 
-**Quickstart Checklist**:
-- [ ] Read this file (you are here!)
-- [ ] Review `.pm/execution_state.json` for current state
-- [ ] Check `bd ready` for available work
-- [ ] Read relevant synthesis document section
-- [ ] Start work on assigned bead
+### Audit Results
+- **PHASE-5-DECISION-AUDIT.md** (.pm/ directory)
+  - Comprehensive audit report with 14 issues documented
+  - Detailed recommendations for each issue
+  - Risk register and mitigation strategies
+  - Timeline estimates (realistic: 7-11 days vs claimed 3-4)
 
-**If Resuming After Break**:
-1. Read CONTEXT_PROTOCOL.md Phase 1 (load context)
-2. Run `mvnw test` (verify 159 tests passing)
-3. Check memory bank for recent learnings
-4. Review last 3 commits in git log
-5. Ask architect if unclear
+### Decision & Planning
+- **PHASE-5-DECISION.md** - Final decision: Core.Apply recommended
+- **PHASE-5A-BEAD-SPECIFICATIONS.md** - Complete bead specifications (4 beads)
+- **PHASE-5-PLAN-AUDIT-SUMMARY.md** - Preliminary audit findings
 
----
+### Research Synthesis
+- **linkcode-pattern-design.md** - Phase 4 research synthesis
+- **mode-analysis-design.md** - Phase 3 research synthesis
 
-## Phase Transition Checklist
-
-**Before Starting Phase 3**:
-
-- [ ] Review PHASES.md for Phase 3 overview
-- [ ] Read algorithm-synthesis-ura-to-morel.md
-- [ ] Check phase-3-4-bead-definitions.md for epic details
-- [ ] All 159 tests passing
-- [ ] No compiler warnings
-- [ ] Code review approved
-- [ ] Performance baseline established
-
-**Phase 3 Success Criteria** (from execution_state.json):
-1. Transitive closure test (such-that.smli:737-742) passing
-2. All 159 existing tests still passing
-3. Code review approved with < 2 requested changes
-4. Test coverage >= 85% for new code
-5. Performance: Phase 3 queries run in < 10ms
+### Beads Status
+- **morel-wvh** (5a): Environment Scoping Validation - READY
+- **morel-c2z** (5b): Pattern Coverage Specification - READY
+- **morel-9af** (5c): Comprehensive Test Plan - READY
+- **morel-aga** (5d): Prototype Validation & POC - READY
 
 ---
 
-## Risk Assessment
+## Next Immediate Actions
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|-----------|
-| PPT construction complexity | Medium | High | Early design review + prototyping |
-| Mode analysis interaction effects | Medium | Medium | Comprehensive test suite |
-| Performance regression | Low | Medium | Benchmark before/after each phase |
-| Duplicate detection bugs | Low | High | Dedicated test cases + code review |
+### IMMEDIATE (Next 30 minutes)
+```bash
+# 1. Add debug logging to PredicateInverter
+# 2. Run test:
+./mvnw test -Dtest=ScriptTest -Dtest.scm=such-that.smli
+
+# 3. Check stderr for: "edges" binding present: true/false
+```
+
+### THEN (Based on Phase 5a-prime Results)
+
+**If GO** (environment scoping works):
+1. Review audit report (.pm/PHASE-5-DECISION-AUDIT.md)
+2. Choose Path B or C
+3. Update Phase 5 plan with recommendations
+4. Execute Phase 5b (pattern specification)
+
+**If INVESTIGATE** (fixable issues):
+1. Debug identified problems
+2. Estimate fix time
+3. If < 2 hours: Fix and proceed
+4. If > 2 hours: Consider Path C (full refinement)
+
+**If NO-GO** (fundamental failure):
+1. STOP Phase 5 execution
+2. Research explicit syntax as fallback (1-2 days)
+3. Decide: Pivot or continue with modifications
 
 ---
 
-**Status**: PHASE 2 COMPLETE, READY FOR PHASE 3 PLANNING
+## Beads Ready to Work
 
-**Next Milestone**: Transitive Closure Test Passing (Phase 3.5)
+All four Phase 5 beads are fully specified and ready:
 
-**Expected Duration**: 4-6 weeks total for Phases 3-4
+```bash
+bd ready  # Show available work
+
+# Phase 5a-prime (prerequisite for all others)
+bd show morel-wvh
+
+# After 5a-prime succeeds:
+bd claim morel-c2z  # Pattern specification
+bd claim morel-9af  # Test plan
+bd claim morel-aga  # Prototype
+```
+
+---
+
+## Key Learnings from Audit
+
+1. **Empirical validation matters**: 30-min quick test > 2-4 hours documentation
+2. **Confidence needs evidence**: Claims of 85% were not justified
+3. **Timeline realism**: Add 30% contingency for software complexity
+4. **Fallbacks need research**: "Explicit syntax" is not a fallback unless studied
+5. **Risk management**: Identify failure modes before execution
+
+---
+
+## Success Metrics for Phase 5
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| Validation approach | Documentation | Empirical-first |
+| GO/NO-GO clarity | Vague | Specific & measurable |
+| Timeline buffer | 0% | 30% contingency |
+| Confidence level | 60% (unjustified) | 75%+ (evidence-based) |
+| Risk management | Minimal | Comprehensive |
+
+---
+
+## Recommended Reading Order
+
+1. **PHASE-5-NEXT-ACTIONS.md** (Memory Bank) - Quick decision guide
+2. **PHASE-5-DECISION-AUDIT.md** - Full audit report
+3. **PHASE-5-DECISION.md** - Original decision document
+4. **PHASE-5A-BEAD-SPECIFICATIONS.md** - Bead details
+
+---
+
+## Timeline Estimate (Path B - Recommended)
+
+- **Phase 5a-prime**: 30 min (quick test)
+- **Plan refinement**: 1-2 hours (if GO)
+- **Phase 5b**: 6-10 hours (pattern spec)
+- **Phase 5a**: 11-15 hours (multi-component validation)
+- **Phase 5d**: 4-6 days (debug & integrate)
+- **Phase 5c**: 1.5-2.5 days (comprehensive testing)
+- **Total Validation**: 7-11 days (with contingency)
+
+**Full Implementation**: 4-6 weeks total (Phase 5 + full build)
+
+---
+
+## Confidence After This Phase
+
+**If Phase 5a-prime succeeds**: 75% confidence in approach
+**After Phase 5a completion**: 85% confidence in approach
+**After Phase 5d completion**: 95% confidence in approach
+
+---
+
+## For Session Continuity
+
+**If resuming this session**:
+1. Run Phase 5a-prime quick test (you are here!)
+2. Review audit report based on results
+3. Choose Path A/B/C
+4. Proceed with Phase 5 execution
+
+**If resuming later**:
+1. Read this CONTINUATION.md
+2. Check `.pm/execution_state.json` for current status
+3. Review audit findings in PHASE-5-DECISION-AUDIT.md
+4. Determine: Did Phase 5a-prime run? What were results?
+5. Continue from there
+
+---
+
+## Critical Success Factor
+
+✅ **EXECUTE PHASE 5A-PRIME IMMEDIATELY**
+
+This 30-minute test is the gate for everything else. It provides empirical evidence that makes the entire Phase 5 validation plan credible.
+
+**Do not skip this. Do not defer this. Run it now.**
+
+---
+
+**Status**: Phase 5 Audit COMPLETE ✅ | Ready for Phase 5a-prime | Decision pending
+
+**Next Milestone**: Phase 5a-prime results
+**Expected**: 30 minutes to 1 hour from now
+**Then**: Path A/B/C decision + Phase 5 execution
