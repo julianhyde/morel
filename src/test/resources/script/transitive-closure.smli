@@ -290,4 +290,205 @@ from x in [1, 2]
 [1,2]
 *)
 
-(* END OF TRANSITIVE-CLOSURE.SMLI *)
+(* ===================================================================
+ * CATEGORY 6: ADVANCED INTEGRATION TESTS (P1)
+ * =================================================================== *)
+
+(* Test 6.1: TC with Complex Filters *)
+val edges_6_1 = [(1,2), (2,3), (5,6), (6,7), (7,8)];
+fun edge_6_1 (x, y) = (x, y) elem edges_6_1;
+fun path_6_1 (x, y) = edge_6_1 (x, y) orelse
+  (exists z where path_6_1 (x, z) andalso edge_6_1 (z, y));
+from (x, y) where path_6_1 (x, y) andalso x > 5;
+(*
+[(5,6),(5,7),(5,8),(6,7),(6,8),(7,8)]
+*)
+
+(* Test 6.2: TC with Nested Queries *)
+val edges_6_2 = [(1,2), (2,3), (3,4)];
+val bigSet = [2, 3, 4];
+fun edge_6_2 (x, y) = (x, y) elem edges_6_2;
+fun path_6_2 (x, y) = edge_6_2 (x, y) orelse
+  (exists z where path_6_2 (x, z) andalso edge_6_2 (z, y));
+from a in [1, 2, 3]
+  where exists (from b in bigSet where path_6_2 (a, b));
+(*
+[1,2,3]
+*)
+
+(* Test 6.3: TC with Aggregate - count *)
+val edges_6_3 = [(1,2), (2,3)];
+fun edge_6_3 (x, y) = (x, y) elem edges_6_3;
+fun path_6_3 (x, y) = edge_6_3 (x, y) orelse
+  (exists z where path_6_3 (x, z) andalso edge_6_3 (z, y));
+count (from p where path_6_3 p);
+(*
+3
+*)
+
+(* Test 6.4: TC with JOIN *)
+val edges_6_4 = [(1,2), (2,3)];
+val otherRel = [{x=2, y=10}, {x=3, y=20}];
+fun edge_6_4 (x, y) = (x, y) elem edges_6_4;
+fun path_6_4 (x, y) = edge_6_4 (x, y) orelse
+  (exists z where path_6_4 (x, z) andalso edge_6_4 (z, y));
+from p in (from pp where path_6_4 pp),
+     q in otherRel
+  where #2 p = #x q
+  yield (#1 p, #y q);
+(*
+[(1,10),(1,20),(2,20)]
+*)
+
+(* ===================================================================
+ * CATEGORY 7: ADVANCED EDGE CASES (P1)
+ * =================================================================== *)
+
+(* Test 7.1: Very Deep Chain (20+ nodes) *)
+val edges_7_1 = List.tabulate (20, fn i => (i + 1, i + 2));
+fun edge_7_1 (x, y) = (x, y) elem edges_7_1;
+fun path_7_1 (x, y) = edge_7_1 (x, y) orelse
+  (exists z where path_7_1 (x, z) andalso edge_7_1 (z, y));
+val result_7_1 = from p where path_7_1 p;
+List.length result_7_1;
+(*
+210
+*)
+
+(* Test 7.2: Highly Connected Graph (K_10 complete graph) *)
+fun genCompleteGraph n =
+  from i in List.tabulate (n, fn x => x + 1),
+       j in List.tabulate (n, fn x => x + 1)
+    where i <> j
+    yield (i, j);
+
+val edges_7_2 = genCompleteGraph 10;
+fun edge_7_2 (x, y) = (x, y) elem edges_7_2;
+fun path_7_2 (x, y) = edge_7_2 (x, y) orelse
+  (exists z where path_7_2 (x, z) andalso edge_7_2 (z, y));
+val result_7_2 = from p where path_7_2 p;
+List.length result_7_2;
+(*
+90
+*)
+
+(* Test 7.3: Mixed Self-Loops and Cross-Edges *)
+val edges_7_3 = [(1,1), (1,2), (2,2), (2,3), (3,3)];
+fun edge_7_3 (x, y) = (x, y) elem edges_7_3;
+fun path_7_3 (x, y) = edge_7_3 (x, y) orelse
+  (exists z where path_7_3 (x, z) andalso edge_7_3 (z, y));
+from p where path_7_3 p;
+(*
+[(1,1),(1,2),(1,3),(2,2),(2,3),(3,3)]
+*)
+
+(* Test 7.4: Multiple Disconnected Components *)
+val edges_7_4 = [(1,2), (2,1), (3,4), (4,3), (5,5)];
+fun edge_7_4 (x, y) = (x, y) elem edges_7_4;
+fun path_7_4 (x, y) = edge_7_4 (x, y) orelse
+  (exists z where path_7_4 (x, z) andalso edge_7_4 (z, y));
+from p where path_7_4 p;
+(*
+[(1,1),(1,2),(2,1),(2,2),(3,3),(3,4),(4,3),(4,4),(5,5)]
+*)
+
+(* ===================================================================
+ * CATEGORY 8: ADDITIONAL PATTERN VARIATIONS (P2)
+ * =================================================================== *)
+
+(* Test 8.1: Alternative Base Case Order (multiple orelse) *)
+val edges_8_1a = [(1,2), (2,3)];
+val edges_8_1b = [(3,4)];
+fun edge_8_1a (x, y) = (x, y) elem edges_8_1a;
+fun edge_8_1b (x, y) = (x, y) elem edges_8_1b;
+fun path_8_1 (x, y) = edge_8_1b (x, y) orelse edge_8_1a (x, y) orelse
+  (exists z where path_8_1 (x, z) andalso edge_8_1a (z, y));
+from p where path_8_1 p;
+(*
+[(1,2),(1,3),(1,4),(2,3),(2,4),(3,4)]
+*)
+
+(* Test 8.2: Guard Condition in Base Case *)
+val edges_8_2 = [(1,2), (2,3), (99,100), (100,101)];
+fun edge_8_2 (x, y) = (x, y) elem edges_8_2;
+fun path_8_2 (x, y) = (x < 100 andalso edge_8_2 (x, y)) orelse
+  (exists z where path_8_2 (x, z) andalso edge_8_2 (z, y));
+from p where path_8_2 p;
+(*
+[(1,2),(1,3),(2,3)]
+*)
+
+(* Test 8.3: Multiple exists with different variables *)
+val edges_8_3 = [(1,2), (2,3), (3,4)];
+fun edge_8_3 (x, y) = (x, y) elem edges_8_3;
+fun path_8_3 (x, y) = edge_8_3 (x, y) orelse
+  (exists z where edge_8_3 (x, z) andalso
+    (exists w where edge_8_3 (z, w) andalso edge_8_3 (w, y)));
+from p where path_8_3 p;
+(*
+[(1,2),(1,4),(2,3),(3,4)]
+*)
+
+(* ===================================================================
+ * CATEGORY 9: ROBUSTNESS TESTS (P1)
+ * =================================================================== *)
+
+(* Test 9.1: Repeated TC Invocations in Same Query *)
+val edges_9_1 = [(1,2), (2,3), (3,4)];
+fun edge_9_1 (x, y) = (x, y) elem edges_9_1;
+fun path_9_1 (x, y) = edge_9_1 (x, y) orelse
+  (exists z where path_9_1 (x, z) andalso edge_9_1 (z, y));
+from (x, y, z)
+  where path_9_1 (x, y) andalso path_9_1 (y, z);
+(*
+[(1,2,3),(1,2,4),(1,3,4),(2,3,4)]
+*)
+
+(* Test 9.2: TC with Empty Base (explicit empty list) *)
+val edges_9_2 = [] : (int * int) list;
+fun edge_9_2 (x, y) = (x, y) elem edges_9_2;
+fun path_9_2 (x, y) = edge_9_2 (x, y) orelse
+  (exists z where path_9_2 (x, z) andalso edge_9_2 (z, y));
+from p where path_9_2 p;
+(*
+[]
+*)
+
+(* Test 9.3: Large Cycle Detection *)
+val edges_9_3 = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,1)];
+fun edge_9_3 (x, y) = (x, y) elem edges_9_3;
+fun path_9_3 (x, y) = edge_9_3 (x, y) orelse
+  (exists z where path_9_3 (x, z) andalso edge_9_3 (z, y));
+val result_9_3 = from p where path_9_3 p;
+List.length result_9_3;
+(*
+36
+*)
+
+(* ===================================================================
+ * CATEGORY 10: PERFORMANCE CHARACTERISTICS (P1)
+ * =================================================================== *)
+
+(* Test 10.1: Iteration Count - Chain(15) should need ~15 iterations *)
+val edges_10_1 = genChain 15;
+fun edge_10_1 (x, y) = (x, y) elem edges_10_1;
+fun path_10_1 (x, y) = edge_10_1 (x, y) orelse
+  (exists z where path_10_1 (x, z) andalso edge_10_1 (z, y));
+val result_10_1 = from p where path_10_1 p;
+List.length result_10_1;
+(*
+105
+*)
+
+(* Test 10.2: Scalability Boundary - 50 node chain *)
+val edges_10_2 = List.tabulate (49, fn i => (i + 1, i + 2));
+fun edge_10_2 (x, y) = (x, y) elem edges_10_2;
+fun path_10_2 (x, y) = edge_10_2 (x, y) orelse
+  (exists z where path_10_2 (x, z) andalso edge_10_2 (z, y));
+val result_10_2 = from p where path_10_2 p;
+List.length result_10_2;
+(*
+1225
+*)
+
+(*) End transitive-closure.smli
