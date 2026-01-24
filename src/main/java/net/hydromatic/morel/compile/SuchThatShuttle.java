@@ -36,6 +36,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
@@ -59,13 +60,34 @@ import org.apache.calcite.util.Holder;
  * }</pre>
  */
 class SuchThatShuttle extends EnvShuttle {
+  /** True if we're inside a recursive function definition. */
+  private final boolean inRecursiveFunction;
+
   SuchThatShuttle(TypeSystem typeSystem, Environment env) {
+    this(typeSystem, env, false);
+  }
+
+  private SuchThatShuttle(
+      TypeSystem typeSystem, Environment env, boolean inRecursiveFunction) {
     super(typeSystem, env);
+    this.inRecursiveFunction = inRecursiveFunction;
   }
 
   @Override
   protected EnvShuttle push(Environment env) {
-    return new SuchThatShuttle(typeSystem, env);
+    return new SuchThatShuttle(typeSystem, env, inRecursiveFunction);
+  }
+
+  @Override
+  protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
+    // When visiting recursive function definitions, mark that we're inside
+    // so that From expressions won't be expanded (they're part of the
+    // function definition, not queries to execute).
+    final java.util.List<Binding> bindings = new java.util.ArrayList<>();
+    Compiles.bindPattern(typeSystem, bindings, recValDecl);
+    final SuchThatShuttle inner =
+        new SuchThatShuttle(typeSystem, env.bindAll(bindings), true);
+    return recValDecl.copy(inner.visitList(recValDecl.list));
   }
 
   static boolean containsUnbounded(Core.Decl decl) {
@@ -85,10 +107,95 @@ class SuchThatShuttle extends EnvShuttle {
 
   @Override
   protected Core.Exp visit(Core.From from) {
+    System.err.println(
+        "DEBUG SuchThatShuttle.visit(From): inRecursiveFunction="
+            + inRecursiveFunction);
+
+    // Skip expansion for From expressions inside recursive function
+    // definitions.
+    // These are part of the function's logic, not queries to execute.
+    // The outer query will handle transitive closure detection.
+    if (inRecursiveFunction) {
+      System.err.println(
+          "DEBUG SuchThatShuttle: skipping expansion inside recursive function");
+      return super.visit(from);
+    }
+
     final Core.From from2 = Expander.expandFrom(typeSystem, env, from);
+    System.out.println(from2);
 
     // Expand subqueries.
     return super.visit(from2);
+  }
+
+  /**
+   * Returns true if we're inside a function body. We detect this by checking if
+   * the env contains bindings that look like lambda parameters: single letters
+   * or names with underscore+number suffix.
+   */
+  private boolean isInsideFunctionBody() {
+    final Holder<Boolean> found = Holder.of(false);
+    env.visit(
+        b -> {
+          if (b.exp == null && b.parameter) {
+            // Explicitly marked as a parameter
+            found.set(true);
+          } else if (b.exp == null) {
+            final String name = b.id.name;
+            // Check for lambda parameter patterns:
+            // - Single letter: x, y, z, v, etc.
+            // - Underscore suffix: x_1, y_1, etc.
+            if (name.length() == 1 && Character.isLowerCase(name.charAt(0))) {
+              found.set(true);
+            } else if (name.contains("_")
+                && name.length() <= 5
+                && Character.isLowerCase(name.charAt(0))) {
+              found.set(true);
+            }
+          }
+        });
+    return found.get();
+  }
+
+  /**
+   * Returns true if the from expression contains a call to a recursive
+   * function.
+   */
+  private boolean containsRecursiveCall(Core.From from) {
+    final Holder<Boolean> found = Holder.of(false);
+    from.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Apply apply) {
+            super.visit(apply);
+            if (apply.fn.op == Op.ID) {
+              final Core.Id fnId = (Core.Id) apply.fn;
+              final Binding binding = env.getTop(fnId.idPat.name);
+              if (binding != null && binding.exp != null) {
+                // Check if the function body references itself
+                final String fnName = fnId.idPat.name;
+                final Holder<Boolean> selfRef = Holder.of(false);
+                binding.exp.accept(
+                    new Visitor() {
+                      @Override
+                      protected void visit(Core.Apply innerApply) {
+                        super.visit(innerApply);
+                        if (innerApply.fn.op == Op.ID) {
+                          final Core.Id innerId = (Core.Id) innerApply.fn;
+                          if (innerId.idPat.name.equals(fnName)) {
+                            selfRef.set(true);
+                          }
+                        }
+                      }
+                    });
+                if (selfRef.get()) {
+                  found.set(true);
+                }
+              }
+            }
+          }
+        });
+    return found.get();
   }
 
   // TODO: This is obsolete. Remove it.
