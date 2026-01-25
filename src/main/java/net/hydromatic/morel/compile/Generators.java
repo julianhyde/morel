@@ -1389,51 +1389,17 @@ class Generators {
           }
         }
         final RecordLikeType recordLikeType = tuple.type();
-        Core.Exp simplified = simplifyTuple(newArgs, recordLikeType);
-        return simplified != null
-            ? simplified
-            : changed ? core.tuple(recordLikeType, newArgs) : body;
+        Core.Exp simplified = core.simplifyTuple(newArgs, recordLikeType);
+        if (simplified != null) {
+          return simplified;
+        }
+        return changed ? core.tuple(recordLikeType, newArgs) : body;
 
       default:
         // For other expression types, return unchanged
         // A full implementation would handle all cases
         return body;
     }
-  }
-
-  /** Simplifies "(#1 x, #2 x)" to "x" if "x" has 2 fields; otherwise null. */
-  // TODO: move this to general-purpose simplify
-  private static Core.@Nullable Exp simplifyTuple(
-      List<Core.Exp> newArgs, RecordLikeType recordLikeType) {
-    if (newArgs.isEmpty()) {
-      // Cannot simplify unit, "()".
-      return null;
-    }
-    if (newArgs.size() != recordLikeType.argTypes().size()) {
-      // Cannot simplify "(#1 x, #2 x)" to "x" if x has 3 or more fields.
-      return null;
-    }
-    Core.Exp arg = null;
-    for (int i = 0; i < newArgs.size(); i++) {
-      final Core.Exp a = newArgs.get(i);
-      if (!(a instanceof Core.Apply)) {
-        return null;
-      }
-      final Core.Apply apply = (Core.Apply) a;
-      if (!(apply.fn instanceof Core.RecordSelector)) {
-        return null;
-      }
-      final Core.RecordSelector recordSelector = (Core.RecordSelector) apply.fn;
-      if (recordSelector.slot == i) {
-        if (i == 0) {
-          arg = apply.arg;
-        } else if (arg != apply.arg) {
-          // Arguments are not the same, e.g. "(#1 x, #2 x, #3 y)".
-          return null;
-        }
-      }
-    }
-    return arg;
   }
 
   /**
