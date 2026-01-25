@@ -1,0 +1,9 @@
+(* Simple transitive closure test *)
+val edges = [(1, 2), (2, 3)];
+fun edge (x, y) = (x, y) elem edges;
+fun path (x, y) = edge (x, y) orelse
+  (exists z where path (x, z) andalso edge (z, y));
+from p where path p;
+(*
+[(1,2),(1,3),(2,3)]
+*)

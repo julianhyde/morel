@@ -88,7 +88,16 @@ abstract class EnvShuttle extends Shuttle {
   @Override
   protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
     final List<Binding> bindings = new ArrayList<>();
-    recValDecl.list.forEach(decl -> Compiles.acceptBinding(decl.pat, bindings));
+    // Include the expression in bindings so PredicateInverter can access
+    // the function body for recursive functions
+    recValDecl.list.forEach(
+        decl -> {
+          if (decl.pat instanceof Core.IdPat) {
+            bindings.add(Binding.of((Core.IdPat) decl.pat, decl.exp));
+          } else {
+            Compiles.acceptBinding(decl.pat, bindings);
+          }
+        });
     return recValDecl.copy(bind(bindings).visitList(recValDecl.list));
   }
 

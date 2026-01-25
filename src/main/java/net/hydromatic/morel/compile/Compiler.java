@@ -951,7 +951,9 @@ public class Compiler {
           (pat, exp, overloadPat, pos) -> {
             final LinkCode linkCode = new LinkCode();
             linkCodes.put(pat, linkCode);
-            bindings.add(Binding.of(pat, linkCode));
+            // Include exp in binding so PredicateInverter can access function
+            // bodies for recursive functions during predicate inversion
+            bindings.add(Binding.of(pat, exp, linkCode));
           });
     }
 
@@ -1117,6 +1119,7 @@ public class Compiler {
     private final Code code;
     private final Core.NamedPat pat;
     private final Type type;
+    private final Core.@Nullable Exp exp;
     private final Core.@Nullable IdPat overloadPat;
     private final Pos pos;
     private final Core.@Nullable Pat skipPat;
@@ -1134,6 +1137,9 @@ public class Compiler {
       this.pat = pat;
       final Type type0 = pat.type.containsProgressive() ? exp.type : pat.type;
       this.type = typeSystem.ensureClosed(type0);
+      // Store the expression so PredicateInverter can access function bodies
+      // for recursive functions during predicate inversion
+      this.exp = exp;
       this.overloadPat = overloadPat;
       this.pos = pos;
       this.skipPat = skipPat;
@@ -1156,7 +1162,7 @@ public class Compiler {
             (pat2, o2) ->
                 outBindings0.add(
                     overloadPat == null
-                        ? Binding.of(pat2, o2)
+                        ? Binding.of(pat2, exp, o2)
                         : Binding.inst(pat2, overloadPat, o2)))) {
           throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
         }

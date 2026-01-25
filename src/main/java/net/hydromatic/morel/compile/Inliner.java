@@ -19,7 +19,6 @@
 package net.hydromatic.morel.compile;
 
 import static java.lang.String.format;
-import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.allMatch;
@@ -56,20 +55,48 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class Inliner extends EnvShuttle {
   private final Analyzer.@Nullable Analysis analysis;
   /**
-   * Patterns currently being inlined. Used to detect recursive references and
-   * avoid infinite recursion during inlining.
+   * Base names of patterns currently being inlined (with numeric suffixes
+   * stripped). Used to detect recursive references and avoid infinite recursion
+   * during inlining. We strip suffixes because the same logical function can
+   * have different IdPat names (e.g., "fact" vs "fact_4").
    */
-  private final Set<Core.NamedPat> inliningPats;
+  private final Set<String> inliningBaseNames;
+  /**
+   * Current inlining depth. Used to prevent very deep inlining chains that
+   * could indicate cyclic inlining between different variables.
+   */
+  private final int depth;
+  /** Maximum inlining depth to prevent infinite cycles. */
+  private static final int MAX_DEPTH = 250;
 
   /** Private constructor. */
   private Inliner(
       TypeSystem typeSystem,
       Environment env,
       Analyzer.Analysis analysis,
-      Set<Core.NamedPat> inliningPats) {
+      Set<String> inliningBaseNames,
+      int depth) {
     super(typeSystem, env);
     this.analysis = analysis;
-    this.inliningPats = inliningPats;
+    this.inliningBaseNames = inliningBaseNames;
+    this.depth = depth;
+  }
+
+  /**
+   * Strips numeric suffix from a name (e.g., "fact_4" -> "fact"). Names in
+   * Morel can have suffixes like "_4" to distinguish different instances of the
+   * same logical variable. For recursion detection, we need to compare base
+   * names.
+   */
+  private static String baseName(String name) {
+    int i = name.lastIndexOf('_');
+    if (i > 0) {
+      String suffix = name.substring(i + 1);
+      if (!suffix.isEmpty() && suffix.chars().allMatch(Character::isDigit)) {
+        return name.substring(0, i);
+      }
+    }
+    return name;
   }
 
   /**
@@ -81,12 +108,12 @@ public class Inliner extends EnvShuttle {
       TypeSystem typeSystem,
       Environment env,
       Analyzer.@Nullable Analysis analysis) {
-    return new Inliner(typeSystem, env, analysis, new HashSet<>());
+    return new Inliner(typeSystem, env, analysis, new HashSet<>(), 0);
   }
 
   @Override
   protected Inliner push(Environment env) {
-    return new Inliner(typeSystem, env, analysis, inliningPats);
+    return new Inliner(typeSystem, env, analysis, inliningBaseNames, depth);
   }
 
   @Override
@@ -94,22 +121,34 @@ public class Inliner extends EnvShuttle {
     final Binding binding = env.getOpt(id.idPat);
     if (binding != null && !binding.parameter) {
       if (binding.exp != null) {
-        // Skip inlining if this pattern is already being inlined (recursive
-        // reference).
-        // This prevents infinite recursion when inlining recursive functions.
-        if (!inliningPats.contains(id.idPat)) {
-          final Analyzer.Use use =
-              analysis == null
-                  ? Analyzer.Use.MULTI_UNSAFE
-                  : requireNonNull(analysis.map.get(id.idPat));
+        // Skip inlining if:
+        // 1. This pattern name is already being inlined (recursive reference)
+        // 2. We've exceeded the maximum inlining depth (cycle detection)
+        final String base = baseName(id.idPat.name);
+        if (!inliningBaseNames.contains(base) && depth < MAX_DEPTH) {
+          // Get usage info from analysis. If the pattern isn't in the analysis
+          // map (e.g., it was added after analysis), treat it as MULTI_UNSAFE
+          // to be safe.
+          final Analyzer.Use use;
+          if (analysis == null) {
+            use = Analyzer.Use.MULTI_UNSAFE;
+          } else {
+            final Analyzer.Use analysisUse = analysis.map.get(id.idPat);
+            use = analysisUse != null ? analysisUse : Analyzer.Use.MULTI_UNSAFE;
+          }
           switch (use) {
             case ATOMIC:
             case ONCE_SAFE:
-              inliningPats.add(id.idPat);
+              inliningBaseNames.add(base);
+              // Create a new Inliner with incremented depth for the nested
+              // inlining
+              final Inliner nestedInliner =
+                  new Inliner(
+                      typeSystem, env, analysis, inliningBaseNames, depth + 1);
               try {
-                return binding.exp.accept(this);
+                return binding.exp.accept(nestedInliner);
               } finally {
-                inliningPats.remove(id.idPat);
+                inliningBaseNames.remove(base);
               }
           }
         }
@@ -385,8 +424,12 @@ public class Inliner extends EnvShuttle {
         analysis == null
             ? Analyzer.Use.MULTI_UNSAFE
             : let.decl instanceof Core.NonRecValDecl
-                ? requireNonNull(
-                    analysis.map.get(((Core.NonRecValDecl) let.decl).pat))
+                // Use MULTI_UNSAFE as default when pattern isn't in analysis
+                // (can happen when inlining function bodies from other
+                // declarations)
+                ? analysis.map.getOrDefault(
+                    ((Core.NonRecValDecl) let.decl).pat,
+                    Analyzer.Use.MULTI_UNSAFE)
                 : Analyzer.Use.MULTI_UNSAFE;
     switch (use) {
       case DEAD:

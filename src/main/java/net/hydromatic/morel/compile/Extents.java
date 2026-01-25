@@ -677,7 +677,9 @@ public class Extents {
                           core.id(createId(tuple.type, apply.arg(1)));
                       final Core.Exp elem =
                           core.elem(typeSystem, id, apply.arg(1));
-                      g3(
+                      // Use g3b instead of g3 to enable PredicateInverter
+                      // support
+                      g3b(
                           map,
                           core.andAlso(
                               typeSystem,
@@ -692,7 +694,7 @@ public class Extents {
                                       typeSystem,
                                       core.field(typeSystem, id, i),
                                       arg)));
-                      g3(map, core.andAlso(typeSystem, conjunctions));
+                      g3b(map, core.andAlso(typeSystem, conjunctions));
                       break;
                   }
                   break;

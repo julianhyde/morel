@@ -85,6 +85,17 @@ public class Binding {
     return new Binding(id, null, null, value, false, Kind.VAL);
   }
 
+  /**
+   * Creates a binding with both an expression and a value.
+   *
+   * <p>This is used when we want to preserve the AST expression (for predicate
+   * inversion) while also storing the compiled value.
+   */
+  public static Binding of(
+      Core.NamedPat id, Core.@Nullable Exp exp, Object value) {
+    return new Binding(id, null, exp, value, false, Kind.VAL);
+  }
+
   public static Binding inst(
       Core.NamedPat id, Core.IdPat overloadId, Object value) {
     return new Binding(id, overloadId, null, value, false, Kind.INST);

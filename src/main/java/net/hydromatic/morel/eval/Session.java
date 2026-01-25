@@ -174,6 +174,8 @@ public class Session {
           buf.append(e.getMessage());
         } else {
           buf.append(e);
+          // DEBUG: print full stack trace
+          e.printStackTrace();
         }
       }
     },

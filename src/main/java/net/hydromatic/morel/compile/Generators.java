@@ -32,6 +32,7 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -69,6 +70,10 @@ class Generators {
     }
 
     if (maybeExists(cache, pat, constraints)) {
+      return true;
+    }
+
+    if (maybeUserFunction(cache, pat, ordered, constraints)) {
       return true;
     }
 
@@ -115,6 +120,70 @@ class Generators {
               default:
                 continue constraint_loop;
             }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Tries to invert user-defined function predicates using PredicateInverter.
+   *
+   * <p>For example, given a constraint {@code path_1_1 p} where {@code
+   * path_1_1} is a recursive function defining transitive closure, this method
+   * attempts to invert it into a generator using {@code Relational.iterate}.
+   *
+   * @param cache the generator cache
+   * @param pat the pattern to generate values for
+   * @param ordered whether the generator should preserve order
+   * @param constraints the list of predicates to potentially invert
+   * @return true if a finite generator was successfully created
+   */
+  private static boolean maybeUserFunction(
+      Cache cache, Core.Pat pat, boolean ordered, List<Core.Exp> constraints) {
+    // Get the named patterns we need to generate
+    final List<Core.NamedPat> goalPats = pat.expand();
+
+    for (Core.Exp constraint : constraints) {
+      // Look for user-defined function calls: APPLY with fn being an ID
+      if (constraint.op == Op.APPLY) {
+        Core.Apply apply = (Core.Apply) constraint;
+        if (apply.fn.op == Op.ID) {
+          // This is a user-defined function call
+          // Build generators map from existing cache generators
+          final Map<Core.NamedPat, PredicateInverter.Generator> generators =
+              new LinkedHashMap<>();
+          cache.generators.forEach(
+              (namedPat, generator) ->
+                  generators.put(
+                      namedPat,
+                      new PredicateInverter.Generator(
+                          namedPat,
+                          generator.exp,
+                          generator.cardinality,
+                          ImmutableList.of(),
+                          generator.freePats)));
+
+          // Try to invert the predicate
+          PredicateInverter.Result result =
+              PredicateInverter.invert(
+                  cache.typeSystem,
+                  cache.env,
+                  constraint,
+                  goalPats,
+                  generators);
+
+          // Check if inversion succeeded with a finite generator
+          if (result.generator.cardinality != Generator.Cardinality.INFINITE) {
+            // Create a CollectionGenerator from the result
+            Set<Core.NamedPat> freePats =
+                SuchThatShuttle.freePats(
+                    cache.typeSystem, result.generator.expression);
+            cache.add(
+                new CollectionGenerator(
+                    pat, result.generator.expression, freePats));
+            return true;
           }
         }
       }

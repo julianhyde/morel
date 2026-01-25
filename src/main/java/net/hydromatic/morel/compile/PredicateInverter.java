@@ -57,6 +57,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ConsList;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Inverts predicates into generator expressions.
@@ -122,7 +123,6 @@ public class PredicateInverter {
    */
   private Result invert(
       Core.Exp predicate, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
-
     // Handle function application
     if (predicate.op == Op.APPLY) {
       Core.Apply apply = (Core.Apply) predicate;
@@ -202,14 +202,14 @@ public class PredicateInverter {
           // This is a recursive call - try to invert it with transitive closure
           Binding binding = env.getOpt(fnPat);
 
-          if (binding != null && binding.value instanceof Core.Exp) {
-            Core.Exp fnBody = (Core.Exp) binding.value;
+          if (binding != null && binding.exp != null) {
+            Core.Exp fnBody = binding.exp;
             if (fnBody.op == Op.FN) {
               Core.Fn fn = (Core.Fn) fnBody;
 
-              // Substitute the function argument into the body
-              Core.Exp substitutedBody =
-                  substituteArg(fn.idPat, apply.arg, fn.exp);
+              // Substitute the function argument into the body, handling case
+              // unwrapping for tuple parameters
+              Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
 
               // Try to invert as transitive closure pattern
               Result transitiveClosureResult =
@@ -248,15 +248,14 @@ public class PredicateInverter {
         }
 
         Binding binding = env.getOpt(fnPat);
-
-        if (binding != null && binding.value instanceof Core.Exp) {
-          Core.Exp fnBody = (Core.Exp) binding.value;
+        if (binding != null && binding.exp != null) {
+          Core.Exp fnBody = binding.exp;
           if (fnBody.op == Op.FN) {
             Core.Fn fn = (Core.Fn) fnBody;
 
-            // Substitute the function argument into the body
-            Core.Exp substitutedBody =
-                substituteArg(fn.idPat, apply.arg, fn.exp);
+            // Substitute the function argument into the body, handling case
+            // unwrapping for tuple parameters
+            Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
 
             // Try to invert the substituted body
             return invert(substitutedBody, goalPats, ConsList.of(fnId, active));
@@ -855,6 +854,23 @@ public class PredicateInverter {
                 ImmutableList.of());
         return result(generator, ImmutableList.of());
       }
+
+      // Handle field accesses on a single goal pattern: (#1 p, #2 p) elem list
+      // This occurs when path(p) is inverted and edge body is substituted.
+      // If all tuple elements are field accesses on the same goal pattern,
+      // we can simplify to: p elem list
+      final Core.NamedPat sourceGoal = extractFieldAccessGoal(tuple, goalPats);
+      if (sourceGoal != null) {
+        // All field accesses are on sourceGoal, so the pattern is equivalent
+        // to sourceGoal elem collection
+        final Generator generator =
+            generator(
+                sourceGoal,
+                collection,
+                net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                ImmutableList.of());
+        return result(generator, ImmutableList.of());
+      }
       // Fall through for patterns with constants - let g3 handle with field
       // extraction
     }
@@ -889,6 +905,52 @@ public class PredicateInverter {
       }
     }
     return true;
+  }
+
+  /**
+   * Checks if all elements of a tuple are field accesses on the same goal
+   * pattern. For example, (#1 p, #2 p) where p is a goal pattern.
+   *
+   * @param tuple The tuple expression to check
+   * @param goalPats The goal patterns we're trying to generate
+   * @return The common source pattern if all elements are field accesses on it,
+   *     null otherwise
+   */
+  private Core.@Nullable NamedPat extractFieldAccessGoal(
+      Core.Tuple tuple, List<Core.NamedPat> goalPats) {
+    Core.NamedPat commonSource = null;
+    for (int i = 0; i < tuple.args.size(); i++) {
+      final Core.Exp arg = tuple.args.get(i);
+      // Check if this is a field access: #slot id
+      if (arg.op != Op.APPLY) {
+        return null;
+      }
+      final Core.Apply apply = (Core.Apply) arg;
+      if (apply.fn.op != Op.RECORD_SELECTOR) {
+        return null;
+      }
+      final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
+      // The argument to the selector should be an ID
+      if (apply.arg.op != Op.ID) {
+        return null;
+      }
+      final Core.Id id = (Core.Id) apply.arg;
+      // Check if this ID is one of our goal patterns
+      if (!goalPats.contains(id.idPat)) {
+        return null;
+      }
+      // Check that the slot matches the position in the tuple
+      if (selector.slot != i) {
+        return null;
+      }
+      // Check that all accesses are on the same source pattern
+      if (commonSource == null) {
+        commonSource = id.idPat;
+      } else if (commonSource != id.idPat) {
+        return null;
+      }
+    }
+    return commonSource;
   }
 
   /**
@@ -1003,6 +1065,44 @@ public class PredicateInverter {
   }
 
   /**
+   * Substitutes a function argument into the function body, handling the case
+   * where the function has a tuple parameter compiled as {@code fn v => case v
+   * of (x, y) => ...}.
+   *
+   * <p>Functions like {@code fun edge (x, y) = (x, y) elem edges} compile to:
+   * {@code fn v => case v of (x, y) => op elem (...)}. This method unwraps the
+   * case to use the real parameter pattern for substitution.
+   *
+   * @param fn The function expression
+   * @param arg The argument to substitute
+   * @return The function body with argument substituted
+   */
+  private Core.Exp substituteIntoFn(Core.Fn fn, Core.Exp arg) {
+    // Extract the actual body and parameter pattern.
+    // Functions like `fun edge (x, y) = (x, y) elem edges` compile to:
+    //   fn v => case v of (x, y) => op elem (...)
+    // We need to unwrap the case to get the real pattern and body.
+    Core.Pat paramPat = fn.idPat;
+    Core.Exp body = fn.exp;
+
+    if (body.op == Op.CASE) {
+      final Core.Case caseExp = (Core.Case) body;
+      // Check if case is matching on the function parameter
+      if (caseExp.exp.op == Op.ID) {
+        final Core.Id caseId = (Core.Id) caseExp.exp;
+        if (caseId.idPat.equals(fn.idPat) && caseExp.matchList.size() == 1) {
+          // Single-arm case matching on parameter - extract the arm
+          final Core.Match match = caseExp.matchList.get(0);
+          paramPat = match.pat;
+          body = match.exp;
+        }
+      }
+    }
+
+    return substituteArg(paramPat, arg, body);
+  }
+
+  /**
    * Builds a substitution map from a pattern to an expression.
    *
    * <p>For example, given pattern {@code (x, y)} and expression {@code (z, w)},
@@ -1022,6 +1122,22 @@ public class PredicateInverter {
 
       case TUPLE_PAT:
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        // Handle variable of tuple type: p -> {x -> #1 p, y -> #2 p}
+        if (exp.op == Op.ID && exp.type instanceof RecordLikeType) {
+          final RecordLikeType recordType = (RecordLikeType) exp.type;
+          if (tuplePat.args.size() != recordType.argTypes().size()) {
+            return false;
+          }
+          for (int i = 0; i < tuplePat.args.size(); i++) {
+            final Core.Pat argPat = tuplePat.args.get(i);
+            // Create field access: #i exp
+            final Core.Exp fieldExp = core.field(typeSystem, exp, i);
+            if (!buildSubstitution(argPat, fieldExp, subst)) {
+              return false;
+            }
+          }
+          return true;
+        }
         if (exp.op != Op.TUPLE) {
           return false;
         }
@@ -1039,6 +1155,21 @@ public class PredicateInverter {
 
       case RECORD_PAT:
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        // Handle variable of record type: r -> {x -> #1 r, y -> #2 r}
+        if (exp.op == Op.ID && exp.type instanceof RecordLikeType) {
+          final RecordLikeType recType = (RecordLikeType) exp.type;
+          if (recordPat.args.size() != recType.argTypes().size()) {
+            return false;
+          }
+          for (int i = 0; i < recordPat.args.size(); i++) {
+            final Core.Pat argPat = recordPat.args.get(i);
+            final Core.Exp fieldExp = core.field(typeSystem, exp, i);
+            if (!buildSubstitution(argPat, fieldExp, subst)) {
+              return false;
+            }
+          }
+          return true;
+        }
         // Records are represented as tuples in Core
         if (exp.op != Op.TUPLE) {
           return false;

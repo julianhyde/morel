@@ -174,8 +174,7 @@ public abstract class Compiles {
           .forEachBinding(
               (pat, exp, overloadPat, pos) -> {
                 // Add placeholder binding so PredicateInverter can detect
-                // recursive
-                // calls
+                // recursive calls
                 if (pat instanceof Core.IdPat) {
                   functionPlaceholders.add(Binding.of((Core.IdPat) pat, exp));
                 }
@@ -217,7 +216,12 @@ public abstract class Compiles {
       }
       for (int i = 0; i < inlinePassCount; i++) {
         final Core.Decl coreDecl2 = coreDecl;
-        if (mayContainUnbounded) {
+        // Don't apply SuchThatShuttle to RecValDecl (recursive function
+        // definitions)
+        // because it would try to expand EXISTS clauses that reference the
+        // function being defined, causing infinite recursion. The FROMs inside
+        // recursive functions will be expanded when the functions are called.
+        if (mayContainUnbounded && coreDecl.op != Op.REC_VAL_DECL) {
           if (SuchThatShuttle.containsUnbounded(coreDecl)) {
             coreDecl =
                 coreDecl.accept(new SuchThatShuttle(typeSystem, enrichedEnv));
