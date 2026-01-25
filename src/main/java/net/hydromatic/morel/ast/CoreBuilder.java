@@ -925,14 +925,19 @@ public enum CoreBuilder {
     switch (exp.op) {
       case TUPLE:
         final Core.Tuple tuple = (Core.Tuple) exp;
-        return tuple.copy(
-            typeSystem, transform(tuple.args, e -> simplify(typeSystem, e)));
+        final List<Core.Exp> simplifiedArgs =
+            transformEager(tuple.args, e -> simplify(typeSystem, e));
+        final Core.Exp simplified = simplifyTuple(simplifiedArgs, tuple.type());
+        if (simplified != null) {
+          return simplified;
+        }
+        return tuple.copy(typeSystem, simplifiedArgs);
 
       case APPLY:
         Core.Apply apply = (Core.Apply) exp;
-        final Core.Exp simplifiedArgs = simplify(typeSystem, apply.arg);
-        if (!simplifiedArgs.equals(apply.arg)) {
-          apply = apply.copy(apply.fn, simplifiedArgs);
+        final Core.Exp simplifiedArg = simplify(typeSystem, apply.arg);
+        if (!simplifiedArg.equals(apply.arg)) {
+          apply = apply.copy(apply.fn, simplifiedArg);
         }
         if (apply.isCallTo(BuiltIn.LIST_CONCAT)
             && apply.arg.isCallTo(BuiltIn.Z_LIST)) {
@@ -1324,6 +1329,53 @@ public enum CoreBuilder {
       default:
         throw new AssertionError("cannot convert " + exp + " to pattern");
     }
+  }
+
+  /**
+   * Simplifies {@code (#1 x, #2 x)} to {@code x} if {@code x} has exactly 2
+   * fields.
+   *
+   * <p>More generally, simplifies a tuple of field accesses on the same
+   * expression to that expression, if the field accesses cover all fields in
+   * order.
+   *
+   * @param args the tuple arguments (already simplified)
+   * @param recordLikeType the type of the tuple
+   * @return the simplified expression, or null if no simplification is possible
+   */
+  public Core.@Nullable Exp simplifyTuple(
+      List<Core.Exp> args, RecordLikeType recordLikeType) {
+    if (args.isEmpty()) {
+      // Cannot simplify unit, "()".
+      return null;
+    }
+    if (args.size() != recordLikeType.argTypes().size()) {
+      // Cannot simplify "(#1 x, #2 x)" to "x" if x has 3 or more fields.
+      return null;
+    }
+    Core.Exp arg = null;
+    for (int i = 0; i < args.size(); i++) {
+      final Core.Exp a = args.get(i);
+      if (!(a instanceof Core.Apply)) {
+        return null;
+      }
+      final Core.Apply apply = (Core.Apply) a;
+      if (!(apply.fn instanceof Core.RecordSelector)) {
+        return null;
+      }
+      final Core.RecordSelector recordSelector = (Core.RecordSelector) apply.fn;
+      if (recordSelector.slot != i) {
+        // Field access is not in order, e.g. "(#2 x, #1 x)".
+        return null;
+      }
+      if (i == 0) {
+        arg = apply.arg;
+      } else if (!arg.equals(apply.arg)) {
+        // Arguments are not the same, e.g. "(#1 x, #2 y)".
+        return null;
+      }
+    }
+    return arg;
   }
 }
 
