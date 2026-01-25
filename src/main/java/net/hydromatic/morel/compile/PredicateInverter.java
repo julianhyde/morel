@@ -446,6 +446,8 @@ public class PredicateInverter {
     return result(generatorFor(goalPats), ImmutableList.of(elemCall));
   }
 
+  // TODO: Refactor - consolidate with Generators.toPat(). Consider moving to
+  // a shared utility class or using Op#toPat() more directly.
   /**
    * Converts an expression to the equivalent pattern.
    *
