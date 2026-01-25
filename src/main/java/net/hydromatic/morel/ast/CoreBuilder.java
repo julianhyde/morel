@@ -27,6 +27,7 @@ import static net.hydromatic.morel.util.Static.filterEager;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.transform;
+import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -1267,6 +1268,62 @@ public enum CoreBuilder {
   /** Flattens the {@code orelse}s in every expression into a consumer. */
   public void flattenOrs(List<Core.Exp> exps, Consumer<Core.Exp> consumer) {
     exps.forEach(arg -> flattenOr(arg, consumer));
+  }
+
+  /**
+   * Converts an expression to the equivalent pattern.
+   *
+   * <p>For example, converts {@code id(x)} to {@code idPat(x)}, and {@code
+   * tuple(id(x), id(y))} to {@code tuplePat(idPat(x), idPat(y))}.
+   *
+   * @see Op#toPat()
+   */
+  public Core.Pat toPat(Core.Exp exp) {
+    switch (exp.op) {
+      case ID:
+        return ((Core.Id) exp).idPat;
+
+      case TUPLE:
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        if (tuple.type.op() == Op.RECORD_TYPE) {
+          return recordPat(
+              (RecordType) tuple.type(),
+              transformEager(tuple.args, this::toPat));
+        } else {
+          return tuplePat(
+              tuple.type(), transformEager(tuple.args, this::toPat));
+        }
+
+      case BOOL_LITERAL:
+      case CHAR_LITERAL:
+      case INT_LITERAL:
+      case REAL_LITERAL:
+      case STRING_LITERAL:
+      case UNIT_LITERAL:
+        final Core.Literal literal = (Core.Literal) exp;
+        return literalPat(exp.op.toPat(), exp.type, literal.value);
+
+      case APPLY:
+        // Handle field access like #1 p or #x p
+        // Create a fresh pattern that matches the field value
+        final Core.Apply apply = (Core.Apply) exp;
+        if (apply.fn.op == Op.RECORD_SELECTOR) {
+          final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
+          // Use field name as variable name prefix (e.g., "x" for #x, "f1" for
+          // #1)
+          final String fieldName = selector.fieldName();
+          final String varName =
+              Character.isDigit(fieldName.charAt(0))
+                  ? "f" + fieldName
+                  : fieldName;
+          return idPat(exp.type, varName, 0);
+        }
+        // For other applies, create a fresh pattern
+        return idPat(exp.type, "v", 0);
+
+      default:
+        throw new AssertionError("cannot convert " + exp + " to pattern");
+    }
   }
 }
 
