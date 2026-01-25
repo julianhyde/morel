@@ -2066,7 +2066,7 @@ class Generators {
           if (p != null) {
             slot = arg.i;
           }
-          patList.add(toPat(arg.e));
+          patList.add(core.toPat(arg.e));
         }
         if (slot < 0) {
           return null;
@@ -2092,61 +2092,6 @@ class Generators {
 
       default:
         return null;
-    }
-  }
-
-  // TODO: Refactor - consider moving to Op or using Op#toPat() more directly.
-  // This method manually traverses the AST with a switch statement.
-  /**
-   * Converts an expression to the equivalent pattern.
-   *
-   * @see Op#toPat()
-   */
-  private static Core.Pat toPat(Core.Exp exp) {
-    switch (exp.op) {
-      case ID:
-        return ((Core.Id) exp).idPat;
-
-      case TUPLE:
-        final Core.Tuple tuple = (Core.Tuple) exp;
-        if (tuple.type.op() == Op.RECORD_TYPE) {
-          return core.recordPat(
-              (RecordType) tuple.type(),
-              transformEager(tuple.args, Generators::toPat));
-        } else {
-          return core.tuplePat(
-              tuple.type(), transformEager(tuple.args, Generators::toPat));
-        }
-
-      case BOOL_LITERAL:
-      case CHAR_LITERAL:
-      case INT_LITERAL:
-      case REAL_LITERAL:
-      case STRING_LITERAL:
-      case UNIT_LITERAL:
-        final Core.Literal literal = (Core.Literal) exp;
-        return core.literalPat(exp.op.toPat(), exp.type, literal.value);
-
-      case APPLY:
-        // Handle field access like #1 p or #x p
-        // Create a fresh pattern that matches the field value
-        final Core.Apply apply = (Core.Apply) exp;
-        if (apply.fn.op == Op.RECORD_SELECTOR) {
-          final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
-          // Use field name as variable name prefix (e.g., "x" for #x, "f1" for
-          // #1)
-          final String fieldName = selector.fieldName();
-          final String varName =
-              Character.isDigit(fieldName.charAt(0))
-                  ? "f" + fieldName
-                  : fieldName;
-          return core.idPat(exp.type, varName, 0);
-        }
-        // For other applies, create a fresh pattern
-        return core.idPat(exp.type, "v", 0);
-
-      default:
-        throw new AssertionError("cannot convert " + exp + " to pattern");
     }
   }
 
