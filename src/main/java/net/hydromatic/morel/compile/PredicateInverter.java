@@ -46,6 +46,7 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.compile.Generator.Cardinality;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
@@ -267,7 +268,7 @@ public class PredicateInverter {
             generator(
                 toTuple(goalPats),
                 collection,
-                net.hydromatic.morel.compile.Generator.Cardinality.INFINITE,
+                Cardinality.INFINITE,
                 ImmutableList.of()));
       }
 
@@ -320,7 +321,7 @@ public class PredicateInverter {
         return generator(
             goalPat,
             core.list(typeSystem, core.unitLiteral()),
-            net.hydromatic.morel.compile.Generator.Cardinality.SINGLE,
+            Cardinality.SINGLE,
             ImmutableList.of());
 
       case 1:
@@ -341,8 +342,7 @@ public class PredicateInverter {
         final FromBuilder fromBuilder = core.fromBuilder(typeSystem, env);
         final ImmutableSet.Builder<Core.NamedPat> freeVars =
             ImmutableSet.builder();
-        net.hydromatic.morel.compile.Generator.Cardinality c =
-            net.hydromatic.morel.compile.Generator.Cardinality.SINGLE;
+        Cardinality c = Cardinality.SINGLE;
         for (Core.NamedPat p : goalPats) {
           Generator generator = generatorFor(ImmutableList.of(p));
           c = c.max(generator.cardinality);
@@ -361,7 +361,7 @@ public class PredicateInverter {
   private Generator generator(
       Core.Pat goalPat,
       Core.Exp exp,
-      net.hydromatic.morel.compile.Generator.Cardinality cardinality,
+      Cardinality cardinality,
       Iterable<? extends Core.Exp> filters) {
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
     final Set<Core.NamedPat> freeVars = freeVarsIn(simplified);
@@ -386,10 +386,7 @@ public class PredicateInverter {
               .union(true, transformEager(skip(generators), g -> g.expression))
               .build();
       return generator(
-          generator0.goalPat,
-          exp,
-          net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-          ImmutableList.of());
+          generator0.goalPat, exp, Cardinality.FINITE, ImmutableList.of());
     }
   }
 
@@ -413,7 +410,7 @@ public class PredicateInverter {
             generator(
                 toTuple(goalPats),
                 collection,
-                net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                Cardinality.FINITE,
                 ImmutableList.of());
         return result(generator, ImmutableList.of());
       }
@@ -433,7 +430,7 @@ public class PredicateInverter {
           generator(
               toTuple(goalPats),
               collection,
-              net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+              Cardinality.FINITE,
               ImmutableList.of());
       return result(generator, ImmutableList.of());
     }
@@ -697,7 +694,7 @@ public class PredicateInverter {
           generator(
               toTuple(goalPats),
               joinedGen,
-              net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+              Cardinality.FINITE,
               ImmutableList.of()),
           ImmutableList.of());
     }
@@ -721,7 +718,7 @@ public class PredicateInverter {
     return new Generator(
         pat,
         extentExp,
-        net.hydromatic.morel.compile.Generator.Cardinality.INFINITE,
+        Cardinality.INFINITE,
         ImmutableList.of(),
         ImmutableSet.of());
   }
@@ -789,7 +786,7 @@ public class PredicateInverter {
         idPat,
         core.call(
             typeSystem, BuiltIn.LIST_TABULATE, stringType, Pos.ZERO, count, fn),
-        net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+        Cardinality.FINITE,
         ImmutableList.of());
   }
 
@@ -852,7 +849,7 @@ public class PredicateInverter {
     return generator(
         pat,
         core.call(typeSystem, BuiltIn.LIST_TABULATE, type, Pos.ZERO, count, fn),
-        net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+        Cardinality.FINITE,
         ImmutableList.of());
   }
 
@@ -877,7 +874,7 @@ public class PredicateInverter {
     public final Core.Exp expression;
 
     /** Cardinality per binding of free variables */
-    public final net.hydromatic.morel.compile.Generator.Cardinality cardinality;
+    public final Cardinality cardinality;
 
     /**
      * A list of constraints that the values from the generator satisfy (without
@@ -892,7 +889,7 @@ public class PredicateInverter {
     Generator(
         Core.Pat goalPat,
         Core.Exp expression,
-        net.hydromatic.morel.compile.Generator.Cardinality cardinality,
+        Cardinality cardinality,
         Iterable<? extends Core.Exp> constraints,
         Iterable<? extends Core.NamedPat> freeVars) {
       this.goalPat = requireNonNull(goalPat);
