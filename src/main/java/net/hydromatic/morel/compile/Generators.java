@@ -1355,9 +1355,6 @@ class Generators {
     return substituteAll(substitutions, body);
   }
 
-  // TODO: Refactor to use Shuttle. This method manually traverses the AST
-  // with a switch statement, but could use the existing Shuttle infrastructure
-  // for expression rewriting (see Replacer.ReplacerShuttle for an example).
   /** Applies all substitutions to an expression, traversing recursively. */
   private static Core.Exp substituteAll(
       Map<Core.NamedPat, Core.Exp> substitutions, Core.Exp body) {
@@ -1689,8 +1686,6 @@ class Generators {
     return pats.size() == 1 ? pats.iterator().next() : null;
   }
 
-  // TODO: Refactor to use Visitor. This method manually traverses the AST
-  // with a switch statement, but could use the existing Visitor infrastructure.
   /**
    * Collects patterns that are accessed via field selectors in the expression.
    */
@@ -1970,9 +1965,6 @@ class Generators {
     return arg.op == Op.ID && ((Core.Id) arg).idPat.equals(pat);
   }
 
-  // TODO: Refactor to use Visitor. This method manually traverses the AST
-  // with a switch statement, but could use the existing Visitor infrastructure
-  // for expression analysis (similar to SuchThatShuttle.freePats).
   /**
    * Returns whether an expression contains a reference to a pattern. If the
    * pattern is {@link Core.IdPat} {@code p}, returns true for {@link Core.Id}
@@ -2029,8 +2021,6 @@ class Generators {
     }
   }
 
-  // TODO: Refactor to use Shuttle or pattern matching infrastructure. This
-  // method manually traverses the AST with a switch statement.
   /**
    * Creates a pattern that encompasses a whole expression.
    *
