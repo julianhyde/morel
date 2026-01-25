@@ -155,6 +155,70 @@ class Generators {
   }
 
   /**
+   * Finds the index of goalPat within a tuple expression.
+   *
+   * <p>For example, if fnArg is (x, y) and goalPat is x, returns 0. If fnArg is
+   * (x, y) and goalPat is y, returns 1. Returns -1 if fnArg is not a tuple or
+   * goalPat is not found.
+   */
+  private static int findTupleComponent(Core.Exp fnArg, Core.Pat goalPat) {
+    if (fnArg.op != Op.TUPLE) {
+      return -1;
+    }
+    final Core.Tuple tuple = (Core.Tuple) fnArg;
+    for (int i = 0; i < tuple.args.size(); i++) {
+      Core.Exp arg = tuple.args.get(i);
+      if (arg.op == Op.ID) {
+        Core.Id id = (Core.Id) arg;
+        if (goalPat instanceof Core.IdPat
+            && id.idPat.name.equals(((Core.IdPat) goalPat).name)) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Creates a tuple pattern from a tuple expression.
+   *
+   * <p>For example, if fnArg is (x, y) where x and y are Ids referencing
+   * IdPats, creates a TuplePat containing those IdPats.
+   */
+  private static Core.Pat createTuplePatFromArg(TypeSystem ts, Core.Exp fnArg) {
+    if (fnArg.op != Op.TUPLE) {
+      throw new IllegalArgumentException("Expected tuple: " + fnArg);
+    }
+    final Core.Tuple tuple = (Core.Tuple) fnArg;
+    final List<Core.Pat> pats = new ArrayList<>();
+    for (Core.Exp arg : tuple.args) {
+      if (arg.op == Op.ID) {
+        pats.add(((Core.Id) arg).idPat);
+      } else {
+        throw new IllegalArgumentException("Expected ID in tuple: " + arg);
+      }
+    }
+    return core.tuplePat(ts, pats);
+  }
+
+  /**
+   * Builds a projection expression that extracts a component from a collection
+   * of tuples.
+   *
+   * <p>For example, to project the first component from a bag of (int * int):
+   * {@code from t in collection yield #1 t}
+   */
+  private static Core.Exp buildTupleProjection(
+      TypeSystem ts, Core.Exp collection, int componentIndex, Type resultType) {
+    final Type elementType = collection.type.elementType();
+    final FromBuilder fb = core.fromBuilder(ts);
+    final Core.IdPat tPat = core.idPat(elementType, "t", 0);
+    fb.scan(tPat, collection);
+    fb.yield_(core.field(ts, core.id(tPat), componentIndex));
+    return fb.build();
+  }
+
+  /**
    * Attempts to invert a user-defined recursive boolean function call into a
    * generator.
    *
@@ -267,17 +331,24 @@ class Generators {
       }
 
       // Step 3b: Try to analyze as unbounded transitive closure pattern.
-      // Only attempt this if the goalPat matches the function's argument type.
-      // This prevents triggering on recursive calls where only some args are
-      // being generated (e.g., `from z where path(x, z)` where x is bound).
+      // Handle two cases:
+      // 1. Full application: path p where p : (int * int)
+      // 2. Tuple application: path (x, y) where x, y : int
       final Core.Exp fnArg = apply.arg;
       final boolean isFullApplication =
           fnArg.op == Op.ID && fnArg.type.equals(goalPat.type);
+      // Check if fnArg is a tuple containing goalPat as a component
+      final int tupleComponentIndex = findTupleComponent(fnArg, goalPat);
+      final boolean isTupleApplication = tupleComponentIndex >= 0;
       System.err.println(
           "DEBUG: trying analyzeTransitiveClosure for "
               + fnName
               + ", isFullApplication="
               + isFullApplication
+              + ", isTupleApplication="
+              + isTupleApplication
+              + ", tupleComponentIndex="
+              + tupleComponentIndex
               + ", fnArg.type="
               + fnArg.type
               + ", goalPat.type="
@@ -303,6 +374,58 @@ class Generators {
             cache.add(
                 new TransitiveClosureGenerator(
                     (Core.NamedPat) goalPat, iterateExp, freePats, apply));
+            return true;
+          }
+        }
+      }
+      // Handle tuple application: path(x, y) where x, y are separate patterns.
+      // Create a TuplePat from the argument, generate transitive closure for
+      // it,
+      // and register the generator under all component patterns.
+      if (isTupleApplication) {
+        // Check if a TransitiveClosureGenerator already exists for goalPat from
+        // the same function call (we may have already generated for a sibling
+        // component of the same tuple).
+        final Generator existingGen =
+            cache.bestGenerator((Core.NamedPat) goalPat);
+        if (existingGen instanceof TransitiveClosureGenerator) {
+          final TransitiveClosureGenerator tcGen =
+              (TransitiveClosureGenerator) existingGen;
+          // Check if the existing generator is for the same constraint
+          if (tcGen.constraint.equals(apply)) {
+            System.err.println(
+                "DEBUG: isTupleApplication, TC generator already exists for "
+                    + goalPat
+                    + " from same constraint");
+            return true;
+          }
+        }
+
+        // Create the TuplePat from the function argument (x, y)
+        final Core.Pat tuplePat =
+            createTuplePatFromArg(cache.typeSystem, fnArg);
+        System.err.println(
+            "DEBUG: isTupleApplication, created tuplePat = " + tuplePat);
+
+        final @Nullable TransitiveClosurePattern tcPattern =
+            analyzeTransitiveClosure(cache, fn, apply.arg, fnName);
+        System.err.println(
+            "DEBUG: tuple tcPattern = "
+                + (tcPattern != null ? "found" : "null"));
+        if (tcPattern != null) {
+          // Generate iterate expression with TuplePat as goalPat
+          final Core.Exp iterateExp =
+              generateTransitiveClosure(cache, tcPattern, tuplePat, ordered);
+          System.err.println(
+              "DEBUG: tuple iterateExp = "
+                  + (iterateExp != null ? "generated" : "null"));
+          if (iterateExp != null) {
+            // Register the generator under all component patterns
+            final Set<Core.NamedPat> freePats =
+                SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
+            cache.add(
+                new TransitiveClosureGenerator(
+                    tuplePat, iterateExp, freePats, apply));
             return true;
           }
         }
@@ -695,8 +818,7 @@ class Generators {
           "DEBUG generateTC: failed to create generator for base case");
       return null;
     }
-    final Generator baseGenerator =
-        baseCache.bestGenerator((Core.NamedPat) goalPat);
+    final Generator baseGenerator = baseCache.bestGeneratorForPat(goalPat);
     System.err.println("DEBUG generateTC: baseGenerator = " + baseGenerator);
     System.err.println(
         "DEBUG generateTC: baseGenerator.exp = " + baseGenerator.exp);
@@ -1219,11 +1341,23 @@ class Generators {
           }
         }
       }
+    } else if (formals.size() == 1 && actuals.size() > 1) {
+      // Single formal (e.g., p) with multiple actuals (e.g., (x, y))
+      // Substitute p -> (x, y) (construct a tuple)
+      final Core.Pat single = formals.get(0);
+      if (single instanceof Core.NamedPat) {
+        final RecordLikeType tupleType = (RecordLikeType) actualArgs.type;
+        final Core.Exp tupleExp = core.tuple(tupleType, actuals);
+        substitutions.put((Core.NamedPat) single, tupleExp);
+      }
     }
 
     return substituteAll(substitutions, body);
   }
 
+  // TODO: Refactor to use Shuttle. This method manually traverses the AST
+  // with a switch statement, but could use the existing Shuttle infrastructure
+  // for expression rewriting (see Replacer.ReplacerShuttle for an example).
   /** Applies all substitutions to an expression, traversing recursively. */
   private static Core.Exp substituteAll(
       Map<Core.NamedPat, Core.Exp> substitutions, Core.Exp body) {
@@ -1442,7 +1576,7 @@ class Generators {
     private final Core.Apply constraint;
 
     TransitiveClosureGenerator(
-        Core.NamedPat pat,
+        Core.Pat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Core.Apply constraint) {
@@ -1458,10 +1592,12 @@ class Generators {
       if (exp.equals(constraint)) {
         return core.boolLiteral(true);
       }
-      // Also check if it's a call to the same function with the goal pattern
+      // Also check if it's a call to the same function with the goal pattern.
+      // Use containsRef to handle both IdPat (path p) and TuplePat (path (x,
+      // y)).
       if (exp.op == Op.APPLY) {
         Core.Apply apply = (Core.Apply) exp;
-        if (apply.fn.equals(constraint.fn) && references(apply.arg, pat)) {
+        if (apply.fn.equals(constraint.fn) && containsRef(apply.arg, pat)) {
           return core.boolLiteral(true);
         }
       }
@@ -1553,6 +1689,8 @@ class Generators {
     return pats.size() == 1 ? pats.iterator().next() : null;
   }
 
+  // TODO: Refactor to use Visitor. This method manually traverses the AST
+  // with a switch statement, but could use the existing Visitor infrastructure.
   /**
    * Collects patterns that are accessed via field selectors in the expression.
    */
@@ -1832,12 +1970,35 @@ class Generators {
     return arg.op == Op.ID && ((Core.Id) arg).idPat.equals(pat);
   }
 
+  // TODO: Refactor to use Visitor. This method manually traverses the AST
+  // with a switch statement, but could use the existing Visitor infrastructure
+  // for expression analysis (similar to SuchThatShuttle.freePats).
   /**
    * Returns whether an expression contains a reference to a pattern. If the
    * pattern is {@link Core.IdPat} {@code p}, returns true for {@link Core.Id}
    * {@code p} and tuple {@code (p, q)}.
+   *
+   * <p>When {@code pat} is a TuplePat, returns true if {@code exp} is a tuple
+   * expression where each component matches the corresponding component of
+   * {@code pat}.
    */
   private static boolean containsRef(Core.Exp exp, Core.Pat pat) {
+    // Special case: if pat is a TuplePat, check if exp is a matching tuple
+    if (pat instanceof Core.TuplePat && exp.op == Op.TUPLE) {
+      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+      final Core.Tuple tuple = (Core.Tuple) exp;
+      if (tuplePat.args.size() == tuple.args.size()) {
+        // Check if each component of the tuple expression matches
+        // the corresponding component pattern
+        for (int i = 0; i < tuplePat.args.size(); i++) {
+          if (!containsRef(tuple.args.get(i), tuplePat.args.get(i))) {
+            return false;
+          }
+        }
+        return true;
+      }
+    }
+
     switch (exp.op) {
       case ID:
         return ((Core.Id) exp).idPat.equals(pat);
@@ -1868,6 +2029,8 @@ class Generators {
     }
   }
 
+  // TODO: Refactor to use Shuttle or pattern matching infrastructure. This
+  // method manually traverses the AST with a switch statement.
   /**
    * Creates a pattern that encompasses a whole expression.
    *
@@ -1932,6 +2095,8 @@ class Generators {
     }
   }
 
+  // TODO: Refactor - consider moving to Op or using Op#toPat() more directly.
+  // This method manually traverses the AST with a switch statement.
   /**
    * Converts an expression to the equivalent pattern.
    *
@@ -2331,6 +2496,43 @@ class Generators {
         bestGenerator = generator;
       }
       return bestGenerator;
+    }
+
+    /**
+     * Gets the best generator for a pattern, which may be a TuplePat.
+     *
+     * <p>For TuplePat, looks for a generator that is indexed under all
+     * component patterns. Returns the first such generator found.
+     */
+    @Nullable
+    Generator bestGeneratorForPat(Core.Pat pat) {
+      if (pat instanceof Core.NamedPat) {
+        return bestGenerator((Core.NamedPat) pat);
+      }
+      if (pat instanceof Core.TuplePat) {
+        // For TuplePat, find a generator common to all component patterns
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        if (tuplePat.args.isEmpty()) {
+          return null;
+        }
+        // Get generators for the first component
+        Set<Generator> candidates = null;
+        for (Core.Pat component : tuplePat.args) {
+          if (component instanceof Core.NamedPat) {
+            final Set<Generator> componentGens =
+                new HashSet<>(generators.get((Core.NamedPat) component));
+            if (candidates == null) {
+              candidates = componentGens;
+            } else {
+              candidates.retainAll(componentGens);
+            }
+          }
+        }
+        if (candidates != null && !candidates.isEmpty()) {
+          return candidates.iterator().next();
+        }
+      }
+      return null;
     }
 
     /**
