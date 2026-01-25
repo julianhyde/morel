@@ -48,7 +48,6 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ConsList;
@@ -425,7 +424,7 @@ public class PredicateInverter {
     // then the generator is "from (a, b, c, "foo") in myList yield {c, b}".
     if (pattern.op == Op.TUPLE) {
       final Core.Tuple tuple = (Core.Tuple) pattern;
-      final Core.Pat pat = toPat(tuple);
+      final Core.Pat pat = core.toPat(tuple);
 
       final FromBuilder fromBuilder = core.fromBuilder(typeSystem, env);
       fromBuilder.scan(pat, elemCall.arg(1));
@@ -444,43 +443,6 @@ public class PredicateInverter {
     // TODO: Deal with "() elem myList"
 
     return result(generatorFor(goalPats), ImmutableList.of(elemCall));
-  }
-
-  // TODO: Refactor - consolidate with Generators.toPat(). Consider moving to
-  // a shared utility class or using Op#toPat() more directly.
-  /**
-   * Converts an expression to the equivalent pattern.
-   *
-   * @see Op#toPat()
-   */
-  private Core.Pat toPat(Core.Exp exp) {
-    switch (exp.op) {
-      case ID:
-        return ((Core.Id) exp).idPat;
-
-      case TUPLE:
-        final Core.Tuple tuple = (Core.Tuple) exp;
-        if (tuple.type.op() == Op.RECORD_TYPE) {
-          return core.recordPat(
-              (RecordType) tuple.type(),
-              transformEager(tuple.args, this::toPat));
-        } else {
-          return core.tuplePat(
-              tuple.type(), transformEager(tuple.args, this::toPat));
-        }
-
-      case BOOL_LITERAL:
-      case CHAR_LITERAL:
-      case INT_LITERAL:
-      case REAL_LITERAL:
-      case STRING_LITERAL:
-      case UNIT_LITERAL:
-        final Core.Literal literal = (Core.Literal) exp;
-        return core.literalPat(exp.op.toPat(), exp.type, literal.value);
-
-      default:
-        throw new AssertionError("cannot convert " + exp + " to pattern");
-    }
   }
 
   private Core.Exp toExp(Core.Pat pat) {
