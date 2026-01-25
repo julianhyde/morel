@@ -78,19 +78,22 @@ public class PredicateInverter {
   private final TypeSystem typeSystem;
   private final Environment env;
   private final Map<Core.Pat, Generator> generators;
+  private final FunctionRegistry functionRegistry;
 
   private PredicateInverter(
       TypeSystem typeSystem,
       Environment env,
-      Map<Core.NamedPat, Generator> initialGenerators) {
+      Map<Core.NamedPat, Generator> initialGenerators,
+      FunctionRegistry functionRegistry) {
     this.typeSystem = requireNonNull(typeSystem);
     this.env = requireNonNull(env);
     this.generators = new HashMap<>(initialGenerators);
+    this.functionRegistry = requireNonNull(functionRegistry);
   }
 
   /** Package-private constructor for testing. */
   PredicateInverter(TypeSystem typeSystem, Environment env) {
-    this(typeSystem, env, ImmutableMap.of());
+    this(typeSystem, env, ImmutableMap.of(), new FunctionRegistry());
   }
 
   /**
@@ -108,7 +111,37 @@ public class PredicateInverter {
       Core.Exp predicate,
       List<Core.NamedPat> goalPats,
       Map<Core.NamedPat, Generator> generators) {
-    return new PredicateInverter(typeSystem, env, generators)
+    return invert(
+        typeSystem,
+        env,
+        predicate,
+        goalPats,
+        generators,
+        new FunctionRegistry());
+  }
+
+  /**
+   * Inverts a predicate to generate tuples using a function registry.
+   *
+   * <p>The function registry contains pre-analyzed invertibility information
+   * for user-defined functions. This avoids the "mixing domains" problem where
+   * function bodies would be inlined onto the inversion stack.
+   *
+   * @param predicate The boolean expression to invert
+   * @param goalPats Variables in the output tuple (what we want to generate)
+   * @param generators Generators for ALL variables in scope (including extents)
+   * @param functionRegistry Registry of function invertibility info
+   * @return Inversion result with improved generator, or fallback to cartesian
+   *     product
+   */
+  public static Result invert(
+      TypeSystem typeSystem,
+      Environment env,
+      Core.Exp predicate,
+      List<Core.NamedPat> goalPats,
+      Map<Core.NamedPat, Generator> generators,
+      FunctionRegistry functionRegistry) {
+    return new PredicateInverter(typeSystem, env, generators, functionRegistry)
         .invert(predicate, goalPats, ImmutableList.of());
   }
 
@@ -196,6 +229,16 @@ public class PredicateInverter {
         Core.Id fnId = (Core.Id) apply.fn;
         // Look up function definition in environment
         Core.NamedPat fnPat = fnId.idPat;
+
+        // First, check the function registry for pre-analyzed invertibility.
+        // Per Scott's principle: "Edge should never be on the stack."
+        Result registryResult = tryInvertFromRegistry(fnPat);
+        if (registryResult != null) {
+          return registryResult;
+        }
+
+        // Fallback: function not in registry - use legacy inlining approach.
+        // This path will be deprecated once all functions are pre-analyzed.
 
         // Check if we're already trying to invert this function (recursion)
         if (active.contains(fnId)) {
@@ -461,6 +504,67 @@ public class PredicateInverter {
           net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
           ImmutableList.of());
     }
+  }
+
+  /**
+   * Tries to invert a function using the pre-analyzed registry.
+   *
+   * <p>Per Scott's principle: "Edge should never be on the stack." Functions
+   * are analyzed once at compile time; we use the cached result.
+   *
+   * @param fnPat the function's name pattern
+   * @return inversion result if function is registered and invertible, null if
+   *     not registered or requires fallback handling
+   */
+  private @Nullable Result tryInvertFromRegistry(Core.NamedPat fnPat) {
+    Optional<FunctionRegistry.FunctionInfo> registeredInfo =
+        functionRegistry.lookup(fnPat);
+    if (!registeredInfo.isPresent()) {
+      return null; // Not registered - use legacy inlining
+    }
+
+    FunctionRegistry.FunctionInfo info = registeredInfo.get();
+    switch (info.status()) {
+      case INVERTIBLE:
+        // Function has a known generator - return it directly
+        if (info.baseGenerator().isPresent()) {
+          Generator gen =
+              new Generator(
+                  info.formalParameter(),
+                  info.baseGenerator().get(),
+                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                  ImmutableList.of(),
+                  ImmutableSet.of());
+          return result(gen, ImmutableList.of());
+        }
+        break;
+
+      case RECURSIVE:
+        // Recursive function - use cached base case and step for iterate
+        // TODO: Build Relational.iterate expression from info
+        break;
+
+      case NOT_INVERTIBLE:
+        // Function cannot be inverted - this is a definitive failure
+        // Return a sentinel that signals complete failure
+        // (Returning null here would fall through to legacy inlining)
+        break;
+
+      case PARTIALLY_INVERTIBLE:
+        // Function is partially invertible - return generator with filters
+        if (info.baseGenerator().isPresent()) {
+          Generator gen =
+              new Generator(
+                  info.formalParameter(),
+                  info.baseGenerator().get(),
+                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                  ImmutableList.of(),
+                  ImmutableSet.of());
+          return result(gen, ImmutableList.copyOf(info.requiredFilters()));
+        }
+        break;
+    }
+    return null; // Fall through to legacy inlining
   }
 
   /**

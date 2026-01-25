@@ -32,6 +32,9 @@
  * <ul>
  *   <li>{@link net.hydromatic.morel.compile.PredicateInverter} - Main inversion
  *       algorithm that transforms predicates into generators.
+ *   <li>{@link net.hydromatic.morel.compile.FunctionRegistry} - Registry for
+ *       function invertibility analysis results, avoiding the "mixing domains"
+ *       problem by caching function analysis at compile time.
  *   <li>{@link net.hydromatic.morel.compile.VarEnvironment} - Immutable
  *       environment tracking variable states (input, output, auxiliary, join).
  * </ul>
