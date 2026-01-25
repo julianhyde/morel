@@ -174,7 +174,7 @@ public class Inliner extends EnvShuttle {
       // becomes
       //   fn x => x + 1
       final Core.Match match = matchList.get(0);
-      final Map<Core.Id, Core.Id> substitution = getSub(exp, match);
+      final Map<Core.NamedPat, Core.Id> substitution = getSub(exp, match);
       if (substitution != null) {
         return Replacer.substitute(typeSystem, env, substitution, match.exp);
       }
@@ -198,23 +198,22 @@ public class Inliner extends EnvShuttle {
     return caseOf.copy(exp, matchList);
   }
 
-  private @Nullable Map<Core.Id, Core.Id> getSub(
+  private @Nullable Map<Core.NamedPat, Core.Id> getSub(
       Core.Exp exp, Core.Match match) {
     if (exp.op == Op.ID && match.pat.op == Op.ID_PAT) {
-      return ImmutableMap.of(core.id((Core.IdPat) match.pat), (Core.Id) exp);
+      return ImmutableMap.of((Core.IdPat) match.pat, (Core.Id) exp);
     }
     if (exp.op == Op.TUPLE && match.pat.op == Op.TUPLE_PAT) {
       final Core.Tuple tuple = (Core.Tuple) exp;
       final Core.TuplePat tuplePat = (Core.TuplePat) match.pat;
       if (allMatch(tuple.args, arg -> arg.op == Op.ID)
           && allMatch(tuplePat.args, arg -> arg.op == Op.ID_PAT)) {
-        final ImmutableMap.Builder<Core.Id, Core.Id> builder =
+        final ImmutableMap.Builder<Core.NamedPat, Core.Id> builder =
             ImmutableMap.builder();
         forEach(
             tuple.args,
             tuplePat.args,
-            (arg, pat) ->
-                builder.put(core.id((Core.IdPat) pat), (Core.Id) arg));
+            (arg, pat) -> builder.put((Core.IdPat) pat, (Core.Id) arg));
         return builder.build();
       }
     }
