@@ -79,6 +79,7 @@ public class PredicateInverter {
   private final Environment env;
   private final Map<Core.Pat, Generator> generators;
   private final FunctionRegistry functionRegistry;
+  private final ModeAnalyzer modeAnalyzer;
 
   private PredicateInverter(
       TypeSystem typeSystem,
@@ -89,6 +90,7 @@ public class PredicateInverter {
     this.env = requireNonNull(env);
     this.generators = new HashMap<>(initialGenerators);
     this.functionRegistry = requireNonNull(functionRegistry);
+    this.modeAnalyzer = new ModeAnalyzer(functionRegistry);
   }
 
   /** Package-private constructor for testing. */
@@ -1194,22 +1196,30 @@ public class PredicateInverter {
       return invert(core.andAlso(typeSystem, predicates), goalPats, active);
     }
 
-    for (int i = 0; i < predicates.size(); i++) {
-      if (predicates.get(i).op != Op.APPLY) {
+    // Phase C: Use mode analysis to order predicates optimally.
+    // Generators come before filters, ordered by dependencies.
+    final List<Core.Exp> orderedPredicates =
+        modeAnalyzer.orderPredicates(predicates, ImmutableSet.copyOf(goalPats));
+
+    // Use the ordered predicates for all subsequent processing
+    final List<Core.Exp> predsToProcess = orderedPredicates;
+
+    for (int i = 0; i < predsToProcess.size(); i++) {
+      if (predsToProcess.get(i).op != Op.APPLY) {
         continue;
       }
-      final Core.Apply lowerBound = (Core.Apply) predicates.get(i);
+      final Core.Apply lowerBound = (Core.Apply) predsToProcess.get(i);
       if (lowerBound.isCallTo(BuiltIn.OP_GT)
           || lowerBound.isCallTo(BuiltIn.OP_GE)) {
         final boolean lowerStrict = lowerBound.isCallTo(BuiltIn.OP_GT);
-        for (int j = 0; j < predicates.size(); j++) {
+        for (int j = 0; j < predsToProcess.size(); j++) {
           if (j == i) {
             continue;
           }
-          if (predicates.get(j).op != Op.APPLY) {
+          if (predsToProcess.get(j).op != Op.APPLY) {
             continue;
           }
-          final Core.Apply upperBound = (Core.Apply) predicates.get(j);
+          final Core.Apply upperBound = (Core.Apply) predsToProcess.get(j);
           if (upperBound.isCallTo(BuiltIn.OP_LT)
               || upperBound.isCallTo(BuiltIn.OP_LE)) {
             final boolean upperStrict = upperBound.isCallTo(BuiltIn.OP_LT);
@@ -1238,7 +1248,7 @@ public class PredicateInverter {
                     generateRange(xPat, lower, lowerStrict, upper, upperStrict);
 
                 final List<Core.Exp> remainingPredicates =
-                    new ArrayList<>(predicates);
+                    new ArrayList<>(predsToProcess);
                 remainingPredicates.remove(lowerBound);
                 remainingPredicates.remove(upperBound);
                 return result(generator, remainingPredicates);
@@ -1251,8 +1261,8 @@ public class PredicateInverter {
 
     // Try to match pattern: x > y andalso x < y + 10
     // to generate: List.tabulate(9, fn k => y + 1 + k)
-    Core.Exp left = predicates.get(0);
-    Core.Exp right = predicates.get(1);
+    Core.Exp left = predsToProcess.get(0);
+    Core.Exp right = predsToProcess.get(1);
 
     // Try to invert both sides and join them
     Result leftResult = invert(left, goalPats, ImmutableList.of());
