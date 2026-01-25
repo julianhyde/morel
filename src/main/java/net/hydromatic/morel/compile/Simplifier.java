@@ -97,6 +97,8 @@ class Simplifier {
     return new Simplifier(typeSystem).simplify(exp);
   }
 
+  // TODO: Refactor to use Shuttle. This method manually traverses the AST
+  // with a switch statement, but could extend Shuttle for expression rewriting.
   Core.Exp simplify(Core.Exp exp) {
     for (Map.Entry<Core.NamedPat, Generator> entry : generators) {
       exp = entry.getValue().simplify(entry.getKey(), exp);
