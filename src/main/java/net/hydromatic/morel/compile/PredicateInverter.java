@@ -969,62 +969,95 @@ public class PredicateInverter {
   /**
    * Substitutes an argument into a function body.
    *
+   * <p>When the parameter is a tuple pattern like {@code (x, y)} and the
+   * argument is a tuple like {@code (z, w)}, this method builds a substitution
+   * map {@code {x -> z, y -> w}} and replaces individual variable references in
+   * the body.
+   *
    * @param param The function parameter pattern
    * @param arg The argument expression to substitute
    * @param body The function body
    * @return The body with the parameter replaced by the argument
    */
   private Core.Exp substituteArg(Core.Pat param, Core.Exp arg, Core.Exp body) {
+    // Build substitution map from pattern to argument
+    final Map<Core.NamedPat, Core.Exp> subst = new HashMap<>();
+    if (!buildSubstitution(param, arg, subst)) {
+      // If we can't build a substitution, return body unchanged
+      return body;
+    }
+
     // Use a Shuttle to traverse and replace
     return body.accept(
         new Shuttle(typeSystem) {
           @Override
           public Core.Exp visit(Core.Id id) {
-            // Check if this ID matches the parameter
-            if (param.op == Op.ID_PAT && id.idPat.equals(param)) {
-              return arg;
+            // Check if this ID is in the substitution map
+            final Core.Exp replacement = subst.get(id.idPat);
+            if (replacement != null) {
+              return replacement;
             }
             return super.visit(id);
-          }
-
-          @Override
-          public Core.Exp visit(Core.Tuple tuple) {
-            // Check if this tuple matches the parameter pattern exactly
-            if (param.op == Op.TUPLE_PAT
-                && tuplesMatch((Core.TuplePat) param, tuple)) {
-              return arg;
-            }
-            return super.visit(tuple);
           }
         });
   }
 
   /**
-   * Checks if a tuple expression matches a tuple pattern (for substitution).
+   * Builds a substitution map from a pattern to an expression.
    *
-   * @param pat The tuple pattern
-   * @param tuple The tuple expression
-   * @return True if all elements match
+   * <p>For example, given pattern {@code (x, y)} and expression {@code (z, w)},
+   * builds map {@code {x -> z, y -> w}}.
+   *
+   * @param pat The pattern
+   * @param exp The expression
+   * @param subst The map to populate
+   * @return true if substitution was built successfully
    */
-  private boolean tuplesMatch(Core.TuplePat pat, Core.Tuple tuple) {
-    if (pat.args.size() != tuple.args.size()) {
-      return false;
-    }
-    for (int i = 0; i < pat.args.size(); i++) {
-      Core.Pat patArg = pat.args.get(i);
-      Core.Exp tupleArg = tuple.args.get(i);
-      // Check if the tuple element matches the pattern element
-      if (patArg.op == Op.ID_PAT && tupleArg.op == Op.ID) {
-        Core.IdPat idPat = (Core.IdPat) patArg;
-        Core.Id id = (Core.Id) tupleArg;
-        if (!idPat.equals(id.idPat)) {
+  private boolean buildSubstitution(
+      Core.Pat pat, Core.Exp exp, Map<Core.NamedPat, Core.Exp> subst) {
+    switch (pat.op) {
+      case ID_PAT:
+        subst.put((Core.IdPat) pat, exp);
+        return true;
+
+      case TUPLE_PAT:
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        if (exp.op != Op.TUPLE) {
           return false;
         }
-      } else {
-        return false; // Don't handle nested patterns yet
-      }
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        if (tuplePat.args.size() != tuple.args.size()) {
+          return false;
+        }
+        for (int i = 0; i < tuplePat.args.size(); i++) {
+          if (!buildSubstitution(
+              tuplePat.args.get(i), tuple.args.get(i), subst)) {
+            return false;
+          }
+        }
+        return true;
+
+      case RECORD_PAT:
+        final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        // Records are represented as tuples in Core
+        if (exp.op != Op.TUPLE) {
+          return false;
+        }
+        final Core.Tuple recordTuple = (Core.Tuple) exp;
+        if (recordPat.args.size() != recordTuple.args.size()) {
+          return false;
+        }
+        for (int i = 0; i < recordPat.args.size(); i++) {
+          if (!buildSubstitution(
+              recordPat.args.get(i), recordTuple.args.get(i), subst)) {
+            return false;
+          }
+        }
+        return true;
+
+      default:
+        return false;
     }
-    return true;
   }
 
   /**

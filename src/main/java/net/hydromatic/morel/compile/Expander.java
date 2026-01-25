@@ -69,7 +69,7 @@ public class Expander {
   public static Core.From expandFrom(
       TypeSystem typeSystem, Environment env, Core.From from) {
     final Core.From outerFrom = from;
-    final Generators.Cache cache = new Generators.Cache(typeSystem);
+    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     final Expander expander = new Expander(cache, ImmutableList.of());
 
     // First, deduce generators.
@@ -92,26 +92,15 @@ public class Expander {
             final Generator generator = cache.bestGenerator(namedPat);
             if (generator == null
                 || generator.cardinality == Generator.Cardinality.INFINITE) {
-              // Allow deferred grounding for patterns in recursive predicates.
-              // If a pattern appears in a scan with an extent but has no
-              // generator,
-              // it means the pattern appears in a predicate that couldn't be
-              // inverted
-              // (such as a recursive function call). These patterns will be
-              // grounded
-              // at runtime through the recursion, so we skip the check here.
-              // This allows the compilation to succeed and rely on runtime
-              // evaluation.
-              // We only defer if:
-              // 1. scan.exp.isExtent() - some inversion was attempted
-              // 2. generator == null - pattern has no generator from inversion
-              // 3. This is not a truly ungrounded pattern with no extent
-              if (scan.exp.isExtent()) {
-                // Defer grounding check - will be validated at runtime
-                continue;
-              }
+              // Pattern cannot be grounded - the predicate couldn't be inverted
+              // to produce a finite generator. This typically happens with:
+              // - User-defined recursive functions that aren't invertible
+              // - Complex predicates without finite solutions
               throw new IllegalArgumentException(
-                  "pattern " + namedPat + " is not grounded");
+                  "pattern "
+                      + namedPat
+                      + " cannot be grounded: "
+                      + "predicate inversion failed to produce a finite generator");
             }
           }
         }

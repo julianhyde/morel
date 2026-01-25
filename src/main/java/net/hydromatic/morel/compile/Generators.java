@@ -27,16 +27,19 @@ import static net.hydromatic.morel.util.Static.skipLast;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -143,8 +146,151 @@ class Generators {
   }
 
   /**
+   * Tries to inline a function call if the function body is an {@code elem}
+   * predicate.
+   *
+   * <p>For example, given {@code edge2(z, y)} where {@code edge2} is defined as
+   * {@code fun edge2 (x, y) = {x, y} elem edges2}, returns {@code {z, y} elem
+   * edges2}.
+   *
+   * @param cache Cache containing environment for function lookup
+   * @param predicate The predicate to potentially inline
+   * @return The inlined expression if predicate is a function call with elem
+   *     body, or null otherwise
+   */
+  private static Core.@Nullable Exp tryInlineFunctionToElem(
+      Cache cache, Core.Exp predicate) {
+    // Check if predicate is a function call: fn(arg)
+    if (predicate.op != Op.APPLY) {
+      return null;
+    }
+    final Core.Apply apply = (Core.Apply) predicate;
+
+    // Check if fn is a user-defined function (ID reference)
+    if (apply.fn.op != Op.ID) {
+      return null;
+    }
+    final Core.Id fnId = (Core.Id) apply.fn;
+
+    // Look up function binding in environment
+    final Binding binding = cache.env.getOpt(fnId.idPat);
+    if (binding == null || binding.exp == null) {
+      return null;
+    }
+
+    // Check if binding is a function
+    if (binding.exp.op != Op.FN) {
+      return null;
+    }
+    final Core.Fn fn = (Core.Fn) binding.exp;
+
+    // Extract the actual body and parameter pattern.
+    // Functions like `fun edge (x, y) = (x, y) elem edges` compile to:
+    //   fn v => case v of (x, y) => op elem (...)
+    // We need to unwrap the case to get the real pattern and body.
+    Core.Pat paramPat = fn.idPat;
+    Core.Exp body = fn.exp;
+
+    if (body.op == Op.CASE) {
+      final Core.Case caseExp = (Core.Case) body;
+      // Check if case is matching on the function parameter
+      if (caseExp.exp.op == Op.ID) {
+        final Core.Id caseId = (Core.Id) caseExp.exp;
+        if (caseId.idPat.equals(fn.idPat) && caseExp.matchList.size() == 1) {
+          // Single-arm case matching on parameter - extract the arm
+          final Core.Match match = caseExp.matchList.get(0);
+          paramPat = match.pat;
+          body = match.exp;
+        }
+      }
+    }
+
+    // Check if function body is an elem predicate
+    if (!body.isCallTo(BuiltIn.OP_ELEM)) {
+      return null;
+    }
+
+    // Build substitution from param pattern to call argument
+    final Map<Core.Id, Core.Exp> subst =
+        buildPatternSubstitution(paramPat, apply.arg);
+    if (subst == null) {
+      return null;
+    }
+
+    // Apply substitution to function body
+    return Replacer.substitute(cache.typeSystem, subst, body);
+  }
+
+  /**
+   * Builds a substitution map from a pattern to an expression.
+   *
+   * <p>For example, given pattern {@code (x, y)} and expression {@code (z, w)},
+   * returns {@code {x -> z, y -> w}}.
+   */
+  private static @Nullable Map<Core.Id, Core.Exp> buildPatternSubstitution(
+      Core.Pat pat, Core.Exp exp) {
+    final ImmutableMap.Builder<Core.Id, Core.Exp> subst =
+        ImmutableMap.builder();
+    if (!buildPatternSubstitution(pat, exp, subst)) {
+      return null;
+    }
+    return subst.build();
+  }
+
+  private static boolean buildPatternSubstitution(
+      Core.Pat pat,
+      Core.Exp exp,
+      ImmutableMap.Builder<Core.Id, Core.Exp> subst) {
+    switch (pat.op) {
+      case ID_PAT:
+        final Core.IdPat idPat = (Core.IdPat) pat;
+        subst.put(core.id(idPat), exp);
+        return true;
+
+      case TUPLE_PAT:
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        if (exp.op != Op.TUPLE) {
+          return false;
+        }
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        if (tuplePat.args.size() != tuple.args.size()) {
+          return false;
+        }
+        for (int i = 0; i < tuplePat.args.size(); i++) {
+          if (!buildPatternSubstitution(
+              tuplePat.args.get(i), tuple.args.get(i), subst)) {
+            return false;
+          }
+        }
+        return true;
+
+      case RECORD_PAT:
+        final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        if (exp.op != Op.TUPLE) {
+          return false;
+        }
+        final Core.Tuple recordTuple = (Core.Tuple) exp;
+        if (recordPat.args.size() != recordTuple.args.size()) {
+          return false;
+        }
+        for (int i = 0; i < recordPat.args.size(); i++) {
+          if (!buildPatternSubstitution(
+              recordPat.args.get(i), recordTuple.args.get(i), subst)) {
+            return false;
+          }
+        }
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  /**
    * For each predicate "pat elem collection", adds a generator based on
    * "collection".
+   *
+   * <p>Also handles function calls that inline to {@code elem} patterns.
    */
   static boolean maybeElem(
       Cache cache,
@@ -152,13 +298,18 @@ class Generators {
       boolean ordered,
       List<Core.Exp> predicates) {
     for (Core.Exp predicate : predicates) {
-      if (predicate.isCallTo(BuiltIn.OP_ELEM)) {
-        if (containsRef(predicate.arg(0), goalPat)) {
+      // First, try to inline function calls that resolve to elem patterns
+      final Core.Exp inlined = tryInlineFunctionToElem(cache, predicate);
+      final Core.Exp effectivePredicate = inlined != null ? inlined : predicate;
+
+      if (effectivePredicate.isCallTo(BuiltIn.OP_ELEM)) {
+        if (containsRef(effectivePredicate.arg(0), goalPat)) {
           // If predicate is "(p, q) elem links", first create a generator
           // for "p2 elem links", where "p2 as (p, q)".
-          final Core.Exp collection = predicate.arg(1);
+          final Core.Exp collection = effectivePredicate.arg(1);
           final ExpPat expPat =
-              requireNonNull(wholePat(cache.typeSystem, predicate.arg(0)));
+              requireNonNull(
+                  wholePat(cache.typeSystem, effectivePredicate.arg(0)));
           CollectionGenerator.create(cache, ordered, expPat.pat, collection);
           return true;
         }
@@ -737,11 +888,13 @@ class Generators {
   /** Generators that have been created to date. */
   static class Cache {
     final TypeSystem typeSystem;
+    final Environment env;
     final Multimap<Core.NamedPat, Generator> generators =
         MultimapBuilder.hashKeys().arrayListValues().build();
 
-    Cache(TypeSystem typeSystem) {
+    Cache(TypeSystem typeSystem, Environment env) {
       this.typeSystem = requireNonNull(typeSystem);
+      this.env = requireNonNull(env);
     }
 
     @Nullable
