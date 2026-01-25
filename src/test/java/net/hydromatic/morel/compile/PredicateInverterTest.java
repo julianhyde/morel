@@ -317,17 +317,35 @@ public class PredicateInverterTest {
    * <p>Given {@code fun edge(x, y) = {x, y} elem edges}, when we invert {@code
    * edge(x, y)} to generate both x and y, it should return {@code edges}.
    *
-   * <p><b>NOTE:</b> Disabled - deferred to Phase 4. Requires function body
-   * lookup and inlining, which will be implemented after mode analysis.
+   * <p>Uses FunctionRegistry to look up pre-analyzed invertibility. Per Scott's
+   * principle: "Edge should never be on the stack" - functions are analyzed
+   * once at compile time.
    */
-  @Disabled("Phase 4 - User-defined function call inversion")
   @Test
   void testInvertEdgeFunction() {
     final Fixture f = new Fixture();
 
+    // Create edges list: [(1, 2), (2, 3)]
+    final Core.Exp edges =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
+            core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
+
+    // Create tuple pattern for edge function parameter: (x, y)
+    final Core.TuplePat edgeParamPat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(f.xPat, f.yPat));
+
     // Build a function call: edge(x, y)
-    // Where edge is defined as: fun edge(x, y) = {x, y} elem edges
+    // Where edge is defined as: fun edge(x, y) = (x, y) elem edges
     final Core.IdPat edgeFnPat = core.idPat(f.intIntBoolFnType, "edge", 0);
+
+    // Register edge in the FunctionRegistry as INVERTIBLE
+    final FunctionRegistry registry = new FunctionRegistry();
+    registry.register(
+        edgeFnPat,
+        FunctionRegistry.FunctionInfo.invertible(
+            edgeParamPat, edges, ImmutableSet.of(f.xPat, f.yPat)));
 
     // edge(x, y)
     final Core.Exp edgeCall =
@@ -344,12 +362,12 @@ public class PredicateInverterTest {
             Environments.empty(),
             edgeCall,
             ImmutableList.of(f.xPat, f.yPat),
-            ImmutableMap.of());
+            ImmutableMap.of(),
+            registry);
 
-    // Should successfully invert
-    assumeTrue(false, "TODO enable test");
-    // After inlining and inverting, should get edges
-    // (actual implementation will need function body lookup)
+    // Should successfully invert to edges
+    assertThat(result.generator.expression, hasToString("[(1, 2), (2, 3)]"));
+    assertThat(result.remainingFilters, empty());
   }
 
   /**
@@ -370,8 +388,8 @@ public class PredicateInverterTest {
    * <pre>{@code
    * Relational.iterate edges
    *   (fn (old, new) =>
-   *     from (x, z) in edges,
-   *          (z2, y) in new
+   *     from (x, z) in new,
+   *          (z2, y) in edges
    *       where z = z2
    *       yield (x, y))
    * }</pre>
@@ -379,33 +397,95 @@ public class PredicateInverterTest {
    * <p>This computes the transitive closure and should produce: [(1,2), (2,3),
    * (1,3)]
    *
-   * <p><b>NOTE:</b> Disabled - deferred to Phase 4. Transitive closure
-   * inversion via function inlining requires mode analysis and function body
-   * lookup.
+   * <p>Uses FunctionRegistry to look up pre-analyzed invertibility. Per Scott's
+   * principle: "Recursion happens in a different domain" - the step function is
+   * pre-computed at registration time.
    */
-  @Disabled("Phase 4 - Transitive closure via function inlining")
   @Test
   void testInvertPathFunction() {
     final Fixture f = new Fixture();
 
     // Create edges list: [(1, 2), (2, 3)]
+    final Type tupleType = f.typeSystem.tupleType(f.intType, f.intType);
+    final Type listTupleType = f.typeSystem.listType(tupleType);
     final Core.Exp edges =
         core.list(
             f.typeSystem,
             core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
             core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
 
-    // Simplified test: Just verify that user function calls are detected
-    // Full function inlining and inversion will be tested in integration tests
+    // Create tuple pattern for path function parameter: (x, y)
+    final Core.TuplePat pathParamPat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(f.xPat, f.yPat));
 
-    // Build: someFunction(x, y)
-    final Core.IdPat someFnPat =
-        core.idPat(f.intIntBoolFnType, "someFunction", 0);
-    final Core.Exp functionCall =
+    // Build step function for Relational.iterate:
+    // fn (old, new) => from (x, z) in new, (z2, y) in edges where z = z2 yield
+    // (x, y)
+    final Core.IdPat oldPat = core.idPat(listTupleType, "oldTuples", 0);
+    final Core.IdPat newPat = core.idPat(listTupleType, "newTuples", 0);
+    final Core.IdPat x2Pat = core.idPat(f.intType, "x", 1);
+    final Core.IdPat zPat = core.idPat(f.intType, "z", 0);
+    final Core.IdPat z2Pat = core.idPat(f.intType, "z2", 0);
+    final Core.IdPat y2Pat = core.idPat(f.intType, "y", 1);
+
+    // Create FROM expression body
+    final Core.TuplePat newScanPat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(x2Pat, zPat));
+    final Core.TuplePat baseScanPat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(z2Pat, y2Pat));
+
+    final Core.Exp whereClause =
+        core.call(
+            f.typeSystem,
+            BuiltIn.OP_EQ,
+            f.intType,
+            Pos.ZERO,
+            core.id(zPat),
+            core.id(z2Pat));
+
+    final Core.Exp yieldExp =
+        core.tuple(f.typeSystem, core.id(x2Pat), core.id(y2Pat));
+
+    final Core.From fromExp =
+        core.fromBuilder(f.typeSystem, (Environment) null)
+            .scan(newScanPat, core.id(newPat))
+            .scan(baseScanPat, edges)
+            .where(whereClause)
+            .yield_(yieldExp)
+            .build();
+
+    // Build lambda: fn v => case v of (old, new) => fromExp
+    final Type paramType = f.typeSystem.tupleType(listTupleType, listTupleType);
+    final Core.IdPat lambdaParam = core.idPat(paramType, "stepFnParam", 0);
+    final Core.TuplePat casePat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(oldPat, newPat));
+    final Core.Match match = core.match(Pos.ZERO, casePat, fromExp);
+    final Core.Case caseExp =
+        core.caseOf(
+            Pos.ZERO,
+            listTupleType,
+            core.id(lambdaParam),
+            ImmutableList.of(match));
+    final net.hydromatic.morel.type.FnType fnType =
+        f.typeSystem.fnType(paramType, listTupleType);
+    final Core.Fn stepFn = core.fn(fnType, lambdaParam, caseExp);
+
+    // Create path function pattern
+    final Core.IdPat pathFnPat = core.idPat(f.intIntBoolFnType, "path", 0);
+
+    // Register path in the FunctionRegistry as RECURSIVE
+    final FunctionRegistry registry = new FunctionRegistry();
+    registry.register(
+        pathFnPat,
+        FunctionRegistry.FunctionInfo.recursive(
+            pathParamPat, edges, stepFn, ImmutableSet.of(f.xPat, f.yPat)));
+
+    // path(x, y)
+    final Core.Exp pathCall =
         core.apply(
             Pos.ZERO,
             PrimitiveType.BOOL,
-            core.id(someFnPat),
+            core.id(pathFnPat),
             core.tuple(f.typeSystem, f.xId, f.yId));
 
     // Invert to generate (x, y)
@@ -413,17 +493,18 @@ public class PredicateInverterTest {
         PredicateInverter.invert(
             f.typeSystem,
             Environments.empty(),
-            functionCall,
+            pathCall,
             ImmutableList.of(f.xPat, f.yPat),
-            ImmutableMap.of());
+            ImmutableMap.of(),
+            registry);
 
-    // Currently returns fallback because we don't have an environment
-    // with the function definition
-    // TODO: Implement full function inlining and inversion
-    // Without env, user functions use fallback - check that predicate is in
-    // remainingFilters
-    assumeTrue(false, "TODO enable test");
-    assertThat(result.remainingFilters, not(empty()));
+    // Should successfully invert to Relational.iterate expression
+    // The expression should contain #iterate Relational
+    String resultStr = result.generator.expression.toString();
+    assertThat(
+        "Should generate Relational.iterate",
+        resultStr.contains("#iterate Relational"));
+    assertThat(result.remainingFilters, empty());
   }
 
   /**

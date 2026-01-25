@@ -561,8 +561,45 @@ public class PredicateInverter {
         break;
 
       case RECURSIVE:
-        // Recursive function - use cached base case and step for iterate
-        // TODO: Build Relational.iterate expression from info
+        // Recursive function - use cached base case and step from registry.
+        // Per Scott: "Recursion happens in a different domain" - the step
+        // function is pre-computed at registration time, NOT inlined here.
+        if (info.baseGenerator().isPresent()
+            && info.recursiveStep().isPresent()) {
+          Core.Exp baseGen = info.baseGenerator().get();
+          Core.Exp stepFn = info.recursiveStep().get();
+
+          // Build: Relational.iterate baseGen stepFn
+          // RELATIONAL_ITERATE has type: 'a bag -> (('a bag, 'a bag) -> 'a bag)
+          //   -> 'a bag
+          // After applying baseGen ('a bag): (('a bag, 'a bag) -> 'a bag) -> 'a
+          // bag
+          // After applying stepFn: 'a bag
+          Type bagType = baseGen.type; // 'a bag (the result type)
+          Type stepFnArgType =
+              typeSystem.tupleType(bagType, bagType); // ('a bag, 'a bag)
+          Type stepFnType =
+              typeSystem.fnType(stepFnArgType, bagType); // ('a bag, 'a bag) ->
+          // 'a bag
+          Type afterBaseType =
+              typeSystem.fnType(stepFnType, bagType); // step -> 'a bag
+
+          Core.Exp iterateFn =
+              core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
+          Core.Exp iterateWithBase =
+              core.apply(Pos.ZERO, afterBaseType, iterateFn, baseGen);
+          Core.Exp relationalIterate =
+              core.apply(Pos.ZERO, bagType, iterateWithBase, stepFn);
+
+          Generator gen =
+              new Generator(
+                  effectiveGoalPat,
+                  relationalIterate,
+                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                  ImmutableList.of(),
+                  ImmutableSet.of());
+          return result(gen, ImmutableList.of());
+        }
         break;
 
       case NOT_INVERTIBLE:
