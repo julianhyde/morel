@@ -27,6 +27,7 @@ import static net.hydromatic.morel.util.Static.skipLast;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
 import java.math.BigDecimal;
@@ -38,12 +39,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -297,9 +298,11 @@ class Generators {
             // Step 5b: Register the generator
             final Set<Core.NamedPat> freePats =
                 SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
+            // Pass the original constraint (the function call) so it can be
+            // simplified to true when the generator is used.
             cache.add(
                 new TransitiveClosureGenerator(
-                    (Core.NamedPat) goalPat, iterateExp, freePats));
+                    (Core.NamedPat) goalPat, iterateExp, freePats, apply));
             return true;
           }
         }
@@ -695,6 +698,10 @@ class Generators {
     final Generator baseGenerator =
         baseCache.bestGenerator((Core.NamedPat) goalPat);
     System.err.println("DEBUG generateTC: baseGenerator = " + baseGenerator);
+    System.err.println(
+        "DEBUG generateTC: baseGenerator.exp = " + baseGenerator.exp);
+    System.err.println(
+        "DEBUG generateTC: baseGenerator.exp.type = " + baseGenerator.exp.type);
 
     // 2. Similarly, substitute and invert the step predicate
     final Core.Exp substitutedStep =
@@ -703,25 +710,14 @@ class Generators {
     System.err.println(
         "DEBUG generateTC: substitutedStep = " + substitutedStep);
 
-    final Cache stepCache = new Cache(ts, cache.env);
-    final Core.Pat stepGoalPat = pattern.intermediateVar;
-    if (!(stepGoalPat instanceof Core.NamedPat)) {
-      System.err.println("DEBUG generateTC: intermediateVar is not NamedPat");
-      return null;
-    }
-    final List<Core.Exp> stepConstraints = ImmutableList.of(substitutedStep);
-    if (!maybeGenerator(stepCache, stepGoalPat, ordered, stepConstraints)) {
-      System.err.println(
-          "DEBUG generateTC: failed to create generator for step case");
-      return null;
-    }
-    final Generator stepGenerator =
-        getLast(stepCache.generators.get((Core.NamedPat) stepGoalPat));
-    System.err.println("DEBUG generateTC: stepGenerator = " + stepGenerator);
+    // Note: We don't need to create a step generator. The step function in
+    // Relational.iterate just scans the base edges and joins with newPaths.
+    // The base generator provides the edges collection which is used for both
+    // the initial seed and the step computation.
 
     // 3. Build the Relational.iterate expression
     return buildRelationalIterate(
-        cache, baseGenerator, stepGenerator, pattern, goalPat, ordered);
+        cache, baseGenerator, substitutedBase, pattern, goalPat, ordered);
   }
 
   /**
@@ -738,65 +734,92 @@ class Generators {
   private static Core.Exp buildRelationalIterate(
       Cache cache,
       Generator baseGenerator,
-      Generator stepGenerator,
+      Core.Exp substitutedBase,
       TransitiveClosurePattern pattern,
       Core.Pat goalPat,
       boolean ordered) {
 
     final TypeSystem ts = cache.typeSystem;
-    final Type elementType = baseGenerator.exp.type.elementType();
-    final Type collectionType = baseGenerator.exp.type;
+    final Type baseElementType = baseGenerator.exp.type.elementType();
+
+    // Get the original collection type by unwrapping any #fromList Bag wrapper
+    // that was added by core.withOrdered when ordered=false
+    final Type originalCollectionType;
+    if (baseGenerator.exp.isCallTo(BuiltIn.BAG_FROM_LIST)) {
+      // baseGenerator.exp is "#fromList Bag edges" - get edges.type
+      // Access the arg field directly since arg(i) assumes tuple arg
+      originalCollectionType = ((Core.Apply) baseGenerator.exp).arg.type;
+    } else {
+      originalCollectionType = baseGenerator.exp.type;
+    }
+
+    System.err.println(
+        "DEBUG buildRI: originalCollectionType = "
+            + originalCollectionType
+            + " instanceof ListType: "
+            + (originalCollectionType instanceof ListType));
+
+    // The result type should match goalPat, which may differ from base element
+    // type (e.g., edges are records {x,y} but goalPat wants tuples (x,y))
+    final Type resultElementType = goalPat.type;
+    // Preserve list vs bag from original collection
+    final Type resultCollectionType =
+        originalCollectionType instanceof ListType
+            ? ts.listType(resultElementType)
+            : ts.bagType(resultElementType);
 
     // Create a tuple type for the step function argument: (allPaths, newPaths)
-    final Type argTupleType = ts.tupleType(collectionType, collectionType);
-    final Core.IdPat allPaths = core.idPat(collectionType, "allPaths", 0);
-    final Core.IdPat newPaths = core.idPat(collectionType, "newPaths", 0);
+    final Core.IdPat allPaths = core.idPat(resultCollectionType, "allPaths", 0);
+    final Core.IdPat newPaths = core.idPat(resultCollectionType, "newPaths", 0);
 
-    // Build the step body: from step in stepGen, prev in newPaths
+    // Build the step body: from step in baseGen, prev in newPaths
     //   where joinCondition yield outputTuple
     final Environment env =
         cache.env.bindAll(
             ImmutableList.of(Binding.of(allPaths), Binding.of(newPaths)));
     final FromBuilder fb = core.fromBuilder(ts, env);
 
-    // Scan step generator (e.g., edges)
-    final Core.IdPat stepPat =
-        core.idPat(stepGenerator.exp.type.elementType(), "step", 0);
-    fb.scan(stepPat, stepGenerator.exp);
+    // Scan base generator (e.g., edges) - the same collection used as the seed
+    final Core.IdPat stepPat = core.idPat(baseElementType, "step", 0);
+    fb.scan(stepPat, baseGenerator.exp);
 
-    // Scan newPaths (second component of the tuple argument)
-    final Core.IdPat prevPat = core.idPat(elementType, "prev", 0);
+    // Scan newPaths (second component of the tuple argument) - uses result type
+    final Core.IdPat prevPat = core.idPat(resultElementType, "prev", 0);
     fb.scan(prevPat, core.id(newPaths));
 
-    // Build join condition: step = prev.x (first field)
+    // Build join condition: step.#1 = prev.#2
+    // The first field of edge (start node) equals the second field of path
+    // (end node). For path (x, z2) and edge (z, y), we join on z = z2.
     final Core.Exp stepId = core.id(stepPat);
     final Core.Exp prevId = core.id(prevPat);
-    final Core.Exp prevFirstField = core.field(ts, prevId, 0);
-    fb.where(core.equal(ts, stepId, prevFirstField));
+    final Core.Exp stepFirstField = core.field(ts, stepId, 0); // z
+    final Core.Exp prevSecondField = core.field(ts, prevId, 1); // z2
+    fb.where(core.equal(ts, stepFirstField, prevSecondField));
 
-    // Yield: combine first field from step's source with remaining from prev
-    // For transitive closure: {x = from original edge, y = prev.y}
-    final List<Core.Exp> yieldFields = new ArrayList<>();
-    if (stepPat.type instanceof RecordType) {
-      yieldFields.add(core.field(ts, stepId, 0));
-    } else {
-      // step itself is the joining value, get x from the step generator's
-      // source
-      // This is tricky - we need to track where x comes from
-      // For now, use a simplified approach
-      yieldFields.add(stepId);
-    }
-    // Add remaining fields from prev (the y component)
-    if (prevPat.type instanceof RecordType) {
-      final RecordType rt = (RecordType) prevPat.type;
-      for (int i = 1; i < rt.argNameTypes.size(); i++) {
-        yieldFields.add(core.field(ts, prevId, i));
-      }
-    } else {
-      yieldFields.add(prevId);
-    }
+    // Yield: (prev.#1, step.#2) = (x, y)
+    // For transitive closure: x is start node of path, y is end node of edge
+    final Core.Exp prevFirst = core.field(ts, prevId, 0); // x (start of path)
+    final Core.Exp stepSecond = core.field(ts, stepId, 1); // y (end of edge)
 
-    fb.yield_(core.tuple((RecordLikeType) stepPat.type, yieldFields));
+    // Build yield expression based on goalPat type (record or tuple)
+    final Core.Exp yieldExp;
+    if (resultElementType instanceof RecordType) {
+      // For record types like {x:int, y:int}, build a record
+      RecordLikeType recordLike = (RecordLikeType) resultElementType;
+      List<String> fieldNames = recordLike.argNames();
+      ImmutableMap<String, Core.Exp> nameExps =
+          ImmutableMap.of(
+              fieldNames.get(0), prevFirst,
+              fieldNames.get(1), stepSecond);
+      yieldExp = core.record(ts, nameExps);
+    } else {
+      // For tuple types like (int * int), build a tuple
+      yieldExp =
+          core.tuple(
+              (RecordLikeType) resultElementType,
+              ImmutableList.of(prevFirst, stepSecond));
+    }
+    fb.yield_(yieldExp);
     final Core.From stepBody = fb.build();
 
     // Create the step function: fn (all, new) => stepBody
@@ -805,21 +828,51 @@ class Generators {
     final Core.Fn stepFn =
         core.fn(
             Pos.ZERO,
-            ts.fnType(stepArgPat.type, collectionType),
+            ts.fnType(stepArgPat.type, resultCollectionType),
             ImmutableList.of(core.match(Pos.ZERO, stepArgPat, stepBody)),
             value -> 0);
 
-    // Build: Relational.iterate baseGenerator stepFn
+    // Convert base generator to result type if needed
+    // e.g., from {x,y} in edges yield (x, y)
+    final Core.Exp seedExp;
+    if (baseElementType.equals(resultElementType)) {
+      seedExp = baseGenerator.exp;
+    } else {
+      final FromBuilder seedFb = core.fromBuilder(ts);
+      final Core.IdPat seedPat = core.idPat(baseElementType, "e", 0);
+      seedFb.scan(seedPat, baseGenerator.exp);
+      final Core.Exp seedId = core.id(seedPat);
+      // Build conversion expression based on result type
+      if (resultElementType instanceof RecordType) {
+        RecordLikeType recordLike = (RecordLikeType) resultElementType;
+        List<String> fieldNames = recordLike.argNames();
+        ImmutableMap<String, Core.Exp> nameExps =
+            ImmutableMap.of(
+                fieldNames.get(0), core.field(ts, seedId, 0),
+                fieldNames.get(1), core.field(ts, seedId, 1));
+        seedFb.yield_(core.record(ts, nameExps));
+      } else {
+        seedFb.yield_(
+            core.tuple(
+                (RecordLikeType) resultElementType,
+                ImmutableList.of(
+                    core.field(ts, seedId, 0), core.field(ts, seedId, 1))));
+      }
+      seedExp = seedFb.build();
+    }
+
+    // Build: Relational.iterate seedExp stepFn
     final Core.Exp iterateFn =
         core.functionLiteral(ts, BuiltIn.RELATIONAL_ITERATE);
     final Core.Exp iterateWithBase =
         core.apply(
             Pos.ZERO,
-            ts.fnType(stepFn.type, collectionType),
+            ts.fnType(stepFn.type, resultCollectionType),
             iterateFn,
-            baseGenerator.exp);
-    return core.withOrdered(ordered,
-        core.apply(Pos.ZERO, collectionType, iterateWithBase, stepFn),
+            seedExp);
+    return core.withOrdered(
+        ordered,
+        core.apply(Pos.ZERO, resultCollectionType, iterateWithBase, stepFn),
         ts);
   }
 
@@ -1383,16 +1436,35 @@ class Generators {
 
   /** Generator that uses Relational.iterate for transitive closure queries. */
   static class TransitiveClosureGenerator extends Generator {
+    /**
+     * The original constraint (function call) that this generator satisfies.
+     */
+    private final Core.Apply constraint;
+
     TransitiveClosureGenerator(
         Core.NamedPat pat,
         Core.Exp exp,
-        Iterable<? extends Core.NamedPat> freePats) {
+        Iterable<? extends Core.NamedPat> freePats,
+        Core.Apply constraint) {
       super(exp, freePats, pat, Cardinality.FINITE);
+      this.constraint = constraint;
     }
 
     @Override
     Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
-      // No simplification for transitive closure expressions
+      // If the expression is the original constraint (the path function call),
+      // simplify it to true since the generator produces exactly the values
+      // that satisfy the constraint.
+      if (exp.equals(constraint)) {
+        return core.boolLiteral(true);
+      }
+      // Also check if it's a call to the same function with the goal pattern
+      if (exp.op == Op.APPLY) {
+        Core.Apply apply = (Core.Apply) exp;
+        if (apply.fn.equals(constraint.fn) && references(apply.arg, pat)) {
+          return core.boolLiteral(true);
+        }
+      }
       return exp;
     }
   }

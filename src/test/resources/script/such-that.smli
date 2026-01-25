@@ -739,7 +739,8 @@ fun path (x, y) =
   (exists z where path (x, z) andalso edge (z, y));
 > val path = fn : int * int -> bool
 from p where path p;
-> val it = [(1,2),(2,3),(1,3)] : (int * int) list
+> val it = [(1,2),(2,3),(1,3)] : (int * int) bag
+*)
 
 let
   fun edge (x, y) = {x, y} elem edges
@@ -749,7 +750,44 @@ let
 in
   from p where path p
 end;
-> val it = [(1,2),(2,3),(1,3)] : (int * int) list
+> val it = [(1,2),(2,3),(1,3)] : (int * int) bag
+
+(*) Same problem, but edges are tuples, not records.
+let
+  val edges = [(1, 2), (2, 3)]
+  fun edge (x, y) = (x, y) elem edges
+  fun path (x, y) =
+    edge (x, y) orelse
+    (exists z where path (x, z) andalso edge (z, y))
+in
+  from p where path p
+end;
+> val it = [(1,2),(2,3),(1,3)] : (int * int) bag
+
+(*) Same problem using tuple arguments: e and p rather than (x, y)
+let
+  val edges = [(1, 2), (2, 3)]
+  fun edge e = e elem edges
+  fun path p =
+    edge p orelse
+    (exists z where path (#1 p, z) andalso edge (z, #2 p))
+in
+  from p where path p
+end;
+> val it = [(1,2),(2,3),(1,3)] : (int * int) bag
+
+(*) Same problem, using 'from x, y' rather than 'from p'
+(* TODO
+let
+  val edges = [(1, 2), (2, 3)]
+  fun edge e = e elem edges
+  fun path p =
+    edge p orelse
+    (exists z where path (#1 p, z) andalso edge (z, #2 p))
+in
+  from x, y where path (x, y)
+end;
+> val it = [(1,2),(2,3),(1,3)] : (int * int) bag
 *)
 
 (* More edges *)
@@ -783,32 +821,32 @@ end;
 > val it : {x:int, y:int} bag
 
 (*) Return points that are 2 hops apart.
-(*
+(* TODO
 from x, y, z where edge (x, y) andalso edge (y, z) andalso x <> z
-  group x, z;
+  group {x, z};
 *)
 
 (* Previous is equivalent to following. (Which implies a theorem connecting
    'exists' with 'group' and variable elimination.) *)
-(*
+(* TODO
 from x, z
-  where exists (from y where edge (x, y) andalso edge (y, z))
+  where (exists y where edge (x, y) andalso edge (y, z))
   andalso x <> z;
 *)
 
 (*) Also equivalent.
-(*
-from x, z where exists (
-   from y where edge (x, y) andalso edge (y, z) andalso x <> z);
+(* TODO
+from x, z
+  where (exists y where edge (x, y) andalso edge (y, z) andalso x <> z);
 *)
 
 (*) Also equivalent.
-(*
+(* TODO
 from x, y
   where edge (x, y)
   join y2, z
   where y2 = y andalso edge (y, z) andalso x <> z
-  group x, y;
+  group {x, y};
 *)
 
 (* ------------------------------------------------------ *)

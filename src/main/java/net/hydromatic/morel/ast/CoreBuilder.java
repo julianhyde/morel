@@ -1234,7 +1234,7 @@ public enum CoreBuilder {
   /** Flattens the {@code andalso}s in an expression into a consumer. */
   public void flattenAnd(Core.Exp exp, Consumer<Core.Exp> consumer) {
     //noinspection StatementWithEmptyBody
-    if (exp.op == Op.BOOL_LITERAL && (boolean) ((Core.Literal) exp).value) {
+    if (exp.isBoolLiteral(true)) {
       // don't add 'true' to the list
     } else if (exp.op == Op.APPLY
         && ((Core.Apply) exp).fn.op == Op.FN_LITERAL
@@ -1253,7 +1253,7 @@ public enum CoreBuilder {
   /** Flattens the {@code orelse}s in an expression into a consumer. */
   public void flattenOr(Core.Exp exp, Consumer<Core.Exp> consumer) {
     //noinspection StatementWithEmptyBody
-    if (exp.op == Op.BOOL_LITERAL && !(boolean) ((Core.Literal) exp).value) {
+    if (exp.isBoolLiteral(false)) {
       // don't add 'false' to the list
     } else if (exp.op == Op.APPLY
         && ((Core.Apply) exp).fn.op == Op.FN_LITERAL
