@@ -27,8 +27,10 @@ import static net.hydromatic.morel.util.Static.allMatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
@@ -53,12 +55,21 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /** Shuttle that inlines constant values. */
 public class Inliner extends EnvShuttle {
   private final Analyzer.@Nullable Analysis analysis;
+  /**
+   * Patterns currently being inlined. Used to detect recursive references and
+   * avoid infinite recursion during inlining.
+   */
+  private final Set<Core.NamedPat> inliningPats;
 
   /** Private constructor. */
   private Inliner(
-      TypeSystem typeSystem, Environment env, Analyzer.Analysis analysis) {
+      TypeSystem typeSystem,
+      Environment env,
+      Analyzer.Analysis analysis,
+      Set<Core.NamedPat> inliningPats) {
     super(typeSystem, env);
     this.analysis = analysis;
+    this.inliningPats = inliningPats;
   }
 
   /**
@@ -70,12 +81,12 @@ public class Inliner extends EnvShuttle {
       TypeSystem typeSystem,
       Environment env,
       Analyzer.@Nullable Analysis analysis) {
-    return new Inliner(typeSystem, env, analysis);
+    return new Inliner(typeSystem, env, analysis, new HashSet<>());
   }
 
   @Override
   protected Inliner push(Environment env) {
-    return new Inliner(typeSystem, env, analysis);
+    return new Inliner(typeSystem, env, analysis, inliningPats);
   }
 
   @Override
@@ -83,14 +94,24 @@ public class Inliner extends EnvShuttle {
     final Binding binding = env.getOpt(id.idPat);
     if (binding != null && !binding.parameter) {
       if (binding.exp != null) {
-        final Analyzer.Use use =
-            analysis == null
-                ? Analyzer.Use.MULTI_UNSAFE
-                : requireNonNull(analysis.map.get(id.idPat));
-        switch (use) {
-          case ATOMIC:
-          case ONCE_SAFE:
-            return binding.exp.accept(this);
+        // Skip inlining if this pattern is already being inlined (recursive
+        // reference).
+        // This prevents infinite recursion when inlining recursive functions.
+        if (!inliningPats.contains(id.idPat)) {
+          final Analyzer.Use use =
+              analysis == null
+                  ? Analyzer.Use.MULTI_UNSAFE
+                  : requireNonNull(analysis.map.get(id.idPat));
+          switch (use) {
+            case ATOMIC:
+            case ONCE_SAFE:
+              inliningPats.add(id.idPat);
+              try {
+                return binding.exp.accept(this);
+              } finally {
+                inliningPats.remove(id.idPat);
+              }
+          }
         }
       }
       Object v = binding.value;
