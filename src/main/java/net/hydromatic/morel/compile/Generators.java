@@ -22,8 +22,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getLast;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Static.skip;
-import static net.hydromatic.morel.util.Static.skipLast;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -132,29 +130,6 @@ class Generators {
   }
 
   /**
-   * Returns a list without the {@code i}<sup>th</sup> element.
-   *
-   * <p>For example, {@code skipMid(["a", "b", "c"], 1)} evaluates to {@code
-   * ["a", "c"]}.
-   */
-  // TODO: Improve this method if used, remove it if not
-  static <E> List<E> skipMid(List<E> list, int i) {
-    if (i == 0) {
-      return skip(list);
-    } else if (i == list.size() - 1) {
-      return skipLast(list);
-    } else {
-      final ImmutableList.Builder<E> list2 = ImmutableList.builder();
-      for (int j = 0; j < list.size(); j++) {
-        if (j != i) {
-          list2.add(list.get(j));
-        }
-      }
-      return list2.build();
-    }
-  }
-
-  /**
    * Finds the index of goalPat within a tuple expression.
    *
    * <p>For example, if fnArg is (x, y) and goalPat is x, returns 0. If fnArg is
@@ -199,23 +174,6 @@ class Generators {
       }
     }
     return core.tuplePat(ts, pats);
-  }
-
-  /**
-   * Builds a projection expression that extracts a component from a collection
-   * of tuples.
-   *
-   * <p>For example, to project the first component from a bag of (int * int):
-   * {@code from t in collection yield #1 t}
-   */
-  private static Core.Exp buildTupleProjection(
-      TypeSystem ts, Core.Exp collection, int componentIndex, Type resultType) {
-    final Type elementType = collection.type.elementType();
-    final FromBuilder fb = core.fromBuilder(ts);
-    final Core.IdPat tPat = core.idPat(elementType, "t", 0);
-    fb.scan(tPat, collection);
-    fb.yield_(core.field(ts, core.id(tPat), componentIndex));
-    return fb.build();
   }
 
   /**
@@ -373,7 +331,7 @@ class Generators {
             // simplified to true when the generator is used.
             cache.add(
                 new TransitiveClosureGenerator(
-                    (Core.NamedPat) goalPat, iterateExp, freePats, apply));
+                    goalPat, iterateExp, freePats, apply));
             return true;
           }
         }
@@ -437,16 +395,13 @@ class Generators {
       System.err.println(
           "DEBUG maybeFunction: trying simple inversion for " + fnName);
       final Core.Exp inlinedBody =
-          inlineFunctionBody(cache.typeSystem, fn, apply.arg);
-      if (inlinedBody != null) {
+          inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
+      System.err.println("DEBUG maybeFunction: inlined body = " + inlinedBody);
+      final List<Core.Exp> inlinedConstraints = ImmutableList.of(inlinedBody);
+      if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
         System.err.println(
-            "DEBUG maybeFunction: inlined body = " + inlinedBody);
-        final List<Core.Exp> inlinedConstraints = ImmutableList.of(inlinedBody);
-        if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
-          System.err.println(
-              "DEBUG maybeFunction: simple inversion succeeded for " + fnName);
-          return true;
-        }
+            "DEBUG maybeFunction: simple inversion succeeded for " + fnName);
+        return true;
       }
     }
     return false;
@@ -460,8 +415,8 @@ class Generators {
    * and actual args are {@code (#1 p, #2 p)}, returns {@code {#1 p, #2 p} elem
    * edges}.
    */
-  private static Core.@Nullable Exp inlineFunctionBody(
-      TypeSystem ts, Core.Fn fn, Core.Exp actualArgs) {
+  private static Core.Exp inlineFunctionBody(
+      TypeSystem ts, Environment env, Core.Fn fn, Core.Exp actualArgs) {
     // Unwrap CASE expression if present (from tuple pattern matching)
     Core.Exp body = fn.exp;
     Core.Pat formalParams = fn.idPat;
@@ -473,7 +428,7 @@ class Generators {
         formalParams = match.pat;
       }
     }
-    return substituteArgs(ts, formalParams, actualArgs, body);
+    return substituteArgs(ts, env, formalParams, actualArgs, body);
   }
 
   /**
@@ -793,7 +748,6 @@ class Generators {
       TransitiveClosurePattern pattern,
       Core.Pat goalPat,
       boolean ordered) {
-
     final TypeSystem ts = cache.typeSystem;
 
     System.err.println(
@@ -806,19 +760,23 @@ class Generators {
     // the base generator (e.g., edges)
     final Core.Exp substitutedBase =
         substituteArgs(
-            ts, pattern.formalParams, pattern.callArgs, pattern.baseCase);
+            ts,
+            cache.env,
+            pattern.formalParams,
+            pattern.callArgs,
+            pattern.baseCase);
     System.err.println(
         "DEBUG generateTC: substitutedBase = " + substitutedBase);
 
     // Try to create a generator for the base case
-    final Cache baseCache = cache; // new Cache(ts, cache.env);
     final List<Core.Exp> baseConstraints = ImmutableList.of(substitutedBase);
-    if (!maybeGenerator(baseCache, goalPat, ordered, baseConstraints)) {
+    if (!maybeGenerator(cache, goalPat, ordered, baseConstraints)) {
       System.err.println(
           "DEBUG generateTC: failed to create generator for base case");
       return null;
     }
-    final Generator baseGenerator = baseCache.bestGeneratorForPat(goalPat);
+    final Generator baseGenerator =
+        requireNonNull(cache.bestGeneratorForPat(goalPat));
     System.err.println("DEBUG generateTC: baseGenerator = " + baseGenerator);
     System.err.println(
         "DEBUG generateTC: baseGenerator.exp = " + baseGenerator.exp);
@@ -828,7 +786,11 @@ class Generators {
     // 2. Similarly, substitute and invert the step predicate
     final Core.Exp substitutedStep =
         substituteArgs(
-            ts, pattern.formalParams, pattern.callArgs, pattern.stepPredicate);
+            ts,
+            cache.env,
+            pattern.formalParams,
+            pattern.callArgs,
+            pattern.stepPredicate);
     System.err.println(
         "DEBUG generateTC: substitutedStep = " + substitutedStep);
 
@@ -1026,7 +988,11 @@ class Generators {
     // 1. Substitute actual args into base case and try to invert
     final Core.Exp substitutedBase =
         substituteArgs(
-            ts, pattern.formalParams, pattern.callArgs, pattern.baseCase);
+            ts,
+            cache.env,
+            pattern.formalParams,
+            pattern.callArgs,
+            pattern.baseCase);
 
     // Try to create a generator for the base case
     final Cache baseCache = new Cache(ts, cache.env);
@@ -1040,7 +1006,11 @@ class Generators {
     // 2. Similarly, substitute and invert the step predicate
     final Core.Exp substitutedStep =
         substituteArgs(
-            ts, pattern.formalParams, pattern.callArgs, pattern.stepPredicate);
+            ts,
+            cache.env,
+            pattern.formalParams,
+            pattern.callArgs,
+            pattern.stepPredicate);
 
     final Cache stepCache = new Cache(ts, cache.env);
     // For step, we need a pattern that captures the "joining" variable
@@ -1121,9 +1091,7 @@ class Generators {
       // Join on z = z'
       final Core.Exp joinCondition =
           buildJoinCondition(ts, pattern, stepPat, prevPat);
-      if (joinCondition != null) {
-        fb.where(joinCondition);
-      }
+      fb.where(joinCondition);
 
       // Yield the combined output: (x from step, y from prev)
       final Core.Exp yieldExp = buildYieldExp(ts, pattern, stepPat, prevPat);
@@ -1312,6 +1280,7 @@ class Generators {
    */
   private static Core.Exp substituteArgs(
       TypeSystem ts,
+      Environment env,
       Core.Pat formalParams,
       Core.Exp actualArgs,
       Core.Exp body) {
@@ -1352,54 +1321,9 @@ class Generators {
       }
     }
 
-    return substituteAll(substitutions, body);
-  }
-
-  /** Applies all substitutions to an expression, traversing recursively. */
-  private static Core.Exp substituteAll(
-      Map<Core.NamedPat, Core.Exp> substitutions, Core.Exp body) {
-    if (substitutions.isEmpty()) {
-      return body;
-    }
-
-    switch (body.op) {
-      case ID:
-        final Core.Id id = (Core.Id) body;
-        final Core.Exp replacement = substitutions.get(id.idPat);
-        return replacement != null ? replacement : body;
-
-      case APPLY:
-        final Core.Apply apply = (Core.Apply) body;
-        final Core.Exp newFn = substituteAll(substitutions, apply.fn);
-        final Core.Exp newArg = substituteAll(substitutions, apply.arg);
-        if (newFn == apply.fn && newArg == apply.arg) {
-          return body;
-        }
-        return core.apply(apply.pos, apply.type, newFn, newArg);
-
-      case TUPLE:
-        final Core.Tuple tuple = (Core.Tuple) body;
-        final List<Core.Exp> newArgs = new ArrayList<>();
-        boolean changed = false;
-        for (Core.Exp arg : tuple.args) {
-          final Core.Exp newArg2 = substituteAll(substitutions, arg);
-          newArgs.add(newArg2);
-          if (newArg2 != arg) {
-            changed = true;
-          }
-        }
-        final RecordLikeType recordLikeType = tuple.type();
-        Core.Exp simplified = core.simplifyTuple(newArgs, recordLikeType);
-        if (simplified != null) {
-          return simplified;
-        }
-        return changed ? core.tuple(recordLikeType, newArgs) : body;
-
-      default:
-        // For other expression types, return unchanged
-        // A full implementation would handle all cases
-        return body;
-    }
+    final Core.Exp substituted =
+        Replacer.substituteShallow(ts, env, substitutions, body);
+    return core.simplify(ts, substituted);
   }
 
   /**

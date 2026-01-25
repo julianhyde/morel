@@ -102,6 +102,7 @@ public class Expander {
     }
 
     // Third, substitute generators.
+    // TODO: Refactor
     if (true) {
       Core.From from2 = expandFrom2(cache, env, stepVars);
       return from2.equals(from) ? from : from2;
@@ -172,7 +173,7 @@ public class Expander {
         });
 
     final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-    final Map<Core.Id, Core.Exp> substitution = new HashMap<>();
+    final Map<Core.NamedPat, Core.Exp> substitution = new HashMap<>();
     stepVarSet.stepVars.forEach(
         (step, freePats) -> {
           // Pull forward any generators.
@@ -297,16 +298,6 @@ public class Expander {
       fromBuilder.scan(recordPat, fromBuilder2.build());
     }
     done.addAll(requiredPats);
-  }
-
-  /** Returns either "p" or "(p, q, r)". */
-  static Core.Pat singleOrTuplePat(
-      TypeSystem typeSystem, List<Core.NamedPat> namedPats) {
-    if (namedPats.size() == 1) {
-      return namedPats.get(0);
-    } else {
-      return core.tuplePat(typeSystem, namedPats);
-    }
   }
 
   static void expandSteps(List<Core.FromStep> steps, Expander expander) {
