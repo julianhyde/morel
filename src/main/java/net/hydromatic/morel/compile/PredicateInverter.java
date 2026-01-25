@@ -232,7 +232,8 @@ public class PredicateInverter {
 
         // First, check the function registry for pre-analyzed invertibility.
         // Per Scott's principle: "Edge should never be on the stack."
-        Result registryResult = tryInvertFromRegistry(fnPat);
+        Result registryResult =
+            tryInvertFromRegistry(fnPat, apply.arg, goalPats);
         if (registryResult != null) {
           return registryResult;
         }
@@ -512,11 +513,18 @@ public class PredicateInverter {
    * <p>Per Scott's principle: "Edge should never be on the stack." Functions
    * are analyzed once at compile time; we use the cached result.
    *
+   * <p>Pattern matching (Phase B'): When the call argument differs from the
+   * function's formal parameter (e.g., scalar {@code p} vs tuple {@code
+   * (x,y)}), we use PatternMatcher to determine the correct binding.
+   *
    * @param fnPat the function's name pattern
+   * @param callArg the argument expression passed to the function
+   * @param goalPats the patterns we want to generate values for
    * @return inversion result if function is registered and invertible, null if
    *     not registered or requires fallback handling
    */
-  private @Nullable Result tryInvertFromRegistry(Core.NamedPat fnPat) {
+  private @Nullable Result tryInvertFromRegistry(
+      Core.NamedPat fnPat, Core.Exp callArg, List<Core.NamedPat> goalPats) {
     Optional<FunctionRegistry.FunctionInfo> registeredInfo =
         functionRegistry.lookup(fnPat);
     if (!registeredInfo.isPresent()) {
@@ -524,13 +532,24 @@ public class PredicateInverter {
     }
 
     FunctionRegistry.FunctionInfo info = registeredInfo.get();
+
+    // Pattern matching: determine which goalPats are bound by this call
+    Optional<PatternMatcher.MatchResult> matchResult =
+        PatternMatcher.match(callArg, info.formalParameter(), goalPats);
+
+    // Determine the effective goal pattern for the generator
+    Core.Pat effectiveGoalPat =
+        matchResult.isPresent()
+            ? matchResult.get().goalPat
+            : info.formalParameter();
+
     switch (info.status()) {
       case INVERTIBLE:
         // Function has a known generator - return it directly
         if (info.baseGenerator().isPresent()) {
           Generator gen =
               new Generator(
-                  info.formalParameter(),
+                  effectiveGoalPat,
                   info.baseGenerator().get(),
                   net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                   ImmutableList.of(),
@@ -555,7 +574,7 @@ public class PredicateInverter {
         if (info.baseGenerator().isPresent()) {
           Generator gen =
               new Generator(
-                  info.formalParameter(),
+                  effectiveGoalPat,
                   info.baseGenerator().get(),
                   net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                   ImmutableList.of(),
