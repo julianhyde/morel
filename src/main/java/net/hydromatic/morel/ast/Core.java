@@ -742,6 +742,12 @@ public class Core {
       final Core.Literal argLiteral = (Core.Literal) apply.arg;
       return argLiteral.unwrap(RangeExtent.class);
     }
+
+    /** Returns whether this is a boolean literal with value {@code b}. */
+    public boolean isBoolLiteral(boolean b) {
+      return op == Op.BOOL_LITERAL
+          && ((Literal) this).unwrap(Boolean.class) == b;
+    }
   }
 
   /**
@@ -1769,15 +1775,10 @@ public class Core {
       } else {
         w.append(" in ").append(exp, Op.EQ.right, 0);
       }
-      if (!isLiteralTrue()) {
+      if (!condition.isBoolLiteral(true)) {
         w.append(" on ").append(condition, 0, 0);
       }
       return w;
-    }
-
-    private boolean isLiteralTrue() {
-      return condition.op == Op.BOOL_LITERAL
-          && ((Literal) condition).unwrap(Boolean.class);
     }
 
     public Scan copy(StepEnv env, Pat pat, Exp exp, Exp condition) {

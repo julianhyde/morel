@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
@@ -207,6 +208,29 @@ public class Expander {
 
           // The step is not a scan over an extent. Add it now.
           step = Replacer.substitute(typeSystem, env, substitution, step);
+
+          // For WHERE steps, simplify the condition using
+          // TransitiveClosureGenerators.
+          // This removes path predicates that are satisfied by the iterate
+          // generator. We only simplify for TransitiveClosureGenerator because
+          // other generators (such as RangeGenerator) may not properly preserve
+          // remaining conjuncts.
+          if (step instanceof Core.Where) {
+            final Core.Where where = (Core.Where) step;
+            final AtomicReference<Core.Exp> conditionRef =
+                new AtomicReference<>(where.exp);
+            // Simplify using transitive closure generators only
+            generatorMap.forEach(
+                (p, generator) -> {
+                  if (generator
+                      instanceof Generators.TransitiveClosureGenerator) {
+                    conditionRef.set(generator.simplify(p, conditionRef.get()));
+                  }
+                });
+            fromBuilder.where(conditionRef.get());
+            return;
+          }
+
           fromBuilder.addAll(ImmutableList.of(step));
         });
 
