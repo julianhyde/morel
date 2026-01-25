@@ -32,10 +32,6 @@
  * <ul>
  *   <li>{@link net.hydromatic.morel.compile.PredicateInverter} - Main inversion
  *       algorithm that transforms predicates into generators.
- *   <li>{@link net.hydromatic.morel.compile.ProcessTreeBuilder} - Constructs
- *       Perfect Process Trees (PPT) from predicates for analysis.
- *   <li>{@link net.hydromatic.morel.compile.ProcessTreeNode} - Represents nodes
- *       in a Perfect Process Tree.
  *   <li>{@link net.hydromatic.morel.compile.VarEnvironment} - Immutable
  *       environment tracking variable states (input, output, auxiliary, join).
  * </ul>

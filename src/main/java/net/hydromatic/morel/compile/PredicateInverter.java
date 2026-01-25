@@ -520,10 +520,9 @@ public class PredicateInverter {
     // Build Relational.iterate with the finite base generator.
     // Remaining filters will be applied at runtime along with the iterate
     // expansion.
-    // Create IOPair for the base case (no PPT terminal, so pass null)
+    // Create IOPair for the base case
     final IOPair baseCaseIO =
-        new IOPair(
-            ImmutableMap.of(), baseCaseResult.generator.expression, null);
+        new IOPair(ImmutableMap.of(), baseCaseResult.generator.expression);
 
     // Create TabulationResult with the base case
     // Use FINITE cardinality since transitive closure is finite for finite
@@ -568,145 +567,6 @@ public class PredicateInverter {
     // Return result with remaining filters from base case
     // These will be applied at runtime
     return result(iterateGenerator, baseCaseResult.remainingFilters);
-  }
-
-  /**
-   * Attempts to invert a predicate using ProcessTreeBuilder analysis.
-   *
-   * <p>This method uses ProcessTreeBuilder to construct a Perfect Process Tree
-   * (PPT) and analyze the predicate structure. It's the integration point
-   * between PredicateInverter and ProcessTreeBuilder.
-   *
-   * <p><b>PHASE 4 PLACEHOLDER:</b> Currently constructs PPT successfully but
-   * always returns empty. Full implementation requires:
-   *
-   * <ul>
-   *   <li>PPT tabulation to build I-O pairs
-   *   <li>Mode analysis for smart generator selection
-   *   <li>Generation of Relational.iterate calls from PPT structure
-   * </ul>
-   *
-   * <p>Phase 3b uses direct AST pattern matching instead (see {@link
-   * #tryInvertTransitiveClosure}). This method will be fully implemented in
-   * Phase 4 to handle all recursive predicates via PPT analysis.
-   *
-   * <p>Package-private for testing.
-   *
-   * @param predicate The predicate expression to analyze
-   * @param goalPatterns Variables to generate values for
-   * @param boundGenerators Generators for bound variables
-   * @return Always returns empty in Phase 3b; will return inversion result in
-   *     Phase 4
-   */
-  @SuppressWarnings("unused") // Phase 4 implementation placeholder
-  Optional<Result> tryInvertWithProcessTree(
-      Core.Exp predicate,
-      List<Core.NamedPat> goalPatterns,
-      Map<Core.NamedPat, Generator> boundGenerators) {
-
-    try {
-      // Create VarEnvironment from goal patterns and bound generators
-      VarEnvironment varEnv =
-          VarEnvironment.initial(
-              goalPatterns,
-              boundGenerators.isEmpty()
-                  ? ImmutableMap.of()
-                  : ImmutableMap.copyOf(boundGenerators),
-              env);
-
-      // Build PPT using ProcessTreeBuilder
-      // Pass null for inverter to avoid infinite recursion
-      ProcessTreeBuilder builder =
-          new ProcessTreeBuilder(typeSystem, null, ImmutableSet.of());
-      ProcessTreeNode ppt = builder.build(predicate, varEnv);
-
-      // Phase 3a: PPT construction succeeded
-      // Phase 4 TODO: Tabulate PPT to build I-O pairs
-      // Phase 4 TODO: Use tabulation results to generate Relational.iterate
-
-      // For now, return empty (placeholder for Phase 4)
-      return Optional.empty();
-
-    } catch (Exception e) {
-      // PPT construction failed - not a valid transitive closure
-      return Optional.empty();
-    }
-  }
-
-  /**
-   * Validates that a ProcessTreeNode matches the transitive closure pattern.
-   *
-   * <p>Pattern: {@code baseCase orelse recursiveCase} where:
-   *
-   * <ul>
-   *   <li>baseCase is a TerminalNode with successful inversion
-   *   <li>recursiveCase contains a recursive call
-   * </ul>
-   *
-   * @param tree The ProcessTreeNode to check
-   * @return True if tree matches transitive closure pattern
-   */
-  private boolean isTransitiveClosurePattern(ProcessTreeNode tree) {
-    if (!(tree instanceof ProcessTreeNode.BranchNode)) {
-      return false;
-    }
-
-    ProcessTreeNode.BranchNode branch = (ProcessTreeNode.BranchNode) tree;
-
-    // Left must be invertible terminal
-    if (!branch.left.isTerminal()) {
-      return false;
-    }
-    ProcessTreeNode.TerminalNode leftTerm =
-        (ProcessTreeNode.TerminalNode) branch.left;
-    if (!leftTerm.isInverted()) {
-      return false; // Must have inversion result
-    }
-
-    // Right must contain recursion
-    if (!branch.right.isRecursiveCall() && !containsRecursion(branch.right)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  /**
-   * Recursively checks if a node contains a recursive call.
-   *
-   * @param node The node to check
-   * @return True if node or any descendant is a recursive call
-   */
-  private boolean containsRecursion(ProcessTreeNode node) {
-    if (node.isRecursiveCall()) {
-      return true;
-    }
-    if (node instanceof ProcessTreeNode.BranchNode) {
-      ProcessTreeNode.BranchNode b = (ProcessTreeNode.BranchNode) node;
-      return containsRecursion(b.left) || containsRecursion(b.right);
-    }
-    if (node instanceof ProcessTreeNode.SequenceNode) {
-      ProcessTreeNode.SequenceNode s = (ProcessTreeNode.SequenceNode) node;
-      return s.children.stream().anyMatch(this::containsRecursion);
-    }
-    return false;
-  }
-
-  /**
-   * Extracts the recursive case body from a transitive closure pattern.
-   *
-   * <p>For a BranchNode representing {@code baseCase orelse recursiveCase},
-   * returns the expression from the recursive case (right branch).
-   *
-   * @param tree The BranchNode containing the pattern
-   * @return The recursive case expression
-   */
-  private Core.Exp extractRecursiveBody(ProcessTreeNode tree) {
-    if (!(tree instanceof ProcessTreeNode.BranchNode)) {
-      throw new IllegalArgumentException("Expected BranchNode, got " + tree);
-    }
-    ProcessTreeNode.BranchNode branch = (ProcessTreeNode.BranchNode) tree;
-    return branch.right.term();
   }
 
   /**
@@ -1601,127 +1461,20 @@ public class PredicateInverter {
   }
 
   /**
-   * An input-output pair from a PPT terminal node.
+   * An input-output pair for tabulation.
    *
-   * <p>Represents a concrete mapping from input bindings to output expressions
-   * discovered during PPT traversal.
+   * <p>Represents a concrete mapping from input bindings to output expressions.
    */
   public static class IOPair {
     /** Input binding for this I-O pair. */
     public final ImmutableMap<Core.NamedPat, Core.Exp> inputBinding;
 
-    /** Output expression from this terminal. */
+    /** Output expression. */
     public final Core.Exp output;
 
-    /** Which terminal node produced this pair. */
-    public final ProcessTreeNode.TerminalNode source;
-
-    public IOPair(
-        Map<Core.NamedPat, Core.Exp> inputBinding,
-        Core.Exp output,
-        ProcessTreeNode.TerminalNode source) {
+    public IOPair(Map<Core.NamedPat, Core.Exp> inputBinding, Core.Exp output) {
       this.inputBinding = ImmutableMap.copyOf(inputBinding);
       this.output = requireNonNull(output);
-      this.source = requireNonNull(source);
-    }
-  }
-
-  /**
-   * Tabulates a Perfect Process Tree to extract I-O pairs.
-   *
-   * <p>This is URA Step 2: traverse the PPT depth-first and collect terminal
-   * nodes with successful inversions. The result includes:
-   *
-   * <ul>
-   *   <li>I-O pairs mapping inputs to outputs
-   *   <li>Overall cardinality (SINGLE, FINITE, or INFINITE)
-   *   <li>Duplicate detection flag
-   * </ul>
-   *
-   * @param ppt The Perfect Process Tree root node
-   * @param env The variable environment
-   * @return Tabulation result with I-O pairs and metadata
-   */
-  private TabulationResult tabulate(ProcessTreeNode ppt, VarEnvironment env) {
-    // Traverse PPT depth-first, collect terminals
-    final List<IOPair> pairs = new ArrayList<>();
-    final List<net.hydromatic.morel.compile.Generator.Cardinality>
-        cardinalities = new ArrayList<>();
-    final Set<String> seenOutputs = new HashSet<>();
-
-    traversePPT(ppt, env, pairs, cardinalities, seenOutputs);
-
-    // Compute overall cardinality
-    final net.hydromatic.morel.compile.Generator.Cardinality
-        overallCardinality = computeCardinality(cardinalities);
-
-    // Detect duplicates (same output from different input classes)
-    final boolean mayHaveDuplicates = detectDuplicates(pairs);
-
-    return new TabulationResult(pairs, overallCardinality, mayHaveDuplicates);
-  }
-
-  /**
-   * Depth-first traversal of PPT collecting terminal nodes.
-   *
-   * <p>Recursively visits all nodes in the PPT and extracts I-O pairs from
-   * terminals with successful inversions.
-   *
-   * @param node The current node to traverse
-   * @param env The variable environment
-   * @param collector List to collect I-O pairs into
-   * @param cardinalities List to collect cardinalities from terminals
-   * @param seenOutputs Set of output strings for duplicate detection
-   */
-  private void traversePPT(
-      ProcessTreeNode node,
-      VarEnvironment env,
-      List<IOPair> collector,
-      List<net.hydromatic.morel.compile.Generator.Cardinality> cardinalities,
-      Set<String> seenOutputs) {
-
-    if (node.isTerminal()) {
-      final ProcessTreeNode.TerminalNode terminal =
-          (ProcessTreeNode.TerminalNode) node;
-
-      // Terminal must have inversion result
-      if (terminal.isInverted()) {
-        // Extract generator result
-        final Result invResult = terminal.inversionResult.get();
-        final PredicateInverter.Generator gen = invResult.generator;
-
-        // Convert boundVars map from Generator to Exp
-        final ImmutableMap.Builder<Core.NamedPat, Core.Exp> inputBuilder =
-            ImmutableMap.builder();
-        for (Map.Entry<Core.NamedPat, PredicateInverter.Generator> entry :
-            env.boundVars.entrySet()) {
-          inputBuilder.put(entry.getKey(), entry.getValue().expression);
-        }
-
-        // Create I-O pair
-        final IOPair pair =
-            new IOPair(inputBuilder.build(), gen.expression, terminal);
-
-        collector.add(pair);
-        cardinalities.add(gen.cardinality);
-        seenOutputs.add(gen.expression.toString());
-      }
-    } else if (node instanceof ProcessTreeNode.BranchNode) {
-      final ProcessTreeNode.BranchNode branch =
-          (ProcessTreeNode.BranchNode) node;
-
-      // Traverse both branches
-      traversePPT(branch.left, env, collector, cardinalities, seenOutputs);
-      traversePPT(branch.right, env, collector, cardinalities, seenOutputs);
-
-    } else if (node instanceof ProcessTreeNode.SequenceNode) {
-      final ProcessTreeNode.SequenceNode seq =
-          (ProcessTreeNode.SequenceNode) node;
-
-      // For sequences, process all children with current environment
-      for (ProcessTreeNode child : seq.children) {
-        traversePPT(child, env, collector, cardinalities, seenOutputs);
-      }
     }
   }
 
