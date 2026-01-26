@@ -1,12 +1,12 @@
-You keep on coming back to cost-based optimization, and execution; I’m not doing either of those. I am just trying to map Datalog-style programs into relational algebra (including iteration). I’m only thinking about correctness and completeness, not cost.
+You keep on coming back to cost-based optimization, and execution; I'm not doing either of those. I am just trying to map Datalog-style programs into relational algebra (including iteration). I'm only thinking about correctness and completeness, not cost.
 
 If I achieve this, it provides an escape route for those who were forced into Datalog. People can write in Datalog if they like (because we can translate it to Morel without losing anything), or they can write in Morel (better).
 
-What started this all off was my observation that, when you are writing fixed-point queries, Datalog’s approach (writing recursive boolean functions) is more concise than algebra+iteration (as exemplified by SQL’s WITH RECURSIVE). Datalog’s termination is straightforward (you stop when you get to ’true’) whereas algebra requires the programmer to provide some notion of a lattice. The Datafun papers are wonderful, but they require the programmer to jump into some kind of Haskell hell, which is just as bad IMHO as Datalog hell. Morel with domain variables is still a nice simple language.
+What started this all off was my observation that, when you are writing fixed-point queries, Datalog's approach (writing recursive boolean functions) is more concise than algebra+iteration (as exemplified by SQL's WITH RECURSIVE). Datalog's termination is straightforward (you stop when you get to 'true') whereas algebra requires the programmer to provide some notion of a lattice. The Datafun papers are wonderful, but they require the programmer to jump into some kind of Haskell hell, which is just as bad IMHO as Datalog hell. Morel with domain variables is still a nice simple language.
 
 On Dec 18, 2025, at 9:56 AM, Scott Meyer <scott.ex.nihilo@gmail.com> wrote:
 
-Your argument seems to be “anyone who has a graph problem is already happy with Datalog, so why bother adding graph capabilities to Morel?”, and if so, I don’t agree.
+Your argument seems to be "anyone who has a graph problem is already happy with Datalog, so why bother adding graph capabilities to Morel?", and if so, I don't agree.
 
 Not at all. As a statistical matter, almost no one is happy with Datalog... LI has a specific implementation of Datalog that was optimized for dynamic planning and random access, but that counts only as an anecdote. Datalog which translates into normal RA is going to splatter itself on LI's problem.
 
@@ -24,7 +24,7 @@ E("foo":1, b:2), E(b:1M, c:1), E(c:1M, d:1), E(d:1, "bar":1)?
 
 I've used :N to indicate the actual cardinality of the variable if constrained only by the other argument. So E(b:1M, c:1) means that there is just 1 c which is the object of 1M edges relating that c to a b.  If you try doing this with RA and a volcano style optimizer, a good optimizer will be catastrophically wrong 50% of the time.  A really good optimizer will be catastrophically wrong 100% of the time because it looks slightly better to start from "bar".  A dynamic optimizer will find the one edge for E(d, "bar"), then discover that E(c, d) has a cardinality of 1M and go from the other end, E("foo", b) having a cardinality of 2, and then finish up the query from that direction.
 
-So just doing this sort of path expression is challenging. Arguably a smart bear with a functional language implementation should recognize that this path expression is going to require dynamic optimization (because self-joins...) and a functional language holds out the possibility of writing the functional code to do the cheapest end first. So it sees: 
+So just doing this sort of path expression is challenging. Arguably a smart bear with a functional language implementation should recognize that this path expression is going to require dynamic optimization (because self-joins...) and a functional language holds out the possibility of writing the functional code to do the cheapest end first. So it sees:
 
 E("foo", b), E(b, c), E(c, d), E(d, "bar")?
 
@@ -42,11 +42,11 @@ Anyway, in that sort of world, the user only writes leaf functions and the syste
 
 Net of all that is that I think that you have to solve the non-recursive case first. And then that recursion has to happen in a different domain. Ie. when you say:
 
-From what I can tell, recursion affects the rewrite process significantly. When I’m trying to invert the ‘edge’ function, I need to invert every expression in the body of ‘edge’, and if those expressions are function calls, I should inline those functions. But I can’t inline a calls to ‘edge’ because it’s on the stack of functions currently being expanded.
+From what I can tell, recursion affects the rewrite process significantly. When I'm trying to invert the 'edge' function, I need to invert every expression in the body of 'edge', and if those expressions are function calls, I should inline those functions. But I can't inline a calls to 'edge' because it's on the stack of functions currently being expanded.
 
 The problem is that you're mixing domains. The recursive solution for macro expansion is tail-recursion + continuation-passing style, but that should be applied to "cheapest_first" which is the thing which is actually recursing. Edge should never be on the stack.
 
-Infinite is definitely not a red herring. In graph search, sure, you’re searching over a fixed set of known facts. But in, say, optimization you are searching over a huge space of generated data.
+Infinite is definitely not a red herring. In graph search, sure, you're searching over a fixed set of known facts. But in, say, optimization you are searching over a huge space of generated data.
 One reading of this is "Don't use Datalog to solve an optimization problem." :-)
 
 -Scott
@@ -54,13 +54,13 @@ One reading of this is "Don't use Datalog to solve an optimization problem." :-)
 On Sun, Dec 14, 2025 at 2:26 PM Julian Hyde <julian@hydromatic.net> wrote:
 The goal is to make a language that can express a wide variety of problems: SQL stuff, graph search, logic problems, mathematical optimization.
 
-Some of these problems look like shortest path in a graph, but a lot don’t. Computing k-means or page-rank requires iteration but is not a shortest-path problem. Once we have converted the problem into a common language, the optimizer can recognize the pattern and target a solver that can handle that particular problem efficiently.
+Some of these problems look like shortest path in a graph, but a lot don't. Computing k-means or page-rank requires iteration but is not a shortest-path problem. Once we have converted the problem into a common language, the optimizer can recognize the pattern and target a solver that can handle that particular problem efficiently.
 
-Your argument seems to be “anyone who has a graph problem is already happy with Datalog, so why bother adding graph capabilities to Morel?”, and if so, I don’t agree.
+Your argument seems to be "anyone who has a graph problem is already happy with Datalog, so why bother adding graph capabilities to Morel?", and if so, I don't agree.
 
-Infinite is definitely not a red herring. In graph search, sure, you’re searching over a fixed set of known facts. But in, say, optimization you are searching over a huge space of generated data.
+Infinite is definitely not a red herring. In graph search, sure, you're searching over a fixed set of known facts. But in, say, optimization you are searching over a huge space of generated data.
 
-From what I can tell, recursion affects the rewrite process significantly. When I’m trying to invert the ‘edge’ function, I need to invert every expression in the body of ‘edge’, and if those expressions are function calls, I should inline those functions. But I can’t inline a calls to ‘edge’ because it’s on the stack of functions currently being expanded. This ‘active list’ also matters when I am trying to expand ’not’. Datalog disallows recursive negation, for some very good reasons, and those reasons pertain to what I’m doing also.
+From what I can tell, recursion affects the rewrite process significantly. When I'm trying to invert the 'edge' function, I need to invert every expression in the body of 'edge', and if those expressions are function calls, I should inline those functions. But I can't inline a calls to 'edge' because it's on the stack of functions currently being expanded. This 'active list' also matters when I am trying to expand 'not'. Datalog disallows recursive negation, for some very good reasons, and those reasons pertain to what I'm doing also.
 
 On Dec 14, 2025, at 1:47 PM, Scott Meyer <scott.ex.nihilo@gmail.com> wrote:
 
@@ -76,24 +76,24 @@ Recursion in general seems to have two stumbling blocks:
 
 By way of explanation for not jumping into the code...
 
--Scott 
+-Scott
 
 
 On Sun, Dec 14, 2025, 12:21 Julian Hyde <julian@hydromatic.net> wrote:
-Should I take that as a “no”? (I asked people to get their hands on the code… and you want to do more reading.)
+Should I take that as a "no"? (I asked people to get their hands on the code… and you want to do more reading.)
 
-The reason that nested loops over unconstrained variables don’t work is that those variables are infinite. Even “from x, y, z where x > 0 andalso x < y andalso y < z andalso z < 10” is not tractable if you execute it naively. Datalog solves this problem by requiring that variables are grounded (connected to known facts). Morel needs to achieve the same effect, but in the dual space of sets rather than predicates.
+The reason that nested loops over unconstrained variables don't work is that those variables are infinite. Even "from x, y, z where x > 0 andalso x < y andalso y < z andalso z < 10" is not tractable if you execute it naively. Datalog solves this problem by requiring that variables are grounded (connected to known facts). Morel needs to achieve the same effect, but in the dual space of sets rather than predicates.
 
-There isn’t much in academia. Claude suggested “predicate materialization”, “mode analysis in logic programming”, “program inversion”, “bidirectional programming”. These fields exist, and I’ve added some reference below, but I don’t find anything that is immediately applicable. Refs:
+There isn't much in academia. Claude suggested "predicate materialization", "mode analysis in logic programming", "program inversion", "bidirectional programming". These fields exist, and I've added some reference below, but I don't find anything that is immediately applicable. Refs:
 The universal resolving algorithm and its correctness: inverse computation in a functional language
-Functional Programming with Datalog
-From Logic to Functional Logic Programs
+Functional Programming with Datalo
+From Logic to Functional Logic Program
 
 Recent languages that attempt to integrate Datalog with query are Flix and Datafun:
 Arntzenius, Krishnaswami. Datafun: a functional Datalog (ICFP 2016, pdf)
 Madsen, Yee, Lhoták. From Datalog to FLIX: A Declarative Language for Fixed Points on Lattices (PLDI 2016, pdf)
 
-David Pratten’s work in constraint programming [ https://arxiv.org/abs/2309.11178, https://arxiv.org/abs/2509.06439  ] provides a theoretical basis for extending relational algebra into constraint programming and solution sets, but he doesn’t have algorithms to power the compiler/query optimizer. 
+David Pratten's work in constraint programming [ https://arxiv.org/abs/2309.11178, https://arxiv.org/abs/2509.06439  ] provides a theoretical basis for extending relational algebra into constraint programming and solution sets, but he doesn't have algorithms to power the compiler/query optimizer.
 
 Julian
 
@@ -108,11 +108,11 @@ Secondly, what problem is being solved? Clearly, the trivial nested loop over al
 
 
 On Fri, Dec 12, 2025, 16:40 Julian Hyde <julian@hydromatic.net> wrote:
-Would any of you guys be interested in getting your hands dirty working on Morel? I claim that it’s not "just another query language” and the finer details of the language and its toolchain actually make a huge difference to where it can be applied.
+Would any of you guys be interested in getting your hands dirty working on Morel? I claim that it's not "just another query language" and the finer details of the language and its toolchain actually make a huge difference to where it can be applied.
 
-Over the last week or so I have resumed work on unifying Morel with Datalog. Datalog expresses relations as predicates (boolean expressions) whereas algebraic languages like SQL and SML compute the results by applying set operations. One of Morel’s innovations is unconstrained variables, which allow you to write programs in the Datalog way.
+Over the last week or so I have resumed work on unifying Morel with Datalog. Datalog expresses relations as predicates (boolean expressions) whereas algebraic languages like SQL and SML compute the results by applying set operations. One of Morel's innovations is unconstrained variables, which allow you to write programs in the Datalog way.
 
-For example, Datalog
+For example, Datalo
 
   edge(1, 2).
   edge(2, 3).
@@ -124,32 +124,32 @@ becomes Morel
 
   fun edge(x, y) =
     (x, y) = (1, 2) orelse
-    (x, y) = (2, 3);
+    (x, y) = (2, 3)
   fun path(x, z) =
     edge(x, z) orelse
-    (exists y where edge(x, z) andalso path(z, y));
-  from p where path p;
+    (exists y where edge(x, z) andalso path(z, y))
+  from p where path p
 
-In https://github.com/hydromatic/morel/issues/323 (fixed but not yet merged) I can parse Datalog and generate that program. It is valid, but we can’t yet execute it. We need to invert the expression “path(x, z)”. Inversion means taking a predicate like “pred(a, b, c)” and converting it into generators like “generate_bc(as)” which, given a finite set of values for a, returns a set of (b, c) pairs where “pred(a, b, c)” is true.
+In https://github.com/hydromatic/morel/issues/323 (fixed but not yet merged) I can parse Datalog and generate that program. It is valid, but we can't yet execute it. We need to invert the expression "path(x, z)". Inversion means taking a predicate like "pred(a, b, c)" and converting it into generators like "generate_bc(as)" which, given a finite set of values for a, returns a set of (b, c) pairs where "pred(a, b, c)" is true.
 
-If “pred(a, b)” is “b > a andalso b < a + 5” then “generate_a” would be “[a + 1, a + 2, a + 3]”.
+If "pred(a, b)" is "b > a andalso b < a + 5" then "generate_a" would be "[a + 1, a + 2, a + 3]".
 
 To be executable, the above program needs to be transformed to
 
   fun generate_edges () =
-    [(1, 2), (2, 3)];
+    [(1, 2), (2, 3)
   fun generate_paths () =
     iterate generate_edges ()
         fn (oldEdges, newEdges) =>
             from (i, j) in newEdges,
-                (j2, k) in edges
+                (j2, k) in edge
               where j = j2
-              yield (i, k);
-  from p in generate_paths();
+              yield (i, k)
+  from p in generate_paths()
 
 At that point, it is relational algebra (with fixed-point iteration), which most query engines can execute.
 
-The general problem of predicate-inversion is a research topic. For Datalog we need to solve the above example, which generates transitive closure, and a similar pattern that generates joins. I have already solved the single-variable case, e.g. “pred(a) = “a > 5 andalso a < 20”. I am confident that we can solve the other important cases by chipping away, refactoring, rinse and repeat. But a more general solution of inversion allows us to express problems of mathematical optimization, constraint programming, complex graph queries.
+The general problem of predicate-inversion is a research topic. For Datalog we need to solve the above example, which generates transitive closure, and a similar pattern that generates joins. I have already solved the single-variable case, e.g. "pred(a) = "a > 5 andalso a < 20". I am confident that we can solve the other important cases by chipping away, refactoring, rinse and repeat. But a more general solution of inversion allows us to express problems of mathematical optimization, constraint programming, complex graph queries.
 
 I started the problem in 2024 [ see https://github.com/julianhyde/morel/tree/217-inverter.0 ] and have just start on a different tack [ see https://github.com/julianhyde/morel/tree/217-inverter ].
 

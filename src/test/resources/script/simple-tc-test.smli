@@ -7,3 +7,5 @@ from p where path p;
 (*
 [(1,2),(1,3),(2,3)]
 *)
+
+(*) End simple-tc-test.smli
