@@ -39,10 +39,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -2903,25 +2905,34 @@ public abstract class Codes {
   private static final Applicable2 RELATIONAL_ITERATE =
       new BaseApplicable2<List, List, Applicable1<List, List>>(
           BuiltIn.RELATIONAL_ITERATE) {
+        @SuppressWarnings("unchecked")
         @Override
         public List apply(
             final List initialList, Applicable1<List, List> update) {
+          // Track all elements seen to handle cyclic graphs correctly.
+          // Without deduplication, cyclic graphs cause infinite loops.
+          Set<Object> seen = new HashSet<>(initialList);
           List list = initialList;
           List newList = list;
           for (; ; ) {
             List nextList = update.apply(FlatLists.of(list, newList));
-            if (nextList.isEmpty()) {
+            // Filter out elements we've already seen to get truly new elements
+            List trulyNewList = new ArrayList<>();
+            for (Object element : (List<Object>) nextList) {
+              if (!seen.contains(element)) {
+                trulyNewList.add(element);
+                seen.add(element);
+              }
+            }
+            if (trulyNewList.isEmpty()) {
               return list;
             }
-            // REVIEW:
-            // 1. should we eliminate duplicates when computing "oldList
-            //   union newList"?
-            // 2. should we subtract oldList before checking whether newList
-            //    is empty?
-            // 3. add an "iterateDistinct" variant?
             list =
-                ImmutableList.builder().addAll(list).addAll(nextList).build();
-            newList = nextList;
+                ImmutableList.builder()
+                    .addAll(list)
+                    .addAll(trulyNewList)
+                    .build();
+            newList = trulyNewList;
           }
         }
       };
