@@ -99,7 +99,7 @@ class Simplifier {
 
   Core.Exp simplify(Core.Exp exp) {
     for (Map.Entry<Core.NamedPat, Generator> entry : generators) {
-      exp = entry.getValue().simplify(entry.getKey(), exp);
+      exp = entry.getValue().simplify(typeSystem, entry.getKey(), exp);
     }
     switch (exp.op) {
       case FN:

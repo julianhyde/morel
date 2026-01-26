@@ -219,7 +219,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       // The exists constraint is satisfied by this generator
       return exp;
     }
@@ -1500,7 +1500,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       // No simplification for bounded iterate expressions
       return exp;
     }
@@ -1568,7 +1568,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       // If the expression is the original constraint (the path function call),
       // simplify it to true since the generator produces exactly the values
       // that satisfy the constraint.
@@ -2183,7 +2183,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       // Simplify "p > lower && p < upper && other" to "other"
       // (or to "true" if there are no other conjuncts).
       if (exp.isCallTo(BuiltIn.Z_ANDALSO)) {
@@ -2214,48 +2214,13 @@ class Generators {
             if (remaining.size() == 1) {
               return remaining.get(0);
             }
-            // Multiple remaining constraints - reconstruct andalso by
-            // extracting from original expression.
-            return extractNonRangeConjuncts(
-                exp, lowerConstraint, upperConstraint);
+            // Multiple remaining constraints - use core.andAlso to
+            // reconstruct.
+            return core.andAlso(typeSystem, remaining);
           }
         }
       }
       return exp;
-    }
-
-    /**
-     * Extracts from an andalso expression all conjuncts except the specified
-     * lower and upper constraints.
-     *
-     * <p>For example, given {@code a && b && c && d} and constraints b and c,
-     * returns {@code a && d}.
-     */
-    private static Core.Exp extractNonRangeConjuncts(
-        Core.Exp exp, Core.Exp lowerConstraint, Core.Exp upperConstraint) {
-      if (!exp.isCallTo(BuiltIn.Z_ANDALSO)) {
-        // Base case: single expression
-        if (exp.equals(lowerConstraint) || exp.equals(upperConstraint)) {
-          return core.boolLiteral(true);
-        }
-        return exp;
-      }
-      // Recursive case: a && b
-      final Core.Exp left =
-          extractNonRangeConjuncts(
-              exp.arg(0), lowerConstraint, upperConstraint);
-      final Core.Exp right =
-          extractNonRangeConjuncts(
-              exp.arg(1), lowerConstraint, upperConstraint);
-      // If either side became true, return the other
-      if (left.isBoolLiteral(true)) {
-        return right;
-      }
-      if (right.isBoolLiteral(true)) {
-        return left;
-      }
-      // Reconstruct using the original expression's structure
-      return ((Core.Apply) exp).withArgs(left, right);
     }
 
     /** Finds the constraint that provides the lower bound. */
@@ -2346,7 +2311,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       // Simplify "p = point" to true.
       if (exp.isCallTo(BuiltIn.OP_EQ)) {
         final Core.@Nullable Exp point = point(pat, ImmutableList.of(exp));
@@ -2377,7 +2342,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       // Simplify "String.isPrefix p strExp" to true when p is in this generator
       // Structure: APPLY(APPLY(FN_LITERAL(STRING_IS_PREFIX), p), s)
       if (exp.op != Op.APPLY) {
@@ -2418,9 +2383,9 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       for (Generator generator : generators) {
-        exp = generator.simplify(pat, exp);
+        exp = generator.simplify(typeSystem, pat, exp);
       }
       return exp;
     }
@@ -2453,7 +2418,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       return exp;
     }
   }
@@ -2488,7 +2453,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       if (exp.isCallTo(BuiltIn.OP_ELEM)
           && references(exp.arg(0), pat)
           && exp.arg(1).equals(this.collection)) {
@@ -2615,7 +2580,7 @@ class Generators {
     }
 
     @Override
-    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       return exp;
     }
   }
