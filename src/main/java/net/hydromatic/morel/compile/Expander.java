@@ -210,24 +210,16 @@ public class Expander {
           // The step is not a scan over an extent. Add it now.
           step = Replacer.substitute(typeSystem, env, substitution, step);
 
-          // For WHERE steps, simplify the condition using
-          // TransitiveClosureGenerators.
-          // This removes path predicates that are satisfied by the iterate
-          // generator. We only simplify for TransitiveClosureGenerator because
-          // other generators (such as RangeGenerator) may not properly preserve
-          // remaining conjuncts.
+          // For WHERE steps, simplify the condition using generators that
+          // can reliably simplify predicates they satisfy.
+          // This removes predicates that are satisfied by the generator.
           if (step instanceof Core.Where) {
-            final Core.Where where = (Core.Where) step;
             final AtomicReference<Core.Exp> conditionRef =
-                new AtomicReference<>(where.exp);
-            // Simplify using transitive closure generators only
+                new AtomicReference<>(((Core.Where) step).exp);
             generatorMap.forEach(
-                (p, generator) -> {
-                  if (generator
-                      instanceof Generators.TransitiveClosureGenerator) {
-                    conditionRef.set(generator.simplify(p, conditionRef.get()));
-                  }
-                });
+                (p, generator) ->
+                    conditionRef.set(
+                        generator.simplify(p, conditionRef.get())));
             fromBuilder.where(conditionRef.get());
             return;
           }
