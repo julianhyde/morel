@@ -1322,7 +1322,7 @@ class Generators {
     }
 
     final Core.Exp substituted =
-        Replacer.substituteShallow(ts, env, substitutions, body);
+        Replacer.substitute(ts, env, substitutions, body);
     return core.simplify(ts, substituted);
   }
 

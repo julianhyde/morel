@@ -51,32 +51,13 @@ public class Replacer extends EnvShuttle {
   static Core.FromStep substitute(
       TypeSystem typeSystem,
       Environment env,
-      Map<Core.NamedPat, Core.Exp> substitution,
+      Map<Core.NamedPat, ? extends Core.Exp> substitution,
       Core.FromStep step) {
     if (substitution.isEmpty()) {
       return step;
     }
     final Replacer replacer = new Replacer(typeSystem, env, substitution);
     return step.accept(replacer);
-  }
-
-  /**
-   * Substitutes expressions for named patterns in an expression.
-   *
-   * <p>Uses shallow traversal: only traverses ID, APPLY, and TUPLE nodes. Does
-   * not traverse into FN, LET, CASE, or other constructs.
-   */
-  static Core.Exp substituteShallow(
-      TypeSystem typeSystem,
-      Environment env,
-      Map<Core.NamedPat, Core.Exp> substitution,
-      Core.Exp exp) {
-    if (substitution.isEmpty()) {
-      return exp;
-    }
-    final Replacer replacer =
-        new ShallowReplacer(typeSystem, env, substitution);
-    return exp.accept(replacer);
   }
 
   @Override
@@ -88,52 +69,6 @@ public class Replacer extends EnvShuttle {
   protected Core.Exp visit(Core.Id id) {
     final Core.Exp exp = substitution.get(id.idPat);
     return exp != null ? exp : id;
-  }
-
-  // In shallow mode, don't traverse into these constructs
-
-  static class ShallowReplacer extends Replacer {
-    ShallowReplacer(
-        TypeSystem typeSystem,
-        Environment env,
-        Map<Core.NamedPat, ? extends Core.Exp> substitution) {
-      super(typeSystem, env, substitution);
-    }
-
-    @Override
-    protected Replacer push(Environment env) {
-      return new ShallowReplacer(typeSystem, env, substitution);
-    }
-
-    @Override
-    protected Core.Fn visit(Core.Fn fn) {
-      return fn;
-    }
-
-    @Override
-    protected Core.Exp visit(Core.Let let) {
-      return let;
-    }
-
-    @Override
-    protected Core.Match visit(Core.Match match) {
-      return match;
-    }
-
-    @Override
-    protected Core.Exp visit(Core.Case caseExp) {
-      return caseExp;
-    }
-
-    @Override
-    protected Core.Exp visit(Core.From from) {
-      return from;
-    }
-
-    @Override
-    protected Core.Exp visit(Core.Local local) {
-      return local;
-    }
   }
 }
 
