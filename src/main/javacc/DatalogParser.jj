@@ -299,8 +299,8 @@ Term term() :
 {
   t = <IDENTIFIER>
   {
-    // Variables start with lowercase, constants with uppercase (but we treat
-    // all identifiers as variables)
+    // Souffle convention: All identifiers are variables
+    // (both foo and Foo are variables, "foo" is a string constant)
     return new Variable(t.image);
   }
 | t = <INTEGER_LITERAL>
@@ -317,8 +317,8 @@ Term term() :
         .replace("\\t", "\t")
         .replace("\\\\", "\\")
         .replace("\\\"", "\"");
-    // String literals are treated as symbols by default in Datalog
-    return new Constant(strValue, "symbol");
+    // String literals have type "string" (Souffle doesn't have separate symbol type)
+    return new Constant(strValue, "string");
   }
 }
 
