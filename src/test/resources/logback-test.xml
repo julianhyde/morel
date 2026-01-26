@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Reduce noise from libraries -->
+  <logger name="org.apache.calcite" level="WARN"/>
+  <logger name="org.codehaus" level="WARN"/>
+
+  <!-- Morel logging - set to DEBUG for more detail -->
+  <logger name="net.hydromatic.morel" level="INFO"/>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+</configuration>

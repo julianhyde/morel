@@ -45,6 +45,18 @@ public class Replacer extends EnvShuttle {
     return exp.accept(replacer);
   }
 
+  static Core.FromStep substitute(
+      TypeSystem typeSystem,
+      Environment env,
+      Map<Core.Id, Core.Exp> substitution,
+      Core.FromStep step) {
+    if (substitution.isEmpty()) {
+      return step;
+    }
+    final Replacer replacer = new Replacer(typeSystem, env, substitution);
+    return step.accept(replacer);
+  }
+
   @Override
   protected Replacer push(Environment env) {
     return new Replacer(typeSystem, env, substitution);

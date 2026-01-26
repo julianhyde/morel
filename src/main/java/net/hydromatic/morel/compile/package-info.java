@@ -20,10 +20,30 @@
 /**
  * Validates programs (represented as {@link net.hydromatic.morel.ast.AstNode}),
  * deduces their type, and compiles them into code that can be evaluated.
+ *
+ * <h2>Predicate Inversion and Recursive Query Processing</h2>
+ *
+ * <p>This package implements predicate inversion for Morel queries, enabling
+ * queries like {@code from p where path(p)} to generate tuples satisfying
+ * transitive closure predicates without explicit iteration.
+ *
+ * <p><b>Key Classes:</b>
+ *
+ * <ul>
+ *   <li>{@link net.hydromatic.morel.compile.PredicateInverter} - Main inversion
+ *       algorithm that transforms predicates into generators.
+ *   <li>{@link net.hydromatic.morel.compile.FunctionRegistry} - Registry for
+ *       function invertibility analysis results, avoiding the "mixing domains"
+ *       problem by caching function analysis at compile time.
+ *   <li>{@link net.hydromatic.morel.compile.PatternMatcher} - Matches patterns
+ *       between function formal parameters and call arguments, handling
+ *       scalar-to-tuple and tuple-to-scalar transformations.
+ *   <li>{@link net.hydromatic.morel.compile.VarEnvironment} - Immutable
+ *       environment tracking variable states (input, output, auxiliary, join).
+ * </ul>
+ *
+ * <p>The predicate inversion implementation is based on the Universal Resolving
+ * Algorithm by Abramov & Glück (2002).
  */
-@NullMarked
 package net.hydromatic.morel.compile;
-
-import org.jspecify.annotations.NullMarked;
-
 // End package-info.java

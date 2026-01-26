@@ -25,18 +25,20 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.type.TypeSystem.canAssign;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
 import static net.hydromatic.morel.util.Static.allMatch;
 import static net.hydromatic.morel.util.Static.last;
+import static net.hydromatic.morel.util.Static.transform;
 import static org.apache.calcite.util.Util.first;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.ObjIntConsumer;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -58,6 +60,7 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -143,6 +146,25 @@ public class Core {
             }
           };
       return unparse(w);
+    }
+
+    /** Returns all named patterns in this pattern. */
+    public List<NamedPat> expand() {
+      final ImmutableList.Builder<NamedPat> list = ImmutableList.builder();
+      accept(
+          new Visitor() {
+            @Override
+            protected void visit(Core.IdPat idPat) {
+              list.add(idPat);
+            }
+
+            @Override
+            protected void visit(Core.AsPat asPat) {
+              list.add(asPat);
+              super.visit(asPat);
+            }
+          });
+      return list.build();
     }
   }
 
@@ -244,6 +266,11 @@ public class Core {
     @Override
     public void accept(Visitor visitor) {
       visitor.visit(this);
+    }
+
+    @Override
+    public List<NamedPat> expand() {
+      return ImmutableList.of(this);
     }
 
     @Override
@@ -620,11 +647,25 @@ public class Core {
       visitor.visit(this);
     }
 
-    public Pat copy(
-        TypeSystem typeSystem, Set<String> argNames, List<Pat> args) {
-      return args.equals(this.args)
-          ? this
-          : core.recordPat(typeSystem, argNames, args);
+    public Pat copy(TypeSystem typeSystem, RecordType type, List<Pat> args) {
+      if (args.equals(this.args)) {
+        return this;
+      }
+      if (!transform(args, Core.Pat::type).equals(type.argTypes())) {
+        // The field types do not match. Create a new record type with the same
+        // field names, new field types.
+        final ImmutableSortedMap.Builder<String, Type> nameTypes =
+            ImmutableSortedMap.orderedBy(RecordType.ORDERING);
+        forEach(
+            type.argNames(),
+            args,
+            (name, pat) -> nameTypes.put(name, pat.type));
+
+        // Cast is safe. If the previous type was a record type (non-empty,
+        // field names are not consecutive integers) the new one will be also.
+        type = (RecordType) typeSystem.recordType(nameTypes.build());
+      }
+      return core.recordPat(type, args);
     }
   }
 
@@ -664,9 +705,17 @@ public class Core {
       return false;
     }
 
+    /**
+     * Returns the {@link BuiltIn} that this is a call to, or {@link
+     * BuiltIn#FALSE} if not a call.
+     */
+    public BuiltIn builtIn() {
+      return BuiltIn.FALSE;
+    }
+
     /** Returns whether this expression is a call to the given built-in. */
     public boolean isCallTo(BuiltIn builtIn) {
-      return false;
+      return builtIn() == builtIn;
     }
 
     /**
@@ -675,6 +724,22 @@ public class Core {
      */
     public boolean isCallTo(BuiltIn.Constructor constructor) {
       return false;
+    }
+
+    /**
+     * Returns whether this expression iterates over the values of a type. Some
+     * extents are infinite.
+     */
+    public boolean isExtent() {
+      return isCallTo(BuiltIn.Z_EXTENT);
+    }
+
+    /** Returns the extent, or throws if not {@link #isExtent()}. */
+    public RangeExtent getRangeExtent() {
+      checkArgument(isExtent());
+      final Apply apply = (Apply) this;
+      final Core.Literal argLiteral = (Core.Literal) apply.arg;
+      return argLiteral.unwrap(RangeExtent.class);
     }
   }
 
@@ -2164,6 +2229,36 @@ public class Core {
           : core.apply(pos, type, fn, arg);
     }
 
+    /**
+     * Creates an Apply with the same function and a list of new arguments. If
+     * the arguments are the same, returns this Apply.
+     */
+    public Apply withArgs(List<Exp> args) {
+      if (args.size() == 1) {
+        return copy(fn, args.get(0));
+      }
+      return withTupleArgs(args);
+    }
+
+    /**
+     * Creates an Apply with the same function and new arguments. If the
+     * arguments are the same, returns this Apply.
+     */
+    public Apply withArgs(Exp arg0, Exp... args) {
+      if (args.length == 0) {
+        return copy(fn, arg0);
+      }
+      return withArgs(Lists.asList(arg0, args));
+    }
+
+    private Apply withTupleArgs(List<Exp> args) {
+      if (args.equals(args())) {
+        return this;
+      }
+      final Tuple newArg = core.tuple((RecordLikeType) this.arg.type, args);
+      return core.apply(pos, type, fn, newArg);
+    }
+
     @Override
     public boolean isConstant() {
       // A list of constants is constant
@@ -2171,9 +2266,11 @@ public class Core {
     }
 
     @Override
-    public boolean isCallTo(BuiltIn builtIn) {
-      return fn.op == Op.FN_LITERAL
-          && ((Literal) fn).unwrap(BuiltIn.class) == builtIn;
+    public BuiltIn builtIn() {
+      if (fn.op == Op.FN_LITERAL) {
+        return ((Literal) fn).unwrap(BuiltIn.class);
+      }
+      return super.builtIn();
     }
 
     @Override

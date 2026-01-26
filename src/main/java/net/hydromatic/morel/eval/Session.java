@@ -30,6 +30,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.compile.FunctionRegistry;
 import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.MorelException;
@@ -74,6 +75,13 @@ public class Session {
    * in this session do not overlap.
    */
   public final NameGenerator nameGenerator = new NameGenerator();
+
+  /**
+   * Function registry. Stores function invertibility analysis results across
+   * statements, enabling predicate inversion for functions defined in earlier
+   * REPL statements.
+   */
+  public final FunctionRegistry functionRegistry = new FunctionRegistry();
 
   /** Implementation of "use". */
   private Shell shell = Shells.INSTANCE;
@@ -174,6 +182,8 @@ public class Session {
           buf.append(e.getMessage());
         } else {
           buf.append(e);
+          // DEBUG: print full stack trace
+          e.printStackTrace();
         }
       }
     },
