@@ -890,8 +890,11 @@ public class Extents {
     core.flattenAnds(extentFilters.leftList(), extents::add);
     final Pair<Core.Exp, List<Core.Exp>> pair =
         core.intersectExtents(typeSystem, extents);
-    return Pair.of(
-        pair.left, core.andAlso(typeSystem, extentFilters.rightList()));
+    // Combine remaining expressions from intersectExtents (constraints that
+    // couldn't be represented as extents) with the existing filter expressions
+    final List<Core.Exp> allFilters = new ArrayList<>(pair.right);
+    allFilters.addAll(extentFilters.rightList());
+    return Pair.of(pair.left, core.andAlso(typeSystem, allFilters));
   }
 
   /**
