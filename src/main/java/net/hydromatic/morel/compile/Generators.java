@@ -330,8 +330,9 @@ class Generators {
                   match.pat,
                   caseExp.exp,
                   match.exp);
+          // Decompose andalso into individual conjuncts for range detection.
           final List<Core.Exp> inlinedConstraints =
-              ImmutableList.of(inlinedBody);
+              core.decomposeAnd(inlinedBody);
           if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
             return true;
           }
@@ -352,7 +353,9 @@ class Generators {
         final Core.Fn fn = (Core.Fn) apply.fn;
         final Core.Exp inlinedBody =
             inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
-        final List<Core.Exp> inlinedConstraints = ImmutableList.of(inlinedBody);
+        // Decompose andalso into individual conjuncts for range detection.
+        final List<Core.Exp> inlinedConstraints =
+            core.decomposeAnd(inlinedBody);
         if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
           return true;
         }
@@ -423,7 +426,8 @@ class Generators {
       // then recursively try to find a generator for the substituted body.
       final Core.Exp inlinedBody =
           inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
-      final List<Core.Exp> inlinedConstraints = ImmutableList.of(inlinedBody);
+      // Decompose andalso into individual conjuncts for range detection.
+      final List<Core.Exp> inlinedConstraints = core.decomposeAnd(inlinedBody);
       if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
         return true;
       }
