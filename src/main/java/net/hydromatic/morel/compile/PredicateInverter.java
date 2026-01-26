@@ -241,18 +241,11 @@ public class PredicateInverter {
         // handling
       }
 
-      // Check for user-defined function literals (already compiled)
-      if (apply.fn.op == Op.FN_LITERAL) {
-        Core.Literal literal = (Core.Literal) apply.fn;
-        if (literal.value instanceof Core.Fn) {
-          Core.Fn fn = (Core.Fn) literal.value;
-
-          // Substitute the function argument into the body
-          Core.Exp substitutedBody = substituteArg(fn.idPat, apply.arg, fn.exp);
-
-          // Try to invert the substituted body
-          return invert(substitutedBody, goalPats, active);
-        }
+      // Check for function literals (Op.FN_LITERAL) or inlined function
+      // definitions (Op.FN). Both cases substitute the arg into the body.
+      Result fnResult = tryInvertFnApplication(apply, goalPats, active);
+      if (fnResult != null) {
+        return fnResult;
       }
 
       // Check for user-defined function calls (ID references)
@@ -356,6 +349,44 @@ public class PredicateInverter {
     }
 
     return result(generatorFor(goalPats), ImmutableList.of());
+  }
+
+  /**
+   * Tries to invert a function application where the function is either an
+   * {@code Op.FN_LITERAL} (compiled function literal) or {@code Op.FN} (inlined
+   * function definition from Inliner).
+   *
+   * <p>Both cases work the same: substitute the argument into the function body
+   * and recursively invert.
+   *
+   * @param apply The function application
+   * @param goalPats Goal patterns to generate
+   * @param active Functions currently being expanded (recursion guard)
+   * @return Inversion result, or null if the function is not FN/FN_LITERAL
+   */
+  private @Nullable Result tryInvertFnApplication(
+      Core.Apply apply, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+    // Handle Op.FN_LITERAL: compiled function literal, value is Core.Fn
+    if (apply.fn.op == Op.FN_LITERAL) {
+      Core.Literal literal = (Core.Literal) apply.fn;
+      if (literal.value instanceof Core.Fn) {
+        Core.Fn fn = (Core.Fn) literal.value;
+        Core.Exp substitutedBody = substituteArg(fn.idPat, apply.arg, fn.exp);
+        return invert(substitutedBody, goalPats, active);
+      }
+    }
+
+    // Handle Op.FN: inlined function definition (from Inliner replacing ID
+    // with the actual Fn). Inliner processes "path p" and may replace
+    // Id(path) with the actual Fn definition, resulting in
+    // Apply(fn=Fn(...), arg=p).
+    if (apply.fn.op == Op.FN) {
+      Core.Fn fn = (Core.Fn) apply.fn;
+      Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
+      return invert(substitutedBody, goalPats, active);
+    }
+
+    return null;
   }
 
   /**
