@@ -71,6 +71,10 @@ class Generators {
       return true;
     }
 
+    if (maybeStringPrefix(cache, pat, ordered, constraints)) {
+      return true;
+    }
+
     if (maybeExists(cache, pat, constraints)) {
       return true;
     }
@@ -109,13 +113,43 @@ class Generators {
           //noinspection SuspiciousListRemoveInLoop
           constraints2.remove(j);
 
+          // Collect inner scan patterns - these are available for generators
+          // within the exists scope
+          final List<Core.Scan> innerScans = new ArrayList<>();
+          for (Core.FromStep step : from.steps) {
+            if (step.op == Op.SCAN) {
+              innerScans.add((Core.Scan) step);
+            }
+          }
+
           for (Core.FromStep step : from.steps) {
             switch (step.op) {
               case SCAN:
                 break;
               case WHERE:
                 constraints2.add(((Core.Where) step).exp);
+                // First try to create a generator without inner dependencies
                 if (maybeGenerator(cache, pat, false, constraints2)) {
+                  // Check if the created generator depends on inner scans
+                  final Generator gen =
+                      cache.bestGenerator((Core.NamedPat) pat);
+                  if (gen != null && !gen.freePats.isEmpty()) {
+                    // Check if any freePat is from inner scans
+                    boolean dependsOnInnerScan = false;
+                    for (Core.NamedPat freePat : gen.freePats) {
+                      for (Core.Scan innerScan : innerScans) {
+                        if (innerScan.pat.expand().contains(freePat)) {
+                          dependsOnInnerScan = true;
+                          break;
+                        }
+                      }
+                    }
+                    if (dependsOnInnerScan) {
+                      // Replace the generator with one that includes inner
+                      // scans
+                      createJoinedGenerator(cache, pat, gen, innerScans);
+                    }
+                  }
                   return true;
                 }
                 break;
@@ -127,6 +161,68 @@ class Generators {
       }
     }
     return false;
+  }
+
+  /**
+   * Creates a generator that joins inner scans with a dependent generator.
+   *
+   * <p>For example, if we have:
+   *
+   * <pre>{@code
+   * from p where exists (from s in list where String.isPrefix p s)
+   * }</pre>
+   *
+   * <p>And the generator for {@code p} is {@code List.tabulate(String.size s +
+   * 1, ...)} which depends on {@code s}, this method creates:
+   *
+   * <pre>{@code
+   * from s in list, p in List.tabulate(String.size s + 1, ...)
+   * }</pre>
+   */
+  private static void createJoinedGenerator(
+      Cache cache,
+      Core.Pat pat,
+      Generator dependentGen,
+      List<Core.Scan> innerScans) {
+    final TypeSystem typeSystem = cache.typeSystem;
+    final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+
+    // Add inner scans first
+    for (Core.Scan scan : innerScans) {
+      fromBuilder.scan(scan.pat, scan.exp);
+    }
+
+    // Add the dependent generator as a join
+    fromBuilder.scan(dependentGen.pat, dependentGen.exp);
+
+    // Yield the pattern we're generating for
+    fromBuilder.yield_(core.id((Core.NamedPat) pat));
+    fromBuilder.distinct();
+
+    final Core.From joinedFrom = fromBuilder.build();
+    final Set<Core.NamedPat> freePats =
+        SuchThatShuttle.freePats(typeSystem, joinedFrom);
+
+    // Remove the old generator and add the new joined one
+    cache.remove((Core.NamedPat) pat);
+    cache.add(
+        new ExistsJoinGenerator((Core.NamedPat) pat, joinedFrom, freePats));
+  }
+
+  /** Generator created from an exists pattern that joins inner scans. */
+  static class ExistsJoinGenerator extends Generator {
+    ExistsJoinGenerator(
+        Core.NamedPat pat,
+        Core.Exp exp,
+        Iterable<? extends Core.NamedPat> freePats) {
+      super(exp, freePats, pat, Cardinality.FINITE);
+    }
+
+    @Override
+    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+      // The exists constraint is satisfied by this generator
+      return exp;
+    }
   }
 
   /**
@@ -1689,6 +1785,96 @@ class Generators {
   }
 
   /**
+   * Checks for {@code String.isPrefix p s} pattern where p is the goal pattern
+   * and s is a string expression. If found, generates all prefixes of s.
+   *
+   * <p>For example, {@code from p where String.isPrefix p "abcd"} generates
+   * {@code List.tabulate(String.size "abcd" + 1, fn i =>
+   * String.substring("abcd", 0, i))}.
+   *
+   * <p>String.isPrefix is curried, so the structure is: {@code
+   * APPLY(APPLY(FN_LITERAL(STRING_IS_PREFIX), p), s)}
+   */
+  static boolean maybeStringPrefix(
+      Cache cache, Core.Pat pat, boolean ordered, List<Core.Exp> constraints) {
+    if (pat.type != PrimitiveType.STRING) {
+      return false;
+    }
+    for (Core.Exp constraint : constraints) {
+      // Check for curried call: APPLY(APPLY(FN_LITERAL(STRING_IS_PREFIX), p),
+      // s)
+      if (constraint.op != Op.APPLY) {
+        continue;
+      }
+      final Core.Apply outerApply = (Core.Apply) constraint;
+      if (outerApply.fn.op != Op.APPLY) {
+        continue;
+      }
+      final Core.Apply innerApply = (Core.Apply) outerApply.fn;
+      if (!innerApply.isCallTo(BuiltIn.STRING_IS_PREFIX)) {
+        continue;
+      }
+      // innerApply.arg is p (the prefix pattern)
+      // outerApply.arg is s (the string to check prefixes of)
+      if (references(innerApply.arg, pat)) {
+        generateStringPrefixes(cache, pat, ordered, outerApply.arg);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Creates an expression that generates all prefixes of a string.
+   *
+   * <p>Generates: {@code List.tabulate(String.size s + 1, fn i =>
+   * String.substring(s, 0, i))}
+   *
+   * @param strExp The string expression to generate prefixes of
+   */
+  static Generator generateStringPrefixes(
+      Cache cache, Core.Pat pat, boolean ordered, Core.Exp strExp) {
+    final TypeSystem typeSystem = cache.typeSystem;
+
+    // Build: String.size s + 1
+    final Core.Exp sizeExp = core.call(typeSystem, BuiltIn.STRING_SIZE, strExp);
+    final Core.Exp countExp =
+        core.call(
+            typeSystem,
+            BuiltIn.Z_PLUS_INT,
+            sizeExp,
+            core.intLiteral(BigDecimal.ONE));
+
+    // Build: fn i => String.substring(s, 0, i)
+    final Core.IdPat iPat = core.idPat(PrimitiveType.INT, "i", 0);
+    final Core.Exp substringExp =
+        core.call(
+            typeSystem,
+            BuiltIn.STRING_SUBSTRING,
+            core.tuple(
+                typeSystem,
+                strExp,
+                core.intLiteral(BigDecimal.ZERO),
+                core.id(iPat)));
+    final Core.Fn fn =
+        core.fn(
+            typeSystem.fnType(PrimitiveType.INT, PrimitiveType.STRING),
+            iPat,
+            substringExp);
+
+    // Build: List.tabulate(count, fn) or Bag.tabulate(count, fn)
+    final BuiltIn tabulate =
+        ordered ? BuiltIn.LIST_TABULATE : BuiltIn.BAG_TABULATE;
+    final Core.Apply exp =
+        core.call(
+            typeSystem, tabulate, PrimitiveType.STRING, Pos.ZERO, countExp, fn);
+
+    final Set<Core.NamedPat> freePats =
+        SuchThatShuttle.freePats(typeSystem, exp);
+    return cache.add(new StringPrefixGenerator(pat, exp, freePats, strExp));
+  }
+
+  /**
    * Creates an expression that generates a range of integer values.
    *
    * <p>For example, {@code generateRange(3, true, 8, false)} generates a range
@@ -2045,8 +2231,6 @@ class Generators {
      * <p>For example, given {@code a && b && c && d} and constraints b and c,
      * returns {@code a && d}.
      */
-    // TODO: Refactor to use 'decomposeAnd' rather than recursion
-    // TODO: Refactor to use 'Core.Exp.isBoolLiteral'
     private static Core.Exp extractNonRangeConjuncts(
         Core.Exp exp, Core.Exp lowerConstraint, Core.Exp upperConstraint) {
       if (!exp.isCallTo(BuiltIn.Z_ANDALSO)) {
@@ -2064,12 +2248,10 @@ class Generators {
           extractNonRangeConjuncts(
               exp.arg(1), lowerConstraint, upperConstraint);
       // If either side became true, return the other
-      if (left.op == Op.BOOL_LITERAL
-          && ((Core.Literal) left).unwrap(Boolean.class)) {
+      if (left.isBoolLiteral(true)) {
         return right;
       }
-      if (right.op == Op.BOOL_LITERAL
-          && ((Core.Literal) right).unwrap(Boolean.class)) {
+      if (right.isBoolLiteral(true)) {
         return left;
       }
       // Reconstruct using the original expression's structure
@@ -2175,6 +2357,43 @@ class Generators {
           if (point.isConstant() && this.point.isConstant()) {
             return core.boolLiteral(false);
           }
+        }
+      }
+      return exp;
+    }
+  }
+
+  /** Generator that generates all prefixes of a string expression. */
+  static class StringPrefixGenerator extends Generator {
+    private final Core.Exp strExp;
+
+    StringPrefixGenerator(
+        Core.Pat pat,
+        Core.Exp exp,
+        Iterable<? extends Core.NamedPat> freePats,
+        Core.Exp strExp) {
+      super(exp, freePats, pat, Cardinality.FINITE);
+      this.strExp = strExp;
+    }
+
+    @Override
+    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+      // Simplify "String.isPrefix p strExp" to true when p is in this generator
+      // Structure: APPLY(APPLY(FN_LITERAL(STRING_IS_PREFIX), p), s)
+      if (exp.op != Op.APPLY) {
+        return exp;
+      }
+      final Core.Apply outerApply = (Core.Apply) exp;
+      if (outerApply.fn.op != Op.APPLY) {
+        return exp;
+      }
+      final Core.Apply innerApply = (Core.Apply) outerApply.fn;
+      if (!innerApply.isCallTo(BuiltIn.STRING_IS_PREFIX)) {
+        return exp;
+      }
+      if (references(innerApply.arg, pat)) {
+        if (outerApply.arg.equals(this.strExp)) {
+          return core.boolLiteral(true);
         }
       }
       return exp;
@@ -2472,6 +2691,11 @@ class Generators {
         generators.put(namedPat, generator);
       }
       return generator;
+    }
+
+    /** Removes all generators for a given pattern. */
+    public void remove(Core.NamedPat namedPat) {
+      generators.removeAll(namedPat);
     }
   }
 
