@@ -172,7 +172,8 @@ class Generators {
                   cache.env,
                   constraint,
                   goalPats,
-                  generators);
+                  generators,
+                  cache.functionRegistry);
 
           // Check if inversion succeeded with a finite generator
           if (result.generator.cardinality != Generator.Cardinality.INFINITE) {
@@ -958,12 +959,21 @@ class Generators {
   static class Cache {
     final TypeSystem typeSystem;
     final Environment env;
+    final FunctionRegistry functionRegistry;
     final Multimap<Core.NamedPat, Generator> generators =
         MultimapBuilder.hashKeys().arrayListValues().build();
 
     Cache(TypeSystem typeSystem, Environment env) {
+      this(typeSystem, env, new FunctionRegistry());
+    }
+
+    Cache(
+        TypeSystem typeSystem,
+        Environment env,
+        FunctionRegistry functionRegistry) {
       this.typeSystem = requireNonNull(typeSystem);
       this.env = requireNonNull(env);
+      this.functionRegistry = requireNonNull(functionRegistry);
     }
 
     @Nullable

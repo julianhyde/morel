@@ -184,6 +184,13 @@ public abstract class Compiles {
       }
     }
 
+    // Analyze function definitions for invertibility
+    final FunctionRegistry functionRegistry = new FunctionRegistry();
+    if (coreDecl0.op == Op.REC_VAL_DECL) {
+      final FunctionAnalyzer analyzer = new FunctionAnalyzer(typeSystem);
+      analyzer.analyzeDecl(coreDecl0, functionRegistry);
+    }
+
     // Ensures that once we discover that there are no unbounded variables,
     // we stop looking; makes things a bit more efficient.
     boolean mayContainUnbounded = true;
@@ -224,7 +231,9 @@ public abstract class Compiles {
         if (mayContainUnbounded && coreDecl.op != Op.REC_VAL_DECL) {
           if (SuchThatShuttle.containsUnbounded(coreDecl)) {
             coreDecl =
-                coreDecl.accept(new SuchThatShuttle(typeSystem, enrichedEnv));
+                coreDecl.accept(
+                    new SuchThatShuttle(
+                        typeSystem, enrichedEnv, functionRegistry));
           } else {
             mayContainUnbounded = false;
           }
@@ -328,12 +337,21 @@ public abstract class Compiles {
       }
     }
 
+    // Analyze function definitions for invertibility
+    final FunctionRegistry functionRegistry = new FunctionRegistry();
+    if (coreDecl0.op == Op.REC_VAL_DECL) {
+      final FunctionAnalyzer analyzer = new FunctionAnalyzer(typeSystem);
+      analyzer.analyzeDecl(coreDecl0, functionRegistry);
+    }
+
     // Run SuchThat and Extents passes
     for (int i = 0; i < inlinePassCount; i++) {
       final Core.Decl coreDecl2 = coreDecl;
       if (mayContainUnbounded) {
         if (SuchThatShuttle.containsUnbounded(coreDecl)) {
-          coreDecl = coreDecl.accept(new SuchThatShuttle(typeSystem, env));
+          coreDecl =
+              coreDecl.accept(
+                  new SuchThatShuttle(typeSystem, env, functionRegistry));
         } else {
           mayContainUnbounded = false;
         }
