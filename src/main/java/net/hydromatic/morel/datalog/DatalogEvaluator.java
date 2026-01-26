@@ -30,6 +30,10 @@ import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.Tracers;
+import net.hydromatic.morel.datalog.DatalogAst.Atom;
+import net.hydromatic.morel.datalog.DatalogAst.BodyAtom;
+import net.hydromatic.morel.datalog.DatalogAst.CompOp;
+import net.hydromatic.morel.datalog.DatalogAst.Comparison;
 import net.hydromatic.morel.datalog.DatalogAst.Constant;
 import net.hydromatic.morel.datalog.DatalogAst.Declaration;
 import net.hydromatic.morel.datalog.DatalogAst.Fact;
@@ -45,7 +49,6 @@ import net.hydromatic.morel.eval.Variant;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
-import net.hydromatic.morel.type.TypeSystem;
 
 /**
  * Evaluator for Datalog programs.
@@ -98,12 +101,11 @@ public class DatalogEvaluator {
       AstNode statement = parser.statementEofSafe();
 
       // 5. Compile the statement
-      TypeSystem typeSystem = new TypeSystem();
       Environment env = Environments.empty();
       List<CompileException> warnings = new ArrayList<>();
       CompiledStatement compiled =
           Compiles.prepareStatement(
-              typeSystem,
+              session.typeSystem,
               session,
               env,
               statement,
@@ -227,6 +229,12 @@ public class DatalogEvaluator {
   private static String translateToMorelSource(Program ast) {
     StringBuilder morel = new StringBuilder();
 
+    // Build declaration map
+    Map<String, Declaration> declarationMap = new LinkedHashMap<>();
+    for (Declaration decl : ast.getDeclarations()) {
+      declarationMap.put(decl.name, decl);
+    }
+
     // Group facts by relation
     Map<String, List<Fact>> factsByRelation = new LinkedHashMap<>();
     Map<String, List<Rule>> rulesByRelation = new LinkedHashMap<>();
@@ -263,7 +271,13 @@ public class DatalogEvaluator {
       // Start let expression
       morel.append("let\n");
 
+      // Helper: check if two lists have same length
+      morel.append(
+          "  fun sameLength [] [] = true | sameLength (_::xs) (_::ys) = sameLength xs ys | sameLength _ _ = false\n");
+
       // Generate val declarations for each relation
+      // First pass: generate fact-only relations (these can be referenced by
+      // rules)
       for (Declaration decl : ast.getDeclarations()) {
         List<Fact> facts =
             factsByRelation.getOrDefault(decl.name, new ArrayList<>());
@@ -275,11 +289,20 @@ public class DatalogEvaluator {
           morel.append("  val ").append(decl.name).append(" = ");
           morel.append(translateFactsToList(decl, facts));
           morel.append("\n");
-        } else if (!rules.isEmpty()) {
-          // Has rules - need more complex translation
-          // For now, throw error for unsupported features
-          throw new UnsupportedOperationException(
-              "Rules not yet supported in Morel translation: " + decl.name);
+        }
+      }
+
+      // Second pass: generate rule-based relations
+      for (Declaration decl : ast.getDeclarations()) {
+        List<Fact> facts =
+            factsByRelation.getOrDefault(decl.name, new ArrayList<>());
+        List<Rule> rules =
+            rulesByRelation.getOrDefault(decl.name, new ArrayList<>());
+
+        if (!rules.isEmpty()) {
+          // Has rules - generate fixpoint iteration
+          morel.append(
+              translateRulesToFixpoint(decl, facts, rules, declarationMap));
         }
       }
 
@@ -324,6 +347,316 @@ public class DatalogEvaluator {
     }
 
     return morel.toString();
+  }
+
+  /**
+   * Translates rules to Morel fixpoint iteration code.
+   *
+   * <p>Generates code like:
+   *
+   * <pre>
+   * fun iterate_path prev =
+   *   let
+   *     val rule1 = edge
+   *     val rule2 = from p in prev, e in edge where ... yield ...
+   *     val new = List.removeDuplicates (rule1 @ rule2)
+   *     val combined = List.removeDuplicates (prev @ new)
+   *   in
+   *     if List.length combined = List.length prev then
+   *       combined
+   *     else
+   *       iterate_path combined
+   *   end
+   * val path = iterate_path []
+   * </pre>
+   */
+  private static String translateRulesToFixpoint(
+      Declaration decl,
+      List<Fact> facts,
+      List<Rule> rules,
+      Map<String, Declaration> declarationMap) {
+    StringBuilder sb = new StringBuilder();
+    String relationName = decl.name;
+
+    // Generate iteration function
+    sb.append("  fun iterate_")
+        .append(relationName)
+        .append(" prev =\n")
+        .append("    let\n");
+
+    // Generate code for each rule
+    for (int i = 0; i < rules.size(); i++) {
+      Rule rule = rules.get(i);
+      sb.append("      val rule").append(i + 1).append(" = ");
+      sb.append(translateRule(rule, decl, relationName, declarationMap));
+      sb.append("\n");
+    }
+
+    // Combine all rule results
+    sb.append("      val new = ");
+    if (rules.size() == 1) {
+      sb.append("rule1");
+    } else {
+      for (int i = 0; i < rules.size(); i++) {
+        if (i > 0) {
+          sb.append(" @ ");
+        }
+        sb.append("rule").append(i + 1);
+      }
+    }
+    sb.append("\n");
+
+    // Combine with previous results
+    sb.append("      val combined = prev @ new\n");
+
+    // Check for fixpoint
+    sb.append("    in\n");
+    sb.append("      if sameLength combined prev then\n");
+    sb.append("        combined\n");
+    sb.append("      else\n");
+    sb.append("        iterate_").append(relationName).append(" combined\n");
+    sb.append("    end\n");
+
+    // Initialize with empty or facts
+    sb.append("  val ").append(relationName).append(" = iterate_");
+    sb.append(relationName).append(" ");
+    if (facts.isEmpty()) {
+      sb.append("[]");
+    } else {
+      sb.append(translateFactsToList(decl, facts));
+    }
+    sb.append("\n");
+
+    return sb.toString();
+  }
+
+  /**
+   * Translates a single Datalog rule to Morel code.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>{@code path(X,Y) :- edge(X,Y)} → {@code edge}
+   *   <li>{@code path(X,Z) :- path(X,Y), edge(Y,Z)} → {@code from p in prev, e
+   *       in edge where #y p = #x e yield {x = #x p, y = #y e}}
+   * </ul>
+   */
+  private static String translateRule(
+      Rule rule,
+      Declaration decl,
+      String relationName,
+      Map<String, Declaration> declarationMap) {
+    // Build variable mapping from head
+    Map<String, String> headVars = new LinkedHashMap<>();
+    for (int i = 0; i < rule.head.terms.size(); i++) {
+      Term term = rule.head.terms.get(i);
+      if (term instanceof Variable) {
+        Variable var = (Variable) term;
+        String paramName = decl.params.get(i).name;
+        headVars.put(var.name, paramName);
+      }
+    }
+
+    // Check if rule body contains only one atom that matches entire relation
+    if (rule.body.size() == 1) {
+      BodyAtom bodyAtom = rule.body.get(0);
+      if (!(bodyAtom instanceof Comparison) && !bodyAtom.negated) {
+        Atom atom = bodyAtom.atom;
+        // Check if body atom variables match head variables in order
+        boolean simpleMatch = true;
+        if (atom.terms.size() == rule.head.terms.size()) {
+          for (int i = 0; i < atom.terms.size(); i++) {
+            Term bodyTerm = atom.terms.get(i);
+            Term headTerm = rule.head.terms.get(i);
+            if (!(bodyTerm instanceof Variable)
+                || !(headTerm instanceof Variable)) {
+              simpleMatch = false;
+              break;
+            }
+            if (!((Variable) bodyTerm)
+                .name.equals(((Variable) headTerm).name)) {
+              simpleMatch = false;
+              break;
+            }
+          }
+        } else {
+          simpleMatch = false;
+        }
+
+        // If it's a simple copy, just reference the relation
+        if (simpleMatch) {
+          // Use "prev" if the body references the recursive relation
+          if (atom.name.equals(relationName)) {
+            return "prev";
+          } else {
+            return atom.name;
+          }
+        }
+      }
+    }
+
+    // Build from expression for complex rules
+    StringBuilder sb = new StringBuilder();
+    sb.append("from ");
+
+    // Generate bindings for each body atom
+    List<String> bindings = new ArrayList<>();
+    Map<String, String> atomVars =
+        new LinkedHashMap<>(); // Maps variable name to atom.field reference
+    int atomIndex = 0;
+
+    for (BodyAtom bodyAtom : rule.body) {
+      if (bodyAtom instanceof Comparison) {
+        // Handle comparisons later in where clause
+        continue;
+      }
+
+      Atom atom = bodyAtom.atom;
+      String atomAlias = String.valueOf((char) ('a' + atomIndex));
+      atomIndex++;
+
+      // Determine source (use "prev" for recursive references)
+      String source = atom.name.equals(relationName) ? "prev" : atom.name;
+
+      bindings.add(atomAlias + " in " + source);
+
+      // Track variables from this atom
+      for (int i = 0; i < atom.terms.size(); i++) {
+        Term term = atom.terms.get(i);
+        if (term instanceof Variable) {
+          Variable var = (Variable) term;
+          String paramName = getParamName(atom, i, declarationMap);
+          String ref =
+              (decl.arity() == 1)
+                  ? atomAlias
+                  : "#" + paramName + " " + atomAlias;
+          atomVars.putIfAbsent(var.name, ref);
+        }
+      }
+    }
+
+    sb.append(String.join(", ", bindings));
+
+    // Generate where clause for join conditions and comparisons
+    List<String> whereConditions = new ArrayList<>();
+
+    // Add join conditions (variables appearing in multiple atoms)
+    Map<String, List<String>> varLocations = new LinkedHashMap<>();
+    atomIndex = 0;
+    for (BodyAtom bodyAtom : rule.body) {
+      if (bodyAtom instanceof Comparison) {
+        continue;
+      }
+      Atom atom = bodyAtom.atom;
+      String atomAlias = String.valueOf((char) ('a' + atomIndex));
+      atomIndex++;
+
+      for (int i = 0; i < atom.terms.size(); i++) {
+        Term term = atom.terms.get(i);
+        if (term instanceof Variable) {
+          Variable var = (Variable) term;
+          String paramName = getParamName(atom, i, declarationMap);
+          String ref =
+              (getArity(atom) == 1)
+                  ? atomAlias
+                  : "#" + paramName + " " + atomAlias;
+          varLocations
+              .computeIfAbsent(var.name, k -> new ArrayList<>())
+              .add(ref);
+        }
+      }
+    }
+
+    // For variables that appear in multiple places, add equality conditions
+    for (Map.Entry<String, List<String>> entry : varLocations.entrySet()) {
+      List<String> refs = entry.getValue();
+      for (int i = 1; i < refs.size(); i++) {
+        whereConditions.add(refs.get(0) + " = " + refs.get(i));
+      }
+    }
+
+    // Add comparison conditions
+    for (BodyAtom bodyAtom : rule.body) {
+      if (bodyAtom instanceof Comparison) {
+        Comparison comp = (Comparison) bodyAtom;
+        String leftRef = termToReference(comp.left, atomVars);
+        String rightRef = termToReference(comp.right, atomVars);
+        String op = compOpToMorel(comp.op);
+        whereConditions.add(leftRef + " " + op + " " + rightRef);
+      }
+    }
+
+    if (!whereConditions.isEmpty()) {
+      sb.append(" where ").append(String.join(" andalso ", whereConditions));
+    }
+
+    // Generate yield clause
+    sb.append(" yield ");
+    if (decl.arity() == 1) {
+      String varName = ((Variable) rule.head.terms.get(0)).name;
+      sb.append(atomVars.get(varName));
+    } else {
+      sb.append("{");
+      for (int i = 0; i < rule.head.terms.size(); i++) {
+        if (i > 0) {
+          sb.append(", ");
+        }
+        String paramName = decl.params.get(i).name;
+        String varName = ((Variable) rule.head.terms.get(i)).name;
+        sb.append(paramName).append(" = ").append(atomVars.get(varName));
+      }
+      sb.append("}");
+    }
+
+    return sb.toString();
+  }
+
+  /** Helper to get parameter name for an atom's position. */
+  private static String getParamName(
+      Atom atom, int index, Map<String, Declaration> declarationMap) {
+    Declaration atomDecl = declarationMap.get(atom.name);
+    if (atomDecl != null && index < atomDecl.params.size()) {
+      return atomDecl.params.get(index).name;
+    }
+    // Fallback to generic names if declaration not found
+    return "x" + index;
+  }
+
+  /** Helper to get arity of an atom. */
+  private static int getArity(Atom atom) {
+    return atom.terms.size();
+  }
+
+  /** Helper to convert a term to a Morel reference expression. */
+  private static String termToReference(
+      Term term, Map<String, String> atomVars) {
+    if (term instanceof Variable) {
+      Variable var = (Variable) term;
+      return atomVars.get(var.name);
+    } else if (term instanceof Constant) {
+      return termToMorel(term);
+    }
+    throw new IllegalArgumentException("Unknown term type: " + term);
+  }
+
+  /** Helper to convert comparison operator to Morel syntax. */
+  private static String compOpToMorel(CompOp op) {
+    switch (op) {
+      case EQ:
+        return "=";
+      case NE:
+        return "<>";
+      case LT:
+        return "<";
+      case LE:
+        return "<=";
+      case GT:
+        return ">";
+      case GE:
+        return ">=";
+      default:
+        throw new IllegalArgumentException("Unknown operator: " + op);
+    }
   }
 
   /**

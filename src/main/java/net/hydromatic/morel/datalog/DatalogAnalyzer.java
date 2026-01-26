@@ -52,6 +52,8 @@ public class DatalogAnalyzer {
       if (stmt instanceof Fact) {
         Fact fact = (Fact) stmt;
         checkAtomDeclaration(program, fact.atom, "fact");
+        // Facts must only contain constants, not variables
+        checkFactConstants(fact);
       } else if (stmt instanceof Rule) {
         Rule rule = (Rule) stmt;
         checkAtomDeclaration(program, rule.head, "rule head");
@@ -61,6 +63,18 @@ public class DatalogAnalyzer {
             checkAtomDeclaration(program, bodyAtom.atom, "rule body");
           }
         }
+      }
+    }
+  }
+
+  /** Checks that a fact contains only constants, not variables. */
+  private static void checkFactConstants(Fact fact) {
+    for (Term term : fact.atom.terms) {
+      if (term instanceof Variable) {
+        throw new DatalogException(
+            String.format(
+                "Argument in fact is not constant: %s",
+                ((Variable) term).name));
       }
     }
   }

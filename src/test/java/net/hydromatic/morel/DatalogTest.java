@@ -164,14 +164,15 @@ public class DatalogTest {
 
   @Test
   void testParseStringConstant() throws ParseException {
-    String input = ".decl person(name:string)\nperson(\"Alice\").";
+    String input =
+        ".decl person(name:string)\n" //
+            + "person(\"Alice\").";
     Program program = DatalogParserImpl.parse(input);
 
     Fact fact = (Fact) program.statements.get(1);
     Constant c = (Constant) fact.atom.terms.get(0);
     assertThat(c.value, is("Alice"));
-    // Parser currently treats string literals as symbols
-    assertThat(c.type, is("symbol"));
+    assertThat(c.type, is("string"));
   }
 
   @Test
@@ -289,33 +290,18 @@ public class DatalogTest {
 
   @Test
   void testAnalyzeTypeMismatchString() throws ParseException {
-    String input = ".decl num(n:number)\nnum(\"hello\").";
-    Program program = DatalogParserImpl.parse(input);
-
-    DatalogException e =
-        assertThrows(
-            DatalogException.class, () -> DatalogAnalyzer.analyze(program));
-    assertThat(e.getMessage(), containsString("Type mismatch"));
-    assertThat(e.getMessage(), containsString("number"));
-    assertThat(
-        e.getMessage(),
-        containsString("symbol")); // Parser treats string literals as symbols
-  }
-
-  @Test
-  void testAnalyzeTypeMismatchSymbol() throws ParseException {
-    // Parser currently treats identifiers as variables, not symbols
-    // So we can't test symbol type mismatch directly - skip this test
     String input =
-        ".decl num(n:number)\nnum(\"foo\")."; // Use string literal instead
+        ".decl num(n:number)\n" //
+            + "num(\"hello\").";
     Program program = DatalogParserImpl.parse(input);
 
     DatalogException e =
         assertThrows(
             DatalogException.class, () -> DatalogAnalyzer.analyze(program));
-    assertThat(e.getMessage(), containsString("Type mismatch"));
-    assertThat(e.getMessage(), containsString("number"));
-    assertThat(e.getMessage(), containsString("symbol"));
+    String expected =
+        "Type mismatch in fact num(...): "
+            + "expected number, got string for parameter n";
+    assertThat(e.getMessage(), hasToString(expected));
   }
 
   @Test
