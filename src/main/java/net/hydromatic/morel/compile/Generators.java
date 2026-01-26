@@ -316,51 +316,64 @@ class Generators {
       boolean ordered,
       List<Core.Exp> constraints) {
     for (Core.Exp constraint : constraints) {
+      // Step 0: Handle CASE expression (from tuple pattern matching)
+      // This occurs when a tuple-parameter function like f(x, y) is compiled
+      // to: case (arg1, arg2) of (x, y) => body
+      if (constraint.op == Op.CASE) {
+        final Core.Case caseExp = (Core.Case) constraint;
+        if (caseExp.matchList.size() == 1) {
+          final Core.Match match = caseExp.matchList.get(0);
+          final Core.Exp inlinedBody =
+              substituteArgs(
+                  cache.typeSystem,
+                  cache.env,
+                  match.pat,
+                  caseExp.exp,
+                  match.exp);
+          final List<Core.Exp> inlinedConstraints =
+              ImmutableList.of(inlinedBody);
+          if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
+            return true;
+          }
+        }
+        continue;
+      }
+
       // Step 1: Find function calls (Apply where fn is an Id, not a built-in)
       if (constraint.op != Op.APPLY) {
-        System.err.println(
-            "DEBUG maybeFunction: constraint not APPLY: " + constraint.op);
         continue;
       }
       final Core.Apply apply = (Core.Apply) constraint;
+
+      // Step 1a: Handle lambda application (fn ... => body) arg
+      // This occurs when a function has been inlined to a lambda.
+      // Note: FN_LITERAL is for built-in functions (Core.Literal), not Core.Fn.
+      if (apply.fn.op == Op.FN) {
+        final Core.Fn fn = (Core.Fn) apply.fn;
+        final Core.Exp inlinedBody =
+            inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
+        final List<Core.Exp> inlinedConstraints = ImmutableList.of(inlinedBody);
+        if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
+          return true;
+        }
+        continue;
+      }
+
       if (apply.fn.op != Op.ID) {
-        System.err.println("DEBUG maybeFunction: fn not ID: " + apply.fn.op);
         continue;
       }
       final Core.Id fnId = (Core.Id) apply.fn;
       final String fnName = fnId.idPat.name;
-      System.err.println("DEBUG maybeFunction: found function call: " + fnName);
 
-      // Step 2: Look up the function definition in the environment
+      // Step 2: Look up the function definition in the environment.
       // Use getTop(name) instead of getOpt(idPat) because the idPat in the
-      // call expression may have a different 'i' than the one in the definition
+      // call expression may have a different 'i' than the one in the
+      // definition.
       final Binding binding = cache.env.getTop(fnName);
-      if (binding == null) {
-        System.err.println(
-            "DEBUG maybeFunction: binding is null for " + fnName);
-        // List what's in env
-        final List<String> names = new ArrayList<>();
-        cache.env.visit(b -> names.add(b.id.name));
-        System.err.println("DEBUG maybeFunction: env contains: " + names);
-        continue;
-      }
-      if (binding.exp == null) {
-        System.err.println(
-            "DEBUG maybeFunction: binding.exp is null for " + fnName);
-        System.err.println("DEBUG maybeFunction: binding = " + binding);
-        System.err.println("DEBUG maybeFunction: binding.id = " + binding.id);
-        System.err.println(
-            "DEBUG maybeFunction: binding.value = " + binding.value);
-        continue;
-      }
-      if (binding.exp.op != Op.FN) {
-        System.err.println(
-            "DEBUG maybeFunction: binding.exp not FN: " + binding.exp.op);
+      if (binding == null || binding.exp == null || binding.exp.op != Op.FN) {
         continue;
       }
       final Core.Fn fn = (Core.Fn) binding.exp;
-      System.err.println(
-          "DEBUG maybeFunction: found function definition for " + fnName);
 
       // Step 3a: Try to analyze as a bounded recursive pattern (with depth
       // limit)
@@ -391,112 +404,90 @@ class Generators {
       final Core.Exp fnArg = apply.arg;
       final boolean isFullApplication =
           fnArg.op == Op.ID && fnArg.type.equals(goalPat.type);
-      // Check if fnArg is a tuple containing goalPat as a component
       final int tupleComponentIndex = findTupleComponent(fnArg, goalPat);
       final boolean isTupleApplication = tupleComponentIndex >= 0;
-      System.err.println(
-          "DEBUG: trying analyzeTransitiveClosure for "
-              + fnName
-              + ", isFullApplication="
-              + isFullApplication
-              + ", isTupleApplication="
-              + isTupleApplication
-              + ", tupleComponentIndex="
-              + tupleComponentIndex
-              + ", fnArg.type="
-              + fnArg.type
-              + ", goalPat.type="
-              + goalPat.type);
       if (isFullApplication) {
-        final @Nullable TransitiveClosurePattern tcPattern =
-            analyzeTransitiveClosure(cache, fn, apply.arg, fnName);
-        System.err.println(
-            "DEBUG: tcPattern = " + (tcPattern != null ? "found" : "null"));
-        if (tcPattern != null) {
-          // Step 4b: Generate Relational.iterate expression for fixed point
-          final Core.Exp iterateExp =
-              generateTransitiveClosure(cache, tcPattern, goalPat, ordered);
-          System.err.println(
-              "DEBUG: iterateExp = "
-                  + (iterateExp != null ? "generated" : "null"));
-          if (iterateExp != null) {
-            // Step 5b: Register the generator
-            final Set<Core.NamedPat> freePats =
-                SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
-            // Pass the original constraint (the function call) so it can be
-            // simplified to true when the generator is used.
-            cache.add(
-                new TransitiveClosureGenerator(
-                    goalPat, iterateExp, freePats, apply));
-            return true;
-          }
+        if (tryTransitiveClosure(cache, fn, apply, goalPat, ordered)) {
+          return true;
         }
       }
-      // Handle tuple application: path(x, y) where x, y are separate patterns.
-      // Create a TuplePat from the argument, generate transitive closure for
-      // it,
-      // and register the generator under all component patterns.
       if (isTupleApplication) {
-        // Check if a TransitiveClosureGenerator already exists for goalPat from
-        // the same function call (we may have already generated for a sibling
-        // component of the same tuple).
-        final Generator existingGen =
-            cache.bestGenerator((Core.NamedPat) goalPat);
-        if (existingGen instanceof TransitiveClosureGenerator) {
-          final TransitiveClosureGenerator tcGen =
-              (TransitiveClosureGenerator) existingGen;
-          // Check if the existing generator is for the same constraint
-          if (tcGen.constraint.equals(apply)) {
-            System.err.println(
-                "DEBUG: isTupleApplication, TC generator already exists for "
-                    + goalPat
-                    + " from same constraint");
-            return true;
-          }
-        }
-
-        // Create the TuplePat from the function argument (x, y)
-        final Core.Pat tuplePat =
-            createTuplePatFromArg(cache.typeSystem, fnArg);
-        System.err.println(
-            "DEBUG: isTupleApplication, created tuplePat = " + tuplePat);
-
-        final @Nullable TransitiveClosurePattern tcPattern =
-            analyzeTransitiveClosure(cache, fn, apply.arg, fnName);
-        System.err.println(
-            "DEBUG: tuple tcPattern = "
-                + (tcPattern != null ? "found" : "null"));
-        if (tcPattern != null) {
-          // Generate iterate expression with TuplePat as goalPat
-          final Core.Exp iterateExp =
-              generateTransitiveClosure(cache, tcPattern, tuplePat, ordered);
-          System.err.println(
-              "DEBUG: tuple iterateExp = "
-                  + (iterateExp != null ? "generated" : "null"));
-          if (iterateExp != null) {
-            // Register the generator under all component patterns
-            final Set<Core.NamedPat> freePats =
-                SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
-            cache.add(
-                new TransitiveClosureGenerator(
-                    tuplePat, iterateExp, freePats, apply));
-            return true;
-          }
+        if (tryTupleTransitiveClosure(
+            cache, fn, apply, fnArg, goalPat, ordered)) {
+          return true;
         }
       }
 
       // Step 3c: Try simple (non-recursive) function inversion.
       // Inline the function body by substituting actual args for formal params,
       // then recursively try to find a generator for the substituted body.
-      System.err.println(
-          "DEBUG maybeFunction: trying simple inversion for " + fnName);
       final Core.Exp inlinedBody =
           inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
-      System.err.println("DEBUG maybeFunction: inlined body = " + inlinedBody);
       final List<Core.Exp> inlinedConstraints = ImmutableList.of(inlinedBody);
       if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
-        System.err.println(
-            "DEBUG maybeFunction: simple inversion succeeded for " + fnName);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Tries to create a transitive closure generator for a full application. */
+  private static boolean tryTransitiveClosure(
+      Cache cache,
+      Core.Fn fn,
+      Core.Apply apply,
+      Core.Pat goalPat,
+      boolean ordered) {
+    final String fnName = ((Core.Id) apply.fn).idPat.name;
+    final @Nullable TransitiveClosurePattern tcPattern =
+        analyzeTransitiveClosure(cache, fn, apply.arg, fnName);
+    if (tcPattern != null) {
+      final Core.Exp iterateExp =
+          generateTransitiveClosure(cache, tcPattern, goalPat, ordered);
+      if (iterateExp != null) {
+        final Set<Core.NamedPat> freePats =
+            SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
+        cache.add(
+            new TransitiveClosureGenerator(
+                goalPat, iterateExp, freePats, apply));
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Tries to create a transitive closure generator for a tuple application. */
+  private static boolean tryTupleTransitiveClosure(
+      Cache cache,
+      Core.Fn fn,
+      Core.Apply apply,
+      Core.Exp fnArg,
+      Core.Pat goalPat,
+      boolean ordered) {
+    // Check if a TransitiveClosureGenerator already exists for goalPat from
+    // the same function call.
+    final Generator existingGen = cache.bestGenerator((Core.NamedPat) goalPat);
+    if (existingGen instanceof TransitiveClosureGenerator) {
+      final TransitiveClosureGenerator tcGen =
+          (TransitiveClosureGenerator) existingGen;
+      if (tcGen.constraint.equals(apply)) {
+        return true;
+      }
+    }
+
+    final Core.Pat tuplePat = createTuplePatFromArg(cache.typeSystem, fnArg);
+    final String fnName = ((Core.Id) apply.fn).idPat.name;
+    final @Nullable TransitiveClosurePattern tcPattern =
+        analyzeTransitiveClosure(cache, fn, apply.arg, fnName);
+    if (tcPattern != null) {
+      final Core.Exp iterateExp =
+          generateTransitiveClosure(cache, tcPattern, tuplePat, ordered);
+      if (iterateExp != null) {
+        final Set<Core.NamedPat> freePats =
+            SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
+        cache.add(
+            new TransitiveClosureGenerator(
+                tuplePat, iterateExp, freePats, apply));
         return true;
       }
     }

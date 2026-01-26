@@ -671,14 +671,12 @@ Sys.planEx "999";
 
 (*) A string function with external extent.
 (*) Given s2, we could generate finite s1.
-(*
 let
   fun isPrefix (s1, s2) = String.isPrefix s1 s2
 in
   from s where isPrefix (s, "abcd")
 end;
-> val it = ["", "a", "ab", "abc", "abcd"] : string list
-*)
+> val it = ["","a","ab","abc","abcd"] : string bag
 
 (*) An integer function with external extent.
 (*) Given j, k we could generate finite i.
