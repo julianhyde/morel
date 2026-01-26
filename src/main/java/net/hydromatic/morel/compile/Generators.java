@@ -1603,9 +1603,9 @@ class Generators {
           // If predicate is "(p, q) elem links", first create a generator
           // for "p2 elem links", where "p2 as (p, q)".
           final Core.Exp collection = predicate.arg(1);
-          final ExpPat expPat =
+          final Core.Pat pat =
               requireNonNull(wholePat(cache.typeSystem, predicate.arg(0)));
-          CollectionGenerator.create(cache, ordered, expPat.pat, collection);
+          CollectionGenerator.create(cache, ordered, pat, collection);
           return true;
         }
       }
@@ -1648,9 +1648,9 @@ class Generators {
           }
 
           // Case 3: General case - create generator for the full pattern
-          final ExpPat expPat =
+          final Core.Pat pat =
               requireNonNull(wholePat(cache.typeSystem, elemExp));
-          CollectionGenerator.create(cache, ordered, expPat.pat, collection);
+          CollectionGenerator.create(cache, ordered, pat, collection);
           return true;
         }
       }
@@ -2100,36 +2100,30 @@ class Generators {
   /**
    * Creates a pattern that encompasses a whole expression.
    *
-   * <p>Returns null if {@code exp} does not contain {@code pat}; you should
-   * have called {@link #containsRef(Core.Exp, Core.Pat)} first.
+   * <p>Returns null if {@code exp} does not contain a pattern reference; you
+   * should have called {@link #containsRef(Core.Exp, Core.Pat)} first.
    *
    * <p>Examples:
    *
    * <ul>
-   *   <li>{@code wholePat(id(p), idPat(p)} returns pattern {@code idPat(p)} and
-   *       expression {@code id(p)}
-   *   <li>{@code wholePat(tuple(id(p), id(q)), idPat(p)} returns pattern {@code
-   *       idPat(r)} and expression {@code r.1}
-   *   <li>{@code wholePat(tuple(id(p), id(p)), idPat(p)} is illegal because it
-   *       contains {@code p} more than once
-   *   <li>{@code wholePat(tuple(id(p), literal("elrond")), idPat(p))} returns
-   *       pattern {@code idPat(p)}, expression {@code id(p)}, and a filter
-   *       {@code id(q) = literal("elrond")}. We currently ignore filters.
+   *   <li>{@code wholePat(id(p))} returns {@code idPat(p)}
+   *   <li>{@code wholePat(tuple(id(p), id(q)))} returns {@code tuplePat(p, q)}
+   *   <li>{@code wholePat(tuple(id(p), literal("x")))} returns {@code
+   *       tuplePat(p, literalPat("x"))}
+   *   <li>{@code wholePat(#1 p)} returns {@code idPat(p)}
    * </ul>
    */
-  private static @Nullable ExpPat wholePat(
+  private static Core.@Nullable Pat wholePat(
       TypeSystem typeSystem, Core.Exp exp) {
     switch (exp.op) {
       case ID:
-        Core.Id id1 = (Core.Id) exp;
-        return ExpPat.of(exp, id1.idPat);
+        return ((Core.Id) exp).idPat;
 
       case TUPLE:
         int slot = -1;
         final List<Core.Pat> patList = new ArrayList<>();
         for (Ord<Core.Exp> arg : Ord.zip(((Core.Tuple) exp).args)) {
-          final @Nullable ExpPat p = wholePat(typeSystem, arg.e);
-          if (p != null) {
+          if (wholePat(typeSystem, arg.e) != null) {
             slot = arg.i;
           }
           patList.add(core.toPat(arg.e));
@@ -2137,22 +2131,16 @@ class Generators {
         if (slot < 0) {
           return null;
         }
-        final Core.Pat tuplePat =
-            (exp.type instanceof RecordType)
-                ? core.recordPat((RecordType) exp.type, patList)
-                : core.tuplePat((RecordLikeType) exp.type, patList);
-        final Core.IdPat idPat = core.idPat(exp.type, "z", 0); // "r as (p, q)"
-        final Core.Id id = core.id(idPat);
-        final Core.Exp exp2 = core.field(typeSystem, id, slot);
-        return ExpPat.of(exp2, tuplePat);
+        return (exp.type instanceof RecordType)
+            ? core.recordPat((RecordType) exp.type, patList)
+            : core.tuplePat((RecordLikeType) exp.type, patList);
 
       case APPLY:
         // Handle field access like #1 p or #x p
         final Core.Apply apply = (Core.Apply) exp;
         if (apply.fn.op == Op.RECORD_SELECTOR && apply.arg.op == Op.ID) {
           // Field access on an ID - the underlying variable is what we want
-          final Core.Id baseId = (Core.Id) apply.arg;
-          return ExpPat.of(apply, baseId.idPat);
+          return ((Core.Id) apply.arg).idPat;
         }
         return null;
 
@@ -2661,26 +2649,6 @@ class Generators {
     /** Removes all generators for a given pattern. */
     public void remove(Core.NamedPat namedPat) {
       generators.removeAll(namedPat);
-    }
-  }
-
-  /** An expression and a pattern. */
-  static class ExpPat {
-    final Core.Exp exp;
-    final Core.Pat pat;
-
-    ExpPat(Core.Exp exp, Core.Pat pat) {
-      this.exp = requireNonNull(exp);
-      this.pat = requireNonNull(pat);
-    }
-
-    static ExpPat of(Core.Exp exp, Core.Pat pat) {
-      return new ExpPat(exp, pat);
-    }
-
-    @Override
-    public String toString() {
-      return "{exp " + exp + ", pat " + pat + "}";
     }
   }
 }
