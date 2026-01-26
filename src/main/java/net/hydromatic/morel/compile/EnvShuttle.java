@@ -18,8 +18,6 @@
  */
 package net.hydromatic.morel.compile;
 
-import static java.util.Objects.requireNonNull;
-
 import java.util.ArrayList;
 import java.util.List;
 import net.hydromatic.morel.ast.Core;
@@ -34,7 +32,7 @@ abstract class EnvShuttle extends Shuttle {
   /** Creates an EnvShuttle. */
   protected EnvShuttle(TypeSystem typeSystem, Environment env) {
     super(typeSystem);
-    this.env = requireNonNull(env);
+    this.env = env;
   }
 
   /** Creates a shuttle the same as this but with a new environment. */
@@ -88,16 +86,7 @@ abstract class EnvShuttle extends Shuttle {
   @Override
   protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
     final List<Binding> bindings = new ArrayList<>();
-    // Include the expression in bindings so PredicateInverter can access
-    // the function body for recursive functions
-    recValDecl.list.forEach(
-        decl -> {
-          if (decl.pat instanceof Core.IdPat) {
-            bindings.add(Binding.of((Core.IdPat) decl.pat, decl.exp));
-          } else {
-            Compiles.acceptBinding(decl.pat, bindings);
-          }
-        });
+    recValDecl.list.forEach(decl -> Compiles.acceptBinding(decl.pat, bindings));
     return recValDecl.copy(bind(bindings).visitList(recValDecl.list));
   }
 
