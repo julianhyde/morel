@@ -25,7 +25,6 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
 import java.math.BigDecimal;
@@ -37,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
@@ -972,29 +972,11 @@ class Generators {
     fb.where(core.equal(ts, stepFirstField, prevSecondField));
 
     // Yield: (prev.#1, step.#2) = (x, y)
-    // For transitive closure: x is start node of path, y is end node of edge
-    final Core.Exp prevFirst = core.field(ts, prevId, 0); // x (start of path)
-    final Core.Exp stepSecond = core.field(ts, stepId, 1); // y (end of edge)
-
-    // Build yield expression based on goalPat type (record or tuple)
-    final Core.Exp yieldExp;
-    if (resultElementType instanceof RecordType) {
-      // For record types like {x:int, y:int}, build a record
-      RecordLikeType recordLike = (RecordLikeType) resultElementType;
-      List<String> fieldNames = recordLike.argNames();
-      ImmutableMap<String, Core.Exp> nameExps =
-          ImmutableMap.of(
-              fieldNames.get(0), prevFirst,
-              fieldNames.get(1), stepSecond);
-      yieldExp = core.record(ts, nameExps);
-    } else {
-      // For tuple types like (int * int), build a tuple
-      yieldExp =
-          core.tuple(
-              (RecordLikeType) resultElementType,
-              ImmutableList.of(prevFirst, stepSecond));
-    }
-    fb.yield_(yieldExp);
+    fb.yield_(
+        CoreBuilder.core.tuple(
+            (RecordLikeType) resultElementType,
+            core.field(ts, prevId, 0),
+            core.field(ts, stepId, 1)));
     final Core.From stepBody = fb.build();
 
     // Create the step function: fn (all, new) => stepBody
@@ -1017,22 +999,11 @@ class Generators {
       final Core.IdPat seedPat = core.idPat(baseElementType, "e", 0);
       seedFb.scan(seedPat, baseGenerator.exp);
       final Core.Exp seedId = core.id(seedPat);
-      // Build conversion expression based on result type
-      if (resultElementType instanceof RecordType) {
-        RecordLikeType recordLike = (RecordLikeType) resultElementType;
-        List<String> fieldNames = recordLike.argNames();
-        ImmutableMap<String, Core.Exp> nameExps =
-            ImmutableMap.of(
-                fieldNames.get(0), core.field(ts, seedId, 0),
-                fieldNames.get(1), core.field(ts, seedId, 1));
-        seedFb.yield_(core.record(ts, nameExps));
-      } else {
-        seedFb.yield_(
-            core.tuple(
-                (RecordLikeType) resultElementType,
-                ImmutableList.of(
-                    core.field(ts, seedId, 0), core.field(ts, seedId, 1))));
-      }
+      seedFb.yield_(
+          core.tuple(
+              (RecordLikeType) resultElementType,
+              core.field(ts, seedId, 0),
+              core.field(ts, seedId, 1)));
       seedExp = seedFb.build();
     }
 

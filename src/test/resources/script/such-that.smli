@@ -823,8 +823,6 @@ end;
 *)
 val edges = [(1, 2), (2, 3), (1, 4), (4, 2), (4, 3)];
 > val edges = [(1,2),(2,3),(1,4),(4,2),(4,3)] : (int * int) list
-fun edge (x, y) = (x, y) elem edges;
-> val edge = fn : int * int -> bool
 
 fun edge (x, y) = (x, y) elem edges;
 > val edge = fn : int * int -> bool
@@ -845,33 +843,57 @@ end;
 > val it : {x:int, y:int} bag
 
 (*) Return points that are 2 hops apart.
-(* TODO
-from x, y, z where edge (x, y) andalso edge (y, z) andalso x <> z
-  group {x, z};
+let
+  fun edge (x, y) = (x, y) elem edges
+in
+  from x, y, z where edge (x, y) andalso edge (y, z) andalso x <> z
+    group {x, z}
+end;
+> x z
+> - -
+> 4 3
+> 1 2
+> 1 3
+>
+> val it : {x:int, z:int} bag
+
+(* TODO: Previous is equivalent to following. (Which implies a theorem connecting
+   'exists' with 'group' and variable elimination.)
+let
+  fun edge (x, y) = (x, y) elem edges
+in
+  from x, z
+    where (exists y where edge (x, y) andalso edge (y, z))
+    andalso x <> z
+end;
 *)
 
-(* Previous is equivalent to following. (Which implies a theorem connecting
-   'exists' with 'group' and variable elimination.) *)
-(* TODO
-from x, z
-  where (exists y where edge (x, y) andalso edge (y, z))
-  andalso x <> z;
+(* TODO: Also equivalent.
+let
+  fun edge (x, y) = (x, y) elem edges
+in
+  from x, z
+    where (exists y where edge (x, y) andalso edge (y, z) andalso x <> z)
+end;
 *)
 
 (*) Also equivalent.
-(* TODO
-from x, z
-  where (exists y where edge (x, y) andalso edge (y, z) andalso x <> z);
-*)
-
-(*) Also equivalent.
-(* TODO
-from x, y
-  where edge (x, y)
-  join y2, z
-  where y2 = y andalso edge (y, z) andalso x <> z
-  group {x, y};
-*)
+let
+  fun edge (x, y) = (x, y) elem edges
+in
+  from x, y
+    where edge (x, y)
+    join y2, z
+    where y2 = y andalso edge (y, z) andalso x <> z
+    group {x, y}
+end;
+> x y
+> - -
+> 1 2
+> 1 4
+> 4 2
+>
+> val it : {x:int, y:int} bag
 
 (* Joe's bar --------------------------------------------------------
  *
