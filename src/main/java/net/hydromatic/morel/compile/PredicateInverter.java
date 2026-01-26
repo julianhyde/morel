@@ -1814,8 +1814,11 @@ public class PredicateInverter {
     final Type bagType = baseGen.type;
 
     // Create parameter patterns for the lambda: (old, new)
-    final Core.IdPat oldPat = core.idPat(bagType, "oldTuples", 0);
-    final Core.IdPat newPat = core.idPat(bagType, "newTuples", 0);
+    // Use nameGenerator to avoid collisions with source code variables
+    final Core.IdPat oldPat =
+        core.idPat(bagType, typeSystem.nameGenerator.get(), 0);
+    final Core.IdPat newPat =
+        core.idPat(bagType, typeSystem.nameGenerator.get(), 0);
 
     // Build the FROM expression that forms the body
     final Core.Exp fromExp =
@@ -1831,7 +1834,9 @@ public class PredicateInverter {
         typeSystem.fnType(paramType, bagType);
 
     // Create lambda parameter (simple IdPat)
-    final Core.IdPat lambdaParam = core.idPat(paramType, "stepFnParam", 0);
+    // Use nameGenerator to avoid collisions with source code variables
+    final Core.IdPat lambdaParam =
+        core.idPat(paramType, typeSystem.nameGenerator.get(), 0);
 
     // Create lambda: fn v => case v of (old, new) => fromExp
     final Core.Match match = core.match(Pos.ZERO, paramPat, fromExp);
@@ -1882,11 +1887,13 @@ public class PredicateInverter {
 
     // Create patterns for new scan: (x, z)
     // This scans the newly discovered results from the previous iteration
-    final Core.IdPat xPat = core.idPat(baseComponents[0], "x", 0);
+    // Use nameGenerator to avoid collisions with source code variables
+    final Core.IdPat xPat =
+        core.idPat(baseComponents[0], typeSystem.nameGenerator.get(), 0);
     final Core.IdPat zPat =
         baseComponents.length > 1
-            ? core.idPat(baseComponents[1], "z", 0)
-            : core.idPat(baseComponents[0], "z", 0);
+            ? core.idPat(baseComponents[1], typeSystem.nameGenerator.get(), 0)
+            : core.idPat(baseComponents[0], typeSystem.nameGenerator.get(), 0);
     final Core.Pat newScanPat =
         baseComponents.length > 1
             ? core.tuplePat(typeSystem, ImmutableList.of(xPat, zPat))
@@ -1894,11 +1901,13 @@ public class PredicateInverter {
 
     // Create patterns for base scan: (z2, y)
     // This scans the base edges/relations
-    final Core.IdPat z2Pat = core.idPat(baseComponents[0], "z2", 0);
+    // Use nameGenerator to avoid collisions with source code variables
+    final Core.IdPat z2Pat =
+        core.idPat(baseComponents[0], typeSystem.nameGenerator.get(), 0);
     final Core.IdPat yPat =
         baseComponents.length > 1
-            ? core.idPat(baseComponents[1], "y", 0)
-            : core.idPat(baseComponents[0], "y", 0);
+            ? core.idPat(baseComponents[1], typeSystem.nameGenerator.get(), 0)
+            : core.idPat(baseComponents[0], typeSystem.nameGenerator.get(), 0);
     final Core.Pat baseScanPat =
         baseComponents.length > 1
             ? core.tuplePat(typeSystem, ImmutableList.of(z2Pat, yPat))
