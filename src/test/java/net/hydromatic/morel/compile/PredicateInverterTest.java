@@ -717,6 +717,218 @@ public class PredicateInverterTest {
     assertThat(result.remainingFilters, not(empty()));
   }
 
+  /**
+   * Focused debug test for extractFieldAccessGoal pattern recognition.
+   *
+   * <p>This test traces through exactly what happens when we have: - Query:
+   * {@code from p where path p} - After inlining: {@code (#1 p, #2 p) elem
+   * edges}
+   *
+   * <p>The test verifies whether {@code extractFieldAccessGoal} correctly
+   * recognizes that all field accesses are on the same goal pattern.
+   */
+  @Test
+  void testExtractFieldAccessGoalDebug() {
+    final Fixture f = new Fixture();
+
+    // Create pattern p with tuple type (int, int)
+    // This simulates: from p where path p
+    final Type tupleType = f.typeSystem.tupleType(f.intType, f.intType);
+    final Core.IdPat pPat = core.idPat(tupleType, "p", 0);
+    final Core.Id pId = core.id(pPat);
+
+    System.err.println("=== DEBUG: testExtractFieldAccessGoalDebug ===");
+    System.err.println("pPat = " + pPat);
+    System.err.println("pPat.name = " + pPat.name);
+    System.err.println("pPat.type = " + pPat.type);
+    System.err.println("pPat hashCode = " + System.identityHashCode(pPat));
+
+    // Create edges list: [(1, 2), (2, 3)]
+    final Core.Exp edges =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
+            core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
+
+    // Create field accesses: #1 p and #2 p
+    // This simulates what buildSubstitution does when substituting p for (x, y)
+    final Core.Exp field1 = core.field(f.typeSystem, pId, 0); // #1 p
+    final Core.Exp field2 = core.field(f.typeSystem, pId, 1); // #2 p
+
+    System.err.println("\nField access expressions:");
+    System.err.println("field1 (#1 p) = " + field1);
+    System.err.println("field1.op = " + field1.op);
+    System.err.println("field2 (#2 p) = " + field2);
+    System.err.println("field2.op = " + field2.op);
+
+    // Examine the structure of field1
+    if (field1.op == net.hydromatic.morel.ast.Op.APPLY) {
+      Core.Apply apply1 = (Core.Apply) field1;
+      System.err.println("\nfield1 (APPLY) structure:");
+      System.err.println("  fn.op = " + apply1.fn.op);
+      System.err.println("  arg.op = " + apply1.arg.op);
+      if (apply1.arg.op == net.hydromatic.morel.ast.Op.ID) {
+        Core.Id argId = (Core.Id) apply1.arg;
+        System.err.println("  arg.idPat = " + argId.idPat);
+        System.err.println("  arg.idPat.name = " + argId.idPat.name);
+        System.err.println(
+            "  arg.idPat hashCode = " + System.identityHashCode(argId.idPat));
+        System.err.println("  pPat == arg.idPat ? " + (pPat == argId.idPat));
+        System.err.println(
+            "  pPat.equals(arg.idPat) ? " + pPat.equals(argId.idPat));
+      }
+    }
+
+    // Create tuple: (#1 p, #2 p)
+    final Core.Tuple tupleExp =
+        core.tuple(f.typeSystem, null, ImmutableList.of(field1, field2));
+    System.err.println("\nTuple expression:");
+    System.err.println("tupleExp = " + tupleExp);
+
+    // Create elem expression: (#1 p, #2 p) elem edges
+    final Core.Exp elemExp = core.elem(f.typeSystem, tupleExp, edges);
+    System.err.println("\nElem expression:");
+    System.err.println("elemExp = " + elemExp);
+
+    // Set up goalPats containing p
+    final ImmutableList<Core.NamedPat> goalPats = ImmutableList.of(pPat);
+    System.err.println("\ngoalPats:");
+    for (int i = 0; i < goalPats.size(); i++) {
+      Core.NamedPat gp = goalPats.get(i);
+      System.err.println("  goalPats[" + i + "] = " + gp);
+      System.err.println("  goalPats[" + i + "].name = " + gp.name);
+      System.err.println(
+          "  goalPats[" + i + "] hashCode = " + System.identityHashCode(gp));
+    }
+
+    // Now call PredicateInverter.invert
+    // This should trigger invertElem which calls extractFieldAccessGoal
+    System.err.println("\n=== Calling PredicateInverter.invert ===");
+    final Result result =
+        PredicateInverter.invert(
+            f.typeSystem,
+            Environments.empty(),
+            elemExp,
+            goalPats,
+            ImmutableMap.of());
+
+    System.err.println("\n=== Result ===");
+    System.err.println("generator.expression = " + result.generator.expression);
+    System.err.println(
+        "generator.cardinality = " + result.generator.cardinality);
+    System.err.println("remainingFilters = " + result.remainingFilters);
+
+    // If successful, the generator should be edges (not an infinite extent)
+    // If failed, remainingFilters will contain the original elemExp
+    if (result.remainingFilters.isEmpty()) {
+      System.err.println("\nSUCCESS: Pattern was recognized correctly!");
+      assertThat(
+          "Generator should be the edges collection",
+          result.generator.expression,
+          hasToString("[(1, 2), (2, 3)]"));
+    } else {
+      System.err.println("\nFAILURE: Pattern was NOT recognized.");
+      System.err.println(
+          "This indicates extractFieldAccessGoal returned null.");
+    }
+  }
+
+  /**
+   * Test that verifies the exact scenario from the transitive closure case.
+   *
+   * <p>Simulates the flow when: 1. Query is: from p where path p 2. path is
+   * defined as: fun path(x,y) = edge(x,y) orelse ... 3. edge is defined as: fun
+   * edge(x,y) = (x,y) elem edges 4. After inlining path(p), we get the base
+   * case: edge(p) 5. After inlining edge(p), we get: (#1 p, #2 p) elem edges
+   */
+  @Test
+  void testTransitiveClosureBaseCase() {
+    final Fixture f = new Fixture();
+
+    System.err.println("=== DEBUG: testTransitiveClosureBaseCase ===");
+
+    // Create pattern p with tuple type (int, int)
+    final Type tupleType = f.typeSystem.tupleType(f.intType, f.intType);
+    final Core.IdPat pPat = core.idPat(tupleType, "p", 0);
+    final Core.Id pId = core.id(pPat);
+
+    // Create edges list
+    final Type listTupleType = f.typeSystem.listType(tupleType);
+    final Core.Exp edges =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
+            core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
+
+    // Create the edge function: fun edge(x, y) = (x, y) elem edges
+    final Core.IdPat xPat = core.idPat(f.intType, "x", 0);
+    final Core.IdPat yPat = core.idPat(f.intType, "y", 0);
+    final Core.TuplePat edgeParamPat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(xPat, yPat));
+
+    final Core.Tuple xyTuple =
+        core.tuple(
+            f.typeSystem, null, ImmutableList.of(core.id(xPat), core.id(yPat)));
+    final Core.Exp edgeBody = core.elem(f.typeSystem, xyTuple, edges);
+
+    // Create edge function: fn v => case v of (x, y) => (x, y) elem edges
+    final Type fnParamType = f.typeSystem.tupleType(f.intType, f.intType);
+    final net.hydromatic.morel.type.FnType edgeFnType =
+        f.typeSystem.fnType(fnParamType, PrimitiveType.BOOL);
+    final Core.IdPat edgeLambdaParam = core.idPat(fnParamType, "v", 0);
+    final Core.Match edgeMatch = core.match(Pos.ZERO, edgeParamPat, edgeBody);
+    final Core.Case edgeCase =
+        core.caseOf(
+            Pos.ZERO,
+            PrimitiveType.BOOL,
+            core.id(edgeLambdaParam),
+            ImmutableList.of(edgeMatch));
+    final Core.Fn edgeFn = core.fn(edgeFnType, edgeLambdaParam, edgeCase);
+
+    System.err.println("Edge function: " + edgeFn);
+
+    // Create edge function pattern for environment lookup
+    final Core.IdPat edgeFnPat = core.idPat(edgeFnType, "edge", 0);
+
+    // Set up environment with edge function
+    final Environment env =
+        Environments.empty()
+            .bind(net.hydromatic.morel.type.Binding.of(edgeFnPat, edgeFn));
+
+    // Create call: edge(p)
+    final Core.Exp edgeCall =
+        core.apply(Pos.ZERO, PrimitiveType.BOOL, core.id(edgeFnPat), pId);
+
+    System.err.println("\nedge(p) = " + edgeCall);
+
+    // Set up goalPats containing p
+    final ImmutableList<Core.NamedPat> goalPats = ImmutableList.of(pPat);
+    System.err.println("goalPats = " + goalPats);
+    System.err.println("goalPats[0] = " + goalPats.get(0));
+    System.err.println(
+        "goalPats[0] hashCode = " + System.identityHashCode(goalPats.get(0)));
+
+    // Call invert - this should inline edge(p) to (#1 p, #2 p) elem edges
+    System.err.println("\n=== Calling PredicateInverter.invert on edge(p) ===");
+    final Result result =
+        PredicateInverter.invert(
+            f.typeSystem, env, edgeCall, goalPats, ImmutableMap.of());
+
+    System.err.println("\n=== Result ===");
+    System.err.println("generator.expression = " + result.generator.expression);
+    System.err.println(
+        "generator.cardinality = " + result.generator.cardinality);
+    System.err.println("remainingFilters = " + result.remainingFilters);
+
+    if (result.generator.cardinality
+        == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
+      System.err.println(
+          "\nFAILURE: Got INFINITE cardinality - inversion failed!");
+    } else {
+      System.err.println("\nSUCCESS: Got finite cardinality.");
+    }
+  }
+
   private static void checkSimplify(
       String message, String s, String expectedToString) {
     final Fixture f = new Fixture();
@@ -753,6 +965,364 @@ public class PredicateInverterTest {
    */
   @Test
   void testUnused() {}
+
+  /**
+   * Focused diagnostic test for extractFieldAccessGoal pattern recognition
+   * failure in transitive closure.
+   *
+   * <p>This test traces the EXACT flow when: 1. Query is: from p where path p
+   * 2. path(p) is inlined to: edge(#1 p, #2 p) orelse (exists z where ...) 3.
+   * Base case edge(#1 p, #2 p) is inlined to: (#1 p, #2 p) elem edges 4.
+   * extractFieldAccessGoal is called to recognize the pattern
+   *
+   * <p>The test captures and prints debug output showing exactly where pattern
+   * matching fails, focusing on: - What goalPats contains (name, ordinal, and
+   * identity hashCode) - What the tuple args look like after inlining -
+   * Specifically what goalPats.contains(id.idPat) returns and why
+   */
+  @Test
+  void testExtractFieldAccessGoalDiagnostic() {
+    final Fixture f = new Fixture();
+
+    System.err.println("========================================");
+    System.err.println("=== testExtractFieldAccessGoalDiagnostic ===");
+    System.err.println("========================================");
+
+    // Step 1: Create the goal pattern p with tuple type (int, int)
+    // This represents the pattern from: from p where path p
+    final Type tupleType = f.typeSystem.tupleType(f.intType, f.intType);
+    final Core.IdPat pPat = core.idPat(tupleType, "p", 0);
+    final Core.Id pId = core.id(pPat);
+
+    System.err.println("\n=== Step 1: Create goal pattern pPat ===");
+    System.err.println("pPat = " + pPat);
+    System.err.println("pPat.name = " + pPat.name);
+    System.err.println("pPat.i = " + pPat.i);
+    System.err.println("pPat.type = " + pPat.type);
+    System.err.println(
+        "pPat identity hashCode = " + System.identityHashCode(pPat));
+    System.err.println("pId.idPat == pPat: " + (pId.idPat == pPat));
+
+    // Step 2: Create edges list: [(1, 2), (2, 3)]
+    final Type listTupleType = f.typeSystem.listType(tupleType);
+    final Core.Exp edges =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
+            core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
+
+    System.err.println("\n=== Step 2: Create edges list ===");
+    System.err.println("edges = " + edges);
+
+    // Step 3: Simulate the path function substitution
+    // path (x, y) = edge (x, y) orelse ...
+    // After substituting p for (x, y):
+    // - x becomes #1 p (field access to first component)
+    // - y becomes #2 p (field access to second component)
+    final Core.Exp field1 = core.field(f.typeSystem, pId, 0); // #1 p
+    final Core.Exp field2 = core.field(f.typeSystem, pId, 1); // #2 p
+
+    System.err.println(
+        "\n=== Step 3: Create field accesses (path substitution) ===");
+    System.err.println("field1 = core.field(typeSystem, pId, 0)");
+    System.err.println("field1 = " + field1);
+    System.err.println("field1.op = " + field1.op);
+
+    // Verify field1 structure
+    if (field1.op == net.hydromatic.morel.ast.Op.APPLY) {
+      Core.Apply apply1 = (Core.Apply) field1;
+      System.err.println("field1.fn.op = " + apply1.fn.op);
+      System.err.println("field1.arg.op = " + apply1.arg.op);
+      if (apply1.fn.op == net.hydromatic.morel.ast.Op.RECORD_SELECTOR) {
+        Core.RecordSelector sel = (Core.RecordSelector) apply1.fn;
+        System.err.println("field1.fn.slot = " + sel.slot);
+      }
+      if (apply1.arg.op == net.hydromatic.morel.ast.Op.ID) {
+        Core.Id argId = (Core.Id) apply1.arg;
+        System.err.println("field1.arg.idPat = " + argId.idPat);
+        System.err.println("field1.arg.idPat.name = " + argId.idPat.name);
+        System.err.println("field1.arg.idPat.i = " + argId.idPat.i);
+        System.err.println(
+            "field1.arg.idPat identity hashCode = "
+                + System.identityHashCode(argId.idPat));
+        System.err.println(
+            "field1.arg.idPat == pPat: " + (argId.idPat == pPat));
+        System.err.println(
+            "field1.arg.idPat.equals(pPat): " + argId.idPat.equals(pPat));
+      }
+    }
+
+    System.err.println("\nfield2 = core.field(typeSystem, pId, 1)");
+    System.err.println("field2 = " + field2);
+
+    // Step 4: Create the tuple argument for edge: (#1 p, #2 p)
+    // This is what edge receives after path substitution
+    final Core.Tuple edgeArgTuple =
+        core.tuple(f.typeSystem, null, ImmutableList.of(field1, field2));
+
+    System.err.println("\n=== Step 4: Create edge argument tuple ===");
+    System.err.println("edgeArgTuple = " + edgeArgTuple);
+    System.err.println("edgeArgTuple.op = " + edgeArgTuple.op);
+    System.err.println(
+        "edgeArgTuple.args.size() = " + edgeArgTuple.args.size());
+
+    // Step 5: Now simulate what buildSubstitution does when edge is inlined
+    // edge (x, y) = (x, y) elem edges
+    // Substituting (#1 p, #2 p) for (x, y):
+    // - edge's x becomes #1 p (the first component of the tuple arg)
+    // - edge's y becomes #2 p (the second component of the tuple arg)
+    // Result: (#1 p, #2 p) elem edges
+
+    // The key insight: when buildSubstitution is called with:
+    //   pat = (edgeXPat, edgeYPat)  -- edge's tuple pattern
+    //   exp = (#1 p, #2 p)           -- the tuple argument
+    // It builds: {edgeXPat -> #1 p, edgeYPat -> #2 p}
+    // Then the shuttle replaces edge's x with #1 p and edge's y with #2 p
+
+    // The result is the SAME #1 p and #2 p objects, not copies!
+
+    System.err.println(
+        "\n=== Step 5: Simulating edge body after substitution ===");
+    System.err.println(
+        "The tuple in 'tuple elem edges' should be the same edgeArgTuple");
+    System.err.println(
+        "Because buildSubstitution(edgePat, edgeArgTuple) extracts the tuple args");
+
+    // Create the elem expression: (#1 p, #2 p) elem edges
+    final Core.Exp elemExp = core.elem(f.typeSystem, edgeArgTuple, edges);
+
+    System.err.println("\n=== Step 6: Create elem expression ===");
+    System.err.println("elemExp = " + elemExp);
+
+    // Step 7: Set up goalPats and call invert
+    final ImmutableList<Core.NamedPat> goalPats = ImmutableList.of(pPat);
+
+    System.err.println("\n=== Step 7: Set up goalPats ===");
+    System.err.println("goalPats = " + goalPats);
+    for (int i = 0; i < goalPats.size(); i++) {
+      Core.NamedPat gp = goalPats.get(i);
+      System.err.println(
+          "  goalPats["
+              + i
+              + "] = "
+              + gp.name
+              + ", i="
+              + gp.i
+              + ", hashCode="
+              + System.identityHashCode(gp));
+    }
+
+    // Step 8: Call invert and observe the result
+    System.err.println("\n=== Step 8: Calling PredicateInverter.invert ===");
+    System.err.println(
+        "This should trigger invertElem -> extractFieldAccessGoal");
+
+    final Result result =
+        PredicateInverter.invert(
+            f.typeSystem,
+            Environments.empty(),
+            elemExp,
+            goalPats,
+            ImmutableMap.of());
+
+    System.err.println("\n=== RESULT ===");
+    System.err.println("generator.expression = " + result.generator.expression);
+    System.err.println(
+        "generator.cardinality = " + result.generator.cardinality);
+    System.err.println(
+        "remainingFilters.size() = " + result.remainingFilters.size());
+
+    if (result.remainingFilters.isEmpty()) {
+      System.err.println("\n*** SUCCESS: extractFieldAccessGoal worked! ***");
+      System.err.println("Generator produces: edges collection");
+      assertThat(
+          "Generator should be the edges collection",
+          result.generator.expression,
+          hasToString("[(1, 2), (2, 3)]"));
+    } else {
+      System.err.println(
+          "\n*** FAILURE: extractFieldAccessGoal returned null ***");
+      System.err.println("Remaining filters: " + result.remainingFilters);
+      System.err.println(
+          "Generator cardinality is: " + result.generator.cardinality);
+
+      // The debug output from extractFieldAccessGoal (lines 956-1064 in
+      // PredicateInverter.java)
+      // should show exactly which check failed:
+      // - "FAIL: arg[i] is not APPLY" -> tuple element isn't a field access
+      // - "FAIL: fn.op is not RECORD_SELECTOR" -> not a record selector
+      // - "FAIL: apply.arg.op is not ID" -> selector arg isn't an ID
+      // - "FAIL: goalPats does not contain id.idPat" -> THE KEY ISSUE
+      // - "FAIL: slot != position" -> slot/position mismatch
+      // - "FAIL: different source patterns" -> accessing different patterns
+      System.err.println(
+          "\nLook at the debug output above to see which check failed!");
+    }
+  }
+
+  /**
+   * Test that traces through the FULL transitive closure flow.
+   *
+   * <p>This test creates both edge and path functions, then inverts path(p) to
+   * observe the complete base case inversion.
+   */
+  @Test
+  void testTransitiveClosureFullFlow() {
+    final Fixture f = new Fixture();
+
+    System.err.println("========================================");
+    System.err.println("=== testTransitiveClosureFullFlow ===");
+    System.err.println("========================================");
+
+    // Create pattern p with tuple type (int, int)
+    final Type tupleType = f.typeSystem.tupleType(f.intType, f.intType);
+    final Core.IdPat pPat = core.idPat(tupleType, "p", 0);
+    final Core.Id pId = core.id(pPat);
+
+    System.err.println("\nGoal pattern:");
+    System.err.println("pPat = " + pPat);
+    System.err.println("pPat identity = " + System.identityHashCode(pPat));
+
+    // Create edges list
+    final Type listTupleType = f.typeSystem.listType(tupleType);
+    final Core.Exp edges =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
+            core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
+
+    // Create edge function: fun edge(x, y) = (x, y) elem edges
+    final Core.IdPat edgeXPat = core.idPat(f.intType, "x", 0);
+    final Core.IdPat edgeYPat = core.idPat(f.intType, "y", 0);
+    final Core.TuplePat edgeParamPat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(edgeXPat, edgeYPat));
+    final Core.Tuple edgeBodyTuple =
+        core.tuple(
+            f.typeSystem,
+            null,
+            ImmutableList.of(core.id(edgeXPat), core.id(edgeYPat)));
+    final Core.Exp edgeBody = core.elem(f.typeSystem, edgeBodyTuple, edges);
+
+    // Wrap edge in fn v => case v of (x, y) => body
+    final Type edgeFnParamType = f.typeSystem.tupleType(f.intType, f.intType);
+    final net.hydromatic.morel.type.FnType edgeFnType =
+        f.typeSystem.fnType(edgeFnParamType, PrimitiveType.BOOL);
+    final Core.IdPat edgeLambdaParam = core.idPat(edgeFnParamType, "v", 0);
+    final Core.Match edgeMatch = core.match(Pos.ZERO, edgeParamPat, edgeBody);
+    final Core.Case edgeCase =
+        core.caseOf(
+            Pos.ZERO,
+            PrimitiveType.BOOL,
+            core.id(edgeLambdaParam),
+            ImmutableList.of(edgeMatch));
+    final Core.Fn edgeFn = core.fn(edgeFnType, edgeLambdaParam, edgeCase);
+    final Core.IdPat edgeFnPat = core.idPat(edgeFnType, "edge", 0);
+
+    System.err.println("\nEdge function created:");
+    System.err.println(
+        "edge's xPat identity = " + System.identityHashCode(edgeXPat));
+    System.err.println(
+        "edge's yPat identity = " + System.identityHashCode(edgeYPat));
+
+    // Create path function: fun path(x, y) = edge(x, y) orelse (exists z where
+    // ...)
+    // For simplicity, we'll just use the base case: edge(x, y)
+    final Core.IdPat pathXPat =
+        core.idPat(f.intType, "x", 1); // Different ordinal from edge
+    final Core.IdPat pathYPat = core.idPat(f.intType, "y", 1);
+    final Core.TuplePat pathParamPat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(pathXPat, pathYPat));
+
+    System.err.println("\nPath function parameter patterns:");
+    System.err.println(
+        "pathXPat = "
+            + pathXPat
+            + ", identity = "
+            + System.identityHashCode(pathXPat));
+    System.err.println(
+        "pathYPat = "
+            + pathYPat
+            + ", identity = "
+            + System.identityHashCode(pathYPat));
+
+    // Path body: edge(x, y) - just the base case for now
+    final Core.Tuple pathArgTuple =
+        core.tuple(
+            f.typeSystem,
+            null,
+            ImmutableList.of(core.id(pathXPat), core.id(pathYPat)));
+    final Core.Exp pathBody =
+        core.apply(
+            Pos.ZERO, PrimitiveType.BOOL, core.id(edgeFnPat), pathArgTuple);
+
+    // Wrap path in fn v => case v of (x, y) => body
+    final net.hydromatic.morel.type.FnType pathFnType =
+        f.typeSystem.fnType(edgeFnParamType, PrimitiveType.BOOL);
+    final Core.IdPat pathLambdaParam = core.idPat(edgeFnParamType, "v", 1);
+    final Core.Match pathMatch = core.match(Pos.ZERO, pathParamPat, pathBody);
+    final Core.Case pathCase =
+        core.caseOf(
+            Pos.ZERO,
+            PrimitiveType.BOOL,
+            core.id(pathLambdaParam),
+            ImmutableList.of(pathMatch));
+    final Core.Fn pathFn = core.fn(pathFnType, pathLambdaParam, pathCase);
+    final Core.IdPat pathFnPat = core.idPat(pathFnType, "path", 0);
+
+    // Set up environment with both functions
+    final Environment env =
+        Environments.empty()
+            .bind(net.hydromatic.morel.type.Binding.of(edgeFnPat, edgeFn))
+            .bind(net.hydromatic.morel.type.Binding.of(pathFnPat, pathFn));
+
+    // Create call: path(p)
+    final Core.Exp pathCall =
+        core.apply(Pos.ZERO, PrimitiveType.BOOL, core.id(pathFnPat), pId);
+
+    System.err.println("\npath(p) call created:");
+    System.err.println("pathCall = " + pathCall);
+    System.err.println("pathCall.arg = " + ((Core.Apply) pathCall).arg);
+    System.err.println(
+        "pathCall.arg (pId) idPat identity = "
+            + System.identityHashCode(pId.idPat));
+
+    // Set up goalPats
+    final ImmutableList<Core.NamedPat> goalPats = ImmutableList.of(pPat);
+
+    System.err.println("\ngoalPats:");
+    System.err.println(
+        "goalPats[0] identity = " + System.identityHashCode(goalPats.get(0)));
+    System.err.println("goalPats[0] == pPat: " + (goalPats.get(0) == pPat));
+    System.err.println(
+        "goalPats[0] == pId.idPat: " + (goalPats.get(0) == pId.idPat));
+
+    // Call invert
+    System.err.println("\n=== Calling PredicateInverter.invert on path(p) ===");
+    System.err.println(
+        "Tracing: path(p) -> edge(#1 p, #2 p) -> (#1 p, #2 p) elem edges");
+
+    final Result result =
+        PredicateInverter.invert(
+            f.typeSystem, env, pathCall, goalPats, ImmutableMap.of());
+
+    System.err.println("\n=== RESULT ===");
+    System.err.println("generator.expression = " + result.generator.expression);
+    System.err.println(
+        "generator.cardinality = " + result.generator.cardinality);
+    System.err.println("remainingFilters = " + result.remainingFilters);
+
+    if (result.generator.cardinality
+        == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
+      System.err.println(
+          "\n*** FAILURE: Got INFINITE cardinality - base case inversion failed ***");
+      System.err.println(
+          "This means extractFieldAccessGoal returned null during base case inversion.");
+      System.err.println(
+          "Check the debug output above for the specific failure point.");
+    } else {
+      System.err.println("\n*** SUCCESS: Got finite cardinality ***");
+    }
+  }
 }
 
 // End PredicateInverterTest.java

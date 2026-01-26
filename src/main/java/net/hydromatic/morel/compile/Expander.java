@@ -130,9 +130,6 @@ public class Expander {
                       StepVarSet.create(from, typeSystem);
                   from2 = expandFrom2(cache, env, stepVars2);
                 }
-                System.out.println(from);
-                System.out.println(from2);
-                System.out.println("---");
                 return from2;
               }
 

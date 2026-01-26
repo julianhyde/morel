@@ -419,6 +419,32 @@ public class Inliner extends EnvShuttle {
   }
 
   @Override
+  protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
+    // Add the recursive function names to inliningBaseNames to prevent
+    // recursive expansion. This is critical because:
+    // 1. Multiple inlining passes create fresh Inliner instances
+    // 2. Without this, each pass would expand recursive calls one more level
+    // 3. This prevents massive expansion like path -> edge orelse path ->
+    //    edge orelse (edge orelse path) -> etc.
+    final List<String> addedNames = new ArrayList<>();
+    for (Core.NonRecValDecl decl : recValDecl.list) {
+      if (decl.pat instanceof Core.IdPat) {
+        final String base = baseName(((Core.IdPat) decl.pat).name);
+        if (!inliningBaseNames.contains(base)) {
+          inliningBaseNames.add(base);
+          addedNames.add(base);
+        }
+      }
+    }
+    try {
+      return super.visit(recValDecl);
+    } finally {
+      // Remove the names we added to restore original state
+      addedNames.forEach(inliningBaseNames::remove);
+    }
+  }
+
+  @Override
   protected Core.Exp visit(Core.Let let) {
     final Analyzer.Use use =
         analysis == null

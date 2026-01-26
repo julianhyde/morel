@@ -158,6 +158,32 @@ public class PredicateInverter {
    */
   private Result invert(
       Core.Exp predicate, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+    // Handle CASE expressions that result from function application expansion.
+    // When Inliner expands "path p", it becomes:
+    //   case p of (x_1, y_1) => edge(x_1, y_1) orelse exists...
+    // We need to invert the body using the pattern variables as new goals.
+    if (predicate.op == Op.CASE) {
+      Core.Case caseExp = (Core.Case) predicate;
+      // Check for single-arm case matching on a goal pattern
+      if (caseExp.matchList.size() == 1 && caseExp.exp.op == Op.ID) {
+        Core.Id caseId = (Core.Id) caseExp.exp;
+        // Check if we're matching on one of our goal patterns
+        if (goalPats.contains(caseId.idPat)) {
+          Core.Match match = caseExp.matchList.get(0);
+          // The new goal patterns are the variables bound by the match pattern
+          List<Core.NamedPat> newGoalPats = match.pat.expand();
+
+          // Invert the body using the new goal patterns
+          Result bodyResult = invert(match.exp, newGoalPats, active);
+
+          // If successful, the generator produces tuples matching the pattern
+          // which corresponds to the original goal pattern (since the case
+          // destructures goalPat into the match pattern)
+          return bodyResult;
+        }
+      }
+    }
+
     // Handle function application
     if (predicate.op == Op.APPLY) {
       Core.Apply apply = (Core.Apply) predicate;
@@ -196,13 +222,16 @@ public class PredicateInverter {
       }
 
       // Check for orelse (disjunction)
-      // Only handle transitive closure pattern in recursive contexts.
-      // Non-TC orelse patterns fall through to default handler (returns
-      // INFINITE extent).
-      // This design choice optimizes for the common case (TC patterns) while
-      // allowing future enhancement to support general disjunction union (Phase
-      // 6a).
-      if (apply.isCallTo(BuiltIn.Z_ORELSE) && !active.isEmpty()) {
+      // Handle transitive closure patterns:
+      // 1. In recursive contexts (!active.isEmpty()) - traditional TC detection
+      // 2. At top level when Inliner has pre-expanded the function body
+      //
+      // The second case handles: after Inliner expands `path p` to its body,
+      // we receive `baseCase orelse recursiveCase` directly instead of the
+      // function call. We still try TC inversion since it may contain a
+      // recursive pattern (with recursive calls NOT inlined due to recursion
+      // protection in Inliner).
+      if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
         Result tcResult =
             tryInvertTransitiveClosure(apply, null, null, goalPats, active);
         if (tcResult != null) {
@@ -706,16 +735,27 @@ public class PredicateInverter {
     final Core.Exp baseGenerator = baseCaseResult.generator.expression;
 
     // Get the RELATIONAL_ITERATE built-in as a function literal
+    // RELATIONAL_ITERATE has type: 'a bag -> (('a bag, 'a bag) -> 'a bag) -> 'a
+    // bag
     final Core.Exp iterateFn =
         core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
 
+    // Compute types for the application
+    final Type bagType = baseGenerator.type; // 'a bag
+    final Type stepFnArgType =
+        typeSystem.tupleType(bagType, bagType); // ('a bag, 'a bag)
+    final Type stepFnType =
+        typeSystem.fnType(stepFnArgType, bagType); // ('a bag, 'a bag) -> 'a bag
+    final Type afterBaseType =
+        typeSystem.fnType(stepFnType, bagType); // step -> 'a bag
+
     // Apply iterate to base generator
     final Core.Exp iterateWithBase =
-        core.apply(Pos.ZERO, iterateFn, baseGenerator);
+        core.apply(Pos.ZERO, afterBaseType, iterateFn, baseGenerator);
 
     // Apply the result to the step function
     final Core.Exp relationalIterate =
-        core.apply(Pos.ZERO, iterateWithBase, stepFunction);
+        core.apply(Pos.ZERO, bagType, iterateWithBase, stepFunction);
 
     // Create a Generator wrapping the Relational.iterate call
     final Generator iterateGenerator =
@@ -943,20 +983,24 @@ public class PredicateInverter {
     Core.NamedPat commonSource = null;
     for (int i = 0; i < tuple.args.size(); i++) {
       final Core.Exp arg = tuple.args.get(i);
+
       // Check if this is a field access: #slot id
       if (arg.op != Op.APPLY) {
         return null;
       }
       final Core.Apply apply = (Core.Apply) arg;
+
       if (apply.fn.op != Op.RECORD_SELECTOR) {
         return null;
       }
       final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
+
       // The argument to the selector should be an ID
       if (apply.arg.op != Op.ID) {
         return null;
       }
       final Core.Id id = (Core.Id) apply.arg;
+
       // Check if this ID is one of our goal patterns
       if (!goalPats.contains(id.idPat)) {
         return null;

@@ -146,11 +146,35 @@ class Generators {
     final List<Core.NamedPat> goalPats = pat.expand();
 
     for (Core.Exp constraint : constraints) {
-      // Look for user-defined function calls: APPLY with fn being an ID
-      if (constraint.op == Op.APPLY) {
-        Core.Apply apply = (Core.Apply) constraint;
-        if (apply.fn.op == Op.ID) {
-          // This is a user-defined function call
+      // Check if constraint is something we can potentially invert
+      // The constraint might be:
+      // 1. User-defined function call: APPLY where fn.op == ID (e.g., "path p")
+      // 2. Pre-expanded function body: CASE wrapping an orelse pattern
+      //    The Inliner expands "path p" to:
+      //    "case p of (x, y) => edge(x,y) orelse exists..."
+      // 3. Direct orelse pattern (less common)
+
+      // Unwrap CASE expressions to get to the actual predicate body
+      Core.Exp effectiveConstraint = constraint;
+      if (constraint.op == Op.CASE) {
+        Core.Case caseExp = (Core.Case) constraint;
+        // Check if this is a single-arm case (function application pattern)
+        if (caseExp.matchList.size() == 1) {
+          // Use the body of the single match arm
+          effectiveConstraint = caseExp.matchList.get(0).exp;
+        }
+      }
+
+      if (effectiveConstraint.op == Op.APPLY) {
+        Core.Apply apply = (Core.Apply) effectiveConstraint;
+
+        // Handle two cases:
+        // 1. User-defined function calls: fn.op == ID (e.g., "path p")
+        // 2. Pre-expanded function bodies: orelse patterns (after Inliner)
+        boolean isUserFunctionCall = apply.fn.op == Op.ID;
+        boolean isOrElsePattern = apply.isCallTo(BuiltIn.Z_ORELSE);
+
+        if (isUserFunctionCall || isOrElsePattern) {
           // Build generators map from existing cache generators
           final Map<Core.NamedPat, PredicateInverter.Generator> generators =
               new LinkedHashMap<>();
