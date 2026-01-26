@@ -177,13 +177,18 @@ class Generators {
 
           // Check if inversion succeeded with a finite generator
           if (result.generator.cardinality != Generator.Cardinality.INFINITE) {
-            // Create a CollectionGenerator from the result
+            // Create a PredicateInversionGenerator from the result.
+            // This generator knows about the original predicate so it can
+            // simplify "path p" to "true" when the generator produces p.
+            // Convert the collection to a list or bag, per "ordered".
+            final Core.Exp generatorExp =
+                CoreBuilder.withOrdered(
+                    ordered, result.generator.expression, cache.typeSystem);
             Set<Core.NamedPat> freePats =
-                SuchThatShuttle.freePats(
-                    cache.typeSystem, result.generator.expression);
+                SuchThatShuttle.freePats(cache.typeSystem, generatorExp);
             cache.add(
-                new CollectionGenerator(
-                    pat, result.generator.expression, freePats));
+                new PredicateInversionGenerator(
+                    pat, generatorExp, freePats, constraint));
             return true;
           }
         }
@@ -952,6 +957,84 @@ class Generators {
         return core.boolLiteral(true);
       }
       return exp;
+    }
+  }
+
+  /**
+   * Generator created by predicate inversion.
+   *
+   * <p>Stores the original predicate (e.g., {@code path p}) that was inverted
+   * to create this generator. When simplifying, recognizes the original
+   * predicate and replaces it with {@code true}.
+   */
+  static class PredicateInversionGenerator extends Generator {
+    final Core.Exp originalPredicate;
+
+    PredicateInversionGenerator(
+        Core.Pat pat,
+        Core.Exp generatorExp,
+        Iterable<? extends Core.NamedPat> freePats,
+        Core.Exp originalPredicate) {
+      super(generatorExp, freePats, pat, Cardinality.FINITE);
+      this.originalPredicate = requireNonNull(originalPredicate);
+    }
+
+    @Override
+    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+      // Check if exp matches the original predicate.
+      // The original predicate is something like "path p" where p is the pat.
+      // We need to check if exp is equivalent - it might have a different
+      // variable reference but same structure.
+      if (matchesPredicate(exp)) {
+        return core.boolLiteral(true);
+      }
+      return exp;
+    }
+
+    /**
+     * Checks if the expression matches the original predicate pattern.
+     *
+     * <p>For example, if originalPredicate is "path p" and exp is "path p",
+     * returns true.
+     */
+    private boolean matchesPredicate(Core.Exp exp) {
+      if (exp.op != originalPredicate.op) {
+        return false;
+      }
+      // For function calls, check if they call the same function
+      if (exp.op == Op.APPLY) {
+        Core.Apply apply1 = (Core.Apply) exp;
+        Core.Apply apply2 = (Core.Apply) originalPredicate;
+        // Check if same function is called
+        if (apply1.fn.op == Op.ID && apply2.fn.op == Op.ID) {
+          Core.Id fn1 = (Core.Id) apply1.fn;
+          Core.Id fn2 = (Core.Id) apply2.fn;
+          // Compare by name since idPat may differ between scopes
+          if (fn1.idPat.name.equals(fn2.idPat.name)) {
+            // Check if argument references our pattern
+            if (argumentReferencesPattern(apply1.arg, pat)) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    /**
+     * Checks if the argument references the pattern this generator produces.
+     */
+    private boolean argumentReferencesPattern(Core.Exp arg, Core.Pat pat) {
+      if (arg.op == Op.ID) {
+        Core.Id id = (Core.Id) arg;
+        // Check if the ID references any of the patterns we generate
+        for (Core.NamedPat namedPat : this.pat.expand()) {
+          if (id.idPat.name.equals(namedPat.name)) {
+            return true;
+          }
+        }
+      }
+      return false;
     }
   }
 

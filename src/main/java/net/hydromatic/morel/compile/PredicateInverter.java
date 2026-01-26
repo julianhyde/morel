@@ -527,13 +527,15 @@ public class PredicateInverter {
    */
   private @Nullable Result tryInvertFromRegistry(
       Core.NamedPat fnPat, Core.Exp callArg, List<Core.NamedPat> goalPats) {
-    Optional<FunctionRegistry.FunctionInfo> registeredInfo =
-        functionRegistry.lookup(fnPat);
-    if (!registeredInfo.isPresent()) {
+    // Use lookupByName since the IdPat from the call site may differ
+    // from the one registered (different object identity but same name).
+    Optional<FunctionRegistry.MatchResult> matchResultOpt =
+        functionRegistry.lookupByName(fnPat);
+    if (!matchResultOpt.isPresent()) {
       return null; // Not registered - use legacy inlining
     }
 
-    FunctionRegistry.FunctionInfo info = registeredInfo.get();
+    FunctionRegistry.FunctionInfo info = matchResultOpt.get().info;
 
     // Pattern matching: determine which goalPats are bound by this call
     Optional<PatternMatcher.MatchResult> matchResult =

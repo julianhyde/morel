@@ -474,11 +474,13 @@ public class PredicateInverterTest {
     final Core.IdPat pathFnPat = core.idPat(f.intIntBoolFnType, "path", 0);
 
     // Register path in the FunctionRegistry as RECURSIVE
+    // Note: The step function is now built at call time by PredicateInverter,
+    // not stored in the registry.
     final FunctionRegistry registry = new FunctionRegistry();
     registry.register(
         pathFnPat,
         FunctionRegistry.FunctionInfo.recursive(
-            pathParamPat, edges, stepFn, ImmutableSet.of(f.xPat, f.yPat)));
+            pathParamPat, edges, ImmutableSet.of(f.xPat, f.yPat)));
 
     // path(x, y)
     final Core.Exp pathCall =

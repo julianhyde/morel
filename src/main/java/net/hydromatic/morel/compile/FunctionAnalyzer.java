@@ -47,9 +47,14 @@ import net.hydromatic.morel.type.TypeSystem;
  */
 public class FunctionAnalyzer {
   private final TypeSystem typeSystem;
+  private final FunctionRegistry registry;
+  private final Environment env;
 
-  public FunctionAnalyzer(TypeSystem typeSystem) {
+  public FunctionAnalyzer(
+      TypeSystem typeSystem, FunctionRegistry registry, Environment env) {
     this.typeSystem = requireNonNull(typeSystem, "typeSystem");
+    this.registry = requireNonNull(registry, "registry");
+    this.env = requireNonNull(env, "env");
   }
 
   /**
@@ -68,6 +73,24 @@ public class FunctionAnalyzer {
     Core.Fn fn = (Core.Fn) fnExp;
     Core.Pat formalParam = fn.idPat;
     Core.Exp body = fn.exp;
+
+    // Unwrap case expressions for tuple parameters.
+    // Functions like `fun f (x, y) = body` compile to:
+    //   fn v => case v of (x, y) => body
+    // We need to extract the real pattern and body.
+    if (body.op == Op.CASE) {
+      Core.Case caseExp = (Core.Case) body;
+      // Check if case is matching on the function parameter
+      if (caseExp.exp.op == Op.ID) {
+        Core.Id caseId = (Core.Id) caseExp.exp;
+        if (caseId.idPat.equals(fn.idPat) && caseExp.matchList.size() == 1) {
+          // Single-arm case matching on parameter - extract the arm
+          Core.Match match = caseExp.matchList.get(0);
+          formalParam = match.pat;
+          body = match.exp;
+        }
+      }
+    }
 
     // Check if this is a recursive function (references itself)
     boolean isRecursive = referencesFunction(body, fnPat);
@@ -127,14 +150,12 @@ public class FunctionAnalyzer {
         // Analyze base case - should be invertible
         Optional<Core.Exp> baseGenerator = extractElemCollection(baseCase);
         if (baseGenerator.isPresent()) {
-          // For now, mark as RECURSIVE with the base generator
-          // The step function will be constructed during inversion
+          // Mark as RECURSIVE with the base generator.
+          // The step function will be built at call time during inversion,
+          // since it requires context from the call site.
           Set<Core.NamedPat> canGenerate = collectNamedPats(formalParam);
           return FunctionRegistry.FunctionInfo.recursive(
-              formalParam,
-              baseGenerator.get(),
-              recursiveCase, // Store recursive case for later analysis
-              canGenerate);
+              formalParam, baseGenerator.get(), canGenerate);
         }
       }
     }
@@ -144,16 +165,35 @@ public class FunctionAnalyzer {
   }
 
   /**
-   * Extracts the collection from an "elem" expression.
+   * Extracts the collection from an "elem" expression or invertible function
+   * call.
    *
    * <p>For {@code x elem collection}, returns {@code collection}.
+   *
+   * <p>For {@code f(x)} where {@code f} is an INVERTIBLE function, returns the
+   * function's generator.
    */
   private Optional<Core.Exp> extractElemCollection(Core.Exp exp) {
     if (exp.op == Op.APPLY) {
       Core.Apply apply = (Core.Apply) exp;
-      if (apply.isCallTo(BuiltIn.OP_ELEM)) {
+      // Check for elem operator - may be overloaded as elem$1, elem$2, etc.
+      if (apply.isCallTo(BuiltIn.OP_ELEM) || isElemCall(apply)) {
         // apply.arg(0) is the element, apply.arg(1) is the collection
         return Optional.of(apply.arg(1));
+      }
+
+      // Check if this is a call to an invertible function
+      if (apply.fn.op == Op.ID) {
+        Core.Id fnId = (Core.Id) apply.fn;
+        Optional<FunctionRegistry.MatchResult> matchOpt =
+            registry.lookupByName(fnId.idPat);
+        if (matchOpt.isPresent()) {
+          FunctionRegistry.FunctionInfo info = matchOpt.get().info;
+          if (info.status() == FunctionRegistry.InvertibilityStatus.INVERTIBLE
+              && info.baseGenerator().isPresent()) {
+            return info.baseGenerator();
+          }
+        }
       }
     }
     return Optional.empty();
@@ -208,6 +248,26 @@ public class FunctionAnalyzer {
     }
   }
 
+  /**
+   * Checks if an Apply is a call to an overloaded elem operator.
+   *
+   * <p>When elem is overloaded, it compiles to elem$1, elem$2, etc. This method
+   * checks if the function is an ID whose name starts with "elem$".
+   */
+  private boolean isElemCall(Core.Apply apply) {
+    if (apply.fn.op == Op.ID) {
+      Core.Id fnId = (Core.Id) apply.fn;
+      String name = fnId.idPat.name;
+      // Check for overloaded elem: elem$1, elem$2, etc.
+      // The name may be prefixed with "op " for operator syntax
+      return name.startsWith("elem$")
+          || name.equals("elem")
+          || name.startsWith("op elem$")
+          || name.equals("op elem");
+    }
+    return false;
+  }
+
   /** Checks if an expression references a specific function. */
   private boolean referencesFunction(Core.Exp exp, Core.NamedPat fnPat) {
     final boolean[] found = {false};
@@ -255,13 +315,12 @@ public class FunctionAnalyzer {
   }
 
   /**
-   * Populates a FunctionRegistry by analyzing all function definitions in a
+   * Populates the FunctionRegistry by analyzing all function definitions in a
    * declaration.
    *
    * @param decl the declaration to analyze
-   * @param registry the registry to populate
    */
-  public void analyzeDecl(Core.Decl decl, FunctionRegistry registry) {
+  public void analyzeDecl(Core.Decl decl) {
     if (decl instanceof Core.RecValDecl) {
       Core.RecValDecl recValDecl = (Core.RecValDecl) decl;
       for (Core.NonRecValDecl valDecl : recValDecl.list) {
@@ -270,6 +329,14 @@ public class FunctionAnalyzer {
           FunctionRegistry.FunctionInfo info = analyze(fnPat, valDecl.exp);
           registry.register(fnPat, info);
         }
+      }
+    } else if (decl instanceof Core.NonRecValDecl) {
+      // Non-recursive function declaration (e.g., fun edge (x, y) = ...)
+      Core.NonRecValDecl valDecl = (Core.NonRecValDecl) decl;
+      if (valDecl.pat instanceof Core.NamedPat) {
+        Core.NamedPat fnPat = (Core.NamedPat) valDecl.pat;
+        FunctionRegistry.FunctionInfo info = analyze(fnPat, valDecl.exp);
+        registry.register(fnPat, info);
       }
     }
   }

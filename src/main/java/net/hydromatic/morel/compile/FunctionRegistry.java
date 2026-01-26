@@ -159,10 +159,15 @@ public class FunctionRegistry {
     }
 
     /** Creates info for a recursive function. */
+    /**
+     * Creates info for a recursive function (e.g., transitive closure).
+     *
+     * <p>The step function for Relational.iterate is built at call time, not
+     * stored in the registry, since it requires context from the call site.
+     */
     public static FunctionInfo recursive(
         Core.Pat formalParameter,
         Core.Exp baseGenerator,
-        Core.Exp recursiveStep,
         Set<Core.NamedPat> canGenerateAlone) {
       return new FunctionInfo(
           InvertibilityStatus.RECURSIVE,
@@ -170,7 +175,7 @@ public class FunctionRegistry {
           Optional.of(baseGenerator),
           ImmutableSet.copyOf(canGenerateAlone),
           ImmutableSet.of(),
-          Optional.of(recursiveStep));
+          Optional.empty()); // Step function built at call time
     }
 
     /** Creates info for a non-invertible function. */
@@ -224,6 +229,40 @@ public class FunctionRegistry {
    */
   public Optional<FunctionInfo> lookup(Core.NamedPat fnPat) {
     return Optional.ofNullable(registry.get(fnPat));
+  }
+
+  /**
+   * Looks up a function's invertibility information by name.
+   *
+   * <p>This is useful when the IdPat objects differ between call site and
+   * registration site (e.g., due to different scopes or compilation units).
+   *
+   * @param fnPat the function's name pattern (used to extract the name)
+   * @return a MatchResult containing the function info and registered pattern,
+   *     or empty if not found
+   */
+  public Optional<MatchResult> lookupByName(Core.NamedPat fnPat) {
+    String targetName = fnPat.name;
+    for (Map.Entry<Core.NamedPat, FunctionInfo> entry : registry.entrySet()) {
+      if (entry.getKey().name.equals(targetName)) {
+        return Optional.of(new MatchResult(entry.getKey(), entry.getValue()));
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * Result of a name-based lookup, containing both the registered pattern and
+   * info.
+   */
+  public static class MatchResult {
+    public final Core.NamedPat registeredPat;
+    public final FunctionInfo info;
+
+    MatchResult(Core.NamedPat registeredPat, FunctionInfo info) {
+      this.registeredPat = registeredPat;
+      this.info = info;
+    }
   }
 
   /**

@@ -230,6 +230,24 @@ public class Expander {
 
           // The step is not a scan over an extent. Add it now.
           step = Replacer.substitute(typeSystem, env, substitution, step);
+          // For WHERE steps, simplify the condition using generators to remove
+          // predicates that are satisfied by generated values.
+          if (step instanceof Core.Where) {
+            final Core.Where where = (Core.Where) step;
+            final Simplifier simplifier =
+                new Simplifier(typeSystem, cache.generators);
+            final Core.Exp simplifiedCond = simplifier.simplify(where.exp);
+            if (!simplifiedCond.equals(where.exp)) {
+              // Condition was simplified - create a new WHERE with the
+              // simplified condition. If it became "true", skip the WHERE.
+              if (simplifiedCond.op == Op.BOOL_LITERAL
+                  && ((Core.Literal) simplifiedCond).unwrap(Boolean.class)) {
+                // WHERE true - skip this step entirely
+                return;
+              }
+              step = core.where(where.env, simplifiedCond);
+            }
+          }
           fromBuilder.addAll(ImmutableList.of(step));
         });
 

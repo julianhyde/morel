@@ -184,12 +184,14 @@ public abstract class Compiles {
       }
     }
 
-    // Analyze function definitions for invertibility
-    final FunctionRegistry functionRegistry = new FunctionRegistry();
-    if (coreDecl0.op == Op.REC_VAL_DECL) {
-      final FunctionAnalyzer analyzer = new FunctionAnalyzer(typeSystem);
-      analyzer.analyzeDecl(coreDecl0, functionRegistry);
-    }
+    // Analyze function definitions for invertibility.
+    // Use session's registry to persist across statements.
+    // Analyze both recursive (REC_VAL_DECL) and non-recursive (VAL_DECL)
+    // functions.
+    final FunctionRegistry functionRegistry = session.functionRegistry;
+    final FunctionAnalyzer analyzer =
+        new FunctionAnalyzer(typeSystem, functionRegistry, env);
+    analyzer.analyzeDecl(coreDecl0);
 
     // Ensures that once we discover that there are no unbounded variables,
     // we stop looking; makes things a bit more efficient.
@@ -337,11 +339,13 @@ public abstract class Compiles {
       }
     }
 
-    // Analyze function definitions for invertibility
-    final FunctionRegistry functionRegistry = new FunctionRegistry();
+    // Analyze function definitions for invertibility.
+    // Use session's registry to persist across statements.
+    final FunctionRegistry functionRegistry = session.functionRegistry;
     if (coreDecl0.op == Op.REC_VAL_DECL) {
-      final FunctionAnalyzer analyzer = new FunctionAnalyzer(typeSystem);
-      analyzer.analyzeDecl(coreDecl0, functionRegistry);
+      final FunctionAnalyzer analyzer =
+          new FunctionAnalyzer(typeSystem, functionRegistry, env);
+      analyzer.analyzeDecl(coreDecl0);
     }
 
     // Run SuchThat and Extents passes
