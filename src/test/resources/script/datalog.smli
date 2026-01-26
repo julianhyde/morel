@@ -135,18 +135,18 @@ person(\"Bob\").
 .output person";
 > val it = "{person:string list}" : string
 
-(*) Basic facts - symbol type
-Datalog.validate ".decl color(c:symbol)
-color(red).
-color(blue).
-color(green).
+(*) Basic facts - symbol type (now using string type since Souffle has no symbols)
+Datalog.validate ".decl color(c:string)
+color(\"red\").
+color(\"blue\").
+color(\"green\").
 .output color";
 > val it = "{color:string list}" : string
 
 (*) Basic facts - mixed types
-Datalog.validate ".decl employee(name:string, age:number, dept:symbol)
-employee(\"Alice\", 30, engineering).
-employee(\"Bob\", 25, sales).
+Datalog.validate ".decl employee(name:string, age:number, dept:string)
+employee(\"Alice\", 30, \"engineering\").
+employee(\"Bob\", 25, \"sales\").
 .output employee";
 > val it = "{employee:{age:int, dept:string, name:string} list}" : string
 
@@ -183,13 +183,13 @@ person(42).";
 Datalog.validate ".decl num(n:number)
 num(\"hello\").";
 > val it =
->   "Compilation error: Type mismatch in fact num(...): expected number, got symbol for parameter n"
+>   "Compilation error: Type mismatch in fact num(...): expected number, got string for parameter n"
 >   : string
 
-(*) Variables in facts are allowed
+(*) Variables in facts are not allowed
 Datalog.validate ".decl num(n:number)
-num(foo).";
-> val it = "unit" : string
+num(Foo).";
+> val it = "Compilation error: Argument in fact is not constant: Foo" : string
 
 (*) Simple rule - transitive closure
 Datalog.validate ".decl edge(x:number, y:number)
