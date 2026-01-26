@@ -145,8 +145,34 @@ public class Extents {
       SortedMap<Core.NamedPat, Core.Exp> boundPats,
       Iterable<? extends Core.FromStep> followingSteps,
       PairList<Core.IdPat, Core.Exp> idPats) {
+    return create(
+        typeSystem,
+        env,
+        invert,
+        pat,
+        boundPats,
+        followingSteps,
+        idPats,
+        new FunctionRegistry());
+  }
+
+  /**
+   * Creates an extent analysis with a function registry.
+   *
+   * @param functionRegistry Registry of pre-analyzed function invertibility
+   */
+  public static Analysis create(
+      TypeSystem typeSystem,
+      Environment env,
+      boolean invert,
+      Core.Pat pat,
+      SortedMap<Core.NamedPat, Core.Exp> boundPats,
+      Iterable<? extends Core.FromStep> followingSteps,
+      PairList<Core.IdPat, Core.Exp> idPats,
+      FunctionRegistry functionRegistry) {
     final Extent extent =
-        new Extent(typeSystem, env, invert, pat, boundPats, idPats);
+        new Extent(
+            typeSystem, env, invert, pat, boundPats, idPats, functionRegistry);
     final List<Core.Exp> remainingFilters = new ArrayList<>();
 
     final ExtentMap map = new ExtentMap();
@@ -400,6 +426,7 @@ public class Extents {
     private final TypeSystem typeSystem;
     private final Environment env;
     private final boolean invert;
+    private final FunctionRegistry functionRegistry;
     final List<Core.NamedPat> goalPats;
     final SortedMap<Core.NamedPat, Core.Exp> boundPats;
 
@@ -423,10 +450,12 @@ public class Extents {
         boolean invert,
         Core.Pat pat,
         SortedMap<Core.NamedPat, Core.Exp> boundPats,
-        PairList<Core.IdPat, Core.Exp> idPats) {
+        PairList<Core.IdPat, Core.Exp> idPats,
+        FunctionRegistry functionRegistry) {
       this.typeSystem = requireNonNull(typeSystem);
       this.env = requireNonNull(env);
       this.invert = invert;
+      this.functionRegistry = requireNonNull(functionRegistry);
       this.goalPats = ImmutableList.copyOf(flatten(pat));
       this.boundPats = ImmutableSortedMap.copyOf(boundPats);
       this.idPats = idPats;
@@ -586,7 +615,12 @@ public class Extents {
                                   ImmutableSet.of())));
                   final PredicateInverter.Result result =
                       PredicateInverter.invert(
-                          typeSystem, env, filter, goalPats, generators);
+                          typeSystem,
+                          env,
+                          filter,
+                          goalPats,
+                          generators,
+                          functionRegistry);
                   if (invert
                       && result.generator.cardinality
                           != Generator.Cardinality.INFINITE) {
@@ -727,37 +761,45 @@ public class Extents {
       }
 
       if (tryInvert) {
-        // Convert boundPats to generators
-        final Map<Core.NamedPat, PredicateInverter.Generator> generators =
-            new LinkedHashMap<>();
-        boundPats.forEach(
-            (pat, exp) ->
-                generators.put(
-                    pat,
-                    new PredicateInverter.Generator(
-                        pat,
-                        exp,
-                        Generator.Cardinality.FINITE,
-                        ImmutableList.of(),
-                        ImmutableSet.of())));
-        final PredicateInverter.Result result =
-            PredicateInverter.invert(
-                typeSystem, env, filter, goalPats, generators);
-        // Check if inversion succeeded (didn't just return fallback)
-        final boolean inversionSucceeded =
-            result.remainingFilters.size() != 1
-                || !result.remainingFilters.get(0).equals(filter);
-        if (inversionSucceeded) {
-          // The generator produces tuples for all goalPats
-          final Core.Exp combinedFilter =
-              result.remainingFilters.isEmpty()
-                  ? core.boolLiteral(true)
-                  : core.andAlso(typeSystem, result.remainingFilters);
-          goalPats.forEach(
-              pat ->
-                  map.computeIfAbsent(pat, p -> PairList.of())
-                      .add(result.generator.expression, combinedFilter));
-        }
+        tryPredicateInversion(map, filter);
+      }
+    }
+
+    /**
+     * Attempts to invert a predicate to produce a generator for goal patterns.
+     */
+    private void tryPredicateInversion(
+        Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map, Core.Exp filter) {
+      // Convert boundPats to generators
+      final Map<Core.NamedPat, PredicateInverter.Generator> generators =
+          new LinkedHashMap<>();
+      boundPats.forEach(
+          (pat, exp) ->
+              generators.put(
+                  pat,
+                  new PredicateInverter.Generator(
+                      pat,
+                      exp,
+                      Generator.Cardinality.FINITE,
+                      ImmutableList.of(),
+                      ImmutableSet.of())));
+      final PredicateInverter.Result result =
+          PredicateInverter.invert(
+              typeSystem, env, filter, goalPats, generators, functionRegistry);
+      // Check if inversion succeeded (didn't just return fallback)
+      final boolean inversionSucceeded =
+          result.remainingFilters.size() != 1
+              || !result.remainingFilters.get(0).equals(filter);
+      if (inversionSucceeded) {
+        // The generator produces tuples for all goalPats
+        final Core.Exp combinedFilter =
+            result.remainingFilters.isEmpty()
+                ? core.boolLiteral(true)
+                : core.andAlso(typeSystem, result.remainingFilters);
+        goalPats.forEach(
+            pat ->
+                map.computeIfAbsent(pat, p -> PairList.of())
+                    .add(result.generator.expression, combinedFilter));
       }
     }
 
