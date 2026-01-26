@@ -561,31 +561,46 @@ public class PredicateInverter {
         break;
 
       case RECURSIVE:
-        // Recursive function - use cached base case and step from registry.
-        // Per Scott: "Recursion happens in a different domain" - the step
-        // function is pre-computed at registration time, NOT inlined here.
-        if (info.baseGenerator().isPresent()
-            && info.recursiveStep().isPresent()) {
+        // Recursive function - use cached base case from registry.
+        // Use pre-built step function if available, otherwise build at call
+        // time.
+        if (info.baseGenerator().isPresent()) {
           Core.Exp baseGen = info.baseGenerator().get();
-          Core.Exp stepFn = info.recursiveStep().get();
+          Core.Exp stepFn;
+
+          if (info.recursiveStep().isPresent()) {
+            // Use pre-built step function from registry
+            stepFn = info.recursiveStep().get();
+          } else {
+            // Build step function at call time using existing infrastructure
+            final IOPair baseCaseIO = new IOPair(ImmutableMap.of(), baseGen);
+            final TabulationResult tabulation =
+                new TabulationResult(
+                    ImmutableList.of(baseCaseIO),
+                    net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                    true);
+            final VarEnvironment varEnv = VarEnvironment.initial(goalPats, env);
+            stepFn = buildStepFunction(tabulation, varEnv);
+          }
 
           // Build: Relational.iterate baseGen stepFn
-          // RELATIONAL_ITERATE has type: 'a bag -> (('a bag, 'a bag) -> 'a bag)
-          //   -> 'a bag
-          // After applying baseGen ('a bag): (('a bag, 'a bag) -> 'a bag) -> 'a
+          // RELATIONAL_ITERATE: 'a bag -> (('a bag * 'a bag) -> 'a bag) -> 'a
           // bag
-          // After applying stepFn: 'a bag
-          Type bagType = baseGen.type; // 'a bag (the result type)
+          // Use the overload-resolving functionLiteral to handle MultiType
+          Type bagType = baseGen.type; // 'a bag
           Type stepFnArgType =
               typeSystem.tupleType(bagType, bagType); // ('a bag, 'a bag)
           Type stepFnType =
-              typeSystem.fnType(stepFnArgType, bagType); // ('a bag, 'a bag) ->
-          // 'a bag
+              typeSystem.fnType(
+                  stepFnArgType, bagType); // ('a bag, 'a bag) -> 'a bag
           Type afterBaseType =
               typeSystem.fnType(stepFnType, bagType); // step -> 'a bag
 
           Core.Exp iterateFn =
-              core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
+              core.functionLiteral(
+                  typeSystem,
+                  BuiltIn.RELATIONAL_ITERATE,
+                  ImmutableList.of(baseGen));
           Core.Exp iterateWithBase =
               core.apply(Pos.ZERO, afterBaseType, iterateFn, baseGen);
           Core.Exp relationalIterate =
