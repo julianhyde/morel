@@ -18,12 +18,15 @@
  *
  * Tests for queries with unbounded variables (also called 'domain
  * variables' because they range over a domain such as integers
- * or positive integers).
+ * or positive integers). Queries with unbounded variables are made
+ * runnable using a technique called 'predicate inversion'.
  *
  * Originally, such queries used a 'suchthat' keyword, but that
  * keyword has since been removed.
  *)
 Sys.set ("output", "tabular");
+> val it = () : unit
+Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
 (* ------------------------------------------------------ *)
@@ -182,6 +185,17 @@ end;
 > val it = [1,2,10,20] : int bag
 
 (* -- Predicate inversion ------------------------------- *)
+
+(* 1. Simple elem
+ *
+ * Invert 'from x where x elem list' to 'from x in list'. *)
+from x where x elem [1, 2, 4];
+> val it = [1,2,4] : int bag
+(* TODO: remove spurious 'where op elem (x, [1, 2, 4])' *)
+Sys.planEx "999";
+> val it =
+>   "val it = from x in #fromList Bag ([1, 2, 4]) where op elem (x, [1, 2, 4])"
+>   : string
 
 (* In the following case, we solve for x given a value of y. This
    requires predicate-inversion because it cannot be solved using
@@ -610,9 +624,20 @@ in
 end;
 *)
 
-(*
+(* 2. String prefix.
+ *
+ * Invert
+ *   from p where ifPrefix p s'
+ * to
+ *   from p in List.tabulate(String.size s + 1,
+ *                           fn i => String.substring(s, 0, i))
+ *)
 from p where String.isPrefix p "abcd";
 > val it = ["","a","ab","abc","abcd"] : string bag
+Sys.planEx "999";
+> val it =
+>   "val it = from p in #tabulate Bag (#size String \"abcd\" + 1, fn i => #substring String (\"abcd\", 0, i))"
+>   : string
 
 from s in ["abcd", "ant"], p where String.isPrefix p s;
 > p    s
@@ -628,13 +653,21 @@ from s in ["abcd", "ant"], p where String.isPrefix p s;
 > ant  ant
 >
 > val it : {p:string, s:string} bag
+Sys.planEx "999";
+> val it =
+>   "val it = from s in [\"abcd\", \"ant\"] join p in #tabulate Bag (#size String s + 1, fn i => #substring String (s, 0, i))"
+>   : string
 
 from s in ["abcd", "ant"], p where String.isPrefix p s yield p distinct;
 > val it = ["a","ab","abc","ant","abcd","an",""] : string bag
 
 from p where (exists s in ["abcd", "ant"] where String.isPrefix p s) order p;
 > val it = ["","a","ab","abc","abcd","an","ant"] : string list
-*)
+(* TODO: remove spurious 'where' *)
+Sys.planEx "999";
+> val it =
+>   "val it = from s in [\"abcd\", \"ant\"] join p in #tabulate Bag (#size String s + 1, fn i => #substring String (s, 0, i)) yield p group p = p where #nonEmpty Relational (from s in [\"abcd\", \"ant\"] where #isPrefix String p s) order p"
+>   : string
 
 (*) A string function with external extent.
 (*) Given s2, we could generate finite s1.
