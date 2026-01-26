@@ -1290,16 +1290,12 @@ from d where d elem scott.depts;
 > 40     OPERATIONS BOSTON
 >
 > val it : {deptno:int, dname:string, loc:string} bag
-(*
 Sys.planEx "0";
 > val it =
->   "val it_66 = from d_3 : {deptno:int, dname:string, loc:string} where op elem$0 (d_3, #depts scott)"
+>   "val it = from d : {deptno:int, dname:string, loc:string} where op elem$0 (d, #depts scott)"
 >   : string
-Sys.planEx "-1";
-> val it =
->   "val it = from d in #depts scott"
->   : string
-*)
+Sys.planEx "3";
+> val it = "val it = from d in #depts scott" : string
 
 (* testFromSuchThat2c - Record pattern with field renaming *)
 from loc, deptno, name
@@ -1312,12 +1308,15 @@ where {deptno, loc, dname = name} elem scott.depts;
 > 40     BOSTON   OPERATIONS
 >
 > val it : {deptno:int, loc:string, name:string} bag
-(*
 Sys.planEx "-1";
 > val it =
->   "val it = from v$0 in #depts scott join loc in [#loc v$0] join deptno in [#deptno v$0] join name in [#dname v$0] where op elem ({deptno = deptno, dname = name, loc = loc}, #depts scott) yield {deptno = deptno, loc = loc, name = name}"
+>   "val it = from loc : string join deptno : int join name : string where op elem$0 ({deptno = deptno, dname = name, loc = loc}, #depts scott)"
 >   : string
-*)
+(* TODO: remove spurious 'where' *)
+Sys.planEx "3";
+> val it =
+>   "val it = from ({deptno = deptno, dname = name, loc = loc}) in #depts scott where op elem ({deptno = deptno, dname = name, loc = loc}, #depts scott)"
+>   : string
 
 (* testFromSuchThat2d - Record pattern with literal and additional
    constraint. Same as testFromSuchThat2c but with a literal. *)
@@ -1330,16 +1329,15 @@ from dno, name
 > 30  SALES
 >
 > val it : {dno:int, name:string} bag
-(*
 Sys.planEx "0";
 > val it =
 >   "val it = from dno : int join name : string where op elem$0 ({deptno = dno, dname = name, loc = \"CHICAGO\"}, #depts scott) andalso dno > 20"
 >   : string
-Sys.planEx "-1";
+(* TODO: remove spurious 'where' *)
+Sys.planEx "3";
 > val it =
->   "val it = from v$0 in #depts scott join dno in [#deptno v$0] join name in [#dname v$0] where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"}, #depts scott) andalso dno > 20 yield {dno = dno, name = name}"
+>   "val it = from ({deptno = dno, dname = name, loc = \"CHICAGO\"}) in #depts scott where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"}, #depts scott) andalso dno > 20"
 >   : string
-*)
 
 (* testFromSuchThat2d3 - Forward references with equality constraint *)
 from dno, name, v
@@ -1354,16 +1352,14 @@ yield {dno = #deptno v, name = #dname v};
 > 30  SALES
 >
 > val it : {dno:int, name:string} bag
-(*
 Sys.planEx "0";
 > val it =
 >   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem$0 (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
 >   : string
-Sys.planEx "-1";
+Sys.planEx "3";
 > val it =
->   "val it = from dno in [30] unorder join v in #depts scott join name in [#dname v] where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
+>   "val it = from v in #depts scott join dno in #fromList Bag ([#deptno v]) join name in #fromList Bag ([#dname v]) where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
 >   : string
-*)
 
 (* testFromSuchThat2d4 - Forward references with inequality constraint *)
 from dno, name, v
@@ -1378,16 +1374,14 @@ yield {dno = #deptno v, name = #dname v};
 > 30  SALES
 >
 > val it : {dno:int, name:string} bag
-(*
 Sys.planEx "0";
 > val it =
 >   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem$0 (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
 >   : string
-Sys.planEx "-1";
+Sys.planEx "3";
 > val it =
->   "val it = from v in #depts scott join dno in [#deptno v] join name in [#dname v] where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
+>   "val it = from v in #depts scott join dno in #fromList Bag ([#deptno v]) join name in #fromList Bag ([#dname v]) where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
 >   : string
-*)
 
 (* testFromSuchThat2e - Function inlining with elem predicate.
  * As testFromSuchThat2d but using a function. (Simple enough
@@ -1401,16 +1395,15 @@ in
     yield d.dname
 end;
 > val it = ["RESEARCH"] : string bag
-(*
 Sys.planEx "0";
 > val it =
 >   "val it = let val isDept = fn d => op elem$0 (d, #depts scott) in from d_1 : {deptno:int, dname:string, loc:string} where isDept d_1 andalso #deptno d_1 = 20 yield #dname d_1 end"
 >   : string
-Sys.planEx "-1";
+(* TODO: remove spurious 'where op elem (d, #depts scott)' *)
+Sys.planEx "999";
 > val it =
->   "val it = from d_1 in #depts scott where #deptno d_1 = 20 yield #dname d_1"
+>   "val it = from d in #depts scott where op elem (d, #depts scott) andalso #deptno d = 20 yield #dname d"
 >   : string
-*)
 
 (* testFromSuchThat2f - Join via suchthat with two functions *)
 let
@@ -1427,16 +1420,15 @@ in
     yield d.dname
 end;
 > val it = ["RESEARCH","RESEARCH","RESEARCH","RESEARCH","RESEARCH"] : string bag
-(*
 Sys.planEx "0";
 > val it =
 >   "val it = let val isDept = fn d => op elem$0 (d, #depts scott) in let val isEmp = fn e => op elem$0 (e, #emps scott) in from d_1 : {deptno:int, dname:string, loc:string} join e_1 : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} where isDept d_1 andalso isEmp e_1 andalso #deptno d_1 = #deptno e_1 andalso #deptno d_1 = 20 yield #dname d_1 end end"
 >   : string
-Sys.planEx "-1";
+(* TODO: remove spurious 'where op elem (d, #depts scott) andalso op elem (e, #emps scott)' *)
+Sys.planEx "999";
 > val it =
->   "val it = from d_1 in #depts scott join e_1 in #emps scott where #deptno d_1 = #deptno e_1 andalso #deptno d_1 = 20 yield #dname d_1"
+>   "val it = from d in #depts scott join e in #emps scott where op elem (d, #depts scott) andalso op elem (e, #emps scott) andalso #deptno d = #deptno e andalso #deptno d = 20 yield #dname d"
 >   : string
-*)
 
 (* testFromSuchThat3 - Smaller version of testFromSuchThat *)
 let
