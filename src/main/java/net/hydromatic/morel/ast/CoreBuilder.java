@@ -22,12 +22,14 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Maps.transformValues;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.PairList.fromTransformed;
 import static net.hydromatic.morel.util.Static.allMatch;
 import static net.hydromatic.morel.util.Static.filterEager;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
+import static net.hydromatic.morel.util.Static.transformToMap;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -347,7 +349,7 @@ public enum CoreBuilder {
   }
 
   public Core.RecordPat recordPat(
-      RecordType type, List<? extends Core.Pat> args) {
+      RecordType type, Iterable<? extends Core.Pat> args) {
     return new Core.RecordPat(type, ImmutableList.copyOf(args));
   }
 
@@ -359,8 +361,22 @@ public enum CoreBuilder {
         ImmutableSortedMap.copyOf(namePats, ORDERING);
     final RecordLikeType recordType =
         typeSystem.recordType(transformValues(sortedNamePats, Core.Pat::type));
+    return recordPat((RecordType) recordType, sortedNamePats.values());
+  }
+
+  /**
+   * Creates a pattern for a list of named patterns.
+   *
+   * <p>If the list has one element, returns that element. Otherwise, returns a
+   * record pattern with the patterns as fields.
+   */
+  public Core.Pat recordPatOrSingleton(
+      TypeSystem typeSystem, List<? extends Core.NamedPat> pats) {
+    if (pats.size() == 1) {
+      return pats.get(0);
+    }
     return recordPat(
-        (RecordType) recordType, ImmutableList.copyOf(sortedNamePats.values()));
+        typeSystem, transformToMap(pats, (p, c) -> c.accept(p.name, p)));
   }
 
   public Core.Tuple tuple(
@@ -979,27 +995,32 @@ public enum CoreBuilder {
     return exp;
   }
 
-  /** Creates a record from a map of named expressions. */
-  public Core.Exp record(
-      TypeSystem typeSystem, Map<String, ? extends Core.Exp> nameExps) {
-    return record_(
-        typeSystem, ImmutableSortedMap.copyOf(nameExps, RecordType.ORDERING));
-  }
-
   /** Creates a record from a collection of named expressions. */
   public Core.Exp record(
       TypeSystem typeSystem,
       Collection<? extends Map.Entry<String, ? extends Core.Exp>> nameExps) {
-    return record_(
-        typeSystem, ImmutableSortedMap.copyOf(nameExps, RecordType.ORDERING));
+    // Ensure sorted. If the names need to be permuted, apply the same
+    // permutation to patterns and types.
+    final SortedMap<String, Core.Exp> sortedNameExps =
+        ImmutableSortedMap.copyOf(nameExps, ORDERING);
+    final RecordLikeType recordType =
+        typeSystem.recordType(transformValues(sortedNameExps, Core.Exp::type));
+    return tuple(typeSystem, recordType, sortedNameExps.values());
   }
 
-  private Core.Tuple record_(
-      TypeSystem typeSystem, ImmutableSortedMap<String, Core.Exp> nameExps) {
-    final PairList<String, Type> argNameTypes = PairList.of();
-    nameExps.forEach((name, exp) -> argNameTypes.add(name, exp.type));
-    return tuple(
-        typeSystem, typeSystem.recordType(argNameTypes), nameExps.values());
+  /**
+   * Creates an expression for a list of named patterns.
+   *
+   * <p>If the list has one element, returns an id expression for that pattern.
+   * Otherwise, returns a record expression with the patterns as fields.
+   */
+  public Core.Exp recordOrSingleton(
+      TypeSystem typeSystem, List<? extends Core.NamedPat> pats) {
+    if (pats.size() == 1) {
+      return id(pats.get(0));
+    }
+    return record(
+        typeSystem, fromTransformed(pats, (p, c) -> c.accept(p.name, id(p))));
   }
 
   /** Calls a built-in function. */
