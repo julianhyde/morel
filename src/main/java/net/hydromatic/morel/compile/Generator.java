@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.type.TypeSystem;
 
 /**
  * An expression that returns all values that satisfy a predicate.
@@ -59,7 +60,7 @@ abstract class Generator {
    * Generators#generateRange}(0, 5) should return true for {@code p > 0 andalso
    * p < 5}.
    */
-  abstract Core.Exp simplify(Core.Pat pat, Core.Exp exp);
+  abstract Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp);
 
   /** Cardinality of a generator per binding of its free variables. */
   public enum Cardinality {

@@ -219,7 +219,7 @@ public class Expander {
             generatorMap.forEach(
                 (p, generator) ->
                     conditionRef.set(
-                        generator.simplify(p, conditionRef.get())));
+                        generator.simplify(typeSystem, p, conditionRef.get())));
             fromBuilder.where(conditionRef.get());
             return;
           }
