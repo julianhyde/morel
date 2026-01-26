@@ -4597,9 +4597,9 @@ Sys.planEx;
 val x = 1 + 2;
 > val x = 3 : int
 Sys.planEx "0";
-> val it = "val x_105 = 1 + 2" : string
+> val it = "val x = 1 + 2" : string
 Sys.planEx "-1";
-> val it = "val x_105 = 1 + 2" : string
+> val it = "val x = 1 + 2" : string
 
 (*) val show : string -> string option
 Sys.show;

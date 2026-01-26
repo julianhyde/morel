@@ -3422,7 +3422,7 @@ public abstract class Codes {
                     session.environment,
                     session,
                     phase);
-            return coreAtPhase.toString();
+            return coreAtPhase.unparseRenumbered();
           } catch (NumberFormatException e) {
             return "Invalid phase: "
                 + phase
