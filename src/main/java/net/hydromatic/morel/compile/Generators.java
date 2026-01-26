@@ -1998,27 +1998,126 @@ class Generators {
 
     @Override
     Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
-      // Simplify "p > lower && p < upper"
+      // Simplify "p > lower && p < upper && other" to "other"
+      // (or to "true" if there are no other conjuncts).
       if (exp.isCallTo(BuiltIn.Z_ANDALSO)) {
         final List<Core.Exp> ands = core.decomposeAnd(exp);
         final Pair<Core.Exp, Boolean> lowerBound = lowerBound(pat, ands);
         final Pair<Core.Exp, Boolean> upperBound = upperBound(pat, ands);
         if (lowerBound != null && upperBound != null) {
-          if (lowerBound.left.equals(this.lower)
-              && upperBound.left.equals(this.upper)) {
-            return core.boolLiteral(true);
-          }
-          if (lowerBound.left.isConstant()
-              && upperBound.left.isConstant()
-              && this.lower.isConstant()
-              && this.upper.isConstant()) {
-            return core.boolLiteral(
-                gt(lowerBound.left, this.lower, lowerBound.right)
-                    && gt(this.upper, upperBound.left, upperBound.right));
+          final boolean boundsMatch =
+              lowerBound.left.equals(this.lower)
+                  && upperBound.left.equals(this.upper);
+          final boolean boundsImplied =
+              lowerBound.left.isConstant()
+                  && upperBound.left.isConstant()
+                  && this.lower.isConstant()
+                  && this.upper.isConstant()
+                  && gt(lowerBound.left, this.lower, lowerBound.right)
+                  && gt(this.upper, upperBound.left, upperBound.right);
+          if (boundsMatch || boundsImplied) {
+            // Remove the range constraints and keep the rest.
+            final Core.Exp lowerConstraint = findLowerConstraint(pat, ands);
+            final Core.Exp upperConstraint = findUpperConstraint(pat, ands);
+            final List<Core.Exp> remaining = new ArrayList<>(ands);
+            remaining.remove(lowerConstraint);
+            remaining.remove(upperConstraint);
+            if (remaining.isEmpty()) {
+              return core.boolLiteral(true);
+            }
+            if (remaining.size() == 1) {
+              return remaining.get(0);
+            }
+            // Multiple remaining constraints - reconstruct andalso by
+            // extracting from original expression.
+            return extractNonRangeConjuncts(
+                exp, lowerConstraint, upperConstraint);
           }
         }
       }
       return exp;
+    }
+
+    /**
+     * Extracts from an andalso expression all conjuncts except the specified
+     * lower and upper constraints.
+     *
+     * <p>For example, given {@code a && b && c && d} and constraints b and c,
+     * returns {@code a && d}.
+     */
+    // TODO: Refactor to use 'decomposeAnd' rather than recursion
+    // TODO: Refactor to use 'Core.Exp.isBoolLiteral'
+    private static Core.Exp extractNonRangeConjuncts(
+        Core.Exp exp, Core.Exp lowerConstraint, Core.Exp upperConstraint) {
+      if (!exp.isCallTo(BuiltIn.Z_ANDALSO)) {
+        // Base case: single expression
+        if (exp.equals(lowerConstraint) || exp.equals(upperConstraint)) {
+          return core.boolLiteral(true);
+        }
+        return exp;
+      }
+      // Recursive case: a && b
+      final Core.Exp left =
+          extractNonRangeConjuncts(
+              exp.arg(0), lowerConstraint, upperConstraint);
+      final Core.Exp right =
+          extractNonRangeConjuncts(
+              exp.arg(1), lowerConstraint, upperConstraint);
+      // If either side became true, return the other
+      if (left.op == Op.BOOL_LITERAL
+          && ((Core.Literal) left).unwrap(Boolean.class)) {
+        return right;
+      }
+      if (right.op == Op.BOOL_LITERAL
+          && ((Core.Literal) right).unwrap(Boolean.class)) {
+        return left;
+      }
+      // Reconstruct using the original expression's structure
+      return ((Core.Apply) exp).withArgs(left, right);
+    }
+
+    /** Finds the constraint that provides the lower bound. */
+    private static Core.@Nullable Exp findLowerConstraint(
+        Core.Pat pat, List<Core.Exp> constraints) {
+      for (Core.Exp constraint : constraints) {
+        switch (constraint.builtIn()) {
+          case OP_GT:
+          case OP_GE:
+            if (references(constraint.arg(0), pat)) {
+              return constraint;
+            }
+            break;
+          case OP_LT:
+          case OP_LE:
+            if (references(constraint.arg(1), pat)) {
+              return constraint;
+            }
+            break;
+        }
+      }
+      return null;
+    }
+
+    /** Finds the constraint that provides the upper bound. */
+    private static Core.@Nullable Exp findUpperConstraint(
+        Core.Pat pat, List<Core.Exp> constraints) {
+      for (Core.Exp constraint : constraints) {
+        switch (constraint.builtIn()) {
+          case OP_LT:
+          case OP_LE:
+            if (references(constraint.arg(0), pat)) {
+              return constraint;
+            }
+            break;
+          case OP_GT:
+          case OP_GE:
+            if (references(constraint.arg(1), pat)) {
+              return constraint;
+            }
+            break;
+        }
+      }
+      return null;
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
