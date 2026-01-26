@@ -18,6 +18,14 @@
  *)
 Sys.set ("output", "tabular");
 > val it = () : unit
+
+let
+  fun isPrefix (s1, s2) = String.isPrefix s1 s2
+in
+  from s where isPrefix (s, "abcd")
+end;
+> val it = ["","a","ab","abc","abcd"] : string bag
+
 (*
 let
   val emps =
