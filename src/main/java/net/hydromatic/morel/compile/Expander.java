@@ -25,10 +25,8 @@ import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.forEachInIntersection;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transformEager;
-import static net.hydromatic.morel.util.Static.transformToMap;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
@@ -275,21 +273,103 @@ public class Expander {
       // Add "join (x, y, z) in collection".
       fromBuilder.scan(generator.pat, generator.exp);
     } else {
-      // Add "join (x, z) in (from (x, y, z) in collection yield {x, z})".
-      final FromBuilder fromBuilder2 = core.fromBuilder(typeSystem);
-      fromBuilder2.scan(generator.pat, generator.exp);
-      ImmutableMap<String, Core.Exp> nameExps =
-          transformToMap(requiredPats, (p, c) -> c.accept(p.name, core.id(p)));
-      fromBuilder2.yield_(core.record(typeSystem, nameExps));
-      fromBuilder2.distinct();
+      // Some patterns are already bound. Create a filtered projection.
+      // For example, for "(y, z) in edges" where y is already bound:
+      // Add "join z in (from (y', z) in edges where y' = y yield z)".
 
-      final Core.Pat recordPat =
-          core.recordPat(
-              typeSystem,
-              transformToMap(requiredPats, (p, c) -> c.accept(p.name, p)));
-      fromBuilder.scan(recordPat, fromBuilder2.build());
+      // Identify patterns that are already bound.
+      final Map<Core.NamedPat, Core.IdPat> renameMap = new HashMap<>();
+      final List<Core.Exp> joinConditions = new ArrayList<>();
+      for (Core.NamedPat p : expandedPats) {
+        if (done.contains(p) && !requiredPats.contains(p)) {
+          // Create a fresh pattern variable for the subquery's binding.
+          final Core.IdPat freshPat = core.idPat(p.type, p.name + "'", 0);
+          renameMap.put(p, freshPat);
+          // Add condition: freshPat = p (subquery's value equals outer value)
+          joinConditions.add(
+              core.equal(typeSystem, core.id(freshPat), core.id(p)));
+        }
+      }
+
+      // Build subquery: from (y', z) in collection where y' = y yield z
+      final FromBuilder fromBuilder2 = core.fromBuilder(typeSystem);
+      final Core.Pat scanPat =
+          renamePatterns(typeSystem, generator.pat, renameMap);
+      fromBuilder2.scan(scanPat, generator.exp);
+
+      if (!joinConditions.isEmpty()) {
+        fromBuilder2.where(core.andAlso(typeSystem, joinConditions));
+      }
+
+      // Yield only the required patterns.
+      fromBuilder2.yield_(core.recordOrSingleton(typeSystem, requiredPats));
+
+      // Add distinct if we're projecting away inner variables (not
+      // outer-bound).
+      // If patterns are projected away because they're in `done` (already bound
+      // from outer scans), we don't need distinct - the outer context provides
+      // uniqueness via the join condition.
+      // If patterns are projected away because they're not in `allPats` (inner
+      // variables like y in "exists y"), we need distinct to avoid duplicates.
+      boolean hasInnerVariables = false;
+      for (Core.NamedPat p : expandedPats) {
+        if (!requiredPats.contains(p) && !done.contains(p)) {
+          hasInnerVariables = true;
+          break;
+        }
+      }
+      if (hasInnerVariables) {
+        fromBuilder2.distinct();
+      }
+
+      // Add scan from the filtered subquery.
+      final Core.Pat scanPat2 =
+          core.recordPatOrSingleton(typeSystem, requiredPats);
+      fromBuilder.scan(scanPat2, fromBuilder2.build());
     }
     done.addAll(requiredPats);
+  }
+
+  /**
+   * Renames patterns in a pattern tree according to the given map.
+   *
+   * <p>For example, if the map is {y -> y$}, then the pattern (x, y, z) becomes
+   * (x, y$, z).
+   */
+  private static Core.Pat renamePatterns(
+      TypeSystem typeSystem,
+      Core.Pat pat,
+      Map<Core.NamedPat, Core.IdPat> renameMap) {
+    if (pat instanceof Core.IdPat) {
+      final Core.IdPat replacement = renameMap.get(pat);
+      return replacement != null ? replacement : pat;
+    } else if (pat instanceof Core.TuplePat) {
+      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+      final List<Core.Pat> args = new ArrayList<>(tuplePat.args.size());
+      boolean changed = false;
+      for (Core.Pat arg : tuplePat.args) {
+        final Core.Pat newArg = renamePatterns(typeSystem, arg, renameMap);
+        args.add(newArg);
+        if (newArg != arg) {
+          changed = true;
+        }
+      }
+      return changed ? tuplePat.copy(typeSystem, args) : pat;
+    } else if (pat instanceof Core.RecordPat) {
+      final Core.RecordPat recordPat = (Core.RecordPat) pat;
+      final List<Core.Pat> args = new ArrayList<>(recordPat.args.size());
+      boolean changed = false;
+      for (Core.Pat arg : recordPat.args) {
+        final Core.Pat newArg = renamePatterns(typeSystem, arg, renameMap);
+        args.add(newArg);
+        if (newArg != arg) {
+          changed = true;
+        }
+      }
+      return changed ? core.recordPat(recordPat.type(), args) : pat;
+    } else {
+      return pat;
+    }
   }
 
   static void expandSteps(List<Core.FromStep> steps, Expander expander) {
