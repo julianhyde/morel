@@ -270,8 +270,17 @@ public class Expander {
 
     // Now all dependencies are done, add a scan for the generator.
     if (expandedPats.equals(requiredPats)) {
-      // Add "join (x, y, z) in collection".
-      fromBuilder.scan(generator.pat, generator.exp);
+      if (generator.unique) {
+        // Add "join (x, y, z) in collection".
+        fromBuilder.scan(generator.pat, generator.exp);
+      } else {
+        // Generator may produce duplicates (e.g., union of overlapping ranges).
+        // Wrap with distinct: "from pat in collection group pat"
+        final FromBuilder fromBuilder2 = core.fromBuilder(typeSystem);
+        fromBuilder2.scan(generator.pat, generator.exp);
+        fromBuilder2.distinct();
+        fromBuilder.scan(generator.pat, fromBuilder2.build());
+      }
     } else {
       // Some patterns are already bound. Create a filtered projection.
       // For example, for "(y, z) in edges" where y is already bound:
@@ -304,21 +313,25 @@ public class Expander {
       // Yield only the required patterns.
       fromBuilder2.yield_(core.recordOrSingleton(typeSystem, requiredPats));
 
-      // Add distinct if we're projecting away inner variables (not
-      // outer-bound).
+      // Add distinct if:
+      // 1. The generator may produce duplicates (!generator.unique), or
+      // 2. We're projecting away inner variables (not outer-bound).
+      //
       // If patterns are projected away because they're in `done` (already bound
       // from outer scans), we don't need distinct - the outer context provides
       // uniqueness via the join condition.
       // If patterns are projected away because they're not in `allPats` (inner
       // variables like y in "exists y"), we need distinct to avoid duplicates.
-      boolean hasInnerVariables = false;
-      for (Core.NamedPat p : expandedPats) {
-        if (!requiredPats.contains(p) && !done.contains(p)) {
-          hasInnerVariables = true;
-          break;
+      boolean needsDistinct = !generator.unique;
+      if (!needsDistinct) {
+        for (Core.NamedPat p : expandedPats) {
+          if (!requiredPats.contains(p) && !done.contains(p)) {
+            needsDistinct = true;
+            break;
+          }
         }
       }
-      if (hasInnerVariables) {
+      if (needsDistinct) {
         fromBuilder2.distinct();
       }
 
