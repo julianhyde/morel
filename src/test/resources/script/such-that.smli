@@ -666,8 +666,6 @@ end;
 > val it = ["SMITH","ADAMS"] : string bag
 
 (*) A disjunctive condition prevents the extent.
-(*) TODO: throw an error, rather than returning an empty list
-(*
 let
   fun isEmp50 e =
     e elem scott.emps orelse e.deptno = 50
@@ -676,7 +674,7 @@ in
     where isEmp50 e
     yield e.ename
 end;
-*)
+> java.lang.IllegalArgumentException: pattern e_10 is not grounded
 
 (*) A function with external extent.
 (* TODO enable when we have types
