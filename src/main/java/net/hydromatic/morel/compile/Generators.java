@@ -1717,9 +1717,24 @@ class Generators {
       if (constraint.isCallTo(BuiltIn.Z_ORELSE)) {
         final List<Core.Exp> orList = core.decomposeOr(constraint);
         final List<Generator> generators = new ArrayList<>();
+
+        // Save generator count before trying branches.
+        // If any branch fails, we need to clean up generators from successful
+        // branches so they don't leak into the cache.
+        final int initialCount =
+            cache.generators.get((Core.NamedPat) pat).size();
+
         for (Core.Exp exp : orList) {
           final List<Core.Exp> andList = core.decomposeAnd(exp);
           if (!maybeGenerator(cache, pat, ordered, andList)) {
+            // Clean up generators added by successful branches before this one.
+            // Remove generators until we're back to the initial count.
+            while (cache.generators.get((Core.NamedPat) pat).size()
+                > initialCount) {
+              final List<Generator> genList =
+                  (List<Generator>) cache.generators.get((Core.NamedPat) pat);
+              genList.remove(genList.size() - 1);
+            }
             continue next_constraint;
           }
           generators.add(getLast(cache.generators.get((Core.NamedPat) pat)));
