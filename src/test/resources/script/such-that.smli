@@ -33,6 +33,21 @@ Sys.set ("stringDepth", ~1);
 (* Convert predicates into ranges. *)
 from i where i > 0 andalso i < 10;
 > val it = [1,2,3,4,5,6,7,8,9] : int bag
+Sys.planEx "3";
+> val it = "val it = from i in #tabulate Bag (9, fn k => op + (1, k))" : string
+
+from i where i >= 0 andalso i <= 10;
+> val it = [0,1,2,3,4,5,6,7,8,9,10] : int bag
+Sys.planEx "3";
+> val it = "val it = from i in #tabulate Bag (11, fn k => 0 + k)" : string
+
+from i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22;
+> val it = [0,1,2,3,4,5,8,21] : int bag
+Sys.planEx "3";
+> val it =
+>   "val it = from i in #concat Bag ([#tabulate Bag (6, fn k => 0 + k), #fromList Bag ([8]), #tabulate Bag (1, fn k => op + (21, k))]) where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22"
+>   : string
+
 from i where i > 0 andalso i < 4 yield {j = i + 1};
 > j
 > -
@@ -41,6 +56,7 @@ from i where i > 0 andalso i < 4 yield {j = i + 1};
 > 4
 >
 > val it : {j:int} bag
+
 from i where i > 0 andalso i < 4 yield {j = i + 1} order DESC j;
 > j
 > -
@@ -49,16 +65,22 @@ from i where i > 0 andalso i < 4 yield {j = i + 1} order DESC j;
 > 2
 >
 > val it : {j:int} list
+
 from i where i > 0 andalso i < 10 andalso i mod 3 = 2;
 > val it = [2,5,8] : int bag
+
 from i where i = 0;
 > val it = [0] : int bag
+
 from s where s = "abc";
 > val it = ["abc"] : string bag
+
 from i where i = 0 orelse i = 12;
 > val it = [0,12] : int bag
+
 from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
 > val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int bag
+
 from i
 where i > 0 andalso i < 10
 join b
@@ -76,6 +98,7 @@ where b = true;
 > true 9
 >
 > val it : {b:bool, i:int} bag
+
 from i
 where i > 0 andalso i < 10
 join b
@@ -123,6 +146,22 @@ end;
 (*) Case
 from x where case x of y => y elem [1,2];
 > val it = [1,2] : int bag
+
+(*) Case with multiple arms
+(* TODO currently gives 'x is not grounded'
+from x where (case x of 1 => true | 3 => true | _ => false);
+> val it = [1,3] : int bag
+Sys.planEx "3";
+> val it = "..." : string
+*)
+
+(* Predicate cannot be inverted.
+ *
+ * With symbolic math we could deduce that the solution is [~2,3],
+ * but we don't have symbolic math. *)
+(* TODO: better exception *)
+from x where (x + 2) * (x - 3) = 0;
+> java.lang.IllegalArgumentException: pattern x_1 is not grounded
 
 (*) Pattern
 from x, y where (x, y) elem [(1,true),(2,false)];
@@ -200,7 +239,7 @@ Sys.planEx "999";
 (* In the following case, we solve for x given a value of y. This
    requires predicate-inversion because it cannot be solved using
    ranges alone. *)
-(*
+(* TODO
 from x, y in [0, 2, 9] where x > y andalso x < y + 5;
 > x  y
 > -- -
@@ -219,6 +258,42 @@ from x, y in [0, 2, 9] where x > y andalso x < y + 5;
 >
 > val it : {x:int, y:int} bag
 *)
+
+(* Similar, but we know the values of x. *)
+(* TODO currently gives "y is not grounded"
+from x in [3, 5, 7], y where x > y andalso x < y + 5 yield y;
+> val it = [~3,~2,~1,0,0,0,1,1,1,2] : int bag
+Sys.planEx "3";
+> val it = "from x in [3,5,7], y in List.tabulate(9, fn k => x - 9 + k) yield y" : string
+*)
+
+(* TODO
+from x in [3, 5, 7], y
+  where x > y andalso x < y + 5
+  group y compute count over ();
+> count y
+> ----- -
+>     1 ~2
+>     1 ~1
+>     2  0
+>     2  1
+>
+> val it : {count:int, y:int} bag
+*)
+
+from x where x = 3 andalso x < 10;
+> val it = [3] : int bag
+
+from x where x = 3 andalso x > 10;
+> val it = [] : int bag
+
+(* TODO current result has duplicate 3
+from x where x = 3 orelse x > 0 andalso x < 5;
+> val it = [1,2,3,4] : int bag
+*)
+
+from x where x = 3 orelse x > 10 andalso x < 15;
+> val it = [3,11,12,13,14] : int bag
 
 from b where b > false;
 > val it = [true] : bool bag
@@ -382,6 +457,15 @@ exists w, x, y
 
 exists w, x, y
   where (x, 0) elem [(1, 2), (1, 3), (4, 3)];
+> val it = false : bool
+
+exists w, x where x = 3;
+> val it = true : bool
+
+exists w, x where x = 3 andalso x < 10;
+> val it = true : bool
+
+exists w, x where x = 3 andalso x > 10;
 > val it = false : bool
 
 exists x
@@ -694,6 +778,21 @@ end;
 fun enumerate predicate =
   from r where predicate r;
 > val enumerate = fn : ('a -> bool) -> 'a bag
+*)
+
+(* Join inversion. *)
+(* TODO
+let
+  fun empInDept (empno, deptno) =
+    exists e in scott.emps where e.empno = empno andalso e.deptno = deptno
+  fun deptName(deptno, dname) =
+    exists d in scott.depts where d.deptno = deptno andalso d.dname = dname
+  fun empInDeptName(empno, dname) =
+    exists deptno where empInDept(empno, deptno) andalso deptName(deptno, dname)
+in
+  from empno
+    where empInDeptName(empno, "SALES")
+end;
 *)
 
 (* TODO: Remove the 'let', when inlining is working. *)
