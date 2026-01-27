@@ -215,7 +215,8 @@ class Generators {
         Core.NamedPat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats) {
-      super(exp, freePats, pat, Cardinality.FINITE);
+      // unique = true because exists generators apply distinct internally
+      super(exp, freePats, pat, Cardinality.FINITE, true);
     }
 
     @Override
@@ -1461,7 +1462,8 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         int depthBound) {
-      super(exp, freePats, pat, Cardinality.FINITE);
+      // unique = true because Relational.iterate produces unique results
+      super(exp, freePats, pat, Cardinality.FINITE, true);
       this.depthBound = depthBound;
     }
 
@@ -1529,7 +1531,8 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Core.Apply constraint) {
-      super(exp, freePats, pat, Cardinality.FINITE);
+      // unique = true because Relational.iterate produces unique results
+      super(exp, freePats, pat, Cardinality.FINITE, true);
       this.constraint = constraint;
     }
 
@@ -1679,7 +1682,11 @@ class Generators {
   }
 
   /**
-   * Creates an expression that generates a values from several generators.
+   * Creates an expression that generates values from several generators.
+   *
+   * <p>The resulting generator has {@code unique = false} because different
+   * branches of an orelse may produce overlapping values. The caller should add
+   * a distinct operation if uniqueness is required.
    *
    * @param ordered If true, generate a `list`, otherwise a `bag`
    * @param generators Generators
@@ -2131,7 +2138,8 @@ class Generators {
         boolean ignoreLowerStrict,
         Core.Exp upper,
         boolean ignoreUpperStrict) {
-      super(exp, freePats, pat, Cardinality.FINITE);
+      // unique = true because a range produces each integer exactly once
+      super(exp, freePats, pat, Cardinality.FINITE, true);
       this.lower = lower;
       this.upper = upper;
     }
@@ -2230,10 +2238,7 @@ class Generators {
     }
   }
 
-  /**
-   * Generator that generates a range of integers from {@code lower} to {@code
-   * upper}.
-   */
+  /** Generator that generates a single value. */
   static class PointGenerator extends Generator {
     private final Core.Exp point;
 
@@ -2242,7 +2247,8 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Core.Exp point) {
-      super(exp, freePats, pat, Cardinality.SINGLE);
+      // unique = true because a single value has no duplicates
+      super(exp, freePats, pat, Cardinality.SINGLE, true);
       this.point = point;
     }
 
@@ -2291,7 +2297,8 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Core.Exp strExp) {
-      super(exp, freePats, pat, Cardinality.FINITE);
+      // unique = true because each prefix has a distinct length
+      super(exp, freePats, pat, Cardinality.FINITE, true);
       this.strExp = strExp;
     }
 
@@ -2327,7 +2334,14 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         List<Generator> generators) {
-      super(exp, freePats, firstGenerator(generators).pat, Cardinality.FINITE);
+      // unique = false because branches of orelse may produce overlapping
+      // values
+      super(
+          exp,
+          freePats,
+          firstGenerator(generators).pat,
+          Cardinality.FINITE,
+          false);
       this.generators = ImmutableList.copyOf(generators);
     }
 
@@ -2355,7 +2369,8 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Cardinality cardinality) {
-      super(exp, freePats, pat, cardinality);
+      // unique = true because each value of a type appears exactly once
+      super(exp, freePats, pat, cardinality, true);
     }
 
     /** Creates an extent generator. */
@@ -2389,7 +2404,9 @@ class Generators {
         Core.Pat pat,
         Core.Exp collection,
         Iterable<? extends Core.NamedPat> freePats) {
-      super(collection, freePats, pat, Cardinality.FINITE);
+      // unique = true because the generator doesn't create duplicates;
+      // it just exposes the collection's contents as-is
+      super(collection, freePats, pat, Cardinality.FINITE, true);
       this.collection = collection;
       checkArgument(collection.type.isCollection());
     }
@@ -2436,7 +2453,9 @@ class Generators {
         Core.Exp projectionExp,
         Core.Exp collection,
         Iterable<? extends Core.NamedPat> freePats) {
-      super(projectionExp, freePats, goalPat, Cardinality.FINITE);
+      // unique = true because the generator doesn't create duplicates;
+      // it just projects the collection's contents
+      super(projectionExp, freePats, goalPat, Cardinality.FINITE, true);
       this.collection = collection;
       this.projectionExp = projectionExp;
     }
