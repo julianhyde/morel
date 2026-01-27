@@ -656,12 +656,43 @@ public class TypeSystem {
     while (fromType instanceof ForallType) {
       fromType = ((ForallType) fromType).type;
     }
+    while (toType instanceof ForallType) {
+      toType = ((ForallType) toType).type;
+    }
+    // Type variables can accept any type (polymorphic assignment)
+    if (toType instanceof TypeVar) {
+      return true;
+    }
+    // Check if toType contains TypeVars at any level
+    if (containsTypeVar(toType)) {
+      return true;
+    }
+    // Check if fromType contains TypeVars - try to unify with toType
+    // (this handles cases where type instantiation hasn't occurred yet)
+    if (containsTypeVar(fromType)) {
+      Map<Integer, Type> unification = fromType.unifyWith(toType);
+      return unification != null;
+    }
     return fromType.equals(toType)
         || fromType instanceof RecordType && toType.isProgressive()
         || toType.containsAlias()
         || fromType instanceof ListType
             && toType instanceof ListType
             && canAssign(fromType.elementType(), toType.elementType());
+  }
+
+  /** Returns whether the type contains any type variables. */
+  private static boolean containsTypeVar(Type type) {
+    final boolean[] found = {false};
+    type.accept(
+        new TypeVisitor<Void>() {
+          @Override
+          public Void visit(TypeVar typeVar) {
+            found[0] = true;
+            return null;
+          }
+        });
+    return found[0];
   }
 
   /** Visitor that finds all {@link TypeVar} instances within a {@link Type}. */

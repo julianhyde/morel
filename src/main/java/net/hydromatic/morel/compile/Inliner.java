@@ -45,6 +45,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -385,10 +386,33 @@ public class Inliner extends EnvShuttle {
       TypeSystem typeSystem, Type type, Object value) {
     final List<Object> list;
     switch (type.op()) {
+      case TY_VAR:
+        // Type variable - try to infer actual type from value
+        Type inferredType = inferTypeFromValue(typeSystem, value);
+        if (inferredType != null) {
+          return valueToExp(typeSystem, inferredType, value);
+        }
+        // Can't infer type, fall through to error
+        throw new AssertionError(
+            format(
+                "cannot convert value [%s] of type [%s] to expression",
+                value, type));
+
       case ID:
         return core.literal((PrimitiveType) type, value);
 
       case DATA_TYPE:
+        // DataType values are represented as [constructorName, argValue]
+        // But we need to check the value format first
+        if (!(value instanceof List)) {
+          // Value is not in constructor format - it may be a primitive
+          // that happens to have a DataType wrapper (shouldn't normally happen)
+          throw new AssertionError(
+              format(
+                  "cannot convert value [%s] of type [%s] to expression - "
+                      + "expected List for DataType",
+                  value, type));
+        }
         list = (List<Object>) value;
         String name = (String) list.get(0);
         final Core.IdPat idPat = core.idPat(type, name, 0);
@@ -410,12 +434,56 @@ public class Inliner extends EnvShuttle {
             (t, v) -> args.add(valueToExp(typeSystem, t, v)));
         return core.tuple(tupleType, args.build());
 
+      case RECORD_TYPE:
+        final RecordType recordType = (RecordType) type;
+        list = (List<Object>) value;
+        final ImmutableMap.Builder<String, Core.Exp> recordFields =
+            ImmutableMap.builder();
+        int i = 0;
+        for (Map.Entry<String, Type> entry :
+            recordType.argNameTypes.entrySet()) {
+          recordFields.put(
+              entry.getKey(),
+              valueToExp(typeSystem, entry.getValue(), list.get(i++)));
+        }
+        return core.record(typeSystem, recordFields.build());
+
       default:
         throw new AssertionError(
             format(
                 "cannot convert value [%s] of type [%s] to expression",
                 value, type));
     }
+  }
+
+  /** Infers type from a runtime value. Returns null if cannot infer. */
+  private static @Nullable Type inferTypeFromValue(
+      TypeSystem typeSystem, Object value) {
+    if (value instanceof Integer) {
+      return PrimitiveType.INT;
+    } else if (value instanceof String) {
+      return PrimitiveType.STRING;
+    } else if (value instanceof Boolean) {
+      return PrimitiveType.BOOL;
+    } else if (value instanceof Float || value instanceof Double) {
+      return PrimitiveType.REAL;
+    } else if (value instanceof Character) {
+      return PrimitiveType.CHAR;
+    } else if (value instanceof Unit) {
+      return PrimitiveType.UNIT;
+    } else if (value instanceof List) {
+      // For lists, we need to infer element type
+      @SuppressWarnings("unchecked")
+      List<Object> listValue = (List<Object>) value;
+      if (listValue.isEmpty()) {
+        return null; // Can't infer element type from empty list
+      }
+      Type elementType = inferTypeFromValue(typeSystem, listValue.get(0));
+      if (elementType != null) {
+        return typeSystem.listType(elementType);
+      }
+    }
+    return null;
   }
 
   @Override
