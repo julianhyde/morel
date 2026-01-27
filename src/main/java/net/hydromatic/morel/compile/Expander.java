@@ -256,6 +256,16 @@ public class Expander {
       addGeneratorScan(typeSystem, done, p, generatorMap, allPats, fromBuilder);
     }
 
+    // Check that all dependencies are now satisfied.
+    // If a dependency is from a non-extent scan that hasn't been processed yet,
+    // we cannot add this generator now - it will be added later when the
+    // dependency is in `done` (e.g., when processing the WHERE clause).
+    for (Core.NamedPat p : generator.freePats) {
+      if (!done.contains(p)) {
+        return;
+      }
+    }
+
     // The patterns we need (requiredPats) are those provided by the generator,
     // which are used in later steps (allPats),
     // and are not provided by earlier steps (done).
