@@ -747,7 +747,7 @@ public class PredicateInverterTest {
     final Core.Exp field1 = core.field(f.typeSystem, pId, 0); // #1 p
     final Core.Exp field2 = core.field(f.typeSystem, pId, 1); // #2 p
 
-    System.err.println("\nField access expressions:");
+    System.err.println("Field access expressions:");
     System.err.println("field1 (#1 p) = " + field1);
     System.err.println("field1.op = " + field1.op);
     System.err.println("field2 (#2 p) = " + field2);
@@ -756,7 +756,7 @@ public class PredicateInverterTest {
     // Examine the structure of field1
     if (field1.op == net.hydromatic.morel.ast.Op.APPLY) {
       Core.Apply apply1 = (Core.Apply) field1;
-      System.err.println("\nfield1 (APPLY) structure:");
+      System.err.println("field1 (APPLY) structure:");
       System.err.println("  fn.op = " + apply1.fn.op);
       System.err.println("  arg.op = " + apply1.arg.op);
       if (apply1.arg.op == net.hydromatic.morel.ast.Op.ID) {
@@ -774,17 +774,17 @@ public class PredicateInverterTest {
     // Create tuple: (#1 p, #2 p)
     final Core.Tuple tupleExp =
         core.tuple(f.typeSystem, null, ImmutableList.of(field1, field2));
-    System.err.println("\nTuple expression:");
+    System.err.println("Tuple expression:");
     System.err.println("tupleExp = " + tupleExp);
 
     // Create elem expression: (#1 p, #2 p) elem edges
     final Core.Exp elemExp = core.elem(f.typeSystem, tupleExp, edges);
-    System.err.println("\nElem expression:");
+    System.err.println("Elem expression:");
     System.err.println("elemExp = " + elemExp);
 
     // Set up goalPats containing p
     final ImmutableList<Core.NamedPat> goalPats = ImmutableList.of(pPat);
-    System.err.println("\ngoalPats:");
+    System.err.println("goalPats:");
     for (int i = 0; i < goalPats.size(); i++) {
       Core.NamedPat gp = goalPats.get(i);
       System.err.println("  goalPats[" + i + "] = " + gp);
@@ -795,7 +795,7 @@ public class PredicateInverterTest {
 
     // Now call PredicateInverter.invert
     // This should trigger invertElem which calls extractFieldAccessGoal
-    System.err.println("\n=== Calling PredicateInverter.invert ===");
+    System.err.println("=== Calling PredicateInverter.invert ===");
     final Result result =
         PredicateInverter.invert(
             f.typeSystem,
@@ -804,7 +804,7 @@ public class PredicateInverterTest {
             goalPats,
             ImmutableMap.of());
 
-    System.err.println("\n=== Result ===");
+    System.err.println("=== Result ===");
     System.err.println("generator.expression = " + result.generator.expression);
     System.err.println(
         "generator.cardinality = " + result.generator.cardinality);
@@ -813,13 +813,13 @@ public class PredicateInverterTest {
     // If successful, the generator should be edges (not an infinite extent)
     // If failed, remainingFilters will contain the original elemExp
     if (result.remainingFilters.isEmpty()) {
-      System.err.println("\nSUCCESS: Pattern was recognized correctly!");
+      System.err.println("SUCCESS: Pattern was recognized correctly!");
       assertThat(
           "Generator should be the edges collection",
           result.generator.expression,
           hasToString("[(1, 2), (2, 3)]"));
     } else {
-      System.err.println("\nFAILURE: Pattern was NOT recognized.");
+      System.err.println("FAILURE: Pattern was NOT recognized.");
       System.err.println(
           "This indicates extractFieldAccessGoal returned null.");
     }
@@ -891,7 +891,7 @@ public class PredicateInverterTest {
     final Core.Exp edgeCall =
         core.apply(Pos.ZERO, PrimitiveType.BOOL, core.id(edgeFnPat), pId);
 
-    System.err.println("\nedge(p) = " + edgeCall);
+    System.err.println("edge(p) = " + edgeCall);
 
     // Set up goalPats containing p
     final ImmutableList<Core.NamedPat> goalPats = ImmutableList.of(pPat);
@@ -901,12 +901,12 @@ public class PredicateInverterTest {
         "goalPats[0] hashCode = " + System.identityHashCode(goalPats.get(0)));
 
     // Call invert - this should inline edge(p) to (#1 p, #2 p) elem edges
-    System.err.println("\n=== Calling PredicateInverter.invert on edge(p) ===");
+    System.err.println("=== Calling PredicateInverter.invert on edge(p) ===");
     final Result result =
         PredicateInverter.invert(
             f.typeSystem, env, edgeCall, goalPats, ImmutableMap.of());
 
-    System.err.println("\n=== Result ===");
+    System.err.println("=== Result ===");
     System.err.println("generator.expression = " + result.generator.expression);
     System.err.println(
         "generator.cardinality = " + result.generator.cardinality);
@@ -915,9 +915,9 @@ public class PredicateInverterTest {
     if (result.generator.cardinality
         == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
       System.err.println(
-          "\nFAILURE: Got INFINITE cardinality - inversion failed!");
+          "FAILURE: Got INFINITE cardinality - inversion failed!");
     } else {
-      System.err.println("\nSUCCESS: Got finite cardinality.");
+      System.err.println("SUCCESS: Got finite cardinality.");
     }
   }
 
@@ -986,7 +986,7 @@ public class PredicateInverterTest {
     final Core.IdPat pPat = core.idPat(tupleType, "p", 0);
     final Core.Id pId = core.id(pPat);
 
-    System.err.println("\n=== Step 1: Create goal pattern pPat ===");
+    System.err.println("=== Step 1: Create goal pattern pPat ===");
     System.err.println("pPat = " + pPat);
     System.err.println("pPat.name = " + pPat.name);
     System.err.println("pPat.i = " + pPat.i);
@@ -1003,7 +1003,7 @@ public class PredicateInverterTest {
             core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)),
             core.tuple(f.typeSystem, f.intLiteral(2), f.intLiteral(3)));
 
-    System.err.println("\n=== Step 2: Create edges list ===");
+    System.err.println("=== Step 2: Create edges list ===");
     System.err.println("edges = " + edges);
 
     // Step 3: Simulate the path function substitution
@@ -1015,7 +1015,7 @@ public class PredicateInverterTest {
     final Core.Exp field2 = core.field(f.typeSystem, pId, 1); // #2 p
 
     System.err.println(
-        "\n=== Step 3: Create field accesses (path substitution) ===");
+        "=== Step 3: Create field accesses (path substitution) ===");
     System.err.println("field1 = core.field(typeSystem, pId, 0)");
     System.err.println("field1 = " + field1);
     System.err.println("field1.op = " + field1.op);
@@ -1044,7 +1044,7 @@ public class PredicateInverterTest {
       }
     }
 
-    System.err.println("\nfield2 = core.field(typeSystem, pId, 1)");
+    System.err.println("field2 = core.field(typeSystem, pId, 1)");
     System.err.println("field2 = " + field2);
 
     // Step 4: Create the tuple argument for edge: (#1 p, #2 p)
@@ -1052,7 +1052,7 @@ public class PredicateInverterTest {
     final Core.Tuple edgeArgTuple =
         core.tuple(f.typeSystem, null, ImmutableList.of(field1, field2));
 
-    System.err.println("\n=== Step 4: Create edge argument tuple ===");
+    System.err.println("=== Step 4: Create edge argument tuple ===");
     System.err.println("edgeArgTuple = " + edgeArgTuple);
     System.err.println("edgeArgTuple.op = " + edgeArgTuple.op);
     System.err.println(
@@ -1074,7 +1074,7 @@ public class PredicateInverterTest {
     // The result is the SAME #1 p and #2 p objects, not copies!
 
     System.err.println(
-        "\n=== Step 5: Simulating edge body after substitution ===");
+        "=== Step 5: Simulating edge body after substitution ===");
     System.err.println(
         "The tuple in 'tuple elem edges' should be the same edgeArgTuple");
     System.err.println(
@@ -1083,13 +1083,13 @@ public class PredicateInverterTest {
     // Create the elem expression: (#1 p, #2 p) elem edges
     final Core.Exp elemExp = core.elem(f.typeSystem, edgeArgTuple, edges);
 
-    System.err.println("\n=== Step 6: Create elem expression ===");
+    System.err.println("=== Step 6: Create elem expression ===");
     System.err.println("elemExp = " + elemExp);
 
     // Step 7: Set up goalPats and call invert
     final ImmutableList<Core.NamedPat> goalPats = ImmutableList.of(pPat);
 
-    System.err.println("\n=== Step 7: Set up goalPats ===");
+    System.err.println("=== Step 7: Set up goalPats ===");
     System.err.println("goalPats = " + goalPats);
     for (int i = 0; i < goalPats.size(); i++) {
       Core.NamedPat gp = goalPats.get(i);
@@ -1105,7 +1105,7 @@ public class PredicateInverterTest {
     }
 
     // Step 8: Call invert and observe the result
-    System.err.println("\n=== Step 8: Calling PredicateInverter.invert ===");
+    System.err.println("=== Step 8: Calling PredicateInverter.invert ===");
     System.err.println(
         "This should trigger invertElem -> extractFieldAccessGoal");
 
@@ -1117,7 +1117,7 @@ public class PredicateInverterTest {
             goalPats,
             ImmutableMap.of());
 
-    System.err.println("\n=== RESULT ===");
+    System.err.println("=== RESULT ===");
     System.err.println("generator.expression = " + result.generator.expression);
     System.err.println(
         "generator.cardinality = " + result.generator.cardinality);
@@ -1125,7 +1125,7 @@ public class PredicateInverterTest {
         "remainingFilters.size() = " + result.remainingFilters.size());
 
     if (result.remainingFilters.isEmpty()) {
-      System.err.println("\n*** SUCCESS: extractFieldAccessGoal worked! ***");
+      System.err.println("*** SUCCESS: extractFieldAccessGoal worked! ***");
       System.err.println("Generator produces: edges collection");
       assertThat(
           "Generator should be the edges collection",
@@ -1133,7 +1133,7 @@ public class PredicateInverterTest {
           hasToString("[(1, 2), (2, 3)]"));
     } else {
       System.err.println(
-          "\n*** FAILURE: extractFieldAccessGoal returned null ***");
+          "*** FAILURE: extractFieldAccessGoal returned null ***");
       System.err.println("Remaining filters: " + result.remainingFilters);
       System.err.println(
           "Generator cardinality is: " + result.generator.cardinality);
@@ -1148,7 +1148,7 @@ public class PredicateInverterTest {
       // - "FAIL: slot != position" -> slot/position mismatch
       // - "FAIL: different source patterns" -> accessing different patterns
       System.err.println(
-          "\nLook at the debug output above to see which check failed!");
+          "Look at the debug output above to see which check failed!");
     }
   }
 
@@ -1171,7 +1171,7 @@ public class PredicateInverterTest {
     final Core.IdPat pPat = core.idPat(tupleType, "p", 0);
     final Core.Id pId = core.id(pPat);
 
-    System.err.println("\nGoal pattern:");
+    System.err.println("Goal pattern:");
     System.err.println("pPat = " + pPat);
     System.err.println("pPat identity = " + System.identityHashCode(pPat));
 
@@ -1210,7 +1210,7 @@ public class PredicateInverterTest {
     final Core.Fn edgeFn = core.fn(edgeFnType, edgeLambdaParam, edgeCase);
     final Core.IdPat edgeFnPat = core.idPat(edgeFnType, "edge", 0);
 
-    System.err.println("\nEdge function created:");
+    System.err.println("Edge function created:");
     System.err.println(
         "edge's xPat identity = " + System.identityHashCode(edgeXPat));
     System.err.println(
@@ -1225,7 +1225,7 @@ public class PredicateInverterTest {
     final Core.TuplePat pathParamPat =
         core.tuplePat(f.typeSystem, ImmutableList.of(pathXPat, pathYPat));
 
-    System.err.println("\nPath function parameter patterns:");
+    System.err.println("Path function parameter patterns:");
     System.err.println(
         "pathXPat = "
             + pathXPat
@@ -1271,7 +1271,7 @@ public class PredicateInverterTest {
     final Core.Exp pathCall =
         core.apply(Pos.ZERO, PrimitiveType.BOOL, core.id(pathFnPat), pId);
 
-    System.err.println("\npath(p) call created:");
+    System.err.println("path(p) call created:");
     System.err.println("pathCall = " + pathCall);
     System.err.println("pathCall.arg = " + ((Core.Apply) pathCall).arg);
     System.err.println(
@@ -1281,7 +1281,7 @@ public class PredicateInverterTest {
     // Set up goalPats
     final ImmutableList<Core.NamedPat> goalPats = ImmutableList.of(pPat);
 
-    System.err.println("\ngoalPats:");
+    System.err.println("goalPats:");
     System.err.println(
         "goalPats[0] identity = " + System.identityHashCode(goalPats.get(0)));
     System.err.println("goalPats[0] == pPat: " + (goalPats.get(0) == pPat));
@@ -1289,7 +1289,7 @@ public class PredicateInverterTest {
         "goalPats[0] == pId.idPat: " + (goalPats.get(0) == pId.idPat));
 
     // Call invert
-    System.err.println("\n=== Calling PredicateInverter.invert on path(p) ===");
+    System.err.println("=== Calling PredicateInverter.invert on path(p) ===");
     System.err.println(
         "Tracing: path(p) -> edge(#1 p, #2 p) -> (#1 p, #2 p) elem edges");
 
@@ -1297,7 +1297,7 @@ public class PredicateInverterTest {
         PredicateInverter.invert(
             f.typeSystem, env, pathCall, goalPats, ImmutableMap.of());
 
-    System.err.println("\n=== RESULT ===");
+    System.err.println("=== RESULT ===");
     System.err.println("generator.expression = " + result.generator.expression);
     System.err.println(
         "generator.cardinality = " + result.generator.cardinality);
@@ -1306,13 +1306,13 @@ public class PredicateInverterTest {
     if (result.generator.cardinality
         == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
       System.err.println(
-          "\n*** FAILURE: Got INFINITE cardinality - base case inversion failed ***");
+          "*** FAILURE: Got INFINITE cardinality - base case inversion failed ***");
       System.err.println(
           "This means extractFieldAccessGoal returned null during base case inversion.");
       System.err.println(
           "Check the debug output above for the specific failure point.");
     } else {
-      System.err.println("\n*** SUCCESS: Got finite cardinality ***");
+      System.err.println("*** SUCCESS: Got finite cardinality ***");
     }
   }
 }

@@ -1187,7 +1187,6 @@ public class MainTest {
    * of the dependency graph. In each group, the inliner should choose one
    * function as 'loop-breaker' that will not be inlined; say f and q.
    */
-  @Disabled("until mutual recursion bug is fixed")
   @Test
   void testMutualRecursionComplex() {
     final String ml0 =
@@ -1198,7 +1197,7 @@ public class MainTest {
             + "  and p i = q (i + 32)\n"
             + "  and q i = if i > 200 then i + 64 else g (i + 128)\n"
             + "in\n"
-            + "  g 7\n"
+            + "  g\n"
             + "end";
     final String ml =
         "let\n"
@@ -1208,7 +1207,7 @@ public class MainTest {
             + "  and p = fn i => q (i + 32)\n"
             + "  and q = fn i => if i > 200 then i + 64 else g (i + 128)\n"
             + "in\n"
-            + "  g 7\n"
+            + "  g\n"
             + "end";
     ml(ml)
         // answers checked on SMLJ
