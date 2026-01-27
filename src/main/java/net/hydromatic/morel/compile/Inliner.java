@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Closure;
@@ -71,6 +72,22 @@ public class Inliner extends EnvShuttle {
   private final int depth;
   /** Maximum inlining depth to prevent infinite cycles. */
   private static final int MAX_DEPTH = 250;
+
+  /**
+   * Set of impure built-in function names that should not be inlined. These
+   * functions have side effects or read mutable state.
+   */
+  private static final Set<String> IMPURE_FUNCTION_NAMES =
+      Set.of(
+          "env",
+          "clearEnv",
+          "set",
+          "unset",
+          "show",
+          "showAll",
+          "file",
+          "plan",
+          "planEx");
 
   /** Private constructor. */
   private Inliner(
@@ -142,6 +159,12 @@ public class Inliner extends EnvShuttle {
           switch (use) {
             case ATOMIC:
             case ONCE_SAFE:
+              // Don't inline expressions containing impure function calls.
+              // These expressions read mutable state (like Sys.env) and would
+              // produce different values if re-evaluated at the use site.
+              if (containsImpureCall(binding.exp)) {
+                break; // Fall through to use binding.value instead
+              }
               inliningBaseNames.add(base);
               // Create a new Inliner with incremented depth for the nested
               // inlining
@@ -581,6 +604,47 @@ public class Inliner extends EnvShuttle {
             return null;
           }
         });
+    return found[0];
+  }
+
+  /**
+   * Returns whether the expression contains any call to an impure function.
+   * Impure functions read mutable state (like Sys.env) and should not be
+   * inlined because the expression would be re-evaluated at the use site,
+   * potentially returning a different value.
+   */
+  private static boolean containsImpureCall(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (IMPURE_FUNCTION_NAMES.contains(id.idPat.name)) {
+              found[0] = true;
+            }
+          }
+
+          @Override
+          protected void visit(Core.RecordSelector recordSelector) {
+            // Check if this record selector accesses an impure field
+            // (e.g., Sys.env, Sys.clearEnv)
+            if (IMPURE_FUNCTION_NAMES.contains(recordSelector.fieldName())) {
+              found[0] = true;
+            }
+          }
+        });
+    // Also check if the expression's string representation contains impure
+    // function patterns. This handles cases where macros like Sys.env have been
+    // expanded into VALUE_LITERALs that we can't directly inspect.
+    if (!found[0]) {
+      final String expStr = exp.toString();
+      for (String name : IMPURE_FUNCTION_NAMES) {
+        if (expStr.contains("#" + name + " ")) {
+          found[0] = true;
+          break;
+        }
+      }
+    }
     return found[0];
   }
 }
