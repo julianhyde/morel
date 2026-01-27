@@ -211,6 +211,27 @@ public class Expander {
 
           // The step is not a scan over an extent. Add it now.
           step = Replacer.substitute(typeSystem, env, substitution, step);
+
+          // For WHERE steps, simplify the condition using generators.
+          // If a generator was created from a predicate (e.g., path(p) was
+          // inverted to produce an iterate expression), the original predicate
+          // should be removed from the WHERE clause.
+          if (step instanceof Core.Where) {
+            final Core.Where where = (Core.Where) step;
+            final Simplifier simplifier =
+                new Simplifier(typeSystem, cache.generators);
+            final Core.Exp simplified = simplifier.simplify(where.exp);
+            if (simplified.op == Op.BOOL_LITERAL
+                && Boolean.TRUE.equals(((Core.Literal) simplified).value)) {
+              // Condition simplified to true, skip the WHERE step
+              return;
+            }
+            if (simplified != where.exp) {
+              // Condition was simplified, use the simplified version
+              fromBuilder.where(simplified);
+              return;
+            }
+          }
           fromBuilder.addAll(ImmutableList.of(step));
         });
 
@@ -248,11 +269,14 @@ public class Expander {
     // The patterns we need (requiredPats) are those provided by the generator,
     // which are used in later steps (allPats),
     // and are not provided by earlier steps (done).
+    // Deduplicate by name to avoid "Multiple entries with same key" errors
+    // when recursive inversion creates patterns with the same name.
     final List<Core.NamedPat> expandedPats = generator.pat.expand();
     final List<Core.NamedPat> requiredPats =
         new ArrayList<>(expandedPats.size());
+    final java.util.Set<String> seenNames = new java.util.HashSet<>();
     for (Core.NamedPat p : expandedPats) {
-      if (allPats.contains(p) && !done.contains(p)) {
+      if (allPats.contains(p) && !done.contains(p) && seenNames.add(p.name)) {
         requiredPats.add(p);
       }
     }

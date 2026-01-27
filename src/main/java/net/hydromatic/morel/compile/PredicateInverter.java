@@ -158,23 +158,60 @@ public class PredicateInverter {
    */
   private Result invert(
       Core.Exp predicate, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+    System.err.println(
+        "[DEBUG PredicateInverter.invert] predicate.op="
+            + predicate.op
+            + ", predicate="
+            + predicate);
+    System.err.println(
+        "[DEBUG PredicateInverter.invert] goalPats before dedup=" + goalPats);
+    // Deduplicate goalPats by name to avoid accumulating duplicates in
+    // recursive
+    // calls. This can happen with recursive transitive closure inversion where
+    // the same existential variable gets added to goalPats multiple times.
+    java.util.Set<String> seenNames = new java.util.LinkedHashSet<>();
+    List<Core.NamedPat> uniqueGoalPats = new ArrayList<>();
+    for (Core.NamedPat pat : goalPats) {
+      if (seenNames.add(pat.name)) {
+        uniqueGoalPats.add(pat);
+      }
+    }
+    goalPats = uniqueGoalPats;
+    System.err.println(
+        "[DEBUG PredicateInverter.invert] goalPats after dedup=" + goalPats);
+
     // Handle CASE expressions that result from function application expansion.
     // When Inliner expands "path p", it becomes:
     //   case p of (x_1, y_1) => edge(x_1, y_1) orelse exists...
     // We need to invert the body using the pattern variables as new goals.
     if (predicate.op == Op.CASE) {
+      System.err.println(
+          "[DEBUG PredicateInverter.invert] handling CASE expression");
       Core.Case caseExp = (Core.Case) predicate;
       // Check for single-arm case matching on a goal pattern
       if (caseExp.matchList.size() == 1 && caseExp.exp.op == Op.ID) {
         Core.Id caseId = (Core.Id) caseExp.exp;
+        System.err.println(
+            "[DEBUG PredicateInverter.invert] CASE matching on "
+                + caseId.idPat
+                + ", goalPats.contains="
+                + goalPats.contains(caseId.idPat));
         // Check if we're matching on one of our goal patterns
         if (goalPats.contains(caseId.idPat)) {
           Core.Match match = caseExp.matchList.get(0);
           // The new goal patterns are the variables bound by the match pattern
           List<Core.NamedPat> newGoalPats = match.pat.expand();
+          System.err.println(
+              "[DEBUG PredicateInverter.invert] CASE destructuring to newGoalPats="
+                  + newGoalPats);
+          System.err.println(
+              "[DEBUG PredicateInverter.invert] CASE body=" + match.exp);
 
           // Invert the body using the new goal patterns
           Result bodyResult = invert(match.exp, newGoalPats, active);
+          System.err.println(
+              "[DEBUG PredicateInverter.invert] CASE bodyResult.cardinality="
+                  + bodyResult.generator.cardinality);
 
           // If successful, the generator produces tuples matching the pattern
           // which corresponds to the original goal pattern (since the case
@@ -232,9 +269,21 @@ public class PredicateInverter {
       // recursive pattern (with recursive calls NOT inlined due to recursion
       // protection in Inliner).
       if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
+        System.err.println(
+            "[DEBUG PredicateInverter.invert] handling Z_ORELSE (orelse)");
+        System.err.println(
+            "[DEBUG PredicateInverter.invert] orelse arg0=" + apply.arg(0));
+        System.err.println(
+            "[DEBUG PredicateInverter.invert] orelse arg1=" + apply.arg(1));
         Result tcResult =
             tryInvertTransitiveClosure(apply, null, null, goalPats, active);
+        System.err.println(
+            "[DEBUG PredicateInverter.invert] tryInvertTransitiveClosure returned "
+                + (tcResult != null ? "result" : "null"));
         if (tcResult != null) {
+          System.err.println(
+              "[DEBUG PredicateInverter.invert] TC result cardinality="
+                  + tcResult.generator.cardinality);
           return tcResult;
         }
         // If transitive closure pattern doesn't match, fall through to default
@@ -432,11 +481,18 @@ public class PredicateInverter {
     if (collection.isExtent()) {
       // Extent scan - filter must provide the generators.
       // Add the scan variable to outputPats temporarily so it can be
-      // referenced.
+      // referenced. Check if already present (by name) to avoid duplicates in
+      // recursive calls.
       List<Core.NamedPat> extendedOutputPats = new ArrayList<>(goalPats);
       if (scanPat.op == Op.ID_PAT) {
         Core.IdPat scanIdPat = (Core.IdPat) scanPat;
-        extendedOutputPats.add(scanIdPat);
+        // Only add if a pattern with same name is not already present
+        // (avoid duplicates in recursive calls)
+        boolean alreadyPresent =
+            goalPats.stream().anyMatch(p -> p.name.equals(scanIdPat.name));
+        if (!alreadyPresent) {
+          extendedOutputPats.add(scanIdPat);
+        }
         // Add an infinite extent generator for the scan variable
         this.generators.put(
             scanIdPat,
@@ -489,6 +545,19 @@ public class PredicateInverter {
   }
 
   private Generator generatorFor(List<Core.NamedPat> goalPats) {
+    // Deduplicate goalPats by name to avoid duplicate bindings in recursive
+    // calls.
+    // This can happen when recursive transitive closure inversion accumulates
+    // the same existential variable multiple times across iterations.
+    java.util.Set<String> seenNames = new java.util.LinkedHashSet<>();
+    List<Core.NamedPat> uniqueGoalPats = new ArrayList<>();
+    for (Core.NamedPat pat : goalPats) {
+      if (seenNames.add(pat.name)) {
+        uniqueGoalPats.add(pat);
+      }
+    }
+    goalPats = uniqueGoalPats;
+
     final Core.Pat goalPat = toTuple(goalPats);
     switch (goalPats.size()) {
       case 0:
@@ -705,21 +774,36 @@ public class PredicateInverter {
       Core.Exp fnArg,
       List<Core.NamedPat> goalPats,
       List<Core.Exp> active) {
+    System.err.println(
+        "[DEBUG tryInvertTransitiveClosure] fnBody.op=" + fnBody.op);
     // Check if fnBody matches: baseCase orelse recursiveCase
     if (fnBody.op != Op.APPLY) {
+      System.err.println(
+          "[DEBUG tryInvertTransitiveClosure] returning null - fnBody is not APPLY");
       return null;
     }
 
     Core.Apply orElseApply = (Core.Apply) fnBody;
     if (!orElseApply.isCallTo(BuiltIn.Z_ORELSE)) {
+      System.err.println(
+          "[DEBUG tryInvertTransitiveClosure] returning null - not Z_ORELSE");
       return null;
     }
 
     Core.Exp baseCase = orElseApply.arg(0);
     Core.Exp recursiveCase = orElseApply.arg(1);
+    System.err.println(
+        "[DEBUG tryInvertTransitiveClosure] baseCase=" + baseCase);
+    System.err.println(
+        "[DEBUG tryInvertTransitiveClosure] recursiveCase=" + recursiveCase);
 
     // Try to invert the base case without the recursive call
+    System.err.println(
+        "[DEBUG tryInvertTransitiveClosure] trying to invert baseCase");
     Result baseCaseResult = invert(baseCase, goalPats, ImmutableList.of());
+    System.err.println(
+        "[DEBUG tryInvertTransitiveClosure] baseCaseResult.cardinality="
+            + baseCaseResult.generator.cardinality);
 
     // Check if base case could be inverted to a FINITE generator.
     // If the base case is non-invertible (e.g., a user-defined function call),
@@ -736,8 +820,12 @@ public class PredicateInverter {
     // failed, causing the caller to skip this optimization.
     if (baseCaseResult.generator.cardinality
         == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
+      System.err.println(
+          "[DEBUG tryInvertTransitiveClosure] returning null - base case has INFINITE cardinality");
       return null;
     }
+    System.err.println(
+        "[DEBUG tryInvertTransitiveClosure] base case has FINITE cardinality, proceeding...");
 
     // Build Relational.iterate with the finite base generator.
     // Remaining filters will be applied at runtime along with the iterate
@@ -921,28 +1009,111 @@ public class PredicateInverter {
       }
     }
 
-    // Handle tuple elem patterns like (x, y) elem list
-    // But only if:
-    // 1. The pattern contains only variable IDs (no literals/constants), AND
-    // 2. The pattern is a simple tuple (not a record with named fields)
-    // Record patterns (e.g., {deptno=x, dname=y} elem depts) should fall
-    // through
-    // to Extents.g3 which produces field extraction pattern (#deptno v$0).
+    // Handle tuple elem patterns like (x, y) elem list or {x=a, y=b} elem list
+    // But only if the pattern contains only variable IDs (no
+    // literals/constants).
+    // Both simple tuples and records with only ID fields can be inverted.
     if (pattern.op == Op.TUPLE) {
       final Core.Tuple tuple = (Core.Tuple) pattern;
-      // Only handle simple tuples (not records) with all IDs
       boolean isRecord = tuple.type.op() == Op.RECORD_TYPE;
-      if (!isRecord && containsOnlyIds(tuple)) {
-        final Core.Pat pat = toPat(tuple);
-        // Use no-validation fromBuilder since collection references outer-scope
-        // vars
-        final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-        fromBuilder.scan(pat, collection);
-        fromBuilder.yield_(tuple);
+      if (containsOnlyIds(tuple)) {
+        // Check if the tuple has duplicate variable names (e.g., (z, z))
+        // This can happen after function expansion: path(z, y) expands and
+        // substitutes x->z, turning edge(x, z) into edge(z, z).
+        // Pattern (z, z) elem edges means "pairs where both elements are
+        // equal".
+        List<Core.Id> tupleIds = new ArrayList<>();
+        for (Core.Exp arg : tuple.args) {
+          tupleIds.add((Core.Id) arg);
+        }
+        java.util.Set<String> seenNames = new java.util.HashSet<>();
+        boolean hasDuplicates = false;
+        for (Core.Id id : tupleIds) {
+          if (!seenNames.add(id.idPat.name)) {
+            hasDuplicates = true;
+            break;
+          }
+        }
+
+        if (hasDuplicates) {
+          // Handle duplicate names by creating fresh scan patterns
+          // and adding equality constraints.
+          // For (z, z) elem edges, generate:
+          //   from (z_1, z_2) in edges where z_1 = z_2 yield z_1
+          final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+          List<Core.IdPat> freshPats = new ArrayList<>();
+          for (Core.Id id : tupleIds) {
+            Core.IdPat freshPat =
+                core.idPat(id.type, typeSystem.nameGenerator.get(), 0);
+            freshPats.add(freshPat);
+          }
+          final Core.Pat scanPat =
+              freshPats.size() == 1
+                  ? freshPats.get(0)
+                  : core.tuplePat(typeSystem, freshPats);
+          fromBuilder.scan(scanPat, collection);
+
+          // Add WHERE clauses for equality constraints between duplicate vars
+          // For (z, z), we need: z_1 = z_2
+          Map<String, List<Integer>> namePositions =
+              new java.util.LinkedHashMap<>();
+          for (int i = 0; i < tupleIds.size(); i++) {
+            namePositions
+                .computeIfAbsent(
+                    tupleIds.get(i).idPat.name, k -> new ArrayList<>())
+                .add(i);
+          }
+          for (List<Integer> positions : namePositions.values()) {
+            if (positions.size() > 1) {
+              // Generate equality constraints: p0 = p1, p0 = p2, etc.
+              Core.IdPat first = freshPats.get(positions.get(0));
+              for (int i = 1; i < positions.size(); i++) {
+                Core.IdPat other = freshPats.get(positions.get(i));
+                Core.Exp eqConstraint =
+                    core.call(
+                        typeSystem,
+                        BuiltIn.OP_EQ,
+                        first.type,
+                        Pos.ZERO,
+                        core.id(first),
+                        core.id(other));
+                fromBuilder.where(eqConstraint);
+              }
+            }
+          }
+
+          // Yield the first fresh pattern for each unique name
+          List<Core.Exp> yieldArgs = new ArrayList<>();
+          java.util.Set<String> yieldedNames = new java.util.HashSet<>();
+          for (int i = 0; i < tupleIds.size(); i++) {
+            String name = tupleIds.get(i).idPat.name;
+            if (yieldedNames.add(name)) {
+              yieldArgs.add(core.id(freshPats.get(i)));
+            }
+          }
+          final Core.Exp yieldExp =
+              yieldArgs.size() == 1
+                  ? yieldArgs.get(0)
+                  : core.tuple(typeSystem, yieldArgs.toArray(new Core.Exp[0]));
+          fromBuilder.yield_(yieldExp);
+
+          final Generator generator =
+              generator(
+                  toTuple(goalPats),
+                  fromBuilder.build(),
+                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                  ImmutableList.of());
+          return result(generator, ImmutableList.of());
+        }
+
+        // No duplicates - use collection directly.
+        // Building `from pat in collection yield tuple` would be an identity
+        // transformation since pat = toPat(tuple). Using collection directly
+        // avoids issues with FromBuilder's flattening logic in buildStepBody().
         final Generator generator =
             generator(
                 toTuple(goalPats),
-                fromBuilder.build(),
+                collection,
                 net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                 ImmutableList.of());
         return result(generator, ImmutableList.of());
@@ -1907,7 +2078,10 @@ public class PredicateInverter {
     // For transitive closure pattern (x, z) from edges
     // We need to decompose the tuple type to get individual variable types
     final Type[] baseComponents;
-    if (baseElemType.op() == Op.TUPLE_TYPE) {
+    // Check for both TUPLE_TYPE and RECORD_TYPE - records also need
+    // decomposition
+    if (baseElemType.op() == Op.TUPLE_TYPE
+        || baseElemType.op() == Op.RECORD_TYPE) {
       final RecordLikeType recordLikeType = (RecordLikeType) baseElemType;
       final List<Type> argTypes = recordLikeType.argTypes();
       baseComponents = argTypes.toArray(new Type[0]);
@@ -1953,8 +2127,13 @@ public class PredicateInverter {
     // Scan new results first: from (x, z) in newTuples
     builder.scan(newScanPat, core.id(newPat));
 
-    // Scan base generator: (z2, y) in baseGen
-    builder.scan(baseScanPat, baseGen);
+    // Simplify baseGen if it's a FROM expression that wraps a simple
+    // collection.
+    // This avoids broken variable references when FromBuilder tries to flatten.
+    final Core.Exp simplifiedBaseGen = simplifyFromExpression(baseGen);
+
+    // Scan base generator: (z2, y) in simplifiedBaseGen
+    builder.scan(baseScanPat, simplifiedBaseGen);
 
     // Add WHERE clause: z = z2 (join on intermediate variable)
     if (baseComponents.length > 1) {
@@ -2009,6 +2188,108 @@ public class PredicateInverter {
         .min(Comparator.comparing(pat -> pat.name))
         .orElseThrow(
             () -> new IllegalArgumentException("No join variable identified"));
+  }
+
+  /**
+   * Simplifies a FROM expression to its underlying collection if possible.
+   *
+   * <p>If the expression is {@code from pat in collection yield tuple} where
+   * the yield is an identity transformation (tuple reconstructs the same values
+   * bound by pat), returns just the collection. This avoids broken variable
+   * references when FromBuilder tries to flatten nested FROM expressions.
+   *
+   * @param exp The expression to simplify
+   * @return The simplified expression (collection) or the original if not
+   *     simplifiable
+   */
+  private Core.Exp simplifyFromExpression(Core.Exp exp) {
+    if (exp.op != Op.FROM) {
+      return exp;
+    }
+    final Core.From from = (Core.From) exp;
+    final List<Core.FromStep> steps = from.steps;
+
+    // Check for pattern: from pat in collection yield tuple
+    // This requires exactly 2 steps: SCAN + YIELD
+    if (steps.size() != 2) {
+      return exp;
+    }
+    if (steps.get(0).op != Op.SCAN || steps.get(1).op != Op.YIELD) {
+      return exp;
+    }
+
+    final Core.Scan scan = (Core.Scan) steps.get(0);
+    final Core.Yield yield = (Core.Yield) steps.get(1);
+
+    // Check if yield is an identity transformation
+    // The yield expression should be a tuple/record that matches the scan
+    // pattern
+    if (!isIdentityYield(scan.pat, yield.exp)) {
+      return exp;
+    }
+
+    // Return the underlying collection
+    return scan.exp;
+  }
+
+  /**
+   * Checks if a yield expression is an identity transformation of a pattern.
+   *
+   * <p>Returns true if the yield expression reconstructs the same values that
+   * the pattern binds. For example, if pat binds (x, y) and exp is (x, y).
+   *
+   * @param pat The scan pattern
+   * @param exp The yield expression
+   * @return true if exp is an identity transformation of pat
+   */
+  private boolean isIdentityYield(Core.Pat pat, Core.Exp exp) {
+    switch (pat.op) {
+      case ID_PAT:
+        // Simple ID pattern: yield should be an ID reference to the same var
+        if (exp.op != Op.ID) {
+          return false;
+        }
+        return ((Core.IdPat) pat).equals(((Core.Id) exp).idPat);
+
+      case TUPLE_PAT:
+        // Tuple pattern: yield should be a tuple with matching elements
+        if (exp.op != Op.TUPLE) {
+          return false;
+        }
+        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        if (tuplePat.args.size() != tuple.args.size()) {
+          return false;
+        }
+        for (int i = 0; i < tuplePat.args.size(); i++) {
+          if (!isIdentityYield(tuplePat.args.get(i), tuple.args.get(i))) {
+            return false;
+          }
+        }
+        return true;
+
+      case RECORD_PAT:
+        // Record pattern: yield should be a tuple (record literal) with
+        // matching
+        if (exp.op != Op.TUPLE) {
+          return false;
+        }
+        final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        final Core.Tuple recordTuple = (Core.Tuple) exp;
+        if (recordPat.args.size() != recordTuple.args.size()) {
+          return false;
+        }
+        for (int i = 0; i < recordPat.args.size(); i++) {
+          if (!isIdentityYield(
+              recordPat.args.get(i), recordTuple.args.get(i))) {
+            return false;
+          }
+        }
+        return true;
+
+      default:
+        return false;
+    }
   }
 }
 

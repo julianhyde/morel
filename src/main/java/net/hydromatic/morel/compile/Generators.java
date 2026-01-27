@@ -200,13 +200,15 @@ class Generators {
 
           // Check if inversion succeeded with a finite generator
           if (result.generator.cardinality != Generator.Cardinality.INFINITE) {
-            // Create a CollectionGenerator from the result
-            Set<Core.NamedPat> freePats =
-                SuchThatShuttle.freePats(
-                    cache.typeSystem, result.generator.expression);
-            cache.add(
-                new CollectionGenerator(
-                    pat, result.generator.expression, freePats));
+            // Create a UserFunctionGenerator from the result.
+            // Use the original 'pat' parameter, not result.generator.goalPat.
+            // When CASE handling destructures 'p' into '(x_1, y_1)', the
+            // generator produces tuples that match the original pattern 'p',
+            // so we must register for 'p' (which Expander is looking for).
+            // Also track the original constraint so it can be simplified to
+            // true in the WHERE clause.
+            UserFunctionGenerator.create(
+                cache, ordered, pat, result.generator.expression, constraint);
             return true;
           }
         }
@@ -975,6 +977,95 @@ class Generators {
         return core.boolLiteral(true);
       }
       return exp;
+    }
+  }
+
+  /**
+   * Generator that was created by inverting a user-defined function predicate.
+   *
+   * <p>For example, if {@code path(p)} is inverted to produce an {@code
+   * iterate} expression, this generator tracks the original predicate and
+   * simplifies it to {@code true} when encountered in a WHERE clause.
+   */
+  static class UserFunctionGenerator extends Generator {
+    /** The original predicate that was inverted to create this generator. */
+    final Core.Exp originalPredicate;
+
+    private UserFunctionGenerator(
+        Core.Pat pat,
+        Core.Exp generatorExp,
+        Core.Exp originalPredicate,
+        Iterable<? extends Core.NamedPat> freePats) {
+      super(generatorExp, freePats, pat, Cardinality.FINITE);
+      this.originalPredicate = requireNonNull(originalPredicate);
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
+    static UserFunctionGenerator create(
+        Cache cache,
+        boolean ordered,
+        Core.Pat pat,
+        Core.Exp generatorExp,
+        Core.Exp originalPredicate) {
+      // Convert the collection to a list or bag, per "ordered".
+      final TypeSystem typeSystem = cache.typeSystem;
+      final Core.Exp generatorExp2 =
+          CoreBuilder.withOrdered(ordered, generatorExp, typeSystem);
+      final Set<Core.NamedPat> freePats =
+          SuchThatShuttle.freePats(typeSystem, generatorExp2);
+      return cache.add(
+          new UserFunctionGenerator(
+              pat, generatorExp2, originalPredicate, freePats));
+    }
+
+    @Override
+    Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+      // If the expression matches the original predicate that was inverted,
+      // simplify it to true (the generator already produces all valid values).
+      if (matchesPredicate(exp, originalPredicate)) {
+        return core.boolLiteral(true);
+      }
+      return exp;
+    }
+
+    /**
+     * Checks if an expression matches the original predicate.
+     *
+     * <p>This handles structural matching, including the case where the
+     * predicate is wrapped in a CASE expression (e.g., {@code case p of (x, y)
+     * => ...}).
+     */
+    private boolean matchesPredicate(Core.Exp exp, Core.Exp predicate) {
+      // Direct match
+      if (exp.equals(predicate)) {
+        return true;
+      }
+      // Handle CASE-wrapped predicates
+      if (exp.op == Op.CASE && predicate.op == Op.CASE) {
+        Core.Case expCase = (Core.Case) exp;
+        Core.Case predCase = (Core.Case) predicate;
+        if (expCase.matchList.size() == 1 && predCase.matchList.size() == 1) {
+          return expCase
+              .matchList
+              .get(0)
+              .exp
+              .equals(predCase.matchList.get(0).exp);
+        }
+      }
+      // For CASE expressions, compare the body of the single match arm
+      if (exp.op == Op.CASE) {
+        Core.Case caseExp = (Core.Case) exp;
+        if (caseExp.matchList.size() == 1) {
+          return matchesPredicate(caseExp.matchList.get(0).exp, predicate);
+        }
+      }
+      if (predicate.op == Op.CASE) {
+        Core.Case caseExp = (Core.Case) predicate;
+        if (caseExp.matchList.size() == 1) {
+          return matchesPredicate(exp, caseExp.matchList.get(0).exp);
+        }
+      }
+      return false;
     }
   }
 

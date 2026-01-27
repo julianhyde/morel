@@ -590,16 +590,15 @@ public class Extents {
                   if (invert
                       && result.generator.cardinality
                           != Generator.Cardinality.INFINITE) {
-                    // The generator produces tuples for all goalPats
-                    // Add remaining filters if any
-                    final Core.Exp combinedFilter =
-                        core.andAlso(typeSystem, result.remainingFilters);
+                    // The generator produces tuples for all goalPats.
+                    // Mark the ORIGINAL filter as satisfied so it gets removed
+                    // from the WHERE clause. The remaining filters (if any)
+                    // will
+                    // be applied as additional constraints.
                     goalPats.forEach(
                         pat ->
                             map.computeIfAbsent(pat, p -> PairList.of())
-                                .add(
-                                    result.generator.expression,
-                                    combinedFilter));
+                                .add(result.generator.expression, filter));
                     break;
                   }
                   map2 = new LinkedHashMap<>();
@@ -748,15 +747,13 @@ public class Extents {
             result.remainingFilters.size() != 1
                 || !result.remainingFilters.get(0).equals(filter);
         if (inversionSucceeded) {
-          // The generator produces tuples for all goalPats
-          final Core.Exp combinedFilter =
-              result.remainingFilters.isEmpty()
-                  ? core.boolLiteral(true)
-                  : core.andAlso(typeSystem, result.remainingFilters);
+          // The generator produces tuples for all goalPats.
+          // Mark the ORIGINAL filter as satisfied so it gets removed from
+          // the WHERE clause.
           goalPats.forEach(
               pat ->
                   map.computeIfAbsent(pat, p -> PairList.of())
-                      .add(result.generator.expression, combinedFilter));
+                      .add(result.generator.expression, filter));
         }
       }
     }
