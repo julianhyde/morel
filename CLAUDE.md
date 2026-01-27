@@ -21,7 +21,7 @@ Morel is a Standard ML interpreter with relational extensions, implemented in Ja
 ./mvnw test -Dtest=MainTest # Run specific test class
 ./mvnw test -Dtest=MainTest#testRepl # Run specific test method
 
-# Run individual .smli script test files
+# Run individual .smli script test files (compares output to expected)
 ./morel src/test/resources/script/wordle.smli
 
 # Run individual script with visible output (for debugging hangs/slow tests)
@@ -32,6 +32,8 @@ Morel is a Standard ML interpreter with relational extensions, implemented in Ja
 ### Running the Shell
 ```bash
 ./morel                     # Start interactive REPL
+./morel -e '1 + 2'          # Evaluate expression and exit
+./morel --eval='from x in [1,2,3] yield x * 2'  # Long form
 ```
 
 ### Code Quality
