@@ -1737,12 +1737,12 @@ class Generators {
       return false;
     }
     final @Nullable Pair<Core.Exp, Boolean> lower =
-        lowerBound(pat, constraints);
+        lowerBound(cache.typeSystem, pat, constraints);
     if (lower == null) {
       return false;
     }
     final @Nullable Pair<Core.Exp, Boolean> upper =
-        upperBound(pat, constraints);
+        upperBound(cache.typeSystem, pat, constraints);
     if (upper == null) {
       return false;
     }
@@ -1945,13 +1945,16 @@ class Generators {
    * If there is a predicate "pat &gt; exp" or "pat &ge; exp", returns "exp" and
    * whether the comparison is strict.
    *
+   * <p>Also handles constraints like "e &lt; pat + k" which gives a lower bound
+   * of "e - k" for pat.
+   *
    * <p>We do not attempt to find the strongest such constraint. Clearly "p &gt;
    * 10" is stronger than "p &ge; 0". But is "p &gt; x" stronger than "p &ge;
    * y"? If the goal is to convert an infinite generator to a finite generator,
    * any constraint is good enough.
    */
   static @Nullable Pair<Core.Exp, Boolean> lowerBound(
-      Core.Pat pat, List<Core.Exp> constraints) {
+      TypeSystem typeSystem, Core.Pat pat, List<Core.Exp> constraints) {
     for (Core.Exp constraint : constraints) {
       switch (constraint.builtIn()) {
         case OP_GT:
@@ -1961,6 +1964,7 @@ class Generators {
             final boolean strict = constraint.builtIn() == BuiltIn.OP_GT;
             return Pair.of(constraint.arg(1), strict);
           }
+          // Check for "e > p + k" -> "p < e - k" (this is an upper bound, skip)
           break;
         case OP_LT:
         case OP_LE:
@@ -1968,6 +1972,15 @@ class Generators {
             // "e < p" -> (strict, e); "e <= p" -> (non-strict, e).
             final boolean strict = constraint.builtIn() == BuiltIn.OP_LT;
             return Pair.of(constraint.arg(0), strict);
+          }
+          // Check for "e < p + k" -> "p > e - k" -> lower bound = e - k
+          final BigDecimal offset = extractOffset(constraint.arg(1), pat);
+          if (offset != null) {
+            // "e < p + k" -> "p > e - k"
+            final boolean strict = constraint.builtIn() == BuiltIn.OP_LT;
+            final Core.Exp bound =
+                adjustBound(constraint.arg(0), offset, typeSystem);
+            return Pair.of(bound, strict);
           }
           break;
       }
@@ -1979,10 +1992,13 @@ class Generators {
    * If there is a constraint "pat &lt; exp" or "pat &le; exp", returns "exp"
    * and whether the comparison is strict.
    *
-   * <p>Analogous to {@link #lowerBound(Core.Pat, List)}.
+   * <p>Also handles constraints like "e &gt; pat + k" which gives an upper
+   * bound of "e - k" for pat.
+   *
+   * <p>Analogous to {@link #lowerBound(TypeSystem, Core.Pat, List)}.
    */
   static @Nullable Pair<Core.Exp, Boolean> upperBound(
-      Core.Pat pat, List<Core.Exp> constraints) {
+      TypeSystem typeSystem, Core.Pat pat, List<Core.Exp> constraints) {
     for (Core.Exp constraint : constraints) {
       switch (constraint.builtIn()) {
         case OP_LT:
@@ -1992,6 +2008,7 @@ class Generators {
             final boolean strict = constraint.builtIn() == BuiltIn.OP_LT;
             return Pair.of(constraint.arg(1), strict);
           }
+          // Check for "e < p + k" -> "p > e - k" (this is a lower bound, skip)
           break;
         case OP_GT:
         case OP_GE:
@@ -1999,6 +2016,15 @@ class Generators {
             // "e > p" -> (strict, e); "e >= p" -> (non-strict, e).
             final boolean strict = constraint.builtIn() == BuiltIn.OP_GT;
             return Pair.of(constraint.arg(0), strict);
+          }
+          // Check for "e > p + k" -> "p < e - k" -> upper bound = e - k
+          final BigDecimal offset = extractOffset(constraint.arg(1), pat);
+          if (offset != null) {
+            // "e > p + k" -> "p < e - k"
+            final boolean strict = constraint.builtIn() == BuiltIn.OP_GT;
+            final Core.Exp bound =
+                adjustBound(constraint.arg(0), offset, typeSystem);
+            return Pair.of(bound, strict);
           }
           break;
       }
@@ -2012,6 +2038,75 @@ class Generators {
    */
   private static boolean references(Core.Exp arg, Core.Pat pat) {
     return arg.op == Op.ID && ((Core.Id) arg).idPat.equals(pat);
+  }
+
+  /**
+   * Extracts the offset from an expression relative to a pattern.
+   *
+   * <p>Returns the integer offset if exp is pat, pat + k, or pat - k where k is
+   * an integer literal. Returns null otherwise.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>{@code extractOffset(y, y)} returns 0
+   *   <li>{@code extractOffset(y + 5, y)} returns 5
+   *   <li>{@code extractOffset(y - 3, y)} returns -3
+   *   <li>{@code extractOffset(x + 5, y)} returns null
+   * </ul>
+   */
+  private static @Nullable BigDecimal extractOffset(
+      Core.Exp exp, Core.Pat pat) {
+    if (references(exp, pat)) {
+      return BigDecimal.ZERO;
+    }
+    if (exp instanceof Core.Apply) {
+      final Core.Apply apply = (Core.Apply) exp;
+      switch (apply.builtIn()) {
+        case Z_PLUS_INT:
+        case OP_PLUS:
+          // pat + k
+          if (references(apply.arg(0), pat) && apply.arg(1).isConstant()) {
+            final Object value = ((Core.Literal) apply.arg(1)).value;
+            if (value instanceof BigDecimal) {
+              return (BigDecimal) value;
+            }
+          }
+          // k + pat
+          if (references(apply.arg(1), pat) && apply.arg(0).isConstant()) {
+            final Object value = ((Core.Literal) apply.arg(0)).value;
+            if (value instanceof BigDecimal) {
+              return (BigDecimal) value;
+            }
+          }
+          break;
+        case Z_MINUS_INT:
+        case OP_MINUS:
+          // pat - k
+          if (references(apply.arg(0), pat) && apply.arg(1).isConstant()) {
+            final Object value = ((Core.Literal) apply.arg(1)).value;
+            if (value instanceof BigDecimal) {
+              return ((BigDecimal) value).negate();
+            }
+          }
+          break;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Adjusts an expression by subtracting an offset.
+   *
+   * <p>For example, {@code adjustBound(x, 5, ts)} returns {@code x - 5}.
+   */
+  private static Core.Exp adjustBound(
+      Core.Exp exp, BigDecimal offset, TypeSystem typeSystem) {
+    if (offset.equals(BigDecimal.ZERO)) {
+      return exp;
+    }
+    return core.call(
+        typeSystem, BuiltIn.Z_MINUS_INT, exp, core.intLiteral(offset));
   }
 
   /**
@@ -2150,8 +2245,10 @@ class Generators {
       // (or to "true" if there are no other conjuncts).
       if (exp.isCallTo(BuiltIn.Z_ANDALSO)) {
         final List<Core.Exp> ands = core.decomposeAnd(exp);
-        final Pair<Core.Exp, Boolean> lowerBound = lowerBound(pat, ands);
-        final Pair<Core.Exp, Boolean> upperBound = upperBound(pat, ands);
+        final Pair<Core.Exp, Boolean> lowerBound =
+            lowerBound(typeSystem, pat, ands);
+        final Pair<Core.Exp, Boolean> upperBound =
+            upperBound(typeSystem, pat, ands);
         if (lowerBound != null && upperBound != null) {
           final boolean boundsMatch =
               lowerBound.left.equals(this.lower)
