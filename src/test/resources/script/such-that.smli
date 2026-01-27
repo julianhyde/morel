@@ -749,7 +749,7 @@ from p where (exists s in ["abcd", "ant"] where String.isPrefix p s) order p;
 (* TODO: remove spurious 'where' *)
 Sys.planEx "999";
 > val it =
->   "val it = from s in [\"abcd\", \"ant\"] join p in #tabulate Bag (#size String s + 1, fn i => #substring String (s, 0, i)) yield p group p = p where #nonEmpty Relational (from s in [\"abcd\", \"ant\"] where #isPrefix String p s) order p"
+>   "val it = from s in [\"abcd\", \"ant\"] join p in #tabulate Bag (#size String s + 1, fn i => #substring String (s, 0, i)) yield p group p where #nonEmpty Relational (from s in [\"abcd\", \"ant\"] where #isPrefix String p s) order p"
 >   : string
 
 (*) A string function with external extent.
