@@ -915,6 +915,17 @@ end;
 >
 > val it : {x:int, y:int} bag
 
+(*) Find symmetric elements of a relation
+let
+  val edges = [(1, 1), (2, 3), (4, 4)]
+  fun edge (x, y) = (x, y) elem edges
+  fun self_loop x =
+    (exists y where edge (x, y) andalso x = y)
+in
+  from x where self_loop x
+end;
+> val it = [1,4] : int bag
+
 (* More edges *)
 (*
    1 --> 4 ----+

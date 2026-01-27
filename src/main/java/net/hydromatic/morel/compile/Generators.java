@@ -127,7 +127,11 @@ class Generators {
               case SCAN:
                 break;
               case WHERE:
-                constraints2.add(((Core.Where) step).exp);
+                // Decompose "andalso" to allow each conjunct to be processed
+                // separately. E.g., "edge(x,y) andalso x = y" becomes
+                // ["edge(x,y)", "x = y"], allowing maybeFunction to process
+                // the edge function call.
+                core.flattenAnd(((Core.Where) step).exp, constraints2::add);
                 // First try to create a generator without inner dependencies
                 if (maybeGenerator(cache, pat, false, constraints2)) {
                   // Check if the created generator depends on inner scans
@@ -331,10 +335,9 @@ class Generators {
                   match.pat,
                   caseExp.exp,
                   match.exp);
-          // Decompose andalso into individual conjuncts for range detection.
-          final List<Core.Exp> inlinedConstraints =
-              core.decomposeAnd(inlinedBody);
-          if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
+          // Decompose "andalso" into individual conjuncts for range detection.
+          if (maybeGenerator(
+              cache, goalPat, ordered, core.decomposeAnd(inlinedBody))) {
             return true;
           }
         }
@@ -354,10 +357,9 @@ class Generators {
         final Core.Fn fn = (Core.Fn) apply.fn;
         final Core.Exp inlinedBody =
             inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
-        // Decompose andalso into individual conjuncts for range detection.
-        final List<Core.Exp> inlinedConstraints =
-            core.decomposeAnd(inlinedBody);
-        if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
+        // Decompose "andalso" into individual conjuncts for range detection.
+        if (maybeGenerator(
+            cache, goalPat, ordered, core.decomposeAnd(inlinedBody))) {
           return true;
         }
         continue;
@@ -427,9 +429,9 @@ class Generators {
       // then recursively try to find a generator for the substituted body.
       final Core.Exp inlinedBody =
           inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
-      // Decompose andalso into individual conjuncts for range detection.
-      final List<Core.Exp> inlinedConstraints = core.decomposeAnd(inlinedBody);
-      if (maybeGenerator(cache, goalPat, ordered, inlinedConstraints)) {
+      // Decompose "andalso" into individual conjuncts for range detection.
+      if (maybeGenerator(
+          cache, goalPat, ordered, core.decomposeAnd(inlinedBody))) {
         return true;
       }
     }
@@ -548,14 +550,13 @@ class Generators {
     if (!fn.exp.isCallTo(BuiltIn.Z_ANDALSO)) {
       return null;
     }
-    final List<Core.Exp> topConjuncts = core.decomposeAnd(fn.exp);
 
     // Find the guard "n > 0" and identify the bound parameter
     Core.NamedPat boundParam = null;
     int boundParamIndex = -1;
     final List<Core.Exp> bodyParts = new ArrayList<>();
 
-    for (Core.Exp conjunct : topConjuncts) {
+    for (Core.Exp conjunct : core.decomposeAnd(fn.exp)) {
       if (conjunct.isCallTo(BuiltIn.OP_GT)) {
         final Core.Apply gt = (Core.Apply) conjunct;
         if (gt.arg(0).op == Op.ID && isZeroLiteral(gt.arg(1))) {
@@ -619,11 +620,10 @@ class Generators {
     }
 
     // Step 5: Decompose where clause into step predicate and recursive call
-    final List<Core.Exp> whereConjuncts = core.decomposeAnd(whereClause);
     Core.Apply recursiveCall = null;
     final List<Core.Exp> stepPredicates = new ArrayList<>();
 
-    for (Core.Exp conj : whereConjuncts) {
+    for (Core.Exp conj : core.decomposeAnd(whereClause)) {
       if (conj.op == Op.APPLY) {
         final Core.Apply applyConj = (Core.Apply) conj;
         if (applyConj.fn.op == Op.ID
@@ -787,11 +787,10 @@ class Generators {
     }
 
     // Decompose where clause into step predicate and recursive call
-    final List<Core.Exp> whereConjuncts = core.decomposeAnd(whereClause);
     Core.Apply recursiveCall = null;
     final List<Core.Exp> stepPredicates = new ArrayList<>();
 
-    for (Core.Exp conj : whereConjuncts) {
+    for (Core.Exp conj : core.decomposeAnd(whereClause)) {
       if (conj.op == Op.APPLY) {
         final Core.Apply applyConj = (Core.Apply) conj;
         if (applyConj.fn.op == Op.ID
@@ -1715,7 +1714,6 @@ class Generators {
     next_constraint:
     for (Core.Exp constraint : constraints) {
       if (constraint.isCallTo(BuiltIn.Z_ORELSE)) {
-        final List<Core.Exp> orList = core.decomposeOr(constraint);
         final List<Generator> generators = new ArrayList<>();
 
         // Save generator count before trying branches.
@@ -1724,9 +1722,8 @@ class Generators {
         final int initialCount =
             cache.generators.get((Core.NamedPat) pat).size();
 
-        for (Core.Exp exp : orList) {
-          final List<Core.Exp> andList = core.decomposeAnd(exp);
-          if (!maybeGenerator(cache, pat, ordered, andList)) {
+        for (Core.Exp exp : core.decomposeOr(constraint)) {
+          if (!maybeGenerator(cache, pat, ordered, core.decomposeAnd(exp))) {
             // Clean up generators added by successful branches before this one.
             // Remove generators until we're back to the initial count.
             while (cache.generators.get((Core.NamedPat) pat).size()
@@ -2258,41 +2255,40 @@ class Generators {
     Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       // Simplify "p > lower && p < upper && other" to "other"
       // (or to "true" if there are no other conjuncts).
-      if (exp.isCallTo(BuiltIn.Z_ANDALSO)) {
-        final List<Core.Exp> ands = core.decomposeAnd(exp);
-        final Pair<Core.Exp, Boolean> lowerBound =
-            lowerBound(typeSystem, pat, ands);
-        final Pair<Core.Exp, Boolean> upperBound =
-            upperBound(typeSystem, pat, ands);
-        if (lowerBound != null && upperBound != null) {
-          final boolean boundsMatch =
-              lowerBound.left.equals(this.lower)
-                  && upperBound.left.equals(this.upper);
-          final boolean boundsImplied =
-              lowerBound.left.isConstant()
-                  && upperBound.left.isConstant()
-                  && this.lower.isConstant()
-                  && this.upper.isConstant()
-                  && gt(lowerBound.left, this.lower, lowerBound.right)
-                  && gt(this.upper, upperBound.left, upperBound.right);
-          if (boundsMatch || boundsImplied) {
-            // Remove the range constraints and keep the rest.
-            final Core.Exp lowerConstraint = findLowerConstraint(pat, ands);
-            final Core.Exp upperConstraint = findUpperConstraint(pat, ands);
-            final List<Core.Exp> remaining = new ArrayList<>(ands);
-            remaining.remove(lowerConstraint);
-            remaining.remove(upperConstraint);
-            if (remaining.isEmpty()) {
-              return core.boolLiteral(true);
-            }
-            if (remaining.size() == 1) {
-              return remaining.get(0);
-            }
-            // Multiple remaining constraints - use core.andAlso to
-            // reconstruct.
-            return core.andAlso(typeSystem, remaining);
-          }
+      final List<Core.Exp> ands = core.decomposeAnd(exp);
+      final Pair<Core.Exp, Boolean> lowerBound =
+          lowerBound(typeSystem, pat, ands);
+      final Pair<Core.Exp, Boolean> upperBound =
+          upperBound(typeSystem, pat, ands);
+      if (lowerBound == null || upperBound == null) {
+        return exp;
+      }
+      final boolean boundsMatch =
+          lowerBound.left.equals(this.lower)
+              && upperBound.left.equals(this.upper);
+      final boolean boundsImplied =
+          lowerBound.left.isConstant()
+              && upperBound.left.isConstant()
+              && this.lower.isConstant()
+              && this.upper.isConstant()
+              && gt(lowerBound.left, this.lower, lowerBound.right)
+              && gt(this.upper, upperBound.left, upperBound.right);
+      if (boundsMatch || boundsImplied) {
+        // Remove the range constraints and keep the rest.
+        final Core.Exp lowerConstraint = findLowerConstraint(pat, ands);
+        final Core.Exp upperConstraint = findUpperConstraint(pat, ands);
+        final List<Core.Exp> remaining = new ArrayList<>(ands);
+        remaining.remove(lowerConstraint);
+        remaining.remove(upperConstraint);
+        if (remaining.isEmpty()) {
+          return core.boolLiteral(true);
         }
+        if (remaining.size() == 1) {
+          return remaining.get(0);
+        }
+        // Multiple remaining constraints - use core.andAlso to
+        // reconstruct.
+        return core.andAlso(typeSystem, remaining);
       }
       return exp;
     }
