@@ -42,10 +42,10 @@ Sys.planEx "3";
 > val it = "val it = from i in #tabulate Bag (11, fn k => 0 + k)" : string
 
 from i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22;
-> val it = [0,1,2,3,4,5,8,21] : int bag
+> val it = [1,2,3,4,5,21,8,0] : int bag
 Sys.planEx "3";
 > val it =
->   "val it = from i in #concat Bag ([#tabulate Bag (6, fn k => 0 + k), #fromList Bag ([8]), #tabulate Bag (1, fn k => op + (21, k))]) where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22"
+>   "val it = from i in #concat Bag ([#tabulate Bag (6, fn k => 0 + k), #fromList Bag ([8]), #tabulate Bag (1, fn k => op + (21, k))]) group i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22"
 >   : string
 
 from i where i > 0 andalso i < 4 yield {j = i + 1};
@@ -76,7 +76,7 @@ from s where s = "abc";
 > val it = ["abc"] : string bag
 
 from i where i = 0 orelse i = 12;
-> val it = [0,12] : int bag
+> val it = [12,0] : int bag
 
 from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
 > val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int bag
@@ -221,7 +221,7 @@ let (* TODO remove 'let' when we have fixed inlining *)
 in
   from n where isSmall n orelse isLarge n
 end;
-> val it = [1,2,10,20] : int bag
+> val it = [1,2,20,10] : int bag
 
 (* -- Predicate inversion ------------------------------- *)
 
@@ -287,10 +287,8 @@ from x where x = 3 andalso x < 10;
 from x where x = 3 andalso x > 10;
 > val it = [] : int bag
 
-(* TODO current result has duplicate 3
 from x where x = 3 orelse x > 0 andalso x < 5;
 > val it = [1,2,3,4] : int bag
-*)
 
 from x where x = 3 orelse x > 10 andalso x < 15;
 > val it = [3,11,12,13,14] : int bag

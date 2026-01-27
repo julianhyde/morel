@@ -38,17 +38,21 @@ abstract class Generator {
   final Core.Pat pat;
   final Cardinality cardinality;
   final List<Core.NamedPat> freePats;
+  /** Whether the generator produces unique values (no duplicates). */
+  final boolean unique;
 
   Generator(
       Core.Exp exp,
       Iterable<? extends Core.NamedPat> freePats,
       Core.Pat pat,
-      Cardinality cardinality) {
+      Cardinality cardinality,
+      boolean unique) {
     this.exp = requireNonNull(exp);
     this.freePats = ImmutableList.copyOf(freePats);
     checkArgument(freePats instanceof Set || isDistinct(this.freePats));
     this.pat = requireNonNull(pat);
     this.cardinality = requireNonNull(cardinality);
+    this.unique = unique;
   }
 
   /**
