@@ -443,7 +443,11 @@ public class Inliner extends EnvShuttle {
         final Core.IdPat idPat = core.idPat(type, name, 0);
         Core.Id id = core.id(idPat);
         if (list.size() == 1) {
-          return core.valueLiteral(id, list.get(0));
+          // Nullary constructor: keep the full [constructorName] list
+          // representation
+          // so that pattern matching code in Closure.bindRecurse can correctly
+          // cast it to List and extract the constructor name
+          return core.valueLiteral(id, list);
         }
         Type argType = ((DataType) type).typeConstructors(typeSystem).get(name);
         Core.Exp arg = valueToExp(typeSystem, argType, list.get(1));
