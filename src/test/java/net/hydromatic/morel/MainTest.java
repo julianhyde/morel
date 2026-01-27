@@ -1167,7 +1167,6 @@ public class MainTest {
    * Tests a recursive {@code let} that includes a pattern. I'm not sure whether
    * this is valid Standard ML; SML-NJ doesn't like it.
    */
-  @Disabled("until mutual recursion bug is fixed")
   @Test
   void testCompositeRecursiveLet() {
     final String ml =
@@ -1320,7 +1319,6 @@ public class MainTest {
     ml("{b = true, a = 0} = {a = 1, b = true}").assertEval(is(false));
   }
 
-  @Disabled("deduce type of #label")
   @Test
   void testRecord2() {
     ml("#x #b {a = 1, b = {x = 3, y = 4}, z = true}")
@@ -1382,7 +1380,6 @@ public class MainTest {
     ml("1 :: 2 :: []").assertType("int list").assertEval(is(list(1, 2)));
   }
 
-  @Disabled("need type annotations")
   @Test
   void testList2() {
     ml("fn x: 'b list => 0").assertType("'a list -> int");
@@ -1716,7 +1713,6 @@ public class MainTest {
    * Mutually recursive functions: the definition of 'even' references 'odd' and
    * the definition of 'odd' references 'even'.
    */
-  @Disabled("not working yet")
   @Test
   void testMutuallyRecursiveFunctions() {
     final String ml =
@@ -1728,7 +1724,7 @@ public class MainTest {
             + "in\n"
             + "  odd 7\n"
             + "end";
-    ml(ml).assertType("boolean").assertEval(is(true));
+    ml(ml).assertType("bool").assertEval(is(true));
   }
 
   /** A function with two arguments. */

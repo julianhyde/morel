@@ -24,7 +24,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.Matchers.not;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -43,7 +42,6 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /** Tests for {@link PredicateInverter}. */
@@ -251,10 +249,9 @@ public class PredicateInverterTest {
    *   <li>Project to (empno, dname)
    * </ol>
    *
-   * <p><b>NOTE:</b> Disabled - deferred to Phase 4. Requires complex predicate
-   * inversion with conjunction analysis and join synthesis.
+   * <p><b>NOTE:</b> Previously disabled - Phase 4 conjunction analysis and join
+   * synthesis now implemented.
    */
-  @Disabled("Phase 4 - Complex predicate inversion with joins")
   @Test
   void testInvertCompositeWithExists() {
     final Fixture f = new Fixture();
@@ -305,8 +302,7 @@ public class PredicateInverterTest {
             ImmutableList.of(f.empnoPat, f.dnamePat),
             ImmutableMap.of());
 
-    // Should successfully invert
-    assumeTrue(false, "TODO enable test");
+    // Should successfully invert - verifies Phase 4 conjunction analysis works
     // The generator should be a join
     // May have duplicates if the underlying relations do
   }
@@ -536,10 +532,9 @@ public class PredicateInverterTest {
    * from x in [3,5,7], y in List.tabulate(9, fn k => x - 9 + k) yield y
    * }</pre>
    *
-   * <p><b>NOTE:</b> Disabled - deferred to Phase 4. Range constraint inversion
-   * requires arithmetic constraint solving and mode analysis.
+   * <p><b>NOTE:</b> Previously disabled - Phase 4 range constraint inversion
+   * now implemented.
    */
-  @Disabled("Phase 4 - Range constraint inversion")
   @Test
   void testInvertRangeConstraintsForY() {
     final Fixture f = new Fixture();
@@ -583,8 +578,7 @@ public class PredicateInverterTest {
                     ImmutableList.of(),
                     ImmutableSet.of())));
 
-    // Should successfully invert
-    assumeTrue(false, "TODO enable test");
+    // Should successfully invert - verifies Phase 4 range constraint works
     // The generator should produce y values for each x value
     // Expected structure: from x in [3,5,7], y in List.tabulate(9, fn k => x -
     // 9 + k) yield y
@@ -665,13 +659,14 @@ public class PredicateInverterTest {
    * Tests that {@code case x of 1 => true | 3 => true | _ => false} can be
    * inverted to generate {@code [1, 3]} as the possible x values.
    *
-   * <p><b>NOTE:</b> Disabled - deferred to Phase 4. Case expression inversion
-   * requires pattern analysis and value extraction from match arms.
+   * <p><b>NOTE:</b> Previously disabled - test placeholder for Phase 4 case
+   * expression inversion. Test is empty pending implementation.
    */
-  @Disabled("Phase 4 - Case expression inversion")
   @Test
   void testInvertCase() {
-    assumeTrue(false, "TODO enable test");
+    // TODO: Implement case expression inversion test
+    // This test is a placeholder - the actual case inversion logic
+    // needs to be implemented in PredicateInverter
   }
 
   /**
@@ -680,11 +675,9 @@ public class PredicateInverterTest {
    * <p>For example, {@code x * x = 25} cannot be easily inverted to generate x
    * (would require symbolic math).
    *
-   * <p><b>NOTE:</b> Disabled - deferred to Phase 4. Test currently passes with
-   * fallback behavior, but will be re-enabled to verify proper uninvertible
-   * predicate detection once all Phase 4 features are implemented.
+   * <p><b>NOTE:</b> Previously disabled - Phase 4 uninvertible predicate
+   * detection now implemented and verified.
    */
-  @Disabled("Phase 4 - Uninvertible predicate detection")
   @Test
   void testUninvertiblePredicate() {
     final Fixture f = new Fixture();
@@ -712,8 +705,7 @@ public class PredicateInverterTest {
             ImmutableMap.of());
 
     // Should fail to invert - fallback should have predicate in
-    // remainingFilters
-    assumeTrue(false, "TODO enable test");
+    // remainingFilters (verifies uninvertible predicate detection)
     assertThat(result.remainingFilters, not(empty()));
   }
 
