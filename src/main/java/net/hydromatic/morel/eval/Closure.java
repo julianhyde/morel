@@ -175,6 +175,11 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
       case TUPLE_PAT:
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+        // Tuples are represented as Lists at runtime. If the value is not a
+        // List, pattern matching fails.
+        if (!(argValue instanceof List)) {
+          return false;
+        }
         listValue = (List) argValue;
         return allMatch(
             tuplePat.args,
@@ -183,6 +188,11 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
       case RECORD_PAT:
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        // Records are represented as Lists at runtime. If the value is not a
+        // List, pattern matching fails.
+        if (!(argValue instanceof List)) {
+          return false;
+        }
         listValue = (List) argValue;
         return allMatch(
             recordPat.args,
@@ -191,6 +201,11 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
       case LIST_PAT:
         final Core.ListPat listPat = (Core.ListPat) pat;
+        // Lists are represented as Lists at runtime. If the value is not a
+        // List, pattern matching fails.
+        if (!(argValue instanceof List)) {
+          return false;
+        }
         listValue = (List) argValue;
         if (listValue.size() != listPat.args.size()) {
           return false;
@@ -205,6 +220,10 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
         if (argValue instanceof Variant) {
           return Variant.bindConsPat(envRef, (Variant) argValue, consPat);
         }
+        // CONS values are represented as Lists at runtime.
+        if (!(argValue instanceof List)) {
+          return false;
+        }
         @SuppressWarnings("unchecked")
         final List<Object> consValue = (List) argValue;
         if (consValue.isEmpty()) {
@@ -218,6 +237,10 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
       case CON0_PAT:
         final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;
+        // Nullary constructor values are represented as [tag].
+        if (!(argValue instanceof List)) {
+          return false;
+        }
         final List con0Value = (List) argValue;
         return con0Value.get(0).equals(con0Pat.tyCon);
 
@@ -228,6 +251,9 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
           return Variant.bindConPat(envRef, value, conPat);
         }
         // Old-style [tag, payload] representation
+        if (!(argValue instanceof List)) {
+          return false;
+        }
         final List conValue = (List) argValue;
         return conValue.get(0).equals(conPat.tyCon)
             && bindRecurse(conPat.pat, conValue.get(1), envRef);

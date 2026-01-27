@@ -236,22 +236,38 @@ public class EvalEnvs {
 
         case TUPLE_PAT:
           final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+          // Tuples are represented as Lists at runtime.
+          if (!(argValue instanceof List)) {
+            return false;
+          }
           listValue = (List) argValue;
           return allMatch(tuplePat.args, listValue, this::bindRecurse);
 
         case RECORD_PAT:
           final Core.RecordPat recordPat = (Core.RecordPat) pat;
+          // Records are represented as Lists at runtime.
+          if (!(argValue instanceof List)) {
+            return false;
+          }
           listValue = (List) argValue;
           return allMatch(recordPat.args, listValue, this::bindRecurse);
 
         case LIST_PAT:
           final Core.ListPat listPat = (Core.ListPat) pat;
+          // Lists are Lists at runtime.
+          if (!(argValue instanceof List)) {
+            return false;
+          }
           listValue = (List) argValue;
           return listValue.size() == listPat.args.size()
               && allMatch(listPat.args, listValue, this::bindRecurse);
 
         case CONS_PAT:
           final Core.ConPat infixPat = (Core.ConPat) pat;
+          // CONS is represented as a List at runtime.
+          if (!(argValue instanceof List)) {
+            return false;
+          }
           @SuppressWarnings("unchecked")
           final List<Object> consValue = (List) argValue;
           if (consValue.isEmpty()) {
@@ -269,10 +285,13 @@ public class EvalEnvs {
           if (argValue instanceof Variant) {
             final Variant value = (Variant) argValue;
             return value.constructor().constructor.equals(con0Pat.tyCon);
-          } else {
+          } else if (argValue instanceof List) {
             @SuppressWarnings("unchecked")
             final List<Object> list = (List<Object>) argValue;
             return list.get(0).equals(con0Pat.tyCon);
+          } else {
+            // Value is not in expected format.
+            return false;
           }
 
         case CON_PAT:
@@ -287,11 +306,14 @@ public class EvalEnvs {
             // Extract payload without converting to List representation.
             final Object payload = value.value;
             return bindRecurse(conPat.pat, payload);
-          } else {
+          } else if (argValue instanceof List) {
             @SuppressWarnings("unchecked")
             final List<Object> list = (List<Object>) argValue;
             return list.get(0).equals(conPat.tyCon)
                 && bindRecurse(conPat.pat, list.get(1));
+          } else {
+            // Value is not in expected format.
+            return false;
           }
 
         default:

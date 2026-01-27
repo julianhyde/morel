@@ -1028,6 +1028,53 @@ public class MainTest {
   }
 
   /**
+   * Tests closure capture when a function is shadowed. This test verifies that:
+   * 1. The second definition of 'f' correctly captures the value of 'x' (3) 2.
+   * When 'f x' is called, it uses the second 'f' with the second 'x' (10) 3.
+   * The result should be 3 + 10 = 13
+   *
+   * <p>This test was failing with ClassCastException: Integer cannot be cast to
+   * List, which indicated a type/value mismatch during inlining.
+   */
+  @Test
+  void testClosureShadowing() {
+    final String ml =
+        "let\n"
+            + "  fun f x = 1 + x;\n"
+            + "  val x = f 2;\n"
+            + "  fun f y = x + y;\n"
+            + "  val x = 10\n"
+            + "in\n"
+            + "  f x\n"
+            + "end";
+    // Test without inlining first
+    ml(ml).with(Prop.INLINE_PASS_COUNT, 0).assertEval(is(13));
+    // Test with default inlining (should also work)
+    ml(ml).assertEval(is(13));
+  }
+
+  /**
+   * Tests closure with lambda shadowing (same as testClosureShadowing but using
+   * lambda syntax).
+   */
+  @Test
+  void testClosureShadowingLambda() {
+    final String ml =
+        "let\n"
+            + "  val f = fn x => 1 + x;\n"
+            + "  val x = f 2;\n"
+            + "  val f = fn y => x + y;\n"
+            + "  val x = 10\n"
+            + "in\n"
+            + "  f x\n"
+            + "end";
+    // Test without inlining first
+    ml(ml).with(Prop.INLINE_PASS_COUNT, 0).assertEval(is(13));
+    // Test with default inlining (should also work)
+    ml(ml).assertEval(is(13));
+  }
+
+  /**
    * Tests that a simple eager function ({@code Math.pow}) uses direct
    * application ({@code apply2}) when its arguments are a tuple.
    */

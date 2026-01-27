@@ -59,12 +59,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class Inliner extends EnvShuttle {
   private final Analyzer.@Nullable Analysis analysis;
   /**
-   * Base names of patterns currently being inlined (with numeric suffixes
-   * stripped). Used to detect recursive references and avoid infinite recursion
-   * during inlining. We strip suffixes because the same logical function can
-   * have different IdPat names (e.g., "fact" vs "fact_4").
+   * Names of patterns currently being inlined. Used to detect recursive
+   * references and avoid infinite recursion during inlining. We use full names
+   * (not base names) to correctly handle shadowed variables - if "f_0" and
+   * "f_1" are different functions, they should be tracked separately.
    */
-  private final Set<String> inliningBaseNames;
+  private final Set<String> inliningNames;
   /**
    * Current inlining depth. Used to prevent very deep inlining chains that
    * could indicate cyclic inlining between different variables.
@@ -94,11 +94,11 @@ public class Inliner extends EnvShuttle {
       TypeSystem typeSystem,
       Environment env,
       Analyzer.Analysis analysis,
-      Set<String> inliningBaseNames,
+      Set<String> inliningNames,
       int depth) {
     super(typeSystem, env);
     this.analysis = analysis;
-    this.inliningBaseNames = inliningBaseNames;
+    this.inliningNames = inliningNames;
     this.depth = depth;
   }
 
@@ -133,7 +133,7 @@ public class Inliner extends EnvShuttle {
 
   @Override
   protected Inliner push(Environment env) {
-    return new Inliner(typeSystem, env, analysis, inliningBaseNames, depth);
+    return new Inliner(typeSystem, env, analysis, inliningNames, depth);
   }
 
   @Override
@@ -144,8 +144,11 @@ public class Inliner extends EnvShuttle {
         // Skip inlining if:
         // 1. This pattern name is already being inlined (recursive reference)
         // 2. We've exceeded the maximum inlining depth (cycle detection)
-        final String base = baseName(id.idPat.name);
-        if (!inliningBaseNames.contains(base) && depth < MAX_DEPTH) {
+        // Use full name including index (not just base name) to correctly
+        // handle shadowed variables. For example, x_1 and x (inner) are
+        // different variables and should be tracked separately.
+        final String name = id.idPat.name + "_" + id.idPat.i;
+        if (!inliningNames.contains(name) && depth < MAX_DEPTH) {
           // Get usage info from analysis. If the pattern isn't in the analysis
           // map (e.g., it was added after analysis), treat it as MULTI_UNSAFE
           // to be safe.
@@ -156,26 +159,35 @@ public class Inliner extends EnvShuttle {
             final Analyzer.Use analysisUse = analysis.map.get(id.idPat);
             use = analysisUse != null ? analysisUse : Analyzer.Use.MULTI_UNSAFE;
           }
-          switch (use) {
-            case ATOMIC:
-            case ONCE_SAFE:
-              // Don't inline expressions containing impure function calls.
-              // These expressions read mutable state (like Sys.env) and would
-              // produce different values if re-evaluated at the use site.
-              if (containsImpureCall(binding.exp)) {
-                break; // Fall through to use binding.value instead
-              }
-              inliningBaseNames.add(base);
+          // Determine if we should inline this expression.
+          // We inline if:
+          // 1. The analysis says it's ATOMIC or ONCE_SAFE, OR
+          // 2. We're in an inlining pass (analysis != null) and the expression
+          //    is atomic (literal/id) which is always safe to inline, even if
+          //    the pattern isn't in the analysis map (e.g., variables from
+          //    beta-reduced expressions). We only do this when analysis is
+          //    present to respect INLINE_PASS_COUNT=0 settings.
+          final boolean shouldInline =
+              use == Analyzer.Use.ATOMIC
+                  || use == Analyzer.Use.ONCE_SAFE
+                  || analysis != null && isAtomic(binding.exp);
+          if (shouldInline) {
+            // Don't inline expressions containing impure function calls.
+            // These expressions read mutable state (like Sys.env) and would
+            // produce different values if re-evaluated at the use site.
+            if (!containsImpureCall(binding.exp)) {
+              inliningNames.add(name);
               // Create a new Inliner with incremented depth for the nested
               // inlining
               final Inliner nestedInliner =
                   new Inliner(
-                      typeSystem, env, analysis, inliningBaseNames, depth + 1);
+                      typeSystem, env, analysis, inliningNames, depth + 1);
               try {
                 return binding.exp.accept(nestedInliner);
               } finally {
-                inliningBaseNames.remove(base);
+                inliningNames.remove(name);
               }
+            }
           }
         }
       }
@@ -232,18 +244,28 @@ public class Inliner extends EnvShuttle {
     if (apply2.fn.op == Op.RECORD_SELECTOR
         && apply2.arg.op == Op.VALUE_LITERAL) {
       final Core.RecordSelector selector = (Core.RecordSelector) apply2.fn;
-      @SuppressWarnings("rawtypes")
-      final List list = ((Core.Literal) apply2.arg).unwrap(List.class);
-      final Object o = list.get(selector.slot);
-      if (o instanceof Applicable || o instanceof Macro) {
-        // E.g. apply is '#filter List', o is Codes.LIST_FILTER,
-        // builtIn is BuiltIn.LIST_FILTER.
-        final BuiltIn builtIn = Codes.BUILT_IN_MAP.get(o);
-        if (builtIn != null) {
-          return core.functionLiteral(apply2.type, builtIn);
+      // VALUE_LITERAL might contain non-List values (e.g., Integer) if type
+      // information was lost during pattern matching. Only proceed if we
+      // actually have a List (record/tuple representation).
+      final Object unwrapped = ((Core.Literal) apply2.arg).unwrap(Object.class);
+      if (unwrapped instanceof List) {
+        @SuppressWarnings("rawtypes")
+        final List list = (List) unwrapped;
+        if (selector.slot < list.size()) {
+          final Object o = list.get(selector.slot);
+          if (o instanceof Applicable || o instanceof Macro) {
+            // E.g. apply is '#filter List', o is Codes.LIST_FILTER,
+            // builtIn is BuiltIn.LIST_FILTER.
+            final BuiltIn builtIn = Codes.BUILT_IN_MAP.get(o);
+            if (builtIn != null) {
+              return core.functionLiteral(apply2.type, builtIn);
+            }
+          }
+          return core.valueLiteral(apply2, o);
         }
       }
-      return core.valueLiteral(apply2, o);
+      // Fall through if VALUE_LITERAL doesn't contain a List or slot out of
+      // bounds
     }
     if (apply2.fn.op == Op.FN) {
       // Beta-reduction:
@@ -394,7 +416,9 @@ public class Inliner extends EnvShuttle {
       case INT_LITERAL:
         return ((Core.Literal) exp).unwrap(Integer.class);
       case VALUE_LITERAL:
-        return ((Core.Literal) exp).unwrap(List.class);
+        // VALUE_LITERAL can contain any value (List, Integer, String, etc.)
+        // Use Object.class to extract the wrapped value regardless of type
+        return ((Core.Literal) exp).unwrap(Object.class);
       case TUPLE:
         final Core.Tuple tuple = (Core.Tuple) exp;
         final ImmutableList.Builder<Object> args = ImmutableList.builder();
@@ -477,28 +501,58 @@ public class Inliner extends EnvShuttle {
         return core.apply(Pos.ZERO, type, id, arg);
 
       case TUPLE_TYPE:
-        final TupleType tupleType = (TupleType) type;
-        list = (List<Object>) value;
-        final ImmutableList.Builder<Core.Exp> args = ImmutableList.builder();
-        forEach(
-            tupleType.argTypes,
-            list,
-            (t, v) -> args.add(valueToExp(typeSystem, t, v)));
-        return core.tuple(tupleType, args.build());
+        {
+          final TupleType tupleType = (TupleType) type;
+          // Check if value matches expected tuple representation
+          if (!(value instanceof List)) {
+            // Type/value mismatch - try to infer actual type from value
+            Type tupleInferredType = inferTypeFromValue(typeSystem, value);
+            if (tupleInferredType != null) {
+              return valueToExp(typeSystem, tupleInferredType, value);
+            }
+            throw new AssertionError(
+                format(
+                    "cannot convert value [%s] of type [%s] to expression - "
+                        + "expected List for TupleType",
+                    value, type));
+          }
+          list = (List<Object>) value;
+          final ImmutableList.Builder<Core.Exp> args = ImmutableList.builder();
+          forEach(
+              tupleType.argTypes,
+              list,
+              (t, v) -> args.add(valueToExp(typeSystem, t, v)));
+          return core.tuple(tupleType, args.build());
+        }
 
       case RECORD_TYPE:
-        final RecordType recordType = (RecordType) type;
-        list = (List<Object>) value;
-        final ImmutableMap.Builder<String, Core.Exp> recordFields =
-            ImmutableMap.builder();
-        int i = 0;
-        for (Map.Entry<String, Type> entry :
-            recordType.argNameTypes.entrySet()) {
-          recordFields.put(
-              entry.getKey(),
-              valueToExp(typeSystem, entry.getValue(), list.get(i++)));
+        {
+          final RecordType recordType = (RecordType) type;
+          // Check if value matches expected record representation
+          if (!(value instanceof List)) {
+            // Type/value mismatch - try to infer actual type from value
+            Type recordInferredType = inferTypeFromValue(typeSystem, value);
+            if (recordInferredType != null) {
+              return valueToExp(typeSystem, recordInferredType, value);
+            }
+            throw new AssertionError(
+                format(
+                    "cannot convert value [%s] of type [%s] to expression - "
+                        + "expected List for RecordType",
+                    value, type));
+          }
+          list = (List<Object>) value;
+          final ImmutableMap.Builder<String, Core.Exp> recordFields =
+              ImmutableMap.builder();
+          int i = 0;
+          for (Map.Entry<String, Type> entry :
+              recordType.argNameTypes.entrySet()) {
+            recordFields.put(
+                entry.getKey(),
+                valueToExp(typeSystem, entry.getValue(), list.get(i++)));
+          }
+          return core.record(typeSystem, recordFields.build());
         }
-        return core.record(typeSystem, recordFields.build());
 
       default:
         throw new AssertionError(
@@ -540,19 +594,20 @@ public class Inliner extends EnvShuttle {
 
   @Override
   protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
-    // Add the recursive function names to inliningBaseNames to prevent
+    // Add the recursive function names to inliningNames to prevent
     // recursive expansion. This is critical because:
     // 1. Multiple inlining passes create fresh Inliner instances
     // 2. Without this, each pass would expand recursive calls one more level
     // 3. This prevents massive expansion like path -> edge orelse path ->
     //    edge orelse (edge orelse path) -> etc.
+    // Use full names (not base names) to correctly handle shadowed variables
     final List<String> addedNames = new ArrayList<>();
     for (Core.NonRecValDecl decl : recValDecl.list) {
       if (decl.pat instanceof Core.IdPat) {
-        final String base = baseName(((Core.IdPat) decl.pat).name);
-        if (!inliningBaseNames.contains(base)) {
-          inliningBaseNames.add(base);
-          addedNames.add(base);
+        final String name = ((Core.IdPat) decl.pat).name;
+        if (!inliningNames.contains(name)) {
+          inliningNames.add(name);
+          addedNames.add(name);
         }
       }
     }
@@ -560,7 +615,7 @@ public class Inliner extends EnvShuttle {
       return super.visit(recValDecl);
     } finally {
       // Remove the names we added to restore original state
-      addedNames.forEach(inliningBaseNames::remove);
+      addedNames.forEach(inliningNames::remove);
     }
   }
 
@@ -586,6 +641,24 @@ public class Inliner extends EnvShuttle {
       case ONCE_SAFE:
         // This declaration has one use; remove the declaration, and replace its
         // use inside the expression.
+        // IMPORTANT: We must first inline the declaration's expression before
+        // storing it in the binding. Otherwise, references in the expression
+        // to outer-scope variables will fail when we try to expand them later
+        // (because those outer bindings may have been removed by then).
+        if (let.decl instanceof Core.NonRecValDecl) {
+          final Core.NonRecValDecl nonRecDecl = (Core.NonRecValDecl) let.decl;
+          // First, inline the declaration's expression while outer bindings are
+          // still available
+          final Core.Exp inlinedDeclExp = nonRecDecl.exp.accept(this);
+          // Create binding with the inlined expression
+          final List<Binding> bindingsInlined = new ArrayList<>();
+          if (nonRecDecl.pat instanceof Core.IdPat) {
+            bindingsInlined.add(
+                Binding.of((Core.IdPat) nonRecDecl.pat, inlinedDeclExp));
+          }
+          return let.exp.accept(bind(bindingsInlined));
+        }
+        // Fallback for non-NonRecValDecl cases (shouldn't happen for ONCE_SAFE)
         final List<Binding> bindings = new ArrayList<>();
         Compiles.bindPattern(typeSystem, bindings, let.decl);
         return let.exp.accept(bind(bindings));
