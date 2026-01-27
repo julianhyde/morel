@@ -42,6 +42,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.RefChecker;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
@@ -274,6 +275,85 @@ public class FromBuilder {
       default:
         return false;
     }
+  }
+
+  /**
+   * Checks if two types have compatible structures for flattening.
+   *
+   * <p>Returns true if both are records, both are tuples, or both are atomic.
+   * This prevents flattening when a FROM expression yields a different type
+   * structure than the scan pattern expects (e.g., record-to-tuple projection).
+   */
+  private static boolean typeStructuresMatch(Type patType, Type expElemType) {
+    // Both must be records, or both must be tuples, or both must be atomic
+    if (patType.op() == Op.RECORD_TYPE) {
+      return expElemType.op() == Op.RECORD_TYPE;
+    }
+    if (patType.op() == Op.TUPLE_TYPE) {
+      return expElemType.op() == Op.TUPLE_TYPE;
+    }
+    // For atomic types, they must match structurally
+    return patType.op() == expElemType.op();
+  }
+
+  /**
+   * Checks if a FROM expression has a structural transformation yield.
+   *
+   * <p>Returns true if the FROM has a YIELD step that constructs a tuple/record
+   * from a different structure type. When true, the FROM should not be
+   * flattened because the yield transformation would be lost.
+   *
+   * <p>For example, {@code from r in records yield (#src r, #dst r)} has a
+   * transforming yield because it converts records to tuples.
+   *
+   * <p>However, {@code from r in records yield #deptno r} is just a field
+   * projection and can safely be flattened.
+   */
+  private static boolean hasNonIdentityYield(Core.From from) {
+    if (from.steps.isEmpty()) {
+      return false;
+    }
+    final Core.FromStep lastStep = last(from.steps);
+    if (lastStep.op != Op.YIELD) {
+      return false;
+    }
+
+    // Get the yield expression
+    final Core.Yield yieldStep = (Core.Yield) lastStep;
+    final Core.Exp yieldExp = yieldStep.exp;
+
+    // Only consider structural transformations: tuple/record constructions
+    // Simple field projections and ID references are safe to flatten
+    if (yieldExp.op != Op.TUPLE && yieldExp.op != Op.RECORD) {
+      return false;
+    }
+
+    // Find the scan step to get the scan source type
+    Core.Scan scan = null;
+    for (Core.FromStep step : from.steps) {
+      if (step.op == Op.SCAN) {
+        scan = (Core.Scan) step;
+        break;
+      }
+    }
+    if (scan == null) {
+      return false;
+    }
+
+    // Check if the yield constructs a different structure type than the scan
+    Type scanElemType = scan.exp.type.elementType();
+
+    // If the yield is a tuple construction but scan is on records (or vice
+    // versa),
+    // this is a structural transformation that should not be flattened
+    if (yieldExp.op == Op.TUPLE && scanElemType.op() == Op.RECORD_TYPE) {
+      return true;
+    }
+    if (yieldExp.op == Op.RECORD && scanElemType.op() == Op.TUPLE_TYPE) {
+      return true;
+    }
+
+    return false;
   }
 
   public FromBuilder addAll(Iterable<? extends Core.FromStep> steps) {

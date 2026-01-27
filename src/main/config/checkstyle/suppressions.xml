@@ -51,4 +51,7 @@ License.
 
   <!-- Method names in Resource can have underscores -->
   <suppress checks="MethodName" files="CalciteResource.java"/>
+
+  <!-- Complex extent generation logic in g3b method -->
+  <suppress checks="MethodLength" files="Extents.java"/>
 </suppressions>

@@ -46,6 +46,7 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
@@ -591,15 +592,35 @@ public class Extents {
                       && result.generator.cardinality
                           != Generator.Cardinality.INFINITE) {
                     // The generator produces tuples for all goalPats.
-                    // Mark the ORIGINAL filter as satisfied so it gets removed
-                    // from the WHERE clause. The remaining filters (if any)
-                    // will
-                    // be applied as additional constraints.
-                    goalPats.forEach(
-                        pat ->
-                            map.computeIfAbsent(pat, p -> PairList.of())
-                                .add(result.generator.expression, filter));
-                    break;
+                    // Check if the generator element type is compatible with
+                    // individual goal patterns. If the generator produces
+                    // records/tuples but goalPats are atomic, let the normal
+                    // OP_ELEM handling create field projections instead.
+                    final Type genElemType =
+                        result.generator.expression.type.elementType();
+                    final boolean isRecordGenerator =
+                        genElemType != null
+                            && (genElemType.op() == Op.RECORD_TYPE
+                                || genElemType.op() == Op.TUPLE_TYPE);
+                    final boolean hasAtomicGoals =
+                        goalPats.size() > 1
+                            || goalPats.size() == 1
+                                && goalPats.get(0).type.op() != Op.RECORD_TYPE
+                                && goalPats.get(0).type.op() != Op.TUPLE_TYPE;
+
+                    if (isRecordGenerator && hasAtomicGoals) {
+                      // Don't use this generator - let normal OP_ELEM handling
+                      // create field projections. Fall through to the map2
+                      // code.
+                    } else {
+                      // Mark the ORIGINAL filter as satisfied so it gets
+                      // removed from the WHERE clause.
+                      goalPats.forEach(
+                          pat ->
+                              map.computeIfAbsent(pat, p -> PairList.of())
+                                  .add(result.generator.expression, filter));
+                      break;
+                    }
                   }
                   map2 = new LinkedHashMap<>();
                   apply.arg.forEachArg((arg, i) -> g3(map2, arg));
@@ -852,6 +873,54 @@ public class Extents {
       final Core.IdPat idPat = core.idPat(type, typeSystem.nameGenerator::get);
       idPats.add(idPat, extent);
       return idPat;
+    }
+
+    /**
+     * Extracts a mapping from pattern names to field names by analyzing the
+     * elem predicate in a filter expression.
+     *
+     * <p>For example, given filter containing {@code elem({deptno=x, dname=y},
+     * collection)}, returns {"x" -> "deptno", "y" -> "dname"}.
+     */
+    private static Map<String, String> extractPatternToFieldMapping(
+        Core.Exp filter) {
+      final Map<String, String> mapping = new HashMap<>();
+      extractPatternToFieldMapping(filter, mapping);
+      return mapping;
+    }
+
+    private static void extractPatternToFieldMapping(
+        Core.Exp exp, Map<String, String> mapping) {
+      if (exp.op == Op.APPLY) {
+        final Core.Apply apply = (Core.Apply) exp;
+        if (apply.isCallTo(BuiltIn.OP_ELEM)) {
+          // Found elem(pattern, collection)
+          final Core.Exp pattern = apply.arg(0);
+          if (pattern.op == Op.TUPLE) {
+            final Core.Tuple tuple = (Core.Tuple) pattern;
+            if (tuple.type.op() == Op.RECORD_TYPE) {
+              // It's a record - extract field names and their pattern values
+              final RecordLikeType recordType = (RecordLikeType) tuple.type;
+              final List<String> fieldNames = recordType.argNames();
+              for (int i = 0; i < tuple.args.size(); i++) {
+                final Core.Exp arg = tuple.args.get(i);
+                if (arg.op == Op.ID) {
+                  final Core.Id id = (Core.Id) arg;
+                  // Map pattern name to field name
+                  mapping.put(id.idPat.name, fieldNames.get(i));
+                }
+              }
+            }
+          }
+          return;
+        }
+        // Recurse into andalso/orelse
+        if (apply.isCallTo(BuiltIn.Z_ANDALSO)
+            || apply.isCallTo(BuiltIn.Z_ORELSE)) {
+          apply.arg.forEachArg(
+              (arg, i) -> extractPatternToFieldMapping(arg, mapping));
+        }
+      }
     }
   }
 

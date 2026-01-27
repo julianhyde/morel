@@ -54,6 +54,7 @@ public class ScriptTest {
   @ParameterizedTest
   @MethodSource("data")
   void test(String path) throws Exception {
+    System.err.println("[TEST] Running: " + path);
     Method method = findMethod(path);
     if (method != null) {
       try {
@@ -90,7 +91,11 @@ public class ScriptTest {
   }
 
   protected void checkRun(String path) throws Exception {
-    Script.create(path).run();
+    try {
+      Script.create(path).run();
+    } catch (Throwable e) {
+      throw new RuntimeException("Failed in script: " + path, e);
+    }
   }
 
   @SuppressWarnings("SameParameterValue")
