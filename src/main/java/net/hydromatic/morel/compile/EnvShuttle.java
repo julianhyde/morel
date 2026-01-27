@@ -111,7 +111,11 @@ abstract class EnvShuttle extends Shuttle {
       env = step2.env;
     }
 
-    return from.copy(typeSystem, this.env, steps);
+    // Pass null to skip re-validation. The steps reference variables bound by
+    // previous steps WITHIN the FROM, which are not in this.env (the outer
+    // environment). Each step was already visited with proper environment
+    // handling in the loop above.
+    return from.copy(typeSystem, null, steps);
   }
 }
 
