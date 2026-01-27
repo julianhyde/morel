@@ -49,6 +49,8 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypeVar;
+import net.hydromatic.morel.type.TypeVisitor;
 import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -244,7 +246,30 @@ public class Inliner extends EnvShuttle {
       final Core.Match match = matchList.get(0);
       final Map<Core.Id, Core.Exp> substitution = getSub(exp, match);
       if (substitution != null) {
-        return Replacer.substitute(typeSystem, substitution, match.exp);
+        Core.Exp result =
+            Replacer.substitute(typeSystem, substitution, match.exp);
+        // Apply type substitution: TypeVars in the result should be replaced
+        // with concrete types based on the scrutinee's type.
+        // Only attempt unification if the result type contains TypeVars.
+        // Note: TypeUnifier lacks cycle detection, so recursive types
+        // (like DataTypes) can cause infinite recursion. We catch that
+        // and skip type substitution in those cases.
+        if (containsTypeVar(result.type)) {
+          try {
+            // Unify the polymorphic pattern type with the concrete scrutinee
+            // type
+            // to get the type substitution map.
+            Map<Integer, Type> typeSub = match.pat.type.unifyWith(exp.type);
+            if (typeSub != null && !typeSub.isEmpty()) {
+              result =
+                  TypeSubstitutingShuttle.substitute(
+                      typeSystem, typeSub, result);
+            }
+          } catch (StackOverflowError e) {
+            // Unification hit infinite recursion on cyclic types; skip
+          }
+        }
+        return result;
       }
     }
 
@@ -539,6 +564,20 @@ public class Inliner extends EnvShuttle {
         return let.exp.accept(bind(bindings));
     }
     return super.visit(let);
+  }
+
+  /** Returns whether the type contains any type variables. */
+  private static boolean containsTypeVar(Type type) {
+    final boolean[] found = {false};
+    type.accept(
+        new TypeVisitor<Void>() {
+          @Override
+          public Void visit(TypeVar typeVar) {
+            found[0] = true;
+            return null;
+          }
+        });
+    return found[0];
   }
 }
 
