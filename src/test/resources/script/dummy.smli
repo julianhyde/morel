@@ -33,4 +33,19 @@ from x, y, z where (x, y) elem edges andalso (y, z) elem edges;
 >
 > val it : {x:int, y:int, z:int} bag
 
+(*) Siblings - invert "exists v0 where parent (v0, x) andalso parent (v0, y)"
+let
+  val parent_facts = [("Alice", "Bob"), ("Alice", "Carol")]
+  fun parent (p, c) = (p, c) elem parent_facts
+  fun sibling (x, y) =
+    (exists v0 where parent (v0, x) andalso parent (v0, y))
+in
+  {sibling = from x, y where sibling (x, y)}
+end;
+> val it =
+>   {
+>    sibling=
+>    [{x="Bob",y="Bob"},{x="Bob",y="Carol"},{x="Carol",y="Bob"},
+>     {x="Carol",y="Carol"}]} : {sibling:{x:string, y:string} bag}
+
 (*) End dummy.smli

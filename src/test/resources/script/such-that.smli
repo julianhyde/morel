@@ -825,6 +825,21 @@ in
 end;
 > val it = [1,4] : int bag
 
+(*) Siblings
+let
+  val parents = [("Alice", "Bob"), ("Alice", "Carol")]
+  fun parent (p, c) = (p, c) elem parents
+  fun sibling (x, y) =
+    (exists v0 where parent (v0, x) andalso parent (v0, y))
+in
+  {sibling = from x, y where sibling (x, y)}
+end;
+> val it =
+>   {
+>    sibling=
+>    [{x="Bob",y="Bob"},{x="Bob",y="Carol"},{x="Carol",y="Bob"},
+>     {x="Carol",y="Carol"}]} : {sibling:{x:string, y:string} bag}
+
 (* More edges *)
 (*
    1 --> 4 ----+
