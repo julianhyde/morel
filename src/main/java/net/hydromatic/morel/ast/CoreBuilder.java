@@ -370,7 +370,7 @@ public enum CoreBuilder {
    * <p>If the list has one element, returns that element. Otherwise, returns a
    * record pattern with the patterns as fields.
    */
-  public Core.Pat recordPatOrSingleton(
+  public Core.Pat recordOrAtomPat(
       TypeSystem typeSystem, List<? extends Core.NamedPat> pats) {
     if (pats.size() == 1) {
       return pats.get(0);
@@ -1014,7 +1014,7 @@ public enum CoreBuilder {
    * <p>If the list has one element, returns an id expression for that pattern.
    * Otherwise, returns a record expression with the patterns as fields.
    */
-  public Core.Exp recordOrSingleton(
+  public Core.Exp recordOrAtom(
       TypeSystem typeSystem, List<? extends Core.NamedPat> pats) {
     if (pats.size() == 1) {
       return id(pats.get(0));

@@ -170,6 +170,29 @@ public class Expander {
           }
         });
 
+    // Track original patterns before adding shared ones for joining.
+    // We'll need to project away shared patterns at the end.
+    final Set<Core.NamedPat> originalPats = new HashSet<>(allPats);
+
+    // Find shared patterns across generators. If a pattern appears in
+    // multiple generators, add it to allPats so it can be used for joining.
+    // For example, for "exists v0 where parent(v0, x) andalso parent(v0, y)",
+    // both the generator for x and the generator for y have v0 in their
+    // patterns. We need v0 in allPats so the second generator can join on it.
+    final Set<Core.NamedPat> sharedPats = new HashSet<>();
+    final Map<Core.NamedPat, Integer> patternCounts = new HashMap<>();
+    for (Generator generator : generatorMap.values()) {
+      for (Core.NamedPat p : generator.pat.expand()) {
+        patternCounts.merge(p, 1, Integer::sum);
+      }
+    }
+    for (Map.Entry<Core.NamedPat, Integer> entry : patternCounts.entrySet()) {
+      if (entry.getValue() > 1 && !allPats.contains(entry.getKey())) {
+        allPats.add(entry.getKey());
+        sharedPats.add(entry.getKey());
+      }
+    }
+
     final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
     final Map<Core.NamedPat, Core.Exp> substitution = new HashMap<>();
     stepVarSet.stepVars.forEach(
@@ -225,6 +248,22 @@ public class Expander {
           fromBuilder.addAll(ImmutableList.of(step));
         });
 
+    // If we added shared patterns for joining, project them away at the end.
+    // The final result should only contain the original query patterns.
+    if (!sharedPats.isEmpty()) {
+      // Check if any shared patterns are in the current step environment
+      final List<Core.NamedPat> toProject = new ArrayList<>();
+      for (Binding binding : fromBuilder.stepEnv().bindings) {
+        if (originalPats.contains(binding.id)) {
+          toProject.add(binding.id);
+        }
+      }
+      if (toProject.size() < fromBuilder.stepEnv().bindings.size()) {
+        // Some shared patterns need to be projected away
+        fromBuilder.yield_(core.recordOrAtom(typeSystem, toProject));
+      }
+    }
+
     return fromBuilder.build();
   }
 
@@ -277,7 +316,6 @@ public class Expander {
         requiredPats.add(p);
       }
     }
-
     // Now all dependencies are done, add a scan for the generator.
     if (expandedPats.equals(requiredPats)) {
       if (generator.unique) {
@@ -314,14 +352,22 @@ public class Expander {
       final FromBuilder fromBuilder2 = core.fromBuilder(typeSystem);
       final Core.Pat scanPat =
           renamePatterns(typeSystem, generator.pat, renameMap);
-      fromBuilder2.scan(scanPat, generator.exp);
+      // Use a non-trivial condition to prevent the FROM from being inlined.
+      // Inlining would add the inner scan's bindings (e.g., v0) to the outer
+      // builder, causing duplicate bindings when the same variable appears
+      // in multiple generators. We use "true andalso true andalso <conditions>"
+      // which is semantically equivalent but syntactically different from true.
+      final Core.Exp noInlineCondition =
+          core.andAlso(
+              typeSystem,
+              core.boolLiteral(true),
+              core.andAlso(typeSystem, joinConditions));
+      fromBuilder2.scan(scanPat, generator.exp, noInlineCondition);
 
-      if (!joinConditions.isEmpty()) {
-        fromBuilder2.where(core.andAlso(typeSystem, joinConditions));
-      }
+      // Join conditions are now part of the scan condition
 
       // Yield only the required patterns.
-      fromBuilder2.yield_(core.recordOrSingleton(typeSystem, requiredPats));
+      fromBuilder2.yield_(core.recordOrAtom(typeSystem, requiredPats));
 
       // Add distinct if:
       // 1. The generator may produce duplicates (!generator.unique), or
@@ -346,9 +392,9 @@ public class Expander {
       }
 
       // Add scan from the filtered subquery.
-      final Core.Pat scanPat2 =
-          core.recordPatOrSingleton(typeSystem, requiredPats);
-      fromBuilder.scan(scanPat2, fromBuilder2.build());
+      final Core.Pat scanPat2 = core.recordOrAtomPat(typeSystem, requiredPats);
+      final Core.From subquery = fromBuilder2.build();
+      fromBuilder.scan(scanPat2, subquery);
     }
     done.addAll(requiredPats);
   }
