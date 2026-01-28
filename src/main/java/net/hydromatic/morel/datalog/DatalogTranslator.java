@@ -281,7 +281,9 @@ public class DatalogTranslator {
     } else {
       for (int i = 0; i < disjuncts.size(); i++) {
         if (i > 0) {
-          sb.append(" orelse\n    ");
+          sb.append(
+              " orelse\n" //
+                  + "    ");
         }
         sb.append(disjuncts.get(i));
       }
