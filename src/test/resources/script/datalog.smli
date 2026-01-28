@@ -18,6 +18,8 @@
  *)
 Sys.set ("printDepth", ~1);
 > val it = () : unit
+Sys.set ("printLength", ~1);
+> val it = () : unit
 Sys.set ("lineWidth", 78);
 > val it = () : unit
 Sys.set ("stringDepth", ~1);
@@ -197,7 +199,11 @@ Datalog.validate ".decl num(n:number)
 num(Foo).";
 > val it = "Compilation error: Argument in fact is not constant: Foo" : string
 
-(*) Transitive closure
+(* Transitive closure
+
+   Input graph:
+        1 ---> 2 ---> 3
+*)
 val program = ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 edge(1,2).
@@ -217,13 +223,37 @@ Datalog.translate program;
 >   : string option
 
 (*) Simple rule - join
-Datalog.validate ".decl parent(p:string, c:string)
+Datalog.execute ".decl parent(p:string, c:string)
 .decl sibling(x:string, y:string)
 parent(\"Alice\", \"Bob\").
 parent(\"Alice\", \"Carol\").
 sibling(X,Y) :- parent(P,X), parent(P,Y).
 .output sibling";
-> val it = "Compilation error: not found [x_20]" : string
+> val it =
+>   {
+>    sibling=
+>    [{x="Bob",y="Bob"},{x="Bob",y="Carol"},{x="Carol",y="Bob"},
+>     {x="Carol",y="Carol"}]} : {sibling:{x:string, y:string} bag} variant
+
+(*) Join, avoiding symmetric
+Datalog.execute ".decl parent(p:string, c:string)
+.decl sibling(x:string, y:string)
+parent(\"Alice\", \"Bob\").
+parent(\"Alice\", \"Carol\").
+sibling(X,Y) :- parent(P,X), parent(P,Y), X != Y.
+.output sibling";
+> val it = {sibling=[{x="Bob",y="Carol"},{x="Carol",y="Bob"}]}
+>   : {sibling:{x:string, y:string} bag} variant
+
+(*) Join, avoiding symmetric and duplicates
+Datalog.execute ".decl parent(p:string, c:string)
+.decl sibling(x:string, y:string)
+parent(\"Alice\", \"Bob\").
+parent(\"Alice\", \"Carol\").
+sibling(X,Y) :- parent(P,X), parent(P,Y), X < Y.
+.output sibling";
+> val it = {sibling=[{x="Bob",y="Carol"}]}
+>   : {sibling:{x:string, y:string} bag} variant
 
 (*) Negation - set difference
 Datalog.execute ".decl student(name:string)

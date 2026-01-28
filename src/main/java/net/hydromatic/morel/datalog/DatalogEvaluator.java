@@ -108,7 +108,7 @@ public class DatalogEvaluator {
 
       return new DatalogEvaluator(compiled, session, env, morelSource);
 
-    } catch (ParseException e) {
+    } catch (ParseException | TokenMgrError e) {
       throw new DatalogException(format("Parse error: %s", e.getMessage()), e);
     } catch (Exception e) {
       throw new DatalogException(
