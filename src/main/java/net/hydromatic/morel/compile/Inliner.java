@@ -643,7 +643,9 @@ public class Inliner extends EnvShuttle {
     final List<String> addedNames = new ArrayList<>();
     for (Core.NonRecValDecl decl : recValDecl.list) {
       if (decl.pat instanceof Core.IdPat) {
-        final String name = ((Core.IdPat) decl.pat).name;
+        final Core.IdPat idPat = (Core.IdPat) decl.pat;
+        // Use full name with index to match visit(Core.Id)
+        final String name = idPat.name + "_" + idPat.i;
         if (!inliningNames.contains(name)) {
           inliningNames.add(name);
           addedNames.add(name);
@@ -680,24 +682,11 @@ public class Inliner extends EnvShuttle {
       case ONCE_SAFE:
         // This declaration has one use; remove the declaration, and replace its
         // use inside the expression.
-        // IMPORTANT: We must first inline the declaration's expression before
-        // storing it in the binding. Otherwise, references in the expression
-        // to outer-scope variables will fail when we try to expand them later
-        // (because those outer bindings may have been removed by then).
-        if (let.decl instanceof Core.NonRecValDecl) {
-          final Core.NonRecValDecl nonRecDecl = (Core.NonRecValDecl) let.decl;
-          // First, inline the declaration's expression while outer bindings are
-          // still available
-          final Core.Exp inlinedDeclExp = nonRecDecl.exp.accept(this);
-          // Create binding with the inlined expression
-          final List<Binding> bindingsInlined = new ArrayList<>();
-          if (nonRecDecl.pat instanceof Core.IdPat) {
-            bindingsInlined.add(
-                Binding.of((Core.IdPat) nonRecDecl.pat, inlinedDeclExp));
-          }
-          return let.exp.accept(bind(bindingsInlined));
-        }
-        // Fallback for non-NonRecValDecl cases (shouldn't happen for ONCE_SAFE)
+        // NOTE: We previously tried pre-inlining the declaration's expression
+        // here, but that caused infinite recursion because the pattern wasn't
+        // added to inliningNames first. The simpler approach below works
+        // because
+        // the expression will be inlined when the Id reference is encountered.
         final List<Binding> bindings = new ArrayList<>();
         Compiles.bindPattern(typeSystem, bindings, let.decl);
         return let.exp.accept(bind(bindings));
