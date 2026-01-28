@@ -33,11 +33,14 @@ edge(2,3).
 >   : string
 
 Datalog.validate program;
-> val it = "{edge:{x:int, y:int} list}" : string
+> val it = "{edge:{x:int, y:int} bag}" : string
+
+Datalog.execute program;
+> val it = {edge=[{x=1,y=2},{x=2,y=3}]} : {edge:{x:int, y:int} bag} variant
 
 Datalog.translate program;
 > val it =
->   SOME "let\n  val edge = [{x=1, y=2}, {x=2, y=3}]\nin\n  {edge=edge}\nend"
+>   SOME "let\n  val edge_facts = [(1, 2), (2, 3)]\n  fun edge (x, y) = (x, y) elem edge_facts\nin\n  {edge = from x, y where edge (x, y)}\nend"
 >   : string option
 
 (*) Basic validation - parse error
@@ -100,58 +103,59 @@ q(X) :- edge(X,Y), !p(X).";
 >   : string
 
 (*) Stratification - valid stratified program
-Datalog.validate ".decl edge(x:number, y:number)
+Datalog.execute ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 edge(1,2).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> val it =
->   "Compilation error: Rules not yet supported in Morel translation: path"
->   : string
+> val it = {path=[{x=1,y=2}]} : {path:{x:int, y:int} bag} variant
 
 (*) Multiple .output directives
-Datalog.validate ".decl edge(x:number, y:number)
+Datalog.execute ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 edge(1,2).
 path(X,Y) :- edge(X,Y).
 .output edge
 .output path";
-> val it =
->   "Compilation error: Rules not yet supported in Morel translation: path"
->   : string
+> val it = {edge=[{x=1,y=2}],path=[{x=1,y=2}]}
+>   : {edge:{x:int, y:int} bag, path:{x:int, y:int} bag} variant
 
 (*) Basic facts - number type
-Datalog.validate ".decl num(n:number)
+Datalog.execute ".decl num(n:number)
 num(42).
 num(0).
 .output num";
-> val it = "{num:int list}" : string
+> val it = {num=[42,0]} : {num:int bag} variant
 
 (*) Basic facts - string type
-Datalog.validate ".decl person(name:string)
+Datalog.execute ".decl person(name:string)
 person(\"Alice\").
 person(\"Bob\").
 .output person";
-> val it = "{person:string list}" : string
+> val it = {person=["Alice","Bob"]} : {person:string bag} variant
 
 (*) Basic facts - symbol type (now using string type since Souffle has no symbols)
-Datalog.validate ".decl color(c:string)
+Datalog.execute ".decl color(c:string)
 color(\"red\").
 color(\"blue\").
 color(\"green\").
 .output color";
-> val it = "{color:string list}" : string
+> val it = {color=["red","blue","green"]} : {color:string bag} variant
 
 (*) Basic facts - mixed types
-Datalog.validate ".decl employee(name:string, age:number, dept:string)
+Datalog.execute ".decl employee(name:string, age:number, dept:string)
 employee(\"Alice\", 30, \"engineering\").
 employee(\"Bob\", 25, \"sales\").
 .output employee";
-> val it = "{employee:{age:int, dept:string, name:string} list}" : string
+> val it =
+>   {
+>    employee=
+>    [{age=30,dept="engineering",name="Alice"},{age=25,dept="sales",name="Bob"}]}
+>   : {employee:{age:int, dept:string, name:string} bag} variant
 
 (*) Basic facts - more than one output
-Datalog.validate ".decl employee(name:string, age:number, dept:number)
+Datalog.execute ".decl employee(name:string, age:number, dept:number)
 .decl department(name:string, dept:number)
 employee(\"Alice\", 30, 10).
 employee(\"Bob\", 25, 20).
@@ -160,17 +164,19 @@ department(\"Engineering\", 10).
 .output employee
 .output department";
 > val it =
->   "{department:{dept:int, name:string} list, employee:{age:int, dept:int, name:string} list}"
->   : string
+>   {department=[{dept=20,name="Sales"},{dept=10,name="Engineering"}],
+>    employee=[{age=30,dept=10,name="Alice"},{age=25,dept=20,name="Bob"}]}
+>   : {department:{dept:int, name:string} bag,
+>      employee:{age:int, dept:int, name:string} bag} variant
 
 (*) Basic facts - no output
-Datalog.validate ".decl employee(name:string, age:number, dept:number)
+Datalog.execute ".decl employee(name:string, age:number, dept:number)
 .decl department(name:string, dept:number)
 employee(\"Alice\", 30, 10).
 employee(\"Bob\", 25, 20).
 department(\"Sales\", 20).
 department(\"Engineering\", 10).";
-> val it = "unit" : string
+> val it = () : unit variant
 
 (*) Type mismatch - number for string
 Datalog.validate ".decl person(name:string)
@@ -191,18 +197,24 @@ Datalog.validate ".decl num(n:number)
 num(Foo).";
 > val it = "Compilation error: Argument in fact is not constant: Foo" : string
 
-(*) Simple rule - transitive closure
-Datalog.validate ".decl edge(x:number, y:number)
+(*) Transitive closure
+val program = ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 edge(1,2).
 edge(2,3).
-edge(3,4).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> val it =
->   "Compilation error: Rules not yet supported in Morel translation: path"
+> val program =
+>   ".decl edge(x:number, y:number)\n.decl path(x:number, y:number)\nedge(1,2).\nedge(2,3).\npath(X,Y) :- edge(X,Y).\npath(X,Z) :- path(X,Y), edge(Y,Z).\n.output path"
 >   : string
+Datalog.execute program;
+> val it = {path=[{x=1,y=2},{x=2,y=3},{x=1,y=3}]}
+>   : {path:{x:int, y:int} bag} variant
+Datalog.translate program;
+> val it =
+>   SOME "let\n  val edge_facts = [(1, 2), (2, 3)]\n  fun edge (x, y) = (x, y) elem edge_facts\n  fun path (x, y) =\n    edge (x, y) orelse\n    (exists v0 where path (x, v0) andalso edge (v0, y))\nin\n  {path = from x, y where path (x, y)}\nend"
+>   : string option
 
 (*) Simple rule - join
 Datalog.validate ".decl parent(p:string, c:string)
@@ -211,12 +223,10 @@ parent(\"Alice\", \"Bob\").
 parent(\"Alice\", \"Carol\").
 sibling(X,Y) :- parent(P,X), parent(P,Y).
 .output sibling";
-> val it =
->   "Compilation error: Rules not yet supported in Morel translation: sibling"
->   : string
+> val it = "Compilation error: not found [x_20]" : string
 
 (*) Negation - set difference
-Datalog.validate ".decl student(name:string)
+Datalog.execute ".decl student(name:string)
 .decl graduate(name:string)
 .decl undergraduate(name:string)
 student(\"Alice\").
@@ -224,12 +234,10 @@ student(\"Bob\").
 graduate(\"Alice\").
 undergraduate(X) :- student(X), !graduate(X).
 .output undergraduate";
-> val it =
->   "Compilation error: Rules not yet supported in Morel translation: undergraduate"
->   : string
+> val it = {undergraduate=["Bob"]} : {undergraduate:string bag} variant
 
 (*) Complex example - ancestor queries
-Datalog.validate ".decl parent(p:string, c:string)
+Datalog.execute ".decl parent(p:string, c:string)
 .decl ancestor(a:string, d:string)
 .decl descendant(p:string, d:string)
 parent(\"Alice\", \"Bob\").
@@ -241,8 +249,14 @@ descendant(P,D) :- ancestor(D,P).
 .output ancestor
 .output descendant";
 > val it =
->   "Compilation error: Rules not yet supported in Morel translation: ancestor"
->   : string
+>   {
+>    ancestor=
+>    [{a="Alice",d="Bob"},{a="Bob",d="Carol"},{a="Carol",d="Dan"},
+>     {a="Alice",d="Carol"},{a="Bob",d="Dan"},{a="Alice",d="Dan"}],
+>    descendant=
+>    [{d="Alice",p="Bob"},{d="Bob",p="Carol"},{d="Carol",p="Dan"},
+>     {d="Alice",p="Carol"},{d="Bob",p="Dan"},{d="Alice",p="Dan"}]}
+>   : {ancestor:{a:string, d:string} bag, descendant:{d:string, p:string} bag} variant
 
 (*) Empty relation
 Datalog.validate ".decl empty(x:number)
@@ -250,12 +264,12 @@ Datalog.validate ".decl empty(x:number)
 > val it = "{empty:'a list}" : string
 
 (*) Comments in Datalog
-Datalog.validate "// Line comment
+Datalog.execute "// Line comment
 .decl edge(x:number, y:number)
 /* Block comment */
 edge(1,2).
 .output edge";
-> val it = "{edge:{x:int, y:int} list}" : string
+> val it = {edge=[{x=1,y=2}]} : {edge:{x:int, y:int} bag} variant
 
 (*) Execution - basic facts
 Datalog.execute ".decl num(n:number)
@@ -263,10 +277,9 @@ num(1).
 num(2).
 num(3).
 .output num";
-> val it = {num=[1,2,3]} : {num:int list} variant
+> val it = {num=[1,2,3]} : {num:int bag} variant
 
 (*) Execution - transitive closure
-(* TODO
 Datalog.execute ".decl edge(x:number, y:number)
 .decl path(x:number, y:number)
 edge(1,2).
@@ -274,9 +287,8 @@ edge(2,3).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> val it = {path=[{x=1,y=2},{x=1,y=3},{x=2,y=3}]}
->   : {path:{x:int, y:int} list} variant
-*)
+> val it = {path=[{x=1,y=2},{x=2,y=3},{x=1,y=3}]}
+>   : {path:{x:int, y:int} bag} variant
 
 (*
 Translated:
@@ -298,7 +310,6 @@ from x in [1,2,3], z in [1,2,3] where path(x, z);
 *)
 
 (*) Comparison operators - less than
-(*
 Datalog.execute ".decl num(n:number)
 .decl small(n:number)
 num(1).
@@ -306,11 +317,9 @@ num(5).
 num(10).
 small(X) :- num(X), X < 7.
 .output small";
-> val it = {small=[1,5]} : {small:int list} variant
-*)
+> val it = {small=[1,5]} : {small:int bag} variant
 
 (*) Comparison operators - greater than or equal
-(* TODO
 Datalog.execute ".decl num(n:number)
 .decl large(n:number)
 num(1).
@@ -318,11 +327,9 @@ num(5).
 num(10).
 large(X) :- num(X), X >= 5.
 .output large";
-> val it = {large=[5,10]} : {large:int list} variant
-*)
+> val it = {large=[5,10]} : {large:int bag} variant
 
 (*) Comparison operators - not equal
-(* TODO
 Datalog.execute ".decl num(n:number)
 .decl not_five(n:number)
 num(1).
@@ -330,11 +337,9 @@ num(5).
 num(10).
 not_five(X) :- num(X), X != 5.
 .output not_five";
-> val it = {not_five=[1,10]} : {not_five:int list} variant
-*)
+> val it = {not_five=[1,10]} : {not_five:int bag} variant
 
 (*) Comparison operators - equal
-(*
 Datalog.execute ".decl edge(x:number, y:number)
 .decl self_loop(x:number)
 edge(1, 1).
@@ -342,7 +347,6 @@ edge(2, 3).
 edge(4, 4).
 self_loop(X) :- edge(X, Y), X = Y.
 .output self_loop";
-> val it = {self_loop=[1,4]} : {self_loop:int list} variant
-*)
+> val it = {self_loop=[1,4]} : {self_loop:int bag} variant
 
 (*) End datalog.smli
