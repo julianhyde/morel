@@ -140,6 +140,27 @@ public class Inliner extends EnvShuttle {
   protected Core.Exp visit(Core.Id id) {
     final Binding binding = env.getOpt(id.idPat);
     if (binding != null && !binding.parameter) {
+      // For simple constant values (not functions), prefer using the computed
+      // value over inlining the expression. This ensures that values like NaN
+      // show as "constant(NaN)" rather than "apply2(Real./, Infinity,
+      // Infinity)".
+      // We check this before expression inlining so that computed constants
+      // are preferred over their defining expressions.
+      if (binding.value != null
+          && binding.value != Unit.INSTANCE
+          && !(binding.value instanceof Applicable)
+          && !(binding.value instanceof Applicable1)
+          && !(binding.value instanceof Closure)
+          && !(binding.value instanceof Macro)
+          && !(binding.value instanceof Code)) {
+        final Type type = typeSystem.unqualified(id.type);
+        if (type.op() == Op.ID && id.type instanceof PrimitiveType) {
+          return core.literal((PrimitiveType) id.type, binding.value);
+        }
+        if (type.op() != Op.FUNCTION_TYPE) {
+          return core.valueLiteral(id, binding.value);
+        }
+      }
       if (binding.exp != null) {
         // Skip inlining if:
         // 1. This pattern name is already being inlined (recursive reference)
@@ -273,8 +294,24 @@ public class Inliner extends EnvShuttle {
       // becomes
       //   let x = A in E end
       final Core.Fn fn = (Core.Fn) apply2.fn;
-      return core.let(
-          core.nonRecValDecl(apply2.pos, fn.idPat, null, apply2.arg), fn.exp);
+      // Only perform beta-reduction if argument type is assignable to parameter
+      // type.
+      // This handles polymorphic type instantiation where the function's
+      // parameter
+      // pattern may have a different (more general) type than the actual
+      // argument.
+      if (TypeSystem.canAssign(apply2.arg.type, fn.idPat.type)) {
+        try {
+          return core.let(
+              core.nonRecValDecl(apply2.pos, fn.idPat, null, apply2.arg),
+              fn.exp);
+        } catch (IllegalArgumentException e) {
+          // Type mismatch after type variable resolution - skip beta-reduction.
+          // This can happen when canAssign returns true due to type variables,
+          // but the actual types don't match after instantiation.
+        }
+      }
+      // Types incompatible - skip beta-reduction and return as-is
     }
     return apply2;
   }
@@ -312,6 +349,8 @@ public class Inliner extends EnvShuttle {
             }
           } catch (StackOverflowError e) {
             // Unification hit infinite recursion on cyclic types; skip
+          } catch (IllegalArgumentException e) {
+            // Type mismatch during substitution - skip
           }
         }
         return result;

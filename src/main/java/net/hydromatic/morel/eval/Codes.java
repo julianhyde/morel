@@ -4092,7 +4092,15 @@ public abstract class Codes {
 
     @Override
     public Object apply(EvalEnv env, Object arg) {
-      final Session session = env.getSession();
+      // Check if session is available - may be null during compile-time
+      // inlining
+      final Object sessionObj = env.getOpt(EvalEnv.SESSION);
+      if (sessionObj == null) {
+        // Cannot create Variant without session/typeSystem
+        // Return null to signal that inlining should be skipped
+        return null;
+      }
+      final Session session = (Session) sessionObj;
       final TypeSystem typeSystem = session.typeSystem;
       if (typeSystem == null) {
         throw new IllegalStateException(

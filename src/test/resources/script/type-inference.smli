@@ -106,9 +106,9 @@ Sys.set ("lineWidth", 78);
 :t fn () => (5, fn () => 6);
 > val it : unit -> int * (unit -> int)
 :t fn f => fn g => fn x => g (f x);
-> val it : ('a -> 'b) -> ('b -> 'c) -> 'a -> 'c
+> val it : forall 'a 'b 'c. ('a -> 'b) -> ('b -> 'c) -> 'a -> 'c
 :t fn (f, g) => fn x => f (g x);
-> val it : ('a -> 'b) * ('c -> 'a) -> 'c -> 'b
+> val it : forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a) -> 'c -> 'b
 :t fn x: int => true;
 > val it : int -> bool
 :t fn (x: int, y: string) => (true, [1]);
@@ -116,9 +116,9 @@ Sys.set ("lineWidth", 78);
 :t {f = fn () => 0, g = 1};
 > val it : {f:unit -> int, g:int}
 :t fn {f, g} => true;
-> val it : {f:'a, g:'b} -> bool
+> val it : forall 'a 'b. {f:'a, g:'b} -> bool
 :t fn x => fn f => f x;
-> val it : 'a -> ('a -> 'b) -> 'b
+> val it : forall 'a 'b. 'a -> ('a -> 'b) -> 'b
 :t fn (x, y) => x andalso y;
 > val it : bool * bool -> bool
 :t fn (x, y) => x orelse y;
@@ -126,17 +126,17 @@ Sys.set ("lineWidth", 78);
 :t fn (x, y) => x implies y;
 > val it : bool * bool -> bool
 :t fn (x, y) => x < y;
-> val it : 'a * 'a -> bool
+> val it : forall 'a. 'a * 'a -> bool
 :t fn (x, y) => x <= y;
-> val it : 'a * 'a -> bool
+> val it : forall 'a. 'a * 'a -> bool
 :t fn (x, y) => x > y;
-> val it : 'a * 'a -> bool
+> val it : forall 'a. 'a * 'a -> bool
 :t fn (x, y) => x >= y;
-> val it : 'a * 'a -> bool
+> val it : forall 'a. 'a * 'a -> bool
 :t fn (x, y) => x = y;
-> val it : 'a * 'a -> bool
+> val it : forall 'a. 'a * 'a -> bool
 :t fn (x, y) => x <> y;
-> val it : 'a * 'a -> bool
+> val it : forall 'a. 'a * 'a -> bool
 :t fn (x, y) => x + y + 0;
 > val it : int * int -> int
 :t fn (x, y) => x - y + 0;
@@ -153,13 +153,13 @@ Sys.set ("lineWidth", 78);
 fn NONE => 0;
 > stdIn:1.1-1.13 Warning: match nonexhaustive
 >   raised at: stdIn:1.1-1.13
-> val it : 'a option -> int
+> val it : forall 'a. 'a option -> int
 
 :t
 fn (SOME x) => 0;
 > stdIn:1.1-1.17 Warning: match nonexhaustive
 >   raised at: stdIn:1.1-1.17
-> val it : 'a option -> int
+> val it : forall 'a. 'a option -> int
 
 :t
 fn (SOME x) => x + 1;
@@ -256,31 +256,31 @@ end;
 :t fn (x, y) => (x + 1, fn z => (x + z, y + z), y);
 > val it : int * int -> int * (int -> int * int) * int
 :t fn {a = x, b = y, c} => x + y;
-> val it : {a:int, b:int, c:'a} -> int
+> val it : forall 'a. {a:int, b:int, c:'a} -> int
 
 (*) Polymorphic type variables
 :t fn _ => 42;
-> val it : 'a -> int
+> val it : forall 'a. 'a -> int
 :t fn _ => fn _ => 42;
-> val it : 'a -> 'b -> int
+> val it : forall 'a 'b. 'a -> 'b -> int
 :t fn x => x;
-> val it : 'a -> 'a
+> val it : forall 'a. 'a -> 'a
 :t let fun id x = x in id end;
 > val it : 'a -> 'a
 :t fun id x = x;
-> val id : 'a -> 'a
+> val id : forall 'a. 'a -> 'a
 :t fn x => fn y => x;
-> val it : 'a -> 'b -> 'a
+> val it : forall 'a 'b. 'a -> 'b -> 'a
 :t let fun first x y = x in first end;
 > val it : 'a -> 'b -> 'a
 :t fun first x y = x;
-> val first : 'a -> 'b -> 'a
+> val first : forall 'a 'b. 'a -> 'b -> 'a
 :t fun second x y = y;
-> val second : 'a -> 'b -> 'b
+> val second : forall 'a 'b. 'a -> 'b -> 'b
 :t fun choose b x y = if b then x else y;
-> val choose : bool -> 'a -> 'a -> 'a
+> val choose : forall 'a. bool -> 'a -> 'a -> 'a
 :t fun choose b (x, y) = if b then x else y;
-> val choose : bool -> 'a * 'a -> 'a
+> val choose : forall 'a. bool -> 'a * 'a -> 'a
 
 (*) Record types, including duplicate fields
 :t map #empno [{empno = 10, name = "Shaggy"}];
@@ -334,7 +334,7 @@ end;
 :t fn [] => 0;
 > stdIn:1.14-1.24 Warning: match nonexhaustive
 >   raised at: stdIn:1.14-1.24
-> val it : 'a list -> int
+> val it : forall 'a. 'a list -> int
 
 (*) Cannot be typed, since the parameter f is in a monomorphic position
 :t fn f => (f true, f 0);
