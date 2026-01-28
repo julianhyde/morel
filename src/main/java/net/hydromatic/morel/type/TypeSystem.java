@@ -616,6 +616,34 @@ public class TypeSystem {
   }
 
   /**
+   * Generalizes a type for let-polymorphism.
+   *
+   * <p>If the type contains free type variables, wraps it in a {@link
+   * ForallType} with the type variables renumbered sequentially starting from
+   * 0. This enables polymorphic bindings where each use site gets fresh type
+   * variables.
+   *
+   * <p>For example, the type {@code 'a -> 'a} becomes {@code forall 'a. 'a ->
+   * 'a}, allowing the identity function to be used at multiple types.
+   *
+   * <p>This is used during let-binding generalization per the Standard ML
+   * Definition Section 4.7 "Closure". The value restriction must be checked
+   * separately before calling this method.
+   *
+   * @param type the type to generalize
+   * @return a ForallType if the type has free variables, otherwise the original
+   *     type unchanged
+   * @see net.hydromatic.morel.compile.ValueRestriction#shouldGeneralize
+   */
+  public Type generalize(Type type) {
+    // If type is already a ForallType, don't double-wrap
+    if (type instanceof ForallType) {
+      return type;
+    }
+    return ensureClosed(type);
+  }
+
+  /**
    * Converts a type into a {@link ForallType} if it has free type variables.
    */
   public Type ensureClosed(Type type) {

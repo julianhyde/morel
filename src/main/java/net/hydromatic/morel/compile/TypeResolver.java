@@ -48,11 +48,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.NavigableSet;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -1741,6 +1744,83 @@ public class TypeResolver {
     return env;
   }
 
+  /**
+   * Extracts pattern-name to expression mappings from a declaration.
+   *
+   * <p>This is used for let-polymorphism to determine which bindings should be
+   * generalized based on the value restriction.
+   *
+   * <p>For VAL_DECL, the actual expression is returned for value restriction
+   * checking. For FUN_DECL, null is returned but the binding is marked as
+   * generalizable (functions are always values).
+   *
+   * @param decl the declaration to extract from
+   * @return map from pattern name to expression (null means always generalize)
+   */
+  private static Map<String, Ast.Exp> extractExpressions(Ast.Decl decl) {
+    final Map<String, Ast.Exp> result = new HashMap<>();
+    if (decl.op == Op.VAL_DECL) {
+      Ast.ValDecl valDecl = (Ast.ValDecl) decl;
+      for (Ast.ValBind valBind : valDecl.valBinds) {
+        if (valBind.pat instanceof Ast.IdPat) {
+          result.put(((Ast.IdPat) valBind.pat).name, valBind.exp);
+        }
+      }
+    } else if (decl.op == Op.FUN_DECL) {
+      // Function declarations are always values (they're lambdas)
+      // Mark with null to indicate "always generalize"
+      Ast.FunDecl funDecl = (Ast.FunDecl) decl;
+      for (Ast.FunBind funBind : funDecl.funBinds) {
+        result.put(funBind.name, null);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Binds all names in termMap, using generalization for syntactic values.
+   *
+   * <p>For let-polymorphism, bindings to syntactic values (lambda expressions,
+   * literals, etc.) are generalized, meaning each use gets fresh type
+   * variables. This is the key mechanism that enables polymorphic let bindings.
+   *
+   * @param env the environment to extend
+   * @param termMap mapping from pattern to term
+   * @param exprMap mapping from pattern name to expression (for value check)
+   * @return the extended environment
+   */
+  private TypeEnv bindAllWithGeneralization(
+      TypeEnv env,
+      PairList<Ast.IdPat, Term> termMap,
+      Map<String, Ast.Exp> exprMap) {
+    for (Map.Entry<Ast.IdPat, Term> entry : termMap) {
+      String name = entry.getKey().name;
+      Term term = entry.getValue();
+
+      // Check if this binding should be generalized (let-polymorphism)
+      // A binding should be generalized if:
+      // 1. It's in the exprMap (meaning it's a named pattern from val/fun decl)
+      // 2. Either the expression is null (FUN_DECL - always generalize)
+      //    or it passes the value restriction
+      boolean shouldGeneralize = false;
+      if (exprMap.containsKey(name)) {
+        Ast.Exp exp = exprMap.get(name);
+        // null means "always generalize" (for function declarations)
+        shouldGeneralize =
+            exp == null || ValueRestriction.shouldGeneralizeAst(exp);
+      }
+
+      if (shouldGeneralize) {
+        // Use a factory that creates fresh type variables on each lookup
+        env = env.bind(name, Kind.VAL, new GeneralizingTermFactory(term));
+      } else {
+        // Non-value expressions: use fixed term (monomorphic)
+        env = env.bind(name, term);
+      }
+    }
+    return env;
+  }
+
   private Ast.Decl deduceDeclType(
       TypeEnv env, Ast.Decl node, PairList<Ast.IdPat, Term> termMap) {
     switch (node.op) {
@@ -2751,6 +2831,202 @@ public class TypeResolver {
     @Override
     public String toString() {
       return term.toString();
+    }
+  }
+
+  /**
+   * Factory that creates fresh type variables on each invocation.
+   *
+   * <p>This implements let-polymorphism: each use of a polymorphic binding gets
+   * fresh type variables, allowing the binding to be used at different types in
+   * different contexts.
+   */
+  class GeneralizingTermFactory implements Function<TypeSystem, Term> {
+    private final Term term;
+
+    GeneralizingTermFactory(Term term) {
+      this.term = term;
+    }
+
+    private Set<Variable> collectVariables(Term t) {
+      final Set<Variable> vars = new LinkedHashSet<>();
+      t.accept(
+          new Unifier.TermVisitor<Void>() {
+            @Override
+            public Void visit(Unifier.Sequence sequence) {
+              for (Term arg : sequence.terms) {
+                arg.accept(this);
+              }
+              return null;
+            }
+
+            @Override
+            public Void visit(Variable variable) {
+              vars.add(variable);
+              return null;
+            }
+          });
+      return vars;
+    }
+
+    /**
+     * Finds the structured term that a variable is equivalent to by searching
+     * the equivalences in the terms list.
+     *
+     * <p>When we have equiv(V, fnTerm(V2, V2)), the terms list contains
+     * TermVariable(fnTerm(V2, V2), V). This method finds that structure.
+     *
+     * <p>This method also recursively resolves variables within sequences, so
+     * that fn(T3, T2) where T2=T3 becomes fn(T3, T3).
+     */
+    private Term resolveFromEquivalences(Term t) {
+      return resolveFromEquivalences(t, new HashSet<>());
+    }
+
+    private Term resolveFromEquivalences(Term t, Set<Variable> visited) {
+      if (t instanceof Variable) {
+        Variable v = (Variable) t;
+        // Avoid cycles
+        if (visited.contains(v)) {
+          return v;
+        }
+        visited.add(v);
+
+        // Search the terms list for an equivalence with this variable
+        for (TermVariable tv : terms) {
+          if (tv.variable.equals(v)) {
+            // Found! Return the structured term (recursively resolve)
+            return resolveFromEquivalences(tv.term, visited);
+          }
+        }
+        // Also check if this variable is on the term side of an equivalence
+        // (terms list stores TermVariable(term, variable) where variable =
+        // term)
+        // Some equivalences might be stored as Variable = Variable
+        for (TermVariable tv : terms) {
+          if (tv.term instanceof Variable && tv.term.equals(v)) {
+            // v is equivalent to tv.variable
+            return resolveFromEquivalences(tv.variable, visited);
+          }
+        }
+        // No equivalence found, return the variable as-is
+        return v;
+      } else if (t instanceof Sequence) {
+        // Recursively resolve variables within the sequence
+        // Each argument gets a fresh visited set (copied from parent) to avoid
+        // incorrectly marking sibling variables as visited
+        Sequence seq = (Sequence) t;
+        List<Term> resolvedArgs = new ArrayList<>();
+        boolean changed = false;
+        for (Term arg : seq.terms) {
+          // Create fresh visited set for each argument (copy parent context)
+          Term resolved = resolveFromEquivalences(arg, new HashSet<>(visited));
+          resolvedArgs.add(resolved);
+          if (resolved != arg) {
+            changed = true;
+          }
+        }
+        if (changed) {
+          return unifier.apply(seq.operator, resolvedArgs);
+        }
+        return t;
+      }
+      return t;
+    }
+
+    /**
+     * Finds the root of an equivalence class for a variable using the terms
+     * list. Uses path compression for efficiency.
+     */
+    private Variable findRoot(Variable v, Map<Variable, Variable> parent) {
+      Variable root = parent.get(v);
+      if (root == null) {
+        return v;
+      }
+      if (root.equals(v)) {
+        return v;
+      }
+      // Path compression
+      Variable actualRoot = findRoot(root, parent);
+      if (!actualRoot.equals(root)) {
+        parent.put(v, actualRoot);
+      }
+      return actualRoot;
+    }
+
+    /**
+     * Builds equivalence classes from variable-to-variable equivalences in the
+     * terms list.
+     */
+    private Map<Variable, Variable> buildEquivalenceClasses(
+        Set<Variable> vars) {
+      // Initialize: each variable is its own parent
+      Map<Variable, Variable> parent = new HashMap<>();
+      for (Variable v : vars) {
+        parent.put(v, v);
+      }
+
+      // Union variables based on equivalences in terms list
+      for (TermVariable tv : terms) {
+        if (tv.term instanceof Variable) {
+          Variable v1 = tv.variable;
+          Variable v2 = (Variable) tv.term;
+          // Only process if both are in our variable set
+          if (vars.contains(v1) && vars.contains(v2)) {
+            Variable root1 = findRoot(v1, parent);
+            Variable root2 = findRoot(v2, parent);
+            if (!root1.equals(root2)) {
+              // Union: make root1 point to root2
+              parent.put(root1, root2);
+            }
+          }
+        }
+      }
+
+      return parent;
+    }
+
+    @Override
+    public Term apply(TypeSystem typeSystem) {
+      // Resolve the term to get its structure by looking at equivalences.
+      // At binding time, term might be just a Variable (V1), but through
+      // equiv() calls, it's linked to a structure like fnTerm(V2, V2).
+      Term resolvedTerm = resolveFromEquivalences(term);
+
+      // Collect variables from the resolved term
+      Set<Variable> resolvedVars = collectVariables(resolvedTerm);
+      if (resolvedVars.isEmpty()) {
+        return resolvedTerm;
+      }
+
+      // Build equivalence classes to handle cases like fn(T3, T2) where T2=T3
+      // Both T2 and T3 should map to the same fresh variable.
+      Map<Variable, Variable> parent = buildEquivalenceClasses(resolvedVars);
+
+      // Create one fresh variable per equivalence class (root)
+      final Map<Variable, Variable> rootToFresh = new HashMap<>();
+      for (Variable v : resolvedVars) {
+        Variable root = findRoot(v, parent);
+        if (!rootToFresh.containsKey(root)) {
+          rootToFresh.put(root, unifier.variable());
+        }
+      }
+
+      // Build substitution: each variable maps to the fresh var for its class
+      final Map<Variable, Term> substitution = new HashMap<>();
+      for (Variable v : resolvedVars) {
+        Variable root = findRoot(v, parent);
+        substitution.put(v, rootToFresh.get(root));
+      }
+
+      // Apply substitution to get a new term with fresh variables
+      // preserving the type structure (e.g., V3 -> V3 instead of just V3)
+      return resolvedTerm.apply(substitution);
+    }
+
+    @Override
+    public String toString() {
+      return "generalize(" + term + ")";
     }
   }
 

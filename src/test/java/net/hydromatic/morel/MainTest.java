@@ -589,7 +589,8 @@ public class MainTest {
   // testOverload, testOverload1, testApply, testApply2 migrated to
   // type-inference.smli
 
-  @Disabled("disable failing test - enable when we have polymorphic types")
+  @Disabled(
+      "let-polymorphism requires solving constraints before processing body")
   @Test
   void testLetIsPolymorphic() {
     // f has been introduced in a let-expression and is therefore treated as
@@ -597,7 +598,8 @@ public class MainTest {
     ml("let val f = fn x => x in (f true, f 0) end").assertType("bool * int");
   }
 
-  @Disabled("disable failing test - enable when we have polymorphic types")
+  @Disabled(
+      "let-polymorphism requires solving constraints before processing body")
   @Test
   void testHdIsPolymorphic() {
     ml("(hd [1, 2], hd [false, true])").assertType("int * bool");
@@ -618,7 +620,8 @@ public class MainTest {
     ml("(fn x => x) true").assertEval(is(true));
   }
 
-  @Disabled("disable failing test - enable when we have polymorphic types")
+  @Disabled(
+      "let-polymorphism requires solving constraints before processing body")
   @Test
   void testExponentialType0() {
     final String ml =
@@ -627,7 +630,13 @@ public class MainTest {
             + "in\n"
             + "  f (f 0)\n"
             + "end";
-    ml(ml).assertType("xx");
+    // f : 'a -> 'a * 'a (polymorphic)
+    // f 0 : int * int
+    // f (f 0) : (int * int) * (int * int)
+    // Note: Morel displays this as "int * int * (int * int)" which is
+    // structurally the same as "(int * int) * (int * int)" with
+    // left-associativity
+    ml(ml).assertType("int * int * (int * int)");
   }
 
   @Disabled("until type-inference bug is fixed")

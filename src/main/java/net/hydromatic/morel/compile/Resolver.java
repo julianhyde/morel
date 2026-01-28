@@ -291,18 +291,38 @@ public class Resolver {
    * rest = emps} are considered complex, and are not handled by this method.
    *
    * <p>Likewise recursive declarations.
+   *
+   * <p>This method implements let-polymorphism by generalizing the type of the
+   * binding when the expression is a syntactic value (per the value
+   * restriction). This allows polymorphic functions like {@code val id = fn x
+   * => x} to be used at multiple types.
    */
   public Core.ValDecl toCore(Ast.ValDecl valDecl) {
     final List<Binding> bindings = new ArrayList<>(); // discard
     final ResolvedValDecl resolvedValDecl = resolveValDecl(valDecl, bindings);
+
+    // Extract pattern and expression
+    Core.NamedPat pat = resolvedValDecl.pat;
+    final Core.Exp exp = resolvedValDecl.exp;
+
+    // Let-polymorphism: Generalize the type if:
+    // 1. The expression passes the value restriction (is a syntactic value)
+    // 2. This is NOT an overloaded binding (overloads remain monomorphic)
+    // This works for BOTH recursive and non-recursive bindings.
+    final boolean isOverloaded = valDecl.inst && pat instanceof Core.IdPat;
+    if (!isOverloaded && ValueRestriction.shouldGeneralize(exp)) {
+      Type generalizedType = typeMap.typeSystem.generalize(pat.type);
+      if (generalizedType instanceof ForallType) {
+        pat = pat.withType(generalizedType);
+      }
+    }
+
     final Core.NonRecValDecl nonRecValDecl =
         core.nonRecValDecl(
             resolvedValDecl.patExps.get(0).pos,
-            resolvedValDecl.pat,
-            valDecl.inst && resolvedValDecl.pat instanceof Core.IdPat
-                ? getOverload((Core.IdPat) resolvedValDecl.pat)
-                : null,
-            resolvedValDecl.exp);
+            pat,
+            isOverloaded ? getOverload((Core.IdPat) resolvedValDecl.pat) : null,
+            exp);
     return resolvedValDecl.rec
         ? core.recValDecl(ImmutableList.of(nonRecValDecl))
         : nonRecValDecl;
