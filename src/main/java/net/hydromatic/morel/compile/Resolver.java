@@ -309,8 +309,15 @@ public class Resolver {
     // 1. The expression passes the value restriction (is a syntactic value)
     // 2. This is NOT an overloaded binding (overloads remain monomorphic)
     // This works for BOTH recursive and non-recursive bindings.
+    //
+    // DISABLED: This causes hangs on type.smli due to generalize() being slow
+    // for complex polymorphic record types. Pending optimization of
+    // TypeSystem.generalize() / ensureClosed().
     final boolean isOverloaded = valDecl.inst && pat instanceof Core.IdPat;
-    if (!isOverloaded && ValueRestriction.shouldGeneralize(exp)) {
+    final boolean enableLetPolymorphism = false; // TODO: Re-enable after fixing
+    if (enableLetPolymorphism
+        && !isOverloaded
+        && ValueRestriction.shouldGeneralize(exp)) {
       Type generalizedType = typeMap.typeSystem.generalize(pat.type);
       if (generalizedType instanceof ForallType) {
         pat = pat.withType(generalizedType);

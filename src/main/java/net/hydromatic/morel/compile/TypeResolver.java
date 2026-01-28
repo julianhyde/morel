@@ -1802,13 +1802,19 @@ public class TypeResolver {
       // 1. It's in the exprMap (meaning it's a named pattern from val/fun decl)
       // 2. Either the expression is null (FUN_DECL - always generalize)
       //    or it passes the value restriction
+      //
+      // DISABLED: GeneralizingTermFactory causes hangs on type.smli because
+      // it's called during type inference before constraints are fully
+      // resolved.
+      // See morel-iev for proper let-polymorphism implementation.
       boolean shouldGeneralize = false;
-      if (exprMap.containsKey(name)) {
-        Ast.Exp exp = exprMap.get(name);
-        // null means "always generalize" (for function declarations)
-        shouldGeneralize =
-            exp == null || ValueRestriction.shouldGeneralizeAst(exp);
-      }
+      // Disabled pending architectural fix:
+      // if (exprMap.containsKey(name)) {
+      //   Ast.Exp exp = exprMap.get(name);
+      //   // null means "always generalize" (for function declarations)
+      //   shouldGeneralize =
+      //       exp == null || ValueRestriction.shouldGeneralizeAst(exp);
+      // }
 
       if (shouldGeneralize) {
         // Use a factory that creates fresh type variables on each lookup
