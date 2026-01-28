@@ -489,7 +489,7 @@ public class DatalogTest {
             + "edge(1,2).\n"
             + ".output edge\n";
     String ml = "Datalog.execute \"" + stringToString(program) + "\"";
-    String expected = "Variant({edge:{x:int, y:int} list}, [[[1, 2]]])";
+    String expected = "Variant({edge:{x:int, y:int} bag}, [[[1, 2]]])";
     ml(ml).assertType("variant").assertEval(hasToString(expected));
   }
 }

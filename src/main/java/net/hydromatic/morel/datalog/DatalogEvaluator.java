@@ -18,12 +18,21 @@
  */
 package net.hydromatic.morel.datalog;
 
+import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
@@ -38,7 +47,6 @@ import net.hydromatic.morel.datalog.DatalogAst.Constant;
 import net.hydromatic.morel.datalog.DatalogAst.Declaration;
 import net.hydromatic.morel.datalog.DatalogAst.Fact;
 import net.hydromatic.morel.datalog.DatalogAst.Output;
-import net.hydromatic.morel.datalog.DatalogAst.Param;
 import net.hydromatic.morel.datalog.DatalogAst.Program;
 import net.hydromatic.morel.datalog.DatalogAst.Rule;
 import net.hydromatic.morel.datalog.DatalogAst.Statement;
@@ -49,6 +57,7 @@ import net.hydromatic.morel.eval.Variant;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 
 /**
  * Evaluator for Datalog programs.
@@ -100,12 +109,14 @@ public class DatalogEvaluator {
           new MorelParserImpl(new StringReader(morelSource));
       AstNode statement = parser.statementEofSafe();
 
-      // 5. Compile the statement
-      Environment env = Environments.empty();
-      List<CompileException> warnings = new ArrayList<>();
+      // 5. Compile the statement using environment with built-ins
+      final TypeSystem typeSystem = requireNonNull(session.typeSystem);
+      final Environment env =
+          Environments.env(typeSystem, session, ImmutableMap.of());
+      final List<CompileException> warnings = new ArrayList<>();
       CompiledStatement compiled =
           Compiles.prepareStatement(
-              session.typeSystem,
+              typeSystem,
               session,
               env,
               statement,
@@ -116,11 +127,10 @@ public class DatalogEvaluator {
       return new DatalogEvaluator(compiled, session, env, morelSource);
 
     } catch (ParseException e) {
-      throw new DatalogException(
-          String.format("Parse error: %s", e.getMessage()), e);
+      throw new DatalogException(format("Parse error: %s", e.getMessage()), e);
     } catch (Exception e) {
       throw new DatalogException(
-          String.format("Compilation error: %s", e.getMessage()), e);
+          format("Compilation error: %s", e.getMessage()), e);
     }
   }
 
@@ -149,7 +159,7 @@ public class DatalogEvaluator {
       return Variant.of(resultType, result);
     } catch (Exception e) {
       throw new DatalogException(
-          String.format(
+          format(
               "Error executing Morel translation: %s\n"
                   + "Generated Morel code:\n"
                   + "%s",
@@ -204,13 +214,27 @@ public class DatalogEvaluator {
     try {
       DatalogEvaluator evaluator = compile(program, session);
       // Return SOME(morelSource)
-      return com.google.common.collect.ImmutableList.of(
-          net.hydromatic.morel.compile.BuiltIn.Constructor.OPTION_SOME
-              .constructor,
-          evaluator.morelSource);
+      return ImmutableList.of(
+          BuiltIn.Constructor.OPTION_SOME.constructor, evaluator.morelSource);
     } catch (DatalogException | UnsupportedOperationException e) {
-      // Return NONE for any error
-      return com.google.common.collect.ImmutableList.of("NONE");
+      // For debugging, try to get the translated source even on error
+      try {
+        Program ast = DatalogParserImpl.parse(program);
+        DatalogAnalyzer.analyze(ast);
+        String morelSource = translateToMorelSource(ast);
+        // Return the source with error prefix for debugging
+        return ImmutableList.of(
+            BuiltIn.Constructor.OPTION_SOME.constructor,
+            "ERROR: " //
+                + e.getMessage()
+                + "\n"
+                + "\n"
+                + "Generated:\n"
+                + morelSource);
+      } catch (Exception e2) {
+        // Return NONE for any error
+        return ImmutableList.of("NONE");
+      }
     }
   }
 
@@ -271,13 +295,9 @@ public class DatalogEvaluator {
       // Start let expression
       morel.append("let\n");
 
-      // Helper: check if two lists have same length
-      morel.append(
-          "  fun sameLength [] [] = true | sameLength (_::xs) (_::ys) = sameLength xs ys | sameLength _ _ = false\n");
-
       // Generate val declarations for each relation
-      // First pass: generate fact-only relations (these can be referenced by
-      // rules)
+      // First pass: generate fact-only relations as predicate functions
+      // (these can be referenced by rules)
       for (Declaration decl : ast.getDeclarations()) {
         List<Fact> facts =
             factsByRelation.getOrDefault(decl.name, new ArrayList<>());
@@ -285,14 +305,48 @@ public class DatalogEvaluator {
             rulesByRelation.getOrDefault(decl.name, new ArrayList<>());
 
         if (!facts.isEmpty() && rules.isEmpty()) {
-          // Facts only - simple list literal
-          morel.append("  val ").append(decl.name).append(" = ");
+          // Facts only - generate predicate function
+          morel.append("  val ").append(decl.name).append("_facts = ");
           morel.append(translateFactsToList(decl, facts));
+          morel.append("\n");
+
+          // Generate predicate function
+          morel.append("  fun ").append(decl.name).append(" ");
+          if (decl.arity() == 1) {
+            morel.append(decl.params.get(0).name);
+          } else {
+            morel.append("(");
+            for (int i = 0; i < decl.params.size(); i++) {
+              if (i > 0) {
+                morel.append(", ");
+              }
+              morel.append(decl.params.get(i).name);
+            }
+            morel.append(")");
+          }
+          morel.append(" = ");
+          if (decl.arity() == 1) {
+            morel
+                .append(decl.params.get(0).name)
+                .append(" elem ")
+                .append(decl.name)
+                .append("_facts");
+          } else {
+            // Use tuple (not record) to avoid Morel bug with elem
+            morel.append("(");
+            for (int i = 0; i < decl.params.size(); i++) {
+              if (i > 0) {
+                morel.append(", ");
+              }
+              morel.append(decl.params.get(i).name);
+            }
+            morel.append(") elem ").append(decl.name).append("_facts");
+          }
           morel.append("\n");
         }
       }
 
-      // Second pass: generate rule-based relations
+      // Second pass: generate rule-based relations using predicate functions
       for (Declaration decl : ast.getDeclarations()) {
         List<Fact> facts =
             factsByRelation.getOrDefault(decl.name, new ArrayList<>());
@@ -300,9 +354,9 @@ public class DatalogEvaluator {
             rulesByRelation.getOrDefault(decl.name, new ArrayList<>());
 
         if (!rules.isEmpty()) {
-          // Has rules - generate fixpoint iteration
+          // Has rules - generate predicate functions (like such-that.smli)
           morel.append(
-              translateRulesToFixpoint(decl, facts, rules, declarationMap));
+              translateRulesToPredicates(decl, facts, rules, declarationMap));
         }
       }
 
@@ -313,16 +367,6 @@ public class DatalogEvaluator {
     List<Output> outputs = ast.getOutputs();
     if (outputs.isEmpty()) {
       morel.append("()");
-    } else if (outputs.size() == 1) {
-      String relName = outputs.get(0).relationName;
-      morel.append("{").append(relName).append("=");
-      if (hasDeclarations) {
-        morel.append(relName);
-      } else {
-        // Empty relation
-        morel.append("[]");
-      }
-      morel.append("}");
     } else {
       morel.append("{");
       for (int i = 0; i < outputs.size(); i++) {
@@ -330,9 +374,36 @@ public class DatalogEvaluator {
           morel.append(", ");
         }
         String relName = outputs.get(i).relationName;
-        morel.append(relName).append("=");
-        if (hasDeclarations) {
-          morel.append(relName);
+        morel.append(relName).append(" = ");
+
+        Declaration decl = declarationMap.get(relName);
+        List<Fact> facts =
+            factsByRelation.getOrDefault(relName, new ArrayList<>());
+        List<Rule> rules =
+            rulesByRelation.getOrDefault(relName, new ArrayList<>());
+
+        if (!facts.isEmpty() || !rules.isEmpty()) {
+          // Generate from ... where expression
+          morel.append("from ");
+          for (int j = 0; j < decl.params.size(); j++) {
+            if (j > 0) {
+              morel.append(", ");
+            }
+            morel.append(decl.params.get(j).name);
+          }
+          morel.append(" where ").append(relName);
+          if (decl.arity() == 1) {
+            morel.append(" ").append(decl.params.get(0).name);
+          } else {
+            morel.append(" (");
+            for (int j = 0; j < decl.params.size(); j++) {
+              if (j > 0) {
+                morel.append(", ");
+              }
+              morel.append(decl.params.get(j).name);
+            }
+            morel.append(")");
+          }
         } else {
           // Empty relation
           morel.append("[]");
@@ -350,27 +421,19 @@ public class DatalogEvaluator {
   }
 
   /**
-   * Translates rules to Morel fixpoint iteration code.
+   * Translates rules to Morel predicate functions.
    *
-   * <p>Generates code like:
+   * <p>Uses the pattern from such-that.smli:
    *
    * <pre>
-   * fun iterate_path prev =
-   *   let
-   *     val rule1 = edge
-   *     val rule2 = from p in prev, e in edge where ... yield ...
-   *     val new = List.removeDuplicates (rule1 @ rule2)
-   *     val combined = List.removeDuplicates (prev @ new)
-   *   in
-   *     if List.length combined = List.length prev then
-   *       combined
-   *     else
-   *       iterate_path combined
-   *   end
-   * val path = iterate_path []
+   * fun edge (x, y) = {x, y} elem edge_facts
+   * fun path (x, y) =
+   *   edge (x, y) orelse
+   *   (exists z where path (x, z) andalso edge (z, y))
+   * val path_result = from x, y where path (x, y)
    * </pre>
    */
-  private static String translateRulesToFixpoint(
+  private static String translateRulesToPredicates(
       Declaration decl,
       List<Fact> facts,
       List<Rule> rules,
@@ -378,56 +441,262 @@ public class DatalogEvaluator {
     StringBuilder sb = new StringBuilder();
     String relationName = decl.name;
 
-    // Generate iteration function
-    sb.append("  fun iterate_")
-        .append(relationName)
-        .append(" prev =\n")
-        .append("    let\n");
-
-    // Generate code for each rule
-    for (int i = 0; i < rules.size(); i++) {
-      Rule rule = rules.get(i);
-      sb.append("      val rule").append(i + 1).append(" = ");
-      sb.append(translateRule(rule, decl, relationName, declarationMap));
+    // If there are facts, generate the facts list and elem-based predicate
+    if (!facts.isEmpty()) {
+      sb.append("  val ").append(relationName).append("_facts = ");
+      sb.append(translateFactsToList(decl, facts));
       sb.append("\n");
     }
 
-    // Combine all rule results
-    sb.append("      val new = ");
-    if (rules.size() == 1) {
-      sb.append("rule1");
+    // Generate predicate function
+    sb.append("  fun ").append(relationName).append(" ");
+
+    // Generate parameter pattern
+    if (decl.arity() == 1) {
+      sb.append(decl.params.get(0).name);
     } else {
-      for (int i = 0; i < rules.size(); i++) {
+      sb.append("(");
+      for (int i = 0; i < decl.params.size(); i++) {
         if (i > 0) {
-          sb.append(" @ ");
+          sb.append(", ");
         }
-        sb.append("rule").append(i + 1);
+        sb.append(decl.params.get(i).name);
+      }
+      sb.append(")");
+    }
+    sb.append(" =\n");
+
+    // Generate body: facts check orelse rule1 orelse rule2 ...
+    List<String> disjuncts = new ArrayList<>();
+
+    // Add facts elem check if there are facts
+    if (!facts.isEmpty()) {
+      if (decl.arity() == 1) {
+        disjuncts.add(
+            decl.params.get(0).name + " elem " + relationName + "_facts");
+      } else {
+        // Use tuple (not record) to avoid Morel bug with elem
+        StringBuilder elemCheck = new StringBuilder("(");
+        for (int i = 0; i < decl.params.size(); i++) {
+          if (i > 0) {
+            elemCheck.append(", ");
+          }
+          elemCheck.append(decl.params.get(i).name);
+        }
+        elemCheck.append(") elem ").append(relationName).append("_facts");
+        disjuncts.add(elemCheck.toString());
+      }
+    }
+
+    // Add each rule as a disjunct
+    for (Rule rule : rules) {
+      disjuncts.add(translateRuleToPredicate(rule, decl, declarationMap));
+    }
+
+    // Join with orelse
+    sb.append("    ");
+    if (disjuncts.size() == 1) {
+      sb.append(disjuncts.get(0));
+    } else {
+      for (int i = 0; i < disjuncts.size(); i++) {
+        if (i > 0) {
+          sb.append(
+              " orelse\n" //
+                  + "    ");
+        }
+        sb.append(disjuncts.get(i));
       }
     }
     sb.append("\n");
 
-    // Combine with previous results
-    sb.append("      val combined = prev @ new\n");
-
-    // Check for fixpoint
-    sb.append("    in\n");
-    sb.append("      if sameLength combined prev then\n");
-    sb.append("        combined\n");
-    sb.append("      else\n");
-    sb.append("        iterate_").append(relationName).append(" combined\n");
-    sb.append("    end\n");
-
-    // Initialize with empty or facts
-    sb.append("  val ").append(relationName).append(" = iterate_");
-    sb.append(relationName).append(" ");
-    if (facts.isEmpty()) {
-      sb.append("[]");
-    } else {
-      sb.append(translateFactsToList(decl, facts));
-    }
-    sb.append("\n");
+    // Don't generate a result list here - it will be generated in the output
+    // section
 
     return sb.toString();
+  }
+
+  /**
+   * Translates a single Datalog rule to a Morel predicate expression.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>{@code path(X,Y) :- edge(X,Y)} → {@code edge (x, y)}
+   *   <li>{@code path(X,Z) :- path(X,Y), edge(Y,Z)} → {@code (exists z where
+   *       path (x, z) andalso edge (z, y))}
+   * </ul>
+   */
+  private static String translateRuleToPredicate(
+      Rule rule, Declaration decl, Map<String, Declaration> declarationMap) {
+    // Collect head variables and map them to declaration param names
+    // head var -> param name
+    Map<String, String> headVarToParam = new LinkedHashMap<>();
+    for (int i = 0; i < rule.head.terms.size(); i++) {
+      Term term = rule.head.terms.get(i);
+      if (term instanceof Variable) {
+        Variable var = (Variable) term;
+        String paramName = decl.params.get(i).name;
+        headVarToParam.put(var.name, paramName);
+      }
+    }
+
+    // Collect all variables in body that are NOT in the head
+    // Use fresh names to avoid collision with head params
+    Set<String> headParamNames = new HashSet<>(headVarToParam.values());
+    Map<String, String> bodyVarToFresh = new LinkedHashMap<>();
+    int freshCounter = 0;
+    for (BodyAtom bodyAtom : rule.body) {
+      if (bodyAtom instanceof Comparison) {
+        Comparison comp = (Comparison) bodyAtom;
+        for (Term term : Arrays.asList(comp.left, comp.right)) {
+          if (term instanceof Variable) {
+            Variable var = (Variable) term;
+            if (!headVarToParam.containsKey(var.name)
+                && !bodyVarToFresh.containsKey(var.name)) {
+              // Generate a fresh name that doesn't collide
+              String fresh = "v" + freshCounter++;
+              while (headParamNames.contains(fresh)) {
+                fresh = "v" + freshCounter++;
+              }
+              bodyVarToFresh.put(var.name, fresh);
+            }
+          }
+        }
+        continue;
+      }
+      Atom atom = bodyAtom.atom;
+      for (Term term : atom.terms) {
+        if (term instanceof Variable) {
+          Variable var = (Variable) term;
+          if (!headVarToParam.containsKey(var.name)
+              && !bodyVarToFresh.containsKey(var.name)) {
+            // Generate a fresh name that doesn't collide
+            String fresh = "v" + freshCounter++;
+            while (headParamNames.contains(fresh)) {
+              fresh = "v" + freshCounter++;
+            }
+            bodyVarToFresh.put(var.name, fresh);
+          }
+        }
+      }
+    }
+
+    // Build the body expression
+    StringBuilder body = new StringBuilder();
+
+    // If there are body-only variables, wrap in exists
+    if (!bodyVarToFresh.isEmpty()) {
+      body.append("(exists ");
+      body.append(String.join(", ", bodyVarToFresh.values()));
+      body.append(" where ");
+    }
+
+    // Build conjunction of body atoms
+    List<String> conjuncts = new ArrayList<>();
+    for (BodyAtom bodyAtom : rule.body) {
+      if (bodyAtom instanceof Comparison) {
+        Comparison comp = (Comparison) bodyAtom;
+        String left =
+            termToPredicateRef(comp.left, headVarToParam, bodyVarToFresh);
+        String right =
+            termToPredicateRef(comp.right, headVarToParam, bodyVarToFresh);
+        String op = compOpToMorel(comp.op);
+        conjuncts.add(left + " " + op + " " + right);
+      } else {
+        Atom atom = bodyAtom.atom;
+        StringBuilder call = new StringBuilder();
+        if (bodyAtom.negated) {
+          call.append("not (");
+        }
+        call.append(atom.name);
+        if (atom.terms.size() == 1) {
+          call.append(" ");
+          call.append(
+              termToPredicateRef(
+                  atom.terms.get(0), headVarToParam, bodyVarToFresh));
+        } else {
+          call.append(" (");
+          for (int i = 0; i < atom.terms.size(); i++) {
+            if (i > 0) {
+              call.append(", ");
+            }
+            call.append(
+                termToPredicateRef(
+                    atom.terms.get(i), headVarToParam, bodyVarToFresh));
+          }
+          call.append(")");
+        }
+        if (bodyAtom.negated) {
+          call.append(")");
+        }
+        conjuncts.add(call.toString());
+      }
+    }
+
+    body.append(String.join(" andalso ", conjuncts));
+
+    if (!bodyVarToFresh.isEmpty()) {
+      body.append(")");
+    }
+
+    return body.toString();
+  }
+
+  /** Converts a term to a reference in a predicate expression. */
+  private static String termToPredicateRef(
+      Term term,
+      Map<String, String> headVarToParam,
+      Map<String, String> bodyVarToFresh) {
+    if (term instanceof Variable) {
+      Variable var = (Variable) term;
+      // If the variable is in the head, use the parameter name
+      String paramName = headVarToParam.get(var.name);
+      if (paramName != null) {
+        return paramName;
+      }
+      // If the variable is body-only, use the fresh name
+      String freshName = bodyVarToFresh.get(var.name);
+      if (freshName != null) {
+        return freshName;
+      }
+      // Fallback (shouldn't happen)
+      return var.name.toLowerCase();
+    } else if (term instanceof Constant) {
+      return termToMorel(term);
+    }
+    throw new IllegalArgumentException("Unknown term type: " + term);
+  }
+
+  /**
+   * Checks if a rule is a simple copy (e.g., {@code path(X,Y) :- edge(X,Y)}).
+   *
+   * <p>A simple copy has exactly one positive body atom whose variables match
+   * the head variables in the same order.
+   *
+   * @return the source relation name if it's a simple copy, null otherwise
+   */
+  private static String getSimpleCopySource(Rule rule) {
+    if (rule.body.size() != 1) {
+      return null;
+    }
+    BodyAtom bodyAtom = rule.body.get(0);
+    if (bodyAtom instanceof Comparison || bodyAtom.negated) {
+      return null;
+    }
+    Atom atom = bodyAtom.atom;
+    if (atom.terms.size() != rule.head.terms.size()) {
+      return null;
+    }
+    for (int i = 0; i < atom.terms.size(); i++) {
+      Term bodyTerm = atom.terms.get(i);
+      Term headTerm = rule.head.terms.get(i);
+      if (!(bodyTerm instanceof Variable)
+          || !(headTerm instanceof Variable)
+          || !((Variable) bodyTerm).name.equals(((Variable) headTerm).name)) {
+        return null;
+      }
+    }
+    return atom.name;
   }
 
   /**
@@ -446,6 +715,13 @@ public class DatalogEvaluator {
       Declaration decl,
       String relationName,
       Map<String, Declaration> declarationMap) {
+    // Check if rule is a simple copy (e.g., path(X,Y) :- edge(X,Y))
+    String simpleCopySource = getSimpleCopySource(rule);
+    if (simpleCopySource != null) {
+      // Use "prev" if the body references the recursive relation
+      return simpleCopySource.equals(relationName) ? "prev" : simpleCopySource;
+    }
+
     // Build variable mapping from head
     Map<String, String> headVars = new LinkedHashMap<>();
     for (int i = 0; i < rule.head.terms.size(); i++) {
@@ -454,44 +730,6 @@ public class DatalogEvaluator {
         Variable var = (Variable) term;
         String paramName = decl.params.get(i).name;
         headVars.put(var.name, paramName);
-      }
-    }
-
-    // Check if rule body contains only one atom that matches entire relation
-    if (rule.body.size() == 1) {
-      BodyAtom bodyAtom = rule.body.get(0);
-      if (!(bodyAtom instanceof Comparison) && !bodyAtom.negated) {
-        Atom atom = bodyAtom.atom;
-        // Check if body atom variables match head variables in order
-        boolean simpleMatch = true;
-        if (atom.terms.size() == rule.head.terms.size()) {
-          for (int i = 0; i < atom.terms.size(); i++) {
-            Term bodyTerm = atom.terms.get(i);
-            Term headTerm = rule.head.terms.get(i);
-            if (!(bodyTerm instanceof Variable)
-                || !(headTerm instanceof Variable)) {
-              simpleMatch = false;
-              break;
-            }
-            if (!((Variable) bodyTerm)
-                .name.equals(((Variable) headTerm).name)) {
-              simpleMatch = false;
-              break;
-            }
-          }
-        } else {
-          simpleMatch = false;
-        }
-
-        // If it's a simple copy, just reference the relation
-        if (simpleMatch) {
-          // Use "prev" if the body references the recursive relation
-          if (atom.name.equals(relationName)) {
-            return "prev";
-          } else {
-            return atom.name;
-          }
-        }
       }
     }
 
@@ -571,7 +809,7 @@ public class DatalogEvaluator {
     for (Map.Entry<String, List<String>> entry : varLocations.entrySet()) {
       List<String> refs = entry.getValue();
       for (int i = 1; i < refs.size(); i++) {
-        whereConditions.add(refs.get(0) + " = " + refs.get(i));
+        whereConditions.add("(" + refs.get(0) + ") = (" + refs.get(i) + ")");
       }
     }
 
@@ -679,17 +917,15 @@ public class DatalogEvaluator {
         // Single value - no tuple
         sb.append(termToMorel(fact.atom.terms.get(0)));
       } else {
-        // Multiple values - record with field names
-        sb.append("{");
+        // Multiple values - tuple (not record, to avoid Morel bug with elem)
+        sb.append("(");
         for (int j = 0; j < fact.atom.terms.size(); j++) {
           if (j > 0) {
             sb.append(", ");
           }
-          Param param = decl.params.get(j);
-          sb.append(param.name).append("=");
           sb.append(termToMorel(fact.atom.terms.get(j)));
         }
-        sb.append("}");
+        sb.append(")");
       }
     }
 
