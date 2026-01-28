@@ -137,9 +137,12 @@ class Generators {
                   // Check if the created generator depends on inner scans
                   final Generator gen =
                       cache.bestGenerator((Core.NamedPat) pat);
-                  if (gen != null && !gen.freePats.isEmpty()) {
-                    // Check if any freePat is from inner scans
+                  if (gen != null) {
+                    // Check if any freePat is from inner scans OR if the
+                    // generator's pattern contains inner scan variables
                     boolean dependsOnInnerScan = false;
+
+                    // Check free variables in the generator expression
                     for (Core.NamedPat freePat : gen.freePats) {
                       for (Core.Scan innerScan : innerScans) {
                         if (innerScan.pat.expand().contains(freePat)) {
@@ -148,6 +151,21 @@ class Generators {
                         }
                       }
                     }
+
+                    // Also check if the generator's pattern contains inner
+                    // scan variables (e.g., for elem patterns like
+                    // "(v0, x) elem list" where v0 is from the exists clause)
+                    if (!dependsOnInnerScan) {
+                      for (Core.NamedPat patVar : gen.pat.expand()) {
+                        for (Core.Scan innerScan : innerScans) {
+                          if (innerScan.pat.expand().contains(patVar)) {
+                            dependsOnInnerScan = true;
+                            break;
+                          }
+                        }
+                      }
+                    }
+
                     if (dependsOnInnerScan) {
                       // Replace the generator with one that includes inner
                       // scans
@@ -191,32 +209,57 @@ class Generators {
     final TypeSystem typeSystem = cache.typeSystem;
     final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
 
-    // Add inner scans first
+    // Collect which inner scan variables are already covered by the
+    // dependent generator's pattern
+    final Set<Core.NamedPat> coveredByGenerator =
+        new HashSet<>(dependentGen.pat.expand());
+
+    // Add inner scans first (only if not already covered by the generator)
     for (Core.Scan scan : innerScans) {
-      fromBuilder.scan(scan.pat, scan.exp);
+      boolean scanCovered = true;
+      for (Core.NamedPat scanPat : scan.pat.expand()) {
+        if (!coveredByGenerator.contains(scanPat)) {
+          scanCovered = false;
+          break;
+        }
+      }
+      if (!scanCovered) {
+        fromBuilder.scan(scan.pat, scan.exp);
+      }
     }
 
     // Add the dependent generator as a join
     fromBuilder.scan(dependentGen.pat, dependentGen.exp);
 
-    // Yield the pattern we're generating for
-    fromBuilder.yield_(core.id((Core.NamedPat) pat));
+    // Yield the FULL scan pattern (including inner scan variables).
+    // This allows the Expander to join subsequent generators on shared
+    // inner variables. For example, for:
+    //   exists v0 where parent (v0, x) andalso parent (v0, y)
+    // The first generator yields (v0, x), and the second can join on v0.
+    // IMPORTANT: Use recordOrAtom (not tuple) so that distinct() sees
+    // individual bindings for each component, not a single tuple binding.
+    final List<Core.NamedPat> yieldPats = dependentGen.pat.expand();
+    fromBuilder.yield_(core.recordOrAtom(typeSystem, yieldPats));
     fromBuilder.distinct();
 
     final Core.From joinedFrom = fromBuilder.build();
-    final Set<Core.NamedPat> freePats =
+    final Set<Core.NamedPat> freePats2 =
         SuchThatShuttle.freePats(typeSystem, joinedFrom);
 
-    // Remove the old generator and add the new joined one
+    // Remove the old generator and add the new joined one.
+    // Use the FULL pattern so inner scan variables are included in the
+    // generator's pattern. The Expander will add these to 'done' and can
+    // create join conditions for subsequent generators.
+    // IMPORTANT: Create a record pattern to match the record we're yielding.
+    final Core.Pat joinedPat = core.recordOrAtomPat(typeSystem, yieldPats);
     cache.remove((Core.NamedPat) pat);
-    cache.add(
-        new ExistsJoinGenerator((Core.NamedPat) pat, joinedFrom, freePats));
+    cache.add(new ExistsJoinGenerator(joinedPat, joinedFrom, freePats2));
   }
 
   /** Generator created from an exists pattern that joins inner scans. */
   static class ExistsJoinGenerator extends Generator {
     ExistsJoinGenerator(
-        Core.NamedPat pat,
+        Core.Pat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats) {
       // unique = true because exists generators apply distinct internally
@@ -718,10 +761,6 @@ class Generators {
    */
   private static @Nullable TransitiveClosurePattern analyzeTransitiveClosure(
       Cache cache, Core.Fn fn, Core.Exp callArgs, String fnName) {
-
-    System.err.println("DEBUG analyzeTC: fn.exp = " + fn.exp);
-    System.err.println("DEBUG analyzeTC: fn.exp.op = " + fn.exp.op);
-
     // Unwrap CASE expression from tuple pattern matching
     // fun path (x, y) = ... becomes fn v => case v of (x, y) => body
     // We need to extract the actual pattern (x, y) for proper substitution
@@ -734,22 +773,15 @@ class Generators {
         body = match.exp;
         formalParams =
             match.pat; // Use the CASE pattern (x, y) not lambda param v
-        System.err.println("DEBUG analyzeTC: unwrapped CASE, body = " + body);
-        System.err.println("DEBUG analyzeTC: body.op = " + body.op);
-        System.err.println("DEBUG analyzeTC: formalParams = " + formalParams);
       }
     }
 
     // Check that body is "baseCase orelse recursiveCase" (no guard)
     if (!body.isCallTo(BuiltIn.Z_ORELSE)) {
-      System.err.println(
-          "DEBUG analyzeTC: not Z_ORELSE, checking builtIn: " + body.builtIn());
       return null;
     }
     final List<Core.Exp> disjuncts = core.decomposeOr(body);
     if (disjuncts.size() != 2) {
-      System.err.println(
-          "DEBUG analyzeTC: wrong number of disjuncts: " + disjuncts.size());
       return null;
     }
 
@@ -841,12 +873,6 @@ class Generators {
       boolean ordered) {
     final TypeSystem ts = cache.typeSystem;
 
-    System.err.println(
-        "DEBUG generateTC: pattern.baseCase = " + pattern.baseCase);
-    System.err.println(
-        "DEBUG generateTC: pattern.stepPredicate = " + pattern.stepPredicate);
-    System.err.println("DEBUG generateTC: goalPat = " + goalPat);
-
     // 1. Substitute actual args into base case and try to invert to get
     // the base generator (e.g., edges)
     final Core.Exp substitutedBase =
@@ -856,23 +882,14 @@ class Generators {
             pattern.formalParams,
             pattern.callArgs,
             pattern.baseCase);
-    System.err.println(
-        "DEBUG generateTC: substitutedBase = " + substitutedBase);
 
     // Try to create a generator for the base case
     final List<Core.Exp> baseConstraints = ImmutableList.of(substitutedBase);
     if (!maybeGenerator(cache, goalPat, ordered, baseConstraints)) {
-      System.err.println(
-          "DEBUG generateTC: failed to create generator for base case");
       return null;
     }
     final Generator baseGenerator =
         requireNonNull(cache.bestGeneratorForPat(goalPat));
-    System.err.println("DEBUG generateTC: baseGenerator = " + baseGenerator);
-    System.err.println(
-        "DEBUG generateTC: baseGenerator.exp = " + baseGenerator.exp);
-    System.err.println(
-        "DEBUG generateTC: baseGenerator.exp.type = " + baseGenerator.exp.type);
 
     // 2. Similarly, substitute and invert the step predicate
     final Core.Exp substitutedStep =
@@ -882,8 +899,6 @@ class Generators {
             pattern.formalParams,
             pattern.callArgs,
             pattern.stepPredicate);
-    System.err.println(
-        "DEBUG generateTC: substitutedStep = " + substitutedStep);
 
     // Note: We don't need to create a step generator. The step function in
     // Relational.iterate just scans the base edges and joins with newPaths.

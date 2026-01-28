@@ -107,7 +107,10 @@ abstract class EnvShuttle extends Shuttle {
       env = step2.env;
     }
 
-    return from.copy(typeSystem, this.env, steps);
+    // Don't pass outer env for validation. Steps reference patterns
+    // defined within the FROM itself, which may not be in the outer env.
+    // The step traversal above already validates with appropriate bindings.
+    return from.copy(typeSystem, null, steps);
   }
 }
 
