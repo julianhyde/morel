@@ -614,31 +614,53 @@ public class PredicateInverter {
         break;
 
       case RECURSIVE:
-        // Recursive function - the proper implementation would use
-        // Relational.iterate to compute the transitive closure. However,
-        // the step function construction in FunctionAnalyzer.buildRecursiveStep
-        // is not yet implemented properly.
-        //
-        // Fallback: Return just the base generator. This produces the base case
-        // results (e.g., direct edges) but NOT the full transitive closure.
-        // This is a temporary measure to avoid errors.
-        //
-        // TODO: Implement proper step function and use Relational.iterate
+        // Recursive function - build Relational.iterate for transitive closure
         if (info.baseGenerator().isPresent()) {
           Core.Exp baseGen = info.baseGenerator().get();
           Type elementType = baseGen.type.elementType();
 
           // Check type compatibility
-          if (isTypeCompatible(effectiveGoalPat.type, elementType)) {
-            Generator gen =
-                new Generator(
-                    effectiveGoalPat,
-                    baseGen,
-                    net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-                    ImmutableList.of(),
-                    ImmutableSet.of());
-            return result(gen, ImmutableList.of());
+          if (!isTypeCompatible(effectiveGoalPat.type, elementType)) {
+            break; // Fall through to other handling
           }
+
+          // Build Relational.iterate expression for full transitive closure
+          // Step 1: Create TabulationResult from base generator
+          IOPair baseCaseIO = new IOPair(ImmutableMap.of(), baseGen);
+          TabulationResult tabulation =
+              new TabulationResult(
+                  ImmutableList.of(baseCaseIO),
+                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                  true); // may have duplicates
+
+          // Step 2: Create VarEnvironment from goalPats
+          VarEnvironment varEnv = VarEnvironment.initial(goalPats, env);
+
+          // Step 3: Build step function using existing infrastructure
+          Core.Exp stepFunction = buildStepFunction(tabulation, varEnv);
+
+          // Step 4: Build Relational.iterate expression
+          Type bagType = baseGen.type;
+          Type stepFnArgType = typeSystem.tupleType(bagType, bagType);
+          Type stepFnType = typeSystem.fnType(stepFnArgType, bagType);
+          Type afterBaseType = typeSystem.fnType(stepFnType, bagType);
+
+          Core.Exp iterateFn =
+              core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
+          Core.Exp iterateWithBase =
+              core.apply(Pos.ZERO, afterBaseType, iterateFn, baseGen);
+          Core.Exp relationalIterate =
+              core.apply(Pos.ZERO, bagType, iterateWithBase, stepFunction);
+
+          // Step 5: Return result with the iterate expression
+          Generator gen =
+              new Generator(
+                  effectiveGoalPat,
+                  relationalIterate,
+                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                  ImmutableList.of(),
+                  ImmutableSet.of());
+          return result(gen, ImmutableList.of());
         }
         break;
 
