@@ -168,13 +168,15 @@ class Generators {
       if (effectiveConstraint.op == Op.APPLY) {
         Core.Apply apply = (Core.Apply) effectiveConstraint;
 
-        // Handle two cases:
+        // Handle three cases:
         // 1. User-defined function calls: fn.op == ID (e.g., "path p")
-        // 2. Pre-expanded function bodies: orelse patterns (after Inliner)
+        // 2. Inlined function: fn.op == FN (after Inliner replaces ID with Fn)
+        // 3. Pre-expanded function bodies: orelse patterns (after Inliner)
         boolean isUserFunctionCall = apply.fn.op == Op.ID;
+        boolean isInlinedFunction = apply.fn.op == Op.FN;
         boolean isOrElsePattern = apply.isCallTo(BuiltIn.Z_ORELSE);
 
-        if (isUserFunctionCall || isOrElsePattern) {
+        if (isUserFunctionCall || isInlinedFunction || isOrElsePattern) {
           // Build generators map from existing cache generators
           final Map<Core.NamedPat, PredicateInverter.Generator> generators =
               new LinkedHashMap<>();
@@ -395,7 +397,37 @@ class Generators {
     for (Core.Exp predicate : predicates) {
       // First, try to inline function calls that resolve to elem patterns
       final Core.Exp inlined = tryInlineFunctionToElem(cache, predicate);
-      final Core.Exp effectivePredicate = inlined != null ? inlined : predicate;
+      Core.Exp effectivePredicate = inlined != null ? inlined : predicate;
+
+      // Handle CASE expressions that result from function inlining.
+      // After Inliner, `edge p` may become `case p of (x,y) => (x,y) elem
+      // edges`.
+      // In this case, the CASE is matching on goalPat (p), and the body
+      // contains an elem call that we should use as the generator.
+      if (effectivePredicate.op == Op.CASE) {
+        Core.Case caseExp = (Core.Case) effectivePredicate;
+        if (caseExp.matchList.size() == 1) {
+          // Check if the CASE is matching on our goal pattern
+          if (containsRef(caseExp.exp, goalPat)) {
+            // The body might be:
+            // 1. Direct elem: (x, y) elem edges
+            // 2. Conjunction: (x, y) elem edges andalso x <> y
+            Core.Exp body = caseExp.matchList.get(0).exp;
+
+            // Find an elem call in the body
+            Core.Exp elemCall = findElemCall(body);
+            if (elemCall != null) {
+              // The collection is the generator source for goalPat
+              final Core.Exp collection = elemCall.arg(1);
+              // The goalPat type matches the collection element type
+              CollectionGenerator.create(cache, ordered, goalPat, collection);
+              return true;
+            }
+          }
+          // Fall through to unwrap and check other patterns
+          effectivePredicate = caseExp.matchList.get(0).exp;
+        }
+      }
 
       if (effectivePredicate.isCallTo(BuiltIn.OP_ELEM)) {
         if (containsRef(effectivePredicate.arg(0), goalPat)) {
@@ -411,6 +443,28 @@ class Generators {
       }
     }
     return false;
+  }
+
+  /**
+   * Finds an {@code elem} call in an expression, searching through conjunctions
+   * and other patterns.
+   *
+   * <p>For example, given {@code (x, y) elem edges andalso x <> y}, returns the
+   * {@code (x, y) elem edges} call.
+   */
+  private static Core.@Nullable Exp findElemCall(Core.Exp exp) {
+    if (exp.isCallTo(BuiltIn.OP_ELEM)) {
+      return exp;
+    }
+    // Search through andalso conjunctions
+    if (exp.isCallTo(BuiltIn.Z_ANDALSO)) {
+      Core.Exp left = findElemCall(exp.arg(0));
+      if (left != null) {
+        return left;
+      }
+      return findElemCall(exp.arg(1));
+    }
+    return null;
   }
 
   static boolean maybePoint(

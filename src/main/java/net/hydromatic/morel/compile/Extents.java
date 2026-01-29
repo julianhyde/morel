@@ -731,6 +731,12 @@ public class Extents {
               tryInvert = true;
               break;
 
+            case FN:
+              // Inlined function (Inliner replaced Id with Fn).
+              // Try to invert.
+              tryInvert = true;
+              break;
+
             case APPLY:
               // Curried function application (e.g., String.isPrefix s "abcd").
               // Try to invert.

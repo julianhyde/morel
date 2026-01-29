@@ -227,6 +227,25 @@ public class FunctionRegistry {
   }
 
   /**
+   * Looks up a function's invertibility information by name.
+   *
+   * <p>This is needed because the NamedPat instance used during lookup may
+   * differ from the one used during registration (e.g., when looking up a
+   * function referenced in another function's body).
+   *
+   * @param name the function's name
+   * @return the function info, or empty if not registered
+   */
+  public Optional<FunctionInfo> lookupByName(String name) {
+    for (Map.Entry<Core.NamedPat, FunctionInfo> entry : registry.entrySet()) {
+      if (entry.getKey().name.equals(name)) {
+        return Optional.of(entry.getValue());
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
    * Returns whether a function is registered.
    *
    * @param fnPat the function's name pattern
