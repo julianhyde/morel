@@ -46,8 +46,19 @@ public class DatalogAnalyzer {
     checkStratification(program);
   }
 
-  /** Checks that all relations used in facts and rules are declared. */
+  /**
+   * Checks that all relations used in facts, rules, and directives are
+   * declared.
+   */
   private static void checkDeclarations(Program program) {
+    for (Input input : program.getInputs()) {
+      if (!program.hasDeclaration(input.relationName)) {
+        throw new DatalogException(
+            String.format(
+                "Relation '%s' used in .input but not declared",
+                input.relationName));
+      }
+    }
     for (Statement stmt : program.statements) {
       if (stmt instanceof Fact) {
         Fact fact = (Fact) stmt;
