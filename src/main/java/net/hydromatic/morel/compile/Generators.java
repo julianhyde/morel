@@ -615,7 +615,14 @@ class Generators {
         SuchThatShuttle.freePats(typeSystem, simplified);
     return cache.add(
         new RangeGenerator(
-            pat, simplified, freePats, lower, lowerStrict, upper, upperStrict));
+            typeSystem,
+            pat,
+            simplified,
+            freePats,
+            lower,
+            lowerStrict,
+            upper,
+            upperStrict));
   }
 
   /** Returns an extent generator, or null if expression is not an extent. */
@@ -833,10 +840,12 @@ class Generators {
    * upper}.
    */
   static class RangeGenerator extends Generator {
+    private final TypeSystem typeSystem;
     private final Core.Exp lower;
     private final Core.Exp upper;
 
     RangeGenerator(
+        TypeSystem typeSystem,
         Core.NamedPat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
@@ -845,33 +854,62 @@ class Generators {
         Core.Exp upper,
         boolean ignoreUpperStrict) {
       super(exp, freePats, pat, Cardinality.FINITE);
+      this.typeSystem = typeSystem;
       this.lower = lower;
       this.upper = upper;
     }
 
     @Override
     Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
-      // Simplify "p > lower && p < upper"
+      // Simplify "p > lower && p < upper && other_predicates"
+      // Only remove the bounds predicates, keep other predicates as filter
       if (exp.isCallTo(BuiltIn.Z_ANDALSO)) {
         final List<Core.Exp> ands = core.decomposeAnd(exp);
         final Pair<Core.Exp, Boolean> lowerBound = lowerBound(pat, ands);
         final Pair<Core.Exp, Boolean> upperBound = upperBound(pat, ands);
         if (lowerBound != null && upperBound != null) {
-          if (lowerBound.left.equals(this.lower)
-              && upperBound.left.equals(this.upper)) {
-            return core.boolLiteral(true);
-          }
-          if (lowerBound.left.isConstant()
-              && upperBound.left.isConstant()
-              && this.lower.isConstant()
-              && this.upper.isConstant()) {
-            return core.boolLiteral(
-                gt(lowerBound.left, this.lower, lowerBound.right)
-                    && gt(this.upper, upperBound.left, upperBound.right));
+          boolean boundsMatch =
+              lowerBound.left.equals(this.lower)
+                  && upperBound.left.equals(this.upper);
+          boolean boundsImplied =
+              lowerBound.left.isConstant()
+                  && upperBound.left.isConstant()
+                  && this.lower.isConstant()
+                  && this.upper.isConstant()
+                  && gt(lowerBound.left, this.lower, lowerBound.right)
+                  && gt(this.upper, upperBound.left, upperBound.right);
+
+          if (boundsMatch || boundsImplied) {
+            // Remove bounds predicates but keep other predicates
+            final List<Core.Exp> remaining = new ArrayList<>();
+            for (Core.Exp predicate : ands) {
+              if (!isBoundPredicate(pat, predicate)) {
+                remaining.add(predicate);
+              }
+            }
+            // Return remaining predicates as a conjunction, or true if none
+            return core.andAlso(typeSystem, remaining);
           }
         }
       }
       return exp;
+    }
+
+    /**
+     * Checks if predicate is a bound constraint for the given pattern. Returns
+     * true for predicates like "p > e", "p < e", "p >= e", "p <= e".
+     */
+    private static boolean isBoundPredicate(Core.Pat pat, Core.Exp predicate) {
+      switch (predicate.builtIn()) {
+        case OP_GT:
+        case OP_GE:
+        case OP_LT:
+        case OP_LE:
+          return references(predicate.arg(0), pat)
+              || references(predicate.arg(1), pat);
+        default:
+          return false;
+      }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -954,6 +992,30 @@ class Generators {
 
     @Override
     Core.Exp simplify(Core.Pat pat, Core.Exp exp) {
+      // First, check if this is an orelse expression that matches our union
+      if (exp.isCallTo(BuiltIn.Z_ORELSE)) {
+        final List<Core.Exp> orList = core.decomposeOr(exp);
+        // Check if each branch of the orelse can be simplified by one of our
+        // generators. If all branches simplify to true, the whole orelse is
+        // true.
+        if (orList.size() == generators.size()) {
+          boolean allSimplified = true;
+          for (int i = 0; i < orList.size(); i++) {
+            Core.Exp branch = orList.get(i);
+            Core.Exp simplified = generators.get(i).simplify(pat, branch);
+            if (simplified.op != Op.BOOL_LITERAL
+                || !Boolean.TRUE.equals(((Core.Literal) simplified).value)) {
+              allSimplified = false;
+              break;
+            }
+          }
+          if (allSimplified) {
+            return core.boolLiteral(true);
+          }
+        }
+      }
+
+      // Fall back to delegating to constituent generators
       for (Generator generator : generators) {
         exp = generator.simplify(pat, exp);
       }

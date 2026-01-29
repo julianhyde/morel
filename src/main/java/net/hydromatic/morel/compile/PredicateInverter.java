@@ -762,6 +762,14 @@ public class PredicateInverter {
     boolean arg0HasExists = containsExists(arg0);
     boolean arg1HasExists = containsExists(arg1);
 
+    // A transitive closure pattern MUST have an exists in the recursive case.
+    // If NEITHER branch contains exists, this is NOT a transitive closure -
+    // it's a simple union like "x > 0 orelse x < -10" that should be handled
+    // by maybeUnion, not PredicateInverter.
+    if (!arg0HasExists && !arg1HasExists) {
+      return null;
+    }
+
     // The recursive case typically contains exists; the base case doesn't
     // If arg0 has exists and arg1 doesn't, they're reversed
     final Core.Exp baseCase;
@@ -776,6 +784,7 @@ public class PredicateInverter {
       recursiveCase = arg1;
     }
 
+    // Try to invert the base case without the recursive call.
     // Try to invert the base case without the recursive call
     Result baseCaseResult = invert(baseCase, goalPats, ImmutableList.of());
 
