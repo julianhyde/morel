@@ -214,6 +214,14 @@ public abstract class Compiles {
         }
         tracer.onCore(i + 2, coreDecl);
       }
+
+      // Analyze function definitions and register in FunctionRegistry.
+      // This must happen after inlining (so we see the final function bodies)
+      // but before SuchThatShuttle (so PredicateInverter can look them up).
+      FunctionAnalyzer functionAnalyzer =
+          new FunctionAnalyzer(typeSystem, enrichedEnv);
+      functionAnalyzer.registerFunctions(coreDecl, session.functionRegistry);
+
       for (int i = 0; i < inlinePassCount; i++) {
         final Core.Decl coreDecl2 = coreDecl;
         // Don't apply SuchThatShuttle to RecValDecl (recursive function

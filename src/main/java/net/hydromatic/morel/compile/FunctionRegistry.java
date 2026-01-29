@@ -217,13 +217,34 @@ public class FunctionRegistry {
   }
 
   /**
-   * Looks up a function's invertibility information.
+   * Looks up a function's invertibility information by pattern reference.
    *
    * @param fnPat the function's name pattern
    * @return the function info, or empty if not registered
    */
   public Optional<FunctionInfo> lookup(Core.NamedPat fnPat) {
-    return Optional.ofNullable(registry.get(fnPat));
+    // First try exact reference lookup
+    FunctionInfo info = registry.get(fnPat);
+    if (info != null) {
+      return Optional.of(info);
+    }
+    // Fallback: lookup by name (for cases where pattern objects differ)
+    return lookupByName(fnPat.name);
+  }
+
+  /**
+   * Looks up a function's invertibility information by name.
+   *
+   * @param name the function's name
+   * @return the function info, or empty if not registered
+   */
+  public Optional<FunctionInfo> lookupByName(String name) {
+    for (Map.Entry<Core.NamedPat, FunctionInfo> entry : registry.entrySet()) {
+      if (entry.getKey().name.equals(name)) {
+        return Optional.of(entry.getValue());
+      }
+    }
+    return Optional.empty();
   }
 
   /**
