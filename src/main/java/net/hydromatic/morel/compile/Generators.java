@@ -170,13 +170,17 @@ class Generators {
 
         // Handle three cases:
         // 1. User-defined function calls: fn.op == ID (e.g., "path p")
-        // 2. Inlined function: fn.op == FN (after Inliner replaces ID with Fn)
-        // 3. Pre-expanded function bodies: orelse patterns (after Inliner)
+        // 2. Pre-expanded function bodies: orelse patterns (after Inliner)
+        //
+        // NOTE: We skip inlined functions (Op.FN) because they include built-in
+        // generators like 'range' and identity functions like 'mustBeList' that
+        // shouldn't be inverted. Disabling this prevents NullPointerException
+        // in regex-example.smli where these functions are used in
+        // comprehensions.
         boolean isUserFunctionCall = apply.fn.op == Op.ID;
-        boolean isInlinedFunction = apply.fn.op == Op.FN;
         boolean isOrElsePattern = apply.isCallTo(BuiltIn.Z_ORELSE);
 
-        if (isUserFunctionCall || isInlinedFunction || isOrElsePattern) {
+        if (isUserFunctionCall || isOrElsePattern) {
           // Build generators map from existing cache generators
           final Map<Core.NamedPat, PredicateInverter.Generator> generators =
               new LinkedHashMap<>();

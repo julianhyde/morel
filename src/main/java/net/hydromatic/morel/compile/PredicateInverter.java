@@ -234,24 +234,17 @@ public class PredicateInverter {
         return invertAnds(predicates, goalPats, active);
       }
 
-      // Check for orelse (disjunction)
-      // Handle transitive closure patterns:
-      // 1. In recursive contexts (!active.isEmpty()) - traditional TC detection
-      // 2. At top level when Inliner has pre-expanded the function body
-      //
-      // The second case handles: after Inliner expands `path p` to its body,
-      // we receive `baseCase orelse recursiveCase` directly instead of the
-      // function call. We still try TC inversion since it may contain a
-      // recursive pattern (with recursive calls NOT inlined due to recursion
-      // protection in Inliner).
+      // Try orelse: first TC inversion, then simple union inversion
       if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
         Result tcResult =
             tryInvertTransitiveClosure(apply, null, null, goalPats, active);
         if (tcResult != null) {
           return tcResult;
         }
-        // If transitive closure pattern doesn't match, fall through to default
-        // handling
+        Result unionResult = tryInvertSimpleUnion(apply, goalPats, active);
+        if (unionResult != null) {
+          return unionResult;
+        }
       }
 
       // Check for function literals (Op.FN_LITERAL) or inlined function
@@ -604,6 +597,50 @@ public class PredicateInverter {
           net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
           ImmutableList.of());
     }
+  }
+
+  /**
+   * Tries to invert a simple orelse pattern (without exists) as a union.
+   *
+   * <p>Handles patterns like: {@code a orelse b} where neither branch contains
+   * exists. Used for base cases of transitive closures and standalone
+   * disjunctions.
+   *
+   * @param orElse the orelse expression (must have 2 arguments)
+   * @param goalPats the output patterns we want to generate
+   * @param active recursive call stack for detecting transitive closure
+   * @return a Generator combining both branches via unionDistinct, or null if
+   *     either branch cannot be inverted to a finite generator
+   */
+  @Nullable
+  private Result tryInvertSimpleUnion(
+      Core.Apply orElse, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+
+    final Core.Exp branch0 = orElse.arg(0);
+    final Core.Exp branch1 = orElse.arg(1);
+
+    // Try to invert both branches
+    final Result result0 = invert(branch0, goalPats, active);
+    final Result result1 = invert(branch1, goalPats, active);
+
+    // Check if both inversions succeeded with FINITE generators
+    if (result0.generator.cardinality
+            == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE
+        || result1.generator.cardinality
+            == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
+      return null; // Can't create finite union with infinite generators
+    }
+
+    // Combine generators using unionDistinct
+    final Generator unionGen =
+        unionDistinct(ImmutableList.of(result0.generator, result1.generator));
+
+    // Combine remaining filters from both branches
+    final List<Core.Exp> combinedFilters = new ArrayList<>();
+    combinedFilters.addAll(result0.remainingFilters);
+    combinedFilters.addAll(result1.remainingFilters);
+
+    return result(unionGen, combinedFilters);
   }
 
   /**
