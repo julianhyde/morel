@@ -50,13 +50,11 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
-import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.ConsList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -275,73 +273,19 @@ public class PredicateInverter {
           return registryResult;
         }
 
-        // Fallback: function not in registry - use legacy inlining approach.
-        // This path will be deprecated once all functions are pre-analyzed.
-
-        // Check if we're already trying to invert this function (recursion)
+        // Fallback: function not in registry.
+        // If the function is already on the active stack (recursive call), we
+        // can't invert it without the registry, so return null.
+        // If it's not recursive, we also return null to indicate we can't
+        // invert this function call.
         if (active.contains(fnId)) {
-          // This is a recursive call - try to invert it with transitive closure
-          Binding binding = env.getOpt(fnPat);
-
-          if (binding != null && binding.exp != null) {
-            Core.Exp fnBody = binding.exp;
-            if (fnBody.op == Op.FN) {
-              Core.Fn fn = (Core.Fn) fnBody;
-
-              // Substitute the function argument into the body, handling case
-              // unwrapping for tuple parameters
-              Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
-
-              // Try to invert as transitive closure pattern
-              Result transitiveClosureResult =
-                  tryInvertTransitiveClosure(
-                      substitutedBody, fn, apply.arg, goalPats, active);
-              if (transitiveClosureResult != null) {
-                return transitiveClosureResult;
-              }
-            }
-          }
-
-          // Fallback: can't invert recursive calls and couldn't build
-          // Relational.iterate
-          // Since we couldn't invert the transitive closure, we can't safely
-          // generate
-          // values for these goal patterns using infinite extents. Instead of
-          // returning
-          // an infinite cartesian product (which would fail at runtime), we
-          // signal
-          // complete inversion failure by returning null.
-          // This forces the caller to handle the failure explicitly, either by:
-          // 1. Allowing deferred grounding (if safe in context)
-          // 2. Returning null to propagate the failure further
-          // 3. Throwing an ungrounded pattern error
-          // In all cases, returning an INFINITE cardinality result signals to
-          // the caller that this predicate couldn't be inverted properly.
-          // We cannot safely create a fallback with infinite extents, because:
-          // 1. The inversion failed (base case is non-invertible)
-          // 2. Relational.iterate can't be built (due to infinite base case)
-          // 3. Any fallback with infinite extents will fail at runtime when
-          // materialized
-          //
-          // Return null to signal complete failure. The caller (invert method)
-          // will handle this appropriately.
+          // Recursive call not handled by registry - return null to signal
+          // that we cannot invert this without proper registry support.
           return null;
         }
 
-        Binding binding = env.getOpt(fnPat);
-        if (binding != null && binding.exp != null) {
-          Core.Exp fnBody = binding.exp;
-          if (fnBody.op == Op.FN) {
-            Core.Fn fn = (Core.Fn) fnBody;
-
-            // Substitute the function argument into the body, handling case
-            // unwrapping for tuple parameters
-            Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
-
-            // Try to invert the substituted body
-            return invert(substitutedBody, goalPats, ConsList.of(fnId, active));
-          }
-        }
+        // Non-recursive function not in registry - fall through to other
+        // handlers (e.g., exists, andalso, orelse).
       }
     }
 
