@@ -224,7 +224,9 @@ public abstract class Compiles {
         if (mayContainUnbounded && coreDecl.op != Op.REC_VAL_DECL) {
           if (SuchThatShuttle.containsUnbounded(coreDecl)) {
             coreDecl =
-                coreDecl.accept(new SuchThatShuttle(typeSystem, enrichedEnv));
+                coreDecl.accept(
+                    new SuchThatShuttle(
+                        typeSystem, enrichedEnv, session.functionRegistry));
           } else {
             mayContainUnbounded = false;
           }
@@ -333,7 +335,10 @@ public abstract class Compiles {
       final Core.Decl coreDecl2 = coreDecl;
       if (mayContainUnbounded) {
         if (SuchThatShuttle.containsUnbounded(coreDecl)) {
-          coreDecl = coreDecl.accept(new SuchThatShuttle(typeSystem, env));
+          coreDecl =
+              coreDecl.accept(
+                  new SuchThatShuttle(
+                      typeSystem, env, session.functionRegistry));
         } else {
           mayContainUnbounded = false;
         }

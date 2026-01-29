@@ -339,8 +339,7 @@ public class Inliner extends EnvShuttle {
         if (containsTypeVar(result.type)) {
           try {
             // Unify the polymorphic pattern type with the concrete scrutinee
-            // type
-            // to get the type substitution map.
+            // type to get the type substitution map.
             Map<Integer, Type> typeSub = match.pat.type.unifyWith(exp.type);
             if (typeSub != null && !typeSub.isEmpty()) {
               result =

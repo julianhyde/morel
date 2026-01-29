@@ -68,8 +68,24 @@ public class Expander {
    */
   public static Core.From expandFrom(
       TypeSystem typeSystem, Environment env, Core.From from) {
+    return expandFrom(typeSystem, env, from, new FunctionRegistry());
+  }
+
+  /**
+   * Converts all unbounded variables in a query to bounded, using a function
+   * registry for predicate inversion.
+   *
+   * @param functionRegistry Registry containing pre-analyzed function
+   *     invertibility info
+   */
+  public static Core.From expandFrom(
+      TypeSystem typeSystem,
+      Environment env,
+      Core.From from,
+      FunctionRegistry functionRegistry) {
     final Core.From outerFrom = from;
-    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
+    final Generators.Cache cache =
+        new Generators.Cache(typeSystem, env, functionRegistry);
     final Expander expander = new Expander(cache, ImmutableList.of());
 
     // First, deduce generators.
