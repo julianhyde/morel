@@ -54,6 +54,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ConsList;
@@ -493,8 +494,27 @@ public class PredicateInverter {
         }
 
         if (!resultGenerators.isEmpty()) {
-          // Create union of all generators with distinct semantics.
-          return result(unionDistinct(resultGenerators), ImmutableList.of());
+          // Chain generators using @ operator instead of FROM...union.
+          Core.Exp combined;
+          if (resultGenerators.size() == 1) {
+            combined = resultGenerators.get(0).expression;
+          } else {
+            combined = resultGenerators.get(0).expression;
+            for (int i = 1; i < resultGenerators.size(); i++) {
+              // Create (combined @ nextExpr) with explicit types
+              combined =
+                  createListAppend(
+                      combined, resultGenerators.get(i).expression);
+            }
+          }
+          Generator gen =
+              new Generator(
+                  resultGenerators.get(0).goalPat,
+                  combined,
+                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                  resultGenerators.get(0).constraints,
+                  resultGenerators.get(0).freeVars);
+          return result(gen, ImmutableList.of());
         }
       }
     }
@@ -685,9 +705,17 @@ public class PredicateInverter {
       return null; // Can't create finite union with infinite generators
     }
 
-    // Combine generators using unionDistinct
+    // Combine generators using @ operator instead of FROM...union
+    final Core.Exp combinedExpr =
+        createListAppend(
+            result0.generator.expression, result1.generator.expression);
     final Generator unionGen =
-        unionDistinct(ImmutableList.of(result0.generator, result1.generator));
+        new Generator(
+            result0.generator.goalPat,
+            combinedExpr,
+            net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+            result0.generator.constraints,
+            result0.generator.freeVars);
 
     // Combine remaining filters from both branches
     final List<Core.Exp> combinedFilters = new ArrayList<>();
@@ -902,15 +930,31 @@ public class PredicateInverter {
       allRemainingFilters.addAll(baseCaseResult.remainingFilters);
     }
 
-    // Combine all base generators using unionDistinct
-    final Generator combinedBase = unionDistinct(baseGenerators);
+    // Combine all base generators into a single list expression.
+    // For Relational.iterate, we need a simple list expression, not a
+    // FROM...union.
+    // Chain base generators using @ (append) operator.
+    final Core.Exp combinedBaseExpression;
+    final Core.Pat goalPat = baseGenerators.get(0).goalPat;
+    if (baseGenerators.size() == 1) {
+      combinedBaseExpression = baseGenerators.get(0).expression;
+    } else {
+      // Chain expressions using @ operator: expr1 @ expr2 @ expr3 ...
+      Core.Exp result = baseGenerators.get(0).expression;
+      for (int i = 1; i < baseGenerators.size(); i++) {
+        Core.Exp nextExpr = baseGenerators.get(i).expression;
+        // Create (result @ nextExpr) with explicit types
+        result = createListAppend(result, nextExpr);
+      }
+      combinedBaseExpression = result;
+    }
 
     // Build Relational.iterate with the finite base generator.
     // Remaining filters will be applied at runtime along with the iterate
     // expansion.
     // Create IOPair for the base case
     final IOPair baseCaseIO =
-        new IOPair(ImmutableMap.of(), combinedBase.expression);
+        new IOPair(ImmutableMap.of(), combinedBaseExpression);
 
     // Create TabulationResult with the base case
     // Use FINITE cardinality since transitive closure is finite for finite
@@ -931,7 +975,7 @@ public class PredicateInverter {
     // Pattern: Relational.iterate baseGenerator stepFunction
     // If the base generator produces records but we need tuples, wrap it with
     // a conversion: from {x,y} in baseGen yield (x,y)
-    Core.Exp baseGenerator = combinedBase.expression;
+    Core.Exp baseGenerator = combinedBaseExpression;
     final Type baseElemType = baseGenerator.type.elementType();
     if (baseElemType != null && baseElemType.op() == Op.RECORD_TYPE) {
       baseGenerator = convertRecordBagToTupleBag(baseGenerator);
@@ -961,13 +1005,16 @@ public class PredicateInverter {
         core.apply(Pos.ZERO, bagType, iterateWithBase, stepFunction);
 
     // Create a Generator wrapping the Relational.iterate call
+    // Get constraints and freeVars from the first base generator (they should
+    // all be compatible)
+    final Generator firstBaseGen = baseGenerators.get(0);
     final Generator iterateGenerator =
         new Generator(
-            combinedBase.goalPat,
+            goalPat,
             relationalIterate,
             net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-            combinedBase.constraints,
-            combinedBase.freeVars);
+            firstBaseGen.constraints,
+            firstBaseGen.freeVars);
 
     // Return result with remaining filters from all base cases
     // These will be applied at runtime
@@ -1019,6 +1066,35 @@ public class PredicateInverter {
     builder.yield_(yieldExp);
 
     return builder.build();
+  }
+
+  /**
+   * Creates a list append expression using the @ operator with explicit types.
+   *
+   * <p>For example, {@code createListAppend(list1, list2)} becomes {@code
+   * list1 @ list2}.
+   *
+   * <p>This method ensures proper type inference by instantiating the
+   * polymorphic LIST_AT function with the concrete element type, avoiding
+   * ForallType vs FnType casting issues.
+   *
+   * @param list1 The first list expression
+   * @param list2 The second list expression
+   * @return An Apply expression representing list1 @ list2
+   */
+  private Core.Exp createListAppend(Core.Exp list1, Core.Exp list2) {
+    final Type listType = list1.type;
+    final Type elementType = listType.elementType();
+
+    // Create the tuple of arguments
+    final Type tupleType = typeSystem.tupleType(listType, listType);
+    final Core.Tuple argTuple = core.tuple((TupleType) tupleType, list1, list2);
+
+    // Use core.call with type parameter to properly instantiate the polymorphic
+    // LIST_AT function.
+    // This creates the proper Apply node with the correct instantiated type.
+    return core.call(
+        typeSystem, BuiltIn.LIST_AT, elementType, Pos.ZERO, argTuple);
   }
 
   /**
