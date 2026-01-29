@@ -951,12 +951,9 @@ public class Compiler {
           (pat, exp, overloadPat, pos) -> {
             final LinkCode linkCode = new LinkCode();
             linkCodes.put(pat, linkCode);
-            // Don't include exp in binding - it causes Inliner to inline
-            // function
-            // bodies which leads to runtime errors. PredicateInverter should
-            // use
-            // FunctionRegistry instead for function body access.
-            bindings.add(Binding.of(pat, linkCode));
+            // Include exp in binding so PredicateInverter can access function
+            // bodies for recursive functions during predicate inversion
+            bindings.add(Binding.of(pat, exp, linkCode));
           });
     }
 
@@ -1165,7 +1162,7 @@ public class Compiler {
             (pat2, o2) ->
                 outBindings0.add(
                     overloadPat == null
-                        ? Binding.of(pat2, o2)
+                        ? Binding.of(pat2, exp, o2)
                         : Binding.inst(pat2, overloadPat, o2)))) {
           throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
         }

@@ -50,11 +50,13 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ConsList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -273,19 +275,73 @@ public class PredicateInverter {
           return registryResult;
         }
 
-        // Fallback: function not in registry.
-        // If the function is already on the active stack (recursive call), we
-        // can't invert it without the registry, so return null.
-        // If it's not recursive, we also return null to indicate we can't
-        // invert this function call.
+        // Fallback: function not in registry - use legacy inlining approach.
+        // This path will be deprecated once all functions are pre-analyzed.
+
+        // Check if we're already trying to invert this function (recursion)
         if (active.contains(fnId)) {
-          // Recursive call not handled by registry - return null to signal
-          // that we cannot invert this without proper registry support.
+          // This is a recursive call - try to invert it with transitive closure
+          Binding binding = env.getOpt(fnPat);
+
+          if (binding != null && binding.exp != null) {
+            Core.Exp fnBody = binding.exp;
+            if (fnBody.op == Op.FN) {
+              Core.Fn fn = (Core.Fn) fnBody;
+
+              // Substitute the function argument into the body, handling case
+              // unwrapping for tuple parameters
+              Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
+
+              // Try to invert as transitive closure pattern
+              Result transitiveClosureResult =
+                  tryInvertTransitiveClosure(
+                      substitutedBody, fn, apply.arg, goalPats, active);
+              if (transitiveClosureResult != null) {
+                return transitiveClosureResult;
+              }
+            }
+          }
+
+          // Fallback: can't invert recursive calls and couldn't build
+          // Relational.iterate
+          // Since we couldn't invert the transitive closure, we can't safely
+          // generate
+          // values for these goal patterns using infinite extents. Instead of
+          // returning
+          // an infinite cartesian product (which would fail at runtime), we
+          // signal
+          // complete inversion failure by returning null.
+          // This forces the caller to handle the failure explicitly, either by:
+          // 1. Allowing deferred grounding (if safe in context)
+          // 2. Returning null to propagate the failure further
+          // 3. Throwing an ungrounded pattern error
+          // In all cases, returning an INFINITE cardinality result signals to
+          // the caller that this predicate couldn't be inverted properly.
+          // We cannot safely create a fallback with infinite extents, because:
+          // 1. The inversion failed (base case is non-invertible)
+          // 2. Relational.iterate can't be built (due to infinite base case)
+          // 3. Any fallback with infinite extents will fail at runtime when
+          // materialized
+          //
+          // Return null to signal complete failure. The caller (invert method)
+          // will handle this appropriately.
           return null;
         }
 
-        // Non-recursive function not in registry - fall through to other
-        // handlers (e.g., exists, andalso, orelse).
+        Binding binding = env.getOpt(fnPat);
+        if (binding != null && binding.exp != null) {
+          Core.Exp fnBody = binding.exp;
+          if (fnBody.op == Op.FN) {
+            Core.Fn fn = (Core.Fn) fnBody;
+
+            // Substitute the function argument into the body, handling case
+            // unwrapping for tuple parameters
+            Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
+
+            // Try to invert the substituted body
+            return invert(substitutedBody, goalPats, ConsList.of(fnId, active));
+          }
+        }
       }
     }
 
@@ -590,22 +646,10 @@ public class PredicateInverter {
       case INVERTIBLE:
         // Function has a known generator - return it directly
         if (info.baseGenerator().isPresent()) {
-          Core.Exp baseGen = info.baseGenerator().get();
-          Type elementType = baseGen.type.elementType();
-
-          // Check that the goal pattern type is compatible with the generator
-          // element type. Use unification to handle structural equivalence
-          // (e.g., (int * int) vs {x:int, y:int} are structurally compatible).
-          // If not, this inversion doesn't apply (e.g., when trying to generate
-          // just 'z' from a function that produces (x, y) tuples).
-          if (!isTypeCompatible(effectiveGoalPat.type, elementType)) {
-            break; // Fall through to other handling
-          }
-
           Generator gen =
               new Generator(
                   effectiveGoalPat,
-                  baseGen,
+                  info.baseGenerator().get(),
                   net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                   ImmutableList.of(),
                   ImmutableSet.of());
@@ -614,45 +658,36 @@ public class PredicateInverter {
         break;
 
       case RECURSIVE:
-        // Recursive function - build Relational.iterate for transitive closure
-        if (info.baseGenerator().isPresent()) {
+        // Recursive function - use cached base case and step from registry.
+        // Per Scott: "Recursion happens in a different domain" - the step
+        // function is pre-computed at registration time, NOT inlined here.
+        if (info.baseGenerator().isPresent()
+            && info.recursiveStep().isPresent()) {
           Core.Exp baseGen = info.baseGenerator().get();
-          Type elementType = baseGen.type.elementType();
+          Core.Exp stepFn = info.recursiveStep().get();
 
-          // Check type compatibility
-          if (!isTypeCompatible(effectiveGoalPat.type, elementType)) {
-            break; // Fall through to other handling
-          }
-
-          // Build Relational.iterate expression for full transitive closure
-          // Step 1: Create TabulationResult from base generator
-          IOPair baseCaseIO = new IOPair(ImmutableMap.of(), baseGen);
-          TabulationResult tabulation =
-              new TabulationResult(
-                  ImmutableList.of(baseCaseIO),
-                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-                  true); // may have duplicates
-
-          // Step 2: Create VarEnvironment from goalPats
-          VarEnvironment varEnv = VarEnvironment.initial(goalPats, env);
-
-          // Step 3: Build step function using existing infrastructure
-          Core.Exp stepFunction = buildStepFunction(tabulation, varEnv);
-
-          // Step 4: Build Relational.iterate expression
-          Type bagType = baseGen.type;
-          Type stepFnArgType = typeSystem.tupleType(bagType, bagType);
-          Type stepFnType = typeSystem.fnType(stepFnArgType, bagType);
-          Type afterBaseType = typeSystem.fnType(stepFnType, bagType);
+          // Build: Relational.iterate baseGen stepFn
+          // RELATIONAL_ITERATE has type: 'a bag -> (('a bag, 'a bag) -> 'a bag)
+          //   -> 'a bag
+          // After applying baseGen ('a bag): (('a bag, 'a bag) -> 'a bag) -> 'a
+          // bag
+          // After applying stepFn: 'a bag
+          Type bagType = baseGen.type; // 'a bag (the result type)
+          Type stepFnArgType =
+              typeSystem.tupleType(bagType, bagType); // ('a bag, 'a bag)
+          Type stepFnType =
+              typeSystem.fnType(stepFnArgType, bagType); // ('a bag, 'a bag) ->
+          // 'a bag
+          Type afterBaseType =
+              typeSystem.fnType(stepFnType, bagType); // step -> 'a bag
 
           Core.Exp iterateFn =
               core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
           Core.Exp iterateWithBase =
               core.apply(Pos.ZERO, afterBaseType, iterateFn, baseGen);
           Core.Exp relationalIterate =
-              core.apply(Pos.ZERO, bagType, iterateWithBase, stepFunction);
+              core.apply(Pos.ZERO, bagType, iterateWithBase, stepFn);
 
-          // Step 5: Return result with the iterate expression
           Generator gen =
               new Generator(
                   effectiveGoalPat,
@@ -673,19 +708,10 @@ public class PredicateInverter {
       case PARTIALLY_INVERTIBLE:
         // Function is partially invertible - return generator with filters
         if (info.baseGenerator().isPresent()) {
-          Core.Exp baseGen = info.baseGenerator().get();
-          Type elementType = baseGen.type.elementType();
-
-          // Check type compatibility (using unification for structural
-          // equivalence)
-          if (!isTypeCompatible(effectiveGoalPat.type, elementType)) {
-            break; // Fall through to other handling
-          }
-
           Generator gen =
               new Generator(
                   effectiveGoalPat,
-                  baseGen,
+                  info.baseGenerator().get(),
                   net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                   ImmutableList.of(),
                   ImmutableSet.of());
@@ -2492,29 +2518,6 @@ public class PredicateInverter {
       default:
         return false;
     }
-  }
-
-  /**
-   * Checks if two types are compatible for generator binding.
-   *
-   * <p>Uses unification to handle structural equivalence, such as (int * int)
-   * being compatible with {x:int, y:int}. This is more flexible than exact type
-   * equality and handles cases where the same logical structure has different
-   * type representations.
-   *
-   * @param fromType the pattern type (what we want to bind to)
-   * @param toType the generator element type (what the generator produces)
-   * @return true if the types are compatible
-   */
-  private boolean isTypeCompatible(Type fromType, Type toType) {
-    // First try the standard canAssign check
-    if (TypeSystem.canAssign(fromType, toType)) {
-      return true;
-    }
-
-    // If that fails, try unification for structural equivalence
-    // This handles cases like (int * int) vs {x:int, y:int}
-    return fromType.unifyWith(toType) != null;
   }
 }
 

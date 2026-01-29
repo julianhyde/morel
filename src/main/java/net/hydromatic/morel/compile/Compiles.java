@@ -214,14 +214,6 @@ public abstract class Compiles {
         }
         tracer.onCore(i + 2, coreDecl);
       }
-
-      // Analyze function definitions and register in FunctionRegistry.
-      // This must happen after inlining (so we see the final function bodies)
-      // but before SuchThatShuttle (so PredicateInverter can look them up).
-      FunctionAnalyzer functionAnalyzer =
-          new FunctionAnalyzer(typeSystem, enrichedEnv);
-      functionAnalyzer.registerFunctions(coreDecl, session.functionRegistry);
-
       for (int i = 0; i < inlinePassCount; i++) {
         final Core.Decl coreDecl2 = coreDecl;
         // Don't apply SuchThatShuttle to RecValDecl (recursive function
@@ -232,9 +224,7 @@ public abstract class Compiles {
         if (mayContainUnbounded && coreDecl.op != Op.REC_VAL_DECL) {
           if (SuchThatShuttle.containsUnbounded(coreDecl)) {
             coreDecl =
-                coreDecl.accept(
-                    new SuchThatShuttle(
-                        typeSystem, enrichedEnv, session.functionRegistry));
+                coreDecl.accept(new SuchThatShuttle(typeSystem, enrichedEnv));
           } else {
             mayContainUnbounded = false;
           }
@@ -343,10 +333,7 @@ public abstract class Compiles {
       final Core.Decl coreDecl2 = coreDecl;
       if (mayContainUnbounded) {
         if (SuchThatShuttle.containsUnbounded(coreDecl)) {
-          coreDecl =
-              coreDecl.accept(
-                  new SuchThatShuttle(
-                      typeSystem, env, session.functionRegistry));
+          coreDecl = coreDecl.accept(new SuchThatShuttle(typeSystem, env));
         } else {
           mayContainUnbounded = false;
         }

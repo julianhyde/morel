@@ -415,13 +415,14 @@ public class FunctionAnalyzer {
       return false;
     } else if (formalParam instanceof Core.TuplePat) {
       // Tuple case: formal param is (x, y, ...)
+      // The element can be either a tuple (x, y) or a record {x, y}
       Core.TuplePat tuplePat = (Core.TuplePat) formalParam;
-      if (element.op == Op.TUPLE) {
+      if (element.op == Op.TUPLE || element.op == Op.RECORD) {
         Core.Tuple tuple = (Core.Tuple) element;
         if (tuple.args.size() != tuplePat.args.size()) {
           return false;
         }
-        // Each tuple element must match corresponding pattern
+        // Each element must match corresponding pattern
         for (int i = 0; i < tuple.args.size(); i++) {
           if (!matchesFormalParameter(
               tuple.args.get(i), tuplePat.args.get(i))) {

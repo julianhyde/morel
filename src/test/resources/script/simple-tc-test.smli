@@ -1,5 +1,4 @@
 (* Simple transitive closure test *)
-(* Tests that Relational.iterate computes full transitive closure *)
 val edges = [(1, 2), (2, 3)];
 > val edges = [(1,2),(2,3)] : (int * int) list
 fun edge (x, y) = (x, y) elem edges;

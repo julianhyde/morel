@@ -59,23 +59,13 @@ import org.apache.calcite.util.Holder;
  * }</pre>
  */
 class SuchThatShuttle extends EnvShuttle {
-  private final FunctionRegistry functionRegistry;
-
   SuchThatShuttle(TypeSystem typeSystem, Environment env) {
-    this(typeSystem, env, new FunctionRegistry());
-  }
-
-  SuchThatShuttle(
-      TypeSystem typeSystem,
-      Environment env,
-      FunctionRegistry functionRegistry) {
     super(typeSystem, env);
-    this.functionRegistry = functionRegistry;
   }
 
   @Override
   protected EnvShuttle push(Environment env) {
-    return new SuchThatShuttle(typeSystem, env, functionRegistry);
+    return new SuchThatShuttle(typeSystem, env);
   }
 
   static boolean containsUnbounded(Core.Decl decl) {
@@ -95,8 +85,7 @@ class SuchThatShuttle extends EnvShuttle {
 
   @Override
   protected Core.Exp visit(Core.From from) {
-    final Core.From from2 =
-        Expander.expandFrom(typeSystem, env, from, functionRegistry);
+    final Core.From from2 = Expander.expandFrom(typeSystem, env, from);
 
     // Expand subqueries.
     return super.visit(from2);
