@@ -815,8 +815,33 @@ end;
 >
 > val it : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
 
+(* ------------------------------------------------------------------
+ * Datalog programming in Morel.
+ *
+ * The following queries are "simple" examples of functional
+ * programming, expressed in Datalog, then converted to
+ * Morel's "such that" style. They are difficult to invert
+ * and in some cases will not terminate if called with a
+ * value outside the acceptable range.
+ *)
+
+(*) Factorial
+(* TODO Query runs but the result is incorrect. It should include
+ * all values of n between 0 and 10. *)
+let
+  val fact_facts = [(0, 1)]
+  fun fact (n, value) =
+    (n, value) elem fact_facts orelse
+        (exists v0 where fact (n - 1, v0)
+            andalso n - 1 < 10
+            andalso value = v0 * (n - 1 + 1))
+in
+  {fact = from n, value where fact (n, value)}
+end;
+> val it = {fact=[{n=0,value=1}]} : {fact:{n:int, value:int} bag}
+
 (* -------------------------------------------------------------------
- * The following example from Souffle,
+ * The following example is from Souffle,
  * https://souffle-lang.github.io/simple.
  *
  * Say we have a Datalog file example.dl, whose contents are as shown:
