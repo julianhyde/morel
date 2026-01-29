@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableMap;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeMap;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
@@ -34,11 +35,23 @@ import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.Tracers;
+import net.hydromatic.morel.datalog.DatalogAst.Atom;
+import net.hydromatic.morel.datalog.DatalogAst.Constant;
+import net.hydromatic.morel.datalog.DatalogAst.Declaration;
+import net.hydromatic.morel.datalog.DatalogAst.Fact;
+import net.hydromatic.morel.datalog.DatalogAst.Input;
+import net.hydromatic.morel.datalog.DatalogAst.Param;
 import net.hydromatic.morel.datalog.DatalogAst.Program;
+import net.hydromatic.morel.datalog.DatalogAst.Statement;
+import net.hydromatic.morel.datalog.DatalogAst.Term;
+import net.hydromatic.morel.eval.File;
+import net.hydromatic.morel.eval.Files;
+import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Variant;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 
@@ -80,10 +93,13 @@ public class DatalogEvaluator {
       // 1. Parse Datalog program
       Program ast = DatalogParserImpl.parse(program);
 
-      // 2. Analyze for safety and stratification
+      // 2. Load input files and inject synthetic facts
+      ast = loadInputFiles(ast, session);
+
+      // 3. Analyze for safety and stratification
       DatalogAnalyzer.analyze(ast);
 
-      // 3. Translate to Morel source code
+      // 4. Translate to Morel source code
       String morelSource = DatalogTranslator.translate(ast);
 
       // 4. Parse the Morel source
@@ -208,6 +224,80 @@ public class DatalogEvaluator {
         return ImmutableList.of("NONE");
       }
     }
+  }
+  /**
+   * Processes {@code .input} directives by reading CSV files and injecting
+   * synthetic {@link Fact} nodes into the program.
+   *
+   * <p>If the program has no {@code .input} directives, returns the original
+   * program unchanged.
+   */
+  private static Program loadInputFiles(Program ast, Session session) {
+    List<Input> inputs = ast.getInputs();
+    if (inputs.isEmpty()) {
+      return ast;
+    }
+
+    java.io.File baseDir = Prop.DIRECTORY.fileValue(session.map);
+    List<Statement> augmented = new ArrayList<>(ast.statements);
+
+    for (Input input : inputs) {
+      Declaration decl = ast.getDeclaration(input.relationName);
+      if (decl == null) {
+        // Will be caught by the analyzer
+        continue;
+      }
+
+      String fileName = input.effectiveFileName();
+      java.io.File ioFile = new java.io.File(baseDir, fileName);
+      if (!ioFile.exists()) {
+        throw new DatalogException(
+            format(
+                "Input file not found: %s (resolved to %s)",
+                fileName, ioFile.getAbsolutePath()));
+      }
+      File file = Files.create(ioFile);
+
+      @SuppressWarnings("unchecked")
+      List<List<Object>> rows = (List<List<Object>>) file.valueAs(List.class);
+      if (rows == null || rows.isEmpty()) {
+        continue;
+      }
+
+      // Build mapping from declaration param index to sorted field index.
+      // Files.valueAs returns records with fields in alphabetical order.
+      List<String> paramNames = new ArrayList<>();
+      for (Param p : decl.params) {
+        paramNames.add(p.name);
+      }
+      TreeMap<String, Integer> sortedIndex = new TreeMap<>(RecordType.ORDERING);
+      for (String name : paramNames) {
+        sortedIndex.put(name, sortedIndex.size());
+      }
+      int[] declToSorted = new int[decl.params.size()];
+      for (int i = 0; i < decl.params.size(); i++) {
+        declToSorted[i] = sortedIndex.get(decl.params.get(i).name);
+      }
+
+      // Convert each row to a Fact
+      for (List<Object> row : rows) {
+        List<Term> terms = new ArrayList<>();
+        for (int i = 0; i < decl.params.size(); i++) {
+          Object value = row.get(declToSorted[i]);
+          String type = decl.params.get(i).type;
+          String datalogType;
+          if (value instanceof Integer) {
+            datalogType = "number";
+          } else {
+            datalogType = "string";
+          }
+          terms.add(new Constant(value, datalogType));
+        }
+        augmented.add(new Fact(new Atom(input.relationName, terms)));
+      }
+    }
+
+    return new Program(augmented);
   }
 }
 

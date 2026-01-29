@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Abstract syntax tree nodes for Datalog programs.
@@ -40,27 +41,36 @@ public class DatalogAst {
   public static class Program {
     public final List<Statement> statements;
     private final Map<String, Declaration> declarations;
+    private final List<Input> inputs;
     private final List<Output> outputs;
 
     public Program(List<Statement> statements) {
       this.statements = ImmutableList.copyOf(statements);
       this.declarations = new HashMap<>();
+      ImmutableList.Builder<Input> inputsBuilder = ImmutableList.builder();
       ImmutableList.Builder<Output> outputsBuilder = ImmutableList.builder();
 
-      // Index declarations and outputs for easy lookup
+      // Index declarations, inputs, and outputs for easy lookup
       for (Statement stmt : statements) {
         if (stmt instanceof Declaration) {
           Declaration decl = (Declaration) stmt;
           declarations.put(decl.name, decl);
+        } else if (stmt instanceof Input) {
+          inputsBuilder.add((Input) stmt);
         } else if (stmt instanceof Output) {
           outputsBuilder.add((Output) stmt);
         }
       }
+      this.inputs = inputsBuilder.build();
       this.outputs = outputsBuilder.build();
     }
 
     public Declaration getDeclaration(String name) {
       return declarations.get(name);
+    }
+
+    public List<Input> getInputs() {
+      return inputs;
     }
 
     public List<Output> getOutputs() {
@@ -117,17 +127,26 @@ public class DatalogAst {
     }
   }
 
-  /** An input directive: .input relation */
+  /** An input directive: .input relation [file_name] */
   public static class Input extends Statement {
     public final String relationName;
+    public final @Nullable String fileName;
 
-    public Input(String relationName) {
+    public Input(String relationName, @Nullable String fileName) {
       this.relationName = requireNonNull(relationName);
+      this.fileName = fileName;
+    }
+
+    /** Returns the effective file name (explicit or default). */
+    public String effectiveFileName() {
+      return fileName != null ? fileName : relationName + ".csv";
     }
 
     @Override
     public String toString() {
-      return ".input " + relationName;
+      return fileName != null
+          ? ".input " + relationName + " \"" + fileName + "\""
+          : ".input " + relationName;
     }
   }
 
