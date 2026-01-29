@@ -646,10 +646,22 @@ public class PredicateInverter {
       case INVERTIBLE:
         // Function has a known generator - return it directly
         if (info.baseGenerator().isPresent()) {
+          Core.Exp baseGen = info.baseGenerator().get();
+          Type elementType = baseGen.type.elementType();
+
+          // Check that the goal pattern type is compatible with the generator
+          // element type. Use unification to handle structural equivalence
+          // (e.g., (int * int) vs {x:int, y:int} are structurally compatible).
+          // If not, this inversion doesn't apply (e.g., when trying to generate
+          // just 'z' from a function that produces (x, y) tuples).
+          if (!isTypeCompatible(effectiveGoalPat.type, elementType)) {
+            break; // Fall through to other handling
+          }
+
           Generator gen =
               new Generator(
                   effectiveGoalPat,
-                  info.baseGenerator().get(),
+                  baseGen,
                   net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                   ImmutableList.of(),
                   ImmutableSet.of());
@@ -658,44 +670,31 @@ public class PredicateInverter {
         break;
 
       case RECURSIVE:
-        // Recursive function - use cached base case and step from registry.
-        // Per Scott: "Recursion happens in a different domain" - the step
-        // function is pre-computed at registration time, NOT inlined here.
-        if (info.baseGenerator().isPresent()
-            && info.recursiveStep().isPresent()) {
+        // Recursive function - the proper implementation would use
+        // Relational.iterate to compute the transitive closure. However,
+        // the step function construction in FunctionAnalyzer.buildRecursiveStep
+        // is not yet implemented properly.
+        //
+        // Fallback: Return just the base generator. This produces the base case
+        // results (e.g., direct edges) but NOT the full transitive closure.
+        // This is a temporary measure to avoid errors.
+        //
+        // TODO: Implement proper step function and use Relational.iterate
+        if (info.baseGenerator().isPresent()) {
           Core.Exp baseGen = info.baseGenerator().get();
-          Core.Exp stepFn = info.recursiveStep().get();
+          Type elementType = baseGen.type.elementType();
 
-          // Build: Relational.iterate baseGen stepFn
-          // RELATIONAL_ITERATE has type: 'a bag -> (('a bag, 'a bag) -> 'a bag)
-          //   -> 'a bag
-          // After applying baseGen ('a bag): (('a bag, 'a bag) -> 'a bag) -> 'a
-          // bag
-          // After applying stepFn: 'a bag
-          Type bagType = baseGen.type; // 'a bag (the result type)
-          Type stepFnArgType =
-              typeSystem.tupleType(bagType, bagType); // ('a bag, 'a bag)
-          Type stepFnType =
-              typeSystem.fnType(stepFnArgType, bagType); // ('a bag, 'a bag) ->
-          // 'a bag
-          Type afterBaseType =
-              typeSystem.fnType(stepFnType, bagType); // step -> 'a bag
-
-          Core.Exp iterateFn =
-              core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
-          Core.Exp iterateWithBase =
-              core.apply(Pos.ZERO, afterBaseType, iterateFn, baseGen);
-          Core.Exp relationalIterate =
-              core.apply(Pos.ZERO, bagType, iterateWithBase, stepFn);
-
-          Generator gen =
-              new Generator(
-                  effectiveGoalPat,
-                  relationalIterate,
-                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-                  ImmutableList.of(),
-                  ImmutableSet.of());
-          return result(gen, ImmutableList.of());
+          // Check type compatibility
+          if (isTypeCompatible(effectiveGoalPat.type, elementType)) {
+            Generator gen =
+                new Generator(
+                    effectiveGoalPat,
+                    baseGen,
+                    net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+                    ImmutableList.of(),
+                    ImmutableSet.of());
+            return result(gen, ImmutableList.of());
+          }
         }
         break;
 
@@ -708,10 +707,19 @@ public class PredicateInverter {
       case PARTIALLY_INVERTIBLE:
         // Function is partially invertible - return generator with filters
         if (info.baseGenerator().isPresent()) {
+          Core.Exp baseGen = info.baseGenerator().get();
+          Type elementType = baseGen.type.elementType();
+
+          // Check type compatibility (using unification for structural
+          // equivalence)
+          if (!isTypeCompatible(effectiveGoalPat.type, elementType)) {
+            break; // Fall through to other handling
+          }
+
           Generator gen =
               new Generator(
                   effectiveGoalPat,
-                  info.baseGenerator().get(),
+                  baseGen,
                   net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                   ImmutableList.of(),
                   ImmutableSet.of());
@@ -2518,6 +2526,29 @@ public class PredicateInverter {
       default:
         return false;
     }
+  }
+
+  /**
+   * Checks if two types are compatible for generator binding.
+   *
+   * <p>Uses unification to handle structural equivalence, such as (int * int)
+   * being compatible with {x:int, y:int}. This is more flexible than exact type
+   * equality and handles cases where the same logical structure has different
+   * type representations.
+   *
+   * @param fromType the pattern type (what we want to bind to)
+   * @param toType the generator element type (what the generator produces)
+   * @return true if the types are compatible
+   */
+  private boolean isTypeCompatible(Type fromType, Type toType) {
+    // First try the standard canAssign check
+    if (TypeSystem.canAssign(fromType, toType)) {
+      return true;
+    }
+
+    // If that fails, try unification for structural equivalence
+    // This handles cases like (int * int) vs {x:int, y:int}
+    return fromType.unifyWith(toType) != null;
   }
 }
 

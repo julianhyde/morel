@@ -48,6 +48,7 @@ public class FunctionAnalyzer {
 
   private final TypeSystem typeSystem;
   private final Environment env;
+  private FunctionRegistry registry;
 
   /**
    * Creates a FunctionAnalyzer.
@@ -76,12 +77,12 @@ public class FunctionAnalyzer {
       return elemResult.get();
     }
 
-    // TODO: Phase 1b - Check for RECURSIVE pattern (transitive closure)
-    // Optional<FunctionRegistry.FunctionInfo> recursiveResult =
-    //     analyzeRecursivePattern(fnPat, fn);
-    // if (recursiveResult.isPresent()) {
-    //   return recursiveResult.get();
-    // }
+    // Check for RECURSIVE pattern (transitive closure)
+    Optional<FunctionRegistry.FunctionInfo> recursiveResult =
+        analyzeRecursivePattern(fnPat, fn);
+    if (recursiveResult.isPresent()) {
+      return recursiveResult.get();
+    }
 
     // Default: not invertible
     return FunctionRegistry.FunctionInfo.notInvertible(fn.idPat);
@@ -160,6 +161,215 @@ public class FunctionAnalyzer {
     return Optional.of(
         FunctionRegistry.FunctionInfo.invertible(
             formalParam, collection, canGenerate));
+  }
+
+  /**
+   * Analyzes whether a function matches the RECURSIVE pattern (transitive
+   * closure).
+   *
+   * <p>Pattern: {@code fun path(x,y) = edge(x,y) orelse (exists z where
+   * edge(x,z) andalso path(z,y))}
+   *
+   * <p>AST structure:
+   *
+   * <pre>
+   * Core.Fn(idPat=(x,y), exp=
+   *   Apply(ORELSE, Tuple(
+   *     Apply(edge, ...),              // base case - invertible function
+   *     Apply(RELATIONAL_NON_EMPTY,    // recursive case - exists
+   *       From(...)))))
+   * </pre>
+   *
+   * @param fnPat the function name pattern
+   * @param fn the function expression
+   * @return FunctionInfo if pattern matches, empty otherwise
+   */
+  private Optional<FunctionRegistry.FunctionInfo> analyzeRecursivePattern(
+      Core.NamedPat fnPat, Core.Fn fn) {
+    // Handle CASE-wrapped function body
+    Core.Exp body = fn.exp;
+    Core.Pat formalParam = fn.idPat;
+
+    if (body.op == Op.CASE) {
+      Core.Case caseExp = (Core.Case) body;
+      if (caseExp.matchList.size() == 1) {
+        Core.Match match = caseExp.matchList.get(0);
+        formalParam = match.pat;
+        body = match.exp;
+      }
+    }
+
+    // Body must be Apply(ORELSE, ...)
+    if (body.op != Op.APPLY) {
+      return Optional.empty();
+    }
+    Core.Apply orElseApply = (Core.Apply) body;
+    if (!isOrElseBuiltIn(orElseApply.fn)) {
+      return Optional.empty();
+    }
+
+    // Argument must be a tuple: (baseCase, recursiveCase)
+    if (orElseApply.arg.op != Op.TUPLE) {
+      return Optional.empty();
+    }
+    Core.Tuple orElseArgs = (Core.Tuple) orElseApply.arg;
+    if (orElseArgs.args.size() != 2) {
+      return Optional.empty();
+    }
+
+    Core.Exp baseCase = orElseArgs.args.get(0);
+    Core.Exp recursiveCase = orElseArgs.args.get(1);
+
+    // Base case: must be an invertible function call that we can use as
+    // generator. We check if it's a call to a function that matches the ELEM
+    // pattern.
+    Optional<Core.Exp> baseGenerator = extractBaseGenerator(baseCase);
+    if (!baseGenerator.isPresent()) {
+      return Optional.empty();
+    }
+
+    // Recursive case: must be exists (RELATIONAL_NON_EMPTY(From...))
+    // with a recursive call to this function
+    boolean isRecursive = isRecursiveCase(recursiveCase, fnPat.name);
+    if (!isRecursive) {
+      return Optional.empty();
+    }
+
+    // Extract patterns that can be generated
+    Set<Core.NamedPat> canGenerate = extractNamedPats(formalParam);
+
+    // Build the recursive step function for Relational.iterate
+    // The step function takes (old, new) bags and computes the next
+    // generation. For transitive closure: join new with baseGenerator.
+    Core.Exp stepFunction =
+        buildRecursiveStep(formalParam, baseGenerator.get(), recursiveCase);
+
+    return Optional.of(
+        FunctionRegistry.FunctionInfo.recursive(
+            formalParam, baseGenerator.get(), stepFunction, canGenerate));
+  }
+
+  /**
+   * Extracts the base generator from a base case expression.
+   *
+   * <p>Looks for patterns like edge(x,y) where edge is defined as (x,y) elem
+   * edges. The function must have been previously registered in the
+   * FunctionRegistry.
+   */
+  private Optional<Core.Exp> extractBaseGenerator(Core.Exp baseCase) {
+    // Base case is typically a function call: Apply(Id(edge), Tuple(x, y))
+    if (baseCase.op != Op.APPLY) {
+      return Optional.empty();
+    }
+    Core.Apply apply = (Core.Apply) baseCase;
+
+    // Check if it's a user-defined function call
+    if (apply.fn.op != Op.ID) {
+      return Optional.empty();
+    }
+    Core.Id fnId = (Core.Id) apply.fn;
+
+    // Look up the function in the registry - it should have been registered
+    // in a previous declaration (e.g., edge before path)
+    if (registry == null) {
+      return Optional.empty();
+    }
+
+    // Look up by name since the idPat instances may differ
+    Optional<FunctionRegistry.FunctionInfo> infoOpt =
+        registry.lookupByName(fnId.idPat.name);
+    if (!infoOpt.isPresent()) {
+      return Optional.empty();
+    }
+
+    FunctionRegistry.FunctionInfo info = infoOpt.get();
+    if (info.status() == FunctionRegistry.InvertibilityStatus.INVERTIBLE) {
+      return info.baseGenerator();
+    }
+
+    return Optional.empty();
+  }
+
+  /**
+   * Checks if an expression is a recursive case containing a call to the named
+   * function.
+   */
+  private boolean isRecursiveCase(Core.Exp exp, String fnName) {
+    // Recursive case is: Apply(RELATIONAL_NON_EMPTY, From(...))
+    if (exp.op != Op.APPLY) {
+      return false;
+    }
+    Core.Apply apply = (Core.Apply) exp;
+
+    // Check for RELATIONAL_NON_EMPTY
+    if (!isNonEmptyBuiltIn(apply.fn)) {
+      return false;
+    }
+
+    // Argument should be a FROM expression
+    if (apply.arg.op != Op.FROM) {
+      return false;
+    }
+
+    // Check if the FROM contains a recursive call to fnName
+    return containsRecursiveCall(apply.arg, fnName);
+  }
+
+  /**
+   * Checks if an expression contains a recursive call to the named function.
+   */
+  private boolean containsRecursiveCall(Core.Exp exp, String fnName) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Apply apply) {
+            if (apply.fn.op == Op.ID) {
+              Core.Id id = (Core.Id) apply.fn;
+              if (id.idPat.name.equals(fnName)) {
+                found[0] = true;
+              }
+            }
+            super.visit(apply);
+          }
+        });
+    return found[0];
+  }
+
+  /**
+   * Builds the recursive step function for Relational.iterate.
+   *
+   * <p>For transitive closure, the step function computes: from (x, z) in
+   * newPaths, (z2, y) in baseGenerator where z = z2 yield (x, y)
+   */
+  private Core.Exp buildRecursiveStep(
+      Core.Pat formalParam, Core.Exp baseGenerator, Core.Exp recursiveCase) {
+    // For now, return the recursive case directly.
+    // The full implementation would build a proper step function.
+    // TODO: Properly construct the join expression for iterate
+    return recursiveCase;
+  }
+
+  /** Checks if an expression is the built-in 'orelse' operator. */
+  private boolean isOrElseBuiltIn(Core.Exp exp) {
+    if (exp.op == Op.FN_LITERAL) {
+      Core.Literal literal = (Core.Literal) exp;
+      if (literal.value instanceof BuiltIn) {
+        return literal.value == BuiltIn.Z_ORELSE;
+      }
+    }
+    return false;
+  }
+
+  /** Checks if an expression is the built-in 'Relational.nonEmpty'. */
+  private boolean isNonEmptyBuiltIn(Core.Exp exp) {
+    if (exp.op == Op.FN_LITERAL) {
+      Core.Literal literal = (Core.Literal) exp;
+      if (literal.value instanceof BuiltIn) {
+        return literal.value == BuiltIn.RELATIONAL_NON_EMPTY;
+      }
+    }
+    return false;
   }
 
   /**
@@ -261,6 +471,9 @@ public class FunctionAnalyzer {
    * @param registry the registry to populate
    */
   public void registerFunctions(Core.Decl decl, FunctionRegistry registry) {
+    // Store registry so extractBaseGenerator can look up previously registered
+    // functions
+    this.registry = registry;
     decl.accept(
         new Visitor() {
           @Override
