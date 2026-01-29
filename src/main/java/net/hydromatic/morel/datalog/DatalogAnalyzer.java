@@ -22,7 +22,19 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import net.hydromatic.morel.datalog.DatalogAst.*;
+import net.hydromatic.morel.datalog.DatalogAst.ArithmeticExpr;
+import net.hydromatic.morel.datalog.DatalogAst.Atom;
+import net.hydromatic.morel.datalog.DatalogAst.BodyAtom;
+import net.hydromatic.morel.datalog.DatalogAst.Comparison;
+import net.hydromatic.morel.datalog.DatalogAst.Constant;
+import net.hydromatic.morel.datalog.DatalogAst.Declaration;
+import net.hydromatic.morel.datalog.DatalogAst.Fact;
+import net.hydromatic.morel.datalog.DatalogAst.Input;
+import net.hydromatic.morel.datalog.DatalogAst.Program;
+import net.hydromatic.morel.datalog.DatalogAst.Rule;
+import net.hydromatic.morel.datalog.DatalogAst.Statement;
+import net.hydromatic.morel.datalog.DatalogAst.Term;
+import net.hydromatic.morel.datalog.DatalogAst.Variable;
 
 /**
  * Analyzer for Datalog programs.
@@ -78,7 +90,9 @@ public class DatalogAnalyzer {
     }
   }
 
-  /** Checks that a fact contains only constants, not variables. */
+  /**
+   * Checks that a fact contains only constants, not variables or arithmetic.
+   */
   private static void checkFactConstants(Fact fact) {
     for (Term term : fact.atom.terms) {
       if (term instanceof Variable) {
@@ -86,6 +100,10 @@ public class DatalogAnalyzer {
             String.format(
                 "Argument in fact is not constant: %s",
                 ((Variable) term).name));
+      }
+      if (term instanceof ArithmeticExpr) {
+        throw new DatalogException(
+            String.format("Argument in fact is not constant: %s", term));
       }
     }
   }
@@ -160,7 +178,9 @@ public class DatalogAnalyzer {
   }
 
   private static void checkRuleSafety(Rule rule) {
-    // Collect variables from positive body atoms (but not comparisons)
+    // Collect variables from positive body atoms (but not comparisons).
+    // Only direct Variable terms ground a variable; variables inside
+    // ArithmeticExpr do not (following Souffle semantics).
     Set<String> groundedVars = new HashSet<>();
     for (BodyAtom bodyAtom : rule.body) {
       if (!bodyAtom.negated && !(bodyAtom instanceof Comparison)) {
@@ -172,14 +192,16 @@ public class DatalogAnalyzer {
       }
     }
 
-    // Check that all head variables are grounded
+    // Check that all variables in head terms are grounded
     for (Term term : rule.head.terms) {
-      if (term instanceof Variable) {
-        String varName = ((Variable) term).name;
+      Set<String> vars = new HashSet<>();
+      extractVariables(term, vars);
+      for (String varName : vars) {
         if (!groundedVars.contains(varName)) {
           throw new DatalogException(
               String.format(
-                  "Rule is unsafe. Variable '%s' in head does not appear in positive body atom",
+                  "Rule is unsafe. Variable '%s' in head does not appear"
+                      + " in positive body atom",
                   varName));
         }
       }
@@ -188,23 +210,41 @@ public class DatalogAnalyzer {
     // Check that variables in negated atoms and comparisons are grounded
     for (BodyAtom bodyAtom : rule.body) {
       if (bodyAtom.negated || bodyAtom instanceof Comparison) {
-        for (Term term : bodyAtom.atom.terms) {
-          if (term instanceof Variable) {
-            String varName = ((Variable) term).name;
-            if (!groundedVars.contains(varName)) {
-              String context =
-                  bodyAtom instanceof Comparison
-                      ? "comparison"
-                      : "negated atom";
-              throw new DatalogException(
-                  String.format(
-                      "Rule is unsafe. Variable '%s' in %s does not appear in positive body atom",
-                      varName, context));
-            }
+        Set<String> vars = new HashSet<>();
+        if (bodyAtom instanceof Comparison) {
+          Comparison comp = (Comparison) bodyAtom;
+          extractVariables(comp.left, vars);
+          extractVariables(comp.right, vars);
+        } else {
+          for (Term term : bodyAtom.atom.terms) {
+            extractVariables(term, vars);
+          }
+        }
+        for (String varName : vars) {
+          if (!groundedVars.contains(varName)) {
+            String context =
+                bodyAtom instanceof Comparison ? "comparison" : "negated atom";
+            throw new DatalogException(
+                String.format(
+                    "Rule is unsafe. Variable '%s' in %s does not appear"
+                        + " in positive body atom",
+                    varName, context));
           }
         }
       }
     }
+  }
+
+  /** Recursively extracts all variable names from a term. */
+  private static void extractVariables(Term term, Set<String> vars) {
+    if (term instanceof Variable) {
+      vars.add(((Variable) term).name);
+    } else if (term instanceof ArithmeticExpr) {
+      ArithmeticExpr expr = (ArithmeticExpr) term;
+      extractVariables(expr.left, vars);
+      extractVariables(expr.right, vars);
+    }
+    // Constants have no variables
   }
 
   /**

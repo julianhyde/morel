@@ -453,54 +453,61 @@ num(1), num(2), num(3).
 *)
 
 (* -------------------------------------------------------------- *)
+(* Factorial *)
+
+(* The translate works but execute cannot yet evaluate recursive
+ * predicates with arithmetic that create new integer values
+ * (predicate-inversion cannot handle unbounded integers). *)
+Datalog.translate ".decl fact(n:number, value:number)
+fact(0, 1).
+fact(N + 1, value * (N + 1)) :- fact(N, value), N < 10.
+.output fact";
+> val it =
+>   SOME "let\n  val fact_facts = [(0, 1)]\n  fun fact (n, value) =\n    (n, value) elem fact_facts orelse\n    (exists v0 where fact (n - 1, v0) andalso n - 1 < 10 andalso value = v0 * (n - 1 + 1))\nin\n  {fact = from n, value where fact (n, value)}\nend"
+>   : string option
+
+(* -------------------------------------------------------------- *)
 (* Fibonacci sequence *)
 
 (* Not valid, because the variable idx is not bound as an argument
-   of a positive predicate in the body. In the example, variable
-   idx occurs in the predicates fib(idx-1, x) and fib(idx-2, y)
-   but as arguments of a functor rather than as a direct
-   argument. *)
-(* TODO
-Datalog.translate ".decl fib(idx:number, value:number)
+ * of a positive predicate in the body. In the example, variable
+ * idx occurs in the predicates fib(idx-1, x) and fib(idx-2, y)
+ * but as arguments of a functor rather than as a direct
+ * argument. *)
+Datalog.validate ".decl fib(idx:number, value:number)
 fib(1,1).
 fib(2,1).
 fib(idx, x + y) :- fib(idx - 1, x), fib(idx - 2, y), idx <= 10.
 .output fib";
-> error
-*)
+> val it =
+>   "Compilation error: Rule is unsafe. Variable 'idx' in head does not appear in positive body atom"
+>   : string
 
 (* To make variable idx bound, we can shift the index by one and
-   obtain a program whose variables are grounded *)
-(* TODO
-Datalog.execute ".decl fib(idx:number, value:number)
+ * obtain a program whose variables are grounded.
+ *
+ * The translate works but execute cannot yet evaluate recursive
+ * predicates with arithmetic that create new integer values
+ * (predicate-inversion cannot handle unbounded integers). *)
+Datalog.translate ".decl fib(idx:number, value:number)
 fib(1,1).
 fib(2,1).
 fib(idx + 1, x + y) :- fib(idx, x), fib(idx - 1, y), idx <= 9.
 .output fib";
-
-Output:
-idx  value
-1  1
-2  1
-3  2
-4  3
-5  5
-6  8
-7  13
-8  21
-9  34
-10  55
-*)
+> val it =
+>   SOME "let\n  val fib_facts = [(1, 1), (2, 1)]\n  fun fib (idx, value) =\n    (idx, value) elem fib_facts orelse\n    (exists v0, v1 where fib (idx - 1, v0) andalso fib (idx - 1 - 1, v1) andalso idx - 1 <= 9 andalso value = v0 + v1)\nin\n  {fib = from idx, value where fib (idx, value)}\nend"
+>   : string option
 
 (* -------------------------------------------------------------- *)
 (* Queries for existence of odd cycle.
-
-   "Linear Datalog and bounded path duality of relational structures"
-   (Dalmau, 2004) gives the query more concisely as
-     P(x,y) :- E(x,y)
-     P(x,y) :- P(x,z),E(z,u),E(u,y)
-     Q :- P(x,x)
-*)
+ *
+ * "Linear Datalog and bounded path duality of relational structures"
+ * (Dalmau, 2004) gives the query more concisely as
+ *
+ *   P(x,y) :- E(x,y)
+ *   P(x,y) :- P(x,z),E(z,u),E(u,y)
+ *   Q :- P(x,x)
+ *)
 Datalog.execute ".decl edge(x:symbol, y:symbol)
 .decl odd_path(x:symbol, y:symbol)
 .decl exists_odd_cycle()
@@ -527,16 +534,18 @@ exists_odd_cycle() :- odd_path(X,X).
 > val it = {exists_odd_cycle=[()]} : {exists_odd_cycle:unit list} variant
 
 (* -------------------------------------------------------------- *)
-(* The next few queries perform transitive closure and bounded
-   transitive closure over a graph. They all use the following graph.
-
-   a ---> b ---> c ---> d ---> e ---> f
-   |             ^
-   +-------------+
-
-   From a: b is 1 hop, c is 1 hop (shortcut), d is 2 hops (a->c->d),
-   e is 3 hops (a->c->d->e), f is 4 hops (a->c->d->e->f).
-*)
+(*
+ * The next few queries perform transitive closure and bounded
+ * transitive closure over a graph. They all use the following
+ * graph.
+ *
+ *   a ---> b ---> c ---> d ---> e ---> f
+ *   |             ^
+ *   +-------------+
+ *
+ * From a: b is 1 hop, c is 1 hop (shortcut), d is 2 hops (a->c->d),
+ * e is 3 hops (a->c->d->e), f is 4 hops (a->c->d->e->f).
+ *)
 
 (*) Transitive closure
 Datalog.execute ".decl edge(x:string, y:string)
@@ -581,14 +590,14 @@ reach2(X, Z) :- edge(X, Y), edge(Y, Z).
 >    [{x="a",y="c"},{x="b",y="d"},{x="c",y="e"},{x="d",y="f"},{x="a",y="d"}]}
 >   : {reach1:{x:string, y:string} bag, reach2:{x:string, y:string} bag} variant
 
-(*) Shortest path with distance parameter
-(*  This is the standard way to express shortest path in Datalog:
-    - Base case: direct edges have distance 1
-    - Recursive case: extend a path by one edge, incrementing distance
-    Note: This requires arithmetic in rule heads (N+1), which is not yet
-    supported. *)
-(* TODO implement arithmetic in rule heads
-Datalog.execute ".decl edge(x:string, y:string)
+(*
+ * Shortest path with distance parameter.
+ *
+ * This is the standard way to express shortest path in Datalog:
+ *  - Base case: direct edges have distance 1
+ *  - Recursive case: extend a path by one edge, incrementing distance
+ *)
+Datalog.translate ".decl edge(x:string, y:string)
 .decl path(x:string, y:string, n:number)
 edge(\"a\", \"b\").
 edge(\"b\", \"c\").
@@ -599,35 +608,32 @@ edge(\"a\", \"c\").
 path(X, Y, 1) :- edge(X, Y).
 path(X, Z, N+1) :- path(X, Y, N), edge(Y, Z).
 .output path";
-
-Output:
-a b 1
-a c 1
-a c 2
-a d 2
-a d 3
-a e 3
-a e 4
-a f 4
-a f 5
-b c 1
-b d 2
-b e 3
-b f 4
-c d 1
-c e 2
-c f 3
-d e 1
-d f 2
-e f 1
+> val it =
+>   SOME "let\n  val edge_facts = [(\"a\", \"b\"), (\"b\", \"c\"), (\"c\", \"d\"), (\"d\", \"e\"), (\"e\", \"f\"), (\"a\", \"c\")]\n  fun edge (x, y) = (x, y) elem edge_facts\n  fun path (x, y, n) =\n    edge (x, y) andalso n = 1 orelse\n    (exists v0 where path (x, v0, n - 1) andalso edge (v0, y))\nin\n  {path = from x, y, n where path (x, y, n)}\nend"
+>   : string option
+(*
+> val it =
+>   {path=[{n=1,x="a",y="b"},{n=1,x="b",y="c"},{n=1,x="c",y="d"},
+>     {n=1,x="d",y="e"},{n=1,x="e",y="f"},{n=1,x="a",y="c"},
+>     {n=2,x="a",y="c"},{n=2,x="b",y="d"},{n=2,x="c",y="e"},
+>     {n=2,x="d",y="f"},{n=2,x="a",y="d"},
+>     {n=3,x="a",y="d"},{n=3,x="b",y="e"},{n=3,x="c",y="f"},
+>     {n=3,x="a",y="e"},
+>     {n=4,x="a",y="e"},{n=4,x="b",y="f"},{n=4,x="a",y="f"},
+>     {n=5,x="a",y="f"}]}
+>   : {path:{n:int, x:string, y:string} bag} variant
 *)
 
-(*) Shortest path using aggregation - Datalog with min
-(*  An alternative formulation uses 'min' aggregation to find the
-    shortest distance among all paths. First compute all paths with
-    their distances, then select the minimum.
-    Note: This requires both arithmetic (N+1) and aggregation (min),
-    neither of which is yet supported. *)
+(*
+ * Shortest path using aggregation - Datalog with min
+ *
+ * An alternative formulation uses 'min' aggregation to find the
+ * shortest distance among all paths. First compute all paths with
+ * their distances, then select the minimum.
+ *
+ * Note: This requires both arithmetic (N+1) and aggregation (min),
+ * neither of which is yet supported.
+ *)
 (* TODO
 Datalog.execute ".decl edge(x:string, y:string)
 .decl dist(x:string, y:string, n:number)
@@ -644,16 +650,20 @@ shortest(X, Y, min N) :- dist(X, Y, N).
 .output shortest";
 *)
 
-(*) Bounded transitive closure - find all paths of length <= 3
-(*  This query finds all pairs (X, Y) reachable in at most 3 hops.
-    The bound is a parameter, not hardcoded as separate reach1, reach2,
-    reach3 relations. The guard N < 3 in the recursive rule stops
-    extension beyond the bound.
-    From a: e is reachable (3 hops: a->c->d->e) but f is not (4 hops).
-    Note: This requires arithmetic in rule heads (N+1), which is not
-    yet supported. *)
-(* TODO
-val program = ".decl edge(x:string, y:string)
+(*
+ * Bounded transitive closure - find all paths of length <= 3.
+ *
+ * This query finds all pairs (X, Y) reachable in at most 3 hops.
+ * The bound is a parameter, not hardcoded as separate reach1, reach2,
+ * reach3 relations. The guard N < 3 in the recursive rule stops
+ * extension beyond the bound.
+ *
+ * From a: e is reachable (3 hops: a->c->d->e) but f is not (4 hops).
+ * The translate works but execute cannot yet handle 3-arity recursive
+ * predicates with arithmetic (such-that evaluator cannot enumerate
+ * unbounded integers).
+ *)
+Datalog.translate ".decl edge(x:string, y:string)
 .decl path(x:string, y:string, n:number)
 edge(\"a\", \"b\").
 edge(\"b\", \"c\").
@@ -664,20 +674,9 @@ edge(\"a\", \"c\").
 path(X, Y, 1) :- edge(X, Y).
 path(X, Z, N+1) :- path(X, Y, N), edge(Y, Z), N < 3.
 .output path";
-Datalog.translate program;
 > val it =
->   SOME "let\n  val edge_facts = [(\"a\", \"b\"), (\"b\", \"c\"), (\"c\", \"d\"), (\"d\", \"e\"), (\"e\", \"f\"), (\"a\", \"c\")]\n  fun edge (x, y) = (x, y) elem edge_facts\n  fun path (x, y, n) =\n    (edge (x, y) andalso n = 1) orelse\n    (exists v0 where path (x, v0, n - 1) andalso edge (v0, y) andalso n - 1 < 3)\nin\n  {path = from x, y, n where path (x, y, n)}\nend"
+>   SOME "let\n  val edge_facts = [(\"a\", \"b\"), (\"b\", \"c\"), (\"c\", \"d\"), (\"d\", \"e\"), (\"e\", \"f\"), (\"a\", \"c\")]\n  fun edge (x, y) = (x, y) elem edge_facts\n  fun path (x, y, n) =\n    edge (x, y) andalso n = 1 orelse\n    (exists v0 where path (x, v0, n - 1) andalso edge (v0, y) andalso n - 1 < 3)\nin\n  {path = from x, y, n where path (x, y, n)}\nend"
 >   : string option
-Datalog.execute program;
-> val it =
->   {path=[{n=1,x="a",y="b"},{n=1,x="b",y="c"},{n=1,x="c",y="d"},
->     {n=1,x="d",y="e"},{n=1,x="e",y="f"},{n=1,x="a",y="c"},
->     {n=2,x="a",y="c"},{n=2,x="b",y="d"},{n=2,x="c",y="e"},
->     {n=2,x="d",y="f"},{n=2,x="a",y="d"},
->     {n=3,x="a",y="d"},{n=3,x="b",y="e"},{n=3,x="c",y="f"},
->     {n=3,x="a",y="e"}]}
->   : {path:{n:int, x:string, y:string} bag} variant
-*)
 
 (* -------------------------------------------------------------- *)
 (* .input directive - read facts from CSV file *)
