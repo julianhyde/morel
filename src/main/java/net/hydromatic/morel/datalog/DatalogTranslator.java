@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.datalog;
 
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -25,6 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.hydromatic.morel.datalog.DatalogAst.ArithOp;
+import net.hydromatic.morel.datalog.DatalogAst.ArithmeticExpr;
 import net.hydromatic.morel.datalog.DatalogAst.Atom;
 import net.hydromatic.morel.datalog.DatalogAst.BodyAtom;
 import net.hydromatic.morel.datalog.DatalogAst.CompOp;
@@ -296,54 +299,42 @@ public class DatalogTranslator {
   /** Translates a single Datalog rule to a Morel predicate expression. */
   private static String translateRuleToPredicate(
       Rule rule, Declaration decl, Map<String, Declaration> declarationMap) {
-    // Map head variables to declaration param names
+    // Map head variables to declaration param names (or expressions for
+    // backward substitution). Values are Morel expression strings.
     Map<String, String> headVarToParam = new LinkedHashMap<>();
+    // Extra constraints from arithmetic or constant head terms.
+    // Each entry is (paramName, term) where the constraint is paramName = term.
+    List<Map.Entry<String, Term>> headConstraints = new ArrayList<>();
+
     for (int i = 0; i < rule.head.terms.size(); i++) {
       Term term = rule.head.terms.get(i);
+      String paramName = decl.params.get(i).name;
       if (term instanceof Variable) {
         Variable var = (Variable) term;
-        String paramName = decl.params.get(i).name;
         headVarToParam.put(var.name, paramName);
+      } else if (term instanceof Constant) {
+        // Constant in head: add equality constraint
+        headConstraints.add(new AbstractMap.SimpleEntry<>(paramName, term));
+      } else if (term instanceof ArithmeticExpr) {
+        processHeadArithExpr(
+            (ArithmeticExpr) term, paramName, headVarToParam, headConstraints);
       }
     }
 
-    // Collect body-only variables with fresh names
+    // Collect body-only variables with fresh names.
+    // A variable is "body-only" if it is not in headVarToParam.
     Set<String> headParamNames = new HashSet<>(headVarToParam.values());
     Map<String, String> bodyVarToFresh = new LinkedHashMap<>();
     int freshCounter = 0;
 
     for (BodyAtom bodyAtom : rule.body) {
-      if (bodyAtom instanceof Comparison) {
-        Comparison comp = (Comparison) bodyAtom;
-        for (Term term : Arrays.asList(comp.left, comp.right)) {
-          if (term instanceof Variable) {
-            Variable var = (Variable) term;
-            if (!headVarToParam.containsKey(var.name)
-                && !bodyVarToFresh.containsKey(var.name)) {
-              String fresh = "v" + freshCounter++;
-              while (headParamNames.contains(fresh)) {
-                fresh = "v" + freshCounter++;
-              }
-              bodyVarToFresh.put(var.name, fresh);
-            }
-          }
-        }
-        continue;
-      }
-      Atom atom = bodyAtom.atom;
-      for (Term term : atom.terms) {
-        if (term instanceof Variable) {
-          Variable var = (Variable) term;
-          if (!headVarToParam.containsKey(var.name)
-              && !bodyVarToFresh.containsKey(var.name)) {
-            String fresh = "v" + freshCounter++;
-            while (headParamNames.contains(fresh)) {
-              fresh = "v" + freshCounter++;
-            }
-            bodyVarToFresh.put(var.name, fresh);
-          }
-        }
-      }
+      freshCounter =
+          collectBodyVars(
+              bodyAtom,
+              headVarToParam,
+              headParamNames,
+              bodyVarToFresh,
+              freshCounter);
     }
 
     // Build the body expression
@@ -398,6 +389,15 @@ public class DatalogTranslator {
       }
     }
 
+    // Add head constraints (from constants or complex arithmetic in head)
+    for (Map.Entry<String, Term> constraint : headConstraints) {
+      String paramRef = constraint.getKey();
+      String termRef =
+          termToPredicateRef(
+              constraint.getValue(), headVarToParam, bodyVarToFresh);
+      conjuncts.add(paramRef + " = " + termRef);
+    }
+
     body.append(String.join(" andalso ", conjuncts));
 
     if (!bodyVarToFresh.isEmpty()) {
@@ -405,6 +405,127 @@ public class DatalogTranslator {
     }
 
     return body.toString();
+  }
+
+  /**
+   * Processes an arithmetic expression in the rule head.
+   *
+   * <p>For simple forms like {@code var + const} or {@code var - const},
+   * applies backward substitution: maps the variable to the inverse expression.
+   * For complex forms (like {@code x + y}), adds an equality constraint.
+   */
+  private static void processHeadArithExpr(
+      ArithmeticExpr expr,
+      String paramName,
+      Map<String, String> headVarToParam,
+      List<Map.Entry<String, Term>> headConstraints) {
+    // Simple case: var op const
+    if (expr.left instanceof Variable && expr.right instanceof Constant) {
+      Variable var = (Variable) expr.left;
+      String constStr = termToMorel(expr.right);
+      String inverseOp = inverseOp(expr.op);
+      if (inverseOp != null && !headVarToParam.containsKey(var.name)) {
+        headVarToParam.put(
+            var.name, paramName + " " + inverseOp + " " + constStr);
+      } else {
+        // Variable already mapped (appears in another head position);
+        // fall through to constraint
+        headConstraints.add(new AbstractMap.SimpleEntry<>(paramName, expr));
+      }
+      return;
+    }
+    // Simple case: const op var (only for commutative operators)
+    if (expr.left instanceof Constant && expr.right instanceof Variable) {
+      Variable var = (Variable) expr.right;
+      String constStr = termToMorel(expr.left);
+      if ((expr.op == ArithOp.PLUS || expr.op == ArithOp.TIMES)
+          && !headVarToParam.containsKey(var.name)) {
+        String inverseOp = inverseOp(expr.op);
+        headVarToParam.put(
+            var.name, paramName + " " + inverseOp + " " + constStr);
+        return;
+      }
+      // For const - var or const / var, use constraint
+    }
+    // Complex case: add equality constraint.
+    // The Term will be resolved later via termToPredicateRef.
+    headConstraints.add(new AbstractMap.SimpleEntry<>(paramName, expr));
+  }
+
+  /**
+   * Collects body-only variables from a body atom, returning the updated fresh
+   * counter.
+   */
+  private static int collectBodyVars(
+      BodyAtom bodyAtom,
+      Map<String, String> headVarToParam,
+      Set<String> headParamNames,
+      Map<String, String> bodyVarToFresh,
+      int freshCounter) {
+    if (bodyAtom instanceof Comparison) {
+      Comparison comp = (Comparison) bodyAtom;
+      for (Term term : Arrays.asList(comp.left, comp.right)) {
+        freshCounter =
+            collectTermVars(
+                term,
+                headVarToParam,
+                headParamNames,
+                bodyVarToFresh,
+                freshCounter);
+      }
+      return freshCounter;
+    }
+    Atom atom = bodyAtom.atom;
+    for (Term term : atom.terms) {
+      freshCounter =
+          collectTermVars(
+              term,
+              headVarToParam,
+              headParamNames,
+              bodyVarToFresh,
+              freshCounter);
+    }
+    return freshCounter;
+  }
+
+  /**
+   * Collects body-only variables from a term (recursing into ArithmeticExpr),
+   * returning the updated fresh counter.
+   */
+  private static int collectTermVars(
+      Term term,
+      Map<String, String> headVarToParam,
+      Set<String> headParamNames,
+      Map<String, String> bodyVarToFresh,
+      int freshCounter) {
+    if (term instanceof Variable) {
+      Variable var = (Variable) term;
+      if (!headVarToParam.containsKey(var.name)
+          && !bodyVarToFresh.containsKey(var.name)) {
+        String fresh = "v" + freshCounter++;
+        while (headParamNames.contains(fresh)) {
+          fresh = "v" + freshCounter++;
+        }
+        bodyVarToFresh.put(var.name, fresh);
+      }
+    } else if (term instanceof ArithmeticExpr) {
+      ArithmeticExpr expr = (ArithmeticExpr) term;
+      freshCounter =
+          collectTermVars(
+              expr.left,
+              headVarToParam,
+              headParamNames,
+              bodyVarToFresh,
+              freshCounter);
+      freshCounter =
+          collectTermVars(
+              expr.right,
+              headVarToParam,
+              headParamNames,
+              bodyVarToFresh,
+              freshCounter);
+    }
+    return freshCounter;
   }
 
   /** Converts a term to a reference in a predicate expression. */
@@ -425,8 +546,81 @@ public class DatalogTranslator {
       return var.name.toLowerCase();
     } else if (term instanceof Constant) {
       return termToMorel(term);
+    } else if (term instanceof ArithmeticExpr) {
+      ArithmeticExpr expr = (ArithmeticExpr) term;
+      String left =
+          termToPredicateRefParens(
+              expr.left, expr.op, true, headVarToParam, bodyVarToFresh);
+      String right =
+          termToPredicateRefParens(
+              expr.right, expr.op, false, headVarToParam, bodyVarToFresh);
+      return left + " " + expr.op.symbol + " " + right;
     }
     throw new IllegalArgumentException("Unknown term type: " + term);
+  }
+
+  /**
+   * Converts a sub-term to a reference, adding parentheses if needed for
+   * correct precedence.
+   */
+  private static String termToPredicateRefParens(
+      Term term,
+      ArithOp parentOp,
+      boolean isLeft,
+      Map<String, String> headVarToParam,
+      Map<String, String> bodyVarToFresh) {
+    String ref = termToPredicateRef(term, headVarToParam, bodyVarToFresh);
+    if (needsParens(term, parentOp, isLeft, headVarToParam)) {
+      return "(" + ref + ")";
+    }
+    return ref;
+  }
+
+  /**
+   * Returns whether a sub-term needs parentheses given its parent operator.
+   *
+   * <p>Multiplicative operators ({@code *}, {@code /}) bind tighter than
+   * additive ({@code +}, {@code -}). A sub-term needs parentheses if it has
+   * lower precedence than the parent, or if it is on the right side of a
+   * non-commutative/non-associative operator.
+   */
+  private static boolean needsParens(
+      Term term,
+      ArithOp parentOp,
+      boolean isLeft,
+      Map<String, String> headVarToParam) {
+    // If the term is a variable that resolves to a compound expression
+    // (backward substitution like N -> n - 1), it needs parens when used
+    // in a multiplicative context.
+    if (term instanceof Variable) {
+      String resolved = headVarToParam.get(((Variable) term).name);
+      if (resolved != null && resolved.contains(" ")) {
+        // The resolved expression is compound (e.g., "n - 1");
+        // needs parens if parent is multiplicative
+        return isMultiplicative(parentOp);
+      }
+      return false;
+    }
+    if (!(term instanceof ArithmeticExpr)) {
+      return false;
+    }
+    ArithmeticExpr subExpr = (ArithmeticExpr) term;
+    // Additive inside multiplicative needs parens
+    if (isMultiplicative(parentOp) && !isMultiplicative(subExpr.op)) {
+      return true;
+    }
+    // Right operand of minus or divide needs parens if it is additive
+    if (!isLeft
+        && (parentOp == ArithOp.MINUS || parentOp == ArithOp.DIVIDE)
+        && !isMultiplicative(subExpr.op)) {
+      return true;
+    }
+    return false;
+  }
+
+  /** Returns whether an operator is multiplicative (higher precedence). */
+  private static boolean isMultiplicative(ArithOp op) {
+    return op == ArithOp.TIMES || op == ArithOp.DIVIDE;
   }
 
   /** Converts comparison operator to Morel syntax. */
@@ -446,6 +640,22 @@ public class DatalogTranslator {
         return ">=";
       default:
         throw new IllegalArgumentException("Unknown operator: " + op);
+    }
+  }
+
+  /** Returns the inverse operator symbol, or null if not invertible. */
+  private static String inverseOp(ArithOp op) {
+    switch (op) {
+      case PLUS:
+        return "-";
+      case MINUS:
+        return "+";
+      case TIMES:
+        return "/";
+      case DIVIDE:
+        return "*";
+      default:
+        return null;
     }
   }
 

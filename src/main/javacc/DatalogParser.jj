@@ -27,6 +27,8 @@ PARSER_BEGIN(DatalogParserImpl)
 
 package net.hydromatic.morel.datalog;
 
+import net.hydromatic.morel.datalog.DatalogAst.ArithmeticExpr;
+import net.hydromatic.morel.datalog.DatalogAst.ArithOp;
 import net.hydromatic.morel.datalog.DatalogAst.Atom;
 import net.hydromatic.morel.datalog.DatalogAst.BodyAtom;
 import net.hydromatic.morel.datalog.DatalogAst.CompOp;
@@ -91,6 +93,10 @@ TOKEN :
 | < LT: "<" >
 | < GT: ">" >
 | < EQ: "=" >
+| < PLUS: "+" >
+| < MINUS: "-" >
+| < STAR: "*" >
+| < SLASH: "/" >
 }
 
 TOKEN :
@@ -301,12 +307,47 @@ List<Term> termList() :
   { return terms; } // empty list
 }
 
-/** Parses a term (variable or constant). */
+/** Parses a term (possibly an additive expression). */
 Term term() :
+{
+  Term t;
+  Term right;
+  ArithOp op;
+}
+{
+  t = multiplicativeTerm()
+  (
+    ( <PLUS> { op = ArithOp.PLUS; } | <MINUS> { op = ArithOp.MINUS; } )
+    right = multiplicativeTerm()
+    { t = new ArithmeticExpr(t, op, right); }
+  )*
+  { return t; }
+}
+
+/** Parses a multiplicative term. */
+Term multiplicativeTerm() :
+{
+  Term t;
+  Term right;
+  ArithOp op;
+}
+{
+  t = primaryTerm()
+  (
+    ( <STAR> { op = ArithOp.TIMES; } | <SLASH> { op = ArithOp.DIVIDE; } )
+    right = primaryTerm()
+    { t = new ArithmeticExpr(t, op, right); }
+  )*
+  { return t; }
+}
+
+/** Parses a primary term (variable, constant, or parenthesized expression). */
+Term primaryTerm() :
 {
   final Token t;
   final String strValue;
   final int intValue;
+  final Term inner;
 }
 {
   t = <IDENTIFIER>
@@ -332,6 +373,8 @@ Term term() :
     // String literals have type "string" (Souffle doesn't have separate symbol type)
     return new Constant(strValue, "string");
   }
+| <LPAREN> inner = term() <RPAREN>
+  { return inner; }
 }
 
 // End DatalogParser.jj
