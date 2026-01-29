@@ -825,6 +825,35 @@ in
 end;
 > val it = [1,4] : int bag
 
+(*) Odd cycle
+let
+  val edge_facts = [("a", "b"), ("b", "c"), ("c", "a")]
+  fun edge (x, y) = (x, y) elem edge_facts
+  fun odd_path (x, y) = edge (x, y) orelse
+    (exists v0, v1 where odd_path (x, v0) andalso edge (v0, v1) andalso edge (v1, y))
+  fun exists_odd_cycle () = (exists v0 where odd_path (v0, v0))
+in
+  {exists_odd_cycle = from  where exists_odd_cycle ()}
+end;
+> val it = {exists_odd_cycle=[()]} : {exists_odd_cycle:unit list}
+
+(*) Bounded transitive closure
+let
+  val edge_facts = [("a", "b"), ("b", "c"), ("c", "d"), ("d", "e"), ("e", "f"), ("a", "c")]
+  fun edge (x, y) = (x, y) elem edge_facts
+  fun path (x, y, n) =
+    (edge (x, y) andalso n = 1) orelse
+    (exists v0 where path (x, v0, n - 1) andalso edge (v0, y) andalso n + 1 < 3)
+in
+  {path = from x, y, n where path (x, y, n)}
+end;
+> val it =
+>   {
+>    path=
+>    [{n=1,x="a",y="b"},{n=1,x="b",y="c"},{n=1,x="c",y="d"},{n=1,x="d",y="e"},
+>     {n=1,x="e",y="f"},{n=1,x="a",y="c"}]}
+>   : {path:{n:int, x:string, y:string} bag}
+
 (*) Siblings
 let
   val parents = [("Alice", "Bob"), ("Alice", "Carol")]

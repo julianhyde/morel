@@ -302,10 +302,14 @@ class Generators {
    *
    * <p>For example, if fnArg is (x, y) where x and y are Ids referencing
    * IdPats, creates a TuplePat containing those IdPats.
+   *
+   * <p>Returns null if fnArg is not a tuple or contains non-ID elements (e.g.,
+   * expressions like {@code n - 1}).
    */
-  private static Core.Pat createTuplePatFromArg(TypeSystem ts, Core.Exp fnArg) {
+  private static Core.@Nullable Pat createTuplePatFromArg(
+      TypeSystem ts, Core.Exp fnArg) {
     if (fnArg.op != Op.TUPLE) {
-      throw new IllegalArgumentException("Expected tuple: " + fnArg);
+      return null;
     }
     final Core.Tuple tuple = (Core.Tuple) fnArg;
     final List<Core.Pat> pats = new ArrayList<>();
@@ -313,7 +317,7 @@ class Generators {
       if (arg.op == Op.ID) {
         pats.add(((Core.Id) arg).idPat);
       } else {
-        throw new IllegalArgumentException("Expected ID in tuple: " + arg);
+        return null;
       }
     }
     return core.tuplePat(ts, pats);
@@ -466,15 +470,23 @@ class Generators {
         }
       }
 
-      // Step 3c: Try simple (non-recursive) function inversion.
+      // Step 3c: Try simple function inversion.
       // Inline the function body by substituting actual args for formal params,
       // then recursively try to find a generator for the substituted body.
+      // For recursive functions, inline only the non-recursive branches of
+      // any top-level orelse to avoid infinite expansion.
       final Core.Exp inlinedBody =
           inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
-      // Decompose "andalso" into individual conjuncts for range detection.
-      if (maybeGenerator(
-          cache, goalPat, ordered, core.decomposeAnd(inlinedBody))) {
-        return true;
+      final Core.Exp safeBody =
+          containsSelfCall(fn.exp, fnName)
+              ? removeRecursiveBranches(cache.typeSystem, inlinedBody, fnName)
+              : inlinedBody;
+      if (safeBody != null) {
+        // Decompose "andalso" into individual conjuncts for range detection.
+        if (maybeGenerator(
+            cache, goalPat, ordered, core.decomposeAnd(safeBody))) {
+          return true;
+        }
       }
     }
     return false;
@@ -525,6 +537,18 @@ class Generators {
     }
 
     final Core.Pat tuplePat = createTuplePatFromArg(cache.typeSystem, fnArg);
+    if (tuplePat == null) {
+      return false;
+    }
+
+    // Check for duplicate variables in the tuple (e.g., odd_path(v0, v0)).
+    // If duplicates exist, create fresh variables for the TC and filter
+    // for equality afterward.
+    if (hasDuplicateVars(tuplePat)) {
+      return tryTupleTransitiveClosureWithDuplicates(
+          cache, fn, apply, fnArg, goalPat, ordered);
+    }
+
     final String fnName = ((Core.Id) apply.fn).idPat.name;
     final @Nullable TransitiveClosurePattern tcPattern =
         analyzeTransitiveClosure(cache, fn, apply.arg, fnName);
@@ -541,6 +565,116 @@ class Generators {
       }
     }
     return false;
+  }
+
+  /** Returns whether a pattern has duplicate named variables. */
+  private static boolean hasDuplicateVars(Core.Pat pat) {
+    final List<? extends Core.NamedPat> expanded = pat.expand();
+    final Set<String> names = new HashSet<>();
+    for (Core.NamedPat np : expanded) {
+      if (!names.add(np.name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Handles transitive closure when the call has duplicate variables (e.g.,
+   * {@code odd_path(v0, v0)}).
+   *
+   * <p>Creates fresh variables for the TC generator, then wraps the result to
+   * filter for equality among the duplicate positions.
+   */
+  private static boolean tryTupleTransitiveClosureWithDuplicates(
+      Cache cache,
+      Core.Fn fn,
+      Core.Apply apply,
+      Core.Exp fnArg,
+      Core.Pat goalPat,
+      boolean ordered) {
+    final TypeSystem ts = cache.typeSystem;
+    final Core.Tuple tuple = (Core.Tuple) fnArg;
+
+    // Create fresh variables for each position in the tuple
+    final List<Core.IdPat> freshPats = new ArrayList<>();
+    final List<Core.Exp> freshArgs = new ArrayList<>();
+    for (int i = 0; i < tuple.args.size(); i++) {
+      final Core.Exp arg = tuple.args.get(i);
+      final Core.IdPat freshPat = core.idPat(arg.type, "_tc_" + i, 0);
+      freshPats.add(freshPat);
+      freshArgs.add(core.id(freshPat));
+    }
+    final Core.Pat freshTuplePat = core.tuplePat(ts, freshPats);
+    final Core.Exp freshCallArgs =
+        core.tuple(
+            (RecordLikeType) fnArg.type, freshArgs.toArray(new Core.Exp[0]));
+
+    // Analyze the transitive closure using fresh callArgs
+    final String fnName = ((Core.Id) apply.fn).idPat.name;
+    final @Nullable TransitiveClosurePattern tcPattern =
+        analyzeTransitiveClosure(cache, fn, freshCallArgs, fnName);
+    if (tcPattern == null) {
+      return false;
+    }
+
+    // Generate TC expression using the fresh tuplePat
+    final Core.Exp iterateExp =
+        generateTransitiveClosure(cache, tcPattern, freshTuplePat, ordered);
+    if (iterateExp == null) {
+      return false;
+    }
+
+    // Build a wrapper: from (tc_0, tc_1) in iterateExp
+    //   where tc_0 = tc_1 yield tc_0
+    // This filters the TC result to only pairs where duplicated positions
+    // are equal, then yields the original variable's value.
+    final FromBuilder fb = core.fromBuilder(ts);
+    fb.scan(freshTuplePat, iterateExp);
+
+    // Add equality constraints for duplicate positions.
+    // Build a map from original variable to first fresh variable.
+    final Map<String, Core.IdPat> firstFresh = new LinkedHashMap<>();
+    for (int i = 0; i < tuple.args.size(); i++) {
+      final Core.Exp arg = tuple.args.get(i);
+      if (arg.op == Op.ID) {
+        final String name = ((Core.Id) arg).idPat.name;
+        if (firstFresh.containsKey(name)) {
+          // Duplicate: add equality constraint
+          fb.where(
+              core.equal(
+                  ts,
+                  core.id(firstFresh.get(name)),
+                  core.id(freshPats.get(i))));
+        } else {
+          firstFresh.put(name, freshPats.get(i));
+        }
+      }
+    }
+
+    // Yield the first fresh variable for each original variable
+    if (goalPat instanceof Core.IdPat) {
+      // goalPat is a scalar (e.g., v0) - yield just the first fresh var
+      final Core.IdPat firstVar = firstFresh.values().iterator().next();
+      fb.yield_(core.id(firstVar));
+    } else {
+      // goalPat is a tuple - yield matching fresh vars
+      final List<Core.Exp> yieldArgs = new ArrayList<>();
+      for (Core.IdPat fp : firstFresh.values()) {
+        yieldArgs.add(core.id(fp));
+      }
+      fb.yield_(
+          core.tuple(
+              (RecordLikeType) goalPat.type,
+              yieldArgs.toArray(new Core.Exp[0])));
+    }
+    final Core.Exp wrappedExp = fb.build();
+
+    final Set<Core.NamedPat> freePats =
+        SuchThatShuttle.freePats(ts, wrappedExp);
+    cache.add(
+        new TransitiveClosureGenerator(goalPat, wrappedExp, freePats, apply));
+    return true;
   }
 
   /**
@@ -882,13 +1016,15 @@ class Generators {
             pattern.callArgs,
             pattern.baseCase);
 
-    // Try to create a generator for the base case
+    // Try to create a generator for the base case using a fresh cache,
+    // so that extent generators from outer scope don't interfere.
+    final Cache baseCache = new Cache(cache.typeSystem, cache.env);
     final List<Core.Exp> baseConstraints = ImmutableList.of(substitutedBase);
-    if (!maybeGenerator(cache, goalPat, ordered, baseConstraints)) {
+    if (!maybeGenerator(baseCache, goalPat, ordered, baseConstraints)) {
       return null;
     }
     final Generator baseGenerator =
-        requireNonNull(cache.bestGeneratorForPat(goalPat));
+        requireNonNull(baseCache.bestGeneratorForPat(goalPat));
 
     // 2. Similarly, substitute and invert the step predicate
     final Core.Exp substitutedStep =
@@ -941,12 +1077,6 @@ class Generators {
     } else {
       originalCollectionType = baseGenerator.exp.type;
     }
-
-    System.err.println(
-        "DEBUG buildRI: originalCollectionType = "
-            + originalCollectionType
-            + " instanceof ListType: "
-            + (originalCollectionType instanceof ListType));
 
     // The result type should match goalPat, which may differ from base element
     // type (e.g., edges are records {x,y} but goalPat wants tuples (x,y))
@@ -1272,6 +1402,35 @@ class Generators {
 
     // Simple tuple case
     return core.tuple(ts, null, ImmutableList.of(stepId, prevId));
+  }
+
+  /**
+   * Removes recursive branches from an inlined orelse expression.
+   *
+   * <p>For a recursive function body like {@code (edge(x,y) andalso n=1) orelse
+   * (exists v0 where path(...))}, after inlining, this returns only the
+   * non-recursive branches (e.g., {@code edge(x,y) andalso n=1}). If there are
+   * no non-recursive branches, returns null.
+   *
+   * <p>If the expression is not an orelse, returns null (cannot safely inline a
+   * recursive expression that isn't a union of branches).
+   */
+  private static Core.@Nullable Exp removeRecursiveBranches(
+      TypeSystem typeSystem, Core.Exp exp, String fnName) {
+    if (!exp.isCallTo(BuiltIn.Z_ORELSE)) {
+      // Not an orelse - can't extract non-recursive parts
+      return null;
+    }
+    final List<Core.Exp> nonRecursiveBranches = new ArrayList<>();
+    for (Core.Exp branch : core.decomposeOr(exp)) {
+      if (!containsSelfCall(branch, fnName)) {
+        nonRecursiveBranches.add(branch);
+      }
+    }
+    if (nonRecursiveBranches.isEmpty()) {
+      return null;
+    }
+    return core.orElse(typeSystem, nonRecursiveBranches);
   }
 
   /** Returns whether the expression contains a call to the named function. */
