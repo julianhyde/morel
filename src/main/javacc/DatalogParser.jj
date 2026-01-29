@@ -179,14 +179,26 @@ String datalogType() :
   )
 }
 
-/** Parses an input directive: {@code .input relation}. */
+/** Parses an input directive: {@code .input relation [file_name]}. */
 Input input() :
 {
   final Token name;
+  Token fileName = null;
 }
 {
-  <INPUT> name = <IDENTIFIER>
-  { return new Input(name.image); }
+  <INPUT> name = <IDENTIFIER> [ fileName = <STRING_LITERAL> ]
+  {
+    String file = null;
+    if (fileName != null) {
+      file = fileName.image.substring(1, fileName.image.length() - 1)
+          .replace("\\n", "\n")
+          .replace("\\r", "\r")
+          .replace("\\t", "\t")
+          .replace("\\\\", "\\")
+          .replace("\\\"", "\"");
+    }
+    return new Input(name.image, file);
+  }
 }
 
 /** Parses an output directive: {@code .output relation}. */
