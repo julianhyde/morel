@@ -560,11 +560,15 @@ public class Extents {
           switch (apply.fn.op) {
             case FN_LITERAL:
               Core.Literal literal = (Core.Literal) apply.fn;
+              // NOTE: We skip inlined functions (Core.Fn) because they include
+              // built-in generators like 'range' and identity functions like
+              // 'mustBeList' that shouldn't be inverted.
+              //
               // Check if it's a user-defined function
-              if (literal.value instanceof Core.Fn) {
-                tryInvert = true;
-                break;
-              }
+              // if (literal.value instanceof Core.Fn) {
+              //   tryInvert = true;
+              //   break;
+              // }
               BuiltIn builtIn = literal.unwrap(BuiltIn.class);
               final Map<Core.Pat, PairList<Core.Exp, Core.Exp>> map2;
               switch (builtIn) {
@@ -731,11 +735,20 @@ public class Extents {
               tryInvert = true;
               break;
 
-            case FN:
-              // Inlined function (Inliner replaced Id with Fn).
-              // Try to invert.
-              tryInvert = true;
-              break;
+              // NOTE: We skip inlined functions (Op.FN) because they include
+              // built-in
+              // generators like 'range' and identity functions like
+              // 'mustBeList' that
+              // shouldn't be inverted. Disabling this prevents
+              // NullPointerException
+              // in regex-example.smli where these functions are used in
+              // comprehensions.
+              //
+              // case FN:
+              //   // Inlined function (Inliner replaced Id with Fn).
+              //   // Try to invert.
+              //   tryInvert = true;
+              //   break;
 
             case APPLY:
               // Curried function application (e.g., String.isPrefix s "abcd").

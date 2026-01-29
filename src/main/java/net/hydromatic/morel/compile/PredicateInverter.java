@@ -600,6 +600,60 @@ public class PredicateInverter {
   }
 
   /**
+   * Recursively extracts all non-recursive base cases from an orelse tree. Base
+   * cases are branches that do NOT contain 'exists' or recursive calls.
+   *
+   * <p>For pattern: {@code a orelse b orelse (exists z where rec(z))} Returns:
+   * [a, b]
+   *
+   * @param exp the expression to analyze (typically an orelse tree)
+   * @return list of all base case expressions (non-exists branches)
+   */
+  private List<Core.Exp> extractAllBaseCases(Core.Exp exp) {
+    List<Core.Exp> baseCases = new ArrayList<>();
+    extractBaseCasesHelper(exp, baseCases);
+    return baseCases;
+  }
+
+  /** Helper for extractAllBaseCases - recursively walks the orelse tree. */
+  private void extractBaseCasesHelper(Core.Exp exp, List<Core.Exp> baseCases) {
+    if (exp.op == Op.APPLY) {
+      Core.Apply apply = (Core.Apply) exp;
+      if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
+        Core.Exp arg0 = apply.arg(0);
+        Core.Exp arg1 = apply.arg(1);
+
+        // Check arg0
+        if (containsExists(arg0)) {
+          // Has 'exists', dig deeper to find nested base cases
+          extractBaseCasesHelper(arg0, baseCases);
+        } else {
+          // Doesn't have 'exists', it's a base case
+          baseCases.add(arg0);
+        }
+
+        // Check arg1
+        if (containsExists(arg1)) {
+          // Has 'exists', dig deeper to find nested base cases
+          extractBaseCasesHelper(arg1, baseCases);
+        } else {
+          // Doesn't have 'exists', it's a base case
+          baseCases.add(arg1);
+        }
+
+        return;
+      }
+    }
+
+    // Not an orelse pattern. If it contains exists, it's a recursive case (skip
+    // it).
+    // Only add non-exists expressions as base cases.
+    if (!containsExists(exp)) {
+      baseCases.add(exp);
+    }
+  }
+
+  /**
    * Tries to invert a simple orelse pattern (without exists) as a union.
    *
    * <p>Handles patterns like: {@code a orelse b} where neither branch contains
@@ -807,47 +861,56 @@ public class PredicateInverter {
       return null;
     }
 
-    // The recursive case typically contains exists; the base case doesn't
-    // If arg0 has exists and arg1 doesn't, they're reversed
-    final Core.Exp baseCase;
-    final Core.Exp recursiveCase;
-    if (arg0HasExists && !arg1HasExists) {
-      // Reversed order: recursive first, base second
-      baseCase = arg1;
-      recursiveCase = arg0;
-    } else {
-      // Standard order: base first, recursive second
-      baseCase = arg0;
-      recursiveCase = arg1;
+    // Extract ALL base cases (non-exists branches) from the orelse tree.
+    // For patterns like: edge_b (x, y) orelse edge_a (x, y) orelse (exists z
+    // ...)
+    // This extracts: [edge_b (x, y), edge_a (x, y)]
+    List<Core.Exp> allBaseCases = extractAllBaseCases(fnBody);
+
+    if (allBaseCases.isEmpty()) {
+      return null; // No base cases found
     }
 
-    // Try to invert the base case without the recursive call.
-    // Try to invert the base case without the recursive call
-    Result baseCaseResult = invert(baseCase, goalPats, ImmutableList.of());
+    // Invert each base case and collect the generators and remaining filters
+    List<Generator> baseGenerators = new ArrayList<>();
+    List<Core.Exp> allRemainingFilters = new ArrayList<>();
+    for (Core.Exp baseCase : allBaseCases) {
+      Result baseCaseResult = invert(baseCase, goalPats, ImmutableList.of());
 
-    // Check if base case could be inverted to a FINITE generator.
-    // If the base case is non-invertible (e.g., a user-defined function call),
-    // the invert method returns a result with INFINITE cardinality as a
-    // fallback. We cannot safely build Relational.iterate with an infinite
-    // generator because:
-    // 1. An infinite generator cannot be materialized at runtime
-    // 2. At compile time we don't know what runtime values are available
-    // 3. The entire iteration would fail with "infinite: int * int" at runtime
-    //
-    // In this case, we cannot safely build Relational.iterate with an infinite
-    // base case. Return null to signal that transitive closure pattern matching
-    // failed, causing the caller to skip this optimization.
-    if (baseCaseResult.generator.cardinality
-        == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
-      return null;
+      // Check if base case could be inverted to a FINITE generator.
+      // If the base case is non-invertible (e.g., a user-defined function
+      // call),
+      // the invert method returns a result with INFINITE cardinality as a
+      // fallback. We cannot safely build Relational.iterate with an infinite
+      // generator because:
+      // 1. An infinite generator cannot be materialized at runtime
+      // 2. At compile time we don't know what runtime values are available
+      // 3. The entire iteration would fail with "infinite: int * int" at
+      // runtime
+      //
+      // In this case, we cannot safely build Relational.iterate with an
+      // infinite
+      // base case. Return null to signal that transitive closure pattern
+      // matching
+      // failed, causing the caller to skip this optimization.
+      if (baseCaseResult.generator.cardinality
+          == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
+        return null;
+      }
+
+      baseGenerators.add(baseCaseResult.generator);
+      allRemainingFilters.addAll(baseCaseResult.remainingFilters);
     }
+
+    // Combine all base generators using unionDistinct
+    final Generator combinedBase = unionDistinct(baseGenerators);
 
     // Build Relational.iterate with the finite base generator.
     // Remaining filters will be applied at runtime along with the iterate
     // expansion.
     // Create IOPair for the base case
     final IOPair baseCaseIO =
-        new IOPair(ImmutableMap.of(), baseCaseResult.generator.expression);
+        new IOPair(ImmutableMap.of(), combinedBase.expression);
 
     // Create TabulationResult with the base case
     // Use FINITE cardinality since transitive closure is finite for finite
@@ -868,7 +931,7 @@ public class PredicateInverter {
     // Pattern: Relational.iterate baseGenerator stepFunction
     // If the base generator produces records but we need tuples, wrap it with
     // a conversion: from {x,y} in baseGen yield (x,y)
-    Core.Exp baseGenerator = baseCaseResult.generator.expression;
+    Core.Exp baseGenerator = combinedBase.expression;
     final Type baseElemType = baseGenerator.type.elementType();
     if (baseElemType != null && baseElemType.op() == Op.RECORD_TYPE) {
       baseGenerator = convertRecordBagToTupleBag(baseGenerator);
@@ -900,15 +963,15 @@ public class PredicateInverter {
     // Create a Generator wrapping the Relational.iterate call
     final Generator iterateGenerator =
         new Generator(
-            baseCaseResult.generator.goalPat,
+            combinedBase.goalPat,
             relationalIterate,
             net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-            baseCaseResult.generator.constraints,
-            baseCaseResult.generator.freeVars);
+            combinedBase.constraints,
+            combinedBase.freeVars);
 
-    // Return result with remaining filters from base case
+    // Return result with remaining filters from all base cases
     // These will be applied at runtime
-    return result(iterateGenerator, baseCaseResult.remainingFilters);
+    return result(iterateGenerator, ImmutableList.copyOf(allRemainingFilters));
   }
 
   /**
