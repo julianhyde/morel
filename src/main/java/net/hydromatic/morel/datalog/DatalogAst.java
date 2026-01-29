@@ -306,6 +306,62 @@ public class DatalogAst {
     }
   }
 
+  /** Arithmetic operators for use in terms. */
+  public enum ArithOp {
+    PLUS("+"),
+    MINUS("-"),
+    TIMES("*"),
+    DIVIDE("/");
+
+    public final String symbol;
+
+    ArithOp(String symbol) {
+      this.symbol = symbol;
+    }
+
+    @Override
+    public String toString() {
+      return symbol;
+    }
+  }
+
+  /** An arithmetic expression term (e.g., {@code N + 1}). */
+  public static class ArithmeticExpr extends Term {
+    public final Term left;
+    public final ArithOp op;
+    public final Term right;
+
+    public ArithmeticExpr(Term left, ArithOp op, Term right) {
+      this.left = requireNonNull(left);
+      this.op = requireNonNull(op);
+      this.right = requireNonNull(right);
+    }
+
+    @Override
+    public String toString() {
+      return left + " " + op + " " + right;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (!(o instanceof ArithmeticExpr)) {
+        return false;
+      }
+      ArithmeticExpr that = (ArithmeticExpr) o;
+      return left.equals(that.left)
+          && op == that.op
+          && right.equals(that.right);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(left, op, right);
+    }
+  }
+
   /** A constant term. */
   public static class Constant extends Term {
     public final Object value;
