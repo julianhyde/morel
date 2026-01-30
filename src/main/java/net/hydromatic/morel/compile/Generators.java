@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getLast;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.compile.FreeFinder.freePats;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -243,8 +244,7 @@ class Generators {
     fromBuilder.distinct();
 
     final Core.From joinedFrom = fromBuilder.build();
-    final Set<Core.NamedPat> freePats2 =
-        SuchThatShuttle.freePats(typeSystem, joinedFrom);
+    final Set<Core.NamedPat> freePats2 = freePats(typeSystem, joinedFrom);
 
     // Remove the old generator and add the new joined one.
     // Use the FULL pattern so inner scan variables are included in the
@@ -262,7 +262,6 @@ class Generators {
         Core.Pat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats) {
-      // unique = true because exists generators apply distinct internally
       super(exp, freePats, pat, Cardinality.FINITE, true);
     }
 
@@ -439,7 +438,7 @@ class Generators {
         if (iterateExp != null) {
           // Step 5a: Register the generator
           final Set<Core.NamedPat> freePats =
-              SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
+              freePats(cache.typeSystem, iterateExp);
           cache.add(
               new BoundedIterateGenerator(
                   (Core.NamedPat) goalPat,
@@ -508,7 +507,7 @@ class Generators {
           generateTransitiveClosure(cache, tcPattern, goalPat, ordered);
       if (iterateExp != null) {
         final Set<Core.NamedPat> freePats =
-            SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
+            freePats(cache.typeSystem, iterateExp);
         cache.add(
             new TransitiveClosureGenerator(
                 goalPat, iterateExp, freePats, apply));
@@ -558,7 +557,7 @@ class Generators {
           generateTransitiveClosure(cache, tcPattern, tuplePat, ordered);
       if (iterateExp != null) {
         final Set<Core.NamedPat> freePats =
-            SuchThatShuttle.freePats(cache.typeSystem, iterateExp);
+            freePats(cache.typeSystem, iterateExp);
         cache.add(
             new TransitiveClosureGenerator(
                 tuplePat, iterateExp, freePats, apply));
@@ -671,8 +670,7 @@ class Generators {
     }
     final Core.Exp wrappedExp = fb.build();
 
-    final Set<Core.NamedPat> freePats =
-        SuchThatShuttle.freePats(ts, wrappedExp);
+    final Set<Core.NamedPat> freePats = freePats(ts, wrappedExp);
     cache.add(
         new TransitiveClosureGenerator(goalPat, wrappedExp, freePats, apply));
     return true;
@@ -1005,13 +1003,11 @@ class Generators {
       TransitiveClosurePattern pattern,
       Core.Pat goalPat,
       boolean ordered) {
-    final TypeSystem ts = cache.typeSystem;
-
-    // 1. Substitute actual args into base case and try to invert to get
+    // Substitute actual args into base case and try to invert to get
     // the base generator (e.g., edges)
     final Core.Exp substitutedBase =
         substituteArgs(
-            ts,
+            cache.typeSystem,
             cache.env,
             pattern.formalParams,
             pattern.callArgs,
@@ -1027,23 +1023,13 @@ class Generators {
     final Generator baseGenerator =
         requireNonNull(baseCache.bestGeneratorForPat(goalPat));
 
-    // 2. Similarly, substitute and invert the step predicate
-    final Core.Exp substitutedStep =
-        substituteArgs(
-            ts,
-            cache.env,
-            pattern.formalParams,
-            pattern.callArgs,
-            pattern.stepPredicate);
-
     // Note: We don't need to create a step generator. The step function in
     // Relational.iterate just scans the base edges and joins with newPaths.
     // The base generator provides the edges collection which is used for both
     // the initial seed and the step computation.
 
-    // 3. Build the Relational.iterate expression
-    return buildRelationalIterate(
-        cache, baseGenerator, substitutedBase, pattern, goalPat, ordered);
+    // Build the Relational.iterate expression
+    return buildRelationalIterate(cache, baseGenerator, goalPat, ordered);
   }
 
   /**
@@ -1058,13 +1044,7 @@ class Generators {
    * }</pre>
    */
   private static Core.Exp buildRelationalIterate(
-      Cache cache,
-      Generator baseGenerator,
-      Core.Exp substitutedBase,
-      TransitiveClosurePattern pattern,
-      Core.Pat goalPat,
-      boolean ordered) {
-
+      Cache cache, Generator baseGenerator, Core.Pat goalPat, boolean ordered) {
     final TypeSystem ts = cache.typeSystem;
     final Type baseElementType = baseGenerator.exp.type.elementType();
 
@@ -1189,20 +1169,17 @@ class Generators {
       BoundedRecursivePattern pattern,
       Core.Pat goalPat,
       boolean ordered) {
-
-    final TypeSystem ts = cache.typeSystem;
-
     // 1. Substitute actual args into base case and try to invert
     final Core.Exp substitutedBase =
         substituteArgs(
-            ts,
+            cache.typeSystem,
             cache.env,
             pattern.formalParams,
             pattern.callArgs,
             pattern.baseCase);
 
     // Try to create a generator for the base case
-    final Cache baseCache = new Cache(ts, cache.env);
+    final Cache baseCache = new Cache(cache.typeSystem, cache.env);
     final List<Core.Exp> baseConstraints = ImmutableList.of(substitutedBase);
     if (!maybeGenerator(baseCache, goalPat, ordered, baseConstraints)) {
       return null;
@@ -1213,18 +1190,19 @@ class Generators {
     // 2. Similarly, substitute and invert the step predicate
     final Core.Exp substitutedStep =
         substituteArgs(
-            ts,
+            cache.typeSystem,
             cache.env,
             pattern.formalParams,
             pattern.callArgs,
             pattern.stepPredicate);
 
-    final Cache stepCache = new Cache(ts, cache.env);
     // For step, we need a pattern that captures the "joining" variable
-    final Core.Pat stepGoalPat = deriveStepGoalPat(ts, pattern, goalPat);
+    final Core.Pat stepGoalPat = deriveStepGoalPat(pattern);
     if (stepGoalPat == null) {
       return null;
     }
+
+    final Cache stepCache = new Cache(cache.typeSystem, cache.env);
     final List<Core.Exp> stepConstraints = ImmutableList.of(substitutedStep);
     if (!maybeGenerator(stepCache, stepGoalPat, ordered, stepConstraints)) {
       return null;
@@ -1234,7 +1212,7 @@ class Generators {
 
     // 3. Build the unrolled iteration
     return unrollBoundedIterate(
-        cache, baseGenerator, stepGenerator, pattern, goalPat, ordered);
+        cache, baseGenerator, stepGenerator, pattern, ordered);
   }
 
   /**
@@ -1244,9 +1222,9 @@ class Generators {
    * so we can join z with the previous iteration's output.
    */
   private static Core.@Nullable Pat deriveStepGoalPat(
-      TypeSystem ts, BoundedRecursivePattern pattern, Core.Pat goalPat) {
-    // For simplicity, use the intermediate variable as the step goal
-    // This works for the common case where step is like "edge(x, z)"
+      BoundedRecursivePattern pattern) {
+    // For simplicity, use the intermediate variable as the step goal.
+    // This works for the common case where step is like "edge(x, z)".
     if (pattern.intermediateVar instanceof Core.NamedPat) {
       return pattern.intermediateVar;
     }
@@ -1259,12 +1237,10 @@ class Generators {
       Generator baseGenerator,
       Generator stepGenerator,
       BoundedRecursivePattern pattern,
-      Core.Pat goalPat,
       boolean ordered) {
 
-    final TypeSystem ts = cache.typeSystem;
-    final Type elementType = baseGenerator.exp.type.elementType();
     final Type collectionType = baseGenerator.exp.type;
+    final Type elementType = collectionType.elementType();
 
     final List<Core.IdPat> iterPats = new ArrayList<>();
     final List<Core.Exp> iterExps = new ArrayList<>();
@@ -1281,7 +1257,7 @@ class Generators {
 
       // Build: from stepVar in stepGenerator, prevVar in prevIter
       //          where joinCondition yield outputTuple
-      final FromBuilder fb = core.fromBuilder(ts, cache.env);
+      final FromBuilder fb = core.fromBuilder(cache.typeSystem, cache.env);
 
       // Scan step generator (e.g., edges for edge(x, z))
       final Core.IdPat stepPat =
@@ -1293,15 +1269,15 @@ class Generators {
       fb.scan(prevPat, core.id(prevIterPat));
 
       // Build join condition: the intermediate var from step equals
-      // the first field of prev
-      // For path(x, y, n), step produces (x, z) and prev has (z', y)
-      // Join on z = z'
+      // the first field of prev. For path(x, y, n), step produces (x, z) and
+      // prev has (z', y). Join on z = z'.
       final Core.Exp joinCondition =
-          buildJoinCondition(ts, pattern, stepPat, prevPat);
+          buildJoinCondition(cache.typeSystem, stepPat, prevPat);
       fb.where(joinCondition);
 
       // Yield the combined output: (x from step, y from prev)
-      final Core.Exp yieldExp = buildYieldExp(ts, pattern, stepPat, prevPat);
+      final Core.Exp yieldExp =
+          buildYieldExp(cache.typeSystem, stepPat, prevPat);
       fb.yield_(yieldExp);
 
       iterPats.add(iterIPat);
@@ -1311,24 +1287,20 @@ class Generators {
 
     // Build: List.concat [iter0, iter1, ..., iterN-1]
     final List<Core.Exp> iterRefs = transformEager(iterPats, core::id);
-    final Core.Exp listOfIters = core.list(ts, collectionType, iterRefs);
-    final Core.Exp concatCall =
-        core.apply(
-            Pos.ZERO,
-            collectionType,
-            core.functionLiteral(
-                ts, ordered ? BuiltIn.LIST_CONCAT : BuiltIn.BAG_CONCAT),
-            listOfIters);
+    final Core.Exp listOfIters =
+        core.list(cache.typeSystem, collectionType, iterRefs);
+    final BuiltIn builtIn = ordered ? BuiltIn.LIST_CONCAT : BuiltIn.BAG_CONCAT;
+    final Core.Literal fn = core.functionLiteral(cache.typeSystem, builtIn);
+    Core.Exp e = core.apply(Pos.ZERO, collectionType, fn, listOfIters);
 
     // Wrap in nested let expressions: let val iter0 = ... in let val iter1 =
     // ... in ... end end
-    Core.Exp result = concatCall;
     for (int i = iterPats.size() - 1; i >= 0; i--) {
       final Core.NonRecValDecl decl =
           core.nonRecValDecl(Pos.ZERO, iterPats.get(i), null, iterExps.get(i));
-      result = core.let(decl, result);
+      e = core.let(decl, e);
     }
-    return result;
+    return e;
   }
 
   /**
@@ -1338,10 +1310,7 @@ class Generators {
    * join condition is z = z'.x (or the appropriate field).
    */
   private static Core.Exp buildJoinCondition(
-      TypeSystem ts,
-      BoundedRecursivePattern pattern,
-      Core.IdPat stepPat,
-      Core.IdPat prevPat) {
+      TypeSystem ts, Core.IdPat stepPat, Core.IdPat prevPat) {
     // The intermediate variable from the step should equal the first
     // component of the previous tuple.
     // For edge(x, z), z is the intermediate var.
@@ -1370,10 +1339,7 @@ class Generators {
    * <p>Combines the first field from step with remaining fields from prev.
    */
   private static Core.Exp buildYieldExp(
-      TypeSystem ts,
-      BoundedRecursivePattern pattern,
-      Core.IdPat stepPat,
-      Core.IdPat prevPat) {
+      TypeSystem ts, Core.IdPat stepPat, Core.IdPat prevPat) {
     // For path(x, y), yield {x = step.x, y = prev.y}
     // where step comes from edge(x, z) giving us x
     // and prev comes from previous paths giving us y
@@ -1635,7 +1601,6 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         int depthBound) {
-      // unique = true because Relational.iterate produces unique results
       super(exp, freePats, pat, Cardinality.FINITE, true);
       this.depthBound = depthBound;
     }
@@ -1704,7 +1669,6 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Core.Apply constraint) {
-      // unique = true because Relational.iterate produces unique results
       super(exp, freePats, pat, Cardinality.FINITE, true);
       this.constraint = constraint;
     }
@@ -1745,103 +1709,13 @@ class Generators {
           // If predicate is "(p, q) elem links", first create a generator
           // for "p2 elem links", where "p2 as (p, q)".
           final Core.Exp collection = predicate.arg(1);
-          final Core.Pat pat =
-              requireNonNull(wholePat(cache.typeSystem, predicate.arg(0)));
+          final Core.Pat pat = requireNonNull(wholePat(predicate.arg(0)));
           CollectionGenerator.create(cache, ordered, pat, collection);
           return true;
         }
       }
     }
     return false;
-  }
-
-  static boolean maybeElemNew(
-      Cache cache,
-      Core.Pat goalPat,
-      boolean ordered,
-      List<Core.Exp> constraints) {
-    for (Core.Exp predicate : constraints) {
-      if (predicate.isCallTo(BuiltIn.OP_ELEM)) {
-        if (containsRef(predicate.arg(0), goalPat)) {
-          // Check if the element expression is a projection from goalPat
-          // (e.g., {x = #1 p, y = #2 p} where goalPat = p)
-          final Core.Exp elemExp = predicate.arg(0);
-          final Core.Exp collection = predicate.arg(1);
-
-          // Case 1: Simple case where elemExp is directly the goalPat
-          // (e.g., "p elem edges" where goalPat = p)
-          if (elemExp.op == Op.ID
-              && goalPat instanceof Core.IdPat
-              && ((Core.Id) elemExp).idPat.equals(goalPat)) {
-            CollectionGenerator.create(cache, ordered, goalPat, collection);
-            return true;
-          }
-
-          // Case 2: Projection case where elemExp is a record/tuple of
-          // field accesses on goalPat
-          // (e.g., {x = #1 p, y = #2 p} elem edges)
-          final Core.NamedPat projectedPat = getProjectedPattern(elemExp);
-          if (projectedPat != null && projectedPat.equals(goalPat)) {
-            // Create a projection generator that converts collection
-            // elements to goalPat's type
-            ProjectionGenerator.create(
-                cache, ordered, (Core.NamedPat) goalPat, elemExp, collection);
-            return true;
-          }
-
-          // Case 3: General case - create generator for the full pattern
-          final Core.Pat pat =
-              requireNonNull(wholePat(cache.typeSystem, elemExp));
-          CollectionGenerator.create(cache, ordered, pat, collection);
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Returns the pattern that is projected in an expression containing only
-   * field accesses on a single pattern.
-   *
-   * <p>For example, for {@code {x = #1 p, y = #2 p}}, returns {@code p}.
-   * Returns null if the expression is not a pure projection (e.g., contains
-   * literals or references to multiple patterns).
-   */
-  private static Core.@Nullable NamedPat getProjectedPattern(Core.Exp exp) {
-    final Set<Core.NamedPat> pats = new HashSet<>();
-    collectFieldAccessPatterns(exp, pats);
-    return pats.size() == 1 ? pats.iterator().next() : null;
-  }
-
-  /**
-   * Collects patterns that are accessed via field selectors in the expression.
-   */
-  private static void collectFieldAccessPatterns(
-      Core.Exp exp, Set<Core.NamedPat> pats) {
-    switch (exp.op) {
-      case APPLY:
-        final Core.Apply apply = (Core.Apply) exp;
-        if (apply.fn.op == Op.RECORD_SELECTOR && apply.arg.op == Op.ID) {
-          pats.add(((Core.Id) apply.arg).idPat);
-        } else {
-          collectFieldAccessPatterns(apply.fn, pats);
-          collectFieldAccessPatterns(apply.arg, pats);
-        }
-        break;
-      case TUPLE:
-        for (Core.Exp arg : ((Core.Tuple) exp).args) {
-          collectFieldAccessPatterns(arg, pats);
-        }
-        break;
-      case ID:
-        // Direct ID reference (not a field access) - add to pats
-        pats.add(((Core.Id) exp).idPat);
-        break;
-      default:
-        // Literals and other expressions don't contribute to patterns
-        break;
-    }
   }
 
   static boolean maybePoint(
@@ -1858,8 +1732,8 @@ class Generators {
    * Creates an expression that generates values from several generators.
    *
    * <p>The resulting generator has {@code unique = false} because different
-   * branches of an orelse may produce overlapping values. The caller should add
-   * a distinct operation if uniqueness is required.
+   * branches of an {@code orelse} may produce overlapping values. The caller
+   * should add a {@code distinct} operation if uniqueness is required.
    *
    * @param ordered If true, generate a `list`, otherwise a `bag`
    * @param generators Generators
@@ -1878,8 +1752,7 @@ class Generators {
             collectionType.elementType(),
             transformEager(generators, g -> g.exp));
     final Core.Exp exp = core.apply(Pos.ZERO, collectionType, fn, arg);
-    final Set<Core.NamedPat> freePats =
-        SuchThatShuttle.freePats(cache.typeSystem, exp);
+    final Set<Core.NamedPat> freePats = freePats(cache.typeSystem, exp);
     return cache.add(new UnionGenerator(exp, freePats, generators));
   }
 
@@ -1936,10 +1809,10 @@ class Generators {
         cache,
         ordered,
         (Core.NamedPat) pat,
-        lower.left,
-        lower.right,
-        upper.left,
-        upper.right);
+        requireNonNull(lower.left),
+        requireNonNull(lower.right),
+        requireNonNull(upper.left),
+        requireNonNull(upper.right));
     return true;
   }
 
@@ -1976,61 +1849,11 @@ class Generators {
       // innerApply.arg is p (the prefix pattern)
       // outerApply.arg is s (the string to check prefixes of)
       if (references(innerApply.arg, pat)) {
-        generateStringPrefixes(cache, pat, ordered, outerApply.arg);
+        StringPrefixGenerator.create(cache, pat, ordered, outerApply.arg);
         return true;
       }
     }
     return false;
-  }
-
-  /**
-   * Creates an expression that generates all prefixes of a string.
-   *
-   * <p>Generates: {@code List.tabulate(String.size s + 1, fn i =>
-   * String.substring(s, 0, i))}
-   *
-   * @param strExp The string expression to generate prefixes of
-   */
-  static Generator generateStringPrefixes(
-      Cache cache, Core.Pat pat, boolean ordered, Core.Exp strExp) {
-    final TypeSystem typeSystem = cache.typeSystem;
-
-    // Build: String.size s + 1
-    final Core.Exp sizeExp = core.call(typeSystem, BuiltIn.STRING_SIZE, strExp);
-    final Core.Exp countExp =
-        core.call(
-            typeSystem,
-            BuiltIn.Z_PLUS_INT,
-            sizeExp,
-            core.intLiteral(BigDecimal.ONE));
-
-    // Build: fn i => String.substring(s, 0, i)
-    final Core.IdPat iPat = core.idPat(PrimitiveType.INT, "i", 0);
-    final Core.Exp substringExp =
-        core.call(
-            typeSystem,
-            BuiltIn.STRING_SUBSTRING,
-            core.tuple(
-                typeSystem,
-                strExp,
-                core.intLiteral(BigDecimal.ZERO),
-                core.id(iPat)));
-    final Core.Fn fn =
-        core.fn(
-            typeSystem.fnType(PrimitiveType.INT, PrimitiveType.STRING),
-            iPat,
-            substringExp);
-
-    // Build: List.tabulate(count, fn) or Bag.tabulate(count, fn)
-    final BuiltIn tabulate =
-        ordered ? BuiltIn.LIST_TABULATE : BuiltIn.BAG_TABULATE;
-    final Core.Apply exp =
-        core.call(
-            typeSystem, tabulate, PrimitiveType.STRING, Pos.ZERO, countExp, fn);
-
-    final Set<Core.NamedPat> freePats =
-        SuchThatShuttle.freePats(typeSystem, exp);
-    return cache.add(new StringPrefixGenerator(pat, exp, freePats, strExp));
   }
 
   /**
@@ -2095,8 +1918,7 @@ class Generators {
     BuiltIn tabulate = ordered ? BuiltIn.LIST_TABULATE : BuiltIn.BAG_TABULATE;
     Core.Apply exp = core.call(typeSystem, tabulate, type, Pos.ZERO, count, fn);
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
-    final Set<Core.NamedPat> freePats =
-        SuchThatShuttle.freePats(typeSystem, simplified);
+    final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
     return cache.add(
         new RangeGenerator(
             pat, simplified, freePats, lower, lowerStrict, upper, upperStrict));
@@ -2367,17 +2189,17 @@ class Generators {
    *   <li>{@code wholePat(#1 p)} returns {@code idPat(p)}
    * </ul>
    */
-  private static Core.@Nullable Pat wholePat(
-      TypeSystem typeSystem, Core.Exp exp) {
+  private static Core.@Nullable Pat wholePat(Core.Exp exp) {
     switch (exp.op) {
       case ID:
         return ((Core.Id) exp).idPat;
 
       case TUPLE:
+        final Core.Tuple tuple = (Core.Tuple) exp;
         int slot = -1;
         final List<Core.Pat> patList = new ArrayList<>();
-        for (Ord<Core.Exp> arg : Ord.zip(((Core.Tuple) exp).args)) {
-          if (wholePat(typeSystem, arg.e) != null) {
+        for (Ord<Core.Exp> arg : Ord.zip(tuple.args)) {
+          if (wholePat(arg.e) != null) {
             slot = arg.i;
           }
           patList.add(core.toPat(arg.e));
@@ -2385,9 +2207,10 @@ class Generators {
         if (slot < 0) {
           return null;
         }
-        return (exp.type instanceof RecordType)
-            ? core.recordPat((RecordType) exp.type, patList)
-            : core.tuplePat((RecordLikeType) exp.type, patList);
+        final RecordLikeType type = tuple.type();
+        return type instanceof RecordType
+            ? core.recordPat((RecordType) type, patList)
+            : core.tuplePat(type, patList);
 
       case APPLY:
         // Handle field access like #1 p or #x p
@@ -2419,7 +2242,6 @@ class Generators {
         boolean ignoreLowerStrict,
         Core.Exp upper,
         boolean ignoreUpperStrict) {
-      // unique = true because a range produces each integer exactly once
       super(exp, freePats, pat, Cardinality.FINITE, true);
       this.lower = lower;
       this.upper = upper;
@@ -2437,6 +2259,10 @@ class Generators {
       if (lowerBound == null || upperBound == null) {
         return exp;
       }
+      requireNonNull(lowerBound.left);
+      requireNonNull(lowerBound.right);
+      requireNonNull(upperBound.left);
+      requireNonNull(upperBound.right);
       final boolean boundsMatch =
           lowerBound.left.equals(this.lower)
               && upperBound.left.equals(this.upper);
@@ -2529,7 +2355,6 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Core.Exp point) {
-      // unique = true because a single value has no duplicates
       super(exp, freePats, pat, Cardinality.SINGLE, true);
       this.point = point;
     }
@@ -2547,8 +2372,7 @@ class Generators {
           ordered
               ? core.list(cache.typeSystem, lower)
               : core.bag(cache.typeSystem, lower);
-      final Set<Core.NamedPat> freePats =
-          SuchThatShuttle.freePats(cache.typeSystem, exp);
+      final Set<Core.NamedPat> freePats = freePats(cache.typeSystem, exp);
       return cache.add(new PointGenerator(pat, exp, freePats, lower));
     }
 
@@ -2579,9 +2403,50 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Core.Exp strExp) {
-      // unique = true because each prefix has a distinct length
       super(exp, freePats, pat, Cardinality.FINITE, true);
       this.strExp = strExp;
+    }
+
+    /**
+     * Creates an expression that generates all prefixes of a string.
+     *
+     * <p>Generates: {@code List.tabulate(String.size s + 1, fn i =>
+     * String.substring(s, 0, i))}
+     *
+     * @param strExp The string expression to generate prefixes of
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    static Generator create(
+        Cache cache, Core.Pat pat, boolean ordered, Core.Exp strExp) {
+      final TypeSystem ts = cache.typeSystem;
+
+      // Build: String.size s + 1
+      final Core.Exp sizeExp = core.call(ts, BuiltIn.STRING_SIZE, strExp);
+      final Core.Literal one = core.intLiteral(BigDecimal.ONE);
+      final Core.Exp countExp = core.call(ts, BuiltIn.Z_PLUS_INT, sizeExp, one);
+
+      // Build: fn i => String.substring(s, 0, i)
+      final Core.IdPat iPat = core.idPat(PrimitiveType.INT, "i", 0);
+      Core.Literal zero = core.intLiteral(BigDecimal.ZERO);
+      final Core.Exp substringExp =
+          core.call(
+              ts,
+              BuiltIn.STRING_SUBSTRING,
+              core.tuple(ts, strExp, zero, core.id(iPat)));
+      final Core.Fn fn =
+          core.fn(
+              ts.fnType(PrimitiveType.INT, PrimitiveType.STRING),
+              iPat,
+              substringExp);
+
+      // Build: List.tabulate(count, fn) or Bag.tabulate(count, fn)
+      final BuiltIn tabulate =
+          ordered ? BuiltIn.LIST_TABULATE : BuiltIn.BAG_TABULATE;
+      final Core.Apply exp =
+          core.call(ts, tabulate, PrimitiveType.STRING, Pos.ZERO, countExp, fn);
+
+      final Set<Core.NamedPat> freePats = freePats(ts, exp);
+      return cache.add(new StringPrefixGenerator(pat, exp, freePats, strExp));
     }
 
     @Override
@@ -2616,13 +2481,12 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         List<Generator> generators) {
-      // unique = false because branches of orelse may produce overlapping
-      // values
       super(
           exp,
           freePats,
           firstGenerator(generators).pat,
           Cardinality.FINITE,
+          // not unique because branches of union may overlap
           false);
       this.generators = ImmutableList.copyOf(generators);
     }
@@ -2651,7 +2515,6 @@ class Generators {
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
         Cardinality cardinality) {
-      // unique = true because each value of a type appears exactly once
       super(exp, freePats, pat, cardinality, true);
     }
 
@@ -2663,8 +2526,7 @@ class Generators {
           rangeExtent.iterable == null
               ? Cardinality.INFINITE
               : Cardinality.FINITE;
-      final Set<Core.NamedPat> freePats =
-          SuchThatShuttle.freePats(cache.typeSystem, exp);
+      final Set<Core.NamedPat> freePats = freePats(cache.typeSystem, exp);
       return cache.add(new ExtentGenerator(pat, exp, freePats, cardinality));
     }
 
@@ -2686,8 +2548,6 @@ class Generators {
         Core.Pat pat,
         Core.Exp collection,
         Iterable<? extends Core.NamedPat> freePats) {
-      // unique = true because the generator doesn't create duplicates;
-      // it just exposes the collection's contents as-is
       super(collection, freePats, pat, Cardinality.FINITE, true);
       this.collection = collection;
       checkArgument(collection.type.isCollection());
@@ -2701,7 +2561,7 @@ class Generators {
       final Core.Exp collection2 =
           core.withOrdered(ordered, collection, typeSystem);
       final Set<Core.NamedPat> freePats =
-          SuchThatShuttle.freePats(cache.typeSystem, collection2);
+          freePats(cache.typeSystem, collection2);
       return cache.add(new CollectionGenerator(pat, collection2, freePats));
     }
 
@@ -2713,129 +2573,6 @@ class Generators {
         // "p elem collection" simplifies to "true"
         return core.boolLiteral(true);
       }
-      return exp;
-    }
-  }
-
-  /**
-   * Generator that scans a collection and projects each element to match the
-   * goal pattern's type.
-   *
-   * <p>For example, for {@code {x = #1 p, y = #2 p} elem edges} where {@code p
-   * : int * int}, this generator scans {@code edges} (which contains {@code {x:
-   * int, y: int}} records) and yields {@code (r.x, r.y)} for each record {@code
-   * r}, effectively converting records to tuples to bind {@code p}.
-   */
-  static class ProjectionGenerator extends Generator {
-    final Core.Exp collection;
-    final Core.Exp projectionExp;
-
-    private ProjectionGenerator(
-        Core.NamedPat goalPat,
-        Core.Exp projectionExp,
-        Core.Exp collection,
-        Iterable<? extends Core.NamedPat> freePats) {
-      // unique = true because the generator doesn't create duplicates;
-      // it just projects the collection's contents
-      super(projectionExp, freePats, goalPat, Cardinality.FINITE, true);
-      this.collection = collection;
-      this.projectionExp = projectionExp;
-    }
-
-    static void create(
-        Cache cache,
-        boolean ordered,
-        Core.NamedPat goalPat,
-        Core.Exp elemExp,
-        Core.Exp collection) {
-      final TypeSystem ts = cache.typeSystem;
-
-      // Build a projection expression: from r in collection yield projection
-      // where projection converts r to goalPat's type
-      final Core.Exp projectionExp =
-          buildProjectionExpression(ts, goalPat, elemExp, collection, ordered);
-
-      final Set<Core.NamedPat> freePats =
-          SuchThatShuttle.freePats(ts, projectionExp);
-      cache.add(
-          new ProjectionGenerator(
-              goalPat, projectionExp, collection, freePats));
-    }
-
-    /**
-     * Builds an expression that scans the collection and projects each element
-     * to the goal pattern's type.
-     *
-     * <p>For {@code {x = #1 p, y = #2 p} elem edges} where p : int * int,
-     * builds: {@code from r in edges yield (r.x, r.y)}
-     */
-    private static Core.Exp buildProjectionExpression(
-        TypeSystem ts,
-        Core.NamedPat goalPat,
-        Core.Exp elemExp,
-        Core.Exp collection,
-        boolean ordered) {
-      // Create a fresh variable for scanning the collection
-      final Type elemType =
-          ((net.hydromatic.morel.type.ListType) collection.type).elementType;
-      final Core.IdPat scanPat = core.idPat(elemType, "r", 0);
-      final Core.Id scanId = core.id(scanPat);
-
-      // Build the yield expression by extracting fields from scanId based on
-      // the structure of elemExp
-      final Core.Exp yieldExp = buildYieldExpression(ts, elemExp, scanId);
-
-      // Build: from r in collection yield yieldExp
-      final FromBuilder fb = core.fromBuilder(ts);
-      fb.scan(scanPat, core.withOrdered(ordered, collection, ts));
-      fb.yield_(ordered, null, yieldExp, true);
-      return fb.build();
-    }
-
-    /**
-     * Builds the yield expression that converts collection elements to the goal
-     * pattern's type.
-     *
-     * <p>For elemExp = {x = #1 p, y = #2 p} and scanId = r, returns (r.x, r.y)
-     * (a tuple built from the record fields).
-     */
-    private static Core.Exp buildYieldExpression(
-        TypeSystem ts, Core.Exp elemExp, Core.Id scanId) {
-      // elemExp is a record/tuple of field accesses on p
-      // We need to extract the corresponding fields from scanId
-      if (elemExp.op == Op.TUPLE) {
-        final Core.Tuple tuple = (Core.Tuple) elemExp;
-        final List<Core.Exp> projectedArgs = new ArrayList<>();
-
-        if (tuple.type instanceof RecordType) {
-          // Record: {x = #1 p, y = #2 p}
-          // For each field in elemExp, get the corresponding field from scanId
-          final RecordType recordType = (RecordType) tuple.type;
-          int i = 0;
-          for (String fieldName : recordType.argNames()) {
-            // Get the field value from scanId
-            projectedArgs.add(core.field(ts, scanId, i));
-            i++;
-          }
-        } else {
-          // Tuple: (#1 p, #2 p)
-          for (int i = 0; i < tuple.args.size(); i++) {
-            projectedArgs.add(core.field(ts, scanId, i));
-          }
-        }
-
-        // Create result tuple with projected fields
-        final RecordLikeType goalType =
-            ts.tupleType(transformEager(projectedArgs, Core.Exp::type));
-        return core.tuple(goalType, projectedArgs);
-      }
-
-      // Fallback: just return scanId if we can't decompose
-      return scanId;
-    }
-
-    @Override
-    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       return exp;
     }
   }
