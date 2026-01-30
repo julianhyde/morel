@@ -1463,8 +1463,7 @@ Sys.planEx "code";
 *)
 
 (* testFromSuchThat2 - Complex function with division and elem *)
-(* TODO - currently not fully working *)
-(*
+(* TODO - currently not fully working
 let
   fun hasJob (d, job) =
     (d div 2, job)
@@ -1475,32 +1474,29 @@ in
     yield j
 end;
 > val it : string bag
-(*) Expected code:
-(*) "from(sink join(pat d_1,
-(*)     exp apply(fnValue nth:1, argCode get(name scott)),
-(*)   sink join(pat j,
-(*)       exp apply(
-(*)         fnCode apply(fnValue List.filter,
-(*)           argCode match(j,
-(*)             apply(fnCode match((d, job),
-(*)               apply2(fnValue elem,
-(*)                 tuple(apply2(fnValue div, get(name d), constant(2)),
-(*)                 get(name job)),
-(*)               from(
-(*)               sink join(pat e,
-(*)                 exp apply(fnValue nth:2, argCode get(name scott)),
-(*)                 sink collect(
-(*)                   tuple(apply(fnValue nth:1, argCode get(name e)),
-(*)                     apply(fnValue nth:5, argCode get(name e)))))))),
-(*)               argCode tuple(
-(*)                 apply(fnValue nth:0, argCode get(name d)),
-(*)                 get(name j))))),
-(*)         argCode apply(fnValue $.extent, argCode constant(()))),
-(*)     sink collect(get(name j)))))"
-(*
 Sys.planEx "code";
-> [actual output would appear here]
-*)
+> val it =
+ "from(sink join(pat d_1,
+     exp apply(fnValue nth:1, argCode get(name scott)),
+   sink join(pat j,
+       exp apply(
+         fnCode apply(fnValue List.filter,
+           argCode match(j,
+             apply(fnCode match((d, job),
+               apply2(fnValue elem,
+                 tuple(apply2(fnValue div, get(name d), constant(2)),
+                 get(name job)),
+               from(
+               sink join(pat e,
+                 exp apply(fnValue nth:2, argCode get(name scott)),
+                 sink collect(
+                   tuple(apply(fnValue nth:1, argCode get(name e)),
+                     apply(fnValue nth:5, argCode get(name e)))))))),
+               argCode tuple(
+                 apply(fnValue nth:0, argCode get(name d)),
+                 get(name j))))),
+         argCode apply(fnValue $.extent, argCode constant(()))),
+     sink collect(get(name j)))))"
 *)
 
 (* testFromSuchThat2b - Simple "d elem list" pattern *)

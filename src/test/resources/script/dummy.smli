@@ -16,36 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  *)
-Sys.set ("output", "tabular");
-> val it = () : unit
-
-val edges = [(1, 2), (2, 3), (1, 4), (4, 2), (4, 3)];
-> val edges = [(1,2),(2,3),(1,4),(4,2),(4,3)] : (int * int) list
-
-(*) Join: two elem constraints with shared variable y
-from x, y, z where (x, y) elem edges andalso (y, z) elem edges;
-> x y z
-> - - -
-> 1 2 3
-> 1 4 2
-> 1 4 3
-> 4 2 3
->
-> val it : {x:int, y:int, z:int} bag
-
-(*) Siblings - invert "exists v0 where parent (v0, x) andalso parent (v0, y)"
-let
-  val parent_facts = [("Alice", "Bob"), ("Alice", "Carol")]
-  fun parent (p, c) = (p, c) elem parent_facts
-  fun sibling (x, y) =
-    (exists v0 where parent (v0, x) andalso parent (v0, y))
-in
-  {sibling = from x, y where sibling (x, y)}
-end;
-> val it =
->   {
->    sibling=
->    [{x="Bob",y="Bob"},{x="Bob",y="Carol"},{x="Carol",y="Bob"},
->     {x="Carol",y="Carol"}]} : {sibling:{x:string, y:string} bag}
+"this is a simple script; modify it for debugging test cases";
+> val it = "this is a simple script; modify it for debugging test cases" : string
 
 (*) End dummy.smli

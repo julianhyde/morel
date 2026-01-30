@@ -40,10 +40,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
-import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
@@ -67,7 +67,6 @@ public class Expander {
    */
   public static Core.From expandFrom(
       TypeSystem typeSystem, Environment env, Core.From from) {
-    final Core.From outerFrom = from;
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     final Expander expander = new Expander(cache, ImmutableList.of());
 
@@ -100,45 +99,8 @@ public class Expander {
     }
 
     // Third, substitute generators.
-    // TODO: Refactor
-    if (true) {
-      Core.From from2 = expandFrom2(cache, env, stepVars);
-      return from2.equals(from) ? from : from2;
-    }
-
-    final Simplifier simplifier = new Simplifier(typeSystem, cache.generators);
-    return (Core.From)
-        from.accept(
-            new Shuttle(typeSystem) {
-              @Override
-              protected Core.Exp visit(Core.From from) {
-                final Core.From from2;
-                if (from == outerFrom) {
-                  from2 = expandFrom2(cache, env, stepVars);
-                } else if (false) {
-                  // Don't recurse into subqueries.
-                  return from;
-                } else {
-                  final StepVarSet stepVars2 =
-                      StepVarSet.create(from, typeSystem);
-                  from2 = expandFrom2(cache, env, stepVars2);
-                }
-                System.out.println(from);
-                System.out.println(from2);
-                System.out.println("---");
-                return from2;
-              }
-
-              @Override
-              protected Core.Exp visit(Core.Apply apply) {
-                Core.Exp exp1 = super.visit(apply);
-                final Core.Exp exp2 = simplifier.simplify(exp1);
-                if (exp2 == apply) {
-                  return apply;
-                }
-                return exp2.accept(this);
-              }
-            });
+    Core.From from2 = expandFrom2(cache, env, stepVars);
+    return from2.equals(from) ? from : from2;
   }
 
   private static Core.From expandFrom2(
@@ -179,19 +141,19 @@ public class Expander {
     // For example, for "exists v0 where parent(v0, x) andalso parent(v0, y)",
     // both the generator for x and the generator for y have v0 in their
     // patterns. We need v0 in allPats so the second generator can join on it.
-    final Set<Core.NamedPat> sharedPats = new HashSet<>();
     final Map<Core.NamedPat, Integer> patternCounts = new HashMap<>();
     for (Generator generator : generatorMap.values()) {
       for (Core.NamedPat p : generator.pat.expand()) {
         patternCounts.merge(p, 1, Integer::sum);
       }
     }
-    for (Map.Entry<Core.NamedPat, Integer> entry : patternCounts.entrySet()) {
-      if (entry.getValue() > 1 && !allPats.contains(entry.getKey())) {
-        allPats.add(entry.getKey());
-        sharedPats.add(entry.getKey());
-      }
-    }
+    final Set<Core.NamedPat> sharedPats = new HashSet<>();
+    patternCounts.forEach(
+        (p, count) -> {
+          if (count > 1 && allPats.add(p)) {
+            sharedPats.add(p);
+          }
+        });
 
     final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
     final Map<Core.NamedPat, Core.Exp> substitution = new HashMap<>();
@@ -231,7 +193,7 @@ public class Expander {
           // The step is not a scan over an extent. Add it now.
           step = Replacer.substitute(typeSystem, env, substitution, step);
 
-          // For WHERE steps, simplify the condition using generators that
+          // For "where" steps, simplify the condition using generators that
           // can reliably simplify predicates they satisfy.
           // This removes predicates that are satisfied by the generator.
           if (step instanceof Core.Where) {
@@ -352,19 +314,8 @@ public class Expander {
       final FromBuilder fromBuilder2 = core.fromBuilder(typeSystem);
       final Core.Pat scanPat =
           renamePatterns(typeSystem, generator.pat, renameMap);
-      // Use a non-trivial condition to prevent the FROM from being inlined.
-      // Inlining would add the inner scan's bindings (e.g., v0) to the outer
-      // builder, causing duplicate bindings when the same variable appears
-      // in multiple generators. We use "true andalso true andalso <conditions>"
-      // which is semantically equivalent but syntactically different from true.
-      final Core.Exp noInlineCondition =
-          core.andAlso(
-              typeSystem,
-              core.boolLiteral(true),
-              core.andAlso(typeSystem, joinConditions));
-      fromBuilder2.scan(scanPat, generator.exp, noInlineCondition);
-
-      // Join conditions are now part of the scan condition
+      fromBuilder2.scan(
+          scanPat, generator.exp, core.andAlso(typeSystem, joinConditions));
 
       // Yield only the required patterns.
       fromBuilder2.yield_(core.recordOrAtom(typeSystem, requiredPats));
@@ -504,34 +455,48 @@ public class Expander {
     return new Expander(cache, constraints);
   }
 
-  /** Finds free variables in an expression. */
-  static class FreeFinder extends EnvVisitor {
+  /**
+   * Finds free variables in an expression.
+   *
+   * <p>It works similarly to {@link FreeFinder}.
+   */
+  static class StepAnalyzer extends EnvVisitor {
     final List<Core.NamedPat> freePats;
-    final PairList<Core.FromStep, Set<Core.NamedPat>> stepVars;
+    final BiConsumer<Core.FromStep, Set<Core.NamedPat>> consumer;
 
-    private FreeFinder(
+    private StepAnalyzer(
         TypeSystem typeSystem,
         Environment env,
         Deque<FromContext> fromStack,
         List<Core.NamedPat> freePats,
-        PairList<Core.FromStep, Set<Core.NamedPat>> stepVars) {
+        BiConsumer<Core.FromStep, Set<Core.NamedPat>> consumer) {
       super(typeSystem, env, fromStack);
       this.freePats = freePats;
-      this.stepVars = stepVars;
+      this.consumer = consumer;
+    }
+
+    /**
+     * Given a query, computes a list of steps and the free variables in each
+     * step.
+     */
+    private static PairList<Core.FromStep, Set<Core.NamedPat>> getEntries(
+        Core.From from, TypeSystem typeSystem) {
+      final PairList<Core.FromStep, Set<Core.NamedPat>> list = PairList.of();
+      final Environment env = Environments.empty();
+      from.accept(
+          new StepAnalyzer(
+              typeSystem,
+              env,
+              new ArrayDeque<>(),
+              new ArrayList<>(),
+              list::add));
+      return list;
     }
 
     @Override
     protected EnvVisitor push(Environment env) {
-      return new FreeFinder(typeSystem, env, fromStack, freePats, stepVars);
+      return new StepAnalyzer(typeSystem, env, fromStack, freePats, consumer);
     }
-
-    //    @Override
-    //    protected void visit(Core.From from) {
-    // Recurse into the root query, not into subqueries.
-    //      if (fromStack.isEmpty()) {
-    //        super.visit(from);
-    //      }
-    //    }
 
     @Override
     protected void visit(Core.Id id) {
@@ -552,7 +517,7 @@ public class Expander {
           freePats,
           transformEager(stepEnv.bindings, b -> b.id),
           namedPats::add);
-      stepVars.add(step, namedPats.build());
+      consumer.accept(step, namedPats.build());
     }
   }
 
@@ -574,13 +539,7 @@ public class Expander {
      * step environment used by each step.
      */
     static StepVarSet create(Core.From from, TypeSystem typeSystem) {
-      final PairList<Core.FromStep, Set<Core.NamedPat>> list = PairList.of();
-      final Environment env = Environments.empty();
-      final FreeFinder visitor =
-          new FreeFinder(
-              typeSystem, env, new ArrayDeque<>(), new ArrayList<>(), list);
-      from.accept(visitor);
-      return new StepVarSet(list);
+      return new StepVarSet(StepAnalyzer.getEntries(from, typeSystem));
     }
   }
 }
