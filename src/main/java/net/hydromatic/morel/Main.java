@@ -52,7 +52,7 @@ import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
-import net.hydromatic.morel.compile.ExpectedOutputBagPrinter;
+import net.hydromatic.morel.compile.OutputMatcher;
 import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Codes;
@@ -74,6 +74,7 @@ public class Main {
   private final Map<String, ForeignValue> valueMap;
   final TypeSystem typeSystem = new TypeSystem();
   final boolean idempotent;
+  final @Nullable NavigableMap<Integer, String> expectedOutputByOffset;
   final Session session;
 
   /**
@@ -128,15 +129,14 @@ public class Main {
     this.idempotent = idempotent;
     if (idempotent) {
       StripResult result = stripAndCaptureOutLines(in);
-      ExpectedOutputBagPrinter bagPrinter =
-          new ExpectedOutputBagPrinter(typeSystem);
-      session.setBagPrinter(bagPrinter);
+      this.expectedOutputByOffset = result.expectedOutputByOffset;
       this.in =
           buffer(
               new BufferingReader(
                   new StringReader(result.code),
                   result.expectedOutputByOffset));
     } else {
+      this.expectedOutputByOffset = null;
       this.in = buffer(in);
     }
   }
@@ -357,7 +357,11 @@ public class Main {
         shell,
         outLines,
         session1 ->
-            shell.run(session1, new BufferingReader(in), echoLines, outLines));
+            shell.run(
+                session1,
+                new BufferingReader(in, expectedOutputByOffset),
+                echoLines,
+                outLines));
     out.flush();
   }
 
@@ -412,7 +416,6 @@ public class Main {
           String code = in2.flush();
           String expectedOutput = in2.expectedOutput();
           if (main.idempotent) {
-            session.bagPrinter().setExpectedOutput(expectedOutput);
             if (code.startsWith("\n")) {
               code = code.substring(1);
             }
@@ -435,10 +438,14 @@ public class Main {
           if (statement == null) {
             break;
           }
+          final List<String> collectedLines = new ArrayList<>();
+          final Consumer<String> collectingOutLines = collectedLines::add;
           session.withShell(
               subShell,
-              outLines,
-              session1 -> subShell.command(statement, outLines, typeOnly));
+              collectingOutLines,
+              session1 ->
+                  subShell.command(statement, collectingOutLines, typeOnly));
+          emitOutput(collectedLines, expectedOutput, outLines);
         } catch (MorelParseException | CompileException e) {
           final String message = e.getMessage();
           if (message.startsWith("Encountered \"<EOF>\" ")) {
@@ -455,6 +462,30 @@ public class Main {
             break;
           }
         }
+      }
+    }
+
+    /**
+     * Emits output lines, substituting expected output if semantically
+     * equivalent. Uses value-based comparison with bag-aware equality so that
+     * bag element order differences are accepted.
+     */
+    private static void emitOutput(
+        List<String> actualLines,
+        @Nullable String expectedOutput,
+        Consumer<String> outLines) {
+      if (expectedOutput != null) {
+        String actual = String.join("\n", actualLines);
+        if (actual.equals(expectedOutput)
+            || OutputMatcher.equivalent(actual, expectedOutput)) {
+          // Expected and actual are equivalent; emit expected verbatim
+          outLines.accept(expectedOutput);
+          return;
+        }
+      }
+      // Emit actual output
+      for (String line : actualLines) {
+        outLines.accept(line);
       }
     }
 
@@ -650,112 +681,6 @@ public class Main {
       this.code = code;
       this.expectedOutputByOffset = expectedOutputByOffset;
     }
-  }
-
-  /**
-   * Parses a bracketed list of elements from expected output text.
-   *
-   * <p>Finds the first {@code [...]} in the text, splits the content on commas
-   * at depth 0, respecting parentheses, brackets, braces, and quoted strings.
-   *
-   * @param text Expected output text
-   * @return List of element strings, or null if not parseable
-   */
-  public static @Nullable List<String> parseBracketedElements(String text) {
-    int start = text.indexOf('[');
-    if (start < 0) {
-      return null;
-    }
-    // Find matching ']'
-    int depth = 0;
-    boolean inString = false;
-    int end = -1;
-    for (int i = start; i < text.length(); i++) {
-      char c = text.charAt(i);
-      if (inString) {
-        if (c == '"') {
-          inString = false;
-        } else if (c == '\\') {
-          i++; // skip escaped char
-        }
-        continue;
-      }
-      switch (c) {
-        case '"':
-          inString = true;
-          break;
-        case '[':
-        case '(':
-        case '{':
-          depth++;
-          break;
-        case ')':
-        case '}':
-          depth--;
-          break;
-        case ']':
-          depth--;
-          if (depth == 0) {
-            end = i;
-            i = text.length(); // break out of loop
-          }
-          break;
-        default:
-          break;
-      }
-    }
-    if (end < 0) {
-      return null;
-    }
-    String content = text.substring(start + 1, end);
-    // Check for truncation marker
-    if (content.contains("...")) {
-      return null;
-    }
-    if (content.trim().isEmpty()) {
-      return ImmutableList.of();
-    }
-    // Split on commas at depth 0
-    List<String> elements = new ArrayList<>();
-    depth = 0;
-    inString = false;
-    int elemStart = 0;
-    for (int i = 0; i < content.length(); i++) {
-      char c = content.charAt(i);
-      if (inString) {
-        if (c == '"') {
-          inString = false;
-        } else if (c == '\\') {
-          i++;
-        }
-        continue;
-      }
-      switch (c) {
-        case '"':
-          inString = true;
-          break;
-        case '[':
-        case '(':
-        case '{':
-          depth++;
-          break;
-        case ']':
-        case ')':
-        case '}':
-          depth--;
-          break;
-        case ',':
-          if (depth == 0) {
-            elements.add(content.substring(elemStart, i));
-            elemStart = i + 1;
-          }
-          break;
-        default:
-          break;
-      }
-    }
-    elements.add(content.substring(elemStart));
-    return elements;
   }
 }
 

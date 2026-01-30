@@ -20,15 +20,11 @@ package net.hydromatic.morel.compile;
 
 import java.util.List;
 import net.hydromatic.morel.type.Type;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Controls element ordering when printing bag values. */
 public interface BagPrinter {
   /** Returns elements in the order they should be printed. */
   List<Object> order(List<Object> elements, Type elementType);
-
-  /** Sets the expected output for the next evaluation. Default is no-op. */
-  default void setExpectedOutput(@Nullable String expectedOutput) {}
 
   /** Default: prints in natural iteration order. */
   BagPrinter NATURAL = (elements, type) -> elements;
