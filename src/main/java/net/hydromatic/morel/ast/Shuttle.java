@@ -457,8 +457,6 @@ public class Shuttle {
   }
 
   protected Core.Exp visit(Core.Let let) {
-    System.err.println(
-        "DEBUG Shuttle.visit(Let) called, class = " + getClass());
     return let.copy(let.decl.accept(this), let.exp.accept(this));
   }
 
@@ -475,11 +473,6 @@ public class Shuttle {
   }
 
   protected Core.NonRecValDecl visit(Core.NonRecValDecl valDecl) {
-    System.err.println(
-        "DEBUG Shuttle.visit(NonRecValDecl): pat="
-            + valDecl.pat
-            + ", exp.op="
-            + valDecl.exp.op);
     return valDecl.copy(
         valDecl.pat.accept(this),
         valDecl.exp.accept(this),

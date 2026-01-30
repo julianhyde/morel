@@ -18,11 +18,8 @@
  */
 package net.hydromatic.morel.compile;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.function.Consumer;
+import java.util.ArrayList;
+import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
@@ -69,7 +66,7 @@ class SuchThatShuttle extends EnvShuttle {
     // When visiting recursive function definitions, mark that we're inside
     // so that From expressions won't be expanded (they're part of the
     // function definition, not queries to execute).
-    final java.util.List<Binding> bindings = new java.util.ArrayList<>();
+    final List<Binding> bindings = new ArrayList<>();
     Compiles.bindPattern(typeSystem, bindings, recValDecl);
     final SuchThatShuttle inner =
         new SuchThatShuttle(typeSystem, env.bindAll(bindings), true);
@@ -93,60 +90,17 @@ class SuchThatShuttle extends EnvShuttle {
 
   @Override
   protected Core.Exp visit(Core.From from) {
-    System.err.println(
-        "DEBUG SuchThatShuttle.visit(From): inRecursiveFunction="
-            + inRecursiveFunction);
-
-    // Skip expansion for From expressions inside recursive function
-    // definitions.
-    // These are part of the function's logic, not queries to execute.
-    // The outer query will handle transitive closure detection.
+    // Skip expansion for "from" expressions inside recursive function
+    // definitions. These are part of the function's logic, not queries to
+    // execute. The outer query will handle transitive closure detection.
     if (inRecursiveFunction) {
-      System.err.println(
-          "DEBUG SuchThatShuttle: skipping expansion inside recursive function");
       return super.visit(from);
     }
 
     final Core.From from2 = Expander.expandFrom(typeSystem, env, from);
-    System.out.println(from2);
 
     // Expand subqueries.
     return super.visit(from2);
-  }
-
-  // TODO: Refactor: Move this method to a better place.
-  static Set<Core.NamedPat> freePats(TypeSystem typeSystem, Core.Exp exp) {
-    final Set<Core.NamedPat> set = new HashSet<>();
-    exp.accept(
-        new FreeFinder(
-            typeSystem, Environments.empty(), new ArrayDeque<>(), set::add));
-    return set;
-  }
-
-  /** Finds free variables in an expression. */
-  private static class FreeFinder extends EnvVisitor {
-    final Consumer<Core.NamedPat> consumer;
-
-    FreeFinder(
-        TypeSystem typeSystem,
-        Environment env,
-        Deque<FromContext> fromStack,
-        Consumer<Core.NamedPat> consumer) {
-      super(typeSystem, env, fromStack);
-      this.consumer = consumer;
-    }
-
-    @Override
-    protected EnvVisitor push(Environment env) {
-      return new FreeFinder(typeSystem, env, fromStack, consumer);
-    }
-
-    @Override
-    protected void visit(Core.Id id) {
-      if (env.getOpt(id.idPat) == null) {
-        consumer.accept(id.idPat);
-      }
-    }
   }
 }
 

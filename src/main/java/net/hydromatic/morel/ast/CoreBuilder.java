@@ -20,6 +20,7 @@ package net.hydromatic.morel.ast;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Maps.transformValues;
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.PairList.fromTransformed;
@@ -961,8 +962,8 @@ public enum CoreBuilder {
           if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 unionExtents(typeSystem, apply2.args());
-            if (pair.right.isEmpty()) {
-              return pair.left;
+            if (requireNonNull(pair.right).isEmpty()) {
+              return requireNonNull(pair.left);
             }
           }
         }
@@ -974,8 +975,8 @@ public enum CoreBuilder {
           if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 unionExtents(typeSystem, apply2.args());
-            if (pair.right.isEmpty()) {
-              return pair.left;
+            if (requireNonNull(pair.right).isEmpty()) {
+              return requireNonNull(pair.left);
             }
           }
         }
@@ -985,8 +986,8 @@ public enum CoreBuilder {
           if (allMatch(apply2.args(), Core.Exp::isExtent)) {
             Pair<Core.Exp, List<Core.Exp>> pair =
                 intersectExtents(typeSystem, apply2.args());
-            if (pair.right.isEmpty()) {
-              return pair.left;
+            if (requireNonNull(pair.right).isEmpty()) {
+              return requireNonNull(pair.left);
             }
           }
         }
@@ -1198,28 +1199,6 @@ public enum CoreBuilder {
   }
 
   /**
-   * Returns an expression substituting every given expression as true.
-   *
-   * <p>For example, if {@code exp} is "{@code x = 1 andalso y > 2}" and {@code
-   * trueExps} is [{@code x = 1}, {@code z = 2}], returns "{@code y > 2}".
-   */
-  public Core.Exp subTrue(
-      TypeSystem typeSystem, Core.Exp exp, List<Core.Exp> trueExps) {
-    List<Core.Exp> conjunctions = decomposeAnd(exp);
-    List<Core.Exp> conjunctions2 = new ArrayList<>();
-    for (Core.Exp conjunction : conjunctions) {
-      if (!trueExps.contains(conjunction)) {
-        conjunctions2.add(conjunction);
-      }
-    }
-    if (conjunctions.size() == conjunctions2.size()) {
-      // Don't create a new expression unless we have to.
-      return exp;
-    }
-    return andAlso(typeSystem, conjunctions2);
-  }
-
-  /**
    * Decomposes an {@code andalso} expression; inverse of {@link
    * #andAlso(TypeSystem, Iterable)}.
    *
@@ -1354,12 +1333,8 @@ public enum CoreBuilder {
   }
 
   /**
-   * Simplifies {@code (#1 x, #2 x)} to {@code x} if {@code x} has exactly 2
-   * fields.
-   *
-   * <p>More generally, simplifies a tuple of field accesses on the same
-   * expression to that expression, if the field accesses cover all fields in
-   * order.
+   * Simplifies a tuple expression like {@code (#1 x, #2 x, ...)} to {@code x}
+   * if the tuple references all fields of {@code x} in order.
    *
    * @param args the tuple arguments (already simplified)
    * @param recordLikeType the type of the tuple
