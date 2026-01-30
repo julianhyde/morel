@@ -41,11 +41,12 @@ from i where i >= 0 andalso i <= 10;
 Sys.planEx "3";
 > val it = "val it = from i in #tabulate Bag (11, fn k => 0 + k)" : string
 
-from i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22;
-> val it = [1,2,3,4,5,21,8,0] : int bag
+from i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22
+  order i;
+> val it = [0,1,2,3,4,5,8,21] : int list
 Sys.planEx "3";
 > val it =
->   "val it = from i in #concat Bag ([#tabulate Bag (6, fn k => 0 + k), #fromList Bag ([8]), #tabulate Bag (1, fn k => op + (21, k))]) group i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22"
+>   "val it = from i in #concat Bag ([#tabulate Bag (6, fn k => 0 + k), #fromList Bag ([8]), #tabulate Bag (1, fn k => op + (21, k))]) group i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22 order i"
 >   : string
 
 from i where i > 0 andalso i < 4 yield {j = i + 1};
@@ -219,9 +220,9 @@ let (* TODO remove 'let' when we have fixed inlining *)
   fun isSmall n = n elem [1, 2]
   fun isLarge n = n elem [10, 20]
 in
-  from n where isSmall n orelse isLarge n
+  from n where isSmall n orelse isLarge n order n
 end;
-> val it = [1,2,20,10] : int bag
+> val it = [1,2,10,20] : int bag
 
 (* -- Predicate inversion ------------------------------- *)
 
@@ -328,7 +329,8 @@ where i > 0 andalso i < 3
 join k, m
 where j > 4 andalso j < 7
   andalso k > 8 andalso k < 11
-  andalso m > 12 andalso m < 15;
+  andalso m > 12 andalso m < 15
+order {i, j, k, m};
 > i j k  m
 > - - -- --
 > 1 5 9  13
@@ -348,7 +350,7 @@ where j > 4 andalso j < 7
 > 2 6 10 13
 > 2 6 10 14
 >
-> val it : {i:int, j:int, k:int, m:int} bag
+> val it : {i:int, j:int, k:int, m:int} list
 
 (* -- Emp and dept examples ----------------------------- *)
 
