@@ -222,7 +222,7 @@ let (* TODO remove 'let' when we have fixed inlining *)
 in
   from n where isSmall n orelse isLarge n order n
 end;
-> val it = [1,2,10,20] : int bag
+> val it = [1,2,10,20] : int list
 
 (* -- Predicate inversion ------------------------------- *)
 

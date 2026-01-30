@@ -42,6 +42,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Pos;
@@ -50,6 +52,7 @@ import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.ExpectedOutputBagPrinter;
 import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Codes;
@@ -61,6 +64,7 @@ import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.MorelException;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Standard ML REPL. */
 public class Main {
@@ -117,12 +121,24 @@ public class Main {
       Map<String, ForeignValue> valueMap,
       Map<Prop, Object> propMap,
       boolean idempotent) {
-    this.in = buffer(idempotent ? stripOutLines(in) : in);
     this.out = buffer(out);
     this.echo = argList.contains("--echo");
     this.valueMap = ImmutableMap.copyOf(valueMap);
     this.session = new Session(propMap, typeSystem);
     this.idempotent = idempotent;
+    if (idempotent) {
+      StripResult result = stripAndCaptureOutLines(in);
+      ExpectedOutputBagPrinter bagPrinter =
+          new ExpectedOutputBagPrinter(typeSystem);
+      session.setBagPrinter(bagPrinter);
+      this.in =
+          buffer(
+              new BufferingReader(
+                  new StringReader(result.code),
+                  result.expectedOutputByOffset));
+    } else {
+      this.in = buffer(in);
+    }
   }
 
   private static void readerToString(Reader r, StringBuilder b) {
@@ -140,10 +156,12 @@ public class Main {
     }
   }
 
-  private static Reader stripOutLines(Reader in) {
+  /** Strips output lines and captures expected output by offset. */
+  private static StripResult stripAndCaptureOutLines(Reader in) {
     final StringBuilder b = new StringBuilder();
     readerToString(in, b);
     final String s = str(b);
+    final NavigableMap<Integer, String> expectedMap = new TreeMap<>();
 
     for (int i = 0, n = s.length(); ; ) {
       int j0 = i == 0 && (s.startsWith("> ") || s.startsWith(">\n")) ? 0 : -1;
@@ -158,11 +176,56 @@ public class Main {
         break;
       }
       if (j == j0 || j == j1 || j == j2) {
-        // Skip line beginning ">"
+        // Skip lines beginning ">"
         b.append(s, i, j);
-        int k = s.indexOf("\n", j + 1);
-        if (k < 0) {
-          k = n;
+        final int offsetInStripped = b.length();
+        // Collect all consecutive ">" lines as expected output
+        final StringBuilder expectedBuf = new StringBuilder();
+        int k = j;
+        while (k < n) {
+          // If k == j and j == j0, we're at position 0
+          // Otherwise we need a newline before ">"
+          if (k == j && j == j0) {
+            // At start of string: line begins with ">" at position 0
+          } else if (k < n && s.charAt(k) == '\n') {
+            k++; // skip the newline before ">"
+          } else {
+            break;
+          }
+          if (k >= n || s.charAt(k) != '>') {
+            break;
+          }
+          // We have a ">" line: find end of line
+          int lineEnd = s.indexOf("\n", k + 1);
+          if (lineEnd < 0) {
+            lineEnd = n;
+          }
+          String line = s.substring(k, lineEnd);
+          // Remove "> " prefix (or just ">")
+          if (line.startsWith("> ")) {
+            line = line.substring(2);
+          } else if (line.equals(">")) {
+            line = "";
+          } else {
+            break;
+          }
+          if (expectedBuf.length() > 0) {
+            expectedBuf.append('\n');
+          }
+          expectedBuf.append(line);
+          k = lineEnd;
+          // Check if next line also starts with ">"
+          if (k < n && s.charAt(k) == '\n') {
+            int peek = k + 1;
+            if (peek < n && s.charAt(peek) == '>') {
+              // Continue collecting
+              continue;
+            }
+          }
+          break;
+        }
+        if (expectedBuf.length() > 0) {
+          expectedMap.put(offsetInStripped, expectedBuf.toString());
         }
         i = k;
       } else if (j == j3) {
@@ -199,7 +262,12 @@ public class Main {
         i = k;
       }
     }
-    return new StringReader(b.toString());
+    return new StripResult(b.toString(), expectedMap);
+  }
+
+  /** Strips output lines without capturing expected output (for sub-shells). */
+  private static Reader stripOutLines(Reader in) {
+    return new StringReader(stripAndCaptureOutLines(in).code);
   }
 
   /**
@@ -342,7 +410,9 @@ public class Main {
           parser.zero("stdIn");
           final AstNode statement = parser.statementSemicolonOrEofSafe();
           String code = in2.flush();
+          String expectedOutput = in2.expectedOutput();
           if (main.idempotent) {
+            session.bagPrinter().setExpectedOutput(expectedOutput);
             if (code.startsWith("\n")) {
               code = code.substring(1);
             }
@@ -518,15 +588,27 @@ public class Main {
    */
   static class BufferingReader extends FilterReader {
     final StringBuilder buf = new StringBuilder();
+    private final @Nullable NavigableMap<Integer, String> expectedMap;
+    private int offset = 0;
+    private int flushStart = 0;
 
     protected BufferingReader(Reader in) {
+      this(in, null);
+    }
+
+    BufferingReader(
+        Reader in, @Nullable NavigableMap<Integer, String> expectedMap) {
       super(in);
+      this.expectedMap = expectedMap;
     }
 
     @Override
     public int read() throws IOException {
       int c = super.read();
-      buf.append(c);
+      if (c >= 0) {
+        buf.append((char) c);
+        offset++;
+      }
       return c;
     }
 
@@ -535,13 +617,145 @@ public class Main {
       int n = super.read(cbuf, off, 1);
       if (n > 0) {
         buf.append(cbuf, off, n);
+        offset += n;
       }
       return n;
     }
 
     public String flush() {
+      flushStart = offset;
       return str(buf);
     }
+
+    /**
+     * Returns expected output for the most recently flushed chunk, or null.
+     * Uses position-based lookup to stay in sync.
+     */
+    public @Nullable String expectedOutput() {
+      if (expectedMap == null) {
+        return null;
+      }
+      Map.Entry<Integer, String> entry = expectedMap.floorEntry(flushStart);
+      return entry != null ? entry.getValue() : null;
+    }
+  }
+
+  /** Result of stripping output lines from an idempotent script. */
+  static class StripResult {
+    final String code;
+    final NavigableMap<Integer, String> expectedOutputByOffset;
+
+    StripResult(
+        String code, NavigableMap<Integer, String> expectedOutputByOffset) {
+      this.code = code;
+      this.expectedOutputByOffset = expectedOutputByOffset;
+    }
+  }
+
+  /**
+   * Parses a bracketed list of elements from expected output text.
+   *
+   * <p>Finds the first {@code [...]} in the text, splits the content on commas
+   * at depth 0, respecting parentheses, brackets, braces, and quoted strings.
+   *
+   * @param text Expected output text
+   * @return List of element strings, or null if not parseable
+   */
+  public static @Nullable List<String> parseBracketedElements(String text) {
+    int start = text.indexOf('[');
+    if (start < 0) {
+      return null;
+    }
+    // Find matching ']'
+    int depth = 0;
+    boolean inString = false;
+    int end = -1;
+    for (int i = start; i < text.length(); i++) {
+      char c = text.charAt(i);
+      if (inString) {
+        if (c == '"') {
+          inString = false;
+        } else if (c == '\\') {
+          i++; // skip escaped char
+        }
+        continue;
+      }
+      switch (c) {
+        case '"':
+          inString = true;
+          break;
+        case '[':
+        case '(':
+        case '{':
+          depth++;
+          break;
+        case ')':
+        case '}':
+          depth--;
+          break;
+        case ']':
+          depth--;
+          if (depth == 0) {
+            end = i;
+            i = text.length(); // break out of loop
+          }
+          break;
+        default:
+          break;
+      }
+    }
+    if (end < 0) {
+      return null;
+    }
+    String content = text.substring(start + 1, end);
+    // Check for truncation marker
+    if (content.contains("...")) {
+      return null;
+    }
+    if (content.trim().isEmpty()) {
+      return ImmutableList.of();
+    }
+    // Split on commas at depth 0
+    List<String> elements = new ArrayList<>();
+    depth = 0;
+    inString = false;
+    int elemStart = 0;
+    for (int i = 0; i < content.length(); i++) {
+      char c = content.charAt(i);
+      if (inString) {
+        if (c == '"') {
+          inString = false;
+        } else if (c == '\\') {
+          i++;
+        }
+        continue;
+      }
+      switch (c) {
+        case '"':
+          inString = true;
+          break;
+        case '[':
+        case '(':
+        case '{':
+          depth++;
+          break;
+        case ']':
+        case ')':
+        case '}':
+          depth--;
+          break;
+        case ',':
+          if (depth == 0) {
+            elements.add(content.substring(elemStart, i));
+            elemStart = i + 1;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+    elements.add(content.substring(elemStart));
+    return elements;
   }
 }
 
