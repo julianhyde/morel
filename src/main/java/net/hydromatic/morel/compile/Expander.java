@@ -109,12 +109,16 @@ public class Expander {
     final TypeSystem typeSystem = cache.typeSystem;
     final Set<Core.NamedPat> done = new HashSet<>();
     final Set<Core.NamedPat> allPats = new HashSet<>();
+    // All patterns defined in any scan step (extent or not). Used to
+    // distinguish local scan patterns from outer-scope variables.
+    final Set<Core.NamedPat> allScanPats = new HashSet<>();
     final Map<Core.NamedPat, Generator> generatorMap = new HashMap<>();
     stepVarSet.stepVars.forEach(
         (step, vars) -> {
           if (step.op == Op.SCAN) {
             final Core.Scan scan = (Core.Scan) step;
             final List<Core.NamedPat> namedPats = scan.pat.expand();
+            allScanPats.addAll(namedPats);
             if (scan.exp.isExtent()) {
               for (Core.NamedPat namedPat : namedPats) {
                 if (!stepVarSet.usedPats.contains(namedPat)) {
@@ -162,7 +166,13 @@ public class Expander {
           // Pull forward any generators.
           for (Core.NamedPat freePat : freePats) {
             addGeneratorScan(
-                typeSystem, done, freePat, generatorMap, allPats, fromBuilder);
+                typeSystem,
+                done,
+                freePat,
+                generatorMap,
+                allPats,
+                allScanPats,
+                fromBuilder);
           }
 
           if (step instanceof Core.Scan) {
@@ -173,7 +183,13 @@ public class Expander {
                 // "exists x, y where x elem [1, 2]".
                 if (stepVarSet.usedPats.contains(p)) {
                   addGeneratorScan(
-                      typeSystem, done, p, generatorMap, allPats, fromBuilder);
+                      typeSystem,
+                      done,
+                      p,
+                      generatorMap,
+                      allPats,
+                      allScanPats,
+                      fromBuilder);
                 }
               }
               if (scan.env.atom
@@ -244,6 +260,7 @@ public class Expander {
       Core.NamedPat freePat,
       Map<Core.NamedPat, Generator> generatorMap,
       Set<Core.NamedPat> allPats,
+      Set<Core.NamedPat> allScanPats,
       FromBuilder fromBuilder) {
     if (done.contains(freePat) || !allPats.contains(freePat)) {
       return;
@@ -251,18 +268,24 @@ public class Expander {
 
     // Find a generator, and find which patterns it depends on.
     final Generator generator = generatorMap.get(freePat);
+    if (generator == null) {
+      return;
+    }
 
     // Make sure all dependencies have a scan.
     for (Core.NamedPat p : generator.freePats) {
-      addGeneratorScan(typeSystem, done, p, generatorMap, allPats, fromBuilder);
+      addGeneratorScan(
+          typeSystem, done, p, generatorMap, allPats, allScanPats, fromBuilder);
     }
 
     // Check that all dependencies are now satisfied.
-    // If a dependency is from a non-extent scan that hasn't been processed yet,
-    // we cannot add this generator now - it will be added later when the
-    // dependency is in `done` (e.g., when processing the WHERE clause).
+    // If a dependency is from a scan in this from expression that hasn't been
+    // processed yet, we cannot add this generator now - it will be added later
+    // when the dependency is in `done` (e.g., when processing the WHERE
+    // clause). Free variables from outer scopes (e.g., a variable defined in
+    // an enclosing let) are already bound and don't need to be "done".
     for (Core.NamedPat p : generator.freePats) {
-      if (!done.contains(p)) {
+      if (allScanPats.contains(p) && !done.contains(p)) {
         return;
       }
     }

@@ -538,6 +538,11 @@ class Generators {
 
     final Core.Pat tuplePat = createTuplePatFromArg(cache.typeSystem, fnArg);
     if (tuplePat == null) {
+      // Some args are not IDs (e.g., constants). Try with fresh variables.
+      if (fnArg.op == Op.TUPLE) {
+        return tryTupleTransitiveClosureWithConstants(
+            cache, fn, apply, fnArg, goalPat, ordered);
+      }
       return false;
     }
 
@@ -673,6 +678,66 @@ class Generators {
     final Set<Core.NamedPat> freePats = freePats(ts, wrappedExp);
     cache.add(
         new TransitiveClosureGenerator(goalPat, wrappedExp, freePats, apply));
+    return true;
+  }
+
+  /**
+   * Handles transitive closure when some call arguments are constants (e.g.,
+   * {@code isAncestor(a, "arwen")}).
+   *
+   * <p>Creates fresh variables for all positions, runs the full transitive
+   * closure, then registers a generator with a tuple pattern containing both
+   * variable and literal patterns. The literal patterns act as filters during
+   * scan, same as how {@link CollectionGenerator} handles partial patterns.
+   */
+  private static boolean tryTupleTransitiveClosureWithConstants(
+      Cache cache,
+      Core.Fn fn,
+      Core.Apply apply,
+      Core.Exp fnArg,
+      Core.Pat goalPat,
+      boolean ordered) {
+    final TypeSystem ts = cache.typeSystem;
+    final Core.Tuple tuple = (Core.Tuple) fnArg;
+
+    // Create fresh variables for each position in the tuple
+    final List<Core.IdPat> freshPats = new ArrayList<>();
+    final List<Core.Exp> freshArgs = new ArrayList<>();
+    for (int i = 0; i < tuple.args.size(); i++) {
+      final Core.Exp arg = tuple.args.get(i);
+      final Core.IdPat freshPat = core.idPat(arg.type, "_tc_" + i, 0);
+      freshPats.add(freshPat);
+      freshArgs.add(core.id(freshPat));
+    }
+    final Core.Pat freshTuplePat = core.tuplePat(ts, freshPats);
+    final Core.Exp freshCallArgs =
+        core.tuple(
+            (RecordLikeType) fnArg.type, freshArgs.toArray(new Core.Exp[0]));
+
+    // Analyze the transitive closure using fresh callArgs
+    final String fnName = ((Core.Id) apply.fn).idPat.name;
+    final @Nullable TransitiveClosurePattern tcPattern =
+        analyzeTransitiveClosure(cache, fn, freshCallArgs, fnName);
+    if (tcPattern == null) {
+      return false;
+    }
+
+    // Generate TC expression using the fresh tuplePat
+    final Core.Exp iterateExp =
+        generateTransitiveClosure(cache, tcPattern, freshTuplePat, ordered);
+    if (iterateExp == null) {
+      return false;
+    }
+
+    // Build a scan pattern that mirrors the call arguments: variable positions
+    // use the goalPat's IdPat (or fresh pats), constant positions use literal
+    // patterns. E.g., for isAncestor(a, "arwen") we create pattern (a, "arwen")
+    // so the scan destructures tuples and filters by the literal.
+    final Core.Pat scanPat = requireNonNull(wholePat(fnArg));
+
+    final Set<Core.NamedPat> freePats = freePats(ts, iterateExp);
+    cache.add(
+        new TransitiveClosureGenerator(scanPat, iterateExp, freePats, apply));
     return true;
   }
 
