@@ -84,8 +84,10 @@ public class FunctionAnalyzer {
       return recursiveResult.get();
     }
 
-    // Default: not invertible
-    return FunctionRegistry.FunctionInfo.notInvertible(fn.idPat);
+    // Default: not registered - let legacy inlining handle it
+    // This includes andalso patterns and other complex predicates
+    // Legacy inlining will substitute the function body and try to invert it
+    return null; // Signal: not pre-analyzed, use legacy inlining
   }
 
   /**
@@ -485,7 +487,11 @@ public class FunctionAnalyzer {
               Core.Fn fn = (Core.Fn) valDecl.exp;
               Core.NamedPat fnPat = (Core.NamedPat) valDecl.pat;
               FunctionRegistry.FunctionInfo info = analyze(fnPat, fn);
-              registry.register(fnPat, info);
+              // Only register if analysis produced a result
+              // Null means: not pre-analyzed, use legacy inlining
+              if (info != null) {
+                registry.register(fnPat, info);
+              }
             }
           }
 
@@ -497,7 +503,11 @@ public class FunctionAnalyzer {
                 Core.Fn fn = (Core.Fn) inner.exp;
                 Core.NamedPat fnPat = (Core.NamedPat) inner.pat;
                 FunctionRegistry.FunctionInfo info = analyze(fnPat, fn);
-                registry.register(fnPat, info);
+                // Only register if analysis produced a result
+                // Null means: not pre-analyzed, use legacy inlining
+                if (info != null) {
+                  registry.register(fnPat, info);
+                }
               }
             }
           }
@@ -536,16 +546,30 @@ public class FunctionAnalyzer {
 
             // Analyze and register the function
             FunctionRegistry.FunctionInfo info = analyzer.analyze(fnPat, fn);
-            registry.register(fnPat, info);
-            System.err.println(
-                "Registered function: "
-                    + fnPat.name
-                    + " with status: "
-                    + info.status());
+            // Only register if analysis produced a result
+            // Null means: not pre-analyzed, use legacy inlining
+            if (info != null) {
+              registry.register(fnPat, info);
+            }
           }
         });
 
     return registry;
   }
+
+  /**
+   * Analyzes whether a function matches the ANDALSO pattern for partial
+   * invertibility.
+   *
+   * <p>Pattern: {@code fun notPath(x,y) = edge(x,y) andalso x <> y}
+   *
+   * <p>This pattern is partially invertible when the left conjunct is
+   * invertible and can produce a generator, while the right conjunct acts as a
+   * filter.
+   *
+   * @param fnPat the function name pattern
+   * @param fn the function expression
+   * @return FunctionInfo if pattern matches, empty otherwise
+   */
 }
 // End FunctionAnalyzer.java
