@@ -66,6 +66,7 @@ public class LintTest {
     addProgram0(b);
     addProgram1(b);
     addProgram2(b);
+    addProgram3(b);
     return b.build();
   }
 
@@ -462,6 +463,117 @@ public class LintTest {
                 .message(line, "fully-qualified class name; use import"));
   }
 
+  private static void addProgram3(Puffin.Builder<GlobalState, FileState> b) {
+    // Rule: track Morel block comment depth and validate block comments.
+    b.add(
+        line -> isMorel(line.filename()),
+        line -> {
+          final FileState f = line.state();
+          final String s = line.line();
+
+          // If the previous line was a block-open "(*", determine
+          // whether this is a real block comment or commented-out code.
+          if (f.pendingBlockOpenLine == line.fnr() - 1) {
+            if (s.startsWith(" *")) {
+              f.commentStartLine = f.pendingBlockOpenLine;
+            }
+            f.pendingBlockOpenLine = 0;
+          }
+
+          // Validate block comment intermediate lines.
+          if (f.commentStartLine > 0
+              && f.commentDepth == 1
+              && f.pendingBlockOpenLine == 0) {
+            if (!s.trim().equals("*)")) {
+              if (!s.startsWith(" *")) {
+                f.message(line, "block comment line must start with ' *'");
+              }
+              if (s.length() > 70) {
+                f.message(
+                    line, "block comment line length %d > 70", s.length());
+              }
+            }
+          }
+
+          // Track comment depth.
+          int i = 0;
+          while (i < s.length() - 1) {
+            if (s.charAt(i) == '(' && s.charAt(i + 1) == '*') {
+              // Skip "(*)" — line comment, not block open
+              if (i + 2 < s.length() && s.charAt(i + 2) == ')') {
+                i += 3;
+                continue;
+              }
+              f.commentDepth++;
+              if (f.commentDepth == 1) {
+                // Check if '(*' is the entire trimmed line
+                if (s.trim().equals("(*")) {
+                  f.pendingBlockOpenLine = line.fnr();
+                }
+              }
+              i += 2;
+            } else if (s.charAt(i) == '*' && s.charAt(i + 1) == ')') {
+              f.commentDepth--;
+              if (f.commentDepth == 0) {
+                f.commentStartLine = 0;
+                f.pendingBlockOpenLine = 0;
+              }
+              i += 2;
+            } else {
+              i++;
+            }
+          }
+        });
+
+    // Rule: decorative single-line headers with "---" must be 70 chars.
+    b.add(
+        line ->
+            isMorel(line.filename())
+                && line.line().startsWith("(*")
+                && line.line().endsWith("*)")
+                && line.line().contains("---"),
+        line -> {
+          if (line.line().length() != 70) {
+            line.state()
+                .message(
+                    line,
+                    "decorative comment length %d != 70",
+                    line.line().length());
+          }
+        });
+
+    // Rule: "(*)" line with "---" is a decorative header that should
+    // be a block comment "(* --- ... *)".
+    b.add(
+        line ->
+            isMorel(line.filename())
+                && line.line().startsWith("(*)")
+                && line.line().contains("---"),
+        line ->
+            line.state()
+                .message(line, "decorative comment should be '(* --- ... *)'"));
+
+    // Rule: decorative headers with "===" or "***" should use "---".
+    b.add(
+        line ->
+            isMorel(line.filename())
+                && line.line().startsWith("(*")
+                && (line.line().contains("===") || line.line().contains("***")),
+        line ->
+            line.state()
+                .message(
+                    line,
+                    "decorative comment; use '---' not '%s'",
+                    line.line().contains("***") ? "***" : "==="));
+  }
+
+  /** Returns whether we are in a file that contains Morel code. */
+  private static boolean isMorel(String filename) {
+    return filename.endsWith(".sml")
+        || filename.endsWith(".smli")
+        || filename.endsWith(".sig");
+  }
+
   /**
    * Returns whether lint is disabled for this line by a "// lint:skip" or "//
    * lint:skip N" comment on this or a preceding line.
@@ -646,6 +758,58 @@ public class LintTest {
     final GlobalState g;
     try (PrintWriter pw = new PrintWriter(sw)) {
       g = program.execute(Stream.of(Sources.of(code)), pw);
+    }
+    assertThat(
+        g.messages.toString().replace(", ", "\n").replace(']', '\n'),
+        is(expectedMessages));
+  }
+
+  @Test
+  void testProgramWorksMorel() throws IOException {
+    // We write test content to a temp .smli file so isMorel matches.
+    final File tmpFile =
+        new File(
+            "/private/tmp/claude/-Users-jhyde-dev-morel-1/"
+                + "01b2eb3b-4b09-47cd-b614-ad7efeffa1be/scratchpad",
+            "test.smli");
+    tmpFile.getParentFile().mkdirs();
+    final String code =
+        "(* single-line comment *)\n"
+            + "(*\n"
+            + " * good block\n"
+            + " * comment\n"
+            + " *)\n"
+            + "(*\n"
+            + "commented out code\n"
+            + "*)\n"
+            + "(* Good header ----------------------------------------"
+            + "------------ *)\n"
+            + "(*\n"
+            + " * good block line\n"
+            + " bad block line\n"
+            + " *)\n"
+            + "(* short header -------- *)\n"
+            + "(*** bad stars ***)\n"
+            + "(*) End test.smli\n";
+    try (PrintWriter pw = new PrintWriter(new FileWriter(tmpFile))) {
+      pw.print(code);
+    }
+    final String expectedMessages =
+        "["
+            + tmpFile
+            + ":12:"
+            + "block comment line must start with ' *'\n"
+            + tmpFile
+            + ":14:"
+            + "decorative comment length 27 != 70\n"
+            + tmpFile
+            + ":15:"
+            + "decorative comment; use '---' not '***'\n";
+    final Puffin.Program<GlobalState> program = makeProgram();
+    final StringWriter sw = new StringWriter();
+    final GlobalState g;
+    try (PrintWriter pw = new PrintWriter(sw)) {
+      g = program.execute(Stream.of(Sources.of(tmpFile)), pw);
     }
     assertThat(
         g.messages.toString().replace(", ", "\n").replace(']', '\n'),
@@ -858,6 +1022,9 @@ public class LintTest {
     int blockquoteCount;
     int ulCount;
     int lintEnableLine;
+    int commentDepth;
+    int commentStartLine;
+    int pendingBlockOpenLine;
 
     FileState(GlobalState global) {
       this.global = global;
