@@ -212,21 +212,6 @@ class Generators {
                   generators,
                   functionRegistry);
 
-          // DEBUG: Track INFINITE inversion results
-          if (result.generator.cardinality == Generator.Cardinality.INFINITE) {
-            String constraintStr = constraint.toString();
-            System.err.println(
-                "[maybeUserFunction] **INFINITE** Inversion failed:");
-            System.err.println(
-                "[maybeUserFunction]   constraint (first 150 chars): "
-                    + constraintStr.substring(
-                        0, Math.min(150, constraintStr.length())));
-            System.err.println("[maybeUserFunction]   goalPats: " + goalPats);
-            System.err.println(
-                "[maybeUserFunction]   result expression: "
-                    + result.generator.expression);
-          }
-
           // Check if inversion succeeded with a finite generator
           if (result.generator.cardinality != Generator.Cardinality.INFINITE) {
             // Create a UserFunctionGenerator from the result.
@@ -1229,23 +1214,6 @@ class Generators {
       Generator bestGenerator = null;
       for (Generator generator : generators.get(namedPat)) {
         bestGenerator = generator;
-      }
-      // DEBUG: Track p_14 and p lookup
-      if (namedPat.name.equals("p_14") || namedPat.name.equals("p")) {
-        System.err.println(
-            "[ExtentsCache.bestGenerator] Looking up: " + namedPat.name);
-        System.err.println(
-            "[ExtentsCache.bestGenerator]   Result: "
-                + (bestGenerator != null ? bestGenerator.cardinality : "NULL"));
-        if (bestGenerator == null) {
-          System.err.println(
-              "[ExtentsCache.bestGenerator]   Available patterns: "
-                  + generators.keySet());
-        } else {
-          System.err.println(
-              "[ExtentsCache.bestGenerator]   Generator exp: "
-                  + bestGenerator.exp);
-        }
       }
       return bestGenerator;
     }
