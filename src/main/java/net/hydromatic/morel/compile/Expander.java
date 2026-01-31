@@ -92,6 +92,16 @@ public class Expander {
             final Generator generator = cache.bestGenerator(namedPat);
             if (generator == null
                 || generator.cardinality == Generator.Cardinality.INFINITE) {
+              // DEBUG: Track p_14 error
+              if (namedPat.name.equals("p_14") || namedPat.name.equals("p")) {
+                System.err.println(
+                    "[Expander] **P_14 ERROR** About to throw cannot be"
+                        + " grounded");
+                System.err.println("[Expander]   namedPat: " + namedPat.name);
+                System.err.println(
+                    "[Expander]   generator: "
+                        + (generator != null ? generator.cardinality : "NULL"));
+              }
               // Pattern cannot be grounded - the predicate couldn't be inverted
               // to produce a finite generator. This typically happens with:
               // - User-defined recursive functions that aren't invertible

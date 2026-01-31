@@ -168,9 +168,10 @@ class Generators {
       if (effectiveConstraint.op == Op.APPLY) {
         Core.Apply apply = (Core.Apply) effectiveConstraint;
 
-        // Handle three cases:
+        // Handle four cases:
         // 1. User-defined function calls: fn.op == ID (e.g., "path p")
         // 2. Pre-expanded function bodies: orelse patterns (after Inliner)
+        // 3. Andalso patterns: conjunctions that can be partially inverted
         //
         // NOTE: We skip inlined functions (Op.FN) because they include built-in
         // generators like 'range' and identity functions like 'mustBeList' that
@@ -179,8 +180,9 @@ class Generators {
         // comprehensions.
         boolean isUserFunctionCall = apply.fn.op == Op.ID;
         boolean isOrElsePattern = apply.isCallTo(BuiltIn.Z_ORELSE);
+        boolean isAndalsoPattern = apply.isCallTo(BuiltIn.Z_ANDALSO);
 
-        if (isUserFunctionCall || isOrElsePattern) {
+        if (isUserFunctionCall || isOrElsePattern || isAndalsoPattern) {
           // Build generators map from existing cache generators
           final Map<Core.NamedPat, PredicateInverter.Generator> generators =
               new LinkedHashMap<>();
@@ -209,6 +211,21 @@ class Generators {
                   goalPats,
                   generators,
                   functionRegistry);
+
+          // DEBUG: Track INFINITE inversion results
+          if (result.generator.cardinality == Generator.Cardinality.INFINITE) {
+            String constraintStr = constraint.toString();
+            System.err.println(
+                "[maybeUserFunction] **INFINITE** Inversion failed:");
+            System.err.println(
+                "[maybeUserFunction]   constraint (first 150 chars): "
+                    + constraintStr.substring(
+                        0, Math.min(150, constraintStr.length())));
+            System.err.println("[maybeUserFunction]   goalPats: " + goalPats);
+            System.err.println(
+                "[maybeUserFunction]   result expression: "
+                    + result.generator.expression);
+          }
 
           // Check if inversion succeeded with a finite generator
           if (result.generator.cardinality != Generator.Cardinality.INFINITE) {
@@ -1212,6 +1229,23 @@ class Generators {
       Generator bestGenerator = null;
       for (Generator generator : generators.get(namedPat)) {
         bestGenerator = generator;
+      }
+      // DEBUG: Track p_14 and p lookup
+      if (namedPat.name.equals("p_14") || namedPat.name.equals("p")) {
+        System.err.println(
+            "[ExtentsCache.bestGenerator] Looking up: " + namedPat.name);
+        System.err.println(
+            "[ExtentsCache.bestGenerator]   Result: "
+                + (bestGenerator != null ? bestGenerator.cardinality : "NULL"));
+        if (bestGenerator == null) {
+          System.err.println(
+              "[ExtentsCache.bestGenerator]   Available patterns: "
+                  + generators.keySet());
+        } else {
+          System.err.println(
+              "[ExtentsCache.bestGenerator]   Generator exp: "
+                  + bestGenerator.exp);
+        }
       }
       return bestGenerator;
     }

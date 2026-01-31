@@ -594,6 +594,24 @@ public class Extents {
                   final FunctionRegistry functionRegistry =
                       FunctionAnalyzer.buildRegistryFromEnvironment(
                           typeSystem, env);
+                  // DEBUG: Track all filter inversion attempts
+                  final String filterStr = filter.toString();
+                  final boolean isP14Related =
+                      goalPats.stream()
+                          .anyMatch(
+                              p ->
+                                  p.name.equals("p")
+                                      || p.name.startsWith("p_")
+                                          && filterStr.contains("notPath"));
+                  if (isP14Related) {
+                    System.err.println(
+                        "[Extents] **P_14 RELATED** About to call"
+                            + " PredicateInverter.invert()");
+                    System.err.println("[Extents]   filter: " + filterStr);
+                    System.err.println("[Extents]   goalPats: " + goalPats);
+                    System.err.println(
+                        "[Extents]   boundPats: " + boundPats.keySet());
+                  }
                   final PredicateInverter.Result result =
                       PredicateInverter.invert(
                           typeSystem,
