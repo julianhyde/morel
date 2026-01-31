@@ -60,6 +60,9 @@ import org.junit.jupiter.api.Test;
 /** Runs Lint-like checks on the source code. Also tests those checks. */
 @SuppressWarnings("Convert2MethodRef") // JDK 8 requires lambdas
 public class LintTest {
+  private static final ThreadLocal<@Nullable String> THREAD_FILE_NAME =
+      new ThreadLocal<>();
+
   private Puffin.Program<GlobalState> makeProgram() {
     Puffin.Builder<GlobalState, FileState> b =
         Puffin.builder(GlobalState::new, global -> new FileState(global));
@@ -71,6 +74,20 @@ public class LintTest {
   }
 
   private static void addProgram0(Puffin.Builder<GlobalState, FileState> b) {
+    // Set language
+    b.add(
+        line -> line.fnr() == 1,
+        line -> {
+          String filename = THREAD_FILE_NAME.get();
+          if (filename == null) {
+            filename = line.filename();
+          }
+          line.state().language =
+              isJava(filename)
+                  ? Language.JAVA
+                  : isMorel(filename) ? Language.MOREL : Language.UNKNOWN;
+        });
+
     // Track "// lint:skip" and "// lint:skip N" comments.
     b.add(
         line -> true,
@@ -231,10 +248,10 @@ public class LintTest {
     // In 'for (int i : list)', colon must be surrounded by space.
     b.add(
         line ->
-            line.matches("^ *for \\(.*:.*")
+            line.state().language == Language.JAVA
+                && line.matches("^ *for \\(.*:.*")
                 && !line.matches(".*[^ ][ ][:][ ][^ ].*")
-                && !line.matches(".*[^ ][ ][:]$")
-                && isJava(line.filename()),
+                && !line.matches(".*[^ ][ ][:]$"),
         line -> line.state().message(line, "':' must be surrounded by ' '"));
   }
 
@@ -246,9 +263,9 @@ public class LintTest {
     // Broken string, "latch" + "string", should be "latchstring".
     b.add(
         line ->
-            line.matches("^[^\"]*[\"][^\"]*[\"] *\\+ *[\"].*$")
-                && !line.contains("//")
-                && isJava(line.filename()),
+            line.state().language == Language.JAVA
+                && line.matches("^[^\"]*[\"][^\"]*[\"] *\\+ *[\"].*$")
+                && !line.contains("//"),
         line -> line.state().message(line, "broken string"));
 
     // Broken string, "yoyo\n" + "string", should be on separate lines.
@@ -262,10 +279,10 @@ public class LintTest {
     // Newline should be at end of string literal, not in the middle
     b.add(
         line ->
-            line.matches("^.*\\\\n[^\"]+[\"][^\"]*$")
+            line.state().language == Language.JAVA
+                && line.matches("^.*\\\\n[^\"]+[\"][^\"]*$")
                 && !line.contains("//")
-                && !line.contains("\\\\n")
-                && isJava(line.filename()),
+                && !line.contains("\\\\n"),
         line ->
             line.state()
                 .message(line, "newline should be at end of string literal"));
@@ -444,9 +461,9 @@ public class LintTest {
     // string literals, and lines with "// lint:skip".
     b.add(
         line ->
-            line.matches(
+            line.state().language == Language.JAVA
+                && line.matches(
                     ".*\\b(java|javax|com|net|org)\\.[a-z]+(\\.[a-z]+)*\\.[A-Z].*")
-                && isJava(line.filename())
                 && !line.startsWith("import ")
                 && !line.startsWith("import static ")
                 && !line.startsWith("package ")
@@ -466,7 +483,7 @@ public class LintTest {
   private static void addProgram3(Puffin.Builder<GlobalState, FileState> b) {
     // Rule: track Morel block comment depth and validate block comments.
     b.add(
-        line -> isMorel(line.filename()),
+        line -> line.state().language == Language.MOREL,
         line -> {
           final FileState f = line.state();
           final String s = line.line();
@@ -530,7 +547,7 @@ public class LintTest {
     // Rule: decorative single-line headers with "---" must be 70 chars.
     b.add(
         line ->
-            isMorel(line.filename())
+            line.state().language == Language.MOREL
                 && line.line().startsWith("(*")
                 && line.line().endsWith("*)")
                 && line.line().contains("---"),
@@ -548,7 +565,7 @@ public class LintTest {
     // be a block comment "(* --- ... *)".
     b.add(
         line ->
-            isMorel(line.filename())
+            line.state().language == Language.MOREL
                 && line.line().startsWith("(*)")
                 && line.line().contains("---"),
         line ->
@@ -558,7 +575,7 @@ public class LintTest {
     // Rule: decorative headers with "===" or "***" should use "---".
     b.add(
         line ->
-            isMorel(line.filename())
+            line.state().language == Language.MOREL
                 && line.line().startsWith("(*")
                 && (line.line().contains("===") || line.line().contains("***")),
         line ->
@@ -759,7 +776,10 @@ public class LintTest {
     final StringWriter sw = new StringWriter();
     final GlobalState g;
     try (PrintWriter pw = new PrintWriter(sw)) {
+      THREAD_FILE_NAME.set("Foo.java");
       g = program.execute(Stream.of(Sources.of(code)), pw);
+    } finally {
+      THREAD_FILE_NAME.remove();
     }
     assertThat(
         g.messages.toString().replace(", ", "\n").replace(']', '\n'),
@@ -769,12 +789,6 @@ public class LintTest {
   @Test
   void testProgramWorksMorel() throws IOException {
     // We write test content to a temp .smli file so isMorel matches.
-    final File tmpFile =
-        new File(
-            "/private/tmp/claude/-Users-jhyde-dev-morel-1/"
-                + "01b2eb3b-4b09-47cd-b614-ad7efeffa1be/scratchpad",
-            "test.smli");
-    tmpFile.getParentFile().mkdirs();
     final String code =
         "(* single-line comment *)\n"
             + "(*\n"
@@ -793,25 +807,22 @@ public class LintTest {
             + "(* short header -------- *)\n"
             + "(*** bad stars ***)\n"
             + "(*) End test.smli\n";
-    try (PrintWriter pw = new PrintWriter(new FileWriter(tmpFile))) {
-      pw.print(code);
-    }
     final String expectedMessages =
         "["
-            + tmpFile
-            + ":12:"
+            + "GuavaCharSource{memory}:12:"
             + "block comment line must start with ' *'\n"
-            + tmpFile
-            + ":14:"
+            + "GuavaCharSource{memory}:14:"
             + "decorative comment length 27 != 70\n"
-            + tmpFile
-            + ":15:"
+            + "GuavaCharSource{memory}:15:"
             + "decorative comment; use '---' not '***'\n";
     final Puffin.Program<GlobalState> program = makeProgram();
     final StringWriter sw = new StringWriter();
     final GlobalState g;
     try (PrintWriter pw = new PrintWriter(sw)) {
-      g = program.execute(Stream.of(Sources.of(tmpFile)), pw);
+      THREAD_FILE_NAME.set("foo.smli");
+      g = program.execute(Stream.of(Sources.of(code)), pw);
+    } finally {
+      THREAD_FILE_NAME.remove();
     }
     assertThat(
         g.messages.toString().replace(", ", "\n").replace(']', '\n'),
@@ -1014,6 +1025,7 @@ public class LintTest {
   /** Internal state of the lint rules, per file. */
   private static class FileState {
     final GlobalState global;
+    Language language;
     @Nullable String partialSort;
     @Nullable Consumer<Puffin.Line<GlobalState, FileState>> sortConsumer;
     int versionCount;
@@ -1202,6 +1214,12 @@ public class LintTest {
       }
       lines.add(thisLine);
     }
+  }
+
+  enum Language {
+    JAVA,
+    MOREL,
+    UNKNOWN
   }
 }
 
