@@ -1843,17 +1843,84 @@ public class PredicateInverterTest {
             ImmutableList.of(xPat),
             ImmutableList.of());
 
-    // The result may be null (uninvertible) or may have remaining filters
-    if (result != null) {
-      System.out.println(
-          "Disjunction with uninvertible branch result: "
-              + result.generator.expression
-              + ", filters: "
-              + result.remainingFilters.size());
-    } else {
-      System.out.println(
-          "Disjunction with uninvertible branch correctly failed");
-    }
+    // The result may be null (uninvertible) or may have remaining filters.
+    // This test primarily verifies no crash occurs when mixing invertible
+    // and uninvertible branches.
+  }
+
+  /**
+   * Tests that tryInvertDisjunction correctly rejects patterns containing
+   * EXISTS clauses, allowing tryInvertTransitiveClosure to handle them instead.
+   *
+   * <p>This test verifies the fix for the Phase 6a regression where
+   * tryInvertDisjunction was incorrectly processing transitive closure
+   * patterns.
+   */
+  @Test
+  void testTryInvertDisjunctionRejectsExistsPatterns() {
+    final Fixture f = new Fixture();
+
+    // Build a simple invertible base case: x elem [1,2]
+    final Core.Exp list =
+        core.list(
+            f.typeSystem,
+            f.intType,
+            ImmutableList.of(f.intLiteral(1), f.intLiteral(2)));
+    final Core.IdPat xPat = core.idPat(f.intType, "x", 0);
+    final Core.IdPat yPat = core.idPat(f.intType, "y", 0);
+    final Core.Id xId = core.id(xPat);
+    final Core.Id yId = core.id(yPat);
+
+    // Create tuple pattern (x, y) for FROM expression
+    final Core.TuplePat tuplePat =
+        core.tuplePat(f.typeSystem, ImmutableList.of(xPat, yPat));
+
+    // Build base case: (x, y) elem [(1,2)]
+    final Core.Exp tuple =
+        core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2));
+    final Core.Exp tupleList =
+        core.list(
+            f.typeSystem,
+            f.typeSystem.tupleType(f.intType, f.intType),
+            ImmutableList.of(tuple));
+    final Core.Exp tupleId = core.tuple(f.typeSystem, xId, yId);
+    final Core.Exp baseCase = core.elem(f.typeSystem, tupleId, tupleList);
+
+    // Build recursive case with EXISTS: exists z where (x, z) elem list
+    final Core.IdPat zPat = core.idPat(f.intType, "z", 0);
+    final Core.Id zId = core.id(zPat);
+    final Core.Exp xzTuple = core.tuple(f.typeSystem, xId, zId);
+    final Core.Exp existsBody = core.elem(f.typeSystem, xzTuple, tupleList);
+
+    // Create FROM expression (EXISTS)
+    final Core.Exp recursiveCase =
+        core.fromBuilder(f.typeSystem, (Environment) null)
+            .scan(zPat, list)
+            .yield_(existsBody)
+            .build();
+
+    // Build: baseCase orelse recursiveCase (transitive closure pattern)
+    final Core.Exp orelse = core.orElse(f.typeSystem, baseCase, recursiveCase);
+
+    // Try to invert - tryInvertDisjunction should return null because
+    // recursiveCase contains EXISTS (FROM expression)
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final PredicateInverter.Result result =
+        invokePrivateMethod(
+            inverter,
+            "tryInvertDisjunction",
+            new Class<?>[] {
+              Core.Apply.class, java.util.List.class, java.util.List.class
+            },
+            (Core.Apply) orelse,
+            ImmutableList.of(xPat, yPat),
+            ImmutableList.of());
+
+    // Verify that tryInvertDisjunction correctly returned null,
+    // allowing the pattern to be handled by tryInvertTransitiveClosure
+    assertThat(result, org.hamcrest.Matchers.nullValue());
   }
 
   /** Helper method to invoke private methods via reflection for testing. */

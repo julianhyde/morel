@@ -871,9 +871,17 @@ public class PredicateInverter {
     }
 
     // Check if any branch contains EXISTS (indicates transitive closure
-    // pattern)
-    // Transitive closure should be handled by tryInvertTransitiveClosure, not
-    // here
+    // pattern).
+    //
+    // Transitive closure patterns like "base orelse (exists x where ...)"
+    // should be handled by tryInvertTransitiveClosure, not by simple
+    // disjunction
+    // union. This check prevents tryInvertDisjunction from incorrectly
+    // processing recursive patterns that would produce incorrect results.
+    //
+    // Note: This only checks the immediate branch expression. Function calls
+    // containing EXISTS may not be detected here, but will be caught by
+    // tryInvertTransitiveClosure's pattern matching.
     for (int i = 0; i < branches.size(); i++) {
       if (containsExists(branches.get(i))) {
         return null; // Let tryInvertTransitiveClosure handle it
