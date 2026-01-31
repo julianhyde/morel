@@ -72,6 +72,14 @@ public class Inliner extends EnvShuttle {
   private final int depth;
   /** Maximum inlining depth to prevent infinite cycles. */
   private static final int MAX_DEPTH = 250;
+  /**
+   * Full names (with index) of patterns that should not be inlined because
+   * their expressions contain variables that would be captured by inner
+   * bindings. We use full names (e.g., "x_0") rather than base names so that
+   * blocking x_0 doesn't incorrectly block x_1 which may be a different,
+   * safe-to-inline variable.
+   */
+  private final Set<String> captureBlockedNames;
 
   /**
    * Set of impure built-in function names that should not be inlined. These
@@ -95,11 +103,13 @@ public class Inliner extends EnvShuttle {
       Environment env,
       Analyzer.Analysis analysis,
       Set<String> inliningNames,
-      int depth) {
+      int depth,
+      Set<String> captureBlockedNames) {
     super(typeSystem, env);
     this.analysis = analysis;
     this.inliningNames = inliningNames;
     this.depth = depth;
+    this.captureBlockedNames = captureBlockedNames;
   }
 
   /**
@@ -128,12 +138,14 @@ public class Inliner extends EnvShuttle {
       TypeSystem typeSystem,
       Environment env,
       Analyzer.@Nullable Analysis analysis) {
-    return new Inliner(typeSystem, env, analysis, new HashSet<>(), 0);
+    return new Inliner(
+        typeSystem, env, analysis, new HashSet<>(), 0, new HashSet<>());
   }
 
   @Override
   protected Inliner push(Environment env) {
-    return new Inliner(typeSystem, env, analysis, inliningNames, depth);
+    return new Inliner(
+        typeSystem, env, analysis, inliningNames, depth, captureBlockedNames);
   }
 
   @Override
@@ -188,25 +200,37 @@ public class Inliner extends EnvShuttle {
           //    the pattern isn't in the analysis map (e.g., variables from
           //    beta-reduced expressions). We only do this when analysis is
           //    present to respect INLINE_PASS_COUNT=0 settings.
-          final boolean shouldInline =
-              use == Analyzer.Use.ATOMIC
-                  || use == Analyzer.Use.ONCE_SAFE
-                  || analysis != null && isAtomic(binding.exp);
-          if (shouldInline) {
-            // Don't inline expressions containing impure function calls.
-            // These expressions read mutable state (like Sys.env) and would
-            // produce different values if re-evaluated at the use site.
-            if (!containsImpureCall(binding.exp)) {
-              inliningNames.add(name);
-              // Create a new Inliner with incremented depth for the nested
-              // inlining
-              final Inliner nestedInliner =
-                  new Inliner(
-                      typeSystem, env, analysis, inliningNames, depth + 1);
-              try {
-                return binding.exp.accept(nestedInliner);
-              } finally {
-                inliningNames.remove(name);
+          // Don't inline if this variable is blocked due to capture risk.
+          // Use full name with index to distinguish between x_0 and x_1.
+          final String fullName = id.idPat.name + "_" + id.idPat.i;
+          if (captureBlockedNames.contains(fullName)) {
+            // Fall through to return super.visit(id)
+          } else {
+            final boolean shouldInline =
+                use == Analyzer.Use.ATOMIC
+                    || use == Analyzer.Use.ONCE_SAFE
+                    || analysis != null && isAtomic(binding.exp);
+            if (shouldInline) {
+              // Don't inline expressions containing impure function calls.
+              // These expressions read mutable state (like Sys.env) and would
+              // produce different values if re-evaluated at the use site.
+              if (!containsImpureCall(binding.exp)) {
+                inliningNames.add(name);
+                // Create a new Inliner with incremented depth for the nested
+                // inlining
+                final Inliner nestedInliner =
+                    new Inliner(
+                        typeSystem,
+                        env,
+                        analysis,
+                        inliningNames,
+                        depth + 1,
+                        captureBlockedNames);
+                try {
+                  return binding.exp.accept(nestedInliner);
+                } finally {
+                  inliningNames.remove(name);
+                }
               }
             }
           }
@@ -673,6 +697,63 @@ public class Inliner extends EnvShuttle {
                     ((Core.NonRecValDecl) let.decl).pat,
                     Analyzer.Use.MULTI_UNSAFE)
                 : Analyzer.Use.MULTI_UNSAFE;
+
+    // Check for variable capture when the expression might be inlined.
+    // Inlining happens if:
+    // 1. Use is ATOMIC/ONCE_SAFE (LET elimination), OR
+    // 2. Expression is atomic and would be inlined via visit(Core.Id)
+    //
+    // If the expression contains free variables that would be captured by
+    // bindings in the body (e.g., FROM step patterns), we must prevent
+    // inlining to avoid incorrect semantics.
+    // Example: `let x = i in from i in range 3 where i < x yield i`
+    // If we inline x -> i, we get `from i in range 3 where i < i yield i`
+    // where the outer i is captured by the FROM binding.
+    if (let.decl instanceof Core.NonRecValDecl) {
+      final Core.NonRecValDecl nonRecDecl = (Core.NonRecValDecl) let.decl;
+      final boolean mightBeInlined =
+          use == Analyzer.Use.ATOMIC
+              || use == Analyzer.Use.ONCE_SAFE
+              || analysis != null && isAtomic(nonRecDecl.exp);
+
+      if (mightBeInlined) {
+        final Set<String> freeVars = collectFreeVarNames(nonRecDecl.exp);
+        final Set<String> boundVars = collectBoundVarNames(let.exp);
+        // Check if any free variable would be captured
+        for (String freeVar : freeVars) {
+          if (boundVars.contains(freeVar)) {
+            // Variable capture detected - prevent inlining of this pattern.
+            // Add the pattern's full name (with index) to captureBlockedNames
+            // so we only block this specific variable, not other variables
+            // with the same base name.
+            if (nonRecDecl.pat instanceof Core.IdPat) {
+              final Core.IdPat idPat = (Core.IdPat) nonRecDecl.pat;
+              final String fullPatName = idPat.name + "_" + idPat.i;
+              final Set<String> newBlockedNames =
+                  new HashSet<>(captureBlockedNames);
+              newBlockedNames.add(fullPatName);
+              // Create bindings and visit body with the blocked name
+              final List<Binding> bindings = new ArrayList<>();
+              Compiles.bindPattern(typeSystem, bindings, let.decl);
+              final Inliner bodyInliner =
+                  new Inliner(
+                      typeSystem,
+                      env.bindAll(bindings),
+                      analysis,
+                      inliningNames,
+                      depth,
+                      newBlockedNames);
+              final Core.ValDecl visitedDecl = let.decl.accept(this);
+              final Core.Exp visitedBody = let.exp.accept(bodyInliner);
+              return let.copy(visitedDecl, visitedBody);
+            }
+            // Fallback for non-IdPat patterns
+            return super.visit(let);
+          }
+        }
+      }
+    }
+
     switch (use) {
       case DEAD:
         // This declaration has no uses; remove it
@@ -685,8 +766,10 @@ public class Inliner extends EnvShuttle {
         // NOTE: We previously tried pre-inlining the declaration's expression
         // here, but that caused infinite recursion because the pattern wasn't
         // added to inliningNames first. The simpler approach below works
-        // because
-        // the expression will be inlined when the Id reference is encountered.
+        // because the expression will be inlined when the Id reference is
+        // encountered.
+        // NOTE: Capture detection was done above, so we only reach here if
+        // no capture risk was found.
         final List<Binding> bindings = new ArrayList<>();
         Compiles.bindPattern(typeSystem, bindings, let.decl);
         return let.exp.accept(bind(bindings));
@@ -747,6 +830,158 @@ public class Inliner extends EnvShuttle {
       }
     }
     return found[0];
+  }
+
+  /**
+   * Collects BASE names (without index) of free variables in an expression. We
+   * use base names because the runtime EvalEnv uses base names for lookup, so
+   * variables with the same base name will shadow each other even if they have
+   * different AST indices.
+   */
+  private static Set<String> collectFreeVarNames(Core.Exp exp) {
+    final Set<String> freeVars = new HashSet<>();
+    final Set<String> boundVars = new HashSet<>();
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            final String baseName = id.idPat.name;
+            if (!boundVars.contains(baseName)) {
+              freeVars.add(baseName);
+            }
+          }
+
+          @Override
+          protected void visit(Core.Fn fn) {
+            // Function parameter is bound in the body
+            boundVars.add(fn.idPat.name);
+            super.visit(fn);
+            boundVars.remove(fn.idPat.name);
+          }
+
+          @Override
+          protected void visit(Core.Let let) {
+            // Visit declaration first
+            let.decl.accept(this);
+            // Then add bound names before visiting body
+            final Set<String> declBound = collectPatternBaseNames(let.decl);
+            boundVars.addAll(declBound);
+            let.exp.accept(this);
+            boundVars.removeAll(declBound);
+          }
+
+          @Override
+          protected void visit(Core.From from) {
+            // FROM steps introduce bindings
+            for (Core.FromStep step : from.steps) {
+              visitFromStep(step, boundVars);
+            }
+          }
+
+          private void visitFromStep(
+              Core.FromStep step, Set<String> boundVars) {
+            if (step instanceof Core.Scan) {
+              final Core.Scan scan = (Core.Scan) step;
+              // Visit expression before adding binding
+              scan.exp.accept(this);
+              collectPatternBaseNamesHelper(scan.pat, boundVars);
+            } else if (step instanceof Core.Where) {
+              ((Core.Where) step).exp.accept(this);
+            } else if (step instanceof Core.Yield) {
+              ((Core.Yield) step).exp.accept(this);
+            } else if (step instanceof Core.Group) {
+              final Core.Group group = (Core.Group) step;
+              group.groupExps.values().forEach(e -> e.accept(this));
+              group.aggregates.values().forEach(agg -> agg.accept(this));
+            } else if (step instanceof Core.Order) {
+              ((Core.Order) step).exp.accept(this);
+            }
+          }
+        });
+    return freeVars;
+  }
+
+  /** Collects BASE names (without index) of patterns in a declaration. */
+  private static Set<String> collectPatternBaseNames(Core.Decl decl) {
+    final Set<String> names = new HashSet<>();
+    if (decl instanceof Core.NonRecValDecl) {
+      collectPatternBaseNamesHelper(((Core.NonRecValDecl) decl).pat, names);
+    } else if (decl instanceof Core.RecValDecl) {
+      for (Core.NonRecValDecl d : ((Core.RecValDecl) decl).list) {
+        collectPatternBaseNamesHelper(d.pat, names);
+      }
+    }
+    return names;
+  }
+
+  private static void collectPatternBaseNamesHelper(
+      Core.Pat pat, Set<String> names) {
+    if (pat instanceof Core.IdPat) {
+      names.add(((Core.IdPat) pat).name);
+    } else if (pat instanceof Core.TuplePat) {
+      for (Core.Pat p : ((Core.TuplePat) pat).args) {
+        collectPatternBaseNamesHelper(p, names);
+      }
+    } else if (pat instanceof Core.RecordPat) {
+      for (Core.Pat p : ((Core.RecordPat) pat).args) {
+        collectPatternBaseNamesHelper(p, names);
+      }
+    } else if (pat instanceof Core.AsPat) {
+      names.add(((Core.AsPat) pat).name);
+      collectPatternBaseNamesHelper(((Core.AsPat) pat).pat, names);
+    }
+  }
+
+  /**
+   * Collects BASE names (without index) of variables bound within an
+   * expression. We use base names because the runtime EvalEnv uses base names
+   * for lookup, so variables with the same base name will shadow each other.
+   */
+  private static Set<String> collectBoundVarNames(Core.Exp exp) {
+    final Set<String> boundVars = new HashSet<>();
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Fn fn) {
+            boundVars.add(fn.idPat.name);
+            super.visit(fn);
+          }
+
+          @Override
+          protected void visit(Core.Let let) {
+            boundVars.addAll(collectPatternBaseNames(let.decl));
+            super.visit(let);
+          }
+
+          @Override
+          protected void visit(Core.From from) {
+            for (Core.FromStep step : from.steps) {
+              if (step instanceof Core.Scan) {
+                collectPatternBaseNamesHelper(
+                    ((Core.Scan) step).pat, boundVars);
+              } else if (step instanceof Core.Group) {
+                final Core.Group group = (Core.Group) step;
+                // Group keys and aggregates introduce bindings
+                group
+                    .groupExps
+                    .keySet()
+                    .forEach(pat -> boundVars.add(pat.name));
+                group
+                    .aggregates
+                    .keySet()
+                    .forEach(pat -> boundVars.add(pat.name));
+              }
+            }
+            super.visit(from);
+          }
+
+          @Override
+          protected void visit(Core.Match match) {
+            collectPatternBaseNamesHelper(match.pat, boundVars);
+            super.visit(match);
+          }
+        });
+    return boundVars;
   }
 }
 

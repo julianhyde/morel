@@ -1,0 +1,23 @@
+(*
+ * Ultra minimal test to trace environment
+ *)
+
+fun range n = List.tabulate(n, fn k => k);
+> val range = fn : int -> int list
+
+fun innerRange x =
+  from i in range 3
+    where i < x
+    yield i;
+> val innerRange = fn : int -> int list
+
+(* Call directly first *)
+innerRange 2;
+> val it = [0,1] : int list
+
+(* Now in chained FROM *)
+from i in [2],
+     j in innerRange i
+  yield (i, j);
+> val it = [(2,0),(2,1)] : (int * int) list
+

@@ -1,0 +1,19 @@
+(*
+ * Minimal test for the scope issue
+ *)
+
+fun range n = List.tabulate(n, fn k => k);
+> val range = fn : int -> int list
+
+fun innerRange x =
+  from i in range 3
+    where i < x
+    yield i;
+> val innerRange = fn : int -> int list
+
+(* This should work but returns empty list *)
+from i in [1, 2],
+     j in innerRange i
+  yield (i, j);
+> val it = [(1,0),(2,0),(2,1)] : (int * int) list
+

@@ -1,0 +1,20 @@
+(*
+ * Simple scope test for debugging
+ *)
+
+(* Case 1: Direct call should return [0, 1] *)
+fun innerRange x =
+  from i in [0, 1, 2]
+    where i < x
+    yield i;
+> val innerRange = fn : int -> int list
+
+innerRange 2;
+> val it = [0,1] : int list
+
+(* Case 2: Nested FROM with dependent variable - THIS IS THE BUG *)
+from i in [2],
+     j in innerRange i
+  yield (i, j);
+> val it = [(2,0),(2,1)] : (int * int) list
+
