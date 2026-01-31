@@ -55,3 +55,4 @@ from k in range 5
 > val it = [[],[(1,0)],[(2,0),(2,1)],[(3,0),(3,1),(3,2)],[(4,0),(4,1),(4,2)]]
 >   : (int * int) list list
 
+(*) End nested-from-test.smli

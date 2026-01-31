@@ -25,3 +25,4 @@ fun wc_reducer (key, values) =
 val wordCount = mapReduce wc_mapper wc_reducer;
 
 from p in wordCount lines order p.k;
+(*) End blog-test.smli
