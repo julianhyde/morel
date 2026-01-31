@@ -279,7 +279,8 @@ public class PredicateInverter {
         }
         // Try transitive closure inversion
         Result tcResult =
-            tryInvertTransitiveClosure(apply, null, null, goalPats, active);
+            tryInvertTransitiveClosure(
+                apply, null, null, goalPats, active, null);
         if (tcResult != null) {
           return tcResult;
         }
@@ -444,9 +445,17 @@ public class PredicateInverter {
 
           if (!allGoalsAlreadyBound) {
             // Try to invert as transitive closure pattern
+            // Pass the recursive function name to help distinguish recursive
+            // calls from edge calls in multi-base TC patterns
+            String recursiveFnName = (binding != null) ? binding.id.name : null;
             Result transitiveClosureResult =
                 tryInvertTransitiveClosure(
-                    substitutedBody, fn, apply.arg, goalPats, active);
+                    substitutedBody,
+                    fn,
+                    apply.arg,
+                    goalPats,
+                    active,
+                    recursiveFnName);
             if (transitiveClosureResult != null) {
               return transitiveClosureResult;
             }
@@ -826,7 +835,9 @@ public class PredicateInverter {
    * @return The inverted step edge expression, or null if extraction fails
    */
   private Core.@Nullable Exp extractStepEdge(
-      Core.Exp fnBody, List<Core.NamedPat> goalPats) {
+      Core.Exp fnBody,
+      List<Core.NamedPat> goalPats,
+      @Nullable String recursiveFnName) {
     // Find the recursive branch (the one with EXISTS/FROM)
     Core.Exp recursiveBranch = findRecursiveBranch(fnBody);
     if (recursiveBranch == null) {
@@ -836,7 +847,7 @@ public class PredicateInverter {
     // Handle desugared FROM expression (exists becomes from ... yield true)
     if (recursiveBranch.op == Op.FROM) {
       return extractStepEdgeFromFrom(
-          (Core.From) recursiveBranch, fnBody, goalPats);
+          (Core.From) recursiveBranch, fnBody, goalPats, recursiveFnName);
     }
 
     // Handle BAG_EXISTS/RELATIONAL_NON_EMPTY pattern
@@ -864,7 +875,8 @@ public class PredicateInverter {
 
     // Handle desugared FROM pattern
     if (existsArg.op == Op.FROM) {
-      return extractStepEdgeFromFrom((Core.From) existsArg, fnBody, goalPats);
+      return extractStepEdgeFromFrom(
+          (Core.From) existsArg, fnBody, goalPats, recursiveFnName);
     }
 
     // Handle lambda pattern
@@ -887,7 +899,8 @@ public class PredicateInverter {
     Core.Exp right = andalsoApply.arg(1);
 
     // Determine which side is the recursive call and which is the edge
-    boolean leftIsRecursive = containsRecursiveCall(left, fnBody);
+    boolean leftIsRecursive =
+        containsRecursiveCall(left, fnBody, recursiveFnName);
     Core.Exp edgeExp = leftIsRecursive ? right : left;
 
     // Invert the edge expression to get a generator
@@ -917,14 +930,18 @@ public class PredicateInverter {
    * @return The inverted step edge expression, or null if extraction fails
    */
   private Core.@Nullable Exp extractStepEdgeFromFrom(
-      Core.From from, Core.Exp fnBody, List<Core.NamedPat> goalPats) {
+      Core.From from,
+      Core.Exp fnBody,
+      List<Core.NamedPat> goalPats,
+      @Nullable String recursiveFnName) {
     // Look for WHERE step containing ANDALSO with edge function call.
     // Pattern: from ... where recursive_call andalso edge_call yield true
     // The edge_call is an APPLY with fn.op=ID (user function)
     for (Core.FromStep step : from.steps) {
       if (step.op == Op.WHERE) {
         Core.Where where = (Core.Where) step;
-        Core.Exp edgeExp = extractEdgeFromWhereExp(where.exp, fnBody);
+        Core.Exp edgeExp =
+            extractEdgeFromWhereExp(where.exp, fnBody, recursiveFnName);
         if (edgeExp != null) {
           // Found the edge expression - invert it to get a generator
           Result edgeResult = invert(edgeExp, goalPats, ImmutableList.of());
@@ -948,12 +965,12 @@ public class PredicateInverter {
    * with fn.op=ID.
    *
    * @param exp The WHERE expression (typically an ANDALSO)
-   * @param fnBody The function body (unused, but could detect recursive fn
-   *     name)
+   * @param fnBody The function body (for detecting recursive calls)
+   * @param recursiveFnName The name of the recursive function, or null
    * @return The edge expression, or null if not found
    */
   private Core.@Nullable Exp extractEdgeFromWhereExp(
-      Core.Exp exp, Core.Exp fnBody) {
+      Core.Exp exp, Core.Exp fnBody, @Nullable String recursiveFnName) {
     if (exp.op != Op.APPLY) {
       return null;
     }
@@ -965,8 +982,25 @@ public class PredicateInverter {
     Core.Exp left = apply.arg(0);
     Core.Exp right = apply.arg(1);
 
-    // The edge is the side that's a direct function application (fn.op=ID)
-    // The recursive call is typically wrapped in LET
+    // If we know the recursive function name, use it to identify the edge
+    if (recursiveFnName != null) {
+      boolean leftIsRecursive =
+          containsRecursiveCall(left, fnBody, recursiveFnName);
+      boolean rightIsRecursive =
+          containsRecursiveCall(right, fnBody, recursiveFnName);
+
+      // Return the edge (the side that's NOT recursive)
+      if (leftIsRecursive && !rightIsRecursive) {
+        return right;
+      }
+      if (rightIsRecursive && !leftIsRecursive) {
+        return left;
+      }
+      // If both or neither are recursive, fall back to heuristic below
+    }
+
+    // Fallback heuristic: The edge is the side that's a direct function
+    // application (fn.op=ID). The recursive call is typically wrapped in LET.
     if (right.op == Op.APPLY) {
       Core.Apply rightApp = (Core.Apply) right;
       if (rightApp.fn.op == Op.ID) {
@@ -1042,23 +1076,48 @@ public class PredicateInverter {
    * @param fnBody The function body (for reference)
    * @return True if likely contains a recursive call
    */
-  private boolean containsRecursiveCall(Core.Exp exp, Core.Exp fnBody) {
+  /**
+   * Extracts the function name from a function call expression.
+   *
+   * @param exp The expression to extract from
+   * @return The function name, or null if not a user function call
+   */
+  private @Nullable String getFunctionName(Core.Exp exp) {
+    if (exp.op == Op.APPLY) {
+      Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn.op == Op.ID) {
+        Core.Id id = (Core.Id) apply.fn;
+        return id.idPat.name;
+      }
+    }
+    return null;
+  }
+
+  private boolean containsRecursiveCall(
+      Core.Exp exp, Core.Exp fnBody, @Nullable String recursiveFnName) {
     if (exp.op == Op.APPLY) {
       Core.Apply apply = (Core.Apply) exp;
       // Check if this is a user function call (not a built-in)
       if (apply.fn.op == Op.ID) {
+        // If we know the recursive function name, only match that specific
+        // function
+        if (recursiveFnName != null) {
+          String callName = getFunctionName(apply);
+          return recursiveFnName.equals(callName);
+        }
+        // Otherwise, any user function call is considered recursive
         return true;
       }
       // Recurse into arguments
       for (Core.Exp arg : apply.args()) {
-        if (containsRecursiveCall(arg, fnBody)) {
+        if (containsRecursiveCall(arg, fnBody, recursiveFnName)) {
           return true;
         }
       }
     } else if (exp.op == Op.TUPLE) {
       Core.Tuple tuple = (Core.Tuple) exp;
       for (Core.Exp arg : tuple.args) {
-        if (containsRecursiveCall(arg, fnBody)) {
+        if (containsRecursiveCall(arg, fnBody, recursiveFnName)) {
           return true;
         }
       }
@@ -1482,6 +1541,7 @@ public class PredicateInverter {
    * @param fnArg The argument passed to the function
    * @param goalPats The output patterns
    * @param active Functions currently being inverted (for recursion detection)
+   * @param recursiveFnName The name of the recursive function, or null
    * @return Inversion result using Relational.iterate, or null if pattern not
    *     matched
    */
@@ -1490,7 +1550,8 @@ public class PredicateInverter {
       Core.Fn fn,
       Core.Exp fnArg,
       List<Core.NamedPat> goalPats,
-      List<Core.Exp> active) {
+      List<Core.Exp> active,
+      @Nullable String recursiveFnName) {
     // Check if fnBody matches: baseCase orelse recursiveCase
     if (fnBody.op != Op.APPLY) {
       return null;
@@ -1583,20 +1644,16 @@ public class PredicateInverter {
     // The step should join only with the edge mentioned in the recursive
     // clause,
     // NOT with all base cases.
-    // TODO(morel-3sq): Step edge extraction is disabled because after extent
-    // extraction, Z_EXTENT calls replace the original function calls. The
-    // original function names (path vs edge) are lost, making it impossible
-    // to distinguish the recursive call from the edge call.
     //
     // For multi-base TC like: edge_b orelse edge_a orelse (exists z where
-    // path(x,z) andalso edge_a(z,y)), the step should only use edge_a, but we
-    // fall back to using all base cases (edge_a union edge_b).
+    // path(x,z) andalso edge_a(z,y)), the step should only use edge_a, not
+    // all base cases (edge_a union edge_b).
     //
-    // Possible fixes:
-    // 1. Preserve function names through extent extraction
-    // 2. Extract step edge BEFORE extent extraction (in Extents.java)
-    // 3. Use a different representation that preserves provenance
-    final Core.Exp stepEdge = extractStepEdge(fnBody, goalPats);
+    // Solution: Pass the recursive function name to distinguish recursive
+    // calls from edge calls. The extractStepEdge method uses this to identify
+    // which side of the andalso is the recursive call and which is the edge.
+    final Core.Exp stepEdge =
+        extractStepEdge(fnBody, goalPats, recursiveFnName);
 
     // Build Relational.iterate with the finite base generator.
     // Remaining filters will be applied at runtime along with the iterate
