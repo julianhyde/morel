@@ -1250,20 +1250,18 @@ public class PredicateInverter {
     // Combine all base generators into a single list expression.
     // For Relational.iterate, we need a simple list expression, not a
     // FROM...union.
-    // Chain base generators using @ (append) operator.
+    // Use balanced union tree for efficiency: O(log n) depth instead of O(n)
     final Core.Exp combinedBaseExpression;
     final Core.Pat goalPat = baseGenerators.get(0).goalPat;
     if (baseGenerators.size() == 1) {
       combinedBaseExpression = baseGenerators.get(0).expression;
     } else {
-      // Chain expressions using @ operator: expr1 @ expr2 @ expr3 ...
-      Core.Exp result = baseGenerators.get(0).expression;
-      for (int i = 1; i < baseGenerators.size(); i++) {
-        Core.Exp nextExpr = baseGenerators.get(i).expression;
-        // Create (result @ nextExpr) with explicit types
-        result = createListAppend(result, nextExpr);
+      // Extract generator expressions and build balanced union tree
+      List<Core.Exp> generatorExprs = new ArrayList<>();
+      for (Generator gen : baseGenerators) {
+        generatorExprs.add(gen.expression);
       }
-      combinedBaseExpression = result;
+      combinedBaseExpression = buildUnion(generatorExprs);
     }
 
     // Build Relational.iterate with the finite base generator.
