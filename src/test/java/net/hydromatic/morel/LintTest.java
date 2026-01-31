@@ -488,7 +488,9 @@ public class LintTest {
               if (!s.startsWith(" *")) {
                 f.message(line, "block comment line must start with ' *'");
               }
-              if (s.length() > 70) {
+              if (s.length() > 70
+                  && !s.contains("http://")
+                  && !s.contains("https://")) {
                 f.message(
                     line, "block comment line length %d > 70", s.length());
               }
