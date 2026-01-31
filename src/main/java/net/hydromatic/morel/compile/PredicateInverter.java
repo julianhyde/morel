@@ -973,19 +973,16 @@ public class PredicateInverter {
    */
   private Core.@Nullable Exp extractStepEdgeFromFrom(
       Core.From from, Core.Exp fnBody, List<Core.NamedPat> goalPats) {
-    // Look through FROM steps for Scan steps with edge relations.
-    // After extent extraction, scans contain Z_EXTENT calls which have
-    // lost the original function name information.
+    // Look for WHERE step containing ANDALSO with edge function call.
+    // Pattern: from ... where recursive_call andalso edge_call yield true
+    // The edge_call is an APPLY with fn.op=ID (user function)
     for (Core.FromStep step : from.steps) {
-      if (step.op == Op.SCAN) {
-        Core.Scan scan = (Core.Scan) step;
-        // Check if this scan's expression is NOT a recursive call.
-        // Note: This check is unreliable after extent extraction because
-        // containsRecursiveCall looks for Op.ID function calls, but after
-        // extent extraction, the scans contain Z_EXTENT(type) calls instead.
-        if (!containsRecursiveCall(scan.exp, fnBody)) {
-          // This is the edge relation scan - invert it
-          Result edgeResult = invert(scan.exp, goalPats, ImmutableList.of());
+      if (step.op == Op.WHERE) {
+        Core.Where where = (Core.Where) step;
+        Core.Exp edgeExp = extractEdgeFromWhereExp(where.exp, fnBody);
+        if (edgeExp != null) {
+          // Found the edge expression - invert it to get a generator
+          Result edgeResult = invert(edgeExp, goalPats, ImmutableList.of());
           if (edgeResult != null
               && edgeResult.generator.cardinality
                   != net.hydromatic.morel.compile.Generator.Cardinality
@@ -993,6 +990,50 @@ public class PredicateInverter {
             return edgeResult.generator.expression;
           }
         }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Extracts the edge expression from a WHERE clause's ANDALSO.
+   *
+   * <p>Pattern: recursive_call andalso edge_call The recursive_call is
+   * typically wrapped in LET; the edge_call is a direct function application
+   * with fn.op=ID.
+   *
+   * @param exp The WHERE expression (typically an ANDALSO)
+   * @param fnBody The function body (unused, but could detect recursive fn
+   *     name)
+   * @return The edge expression, or null if not found
+   */
+  private Core.@Nullable Exp extractEdgeFromWhereExp(
+      Core.Exp exp, Core.Exp fnBody) {
+    if (exp.op != Op.APPLY) {
+      return null;
+    }
+    Core.Apply apply = (Core.Apply) exp;
+    if (!apply.isCallTo(BuiltIn.Z_ANDALSO)) {
+      return null;
+    }
+
+    Core.Exp left = apply.arg(0);
+    Core.Exp right = apply.arg(1);
+
+    // The edge is the side that's a direct function application (fn.op=ID)
+    // The recursive call is typically wrapped in LET
+    if (right.op == Op.APPLY) {
+      Core.Apply rightApp = (Core.Apply) right;
+      if (rightApp.fn.op == Op.ID) {
+        // Right side is the edge function call
+        return right;
+      }
+    }
+    if (left.op == Op.APPLY) {
+      Core.Apply leftApp = (Core.Apply) left;
+      if (leftApp.fn.op == Op.ID) {
+        // Left side is the edge function call
+        return left;
       }
     }
     return null;
@@ -1610,7 +1651,7 @@ public class PredicateInverter {
     // 1. Preserve function names through extent extraction
     // 2. Extract step edge BEFORE extent extraction (in Extents.java)
     // 3. Use a different representation that preserves provenance
-    final Core.Exp stepEdge = null; // extractStepEdge(fnBody, goalPats);
+    final Core.Exp stepEdge = extractStepEdge(fnBody, goalPats);
 
     // Build Relational.iterate with the finite base generator.
     // Remaining filters will be applied at runtime along with the iterate
