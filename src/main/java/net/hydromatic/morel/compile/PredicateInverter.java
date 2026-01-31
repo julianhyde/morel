@@ -781,6 +781,61 @@ public class PredicateInverter {
   }
 
   /**
+   * Builds a union expression from multiple generators using List.concat.
+   *
+   * <p>Combines generators into a balanced binary tree for efficiency:
+   *
+   * <ul>
+   *   <li>union([a]) = a
+   *   <li>union([a, b]) = List.concat [a, b]
+   *   <li>union([a, b, c, d]) = List.concat [List.concat [a, b], List.concat
+   *       [c, d]]
+   * </ul>
+   *
+   * @param generators List of generator expressions to combine (all must have
+   *     same type)
+   * @return Single expression representing the union of all generators
+   */
+  private Core.Exp buildUnion(List<Core.Exp> generators) {
+    if (generators.isEmpty()) {
+      throw new IllegalArgumentException("Cannot build union of empty list");
+    }
+    if (generators.size() == 1) {
+      return generators.get(0);
+    }
+
+    // Get the type of the generators (should all be the same list type)
+    final Type collectionType = generators.get(0).type;
+
+    // Build balanced binary tree of concatenations
+    List<Core.Exp> currentLevel = new ArrayList<>(generators);
+    while (currentLevel.size() > 1) {
+      List<Core.Exp> nextLevel = new ArrayList<>();
+      for (int i = 0; i < currentLevel.size(); i += 2) {
+        if (i + 1 < currentLevel.size()) {
+          // Pair two generators with concat
+          final Core.Exp left = currentLevel.get(i);
+          final Core.Exp right = currentLevel.get(i + 1);
+          final Core.Exp concatFn =
+              core.functionLiteral(typeSystem, BuiltIn.LIST_CONCAT);
+          final Core.Exp listArg =
+              core.list(
+                  typeSystem, collectionType, ImmutableList.of(left, right));
+          final Core.Exp concat =
+              core.apply(Pos.ZERO, collectionType, concatFn, listArg);
+          nextLevel.add(concat);
+        } else {
+          // Odd element, carry forward
+          nextLevel.add(currentLevel.get(i));
+        }
+      }
+      currentLevel = nextLevel;
+    }
+
+    return currentLevel.get(0);
+  }
+
+  /**
    * Tries to invert a simple orelse pattern (without exists) as a union.
    *
    * <p>Handles patterns like: {@code a orelse b} where neither branch contains

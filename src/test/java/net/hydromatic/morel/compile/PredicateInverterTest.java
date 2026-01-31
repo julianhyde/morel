@@ -35,6 +35,7 @@ import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Ast.Decl;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.PredicateInverter.Result;
 import net.hydromatic.morel.parse.MorelParserImpl;
@@ -1435,6 +1436,120 @@ public class PredicateInverterTest {
     assertThat(branches.get(1), org.hamcrest.Matchers.sameInstance(b));
     assertThat(branches.get(2), org.hamcrest.Matchers.sameInstance(c));
     assertThat(branches.get(3), org.hamcrest.Matchers.sameInstance(d));
+  }
+
+  /** Test buildUnion with a single generator (should return unchanged). */
+  @Test
+  void testBuildUnionSingle() {
+    final Fixture f = new Fixture();
+    final Core.Exp list =
+        core.list(f.typeSystem, f.intLiteral(1), f.intLiteral(2));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final Core.Exp result =
+        invokePrivateMethod(
+            inverter,
+            "buildUnion",
+            new Class<?>[] {java.util.List.class},
+            ImmutableList.of(list));
+
+    assertThat(result, org.hamcrest.Matchers.sameInstance(list));
+  }
+
+  /** Test buildUnion with two generators. */
+  @Test
+  void testBuildUnionTwo() {
+    final Fixture f = new Fixture();
+    final Core.Exp list1 =
+        core.list(f.typeSystem, f.intLiteral(1), f.intLiteral(2));
+    final Core.Exp list2 =
+        core.list(f.typeSystem, f.intLiteral(3), f.intLiteral(4));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final Core.Exp result =
+        invokePrivateMethod(
+            inverter,
+            "buildUnion",
+            new Class<?>[] {java.util.List.class},
+            ImmutableList.of(list1, list2));
+
+    // Result should be: List.concat [list1, list2]
+    assertThat(result.op, org.hamcrest.Matchers.is(Op.APPLY));
+    final Core.Apply apply = (Core.Apply) result;
+    assertThat(
+        apply.fn.toString(), org.hamcrest.Matchers.containsString("concat"));
+  }
+
+  /** Test buildUnion with four generators (balanced tree). */
+  @Test
+  void testBuildUnionFour() {
+    final Fixture f = new Fixture();
+    final Core.Exp list1 =
+        core.list(f.typeSystem, f.intLiteral(1), f.intLiteral(2));
+    final Core.Exp list2 =
+        core.list(f.typeSystem, f.intLiteral(3), f.intLiteral(4));
+    final Core.Exp list3 =
+        core.list(f.typeSystem, f.intLiteral(5), f.intLiteral(6));
+    final Core.Exp list4 =
+        core.list(f.typeSystem, f.intLiteral(7), f.intLiteral(8));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final Core.Exp result =
+        invokePrivateMethod(
+            inverter,
+            "buildUnion",
+            new Class<?>[] {java.util.List.class},
+            ImmutableList.of(list1, list2, list3, list4));
+
+    // Result should be balanced tree: concat([concat([a,b]), concat([c,d])])
+    assertThat(result.op, org.hamcrest.Matchers.is(Op.APPLY));
+
+    // The top-level should be a concat
+    final Core.Apply topApply = (Core.Apply) result;
+    assertThat(
+        topApply.fn.toString(), org.hamcrest.Matchers.containsString("concat"));
+
+    // Verify the result has the correct type (int list)
+    assertThat(
+        result.type.toString(), org.hamcrest.Matchers.containsString("list"));
+  }
+
+  /** Test buildUnion with three generators (odd case). */
+  @Test
+  void testBuildUnionThree() {
+    final Fixture f = new Fixture();
+    final Core.Exp list1 =
+        core.list(f.typeSystem, f.intLiteral(1), f.intLiteral(2));
+    final Core.Exp list2 =
+        core.list(f.typeSystem, f.intLiteral(3), f.intLiteral(4));
+    final Core.Exp list3 =
+        core.list(f.typeSystem, f.intLiteral(5), f.intLiteral(6));
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final Core.Exp result =
+        invokePrivateMethod(
+            inverter,
+            "buildUnion",
+            new Class<?>[] {java.util.List.class},
+            ImmutableList.of(list1, list2, list3));
+
+    // Result should be: concat([concat([list1, list2]), list3])
+    assertThat(result.op, org.hamcrest.Matchers.is(Op.APPLY));
+    final Core.Apply topApply = (Core.Apply) result;
+    assertThat(
+        topApply.fn.toString(), org.hamcrest.Matchers.containsString("concat"));
+
+    // Verify the result has the correct type (int list)
+    assertThat(
+        result.type.toString(), org.hamcrest.Matchers.containsString("list"));
   }
 
   /** Helper method to invoke private methods via reflection for testing. */
