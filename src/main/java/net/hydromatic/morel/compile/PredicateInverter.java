@@ -882,19 +882,20 @@ public class PredicateInverter {
    */
   private Core.@Nullable Exp extractStepEdge(
       Core.Exp fnBody, List<Core.NamedPat> goalPats) {
-    // Find the recursive branch (the one with EXISTS)
-    System.err.println("[extractStepEdge] Finding recursive branch...");
+    // Find the recursive branch (the one with EXISTS/FROM)
     Core.Exp recursiveBranch = findRecursiveBranch(fnBody);
     if (recursiveBranch == null) {
-      System.err.println("[extractStepEdge] No recursive branch found");
       return null;
     }
-    System.err.println(
-        "[extractStepEdge] Found recursive branch: " + recursiveBranch.op);
 
-    // Parse EXISTS pattern: exists v where predicate
+    // Handle desugared FROM expression (exists becomes from ... yield true)
+    if (recursiveBranch.op == Op.FROM) {
+      return extractStepEdgeFromFrom(
+          (Core.From) recursiveBranch, fnBody, goalPats);
+    }
+
+    // Handle BAG_EXISTS/RELATIONAL_NON_EMPTY pattern
     if (recursiveBranch.op != Op.APPLY) {
-      System.err.println("[extractStepEdge] Recursive branch not APPLY");
       return null;
     }
     Core.Apply existsApply = (Core.Apply) recursiveBranch;
@@ -902,29 +903,31 @@ public class PredicateInverter {
     if (!isBagExists && existsApply.fn.op == Op.FN_LITERAL) {
       Core.Literal literal = (Core.Literal) existsApply.fn;
       BuiltIn builtIn = literal.unwrap(BuiltIn.class);
-      // exists is desugared to nonEmpty (RELATIONAL_NON_EMPTY)
       isBagExists =
           builtIn == BuiltIn.BAG_EXISTS
               || builtIn == BuiltIn.RELATIONAL_NON_EMPTY;
     }
     if (!isBagExists) {
-      System.err.println(
-          "[extractStepEdge] Not BAG_EXISTS/nonEmpty, fn.op = "
-              + existsApply.fn.op);
       return null;
     }
-    System.err.println("[extractStepEdge] Found BAG_EXISTS/nonEmpty");
 
-    // Get the lambda inside exists: fn v => predicate
-    Core.Exp existsArg = existsApply.arg(0);
+    // Get the argument inside exists
+    // After desugaring, it can be either:
+    // 1. A FROM expression: nonEmpty(from ... yield true)
+    // 2. A lambda: exists(fn z => predicate)
+    Core.Exp existsArg = existsApply.arg;
+
+    // Handle desugared FROM pattern
+    if (existsArg.op == Op.FROM) {
+      return extractStepEdgeFromFrom((Core.From) existsArg, fnBody, goalPats);
+    }
+
+    // Handle lambda pattern
     if (existsArg.op != Op.FN) {
-      System.err.println(
-          "[extractStepEdge] EXISTS arg not FN: " + existsArg.op);
       return null;
     }
     Core.Fn existsFn = (Core.Fn) existsArg;
     Core.Exp predicate = existsFn.exp;
-    System.err.println("[extractStepEdge] Predicate op: " + predicate.op);
 
     // Parse andalso: recursive(x,z) andalso edge(z,y)
     if (predicate.op != Op.APPLY) {
@@ -954,54 +957,89 @@ public class PredicateInverter {
   }
 
   /**
-   * Finds the recursive branch (the one containing EXISTS) in an orelse tree.
+   * Extracts the step edge from a desugared FROM expression.
+   *
+   * <p>After desugaring, EXISTS becomes FROM ... yield true. For example:
+   * {@code exists z where path(x,z) andalso edge(z,y)} becomes: {@code from z
+   * in <...> where <...> yield true}
+   *
+   * <p>We need to find the Scan step that contains the edge relation (not the
+   * recursive call) and invert it.
+   *
+   * @param from The FROM expression (desugared exists)
+   * @param fnBody The function body (for detecting recursive calls)
+   * @param goalPats The goal patterns for inversion
+   * @return The inverted step edge expression, or null if extraction fails
+   */
+  private Core.@Nullable Exp extractStepEdgeFromFrom(
+      Core.From from, Core.Exp fnBody, List<Core.NamedPat> goalPats) {
+    // Look through FROM steps for Scan steps with edge relations.
+    // After extent extraction, scans contain Z_EXTENT calls which have
+    // lost the original function name information.
+    for (Core.FromStep step : from.steps) {
+      if (step.op == Op.SCAN) {
+        Core.Scan scan = (Core.Scan) step;
+        // Check if this scan's expression is NOT a recursive call.
+        // Note: This check is unreliable after extent extraction because
+        // containsRecursiveCall looks for Op.ID function calls, but after
+        // extent extraction, the scans contain Z_EXTENT(type) calls instead.
+        if (!containsRecursiveCall(scan.exp, fnBody)) {
+          // This is the edge relation scan - invert it
+          Result edgeResult = invert(scan.exp, goalPats, ImmutableList.of());
+          if (edgeResult != null
+              && edgeResult.generator.cardinality
+                  != net.hydromatic.morel.compile.Generator.Cardinality
+                      .INFINITE) {
+            return edgeResult.generator.expression;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Finds the recursive branch (the one containing EXISTS/FROM) in an orelse
+   * tree.
+   *
+   * <p>EXISTS can appear in two forms:
+   *
+   * <ul>
+   *   <li>Op.APPLY with BAG_EXISTS or RELATIONAL_NON_EMPTY (pre-desugaring)
+   *   <li>Op.FROM (after desugaring to FROM ... yield true)
+   * </ul>
    *
    * @param exp The expression to search
    * @return The recursive branch, or null if not found
    */
   private Core.@Nullable Exp findRecursiveBranch(Core.Exp exp) {
-    System.err.println(
-        "[findRecursiveBranch] exp.op="
-            + exp.op
-            + ", containsExists="
-            + containsExists(exp));
-    if (containsExists(exp)) {
-      if (exp.op == Op.APPLY) {
-        Core.Apply apply = (Core.Apply) exp;
-        System.err.println("[findRecursiveBranch] APPLY, fn.op=" + apply.fn.op);
-        if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
-          System.err.println(
-              "[findRecursiveBranch] Found Z_ORELSE, recursing...");
-          // Check both sides
-          Core.Exp left = findRecursiveBranch(apply.arg(0));
-          if (left != null) {
-            return left;
-          }
-          return findRecursiveBranch(apply.arg(1));
-        } else if (apply.isCallTo(BuiltIn.BAG_EXISTS)) {
-          System.err.println("[findRecursiveBranch] Found BAG_EXISTS!");
-          // Found the EXISTS branch
-          return exp;
-        } else if (apply.fn.op == Op.FN_LITERAL) {
-          Core.Literal literal = (Core.Literal) apply.fn;
-          BuiltIn builtIn = literal.unwrap(BuiltIn.class);
-          System.err.println(
-              "[findRecursiveBranch] FN_LITERAL: "
-                  + (builtIn != null ? builtIn.mlName : "null"));
-          // exists is desugared to nonEmpty (RELATIONAL_NON_EMPTY)
-          if (builtIn == BuiltIn.BAG_EXISTS
-              || builtIn == BuiltIn.RELATIONAL_NON_EMPTY) {
-            System.err.println(
-                "[findRecursiveBranch] Found BAG_EXISTS/nonEmpty via FN_LITERAL!");
-            return exp;
-          }
-        } else {
-          System.err.println(
-              "[findRecursiveBranch] Not Z_ORELSE or BAG_EXISTS, fn.op="
-                  + apply.fn.op);
+    if (!containsExists(exp)) {
+      return null;
+    }
+
+    // Check for desugared FROM expression
+    if (exp.op == Op.FROM) {
+      return exp;
+    }
+
+    if (exp.op == Op.APPLY) {
+      Core.Apply apply = (Core.Apply) exp;
+      if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
+        // Check both sides
+        Core.Exp left = findRecursiveBranch(apply.arg(0));
+        if (left != null) {
+          return left;
         }
-      } else {
-        System.err.println("[findRecursiveBranch] Not APPLY, op=" + exp.op);
+        return findRecursiveBranch(apply.arg(1));
+      } else if (apply.isCallTo(BuiltIn.BAG_EXISTS)) {
+        return exp;
+      } else if (apply.fn.op == Op.FN_LITERAL) {
+        Core.Literal literal = (Core.Literal) apply.fn;
+        BuiltIn builtIn = literal.unwrap(BuiltIn.class);
+        if (builtIn == BuiltIn.BAG_EXISTS
+            || builtIn == BuiltIn.RELATIONAL_NON_EMPTY) {
+          return exp;
+        }
       }
     }
     return null;
@@ -1559,10 +1597,19 @@ public class PredicateInverter {
     // The step should join only with the edge mentioned in the recursive
     // clause,
     // NOT with all base cases.
+    // TODO(morel-3sq): Step edge extraction is disabled because after extent
+    // extraction, Z_EXTENT calls replace the original function calls. The
+    // original function names (path vs edge) are lost, making it impossible
+    // to distinguish the recursive call from the edge call.
     //
-    // TODO(morel-3sq): extractStepEdge needs to handle desugared FROM
-    // expressions
-    // Currently disabled because parsing FROM structure is complex
+    // For multi-base TC like: edge_b orelse edge_a orelse (exists z where
+    // path(x,z) andalso edge_a(z,y)), the step should only use edge_a, but we
+    // fall back to using all base cases (edge_a union edge_b).
+    //
+    // Possible fixes:
+    // 1. Preserve function names through extent extraction
+    // 2. Extract step edge BEFORE extent extraction (in Extents.java)
+    // 3. Use a different representation that preserves provenance
     final Core.Exp stepEdge = null; // extractStepEdge(fnBody, goalPats);
 
     // Build Relational.iterate with the finite base generator.
