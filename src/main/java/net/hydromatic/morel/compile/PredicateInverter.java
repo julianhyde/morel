@@ -165,19 +165,6 @@ public class PredicateInverter {
           goalPats.stream()
               .anyMatch(p -> p.name.equals("p_14") || p.name.equals("p"));
       String ps = predicate.toString();
-      if (isP14
-          || ps.contains("andalso")
-              && (ps.contains("<>") || ps.contains("elem"))) {
-        System.err.println(
-            "[invert] "
-                + (isP14 ? "**P_14** " : "")
-                + "Andalso top-level, op="
-                + predicate.op);
-        System.err.println("[invert]   goalPats: " + goalPats);
-        System.err.println(
-            "[invert]   pred: "
-                + (ps.length() > 120 ? ps.substring(0, 120) + "..." : ps));
-      }
     }
 
     // Deduplicate goalPats by name to avoid accumulating duplicates in
@@ -423,15 +410,9 @@ public class PredicateInverter {
     // Look up function definition in environment
     Core.NamedPat fnPat = fnId.idPat;
 
-    System.err.println(
-        "[tryInvertUserDefinedFunction] Called for: " + fnPat.name);
-
     // First, check the function registry for pre-analyzed invertibility.
     // Per Scott's principle: "Edge should never be on the stack."
     Result registryResult = tryInvertFromRegistry(fnPat, apply.arg, goalPats);
-    System.err.println(
-        "[tryInvertUserDefinedFunction]   registryResult: "
-            + (registryResult != null));
     if (registryResult != null) {
       return registryResult;
     }
@@ -489,52 +470,19 @@ public class PredicateInverter {
       return null;
     }
 
-    System.err.println(
-        "[tryInvertUserDefinedFunction] Attempting legacy inlining for: "
-            + fnPat.name);
     Binding binding = env.getOpt(fnPat);
-    System.err.println(
-        "[tryInvertUserDefinedFunction]   binding: " + (binding != null));
-    if (binding != null) {
-      System.err.println(
-          "[tryInvertUserDefinedFunction]   binding.exp: "
-              + (binding.exp != null));
-      if (binding.exp != null) {
-        System.err.println(
-            "[tryInvertUserDefinedFunction]   binding.exp.op: "
-                + binding.exp.op);
-      }
-    }
     if (binding != null && binding.exp != null) {
       Core.Exp fnBody = binding.exp;
       if (fnBody.op == Op.FN) {
         Core.Fn fn = (Core.Fn) fnBody;
 
-        System.err.println(
-            "[tryInvertUserDefinedFunction] Legacy inlining for: "
-                + fnPat.name);
-        System.err.println(
-            "[tryInvertUserDefinedFunction]   function body: " + fn.exp);
-
         // Substitute the function argument into the body, handling case
         // unwrapping for tuple parameters
         Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
 
-        System.err.println(
-            "[tryInvertUserDefinedFunction]   substituted body: "
-                + substitutedBody);
-
         // Try to invert the substituted body
         Result result =
             invert(substitutedBody, goalPats, ConsList.of(fnId, active));
-
-        System.err.println(
-            "[tryInvertUserDefinedFunction]   inversion result: "
-                + (result != null
-                    ? "generator with "
-                        + result.remainingFilters.size()
-                        + " filters"
-                    : "null"));
 
         return result;
       }
@@ -573,21 +521,8 @@ public class PredicateInverter {
     // Apply(fn=Fn(...), arg=p).
     if (apply.fn.op == Op.FN) {
       Core.Fn fn = (Core.Fn) apply.fn;
-      System.err.println("[tryInvertFnApplication] Inlined function detected");
-      System.err.println("[tryInvertFnApplication]   fn.idPat: " + fn.idPat);
-      System.err.println("[tryInvertFnApplication]   fn.exp: " + fn.exp);
-      System.err.println("[tryInvertFnApplication]   apply.arg: " + apply.arg);
       Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
-      System.err.println(
-          "[tryInvertFnApplication]   substitutedBody: " + substitutedBody);
       Result result = invert(substitutedBody, goalPats, active);
-      System.err.println(
-          "[tryInvertFnApplication]   result: "
-              + (result != null
-                  ? "generator with "
-                      + result.remainingFilters.size()
-                      + " filters"
-                  : "null"));
       return result;
     }
 
@@ -2545,21 +2480,9 @@ public class PredicateInverter {
     Core.Exp left = predsToProcess.get(0);
     Core.Exp right = predsToProcess.get(1);
 
-    System.err.println("[invertAnds] Attempting to invert andalso pattern");
-    System.err.println("[invertAnds]   left: " + left);
-    System.err.println("[invertAnds]   right: " + right);
-    System.err.println("[invertAnds]   goalPats: " + goalPats);
-
     // Try to invert both sides and join them
     Result leftResult = invert(left, goalPats, ImmutableList.of());
     Result rightResult = invert(right, goalPats, ImmutableList.of());
-
-    System.err.println(
-        "[invertAnds]   leftResult.remainingFilters: "
-            + leftResult.remainingFilters);
-    System.err.println(
-        "[invertAnds]   rightResult.remainingFilters: "
-            + rightResult.remainingFilters);
 
     // Only join if both sides improved (no remaining filters)
     if (leftResult.remainingFilters.isEmpty()
@@ -2637,11 +2560,6 @@ public class PredicateInverter {
     // If left inverted successfully, use its generator with right as a filter
     if (leftResult.remainingFilters.isEmpty()
         && !rightResult.remainingFilters.isEmpty()) {
-      System.err.println(
-          "[invertAnds] Partial success: left inverted, right is filter");
-      System.err.println(
-          "[invertAnds]   left generator: " + leftResult.generator);
-      System.err.println("[invertAnds]   right filter: " + right);
       // Use left's generator (e.g., the TC generator), keep right as a
       // remaining filter
       return result(leftResult.generator, ImmutableList.of(right));
@@ -2650,20 +2568,10 @@ public class PredicateInverter {
     // If right inverted successfully, use its generator with left as a filter
     if (!leftResult.remainingFilters.isEmpty()
         && rightResult.remainingFilters.isEmpty()) {
-      System.err.println(
-          "[invertAnds] Partial success: right inverted, left is filter");
       // Use right's generator, keep left as a remaining filter
       return result(rightResult.generator, ImmutableList.of(left));
     }
 
-    System.err.println(
-        "[invertAnds] No partial success - both sides have filters or both sides failed");
-    System.err.println(
-        "[invertAnds]   leftResult.remainingFilters: "
-            + leftResult.remainingFilters);
-    System.err.println(
-        "[invertAnds]   rightResult.remainingFilters: "
-            + rightResult.remainingFilters);
     return result(generatorFor(goalPats), predicates);
   }
 
