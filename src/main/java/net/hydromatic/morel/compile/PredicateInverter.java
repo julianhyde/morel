@@ -159,13 +159,6 @@ public class PredicateInverter {
    */
   private Result invert(
       Core.Exp predicate, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
-    System.err.println(
-        "PredicateInverter.invert() called with predicate op="
-            + predicate.op
-            + ", goalPats="
-            + goalPats.stream()
-                .map(p -> p.name)
-                .collect(java.util.stream.Collectors.joining(",")));
     // Deduplicate goalPats by name to avoid accumulating duplicates in
     // recursive calls. This can happen with recursive transitive closure
     // inversion where the same existential variable gets added to goalPats
@@ -403,23 +396,10 @@ public class PredicateInverter {
     }
 
     Binding binding = env.getOpt(fnPat);
-    System.err.println(
-        "Attempting legacy inlining for function: "
-            + fnPat.name
-            + ", binding="
-            + (binding == null
-                ? "null"
-                : "present, exp="
-                    + (binding.exp == null ? "null" : binding.exp.op)));
     if (binding != null && binding.exp != null) {
       Core.Exp fnBody = binding.exp;
       if (fnBody.op == Op.FN) {
         Core.Fn fn = (Core.Fn) fnBody;
-
-        System.err.println(
-            "Legacy inlining for function: "
-                + fnPat.name
-                + " - substituting and inverting body");
 
         // Substitute the function argument into the body, handling case
         // unwrapping for tuple parameters
@@ -885,15 +865,8 @@ public class PredicateInverter {
     // Step 1: Flatten orelse into branches
     final List<Core.Exp> branches = flattenOrelse(orElse);
 
-    System.err.println(
-        "tryInvertDisjunction: branches.size() = " + branches.size());
-    for (int i = 0; i < branches.size(); i++) {
-      System.err.println("  branch " + i + ": op=" + branches.get(i).op);
-    }
-
     if (branches.size() < 2) {
       // Not a multi-branch disjunction, fall through to other handlers
-      System.err.println("tryInvertDisjunction: returning null (< 2 branches)");
       return null;
     }
 
@@ -903,10 +876,6 @@ public class PredicateInverter {
     // here
     for (int i = 0; i < branches.size(); i++) {
       if (containsExists(branches.get(i))) {
-        System.err.println(
-            "tryInvertDisjunction: branch "
-                + i
-                + " contains EXISTS, this is likely a transitive closure - failing");
         return null; // Let tryInvertTransitiveClosure handle it
       }
     }
@@ -921,27 +890,16 @@ public class PredicateInverter {
 
     for (int i = 0; i < branches.size(); i++) {
       final Core.Exp branch = branches.get(i);
-      System.err.println("tryInvertDisjunction: inverting branch " + i);
       final Result branchResult = tryInvertBranch(branch, goalPats, active);
 
       if (branchResult == null) {
         // Branch not invertible - fail entire disjunction
-        System.err.println(
-            "tryInvertDisjunction: branch " + i + " returned null, failing");
         return null;
       }
-
-      System.err.println(
-          "tryInvertDisjunction: branch "
-              + i
-              + " cardinality="
-              + branchResult.generator.cardinality);
 
       // Check if branch produces finite generator
       if (branchResult.generator.cardinality
           == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
-        System.err.println(
-            "tryInvertDisjunction: branch " + i + " is INFINITE, failing");
         return null; // Can't create finite union with infinite generators
       }
 
@@ -1067,19 +1025,10 @@ public class PredicateInverter {
     Optional<FunctionRegistry.FunctionInfo> registeredInfo =
         functionRegistry.lookup(fnPat);
     if (!registeredInfo.isPresent()) {
-      System.err.println(
-          "Function not in registry: "
-              + fnPat.name
-              + " - using legacy inlining");
       return null; // Not registered - use legacy inlining
     }
 
     FunctionRegistry.FunctionInfo info = registeredInfo.get();
-    System.err.println(
-        "Found function in registry: "
-            + fnPat.name
-            + " with status: "
-            + info.status());
 
     // Pattern matching: determine which goalPats are bound by this call
     Optional<PatternMatcher.MatchResult> matchResult =
