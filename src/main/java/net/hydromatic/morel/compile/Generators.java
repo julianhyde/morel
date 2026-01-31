@@ -195,6 +195,11 @@ class Generators {
                           ImmutableList.of(),
                           generator.freePats)));
 
+          // Build FunctionRegistry from environment for predicate inversion
+          final FunctionRegistry functionRegistry =
+              FunctionAnalyzer.buildRegistryFromEnvironment(
+                  cache.typeSystem, cache.env);
+
           // Try to invert the predicate
           PredicateInverter.Result result =
               PredicateInverter.invert(
@@ -202,7 +207,8 @@ class Generators {
                   cache.env,
                   constraint,
                   goalPats,
-                  generators);
+                  generators,
+                  functionRegistry);
 
           // Check if inversion succeeded with a finite generator
           if (result.generator.cardinality != Generator.Cardinality.INFINITE) {

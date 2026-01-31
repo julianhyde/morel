@@ -886,12 +886,29 @@ public class PredicateInverter {
     final List<Core.Exp> branches = flattenOrelse(orElse);
 
     System.err.println(
-        "tryInvertDisjunction: flattened to " + branches.size() + " branches");
+        "tryInvertDisjunction: branches.size() = " + branches.size());
+    for (int i = 0; i < branches.size(); i++) {
+      System.err.println("  branch " + i + ": op=" + branches.get(i).op);
+    }
 
     if (branches.size() < 2) {
       // Not a multi-branch disjunction, fall through to other handlers
-      System.err.println("tryInvertDisjunction: < 2 branches, returning null");
+      System.err.println("tryInvertDisjunction: returning null (< 2 branches)");
       return null;
+    }
+
+    // Check if any branch contains EXISTS (indicates transitive closure
+    // pattern)
+    // Transitive closure should be handled by tryInvertTransitiveClosure, not
+    // here
+    for (int i = 0; i < branches.size(); i++) {
+      if (containsExists(branches.get(i))) {
+        System.err.println(
+            "tryInvertDisjunction: branch "
+                + i
+                + " contains EXISTS, this is likely a transitive closure - failing");
+        return null; // Let tryInvertTransitiveClosure handle it
+      }
     }
 
     // Step 2: Attempt to invert each branch
@@ -910,25 +927,21 @@ public class PredicateInverter {
       if (branchResult == null) {
         // Branch not invertible - fail entire disjunction
         System.err.println(
-            "tryInvertDisjunction: branch "
-                + i
-                + " not invertible, returning null");
+            "tryInvertDisjunction: branch " + i + " returned null, failing");
         return null;
       }
 
       System.err.println(
           "tryInvertDisjunction: branch "
               + i
-              + " cardinality = "
+              + " cardinality="
               + branchResult.generator.cardinality);
 
       // Check if branch produces finite generator
       if (branchResult.generator.cardinality
           == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
         System.err.println(
-            "tryInvertDisjunction: branch "
-                + i
-                + " is INFINITE, returning null");
+            "tryInvertDisjunction: branch " + i + " is INFINITE, failing");
         return null; // Can't create finite union with infinite generators
       }
 
@@ -1552,16 +1565,9 @@ public class PredicateInverter {
     Core.Exp pattern = elemCall.arg(0);
     Core.Exp collection = elemCall.arg(1);
 
-    System.err.println("invertElem: pattern.op = " + pattern.op);
-
     // Simple case: x elem myList => myList
     if (pattern.op == Op.ID) {
       Core.Id id = (Core.Id) pattern;
-      System.err.println("invertElem: id.idPat = " + id.idPat);
-      System.err.println("invertElem: goalPats = " + goalPats);
-      System.err.println(
-          "invertElem: goalPats.contains(id.idPat) = "
-              + goalPats.contains(id.idPat));
       if (goalPats.contains(id.idPat)) {
         final Generator generator =
             generator(
@@ -1569,7 +1575,6 @@ public class PredicateInverter {
                 collection,
                 net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                 ImmutableList.of());
-        System.err.println("invertElem: returning FINITE generator");
         return result(generator, ImmutableList.of());
       }
     }

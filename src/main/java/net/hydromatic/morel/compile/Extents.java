@@ -589,9 +589,19 @@ public class Extents {
                                   Generator.Cardinality.FINITE,
                                   ImmutableList.of(),
                                   ImmutableSet.of())));
+                  // Build FunctionRegistry from environment for predicate
+                  // inversion
+                  final FunctionRegistry functionRegistry =
+                      FunctionAnalyzer.buildRegistryFromEnvironment(
+                          typeSystem, env);
                   final PredicateInverter.Result result =
                       PredicateInverter.invert(
-                          typeSystem, env, filter, goalPats, generators);
+                          typeSystem,
+                          env,
+                          filter,
+                          goalPats,
+                          generators,
+                          functionRegistry);
                   if (invert
                       && result.generator.cardinality
                           != Generator.Cardinality.INFINITE) {
@@ -779,9 +789,17 @@ public class Extents {
                         Generator.Cardinality.FINITE,
                         ImmutableList.of(),
                         ImmutableSet.of())));
+        // Build FunctionRegistry from environment for predicate inversion
+        final FunctionRegistry functionRegistry =
+            FunctionAnalyzer.buildRegistryFromEnvironment(typeSystem, env);
         final PredicateInverter.Result result =
             PredicateInverter.invert(
-                typeSystem, env, filter, goalPats, generators);
+                typeSystem,
+                env,
+                filter,
+                goalPats,
+                generators,
+                functionRegistry);
         // Check if inversion succeeded (didn't just return fallback)
         final boolean inversionSucceeded =
             result.remainingFilters.size() != 1

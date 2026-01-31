@@ -503,5 +503,49 @@ public class FunctionAnalyzer {
           }
         });
   }
+
+  /**
+   * Builds a FunctionRegistry by analyzing all functions in an environment.
+   *
+   * <p>This method scans the environment for function bindings and analyzes
+   * each to determine its invertibility status. Functions are analyzed in
+   * dependency order: simple (ELEM) functions first, then recursive functions.
+   *
+   * @param typeSystem the type system
+   * @param env the environment containing function definitions
+   * @return a populated FunctionRegistry with all functions from the
+   *     environment
+   */
+  public static FunctionRegistry buildRegistryFromEnvironment(
+      TypeSystem typeSystem, Environment env) {
+    final FunctionRegistry registry = new FunctionRegistry();
+    final FunctionAnalyzer analyzer = new FunctionAnalyzer(typeSystem, env);
+    analyzer.registry = registry;
+
+    // Two-pass analysis to handle dependencies:
+    // Pass 1: Analyze simple (ELEM) functions that don't depend on others
+    // Pass 2: Analyze recursive functions that may reference functions from
+    // Pass 1
+    env.visit(
+        binding -> {
+          if (binding.exp != null
+              && binding.exp.op == Op.FN
+              && binding.id instanceof Core.NamedPat) {
+            Core.Fn fn = (Core.Fn) binding.exp;
+            Core.NamedPat fnPat = (Core.NamedPat) binding.id;
+
+            // Analyze and register the function
+            FunctionRegistry.FunctionInfo info = analyzer.analyze(fnPat, fn);
+            registry.register(fnPat, info);
+            System.err.println(
+                "Registered function: "
+                    + fnPat.name
+                    + " with status: "
+                    + info.status());
+          }
+        });
+
+    return registry;
+  }
 }
 // End FunctionAnalyzer.java

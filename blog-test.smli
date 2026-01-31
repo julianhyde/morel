@@ -1,0 +1,27 @@
+(* Minimal test case for blog.smli failure *)
+
+(* Workaround for [MOREL-270] Ambiguous collection types. *)
+fun mustBeList (list: 'a list) = list;
+
+fun split line =
+  String.tokens (fn c => c = #" ") line;
+
+val lines = ["a skunk sat on a stump",
+             "the stump thunk the skunk stunk",
+             "the skunk thunk the stump stunk"];
+
+(*) wordCount using relational mapReduce
+fun mapReduce mapper reducer list =
+  from e in mustBeList list,
+      (k, v) in mustBeList (mapper e)
+    group k compute {c = (fn vs => reducer (k, vs)) over v};
+
+fun wc_mapper line =
+  List.map (fn w => (w, 1)) (split line);
+
+fun wc_reducer (key, values) =
+  List.foldl (fn (x, y) => x + y) 0 values;
+
+val wordCount = mapReduce wc_mapper wc_reducer;
+
+from p in wordCount lines order p.k;

@@ -1,0 +1,57 @@
+(*
+ * Test nested FROM expressions to ensure closure parameters are accessible
+ *)
+
+(* Basic test: function returning FROM expression that uses parameter *)
+val generator = [(1, 10), (2, 20), (3, 30)];
+> val generator = [(1,10),(2,20),(3,30)] : (int * int) list
+
+fun inner x y =
+  from (a, b) in generator
+    where a = x andalso b = y
+    yield (a, b);
+> val inner = fn : int -> int -> (int * int) list
+
+(* Call inner directly - should work *)
+inner 2 20;
+> val it = [(2,20)] : (int * int) list
+
+(* Test: nested FROM with closure parameter access *)
+fun outer i =
+  from j in [10, 20, 30]
+    yield inner i j;
+> val outer = fn : int -> (int * int) list list
+
+outer 2;
+> val it = [[],[(2,20)],[]] : (int * int) list list
+
+(* More complex: multiple nesting levels *)
+fun level2 x =
+  from (a, b) in generator
+    where a = x
+    yield (a, b);
+> val level2 = fn : int -> (int * int) list
+
+fun level1 i =
+  from j in [1, 2, 3]
+    yield level2 j;
+> val level1 = fn : 'a -> (int * int) list list
+
+level1 2;
+> val it = [[(1,10)],[(2,20)],[(3,30)]] : (int * int) list list
+
+(* Test with range function *)
+fun range n = List.tabulate(n, fn i => i);
+> val range = fn : int -> int list
+
+fun innerWithRange x =
+  from i in range 3
+    where i < x
+    yield (x, i);
+> val innerWithRange = fn : int -> (int * int) list
+
+from k in range 5
+  yield innerWithRange k;
+> val it = [[],[(1,0)],[(2,0),(2,1)],[(3,0),(3,1),(3,2)],[(4,0),(4,1),(4,2)]]
+>   : (int * int) list list
+

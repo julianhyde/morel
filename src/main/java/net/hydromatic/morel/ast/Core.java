@@ -447,6 +447,17 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      if (op == Op.CONS_PAT && pat instanceof TuplePat) {
+        // For cons patterns, use infix notation: head :: tail
+        final TuplePat tuplePat = (TuplePat) pat;
+        if (tuplePat.args.size() == 2) {
+          return w.append("(")
+              .append(tuplePat.args.get(0), 0, 0)
+              .append(" :: ")
+              .append(tuplePat.args.get(1), 0, 0)
+              .append(")");
+        }
+      }
       return w.id(tyCon).append("(").append(pat, 0, 0).append(")");
     }
 
@@ -2066,20 +2077,30 @@ public class Core {
     protected AstWriter unparseStep(
         AstWriter w, int ordinal, int left, int right) {
       w.append(" group");
-      Pair.forEachIndexed( // lint:skip
-          groupExps,
-          (i, id, exp) ->
-              w.append(i == 0 ? " " : ", ")
-                  .append(id, 0, 0)
-                  .append(" = ")
-                  .append(exp, 0, 0));
-      Pair.forEachIndexed( // lint:skip
-          aggregates,
-          (i, name, aggregate) ->
-              w.append(i == 0 ? " compute " : ", ")
-                  .append(name, 0, 0)
-                  .append(" = ")
-                  .append(aggregate, 0, 0));
+      // Use record syntax {k1 = e1, k2 = e2} so that when reparsed,
+      // these are treated as labeled fields, not equality tests.
+      if (!groupExps.isEmpty()) {
+        w.append(" {");
+        Pair.forEachIndexed( // lint:skip
+            groupExps,
+            (i, id, exp) ->
+                w.append(i == 0 ? "" : ", ")
+                    .append(id, 0, 0)
+                    .append(" = ")
+                    .append(exp, 0, 0));
+        w.append("}");
+      }
+      if (!aggregates.isEmpty()) {
+        w.append(" compute {");
+        Pair.forEachIndexed( // lint:skip
+            aggregates,
+            (i, name, aggregate) ->
+                w.append(i == 0 ? "" : ", ")
+                    .append(name, 0, 0)
+                    .append(" = ")
+                    .append(aggregate, 0, 0));
+        w.append("}");
+      }
       return w;
     }
 
@@ -2310,11 +2331,39 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      // If aggregate is a low-precedence expression (fn, case, if, let),
+      // wrap it in parentheses to ensure correct reparsing with 'over'.
+      final boolean needsParens =
+          argument != null && needsParensForOver(aggregate);
+      if (needsParens) {
+        w.append("(");
+      }
       w.append(aggregate, 0, 0);
+      if (needsParens) {
+        w.append(")");
+      }
       if (argument != null) {
         w.append(" over ").append(argument, 0, 0);
       }
       return w;
+    }
+
+    /**
+     * Returns whether an expression needs parentheses when used as the left
+     * operand of 'over'. Low-precedence expressions like fn, case, if, and let
+     * extend to the right and would capture the 'over'.
+     */
+    private static boolean needsParensForOver(Exp exp) {
+      switch (exp.op) {
+        case FN:
+        case CASE:
+        case IF:
+        case LET:
+        case MATCH:
+          return true;
+        default:
+          return false;
+      }
     }
 
     public Aggregate copy(Type type, Exp aggregate, @Nullable Exp argument) {

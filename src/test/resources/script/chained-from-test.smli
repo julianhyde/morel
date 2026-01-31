@@ -1,0 +1,33 @@
+(*
+ * Test chained FROM clauses where second clause depends on first
+ *)
+
+(* Simple chained FROM *)
+from i in [1, 2, 3],
+     j in [i, i + 1]
+  yield (i, j);
+> val it = [(1,1),(1,2),(2,2),(2,3),(3,3),(3,4)] : (int * int) list
+
+(* Function that returns a list based on parameter *)
+fun range n = List.tabulate(n, fn k => k);
+> val range = fn : int -> int list
+
+(* Chained FROM with function call *)
+from i in [2, 3],
+     j in range i
+  yield (i, j);
+> val it = [(2,0),(2,1),(3,0),(3,1),(3,2)] : (int * int) list
+
+(* Function that uses outer scope in FROM *)
+fun innerRange x =
+  from i in range 3
+    where i < x
+    yield i;
+> val innerRange = fn : int -> int list
+
+(* Chained FROM calling function *)
+from i in [1, 2, 3],
+     j in innerRange i
+  yield (i, j);
+> val it = [(1,0),(2,0),(2,1),(3,0),(3,1),(3,2)] : (int * int) list
+
