@@ -1315,6 +1315,142 @@ public class PredicateInverterTest {
       System.err.println("*** SUCCESS: Got finite cardinality ***");
     }
   }
+
+  /** Test flattenOrelse with a single (non-orelse) expression. */
+  @Test
+  void testFlattenOrelseSingle() {
+    final Fixture f = new Fixture();
+    final Core.Exp expr = f.intLiteral(1);
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final java.util.List<Core.Exp> branches =
+        invokePrivateMethod(
+            inverter, "flattenOrelse", new Class<?>[] {Core.Exp.class}, expr);
+
+    assertThat(branches.size(), org.hamcrest.Matchers.is(1));
+    assertThat(branches.get(0), org.hamcrest.Matchers.sameInstance(expr));
+  }
+
+  /** Test flattenOrelse with a simple two-branch orelse. */
+  @Test
+  void testFlattenOrelseTwo() {
+    final Fixture f = new Fixture();
+    // Build: 1 orelse 2
+    final Core.Exp left = f.intLiteral(1);
+    final Core.Exp right = f.intLiteral(2);
+    final Core.Exp orElse = core.orElse(f.typeSystem, left, right);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final java.util.List<Core.Exp> branches =
+        invokePrivateMethod(
+            inverter, "flattenOrelse", new Class<?>[] {Core.Exp.class}, orElse);
+
+    assertThat(branches.size(), org.hamcrest.Matchers.is(2));
+    assertThat(branches.get(0), org.hamcrest.Matchers.sameInstance(left));
+    assertThat(branches.get(1), org.hamcrest.Matchers.sameInstance(right));
+  }
+
+  /**
+   * Test flattenOrelse with left-associative nesting: (a orelse b) orelse c.
+   */
+  @Test
+  void testFlattenOrelseLeftAssociative() {
+    final Fixture f = new Fixture();
+    // Build: (1 orelse 2) orelse 3
+    final Core.Exp a = f.intLiteral(1);
+    final Core.Exp b = f.intLiteral(2);
+    final Core.Exp c = f.intLiteral(3);
+
+    final Core.Exp ab = core.orElse(f.typeSystem, a, b);
+    final Core.Exp abc = core.orElse(f.typeSystem, ab, c);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final java.util.List<Core.Exp> branches =
+        invokePrivateMethod(
+            inverter, "flattenOrelse", new Class<?>[] {Core.Exp.class}, abc);
+
+    assertThat(branches.size(), org.hamcrest.Matchers.is(3));
+    assertThat(branches.get(0), org.hamcrest.Matchers.sameInstance(a));
+    assertThat(branches.get(1), org.hamcrest.Matchers.sameInstance(b));
+    assertThat(branches.get(2), org.hamcrest.Matchers.sameInstance(c));
+  }
+
+  /**
+   * Test flattenOrelse with right-associative nesting: a orelse (b orelse c).
+   */
+  @Test
+  void testFlattenOrelseRightAssociative() {
+    final Fixture f = new Fixture();
+    // Build: 1 orelse (2 orelse 3)
+    final Core.Exp a = f.intLiteral(1);
+    final Core.Exp b = f.intLiteral(2);
+    final Core.Exp c = f.intLiteral(3);
+
+    final Core.Exp bc = core.orElse(f.typeSystem, b, c);
+    final Core.Exp abc = core.orElse(f.typeSystem, a, bc);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final java.util.List<Core.Exp> branches =
+        invokePrivateMethod(
+            inverter, "flattenOrelse", new Class<?>[] {Core.Exp.class}, abc);
+
+    assertThat(branches.size(), org.hamcrest.Matchers.is(3));
+    assertThat(branches.get(0), org.hamcrest.Matchers.sameInstance(a));
+    assertThat(branches.get(1), org.hamcrest.Matchers.sameInstance(b));
+    assertThat(branches.get(2), org.hamcrest.Matchers.sameInstance(c));
+  }
+
+  /**
+   * Test flattenOrelse with complex nesting: (a orelse b) orelse (c orelse d).
+   */
+  @Test
+  void testFlattenOrelseMixed() {
+    final Fixture f = new Fixture();
+    // Build: (1 orelse 2) orelse (3 orelse 4)
+    final Core.Exp a = f.intLiteral(1);
+    final Core.Exp b = f.intLiteral(2);
+    final Core.Exp c = f.intLiteral(3);
+    final Core.Exp d = f.intLiteral(4);
+
+    final Core.Exp ab = core.orElse(f.typeSystem, a, b);
+    final Core.Exp cd = core.orElse(f.typeSystem, c, d);
+    final Core.Exp abcd = core.orElse(f.typeSystem, ab, cd);
+
+    final PredicateInverter inverter =
+        new PredicateInverter(f.typeSystem, Environments.empty());
+
+    final java.util.List<Core.Exp> branches =
+        invokePrivateMethod(
+            inverter, "flattenOrelse", new Class<?>[] {Core.Exp.class}, abcd);
+
+    assertThat(branches.size(), org.hamcrest.Matchers.is(4));
+    assertThat(branches.get(0), org.hamcrest.Matchers.sameInstance(a));
+    assertThat(branches.get(1), org.hamcrest.Matchers.sameInstance(b));
+    assertThat(branches.get(2), org.hamcrest.Matchers.sameInstance(c));
+    assertThat(branches.get(3), org.hamcrest.Matchers.sameInstance(d));
+  }
+
+  /** Helper method to invoke private methods via reflection for testing. */
+  private static <T> T invokePrivateMethod(
+      Object target, String methodName, Class<?>[] paramTypes, Object... args) {
+    try {
+      java.lang.reflect.Method method =
+          target.getClass().getDeclaredMethod(methodName, paramTypes);
+      method.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      T result = (T) method.invoke(target, args);
+      return result;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke " + methodName, e);
+    }
+  }
 }
 
 // End PredicateInverterTest.java

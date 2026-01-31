@@ -736,6 +736,51 @@ public class PredicateInverter {
   }
 
   /**
+   * Flattens a nested orelse expression into a list of branches. Handles both
+   * left-associative and right-associative nesting.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>{@code a} → {@code [a]}
+   *   <li>{@code a orelse b} → {@code [a, b]}
+   *   <li>{@code (a orelse b) orelse c} → {@code [a, b, c]}
+   *   <li>{@code a orelse (b orelse c)} → {@code [a, b, c]}
+   *   <li>{@code (a orelse b) orelse (c orelse d)} → {@code [a, b, c, d]}
+   * </ul>
+   *
+   * @param exp The expression to flatten (may or may not be an orelse)
+   * @return List of branch expressions (singleton list if not an orelse)
+   */
+  private List<Core.Exp> flattenOrelse(Core.Exp exp) {
+    List<Core.Exp> branches = new ArrayList<>();
+    flattenOrElseRecursive(exp, branches);
+    return branches;
+  }
+
+  /**
+   * Recursive helper for flattenOrelse. Traverses the orelse tree and collects
+   * all leaf branches.
+   *
+   * @param exp The current expression being examined
+   * @param accumulator The list collecting all branches
+   */
+  private void flattenOrElseRecursive(
+      Core.Exp exp, List<Core.Exp> accumulator) {
+    if (exp.op == Op.APPLY) {
+      Core.Apply apply = (Core.Apply) exp;
+      if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
+        // Recursively flatten both sides
+        flattenOrElseRecursive(apply.arg(0), accumulator);
+        flattenOrElseRecursive(apply.arg(1), accumulator);
+        return;
+      }
+    }
+    // Not an orelse - this is a leaf branch
+    accumulator.add(exp);
+  }
+
+  /**
    * Tries to invert a simple orelse pattern (without exists) as a union.
    *
    * <p>Handles patterns like: {@code a orelse b} where neither branch contains
