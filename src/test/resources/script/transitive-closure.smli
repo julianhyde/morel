@@ -173,9 +173,10 @@ from p where path_2_2 p;
 *)
 
 (* Test 2.3: Record-Based Edges
- * DISABLED: Record-based edge patterns in predicate inversion
- * produce incorrect results. This is a pre-existing bug that
- * requires enhanced record pattern handling.
+ * PARTIALLY FIXED (morel-04p): Base case works correctly, TC incomplete
+ * Current: [(1,2),(2,3)] - correct field order, missing TC result (1,3)
+ * Fix: buildRecordToTupleProjection correctly maps record fields to tuple positions
+ * Remaining: TC iteration not producing closure - needs investigation
 val edges_2_3 = [{src=1, dst=2}, {src=2, dst=3}];
 fun edge_2_3 (x, y) = {src=x, dst=y} elem edges_2_3;
 fun path_2_3 (x, y) = edge_2_3 (x, y) orelse
@@ -387,18 +388,17 @@ from p where path_5_3 p yield {src = #1 p, dst = #2 p};
 [{dst=2,src=1},{dst=3,src=1},{dst=3,src=2}]
 *)
 
-(* Test 5.4: Nested Query
- * DISABLED: Calling path function inside nested exists with bound outer
- * variables causes the recursive function body to evaluate unbounded z.
- * This requires runtime extent refinement which is not yet implemented.
+(* Test 5.4: Nested Query *)
 val edges_5_4 = [(1,2), (2,3)];
+> val edges_5_4 = [(1,2),(2,3)] : (int * int) list
 fun edge_5_4 (x, y) = (x, y) elem edges_5_4;
+> val edge_5_4 = fn : int * int -> bool
 fun path_5_4 (x, y) = edge_5_4 (x, y) orelse
   (exists z where path_5_4 (x, z) andalso edge_5_4 (z, y));
+> val path_5_4 = fn : int * int -> bool
 from x in [1, 2]
   where exists y in [1, 2, 3] where path_5_4 (x, y);
-[1,2]
-*)
+> val it = [1,2] : int list
 
 (* ===================================================================
  * CATEGORY 6: ADVANCED INTEGRATION TESTS (P1)

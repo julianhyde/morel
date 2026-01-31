@@ -434,12 +434,22 @@ public class PredicateInverter {
           // unwrapping for tuple parameters
           Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
 
-          // Try to invert as transitive closure pattern
-          Result transitiveClosureResult =
-              tryInvertTransitiveClosure(
-                  substitutedBody, fn, apply.arg, goalPats, active);
-          if (transitiveClosureResult != null) {
-            return transitiveClosureResult;
+          // Check if all goalPats are already bound (have generators).
+          // If so, we're in a nested context where all variables are
+          // constrained
+          // from outer scope. Don't try to invert - just use as a filter.
+          boolean allGoalsAlreadyBound =
+              !goalPats.isEmpty()
+                  && goalPats.stream().allMatch(generators::containsKey);
+
+          if (!allGoalsAlreadyBound) {
+            // Try to invert as transitive closure pattern
+            Result transitiveClosureResult =
+                tryInvertTransitiveClosure(
+                    substitutedBody, fn, apply.arg, goalPats, active);
+            if (transitiveClosureResult != null) {
+              return transitiveClosureResult;
+            }
           }
         }
       }
