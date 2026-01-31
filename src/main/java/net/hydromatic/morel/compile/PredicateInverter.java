@@ -868,6 +868,181 @@ public class PredicateInverter {
   }
 
   /**
+   * Extracts the step edge from a recursive clause in a transitive closure
+   * pattern.
+   *
+   * <p>For patterns like: {@code exists z where path(x,z) andalso edge(z,y)}
+   *
+   * <p>This extracts the edge relation {@code edge(z,y)} that should be used in
+   * the iteration step.
+   *
+   * @param fnBody The function body (typically an orelse tree)
+   * @param goalPats The goal patterns for inversion
+   * @return The inverted step edge expression, or null if extraction fails
+   */
+  private Core.@Nullable Exp extractStepEdge(
+      Core.Exp fnBody, List<Core.NamedPat> goalPats) {
+    // Find the recursive branch (the one with EXISTS)
+    System.err.println("[extractStepEdge] Finding recursive branch...");
+    Core.Exp recursiveBranch = findRecursiveBranch(fnBody);
+    if (recursiveBranch == null) {
+      System.err.println("[extractStepEdge] No recursive branch found");
+      return null;
+    }
+    System.err.println(
+        "[extractStepEdge] Found recursive branch: " + recursiveBranch.op);
+
+    // Parse EXISTS pattern: exists v where predicate
+    if (recursiveBranch.op != Op.APPLY) {
+      System.err.println("[extractStepEdge] Recursive branch not APPLY");
+      return null;
+    }
+    Core.Apply existsApply = (Core.Apply) recursiveBranch;
+    boolean isBagExists = existsApply.isCallTo(BuiltIn.BAG_EXISTS);
+    if (!isBagExists && existsApply.fn.op == Op.FN_LITERAL) {
+      Core.Literal literal = (Core.Literal) existsApply.fn;
+      BuiltIn builtIn = literal.unwrap(BuiltIn.class);
+      // exists is desugared to nonEmpty (RELATIONAL_NON_EMPTY)
+      isBagExists =
+          builtIn == BuiltIn.BAG_EXISTS
+              || builtIn == BuiltIn.RELATIONAL_NON_EMPTY;
+    }
+    if (!isBagExists) {
+      System.err.println(
+          "[extractStepEdge] Not BAG_EXISTS/nonEmpty, fn.op = "
+              + existsApply.fn.op);
+      return null;
+    }
+    System.err.println("[extractStepEdge] Found BAG_EXISTS/nonEmpty");
+
+    // Get the lambda inside exists: fn v => predicate
+    Core.Exp existsArg = existsApply.arg(0);
+    if (existsArg.op != Op.FN) {
+      System.err.println(
+          "[extractStepEdge] EXISTS arg not FN: " + existsArg.op);
+      return null;
+    }
+    Core.Fn existsFn = (Core.Fn) existsArg;
+    Core.Exp predicate = existsFn.exp;
+    System.err.println("[extractStepEdge] Predicate op: " + predicate.op);
+
+    // Parse andalso: recursive(x,z) andalso edge(z,y)
+    if (predicate.op != Op.APPLY) {
+      return null;
+    }
+    Core.Apply andalsoApply = (Core.Apply) predicate;
+    if (!andalsoApply.isCallTo(BuiltIn.Z_ANDALSO)) {
+      return null;
+    }
+
+    Core.Exp left = andalsoApply.arg(0);
+    Core.Exp right = andalsoApply.arg(1);
+
+    // Determine which side is the recursive call and which is the edge
+    boolean leftIsRecursive = containsRecursiveCall(left, fnBody);
+    Core.Exp edgeExp = leftIsRecursive ? right : left;
+
+    // Invert the edge expression to get a generator
+    Result edgeResult = invert(edgeExp, goalPats, ImmutableList.of());
+    if (edgeResult == null
+        || edgeResult.generator.cardinality
+            == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
+      return null;
+    }
+
+    return edgeResult.generator.expression;
+  }
+
+  /**
+   * Finds the recursive branch (the one containing EXISTS) in an orelse tree.
+   *
+   * @param exp The expression to search
+   * @return The recursive branch, or null if not found
+   */
+  private Core.@Nullable Exp findRecursiveBranch(Core.Exp exp) {
+    System.err.println(
+        "[findRecursiveBranch] exp.op="
+            + exp.op
+            + ", containsExists="
+            + containsExists(exp));
+    if (containsExists(exp)) {
+      if (exp.op == Op.APPLY) {
+        Core.Apply apply = (Core.Apply) exp;
+        System.err.println("[findRecursiveBranch] APPLY, fn.op=" + apply.fn.op);
+        if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
+          System.err.println(
+              "[findRecursiveBranch] Found Z_ORELSE, recursing...");
+          // Check both sides
+          Core.Exp left = findRecursiveBranch(apply.arg(0));
+          if (left != null) {
+            return left;
+          }
+          return findRecursiveBranch(apply.arg(1));
+        } else if (apply.isCallTo(BuiltIn.BAG_EXISTS)) {
+          System.err.println("[findRecursiveBranch] Found BAG_EXISTS!");
+          // Found the EXISTS branch
+          return exp;
+        } else if (apply.fn.op == Op.FN_LITERAL) {
+          Core.Literal literal = (Core.Literal) apply.fn;
+          BuiltIn builtIn = literal.unwrap(BuiltIn.class);
+          System.err.println(
+              "[findRecursiveBranch] FN_LITERAL: "
+                  + (builtIn != null ? builtIn.mlName : "null"));
+          // exists is desugared to nonEmpty (RELATIONAL_NON_EMPTY)
+          if (builtIn == BuiltIn.BAG_EXISTS
+              || builtIn == BuiltIn.RELATIONAL_NON_EMPTY) {
+            System.err.println(
+                "[findRecursiveBranch] Found BAG_EXISTS/nonEmpty via FN_LITERAL!");
+            return exp;
+          }
+        } else {
+          System.err.println(
+              "[findRecursiveBranch] Not Z_ORELSE or BAG_EXISTS, fn.op="
+                  + apply.fn.op);
+        }
+      } else {
+        System.err.println("[findRecursiveBranch] Not APPLY, op=" + exp.op);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Checks if an expression contains a recursive call to the function being
+   * defined.
+   *
+   * <p>For now, this is a simple heuristic: if the expression contains another
+   * function application that's not a built-in, it's likely the recursive call.
+   *
+   * @param exp The expression to check
+   * @param fnBody The function body (for reference)
+   * @return True if likely contains a recursive call
+   */
+  private boolean containsRecursiveCall(Core.Exp exp, Core.Exp fnBody) {
+    if (exp.op == Op.APPLY) {
+      Core.Apply apply = (Core.Apply) exp;
+      // Check if this is a user function call (not a built-in)
+      if (apply.fn.op == Op.ID) {
+        return true;
+      }
+      // Recurse into arguments
+      for (Core.Exp arg : apply.args()) {
+        if (containsRecursiveCall(arg, fnBody)) {
+          return true;
+        }
+      }
+    } else if (exp.op == Op.TUPLE) {
+      Core.Tuple tuple = (Core.Tuple) exp;
+      for (Core.Exp arg : tuple.args) {
+        if (containsRecursiveCall(arg, fnBody)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
    * Flattens a nested orelse expression into a list of branches. Handles both
    * left-associative and right-associative nesting.
    *
@@ -1378,9 +1553,25 @@ public class PredicateInverter {
       combinedBaseExpression = buildUnion(generatorExprs);
     }
 
+    // Extract the step edge from the recursive clause.
+    // For multi-branch patterns like: edge_b orelse edge_a orelse (exists z
+    // ...)
+    // The step should join only with the edge mentioned in the recursive
+    // clause,
+    // NOT with all base cases.
+    //
+    // TODO(morel-3sq): extractStepEdge needs to handle desugared FROM
+    // expressions
+    // Currently disabled because parsing FROM structure is complex
+    final Core.Exp stepEdge = null; // extractStepEdge(fnBody, goalPats);
+
     // Build Relational.iterate with the finite base generator.
     // Remaining filters will be applied at runtime along with the iterate
     // expansion.
+    // Use stepEdge if found, otherwise fall back to combinedBaseExpression
+    final Core.Exp stepExpression =
+        (stepEdge != null) ? stepEdge : combinedBaseExpression;
+
     // Create IOPair for the base case
     final IOPair baseCaseIO =
         new IOPair(ImmutableMap.of(), combinedBaseExpression);
@@ -1398,7 +1589,9 @@ public class PredicateInverter {
     final VarEnvironment varEnv = VarEnvironment.initial(goalPats, env);
 
     // Build step function: fn (old, new) => FROM ...
-    final Core.Exp stepFunction = buildStepFunction(tabulation, varEnv);
+    // Pass stepExpression to use for joining (may differ from base)
+    final Core.Exp stepFunction =
+        buildStepFunction(tabulation, stepExpression, varEnv);
 
     // Construct Relational.iterate call
     // Pattern: Relational.iterate baseGenerator stepFunction
@@ -2722,7 +2915,7 @@ public class PredicateInverter {
    * Builds the step function for Relational.iterate.
    *
    * <p>The step function takes two parameters (oldTuples, newTuples) and
-   * produces newly derived tuples by joining the base case with new results.
+   * produces newly derived tuples by joining the step edge with new results.
    *
    * <p>For transitive closure {@code path(x,y) = edge(x,y) orelse (exists z
    * where edge(x,z) andalso path(z,y))}, generates:
@@ -2736,25 +2929,23 @@ public class PredicateInverter {
    * }</pre>
    *
    * @param tabulation The tabulation result containing I-O mappings
+   * @param stepGenerator The generator expression to use for the step (may
+   *     differ from base)
    * @param env The variable environment
    * @return Lambda expression for the step function
    */
   private Core.Exp buildStepFunction(
-      TabulationResult tabulation, VarEnvironment env) {
+      TabulationResult tabulation, Core.Exp stepGenerator, VarEnvironment env) {
     if (tabulation.ioMappings.isEmpty()) {
       throw new IllegalArgumentException(
           "Cannot build step function for empty tabulation");
     }
 
-    // Get base case generator from first I-O pair
-    final IOPair baseCase = tabulation.ioMappings.get(0);
-    final Core.Exp baseGenerator = baseCase.output;
-
     // Determine threaded variables (variables preserved through recursion)
     final Set<Core.NamedPat> threadedVars = env.unboundGoals();
 
     // Build the lambda function
-    return buildStepLambda(baseGenerator, threadedVars, env);
+    return buildStepLambda(stepGenerator, threadedVars, env);
   }
 
   /**
