@@ -159,6 +159,13 @@ public class PredicateInverter {
    */
   private Result invert(
       Core.Exp predicate, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+    System.err.println(
+        "PredicateInverter.invert() called with predicate op="
+            + predicate.op
+            + ", goalPats="
+            + goalPats.stream()
+                .map(p -> p.name)
+                .collect(java.util.stream.Collectors.joining(",")));
     // Deduplicate goalPats by name to avoid accumulating duplicates in
     // recursive calls. This can happen with recursive transitive closure
     // inversion where the same existential variable gets added to goalPats
@@ -177,24 +184,9 @@ public class PredicateInverter {
     //   case p of (x_1, y_1) => edge(x_1, y_1) orelse exists...
     // We need to invert the body using the pattern variables as new goals.
     if (predicate.op == Op.CASE) {
-      Core.Case caseExp = (Core.Case) predicate;
-      // Check for single-arm case matching on a goal pattern
-      if (caseExp.matchList.size() == 1 && caseExp.exp.op == Op.ID) {
-        Core.Id caseId = (Core.Id) caseExp.exp;
-        // Check if we're matching on one of our goal patterns
-        if (goalPats.contains(caseId.idPat)) {
-          Core.Match match = caseExp.matchList.get(0);
-          // The new goal patterns are the variables bound by the match pattern
-          List<Core.NamedPat> newGoalPats = match.pat.expand();
-
-          // Invert the body using the new goal patterns
-          Result bodyResult = invert(match.exp, newGoalPats, active);
-
-          // If successful, the generator produces tuples matching the pattern
-          // which corresponds to the original goal pattern (since the case
-          // destructures goalPat into the match pattern)
-          return bodyResult;
-        }
+      Result caseResult = tryInvertCase(predicate, goalPats, active);
+      if (caseResult != null) {
+        return caseResult;
       }
     }
 
@@ -257,84 +249,10 @@ public class PredicateInverter {
 
       // Check for user-defined function calls (ID references)
       if (apply.fn.op == Op.ID) {
-        Core.Id fnId = (Core.Id) apply.fn;
-        // Look up function definition in environment
-        Core.NamedPat fnPat = fnId.idPat;
-
-        // First, check the function registry for pre-analyzed invertibility.
-        // Per Scott's principle: "Edge should never be on the stack."
-        Result registryResult =
-            tryInvertFromRegistry(fnPat, apply.arg, goalPats);
-        if (registryResult != null) {
-          return registryResult;
-        }
-
-        // Fallback: function not in registry - use legacy inlining approach.
-        // This path will be deprecated once all functions are pre-analyzed.
-
-        // Check if we're already trying to invert this function (recursion)
-        if (active.contains(fnId)) {
-          // This is a recursive call - try to invert it with transitive closure
-          Binding binding = env.getOpt(fnPat);
-
-          if (binding != null && binding.exp != null) {
-            Core.Exp fnBody = binding.exp;
-            if (fnBody.op == Op.FN) {
-              Core.Fn fn = (Core.Fn) fnBody;
-
-              // Substitute the function argument into the body, handling case
-              // unwrapping for tuple parameters
-              Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
-
-              // Try to invert as transitive closure pattern
-              Result transitiveClosureResult =
-                  tryInvertTransitiveClosure(
-                      substitutedBody, fn, apply.arg, goalPats, active);
-              if (transitiveClosureResult != null) {
-                return transitiveClosureResult;
-              }
-            }
-          }
-
-          // Fallback: can't invert recursive calls and couldn't build
-          // Relational.iterate
-          // Since we couldn't invert the transitive closure, we can't safely
-          // generate
-          // values for these goal patterns using infinite extents. Instead of
-          // returning
-          // an infinite cartesian product (which would fail at runtime), we
-          // signal
-          // complete inversion failure by returning null.
-          // This forces the caller to handle the failure explicitly, either by:
-          // 1. Allowing deferred grounding (if safe in context)
-          // 2. Returning null to propagate the failure further
-          // 3. Throwing an ungrounded pattern error
-          // In all cases, returning an INFINITE cardinality result signals to
-          // the caller that this predicate couldn't be inverted properly.
-          // We cannot safely create a fallback with infinite extents, because:
-          // 1. The inversion failed (base case is non-invertible)
-          // 2. Relational.iterate can't be built (due to infinite base case)
-          // 3. Any fallback with infinite extents will fail at runtime when
-          // materialized
-          //
-          // Return null to signal complete failure. The caller (invert method)
-          // will handle this appropriately.
-          return null;
-        }
-
-        Binding binding = env.getOpt(fnPat);
-        if (binding != null && binding.exp != null) {
-          Core.Exp fnBody = binding.exp;
-          if (fnBody.op == Op.FN) {
-            Core.Fn fn = (Core.Fn) fnBody;
-
-            // Substitute the function argument into the body, handling case
-            // unwrapping for tuple parameters
-            Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
-
-            // Try to invert the substituted body
-            return invert(substitutedBody, goalPats, ConsList.of(fnId, active));
-          }
+        Result userFnResult =
+            tryInvertUserDefinedFunction(apply, goalPats, active);
+        if (userFnResult != null) {
+          return userFnResult;
         }
       }
     }
@@ -360,6 +278,150 @@ public class PredicateInverter {
     // inversion with remaining filters. Without this, predicates like
     // "x = 1" would be silently dropped.
     return result(generatorFor(goalPats), ImmutableList.of(predicate));
+  }
+
+  /**
+   * Tries to invert a CASE expression that results from function application
+   * expansion. When Inliner expands "path p", it becomes: case p of (x_1, y_1)
+   * => edge(x_1, y_1) orelse exists... We need to invert the body using the
+   * pattern variables as new goals.
+   *
+   * @param predicate the CASE expression to invert
+   * @param goalPats the patterns we want to generate values for
+   * @param active the list of functions currently being inverted (for recursion
+   *     detection)
+   * @return the inversion result, or null if the case cannot be inverted
+   */
+  private Result tryInvertCase(
+      Core.Exp predicate, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+    Core.Case caseExp = (Core.Case) predicate;
+    // Check for single-arm case matching on a goal pattern
+    if (caseExp.matchList.size() == 1 && caseExp.exp.op == Op.ID) {
+      Core.Id caseId = (Core.Id) caseExp.exp;
+      // Check if we're matching on one of our goal patterns
+      if (goalPats.contains(caseId.idPat)) {
+        Core.Match match = caseExp.matchList.get(0);
+        // The new goal patterns are the variables bound by the match pattern
+        List<Core.NamedPat> newGoalPats = match.pat.expand();
+
+        // Invert the body using the new goal patterns
+        Result bodyResult = invert(match.exp, newGoalPats, active);
+
+        // If successful, the generator produces tuples matching the pattern
+        // which corresponds to the original goal pattern (since the case
+        // destructures goalPat into the match pattern)
+        return bodyResult;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Tries to invert a user-defined function call (ID references). This
+   * includes: 1. Registry lookup for pre-analyzed functions 2. Recursive call
+   * detection and transitive closure inversion 3. Legacy inlining approach for
+   * non-registered functions
+   *
+   * @param apply the function application to invert
+   * @param goalPats the patterns we want to generate values for
+   * @param active the list of functions currently being inverted (for recursion
+   *     detection)
+   * @return the inversion result, or null if the function cannot be inverted
+   */
+  private Result tryInvertUserDefinedFunction(
+      Core.Apply apply, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+    Core.Id fnId = (Core.Id) apply.fn;
+    // Look up function definition in environment
+    Core.NamedPat fnPat = fnId.idPat;
+
+    // First, check the function registry for pre-analyzed invertibility.
+    // Per Scott's principle: "Edge should never be on the stack."
+    Result registryResult = tryInvertFromRegistry(fnPat, apply.arg, goalPats);
+    if (registryResult != null) {
+      return registryResult;
+    }
+
+    // Fallback: function not in registry - use legacy inlining approach.
+    // This path will be deprecated once all functions are pre-analyzed.
+
+    // Check if we're already trying to invert this function (recursion)
+    if (active.contains(fnId)) {
+      // This is a recursive call - try to invert it with transitive closure
+      Binding binding = env.getOpt(fnPat);
+
+      if (binding != null && binding.exp != null) {
+        Core.Exp fnBody = binding.exp;
+        if (fnBody.op == Op.FN) {
+          Core.Fn fn = (Core.Fn) fnBody;
+
+          // Substitute the function argument into the body, handling case
+          // unwrapping for tuple parameters
+          Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
+
+          // Try to invert as transitive closure pattern
+          Result transitiveClosureResult =
+              tryInvertTransitiveClosure(
+                  substitutedBody, fn, apply.arg, goalPats, active);
+          if (transitiveClosureResult != null) {
+            return transitiveClosureResult;
+          }
+        }
+      }
+
+      // Fallback: can't invert recursive calls and couldn't build
+      // Relational.iterate
+      // Since we couldn't invert the transitive closure, we can't safely
+      // generate
+      // values for these goal patterns using infinite extents. Instead of
+      // returning
+      // an infinite cartesian product (which would fail at runtime), we
+      // signal
+      // complete inversion failure by returning null.
+      // This forces the caller to handle the failure explicitly, either by:
+      // 1. Allowing deferred grounding (if safe in context)
+      // 2. Returning null to propagate the failure further
+      // 3. Throwing an ungrounded pattern error
+      // In all cases, returning an INFINITE cardinality result signals to
+      // the caller that this predicate couldn't be inverted properly.
+      // We cannot safely create a fallback with infinite extents, because:
+      // 1. The inversion failed (base case is non-invertible)
+      // 2. Relational.iterate can't be built (due to infinite base case)
+      // 3. Any fallback with infinite extents will fail at runtime when
+      // materialized
+      //
+      // Return null to signal complete failure. The caller (invert method)
+      // will handle this appropriately.
+      return null;
+    }
+
+    Binding binding = env.getOpt(fnPat);
+    System.err.println(
+        "Attempting legacy inlining for function: "
+            + fnPat.name
+            + ", binding="
+            + (binding == null
+                ? "null"
+                : "present, exp="
+                    + (binding.exp == null ? "null" : binding.exp.op)));
+    if (binding != null && binding.exp != null) {
+      Core.Exp fnBody = binding.exp;
+      if (fnBody.op == Op.FN) {
+        Core.Fn fn = (Core.Fn) fnBody;
+
+        System.err.println(
+            "Legacy inlining for function: "
+                + fnPat.name
+                + " - substituting and inverting body");
+
+        // Substitute the function argument into the body, handling case
+        // unwrapping for tuple parameters
+        Core.Exp substitutedBody = substituteIntoFn(fn, apply.arg);
+
+        // Try to invert the substituted body
+        return invert(substitutedBody, goalPats, ConsList.of(fnId, active));
+      }
+    }
+    return null;
   }
 
   /**
@@ -746,10 +808,19 @@ public class PredicateInverter {
     Optional<FunctionRegistry.FunctionInfo> registeredInfo =
         functionRegistry.lookup(fnPat);
     if (!registeredInfo.isPresent()) {
+      System.err.println(
+          "Function not in registry: "
+              + fnPat.name
+              + " - using legacy inlining");
       return null; // Not registered - use legacy inlining
     }
 
     FunctionRegistry.FunctionInfo info = registeredInfo.get();
+    System.err.println(
+        "Found function in registry: "
+            + fnPat.name
+            + " with status: "
+            + info.status());
 
     // Pattern matching: determine which goalPats are bound by this call
     Optional<PatternMatcher.MatchResult> matchResult =
