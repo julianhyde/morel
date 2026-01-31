@@ -487,6 +487,15 @@ public class FunctionAnalyzer {
               Core.Fn fn = (Core.Fn) valDecl.exp;
               Core.NamedPat fnPat = (Core.NamedPat) valDecl.pat;
               FunctionRegistry.FunctionInfo info = analyze(fnPat, fn);
+              // Debug: log edge and notPath functions
+              if (fnPat.name.startsWith("edge_")
+                  || fnPat.name.equals("notPath")) {
+                System.err.println(
+                    "[FA] "
+                        + fnPat.name
+                        + " -> "
+                        + (info != null ? info.status() : "null"));
+              }
               // Only register if analysis produced a result
               // Null means: not pre-analyzed, use legacy inlining
               if (info != null) {
@@ -546,6 +555,15 @@ public class FunctionAnalyzer {
 
             // Analyze and register the function
             FunctionRegistry.FunctionInfo info = analyzer.analyze(fnPat, fn);
+            // Debug: log edge and notPath functions
+            if (fnPat.name.startsWith("edge_")
+                || fnPat.name.equals("notPath")) {
+              System.err.println(
+                  "[buildRegistry] "
+                      + fnPat.name
+                      + " -> "
+                      + (info != null ? info.status() : "null"));
+            }
             // Only register if analysis produced a result
             // Null means: not pre-analyzed, use legacy inlining
             if (info != null) {
