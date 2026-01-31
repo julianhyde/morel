@@ -227,13 +227,21 @@ public class PredicateInverter {
         return invertAnds(predicates, goalPats, active);
       }
 
-      // Try orelse: first TC inversion, then simple union inversion
+      // Try orelse: first multi-branch disjunction, then TC, then simple union
       if (apply.isCallTo(BuiltIn.Z_ORELSE)) {
+        // Try multi-branch disjunction (N >= 2 branches)
+        Result disjunctionResult =
+            tryInvertDisjunction(apply, goalPats, active);
+        if (disjunctionResult != null) {
+          return disjunctionResult;
+        }
+        // Try transitive closure inversion
         Result tcResult =
             tryInvertTransitiveClosure(apply, null, null, goalPats, active);
         if (tcResult != null) {
           return tcResult;
         }
+        // Fall back to simple binary union
         Result unionResult = tryInvertSimpleUnion(apply, goalPats, active);
         if (unionResult != null) {
           return unionResult;
@@ -753,6 +761,7 @@ public class PredicateInverter {
    * @return List of branch expressions (singleton list if not an orelse)
    */
   private List<Core.Exp> flattenOrelse(Core.Exp exp) {
+    requireNonNull(exp, "exp");
     List<Core.Exp> branches = new ArrayList<>();
     flattenOrElseRecursive(exp, branches);
     return branches;
@@ -792,11 +801,15 @@ public class PredicateInverter {
    *       [c, d]]
    * </ul>
    *
-   * @param generators List of generator expressions to combine (all must have
-   *     same type)
+   * @param generators List of generator expressions to combine (MUST all have
+   *     compatible list types - caller's responsibility to ensure type
+   *     homogeneity)
    * @return Single expression representing the union of all generators
+   * @throws IllegalArgumentException if generators is empty
+   * @throws NullPointerException if generators is null
    */
   private Core.Exp buildUnion(List<Core.Exp> generators) {
+    requireNonNull(generators, "generators");
     if (generators.isEmpty()) {
       throw new IllegalArgumentException("Cannot build union of empty list");
     }
@@ -805,7 +818,11 @@ public class PredicateInverter {
     }
 
     // Get the type of the generators (should all be the same list type)
-    final Type collectionType = generators.get(0).type;
+    final Type listType = generators.get(0).type;
+
+    // Defensive check: verify all generators have the same type
+    assert generators.stream().map(g -> g.type).distinct().count() == 1
+        : "All generators must have the same type";
 
     // Build balanced binary tree of concatenations
     List<Core.Exp> currentLevel = new ArrayList<>(generators);
@@ -819,10 +836,9 @@ public class PredicateInverter {
           final Core.Exp concatFn =
               core.functionLiteral(typeSystem, BuiltIn.LIST_CONCAT);
           final Core.Exp listArg =
-              core.list(
-                  typeSystem, collectionType, ImmutableList.of(left, right));
+              core.list(typeSystem, listType, ImmutableList.of(left, right));
           final Core.Exp concat =
-              core.apply(Pos.ZERO, collectionType, concatFn, listArg);
+              core.apply(Pos.ZERO, listType, concatFn, listArg);
           nextLevel.add(concat);
         } else {
           // Odd element, carry forward
@@ -833,6 +849,136 @@ public class PredicateInverter {
     }
 
     return currentLevel.get(0);
+  }
+
+  /**
+   * Tries to invert a multi-branch disjunction by flattening nested orelse
+   * expressions and unioning the results.
+   *
+   * <p>This handles N-branch disjunctions (N >= 2) where each branch can be
+   * inverted to a finite generator. Uses {@link #flattenOrelse} to decompose
+   * nested orelse structures, then {@link #buildUnion} to combine generators
+   * with a balanced binary tree of List.concat calls.
+   *
+   * <p><b>Strategy</b>:
+   *
+   * <ol>
+   *   <li>Flatten orelse into N branches
+   *   <li>For each branch, attempt inversion via {@link #tryInvertBranch}
+   *   <li>If any branch is not invertible, fail entire disjunction
+   *   <li>Union all generators using balanced tree
+   * </ol>
+   *
+   * <p><b>Example</b>: For {@code directPath(x,y) orelse pathViaA(x,y) orelse
+   * pathViaB(x,y)}, generates {@code List.concat([directGen, viaAGen,
+   * viaBGen])} with balanced binary tree.
+   *
+   * @param orElse the orelse expression
+   * @param goalPats the output patterns we want to generate
+   * @param active recursive call stack for detecting transitive closure
+   * @return Result with union generator, or null if any branch not invertible
+   */
+  @Nullable
+  private Result tryInvertDisjunction(
+      Core.Apply orElse, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+
+    // Step 1: Flatten orelse into branches
+    final List<Core.Exp> branches = flattenOrelse(orElse);
+
+    System.err.println(
+        "tryInvertDisjunction: flattened to " + branches.size() + " branches");
+
+    if (branches.size() < 2) {
+      // Not a multi-branch disjunction, fall through to other handlers
+      System.err.println("tryInvertDisjunction: < 2 branches, returning null");
+      return null;
+    }
+
+    // Step 2: Attempt to invert each branch
+    final List<Core.Exp> generatorExprs = new ArrayList<>();
+    final List<Core.Exp> combinedFilters = new ArrayList<>();
+    Core.Pat goalPat = null;
+    net.hydromatic.morel.compile.Generator.Cardinality combinedCardinality =
+        net.hydromatic.morel.compile.Generator.Cardinality.FINITE;
+    ImmutableSet<Core.NamedPat> combinedFreeVars = ImmutableSet.of();
+
+    for (int i = 0; i < branches.size(); i++) {
+      final Core.Exp branch = branches.get(i);
+      System.err.println("tryInvertDisjunction: inverting branch " + i);
+      final Result branchResult = tryInvertBranch(branch, goalPats, active);
+
+      if (branchResult == null) {
+        // Branch not invertible - fail entire disjunction
+        System.err.println(
+            "tryInvertDisjunction: branch "
+                + i
+                + " not invertible, returning null");
+        return null;
+      }
+
+      System.err.println(
+          "tryInvertDisjunction: branch "
+              + i
+              + " cardinality = "
+              + branchResult.generator.cardinality);
+
+      // Check if branch produces finite generator
+      if (branchResult.generator.cardinality
+          == net.hydromatic.morel.compile.Generator.Cardinality.INFINITE) {
+        System.err.println(
+            "tryInvertDisjunction: branch "
+                + i
+                + " is INFINITE, returning null");
+        return null; // Can't create finite union with infinite generators
+      }
+
+      generatorExprs.add(branchResult.generator.expression);
+      combinedFilters.addAll(branchResult.remainingFilters);
+
+      // Use first branch's goalPat for the union
+      if (goalPat == null) {
+        goalPat = branchResult.generator.goalPat;
+      }
+
+      // Union of free vars from all branches
+      combinedFreeVars =
+          ImmutableSet.<Core.NamedPat>builder()
+              .addAll(combinedFreeVars)
+              .addAll(branchResult.generator.freeVars)
+              .build();
+    }
+
+    // Step 3: Build union of all generators
+    final Core.Exp unionExpr = buildUnion(generatorExprs);
+
+    final Generator unionGen =
+        new Generator(
+            goalPat,
+            unionExpr,
+            combinedCardinality,
+            ImmutableList.of(),
+            combinedFreeVars);
+
+    return result(unionGen, combinedFilters);
+  }
+
+  /**
+   * Attempts to invert a single branch of a disjunction.
+   *
+   * <p>This is a helper method for {@link #tryInvertDisjunction} that inverts
+   * individual branches. It delegates to the main {@link #invert} method to
+   * handle the branch expression.
+   *
+   * @param branch the branch expression to invert
+   * @param goalPats the output patterns we want to generate
+   * @param active recursive call stack for detecting transitive closure
+   * @return Result if branch is invertible, null otherwise
+   */
+  @Nullable
+  private Result tryInvertBranch(
+      Core.Exp branch, List<Core.NamedPat> goalPats, List<Core.Exp> active) {
+    // Delegate to main invert method
+    return invert(branch, goalPats, active);
   }
 
   /**
@@ -1408,9 +1554,16 @@ public class PredicateInverter {
     Core.Exp pattern = elemCall.arg(0);
     Core.Exp collection = elemCall.arg(1);
 
+    System.err.println("invertElem: pattern.op = " + pattern.op);
+
     // Simple case: x elem myList => myList
     if (pattern.op == Op.ID) {
       Core.Id id = (Core.Id) pattern;
+      System.err.println("invertElem: id.idPat = " + id.idPat);
+      System.err.println("invertElem: goalPats = " + goalPats);
+      System.err.println(
+          "invertElem: goalPats.contains(id.idPat) = "
+              + goalPats.contains(id.idPat));
       if (goalPats.contains(id.idPat)) {
         final Generator generator =
             generator(
@@ -1418,6 +1571,7 @@ public class PredicateInverter {
                 collection,
                 net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
                 ImmutableList.of());
+        System.err.println("invertElem: returning FINITE generator");
         return result(generator, ImmutableList.of());
       }
     }
