@@ -418,18 +418,19 @@ from p where path_6_1 p andalso #1 p > 5;
 [(5,6),(5,7),(5,8),(6,7),(6,8),(7,8)]
 *)
 
-(* Test 6.2: TC with Nested Queries
- * DISABLED: Same issue as Test 5.4 - calling path function inside nested
- * from/exists with bound outer variables causes unbounded extent evaluation.
+(* Test 6.2: TC with Nested Queries *)
 val edges_6_2 = [(1,2), (2,3), (3,4)];
+> val edges_6_2 = [(1,2),(2,3),(3,4)] : (int * int) list
 val bigSet = [2, 3, 4];
+> val bigSet = [2,3,4] : int list
 fun edge_6_2 (x, y) = (x, y) elem edges_6_2;
+> val edge_6_2 = fn : int * int -> bool
 fun path_6_2 (x, y) = edge_6_2 (x, y) orelse
   (exists z where path_6_2 (x, z) andalso edge_6_2 (z, y));
+> val path_6_2 = fn : int * int -> bool
 from a in [1, 2, 3]
-  where exists (from b in bigSet where path_6_2 (a, b));
-[1,2,3]
-*)
+  where exists b in bigSet where path_6_2 (a, b);
+> val it = [1,2,3] : int list
 
 (* Test 6.3: TC with Aggregate - count *)
 val edges_6_3 = [(1,2), (2,3)];
@@ -607,9 +608,7 @@ from p where path_8_3 p;
  * =================================================================== *)
 
 (* Test 9.1: Repeated TC Invocations in Same Query
- * DISABLED: Calling path function multiple times with bound variables
- * causes unbounded extent evaluation for the recursive function body.
- * This requires runtime extent refinement which is not yet implemented.
+ * TODO: Re-enable once syntax issue is resolved
 val edges_9_1 = [(1,2), (2,3), (3,4)];
 fun edge_9_1 (x, y) = (x, y) elem edges_9_1;
 fun path_9_1 (x, y) = edge_9_1 (x, y) orelse
