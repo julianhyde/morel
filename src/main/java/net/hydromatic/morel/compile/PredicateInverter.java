@@ -1626,38 +1626,10 @@ public class PredicateInverter {
     final Core.Exp stepFunction =
         buildStepFunction(tabulation, stepExpression, varEnv);
 
-    // Construct Relational.iterate call
-    // Pattern: Relational.iterate baseGenerator stepFunction
-    // If the base generator produces records but we need tuples, wrap it with
-    // a conversion: from {x,y} in baseGen yield (x,y)
-    Core.Exp baseGenerator = combinedBaseExpression;
-    final Type baseElemType = baseGenerator.type.elementType();
-    if (baseElemType != null && baseElemType.op() == Op.RECORD_TYPE) {
-      baseGenerator = convertRecordBagToTupleBag(baseGenerator);
-    }
-
-    // Get the RELATIONAL_ITERATE built-in as a function literal
-    // RELATIONAL_ITERATE has type: 'a bag -> (('a bag, 'a bag) -> 'a bag) -> 'a
-    // bag
-    final Core.Exp iterateFn =
-        core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
-
-    // Compute types for the application
-    final Type bagType = baseGenerator.type; // 'a bag
-    final Type stepFnArgType =
-        typeSystem.tupleType(bagType, bagType); // ('a bag, 'a bag)
-    final Type stepFnType =
-        typeSystem.fnType(stepFnArgType, bagType); // ('a bag, 'a bag) -> 'a bag
-    final Type afterBaseType =
-        typeSystem.fnType(stepFnType, bagType); // step -> 'a bag
-
-    // Apply iterate to base generator
-    final Core.Exp iterateWithBase =
-        core.apply(Pos.ZERO, afterBaseType, iterateFn, baseGenerator);
-
-    // Apply the result to the step function
-    final Core.Exp relationalIterate =
-        core.apply(Pos.ZERO, bagType, iterateWithBase, stepFunction);
+    // Build Relational.iterate call and optionally convert result to tuples
+    Core.Exp relationalIterate =
+        buildRelationalIterate(
+            combinedBaseExpression, stepFunction, allBaseCases, goalPats);
 
     // Create a Generator wrapping the Relational.iterate call
     // Get constraints and freeVars from the first base generator (they should
@@ -1674,6 +1646,68 @@ public class PredicateInverter {
     // Return result with remaining filters from all base cases
     // These will be applied at runtime
     return result(iterateGenerator, ImmutableList.copyOf(allRemainingFilters));
+  }
+
+  /**
+   * Builds a Relational.iterate call for transitive closure.
+   *
+   * <p>IMPORTANT: Relational.iterate works entirely with records if the base
+   * generator produces records. The step function expects records because it
+   * scans the original edge collection. After iterate completes, we convert the
+   * record results to tuples.
+   *
+   * @param baseGenerator The base generator expression (may produce records)
+   * @param stepFunction The step function for iteration
+   * @param allBaseCases All base case expressions (for field mapping)
+   * @param goalPats The goal patterns defining expected output order
+   * @return The Relational.iterate call, with record-to-tuple conversion if
+   *     needed
+   */
+  private Core.Exp buildRelationalIterate(
+      Core.Exp baseGenerator,
+      Core.Exp stepFunction,
+      List<Core.Exp> allBaseCases,
+      List<Core.NamedPat> goalPats) {
+    final Type baseElemType = baseGenerator.type.elementType();
+
+    // Compute field positions for record-to-tuple conversion (used after
+    // iterate)
+    int[] fieldPositions = null;
+    if (baseElemType != null && baseElemType.op() == Op.RECORD_TYPE) {
+      fieldPositions =
+          extractFieldMappingFromBaseCase(
+              allBaseCases, goalPats, (RecordType) baseElemType);
+      if (fieldPositions == null) {
+        fieldPositions =
+            computeFieldOrderFromGoalPats(goalPats, (RecordType) baseElemType);
+      }
+    }
+
+    // Get the RELATIONAL_ITERATE built-in as a function literal
+    final Core.Exp iterateFn =
+        core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_ITERATE);
+
+    // Compute types for the application - use record bag type
+    final Type recordBagType = baseGenerator.type;
+    final Type stepFnArgType =
+        typeSystem.tupleType(recordBagType, recordBagType);
+    final Type stepFnType = typeSystem.fnType(stepFnArgType, recordBagType);
+    final Type afterBaseType = typeSystem.fnType(stepFnType, recordBagType);
+
+    // Apply iterate to base generator (records)
+    final Core.Exp iterateWithBase =
+        core.apply(Pos.ZERO, afterBaseType, iterateFn, baseGenerator);
+
+    // Apply the result to the step function
+    Core.Exp result =
+        core.apply(Pos.ZERO, recordBagType, iterateWithBase, stepFunction);
+
+    // Convert records to tuples AFTER iterate completes
+    if (fieldPositions != null) {
+      result = convertRecordBagToTupleBagWithOrder(result, fieldPositions);
+    }
+
+    return result;
   }
 
   /**
@@ -1721,6 +1755,245 @@ public class PredicateInverter {
     builder.yield_(yieldExp);
 
     return builder.build();
+  }
+
+  /**
+   * Converts a bag of records to a bag of tuples with custom field ordering.
+   *
+   * <p>Generates: {@code from r in recordBag yield (#fieldPos[0] r,
+   * #fieldPos[1] r, ...)}
+   *
+   * <p>This is needed when the record pattern binds variables in a different
+   * order than the alphabetical field order. For example, {@code {src=x,
+   * dst=y}} where the record type is {@code {dst:int, src:int}} (alphabetical)
+   * but we want tuples (x, y) = (src, dst).
+   *
+   * @param recordBag The bag of records to convert
+   * @param fieldPositions Array mapping output tuple position to input record
+   *     field position. fieldPositions[i] = j means tuple element i comes from
+   *     record field at position j.
+   * @return An expression that produces a bag of tuples with reordered fields
+   */
+  private Core.Exp convertRecordBagToTupleBagWithOrder(
+      Core.Exp recordBag, int[] fieldPositions) {
+    final Type elemType = recordBag.type.elementType();
+    if (elemType == null || elemType.op() != Op.RECORD_TYPE) {
+      return recordBag; // Not a record bag, return as-is
+    }
+    final RecordType recordType = (RecordType) elemType;
+
+    // Create scan pattern: a single ID to bind the entire record
+    final Core.IdPat scanPat =
+        core.idPat(recordType, typeSystem.nameGenerator.get(), 0);
+
+    // Create tuple yield expression with fields in the specified order
+    final List<Core.Exp> yieldArgs = new ArrayList<>();
+    for (int fieldPos : fieldPositions) {
+      yieldArgs.add(core.field(typeSystem, core.id(scanPat), fieldPos));
+    }
+    final Core.Exp yieldExp = core.tuple(typeSystem, null, yieldArgs);
+
+    // Build FROM expression: from r in recordBag yield (fields in order)
+    final FromBuilder builder =
+        core.fromBuilder(typeSystem, (Environment) null);
+    builder.scan(scanPat, recordBag);
+    builder.yield_(yieldExp);
+
+    return builder.build();
+  }
+
+  /**
+   * Computes field ordering from goal patterns and record type.
+   *
+   * <p>For record patterns like {@code {src=x, dst=y}} where goalPats = [x, y]
+   * and record type = {dst:int, src:int} (alphabetical), this method attempts
+   * to determine which record fields should map to which tuple positions.
+   *
+   * <p>The method tries to match goal pattern names to record field names. If
+   * names match (e.g., goalPat "x" matches field "x"), that mapping is used.
+   * Otherwise, falls back to identity ordering (which may be incorrect).
+   *
+   * @param goalPats The goal patterns defining expected tuple order
+   * @param recordType The record type whose fields need reordering
+   * @return Array where fieldPositions[i] is the record field index for tuple
+   *     position i
+   */
+  private int[] computeFieldOrderFromGoalPats(
+      List<Core.NamedPat> goalPats, RecordType recordType) {
+    final List<String> fieldNames = recordType.argNames(); // alphabetical
+    final int[] fieldPositions = new int[goalPats.size()];
+
+    // Try to match goal pattern names to field names
+    for (int i = 0; i < goalPats.size(); i++) {
+      final String goalName = goalPats.get(i).name;
+      int foundIndex = fieldNames.indexOf(goalName);
+      if (foundIndex >= 0) {
+        // Goal name matches a field name - use that field's position
+        fieldPositions[i] = foundIndex;
+      } else {
+        // No match - fall back to identity (alphabetical) ordering
+        // This is a best-effort fallback that may produce incorrect results
+        // for patterns like {src=x, dst=y} where goal names differ from fields
+        fieldPositions[i] = Math.min(i, fieldNames.size() - 1);
+      }
+    }
+
+    return fieldPositions;
+  }
+
+  /**
+   * Extracts field mapping from a base case function definition.
+   *
+   * <p>For a base case like {@code edge_2_3(x, y)} where the function is
+   * defined as {@code fun edge_2_3 (x, y) = {src=x, dst=y} elem edges_2_3},
+   * this method extracts the mapping from goal pattern names to record field
+   * positions.
+   *
+   * <p>The mapping is derived by:
+   *
+   * <ol>
+   *   <li>Looking up the function definition in the environment
+   *   <li>Finding the elem pattern in the function body
+   *   <li>Extracting the record pattern (e.g., {@code {src=x, dst=y}})
+   *   <li>Mapping each goal pattern name to its field position
+   * </ol>
+   *
+   * @param baseCases The base case expressions (function calls)
+   * @param goalPats The goal patterns defining expected output order
+   * @param recordType The record type whose fields need reordering
+   * @return Array where fieldPositions[i] is the record field index for tuple
+   *     position i, or null if mapping cannot be extracted
+   */
+  private int @Nullable [] extractFieldMappingFromBaseCase(
+      List<Core.Exp> baseCases,
+      List<Core.NamedPat> goalPats,
+      RecordType recordType) {
+    if (baseCases.isEmpty()) {
+      return null;
+    }
+
+    // Try the first base case
+    final Core.Exp baseCase = baseCases.get(0);
+
+    // Base case should be a function call like edge_2_3(x, y)
+    if (baseCase.op != Op.APPLY) {
+      return null;
+    }
+    final Core.Apply apply = (Core.Apply) baseCase;
+
+    // Get the function name
+    if (apply.fn.op != Op.ID) {
+      return null;
+    }
+    final Core.Id fnId = (Core.Id) apply.fn;
+    final Core.NamedPat fnPat = fnId.idPat;
+
+    // Look up the function definition in the environment
+    final Binding binding = env.getOpt(fnPat);
+    if (binding == null || binding.exp == null) {
+      return null;
+    }
+
+    final Core.Exp fnDef = binding.exp;
+    if (fnDef.op != Op.FN) {
+      return null;
+    }
+    final Core.Fn fn = (Core.Fn) fnDef;
+
+    // Find the elem call in the function body
+    final Core.Apply elemCall = findElemCall(fn.exp);
+    if (elemCall == null) {
+      return null;
+    }
+
+    // The elem pattern should be: pattern elem collection
+    // elemCall.arg(0) is the pattern, elemCall.arg(1) is the collection
+    final Core.Exp patternArg = elemCall.arg(0);
+
+    // Pattern should be a record or tuple
+    if (patternArg.op != Op.TUPLE) {
+      return null;
+    }
+    final Core.Tuple tuple = (Core.Tuple) patternArg;
+    if (tuple.type.op() != Op.RECORD_TYPE) {
+      return null; // Not a record pattern
+    }
+
+    // Extract variable names from the tuple args (in alphabetical field order)
+    // For {src=x, dst=y}, tuple.args = [y, x] (alphabetical: dst, src)
+    final List<String> varNamesInFieldOrder = new ArrayList<>();
+    for (Core.Exp arg : tuple.args) {
+      if (arg.op == Op.ID) {
+        varNamesInFieldOrder.add(((Core.Id) arg).idPat.name);
+      } else {
+        return null; // Pattern contains non-variable
+      }
+    }
+
+    // Build mapping from variable name to field position
+    // For {src=x, dst=y}: varNamesInFieldOrder = ["y", "x"] (dst=0, src=1)
+    // So: y -> 0, x -> 1
+    final Map<String, Integer> varToFieldPos = new HashMap<>();
+    for (int i = 0; i < varNamesInFieldOrder.size(); i++) {
+      varToFieldPos.put(varNamesInFieldOrder.get(i), i);
+    }
+
+    // Now compute field positions for each goal pattern
+    // For goalPats = [x, y]: fieldPositions[0] = 1 (x's position), [1] = 0
+    final int[] fieldPositions = new int[goalPats.size()];
+    for (int i = 0; i < goalPats.size(); i++) {
+      final String goalName = goalPats.get(i).name;
+      final Integer fieldPos = varToFieldPos.get(goalName);
+      if (fieldPos == null) {
+        return null; // Goal pattern not found in record pattern
+      }
+      fieldPositions[i] = fieldPos;
+    }
+
+    return fieldPositions;
+  }
+
+  /**
+   * Finds the elem call in an expression.
+   *
+   * <p>Searches recursively through the expression to find a call to {@code
+   * OP_ELEM} (the elem operator).
+   *
+   * @param exp The expression to search
+   * @return The elem Apply node, or null if not found
+   */
+  private Core.@Nullable Apply findElemCall(Core.Exp exp) {
+    // Handle case expressions (from pattern matching in function definition)
+    if (exp.op == Op.CASE) {
+      final Core.Case caseExp = (Core.Case) exp;
+      for (Core.Match match : caseExp.matchList) {
+        final Core.Apply found = findElemCall(match.exp);
+        if (found != null) {
+          return found;
+        }
+      }
+      return null;
+    }
+
+    // Check if this is an elem call
+    if (exp.op == Op.APPLY) {
+      final Core.Apply apply = (Core.Apply) exp;
+      if (apply.isCallTo(BuiltIn.OP_ELEM)) {
+        return apply;
+      }
+
+      // Check in andalso/orelse branches
+      if (apply.isCallTo(BuiltIn.Z_ANDALSO)
+          || apply.isCallTo(BuiltIn.Z_ORELSE)) {
+        final Core.Apply left = findElemCall(apply.arg(0));
+        if (left != null) {
+          return left;
+        }
+        return findElemCall(apply.arg(1));
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -1933,80 +2206,13 @@ public class PredicateInverter {
         }
 
         if (hasDuplicates) {
-          // Handle duplicate names by creating fresh scan patterns
-          // and adding equality constraints.
-          // For (z, z) elem edges, generate:
-          //   from (z_1, z_2) in edges where z_1 = z_2 yield z_1
-          final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-          List<Core.IdPat> freshPats = new ArrayList<>();
-          for (Core.Id id : tupleIds) {
-            Core.IdPat freshPat =
-                core.idPat(id.type, typeSystem.nameGenerator.get(), 0);
-            freshPats.add(freshPat);
-          }
-          final Core.Pat scanPat =
-              freshPats.size() == 1
-                  ? freshPats.get(0)
-                  : core.tuplePat(typeSystem, freshPats);
-          fromBuilder.scan(scanPat, collection);
-
-          // Add WHERE clauses for equality constraints between duplicate vars
-          // For (z, z), we need: z_1 = z_2
-          Map<String, List<Integer>> namePositions =
-              new java.util.LinkedHashMap<>();
-          for (int i = 0; i < tupleIds.size(); i++) {
-            namePositions
-                .computeIfAbsent(
-                    tupleIds.get(i).idPat.name, k -> new ArrayList<>())
-                .add(i);
-          }
-          for (List<Integer> positions : namePositions.values()) {
-            if (positions.size() > 1) {
-              // Generate equality constraints: p0 = p1, p0 = p2, etc.
-              Core.IdPat first = freshPats.get(positions.get(0));
-              for (int i = 1; i < positions.size(); i++) {
-                Core.IdPat other = freshPats.get(positions.get(i));
-                Core.Exp eqConstraint =
-                    core.call(
-                        typeSystem,
-                        BuiltIn.OP_EQ,
-                        first.type,
-                        Pos.ZERO,
-                        core.id(first),
-                        core.id(other));
-                fromBuilder.where(eqConstraint);
-              }
-            }
-          }
-
-          // Yield the first fresh pattern for each unique name
-          List<Core.Exp> yieldArgs = new ArrayList<>();
-          java.util.Set<String> yieldedNames = new java.util.HashSet<>();
-          for (int i = 0; i < tupleIds.size(); i++) {
-            String name = tupleIds.get(i).idPat.name;
-            if (yieldedNames.add(name)) {
-              yieldArgs.add(core.id(freshPats.get(i)));
-            }
-          }
-          final Core.Exp yieldExp =
-              yieldArgs.size() == 1
-                  ? yieldArgs.get(0)
-                  : core.tuple(typeSystem, yieldArgs.toArray(new Core.Exp[0]));
-          fromBuilder.yield_(yieldExp);
-
-          final Generator generator =
-              generator(
-                  toTuple(goalPats),
-                  fromBuilder.build(),
-                  net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
-                  ImmutableList.of());
-          return result(generator, ImmutableList.of());
+          return buildDuplicateIdElem(tupleIds, goalPats, collection);
         }
 
         // No duplicates - use collection directly.
-        // Building `from pat in collection yield tuple` would be an identity
-        // transformation since pat = toPat(tuple). Using collection directly
-        // avoids issues with FromBuilder's flattening logic in buildStepBody().
+        // For record patterns with different field/variable order (like
+        // {src=x, dst=y}), the field reordering is handled later in
+        // tryInvertTransitiveClosure via convertRecordBagToTupleBagWithOrder.
         final Generator generator =
             generator(
                 toTuple(goalPats),
@@ -2086,6 +2292,145 @@ public class PredicateInverter {
     // TODO: Deal with "() elem myList"
 
     return result(generatorFor(goalPats), ImmutableList.of(elemCall));
+  }
+
+  /**
+   * Handles elem patterns with duplicate variable names.
+   *
+   * <p>For {@code (z, z) elem edges}, generates: {@code from (z_1, z_2) in
+   * edges where z_1 = z_2 yield z_1}
+   *
+   * @param tupleIds The IDs from the pattern (may have duplicates)
+   * @param goalPats The goal patterns
+   * @param collection The collection to scan
+   * @return Result with a generator that filters for equality
+   */
+  private Result buildDuplicateIdElem(
+      List<Core.Id> tupleIds,
+      List<Core.NamedPat> goalPats,
+      Core.Exp collection) {
+    final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+    List<Core.IdPat> freshPats = new ArrayList<>();
+    for (Core.Id id : tupleIds) {
+      Core.IdPat freshPat =
+          core.idPat(id.type, typeSystem.nameGenerator.get(), 0);
+      freshPats.add(freshPat);
+    }
+    final Core.Pat scanPat =
+        freshPats.size() == 1
+            ? freshPats.get(0)
+            : core.tuplePat(typeSystem, freshPats);
+    fromBuilder.scan(scanPat, collection);
+
+    // Add WHERE clauses for equality constraints between duplicate vars
+    Map<String, List<Integer>> namePositions = new java.util.LinkedHashMap<>();
+    for (int i = 0; i < tupleIds.size(); i++) {
+      namePositions
+          .computeIfAbsent(tupleIds.get(i).idPat.name, k -> new ArrayList<>())
+          .add(i);
+    }
+    for (List<Integer> positions : namePositions.values()) {
+      if (positions.size() > 1) {
+        Core.IdPat first = freshPats.get(positions.get(0));
+        for (int i = 1; i < positions.size(); i++) {
+          Core.IdPat other = freshPats.get(positions.get(i));
+          Core.Exp eqConstraint =
+              core.call(
+                  typeSystem,
+                  BuiltIn.OP_EQ,
+                  first.type,
+                  Pos.ZERO,
+                  core.id(first),
+                  core.id(other));
+          fromBuilder.where(eqConstraint);
+        }
+      }
+    }
+
+    // Yield the first fresh pattern for each unique name
+    List<Core.Exp> yieldArgs = new ArrayList<>();
+    java.util.Set<String> yieldedNames = new java.util.HashSet<>();
+    for (int i = 0; i < tupleIds.size(); i++) {
+      String name = tupleIds.get(i).idPat.name;
+      if (yieldedNames.add(name)) {
+        yieldArgs.add(core.id(freshPats.get(i)));
+      }
+    }
+    final Core.Exp yieldExp =
+        yieldArgs.size() == 1
+            ? yieldArgs.get(0)
+            : core.tuple(typeSystem, yieldArgs.toArray(new Core.Exp[0]));
+    fromBuilder.yield_(yieldExp);
+
+    final Generator generator =
+        generator(
+            toTuple(goalPats),
+            fromBuilder.build(),
+            net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+            ImmutableList.of());
+    return result(generator, ImmutableList.of());
+  }
+
+  /**
+   * Builds a projection for record patterns where field order differs from
+   * goalPats order.
+   *
+   * <p>For {@code {src=x, dst=y} elem edges} where goalPats=[x,y]: tupleIds are
+   * in alphabetical field order [y,x] (dst, src). This method builds: {@code
+   * from r in edges yield (#src r, #dst r)} to produce tuples in goalPats
+   * order.
+   *
+   * @param tuple The record pattern (whose args are in alphabetical field
+   *     order)
+   * @param tupleIds The IDs from the pattern (in alphabetical field order)
+   * @param goalPats The goal patterns defining expected output order
+   * @param collection The collection to scan
+   * @return Result with a generator that projects fields in goalPats order
+   */
+  private Result buildRecordReorderProjection(
+      Core.Tuple tuple,
+      List<Core.Id> tupleIds,
+      List<Core.NamedPat> goalPats,
+      Core.Exp collection) {
+    // Compute field positions for each goal pattern
+    final int[] fieldPositions = new int[goalPats.size()];
+    for (int i = 0; i < goalPats.size(); i++) {
+      final Core.NamedPat goal = goalPats.get(i);
+      int foundPos = -1;
+      for (int j = 0; j < tupleIds.size(); j++) {
+        if (tupleIds.get(j).idPat.equals(goal)) {
+          foundPos = j;
+          break;
+        }
+      }
+      fieldPositions[i] = (foundPos >= 0) ? foundPos : i;
+    }
+
+    // Build FROM expression with projection
+    final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+    final RecordType recordType = (RecordType) tuple.type;
+    final Core.IdPat scanPat =
+        core.idPat(recordType, typeSystem.nameGenerator.get(), 0);
+    fromBuilder.scan(scanPat, collection);
+
+    // Build yield with fields in goalPats order
+    final List<Core.Exp> yieldArgs = new ArrayList<>();
+    for (int fieldPos : fieldPositions) {
+      yieldArgs.add(core.field(typeSystem, core.id(scanPat), fieldPos));
+    }
+    final Core.Exp yieldExp =
+        yieldArgs.size() == 1
+            ? yieldArgs.get(0)
+            : core.tuple(typeSystem, yieldArgs.toArray(new Core.Exp[0]));
+    fromBuilder.yield_(yieldExp);
+
+    final Generator generator =
+        generator(
+            toTuple(goalPats),
+            fromBuilder.build(),
+            net.hydromatic.morel.compile.Generator.Cardinality.FINITE,
+            ImmutableList.of());
+    return result(generator, ImmutableList.of());
   }
 
   /**
