@@ -119,7 +119,7 @@ public class FromBuilderTest {
     fromBuilder.distinct();
 
     final Core.From from = fromBuilder.build();
-    assertThat(from, hasToString("from i in [1, 2] group i = i"));
+    assertThat(from, hasToString("from i in [1, 2] group {i = i}"));
 
     // from i in [1, 2],
     //   j in [3, 4]
@@ -136,7 +136,7 @@ public class FromBuilderTest {
         from2,
         hasToString(
             "from i in [1, 2] join j in [3, 4] "
-                + "group i = i, j = j where i < j"));
+                + "group {i = i, j = j} where i < j"));
   }
 
   @Test

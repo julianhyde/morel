@@ -17,3 +17,4 @@ from i in [1, 2],
   yield (i, j);
 > val it = [(1,0),(2,0),(2,1)] : (int * int) list
 
+(*) End minimal-scope-test.smli

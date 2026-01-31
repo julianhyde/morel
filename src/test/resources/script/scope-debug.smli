@@ -18,3 +18,4 @@ from i in [2],
   yield (i, j);
 > val it = [(2,0),(2,1)] : (int * int) list
 
+(*) End scope-debug.smli
