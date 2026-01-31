@@ -193,6 +193,47 @@ public class PredicateInverter {
     }
     goalPats = uniqueGoalPats;
 
+    // Handle LET expressions that create intermediate bindings.
+    // Common pattern: let val v = e in case v of pat => body
+    // Simplify to: case e of pat => body
+    if (predicate.op == Op.LET) {
+      Core.Let let = (Core.Let) predicate;
+      // Only handle NonRecValDecl (simple let bindings)
+      if (let.decl instanceof Core.NonRecValDecl) {
+        Core.NonRecValDecl nonRecDecl = (Core.NonRecValDecl) let.decl;
+        // Check for pattern: let val v = e in case v of pat => body
+        if (let.exp.op == Op.CASE && nonRecDecl.pat instanceof Core.IdPat) {
+          Core.Case caseExp = (Core.Case) let.exp;
+          Core.IdPat letPat = (Core.IdPat) nonRecDecl.pat;
+          // Check if case is matching on the let-bound variable
+          if (caseExp.exp.op == Op.ID) {
+            Core.Id caseId = (Core.Id) caseExp.exp;
+            if (caseId.idPat.equals(letPat)) {
+              // Simplify: replace "let val v = e in case v of pat => body"
+              //       with "case e of pat => body"
+              Core.Case simplified =
+                  core.caseOf(
+                      caseExp.pos,
+                      caseExp.type,
+                      nonRecDecl.exp,
+                      caseExp.matchList);
+              return invert(simplified, goalPats, active);
+            }
+          }
+        }
+        // For simple ID patterns, substitute the variable with its value
+        if (nonRecDecl.pat instanceof Core.IdPat) {
+          Core.IdPat idPat = (Core.IdPat) nonRecDecl.pat;
+          Map<Core.Id, Core.Exp> subst = new HashMap<>();
+          subst.put(core.id(idPat), nonRecDecl.exp);
+          Core.Exp substituted =
+              Replacer.substitute(typeSystem, subst, let.exp);
+          return invert(substituted, goalPats, active);
+        }
+      }
+      // For complex LET patterns (RecValDecl, complex patterns), fall through
+    }
+
     // Handle CASE expressions that result from function application expansion.
     // When Inliner expands "path p", it becomes:
     //   case p of (x_1, y_1) => edge(x_1, y_1) orelse exists...
@@ -332,6 +373,32 @@ public class PredicateInverter {
         // If successful, the generator produces tuples matching the pattern
         // which corresponds to the original goal pattern (since the case
         // destructures goalPat into the match pattern)
+        return bodyResult;
+      }
+    }
+
+    // Handle case matching on a tuple of goal patterns
+    // Pattern: case (x, y) of (x', y') => body
+    // where (x, y) are goalPats and (x', y') are new variables
+    if (caseExp.matchList.size() == 1 && caseExp.exp.op == Op.TUPLE) {
+      Core.Tuple tup = (Core.Tuple) caseExp.exp;
+      // Check if all tuple elements are IDs of goal patterns
+      boolean allGoalPats = true;
+      for (Core.Exp arg : tup.args) {
+        if (arg.op != Op.ID || !goalPats.contains(((Core.Id) arg).idPat)) {
+          allGoalPats = false;
+          break;
+        }
+      }
+      if (allGoalPats) {
+        Core.Match match = caseExp.matchList.get(0);
+        // The new goal patterns are the variables bound by the match pattern
+        List<Core.NamedPat> newGoalPats = match.pat.expand();
+
+        // Invert the body using the new goal patterns
+        Result bodyResult = invert(match.exp, newGoalPats, active);
+
+        // If successful, the generator produces tuples matching the pattern
         return bodyResult;
       }
     }
