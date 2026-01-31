@@ -115,14 +115,8 @@ public abstract class Codes {
   //   where '##private static final [^ ]+ [^ ]+ =' \
   //   erase 'private static final [^ ]+ '
 
-  /** An applicable that returns the absolute value of an int. */
-  private static final Applicable1 ABS =
-      new BaseApplicable1<Integer, Integer>(BuiltIn.ABS) {
-        @Override
-        public Integer apply(Integer integer) {
-          return integer >= 0 ? integer : -integer;
-        }
-      };
+  /** @see BuiltIn#ABS */
+  private static final Applicable ABS = new IntAbs(BuiltIn.ABS, Pos.ZERO);
 
   /** @see BuiltIn#BAG_ALL */
   private static final Applicable2 BAG_ALL = all(BuiltIn.BAG_ALL);
@@ -848,12 +842,28 @@ public abstract class Codes {
 
   /** @see BuiltIn#INT_ABS */
   private static final Applicable INT_ABS =
-      new BaseApplicable1<Integer, Integer>(BuiltIn.INT_ABS) {
-        @Override
-        public Integer apply(Integer i) {
-          return Math.abs(i);
-        }
-      };
+      new IntAbs(BuiltIn.INT_ABS, Pos.ZERO);
+
+  /** Implements {@link #ABS} and {@link #INT_ABS}. */
+  private static class IntAbs
+      extends BasePositionedApplicable1<Integer, Integer> {
+    IntAbs(BuiltIn builtIn, Pos pos) {
+      super(builtIn, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new IntAbs(builtIn, pos);
+    }
+
+    @Override
+    public Integer apply(Integer i) {
+      if (i == Integer.MIN_VALUE) {
+        throw new MorelRuntimeException(BuiltInExn.OVERFLOW, pos);
+      }
+      return Math.abs(i);
+    }
+  }
 
   /** @see BuiltIn#INT_COMPARE */
   private static final Applicable2 INT_COMPARE =
