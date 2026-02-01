@@ -195,7 +195,7 @@ public class ModeAnalyzer {
     return ModeSignature.generator(canGen, required);
   }
 
-  /** Analyzes a comparison expression (>, <, >=, <=, =). */
+  /** Analyzes a comparison expression (&gt;, &lt;, &gt;=, &lt;=, =). */
   private ModeSignature analyzeComparison(
       Core.Apply apply,
       Set<Core.NamedPat> goalPats,

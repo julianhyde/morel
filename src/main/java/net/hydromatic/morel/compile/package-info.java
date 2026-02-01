@@ -43,7 +43,7 @@
  * </ul>
  *
  * <p>The predicate inversion implementation is based on the Universal Resolving
- * Algorithm by Abramov & Glück (2002).
+ * Algorithm by Abramov &amp; Gluck (2002).
  */
 package net.hydromatic.morel.compile;
 // End package-info.java

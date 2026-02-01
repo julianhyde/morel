@@ -909,7 +909,8 @@ class Generators {
 
     /**
      * Checks if predicate is a bound constraint for the given pattern. Returns
-     * true for predicates like "p > e", "p < e", "p >= e", "p <= e".
+     * true for predicates like "p &gt; e", "p &lt; e", "p &gt;= e", "p &lt;=
+     * e".
      */
     private static boolean isBoundPredicate(Core.Pat pat, Core.Exp predicate) {
       switch (predicate.builtIn()) {
