@@ -116,7 +116,17 @@ public abstract class Codes {
   //   erase 'private static final [^ ]+ '
 
   /** @see BuiltIn#ABS */
-  private static final Applicable ABS = new IntAbs(BuiltIn.ABS, Pos.ZERO);
+  private static final Macro ABS =
+      (typeSystem, env, argType) -> {
+        switch ((PrimitiveType) argType) {
+          case INT:
+            return core.functionLiteral(typeSystem, BuiltIn.INT_ABS);
+          case REAL:
+            return core.functionLiteral(typeSystem, BuiltIn.REAL_ABS);
+          default:
+            throw new AssertionError("bad type " + argType);
+        }
+      };
 
   /** @see BuiltIn#BAG_ALL */
   private static final Applicable2 BAG_ALL = all(BuiltIn.BAG_ALL);
@@ -844,7 +854,7 @@ public abstract class Codes {
   private static final Applicable INT_ABS =
       new IntAbs(BuiltIn.INT_ABS, Pos.ZERO);
 
-  /** Implements {@link #ABS} and {@link #INT_ABS}. */
+  /** Implements {@link #INT_ABS}. */
   private static class IntAbs
       extends BasePositionedApplicable1<Integer, Integer> {
     IntAbs(BuiltIn builtIn, Pos pos) {
