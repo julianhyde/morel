@@ -25,6 +25,7 @@ import static net.hydromatic.morel.util.Static.allMatch;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -86,7 +87,7 @@ public class Inliner extends EnvShuttle {
    * functions have side effects or read mutable state.
    */
   private static final Set<String> IMPURE_FUNCTION_NAMES =
-      Set.of(
+      ImmutableSet.of(
           "env",
           "clearEnv",
           "set",

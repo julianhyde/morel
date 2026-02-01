@@ -121,7 +121,7 @@ public class VarEnvironment {
         ImmutableMap.<Core.NamedPat, PredicateInverter.Generator>builder()
             .putAll(boundVars)
             .put(pat, gen)
-            .buildOrThrow(),
+            .build(),
         joinVars,
         typeEnv);
   }

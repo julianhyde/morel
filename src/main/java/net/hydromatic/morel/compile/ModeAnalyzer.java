@@ -87,7 +87,8 @@ public class ModeAnalyzer {
     /** Creates a signature for a generator (can produce values). */
     public static ModeSignature generator(
         Set<Core.NamedPat> canGenerate, Set<Core.NamedPat> requiredBound) {
-      return new ModeSignature(canGenerate, true, requiredBound, Set.of(), 0);
+      return new ModeSignature(
+          canGenerate, true, requiredBound, ImmutableSet.of(), 0);
     }
 
     /** Creates a signature for a generator with join variables. */
@@ -100,12 +101,14 @@ public class ModeAnalyzer {
 
     /** Creates a signature for a filter-only predicate. */
     public static ModeSignature filterOnly(Set<Core.NamedPat> requiredBound) {
-      return new ModeSignature(Set.of(), true, requiredBound, Set.of(), 100);
+      return new ModeSignature(
+          ImmutableSet.of(), true, requiredBound, ImmutableSet.of(), 100);
     }
 
     /** Creates a signature for an infinite generator (range constraint). */
     public static ModeSignature infinite(Set<Core.NamedPat> requiredBound) {
-      return new ModeSignature(Set.of(), false, requiredBound, Set.of(), 50);
+      return new ModeSignature(
+          ImmutableSet.of(), false, requiredBound, ImmutableSet.of(), 50);
     }
 
     /** Returns true if this predicate can generate any variables. */
@@ -223,13 +226,13 @@ public class ModeAnalyzer {
           // Function can generate - determine which goal patterns
           Set<Core.NamedPat> canGen =
               extractPatternsFromArg(apply.arg, goalPats, boundPats);
-          return ModeSignature.generator(canGen, Set.of());
+          return ModeSignature.generator(canGen, ImmutableSet.of());
 
         case RECURSIVE:
           // Recursive functions can generate but need special handling
           Set<Core.NamedPat> recCanGen =
               extractPatternsFromArg(apply.arg, goalPats, boundPats);
-          return ModeSignature.generator(recCanGen, Set.of());
+          return ModeSignature.generator(recCanGen, ImmutableSet.of());
 
         case NOT_INVERTIBLE:
           // Cannot generate - filter only
@@ -243,7 +246,7 @@ public class ModeAnalyzer {
     Set<Core.NamedPat> canGen =
         extractPatternsFromArg(apply.arg, goalPats, boundPats);
     if (!canGen.isEmpty()) {
-      return ModeSignature.generator(canGen, Set.of());
+      return ModeSignature.generator(canGen, ImmutableSet.of());
     }
 
     return ModeSignature.filterOnly(extractFreeVars(apply, goalPats));
