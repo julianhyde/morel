@@ -117,7 +117,7 @@ where b = (i mod 2 = 0);
 >
 > val it : {b:bool, i:int} bag
 
-(* -- elem ---------------------------------------------- *)
+(* -- elem -------------------------------------------------------- *)
 let
   val nums = [1, 2, 3, 4, 5]
 in
@@ -125,7 +125,7 @@ in
 end;
 > val it = [1,2,3,4,5] : int bag
 
-(* -- andalso becomes join ------------------------------ *)
+(* -- andalso becomes join ---------------------------------------- *)
 val nums = [1, 2, 3, 4, 5];
 > val nums = [1,2,3,4,5] : int list
 
@@ -208,7 +208,7 @@ from x where (1, x) elem [(1,"a"),(2,"b")];
 from x where (1, x, true) elem [(1,"a",false),(2,"b",true),(1,"c",true)];
 > val it = ["c"] : string bag
 
-(* -- orelse becomes union ------------------------------ *)
+(* -- orelse becomes union ---------------------------------------- *)
 fun isSmall n = n elem [1, 2];
 > val isSmall = fn : int -> bool
 
@@ -223,7 +223,7 @@ in
 end;
 > val it = [1,2,20,10] : int bag
 
-(* -- Predicate inversion ------------------------------- *)
+(* -- Predicate inversion ----------------------------------------- *)
 
 (* 1. Simple elem
  *
@@ -350,7 +350,7 @@ where j > 4 andalso j < 7
 >
 > val it : {i:int, j:int, k:int, m:int} bag
 
-(* -- Emp and dept examples ----------------------------- *)
+(* -- Emp and dept examples --------------------------------------- *)
 
 (*) Previously MainTest.testFromSuchThat
 let
@@ -1418,8 +1418,9 @@ order DESC profit;
 >
 > val it : {b:int, c:int, profit:int} list
 
-(* ------------------------------------------------------ *)
-(* Extracted testFromSuchThat* tests from MainTest.java *)
+(* -------------------------------------------------------------------
+ * Extracted testFromSuchThat* tests from MainTest.java.
+ *)
 
 Sys.set ("stringDepth", 1000);
 > val it = () : unit
@@ -1512,7 +1513,7 @@ from d where d elem scott.depts;
 > val it : {deptno:int, dname:string, loc:string} bag
 Sys.planEx "0";
 > val it =
->   "val it = from d : {deptno:int, dname:string, loc:string} where op elem$0 (d, #depts scott)"
+>   "val it = from d : {deptno:int, dname:string, loc:string} where op elem (d, #depts scott)"
 >   : string
 Sys.planEx "3";
 > val it = "val it = from d in #depts scott" : string
@@ -1528,9 +1529,9 @@ where {deptno, loc, dname = name} elem scott.depts;
 > 40     BOSTON   OPERATIONS
 >
 > val it : {deptno:int, loc:string, name:string} bag
-Sys.planEx "-1";
+Sys.planEx "0";
 > val it =
->   "val it = from loc : string join deptno : int join name : string where op elem$0 ({deptno = deptno, dname = name, loc = loc}, #depts scott)"
+>   "val it = from loc : string join deptno : int join name : string where op elem ({deptno = deptno, dname = name, loc = loc}, #depts scott)"
 >   : string
 (* TODO: remove spurious 'where' *)
 Sys.planEx "3";
@@ -1551,7 +1552,7 @@ from dno, name
 > val it : {dno:int, name:string} bag
 Sys.planEx "0";
 > val it =
->   "val it = from dno : int join name : string where op elem$0 ({deptno = dno, dname = name, loc = \"CHICAGO\"}, #depts scott) andalso dno > 20"
+>   "val it = from dno : int join name : string where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"}, #depts scott) andalso dno > 20"
 >   : string
 (* TODO: remove spurious 'where' *)
 Sys.planEx "3";
@@ -1574,7 +1575,7 @@ yield {dno = #deptno v, name = #dname v};
 > val it : {dno:int, name:string} bag
 Sys.planEx "0";
 > val it =
->   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem$0 (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
+>   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
 >   : string
 Sys.planEx "3";
 > val it =
@@ -1596,7 +1597,7 @@ yield {dno = #deptno v, name = #dname v};
 > val it : {dno:int, name:string} bag
 Sys.planEx "0";
 > val it =
->   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem$0 (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
+>   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
 >   : string
 Sys.planEx "3";
 > val it =
@@ -1617,7 +1618,7 @@ end;
 > val it = ["RESEARCH"] : string bag
 Sys.planEx "0";
 > val it =
->   "val it = let val isDept = fn d => op elem$0 (d, #depts scott) in from d_1 : {deptno:int, dname:string, loc:string} where isDept d_1 andalso #deptno d_1 = 20 yield #dname d_1 end"
+>   "val it = let val isDept = fn d => op elem (d, #depts scott) in from d_1 : {deptno:int, dname:string, loc:string} where isDept d_1 andalso #deptno d_1 = 20 yield #dname d_1 end"
 >   : string
 (* TODO: remove spurious 'where op elem (d, #depts scott)' *)
 Sys.planEx "999";
@@ -1642,7 +1643,7 @@ end;
 > val it = ["RESEARCH","RESEARCH","RESEARCH","RESEARCH","RESEARCH"] : string bag
 Sys.planEx "0";
 > val it =
->   "val it = let val isDept = fn d => op elem$0 (d, #depts scott) in let val isEmp = fn e => op elem$0 (e, #emps scott) in from d_1 : {deptno:int, dname:string, loc:string} join e_1 : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} where isDept d_1 andalso isEmp e_1 andalso #deptno d_1 = #deptno e_1 andalso #deptno d_1 = 20 yield #dname d_1 end end"
+>   "val it = let val isDept = fn d => op elem (d, #depts scott) in let val isEmp = fn e => op elem (e, #emps scott) in from d_1 : {deptno:int, dname:string, loc:string} join e_1 : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} where isDept d_1 andalso isEmp e_1 andalso #deptno d_1 = #deptno e_1 andalso #deptno d_1 = 20 yield #dname d_1 end end"
 >   : string
 (* TODO: remove spurious 'where op elem (d, #depts scott) andalso op elem (e, #emps scott)' *)
 Sys.planEx "999";
