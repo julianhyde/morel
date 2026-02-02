@@ -518,6 +518,8 @@ public class Main {
    * is a file, and its output is to the same output as its parent shell.
    */
   static class SubShell extends Shell {
+    /** Output consumer for the currently executing command, or null. */
+    private @Nullable Consumer<String> commandOutLines;
 
     SubShell(
         Main main,
@@ -530,7 +532,13 @@ public class Main {
 
     @Override
     public void use(String fileName, boolean silent, Pos pos) {
-      outLines.accept("[opening " + fileName + "]");
+      // In idempotent mode, route through commandOutLines so that
+      // emitOutput can compare actual vs expected output correctly.
+      final Consumer<String> out =
+          main.idempotent && commandOutLines != null
+              ? commandOutLines
+              : outLines;
+      out.accept("[opening " + fileName + "]");
       File file = new File(fileName);
       if (!file.isAbsolute()) {
         final File directory =
@@ -538,7 +546,7 @@ public class Main {
         file = new File(directory, fileName);
       }
       if (!file.exists()) {
-        outLines.accept(
+        out.accept(
             "[use failed: Io: openIn failed on "
                 + fileName
                 + ", No such file or directory]");
@@ -561,6 +569,7 @@ public class Main {
 
     void command(
         AstNode statement, Consumer<String> outLines, boolean typeOnly) {
+      this.commandOutLines = outLines;
       try {
         final Environment env = env0.bindAll(bindingMap.values());
         final Tracer tracer = Tracers.empty();
@@ -603,6 +612,8 @@ public class Main {
         }
       } catch (Codes.MorelRuntimeException e) {
         appendToOutput(e, outLines);
+      } finally {
+        this.commandOutLines = null;
       }
     }
 
