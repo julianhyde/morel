@@ -427,8 +427,12 @@ public class Main {
         Consumer<String> echoLines,
         Consumer<String> outLines) {
       final MorelParserImpl parser = new MorelParserImpl(in2);
+      final LineConsumer lineConsumer =
+          main.idempotent
+              ? new BufferingLineConsumer(outLines)
+              : new DirectLineConsumer(outLines);
       final SubShell subShell =
-          new SubShell(main, echoLines, outLines, bindingMap, env0);
+          new SubShell(main, echoLines, lineConsumer, bindingMap, env0);
       for (; ; ) {
         try {
           Pos pos = parser.nextTokenPos();
@@ -464,7 +468,7 @@ public class Main {
               outLines,
               session1 ->
                   subShell.command(
-                      statement, outLines, typeOnly, expectedOutput));
+                      statement, lineConsumer, typeOnly, expectedOutput));
         } catch (MorelParseException | CompileException e) {
           final String message = e.getMessage();
           if (message.startsWith("Encountered \"<EOF>\" ")) {
@@ -504,6 +508,71 @@ public class Main {
     public void clearEnv() {
       bindingMap.clear();
     }
+
+    /**
+     * Implementation of {@link LineConsumer} that appends a copy of each line
+     * received to an internal list.
+     */
+    private static class BufferingLineConsumer implements LineConsumer {
+      private final List<String> lines = new ArrayList<>();
+      private final Consumer<String> consumer;
+
+      BufferingLineConsumer(Consumer<String> consumer) {
+        this.consumer = consumer;
+      }
+
+      @Override
+      public Consumer<String> consumer() {
+        return consumer;
+      }
+
+      @Override
+      public void start() {
+        lines.clear();
+      }
+
+      @Override
+      public List<String> bufferedLines() {
+        return ImmutableList.copyOf(lines);
+      }
+
+      @Override
+      public void accept(String line) {
+        lines.add(line);
+      }
+    }
+
+    /**
+     * Implementation of {@link LineConsumer} that does not buffer, writing
+     * lines to a downstream consumer.
+     */
+    private static class DirectLineConsumer implements LineConsumer {
+      private final Consumer<String> outLines;
+
+      DirectLineConsumer(Consumer<String> outLines) {
+        this.outLines = outLines;
+      }
+
+      @Override
+      public Consumer<String> consumer() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void start() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public List<String> bufferedLines() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void accept(String line) {
+        outLines.accept(line);
+      }
+    }
   }
 
   /**
@@ -513,8 +582,6 @@ public class Main {
    * is a file, and its output is to the same output as its parent shell.
    */
   static class SubShell extends Shell {
-    /** Output consumer for the currently executing command, or null. */
-    private @Nullable Consumer<String> commandOutLines;
 
     SubShell(
         Main main,
@@ -529,11 +596,7 @@ public class Main {
     public void use(String fileName, boolean silent, Pos pos) {
       // In idempotent mode, route through commandOutLines so that
       // emitOutput can compare actual vs expected output correctly.
-      final Consumer<String> out =
-          main.idempotent && commandOutLines != null
-              ? commandOutLines
-              : outLines;
-      out.accept("[opening " + fileName + "]");
+      outLines.accept("[opening " + fileName + "]");
       File file = new File(fileName);
       if (!file.isAbsolute()) {
         final File directory =
@@ -541,7 +604,7 @@ public class Main {
         file = new File(directory, fileName);
       }
       if (!file.exists()) {
-        out.accept(
+        outLines.accept(
             "[use failed: Io: openIn failed on "
                 + fileName
                 + ", No such file or directory]");
@@ -564,20 +627,13 @@ public class Main {
 
     void command(
         AstNode statement,
-        Consumer<String> outLines,
+        LineConsumer outLines,
         boolean typeOnly,
         @Nullable String expectedOutput) {
-      final @Nullable List<String> actualLines;
-      final Consumer<String> finalOutLines;
-      if (expectedOutput == null) {
-        actualLines = null;
-        finalOutLines = outLines;
-      } else {
-        actualLines = new ArrayList<>();
-        finalOutLines = actualLines::add;
+      if (expectedOutput != null) {
+        outLines.start();
       }
 
-      this.commandOutLines = finalOutLines;
       try {
         final Environment env = env0.bindAll(bindingMap.values());
         final Tracer tracer = Tracers.empty();
@@ -588,7 +644,7 @@ public class Main {
                 env,
                 statement,
                 null,
-                e -> appendToOutput(e, finalOutLines),
+                e -> appendToOutput(e, outLines),
                 tracer);
         final List<Binding> bindings = new ArrayList<>();
         if (typeOnly) {
@@ -596,25 +652,27 @@ public class Main {
           Consumer<Binding> typeOnlyConsumer =
               binding -> {
                 bindings.add(binding);
-                finalOutLines.accept(
+                outLines.accept(
                     "val " + binding.id.name + " : " + binding.id.type);
               };
           compiled.getBindings(typeOnlyConsumer);
         } else {
-          compiled.eval(main.session, env, finalOutLines, bindings::add);
+          compiled.eval(main.session, env, outLines, bindings::add);
         }
 
         if (expectedOutput != null) {
           // Expected output is provided. If the expected and actual output are
           // same modulo whitespace, line endings and re-ordered elements of
           // bags, emit the expected output.
+          final List<String> actualLines = outLines.bufferedLines();
           final String actualOutput = String.join("\n", actualLines);
           if (actualOutput.equals(expectedOutput)
               || OutputMatcher.equivalent(actualOutput, expectedOutput)) {
             // Expected and actual are equivalent; emit expected verbatim
-            Arrays.stream(expectedOutput.split("\n", -1)).forEach(outLines);
+            Arrays.stream(expectedOutput.split("\n", -1))
+                .forEach(outLines.consumer());
           } else {
-            actualLines.forEach(outLines);
+            actualLines.forEach(outLines.consumer());
           }
         }
 
@@ -634,12 +692,10 @@ public class Main {
         }
       } catch (Codes.MorelRuntimeException e) {
         appendToOutput(e, outLines);
-      } finally {
-        this.commandOutLines = null;
       }
     }
 
-    private void appendToOutput(MorelException e, Consumer<String> outLines) {
+    private void appendToOutput(MorelException e, LineConsumer outLines) {
       final StringBuilder buf = new StringBuilder();
       main.session.handle(e, buf);
       outLines.accept(buf.toString());
@@ -714,6 +770,20 @@ public class Main {
       this.code = code;
       this.expectedOutputByOffset = expectedOutputByOffset;
     }
+  }
+
+  /** Can consume output lines. */
+  interface LineConsumer extends Consumer<String> {
+    /** Starts recording output lines. */
+    void start();
+
+    /**
+     * Returns a list of lines that were output since {@link #start} was called.
+     */
+    List<String> bufferedLines();
+
+    /** Returns the downstream consumer. */
+    Consumer<String> consumer();
   }
 }
 
