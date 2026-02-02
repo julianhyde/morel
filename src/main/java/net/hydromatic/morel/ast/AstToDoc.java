@@ -29,6 +29,7 @@ import static net.hydromatic.morel.util.Pretty.group;
 import static net.hydromatic.morel.util.Pretty.hsep;
 import static net.hydromatic.morel.util.Pretty.nest;
 import static net.hydromatic.morel.util.Pretty.punctuate;
+import static net.hydromatic.morel.util.Pretty.sep;
 import static net.hydromatic.morel.util.Pretty.text;
 import static net.hydromatic.morel.util.Pretty.vsep;
 
@@ -249,6 +250,11 @@ public class AstToDoc {
         }
       }
     }
+    final boolean needParens = left > op.left || op.right < right;
+    if (needParens) {
+      left = 0;
+      right = 0;
+    }
     final Doc inner =
         group(
             beside(
@@ -256,13 +262,17 @@ public class AstToDoc {
                 beside(
                     text(op.padded),
                     nest(2, beside(LINE_BREAK, toDoc(a1, op.right, right))))));
-    return maybeParens(left > op.left || op.right < right, inner);
+    return maybeParens(needParens, inner);
   }
 
   /** Prefix operator. */
   static Doc prefixDoc(int left, Op op, AstNode a, int right) {
+    final boolean needParens = left > op.left || op.right < right;
+    if (needParens) {
+      right = 0;
+    }
     final Doc inner = beside(text(op.padded), toDoc(a, op.right, right));
-    return maybeParens(left > op.left || op.right < right, inner);
+    return maybeParens(needParens, inner);
   }
 
   /** List of docs from a list of patterns. */
@@ -470,12 +480,18 @@ public class AstToDoc {
         }
       }
     }
-    return group(
-        beside(
-            toDoc(apply.fn, left, Op.APPLY.left),
-            nest(
-                2,
-                beside(LINE_BREAK, toDoc(apply.arg, Op.APPLY.right, right)))));
+    final boolean needParens = left > Op.APPLY.left || Op.APPLY.right < right;
+    if (needParens) {
+      left = 0;
+      right = 0;
+    }
+    final Doc inner =
+        group(
+            beside(
+                toDoc(apply.fn, left, Op.APPLY.left),
+                nest(
+                    2, beside(LINE, toDoc(apply.arg, Op.APPLY.right, right)))));
+    return maybeParens(needParens, inner);
   }
 
   /** Aggregate: {@code sum over e}. */
@@ -508,8 +524,7 @@ public class AstToDoc {
     }
     final Doc stepsDoc = vsep(stepDocs);
     return group(
-        beside(
-            text(query.op.lowerName()), nest(2, beside(LINE_BREAK, stepsDoc))));
+        beside(text(query.op.lowerName()), nest(2, beside(LINE, stepsDoc))));
   }
 
   /** Scan step. */
@@ -619,16 +634,16 @@ public class AstToDoc {
 
   /** Fun bind: match clauses joined by {@code " | "}. */
   private static Doc funBindDoc(Ast.FunBind funBind) {
-    final List<Doc> docs = new ArrayList<>();
-    for (int i = 0; i < funBind.matchList.size(); i++) {
-      final Doc m = funMatchDoc(funBind.matchList.get(i));
-      if (i > 0) {
-        docs.add(beside(text("  | "), m));
-      } else {
-        docs.add(m);
-      }
+    if (funBind.matchList.size() == 1) {
+      return funMatchDoc(funBind.matchList.get(0));
     }
-    return vsep(docs);
+    Doc result = funMatchDoc(funBind.matchList.get(0));
+    for (int i = 1; i < funBind.matchList.size(); i++) {
+      final Doc m = funMatchDoc(funBind.matchList.get(i));
+      // Flat: "clause1 | clause2"; broken: "clause1\n  | clause2"
+      result = beside(result, nest(2, beside(LINE, beside(text("| "), m))));
+    }
+    return group(result);
   }
 
   /** Fun match: {@code name pat ... = exp}. */
@@ -699,7 +714,7 @@ public class AstToDoc {
     }
     return beside(
         tyVarListDoc(bind.tyVars),
-        beside(text(bind.name.name + " = "), vsep(tyConDocs)));
+        beside(text(bind.name.name + " = "), sep(tyConDocs)));
   }
 
   /** Type constructor: {@code C} or {@code C of t}. */
@@ -776,7 +791,7 @@ public class AstToDoc {
         text("datatype "),
         beside(
             tyVarListDoc(spec.tyVars),
-            beside(text(spec.name.name + " = "), vsep(tyConDocs))));
+            beside(text(spec.name.name + " = "), sep(tyConDocs))));
   }
 
   /** Exception spec: {@code exception E} or {@code exception E of t}. */
