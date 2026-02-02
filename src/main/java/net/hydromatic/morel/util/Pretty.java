@@ -22,6 +22,7 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import java.util.function.BinaryOperator;
 import java.util.function.IntFunction;
 
 /**
@@ -519,8 +520,7 @@ public class Pretty {
   // -- Private helpers ------------------------------------------------------
 
   /** Folds a list of documents using a binary operator. */
-  private static Doc fold(
-      List<Doc> docs, java.util.function.BinaryOperator<Doc> op) {
+  private static Doc fold(List<Doc> docs, BinaryOperator<Doc> op) {
     switch (docs.size()) {
       case 0:
         return EMPTY;

@@ -82,14 +82,22 @@ class PrettyTest {
   void testLine() {
     final Doc doc = beside(text("a"), beside(LINE, text("b")));
     // Without group, LINE always breaks.
-    assertThat(render(80, doc), is("a\nb"));
+    assertThat(
+        render(80, doc),
+        is(
+            "a\n" //
+                + "b"));
   }
 
   @Test
   void testHardLine() {
     final Doc doc = beside(text("a"), beside(HARD_LINE, text("b")));
     // HARD_LINE always breaks, even in a group.
-    assertThat(render(80, group(doc)), is("a\nb"));
+    assertThat(
+        render(80, group(doc)),
+        is(
+            "a\n" //
+                + "b"));
   }
 
   // -- group and flatten ----------------------------------------------------
@@ -103,7 +111,11 @@ class PrettyTest {
   @Test
   void testGroupDoesNotFit() {
     final Doc doc = group(beside(text("a"), beside(LINE, text("b"))));
-    assertThat(render(2, doc), is("a\nb"));
+    assertThat(
+        render(2, doc),
+        is(
+            "a\n" //
+                + "b"));
   }
 
   // -- nest -----------------------------------------------------------------
@@ -115,7 +127,14 @@ class PrettyTest {
         beside(
             text("{"),
             beside(nest(2, beside(LINE, body)), beside(LINE, text("}"))));
-    assertThat(render(80, doc), is("{\n  x\n  y\n  z\n}"));
+    assertThat(
+        render(80, doc),
+        is(
+            "{\n" //
+                + "  x\n" //
+                + "  y\n" //
+                + "  z\n" //
+                + "}"));
   }
 
   @Test
@@ -131,7 +150,14 @@ class PrettyTest {
     // Fits on one line
     assertThat(render(80, doc), is("{x y z}"));
     // Does not fit — breaks and indents
-    assertThat(render(6, doc), is("{\n  x\n  y\n  z\n}"));
+    assertThat(
+        render(6, doc),
+        is(
+            "{\n" //
+                + "  x\n" //
+                + "  y\n" //
+                + "  z\n" //
+                + "}"));
   }
 
   // -- align ----------------------------------------------------------------
@@ -146,7 +172,11 @@ class PrettyTest {
                     ImmutableList.of(
                         text("first"), text("second"), text("third")))));
     assertThat(
-        render(80, doc), is("prefix: first\n        second\n        third"));
+        render(80, doc),
+        is(
+            "prefix: first\n" //
+                + "        second\n"
+                + "        third"));
   }
 
   // -- hang -----------------------------------------------------------------
@@ -157,7 +187,10 @@ class PrettyTest {
         hang(4, fillSep(words("the hang combinator indents these words")));
     assertThat(
         render(20, doc),
-        is("the hang combinator\n    indents these\n    words"));
+        is(
+            "the hang combinator\n" //
+                + "    indents these\n"
+                + "    words"));
   }
 
   // -- indent ---------------------------------------------------------------
@@ -169,7 +202,7 @@ class PrettyTest {
     assertThat(
         render(24, doc),
         is(
-            "    the indent\n"
+            "    the indent\n" //
                 + "        combinator\n"
                 + "        indents these\n"
                 + "        words"));
@@ -184,7 +217,12 @@ class PrettyTest {
 
   @Test
   void testVsep() {
-    assertThat(render(80, vsep(words("a b c"))), is("a\nb\nc"));
+    assertThat(
+        render(80, vsep(words("a b c"))),
+        is(
+            "a\n" //
+                + "b\n" //
+                + "c"));
   }
 
   @Test
@@ -194,7 +232,12 @@ class PrettyTest {
 
   @Test
   void testSepBreaks() {
-    assertThat(render(3, sep(words("a b c"))), is("a\nb\nc"));
+    assertThat(
+        render(3, sep(words("a b c"))),
+        is(
+            "a\n" //
+                + "b\n" //
+                + "c"));
   }
 
   // -- hcat, vcat, cat ------------------------------------------------------
@@ -206,7 +249,12 @@ class PrettyTest {
 
   @Test
   void testVcat() {
-    assertThat(render(80, vcat(words("a b c"))), is("a\nb\nc"));
+    assertThat(
+        render(80, vcat(words("a b c"))),
+        is(
+            "a\n" //
+                + "b\n" //
+                + "c"));
   }
 
   @Test
@@ -216,7 +264,12 @@ class PrettyTest {
 
   @Test
   void testCatBreaks() {
-    assertThat(render(2, cat(words("a b c"))), is("a\nb\nc"));
+    assertThat(
+        render(2, cat(words("a b c"))),
+        is(
+            "a\n" //
+                + "b\n" //
+                + "c"));
   }
 
   // -- fillSep --------------------------------------------------------------
@@ -231,7 +284,7 @@ class PrettyTest {
     assertThat(
         render(40, doc),
         is(
-            "the fill combinator lays out words one\n"
+            "the fill combinator lays out words one\n" //
                 + "at a time fitting as many on each line\n"
                 + "as possible"));
   }
@@ -273,7 +326,12 @@ class PrettyTest {
             text("]"),
             text(", "),
             ImmutableList.of(text("alpha"), text("bravo"), text("charlie")));
-    assertThat(render(15, doc), is("[alpha, \n bravo, \n charlie]"));
+    assertThat(
+        render(15, doc),
+        is(
+            "[alpha, \n" //
+                + " bravo, \n"
+                + " charlie]"));
   }
 
   @Test
@@ -345,12 +403,22 @@ class PrettyTest {
     assertThat(render(80, doc), is("aaa [bbb [ccc, ddd], eee]"));
 
     // Narrow: outer breaks, inner bbb group fits
-    assertThat(render(20, doc), is("aaa\n  [bbb [ccc, ddd],\n  eee]"));
+    assertThat(
+        render(20, doc),
+        is(
+            "aaa\n" //
+                + "  [bbb [ccc, ddd],\n"
+                + "  eee]"));
 
     // Very narrow: everything breaks
     assertThat(
         render(10, doc),
-        is("aaa\n" + "  [bbb\n" + "    [ccc,\n" + "    ddd],\n" + "  eee]"));
+        is(
+            "aaa\n" //
+                + "  [bbb\n"
+                + "    [ccc,\n"
+                + "    ddd],\n"
+                + "  eee]"));
   }
 
   /** SML-style let expression. */
@@ -386,7 +454,7 @@ class PrettyTest {
     assertThat(
         render(20, doc),
         is(
-            "let\n"
+            "let\n" //
                 + "  val x = 1;\n"
                 + "  val y = 2\n"
                 + "in\n"
@@ -408,7 +476,10 @@ class PrettyTest {
 
     // Narrow: arms on separate lines, | aligned
     assertThat(
-        render(20, doc), is("fn 0 => 1\n" + "   | n => n * fact (n - 1)"));
+        render(20, doc),
+        is(
+            "fn 0 => 1\n" //
+                + "   | n => n * fact (n - 1)"));
   }
 
   /** Verify that multiple groups independently decide to break or not. */
@@ -420,9 +491,21 @@ class PrettyTest {
     // Wide: everything on one line
     assertThat(render(80, outer), is("before alpha bravo charlie after"));
     // Medium: outer breaks, inner fits
-    assertThat(render(30, outer), is("before\nalpha bravo charlie\nafter"));
+    assertThat(
+        render(30, outer),
+        is(
+            "before\n" //
+                + "alpha bravo charlie\n"
+                + "after"));
     // Narrow: everything breaks
-    assertThat(render(10, outer), is("before\nalpha\nbravo\ncharlie\nafter"));
+    assertThat(
+        render(10, outer),
+        is(
+            "before\n" //
+                + "alpha\n"
+                + "bravo\n"
+                + "charlie\n"
+                + "after"));
   }
 }
 
