@@ -408,6 +408,11 @@ class Pretty {
       int depth,
       DataType dataType,
       Object value) {
+    if (!(value instanceof List) && !(value instanceof TypedValue)) {
+      // Opaque type (e.g. doc) whose values are not lists;
+      // print a placeholder.
+      return buf.append('-');
+    }
     final List<Object> list = toList(value);
     if (dataType.name.equals("vector")) {
       final Type argType = dataType.arg(0);

@@ -2506,6 +2506,328 @@ returns `v` if `opt` is `SOME v`, otherwise raises
 `Option`.
 """
 
+# === Pretty structure ===============================================
+
+[[functions]]
+ordinal = 258
+structure = "Pretty"
+name = "align"
+specified = "morel"
+type = "doc → doc"
+prototype = "align doc"
+description = """
+aligns the document to the current column.
+"""
+
+[[functions]]
+ordinal = 259
+structure = "Pretty"
+name = "beside"
+specified = "morel"
+type = "doc * doc → doc"
+prototype = "beside (a, b)"
+description = """
+concatenates two documents.
+"""
+
+[[functions]]
+ordinal = 260
+structure = "Pretty"
+name = "braces"
+specified = "morel"
+type = "doc → doc"
+prototype = "braces doc"
+description = """
+encloses the document in curly braces.
+"""
+
+[[functions]]
+ordinal = 261
+structure = "Pretty"
+name = "brackets"
+specified = "morel"
+type = "doc → doc"
+prototype = "brackets doc"
+description = """
+encloses the document in square brackets.
+"""
+
+[[functions]]
+ordinal = 262
+structure = "Pretty"
+name = "cat"
+specified = "morel"
+type = "doc list → doc"
+prototype = "cat docs"
+description = """
+concatenates documents horizontally if they fit,
+otherwise vertically. Equivalent to `group (vcat docs)`.
+"""
+
+[[functions]]
+ordinal = 263
+structure = "Pretty"
+name = "empty"
+specified = "morel"
+type = "doc"
+prototype = "empty"
+description = """
+the empty document.
+"""
+
+[[functions]]
+ordinal = 264
+structure = "Pretty"
+name = "encloseSep"
+specified = "morel"
+type = "doc * doc * doc * doc list → doc"
+prototype = "encloseSep (l, r, sep, docs)"
+description = """
+encloses a list of documents between `l` and `r`,
+separated by `sep`. If the result fits on one line, it is
+displayed horizontally; otherwise, elements are displayed
+one per line.
+"""
+
+[[functions]]
+ordinal = 265
+structure = "Pretty"
+name = "fillCat"
+specified = "morel"
+type = "doc list → doc"
+prototype = "fillCat docs"
+description = """
+concatenates documents, filling each line with as many
+documents as will fit. Uses no separator between documents.
+"""
+
+[[functions]]
+ordinal = 266
+structure = "Pretty"
+name = "fillSep"
+specified = "morel"
+type = "doc list → doc"
+prototype = "fillSep docs"
+description = """
+concatenates documents, filling each line with as many
+documents as will fit. Uses a space as separator.
+"""
+
+[[functions]]
+ordinal = 267
+structure = "Pretty"
+name = "group"
+specified = "morel"
+type = "doc → doc"
+prototype = "group doc"
+description = """
+tries to lay out the document on a single line by
+replacing all line breaks with spaces. If this does not fit,
+the original document is used.
+"""
+
+[[functions]]
+ordinal = 268
+structure = "Pretty"
+name = "hang"
+specified = "morel"
+type = "int * doc → doc"
+prototype = "hang (indent, doc)"
+description = """
+lays out the document with a nesting level set to the
+current column plus `indent`. This is used for hanging
+indentation.
+"""
+
+[[functions]]
+ordinal = 269
+structure = "Pretty"
+name = "hardLine"
+specified = "morel"
+type = "doc"
+prototype = "hardLine"
+description = """
+a line break that is always rendered as a newline, even
+when inside a `group`.
+"""
+
+[[functions]]
+ordinal = 270
+structure = "Pretty"
+name = "hcat"
+specified = "morel"
+type = "doc list → doc"
+prototype = "hcat docs"
+description = """
+concatenates documents horizontally with no separator.
+"""
+
+[[functions]]
+ordinal = 271
+structure = "Pretty"
+name = "hsep"
+specified = "morel"
+type = "doc list → doc"
+prototype = "hsep docs"
+description = """
+concatenates documents horizontally separated by a space.
+"""
+
+[[functions]]
+ordinal = 272
+structure = "Pretty"
+name = "indent"
+specified = "morel"
+type = "int * doc → doc"
+prototype = "indent (n, doc)"
+description = """
+indents the document by `n` spaces, and aligns all
+subsequent lines to that column.
+"""
+
+[[functions]]
+ordinal = 273
+structure = "Pretty"
+name = "line"
+specified = "morel"
+type = "doc"
+prototype = "line"
+description = """
+a line break. When flattened by `group`, it is replaced
+by a space.
+"""
+
+[[functions]]
+ordinal = 274
+structure = "Pretty"
+name = "lineBreak"
+specified = "morel"
+type = "doc"
+prototype = "lineBreak"
+description = """
+a line break. When flattened by `group`, it is replaced
+by the empty document.
+"""
+
+[[functions]]
+ordinal = 275
+structure = "Pretty"
+name = "nest"
+specified = "morel"
+type = "int * doc → doc"
+prototype = "nest (indent, doc)"
+description = """
+increases the nesting level of the document by `indent`.
+"""
+
+[[functions]]
+ordinal = 276
+structure = "Pretty"
+name = "parens"
+specified = "morel"
+type = "doc → doc"
+prototype = "parens doc"
+description = """
+encloses the document in parentheses.
+"""
+
+[[functions]]
+ordinal = 277
+structure = "Pretty"
+name = "punctuate"
+specified = "morel"
+type = "doc * doc list → doc list"
+prototype = "punctuate (sep, docs)"
+description = """
+intersperses the separator `sep` after each document
+except the last. Returns the modified list of documents.
+"""
+
+[[functions]]
+ordinal = 278
+structure = "Pretty"
+name = "render"
+specified = "morel"
+type = "int * doc → string"
+prototype = "render (width, doc)"
+description = """
+renders the document as a string, choosing the best layout
+for the given line width.
+"""
+
+[[functions]]
+ordinal = 279
+structure = "Pretty"
+name = "sep"
+specified = "morel"
+type = "doc list → doc"
+prototype = "sep docs"
+description = """
+concatenates documents separated by a space if they fit
+on one line, otherwise as separate lines. Equivalent to
+`group (vsep docs)`.
+"""
+
+[[functions]]
+ordinal = 280
+structure = "Pretty"
+name = "softBreak"
+specified = "morel"
+type = "doc"
+prototype = "softBreak"
+description = """
+a document that behaves like the empty document if the
+resulting output fits the page, otherwise like `lineBreak`.
+"""
+
+[[functions]]
+ordinal = 281
+structure = "Pretty"
+name = "softLine"
+specified = "morel"
+type = "doc"
+prototype = "softLine"
+description = """
+a document that behaves like a space if the resulting
+output fits the page, otherwise like `line`.
+"""
+
+[[functions]]
+ordinal = 282
+structure = "Pretty"
+name = "text"
+specified = "morel"
+type = "string → doc"
+prototype = "text s"
+description = """
+creates a document containing the literal string `s`. The
+string should not contain newlines.
+"""
+
+[[functions]]
+ordinal = 283
+structure = "Pretty"
+name = "vcat"
+specified = "morel"
+type = "doc list → doc"
+prototype = "vcat docs"
+description = """
+concatenates documents vertically with no separator
+between them.
+"""
+
+[[functions]]
+ordinal = 284
+structure = "Pretty"
+name = "vsep"
+specified = "morel"
+type = "doc list → doc"
+prototype = "vsep docs"
+description = """
+concatenates documents vertically separated by line
+breaks.
+"""
+
 # === Real structure =================================================
 
 [[functions]]

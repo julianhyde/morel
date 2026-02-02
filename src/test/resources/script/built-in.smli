@@ -128,6 +128,22 @@ Option;
 >      map:('l -> 'm) -> 'l option -> 'm option,
 >      mapPartial:('n -> 'o option) -> 'n option -> 'o option,
 >      valOf:'p option -> 'p}
+Pretty;
+> val it =
+>   {align=fn,beside=fn,braces=fn,brackets=fn,cat=fn,empty=-,encloseSep=fn,
+>    fillCat=fn,fillSep=fn,group=fn,hang=fn,hardLine=-,hcat=fn,hsep=fn,indent=fn,
+>    line=-,lineBreak=-,nest=fn,parens=fn,punctuate=fn,render=fn,sep=fn,
+>    softBreak=-,softLine=-,text=fn,vcat=fn,vsep=fn}
+>   : {align:doc -> doc, beside:doc * doc -> doc, braces:doc -> doc,
+>      brackets:doc -> doc, cat:doc list -> doc, empty:doc,
+>      encloseSep:doc * doc * doc * doc list -> doc, fillCat:doc list -> doc,
+>      fillSep:doc list -> doc, group:doc -> doc, hang:int * doc -> doc,
+>      hardLine:doc, hcat:doc list -> doc, hsep:doc list -> doc,
+>      indent:int * doc -> doc, line:doc, lineBreak:doc, nest:int * doc -> doc,
+>      parens:doc -> doc, punctuate:doc * doc list -> doc list,
+>      render:int * doc -> string, sep:doc list -> doc, softBreak:doc,
+>      softLine:doc, text:string -> doc, vcat:doc list -> doc,
+>      vsep:doc list -> doc}
 String;
 > val it =
 >   {<=fn,<==fn,>=fn,>==fn,^=fn,collate=fn,compare=fn,concat=fn,concatWith=fn,
@@ -4413,6 +4429,8 @@ Sys.env ();
 >    ("NONE","'a option"),
 >    ("Option",
 >     "{app:forall 'a. ('a -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, join:forall 'a. 'a option option -> 'a option, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
+>    ("Pretty",
+>     "{align:doc -> doc, beside:doc * doc -> doc, braces:doc -> doc, brackets:doc -> doc, cat:doc list -> doc, empty:doc, encloseSep:doc * doc * doc * doc list -> doc, fillCat:doc list -> doc, fillSep:doc list -> doc, group:doc -> doc, hang:int * doc -> doc, hardLine:doc, hcat:doc list -> doc, hsep:doc list -> doc, indent:int * doc -> doc, line:doc, lineBreak:doc, nest:int * doc -> doc, parens:doc -> doc, punctuate:doc * doc list -> doc list, render:int * doc -> string, sep:doc list -> doc, softBreak:doc, softLine:doc, text:string -> doc, vcat:doc list -> doc, vsep:doc list -> doc}"),
 >    ("REAL","real -> variant"),("RECORD","(string * variant) list -> variant"),
 >    ("Real",
 >     "{/:real * real -> real, abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
@@ -4518,6 +4536,8 @@ env ();
 >    ("NONE","'a option"),
 >    ("Option",
 >     "{app:forall 'a. ('a -> unit) -> 'a option -> unit, compose:forall 'a 'b 'c. ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option, composePartial:forall 'a 'b 'c. ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option, filter:forall 'a. ('a -> bool) -> 'a -> 'a option, getOpt:forall 'a. 'a option * 'a -> 'a, isSome:forall 'a. 'a option -> bool, join:forall 'a. 'a option option -> 'a option, map:forall 'a 'b. ('a -> 'b) -> 'a option -> 'b option, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a option -> 'b option, valOf:forall 'a. 'a option -> 'a}"),
+>    ("Pretty",
+>     "{align:doc -> doc, beside:doc * doc -> doc, braces:doc -> doc, brackets:doc -> doc, cat:doc list -> doc, empty:doc, encloseSep:doc * doc * doc * doc list -> doc, fillCat:doc list -> doc, fillSep:doc list -> doc, group:doc -> doc, hang:int * doc -> doc, hardLine:doc, hcat:doc list -> doc, hsep:doc list -> doc, indent:int * doc -> doc, line:doc, lineBreak:doc, nest:int * doc -> doc, parens:doc -> doc, punctuate:doc * doc list -> doc list, render:int * doc -> string, sep:doc list -> doc, softBreak:doc, softLine:doc, text:string -> doc, vcat:doc list -> doc, vsep:doc list -> doc}"),
 >    ("REAL","real -> variant"),("RECORD","(string * variant) list -> variant"),
 >    ("Real",
 >     "{/:real * real -> real, abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
@@ -5008,5 +5028,21 @@ Value.parse "42";
 Value.parse "true";
 > val it = BOOL true : value
 *)
+
+(*) Pretty.render renders a document to a string.
+Pretty.render (80, Pretty.beside (Pretty.text "hello", Pretty.beside (Pretty.line, Pretty.text "world")));
+> val it = "hello\nworld" : string
+
+(*) Pretty.group tries to flatten a document onto one line.
+val g = #group Pretty;
+> val g = fn : doc -> doc
+val s = #sep Pretty;
+> val s = fn : doc list -> doc
+Pretty.render (80, g (s [Pretty.text "a", Pretty.text "b", Pretty.text "c"]));
+> val it = "a b c" : string
+
+(*) When the line is too narrow, the group breaks.
+Pretty.render (3, g (s [Pretty.text "a", Pretty.text "b", Pretty.text "c"]));
+> val it = "a\nb\nc" : string
 
 (*) End built-in.smli

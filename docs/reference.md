@@ -665,6 +665,33 @@ Exception:
 | Option.filter | (&alpha; &rarr; bool) &rarr; &alpha; &rarr; &alpha; option | "filter f a" returns `SOME a` if `f(a)` is `true`, `NONE` otherwise. |
 | Option.join | &alpha; option option &rarr; &alpha; option | "join opt" maps `NONE` to `NONE` and `SOME v` to `v`. |
 | Option.valOf | &alpha; option &rarr; &alpha; | "valOf opt" returns `v` if `opt` is `SOME v`, otherwise raises `Option`. |
+| Pretty.align | doc &rarr; doc | "align doc" aligns the document to the current column. |
+| Pretty.beside | doc * doc &rarr; doc | "beside (a, b)" concatenates two documents. |
+| Pretty.braces | doc &rarr; doc | "braces doc" encloses the document in curly braces. |
+| Pretty.brackets | doc &rarr; doc | "brackets doc" encloses the document in square brackets. |
+| Pretty.cat | doc list &rarr; doc | "cat docs" concatenates documents horizontally if they fit, otherwise vertically. Equivalent to `group (vcat docs)`. |
+| Pretty.empty | doc | "empty" the empty document. |
+| Pretty.encloseSep | doc * doc * doc * doc list &rarr; doc | "encloseSep (l, r, sep, docs)" encloses a list of documents between `l` and `r`, separated by `sep`. If the result fits on one line, it is displayed horizontally; otherwise, elements are displayed one per line. |
+| Pretty.fillCat | doc list &rarr; doc | "fillCat docs" concatenates documents, filling each line with as many documents as will fit. Uses no separator between documents. |
+| Pretty.fillSep | doc list &rarr; doc | "fillSep docs" concatenates documents, filling each line with as many documents as will fit. Uses a space as separator. |
+| Pretty.group | doc &rarr; doc | "group doc" tries to lay out the document on a single line by replacing all line breaks with spaces. If this does not fit, the original document is used. |
+| Pretty.hang | int * doc &rarr; doc | "hang (indent, doc)" lays out the document with a nesting level set to the current column plus `indent`. This is used for hanging indentation. |
+| Pretty.hardLine | doc | "hardLine" a line break that is always rendered as a newline, even when inside a `group`. |
+| Pretty.hcat | doc list &rarr; doc | "hcat docs" concatenates documents horizontally with no separator. |
+| Pretty.hsep | doc list &rarr; doc | "hsep docs" concatenates documents horizontally separated by a space. |
+| Pretty.indent | int * doc &rarr; doc | "indent (n, doc)" indents the document by `n` spaces, and aligns all subsequent lines to that column. |
+| Pretty.line | doc | "line" a line break. When flattened by `group`, it is replaced by a space. |
+| Pretty.lineBreak | doc | "lineBreak" a line break. When flattened by `group`, it is replaced by the empty document. |
+| Pretty.nest | int * doc &rarr; doc | "nest (indent, doc)" increases the nesting level of the document by `indent`. |
+| Pretty.parens | doc &rarr; doc | "parens doc" encloses the document in parentheses. |
+| Pretty.punctuate | doc * doc list &rarr; doc list | "punctuate (sep, docs)" intersperses the separator `sep` after each document except the last. Returns the modified list of documents. |
+| Pretty.render | int * doc &rarr; string | "render (width, doc)" renders the document as a string, choosing the best layout for the given line width. |
+| Pretty.sep | doc list &rarr; doc | "sep docs" concatenates documents separated by a space if they fit on one line, otherwise as separate lines. Equivalent to `group (vsep docs)`. |
+| Pretty.softBreak | doc | "softBreak" a document that behaves like the empty document if the resulting output fits the page, otherwise like `lineBreak`. |
+| Pretty.softLine | doc | "softLine" a document that behaves like a space if the resulting output fits the page, otherwise like `line`. |
+| Pretty.text | string &rarr; doc | "text s" creates a document containing the literal string `s`. The string should not contain newlines. |
+| Pretty.vcat | doc list &rarr; doc | "vcat docs" concatenates documents vertically with no separator between them. |
+| Pretty.vsep | doc list &rarr; doc | "vsep docs" concatenates documents vertically separated by line breaks. |
 | Real.* | real * real &rarr; real | "r1 * r2" is the product of `r1` and `r2`. The product of zero and an infinity produces NaN. Otherwise, if one argument is infinite, the result is infinite with the correct sign, e.g., -5 * (-infinity) = infinity, infinity * (-infinity) = -infinity. |
 | Real.+ | real * real &rarr; real | "r1 + r2" is the sum of `r1` and `r2`. If one argument is finite and the other infinite, the result is infinite with the correct sign, e.g., 5 - (-infinity) = infinity. We also have infinity + infinity = infinity and (-infinity) + (-infinity) = (-infinity). Any other combination of two infinities produces NaN. |
 | Real.- | real * real &rarr; real | "r1 - r2" is the difference of `r1` and `r2`. If one argument is finite and the other infinite, the result is infinite with the correct sign, e.g., 5 - (-infinity) = infinity. We also have infinity + infinity = infinity and (-infinity) + (-infinity) = (-infinity). Any other combination of two infinities produces NaN. |

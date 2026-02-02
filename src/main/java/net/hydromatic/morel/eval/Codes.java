@@ -69,6 +69,7 @@ import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MorelException;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
+import net.hydromatic.morel.util.Pretty;
 import org.apache.calcite.runtime.FlatLists;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -2375,6 +2376,223 @@ public abstract class Codes {
     return ORDER_EQUAL;
   }
 
+  // -- Pretty structure -------------------------------------------------------
+
+  /** @see BuiltIn#PRETTY_ALIGN */
+  private static final Applicable PRETTY_ALIGN =
+      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PRETTY_ALIGN) {
+        @Override
+        public Pretty.Doc apply(Pretty.Doc doc) {
+          return Pretty.align(doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_BESIDE */
+  private static final Applicable PRETTY_BESIDE =
+      new BaseApplicable2<Pretty.Doc, Pretty.Doc, Pretty.Doc>(
+          BuiltIn.PRETTY_BESIDE) {
+        @Override
+        public Pretty.Doc apply(Pretty.Doc a, Pretty.Doc b) {
+          return Pretty.beside(a, b);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_BRACES */
+  private static final Applicable PRETTY_BRACES =
+      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PRETTY_BRACES) {
+        @Override
+        public Pretty.Doc apply(Pretty.Doc doc) {
+          return Pretty.braces(doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_BRACKETS */
+  private static final Applicable PRETTY_BRACKETS =
+      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PRETTY_BRACKETS) {
+        @Override
+        public Pretty.Doc apply(Pretty.Doc doc) {
+          return Pretty.brackets(doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_CAT */
+  private static final Applicable PRETTY_CAT =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_CAT) {
+        @Override
+        public Pretty.Doc apply(List docs) {
+          return Pretty.cat(docs);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_EMPTY */
+  private static final Pretty.Doc PRETTY_EMPTY = Pretty.EMPTY;
+
+  /** @see BuiltIn#PRETTY_ENCLOSE_SEP */
+  private static final Applicable PRETTY_ENCLOSE_SEP =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_ENCLOSE_SEP) {
+        @Override
+        public Pretty.Doc apply(List args) {
+          return Pretty.encloseSep(
+              (Pretty.Doc) args.get(0),
+              (Pretty.Doc) args.get(1),
+              (Pretty.Doc) args.get(2),
+              (List) args.get(3));
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_FILL_CAT */
+  private static final Applicable PRETTY_FILL_CAT =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_FILL_CAT) {
+        @Override
+        public Pretty.Doc apply(List docs) {
+          return Pretty.fillCat(docs);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_FILL_SEP */
+  private static final Applicable PRETTY_FILL_SEP =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_FILL_SEP) {
+        @Override
+        public Pretty.Doc apply(List docs) {
+          return Pretty.fillSep(docs);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_GROUP */
+  private static final Applicable PRETTY_GROUP =
+      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PRETTY_GROUP) {
+        @Override
+        public Pretty.Doc apply(Pretty.Doc doc) {
+          return Pretty.group(doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_HANG */
+  private static final Applicable PRETTY_HANG =
+      new BaseApplicable2<Pretty.Doc, Integer, Pretty.Doc>(
+          BuiltIn.PRETTY_HANG) {
+        @Override
+        public Pretty.Doc apply(Integer indent, Pretty.Doc doc) {
+          return Pretty.hang(indent, doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_HARD_LINE */
+  private static final Pretty.Doc PRETTY_HARD_LINE = Pretty.HARD_LINE;
+
+  /** @see BuiltIn#PRETTY_HCAT */
+  private static final Applicable PRETTY_HCAT =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_HCAT) {
+        @Override
+        public Pretty.Doc apply(List docs) {
+          return Pretty.hcat(docs);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_HSEP */
+  private static final Applicable PRETTY_HSEP =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_HSEP) {
+        @Override
+        public Pretty.Doc apply(List docs) {
+          return Pretty.hsep(docs);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_INDENT */
+  private static final Applicable PRETTY_INDENT =
+      new BaseApplicable2<Pretty.Doc, Integer, Pretty.Doc>(
+          BuiltIn.PRETTY_INDENT) {
+        @Override
+        public Pretty.Doc apply(Integer indent, Pretty.Doc doc) {
+          return Pretty.indent(indent, doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_LINE */
+  private static final Pretty.Doc PRETTY_LINE = Pretty.LINE;
+
+  /** @see BuiltIn#PRETTY_LINE_BREAK */
+  private static final Pretty.Doc PRETTY_LINE_BREAK = Pretty.LINE_BREAK;
+
+  /** @see BuiltIn#PRETTY_NEST */
+  private static final Applicable PRETTY_NEST =
+      new BaseApplicable2<Pretty.Doc, Integer, Pretty.Doc>(
+          BuiltIn.PRETTY_NEST) {
+        @Override
+        public Pretty.Doc apply(Integer indent, Pretty.Doc doc) {
+          return Pretty.nest(indent, doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_PARENS */
+  private static final Applicable PRETTY_PARENS =
+      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PRETTY_PARENS) {
+        @Override
+        public Pretty.Doc apply(Pretty.Doc doc) {
+          return Pretty.parens(doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_PUNCTUATE */
+  private static final Applicable PRETTY_PUNCTUATE =
+      new BaseApplicable2<List, Pretty.Doc, List>(BuiltIn.PRETTY_PUNCTUATE) {
+        @Override
+        public List apply(Pretty.Doc separator, List docs) {
+          return Pretty.punctuate(separator, docs);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_RENDER */
+  private static final Applicable PRETTY_RENDER =
+      new BaseApplicable2<String, Integer, Pretty.Doc>(BuiltIn.PRETTY_RENDER) {
+        @Override
+        public String apply(Integer width, Pretty.Doc doc) {
+          return Pretty.render(width, doc);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_SEP */
+  private static final Applicable PRETTY_SEP =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_SEP) {
+        @Override
+        public Pretty.Doc apply(List docs) {
+          return Pretty.sep(docs);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_SOFT_BREAK */
+  private static final Pretty.Doc PRETTY_SOFT_BREAK = Pretty.SOFT_BREAK;
+
+  /** @see BuiltIn#PRETTY_SOFT_LINE */
+  private static final Pretty.Doc PRETTY_SOFT_LINE = Pretty.SOFT_LINE;
+
+  /** @see BuiltIn#PRETTY_TEXT */
+  private static final Applicable PRETTY_TEXT =
+      new BaseApplicable1<Pretty.Doc, String>(BuiltIn.PRETTY_TEXT) {
+        @Override
+        public Pretty.Doc apply(String s) {
+          return Pretty.text(s);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_VCAT */
+  private static final Applicable PRETTY_VCAT =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_VCAT) {
+        @Override
+        public Pretty.Doc apply(List docs) {
+          return Pretty.vcat(docs);
+        }
+      };
+
+  /** @see BuiltIn#PRETTY_VSEP */
+  private static final Applicable PRETTY_VSEP =
+      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PRETTY_VSEP) {
+        @Override
+        public Pretty.Doc apply(List docs) {
+          return Pretty.vsep(docs);
+        }
+      };
+
   /** @see BuiltIn#REAL_ABS */
   private static final Applicable REAL_ABS =
       new BaseApplicable1<Float, Float>(BuiltIn.REAL_ABS) {
@@ -4377,6 +4595,33 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_MAP, OPTION_MAP)
           .put(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL)
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
+          .put(BuiltIn.PRETTY_ALIGN, PRETTY_ALIGN)
+          .put(BuiltIn.PRETTY_BESIDE, PRETTY_BESIDE)
+          .put(BuiltIn.PRETTY_BRACES, PRETTY_BRACES)
+          .put(BuiltIn.PRETTY_BRACKETS, PRETTY_BRACKETS)
+          .put(BuiltIn.PRETTY_CAT, PRETTY_CAT)
+          .put(BuiltIn.PRETTY_EMPTY, PRETTY_EMPTY)
+          .put(BuiltIn.PRETTY_ENCLOSE_SEP, PRETTY_ENCLOSE_SEP)
+          .put(BuiltIn.PRETTY_FILL_CAT, PRETTY_FILL_CAT)
+          .put(BuiltIn.PRETTY_FILL_SEP, PRETTY_FILL_SEP)
+          .put(BuiltIn.PRETTY_GROUP, PRETTY_GROUP)
+          .put(BuiltIn.PRETTY_HANG, PRETTY_HANG)
+          .put(BuiltIn.PRETTY_HARD_LINE, PRETTY_HARD_LINE)
+          .put(BuiltIn.PRETTY_HCAT, PRETTY_HCAT)
+          .put(BuiltIn.PRETTY_HSEP, PRETTY_HSEP)
+          .put(BuiltIn.PRETTY_INDENT, PRETTY_INDENT)
+          .put(BuiltIn.PRETTY_LINE, PRETTY_LINE)
+          .put(BuiltIn.PRETTY_LINE_BREAK, PRETTY_LINE_BREAK)
+          .put(BuiltIn.PRETTY_NEST, PRETTY_NEST)
+          .put(BuiltIn.PRETTY_PARENS, PRETTY_PARENS)
+          .put(BuiltIn.PRETTY_PUNCTUATE, PRETTY_PUNCTUATE)
+          .put(BuiltIn.PRETTY_RENDER, PRETTY_RENDER)
+          .put(BuiltIn.PRETTY_SEP, PRETTY_SEP)
+          .put(BuiltIn.PRETTY_SOFT_BREAK, PRETTY_SOFT_BREAK)
+          .put(BuiltIn.PRETTY_SOFT_LINE, PRETTY_SOFT_LINE)
+          .put(BuiltIn.PRETTY_TEXT, PRETTY_TEXT)
+          .put(BuiltIn.PRETTY_VCAT, PRETTY_VCAT)
+          .put(BuiltIn.PRETTY_VSEP, PRETTY_VSEP)
           .put(BuiltIn.REAL_ABS, REAL_ABS)
           .put(BuiltIn.REAL_CEIL, REAL_CEIL)
           .put(BuiltIn.REAL_CHECK_FLOAT, REAL_CHECK_FLOAT)

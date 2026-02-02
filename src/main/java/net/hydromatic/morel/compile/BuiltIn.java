@@ -2530,6 +2530,215 @@ public enum BuiltIn {
       "valOf",
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
+  // -- Pretty structure -----------------------------------------------------
+
+  /** Function "Pretty.align", of type "doc &rarr; doc". */
+  PRETTY_ALIGN(
+      "Pretty",
+      "align",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(doc, doc);
+      }),
+
+  /** Function "Pretty.beside", of type "doc * doc &rarr; doc". */
+  PRETTY_BESIDE(
+      "Pretty",
+      "beside",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.tupleType(doc, doc), doc);
+      }),
+
+  /** Function "Pretty.braces", of type "doc &rarr; doc". */
+  PRETTY_BRACES(
+      "Pretty",
+      "braces",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(doc, doc);
+      }),
+
+  /** Function "Pretty.brackets", of type "doc &rarr; doc". */
+  PRETTY_BRACKETS(
+      "Pretty",
+      "brackets",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(doc, doc);
+      }),
+
+  /** Function "Pretty.cat", of type "doc list &rarr; doc". */
+  PRETTY_CAT(
+      "Pretty",
+      "cat",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.listType(doc), doc);
+      }),
+
+  /** Value "Pretty.empty", of type "doc". */
+  PRETTY_EMPTY("Pretty", "empty", ts -> ts.lookup(Datatype.DOC)),
+
+  /**
+   * Function "Pretty.encloseSep", of type "doc * doc * doc * doc list &rarr;
+   * doc".
+   */
+  PRETTY_ENCLOSE_SEP(
+      "Pretty",
+      "encloseSep",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(
+            ts.tupleType(ImmutableList.of(doc, doc, doc, ts.listType(doc))),
+            doc);
+      }),
+
+  /** Function "Pretty.fillCat", of type "doc list &rarr; doc". */
+  PRETTY_FILL_CAT(
+      "Pretty",
+      "fillCat",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.listType(doc), doc);
+      }),
+
+  /** Function "Pretty.fillSep", of type "doc list &rarr; doc". */
+  PRETTY_FILL_SEP(
+      "Pretty",
+      "fillSep",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.listType(doc), doc);
+      }),
+
+  /** Function "Pretty.group", of type "doc &rarr; doc". */
+  PRETTY_GROUP(
+      "Pretty",
+      "group",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(doc, doc);
+      }),
+
+  /** Function "Pretty.hang", of type "int * doc &rarr; doc". */
+  PRETTY_HANG(
+      "Pretty",
+      "hang",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.tupleType(INT, doc), doc);
+      }),
+
+  /** Value "Pretty.hardLine", of type "doc". */
+  PRETTY_HARD_LINE("Pretty", "hardLine", ts -> ts.lookup(Datatype.DOC)),
+
+  /** Function "Pretty.hcat", of type "doc list &rarr; doc". */
+  PRETTY_HCAT(
+      "Pretty",
+      "hcat",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.listType(doc), doc);
+      }),
+
+  /** Function "Pretty.hsep", of type "doc list &rarr; doc". */
+  PRETTY_HSEP(
+      "Pretty",
+      "hsep",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.listType(doc), doc);
+      }),
+
+  /** Function "Pretty.indent", of type "int * doc &rarr; doc". */
+  PRETTY_INDENT(
+      "Pretty",
+      "indent",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.tupleType(INT, doc), doc);
+      }),
+
+  /** Value "Pretty.line", of type "doc". */
+  PRETTY_LINE("Pretty", "line", ts -> ts.lookup(Datatype.DOC)),
+
+  /** Value "Pretty.lineBreak", of type "doc". */
+  PRETTY_LINE_BREAK("Pretty", "lineBreak", ts -> ts.lookup(Datatype.DOC)),
+
+  /** Function "Pretty.nest", of type "int * doc &rarr; doc". */
+  PRETTY_NEST(
+      "Pretty",
+      "nest",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.tupleType(INT, doc), doc);
+      }),
+
+  /** Function "Pretty.parens", of type "doc &rarr; doc". */
+  PRETTY_PARENS(
+      "Pretty",
+      "parens",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(doc, doc);
+      }),
+
+  /** Function "Pretty.punctuate", of type "doc * doc list &rarr; doc list". */
+  PRETTY_PUNCTUATE(
+      "Pretty",
+      "punctuate",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.tupleType(doc, ts.listType(doc)), ts.listType(doc));
+      }),
+
+  /** Function "Pretty.render", of type "int * doc &rarr; string". */
+  PRETTY_RENDER(
+      "Pretty",
+      "render",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.tupleType(INT, doc), STRING);
+      }),
+
+  /** Function "Pretty.sep", of type "doc list &rarr; doc". */
+  PRETTY_SEP(
+      "Pretty",
+      "sep",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.listType(doc), doc);
+      }),
+
+  /** Value "Pretty.softBreak", of type "doc". */
+  PRETTY_SOFT_BREAK("Pretty", "softBreak", ts -> ts.lookup(Datatype.DOC)),
+
+  /** Value "Pretty.softLine", of type "doc". */
+  PRETTY_SOFT_LINE("Pretty", "softLine", ts -> ts.lookup(Datatype.DOC)),
+
+  /** Function "Pretty.text", of type "string &rarr; doc". */
+  PRETTY_TEXT(
+      "Pretty", "text", ts -> ts.fnType(STRING, ts.lookup(Datatype.DOC))),
+
+  /** Function "Pretty.vcat", of type "doc list &rarr; doc". */
+  PRETTY_VCAT(
+      "Pretty",
+      "vcat",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.listType(doc), doc);
+      }),
+
+  /** Function "Pretty.vsep", of type "doc list &rarr; doc". */
+  PRETTY_VSEP(
+      "Pretty",
+      "vsep",
+      ts -> {
+        final Type doc = ts.lookup(Datatype.DOC);
+        return ts.fnType(ts.listType(doc), doc);
+      }),
+
   /**
    * Function "Real.abs", of type "real &rarr; real".
    *
@@ -4107,6 +4316,9 @@ public enum BuiltIn {
 
     DESCENDING(
         "descending", false, 1, h -> h.tyCon(Constructor.DESCENDING_DESC)),
+
+    /** Abstract type for pretty-printer documents. */
+    DOC("doc", false, 0, h -> h),
 
     EITHER(
         "either",
