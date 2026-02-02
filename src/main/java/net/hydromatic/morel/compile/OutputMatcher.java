@@ -19,7 +19,15 @@
 package net.hydromatic.morel.compile;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.TupleType;
+import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -31,14 +39,19 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * (unordered) vs lists (ordered).
  */
 public class OutputMatcher {
-  private OutputMatcher() {}
+  private final TypeSystem typeSystem = new TypeSystem();
+
+  public OutputMatcher() {}
 
   /**
    * Returns whether {@code actual} and {@code expected} are semantically
    * equivalent. Bag-typed values are compared as multisets (order-independent).
-   * Whitespace differences are ignored.
+   *
+   * <p>If in doubt, we return false. We cannot afford false-positives such as
+   * saying that two strings are equivalent when they have a different number of
+   * spaces.
    */
-  public static boolean equivalent(String actual, String expected) {
+  public boolean equivalent(Type type_, String actual, String expected) {
     // Extract type suffix from the output.
     // Format: "val name = value : type" or "value : type"
     // The type is after the last top-level " : ".
@@ -47,19 +60,15 @@ public class OutputMatcher {
       typeStr = extractType(expected);
     }
     if (typeStr == null) {
-      // No type info; fall back to whitespace-normalized comparison
-      return normalizeWhitespace(actual).equals(normalizeWhitespace(expected));
+      return false;
     }
 
     // Extract value portions
     String actualValue = extractValue(actual);
     String expectedValue = extractValue(expected);
     if (actualValue == null || expectedValue == null) {
-      return normalizeWhitespace(actual).equals(normalizeWhitespace(expected));
+      return false;
     }
-
-    // Parse the type to understand bag positions
-    TypeDesc type = parseType(new Scanner(normalizeWhitespace(typeStr)));
 
     // Parse both values and compare with bag-aware equality
     try {
@@ -67,7 +76,7 @@ public class OutputMatcher {
           parseValue(new Scanner(normalizeWhitespace(actualValue)));
       Object expectedParsed =
           parseValue(new Scanner(normalizeWhitespace(expectedValue)));
-      return valuesEqual(actualParsed, expectedParsed, type);
+      return valuesEqual(actualParsed, expectedParsed, type_);
     } catch (RuntimeException e) {
       // If parsing fails, fall back to whitespace-normalized comparison
       return normalizeWhitespace(actual).equals(normalizeWhitespace(expected));
@@ -237,148 +246,6 @@ public class OutputMatcher {
     return -1;
   }
 
-  // --- Type descriptor ---
-
-  /** A simple description of a type, enough to know which brackets are bags. */
-  abstract static class TypeDesc {
-    static final TypeDesc ATOM =
-        new TypeDesc() {
-          @Override
-          public String toString() {
-            return "ATOM";
-          }
-        };
-  }
-
-  static class ListType extends TypeDesc {
-    final TypeDesc elementType;
-
-    ListType(TypeDesc elementType) {
-      this.elementType = elementType;
-    }
-
-    @Override
-    public String toString() {
-      return elementType + " list";
-    }
-  }
-
-  static class BagType extends TypeDesc {
-    final TypeDesc elementType;
-
-    BagType(TypeDesc elementType) {
-      this.elementType = elementType;
-    }
-
-    @Override
-    public String toString() {
-      return elementType + " bag";
-    }
-  }
-
-  static class TupleType extends TypeDesc {
-    final List<TypeDesc> fields;
-
-    TupleType(List<TypeDesc> fields) {
-      this.fields = fields;
-    }
-  }
-
-  static class RecordType extends TypeDesc {
-    final List<String> names;
-    final List<TypeDesc> types;
-
-    RecordType(List<String> names, List<TypeDesc> types) {
-      this.names = names;
-      this.types = types;
-    }
-  }
-
-  static class OptionType extends TypeDesc {
-    final TypeDesc elementType;
-
-    OptionType(TypeDesc elementType) {
-      this.elementType = elementType;
-    }
-  }
-
-  // --- Type parser ---
-
-  /**
-   * Parses a type string like "int bag", "{x:int, ys:string bag} bag", "int bag
-   * * string", "int list option bag".
-   */
-  static TypeDesc parseType(Scanner sc) {
-    // Parse tuple: type * type * ...
-    TypeDesc first = parseTypeAtom(sc);
-    if (sc.peek() == '*') {
-      List<TypeDesc> fields = new ArrayList<>();
-      fields.add(first);
-      while (sc.peek() == '*') {
-        sc.consume("*");
-        fields.add(parseTypeAtom(sc));
-      }
-      return new TupleType(fields);
-    }
-    return first;
-  }
-
-  /** Parses a type atom, including postfix "list", "bag", "option". */
-  private static TypeDesc parseTypeAtom(Scanner sc) {
-    TypeDesc t;
-    if (sc.peek() == '{') {
-      t = parseRecordType(sc);
-    } else if (sc.peek() == '(') {
-      sc.consume("(");
-      t = parseType(sc);
-      sc.consume(")");
-    } else {
-      // Primitive type name: int, real, string, bool, char, unit, order,
-      // or a type constructor like "'a"
-      sc.consumeWord();
-      t = TypeDesc.ATOM;
-    }
-    // Postfix modifiers: list, bag, option, vector
-    for (; ; ) {
-      String next = sc.peekWord();
-      if ("list".equals(next)) {
-        sc.consumeWord();
-        t = new ListType(t);
-      } else if ("bag".equals(next)) {
-        sc.consumeWord();
-        t = new BagType(t);
-      } else if ("option".equals(next)) {
-        sc.consumeWord();
-        t = new OptionType(t);
-      } else if ("vector".equals(next)) {
-        sc.consumeWord();
-        t = TypeDesc.ATOM; // treat vector as atomic for comparison
-      } else {
-        break;
-      }
-    }
-    return t;
-  }
-
-  private static TypeDesc parseRecordType(Scanner sc) {
-    sc.consume("{");
-    List<String> names = new ArrayList<>();
-    List<TypeDesc> types = new ArrayList<>();
-    if (sc.peek() != '}') {
-      for (; ; ) {
-        names.add(sc.consumeWord());
-        sc.consume(":");
-        types.add(parseType(sc));
-        if (sc.peek() != ',') {
-          break;
-        }
-        sc.consume(",");
-      }
-    }
-    sc.consume("}");
-    return new RecordType(names, types);
-  }
-
   // --- Value parser ---
 
   /**
@@ -497,9 +364,9 @@ public class OutputMatcher {
           && sc.peek() != ']'
           && sc.peek() != '}') {
         Val inner = parseValue(sc);
-        return new AtomVal(word + " " + inner.canonical());
+        return new ListVal(Arrays.asList(new AtomVal(word), inner));
       }
-      return new AtomVal(word);
+      return new ListVal(Collections.singletonList(new AtomVal(word)));
     }
   }
 
@@ -566,15 +433,15 @@ public class OutputMatcher {
    * Compares two parsed values for equivalence, treating bag-typed collections
    * as unordered.
    */
-  static boolean valuesEqual(Object actual, Object expected, TypeDesc type) {
+  boolean valuesEqual(Object actual, Object expected, Type type) {
     if (actual instanceof Val) {
-      return valEqual((Val) actual, (Val) expected, type);
+      return valEqual(type, (Val) actual, (Val) expected);
     }
     return actual.equals(expected);
   }
 
-  private static boolean valEqual(Val actual, Val expected, TypeDesc type) {
-    if (type instanceof BagType) {
+  private boolean valEqual(Type type, Val actual, Val expected) {
+    if (type instanceof DataType && type.isCollection()) {
       // Bag: compare as multisets
       if (!(actual instanceof ListVal) || !(expected instanceof ListVal)) {
         return actual.canonical().equals(expected.canonical());
@@ -584,9 +451,8 @@ public class OutputMatcher {
       if (actualList.elements.size() != expectedList.elements.size()) {
         return false;
       }
-      TypeDesc elemType = ((BagType) type).elementType;
-      return multisetEqual(
-          actualList.elements, expectedList.elements, elemType);
+      Type elemType = type.elementType();
+      return bagEqual(elemType, actualList.elements, expectedList.elements);
     } else if (type instanceof ListType) {
       // List: compare element-wise, in order
       if (!(actual instanceof ListVal) || !(expected instanceof ListVal)) {
@@ -597,96 +463,102 @@ public class OutputMatcher {
       if (actualList.elements.size() != expectedList.elements.size()) {
         return false;
       }
-      TypeDesc elemType = ((ListType) type).elementType;
+      final Type elemType = type.elementType();
       for (int i = 0; i < actualList.elements.size(); i++) {
         if (!valEqual(
+            elemType,
             actualList.elements.get(i),
-            expectedList.elements.get(i),
-            elemType)) {
+            expectedList.elements.get(i))) {
           return false;
         }
       }
       return true;
     } else if (type instanceof TupleType) {
-      if (!(actual instanceof TupleVal) || !(expected instanceof TupleVal)) {
-        return actual.canonical().equals(expected.canonical());
-      }
-      TupleVal actualTuple = (TupleVal) actual;
-      TupleVal expectedTuple = (TupleVal) expected;
-      List<TypeDesc> fieldTypes = ((TupleType) type).fields;
-      if (actualTuple.fields.size() != expectedTuple.fields.size()
-          || actualTuple.fields.size() != fieldTypes.size()) {
-        return actual.canonical().equals(expected.canonical());
-      }
-      for (int i = 0; i < actualTuple.fields.size(); i++) {
-        if (!valEqual(
-            actualTuple.fields.get(i),
-            expectedTuple.fields.get(i),
-            fieldTypes.get(i))) {
-          return false;
-        }
-      }
-      return true;
+      return actual instanceof TupleVal
+          && expected instanceof TupleVal
+          && tupleEqual(
+              (TupleType) type,
+              ((TupleVal) actual).fields,
+              ((TupleVal) expected).fields);
     } else if (type instanceof RecordType) {
-      if (!(actual instanceof RecordVal) || !(expected instanceof RecordVal)) {
-        return actual.canonical().equals(expected.canonical());
-      }
-      RecordVal actualRec = (RecordVal) actual;
-      RecordVal expectedRec = (RecordVal) expected;
-      RecordType recType = (RecordType) type;
-      if (actualRec.names.size() != expectedRec.names.size()) {
-        return false;
-      }
-      for (int i = 0; i < actualRec.names.size(); i++) {
-        if (!actualRec.names.get(i).equals(expectedRec.names.get(i))) {
-          return false;
-        }
-        TypeDesc fieldType = TypeDesc.ATOM;
-        int typeIdx = recType.names.indexOf(actualRec.names.get(i));
-        if (typeIdx >= 0) {
-          fieldType = recType.types.get(typeIdx);
-        }
-        if (!valEqual(
-            actualRec.values.get(i), expectedRec.values.get(i), fieldType)) {
-          return false;
-        }
-      }
-      return true;
-    } else if (type instanceof OptionType) {
-      // Both should be SOME(x) or NONE atoms
-      TypeDesc elemType = ((OptionType) type).elementType;
-      String ac = actual.canonical();
-      String ec = expected.canonical();
-      if (ac.startsWith("SOME ") && ec.startsWith("SOME ")) {
-        try {
-          Val av = parseValue(new Scanner(ac.substring(5)));
-          Val ev = parseValue(new Scanner(ec.substring(5)));
-          return valEqual(av, ev, elemType);
-        } catch (RuntimeException e) {
-          return ac.equals(ec);
-        }
-      }
-      return ac.equals(ec);
+      return actual instanceof RecordVal
+          && expected instanceof RecordVal
+          && recordEqual(
+              (RecordType) type, (RecordVal) actual, (RecordVal) expected);
+    } else if (type instanceof DataType) {
+      return actual instanceof ListVal
+          && expected instanceof ListVal
+          && dataEqual(
+              (DataType) type,
+              ((ListVal) actual).elements,
+              ((ListVal) expected).elements);
     } else {
       // Atomic type
       return actual.canonical().equals(expected.canonical());
     }
   }
 
-  /**
-   * Compares two lists as multisets: every element in actual must match exactly
-   * one element in expected (using bag-aware equality).
-   */
-  private static boolean multisetEqual(
-      List<Val> actual, List<Val> expected, TypeDesc elemType) {
-    if (actual.size() != expected.size()) {
+  private boolean tupleEqual(TupleType type, List<Val> list0, List<Val> list1) {
+    if (list0.size() != list1.size() || list0.size() != type.argTypes.size()) {
       return false;
     }
-    List<Val> remaining = new ArrayList<>(expected);
-    for (Val a : actual) {
+    final List<Type> argTypes = type.argTypes();
+    for (int i = 0; i < list0.size(); i++) {
+      if (!valEqual(argTypes.get(i), list0.get(i), list1.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private boolean recordEqual(
+      RecordType type, RecordVal actual, RecordVal expected) {
+    if (actual.names.size() != expected.names.size()) {
+      return false;
+    }
+    for (int i = 0; i < actual.names.size(); i++) {
+      if (!actual.names.get(i).equals(expected.names.get(i))) {
+        return false;
+      }
+      Type fieldType = type.argNameTypes.get(actual.names.get(i));
+      if (fieldType == null
+          || !valEqual(
+              fieldType, actual.values.get(i), expected.values.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private boolean dataEqual(
+      DataType dataType, List<Val> list0, List<Val> list1) {
+    if (list0.size() != list1.size()) {
+      return false;
+    }
+    if (!list0.get(0).canonical().equals(list1.get(0).canonical())) {
+      return false;
+    }
+    if (list0.size() == 1) {
+      return true;
+    }
+    String constructor = list0.get(0).canonical();
+    Type type = dataType.typeConstructors(typeSystem).get(constructor);
+    return valuesEqual(list0.get(1), list1.get(1), type);
+  }
+
+  /**
+   * Compares two lists as multi-sets: every element in {@code list0} must match
+   * exactly one element in {@code list1} (using bag-aware equality).
+   */
+  private boolean bagEqual(Type type, List<Val> list0, List<Val> list1) {
+    if (list0.size() != list1.size()) {
+      return false;
+    }
+    final List<Val> remaining = new ArrayList<>(list1);
+    for (Val a : list0) {
       boolean found = false;
       for (int j = 0; j < remaining.size(); j++) {
-        if (valEqual(a, remaining.get(j), elemType)) {
+        if (valEqual(type, a, remaining.get(j))) {
           remaining.remove(j);
           found = true;
           break;

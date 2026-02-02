@@ -667,7 +667,9 @@ public class Main {
           final List<String> actualLines = outLines.bufferedLines();
           final String actualOutput = String.join("\n", actualLines);
           if (actualOutput.equals(expectedOutput)
-              || OutputMatcher.equivalent(actualOutput, expectedOutput)) {
+              || new OutputMatcher()
+                  .equivalent(
+                      compiled.getType(), actualOutput, expectedOutput)) {
             // Expected and actual are equivalent; emit expected verbatim
             Arrays.stream(expectedOutput.split("\n", -1))
                 .forEach(outLines.consumer());
