@@ -18,10 +18,15 @@
  */
 package net.hydromatic.morel.compile;
 
+import static java.util.Objects.requireNonNull;
+
+import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.SortedMap;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RecordType;
@@ -37,86 +42,45 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * <p>Output strings have the form {@code val name = value : type} or {@code
  * value : type}. The type suffix tells us which brackets represent bags
  * (unordered) vs lists (ordered).
+ *
+ * <p>Values use Morel's native representation: {@link List} for lists, tuples,
+ * bags, and datatypes; records are stored as tuples with field values in the
+ * order they occur in the type; a datatype instance is a list of length 1 or 2;
+ * atoms are represented as {@link String}.
  */
 public class OutputMatcher {
-  private final TypeSystem typeSystem = new TypeSystem();
+  private final TypeSystem typeSystem;
 
-  public OutputMatcher() {}
+  public OutputMatcher(TypeSystem typeSystem) {
+    this.typeSystem = requireNonNull(typeSystem);
+  }
 
   /**
    * Returns whether {@code actual} and {@code expected} are semantically
    * equivalent. Bag-typed values are compared as multisets (order-independent).
    *
-   * <p>If in doubt, we return false. We cannot afford false-positives such as
-   * saying that two strings are equivalent when they have a different number of
-   * spaces.
+   * <p>If in doubt, we return false; we cannot afford false-positives.
    */
-  public boolean equivalent(Type type_, String actual, String expected) {
-    // Extract type suffix from the output.
-    // Format: "val name = value : type" or "value : type"
-    // The type is after the last top-level " : ".
-    String typeStr = extractType(actual);
-    if (typeStr == null) {
-      typeStr = extractType(expected);
-    }
-    if (typeStr == null) {
-      return false;
-    }
-
+  public boolean equivalent(Type type, String actual, String expected) {
     // Extract value portions
-    String actualValue = extractValue(actual);
-    String expectedValue = extractValue(expected);
-    if (actualValue == null || expectedValue == null) {
+    final String code0 = extractValue(actual);
+    final String code1 = extractValue(expected);
+    if (code0 == null || code1 == null) {
       return false;
     }
 
-    // Parse both values and compare with bag-aware equality
-    try {
-      Object actualParsed =
-          parseValue(new Scanner(normalizeWhitespace(actualValue)));
-      Object expectedParsed =
-          parseValue(new Scanner(normalizeWhitespace(expectedValue)));
-      return valuesEqual(actualParsed, expectedParsed, type_);
-    } catch (RuntimeException e) {
-      // If parsing fails, fall back to whitespace-normalized comparison
-      return normalizeWhitespace(actual).equals(normalizeWhitespace(expected));
-    }
+    return codeEqual(type, code0, code1);
   }
 
-  /**
-   * Extracts the type portion from output like "val x = value : type". Finds
-   * the last " : " that is not inside brackets or strings.
-   */
-  static @Nullable String extractType(String s) {
-    int depth = 0;
-    boolean inString = false;
-    int lastColon = -1;
-    for (int i = 0; i < s.length(); i++) {
-      char c = s.charAt(i);
-      if (inString) {
-        if (c == '"') {
-          inString = false;
-        } else if (c == '\\') {
-          i++; // skip escaped char
-        }
-        continue;
-      }
-      if (c == '"') {
-        inString = true;
-      } else if (c == '(' || c == '[' || c == '{') {
-        depth++;
-      } else if (c == ')' || c == ']' || c == '}') {
-        depth--;
-      } else if (c == ':'
-          && depth == 0
-          && i > 0
-          && s.charAt(i - 1) == ' '
-          && i + 1 < s.length()
-          && s.charAt(i + 1) == ' ') {
-        lastColon = i;
-      }
+  /** Returns whether two value strings are equivalent. */
+  public boolean codeEqual(Type type, String code0, String code1) {
+    try {
+      Object o0 = parseValue(new Scanner(normalizeWhitespace(code0)), type);
+      Object o1 = parseValue(new Scanner(normalizeWhitespace(code1)), type);
+      return valuesEqual(type, o0, o1);
+    } catch (RuntimeException e) {
+      return false;
     }
-    return lastColon >= 0 ? s.substring(lastColon + 2).trim() : null;
   }
 
   /**
@@ -222,10 +186,7 @@ public class OutputMatcher {
     if (prev == '=' && c != '{' && c != '[' && c != '(' && c != ')') {
       return true;
     }
-    if (c == '=' && prev != '>' && prev != '<' && prev != '!') {
-      return true;
-    }
-    return false;
+    return c == '=' && prev != '>' && prev != '<' && prev != '!';
   }
 
   private static boolean isWordChar(char c) {
@@ -249,133 +210,41 @@ public class OutputMatcher {
   // --- Value parser ---
 
   /**
-   * A parsed value. Either a literal string (for atoms) or a structured value
-   * (list, record, tuple).
+   * Parses a value from whitespace-normalized text, guided by the expected
+   * type. Returns a String for atoms, or a {@link List} for compound values.
    */
-  abstract static class Val {
-    abstract String canonical();
-  }
-
-  static class AtomVal extends Val {
-    final String text;
-
-    AtomVal(String text) {
-      this.text = text;
+  Object parseValue(Scanner sc, Type type) {
+    // Handle grouping parentheses around non-tuple values,
+    // e.g. SOME ([1,2]) where the argument is a bag wrapped in parens.
+    if (sc.peek() == '(' && !(type instanceof TupleType)) {
+      sc.consume("(");
+      Object value = parseValue(sc, type);
+      sc.consume(")");
+      return value;
     }
-
-    @Override
-    String canonical() {
-      return text;
-    }
-
-    @Override
-    public String toString() {
-      return text;
-    }
-  }
-
-  static class ListVal extends Val {
-    final List<Val> elements;
-
-    ListVal(List<Val> elements) {
-      this.elements = elements;
-    }
-
-    @Override
-    String canonical() {
-      StringBuilder buf = new StringBuilder("[");
-      for (int i = 0; i < elements.size(); i++) {
-        if (i > 0) {
-          buf.append(",");
-        }
-        buf.append(elements.get(i).canonical());
-      }
-      return buf.append("]").toString();
-    }
-  }
-
-  static class TupleVal extends Val {
-    final List<Val> fields;
-
-    TupleVal(List<Val> fields) {
-      this.fields = fields;
-    }
-
-    @Override
-    String canonical() {
-      StringBuilder buf = new StringBuilder("(");
-      for (int i = 0; i < fields.size(); i++) {
-        if (i > 0) {
-          buf.append(",");
-        }
-        buf.append(fields.get(i).canonical());
-      }
-      return buf.append(")").toString();
-    }
-  }
-
-  static class RecordVal extends Val {
-    final List<String> names;
-    final List<Val> values;
-
-    RecordVal(List<String> names, List<Val> values) {
-      this.names = names;
-      this.values = values;
-    }
-
-    @Override
-    String canonical() {
-      StringBuilder buf = new StringBuilder("{");
-      for (int i = 0; i < names.size(); i++) {
-        if (i > 0) {
-          buf.append(",");
-        }
-        buf.append(names.get(i)).append("=").append(values.get(i).canonical());
-      }
-      return buf.append("}").toString();
-    }
-  }
-
-  /** Parses a value from whitespace-normalized text. */
-  static Val parseValue(Scanner sc) {
-    char c = sc.peek();
-    if (c == '[') {
-      return parseListValue(sc);
-    } else if (c == '(') {
-      // Could be tuple or parenthesized value
-      return parseTupleValue(sc);
-    } else if (c == '{') {
-      return parseRecordValue(sc);
-    } else if (c == '#') {
-      // Character literal like #"z"
-      sc.consume("#");
-      return new AtomVal("#" + sc.consumeString());
-    } else if (c == '"') {
-      return new AtomVal(sc.consumeString());
-    } else if (c == '~' || Character.isDigit(c)) {
-      return new AtomVal(sc.consumeNumber());
+    if (type instanceof DataType && type.isCollection()) {
+      // Bag type: parse as list
+      return parseListElements(sc, type.elementType());
+    } else if (type instanceof ListType) {
+      return parseListElements(sc, type.elementType());
+    } else if (type instanceof TupleType) {
+      return parseTupleElements(sc, (TupleType) type);
+    } else if (type instanceof RecordType) {
+      return parseRecordToTuple(sc, (RecordType) type);
+    } else if (type instanceof DataType) {
+      return parseDatatypeValue(sc, (DataType) type);
     } else {
-      // Constructor (SOME, NONE, LESS, GREATER, EQUAL, etc.) or bool
-      String word = sc.consumeWord();
-      if (("SOME".equals(word) || "INL".equals(word) || "INR".equals(word))
-          && sc.hasMore()
-          && sc.peek() != ','
-          && sc.peek() != ')'
-          && sc.peek() != ']'
-          && sc.peek() != '}') {
-        Val inner = parseValue(sc);
-        return new ListVal(Arrays.asList(new AtomVal(word), inner));
-      }
-      return new ListVal(Collections.singletonList(new AtomVal(word)));
+      return parseAtom(sc);
     }
   }
 
-  private static Val parseListValue(Scanner sc) {
+  /** Parses {@code [e1, e2, ...]} into a list. */
+  private List<Object> parseListElements(Scanner sc, Type elemType) {
     sc.consume("[");
-    List<Val> elements = new ArrayList<>();
+    List<Object> elements = new ArrayList<>();
     if (sc.peek() != ']') {
       for (; ; ) {
-        elements.add(parseValue(sc));
+        elements.add(parseValue(sc, elemType));
         if (sc.peek() != ',') {
           break;
         }
@@ -383,40 +252,47 @@ public class OutputMatcher {
       }
     }
     sc.consume("]");
-    return new ListVal(elements);
+    return elements;
   }
 
-  private static Val parseTupleValue(Scanner sc) {
+  /** Parses {@code (e1, e2, ...)} into a list. */
+  private List<Object> parseTupleElements(Scanner sc, TupleType type) {
     sc.consume("(");
     if (sc.peek() == ')') {
       sc.consume(")");
-      return new AtomVal("()");
+      return Collections.emptyList();
     }
-    Val first = parseValue(sc);
-    if (sc.peek() == ',') {
-      List<Val> fields = new ArrayList<>();
-      fields.add(first);
-      while (sc.peek() == ',') {
+    final List<Object> fields = new ArrayList<>();
+    for (int i = 0; i < type.argTypes.size(); i++) {
+      if (i > 0) {
         sc.consume(",");
-        fields.add(parseValue(sc));
       }
-      sc.consume(")");
-      return new TupleVal(fields);
+      fields.add(parseValue(sc, type.argTypes.get(i)));
     }
     sc.consume(")");
-    // Parenthesized single value
-    return first;
+    return fields;
   }
 
-  private static Val parseRecordValue(Scanner sc) {
+  /**
+   * Parses {@code {f1=v1, f2=v2, ...}} into a list with values in the type's
+   * field order.
+   */
+  private List<Object> parseRecordToTuple(Scanner sc, RecordType type) {
     sc.consume("{");
-    List<String> names = new ArrayList<>();
-    List<Val> values = new ArrayList<>();
+    // Parse fields into a map
+    final Map<String, Object> fieldMap = new LinkedHashMap<>();
+    final SortedMap<String, Type> argNameTypes = type.argNameTypes();
     if (sc.peek() != '}') {
       for (; ; ) {
-        names.add(sc.consumeWord());
+        final String name = sc.consumeWord();
         sc.consume("=");
-        values.add(parseValue(sc));
+        final Type fieldType = argNameTypes.get(name);
+        if (fieldType == null) {
+          // Unknown field; parse as atom
+          fieldMap.put(name, parseAtom(sc));
+        } else {
+          fieldMap.put(name, parseValue(sc, fieldType));
+        }
         if (sc.peek() != ',') {
           break;
         }
@@ -424,151 +300,175 @@ public class OutputMatcher {
       }
     }
     sc.consume("}");
-    return new RecordVal(names, values);
+
+    // Produce values in type's field order.
+    ImmutableList.Builder<Object> values = ImmutableList.builder();
+    for (String fieldName : argNameTypes.keySet()) {
+      final Object v = fieldMap.get(fieldName);
+      if (v == null) {
+        throw new IllegalStateException("missing field: " + fieldName);
+      }
+      values.add(v);
+    }
+    return values.build();
+  }
+
+  /**
+   * Parses a datatype value: a constructor name optionally followed by an
+   * argument. Returns a list of length 1 (nullary) or 2 (with argument).
+   */
+  private List<Object> parseDatatypeValue(Scanner sc, DataType type) {
+    final String constructor = sc.consumeWord();
+    if (!sc.hasMore()
+        || sc.peek() == ','
+        || sc.peek() == ')'
+        || sc.peek() == ']'
+        || sc.peek() == '}') {
+      return ImmutableList.of(constructor);
+    }
+    // Has an argument; look up the argument type from the datatype
+    Map<String, Type> constructors = type.typeConstructors(typeSystem);
+    Type argType = constructors.get(constructor);
+    if (argType == null) {
+      // Unknown constructor; parse argument as atom
+      return ImmutableList.of(constructor, parseAtom(sc));
+    }
+    return ImmutableList.of(constructor, parseValue(sc, argType));
+  }
+
+  /** Parses a single atom: a string, char literal, number, or word. */
+  private static String parseAtom(Scanner sc) {
+    char c = sc.peek();
+    if (c == '#') {
+      sc.consume("#");
+      return "#" + sc.consumeString();
+    } else if (c == '"') {
+      return sc.consumeString();
+    } else if (c == '~' || Character.isDigit(c)) {
+      return sc.consumeNumber();
+    } else if (c == '(' && sc.peekAt(1) == ')') {
+      sc.consume("(");
+      sc.consume(")");
+      return "()";
+    } else {
+      return sc.consumeWord();
+    }
   }
 
   // --- Value comparison ---
 
   /**
    * Compares two parsed values for equivalence, treating bag-typed collections
-   * as unordered.
+   * as unordered. For types with no bags, {@link Object#equals} suffices.
    */
-  boolean valuesEqual(Object actual, Object expected, Type type) {
-    if (actual instanceof Val) {
-      return valEqual(type, (Val) actual, (Val) expected);
-    }
-    return actual.equals(expected);
-  }
-
-  private boolean valEqual(Type type, Val actual, Val expected) {
+  boolean valuesEqual(Type type, Object o0, Object o1) {
     if (type instanceof DataType && type.isCollection()) {
-      // Bag: compare as multisets
-      if (!(actual instanceof ListVal) || !(expected instanceof ListVal)) {
-        return actual.canonical().equals(expected.canonical());
-      }
-      ListVal actualList = (ListVal) actual;
-      ListVal expectedList = (ListVal) expected;
-      if (actualList.elements.size() != expectedList.elements.size()) {
-        return false;
-      }
-      Type elemType = type.elementType();
-      return bagEqual(elemType, actualList.elements, expectedList.elements);
+      return bagEqual(type.elementType(), o0, o1);
     } else if (type instanceof ListType) {
-      // List: compare element-wise, in order
-      if (!(actual instanceof ListVal) || !(expected instanceof ListVal)) {
-        return actual.canonical().equals(expected.canonical());
-      }
-      ListVal actualList = (ListVal) actual;
-      ListVal expectedList = (ListVal) expected;
-      if (actualList.elements.size() != expectedList.elements.size()) {
-        return false;
-      }
-      final Type elemType = type.elementType();
-      for (int i = 0; i < actualList.elements.size(); i++) {
-        if (!valEqual(
-            elemType,
-            actualList.elements.get(i),
-            expectedList.elements.get(i))) {
-          return false;
-        }
-      }
-      return true;
+      return listEqual(type.elementType(), o0, o1);
     } else if (type instanceof TupleType) {
-      return actual instanceof TupleVal
-          && expected instanceof TupleVal
-          && tupleEqual(
-              (TupleType) type,
-              ((TupleVal) actual).fields,
-              ((TupleVal) expected).fields);
+      return tupleEqual(((TupleType) type).argTypes(), o0, o1);
     } else if (type instanceof RecordType) {
-      return actual instanceof RecordVal
-          && expected instanceof RecordVal
-          && recordEqual(
-              (RecordType) type, (RecordVal) actual, (RecordVal) expected);
+      return tupleEqual(((RecordType) type).argTypes(), o0, o1);
     } else if (type instanceof DataType) {
-      return actual instanceof ListVal
-          && expected instanceof ListVal
-          && dataEqual(
-              (DataType) type,
-              ((ListVal) actual).elements,
-              ((ListVal) expected).elements);
+      return datatypeEqual((DataType) type, o0, o1);
     } else {
-      // Atomic type
-      return actual.canonical().equals(expected.canonical());
+      return o0.equals(o1);
     }
   }
 
-  private boolean tupleEqual(TupleType type, List<Val> list0, List<Val> list1) {
-    if (list0.size() != list1.size() || list0.size() != type.argTypes.size()) {
-      return false;
+  /** Compares two lists element-wise with the same element type. */
+  private boolean listEqual(Type elemType, Object actual, Object expected) {
+    if (!(actual instanceof List) || !(expected instanceof List)) {
+      return actual.equals(expected);
     }
-    final List<Type> argTypes = type.argTypes();
-    for (int i = 0; i < list0.size(); i++) {
-      if (!valEqual(argTypes.get(i), list0.get(i), list1.get(i))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private boolean recordEqual(
-      RecordType type, RecordVal actual, RecordVal expected) {
-    if (actual.names.size() != expected.names.size()) {
-      return false;
-    }
-    for (int i = 0; i < actual.names.size(); i++) {
-      if (!actual.names.get(i).equals(expected.names.get(i))) {
-        return false;
-      }
-      Type fieldType = type.argNameTypes.get(actual.names.get(i));
-      if (fieldType == null
-          || !valEqual(
-              fieldType, actual.values.get(i), expected.values.get(i))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private boolean dataEqual(
-      DataType dataType, List<Val> list0, List<Val> list1) {
+    @SuppressWarnings("unchecked")
+    List<Object> list0 = (List<Object>) actual;
+    @SuppressWarnings("unchecked")
+    List<Object> list1 = (List<Object>) expected;
     if (list0.size() != list1.size()) {
       return false;
     }
-    if (!list0.get(0).canonical().equals(list1.get(0).canonical())) {
+    for (int i = 0; i < list0.size(); i++) {
+      if (!valuesEqual(elemType, list0.get(i), list1.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Compares two tuples/records element-wise with per-field types. */
+  private boolean tupleEqual(
+      List<Type> fieldTypes, Object actual, Object expected) {
+    if (!(actual instanceof List) || !(expected instanceof List)) {
+      return actual.equals(expected);
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> list0 = (List<Object>) actual;
+    @SuppressWarnings("unchecked")
+    List<Object> list1 = (List<Object>) expected;
+    if (list0.size() != list1.size() || list0.size() != fieldTypes.size()) {
       return false;
     }
-    if (list0.size() == 1) {
-      return true;
+    for (int i = 0; i < list0.size(); i++) {
+      if (!valuesEqual(fieldTypes.get(i), list0.get(i), list1.get(i))) {
+        return false;
+      }
     }
-    String constructor = list0.get(0).canonical();
-    Type type = dataType.typeConstructors(typeSystem).get(constructor);
-    return valuesEqual(list0.get(1), list1.get(1), type);
+    return true;
+  }
+
+  /** Compares two datatype values (lists of length 1 or 2). */
+  @SuppressWarnings("unchecked")
+  private boolean datatypeEqual(DataType dataType, Object o0, Object o1) {
+    if (o0 instanceof List && o1 instanceof List) {
+      List<Object> list0 = (List<Object>) o0;
+      List<Object> list1 = (List<Object>) o1;
+      if (list0.size() == list1.size()) {
+        if (list0.get(0).equals(list1.get(0))) {
+          if (list0.size() == 1) {
+            return true;
+          }
+          final String constructor = (String) list0.get(0);
+          final Type argType =
+              dataType.typeConstructors(typeSystem).get(constructor);
+          return argType != null
+              && valuesEqual(argType, list0.get(1), list1.get(1));
+        }
+      }
+    }
+    return false;
   }
 
   /**
    * Compares two lists as multi-sets: every element in {@code list0} must match
    * exactly one element in {@code list1} (using bag-aware equality).
    */
-  private boolean bagEqual(Type type, List<Val> list0, List<Val> list1) {
-    if (list0.size() != list1.size()) {
-      return false;
-    }
-    final List<Val> remaining = new ArrayList<>(list1);
-    for (Val a : list0) {
-      boolean found = false;
-      for (int j = 0; j < remaining.size(); j++) {
-        if (valEqual(type, a, remaining.get(j))) {
-          remaining.remove(j);
-          found = true;
-          break;
+  @SuppressWarnings("unchecked")
+  private boolean bagEqual(Type elemType, Object o0, Object o1) {
+    final List<Object> list0 = (List<Object>) o0;
+    final List<Object> list1 = (List<Object>) o1;
+    if (list0.size() == list1.size()) {
+      final List<Object> remaining = new ArrayList<>(list1);
+      for (Object a : list0) {
+        final int j = indexOf(elemType, a, remaining);
+        if (j < 0) {
+          return false;
         }
+        remaining.remove(j);
       }
-      if (!found) {
-        return false;
+      return true;
+    }
+    return false;
+  }
+
+  private int indexOf(Type type, Object o, List<Object> list) {
+    for (int j = 0; j < list.size(); j++) {
+      if (valuesEqual(type, o, list.get(j))) {
+        return j;
       }
     }
-    return true;
+    return -1;
   }
 
   // --- Scanner ---
@@ -591,6 +491,16 @@ public class OutputMatcher {
     char peek() {
       skipSpaces();
       return pos < s.length() ? s.charAt(pos) : 0;
+    }
+
+    /**
+     * Peeks at the character at offset {@code offset} from current position,
+     * without skipping spaces. Returns 0 if out of bounds.
+     */
+    char peekAt(int offset) {
+      skipSpaces();
+      int i = pos + offset;
+      return i < s.length() ? s.charAt(i) : 0;
     }
 
     /**

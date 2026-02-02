@@ -27,6 +27,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.compile.OutputMatcher;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -143,6 +144,7 @@ public class TypeTest {
   void testSubsumes() {
     final TypeSystem typeSystem = new TypeSystem();
     BuiltIn.dataTypes(typeSystem, new ArrayList<>());
+
     final Type intT = PrimitiveType.INT;
     final Type boolT = PrimitiveType.BOOL;
     final Type iRec = typeSystem.recordType(PairList.of("i", intT));
@@ -177,6 +179,31 @@ public class TypeTest {
     } else {
       assertThat(name1 + " != " + name2, subsumes(t1, t2), is(false));
     }
+  }
+
+  /** Tests {@link OutputMatcher}. */
+  @Test
+  void testOutputMatcher() {
+    final TypeSystem typeSystem = new TypeSystem();
+    BuiltIn.dataTypes(typeSystem, new ArrayList<>());
+
+    final OutputMatcher m = new OutputMatcher(typeSystem);
+    final PrimitiveType intType = PrimitiveType.INT;
+    assertThat(m.codeEqual(intType, "1", " 1 "), is(true));
+    assertThat(m.codeEqual(intType, "1", " 2 "), is(false));
+    final PrimitiveType stringType = PrimitiveType.STRING;
+    assertThat(m.codeEqual(stringType, "\"x\"", " \"x\" "), is(true));
+    assertThat(m.codeEqual(stringType, "\"\"", " \" \" "), is(false));
+    final ListType intListType = typeSystem.listType(intType);
+    assertThat(m.codeEqual(intListType, "[1,2,3]", "[ 1,  2,  3] "), is(true));
+    final Type stringOptionType = typeSystem.option(stringType);
+    assertThat(
+        m.codeEqual(stringOptionType, "SOME \"x\"", " SOME  \"x\""), is(true));
+    assertThat(
+        m.codeEqual(stringOptionType, "SOME \"x\"", " SOME  \"y\""), is(false));
+    assertThat(
+        m.codeEqual(stringOptionType, "NONE", " SOME  \"x\""), is(false));
+    assertThat(m.codeEqual(stringOptionType, "NONE", " NONE "), is(true));
   }
 }
 
