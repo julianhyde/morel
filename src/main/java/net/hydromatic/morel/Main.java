@@ -39,6 +39,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -365,10 +366,30 @@ public class Main {
     out.flush();
   }
 
-  /** Precedes every line in 'x' with a caret. */
-  private static String prefixLines(String s) {
-    String s2 = "> " + s.replace("\n", "\n> "); // lint:skip
-    return s2.replace("> \n", ">\n");
+  /**
+   * Precedes every line in 'x' with a caret. The caret is followed by a space
+   * except if the line is empty.
+   */
+  static String prefixLines(String s) {
+    final int capacity = s.length() + 16; // expansion room for 8 lines
+    final StringBuilder b = new StringBuilder(capacity);
+    b.append('>');
+    int lineStart = b.length();
+    for (int i = 0; i < s.length(); ++i) {
+      final char c = s.charAt(i);
+      if (c == '\n') {
+        b.append('\n');
+        b.append('>');
+        lineStart = b.length();
+      } else {
+        if (b.length() == lineStart) {
+          // Convert ">" to "> " now we know the line is not empty.
+          b.append(' ');
+        }
+        b.append(c);
+      }
+    }
+    return b.toString();
   }
 
   /**
@@ -414,7 +435,7 @@ public class Main {
           parser.zero("stdIn");
           final AstNode statement = parser.statementSemicolonOrEofSafe();
           String code = in2.flush();
-          String expectedOutput = in2.expectedOutput();
+          final @Nullable String expectedOutput = in2.expectedOutput();
           if (main.idempotent) {
             if (code.startsWith("\n")) {
               code = code.substring(1);
@@ -438,14 +459,12 @@ public class Main {
           if (statement == null) {
             break;
           }
-          final List<String> collectedLines = new ArrayList<>();
-          final Consumer<String> collectingOutLines = collectedLines::add;
           session.withShell(
               subShell,
-              collectingOutLines,
+              outLines,
               session1 ->
-                  subShell.command(statement, collectingOutLines, typeOnly));
-          emitOutput(collectedLines, expectedOutput, outLines);
+                  subShell.command(
+                      statement, outLines, typeOnly, expectedOutput));
         } catch (MorelParseException | CompileException e) {
           final String message = e.getMessage();
           if (message.startsWith("Encountered \"<EOF>\" ")) {
@@ -462,30 +481,6 @@ public class Main {
             break;
           }
         }
-      }
-    }
-
-    /**
-     * Emits output lines, substituting expected output if semantically
-     * equivalent. Uses value-based comparison with bag-aware equality so that
-     * bag element order differences are accepted.
-     */
-    private static void emitOutput(
-        List<String> actualLines,
-        @Nullable String expectedOutput,
-        Consumer<String> outLines) {
-      if (expectedOutput != null) {
-        String actual = String.join("\n", actualLines);
-        if (actual.equals(expectedOutput)
-            || OutputMatcher.equivalent(actual, expectedOutput)) {
-          // Expected and actual are equivalent; emit expected verbatim
-          outLines.accept(expectedOutput);
-          return;
-        }
-      }
-      // Emit actual output
-      for (String line : actualLines) {
-        outLines.accept(line);
       }
     }
 
@@ -568,8 +563,21 @@ public class Main {
     }
 
     void command(
-        AstNode statement, Consumer<String> outLines, boolean typeOnly) {
-      this.commandOutLines = outLines;
+        AstNode statement,
+        Consumer<String> outLines,
+        boolean typeOnly,
+        @Nullable String expectedOutput) {
+      final @Nullable List<String> actualLines;
+      final Consumer<String> finalOutLines;
+      if (expectedOutput == null) {
+        actualLines = null;
+        finalOutLines = outLines;
+      } else {
+        actualLines = new ArrayList<>();
+        finalOutLines = actualLines::add;
+      }
+
+      this.commandOutLines = finalOutLines;
       try {
         final Environment env = env0.bindAll(bindingMap.values());
         final Tracer tracer = Tracers.empty();
@@ -580,7 +588,7 @@ public class Main {
                 env,
                 statement,
                 null,
-                e -> appendToOutput(e, outLines),
+                e -> appendToOutput(e, finalOutLines),
                 tracer);
         final List<Binding> bindings = new ArrayList<>();
         if (typeOnly) {
@@ -588,12 +596,26 @@ public class Main {
           Consumer<Binding> typeOnlyConsumer =
               binding -> {
                 bindings.add(binding);
-                outLines.accept(
+                finalOutLines.accept(
                     "val " + binding.id.name + " : " + binding.id.type);
               };
           compiled.getBindings(typeOnlyConsumer);
         } else {
-          compiled.eval(main.session, env, outLines, bindings::add);
+          compiled.eval(main.session, env, finalOutLines, bindings::add);
+        }
+
+        if (expectedOutput != null) {
+          // Expected output is provided. If the expected and actual output are
+          // same modulo whitespace, line endings and re-ordered elements of
+          // bags, emit the expected output.
+          final String actualOutput = String.join("\n", actualLines);
+          if (actualOutput.equals(expectedOutput)
+              || OutputMatcher.equivalent(actualOutput, expectedOutput)) {
+            // Expected and actual are equivalent; emit expected verbatim
+            Arrays.stream(expectedOutput.split("\n", -1)).forEach(outLines);
+          } else {
+            actualLines.forEach(outLines);
+          }
         }
 
         // Add the new bindings to the map. Overloaded bindings (INST) add to
