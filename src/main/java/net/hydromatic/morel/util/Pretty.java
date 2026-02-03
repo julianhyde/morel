@@ -474,8 +474,12 @@ public class Pretty {
    * Encloses a list of documents between {@code open} and {@code close},
    * separated by {@code separator}.
    *
-   * <p>If the result fits on one line it is rendered horizontally; otherwise
-   * each element is placed on its own line, aligned.
+   * <p>If the result fits on one line it is rendered horizontally with spaces
+   * after each separator; otherwise each element is placed on its own line,
+   * aligned.
+   *
+   * <p>The separator should be just the punctuation (e.g., {@code text(",")})
+   * without a trailing space; the space or line break is added automatically.
    */
   public static Doc encloseSep(
       Doc open, Doc close, Doc separator, List<Doc> docs) {
@@ -486,7 +490,7 @@ public class Pretty {
       return beside(open, beside(docs.get(0), close));
     }
     final List<Doc> punctuated = punctuate(separator, docs);
-    return group(beside(open, beside(align(vcat(punctuated)), close)));
+    return group(beside(open, beside(align(vsep(punctuated)), close)));
   }
 
   // -- Bracketing helpers ---------------------------------------------------

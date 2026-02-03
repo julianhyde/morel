@@ -1,0 +1,63 @@
+let
+  datatype 'a tree = LEAF of 'a | NODE of 'a tree * 'a * 'a tree;
+  type point = {x: int, y: int};
+  val (origin : point) = {x = 0, y = 0};
+  val pi = 3.14;
+  val greeting = "hello";
+  val unitVal = ();
+  val yes = true;
+  val no = false;
+  val rec fact = fn n => if n = 0 then 1 else n * fact (n - 1);
+  fun double x = x + x;
+  fun fib 0 = 0 | fib 1 = 1 | fib n = fib (n - 1) + fib (n - 2);
+  fun isEven 0 = true | isEven n = isOdd (n - 1)
+  and isOdd 0 = false | isOdd n = isEven (n - 1);
+  val literals = (42, ~1, 3.14, "hello", #"A", true, false, ());
+  val neg = ~42;
+  val arith = (1 + 2, 3 - 4, 5 * 6, 7.0 / 2.0, 10 div 3, 10 mod 3);
+  val joined = "hello" ^ " " ^ "world";
+  val consed = 1 :: 2 :: 3 :: [];
+  val appended = [1, 2] @ [3, 4];
+  val cmp = (1 = 1, 2 <> 3, 1 < 2, 2 > 1, 1 <= 1, 2 >= 1);
+  val logic = (true andalso false, true orelse false);
+  val doubleThenFib = (fib o double);
+  val myTuple = (1, "two", 3.0);
+  val myList = [10, 20, 30, 40, 50];
+  val myRecord = {name = "Alice", age = 30, active = true};
+  fun patternExamples x =
+    case x of [] => "empty" | [_] => "singleton" | first :: _ => "multi";
+  val (a, b, _) = (1, 2, 3);
+  val {name = theName, ...} = {name = "Bob", age = 25};
+  val (typed : int -> int) = fn x => x + 1;
+  fun classify n =
+    if n < 0 then "negative" else if n = 0 then "zero" else "positive";
+  val nested =
+    let val x = 10; val y = let val z = x + 1 in z * 2 end in x + y end;
+  val describe = fn 0 => "zero" | 1 => "one" | _ => "other";
+  fun treeSize t =
+    case t of
+      LEAF _ => 1
+      | NODE (left, _, right) => treeSize left + 1 + treeSize right;
+  val applied = double (double 3);
+  val stripped = 1 + 2;
+  val stripped2 = 42;
+  val deepFn = fn xs => case xs of [] => 0 | h :: t => h + 1;
+  val emps =
+    [{name = "Alice", deptno = 10},
+     {name = "Bob", deptno = 20},
+     {name = "Carol", deptno = 10}];
+  val q1 = (from e in emps where #deptno e = 10 yield #name e);
+  val q2 = (from e in emps order #name e);
+  val q3 = (from e in emps group #deptno e compute count = count);
+  val q4 = (from x in [1, 2, 3] , y in [10, 20] yield x + y);
+  val q5 = (from i in [1, 2, 2, 3, 3, 3] distinct);
+  val q6 = (from i in [1, 2, 3, 4, 5] skip 2 take 2)
+in
+  (fib 10,
+   isEven 4,
+   isOdd 3,
+   classify ~5,
+   treeSize (NODE (LEAF 1, 2, LEAF 3)),
+   q1,
+   q5)
+end

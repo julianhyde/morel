@@ -21,6 +21,12 @@ package net.hydromatic.morel;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 import net.hydromatic.morel.parse.MorelFmt;
 import org.junit.jupiter.api.Test;
 
@@ -86,8 +92,8 @@ class FmtTest {
     check(
         "(alpha, bravo, charlie)",
         15,
-        "(alpha, \n" //
-            + " bravo, \n"
+        "(alpha,\n" //
+            + " bravo,\n"
             + " charlie)");
   }
 
@@ -301,6 +307,55 @@ class FmtTest {
     final String input = "fn 0 => 1 | n => n * 2";
     final String formatted = MorelFmt.format(input, 15);
     assertThat(MorelFmt.format(formatted, 15), is(formatted));
+  }
+
+  // -- All-constructs comprehensive tests ------------------------------------
+
+  /**
+   * Reads a resource file from the {@code /script/fmt/} classpath directory.
+   */
+  private static String readResource(String name) throws IOException {
+    final String path = "/script/fmt/" + name;
+    try (InputStream is = FmtTest.class.getResourceAsStream(path)) {
+      if (is == null) {
+        throw new IOException("resource not found: " + path);
+      }
+      try (BufferedReader r = TestUtils.reader(is)) {
+        return r.lines().collect(Collectors.joining("\n"));
+      }
+    }
+  }
+
+  /**
+   * Formats {@code all-constructs.sml} at the given width, compares the result
+   * against the reference file, and verifies idempotency.
+   */
+  private void checkAllConstructs(int width, String refFileName)
+      throws IOException {
+    final String source = readResource("all-constructs.sml");
+    final String expected = readResource(refFileName);
+    final String formatted = MorelFmt.format(source, width);
+
+    // Compare against reference
+    final List<String> expectedLines = Arrays.asList(expected.split("\n", -1));
+    final List<String> actualLines = Arrays.asList(formatted.split("\n", -1));
+    final String diff = TestUtils.diffLines(expectedLines, actualLines);
+    assertThat(
+        "formatted output differs from " + refFileName + ":\n" + diff,
+        formatted,
+        is(expected));
+
+    // Idempotency: formatting the output again should be identical
+    final String reformatted = MorelFmt.format(formatted, width);
+    assertThat(
+        "formatter is not idempotent at width " + width,
+        reformatted,
+        is(formatted));
+  }
+
+  @Test
+  void testAllConstructsW80() throws IOException {
+    checkAllConstructs(80, "all-constructs.w80.ref");
   }
 }
 

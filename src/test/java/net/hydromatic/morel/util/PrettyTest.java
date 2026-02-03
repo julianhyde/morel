@@ -313,31 +313,32 @@ class PrettyTest {
 
   @Test
   void testEncloseSepFits() {
-    final Doc doc =
-        encloseSep(text("["), text("]"), text(", "), words("a b c"));
+    // Separator should be just the punctuation; space comes from LINE when flat
+    final Doc doc = encloseSep(text("["), text("]"), text(","), words("a b c"));
     assertThat(render(80, doc), is("[a, b, c]"));
   }
 
   @Test
   void testEncloseSepBreaks() {
+    // When breaking, no trailing space after comma (LINE becomes newline)
     final Doc doc =
         encloseSep(
             text("["),
             text("]"),
-            text(", "),
+            text(","),
             ImmutableList.of(text("alpha"), text("bravo"), text("charlie")));
     assertThat(
         render(15, doc),
         is(
-            "[alpha, \n" //
-                + " bravo, \n"
+            "[alpha,\n" //
+                + " bravo,\n"
                 + " charlie]"));
   }
 
   @Test
   void testEncloseSepEmpty() {
     final Doc doc =
-        encloseSep(text("["), text("]"), text(", "), ImmutableList.of());
+        encloseSep(text("["), text("]"), text(","), ImmutableList.of());
     assertThat(render(80, doc), is("[]"));
   }
 
@@ -345,7 +346,7 @@ class PrettyTest {
   void testEncloseSepSingleton() {
     final Doc doc =
         encloseSep(
-            text("["), text("]"), text(", "), ImmutableList.of(text("only")));
+            text("["), text("]"), text(","), ImmutableList.of(text("only")));
     assertThat(render(80, doc), is("[only]"));
   }
 

@@ -304,12 +304,12 @@ public class AstToDoc {
 
   /** Tuple: {@code (a, b, c)}. */
   private static Doc tupleDoc(List<Doc> docs) {
-    return encloseSep(text("("), text(")"), text(", "), docs);
+    return encloseSep(text("("), text(")"), text(","), docs);
   }
 
   /** List: {@code [a, b, c]}. */
   private static Doc listDoc(List<Doc> docs) {
-    return encloseSep(text("["), text("]"), text(", "), docs);
+    return encloseSep(text("["), text("]"), text(","), docs);
   }
 
   /** Record expression: {@code {x = 1, y = 2}}. */
@@ -328,13 +328,13 @@ public class AstToDoc {
             fieldDocs.add(valueDoc);
           }
         });
-    Doc fieldsDoc = encloseSep(text("{"), text("}"), text(", "), fieldDocs);
+    Doc fieldsDoc = encloseSep(text("{"), text("}"), text(","), fieldDocs);
     if (record.with != null) {
       // Wrap: {exp with fields}
       final List<Doc> allDocs = new ArrayList<>();
       allDocs.add(beside(toDoc(record.with, 0, 0), text(" with")));
       allDocs.addAll(fieldDocs);
-      fieldsDoc = encloseSep(text("{"), text("}"), text(", "), allDocs);
+      fieldsDoc = encloseSep(text("{"), text("}"), text(","), allDocs);
     }
     return fieldsDoc;
   }
@@ -349,7 +349,7 @@ public class AstToDoc {
     if (pat.ellipsis) {
       fieldDocs.add(text("..."));
     }
-    return encloseSep(text("{"), text("}"), text(", "), fieldDocs);
+    return encloseSep(text("{"), text("}"), text(","), fieldDocs);
   }
 
   /** Record type: {@code {x: int, y: string}}. */
@@ -359,7 +359,7 @@ public class AstToDoc {
       fieldDocs.add(
           beside(text(entry.getKey() + ": "), toDoc(entry.getValue(), 0, 0)));
     }
-    return encloseSep(text("{"), text("}"), text(", "), fieldDocs);
+    return encloseSep(text("{"), text("}"), text(","), fieldDocs);
   }
 
   /** Tuple type: {@code a * b * c}. Non-associative. */
