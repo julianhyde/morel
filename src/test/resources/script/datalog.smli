@@ -503,8 +503,7 @@ fib(idx + 1, x + y) :- fib(idx, x), fib(idx - 1, y), idx <= 9.
 >   SOME "let\n  val fib =\n    Relational.iterate [(1, 1), (2, 1)]\n      (fn (allFib, newFib) =>\n        from (idx, x) in newFib, (v0, y) in allFib where v0 = idx - 1 andalso idx <= 9 yield (idx + 1, x + y))\nin\n  {fib = from (idx, value) in fib}\nend"
 >   : string option
 
-(* -------------------------------------------------------------- *)
-(* Queries for existence of odd cycle.
+(* Queries for existence of odd cycle ------------------------------
  *
  * "Linear Datalog and bounded path duality of relational structures"
  * (Dalmau, 2004) gives the query more concisely as
@@ -538,8 +537,7 @@ exists_odd_cycle() :- odd_path(X,X).
 .output exists_odd_cycle";
 > val it = {exists_odd_cycle=[]} : {exists_odd_cycle:unit list} variant
 
-(* -------------------------------------------------------------- *)
-(*
+(* -------------------------------------------------------------------
  * The next few queries perform transitive closure and bounded
  * transitive closure over a graph. They all use the following
  * graph.
@@ -699,10 +697,12 @@ Datalog.execute program;
 >     {n=3,x="b",y="e"},{n=3,x="c",y="f"},{n=3,x="a",y="e"}]}
 >   : {path:{n:int, x:string, y:string} list} variant
 
-(* -------------------------------------------------------------- *)
-(* .input directive - read facts from CSV file *)
-
-(*) Read a relation from CSV and output it directly
+(* .input directive --------------------------------------------------
+ * Souffle's ".input" directive read facts from CSV file.
+ *
+ * The following query reads a relation from CSV and outputs it
+ * directly.
+ *)
 Datalog.execute ".decl dept(deptno:number, dname:string, loc:string)
 .input dept \"data/scott/depts.csv\"
 .output dept";

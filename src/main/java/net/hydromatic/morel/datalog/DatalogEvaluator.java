@@ -23,6 +23,8 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+
+import java.io.File;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,7 +46,6 @@ import net.hydromatic.morel.datalog.DatalogAst.Param;
 import net.hydromatic.morel.datalog.DatalogAst.Program;
 import net.hydromatic.morel.datalog.DatalogAst.Statement;
 import net.hydromatic.morel.datalog.DatalogAst.Term;
-import net.hydromatic.morel.eval.File;
 import net.hydromatic.morel.eval.Files;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
@@ -238,8 +239,8 @@ public class DatalogEvaluator {
       return ast;
     }
 
-    java.io.File baseDir = Prop.DIRECTORY.fileValue(session.map);
-    List<Statement> augmented = new ArrayList<>(ast.statements);
+    final File baseDir = Prop.DIRECTORY.fileValue(session.map);
+    final List<Statement> augmented = new ArrayList<>(ast.statements);
 
     for (Input input : inputs) {
       Declaration decl = ast.getDeclaration(input.relationName);
@@ -248,18 +249,21 @@ public class DatalogEvaluator {
         continue;
       }
 
-      String fileName = input.effectiveFileName();
-      java.io.File ioFile = new java.io.File(baseDir, fileName);
+      final String fileName = input.effectiveFileName();
+      final File ioFile = new File(baseDir, fileName);
       if (!ioFile.exists()) {
         throw new DatalogException(
             format(
                 "Input file not found: %s (resolved to %s)",
                 fileName, ioFile.getAbsolutePath()));
       }
-      File file = Files.create(ioFile);
+
+      // lint:skip 2
+      final net.hydromatic.morel.eval.File file =
+          net.hydromatic.morel.eval.Files.create(ioFile);
 
       @SuppressWarnings("unchecked")
-      List<List<Object>> rows = (List<List<Object>>) file.valueAs(List.class);
+      final List<List<Object>> rows = (List<List<Object>>) file.valueAs(List.class);
       if (rows == null || rows.isEmpty()) {
         continue;
       }
