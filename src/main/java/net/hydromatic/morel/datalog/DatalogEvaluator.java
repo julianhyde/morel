@@ -23,7 +23,6 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-
 import java.io.File;
 import java.io.StringReader;
 import java.util.ArrayList;
@@ -46,7 +45,6 @@ import net.hydromatic.morel.datalog.DatalogAst.Param;
 import net.hydromatic.morel.datalog.DatalogAst.Program;
 import net.hydromatic.morel.datalog.DatalogAst.Statement;
 import net.hydromatic.morel.datalog.DatalogAst.Term;
-import net.hydromatic.morel.eval.Files;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Variant;
@@ -263,7 +261,8 @@ public class DatalogEvaluator {
           net.hydromatic.morel.eval.Files.create(ioFile);
 
       @SuppressWarnings("unchecked")
-      final List<List<Object>> rows = (List<List<Object>>) file.valueAs(List.class);
+      final List<List<Object>> rows =
+          (List<List<Object>>) file.valueAs(List.class);
       if (rows == null || rows.isEmpty()) {
         continue;
       }
