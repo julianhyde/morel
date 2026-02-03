@@ -315,6 +315,144 @@ in
 end" *)
 ```
 
+## Datalog in Native Morel
+
+Morel's core language can express Datalog-style deductive queries
+directly, without using the `Datalog` structure. This is possible
+because of two key features:
+
+- **Unbounded variables**: Variables in `from` expressions that are
+  not bound to a collection iterate over all values of their type
+- **Predicate inversion**: Morel can invert predicates to generate
+  values efficiently, rather than testing all possible values
+
+This means Datalog-style logic programming can be intermixed with
+functional programming and SQL-style queries in the same program.
+
+### Correspondence
+
+A Datalog program translates naturally to Morel:
+
+| Datalog | Morel |
+|---------|-------|
+| Relation declaration | Function returning `bool` |
+| Fact `r(1, 2).` | `(1, 2) elem facts` in function body |
+| Rule body `,` (and) | `andalso` |
+| Multiple rules (or) | `orelse` |
+| Variable | Unbounded variable in `from` |
+| Existential (body variable not in head) | `exists` expression |
+| Query | `from` with `where` calling predicate |
+
+### Example: Transitive Closure
+
+The Datalog transitive closure program:
+
+```datalog
+.decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+edge(1, 2).
+edge(2, 3).
+path(X, Y) :- edge(X, Y).
+path(X, Z) :- path(X, Y), edge(Y, Z).
+.output path
+```
+
+Corresponds to this native Morel:
+
+```sml
+let
+  val edges = [(1, 2), (2, 3)]
+  fun edge (x, y) = (x, y) elem edges
+  fun path (x, y) =
+    edge (x, y) orelse
+    (exists z where path (x, z) andalso edge (z, y))
+in
+  from x, y where path (x, y)
+end;
+(* Returns: [(1,2),(2,3),(1,3)] *)
+```
+
+The key points:
+- `edge` is a predicate function: given `(x, y)`, returns whether
+  that edge exists
+- `path` is a recursive predicate combining the base case (`edge`)
+  and recursive case using `orelse`
+- The body variable `z` (which appears in the rule body but not
+  the head) becomes an `exists` expression
+- The query `from x, y where path (x, y)` uses unbounded variables
+  `x` and `y`, which Morel resolves via predicate inversion
+
+### Example: Self-Loops
+
+Find vertices with self-loops:
+
+```datalog
+.decl edge(x:number, y:number)
+.decl self_loop(x:number)
+edge(1, 1). edge(2, 3). edge(4, 4).
+self_loop(X) :- edge(X, Y), X = Y.
+.output self_loop
+```
+
+In native Morel:
+
+```sml
+let
+  val edges = [(1, 1), (2, 3), (4, 4)]
+  fun edge (x, y) = (x, y) elem edges
+  fun self_loop x =
+    exists y where edge (x, y) andalso x = y
+in
+  from x where self_loop x
+end;
+(* Returns: [1, 4] *)
+```
+
+### Mixing Paradigms
+
+Because Datalog-style predicates are just Morel functions, you can
+freely mix deductive, functional, and relational code:
+
+```sml
+let
+  (* Datalog-style: define reachability as a predicate *)
+  val edges = [(1, 2), (2, 3), (3, 4)]
+  fun edge (x, y) = (x, y) elem edges
+  fun reachable (x, y) =
+    edge (x, y) orelse
+    (exists z where reachable (x, z) andalso edge (z, y))
+
+  (* Functional: transform the result *)
+  fun formatPair (x, y) =
+    Int.toString x ^ " -> " ^ Int.toString y
+
+  (* SQL-style: query with aggregation *)
+  val summary =
+    from x, y where reachable (x, y)
+      group x compute c = count
+in
+  (* Combine all three styles *)
+  from x, y where reachable (x, y)
+    yield formatPair (x, y)
+end;
+```
+
+### When to Use Each Style
+
+Use the **Datalog structure** (`Datalog.execute`) when:
+- You have a standalone Datalog program as a string
+- You want automatic semi-naive evaluation optimization
+- You're working with Datalog syntax from external sources
+
+Use **native Morel predicates** when:
+- You want to mix deductive logic with other Morel code
+- You need fine-grained control over evaluation
+- You're building predicates programmatically
+
+Both approaches use the same underlying mechanism: predicate
+inversion converts unbounded variable queries into efficient
+iteration.
+
 ## Evaluation
 
 Morel uses **semi-naive evaluation** for efficient fixpoint
@@ -531,3 +669,5 @@ Use `Datalog.translate` to see the generated Morel code.
 
 - [Morel Language Reference](REFERENCE.md)
 - [Query expressions in Morel](query.md)
+- [Unbounded variables via predicate inversion](https://github.com/hydromatic/morel/commit/eff94a5d66b28cb654851face07ee2c525e35369)
+  (GitHub commit with detailed explanation)
