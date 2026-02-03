@@ -69,13 +69,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Standard ML REPL. */
 public class Main {
-  private final BufferedReader in;
+  private final BufferingReader in;
   private final PrintWriter out;
   private final boolean echo;
   private final Map<String, ForeignValue> valueMap;
   final TypeSystem typeSystem = new TypeSystem();
   final boolean idempotent;
-  final @Nullable NavigableMap<Integer, String> expectedOutputByOffset;
   final Session session;
 
   /**
@@ -130,15 +129,11 @@ public class Main {
     this.idempotent = idempotent;
     if (idempotent) {
       StripResult result = stripAndCaptureOutLines(in);
-      this.expectedOutputByOffset = result.expectedOutputByOffset;
       this.in =
-          buffer(
-              new BufferingReader(
-                  new StringReader(result.code),
-                  result.expectedOutputByOffset));
+          new BufferingReader(
+              new StringReader(result.code), result.expectedOutputByOffset);
     } else {
-      this.expectedOutputByOffset = null;
-      this.in = buffer(in);
+      this.in = new BufferingReader(buffer(in));
     }
   }
 
@@ -357,12 +352,7 @@ public class Main {
     session.withShell(
         shell,
         outLines,
-        session1 ->
-            shell.run(
-                session1,
-                new BufferingReader(in, expectedOutputByOffset),
-                echoLines,
-                outLines));
+        session1 -> shell.run(session1, in, echoLines, outLines));
     out.flush();
   }
 
