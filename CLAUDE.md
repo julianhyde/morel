@@ -1,24 +1,31 @@
-# Claude Code Notes for Morel
+<!--
+Licensed to Julian Hyde under one or more contributor license
+agreements.  See the NOTICE file distributed with this work
+for additional information regarding copyright ownership.
+Julian Hyde licenses this file to you under the Apache
+License, Version 2.0 (the "License"); you may not use this
+file except in compliance with the License.  You may obtain a
+copy of the License at
 
-This file contains notes and tips for Claude Code when working on this project.
+http://www.apache.org/licenses/LICENSE-2.0
 
-## Code Style
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied.  See the License for the specific
+language governing permissions and limitations under the
+License.
+-->
+# Claude Code Notes
 
-### Multi-line String Formatting
+Notes for Claude Code when working on this project.
 
-When writing multi-line strings in Java tests, add `//` after the first
-line's `"\n"` to prevent Google Java Format from joining the lines:
+## Multi-line string formatting
+
+When writing multi-line strings, add `//` after the first `\n"` to prevent
+Google Java Format from joining the lines. For example:
 
 ```java
-// Good - formatter will preserve line breaks
-final String input =
-    "val x = 42;\n" //
-        + "x + 1;\n";
-
-// Bad - formatter will join into one line, causing "broken string" lint error
-final String input =
-    "val x = 42;\n"
-        + "x + 1;\n";
+String s = "first line\n" //
+    + "second line";
 ```
-
-This is enforced by the `LintTest` which checks for "broken string" violations.
