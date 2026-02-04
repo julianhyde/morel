@@ -436,6 +436,138 @@ public class InlineTest {
                     + "end"))
         .assertEval(is(8));
   }
+
+  // ==========================================================================
+  // Tests for cross-compile-unit inlining (issue #223)
+  // ==========================================================================
+
+  /**
+   * Tests that an atomic value (integer literal) from a previous compile unit
+   * can be inlined. This is the simplest case of cross-unit inlining.
+   */
+  @Test
+  void testCrossUnitInlineAtomicInt() {
+    final String input =
+        "val x = 42;\n" //
+            + "x + 1;\n";
+    final String expected =
+        "val x = 42 : int\n" //
+            + "val it = 43 : int\n";
+    ShellTest.fixture()
+        .withRaw(true)
+        .withInputString(input)
+        .assertOutput(is(expected));
+  }
+
+  /**
+   * Tests that an atomic value (string literal) from a previous compile unit
+   * can be inlined.
+   */
+  @Test
+  void testCrossUnitInlineAtomicString() {
+    final String input =
+        "val s = \"hello\";\n" //
+            + "String.size s;\n";
+    final String expected =
+        "val s = \"hello\" : string\n" //
+            + "val it = 5 : int\n";
+    ShellTest.fixture()
+        .withRaw(true)
+        .withInputString(input)
+        .assertOutput(is(expected));
+  }
+
+  /** Tests that a boolean value from a previous compile unit can be inlined. */
+  @Test
+  void testCrossUnitInlineAtomicBool() {
+    final String input =
+        "val b = true;\n" //
+            + "if b then 1 else 2;\n";
+    final String expected =
+        "val b = true : bool\n" //
+            + "val it = 1 : int\n";
+    ShellTest.fixture()
+        .withRaw(true)
+        .withInputString(input)
+        .assertOutput(is(expected));
+  }
+
+  /**
+   * Tests that multiple atomic values from previous compile units can be
+   * inlined in the same expression.
+   */
+  @Test
+  void testCrossUnitInlineMultipleAtomics() {
+    final String input =
+        "val x = 10;\n" //
+            + "val y = 20;\n"
+            + "x + y;\n";
+    final String expected =
+        "val x = 10 : int\n" //
+            + "val y = 20 : int\n"
+            + "val it = 30 : int\n";
+    ShellTest.fixture()
+        .withRaw(true)
+        .withInputString(input)
+        .assertOutput(is(expected));
+  }
+
+  /**
+   * Tests that a function from a previous compile unit can be called (but not
+   * yet inlined - that requires type unification).
+   *
+   * <p>This test documents the current behavior. Full function inlining across
+   * compile units (as requested in issue #223) requires type unification work.
+   */
+  @Test
+  void testCrossUnitFunctionCall() {
+    // Function is called but not inlined (yet)
+    final String input =
+        "fun plus1 x = x + 1;\n" //
+            + "plus1 5;\n";
+    final String expected =
+        "val plus1 = fn : int -> int\n" //
+            + "val it = 6 : int\n";
+    ShellTest.fixture()
+        .withRaw(true)
+        .withInputString(input)
+        .assertOutput(is(expected));
+  }
+
+  /** Tests chained function calls across compile units work correctly. */
+  @Test
+  void testCrossUnitChainedFunctionCalls() {
+    final String input =
+        "fun double x = x * 2;\n"
+            + "fun quadruple x = double (double x);\n"
+            + "quadruple 3;\n";
+    final String expected =
+        "val double = fn : int -> int\n"
+            + "val quadruple = fn : int -> int\n"
+            + "val it = 12 : int\n";
+    ShellTest.fixture()
+        .withRaw(true)
+        .withInputString(input)
+        .assertOutput(is(expected));
+  }
+
+  /**
+   * Tests that a recursive function from a previous compile unit works
+   * correctly (and doesn't cause infinite expansion during inlining).
+   */
+  @Test
+  void testCrossUnitRecursiveFunction() {
+    final String input =
+        "fun fac n = if n <= 1 then 1 else n * fac (n - 1);\n" //
+            + "fac 5;\n";
+    final String expected =
+        "val fac = fn : int -> int\n" //
+            + "val it = 120 : int\n";
+    ShellTest.fixture()
+        .withRaw(true)
+        .withInputString(input)
+        .assertOutput(is(expected));
+  }
 }
 
 // End InlineTest.java

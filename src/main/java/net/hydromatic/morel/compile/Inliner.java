@@ -84,14 +84,26 @@ public class Inliner extends EnvShuttle {
     final Binding binding = env.getOpt(id.idPat);
     if (binding != null && !binding.parameter) {
       if (binding.exp != null) {
-        final Analyzer.Use use =
-            analysis == null
-                ? Analyzer.Use.MULTI_UNSAFE
-                : requireNonNull(analysis.map.get(id.idPat));
-        switch (use) {
-          case ATOMIC:
-          case ONCE_SAFE:
+        // For bindings from previous compile units (identified by having both
+        // exp and a non-Unit value), only inline atomic expressions. Inlining
+        // non-atomic expressions (like function bodies) requires type
+        // unification to handle polymorphic types correctly.
+        // TODO: Add type unification to enable full cross-unit inlining (#223)
+        final boolean isEvalTimeBinding = binding.value != Unit.INSTANCE;
+        if (isEvalTimeBinding) {
+          if (isAtomic(binding.exp)) {
             return binding.exp.accept(this);
+          }
+        } else {
+          final Analyzer.Use use =
+              analysis == null
+                  ? Analyzer.Use.MULTI_UNSAFE
+                  : requireNonNull(analysis.map.get(id.idPat));
+          switch (use) {
+            case ATOMIC:
+            case ONCE_SAFE:
+              return binding.exp.accept(this);
+          }
         }
       }
       Object v = binding.value;

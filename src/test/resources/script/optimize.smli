@@ -251,4 +251,40 @@ Sys.planEx "~1";
 Sys.planEx "1";
 > val it = "val it = local datatype tree in \"b\" end" : string
 
+(* --- Cross-compile-unit inlining (issue #223) ------------------- *)
+
+(*) An atomic integer from a previous compile unit is inlined.
+val x = 42;
+> val x = 42 : int
+x + 1;
+> val it = 43 : int
+Sys.planEx "0";
+> val it = "val it = 42 + 1" : string
+
+(*) An atomic string from a previous compile unit is inlined.
+val greeting = "hello";
+> val greeting = "hello" : string
+String.size greeting;
+> val it = 5 : int
+Sys.planEx "0";
+> val it = "val it = #size String \"hello\"" : string
+
+(*) An atomic boolean from a previous compile unit is inlined.
+val flag = true;
+> val flag = true : bool
+if flag then 1 else 2;
+> val it = 1 : int
+Sys.planEx "0";
+> val it = "val it = 1" : string
+
+(*) Multiple atomic values from previous compile units are inlined.
+val a = 10;
+> val a = 10 : int
+val b = 20;
+> val b = 20 : int
+a + b;
+> val it = 30 : int
+Sys.planEx "0";
+> val it = "val it = 10 + 20" : string
+
 (*) End optimize.smli
