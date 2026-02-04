@@ -95,17 +95,18 @@ public class Inliner extends EnvShuttle {
         if (isEvalTimeBinding) {
           // For cross-unit inlining, we can inline:
           // 1. Atomic expressions (literals, IDs)
-          // 2. Non-recursive, monomorphic functions that:
+          // 2. Non-recursive functions that:
           //    - don't contain nested recursive definitions
           //    - don't have free variables (other than the parameter)
-          // Polymorphic functions require type unification which is not yet
-          // implemented.
-          if (isAtomic(binding.exp)
-              || binding.exp.op == Op.FN
-                  && !containsReference(binding.exp, binding.id)
-                  && !containsTypeVar(binding.exp.type)
-                  && !containsRecursiveDecl(binding.exp)
-                  && !hasFreeVariables((Core.Fn) binding.exp, env)) {
+          // Polymorphic functions are inlined with type unification.
+          if (isAtomic(binding.exp)) {
+            return binding.exp.accept(this);
+          }
+          if (binding.exp.op == Op.FN
+              && !containsReference(binding.exp, binding.id)
+              && !containsTypeVar(binding.exp.type)
+              && !containsRecursiveDecl(binding.exp)
+              && !hasFreeVariables((Core.Fn) binding.exp, env)) {
             return binding.exp.accept(this);
           }
         } else {

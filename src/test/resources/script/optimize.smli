@@ -315,6 +315,11 @@ inc2 (double2 3);
 Sys.planEx "3";
 > val it = "val it = *:int (3, 2) + 1" : string
 
+fn i => inc2 (double2 i);
+> val it = fn : int -> int
+Sys.planEx "3";
+> val it = "val it = fn i => *:int (i, 2) + 1" : string
+
 (*) Recursive functions are NOT inlined (would cause infinite expansion).
 val rec factorial = fn n => if n < 2 then 1 else n * factorial (n - 1);
 > val factorial = fn : int -> int
