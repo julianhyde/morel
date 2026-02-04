@@ -69,6 +69,12 @@ public class OutputMatcher {
       return false;
     }
 
+    final String type0 = extractType(actual);
+    final String type1 = extractType(expected);
+    if (type0 == null || !type0.equals(type1)) {
+      return false;
+    }
+
     return codeEqual(type, code0, code1);
   }
 
@@ -84,55 +90,89 @@ public class OutputMatcher {
   }
 
   /**
-   * Extracts the value portion from output like "val x = value : type" or
-   * "value : type".
+   * Given an output line like "val x = value : type" or "value : type", returns
+   * "value".
    */
   static @Nullable String extractValue(String s) {
-    // Find start of value: after "val <name> = " if present
-    int valueStart = 0;
-    int eqIdx = indexOfEqWhitespace(s);
-    if (eqIdx >= 0 && s.substring(0, eqIdx).contains("val ")) {
-      // Skip "=" and any following whitespace (space, newline, etc.)
-      int start = eqIdx + 1;
-      while (start < s.length() && isWhitespaceChar(s.charAt(start))) {
-        start++;
-      }
-      valueStart = start;
-    }
+    final int[] result = splitOutput(s);
+    return result[1] < 0 ? null : s.substring(result[0], result[1] - 1);
+  }
+
+  /**
+   * Given an output line like "val x = value : type" or "value : type", returns
+   * "type".
+   */
+  static @Nullable String extractType(String s) {
+    final int[] result = splitOutput(s);
+    return result[1] < 0 ? null : s.substring(result[1] + 1);
+  }
+
+  /**
+   * Splits an output line. Given "val x = value : type", returns [valueStart,
+   * lastColon].
+   */
+  private static int[] splitOutput(String s) {
+    // Start of value: after "val <name> = " if present
+    final int valueStart = valueStart(s);
 
     // Find end of value: before the last top-level " : "
+    int lastColon = lastColon(s);
+    return new int[] {valueStart, lastColon};
+  }
+
+  private static int valueStart(String s) {
+    final int eq = indexOfEqWhitespace(s);
+    if (eq < 0 || !s.substring(0, eq).contains("val ")) {
+      return 0;
+    }
+    // Skip "=" and any following whitespace (space, newline, etc.)
+    int start = eq + 1;
+    while (start < s.length() && isWhitespaceChar(s.charAt(start))) {
+      start++;
+    }
+    return start;
+  }
+
+  private static int lastColon(String s) {
     int depth = 0;
     boolean inString = false;
     int lastColon = -1;
     for (int i = 0; i < s.length(); i++) {
-      char c = s.charAt(i);
+      final char c = s.charAt(i);
       if (inString) {
         if (c == '"') {
           inString = false;
         } else if (c == '\\') {
           i++;
         }
-        continue;
-      }
-      if (c == '"') {
-        inString = true;
-      } else if (c == '(' || c == '[' || c == '{') {
-        depth++;
-      } else if (c == ')' || c == ']' || c == '}') {
-        depth--;
-      } else if (c == ':'
-          && depth == 0
-          && i > 0
-          && s.charAt(i - 1) == ' '
-          && i + 1 < s.length()
-          && s.charAt(i + 1) == ' ') {
-        lastColon = i;
+      } else {
+        switch (c) {
+          case '"':
+            inString = true;
+            break;
+          case '(':
+          case '[':
+          case '{':
+            depth++;
+            break;
+          case ')':
+          case ']':
+          case '}':
+            depth--;
+            break;
+          case ':':
+            if (depth == 0
+                && i > 0
+                && s.charAt(i - 1) == ' '
+                && i + 1 < s.length()
+                && s.charAt(i + 1) == ' ') {
+              lastColon = i;
+            }
+            break;
+        }
       }
     }
-    if (lastColon < 0) {
-      return null;
-    }
-    return s.substring(valueStart, lastColon - 1);
+    return lastColon;
   }
 
   static String normalizeWhitespace(String s) {
