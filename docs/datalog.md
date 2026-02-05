@@ -37,22 +37,22 @@ Datalog extends Morel with:
 
 ### Basic Example
 
-```sml
-val program = ".decl edge(x:int, y:int)
+<pre>
+<b>val</b> program = ".decl edge(x:int, y:int)
 edge(1, 2).
 edge(2, 3).
 edge(3, 4).
 .output edge";
 
 Datalog.execute program;
-(* Returns: {edge=[{x=1,y=2},{x=2,y=3},{x=3,y=4}]}
-     : {edge:{x:int, y:int} list} variant *)
-```
+<i>val it = {edge=[{x=1,y=2},{x=2,y=3},{x=3,y=4}]}
+  : {edge:{x:int, y:int} list} variant</i>
+</pre>
 
 ### Transitive Closure
 
-```sml
-val tc = ".decl edge(x:int, y:int)
+<pre>
+<b>val</b> tc = ".decl edge(x:int, y:int)
 .decl path(x:int, y:int)
 edge(1, 2).
 edge(2, 3).
@@ -67,8 +67,9 @@ path(X, Z) :- path(X, Y), edge(Y, Z).
 .output path";
 
 Datalog.execute tc;
-(* Returns all reachable pairs *)
-```
+<i>val it = {path=[{x=1,y=2},{x=1,y=3},{x=1,y=4},{x=2,y=3},{x=2,y=4},{x=3,y=4}]}
+  : {path:{x:int, y:int} list} variant</i>
+</pre>
 
 ## Syntax
 
@@ -264,12 +265,13 @@ Datalog.execute : string -> 'a variant
 - No outputs: `unit variant`
 
 **Example**:
-```sml
-val result = Datalog.execute ".decl num(n:int)
+
+<pre>
+<b>val</b> result = Datalog.execute ".decl num(n:int)
 num(1). num(2). num(3).
 .output num";
-(* result = {num=[1,2,3]} : {num:int list} variant *)
-```
+<i>val result = {num=[1,2,3]} : {num:int list} variant</i>
+</pre>
 
 ### Datalog.validate
 
@@ -280,12 +282,13 @@ Datalog.validate : string -> string
 ```
 
 **Example**:
-```sml
+
+<pre>
 Datalog.validate ".decl edge(x:int, y:int)
 edge(1, 2).
 .output edge";
-(* Returns: "{edge:{x:int, y:int} list}" *)
-```
+<i>val it = "{edge:{x:int, y:int} list}" : string</i>
+</pre>
 
 **Return values**:
 - Success: Type representation like `"{edge:{x:int, y:int} list}"`
@@ -301,14 +304,15 @@ Datalog.translate : string -> string option
 ```
 
 **Example**:
-```sml
+
+<pre>
 Datalog.translate ".decl edge(x:int, y:int)
 .decl path(x:int, y:int)
 edge(1,2). edge(2,3).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-(* Returns: SOME "let
+<i>val it = SOME "let
   val edge = [(1, 2), (2, 3)]
   val path =
     Relational.iterate edge
@@ -317,8 +321,8 @@ path(X,Z) :- path(X,Y), edge(Y,Z).
           where y = v0 yield (x, z))
 in
   {path = from (x, y) in path}
-end" *)
-```
+end" : string option</i>
+</pre>
 
 ## Datalog in Native Morel
 
@@ -364,18 +368,18 @@ path(X, Z) :- path(X, Y), edge(Y, Z).
 
 Corresponds to this native Morel:
 
-```sml
-let
-  val edges = [(1, 2), (2, 3)]
-  fun edge (x, y) = (x, y) elem edges
-  fun path (x, y) =
-    edge (x, y) orelse
-    (exists z where path (x, z) andalso edge (z, y))
-in
-  from x, y where path (x, y)
-end;
-(* Returns: [(1,2),(2,3),(1,3)] *)
-```
+<pre>
+<b>let</b>
+  <b>val</b> edges = [(1, 2), (2, 3)]
+  <b>fun</b> edge (x, y) = (x, y) elem edges
+  <b>fun</b> path (x, y) =
+    edge (x, y) <b>orelse</b>
+    (<b>exists</b> z <b>where</b> path (x, z) <b>andalso</b> edge (z, y))
+<b>in</b>
+  <b>from</b> x, y <b>where</b> path (x, y)
+<b>end</b>;
+<i>val it = [(1,2),(2,3),(1,3)] : (int * int) list</i>
+</pre>
 
 The key points:
 - `edge` is a predicate function: given `(x, y)`, returns whether
@@ -401,46 +405,48 @@ self_loop(X) :- edge(X, Y), X = Y.
 
 In native Morel:
 
-```sml
-let
-  val edges = [(1, 1), (2, 3), (4, 4)]
-  fun edge (x, y) = (x, y) elem edges
-  fun self_loop x =
-    exists y where edge (x, y) andalso x = y
-in
-  from x where self_loop x
-end;
-(* Returns: [1, 4] *)
-```
+<pre>
+<b>let</b>
+  <b>val</b> edges = [(1, 1), (2, 3), (4, 4)]
+  <b>fun</b> edge (x, y) = (x, y) elem edges
+  <b>fun</b> self_loop x =
+    <b>exists</b> y <b>where</b> edge (x, y) <b>andalso</b> x = y
+<b>in</b>
+  <b>from</b> x <b>where</b> self_loop x
+<b>end</b>;
+<i>val it = [1, 4] : int list</i>
+</pre>
 
 ### Mixing Paradigms
 
 Because Datalog-style predicates are just Morel functions, you can
 freely mix deductive, functional, and relational code:
 
-```sml
-let
+<pre>
+<b>let</b>
   (* Datalog-style: define reachability as a predicate *)
-  val edges = [(1, 2), (2, 3), (3, 4)]
-  fun edge (x, y) = (x, y) elem edges
-  fun reachable (x, y) =
-    edge (x, y) orelse
-    (exists z where reachable (x, z) andalso edge (z, y))
+  <b>val</b> edges = [(1, 2), (2, 3), (3, 4)]
+  <b>fun</b> edge (x, y) = (x, y) elem edges
+  <b>fun</b> reachable (x, y) =
+    edge (x, y) <b>orelse</b>
+    (<b>exists</b> z <b>where</b> reachable (x, z) <b>andalso</b> edge (z, y))
 
   (* Functional: transform the result *)
-  fun formatPair (x, y) =
+  <b>fun</b> formatPair (x, y) =
     Int.toString x ^ " -> " ^ Int.toString y
 
   (* SQL-style: query with aggregation *)
-  val summary =
-    from x, y where reachable (x, y)
-      group x compute c = count
-in
+  <b>val</b> summary =
+    <b>from</b> x, y <b>where</b> reachable (x, y)
+      <b>group</b> x <b>compute</b> c = count
+<b>in</b>
   (* Combine all three styles *)
-  from x, y where reachable (x, y)
-    yield formatPair (x, y)
-end;
-```
+  <b>from</b> x, y <b>where</b> reachable (x, y)
+    <b>yield</b> formatPair (x, y)
+<b>end</b>;
+<i>val it = ["1 -> 2","1 -> 3","1 -> 4","2 -> 3","2 -> 4","3 -> 4"]
+  : string list</i>
+</pre>
 
 ### When to Use Each Style
 
@@ -512,49 +518,49 @@ Datalog performs type checking on facts and rules:
 
 ### Type Mismatches in Facts
 
-```sml
+<pre>
 Datalog.validate ".decl edge(x:int, y:int)
 edge(\"hello\", 2).";
-(* Returns: "Compilation error: Type mismatch in fact edge(...):
-             expected number, got string for parameter x" *)
-```
+<i>val it = "Compilation error: Type mismatch in fact edge(...):
+  expected int, got string for parameter x" : string</i>
+</pre>
 
 ### Arity Mismatches
 
-```sml
+<pre>
 Datalog.validate ".decl edge(x:int, y:int)
 edge(1, 2, 3).";
-(* Returns: "Compilation error: Atom edge/3 does not match
-             declaration edge/2" *)
-```
+<i>val it = "Compilation error: Atom edge/3 does not match
+  declaration edge/2" : string</i>
+</pre>
 
 ### Undeclared Relations
 
-```sml
+<pre>
 Datalog.validate ".decl edge(x:int, y:int)
 path(1, 2).";
-(* Returns: "Compilation error: Relation 'path' used in fact
-             but not declared" *)
-```
+<i>val it = "Compilation error: Relation 'path' used in fact
+  but not declared" : string</i>
+</pre>
 
 ## Examples
 
 ### Factorial
 
-```sml
+<pre>
 Datalog.execute ".decl fact(n:int, value:int)
 fact(0, 1).
 fact(N + 1, value * (N + 1)) :- fact(N, value), N < 10.
 .output fact";
-(* Returns factorials 0! through 10!:
-   {fact=[{n=0,value=1},{n=1,value=1},{n=2,value=2},
-          {n=3,value=6},{n=4,value=24},...]} *)
-```
+<i>val it = {fact=[{n=0,value=1},{n=1,value=1},{n=2,value=2},
+  {n=3,value=6},{n=4,value=24},...]}
+  : {fact:{n:int, value:int} list} variant</i>
+</pre>
 
 ### Ancestors
 
-```sml
-val family = ".decl parent(p:string, c:string)
+<pre>
+<b>val</b> family = ".decl parent(p:string, c:string)
 .decl ancestor(a:string, d:string)
 .decl descendant(p:string, d:string)
 
@@ -570,12 +576,15 @@ descendant(P, D) :- ancestor(D, P).
 .output descendant";
 
 Datalog.execute family;
-```
+<i>val it = {ancestor=[...], descendant=[...]}
+  : {ancestor:{a:string, d:string} list,
+     descendant:{d:string, p:string} list} variant</i>
+</pre>
 
 ### Siblings
 
-```sml
-val siblings = ".decl parent(p:string, c:string)
+<pre>
+<b>val</b> siblings = ".decl parent(p:string, c:string)
 .decl sibling(x:string, y:string)
 
 parent(\"Alice\", \"Bob\").
@@ -587,13 +596,14 @@ sibling(X, Y) :- parent(P, X), parent(P, Y), X != Y.
 .output sibling";
 
 Datalog.execute siblings;
-(* Returns: {sibling=[{x="Bob",y="Carol"},{x="Carol",y="Bob"}]} *)
-```
+<i>val it = {sibling=[{x="Bob",y="Carol"},{x="Carol",y="Bob"}]}
+  : {sibling:{x:string, y:string} list} variant</i>
+</pre>
 
 ### Set Difference with Negation
 
-```sml
-val diff = ".decl all(x:int)
+<pre>
+<b>val</b> diff = ".decl all(x:int)
 .decl excluded(x:int)
 .decl result(x:int)
 
@@ -604,23 +614,23 @@ result(X) :- all(X), !excluded(X).
 .output result";
 
 Datalog.execute diff;
-(* Returns: {result=[1,3]} *)
-```
+<i>val it = {result=[1,3]} : {result:int list} variant</i>
+</pre>
 
 ### Loading External Data
 
-```sml
+<pre>
 Datalog.execute ".decl adj(state:string, adjacent:string)
 .decl result(state:string)
 .input adj \"data/map/adjacent-states.csv\"
 result(state) :- adj(state, \"FL\"), adj(state, \"TN\").
 .output result";
-(* Returns states adjacent to both Florida and Tennessee *)
-```
+<i>val it = {result=["GA"]} : {result:string list} variant</i>
+</pre>
 
 ### Odd Cycle Detection
 
-```sml
+<pre>
 Datalog.execute ".decl edge(x:string, y:string)
 .decl odd_path(x:string, y:string)
 .decl exists_odd_cycle()
@@ -634,8 +644,8 @@ odd_path(X, Y) :- odd_path(X, Z), edge(Z, U), edge(U, Y).
 exists_odd_cycle() :- odd_path(X, X).
 
 .output exists_odd_cycle";
-(* Returns: {exists_odd_cycle=[()]} if odd cycle exists *)
-```
+<i>val it = {exists_odd_cycle=[()]} : {exists_odd_cycle:unit list} variant</i>
+</pre>
 
 ## Best Practices
 
@@ -655,11 +665,13 @@ exists_odd_cycle() :- odd_path(X, X).
 
 Use `Datalog.validate` to check for errors before execution:
 
-```sml
-val prog = "...";
-val typeResult = Datalog.validate prog;
-(* Check if typeResult starts with "Error:" or "Parse error:" *)
-```
+<pre>
+<b>val</b> prog = "...";
+<b>val</b> typeResult = Datalog.validate prog;
+<i>val typeResult = "{...}" : string</i>
+</pre>
+
+Check if `typeResult` starts with `"Error:"` or `"Parse error:"`.
 
 Use `Datalog.translate` to see the generated Morel code.
 
