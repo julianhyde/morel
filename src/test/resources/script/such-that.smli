@@ -1060,7 +1060,6 @@ in
   from x, z
     where (exists y where edge (x, y) andalso edge (y, z))
       andalso x <> z
-    distinct (*) TODO: "distinct" should not be required
 end;
 > x z
 > - -
@@ -1076,7 +1075,6 @@ let
 in
   from x, z
     where (exists y where edge (x, y) andalso edge (y, z) andalso x <> z)
-    distinct (*) TODO: "distinct" should not be required
 end;
 > x z
 > - -
@@ -1273,11 +1271,9 @@ fun caskSells b =
   exists price where sells ("cask", b, price);
 > val caskSells = fn : string -> bool
 
-(* TODO
-from p where exists (
-  from b where likes (p, b) andalso not (caskSells b));
-> val it = ["foo"] : string list
-*)
+from p
+  where (exists b where likes (p, b) andalso not (caskSells b));
+> val it = ["shaggy","fred"] : string bag
 
 (* Cousin
  *

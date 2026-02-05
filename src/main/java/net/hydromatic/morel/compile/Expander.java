@@ -237,8 +237,13 @@ public class Expander {
         }
       }
       if (toProject.size() < fromBuilder.stepEnv().bindings.size()) {
-        // Some shared patterns need to be projected away
+        // Some shared patterns need to be projected away.
+        // We also need distinct because projecting away variables that were
+        // used for joining (like y in "exists y where edge(x,y) andalso
+        // edge(y,z)") can cause duplicates. For example, (1, 3) would appear
+        // twice if there are two different y values connecting x=1 to z=3.
         fromBuilder.yield_(core.recordOrAtom(typeSystem, toProject));
+        fromBuilder.distinct();
       }
     }
 
