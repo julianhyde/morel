@@ -1883,13 +1883,19 @@ class Generators {
         }
         if (match.pat.op == Op.ID_PAT) {
           if (!match.exp.isBoolLiteral(false)) {
-            final Core.Exp substituted =
+            Core.Exp substituted =
                 substituteArgs(
                     cache.typeSystem,
                     cache.env,
                     match.pat,
                     caseExp.exp,
                     match.exp);
+            // Apply exclusion constraints for earlier false-returning patterns
+            for (Core.Exp excludeValue : excludeValues) {
+              final Core.Exp notEq =
+                  core.notEqual(cache.typeSystem, caseExp.exp, excludeValue);
+              substituted = core.andAlso(cache.typeSystem, substituted, notEq);
+            }
             branches.add(substituted);
           }
           continue;

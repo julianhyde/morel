@@ -154,13 +154,33 @@ from x where (case x of 1 => true | 2 => false | 3 => true | _ => false);
 from b where not b;
 > val it = [false] : bool bag
 
+(*) Case with variable pattern and range predicate
+from x where (case x of 0 => true | n => n >= 5 andalso n <= 8);
+> val it = [0,5,6,7,8] : int bag
+
+(* TODO: Variable patterns with literal exclusion not yet supported
+(*) Case where explicit false shadows later variable match
+from x where (case x of 6 => false | n => n >= 5 andalso n <= 8);
+> val it = [5,7,8] : int bag
+
+(*) Case with constructor patterns - INL/INR (issue #341)
+from e where (case e of
+    INL 0 => true
+  | INL 6 => false
+  | INR b => not b
+  | INL 7 => true
+  | INL 100 => true
+  | INL n => n >= 5 andalso n <= 8);
+> val it = [INL 0,INR false,INL 7,INL 100,INL 5,INL 8] : (int, bool) either bag
+*)
+
 (* Predicate cannot be inverted.
  *
  * With symbolic math we could deduce that the solution is [~2,3],
  * but we don't have symbolic math. *)
 (* TODO: better exception *)
 from x where (x + 2) * (x - 3) = 0;
-> java.lang.IllegalArgumentException: pattern x_3 is not grounded
+> java.lang.IllegalArgumentException: pattern x_4 is not grounded
 
 (*) Pattern
 from x, y where (x, y) elem [(1,true),(2,false)];
