@@ -1891,9 +1891,12 @@ class Generators {
                     caseExp.exp,
                     match.exp);
             // Apply exclusion constraints for earlier false-returning patterns
+            // Use "not (x = v)" rather than "x <> v" for set-minus semantics
             for (Core.Exp excludeValue : excludeValues) {
+              final Core.Exp eq =
+                  core.equal(cache.typeSystem, caseExp.exp, excludeValue);
               final Core.Exp notEq =
-                  core.notEqual(cache.typeSystem, caseExp.exp, excludeValue);
+                  core.call(cache.typeSystem, BuiltIn.NOT, eq);
               substituted = core.andAlso(cache.typeSystem, substituted, notEq);
             }
             branches.add(substituted);
@@ -1919,10 +1922,12 @@ class Generators {
         }
 
         // Apply exclusion constraints for earlier false-returning patterns
+        // Use "not (x = v)" rather than "x <> v" for set-minus semantics
         Core.Exp branchExp = armConstraint;
         for (Core.Exp excludeValue : excludeValues) {
-          final Core.Exp notEq =
-              core.notEqual(cache.typeSystem, caseExp.exp, excludeValue);
+          final Core.Exp eq =
+              core.equal(cache.typeSystem, caseExp.exp, excludeValue);
+          final Core.Exp notEq = core.call(cache.typeSystem, BuiltIn.NOT, eq);
           branchExp = core.andAlso(cache.typeSystem, branchExp, notEq);
         }
 

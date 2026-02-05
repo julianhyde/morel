@@ -158,11 +158,13 @@ from b where not b;
 from x where (case x of 0 => true | n => n >= 5 andalso n <= 8);
 > val it = [0,5,6,7,8] : int bag
 
-(* TODO: Variable patterns with literal exclusion not yet supported
+(* TODO: Exclusion constraints need to become post-generation filters
 (*) Case where explicit false shadows later variable match
 from x where (case x of 6 => false | n => n >= 5 andalso n <= 8);
 > val it = [5,7,8] : int bag
+*)
 
+(* TODO: Constructor patterns with variable payloads not yet supported
 (*) Case with constructor patterns - INL/INR (issue #341)
 from e where (case e of
     INL 0 => true
