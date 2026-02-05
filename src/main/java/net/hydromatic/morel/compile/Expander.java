@@ -145,8 +145,12 @@ public class Expander {
     // For example, for "exists v0 where parent(v0, x) andalso parent(v0, y)",
     // both the generator for x and the generator for y have v0 in their
     // patterns. We need v0 in allPats so the second generator can join on it.
+    // Use a Set to deduplicate generators (the same generator may be indexed
+    // under multiple patterns in generatorMap).
     final Map<Core.NamedPat, Integer> patternCounts = new HashMap<>();
-    for (Generator generator : generatorMap.values()) {
+    final Set<Generator> uniqueGenerators =
+        new HashSet<>(generatorMap.values());
+    for (Generator generator : uniqueGenerators) {
       for (Core.NamedPat p : generator.pat.expand()) {
         patternCounts.merge(p, 1, Integer::sum);
       }

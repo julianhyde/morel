@@ -1102,6 +1102,62 @@ end;
 >
 > val it : {x:int, y:int} bag
 
+(* Safety ------------------------------------------------------------
+ * A rule is safe if:
+ * 1. Each distinguished variable,
+ * 2. Each variable in an arithmetic subgoal, and
+ * 3. Each variable in a negated subgoal,
+ *
+ * also appears in a non-negated, relational sub-goal.
+ *
+ * Each of the following is unsafe and not allowed:
+ *
+ * 1. S(x) <- R(y)
+ * 2. S(x) <- R(y) AND NOT R(x)
+ * 3. S(x) <- R(y) AND x < y
+ *
+ * In each case, an infinite number of values of x can satisfy the rule, even
+ * if R is a finite relation.
+ *
+ * If rules are safe, we can use the following evaluation approach:
+ * For each subgoal, consider all tuples that make the subgoal true.
+ * If a selection of tuples define a single value for each variable,
+ * then add the head to the result.
+ * Leads to finite search for P(x) <- Q(x), but P(x) <- Q(y) is problematic.
+ *)
+fun isR y = true;
+> val isR = fn : 'a -> bool
+(* TODO
+fun isS1 x = exists y where isR y;
+> val isS1 = fn : 'a -> bool
+*)
+
+(*) isS1 is unsafe
+(* TODO should throw unsafe
+from x where isS1 x;
+> Unsafe
+*)
+
+(*
+fun isS2 x = exists (from y where isR y andalso not (isR x));
+*)
+
+(*) isS2 is unsafe
+(* TODO should throw unsafe
+from x where isS2 x;
+> Unsafe
+*)
+
+(*
+fun isS3 x = exists (from y where isR y andalso x < y);
+*)
+
+(*) isS3 is unsafe
+(* TODO should throw unsafe
+from x where isS3 x;
+> Unsafe
+*)
+
 (* Joe's bar --------------------------------------------------------
  *
  * See http://infolab.stanford.edu/~ullman/fcdb/aut07/slides/dlog.pdf.
@@ -1177,10 +1233,8 @@ fun happy patron =
 (* Find happy patrons. Shaggy is happy because the Squirrel and Cask sell
    Amber; Velma is happy because Cask sells Stout. Fred and Scooby are not
    happy. *)
-(* TODO: Make predicate inversion work
 from p where happy p;
-> val it = ["shaggy", "velma"] : string list
-*)
+> val it = ["shaggy","velma"] : string bag
 
 (* A beer is considered cheap if there are at least two bars that sell it for
  * under $3.
@@ -1204,61 +1258,6 @@ from b where cheap b;
 > val it = ["pale"] : string list
 *)
 
-(* A rule is safe if:
- * 1. Each distinguished variable,
- * 2. Each variable in an arithmetic subgoal, and
- * 3. Each variable in a negated subgoal,
- *
- * also appears in a non-negated, relational sub-goal.
- *
- * Each of the following is unsafe and not allowed:
- *
- * 1. S(x) <- R(y)
- * 2. S(x) <- R(y) AND NOT R(x)
- * 3. S(x) <- R(y) AND x < y
- *
- * In each case, an infinite number of values of x can satisfy the rule, even
- * if R is a finite relation.
- *
- * If rules are safe, we can use the following evaluation approach:
- * For each subgoal, consider all tuples that make the subgoal true.
- * If a selection of tuples define a single value for each variable,
- * then add the head to the result.
- * Leads to finite search for P(x) <- Q(x), but P(x) <- Q(y) is problematic.
- *)
-fun isR y = true;
-> val isR = fn : 'a -> bool
-(* TODO
-fun isS1 x = exists y where isR y;
-> val isS1 = fn : 'a -> bool
-*)
-
-(*) isS1 is unsafe
-(* TODO should throw unsafe
-from x where isS1 x;
-> Unsafe
-*)
-
-(*
-fun isS2 x = exists (from y where isR y andalso not (isR x));
-*)
-
-(*) isS2 is unsafe
-(* TODO should throw unsafe
-from x where isS2 x;
-> Unsafe
-*)
-
-(*
-fun isS3 x = exists (from y where isR y andalso x < y);
-*)
-
-(*) isS3 is unsafe
-(* TODO should throw unsafe
-from x where isS3 x;
-> Unsafe
-*)
-
 (* Example Datalog Program. Using EDB Sells (bar, beer, price) and
  * Likes (patron, beer), find the patrons who like beers Joe doesn't sell.
  *
@@ -1275,7 +1274,7 @@ from p
   where (exists b where likes (p, b) andalso not (caskSells b));
 > val it = ["shaggy","fred"] : string bag
 
-(* Cousin
+(* Family relationships ----------------------------------------------
  *
  * Datalog:
  *   Sib(x,y) <- Par(x,p) AND Par(y,p) AND x<>y
@@ -1296,21 +1295,17 @@ fun par (x, p) =
     ("g", "k"),
     ("h", "i")];
 > val par = fn : string * string -> bool
-(* TODO
-fun sib (x, y) = exists (
-  from p where par (x, p) andalso par (y, p) andalso x <> y);
+fun sib (x, y) =
+  exists p where par (x, p) andalso par (y, p) andalso x <> y;
 > val sib = fn : string * string -> bool
-*)
 
-(* TODO
 fun cousin (x, y) = sib (x, y)
-  orelse exists (
-    from xp, yp
+  orelse
+    exists xp, yp
       where par (x, xp)
       andalso par (y, yp)
-      andalso cousin (xp, yp));
+      andalso cousin (xp, yp);
 > val cousin = fn : string * string -> bool
-*)
 
 (*
  Round 1: (b, c), (c, e), (g, h), (j, k)
@@ -1319,12 +1314,12 @@ fun cousin (x, y) = sib (x, y)
  Round 4: add (i, j), (k, k)
  *)
 (* TODO
-enumerate sib;
+from p where sib p;
 > val it = [("b","c")] : (string * string) list
 *)
 
-(*
-enumerate cousin;
+(* TODO
+from p where cousin p;
 > val it = [("b","c"), ("c","e"),("g","h"),("j","k"),("f","g"),("f","h"),("g","i"),("i","k"),("i","j"),("k","k")] : (string * string) list
 *)
 
@@ -1333,18 +1328,16 @@ enumerate cousin;
  * The graph is not stratified: there is a path with an infinite number
  * of 'not' as we traverse the cycle cousin - s2 - cousin,
  * where s2 is the expression 'notExists (...)'. *)
-(* TODO
 fun cousin2 (x, y) = sib (x, y)
-  andalso notExists (
-    from (xp, yp)
+  andalso not (
+    exists xp, yp
       where par (x, xp)
       andalso par (y, yp)
       andalso cousin2 (xp, yp));
 > val cousin2 = fn : string * string -> bool
-*)
 
 (* TODO
-enumerate cousin2;
+from p where cousin2 p;
 > Error: non-stratified
 *)
 

@@ -223,17 +223,29 @@ class Generators {
     final Set<Core.NamedPat> coveredByGenerator =
         new HashSet<>(dependentGen.pat.expand());
 
-    // Add inner scans first (only if not already covered by the generator)
+    // Add inner scans first (only if not already covered by the generator).
+    // For multi-pattern scans (e.g., {bar, beer, price} in extent), we must
+    // decompose and add separate extent scans only for uncovered patterns,
+    // to avoid duplicating patterns that are already covered.
     for (Core.Scan scan : innerScans) {
-      boolean scanCovered = true;
-      for (Core.NamedPat scanPat : scan.pat.expand()) {
-        if (!coveredByGenerator.contains(scanPat)) {
-          scanCovered = false;
-          break;
+      final List<Core.NamedPat> scanPats = scan.pat.expand();
+      if (scanPats.size() == 1) {
+        // Single-pattern scan: add if not covered
+        if (!coveredByGenerator.contains(scanPats.get(0))) {
+          fromBuilder.scan(scan.pat, scan.exp);
         }
-      }
-      if (!scanCovered) {
-        fromBuilder.scan(scan.pat, scan.exp);
+      } else {
+        // Multi-pattern scan: add separate extent scans for uncovered patterns
+        for (Core.NamedPat scanPat : scanPats) {
+          if (!coveredByGenerator.contains(scanPat)) {
+            final Core.Exp extent =
+                core.extent(
+                    typeSystem,
+                    scanPat.type,
+                    ImmutableRangeSet.of(Range.all()));
+            fromBuilder.scan(scanPat, extent);
+          }
+        }
       }
     }
 
