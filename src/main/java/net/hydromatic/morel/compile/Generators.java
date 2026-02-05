@@ -26,8 +26,10 @@ import static net.hydromatic.morel.compile.FreeFinder.freePats;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
+import com.google.common.collect.Range;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -43,6 +45,8 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
@@ -378,6 +382,22 @@ class Generators {
         final Core.Case caseExp = (Core.Case) constraint;
         if (caseExp.matchList.size() == 1) {
           final Core.Match match = caseExp.matchList.get(0);
+
+          // Step 0a: Handle constructor patterns (CON_PAT and CON0_PAT)
+          // For "case e of INL n => body", generate values for n, wrap with INL
+          if (match.pat.op == Op.CON_PAT) {
+            if (maybeConPat(cache, goalPat, ordered, match)) {
+              return true;
+            }
+            continue;
+          }
+          if (match.pat.op == Op.CON0_PAT) {
+            if (maybeCon0Pat(cache, goalPat, ordered, match)) {
+              return true;
+            }
+            continue;
+          }
+
           final Core.Exp inlinedBody =
               substituteArgs(
                   cache.typeSystem,
@@ -1862,15 +1882,6 @@ class Generators {
         continue;
       }
 
-      // Skip synthetic single-arm cases (pattern + wildcard returning false)
-      if (caseExp.matchList.size() == 2) {
-        final Core.Match lastMatch = caseExp.matchList.get(1);
-        if (lastMatch.pat.op == Op.WILDCARD_PAT
-            && lastMatch.exp.isBoolLiteral(false)) {
-          continue;
-        }
-      }
-
       // Collect literal values from arms that return false for exclusion
       final List<Core.Exp> excludeValues = new ArrayList<>();
 
@@ -2011,6 +2022,124 @@ class Generators {
       default:
         return null;
     }
+  }
+
+  /**
+   * Handles a constructor pattern with a payload (CON_PAT).
+   *
+   * <p>For a pattern like {@code INL n => n >= 5 andalso n <= 8}, this method:
+   *
+   * <ol>
+   *   <li>Recursively generates values for the inner pattern {@code n}
+   *   <li>Wraps each generated value with the constructor {@code INL}
+   * </ol>
+   *
+   * @param cache The generator cache
+   * @param goalPat The pattern we're generating values for (e.g., {@code e})
+   * @param ordered Whether to generate a list (true) or bag (false)
+   * @param match The case arm with a CON_PAT pattern
+   * @return true if a generator was created, false otherwise
+   */
+  private static boolean maybeConPat(
+      Cache cache, Core.Pat goalPat, boolean ordered, Core.Match match) {
+    final TypeSystem ts = cache.typeSystem;
+    final Core.ConPat conPat = (Core.ConPat) match.pat;
+    final Core.Pat innerPat = conPat.pat;
+    final Core.Exp body = match.exp;
+
+    // Build the constructor application: CON(value)
+    // The constructor type is: innerType -> dataType
+    final DataType dataType = (DataType) conPat.type;
+    final Type innerType = innerPat.type;
+    final FnType conFnType = ts.fnType(innerType, dataType);
+    final Core.IdPat conIdPat = core.idPat(conFnType, conPat.tyCon, 0);
+    final Core.Id conId = core.id(conIdPat);
+
+    // Handle literal patterns: INL 0 => true
+    // For literals, generate a single value: CON(literal)
+    if (innerPat instanceof Core.LiteralPat) {
+      final Core.LiteralPat literalPat = (Core.LiteralPat) innerPat;
+      // Body must be true for a literal pattern to generate a value
+      if (!body.isBoolLiteral(true)) {
+        return false;
+      }
+      // Convert the literal pattern to a literal expression
+      final Core.Exp literalExp = patternToLiteral(literalPat);
+      if (literalExp == null) {
+        return false;
+      }
+      // Create CON(literal)
+      final Core.Exp conLiteralExp =
+          core.apply(Pos.ZERO, dataType, conId, literalExp);
+      // Create a point generator for this single value
+      PointGenerator.create(cache, goalPat, ordered, conLiteralExp);
+      return true;
+    }
+
+    // Handle NamedPat (IdPat or TuplePat): INL n => constraint
+    if (!(innerPat instanceof Core.NamedPat)) {
+      return false;
+    }
+    final Core.NamedPat innerNamedPat = (Core.NamedPat) innerPat;
+
+    // Create the extent expression for the inner type.
+    // This allows iterating over all values of finite types like bool.
+    final Core.Exp extentExp =
+        core.extent(ts, innerPat.type, ImmutableRangeSet.of(Range.all()));
+
+    // Create the yield expression: CON(innerPat)
+    final Core.Exp innerPatRef = core.id(innerNamedPat);
+    final Core.Exp yieldExp =
+        core.apply(Pos.ZERO, dataType, conId, innerPatRef);
+
+    // Build wrapper: from innerPat in extent where body yield CON(innerPat)
+    // The body (constraint) filters the extent values, then wraps with the
+    // constructor.
+    final FromBuilder fb = core.fromBuilder(ts);
+    fb.scan(innerNamedPat, extentExp);
+    if (!body.isBoolLiteral(true)) {
+      fb.where(body);
+    }
+    fb.yield_(yieldExp);
+    final Core.Exp wrapperExp = fb.build();
+
+    // Create a generator for goalPat
+    CollectionGenerator.create(cache, ordered, goalPat, wrapperExp);
+    return true;
+  }
+
+  /**
+   * Handles a zero-argument constructor pattern (CON0_PAT).
+   *
+   * <p>For a pattern like {@code NONE => true}, this generates a single value
+   * (the constructor constant) for the goal pattern.
+   *
+   * @param cache The generator cache
+   * @param goalPat The pattern we're generating values for
+   * @param ordered Whether to generate a list (true) or bag (false)
+   * @param match The case arm with a CON0_PAT pattern
+   * @return true if a generator was created, false otherwise
+   */
+  private static boolean maybeCon0Pat(
+      Cache cache, Core.Pat goalPat, boolean ordered, Core.Match match) {
+    final TypeSystem ts = cache.typeSystem;
+    final Core.Con0Pat con0Pat = (Core.Con0Pat) match.pat;
+    final Core.Exp body = match.exp;
+
+    // Only handle if body is true (unconditional)
+    if (!body.isBoolLiteral(true)) {
+      return false;
+    }
+
+    // Create the constructor constant value
+    // For Con0Pat, the value is just the constructor name wrapped in a list
+    final DataType dataType = (DataType) con0Pat.type;
+    final Core.IdPat conIdPat = core.idPat(dataType, con0Pat.tyCon, 0);
+    final Core.Id conValue = core.id(conIdPat);
+
+    // Create a point generator for this single value
+    PointGenerator.create(cache, goalPat, ordered, conValue);
+    return true;
   }
 
   static boolean maybeUnion(

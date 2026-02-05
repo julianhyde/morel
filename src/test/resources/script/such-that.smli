@@ -164,8 +164,22 @@ from x where (case x of 6 => false | n => n >= 5 andalso n <= 8);
 > val it = [5,7,8] : int bag
 *)
 
-(* TODO: Constructor patterns with variable payloads not yet supported
+(*) Simple constructor pattern test - single arm with range constraint
+from e where (case e of INL n => n >= 5 andalso n <= 8 | _ => false);
+> val it = [INL 5,INL 6,INL 7,INL 8] : (int,'a) either bag
+
+(*) Constructor pattern with boolean payload - "not b" inverts to "b = false"
+from e where (case e of INR b => not b | _ => false);
+> val it = [INR false] : ('a,bool) either bag
+
+(*) Multiple constructor arms combined with orelse (via maybeUnion)
+from e where (case e of
+    INL n => n >= 5 andalso n <= 8
+  | INR b => not b);
+> val it = [INL 5,INL 6,INL 7,INL 8,INR false] : (int,bool) either bag
+
 (*) Case with constructor patterns - INL/INR (issue #341)
+(* Multiple arms with literal patterns, variable patterns, and exclusions *)
 from e where (case e of
     INL 0 => true
   | INL 6 => false
@@ -173,8 +187,7 @@ from e where (case e of
   | INL 7 => true
   | INL 100 => true
   | INL n => n >= 5 andalso n <= 8);
-> val it = [INL 0,INR false,INL 7,INL 100,INL 5,INL 8] : (int, bool) either bag
-*)
+> val it = [INL 0,INR false,INL 7,INL 100,INL 5,INL 8] : (int,bool) either bag
 
 (* Predicate cannot be inverted.
  *
@@ -678,7 +691,7 @@ in
     where isEmp50 e
     yield e.ename
 end;
-> java.lang.IllegalArgumentException: pattern e_9 is not grounded
+> java.lang.IllegalArgumentException: pattern e_13 is not grounded
 
 (*) A function with external extent.
 fun hasJob (e: typeof (Bag.hd scott.emps),
