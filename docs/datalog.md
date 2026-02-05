@@ -45,7 +45,8 @@ edge(3, 4).
 .output edge";
 
 Datalog.execute program;
-<i>val it = {edge=[{x=1,y=2},{x=2,y=3},{x=3,y=4}]}
+<i>
+val it = {edge=[{x=1,y=2},{x=2,y=3},{x=3,y=4}]}
   : {edge:{x:int, y:int} list} variant</i>
 </pre>
 
@@ -67,7 +68,8 @@ path(X, Z) :- path(X, Y), edge(Y, Z).
 .output path";
 
 Datalog.execute tc;
-<i>val it = {path=[{x=1,y=2},{x=1,y=3},{x=1,y=4},{x=2,y=3},{x=2,y=4},{x=3,y=4}]}
+<i>
+val it = {path=[{x=1,y=2},{x=1,y=3},{x=1,y=4},{x=2,y=3},{x=2,y=4},{x=3,y=4}]}
   : {path:{x:int, y:int} list} variant</i>
 </pre>
 
@@ -270,7 +272,8 @@ Datalog.execute : string -> 'a variant
 <b>val</b> result = Datalog.execute ".decl num(n:int)
 num(1). num(2). num(3).
 .output num";
-<i>val result = {num=[1,2,3]} : {num:int list} variant</i>
+<i>
+val result = {num=[1,2,3]} : {num:int list} variant</i>
 </pre>
 
 ### Datalog.validate
@@ -287,7 +290,8 @@ Datalog.validate : string -> string
 Datalog.validate ".decl edge(x:int, y:int)
 edge(1, 2).
 .output edge";
-<i>val it = "{edge:{x:int, y:int} list}" : string</i>
+<i>
+val it = "{edge:{x:int, y:int} list}" : string</i>
 </pre>
 
 **Return values**:
@@ -312,7 +316,8 @@ edge(1,2). edge(2,3).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-<i>val it = SOME "let
+<i>
+val it = SOME "let
   val edge = [(1, 2), (2, 3)]
   val path =
     Relational.iterate edge
@@ -378,7 +383,8 @@ Corresponds to this native Morel:
 <b>in</b>
   <b>from</b> x, y <b>where</b> path (x, y)
 <b>end</b>;
-<i>val it = [(1,2),(2,3),(1,3)] : (int * int) list</i>
+<i>
+val it = [(1,2),(2,3),(1,3)] : (int * int) list</i>
 </pre>
 
 The key points:
@@ -414,7 +420,8 @@ In native Morel:
 <b>in</b>
   <b>from</b> x <b>where</b> self_loop x
 <b>end</b>;
-<i>val it = [1, 4] : int list</i>
+<i>
+val it = [1, 4] : int list</i>
 </pre>
 
 ### Mixing Paradigms
@@ -444,7 +451,8 @@ freely mix deductive, functional, and relational code:
   <b>from</b> x, y <b>where</b> reachable (x, y)
     <b>yield</b> formatPair (x, y)
 <b>end</b>;
-<i>val it = ["1 -> 2","1 -> 3","1 -> 4","2 -> 3","2 -> 4","3 -> 4"]
+<i>
+val it = ["1 -> 2","1 -> 3","1 -> 4","2 -> 3","2 -> 4","3 -> 4"]
   : string list</i>
 </pre>
 
@@ -521,7 +529,8 @@ Datalog performs type checking on facts and rules:
 <pre>
 Datalog.validate ".decl edge(x:int, y:int)
 edge(\"hello\", 2).";
-<i>val it = "Compilation error: Type mismatch in fact edge(...):
+<i>
+val it = "Compilation error: Type mismatch in fact edge(...):
   expected int, got string for parameter x" : string</i>
 </pre>
 
@@ -530,7 +539,8 @@ edge(\"hello\", 2).";
 <pre>
 Datalog.validate ".decl edge(x:int, y:int)
 edge(1, 2, 3).";
-<i>val it = "Compilation error: Atom edge/3 does not match
+<i>
+val it = "Compilation error: Atom edge/3 does not match
   declaration edge/2" : string</i>
 </pre>
 
@@ -539,7 +549,8 @@ edge(1, 2, 3).";
 <pre>
 Datalog.validate ".decl edge(x:int, y:int)
 path(1, 2).";
-<i>val it = "Compilation error: Relation 'path' used in fact
+<i>
+val it = "Compilation error: Relation 'path' used in fact
   but not declared" : string</i>
 </pre>
 
@@ -552,7 +563,8 @@ Datalog.execute ".decl fact(n:int, value:int)
 fact(0, 1).
 fact(N + 1, value * (N + 1)) :- fact(N, value), N < 10.
 .output fact";
-<i>val it = {fact=[{n=0,value=1},{n=1,value=1},{n=2,value=2},
+<i>
+val it = {fact=[{n=0,value=1},{n=1,value=1},{n=2,value=2},
   {n=3,value=6},{n=4,value=24},...]}
   : {fact:{n:int, value:int} list} variant</i>
 </pre>
@@ -576,7 +588,8 @@ descendant(P, D) :- ancestor(D, P).
 .output descendant";
 
 Datalog.execute family;
-<i>val it = {ancestor=[...], descendant=[...]}
+<i>
+val it = {ancestor=[...], descendant=[...]}
   : {ancestor:{a:string, d:string} list,
      descendant:{d:string, p:string} list} variant</i>
 </pre>
@@ -596,7 +609,8 @@ sibling(X, Y) :- parent(P, X), parent(P, Y), X != Y.
 .output sibling";
 
 Datalog.execute siblings;
-<i>val it = {sibling=[{x="Bob",y="Carol"},{x="Carol",y="Bob"}]}
+<i>
+val it = {sibling=[{x="Bob",y="Carol"},{x="Carol",y="Bob"}]}
   : {sibling:{x:string, y:string} list} variant</i>
 </pre>
 
@@ -614,7 +628,8 @@ result(X) :- all(X), !excluded(X).
 .output result";
 
 Datalog.execute diff;
-<i>val it = {result=[1,3]} : {result:int list} variant</i>
+<i>
+val it = {result=[1,3]} : {result:int list} variant</i>
 </pre>
 
 ### Loading External Data
@@ -625,7 +640,8 @@ Datalog.execute ".decl adj(state:string, adjacent:string)
 .input adj \"data/map/adjacent-states.csv\"
 result(state) :- adj(state, \"FL\"), adj(state, \"TN\").
 .output result";
-<i>val it = {result=["GA"]} : {result:string list} variant</i>
+<i>
+val it = {result=["GA"]} : {result:string list} variant</i>
 </pre>
 
 ### Odd Cycle Detection
@@ -644,7 +660,8 @@ odd_path(X, Y) :- odd_path(X, Z), edge(Z, U), edge(U, Y).
 exists_odd_cycle() :- odd_path(X, X).
 
 .output exists_odd_cycle";
-<i>val it = {exists_odd_cycle=[()]} : {exists_odd_cycle:unit list} variant</i>
+<i>
+val it = {exists_odd_cycle=[()]} : {exists_odd_cycle:unit list} variant</i>
 </pre>
 
 ## Best Practices
@@ -668,7 +685,8 @@ Use `Datalog.validate` to check for errors before execution:
 <pre>
 <b>val</b> prog = "...";
 <b>val</b> typeResult = Datalog.validate prog;
-<i>val typeResult = "{...}" : string</i>
+<i>
+val typeResult = "{...}" : string</i>
 </pre>
 
 Check if `typeResult` starts with `"Error:"` or `"Parse error:"`.
