@@ -151,10 +151,7 @@ public class DatalogAnalyzer {
   }
 
   private static String normalizeType(String type) {
-    // Both "string" and "symbol" map to string in Morel
-    if ("symbol".equals(type) || "string".equals(type)) {
-      return "string";
-    }
+    // Normalize type names for comparison
     return type;
   }
 

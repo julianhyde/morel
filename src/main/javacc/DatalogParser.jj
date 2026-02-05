@@ -77,9 +77,8 @@ TOKEN :
   < DECL: ".decl" >
 | < INPUT: ".input" >
 | < OUTPUT: ".output" >
-| < NUMBER_TYPE: "number" >
+| < INT_TYPE: "int" >
 | < STRING_TYPE: "string" >
-| < SYMBOL_TYPE: "symbol" >
 | < LPAREN: "(" >
 | < RPAREN: ")" >
 | < COMMA: "," >
@@ -179,9 +178,8 @@ String datalogType() :
 }
 {
   (
-    t = <NUMBER_TYPE> { return t.image; }
+    t = <INT_TYPE> { return t.image; }
   | t = <STRING_TYPE> { return t.image; }
-  | t = <SYMBOL_TYPE> { return t.image; }
   )
 }
 
@@ -359,7 +357,7 @@ Term primaryTerm() :
 | t = <INTEGER_LITERAL>
   {
     intValue = Integer.parseInt(t.image);
-    return new Constant(intValue, "number");
+    return new Constant(intValue, "int");
   }
 | t = <STRING_LITERAL>
   {

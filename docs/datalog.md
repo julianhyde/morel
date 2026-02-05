@@ -38,7 +38,7 @@ Datalog extends Morel with:
 ### Basic Example
 
 ```sml
-val program = ".decl edge(x:number, y:number)
+val program = ".decl edge(x:int, y:int)
 edge(1, 2).
 edge(2, 3).
 edge(3, 4).
@@ -52,8 +52,8 @@ Datalog.execute program;
 ### Transitive Closure
 
 ```sml
-val tc = ".decl edge(x:number, y:number)
-.decl path(x:number, y:number)
+val tc = ".decl edge(x:int, y:int)
+.decl path(x:int, y:int)
 edge(1, 2).
 edge(2, 3).
 edge(3, 4).
@@ -72,6 +72,13 @@ Datalog.execute tc;
 
 ## Syntax
 
+The syntax is based on [Souffle](https://souffle-lang.github.io/) with the
+following differences:
+- Souffle's `number` type is `int`
+- Souffle's `symbol` type is `string`
+- Souffle's `.input` directive has one argument; Morel's has an optional
+  second argument for the file name
+
 ### Declarations
 
 Relations must be declared before use:
@@ -81,15 +88,13 @@ Relations must be declared before use:
 ```
 
 Supported types:
-- `number` - integers (mapped to Morel `int`)
-- `string` - quoted strings (mapped to Morel `string`)
-- `symbol` - unquoted identifiers (mapped to Morel `string`)
+- `int` - integers (mapped to Morel `int`)
+- `string` - strings (mapped to Morel `string`)
 
 Examples:
 ```datalog
-.decl edge(x:number, y:number)
-.decl person(name:string, age:number)
-.decl color(c:symbol)
+.decl edge(x:int, y:int)
+.decl person(name:string, age:int)
 ```
 
 ### Facts
@@ -114,7 +119,7 @@ Components:
 - **Head**: Single atom defining what is derived
 - **Body**: Comma-separated atoms (conjunction)
 - **Variables**: Must start with uppercase letter
-- **Constants**: Numbers, quoted strings, or lowercase symbols
+- **Constants**: Numbers or quoted strings
 
 Example:
 ```datalog
@@ -160,8 +165,8 @@ q(X) :- edge(X, Y), !p(X).
 Rules can include comparisons between variables and constants:
 
 ```datalog
-.decl num(n:number)
-.decl small(n:number)
+.decl num(n:int)
+.decl small(n:int)
 num(1). num(5). num(10).
 small(X) :- num(X), X < 7.       (* less than *)
 ```
@@ -191,7 +196,7 @@ sibling(X, Y) :- parent(P, X), parent(P, Y), X < Y.
 Head atoms can contain arithmetic expressions:
 
 ```datalog
-.decl fact(n:number, value:number)
+.decl fact(n:int, value:int)
 fact(0, 1).
 fact(N + 1, value * (N + 1)) :- fact(N, value), N < 10.
 ```
@@ -211,7 +216,7 @@ body atoms.
 Load facts from CSV files:
 
 ```datalog
-.decl dept(deptno:number, dname:string, loc:string)
+.decl dept(deptno:int, dname:string, loc:string)
 .input dept "data/scott/depts.csv"
 .output dept
 ```
@@ -240,7 +245,7 @@ Multiple outputs are supported:
 
 // This is a line comment
 
-.decl edge(x:number, y:number)  (* Inline comment *)
+.decl edge(x:int, y:int)  (* Inline comment *)
 ```
 
 ## API
@@ -260,7 +265,7 @@ Datalog.execute : string -> 'a variant
 
 **Example**:
 ```sml
-val result = Datalog.execute ".decl num(n:number)
+val result = Datalog.execute ".decl num(n:int)
 num(1). num(2). num(3).
 .output num";
 (* result = {num=[1,2,3]} : {num:int list} variant *)
@@ -276,7 +281,7 @@ Datalog.validate : string -> string
 
 **Example**:
 ```sml
-Datalog.validate ".decl edge(x:number, y:number)
+Datalog.validate ".decl edge(x:int, y:int)
 edge(1, 2).
 .output edge";
 (* Returns: "{edge:{x:int, y:int} list}" *)
@@ -297,8 +302,8 @@ Datalog.translate : string -> string option
 
 **Example**:
 ```sml
-Datalog.translate ".decl edge(x:number, y:number)
-.decl path(x:number, y:number)
+Datalog.translate ".decl edge(x:int, y:int)
+.decl path(x:int, y:int)
 edge(1,2). edge(2,3).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
@@ -348,8 +353,8 @@ A Datalog program translates naturally to Morel:
 The Datalog transitive closure program:
 
 ```datalog
-.decl edge(x:number, y:number)
-.decl path(x:number, y:number)
+.decl edge(x:int, y:int)
+.decl path(x:int, y:int)
 edge(1, 2).
 edge(2, 3).
 path(X, Y) :- edge(X, Y).
@@ -387,8 +392,8 @@ The key points:
 Find vertices with self-loops:
 
 ```datalog
-.decl edge(x:number, y:number)
-.decl self_loop(x:number)
+.decl edge(x:int, y:int)
+.decl self_loop(x:int)
 edge(1, 1). edge(2, 3). edge(4, 4).
 self_loop(X) :- edge(X, Y), X = Y.
 .output self_loop
@@ -508,7 +513,7 @@ Datalog performs type checking on facts and rules:
 ### Type Mismatches in Facts
 
 ```sml
-Datalog.validate ".decl edge(x:number, y:number)
+Datalog.validate ".decl edge(x:int, y:int)
 edge(\"hello\", 2).";
 (* Returns: "Compilation error: Type mismatch in fact edge(...):
              expected number, got string for parameter x" *)
@@ -517,7 +522,7 @@ edge(\"hello\", 2).";
 ### Arity Mismatches
 
 ```sml
-Datalog.validate ".decl edge(x:number, y:number)
+Datalog.validate ".decl edge(x:int, y:int)
 edge(1, 2, 3).";
 (* Returns: "Compilation error: Atom edge/3 does not match
              declaration edge/2" *)
@@ -526,7 +531,7 @@ edge(1, 2, 3).";
 ### Undeclared Relations
 
 ```sml
-Datalog.validate ".decl edge(x:number, y:number)
+Datalog.validate ".decl edge(x:int, y:int)
 path(1, 2).";
 (* Returns: "Compilation error: Relation 'path' used in fact
              but not declared" *)
@@ -537,7 +542,7 @@ path(1, 2).";
 ### Factorial
 
 ```sml
-Datalog.execute ".decl fact(n:number, value:number)
+Datalog.execute ".decl fact(n:int, value:int)
 fact(0, 1).
 fact(N + 1, value * (N + 1)) :- fact(N, value), N < 10.
 .output fact";
@@ -588,9 +593,9 @@ Datalog.execute siblings;
 ### Set Difference with Negation
 
 ```sml
-val diff = ".decl all(x:number)
-.decl excluded(x:number)
-.decl result(x:number)
+val diff = ".decl all(x:int)
+.decl excluded(x:int)
+.decl result(x:int)
 
 all(1). all(2). all(3). all(4).
 excluded(2). excluded(4).
@@ -616,8 +621,8 @@ result(state) :- adj(state, \"FL\"), adj(state, \"TN\").
 ### Odd Cycle Detection
 
 ```sml
-Datalog.execute ".decl edge(x:symbol, y:symbol)
-.decl odd_path(x:symbol, y:symbol)
+Datalog.execute ".decl edge(x:string, y:string)
+.decl odd_path(x:string, y:string)
 .decl exists_odd_cycle()
 
 edge(\"a\", \"b\").
@@ -638,7 +643,7 @@ exists_odd_cycle() :- odd_path(X, X).
 
 - **Relations**: lowercase with underscores (`edge`, `parent_of`)
 - **Variables**: uppercase letters (`X`, `Y`, `Person`)
-- **Constants**: numbers, quoted strings, or lowercase symbols
+- **Constants**: numbers or quoted strings
 
 ### Writing Efficient Rules
 

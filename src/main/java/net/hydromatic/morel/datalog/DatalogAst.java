@@ -365,7 +365,7 @@ public class DatalogAst {
   /** A constant term. */
   public static class Constant extends Term {
     public final Object value;
-    public final String type; // "number", "string", "symbol"
+    public final String type; // "int", "string"
 
     public Constant(Object value, String type) {
       this.value = requireNonNull(value);

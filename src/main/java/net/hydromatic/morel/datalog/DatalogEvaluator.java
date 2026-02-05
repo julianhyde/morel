@@ -290,7 +290,7 @@ public class DatalogEvaluator {
           String type = decl.params.get(i).type;
           String datalogType;
           if (value instanceof Integer) {
-            datalogType = "number";
+            datalogType = "int";
           } else {
             datalogType = "string";
           }

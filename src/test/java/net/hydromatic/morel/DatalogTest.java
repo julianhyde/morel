@@ -50,7 +50,7 @@ public class DatalogTest {
 
   @Test
   void testParseDeclaration() throws ParseException {
-    String input = ".decl edge(x:number, y:number)";
+    String input = ".decl edge(x:int, y:int)";
     Program program = DatalogParserImpl.parse(input);
 
     assertThat(program.statements.size(), is(1));
@@ -60,15 +60,15 @@ public class DatalogTest {
     assertThat(decl.name, is("edge"));
     assertThat(decl.arity(), is(2));
     assertThat(decl.params.get(0).name, is("x"));
-    assertThat(decl.params.get(0).type, is("number"));
+    assertThat(decl.params.get(0).type, is("int"));
     assertThat(decl.params.get(1).name, is("y"));
-    assertThat(decl.params.get(1).type, is("number"));
+    assertThat(decl.params.get(1).type, is("int"));
   }
 
   @Test
   void testParseFact() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n" //
+        ".decl edge(x:int, y:int)\n" //
             + "edge(1,2).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -81,14 +81,14 @@ public class DatalogTest {
     assertThat(fact.atom.terms.get(0) instanceof Constant, is(true));
     Constant c0 = (Constant) fact.atom.terms.get(0);
     assertThat(c0.value, is(1)); // Parser returns Integer, not Long
-    assertThat(c0.type, is("number"));
+    assertThat(c0.type, is("int"));
   }
 
   @Test
   void testParseRule() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n"
-            + ".decl path(x:number, y:number)\n"
+        ".decl edge(x:int, y:int)\n"
+            + ".decl path(x:int, y:int)\n"
             + "path(X,Y) :- edge(X,Y).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -108,8 +108,8 @@ public class DatalogTest {
   @Test
   void testParseNegation() throws ParseException {
     String input =
-        ".decl p(x:number)\n" //
-            + ".decl q(x:number)\n"
+        ".decl p(x:int)\n" //
+            + ".decl q(x:int)\n"
             + "p(X) :- !q(X).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -122,8 +122,8 @@ public class DatalogTest {
   @Test
   void testParseMultipleBodyAtoms() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n"
-            + ".decl path(x:number, y:number)\n"
+        ".decl edge(x:int, y:int)\n"
+            + ".decl path(x:int, y:int)\n"
             + "path(X,Z) :- edge(X,Y), edge(Y,Z).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -136,7 +136,7 @@ public class DatalogTest {
   @Test
   void testParseOutput() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n" //
+        ".decl edge(x:int, y:int)\n" //
             + ".output edge";
     Program program = DatalogParserImpl.parse(input);
 
@@ -153,13 +153,12 @@ public class DatalogTest {
 
   @Test
   void testParseMultipleTypes() throws ParseException {
-    String input = ".decl person(name:string, age:number, dept:symbol)";
+    String input = ".decl person(name:string, age:int)";
     Program program = DatalogParserImpl.parse(input);
 
     Declaration decl = (Declaration) program.statements.get(0);
     assertThat(decl.params.get(0).type, is("string"));
-    assertThat(decl.params.get(1).type, is("number"));
-    assertThat(decl.params.get(2).type, is("symbol"));
+    assertThat(decl.params.get(1).type, is("int"));
   }
 
   @Test
@@ -176,14 +175,14 @@ public class DatalogTest {
   }
 
   @Test
-  void testParseSymbolConstant() throws ParseException {
+  void testParseLowercaseAsVariable() throws ParseException {
     String input =
-        ".decl color(c:symbol)\n" //
+        ".decl color(c:string)\n" //
             + "color(red).";
     Program program = DatalogParserImpl.parse(input);
 
     Fact fact = (Fact) program.statements.get(1);
-    // Parser currently treats lowercase identifiers as variables
+    // Parser treats lowercase identifiers as variables
     assertThat(fact.atom.terms.get(0) instanceof Variable, is(true));
     Variable v = (Variable) fact.atom.terms.get(0);
     assertThat(v.name, is("red"));
@@ -193,7 +192,7 @@ public class DatalogTest {
   void testParseComments() throws ParseException {
     String input =
         "// Line comment\n"
-            + ".decl edge(x:number, y:number)\n"
+            + ".decl edge(x:int, y:int)\n"
             + "/* Block comment */\n"
             + "edge(1,2)."; // Comments are handled by lexer
     Program program = DatalogParserImpl.parse(input);
@@ -204,8 +203,8 @@ public class DatalogTest {
   @Test
   void testAnalyzeValidProgram() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n"
-            + ".decl path(x:number, y:number)\n"
+        ".decl edge(x:int, y:int)\n"
+            + ".decl path(x:int, y:int)\n"
             + "edge(1,2).\n"
             + "path(X,Y) :- edge(X,Y).\n"
             + ".output path";
@@ -218,7 +217,7 @@ public class DatalogTest {
   @Test
   void testAnalyzeArityMismatchFact() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n" //
+        ".decl edge(x:int, y:int)\n" //
             + "edge(1,2,3).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -232,8 +231,8 @@ public class DatalogTest {
   @Test
   void testAnalyzeArityMismatchRuleHead() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n"
-            + ".decl path(x:number, y:number)\n"
+        ".decl edge(x:int, y:int)\n"
+            + ".decl path(x:int, y:int)\n"
             + "path(X,Y,Z) :- edge(X,Y).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -247,8 +246,8 @@ public class DatalogTest {
   @Test
   void testAnalyzeArityMismatchRuleBody() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n"
-            + ".decl path(x:number, y:number)\n"
+        ".decl edge(x:int, y:int)\n"
+            + ".decl path(x:int, y:int)\n"
             + "path(X,Y) :- edge(X).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -262,7 +261,7 @@ public class DatalogTest {
   @Test
   void testAnalyzeUndeclaredRelation() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n" //
+        ".decl edge(x:int, y:int)\n" //
             + "path(1,2).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -285,13 +284,13 @@ public class DatalogTest {
             DatalogException.class, () -> DatalogAnalyzer.analyze(program));
     assertThat(e.getMessage(), containsString("Type mismatch"));
     assertThat(e.getMessage(), containsString("string"));
-    assertThat(e.getMessage(), containsString("number"));
+    assertThat(e.getMessage(), containsString("int"));
   }
 
   @Test
   void testAnalyzeTypeMismatchString() throws ParseException {
     String input =
-        ".decl num(n:number)\n" //
+        ".decl num(n:int)\n" //
             + "num(\"hello\").";
     Program program = DatalogParserImpl.parse(input);
 
@@ -300,15 +299,15 @@ public class DatalogTest {
             DatalogException.class, () -> DatalogAnalyzer.analyze(program));
     String expected =
         "Type mismatch in fact num(...): "
-            + "expected number, got string for parameter n";
+            + "expected int, got string for parameter n";
     assertThat(e.getMessage(), hasToString(expected));
   }
 
   @Test
   void testAnalyzeUnsafeRuleHeadVariable() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n"
-            + ".decl path(x:number, y:number)\n"
+        ".decl edge(x:int, y:int)\n"
+            + ".decl path(x:int, y:int)\n"
             + "path(X,Y) :- edge(X,Z).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -322,8 +321,8 @@ public class DatalogTest {
   @Test
   void testAnalyzeUnsafeNegation() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n"
-            + ".decl path(x:number, y:number)\n"
+        ".decl edge(x:int, y:int)\n"
+            + ".decl path(x:int, y:int)\n"
             + "path(X,Y) :- edge(X,Z), !edge(Y,W).";
     Program program = DatalogParserImpl.parse(input);
 
@@ -337,8 +336,8 @@ public class DatalogTest {
   @Test
   void testAnalyzeStratificationValid() throws ParseException {
     String input =
-        ".decl edge(X:number, Y:number)\n"
-            + ".decl path(X:number, Y:number)\n"
+        ".decl edge(X:int, Y:int)\n"
+            + ".decl path(X:int, Y:int)\n"
             + "edge(1,2).\n"
             + "path(X,Y) :- edge(X,Y).\n"
             + "path(X,Z) :- path(X,Y), edge(Y,Z).";
@@ -351,9 +350,9 @@ public class DatalogTest {
   @Test
   void testAnalyzeStratificationNegationCycle() throws ParseException {
     String input =
-        ".decl edge(X:number, Y:number)\n"
-            + ".decl p(X:number)\n"
-            + ".decl q(X:number)\n"
+        ".decl edge(X:int, Y:int)\n"
+            + ".decl p(X:int)\n"
+            + ".decl q(X:int)\n"
             + "edge(1,2).\n"
             + "p(X) :- edge(X,Y), !q(X).\n"
             + "q(X) :- edge(X,Y), !p(X).";
@@ -370,8 +369,8 @@ public class DatalogTest {
   @Test
   void testAstProgramHelpers() throws ParseException {
     String input =
-        ".decl edge(x:number, y:number)\n"
-            + ".decl path(x:number, y:number)\n"
+        ".decl edge(x:int, y:int)\n"
+            + ".decl path(x:int, y:int)\n"
             + ".output edge\n"
             + ".output path";
     Program program = DatalogParserImpl.parse(input);
@@ -404,9 +403,9 @@ public class DatalogTest {
 
   @Test
   void testAstConstantEquality() {
-    Constant c1 = new Constant(42L, "number");
-    Constant c2 = new Constant(42L, "number");
-    Constant c3 = new Constant(43L, "number");
+    Constant c1 = new Constant(42L, "int");
+    Constant c2 = new Constant(42L, "int");
+    Constant c3 = new Constant(43L, "int");
     Constant c4 = new Constant(42L, "string");
 
     assertThat(c1.equals(c2), is(true));
@@ -418,12 +417,12 @@ public class DatalogTest {
   @Test
   void testAstToString() {
     // Test Param toString
-    Param param = new Param("x", "number");
-    assertThat(param, hasToString("x:number"));
+    Param param = new Param("x", "int");
+    assertThat(param, hasToString("x:int"));
 
     // Test Declaration toString
     List<Param> params =
-        ImmutableList.of(new Param("x", "number"), new Param("y", "number"));
+        ImmutableList.of(new Param("x", "int"), new Param("y", "int"));
     Declaration decl = new Declaration("edge", params);
     assertThat(decl.toString(), containsString(".decl edge"));
 
@@ -431,8 +430,8 @@ public class DatalogTest {
     Variable var = new Variable("X");
     assertThat(var, hasToString("X"));
 
-    // Test Constant toString - number
-    Constant numConst = new Constant(42L, "number");
+    // Test Constant toString - int
+    Constant numConst = new Constant(42L, "int");
     assertThat(numConst, hasToString("42"));
 
     // Test Constant toString - string
@@ -455,7 +454,7 @@ public class DatalogTest {
 
   @Test
   void testParseError() {
-    String input = ".decl edge(x:number"; // Missing closing paren
+    String input = ".decl edge(x:int"; // Missing closing paren
 
     assertThrows(ParseException.class, () -> DatalogParserImpl.parse(input));
   }
@@ -474,7 +473,7 @@ public class DatalogTest {
     // Test Datalog.validate integration with Morel - verify it compiles and has
     // correct type
     String program =
-        ".decl edge(x:number, y:number)\n" //
+        ".decl edge(x:int, y:int)\n" //
             + "edge(1,2).\n"
             + ".output edge\n";
     String ml = "Datalog.validate \"" + stringToString(program) + "\"";
@@ -485,7 +484,7 @@ public class DatalogTest {
   @Test
   void testExecuteThroughMorel() {
     String program =
-        ".decl edge(x:number, y:number)\n" //
+        ".decl edge(x:int, y:int)\n" //
             + "edge(1,2).\n"
             + ".output edge\n";
     String ml = "Datalog.execute \"" + stringToString(program) + "\"";

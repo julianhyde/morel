@@ -25,8 +25,8 @@ A recent commit adds support for Datalog to the Java implementation of
 Morel.  You can now parse, validate and execute programs in Datalog.
 
 ```sml
-Datalog.execute ".decl edge(x:number, y:number)
-.decl path(x:number, y:number)
+Datalog.execute ".decl edge(x:int, y:int)
+.decl path(x:int, y:int)
 edge(1,2).
 edge(2,3).
 path(X,Y) :- edge(X,Y).
@@ -104,8 +104,8 @@ equivalent Morel program.
 
 Datalog:
 ```
-.decl edge(x:number, y:number)
-.decl path(x:number, y:number)
+.decl edge(x:int, y:int)
+.decl path(x:int, y:int)
 edge(1,2).
 edge(2,3).
 path(X,Y) :- edge(X,Y).

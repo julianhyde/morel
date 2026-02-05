@@ -60,6 +60,19 @@
  *
  * <h2>Supported Syntax</h2>
  *
+ * <p>The syntax is based on <a
+ * href="https://souffle-lang.github.io/">Souffle</a> with the following
+ * differences:
+ *
+ * <ul>
+ *   <li>Souffle's {@code number} type is {@code int}
+ *   <li>Souffle's {@code symbol} type is {@code string}
+ *   <li>Souffle's {@code .input} directive has one argument; Morel's has an
+ *       optional second argument for the file name
+ * </ul>
+ *
+ * <p>Supported constructs:
+ *
  * <ul>
  *   <li>Declarations: {@code .decl relation(param:type, ...)}
  *   <li>Facts: {@code relation(const, ...).}
@@ -75,8 +88,8 @@
  * <h2>Example</h2>
  *
  * <pre>{@code
- * Datalog.execute ".decl edge(x:number, y:number)
- * .decl path(x:number, y:number)
+ * Datalog.execute ".decl edge(x:int, y:int)
+ * .decl path(x:int, y:int)
  * edge(1, 2). edge(2, 3).
  * path(X, Y) :- edge(X, Y).
  * path(X, Z) :- path(X, Y), edge(Y, Z).
