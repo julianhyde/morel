@@ -84,6 +84,10 @@ class Generators {
       return true;
     }
 
+    if (maybeCase(cache, pat, ordered, constraints)) {
+      return true;
+    }
+
     return maybeUnion(cache, pat, ordered, constraints);
   }
 
@@ -1819,6 +1823,183 @@ class Generators {
     final Core.Exp exp = core.apply(Pos.ZERO, collectionType, fn, arg);
     final Set<Core.NamedPat> freePats = freePats(cache.typeSystem, exp);
     return cache.add(new UnionGenerator(exp, freePats, generators));
+  }
+
+  /**
+   * Attempts to invert a case expression with multiple arms into a generator.
+   *
+   * <p>Transforms a case expression like:
+   *
+   * <pre>{@code
+   * case x of p1 => e1 | p2 => e2 | ... | _ => false
+   * }</pre>
+   *
+   * <p>into an orelse of constraints, one per arm. Each arm's constraint is:
+   *
+   * <ul>
+   *   <li>For literal patterns: {@code (x = literal) andalso body}
+   *   <li>For constructor patterns: a single-arm case for maybeFunction
+   *   <li>For id patterns: the body with subject substituted for the variable
+   * </ul>
+   *
+   * <p>Exclusion constraints are added for earlier arms that returned false.
+   */
+  static boolean maybeCase(
+      Cache cache, Core.Pat pat, boolean ordered, List<Core.Exp> constraints) {
+    for (Core.Exp constraint : constraints) {
+      if (constraint.op != Op.CASE) {
+        continue;
+      }
+      final Core.Case caseExp = (Core.Case) constraint;
+
+      // Only handle case expressions with boolean result type
+      if (caseExp.type != PrimitiveType.BOOL) {
+        continue;
+      }
+
+      // Need at least 2 arms to be interesting
+      if (caseExp.matchList.size() < 2) {
+        continue;
+      }
+
+      // Skip synthetic single-arm cases (pattern + wildcard returning false)
+      if (caseExp.matchList.size() == 2) {
+        final Core.Match lastMatch = caseExp.matchList.get(1);
+        if (lastMatch.pat.op == Op.WILDCARD_PAT
+            && lastMatch.exp.isBoolLiteral(false)) {
+          continue;
+        }
+      }
+
+      // Collect literal values from arms that return false for exclusion
+      final List<Core.Exp> excludeValues = new ArrayList<>();
+
+      // Build an orelse of constraints for each arm
+      final List<Core.Exp> branches = new ArrayList<>();
+      for (Core.Match match : caseExp.matchList) {
+        // Skip wildcard and id patterns at top level
+        if (match.pat.op == Op.WILDCARD_PAT) {
+          continue;
+        }
+        if (match.pat.op == Op.ID_PAT) {
+          if (!match.exp.isBoolLiteral(false)) {
+            final Core.Exp substituted =
+                substituteArgs(
+                    cache.typeSystem,
+                    cache.env,
+                    match.pat,
+                    caseExp.exp,
+                    match.exp);
+            branches.add(substituted);
+          }
+          continue;
+        }
+
+        // If this arm returns false, collect literal value for exclusion
+        if (match.exp.isBoolLiteral(false)) {
+          final Core.Exp literalValue = patternToLiteral(match.pat);
+          if (literalValue != null) {
+            excludeValues.add(literalValue);
+          }
+          continue;
+        }
+
+        // Create constraint for this arm
+        final Core.Exp armConstraint =
+            createArmConstraint(
+                cache.typeSystem, cache.env, caseExp.exp, match, caseExp.pos);
+        if (armConstraint == null) {
+          continue;
+        }
+
+        // Apply exclusion constraints for earlier false-returning patterns
+        Core.Exp branchExp = armConstraint;
+        for (Core.Exp excludeValue : excludeValues) {
+          final Core.Exp notEq =
+              core.notEqual(cache.typeSystem, caseExp.exp, excludeValue);
+          branchExp = core.andAlso(cache.typeSystem, branchExp, notEq);
+        }
+
+        branches.add(branchExp);
+
+        // Add literal value to exclusions if this is a constant pattern
+        final Core.Exp literalValue = patternToLiteral(match.pat);
+        if (literalValue != null) {
+          excludeValues.add(literalValue);
+        }
+      }
+
+      if (branches.isEmpty()) {
+        continue;
+      }
+
+      // Combine branches with orelse and delegate to maybeGenerator
+      final Core.Exp orElseExp = core.orElse(cache.typeSystem, branches);
+      final List<Core.Exp> newConstraints =
+          ImmutableList.<Core.Exp>builder()
+              .add(orElseExp)
+              .addAll(
+                  constraints.stream()
+                      .filter(c -> c != constraint)
+                      .collect(ImmutableList.toImmutableList()))
+              .build();
+      return maybeGenerator(cache, pat, ordered, newConstraints);
+    }
+    return false;
+  }
+
+  /** Converts a literal pattern to its corresponding literal expression. */
+  private static Core.@Nullable Exp patternToLiteral(Core.Pat pat) {
+    if (!(pat instanceof Core.LiteralPat)) {
+      return null;
+    }
+    final Core.LiteralPat literalPat = (Core.LiteralPat) pat;
+    if (!(literalPat.type instanceof PrimitiveType)) {
+      return null;
+    }
+    return core.literal((PrimitiveType) literalPat.type, literalPat.value);
+  }
+
+  /** Creates a constraint expression for a case arm. */
+  private static Core.@Nullable Exp createArmConstraint(
+      TypeSystem typeSystem,
+      Environment env,
+      Core.Exp subject,
+      Core.Match match,
+      Pos pos) {
+    final Core.Pat pat = match.pat;
+    final Core.Exp body = match.exp;
+
+    switch (pat.op) {
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+        // Literal pattern: (subject = literal) andalso body
+        final Core.Exp literal = patternToLiteral(pat);
+        if (literal == null) {
+          return null;
+        }
+        final Core.Exp eq = core.equal(typeSystem, subject, literal);
+        if (body.isBoolLiteral(true)) {
+          return eq;
+        }
+        return core.andAlso(typeSystem, eq, body);
+
+      case CON0_PAT:
+      case CON_PAT:
+        // Constructor pattern: create single-arm case for maybeFunction
+        return core.caseOf(
+            pos, PrimitiveType.BOOL, subject, ImmutableList.of(match));
+
+      case ID_PAT:
+        // Variable pattern: substitute subject for variable in body
+        return substituteArgs(typeSystem, env, pat, subject, body);
+
+      default:
+        return null;
+    }
   }
 
   static boolean maybeUnion(

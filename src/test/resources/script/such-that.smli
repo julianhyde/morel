@@ -142,13 +142,17 @@ from n where isNum n andalso isEven n;
 from x where case x of y => y elem [1,2];
 > val it = [1,2] : int bag
 
-(*) Case with multiple arms
-(* TODO currently gives 'x is not grounded'
+(*) Case with multiple arms (issue #341)
 from x where (case x of 1 => true | 3 => true | _ => false);
 > val it = [1,3] : int bag
-Sys.planEx "3";
-> val it = "..." : string
-*)
+
+(*) Case with explicit false arm excludes that value
+from x where (case x of 1 => true | 2 => false | 3 => true | _ => false);
+> val it = [1,3] : int bag
+
+(*) Simple boolean inversion: 'not b' generates false
+from b where not b;
+> val it = [false] : bool bag
 
 (* Predicate cannot be inverted.
  *
@@ -156,7 +160,7 @@ Sys.planEx "3";
  * but we don't have symbolic math. *)
 (* TODO: better exception *)
 from x where (x + 2) * (x - 3) = 0;
-> java.lang.IllegalArgumentException: pattern x_1 is not grounded
+> java.lang.IllegalArgumentException: pattern x_3 is not grounded
 
 (*) Pattern
 from x, y where (x, y) elem [(1,true),(2,false)];
