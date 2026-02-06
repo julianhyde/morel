@@ -2176,6 +2176,38 @@ class Generators {
     return core.literal((PrimitiveType) literalPat.type, literalPat.value);
   }
 
+  /**
+   * Converts a pattern to an expression that references the pattern's
+   * variables.
+   *
+   * <p>For example, converts pattern {@code (x, y)} to expression {@code (x,
+   * y)}.
+   */
+  private static Core.Exp patToExp(TypeSystem ts, Core.Pat pat) {
+    if (pat instanceof Core.IdPat) {
+      return core.id((Core.IdPat) pat);
+    }
+    if (pat instanceof Core.TuplePat) {
+      final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+      final List<Core.Exp> args = new ArrayList<>();
+      for (Core.Pat arg : tuplePat.args) {
+        args.add(patToExp(ts, arg));
+      }
+      return core.tuple(tuplePat.type(), args);
+    }
+    if (pat instanceof Core.RecordPat) {
+      final Core.RecordPat recordPat = (Core.RecordPat) pat;
+      final Map<String, Core.Exp> expArgs = new LinkedHashMap<>();
+      final List<String> names =
+          new ArrayList<>(recordPat.type().argNameTypes.keySet());
+      for (int i = 0; i < recordPat.args.size(); i++) {
+        expArgs.put(names.get(i), patToExp(ts, recordPat.args.get(i)));
+      }
+      return core.record(ts, expArgs.entrySet());
+    }
+    throw new AssertionError("unexpected pattern type: " + pat.op);
+  }
+
   /** Creates a constraint expression for a case arm. */
   private static Core.@Nullable Exp createArmConstraint(
       TypeSystem typeSystem,
@@ -2270,31 +2302,30 @@ class Generators {
       return true;
     }
 
-    // Handle NamedPat (IdPat or TuplePat): INL n => constraint
-    if (!(innerPat instanceof Core.NamedPat)) {
-      return false;
-    }
-    final Core.NamedPat innerNamedPat = (Core.NamedPat) innerPat;
-
-    // Create the extent expression for the inner type.
-    // This allows iterating over all values of finite types like bool.
-    final Core.Exp extentExp =
-        core.extent(ts, innerPat.type, ImmutableRangeSet.of(Range.all()));
-
-    // Create the yield expression: CON(innerPat)
-    final Core.Exp innerPatRef = core.id(innerNamedPat);
-    final Core.Exp yieldExp =
-        core.apply(Pos.ZERO, dataType, conId, innerPatRef);
-
+    // Handle IdPat or TuplePat: INL n => constraint, INR (b, i) => constraint
     // Build wrapper: from innerPat in extent where body yield CON(innerPat)
     // The body (constraint) filters the extent values, then wraps with the
-    // constructor.
+    // constructor. The Expander will use maybeGenerator to convert infinite
+    // extents to finite generators based on the constraints.
     final FromBuilder fb = core.fromBuilder(ts);
-    fb.scan(innerNamedPat, extentExp);
+
+    // Add scans for all component patterns
+    for (Core.NamedPat p : innerPat.expand()) {
+      final Core.Exp extentExp =
+          core.extent(ts, p.type, ImmutableRangeSet.of(Range.all()));
+      fb.scan(p, extentExp);
+    }
+
     if (!body.isBoolLiteral(true)) {
       fb.where(body);
     }
+
+    // Create the yield expression: CON(innerPat)
+    final Core.Exp innerPatRef = patToExp(ts, innerPat);
+    final Core.Exp yieldExp =
+        core.apply(Pos.ZERO, dataType, conId, innerPatRef);
     fb.yield_(yieldExp);
+
     final Core.Exp wrapperExp = fb.build();
 
     // Create a generator for goalPat

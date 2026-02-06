@@ -177,13 +177,13 @@ from e where (case e of INR b => not b | _ => false);
 > val it = [INR false] : ('a,bool) either bag
 
 (*) Constructor pattern with (boolean * int) payload
-(* TODO
 from e where (case e of INR (b, i) => b andalso i > 5 andalso i < 15 andalso i mod 3 = 1 | _ => false);
-> val it = [INR (true, 7),INR (true, 10),INR (true, 13),] : ('a,bool) either bag
+> val it = [INR (true,7),INR (true,10),INR (true,13)]
+>   : ('a,(bool * int)) either bag
 
 from e where (case e of INR (b, i) => i > 0 andalso i < 5 andalso b = (i mod 2 = 0) | _ => false);
-> val it = [INR (true, 7),INR (true, 10),INR (true, 13),] : ('a,bool) either bag
-*)
+> val it = [INR (false,1),INR (false,3),INR (true,2),INR (true,4)]
+>   : ('a,(bool * int)) either bag
 
 (*) Multiple constructor arms combined with orelse (via maybeUnion)
 from e where (case e of
