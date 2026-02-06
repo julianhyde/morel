@@ -1293,6 +1293,17 @@ from p
  *   Sib(x,y) <- Par(x,p) AND Par(y,p) AND x<>y
  *   Cousin(x,y) <- Sib(x,y)
  *   Cousin(x,y) <- Par(x,xp) AND Par(y,yp) AND Cousin(xp,yp)
+ *
+ * The data:
+ *         a       d       h
+ *       /   \   /   \    /
+ *      b      c      e  /
+ *      |     /       | /
+ *      f    g        i
+ *    /   \ /
+ *   j     k
+ *
+ * Siblings: {b, c}, {c, e}, {j, k}
  *)
 fun par (x, p) =
   (p, x) elem [
