@@ -134,6 +134,9 @@ class Generators {
           for (Core.FromStep step : from.steps) {
             switch (step.op) {
               case SCAN:
+              case YIELD:
+              case GROUP:
+                // Skip these steps - they don't add constraints
                 break;
               case WHERE:
                 // Decompose "andalso" to allow each conjunct to be processed
@@ -147,11 +150,10 @@ class Generators {
                   final Generator gen =
                       cache.bestGenerator((Core.NamedPat) pat);
                   if (gen != null) {
-                    // Check if any freePat is from inner scans OR if the
-                    // generator's pattern contains inner scan variables
+                    // Check if any free variable of the generator expression
+                    // comes from inner scans. If so, we need to join with those
+                    // scans to bind those variables before using the generator.
                     boolean dependsOnInnerScan = false;
-
-                    // Check free variables in the generator expression
                     for (Core.NamedPat freePat : gen.freePats) {
                       for (Core.Scan innerScan : innerScans) {
                         if (innerScan.pat.expand().contains(freePat)) {
@@ -161,24 +163,46 @@ class Generators {
                       }
                     }
 
-                    // Also check if the generator's pattern contains inner
-                    // scan variables (e.g., for elem patterns like
-                    // "(v0, x) elem list" where v0 is from the exists clause)
-                    if (!dependsOnInnerScan) {
-                      for (Core.NamedPat patVar : gen.pat.expand()) {
-                        for (Core.Scan innerScan : innerScans) {
-                          if (innerScan.pat.expand().contains(patVar)) {
-                            dependsOnInnerScan = true;
-                            break;
-                          }
-                        }
-                      }
-                    }
-
                     if (dependsOnInnerScan) {
                       // Replace the generator with one that includes inner
                       // scans
                       createJoinedGenerator(cache, pat, gen, innerScans);
+                    } else {
+                      // Check if remaining constraints only reference inner
+                      // scans and bound patterns (by name, not identity). If
+                      // they reference other extent patterns, skip
+                      // createFilteredGenerator to avoid circular dependencies.
+                      final Set<String> boundNames = new HashSet<>();
+                      for (Core.NamedPat p : gen.pat.expand()) {
+                        boundNames.add(p.name);
+                      }
+                      final Set<String> innerNames = new HashSet<>();
+                      for (Core.Scan innerScan : innerScans) {
+                        for (Core.NamedPat p : innerScan.pat.expand()) {
+                          innerNames.add(p.name);
+                        }
+                      }
+                      boolean referencesOtherExtent = false;
+                      for (Core.Exp c : constraints2) {
+                        for (Core.NamedPat fp : freePats(cache.typeSystem, c)) {
+                          // Skip patterns bound in environment (functions, etc)
+                          if (cache.env.getOpt(fp) != null) {
+                            continue;
+                          }
+                          if (!boundNames.contains(fp.name)
+                              && !innerNames.contains(fp.name)) {
+                            referencesOtherExtent = true;
+                            break;
+                          }
+                        }
+                        if (referencesOtherExtent) {
+                          break;
+                        }
+                      }
+                      if (!referencesOtherExtent) {
+                        createFilteredGenerator(
+                            cache, pat, gen, constraints2, innerScans);
+                      }
                     }
                   }
                   return true;
@@ -280,6 +304,164 @@ class Generators {
   static class ExistsJoinGenerator extends Generator {
     ExistsJoinGenerator(
         Core.Pat pat,
+        Core.Exp exp,
+        Iterable<? extends Core.NamedPat> freePats) {
+      super(exp, freePats, pat, Cardinality.FINITE, true);
+    }
+
+    @Override
+    Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
+      // The exists constraint is satisfied by this generator
+      return exp;
+    }
+  }
+
+  /**
+   * Creates a generator that applies remaining constraints as a WHERE filter.
+   *
+   * <p>For example, if we have:
+   *
+   * <pre>{@code
+   * from b where cheap b
+   * }</pre>
+   *
+   * <p>Where {@code cheap} is defined as:
+   *
+   * <pre>{@code
+   * fun cheap beer = exists bar1, price1, bar2, price2
+   *   where sells(bar1, beer, price1) andalso sells(bar2, beer, price2)
+   *     andalso price1 < 3 andalso price2 < 3 andalso bar1 <> bar2
+   * }</pre>
+   *
+   * <p>The generator from {@code sells(bar1, beer, price1)} produces {@code
+   * {bar1, beer, price1}} tuples. This method creates a filtered generator that
+   * applies the remaining constraints:
+   *
+   * <pre>{@code
+   * from {bar1, beer, price1} in barBeers
+   *   where price1 < 3
+   *     andalso exists {bar2, price2} in barBeers
+   *       where beer = beer andalso price2 < 3 andalso bar1 <> bar2
+   *   yield beer
+   *   distinct
+   * }</pre>
+   */
+  private static void createFilteredGenerator(
+      Cache cache,
+      Core.Pat pat,
+      Generator sourceGen,
+      List<Core.Exp> remainingConstraints,
+      List<Core.Scan> innerScans) {
+    final TypeSystem typeSystem = cache.typeSystem;
+    final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+
+    // Add the source generator scan
+    fromBuilder.scan(sourceGen.pat, sourceGen.exp);
+
+    // Identify which constraints can be applied directly (those that only
+    // reference variables from the source generator) vs those that need
+    // to remain as exists subqueries (those that reference inner scan
+    // variables not in the source generator).
+    final Set<Core.NamedPat> boundPats = new HashSet<>(sourceGen.pat.expand());
+    final List<Core.Exp> directConstraints = new ArrayList<>();
+    final List<Core.Exp> existsConstraints = new ArrayList<>();
+
+    for (Core.Exp constraint : remainingConstraints) {
+      final Set<Core.NamedPat> freeInConstraint =
+          freePats(typeSystem, constraint);
+      boolean needsExists = false;
+      for (Core.NamedPat freePat : freeInConstraint) {
+        if (!boundPats.contains(freePat)) {
+          // This constraint references a variable not bound by the generator
+          for (Core.Scan innerScan : innerScans) {
+            if (innerScan.pat.expand().contains(freePat)) {
+              needsExists = true;
+              break;
+            }
+          }
+        }
+      }
+      if (needsExists) {
+        existsConstraints.add(constraint);
+      } else {
+        directConstraints.add(constraint);
+      }
+    }
+
+    // Apply direct constraints as WHERE
+    if (!directConstraints.isEmpty()) {
+      fromBuilder.where(core.andAlso(typeSystem, directConstraints));
+    }
+
+    // If there are exists constraints, wrap them in an exists subquery.
+    // Use the inner scans directly (they have the proper source collections).
+    if (!existsConstraints.isEmpty()) {
+      // Find which inner scans are needed for the exists constraints
+      final Set<Core.NamedPat> neededPats = new HashSet<>();
+      for (Core.Exp constraint : existsConstraints) {
+        neededPats.addAll(freePats(typeSystem, constraint));
+      }
+      neededPats.removeAll(boundPats);
+
+      // Build the exists subquery using inner scans that provide needed
+      // patterns
+      final FromBuilder existsBuilder = core.fromBuilder(typeSystem);
+      for (Core.Scan innerScan : innerScans) {
+        boolean scanNeeded = false;
+        for (Core.NamedPat scanPat : innerScan.pat.expand()) {
+          if (neededPats.contains(scanPat)) {
+            scanNeeded = true;
+            break;
+          }
+        }
+        if (scanNeeded) {
+          existsBuilder.scan(innerScan.pat, innerScan.exp);
+        }
+      }
+      existsBuilder.where(core.andAlso(typeSystem, existsConstraints));
+      final Core.From existsFrom = existsBuilder.build();
+
+      // Add the exists check as a WHERE condition
+      final Core.Exp existsCheck =
+          core.apply(
+              Pos.ZERO,
+              PrimitiveType.BOOL,
+              core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_NON_EMPTY),
+              existsFrom);
+      fromBuilder.where(existsCheck);
+    }
+
+    // Yield just the target pattern. We need to find the pattern within
+    // sourceGen.pat that corresponds to pat (they may be different objects).
+    Core.NamedPat yieldPat = null;
+    final String patName = ((Core.NamedPat) pat).name;
+    for (Core.NamedPat p : sourceGen.pat.expand()) {
+      if (p.name.equals(patName)) {
+        yieldPat = p;
+        break;
+      }
+    }
+    if (yieldPat == null) {
+      // pat is not in sourceGen.pat - this shouldn't happen
+      return;
+    }
+    fromBuilder.yield_(core.id(yieldPat));
+    fromBuilder.distinct();
+
+    final Core.From filteredFrom = fromBuilder.build();
+    final Set<Core.NamedPat> freePats2 = freePats(typeSystem, filteredFrom);
+
+    // Replace the generator with the filtered one
+    cache.remove((Core.NamedPat) pat);
+    cache.add(
+        new ExistsFilterGenerator(
+            (Core.NamedPat) pat, filteredFrom, freePats2));
+  }
+
+  /** Generator created from an exists pattern with remaining constraints. */
+  static class ExistsFilterGenerator extends Generator {
+    ExistsFilterGenerator(
+        Core.NamedPat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats) {
       super(exp, freePats, pat, Cardinality.FINITE, true);

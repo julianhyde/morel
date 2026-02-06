@@ -168,9 +168,22 @@ from x where (case x of 6 => false | n => n >= 5 andalso n <= 8);
 from e where (case e of INL n => n >= 5 andalso n <= 8 | _ => false);
 > val it = [INL 5,INL 6,INL 7,INL 8] : (int,'a) either bag
 
+(*) Constructor pattern with boolean payload
+from e where (case e of INR b => b | _ => false);
+> val it = [INR true] : ('a,bool) either bag
+
 (*) Constructor pattern with boolean payload - "not b" inverts to "b = false"
 from e where (case e of INR b => not b | _ => false);
 > val it = [INR false] : ('a,bool) either bag
+
+(*) Constructor pattern with (boolean * int) payload
+(* TODO
+from e where (case e of INR (b, i) => b andalso i > 5 andalso i < 15 andalso i mod 3 = 1 | _ => false);
+> val it = [INR (true, 7),INR (true, 10),INR (true, 13),] : ('a,bool) either bag
+
+from e where (case e of INR (b, i) => i > 0 andalso i < 5 andalso b = (i mod 2 = 0) | _ => false);
+> val it = [INR (true, 7),INR (true, 10),INR (true, 13),] : ('a,bool) either bag
+*)
 
 (*) Multiple constructor arms combined with orelse (via maybeUnion)
 from e where (case e of
@@ -195,7 +208,7 @@ from e where (case e of
  * but we don't have symbolic math. *)
 (* TODO: better exception *)
 from x where (x + 2) * (x - 3) = 0;
-> java.lang.IllegalArgumentException: pattern x_4 is not grounded
+> java.lang.IllegalArgumentException: pattern 'x' is not grounded
 
 (*) Pattern
 from x, y where (x, y) elem [(1,true),(2,false)];
@@ -691,7 +704,7 @@ in
     where isEmp50 e
     yield e.ename
 end;
-> java.lang.IllegalArgumentException: pattern e_13 is not grounded
+> java.lang.IllegalArgumentException: pattern 'e' is not grounded
 
 (*) A function with external extent.
 fun hasJob (e: typeof (Bag.hd scott.emps),
@@ -790,7 +803,7 @@ end;
  * Convenience function that converts a predicate to a relation.
  *)
 
-(* TODO. Currently throws 'pattern r is not grounded'
+(* TODO. Currently throws "pattern 'r' is not grounded"
 fun enumerate predicate =
   from r where predicate r;
 > val enumerate = fn : ('a -> bool) -> 'a bag
@@ -1184,7 +1197,8 @@ val barBeers = [
   {bar =  "squirrel", beer =  "pale", price =  2},
   {bar =  "squirrel", beer =  "amber", price =  3},
   {bar =  "cask", beer =  "stout", price =  4},
-  {bar =  "cask", beer =  "ipa", price =  5}];
+  {bar =  "cask", beer =  "ipa", price =  5},
+  {bar =  "big_al", beer =  "pale", price =  1}];
 > bar      beer  price
 > -------- ----- -----
 > squirrel ipa   2
@@ -1192,6 +1206,7 @@ val barBeers = [
 > squirrel amber 3
 > cask     stout 4
 > cask     ipa   5
+> big_al   pale  1
 >
 > val barBeers : {bar:string, beer:string, price:int} list
 
@@ -1253,10 +1268,8 @@ fun cheap beer =
 > val cheap = fn : string -> bool
 
 (*) Pale is cheap
-(* TODO: Make predicate inversion work
 from b where cheap b;
-> val it = ["pale"] : string list
-*)
+> val it = ["pale"] : string bag
 
 (* Example Datalog Program. Using EDB Sells (bar, beer, price) and
  * Likes (patron, beer), find the patrons who like beers Joe doesn't sell.
