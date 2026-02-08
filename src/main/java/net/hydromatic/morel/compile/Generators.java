@@ -2492,12 +2492,14 @@ class Generators {
     switch (constraint.builtIn()) {
       case OP_GT:
       case OP_GE:
-        return references(constraint.arg(0), pat)
-            || references(constraint.arg(1), pat);
       case OP_LT:
       case OP_LE:
+        // Check direct reference (e.g., "x > y") and offset
+        // expressions (e.g., "x < y + 5" where y is the pattern).
         return references(constraint.arg(0), pat)
-            || references(constraint.arg(1), pat);
+            || references(constraint.arg(1), pat)
+            || extractOffset(constraint.arg(0), pat) != null
+            || extractOffset(constraint.arg(1), pat) != null;
       default:
         return false;
     }

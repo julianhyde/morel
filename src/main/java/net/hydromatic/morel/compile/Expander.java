@@ -40,7 +40,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
@@ -225,20 +224,44 @@ public class Expander {
           // The step is not a scan over an extent. Add it now.
           step = Replacer.substitute(typeSystem, env, substitution, step);
 
-          // For "where" steps, simplify the condition using generators that
-          // can reliably simplify predicates they satisfy.
-          // This removes predicates that are satisfied by the generator.
+          // For "where" steps, simplify the condition by removing
+          // predicates that are subsumed by generators.
+          //
+          // Two levels of simplification:
+          // 1. Provenance: remove conjuncts that appear in any
+          //    generator's provenance (exact object identity).
+          // 2. Simplify: apply each generator's simplify method to
+          //    remaining conjuncts (semantic equivalence).
           if (step instanceof Core.Where) {
-            final AtomicReference<Core.Exp> conditionRef =
-                new AtomicReference<>(((Core.Where) step).exp);
-            generatorMap.forEach(
-                (p, generator) ->
-                    conditionRef.set(
-                        generator.simplify(typeSystem, p, conditionRef.get())));
-            // Note: satisfiedConstraints simplification is intentionally
-            // not applied here. The generator-based simplification above
-            // handles the cases that matter.
-            fromBuilder.where(conditionRef.get());
+            // Collect all provenance constraints from all generators.
+            final Set<Core.Exp> allProvenance = new HashSet<>();
+            for (Generator g : generatorMap.values()) {
+              allProvenance.addAll(g.provenance);
+            }
+            // Decompose, filter by provenance, then simplify remainder.
+            final List<Core.Exp> conjuncts =
+                core.decomposeAnd(((Core.Where) step).exp);
+            final List<Core.Exp> remaining = new ArrayList<>();
+            for (Core.Exp conjunct : conjuncts) {
+              if (allProvenance.contains(conjunct)) {
+                continue; // subsumed by a generator
+              }
+              // Apply generator-based simplification.
+              Core.Exp simplified = conjunct;
+              for (Map.Entry<Core.NamedPat, Generator> entry :
+                  generatorMap.entrySet()) {
+                simplified =
+                    entry
+                        .getValue()
+                        .simplify(typeSystem, entry.getKey(), simplified);
+              }
+              if (!simplified.isBoolLiteral(true)) {
+                remaining.add(simplified);
+              }
+            }
+            if (!remaining.isEmpty()) {
+              fromBuilder.where(core.andAlso(typeSystem, remaining));
+            }
             return;
           }
 
