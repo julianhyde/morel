@@ -27,6 +27,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
@@ -2029,7 +2030,8 @@ class Generators {
           // for "p2 elem links", where "p2 as (p, q)".
           final Core.Exp collection = predicate.arg(1);
           final Core.Pat pat = cache.patForExp(predicate.arg(0));
-          CollectionGenerator.create(cache, ordered, pat, collection);
+          CollectionGenerator.create(
+              cache, ordered, pat, collection, ImmutableSet.of(predicate));
           // Check if field mappings complete any tuple variable
           cache.deriveFieldGenerators(ordered);
           return true;
@@ -2041,10 +2043,22 @@ class Generators {
 
   static boolean maybePoint(
       Cache cache, Core.Pat pat, boolean ordered, List<Core.Exp> constraints) {
-    final Core.@Nullable Exp value = point(pat, constraints);
-    if (value != null) {
-      PointGenerator.create(cache, pat, ordered, value);
-      return true;
+    for (Core.Exp constraint : constraints) {
+      if (constraint.isCallTo(BuiltIn.OP_EQ)) {
+        final Core.@Nullable Exp value;
+        if (references(constraint.arg(0), pat)) {
+          value = constraint.arg(1);
+        } else if (references(constraint.arg(1), pat)) {
+          value = constraint.arg(0);
+        } else {
+          value = null;
+        }
+        if (value != null) {
+          PointGenerator.create(
+              cache, pat, ordered, value, ImmutableSet.of(constraint));
+          return true;
+        }
+      }
     }
     return false;
   }
@@ -2454,6 +2468,13 @@ class Generators {
     if (upper == null) {
       return false;
     }
+    // Build provenance from the bound constraints.
+    final ImmutableSet.Builder<Core.Exp> provenance = ImmutableSet.builder();
+    for (Core.Exp c : constraints) {
+      if (isBoundConstraint(c, pat)) {
+        provenance.add(c);
+      }
+    }
     Generators.generateRange(
         cache,
         ordered,
@@ -2461,8 +2482,25 @@ class Generators {
         requireNonNull(lower.left),
         requireNonNull(lower.right),
         requireNonNull(upper.left),
-        requireNonNull(upper.right));
+        requireNonNull(upper.right),
+        provenance.build());
     return true;
+  }
+
+  /** Returns whether a constraint is a comparison bound on {@code pat}. */
+  private static boolean isBoundConstraint(Core.Exp constraint, Core.Pat pat) {
+    switch (constraint.builtIn()) {
+      case OP_GT:
+      case OP_GE:
+        return references(constraint.arg(0), pat)
+            || references(constraint.arg(1), pat);
+      case OP_LT:
+      case OP_LE:
+        return references(constraint.arg(0), pat)
+            || references(constraint.arg(1), pat);
+      default:
+        return false;
+    }
   }
 
   /**
@@ -2498,7 +2536,8 @@ class Generators {
       // innerApply.arg is p (the prefix pattern)
       // outerApply.arg is s (the string to check prefixes of)
       if (references(innerApply.arg, pat)) {
-        StringPrefixGenerator.create(cache, pat, ordered, outerApply.arg);
+        StringPrefixGenerator.create(
+            cache, pat, ordered, outerApply.arg, ImmutableSet.of(constraint));
         return true;
       }
     }
@@ -2527,7 +2566,8 @@ class Generators {
       Core.Exp lower,
       boolean lowerStrict,
       Core.Exp upper,
-      boolean upperStrict) {
+      boolean upperStrict,
+      Set<Core.Exp> provenance) {
     // For x > lower, we want x >= lower + 1
     final TypeSystem typeSystem = cache.typeSystem;
     final Core.Exp lower2 =
@@ -2570,7 +2610,14 @@ class Generators {
     final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
     return cache.add(
         new RangeGenerator(
-            pat, simplified, freePats, lower, lowerStrict, upper, upperStrict));
+            pat,
+            simplified,
+            freePats,
+            lower,
+            lowerStrict,
+            upper,
+            upperStrict,
+            provenance));
   }
 
   /** Returns an extent generator, or null if expression is not an extent. */
@@ -2890,8 +2937,9 @@ class Generators {
         Core.Exp lower,
         boolean ignoreLowerStrict,
         Core.Exp upper,
-        boolean ignoreUpperStrict) {
-      super(exp, freePats, pat, Cardinality.FINITE, true);
+        boolean ignoreUpperStrict,
+        Set<Core.Exp> provenance) {
+      super(exp, freePats, pat, Cardinality.FINITE, true, provenance);
       this.lower = lower;
       this.upper = upper;
     }
@@ -3003,8 +3051,9 @@ class Generators {
         Core.Pat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
-        Core.Exp point) {
-      super(exp, freePats, pat, Cardinality.SINGLE, true);
+        Core.Exp point,
+        Set<Core.Exp> provenance) {
+      super(exp, freePats, pat, Cardinality.SINGLE, true, provenance);
       this.point = point;
     }
 
@@ -3013,16 +3062,28 @@ class Generators {
      *
      * @param ordered If true, generate a `list`, otherwise a `bag`
      * @param lower Lower bound
+     * @param provenance The constraints this generator subsumes
      */
     @SuppressWarnings("UnusedReturnValue")
     static Generator create(
-        Cache cache, Core.Pat pat, boolean ordered, Core.Exp lower) {
+        Cache cache,
+        Core.Pat pat,
+        boolean ordered,
+        Core.Exp lower,
+        Set<Core.Exp> provenance) {
       final Core.Exp exp =
           ordered
               ? core.list(cache.typeSystem, lower)
               : core.bag(cache.typeSystem, lower);
       final Set<Core.NamedPat> freePats = freePats(cache.typeSystem, exp);
-      return cache.add(new PointGenerator(pat, exp, freePats, lower));
+      return cache.add(
+          new PointGenerator(pat, exp, freePats, lower, provenance));
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
+    static Generator create(
+        Cache cache, Core.Pat pat, boolean ordered, Core.Exp lower) {
+      return create(cache, pat, ordered, lower, ImmutableSet.of());
     }
 
     @Override
@@ -3051,8 +3112,9 @@ class Generators {
         Core.Pat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
-        Core.Exp strExp) {
-      super(exp, freePats, pat, Cardinality.FINITE, true);
+        Core.Exp strExp,
+        Set<Core.Exp> provenance) {
+      super(exp, freePats, pat, Cardinality.FINITE, true, provenance);
       this.strExp = strExp;
     }
 
@@ -3063,10 +3125,15 @@ class Generators {
      * String.substring(s, 0, i))}
      *
      * @param strExp The string expression to generate prefixes of
+     * @param provenance The constraints this generator subsumes
      */
     @SuppressWarnings("UnusedReturnValue")
     static Generator create(
-        Cache cache, Core.Pat pat, boolean ordered, Core.Exp strExp) {
+        Cache cache,
+        Core.Pat pat,
+        boolean ordered,
+        Core.Exp strExp,
+        Set<Core.Exp> provenance) {
       final TypeSystem ts = cache.typeSystem;
 
       // Build: String.size s + 1
@@ -3095,7 +3162,8 @@ class Generators {
           core.call(ts, tabulate, PrimitiveType.STRING, Pos.ZERO, countExp, fn);
 
       final Set<Core.NamedPat> freePats = freePats(ts, exp);
-      return cache.add(new StringPrefixGenerator(pat, exp, freePats, strExp));
+      return cache.add(
+          new StringPrefixGenerator(pat, exp, freePats, strExp, provenance));
     }
 
     @Override
@@ -3196,22 +3264,34 @@ class Generators {
     private CollectionGenerator(
         Core.Pat pat,
         Core.Exp collection,
-        Iterable<? extends Core.NamedPat> freePats) {
-      super(collection, freePats, pat, Cardinality.FINITE, true);
+        Iterable<? extends Core.NamedPat> freePats,
+        Set<Core.Exp> provenance) {
+      super(collection, freePats, pat, Cardinality.FINITE, true, provenance);
       this.collection = collection;
       checkArgument(collection.type.isCollection());
     }
 
     @SuppressWarnings("UnusedReturnValue")
     static CollectionGenerator create(
-        Cache cache, boolean ordered, Core.Pat pat, Core.Exp collection) {
+        Cache cache,
+        boolean ordered,
+        Core.Pat pat,
+        Core.Exp collection,
+        Set<Core.Exp> provenance) {
       // Convert the collection to a list or bag, per "ordered".
       final TypeSystem typeSystem = cache.typeSystem;
       final Core.Exp collection2 =
           core.withOrdered(ordered, collection, typeSystem);
       final Set<Core.NamedPat> freePats =
           freePats(cache.typeSystem, collection2);
-      return cache.add(new CollectionGenerator(pat, collection2, freePats));
+      return cache.add(
+          new CollectionGenerator(pat, collection2, freePats, provenance));
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
+    static CollectionGenerator create(
+        Cache cache, boolean ordered, Core.Pat pat, Core.Exp collection) {
+      return create(cache, ordered, pat, collection, ImmutableSet.of());
     }
 
     @Override
