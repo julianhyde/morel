@@ -724,10 +724,6 @@ class Generators {
         if (maybeGenerator(
             cache, goalPat, ordered, core.decomposeAnd(safeBody))) {
           anySuccess = true;
-          // Record the original constraint as satisfied so it can be
-          // simplified to true during expansion. This is needed because
-          // the generator's simplify method only recognizes the inlined
-          // (elem) form, not the original function call form.
           cache.satisfiedConstraints.add(constraint);
           // If goalPat now has a finite generator, stop. Processing
           // further constraints might create conflicting generators that
