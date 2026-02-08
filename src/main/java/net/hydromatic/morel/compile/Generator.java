@@ -23,6 +23,7 @@ import static java.util.Objects.requireNonNull;
 import static org.apache.calcite.util.Util.isDistinct;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import java.util.List;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
@@ -41,18 +42,39 @@ abstract class Generator {
   /** Whether the generator produces unique values (no duplicates). */
   final boolean unique;
 
+  /**
+   * The constraints from the original WHERE clause that this generator
+   * subsumes. Every value produced by the generator satisfies all of these
+   * constraints.
+   *
+   * <p>This should be the minimal set needed to derive the generator. Smaller
+   * provenance means broader reuse.
+   */
+  final Set<Core.Exp> provenance;
+
   Generator(
       Core.Exp exp,
       Iterable<? extends Core.NamedPat> freePats,
       Core.Pat pat,
       Cardinality cardinality,
-      boolean unique) {
+      boolean unique,
+      Set<Core.Exp> provenance) {
     this.exp = requireNonNull(exp);
     this.freePats = ImmutableList.copyOf(freePats);
     checkArgument(freePats instanceof Set || isDistinct(this.freePats));
     this.pat = requireNonNull(pat);
     this.cardinality = requireNonNull(cardinality);
     this.unique = unique;
+    this.provenance = ImmutableSet.copyOf(provenance);
+  }
+
+  Generator(
+      Core.Exp exp,
+      Iterable<? extends Core.NamedPat> freePats,
+      Core.Pat pat,
+      Cardinality cardinality,
+      boolean unique) {
+    this(exp, freePats, pat, cardinality, unique, ImmutableSet.of());
   }
 
   /**
