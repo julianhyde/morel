@@ -235,6 +235,9 @@ public class Expander {
                 (p, generator) ->
                     conditionRef.set(
                         generator.simplify(typeSystem, p, conditionRef.get())));
+            // Note: satisfiedConstraints simplification is intentionally
+            // not applied here. The generator-based simplification above
+            // handles the cases that matter.
             fromBuilder.where(conditionRef.get());
             return;
           }

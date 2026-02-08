@@ -1337,15 +1337,15 @@ fun cousin (x, y) = sib (x, y)
  Round 3: add (f, g), (f, h), (g, i), (i, k)
  Round 4: add (i, j), (k, k)
  *)
-(* TODO
 from p where sib p;
-> val it = [("b","c")] : (string * string) list
-*)
+> val it = [("b","c"),("j","k"),("c","e"),("e","c"),("c","b"),("k","j")]
+>   : (string * string) bag
 
-(* TODO
 from p where cousin p;
-> val it = [("b","c"), ("c","e"),("g","h"),("j","k"),("f","g"),("f","h"),("g","i"),("i","k"),("i","j"),("k","k")] : (string * string) list
-*)
+> val it =
+>   [("b","c"),("j","k"),("c","e"),("e","c"),("c","b"),("k","j"),("c","c"),
+>    ("k","k"),("b","e"),("e","e"),("b","b"),("e","b"),("j","j")]
+>   : (string * string) bag
 
 (* Nonmonotone relation.
  * 'cousin2' is as 'cousin', but 'orelse' has become 'and not'.

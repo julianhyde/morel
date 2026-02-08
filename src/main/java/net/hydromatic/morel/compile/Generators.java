@@ -27,6 +27,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
 import com.google.common.collect.Range;
@@ -358,6 +359,17 @@ class Generators {
     // Add the source generator scan
     fromBuilder.scan(sourceGen.pat, sourceGen.exp);
 
+    // Filter out constraints that have been satisfied by generators
+    // (e.g., function calls like par(x, y) that were inlined to create
+    // generators). These are already encoded in the source generator's
+    // expression and don't need to be re-checked.
+    final List<Core.Exp> effectiveConstraints = new ArrayList<>();
+    for (Core.Exp constraint : remainingConstraints) {
+      if (!cache.satisfiedConstraints.contains(constraint)) {
+        effectiveConstraints.add(constraint);
+      }
+    }
+
     // Identify which constraints can be applied directly (those that only
     // reference variables from the source generator) vs those that need
     // to remain as exists subqueries (those that reference inner scan
@@ -366,7 +378,7 @@ class Generators {
     final List<Core.Exp> directConstraints = new ArrayList<>();
     final List<Core.Exp> existsConstraints = new ArrayList<>();
 
-    for (Core.Exp constraint : remainingConstraints) {
+    for (Core.Exp constraint : effectiveConstraints) {
       final Set<Core.NamedPat> freeInConstraint =
           freePats(typeSystem, constraint);
       boolean needsExists = false;
@@ -568,6 +580,7 @@ class Generators {
       Core.Pat goalPat,
       boolean ordered,
       List<Core.Exp> constraints) {
+    boolean anySuccess = false;
     for (Core.Exp constraint : constraints) {
       // Step 0: Handle CASE expression (from tuple pattern matching)
       // This occurs when a tuple-parameter function like f(x, y) is compiled
@@ -693,6 +706,12 @@ class Generators {
       // then recursively try to find a generator for the substituted body.
       // For recursive functions, inline only the non-recursive branches of
       // any top-level orelse to avoid infinite expansion.
+      //
+      // Do not return early here: the inlined body may produce generators
+      // for sub-patterns of goalPat (e.g., field components of a tuple).
+      // Continue processing remaining constraints so that all components
+      // can be covered, allowing deriveFieldGenerators to reconstruct the
+      // full tuple.
       final Core.Exp inlinedBody =
           inlineFunctionBody(cache.typeSystem, cache.env, fn, apply.arg);
       final Core.Exp safeBody =
@@ -703,11 +722,28 @@ class Generators {
         // Decompose "andalso" into individual conjuncts for range detection.
         if (maybeGenerator(
             cache, goalPat, ordered, core.decomposeAnd(safeBody))) {
-          return true;
+          anySuccess = true;
+          // Record the original constraint as satisfied so it can be
+          // simplified to true during expansion. This is needed because
+          // the generator's simplify method only recognizes the inlined
+          // (elem) form, not the original function call form.
+          cache.satisfiedConstraints.add(constraint);
+          // If goalPat now has a finite generator, stop. Processing
+          // further constraints might create conflicting generators that
+          // replace the current best without preserving the constraints
+          // already marked as satisfied. Continue only when goalPat
+          // is a NamedPat that still has no finite generator (e.g.,
+          // because only field sub-patterns have been found so far,
+          // and deriveFieldGenerators needs more fields).
+          final Generator bestGen = cache.bestGeneratorForPat(goalPat);
+          if (bestGen != null
+              && bestGen.cardinality != Generator.Cardinality.INFINITE) {
+            return true;
+          }
         }
       }
     }
-    return false;
+    return anySuccess;
   }
 
   /** Tries to create a transitive closure generator for a full application. */
@@ -1992,8 +2028,10 @@ class Generators {
           // If predicate is "(p, q) elem links", first create a generator
           // for "p2 elem links", where "p2 as (p, q)".
           final Core.Exp collection = predicate.arg(1);
-          final Core.Pat pat = requireNonNull(wholePat(predicate.arg(0)));
+          final Core.Pat pat = cache.patForExp(predicate.arg(0));
           CollectionGenerator.create(cache, ordered, pat, collection);
+          // Check if field mappings complete any tuple variable
+          cache.deriveFieldGenerators(ordered);
           return true;
         }
       }
@@ -3188,16 +3226,255 @@ class Generators {
     }
   }
 
-  /** Generators that have been created to date. */
+  /**
+   * Monotonic cache of generators and derived facts.
+   *
+   * <p>Serves as a memoized deductive store during generator expansion. Facts
+   * (generators, field mappings) are only added, never removed. Each fact is
+   * true forever — fresh pattern variables ensure that new facts have their own
+   * identity and don't conflict with existing ones.
+   *
+   * <p>The cache supports dynamic programming: when asked for a generator for a
+   * pattern, it first checks whether one has already been computed. If not, it
+   * may derive one from accumulated facts (e.g., composing field generators
+   * into a tuple reconstruction).
+   *
+   * <p>The monotonicity invariant means {@code bestGenerator} can safely return
+   * the most recently added generator for a pattern, since later additions are
+   * refinements (e.g., an ExistsJoinGenerator that subsumes a raw
+   * CollectionGenerator).
+   */
   static class Cache {
     final TypeSystem typeSystem;
     final Environment env;
     final Multimap<Core.NamedPat, Generator> generators =
         MultimapBuilder.hashKeys().arrayListValues().build();
 
+    /**
+     * Maps (variable, fieldIndex) to the fresh pattern created for {@code #i
+     * variable} by {@link #patForExp}.
+     */
+    final Map<Pair<Core.NamedPat, Integer>, Core.IdPat> fieldPats =
+        new LinkedHashMap<>();
+
+    /**
+     * Constraints that have been used to derive generators and should be
+     * simplified to {@code true} during expansion. This handles the case where
+     * a function call like {@code par(x, y)} was inlined to an {@code elem}
+     * expression to find a generator, but the original function call form
+     * remains in the WHERE clause.
+     */
+    final Set<Core.Exp> satisfiedConstraints = new HashSet<>();
+
     Cache(TypeSystem typeSystem, Environment env) {
       this.typeSystem = requireNonNull(typeSystem);
       this.env = requireNonNull(env);
+    }
+
+    /**
+     * Creates a pattern for an expression, recording field-access
+     * relationships.
+     *
+     * <p>Unlike {@code wholePat} + {@code toPat}, this method remembers which
+     * fresh patterns correspond to which field accesses, enabling {@link
+     * #deriveFieldGenerators} to reconstruct tuple generators.
+     *
+     * <ul>
+     *   <li>{@code patForExp(id(x))} returns {@code idPat(x)}
+     *   <li>{@code patForExp(tuple(id(x), id(y)))} returns {@code tuplePat(x,
+     *       y)}
+     *   <li>{@code patForExp(#1 p)} creates fresh {@code f1}, records {@code
+     *       (p, 0) -> f1}, returns {@code f1}
+     * </ul>
+     */
+    Core.Pat patForExp(Core.Exp exp) {
+      switch (exp.op) {
+        case ID:
+          return ((Core.Id) exp).idPat;
+
+        case TUPLE:
+          final Core.Tuple tuple = (Core.Tuple) exp;
+          final List<Core.Pat> patList = new ArrayList<>();
+          for (Core.Exp arg : tuple.args) {
+            patList.add(patForExp(arg));
+          }
+          final RecordLikeType type = tuple.type();
+          return type instanceof RecordType
+              ? core.recordPat((RecordType) type, patList)
+              : core.tuplePat(type, patList);
+
+        case APPLY:
+          final Core.Apply apply = (Core.Apply) exp;
+          if (apply.fn.op == Op.RECORD_SELECTOR && apply.arg.op == Op.ID) {
+            final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
+            final Core.NamedPat basePat = ((Core.Id) apply.arg).idPat;
+            final int slot = selector.slot;
+            final Pair<Core.NamedPat, Integer> key = Pair.of(basePat, slot);
+            return fieldPats.computeIfAbsent(
+                key,
+                k -> {
+                  final String fieldName = selector.fieldName();
+                  final String varName =
+                      Character.isDigit(fieldName.charAt(0))
+                          ? "f" + fieldName
+                          : fieldName;
+                  return core.idPat(exp.type, varName, 0);
+                });
+          }
+          // For other applies, create a fresh pattern (same as toPat)
+          return core.idPat(exp.type, "v", 0);
+
+        case BOOL_LITERAL:
+        case CHAR_LITERAL:
+        case INT_LITERAL:
+        case REAL_LITERAL:
+        case STRING_LITERAL:
+        case UNIT_LITERAL:
+          return core.toPat(exp);
+
+        default:
+          return core.toPat(exp);
+      }
+    }
+
+    /**
+     * Checks whether all fields of some tuple-typed variable have fresh
+     * patterns in {@link #fieldPats}, and if so creates a self-contained {@link
+     * CollectionGenerator} that reconstructs the tuple by joining the
+     * underlying collection scans.
+     *
+     * <p>For example, if {@code fieldPats} contains {@code (p, 0) -> f1} and
+     * {@code (p, 1) -> f2}, with generators {@code (p1, f1) in edges} and
+     * {@code (p2, f2) in edges}, creates:
+     *
+     * <pre>{@code
+     * from (p1, f1) in edges, (p2, f2) in edges
+     *   where p1 = p2
+     *   yield (f1, f2)
+     *   distinct
+     * }</pre>
+     */
+    void deriveFieldGenerators(boolean ordered) {
+      // Collect all base patterns that have field entries
+      final Map<Core.NamedPat, Map<Integer, Core.IdPat>> byBase =
+          new LinkedHashMap<>();
+      for (Map.Entry<Pair<Core.NamedPat, Integer>, Core.IdPat> entry :
+          fieldPats.entrySet()) {
+        byBase
+            .computeIfAbsent(entry.getKey().left, k -> new LinkedHashMap<>())
+            .put(entry.getKey().right, entry.getValue());
+      }
+      for (Map.Entry<Core.NamedPat, Map<Integer, Core.IdPat>> entry :
+          byBase.entrySet()) {
+        final Core.NamedPat basePat = entry.getKey();
+        final Map<Integer, Core.IdPat> fields = entry.getValue();
+        // Check if basePat is tuple-typed with all fields covered
+        if (!(basePat.type instanceof RecordLikeType)) {
+          continue;
+        }
+        final RecordLikeType recordType = (RecordLikeType) basePat.type;
+        final int arity = recordType.argNameTypes().size();
+        final Generator existing = bestGenerator(basePat);
+        final boolean hasFiniteGenerator =
+            existing != null
+                && existing.cardinality != Generator.Cardinality.INFINITE;
+        if (fields.size() != arity || hasFiniteGenerator) {
+          continue;
+        }
+        // All fields covered and no finite generator — derive one.
+        // Verify all field patterns exist.
+        final List<Core.IdPat> fieldPatList = new ArrayList<>();
+        boolean complete = true;
+        for (int i = 0; i < arity; i++) {
+          final Core.IdPat fieldPat = fields.get(i);
+          if (fieldPat == null) {
+            complete = false;
+            break;
+          }
+          fieldPatList.add(fieldPat);
+        }
+        if (!complete) {
+          continue;
+        }
+
+        // Find the generator for each field pattern and build a FROM
+        // expression that joins them.
+        final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+        final List<Core.NamedPat> sharedPats = new ArrayList<>();
+        boolean first = true;
+        for (Core.IdPat fieldPat : fieldPatList) {
+          final Generator fieldGen = bestGenerator(fieldPat);
+          if (fieldGen == null) {
+            complete = false;
+            break;
+          }
+          if (first) {
+            // First scan: use the generator's pattern and expression as-is
+            fromBuilder.scan(fieldGen.pat, fieldGen.exp);
+            // Track non-field patterns for joining
+            for (Core.NamedPat p : fieldGen.pat.expand()) {
+              if (!fieldPatList.contains(p)) {
+                sharedPats.add(p);
+              }
+            }
+            first = false;
+          } else {
+            // Subsequent scans: need to create fresh patterns for
+            // non-field components and add equality constraints for
+            // shared variables (like p' that appears in both generators).
+            final List<Core.NamedPat> genPats = fieldGen.pat.expand();
+            final List<Core.Pat> freshPats = new ArrayList<>();
+            final List<Core.Exp> eqConstraints = new ArrayList<>();
+            for (Core.NamedPat gp : genPats) {
+              if (fieldPatList.contains(gp)) {
+                freshPats.add(gp);
+              } else {
+                // Create a fresh pattern for this shared/auxiliary variable
+                final Core.IdPat freshPat =
+                    core.idPat(gp.type, gp.name + "$", 0);
+                freshPats.add(freshPat);
+                // Find matching shared pattern from earlier scan
+                for (Core.NamedPat sp : sharedPats) {
+                  if (sp.name.equals(gp.name)) {
+                    eqConstraints.add(
+                        core.equal(typeSystem, core.id(sp), core.id(freshPat)));
+                    break;
+                  }
+                }
+              }
+            }
+            final Core.Pat scanPat = core.tuplePat(typeSystem, freshPats);
+            fromBuilder.scan(scanPat, fieldGen.exp);
+            for (Core.Exp eq : eqConstraints) {
+              fromBuilder.where(eq);
+            }
+          }
+        }
+        if (!complete) {
+          continue;
+        }
+
+        // Group by the reconstructed tuple to get distinct values.
+        // Use group with atom=true and a single key, rather than
+        // yield + distinct, to avoid a pre-existing bug where
+        // yield(tuple) + distinct produces null for tuple-typed atoms.
+        final List<Core.Exp> fieldExps = new ArrayList<>();
+        for (Core.IdPat fp : fieldPatList) {
+          fieldExps.add(core.id(fp));
+        }
+        final Core.Exp tupleExp =
+            core.tuple(typeSystem, fieldExps.toArray(new Core.Exp[0]));
+        final Core.IdPat resultPat = core.idPat(basePat.type, basePat.name, 0);
+        final ImmutableSortedMap<Core.IdPat, Core.Exp> groupExps =
+            ImmutableSortedMap.of(resultPat, tupleExp);
+        fromBuilder.group(true, groupExps, ImmutableSortedMap.of());
+
+        final Core.From derivedFrom = fromBuilder.build();
+        // Convert the derived FROM to a list to prevent FromBuilder.scan
+        // from inlining it (which would break variable scoping).
+        final Core.Exp asList = core.withOrdered(true, derivedFrom, typeSystem);
+        CollectionGenerator.create(this, ordered, basePat, asList);
+      }
     }
 
     @Nullable
