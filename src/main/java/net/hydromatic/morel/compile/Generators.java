@@ -292,13 +292,12 @@ class Generators {
     final Core.From joinedFrom = fromBuilder.build();
     final Set<Core.NamedPat> freePats2 = freePats(typeSystem, joinedFrom);
 
-    // Remove the old generator and add the new joined one.
-    // Use the FULL pattern so inner scan variables are included in the
-    // generator's pattern. The Expander will add these to 'done' and can
-    // create join conditions for subsequent generators.
-    // IMPORTANT: Create a record pattern to match the record we're yielding.
+    // Add the new joined generator. Use the FULL pattern so inner scan
+    // variables are included in the generator's pattern. The Expander will
+    // add these to 'done' and can create join conditions for subsequent
+    // generators. IMPORTANT: Create a record pattern to match the record
+    // we're yielding.
     final Core.Pat joinedPat = core.recordOrAtomPat(typeSystem, yieldPats);
-    cache.remove((Core.NamedPat) pat);
     cache.add(new ExistsJoinGenerator(joinedPat, joinedFrom, freePats2));
   }
 
@@ -464,8 +463,8 @@ class Generators {
     final Core.From filteredFrom = fromBuilder.build();
     final Set<Core.NamedPat> freePats2 = freePats(typeSystem, filteredFrom);
 
-    // Replace the generator with the filtered one
-    cache.remove((Core.NamedPat) pat);
+    // Add the filtered generator. bestGenerator returns the last entry,
+    // so this naturally supersedes any earlier generator for pat.
     cache.add(
         new ExistsFilterGenerator(
             (Core.NamedPat) pat, filteredFrom, freePats2));
@@ -3614,11 +3613,6 @@ class Generators {
         generators.put(namedPat, generator);
       }
       return generator;
-    }
-
-    /** Removes all generators for a given pattern. */
-    public void remove(Core.NamedPat namedPat) {
-      generators.removeAll(namedPat);
     }
   }
 }
