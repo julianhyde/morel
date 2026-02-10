@@ -67,22 +67,86 @@ class Generators {
 
   static boolean maybeGenerator(
       Cache cache, Core.Pat pat, boolean ordered, Context context) {
-    if (maybeElem(cache, pat, ordered, context)) {
+    // Phase A: Classify leaf constraints (single loop)
+    Core.Exp elemMatch = null;
+    Core.Exp pointMatch = null;
+    Core.Exp pointValue = null;
+    boolean hasBounds = false;
+    Core.Exp prefixMatch = null;
+    Core.Exp prefixString = null;
+
+    for (Core.Exp c : context.constraints) {
+      if (elemMatch == null
+          && c.isCallTo(BuiltIn.OP_ELEM)
+          && containsRef(c.arg(0), pat)) {
+        elemMatch = c;
+      }
+      if (pointMatch == null && c.isCallTo(BuiltIn.OP_EQ)) {
+        if (references(c.arg(0), pat)) {
+          pointMatch = c;
+          pointValue = c.arg(1);
+        } else if (references(c.arg(1), pat)) {
+          pointMatch = c;
+          pointValue = c.arg(0);
+        }
+      }
+      if (!hasBounds && isBoundConstraint(c, pat)) {
+        hasBounds = true;
+      }
+      if (prefixMatch == null && pat.type == PrimitiveType.STRING) {
+        if (c.op == Op.APPLY) {
+          final Core.Apply outer = (Core.Apply) c;
+          if (outer.fn.op == Op.APPLY) {
+            final Core.Apply inner = (Core.Apply) outer.fn;
+            if (inner.isCallTo(BuiltIn.STRING_IS_PREFIX)
+                && references(inner.arg, pat)) {
+              prefixMatch = c;
+              prefixString = outer.arg;
+            }
+          }
+        }
+      }
+    }
+
+    // Phase B: Synthesize leaf generators (priority order)
+    if (elemMatch != null) {
+      final Core.Exp collection = elemMatch.arg(1);
+      final Core.Pat elemPat = cache.patForExp(elemMatch.arg(0));
+      CollectionGenerator.create(
+          cache, ordered, elemPat, collection, ImmutableSet.of(elemMatch));
+      cache.deriveFieldGenerators(ordered);
+      return true;
+    }
+    if (pointMatch != null) {
+      PointGenerator.create(
+          cache, pat, ordered, pointValue, ImmutableSet.of(pointMatch));
+      return true;
+    }
+    if (hasBounds && pat.type == PrimitiveType.INT) {
+      final @Nullable Pair<Core.Exp, Boolean> lower =
+          lowerBound(cache.typeSystem, pat, context.constraints);
+      final @Nullable Pair<Core.Exp, Boolean> upper =
+          upperBound(cache.typeSystem, pat, context.constraints);
+      if (lower != null && upper != null) {
+        generateRange(
+            cache,
+            ordered,
+            (Core.NamedPat) pat,
+            context.constraints,
+            requireNonNull(lower.left),
+            requireNonNull(lower.right),
+            requireNonNull(upper.left),
+            requireNonNull(upper.right));
+        return true;
+      }
+    }
+    if (prefixMatch != null) {
+      StringPrefixGenerator.create(
+          cache, pat, ordered, prefixString, ImmutableSet.of(prefixMatch));
       return true;
     }
 
-    if (maybePoint(cache, pat, ordered, context)) {
-      return true;
-    }
-
-    if (maybeRange(cache, pat, ordered, context)) {
-      return true;
-    }
-
-    if (maybeStringPrefix(cache, pat, ordered, context)) {
-      return true;
-    }
-
+    // Phase C: Complex strategies (unchanged)
     if (maybeExists(cache, pat, context)) {
       return true;
     }
@@ -2057,52 +2121,6 @@ class Generators {
   }
 
   /**
-   * For each constraint "pat elem collection", adds a generator based on
-   * "collection".
-   */
-  static boolean maybeElem(
-      Cache cache, Core.Pat goalPat, boolean ordered, Context context) {
-    for (Core.Exp predicate : context.constraints) {
-      if (predicate.isCallTo(BuiltIn.OP_ELEM)) {
-        if (containsRef(predicate.arg(0), goalPat)) {
-          // If predicate is "(p, q) elem links", first create a generator
-          // for "p2 elem links", where "p2 as (p, q)".
-          final Core.Exp collection = predicate.arg(1);
-          final Core.Pat pat = cache.patForExp(predicate.arg(0));
-          CollectionGenerator.create(
-              cache, ordered, pat, collection, ImmutableSet.of(predicate));
-          // Check if field mappings complete any tuple variable
-          cache.deriveFieldGenerators(ordered);
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  static boolean maybePoint(
-      Cache cache, Core.Pat pat, boolean ordered, Context context) {
-    for (Core.Exp constraint : context.constraints) {
-      if (constraint.isCallTo(BuiltIn.OP_EQ)) {
-        final Core.@Nullable Exp value;
-        if (references(constraint.arg(0), pat)) {
-          value = constraint.arg(1);
-        } else if (references(constraint.arg(1), pat)) {
-          value = constraint.arg(0);
-        } else {
-          value = null;
-        }
-        if (value != null) {
-          PointGenerator.create(
-              cache, pat, ordered, value, ImmutableSet.of(constraint));
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
    * Creates an expression that generates values from several generators.
    *
    * <p>The resulting generator has {@code unique = false} because different
@@ -2389,7 +2407,8 @@ class Generators {
       final Core.Exp conLiteralExp =
           core.apply(Pos.ZERO, dataType, conId, literalExp);
       // Create a point generator for this single value
-      PointGenerator.create(cache, goalPat, ordered, conLiteralExp);
+      PointGenerator.create(
+          cache, goalPat, ordered, conLiteralExp, ImmutableSet.of());
       return true;
     }
 
@@ -2420,7 +2439,8 @@ class Generators {
     final Core.Exp wrapperExp = fb.build();
 
     // Create a generator for goalPat
-    CollectionGenerator.create(cache, ordered, goalPat, wrapperExp);
+    CollectionGenerator.create(
+        cache, ordered, goalPat, wrapperExp, ImmutableSet.of());
     return true;
   }
 
@@ -2454,7 +2474,7 @@ class Generators {
     final Core.Id conValue = core.id(conIdPat);
 
     // Create a point generator for this single value
-    PointGenerator.create(cache, goalPat, ordered, conValue);
+    PointGenerator.create(cache, goalPat, ordered, conValue, ImmutableSet.of());
     return true;
   }
 
@@ -2493,40 +2513,6 @@ class Generators {
     return false;
   }
 
-  static boolean maybeRange(
-      Cache cache, Core.Pat pat, boolean ordered, Context context) {
-    if (pat.type != PrimitiveType.INT) {
-      return false;
-    }
-    final @Nullable Pair<Core.Exp, Boolean> lower =
-        lowerBound(cache.typeSystem, pat, context.constraints);
-    if (lower == null) {
-      return false;
-    }
-    final @Nullable Pair<Core.Exp, Boolean> upper =
-        upperBound(cache.typeSystem, pat, context.constraints);
-    if (upper == null) {
-      return false;
-    }
-    // Build provenance from the bound constraints.
-    final ImmutableSet.Builder<Core.Exp> provenance = ImmutableSet.builder();
-    for (Core.Exp c : context.constraints) {
-      if (isBoundConstraint(c, pat)) {
-        provenance.add(c);
-      }
-    }
-    Generators.generateRange(
-        cache,
-        ordered,
-        (Core.NamedPat) pat,
-        requireNonNull(lower.left),
-        requireNonNull(lower.right),
-        requireNonNull(upper.left),
-        requireNonNull(upper.right),
-        provenance.build());
-    return true;
-  }
-
   /** Returns whether a constraint is a comparison bound on {@code pat}. */
   private static boolean isBoundConstraint(Core.Exp constraint, Core.Pat pat) {
     switch (constraint.builtIn()) {
@@ -2546,47 +2532,6 @@ class Generators {
   }
 
   /**
-   * Checks for {@code String.isPrefix p s} pattern where p is the goal pattern
-   * and s is a string expression. If found, generates all prefixes of s.
-   *
-   * <p>For example, {@code from p where String.isPrefix p "abcd"} generates
-   * {@code List.tabulate(String.size "abcd" + 1, fn i =>
-   * String.substring("abcd", 0, i))}.
-   *
-   * <p>String.isPrefix is curried, so the structure is: {@code
-   * APPLY(APPLY(FN_LITERAL(STRING_IS_PREFIX), p), s)}
-   */
-  static boolean maybeStringPrefix(
-      Cache cache, Core.Pat pat, boolean ordered, Context context) {
-    if (pat.type != PrimitiveType.STRING) {
-      return false;
-    }
-    for (Core.Exp constraint : context.constraints) {
-      // Check for curried call: APPLY(APPLY(FN_LITERAL(STRING_IS_PREFIX), p),
-      // s)
-      if (constraint.op != Op.APPLY) {
-        continue;
-      }
-      final Core.Apply outerApply = (Core.Apply) constraint;
-      if (outerApply.fn.op != Op.APPLY) {
-        continue;
-      }
-      final Core.Apply innerApply = (Core.Apply) outerApply.fn;
-      if (!innerApply.isCallTo(BuiltIn.STRING_IS_PREFIX)) {
-        continue;
-      }
-      // innerApply.arg is p (the prefix pattern)
-      // outerApply.arg is s (the string to check prefixes of)
-      if (references(innerApply.arg, pat)) {
-        StringPrefixGenerator.create(
-            cache, pat, ordered, outerApply.arg, ImmutableSet.of(constraint));
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
    * Creates an expression that generates a range of integer values.
    *
    * <p>For example, {@code generateRange(3, true, 8, false)} generates a range
@@ -2594,6 +2539,7 @@ class Generators {
    *
    * @param ordered If true, generate a `list`, otherwise a `bag`
    * @param pat Pattern
+   * @param constraints Constraints to scan for bound provenance
    * @param lower Lower bound
    * @param lowerStrict Whether the lower bound is strict (exclusive): true for
    *     {@code x > lower}, false for {@code x >= lower}
@@ -2605,11 +2551,17 @@ class Generators {
       Cache cache,
       boolean ordered,
       Core.NamedPat pat,
+      ImmutableList<Core.Exp> constraints,
       Core.Exp lower,
       boolean lowerStrict,
       Core.Exp upper,
-      boolean upperStrict,
-      Set<Core.Exp> provenance) {
+      boolean upperStrict) {
+    final ImmutableSet.Builder<Core.Exp> provenance = ImmutableSet.builder();
+    for (Core.Exp c : constraints) {
+      if (isBoundConstraint(c, pat)) {
+        provenance.add(c);
+      }
+    }
     // For x > lower, we want x >= lower + 1
     final TypeSystem typeSystem = cache.typeSystem;
     final Core.Exp lower2 =
@@ -2659,7 +2611,7 @@ class Generators {
             lowerStrict,
             upper,
             upperStrict,
-            provenance));
+            provenance.build()));
   }
 
   /** Returns an extent generator, or null if expression is not an extent. */
@@ -3029,12 +2981,6 @@ class Generators {
           new PointGenerator(pat, exp, freePats, lower, provenance));
     }
 
-    @SuppressWarnings("UnusedReturnValue")
-    static Generator create(
-        Cache cache, Core.Pat pat, boolean ordered, Core.Exp lower) {
-      return create(cache, pat, ordered, lower, ImmutableSet.of());
-    }
-
     @Override
     Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       // Simplify "p = point" to true.
@@ -3243,12 +3189,6 @@ class Generators {
           freePats(cache.typeSystem, collection2);
       return cache.add(
           new CollectionGenerator(pat, collection2, freePats, provenance));
-    }
-
-    @SuppressWarnings("UnusedReturnValue")
-    static CollectionGenerator create(
-        Cache cache, boolean ordered, Core.Pat pat, Core.Exp collection) {
-      return create(cache, ordered, pat, collection, ImmutableSet.of());
     }
 
     @Override
@@ -3520,7 +3460,8 @@ class Generators {
         // Convert the derived FROM to a list to prevent FromBuilder.scan
         // from inlining it (which would break variable scoping).
         final Core.Exp asList = core.withOrdered(true, derivedFrom, typeSystem);
-        CollectionGenerator.create(this, ordered, basePat, asList);
+        CollectionGenerator.create(
+            this, ordered, basePat, asList, ImmutableSet.of());
       }
     }
 
