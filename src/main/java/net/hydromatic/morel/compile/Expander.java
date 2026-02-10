@@ -233,10 +233,15 @@ public class Expander {
           // 2. Simplify: apply each generator's simplify method to
           //    remaining conjuncts (semantic equivalence).
           if (step instanceof Core.Where) {
-            // Collect all provenance constraints from all generators.
+            // Collect all provenance constraints from sealed generators.
+            // Sealed generators fully encode their provenance, so their
+            // constraints can safely be removed from WHERE. Unsealed
+            // generators' provenance is advisory only.
             final Set<Core.Exp> allProvenance = new HashSet<>();
             for (Generator g : generatorMap.values()) {
-              allProvenance.addAll(g.provenance);
+              if (g.sealed) {
+                allProvenance.addAll(g.provenance);
+              }
             }
             // Decompose, filter by provenance, then simplify remainder.
             final List<Core.Exp> conjuncts =
@@ -526,7 +531,8 @@ public class Expander {
     infiniteGenerators.forEach(
         (pat, generator) -> {
           final boolean ordered = generator.exp.type instanceof ListType;
-          if (maybeGenerator(cache, pat, ordered, constraints)) {
+          if (maybeGenerator(
+              cache, pat, ordered, new Generators.Context(constraints))) {
             Generator g = getLast(cache.generators.get(pat));
             g.pat.expand().forEach(p2 -> generators.put(p2, g));
           }
