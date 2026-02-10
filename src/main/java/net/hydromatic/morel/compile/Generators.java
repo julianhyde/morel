@@ -733,11 +733,9 @@ class Generators {
               : inlinedBody;
       if (safeBody != null) {
         // Decompose "andalso" into individual conjuncts for range detection.
-        if (maybeGenerator(
-            cache,
-            goalPat,
-            ordered,
-            new Context(core.decomposeAnd(safeBody)))) {
+        final List<Core.Exp> innerConstraints = core.decomposeAnd(safeBody);
+        final Context innerContext = new Context(innerConstraints);
+        if (maybeGenerator(cache, goalPat, ordered, innerContext)) {
           anySuccess = true;
           context.consumed.add(constraint);
           // If goalPat now has a finite generator, stop. Processing
@@ -750,12 +748,45 @@ class Generators {
           final Generator bestGen = cache.bestGeneratorForPat(goalPat);
           if (bestGen != null
               && bestGen.cardinality != Generator.Cardinality.INFINITE) {
+            // If the generator fully encodes the function body,
+            // add the function-call constraint to its provenance.
+            // This allows expandFrom2 to remove the redundant
+            // function-call conjunct from WHERE.
+            //
+            // Only safe when the generator's pattern matches goalPat
+            // exactly (no extra patterns). If the generator has extra
+            // patterns (e.g., pat = (p, bar) but goalPat = p), those
+            // extra patterns may be projected away when the generator
+            // is used in a nested expansion, making the provenance
+            // entry invalid.
+            final Set<Core.NamedPat> goalPats = new HashSet<>(goalPat.expand());
+            if (bestGen.sealed
+                && goalPats.containsAll(bestGen.pat.expand())
+                && coversAll(
+                    innerConstraints,
+                    bestGen.provenance,
+                    innerContext.consumed)) {
+              bestGen.provenance.add(constraint);
+            }
             return true;
           }
         }
       }
     }
     return anySuccess;
+  }
+
+  /** Whether every constraint is in {@code provenance} or {@code consumed}. */
+  private static boolean coversAll(
+      List<Core.Exp> constraints,
+      Set<Core.Exp> provenance,
+      Set<Core.Exp> consumed) {
+    for (Core.Exp c : constraints) {
+      if (!provenance.contains(c) && !consumed.contains(c)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Tries to create a transitive closure generator for a full application. */
