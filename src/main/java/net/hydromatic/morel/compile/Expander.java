@@ -233,6 +233,8 @@ public class Expander {
           // 2. Simplify: apply each generator's simplify method to
           //    remaining conjuncts (semantic equivalence).
           if (step instanceof Core.Where) {
+            final Core.Where where = (Core.Where) step;
+
             // Collect all provenance constraints from sealed generators.
             // Sealed generators fully encode their provenance, so their
             // constraints can safely be removed from WHERE. Unsealed
@@ -244,29 +246,19 @@ public class Expander {
               }
             }
             // Decompose, filter by provenance, then simplify remainder.
-            final List<Core.Exp> conjuncts =
-                core.decomposeAnd(((Core.Where) step).exp);
             final List<Core.Exp> remaining = new ArrayList<>();
-            for (Core.Exp conjunct : conjuncts) {
+            for (Core.Exp conjunct : core.decomposeAnd(where.exp)) {
               if (allProvenance.contains(conjunct)) {
                 continue; // subsumed by a generator
               }
               // Apply generator-based simplification.
-              Core.Exp simplified = conjunct;
-              for (Map.Entry<Core.NamedPat, Generator> entry :
-                  generatorMap.entrySet()) {
-                simplified =
-                    entry
-                        .getValue()
-                        .simplify(typeSystem, entry.getKey(), simplified);
-              }
-              if (!simplified.isBoolLiteral(true)) {
-                remaining.add(simplified);
-              }
+              final Core.Exp[] simplified = {conjunct};
+              generatorMap.forEach(
+                  (p, g) ->
+                      simplified[0] = g.simplify(typeSystem, p, simplified[0]));
+              remaining.add(simplified[0]);
             }
-            if (!remaining.isEmpty()) {
-              fromBuilder.where(core.andAlso(typeSystem, remaining));
-            }
+            fromBuilder.where(core.andAlso(typeSystem, remaining));
             return;
           }
 

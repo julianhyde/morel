@@ -1094,7 +1094,8 @@ public enum CoreBuilder {
    * simplifies empty list to "true" and singleton list "[e]" to "e".
    */
   public Core.Exp andAlso(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
-    final List<Core.Exp> expList = ImmutableList.copyOf(exps);
+    final List<Core.Exp> expList = new ArrayList<>();
+    flattenAnds(exps, expList::add);
     if (expList.isEmpty()) {
       return trueLiteral;
     }
@@ -1110,7 +1111,8 @@ public enum CoreBuilder {
    * empty list to "false" and singleton list "[e]" to "e".
    */
   public Core.Exp orElse(TypeSystem typeSystem, Iterable<Core.Exp> exps) {
-    final ImmutableList<Core.Exp> expList = ImmutableList.copyOf(exps);
+    final List<Core.Exp> expList = new ArrayList<>();
+    flattenOrs(exps, expList::add);
     if (expList.isEmpty()) {
       return falseLiteral;
     }
@@ -1253,7 +1255,8 @@ public enum CoreBuilder {
   }
 
   /** Flattens the {@code andalso}s in every expression into a consumer. */
-  public void flattenAnds(List<Core.Exp> exps, Consumer<Core.Exp> consumer) {
+  public void flattenAnds(
+      Iterable<? extends Core.Exp> exps, Consumer<Core.Exp> consumer) {
     exps.forEach(arg -> flattenAnd(arg, consumer));
   }
 
@@ -1272,7 +1275,8 @@ public enum CoreBuilder {
   }
 
   /** Flattens the {@code orelse}s in every expression into a consumer. */
-  public void flattenOrs(List<Core.Exp> exps, Consumer<Core.Exp> consumer) {
+  public void flattenOrs(
+      Iterable<? extends Core.Exp> exps, Consumer<Core.Exp> consumer) {
     exps.forEach(arg -> flattenOr(arg, consumer));
   }
 
