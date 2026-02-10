@@ -20,65 +20,21 @@ License.
 TODO:
 insert hyperlinks;
 proof read for spelling and grammar;
-proof read for sentence flow;
-factor out blog post on variant.
+proof read for sentence flow.
 {% endcomment %}
 -->
 
 # Datalog on Morel
 
-Following a recent
-[commit to Morel](https://github.com/hydromatic/morel/commit/62581437ac9c8dc415b159fdc9d6abc7eb588e9a),
-you can now parse, validate and execute programs in Datalog. Consider
-the following program, in the
-[Souffl&eacute;](https://souffle-lang.github.io/) dialect of Datalog,
-to compute transitive closure of an `edge` relation.
+<!-- TODO: Add a lede that announces Datalog support AND states the
+     thesis: this demonstrates that Morel can now mix calculus and
+     algebra styles in one language. -->
 
-<pre><code>.decl edge(x:number, y:number)
-.decl path(x:number, y:number)
-edge(1,2).
-edge(2,3).
-path(X,Y) :- edge(X,Y).
-path(X,Z) :- path(X,Y), edge(Y,Z).
-.output path
-</code></pre>
+## The two paradigms
 
-In a graph with nodes 1, 2 and 3, the `edge` relation defines edges
-from 1 &rarr; 2 and 2 &rarr; 3. The derived `path` relation says that
-there is a path between two nodes if (a) there is an edge, or (b)
-there is an edge to an intermediate node and a path from that
-intermediate node to the destination node.  From the edges {1 &rarr;
-2, 2 &rarr; 3} it deduces the paths {1 &rarr; 2, 2 &rarr; 3, 1 &rarr;
-3}.
-
-The same program can be executed from Morel's shell:
-
-<pre><code>Datalog.execute <span style="color: brown;">"
-.decl edge(x:int, y:int)
-.decl path(x:int, y:int)
-edge(1,2).
-edge(2,3).
-path(X,Y) :- edge(X,Y).
-path(X,Z) :- path(X,Y), edge(Y,Z).
-.output path"</span>;
-<i>
-&gt; val it = {path=[{x=1,y=2},{x=2,y=3},{x=1,y=3}]}
-&gt;   : {path:{x:int, y:int} list} variant</i>
-</code></pre>
-
-Morel's dialect is very similar to Souffl&eacute;. Facts and rules
-have the same syntax, as does the `.output` directive. In the `.decl`
-directive, we have changed the `symbol` and `number` types to `string`
-and `int`, to be consistent with Morel's type system. (The `.input`
-directive, not shown in this example, is also implemented, and has a
-new optional *filePath* argument.)
-
-You'll notice that the Datalog program is passed as a string literal
-to a built-in function, `Datalog.execute`, and that the return is of
-type `variant`.  Before we describe the new functions and the new
-`variant` type, let's discuss why Datalog is so important.
-
-## Why Datalog?
+<!-- TODO: Add a brief intro sentence connecting this section to the
+     thesis - something like "To understand why this matters, we need
+     to understand the two paradigms for writing queries." -->
 
 Datalog represents the *other* great paradigm for writing queries and
 logic programs.
@@ -125,113 +81,109 @@ from a given node in under five steps, and the length of the shortest
 path. In algebra, the data type is a set of nodes and the length of
 the shortest known path.
 
-## Library functions
+<!-- TODO: Add a concluding sentence that connects back to Morel,
+     e.g., "With predicate inversion, Morel now supports both
+     paradigms, and the Datalog interface demonstrates this." -->
 
-This change adds a `Datalog` structure with the following functions.
+## How Morel does it
 
-| Name        | Type                | Description |
-|-------------|---------------------|-------------|
-| `execute`   | `string -> variant` | Executes a Datalog program. Returns the result as a `variant`. |
-| `translate` | `string -> string`  | Translates a Datalog program to an equivalent Morel program. |
-| `validate`  | `string -> string`  | Parses and validates a Datalog program. Returns either a type or an error. |
+<!-- TODO: This section should be a brief (2-3 paragraph) summary.
+     Consider linking to a separate predicate inversion post for
+     details. -->
 
-## Variant
+That magic lies not in the Datalog-to-Morel converter but in the Morel
+language itself. Over the last few months, we have added to Morel a
+capability called *predicate inversion*, the ability to deduce a set
+from a boolean expression.
 
-Notice that the return type of `execute` is declared as `variant`,
-and appears in the shell as `{path:{x:int, y:int} bag} variant`.
+At heart of the generated Morel program is a query: `from x, y where
+path (x, y)`.  It differs from a regular query in that the variables
+`x` and `y` are *unbounded*.  (In a conventional query, every variable
+is *bounded*, meaning it iterates over a collection, as do `d` and `e`
+in `from d in depts, e in employees`.)
 
-To implement the `execute` function, we had a problem to solve. The
-return type of a Datalog program, like any expression or query, varies
-from one program to the next.  The program is not parsed until we call
-the `execute` function, so cannot be known in advance. This is at odds
-with Morel's static type system, which means that a function's return
-type can depend only on the type (not value) of its arguments.
+In principle, an unbounded variable iterates over every possible value
+of its data type. This is fine for "small" data types like `boolean`,
+`char`, and `enum Color { RED | GREEN | BLUE }`, but problematic for
+"large" data types like `int` and `{b: boolean, i: int}` and infinite
+data types like `string` and `int list`.
 
-The solution was `variant` (added in
-[#324](https://github.com/hydromatic/morel/issues/324)), a single type
-that can represent all possible Morel values.
+Morel allows unbounded variables in a program as long as there is a
+predicate like `where x > 0 andalso x < 10` or `where e elem
+employees` that connects it with a finite set. Invertible predicates
+provide a way to generate the values of the variable. In Datalog
+parlance, they ensure that the variable is *grounded*.
 
-`variant` is a union of all primitive and composite types:
+Morel's predicate inversion algorithm recognizes various predicate
+patterns, including boolean functions
+that check membership in a collection (like `edge`)
+and that compute transitive closure (like `path`).
 
-```sml
-datatype variant =
-    UNIT
-  | BOOL of bool
-  | INT of int
-  | REAL of real
-  | CHAR of char
-  | STRING of string
-  | LIST of variant list
-  | BAG of variant list
-  | VECTOR of variant list
-  | VARIANT_NONE
-  | VARIANT_SOME of variant
-  | RECORD of (string * variant) list
-  | CONSTANT of string
-  | CONSTRUCT of string * variant
-```
+## Datalog on Morel
 
-You can use labels like `INT`, `LIST`, `STRING` to construct and
-deconstruct a value:
+Following a recent
+[commit to Morel](https://github.com/hydromatic/morel/commit/62581437ac9c8dc415b159fdc9d6abc7eb588e9a),
+you can now parse, validate and execute programs in Datalog. Consider
+the following program, in the
+[Souffl&eacute;](https://souffle-lang.github.io/) dialect of Datalog,
+to compute transitive closure of an `edge` relation.
 
-```sml
-fun f v =
-  case v of
-    INT i => "it's an integer!"
-   | LIST list => "it's a list!"
-   | STRING s => "it's a string!"
-   | _ => "it's something else!";
-> val f = fn : variant -> string
+<!-- TODO: The Souffle example below uses :number but Morel uses :int.
+     Either change to :int, or add a note explaining the difference. -->
 
-f (INT 5);
-> val it = "it's an integer!" : string
+<pre><code>.decl edge(x:number, y:number)
+.decl path(x:number, y:number)
+edge(1,2).
+edge(2,3).
+path(X,Y) :- edge(X,Y).
+path(X,Z) :- path(X,Y), edge(Y,Z).
+.output path
+</code></pre>
 
-f (STRING "x");
-> val it = "it's a string!" : string
+In a graph with nodes 1, 2 and 3, the `edge` relation defines edges
+from 1 &rarr; 2 and 2 &rarr; 3. The derived `path` relation says that
+there is a path between two nodes if (a) there is an edge, or (b)
+there is an edge to an intermediate node and a path from that
+intermediate node to the destination node.  From the edges {1 &rarr;
+2, 2 &rarr; 3} it deduces the paths {1 &rarr; 2, 2 &rarr; 3, 1 &rarr;
+3}.
 
-f (LIST [INT 1, INT 2]);
-> val it = "it's a list!" : string
-```
+The same program can be executed from Morel's shell:
 
-Expressions like `LIST [INT 1, INT 2]` make it look like a composite
-`variant` value consists of `variant` wrappers all the way down.  If
-that were the case, converting large, deeply nested values to
-`variant` would take considerable time and space. But the
-representation is more efficient.  The implementation of `variant` is
-a thin wrapper that contains a type and a native value. The runtime
-can quickly convert any value to `variant` by adding that wrapper.
+<pre><code>Datalog.execute <span style="color: brown;">"
+.decl edge(x:int, y:int)
+.decl path(x:int, y:int)
+edge(1,2).
+edge(2,3).
+path(X,Y) :- edge(X,Y).
+path(X,Z) :- path(X,Y), edge(Y,Z).
+.output path"</span>;
+<i>
+&gt; val it = {path=[{x=1,y=2},{x=2,y=3},{x=1,y=3}]}
+&gt;   : {path:{x:int, y:int} list} variant</i>
+</code></pre>
 
-We have modified the shell's output to make working with variants more
-intuitive.  Typically, the shell uses a colon (`:`) to separate a
-runtime value from its static type.  However, when printing a
-`variant` value, this convention shifts slightly:
+Morel's dialect is very similar to Souffl&eacute;. Facts and rules
+have the same syntax, as does the `.output` directive. In the `.decl`
+directive, we have changed the `symbol` and `number` types to `string`
+and `int`, to be consistent with Morel's type system. (The `.input`
+directive, not shown in this example, is also implemented, and has a
+new optional *filePath* argument.)
 
-```sml
-val it = {path=[{x=1,y=2},{x=2,y=3},{x=1,y=3}]}
-  : {path:{x:int, y:int} list} variant
-```
+### Translation
 
-In this case, the standard "value : type" separation is nuanced.
-While `variant` is the static type, the description `{path:{x:int,
-y:int} list}` is the dynamic type identified at runtime. Notably,
-`variant` is not the polymorphic type that it appears to be.
-
-But we've achieved our goal; `variant` delivers dynamically typed
-values at low runtime cost while preserving the integrity and benefits
-of the static type system.
-
-## Translation
+<!-- TODO: Add a sentence connecting this to the thesis - the
+     translation shows the structural correspondence between
+     Datalog (calculus) and Morel (algebra). -->
 
 How did we implement support for Datalog? Underneath the library
 functions, translation has a structure that will be familiar to anyone
 who has implemented a compiler that translates a high-level language
 to a lower-level language. Three steps are executed in succession:
 
-1. The *parser* (generated by Claude) converts a Datalog string to a
-   parse tree.
-2. The *validator* (also generated by Claude) makes sure that the
-   program is valid (that rules are safe, grounded and stratified)
-   and deduces its type.
+1. The *parser* converts a Datalog string to a parse tree.
+2. The *validator* makes sure that the program is valid (that rules
+   are safe, grounded and stratified) and deduces its type.
 3. The *translator* generates a Morel program that is equivalent to
    the Datalog program.
 
@@ -271,48 +223,35 @@ directive. This program has one directive, `.output path`, so the
 record has a single field named `path` that is a `bag` of
 `{x:int, y:int}` records.
 
-## Predicate inversion
-
-As we just saw, translating Datalog to Morel is straightforward.
-You might find that surprising, given that Datalog expresses problems
-differently than relational algebra, and that when we include
-recursion (transitive closure) it can compute things that relational
-algebra cannot.
-
-That magic lies not in the Datalog-to-Morel converter but in the Morel
-language itself. Over the last few months, we have added to Morel a
-capability called *predicate inversion*, the ability to deduce a set
-from a boolean expression.
-
-At heart of the generated Morel program is a query: `from x, y where
-path (x, y)`.  It differs from a regular query in that the variables
-`x` and `y` are *unbounded*.  (In a conventional query, every variable
-is *bounded*, meaning it iterates over a collection, as do `d` and `e`
-in `from d in depts, e in employees`.)
-
-In principle, an unbounded variable iterates over every possible value
-of its data type. This is fine for "small" data types like `boolean`,
-`char`, and `enum Color { RED | GREEN | BLUE }`, but problematic for
-"large" data types like `int` and `{b: boolean, i: int}` and infinite
-data types like `string` and `int list`.
-
-Morel allows unbounded variables in a program as long as there is a
-predicate like `where x > 0 andalso x < 10` or `where e elem
-employees` that connects it with a finite set. Invertible predicates
-provide a way to generate the values of the variable. In Datalog
-parlance, they ensure that the variable is *grounded*.
-
-Morel's predicate inversion algorithm recognizes various predicate
-patterns, including boolean functions
-that check membership in a collection (like `edge`)
-and that compute transitive closure (like `path`).
+## Mixing styles
 
 The net result is that predicate inversion allows you to freely mix
 Datalog-style queries (defined by boolean expressions and functions)
 with the relational algebra-style queries (defined by `from`,
-`exists`, `join` and set operations)
+`exists`, `join` and set operations).
+
+<!-- TODO: Add an example that shows both styles in one program.
+     Could adapt from the "Mixing Paradigms" example in datalog.md. -->
+
+## Library functions
+
+This change adds a `Datalog` structure with the following functions.
+
+| Name        | Type                | Description |
+|-------------|---------------------|-------------|
+| `execute`   | `string -> variant` | Executes a Datalog program. Returns the result as a `variant`. |
+| `translate` | `string -> string`  | Translates a Datalog program to an equivalent Morel program. |
+| `validate`  | `string -> string`  | Parses and validates a Datalog program. Returns either a type or an error. |
+
+Notice that the return type of `execute` is `variant`. This is a type
+that can hold any Morel value; see [variant-post.md](variant-post.md)
+for details.
 
 ## Conclusion
+
+<!-- TODO: Rewrite conclusion to tie back to the thesis: Morel now
+     unifies calculus and algebra styles. The Datalog interface is
+     proof of this capability, not the main point. -->
 
 The Datalog implementation demonstrates that Morel is a very powerful
 language.
