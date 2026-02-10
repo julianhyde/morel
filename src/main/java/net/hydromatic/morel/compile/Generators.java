@@ -133,10 +133,10 @@ class Generators {
             ordered,
             (Core.NamedPat) pat,
             context.constraints,
-            requireNonNull(lower.left),
-            requireNonNull(lower.right),
-            requireNonNull(upper.left),
-            requireNonNull(upper.right));
+            lower.left,
+            lower.right,
+            upper.left,
+            upper.right);
         return true;
       }
     }
