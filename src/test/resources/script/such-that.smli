@@ -1675,6 +1675,43 @@ Sys.planEx "999";
 >   "val it = from d in #depts scott join e in #emps scott where #deptno d = #deptno e andalso #deptno d = 20 yield #dname d"
 >   : string
 
+(* testProvenanceThroughFunction - Provenance propagation through
+ * function inversion. When 'f x' appears in WHERE, maybeFunction
+ * inlines the body and creates a Collection generator for x. The
+ * provenance system adds 'f x' to the generator's provenance,
+ * so expandFrom2 can remove it from WHERE. At plan level 999,
+ * there is no WHERE clause. *)
+let
+  val xs = [1, 2, 3]
+  fun f x = x elem xs
+in
+  from x where f x
+end;
+> val it = [1,2,3] : int bag
+Sys.planEx "0";
+> val it =
+>   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in from x_1 : int where f x_1 end end"
+>   : string
+Sys.planEx "999";
+> val it = "val it = from x in #fromList Bag ([1, 2, 3])" : string
+
+(* testProvenanceThroughFunctionWithFilter - Same as above but
+ * with an additional filter. Provenance removes 'f x'
+ * but keeps 'x > 1'. *)
+let
+  val xs = [1, 2, 3]
+  fun f x = x elem xs
+in
+  from x where f x andalso x > 1
+end;
+> val it = [2,3] : int bag
+Sys.planEx "0";
+> val it =
+>   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in from x_1 : int where f x_1 andalso x_1 > 1 end end"
+>   : string
+Sys.planEx "999";
+> val it = "val it = from x in #fromList Bag ([1, 2, 3]) where x > 1" : string
+
 (* testFromSuchThat3 - Smaller version of testFromSuchThat *)
 let
   val emps = [
