@@ -3288,6 +3288,15 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#TEST_FOO */
+  private static final Applicable1 TEST_FOO =
+      new BaseApplicable1<Integer, Integer>(BuiltIn.TEST_FOO) {
+        @Override
+        public Integer apply(Integer arg) {
+          return arg + 1;
+        }
+      };
+
   /** @see BuiltIn#VECTOR_ALL */
   private static final Applicable2 VECTOR_ALL = all(BuiltIn.VECTOR_ALL);
 
@@ -4190,6 +4199,7 @@ public abstract class Codes {
           .put(BuiltIn.SYS_SHOW, SYS_SHOW)
           .put(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL)
           .put(BuiltIn.SYS_UNSET, SYS_UNSET)
+          .put(BuiltIn.TEST_FOO, TEST_FOO)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_APP, VECTOR_APP)
           .put(BuiltIn.VECTOR_APPI, VECTOR_APPI)

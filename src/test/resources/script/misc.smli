@@ -122,4 +122,30 @@ in
 end;
 > val it = ["a"] : string list
 
+(* -------------------------------------------------------------
+ * [MOREL-342] Conditional inclusion of built-in structures
+ *)
+
+(*) By default, the Test structure is excluded.
+Test.foo 1;
+> stdIn:1.1-1.5 Error: unbound variable or constructor: Test
+>   raised at: stdIn:1.1-1.5
+
+(*) After setting excludeStructures to "", Test is visible.
+Sys.set ("excludeStructures", "");
+> val it = () : unit
+Sys.clearEnv ();
+> val it = () : unit
+Test.foo 1;
+> val it = 2 : int
+
+(*) After unsetting excludeStructures, Test is excluded again.
+Sys.unset "excludeStructures";
+> val it = () : unit
+Sys.clearEnv ();
+> val it = () : unit
+Test.foo 1;
+> stdIn:1.1-1.5 Error: unbound variable or constructor: Test
+>   raised at: stdIn:1.1-1.5
+
 (*) End misc.smli

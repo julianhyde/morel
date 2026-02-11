@@ -3323,6 +3323,9 @@ public enum BuiltIn {
   /** Function "Sys.unset", aka "unset", of type "string &rarr; unit". */
   SYS_UNSET("Sys", "unset", "unset", ts -> ts.fnType(STRING, UNIT)),
 
+  /** Function "Test.foo", of type "int &rarr; int". */
+  TEST_FOO("Test", "foo", ts -> ts.fnType(INT, INT)),
+
   /**
    * Function "Vector.all" of type "(&alpha; &rarr; bool) &rarr; &alpha; vector
    * &rarr; bool".

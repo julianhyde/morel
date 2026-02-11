@@ -133,7 +133,16 @@ public enum Prop {
    * href="https://www.smlnj.org/doc/Compiler/pages/printcontrol.html">PRINTCONTROL
    * signature</a> of the Standard Basis Library. Default is 79.
    */
-  LINE_WIDTH("lineWidth", Integer.class, true, 79);
+  LINE_WIDTH("lineWidth", Integer.class, true, 79),
+
+  /**
+   * String property "excludeStructures" is a Java regular expression that
+   * controls which built-in structures are excluded from the environment. A
+   * structure whose name matches the regex is excluded.
+   *
+   * <p>Default is "^Test$", which excludes the {@code Test} structure.
+   */
+  EXCLUDE_STRUCTURES("excludeStructures", String.class, true, "^Test$");
 
   public final String camelName;
   private final Class<?> type;
