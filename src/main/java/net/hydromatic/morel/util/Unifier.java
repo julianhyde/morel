@@ -223,7 +223,6 @@ public abstract class Unifier {
   public abstract Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
-      PairList<Term, ? extends RetryAction> retryMap,
       List<Constraint> constraints,
       Tracer tracer);
 
@@ -249,18 +248,6 @@ public abstract class Unifier {
         BiConsumer<Term, Term> termPairs);
   }
 
-  /** Called by unifier when a variable cannot be resolved. */
-  public interface RetryAction {
-    /** Returns whether the type graph can be remedied. */
-    boolean canAmend();
-
-    /** Amends the type graph. */
-    void amend();
-
-    /** Returns whether the variable is "on". */
-    boolean test();
-  }
-
   /**
    * Result of attempting unification. A success is {@link Substitution}, but
    * there are other failures.
@@ -270,20 +257,6 @@ public abstract class Unifier {
   /** Result indicating that unification was not possible. */
   public interface Failure extends Result {
     String reason();
-  }
-
-  /**
-   * Result indicating that unification may be possible if we adjust some
-   * initial parameters.
-   */
-  public interface Retry extends Result {
-    /** Returns whether trying requires restarting the unifier. */
-    default boolean requiresRestart() {
-      return true;
-    }
-
-    /** Changes some stuff so that we can try unification again. */
-    void amend();
   }
 
   /**

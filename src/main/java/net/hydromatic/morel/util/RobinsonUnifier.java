@@ -73,14 +73,10 @@ public class RobinsonUnifier extends Unifier {
   public Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
-      PairList<Term, ? extends RetryAction> retryMap,
       List<Constraint> constraints,
       Tracer tracer) {
     if (!termActions.isEmpty()) {
       throw new AssertionError("Actions are not supported");
-    }
-    if (!retryMap.isEmpty()) {
-      throw new AssertionError("Retry is not supported");
     }
     if (!constraints.isEmpty()) {
       throw new AssertionError("Constraints are not supported");

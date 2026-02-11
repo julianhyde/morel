@@ -41,7 +41,6 @@ public class MartelliUnifier extends Unifier {
   public Result unify(
       List<TermTerm> termPairs,
       Map<Variable, Action> termActions,
-      PairList<Term, ? extends RetryAction> retryMap,
       List<Constraint> constraints,
       Tracer tracer) {
     final long start = System.nanoTime();
@@ -85,27 +84,7 @@ public class MartelliUnifier extends Unifier {
         if (!left.operator.equals(right.operator)
             || left.terms.size() != right.terms.size()) {
           tracer.onConflict(left, right);
-          if (!retryMap.isEmpty()) {
-            // The retry map is not empty. Try to find a retry action
-            // that can amend the conflict. If we cannot find a retry action,
-            // defer the resolution - add the pair to the conflict queue, and
-            // we will try again when we have exhausted the other queues.
-            final int i =
-                retryMap.firstMatch(
-                    (t, a) ->
-                        (equiv(t, left, result) || equiv(t, right, result))
-                            && a.canAmend());
-            if (i >= 0) {
-              final RetryAction retryAction = retryMap.right(i);
-              return (Retry) retryAction::amend;
-            } else {
-              // Defer resolution.
-              work.conflictQueue.add(pair);
-              continue;
-            }
-          } else {
-            return failure("conflict: " + left + " vs " + right);
-          }
+          return failure("conflict: " + left + " vs " + right);
         }
 
         // decompose
@@ -159,25 +138,6 @@ public class MartelliUnifier extends Unifier {
         continue;
       }
 
-      if (!work.conflictQueue.isEmpty()) {
-        // Now that the other work queues are empty, we have a better chance
-        // to identify whether a conflict maps to a term in the retry map.
-        TermTerm pair = work.conflictQueue.remove(0);
-        final Sequence left = (Sequence) pair.left;
-        final Sequence right = (Sequence) pair.right;
-
-        final int i =
-            retryMap.firstMatch(
-                (t, a) ->
-                    (equiv(t, left, result) || equiv(t, right, result))
-                        && a.canAmend());
-        if (i >= 0) {
-          final RetryAction retryAction = retryMap.right(i);
-          return (Retry) retryAction::amend;
-        }
-        return failure("conflict: " + left + " vs " + right);
-      }
-
       final long duration = System.nanoTime() - start;
       if (false) {
         System.out.printf(
@@ -187,16 +147,6 @@ public class MartelliUnifier extends Unifier {
       }
       return SubstitutionResult.create(result);
     }
-  }
-
-  /** Returns whether two terms are equivalent under a substitution. */
-  private boolean equiv(Term t1, Term t2, Map<Variable, Term> result) {
-    if (t1.equals(t2)) {
-      return true;
-    }
-    Term t1b = t1.apply(result);
-    Term t2b = t2.apply(result);
-    return t1b.equals(t2b);
   }
 
   private void act(
@@ -266,7 +216,6 @@ public class MartelliUnifier extends Unifier {
     final ArrayQueue<TermTerm> deleteQueue = new ArrayQueue<>();
     final ArrayQueue<TermTerm> seqSeqQueue = new ArrayQueue<>();
     final ArrayQueue<TermTerm> varAnyQueue = new ArrayQueue<>();
-    final ArrayQueue<TermTerm> conflictQueue = new ArrayQueue<>();
     final List<MutableConstraint> constraintQueue = new ArrayList<>();
     final Map<Variable, Term> result;
 

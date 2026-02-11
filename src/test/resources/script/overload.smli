@@ -301,4 +301,31 @@ from i in bag [1, 2, 3]
 
 
 
+(*) ---------------------------------------------------------------------------
+(*) Synthetic aggregate tests: testBagSum, testListSum, testOverloadedSum.
+
+(*) testBagSum in a bag context
+from e in (from x in [1, 2, 3] unorder)
+  group compute {s = testBagSum over e};
+
+(*) testBagSum in a list context (should still work)
+from e in [1, 2, 3]
+  group compute {s = testBagSum over e};
+
+(*) testListSum in a list context
+from e in [1, 2, 3]
+  group compute {s = testListSum over e};
+
+(*) testListSum in a bag context (should still work)
+from e in (from x in [1, 2, 3] unorder)
+  group compute {s = testListSum over e};
+
+(*) testOverloadedSum selects bag variant in bag context
+from e in (from x in [1, 2, 3] unorder)
+  group compute {s = testOverloadedSum over e};
+
+(*) testOverloadedSum selects list variant in list context
+from e in [1, 2, 3]
+  group compute {s = testOverloadedSum over e};
+
 (*) End overload.smli

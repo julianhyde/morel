@@ -33,7 +33,6 @@ import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.MartelliUnifier;
 import net.hydromatic.morel.util.RobinsonUnifier;
 import net.hydromatic.morel.util.Tracers;
@@ -147,7 +146,6 @@ public abstract class UnifierTest {
         unifier.unify(
             termPairs,
             ImmutableMap.of(),
-            ImmutablePairList.of(),
             ImmutableList.of(),
             Tracers.nullTracer());
     assertThat(result, notNullValue());
@@ -175,7 +173,6 @@ public abstract class UnifierTest {
         unifier.unify(
             pairList,
             ImmutableMap.of(),
-            ImmutablePairList.of(),
             ImmutableList.of(),
             Tracers.nullTracer());
     assertThat(result, not(instanceOf(Unifier.Substitution.class)));
@@ -431,7 +428,6 @@ public abstract class UnifierTest {
           unifier.unify(
               Arrays.asList(termTerms),
               ImmutableMap.of(),
-              ImmutablePairList.of(),
               ImmutableList.of(),
               Tracers.nullTracer());
       assertThat(unify, notNullValue());

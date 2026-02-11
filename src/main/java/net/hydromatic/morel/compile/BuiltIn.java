@@ -3024,6 +3024,40 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
   /**
+   * Test-only aggregate "Relational.testBagSum", aka "testBagSum", of type
+   * "&alpha; bag &rarr; &alpha;". Accepts ONLY bag.
+   */
+  RELATIONAL_TEST_BAG_SUM(
+      "Relational",
+      "testBagSum",
+      "testBagSum",
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
+
+  /**
+   * Test-only aggregate "Relational.testListSum", aka "testListSum", of type
+   * "&alpha; list &rarr; &alpha;". Accepts ONLY list.
+   */
+  RELATIONAL_TEST_LIST_SUM(
+      "Relational",
+      "testListSum",
+      "testListSum",
+      ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
+
+  /**
+   * Test-only aggregate "Relational.testOverloadedSum", aka
+   * "testOverloadedSum", overloaded with both "&alpha; bag &rarr; &alpha;" and
+   * "&alpha; list &rarr; &alpha;".
+   */
+  RELATIONAL_TEST_OVERLOADED_SUM(
+      "Relational",
+      "testOverloadedSum",
+      "testOverloadedSum",
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
+              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
+
+  /**
    * Function "String.collate", of type "(char * char &rarr; order) &rarr;
    * string * string &rarr; order".
    */

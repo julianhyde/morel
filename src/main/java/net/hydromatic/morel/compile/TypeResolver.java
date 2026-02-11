@@ -96,14 +96,11 @@ import net.hydromatic.morel.util.Unifier.Action;
 import net.hydromatic.morel.util.Unifier.Constraint;
 import net.hydromatic.morel.util.Unifier.Failure;
 import net.hydromatic.morel.util.Unifier.Result;
-import net.hydromatic.morel.util.Unifier.Retry;
-import net.hydromatic.morel.util.Unifier.RetryAction;
 import net.hydromatic.morel.util.Unifier.Sequence;
 import net.hydromatic.morel.util.Unifier.Substitution;
 import net.hydromatic.morel.util.Unifier.Term;
 import net.hydromatic.morel.util.Unifier.TermTerm;
 import net.hydromatic.morel.util.Unifier.Variable;
-import org.apache.calcite.util.ControlFlowException;
 import org.apache.calcite.util.Holder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -118,7 +115,6 @@ public class TypeResolver {
   private final List<TermVariable> terms = new ArrayList<>();
   private final Map<AstNode, Term> map = new HashMap<>();
   private final Map<Variable, Action> actionMap = new HashMap<>();
-  private final PairList<Term, RetryAction> retryMap;
   private final PairList<Variable, PrimitiveType> preferredTypes =
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
@@ -137,12 +133,9 @@ public class TypeResolver {
   static final String PROGRESSIVE_LABEL = "z$dummy";
 
   private TypeResolver(
-      TypeSystem typeSystem,
-      Consumer<CompileException> warningConsumer,
-      PairList<Term, RetryAction> retryMap) {
+      TypeSystem typeSystem, Consumer<CompileException> warningConsumer) {
     this.typeSystem = requireNonNull(typeSystem);
     this.warningConsumer = requireNonNull(warningConsumer);
-    this.retryMap = retryMap;
   }
 
   /** Deduces the datatype of a declaration. */
@@ -151,19 +144,12 @@ public class TypeResolver {
       Ast.Decl decl,
       TypeSystem typeSystem,
       Consumer<CompileException> warningConsumer) {
-    final PairList<Term, RetryAction> retryMap = PairList.of();
-    for (; ; ) {
-      final TypeResolver typeResolver =
-          new TypeResolver(typeSystem, warningConsumer, retryMap);
-      final Resolved resolved;
-      try {
-        resolved = typeResolver.deduceTypeWithRetries(env, decl, typeSystem);
-      } catch (RetryException unused) {
-        continue;
-      }
-      typeResolver.validations.forEach(v -> v.accept(resolved));
-      return resolved;
-    }
+    final TypeResolver typeResolver =
+        new TypeResolver(typeSystem, warningConsumer);
+    final Resolved resolved =
+        typeResolver.deduceTypeWithRetries(env, decl, typeSystem);
+    typeResolver.validations.forEach(v -> v.accept(resolved));
+    return resolved;
   }
 
   /** Converts a type AST to a type. */
@@ -192,11 +178,7 @@ public class TypeResolver {
     }
   }
 
-  /**
-   * Deduces the datatype of a declaration.
-   *
-   * @throws TypeResolver.RetryException if it wants to be called again
-   */
+  /** Deduces the datatype of a declaration. */
   private Resolved deduceType_(Environment env, Ast.Decl decl) {
     // Clean up from previous attempt.
     validations.clear();
@@ -219,15 +201,7 @@ public class TypeResolver {
       final List<TermTerm> termPairs = new ArrayList<>();
       terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
       final Result result =
-          unifier.unify(termPairs, actionMap, retryMap, constraints, tracer);
-      if (result instanceof Retry) {
-        final Retry retry = (Retry) result;
-        retry.amend();
-        if (retry.requiresRestart()) {
-          throw new RetryException();
-        }
-        continue;
-      }
+          unifier.unify(termPairs, actionMap, constraints, tracer);
       if (result instanceof Failure) {
         final String extra =
             ";\n"
@@ -531,20 +505,38 @@ public class TypeResolver {
   }
 
   /**
-   * Adds a constraint that {@code c1} is a bag or list of {@code v1}; if it is
-   * a list then {@code c2} is a bag of {@code v2}, otherwise {@code c2} is a
-   * list of {@code v2}.
+   * Returns the collection kind for an aggregate function.
+   *
+   * <p>Returns -1 if the function is overloaded or its collection kind is
+   * unknown (use {@code isListOrBagMatchingInput} to link to the input's
+   * ordering), 0 if the function's parameter type is a bag, or 1 if the
+   * function's parameter type is a list.
+   *
+   * <p>Uses {@code getTypeOpt}, not {@code getType}, to avoid re-registering
+   * the function expression with its raw type (which would overwrite the
+   * instantiated type registered by {@code deduceApplyFnType}).
    */
-  private void isListOrBagOpposingInput(
-      Variable c1, Variable v1, Variable c2, Variable v2) {
-    Sequence list1 = listTerm(v1);
-    Sequence bag1 = bagTerm(v1);
-    Sequence list2 = listTerm(v2);
-    Sequence bag2 = bagTerm(v2);
-    constraints.add(
-        unifier.constraint(c2, c1, copyOf(list2, bag1, bag2, list1)));
-    constraints.add(
-        unifier.constraint(c1, c2, copyOf(bag1, list2, list1, bag2)));
+  private int collectionKind(TypeEnv env, Ast.Exp fn) {
+    if (fn instanceof Ast.Id) {
+      final Ast.Id id = (Ast.Id) fn;
+      Type type = env.getTypeOpt(id.name);
+      if (type instanceof MultiType || env.hasOverloaded(id.name)) {
+        return -1; // overloaded
+      }
+      if (type instanceof ForallType) {
+        type = ((ForallType) type).type;
+      }
+      if (type instanceof FnType
+          && ((FnType) type).paramType instanceof ListType) {
+        return 1; // list
+      }
+      return 0; // bag (default for known non-overloaded Id functions)
+    }
+    // For non-Id functions (e.g., anonymous functions), we cannot
+    // inspect the declared type statically. Return 2 so that the caller
+    // uses mayBeBagOrList, letting the function body's type inference
+    // determine the collection kind.
+    return 2;
   }
 
   /**
@@ -1748,15 +1740,30 @@ public class TypeResolver {
     final Sequence fnType = fnTerm(cArg, v);
     equiv(vAgg, fnType);
 
-    final RetryAction retryAction =
-        retryMap.addIfLeftAbsent(cArg, OneShotRetryAction::new);
-    if (!retryAction.test()) {
-      // This is the first time we are deducing the type of this
-      // variable. We need to ensure that it matches the input
-      // collection type.
-      isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
-    } else {
-      isListOrBagOpposingInput(cArg, vArg, p.c, p.v);
+    final int collectionKind = collectionKind(p.env, aggregate.aggregate);
+    switch (collectionKind) {
+      case -1:
+        // For overloaded aggregates, link the collection type to the
+        // input ordering so the unifier selects the correct variant.
+        isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
+        break;
+      case 0:
+        // For non-overloaded bag-only aggregates (e.g., sum, count),
+        // directly set the collection kind. This avoids a conflict when
+        // the input ordering differs from the function's parameter type.
+        equiv(cArg, bagTerm(vArg));
+        break;
+      case 1:
+        // Non-overloaded list-only aggregate.
+        equiv(cArg, listTerm(vArg));
+        break;
+      default:
+        // Unknown collection kind (e.g., anonymous functions). Say that
+        // cArg is either list(vArg) or bag(vArg) without linking to the
+        // input's ordering. The function body's type inference will
+        // determine the collection kind.
+        mayBeBagOrList(cArg, vArg);
+        break;
     }
 
     final Ast.Aggregate aggregate2 = aggregate.copy(aggregateFn2, arg2);
@@ -3237,38 +3244,6 @@ public class TypeResolver {
       return format("id %s term %s", id, term);
     }
   }
-
-  /**
-   * Implementation of {@link RetryAction} that retries a type resolution action
-   * just once.
-   */
-  private static class OneShotRetryAction implements RetryAction {
-    private int n = 0;
-
-    @Override
-    public String toString() {
-      return "OneShotRetryAction{n=" + n + '}';
-    }
-
-    @Override
-    public boolean test() {
-      return n == 0;
-    }
-
-    @Override
-    public boolean canAmend() {
-      return n == 0; // we can retry just once
-    }
-
-    @Override
-    public void amend() {
-      checkArgument(canAmend());
-      ++n;
-    }
-  }
-
-  /** Exception that indicates that a retry is required. */
-  private static class RetryException extends ControlFlowException {}
 }
 
 // End TypeResolver.java
