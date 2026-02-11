@@ -178,11 +178,12 @@ Real;
 Relational;
 > val it =
 >   {compare=fn,count=fn,empty=fn,iterate=fn,max=fn,min=fn,nonEmpty=fn,only=fn,
->    sum=fn}
+>    sum=fn,testBagSum=fn,testListSum=fn,testOverloadedSum=fn}
 >   : {compare:'a * 'a -> order, count:'b bag -> int, empty:'c bag -> bool,
 >      iterate:'d bag -> ('d bag * 'd bag -> 'd bag) -> 'd bag, max:'e bag -> 'e,
 >      min:'f bag -> 'f, nonEmpty:'g bag -> bool, only:'h bag -> 'h,
->      sum:'i bag -> 'i}
+>      sum:'i bag -> 'i, testBagSum:'j bag -> 'j, testListSum:'k list -> 'k,
+>      testOverloadedSum:'l bag -> 'l}
 Sys;
 > val it =
 >   {clearEnv=fn,env=fn,file={},plan=fn,set=fn,show=fn,showAll=fn,unset=fn}
@@ -4303,7 +4304,7 @@ Sys.env ();
 >    ("Real",
 >     "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",
->     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:forall 'a. 'a bag -> bool, iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:forall 'a. 'a bag -> 'a, min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:forall 'a. 'a bag -> bool, only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:forall 'a. 'a bag -> 'a}"),
+>     "{compare:forall 'a. 'a * 'a -> order, count:forall 'a. 'a bag -> int, empty:forall 'a. 'a bag -> bool, iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:forall 'a. 'a bag -> 'a, min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:forall 'a. 'a bag -> bool, only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:forall 'a. 'a bag -> 'a, testBagSum:forall 'a. 'a bag -> 'a, testListSum:forall 'a. 'a list -> 'a, testOverloadedSum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
 >     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
@@ -4357,8 +4358,11 @@ Sys.env ();
 >    ("size","string -> int"),("str","char -> string"),
 >    ("substring","string * int * int -> string"),
 >    ("sum","forall 'a. 'a bag -> 'a"),("ten","(bool,int) either"),
+>    ("testBagSum","forall 'a. 'a bag -> 'a"),
 >    ("testChar","(char -> bool) -> (bool * string) list"),
->    ("timesTwo","int -> int"),("tl","forall 'a. 'a list -> 'a list"),
+>    ("testListSum","forall 'a. 'a list -> 'a"),
+>    ("testOverloadedSum","forall 'a. 'a bag -> 'a"),("timesTwo","int -> int"),
+>    ("tl","forall 'a. 'a list -> 'a list"),
 >    ("tokens","(char -> bool) -> string -> string list"),("true","bool"),
 >    ("trunc","real -> int"),("unset","string -> unit"),("use","string -> unit"),
 >    ("useSilently","string -> unit"),("valOf","forall 'a. 'a option -> 'a"),
@@ -4400,7 +4404,7 @@ env ();
 >    ("Real",
 >     "{abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",
->     "{compare:forall 'a. 'a * 'a -> order, count:multi(forall 'a. 'a bag -> int,forall 'a. 'a list -> int), empty:forall 'a. 'a bag -> bool, iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:forall 'a. 'a bag -> 'a, min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:forall 'a. 'a bag -> bool, only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:forall 'a. 'a bag -> 'a}"),
+>     "{compare:forall 'a. 'a * 'a -> order, count:forall 'a. 'a bag -> int, empty:forall 'a. 'a bag -> bool, iterate:multi(forall 'a. 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag,forall 'a. 'a list -> ('a list * 'a list -> 'a list) -> 'a list), max:forall 'a. 'a bag -> 'a, min:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), nonEmpty:forall 'a. 'a bag -> bool, only:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a), sum:forall 'a. 'a bag -> 'a, testBagSum:forall 'a. 'a bag -> 'a, testListSum:forall 'a. 'a list -> 'a, testOverloadedSum:multi(forall 'a. 'a bag -> 'a,forall 'a. 'a list -> 'a)}"),
 >    ("SOME","forall 'a. 'a -> 'a option"),
 >    ("String",
 >     "{collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, `op <`:string * string -> bool, `op <=`:string * string -> bool, `op >`:string * string -> bool, `op >=`:string * string -> bool, `op ^`:string * string -> string, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
@@ -4454,8 +4458,11 @@ env ();
 >    ("size","string -> int"),("str","char -> string"),
 >    ("substring","string * int * int -> string"),
 >    ("sum","forall 'a. 'a bag -> 'a"),("ten","(bool,int) either"),
+>    ("testBagSum","forall 'a. 'a bag -> 'a"),
 >    ("testChar","(char -> bool) -> (bool * string) list"),
->    ("timesTwo","int -> int"),("tl","forall 'a. 'a list -> 'a list"),
+>    ("testListSum","forall 'a. 'a list -> 'a"),
+>    ("testOverloadedSum","forall 'a. 'a bag -> 'a"),("timesTwo","int -> int"),
+>    ("tl","forall 'a. 'a list -> 'a list"),
 >    ("tokens","(char -> bool) -> string -> string list"),("true","bool"),
 >    ("trunc","real -> int"),("unset","string -> unit"),("use","string -> unit"),
 >    ("useSilently","string -> unit"),("valOf","forall 'a. 'a option -> 'a"),

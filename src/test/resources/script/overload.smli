@@ -306,26 +306,32 @@ from i in bag [1, 2, 3]
 
 (*) testBagSum in a bag context
 from e in (from x in [1, 2, 3] unorder)
-  group compute {s = testBagSum over e};
+ group {} compute testBagSum over e;
+> val it = [6] : int bag
 
 (*) testBagSum in a list context (should still work)
 from e in [1, 2, 3]
-  group compute {s = testBagSum over e};
+ group {} compute testBagSum over e;
+> val it = [6] : int list
 
 (*) testListSum in a list context
 from e in [1, 2, 3]
-  group compute {s = testListSum over e};
+ group {} compute testListSum over e;
+> val it = [6] : int list
 
 (*) testListSum in a bag context (should still work)
 from e in (from x in [1, 2, 3] unorder)
-  group compute {s = testListSum over e};
+ group {} compute testListSum over e;
+> val it = [6] : int bag
 
 (*) testOverloadedSum selects bag variant in bag context
 from e in (from x in [1, 2, 3] unorder)
-  group compute {s = testOverloadedSum over e};
+ group {} compute testOverloadedSum over e;
+> val it = [6] : int bag
 
 (*) testOverloadedSum selects list variant in list context
 from e in [1, 2, 3]
-  group compute {s = testOverloadedSum over e};
+ group {} compute testOverloadedSum over e;
+> val it = [6] : int list
 
 (*) End overload.smli

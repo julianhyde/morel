@@ -2808,8 +2808,8 @@ public abstract class Codes {
   /** @see BuiltIn#RELATIONAL_TEST_LIST_SUM */
   private static final Macro RELATIONAL_TEST_LIST_SUM = RELATIONAL_SUM;
 
-  /** @see BuiltIn#RELATIONAL_TEST_OVERLOADED_SUM */
-  private static final Macro RELATIONAL_TEST_OVERLOADED_SUM = RELATIONAL_SUM;
+  /** @see BuiltIn#RELATIONAL_TEST_OVER_SUM */
+  private static final Macro RELATIONAL_TEST_OVER_SUM = RELATIONAL_SUM;
 
   /**
    * Converts the result of {@link Comparable#compareTo(Object)} to an {@code
@@ -4176,9 +4176,7 @@ public abstract class Codes {
           .put(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM)
           .put(BuiltIn.RELATIONAL_TEST_BAG_SUM, RELATIONAL_TEST_BAG_SUM)
           .put(BuiltIn.RELATIONAL_TEST_LIST_SUM, RELATIONAL_TEST_LIST_SUM)
-          .put(
-              BuiltIn.RELATIONAL_TEST_OVERLOADED_SUM,
-              RELATIONAL_TEST_OVERLOADED_SUM)
+          .put(BuiltIn.RELATIONAL_TEST_OVER_SUM, RELATIONAL_TEST_OVER_SUM)
           .put(BuiltIn.STRING_COLLATE, STRING_COLLATE)
           .put(BuiltIn.STRING_COMPARE, STRING_COMPARE)
           .put(BuiltIn.STRING_CONCAT, STRING_CONCAT)

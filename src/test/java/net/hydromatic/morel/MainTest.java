@@ -2443,7 +2443,7 @@ public class MainTest {
             + "  group {}\n"
             + "    compute {c = count over 1,\n"
             + "      c2 = count over 2}")
-        .assertType("{c:int, parity:int, sumSumId:int} list");
+        .assertType("{c:int, c2:int} list");
   }
 
   @Test

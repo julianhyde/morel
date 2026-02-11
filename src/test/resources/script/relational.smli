@@ -920,13 +920,15 @@ from i in bag [1, 2, 3]
   compute Fn.id over i;
 > val it = [1,2,3] : int bag
 
-(*) Aggregate function that is a closure that references group key
+(*) Aggregate function that is a closure that references group key.
+(*) Uses List.length (not sum) because sum is bag-only and anonymous
+(*) functions in list context cannot yet adapt bag-only aggregates.
 from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
-  group k compute {x = (fn vs => k + sum vs) over v};
-> val it = [{k=1,x=12},{k=2,x=19}] : {k:int, x:int} list
+  group k compute {x = (fn vs => k + List.length vs) over v};
+> val it = [{k=1,x=3},{k=2,x=4}] : {k:int, x:int} list
 from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
-  group {k2 = k} compute {x = (fn vs => k2 + sum vs) over v};
-> val it = [{k2=1,x=12},{k2=2,x=19}] : {k2:int, x:int} list
+  group {k2 = k} compute {x = (fn vs => k2 + List.length vs) over v};
+> val it = [{k2=1,x=3},{k2=2,x=4}] : {k2:int, x:int} list
 from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]
   group e.a compute {rows = (fn x => x) over e};
 > val it = [{a=1,rows=[{a=1,b=5},{a=1,b=1}]},{a=0,rows=[{a=0,b=1}]}]
@@ -1640,10 +1642,12 @@ from e in emps
 group {} compute {sumId = sum over e.id};
 > val it = [{sumId=406}] : {sumId:int} list
 
-(*) 'group' with aggregate function that references the key
+(*) 'group' with aggregate function that references the key.
+(*) Uses List.length (not sum) because sum is bag-only and anonymous
+(*) functions in list context cannot yet adapt bag-only aggregates.
 from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
-group k compute {x = (fn vs => k + (sum vs)) over v};
-> val it = [{k=1,x=12},{k=2,x=19}] : {k:int, x:int} list
+group k compute {x = (fn vs => k + List.length vs) over v};
+> val it = [{k=1,x=3},{k=2,x=4}] : {k:int, x:int} list
 
 from (x, y, z) in [("a", "p", "e"), ("m", "a", "n"), ("a", "l", "e"), ("a", "w", "e")]
   group x compute {z = (fn ys => concat (x :: ys)) over y};

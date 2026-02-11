@@ -507,9 +507,9 @@ public class TypeResolver {
   /**
    * Returns the collection kind for an aggregate function.
    *
-   * <p>Returns -1 if the function is overloaded or its collection kind is
-   * unknown (use {@code isListOrBagMatchingInput} to link to the input's
-   * ordering), 0 if the function's parameter type is a bag, or 1 if the
+   * <p>Returns -1 if the function is overloaded, polymorphic, or its collection
+   * kind is unknown (use {@code isListOrBagMatchingInput} to link to the
+   * input's ordering); 0 if the function's parameter type is a bag; or 1 if the
    * function's parameter type is a list.
    *
    * <p>Uses {@code getTypeOpt}, not {@code getType}, to avoid re-registering
@@ -519,24 +519,57 @@ public class TypeResolver {
   private int collectionKind(TypeEnv env, Ast.Exp fn) {
     if (fn instanceof Ast.Id) {
       final Ast.Id id = (Ast.Id) fn;
-      Type type = env.getTypeOpt(id.name);
-      if (type instanceof MultiType || env.hasOverloaded(id.name)) {
+      if (env.hasOverloaded(id.name)) {
         return -1; // overloaded
       }
-      if (type instanceof ForallType) {
-        type = ((ForallType) type).type;
+      Type type = env.getTypeOpt(id.name);
+      if (type == null) {
+        // Type not available (user-defined function in current compilation
+        // unit). Link to input ordering so that the function's type,
+        // determined by deduceApplyFnType, flows through.
+        return -1;
       }
-      if (type instanceof FnType
-          && ((FnType) type).paramType instanceof ListType) {
+      return collectionKindOfType(type);
+    }
+    // For qualified names (e.g., Relational.nonEmpty, Fn.id), try to
+    // extract the type from the record structure.
+    if (fn instanceof Ast.Apply) {
+      final Ast.Apply apply = (Ast.Apply) fn;
+      if (apply.fn.op == Op.RECORD_SELECTOR && apply.arg instanceof Ast.Id) {
+        Type argType = env.getTypeOpt(((Ast.Id) apply.arg).name);
+        if (argType instanceof RecordType) {
+          String fieldName = ((Ast.RecordSelector) apply.fn).name;
+          Type fieldType = ((RecordType) argType).argNameTypes.get(fieldName);
+          if (fieldType != null) {
+            return collectionKindOfType(fieldType);
+          }
+        }
+      }
+    }
+    // For anonymous functions and other non-Id expressions,
+    // link to input ordering.
+    return -1;
+  }
+
+  /** Returns the collection kind for a function type. */
+  private static int collectionKindOfType(Type type) {
+    if (type instanceof MultiType) {
+      return -1; // overloaded
+    }
+    if (type instanceof ForallType) {
+      type = ((ForallType) type).type;
+    }
+    if (type instanceof FnType) {
+      final Type paramType = ((FnType) type).paramType;
+      if (paramType instanceof ListType) {
         return 1; // list
       }
-      return 0; // bag (default for known non-overloaded Id functions)
+      if (paramType instanceof DataType
+          && ((DataType) paramType).name.equals(BAG_TY_CON)) {
+        return 0; // bag
+      }
     }
-    // For non-Id functions (e.g., anonymous functions), we cannot
-    // inspect the declared type statically. Return 2 so that the caller
-    // uses mayBeBagOrList, letting the function body's type inference
-    // determine the collection kind.
-    return 2;
+    return -1; // polymorphic or unknown
   }
 
   /**
@@ -1742,11 +1775,6 @@ public class TypeResolver {
 
     final int collectionKind = collectionKind(p.env, aggregate.aggregate);
     switch (collectionKind) {
-      case -1:
-        // For overloaded aggregates, link the collection type to the
-        // input ordering so the unifier selects the correct variant.
-        isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
-        break;
       case 0:
         // For non-overloaded bag-only aggregates (e.g., sum, count),
         // directly set the collection kind. This avoids a conflict when
@@ -1758,11 +1786,10 @@ public class TypeResolver {
         equiv(cArg, listTerm(vArg));
         break;
       default:
-        // Unknown collection kind (e.g., anonymous functions). Say that
-        // cArg is either list(vArg) or bag(vArg) without linking to the
-        // input's ordering. The function body's type inference will
-        // determine the collection kind.
-        mayBeBagOrList(cArg, vArg);
+        // For overloaded, polymorphic, user-defined, or non-Id aggregates,
+        // link the collection type to the input ordering so the unifier
+        // selects the correct variant or adapts to the input.
+        isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
         break;
     }
 

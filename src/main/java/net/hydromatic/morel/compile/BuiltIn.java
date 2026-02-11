@@ -3048,7 +3048,7 @@ public enum BuiltIn {
    * "testOverloadedSum", overloaded with both "&alpha; bag &rarr; &alpha;" and
    * "&alpha; list &rarr; &alpha;".
    */
-  RELATIONAL_TEST_OVERLOADED_SUM(
+  RELATIONAL_TEST_OVER_SUM(
       "Relational",
       "testOverloadedSum",
       "testOverloadedSum",
