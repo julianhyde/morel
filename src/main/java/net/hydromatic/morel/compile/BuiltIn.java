@@ -3024,40 +3024,6 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
   /**
-   * Test-only aggregate "Relational.testBagSum", aka "testBagSum", of type
-   * "&alpha; bag &rarr; &alpha;". Accepts ONLY bag.
-   */
-  RELATIONAL_TEST_BAG_SUM(
-      "Relational",
-      "testBagSum",
-      "testBagSum",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
-
-  /**
-   * Test-only aggregate "Relational.testListSum", aka "testListSum", of type
-   * "&alpha; list &rarr; &alpha;". Accepts ONLY list.
-   */
-  RELATIONAL_TEST_LIST_SUM(
-      "Relational",
-      "testListSum",
-      "testListSum",
-      ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
-
-  /**
-   * Test-only aggregate "Relational.testOverloadedSum", aka
-   * "testOverloadedSum", overloaded with both "&alpha; bag &rarr; &alpha;" and
-   * "&alpha; list &rarr; &alpha;".
-   */
-  RELATIONAL_TEST_OVER_SUM(
-      "Relational",
-      "testOverloadedSum",
-      "testOverloadedSum",
-      ts ->
-          ts.multi(
-              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
-              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
-
-  /**
    * Function "String.collate", of type "(char * char &rarr; order) &rarr;
    * string * string &rarr; order".
    */
@@ -3343,6 +3309,40 @@ public enum BuiltIn {
 
   /** Function "Test.foo", of type "int &rarr; int". */
   TEST_FOO("Test", "foo", ts -> ts.fnType(INT, INT)),
+
+  /**
+   * Test-only aggregate "Test.testBagSum", aka "testBagSum", of type "&alpha;
+   * bag &rarr; &alpha;". Accepts ONLY bag.
+   */
+  TEST_TEST_BAG_SUM(
+      "Test",
+      "testBagSum",
+      "testBagSum",
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
+
+  /**
+   * Test-only aggregate "Test.testListSum", aka "testListSum", of type "&alpha;
+   * list &rarr; &alpha;". Accepts ONLY list.
+   */
+  TEST_TEST_LIST_SUM(
+      "Test",
+      "testListSum",
+      "testListSum",
+      ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
+
+  /**
+   * Test-only aggregate "Test.testOverloadedSum", aka "testOverloadedSum",
+   * overloaded with both "&alpha; bag &rarr; &alpha;" and "&alpha; list &rarr;
+   * &alpha;".
+   */
+  TEST_TEST_OVER_SUM(
+      "Test",
+      "testOverloadedSum",
+      "testOverloadedSum",
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
+              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
 
   /**
    * Function "Vector.all" of type "(&alpha; &rarr; bool) &rarr; &alpha; vector

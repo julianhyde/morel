@@ -2802,14 +2802,14 @@ public abstract class Codes {
         throw new AssertionError("bad type " + argType);
       };
 
-  /** @see BuiltIn#RELATIONAL_TEST_BAG_SUM */
-  private static final Macro RELATIONAL_TEST_BAG_SUM = RELATIONAL_SUM;
+  /** @see BuiltIn#TEST_TEST_BAG_SUM */
+  private static final Macro TEST_TEST_BAG_SUM = RELATIONAL_SUM;
 
-  /** @see BuiltIn#RELATIONAL_TEST_LIST_SUM */
-  private static final Macro RELATIONAL_TEST_LIST_SUM = RELATIONAL_SUM;
+  /** @see BuiltIn#TEST_TEST_LIST_SUM */
+  private static final Macro TEST_TEST_LIST_SUM = RELATIONAL_SUM;
 
-  /** @see BuiltIn#RELATIONAL_TEST_OVER_SUM */
-  private static final Macro RELATIONAL_TEST_OVER_SUM = RELATIONAL_SUM;
+  /** @see BuiltIn#TEST_TEST_OVER_SUM */
+  private static final Macro TEST_TEST_OVER_SUM = RELATIONAL_SUM;
 
   /**
    * Converts the result of {@link Comparable#compareTo(Object)} to an {@code
@@ -4174,9 +4174,6 @@ public abstract class Codes {
           .put(BuiltIn.RELATIONAL_NON_EMPTY, RELATIONAL_NON_EMPTY)
           .put(BuiltIn.RELATIONAL_ONLY, RELATIONAL_ONLY)
           .put(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM)
-          .put(BuiltIn.RELATIONAL_TEST_BAG_SUM, RELATIONAL_TEST_BAG_SUM)
-          .put(BuiltIn.RELATIONAL_TEST_LIST_SUM, RELATIONAL_TEST_LIST_SUM)
-          .put(BuiltIn.RELATIONAL_TEST_OVER_SUM, RELATIONAL_TEST_OVER_SUM)
           .put(BuiltIn.STRING_COLLATE, STRING_COLLATE)
           .put(BuiltIn.STRING_COMPARE, STRING_COMPARE)
           .put(BuiltIn.STRING_CONCAT, STRING_CONCAT)
@@ -4212,6 +4209,9 @@ public abstract class Codes {
           .put(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL)
           .put(BuiltIn.SYS_UNSET, SYS_UNSET)
           .put(BuiltIn.TEST_FOO, TEST_FOO)
+          .put(BuiltIn.TEST_TEST_BAG_SUM, TEST_TEST_BAG_SUM)
+          .put(BuiltIn.TEST_TEST_LIST_SUM, TEST_TEST_LIST_SUM)
+          .put(BuiltIn.TEST_TEST_OVER_SUM, TEST_TEST_OVER_SUM)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_APP, VECTOR_APP)
           .put(BuiltIn.VECTOR_APPI, VECTOR_APPI)

@@ -103,9 +103,10 @@ public abstract class Environments {
           if ("$".equals(key.structure)) {
             return; // ignore Z_ANDALSO, Z_LIST, etc.
           }
-          if (key.structure != null && excludeStructure.test(key.structure)) {
-            return; // skip built-ins in excluded structures
-          }
+          // Note: we don't skip excluded structures here, because a built-in
+          // in an excluded structure may have an alias that should still be
+          // visible at top level. The structure record itself is filtered in
+          // the forEachStructure call below.
           final Type type = key.typeFunction.apply(typeSystem);
           if (key.sessionValue != null) {
             if (session == null) {
