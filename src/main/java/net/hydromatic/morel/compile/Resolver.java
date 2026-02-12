@@ -1516,15 +1516,17 @@ public class Resolver {
    */
   private static class AggregateResolverImpl implements AggregateResolver {
     private final ImmutableList<Core.IdPat> groupKeys;
+    private final boolean ordered;
     private final Resolver inputResolver;
     private final PairList<Core.IdPat, Core.Aggregate> aggregates;
 
     private AggregateResolverImpl(
         Collection<? extends Core.IdPat> groupKeys,
-        @SuppressWarnings("unused") boolean ordered,
+        boolean ordered,
         Resolver inputResolver,
         PairList<Core.IdPat, Core.Aggregate> aggregates) {
       this.groupKeys = ImmutableList.copyOf(groupKeys);
+      this.ordered = ordered;
       this.inputResolver = inputResolver;
       this.aggregates = aggregates;
     }
@@ -1547,10 +1549,38 @@ public class Resolver {
           orderedAgg
               ? typeMap.typeSystem.listType(argElementType)
               : typeMap.typeSystem.bagType(argElementType);
+      Core.Exp aggFn = outerResolver.fnToCore(aggregate.aggregate, argType);
+      if (orderedAgg != ordered) {
+        // The aggregate function's collection kind differs from the input.
+        // Compose a converter with the aggregate function:
+        //   fn $col => aggFn(converter($col))
+        final BuiltIn converter =
+            ordered
+                ? BuiltIn.BAG_FROM_LIST // input is list, fn expects bag
+                : BuiltIn.BAG_TO_LIST; // input is bag, fn expects list
+        final Type inputCollType =
+            ordered
+                ? typeMap.typeSystem.listType(argElementType)
+                : typeMap.typeSystem.bagType(argElementType);
+        final Core.IdPat param =
+            core.idPat(
+                inputCollType, "$col", typeMap.typeSystem.nameGenerator::inc);
+        final Core.Exp paramRef = core.id(param);
+        final Core.Exp converterLit =
+            core.functionLiteral(typeMap.typeSystem, converter);
+        final Core.Exp converted =
+            core.apply(Pos.ZERO, argType, converterLit, paramRef);
+        final Core.Exp applied =
+            core.apply(Pos.ZERO, typeMap.getType(aggregate), aggFn, converted);
+        final FnType wrappedType =
+            typeMap.typeSystem.fnType(
+                inputCollType, typeMap.getType(aggregate));
+        aggFn = core.fn(wrappedType, param, applied);
+      }
       final Core.Aggregate coreAggregate =
           core.aggregate(
               typeMap.getType(aggregate),
-              outerResolver.fnToCore(aggregate.aggregate, argType),
+              aggFn,
               inputResolver.toCore(aggregate.argument));
       final String base =
           id != null

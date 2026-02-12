@@ -507,10 +507,12 @@ public class TypeResolver {
   /**
    * Returns the collection kind for an aggregate function.
    *
-   * <p>Returns -1 if the function is overloaded, polymorphic, or its collection
-   * kind is unknown (use {@code isListOrBagMatchingInput} to link to the
-   * input's ordering); 0 if the function's parameter type is a bag; or 1 if the
-   * function's parameter type is a list.
+   * <p>Returns -2 if the function is a user-defined named function whose type
+   * is not yet available (use {@code mayBeBagOrList}); -1 if the function is
+   * overloaded, polymorphic, or its collection kind is unknown (use {@code
+   * isListOrBagMatchingInput} to link to the input's ordering); 0 if the
+   * function's parameter type is a bag; or 1 if the function's parameter type
+   * is a list.
    *
    * <p>Uses {@code getTypeOpt}, not {@code getType}, to avoid re-registering
    * the function expression with its raw type (which would overwrite the
@@ -525,9 +527,10 @@ public class TypeResolver {
       Type type = env.getTypeOpt(id.name);
       if (type == null) {
         // Type not available (user-defined function in current compilation
-        // unit). Link to input ordering so that the function's type,
-        // determined by deduceApplyFnType, flows through.
-        return -1;
+        // unit). Don't link to input ordering; instead use mayBeBagOrList
+        // so the function's own type (from deduceApplyFnType) can determine
+        // the collection kind without conflicting with the input ordering.
+        return -2;
       }
       return collectionKindOfType(type);
     }
@@ -1775,6 +1778,13 @@ public class TypeResolver {
 
     final int collectionKind = collectionKind(p.env, aggregate.aggregate);
     switch (collectionKind) {
+      case -2:
+        // User-defined named function whose type is not yet available.
+        // Use mayBeBagOrList so the function's own type (from
+        // deduceApplyFnType) can determine the collection kind without
+        // conflicting with the input ordering.
+        mayBeBagOrList(cArg, vArg);
+        break;
       case 0:
         // For non-overloaded bag-only aggregates (e.g., sum, count),
         // directly set the collection kind. This avoids a conflict when
@@ -1786,7 +1796,7 @@ public class TypeResolver {
         equiv(cArg, listTerm(vArg));
         break;
       default:
-        // For overloaded, polymorphic, user-defined, or non-Id aggregates,
+        // For overloaded, polymorphic, or non-Id aggregates,
         // link the collection type to the input ordering so the unifier
         // selects the correct variant or adapts to the input.
         isListOrBagMatchingInput(cArg, vArg, p.c, p.v);

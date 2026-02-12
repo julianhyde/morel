@@ -1707,6 +1707,11 @@ end;
 >   : {deptno:int, my_sum:int} list
 
 (*) Identity aggregate function (equivalent to SQL's COLLECT)
+(* TODO: Type inference gets confused because it doesn't
+ * know whether 'id' is 'a list' or 'a bag'. When
+ * [MOREL-343] "Allow type variables in type constraints"
+ * is fixed, we will be able to constrain 'x' to 'a list' or 'a bag'.
+ *
 let
   fun id x = x
 in
@@ -1720,15 +1725,12 @@ end;
 >    {deptno=30,
 >     rows=[{deptno=30,id=102,name="Shaggy"},{deptno=30,id=103,name="Scooby"}]}]
 >   : {deptno:int, rows:{deptno:int, id:int, name:string} list} list
+*)
 
-(*) Identity aggregate function, without 'of'
-let
-  fun id x = x
-in
-  from e in emps
-  group e.deptno compute {rows = id over e}
-  order deptno
-end;
+(*) Identity aggregate function, using Fn.id
+from e in emps
+group e.deptno compute {rows = Fn.id over e}
+order deptno;
 > val it =
 >   [{deptno=10,rows=[{deptno=10,id=100,name="Fred"}]},
 >    {deptno=20,rows=[{deptno=20,id=101,name="Velma"}]},
@@ -2502,12 +2504,11 @@ fun pivot listlists =
     []
   else
     let
-      fun id x = x
       val n = (from list in listlists compute min over length list)
     in
       List.tabulate (n,
         fn i => (from list in listlists
-                 compute id over List.nth (list, i)))
+                 compute Fn.id over List.nth (list, i)))
     end;
 > val pivot = fn : 'a list list -> 'a list list
 pivot [[1,2],[3,4],[5,6]];
