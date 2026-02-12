@@ -2946,10 +2946,7 @@ public enum BuiltIn {
       "Relational",
       "min",
       "min",
-      ts ->
-          ts.multi(
-              ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
-              ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
   /**
    * Function "Relational.nonEmpty", of type "&alpha; bag &rarr; bool".
