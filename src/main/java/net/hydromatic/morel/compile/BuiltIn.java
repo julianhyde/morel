@@ -3331,6 +3331,21 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
 
   /**
+   * Test-only overloaded aggregate "Test.testOverCount", aka "testOverCount".
+   * The bag variant returns {@code count}; the list variant returns {@code
+   * count + 1000}. This allows tests to verify which variant was selected at
+   * runtime.
+   */
+  TEST_TEST_OVER_COUNT(
+      "Test",
+      "testOverCount",
+      "testOverCount",
+      ts ->
+          ts.multi(
+              ts.forallType(1, h -> ts.fnType(h.bag(0), INT)),
+              ts.forallType(1, h -> ts.fnType(h.list(0), INT)))),
+
+  /**
    * Test-only aggregate "Test.testOverloadedSum", aka "testOverloadedSum",
    * overloaded with both "&alpha; bag &rarr; &alpha;" and "&alpha; list &rarr;
    * &alpha;".
@@ -3819,6 +3834,20 @@ public enum BuiltIn {
 
   /** Internal accessor of the {@code n}th field of a record. */
   Z_NTH("$", "nth", ts -> UNIT),
+
+  /**
+   * Internal implementation of the bag variant of "Test.testOverCount". Returns
+   * the count of the bag.
+   */
+  Z_TEST_OVER_COUNT_BAG(
+      "$", "testOverCount:bag", ts -> ts.fnType(ts.bagType(INT), INT)),
+
+  /**
+   * Internal implementation of the list variant of "Test.testOverCount".
+   * Returns the count of the list plus 1000.
+   */
+  Z_TEST_OVER_COUNT_LIST(
+      "$", "testOverCount:list", ts -> ts.fnType(ts.listType(INT), INT)),
 
   /** Internal function that constructs a datatype value. */
   Z_TY_CON("$", "tyCon", ts -> UNIT);

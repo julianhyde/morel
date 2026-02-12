@@ -334,4 +334,14 @@ from e in [1, 2, 3]
  group {} compute testOverloadedSum over e;
 > val it = [6] : int list
 
+(*) testOverCount selects bag variant in bag context (returns count)
+from e in (from x in [1, 2, 3] unorder)
+ group {} compute testOverCount over e;
+> val it = [3] : int bag
+
+(*) testOverCount selects list variant in list context (returns count + 1000)
+from e in [1, 2, 3]
+ group {} compute testOverCount over e;
+> val it = [1003] : int list
+
 (*) End overload.smli

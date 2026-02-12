@@ -59,6 +59,7 @@ import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
@@ -2802,15 +2803,6 @@ public abstract class Codes {
         throw new AssertionError("bad type " + argType);
       };
 
-  /** @see BuiltIn#TEST_TEST_BAG_SUM */
-  private static final Macro TEST_TEST_BAG_SUM = RELATIONAL_SUM;
-
-  /** @see BuiltIn#TEST_TEST_LIST_SUM */
-  private static final Macro TEST_TEST_LIST_SUM = RELATIONAL_SUM;
-
-  /** @see BuiltIn#TEST_TEST_OVER_SUM */
-  private static final Macro TEST_TEST_OVER_SUM = RELATIONAL_SUM;
-
   /**
    * Converts the result of {@link Comparable#compareTo(Object)} to an {@code
    * Order} value.
@@ -3306,6 +3298,25 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#TEST_TEST_BAG_SUM */
+  private static final Macro TEST_TEST_BAG_SUM = RELATIONAL_SUM;
+
+  /** @see BuiltIn#TEST_TEST_LIST_SUM */
+  private static final Macro TEST_TEST_LIST_SUM = RELATIONAL_SUM;
+
+  /** @see BuiltIn#TEST_TEST_OVER_COUNT */
+  private static final Macro TEST_TEST_OVER_COUNT =
+      (typeSystem, env, argType) -> {
+        if (argType instanceof ListType) {
+          return core.functionLiteral(
+              typeSystem, BuiltIn.Z_TEST_OVER_COUNT_LIST);
+        }
+        return core.functionLiteral(typeSystem, BuiltIn.Z_TEST_OVER_COUNT_BAG);
+      };
+
+  /** @see BuiltIn#TEST_TEST_OVER_SUM */
+  private static final Macro TEST_TEST_OVER_SUM = RELATIONAL_SUM;
+
   /** @see BuiltIn#VECTOR_ALL */
   private static final Applicable2 VECTOR_ALL = all(BuiltIn.VECTOR_ALL);
 
@@ -3621,6 +3632,24 @@ public abstract class Codes {
             sum += o.floatValue();
           }
           return sum;
+        }
+      };
+
+  /** Implements the bag variant of {@link BuiltIn#TEST_TEST_OVER_COUNT}. */
+  private static final Applicable Z_TEST_OVER_COUNT_BAG =
+      new BaseApplicable1<Integer, List>(BuiltIn.Z_TEST_OVER_COUNT_BAG) {
+        @Override
+        public Integer apply(List list) {
+          return list.size();
+        }
+      };
+
+  /** Implements the list variant of {@link BuiltIn#TEST_TEST_OVER_COUNT}. */
+  private static final Applicable Z_TEST_OVER_COUNT_LIST =
+      new BaseApplicable1<Integer, List>(BuiltIn.Z_TEST_OVER_COUNT_LIST) {
+        @Override
+        public Integer apply(List list) {
+          return list.size() + 1000;
         }
       };
 
@@ -4211,6 +4240,7 @@ public abstract class Codes {
           .put(BuiltIn.TEST_FOO, TEST_FOO)
           .put(BuiltIn.TEST_TEST_BAG_SUM, TEST_TEST_BAG_SUM)
           .put(BuiltIn.TEST_TEST_LIST_SUM, TEST_TEST_LIST_SUM)
+          .put(BuiltIn.TEST_TEST_OVER_COUNT, TEST_TEST_OVER_COUNT)
           .put(BuiltIn.TEST_TEST_OVER_SUM, TEST_TEST_OVER_SUM)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
           .put(BuiltIn.VECTOR_APP, VECTOR_APP)
@@ -4249,6 +4279,8 @@ public abstract class Codes {
           .put(BuiltIn.Z_PLUS_REAL, Z_PLUS_REAL)
           .put(BuiltIn.Z_SUM_INT, Z_SUM_INT)
           .put(BuiltIn.Z_SUM_REAL, Z_SUM_REAL)
+          .put(BuiltIn.Z_TEST_OVER_COUNT_BAG, Z_TEST_OVER_COUNT_BAG)
+          .put(BuiltIn.Z_TEST_OVER_COUNT_LIST, Z_TEST_OVER_COUNT_LIST)
           .put(BuiltIn.Z_TIMES_INT, Z_TIMES_INT)
           .put(BuiltIn.Z_TIMES_REAL, Z_TIMES_REAL)
           .put(BuiltIn.Z_TY_CON, Unit.INSTANCE)
