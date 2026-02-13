@@ -3368,53 +3368,42 @@ public enum BuiltIn {
   /** Function "Sys.unset", aka "unset", of type "string &rarr; unit". */
   SYS_UNSET("Sys", "unset", "unset", ts -> ts.fnType(STRING, UNIT)),
 
+  /**
+   * Test-only aggregate "Test.bagSum", of type "&alpha; bag &rarr; &alpha;". Accepts ONLY bag.
+   */
+  TEST_BAG_SUM(
+      "Test",
+      "bagSum",
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
+
   /** Function "Test.foo", of type "int &rarr; int". */
   TEST_FOO("Test", "foo", ts -> ts.fnType(INT, INT)),
 
   /**
-   * Test-only aggregate "Test.testBagSum", aka "testBagSum", of type "&alpha;
-   * bag &rarr; &alpha;". Accepts ONLY bag.
+   * Test-only aggregate "Test.listSum", of type "&alpha; list &rarr; &alpha;". Accepts ONLY list.
    */
-  TEST_TEST_BAG_SUM(
+  TEST_LIST_SUM(
       "Test",
-      "testBagSum",
-      "testBagSum",
-      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
-
-  /**
-   * Test-only aggregate "Test.testListSum", aka "testListSum", of type "&alpha;
-   * list &rarr; &alpha;". Accepts ONLY list.
-   */
-  TEST_TEST_LIST_SUM(
-      "Test",
-      "testListSum",
-      "testListSum",
+      "listSum",
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
 
   /**
-   * Test-only overloaded aggregate "Test.testOverCount", aka "testOverCount".
-   * The bag variant returns {@code count}; the list variant returns {@code
-   * count + 1000}. This allows tests to verify which variant was selected at
-   * runtime.
+   * Test-only overloaded aggregate "Test.overCount". The bag variant returns {@code count}; the list variant returns {@code count + 1000}. This allows tests to verify which variant was selected at runtime.
    */
-  TEST_TEST_OVER_COUNT(
+  TEST_OVER_COUNT(
       "Test",
-      "testOverCount",
-      "testOverCount",
+      "overCount",
       ts ->
           ts.multi(
               ts.forallType(1, h -> ts.fnType(h.bag(0), INT)),
               ts.forallType(1, h -> ts.fnType(h.list(0), INT)))),
 
   /**
-   * Test-only aggregate "Test.testOverloadedSum", aka "testOverloadedSum",
-   * overloaded with both "&alpha; bag &rarr; &alpha;" and "&alpha; list &rarr;
-   * &alpha;".
+   * Test-only aggregate "Test.overSum", overloaded with both "&alpha; bag &rarr; &alpha;" and "&alpha; list &rarr; &alpha;".
    */
-  TEST_TEST_OVER_SUM(
+  TEST_OVER_SUM(
       "Test",
-      "testOverloadedSum",
-      "testOverloadedSum",
+      "overSum",
       ts ->
           ts.multi(
               ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),

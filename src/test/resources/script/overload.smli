@@ -308,47 +308,47 @@ from i in bag [1, 2, 3]
 
 
 (* ---------------------------------------------------------------------------
- * Synthetic aggregate tests: testBagSum, testListSum, testOverloadedSum.
+ * Synthetic aggregate tests: Test.bagSum, Test.listSum, Test.overSum.
  *)
 
-(*) testBagSum in a bag context
+(*) Test.bagSum in a bag context
 from e in (from x in [1, 2, 3] unorder)
- group {} compute Test.testBagSum over e;
+ group {} compute Test.bagSum over e;
 > val it = [6] : int bag
 
-(*) testBagSum in a list context (should still work)
+(*) Test.bagSum in a list context (should still work)
 from e in [1, 2, 3]
- group {} compute Test.testBagSum over e;
+ group {} compute Test.bagSum over e;
 > val it = [6] : int list
 
-(*) testListSum in a list context
+(*) Test.listSum in a list context
 from e in [1, 2, 3]
- group {} compute Test.testListSum over e;
+ group {} compute Test.listSum over e;
 > val it = [6] : int list
 
-(*) testListSum in a bag context (should still work)
+(*) Test.listSum in a bag context (should still work)
 from e in (from x in [1, 2, 3] unorder)
- group {} compute Test.testListSum over e;
+ group {} compute Test.listSum over e;
 > val it = [6] : int bag
 
-(*) testOverloadedSum selects bag variant in bag context
+(*) Test.overSum selects bag variant in bag context
 from e in (from x in [1, 2, 3] unorder)
- group {} compute Test.testOverloadedSum over e;
+ group {} compute Test.overSum over e;
 > val it = [6] : int bag
 
-(*) testOverloadedSum selects list variant in list context
+(*) Test.overSum selects list variant in list context
 from e in [1, 2, 3]
- group {} compute Test.testOverloadedSum over e;
+ group {} compute Test.overSum over e;
 > val it = [6] : int list
 
-(*) testOverCount selects bag variant in bag context (returns count)
+(*) Test.overCount selects bag variant in bag context (returns count)
 from e in (from x in [1, 2, 3] unorder)
- group {} compute Test.testOverCount over e;
+ group {} compute Test.overCount over e;
 > val it = [3] : int bag
 
-(*) testOverCount selects list variant in list context (returns count + 1000)
+(*) Test.overCount selects list variant in list context (returns count + 1000)
 from e in [1, 2, 3]
- group {} compute Test.testOverCount over e;
+ group {} compute Test.overCount over e;
 > val it = [1003] : int list
 
 (*) A user-defined aggregate works regardless of its collection kind.

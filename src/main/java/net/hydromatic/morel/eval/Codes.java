@@ -3548,6 +3548,9 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#TEST_BAG_SUM */
+  private static final Macro TEST_BAG_SUM = RELATIONAL_SUM;
+
   /** @see BuiltIn#TEST_FOO */
   private static final Applicable1 TEST_FOO =
       new BaseApplicable1<Integer, Integer>(BuiltIn.TEST_FOO) {
@@ -3557,14 +3560,11 @@ public abstract class Codes {
         }
       };
 
-  /** @see BuiltIn#TEST_TEST_BAG_SUM */
-  private static final Macro TEST_TEST_BAG_SUM = RELATIONAL_SUM;
+  /** @see BuiltIn#TEST_LIST_SUM */
+  private static final Macro TEST_LIST_SUM = RELATIONAL_SUM;
 
-  /** @see BuiltIn#TEST_TEST_LIST_SUM */
-  private static final Macro TEST_TEST_LIST_SUM = RELATIONAL_SUM;
-
-  /** @see BuiltIn#TEST_TEST_OVER_COUNT */
-  private static final Macro TEST_TEST_OVER_COUNT =
+  /** @see BuiltIn#TEST_OVER_COUNT */
+  private static final Macro TEST_OVER_COUNT =
       (typeSystem, env, argType) -> {
         if (argType instanceof ListType) {
           return core.functionLiteral(
@@ -3573,8 +3573,8 @@ public abstract class Codes {
         return core.functionLiteral(typeSystem, BuiltIn.Z_TEST_OVER_COUNT_BAG);
       };
 
-  /** @see BuiltIn#TEST_TEST_OVER_SUM */
-  private static final Macro TEST_TEST_OVER_SUM = RELATIONAL_SUM;
+  /** @see BuiltIn#TEST_OVER_SUM */
+  private static final Macro TEST_OVER_SUM = RELATIONAL_SUM;
 
   /** Value of {@link BuiltIn.Constructor#VARIANT_UNIT}. */
   public static final List VARIANT_UNIT =
@@ -3914,7 +3914,7 @@ public abstract class Codes {
         }
       };
 
-  /** Implements the bag variant of {@link BuiltIn#TEST_TEST_OVER_COUNT}. */
+  /** Implements the bag variant of {@link BuiltIn#TEST_OVER_COUNT}. */
   private static final Applicable Z_TEST_OVER_COUNT_BAG =
       new BaseApplicable1<Integer, List>(BuiltIn.Z_TEST_OVER_COUNT_BAG) {
         @Override
@@ -3923,7 +3923,7 @@ public abstract class Codes {
         }
       };
 
-  /** Implements the list variant of {@link BuiltIn#TEST_TEST_OVER_COUNT}. */
+  /** Implements the list variant of {@link BuiltIn#TEST_OVER_COUNT}. */
   private static final Applicable Z_TEST_OVER_COUNT_LIST =
       new BaseApplicable1<Integer, List>(BuiltIn.Z_TEST_OVER_COUNT_LIST) {
         @Override
@@ -4569,10 +4569,10 @@ public abstract class Codes {
           .put(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL)
           .put(BuiltIn.SYS_UNSET, SYS_UNSET)
           .put(BuiltIn.TEST_FOO, TEST_FOO)
-          .put(BuiltIn.TEST_TEST_BAG_SUM, TEST_TEST_BAG_SUM)
-          .put(BuiltIn.TEST_TEST_LIST_SUM, TEST_TEST_LIST_SUM)
-          .put(BuiltIn.TEST_TEST_OVER_COUNT, TEST_TEST_OVER_COUNT)
-          .put(BuiltIn.TEST_TEST_OVER_SUM, TEST_TEST_OVER_SUM)
+          .put(BuiltIn.TEST_BAG_SUM, TEST_BAG_SUM)
+          .put(BuiltIn.TEST_LIST_SUM, TEST_LIST_SUM)
+          .put(BuiltIn.TEST_OVER_COUNT, TEST_OVER_COUNT)
+          .put(BuiltIn.TEST_OVER_SUM, TEST_OVER_SUM)
           .put(BuiltIn.VARIANT_PARSE, VARIANT_PARSE)
           .put(BuiltIn.VARIANT_PRINT, VARIANT_PRINT)
           .put(BuiltIn.VECTOR_ALL, VECTOR_ALL)
