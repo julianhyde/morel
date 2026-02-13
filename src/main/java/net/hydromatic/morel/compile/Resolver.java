@@ -1628,10 +1628,14 @@ public class Resolver {
     public Core.Exp toCore(Ast.Elements elements, Resolver outerResolver) {
       final TypeMap typeMap = outerResolver.typeMap;
       Type type = typeMap.getType(elements);
+      // elements has the same collection type as the input, so the
+      // aggregate function is the identity with concrete type
+      // (e.g. int list -> int list), not the polymorphic ForallType.
+      final FnType fnType = typeMap.typeSystem.fnType(type, type);
       Core.Aggregate coreAggregate =
           core.aggregate(
               type,
-              core.functionLiteral(typeMap.typeSystem, BuiltIn.FN_ID),
+              core.functionLiteral(fnType, BuiltIn.FN_ID),
               inputResolver.current);
       String base = Op.ELEMENTS.lowerName();
       final String name = generateName(base, this::nameIsUnavailable);

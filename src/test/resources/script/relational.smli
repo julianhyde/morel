@@ -1005,6 +1005,10 @@ from i in [1, 2, 3]
   compute elements;
 > val it = [1,2,3] : int list
 
+from i in [1, 2, 3] unorder
+  compute elements;
+> val it = [1,2,3] : int bag
+
 from (i, j) in [("a", 1), ("b", 4), ("a", 3)]
   compute elements;
 > val it = [{i="a",j=1},{i="b",j=4},{i="a",j=3}] : {i:string, j:int} list
@@ -1031,6 +1035,14 @@ from i in [1, 2, 3]
 from (i, j) in [("a", 1), ("b", 4), ("a", 3)]
   group {i} compute {s = from r in elements compute sum over r.j} order i;
 > val it = [{i="a",s=4},{i="b",s=4}] : {i:string, s:int} list
+
+from (i, j) in [("a", 1), ("b", 4), ("a", 3)]
+  group {i} compute {s = from r in elements unorder compute sum over r.j} order i;
+> val it = [{i="a",s=4},{i="b",s=4}] : {i:string, s:int} list
+
+from (i, j) in [("a", 1), ("b", 4), ("a", 3)]
+  group {i} compute {s = from r in elements order r.j take 1 compute sum over r.j} order i;
+> val it = [{i="a",s=1},{i="b",s=4}] : {i:string, s:int} list
 
 from (i, j) in [("a", 1), ("b", 4), ("a", 3)]
   group {i} compute {s = from r in elements where r.j < 2 compute sum over r.j}

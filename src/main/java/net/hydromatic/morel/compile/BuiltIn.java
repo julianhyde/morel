@@ -3369,7 +3369,8 @@ public enum BuiltIn {
   SYS_UNSET("Sys", "unset", "unset", ts -> ts.fnType(STRING, UNIT)),
 
   /**
-   * Test-only aggregate "Test.bagSum", of type "&alpha; bag &rarr; &alpha;". Accepts ONLY bag.
+   * Test-only aggregate "Test.bagSum", of type "&alpha; bag &rarr; &alpha;".
+   * Accepts ONLY bag.
    */
   TEST_BAG_SUM(
       "Test",
@@ -3380,7 +3381,8 @@ public enum BuiltIn {
   TEST_FOO("Test", "foo", ts -> ts.fnType(INT, INT)),
 
   /**
-   * Test-only aggregate "Test.listSum", of type "&alpha; list &rarr; &alpha;". Accepts ONLY list.
+   * Test-only aggregate "Test.listSum", of type "&alpha; list &rarr; &alpha;".
+   * Accepts ONLY list.
    */
   TEST_LIST_SUM(
       "Test",
@@ -3388,7 +3390,9 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
 
   /**
-   * Test-only overloaded aggregate "Test.overCount". The bag variant returns {@code count}; the list variant returns {@code count + 1000}. This allows tests to verify which variant was selected at runtime.
+   * Test-only overloaded aggregate "Test.overCount". The bag variant returns
+   * {@code count}; the list variant returns {@code count + 1000}. This allows
+   * tests to verify which variant was selected at runtime.
    */
   TEST_OVER_COUNT(
       "Test",
@@ -3399,7 +3403,8 @@ public enum BuiltIn {
               ts.forallType(1, h -> ts.fnType(h.list(0), INT)))),
 
   /**
-   * Test-only aggregate "Test.overSum", overloaded with both "&alpha; bag &rarr; &alpha;" and "&alpha; list &rarr; &alpha;".
+   * Test-only aggregate "Test.overSum", overloaded with both "&alpha; bag
+   * &rarr; &alpha;" and "&alpha; list &rarr; &alpha;".
    */
   TEST_OVER_SUM(
       "Test",

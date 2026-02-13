@@ -676,8 +676,11 @@ public class Compiler {
             argumentType = aggregate.argument.type;
             argumentCode = compile(cx, aggregate.argument);
           }
-          final Type aggParamType =
-              ((FnType) aggregate.aggregate.type).paramType;
+          Type aggType = aggregate.aggregate.type;
+          if (aggType instanceof ForallType) {
+            aggType = ((ForallType) aggType).type;
+          }
+          final Type aggParamType = ((FnType) aggType).paramType;
           final Applicable aggregateApplicable =
               compileApplicable(
                   cx, aggregate.aggregate, aggParamType, aggregate.pos);
