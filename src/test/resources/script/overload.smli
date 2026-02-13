@@ -367,4 +367,66 @@ end;
 > val it = [{c1=1,c2=1,deptno=20},{c1=1,c2=1,deptno=10},{c1=2,c2=2,deptno=30}]
 >   : {c1:int, c2:int, deptno:int} list
 
+(* ---------------------------------------------------------------------------
+ * Test 'into' with aggregates: mirrors 'compute' tests above.
+ *)
+
+(*) Test.bagSum into, with bag input
+from e in (from x in [1, 2, 3] unorder) into Test.bagSum;
+> val it = 6 : int
+
+(*) Test.bagSum into, with list input (should still work)
+from e in [1, 2, 3] into Test.bagSum;
+> val it = 6 : int
+
+(*) Test.listSum into, with list input
+from e in [1, 2, 3] into Test.listSum;
+> val it = 6 : int
+
+(*) Test.listSum into, with bag input (should still work)
+from e in (from x in [1, 2, 3] unorder) into Test.listSum;
+> val it = 6 : int
+
+(*) Test.overSum into, selects bag variant in bag context
+from e in (from x in [1, 2, 3] unorder) into Test.overSum;
+> val it = 6 : int
+
+(*) Test.overSum into, selects list variant in list context
+from e in [1, 2, 3] into Test.overSum;
+> val it = 6 : int
+
+(*) Test.overCount into, selects bag variant in bag context (returns count)
+from e in (from x in [1, 2, 3] unorder) into Test.overCount;
+> val it = 3 : int
+
+(*) Test.overCount into, selects list variant in list context (returns count + 1000)
+from e in [1, 2, 3] into Test.overCount;
+> val it = 1003 : int
+
+(*) overAgg into, selects list variant in list context
+from i in [1, 2, 3] into overAgg;
+> val it = "list" : string
+
+(*) overAgg into, selects bag variant in bag context
+from i in bag [1, 2, 3] into overAgg;
+> val it = "bag" : string
+
+(*) Non-overloaded aggregates adapt via into
+from i in [1, 2, 3] into List.hd;
+> val it = 1 : int
+
+from i in bag [1, 2, 3] into List.hd;
+> val it = 1 : int
+
+from i in [1, 2, 3] into Bag.hd;
+> val it = 1 : int
+
+from i in bag [1, 2, 3] into Bag.hd;
+> val it = 1 : int
+
+(*) Qualified-name aggregate works with into regardless of collection kind
+(from e in [1, 2, 3] into List.length,
+ from e in [1, 2, 3] into Bag.length);
+> val it = (3,3) : int * int
+
 (*) End overload.smli

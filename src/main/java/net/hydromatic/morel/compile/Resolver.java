@@ -1244,9 +1244,29 @@ public class Resolver {
     Core.Exp run(Ast.Query query) {
       if (query.isInto()) {
         // Translate "from ... into f" as if they had written "f (from ...)"
-        final Core.Exp coreFrom = run(skipLast(query.steps));
+        Core.Exp coreFrom = run(skipLast(query.steps));
         final Ast.Into into = (Ast.Into) last(query.steps);
-        final Core.Exp exp = toCore(into.exp);
+        // Use fnToCore to resolve overloaded functions based on arg type.
+        final Core.Exp exp = fnToCore(into.exp, coreFrom.type);
+        // If the function's parameter collection kind differs from
+        // the input (e.g. sum expects bag, input is list), wrap the
+        // input with a converter.
+        final boolean inputOrdered = coreFrom.type instanceof ListType;
+        Type expType = exp.type;
+        if (expType instanceof ForallType) {
+          expType = ((ForallType) expType).type;
+        }
+        if (expType instanceof FnType) {
+          final Type paramType = ((FnType) expType).paramType;
+          final boolean fnOrdered = paramType instanceof ListType;
+          if (fnOrdered != inputOrdered) {
+            final BuiltIn converter =
+                inputOrdered ? BuiltIn.BAG_FROM_LIST : BuiltIn.BAG_TO_LIST;
+            final Core.Exp converterLit =
+                core.functionLiteral(typeMap.typeSystem, converter);
+            coreFrom = core.apply(Pos.ZERO, paramType, converterLit, coreFrom);
+          }
+        }
         return core.apply(exp.pos, typeMap.getType(query), exp, coreFrom);
       }
 

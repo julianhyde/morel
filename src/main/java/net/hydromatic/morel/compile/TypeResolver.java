@@ -1034,18 +1034,58 @@ public class TypeResolver {
         return deduceGroupStepType((Ast.Group) step, p, fieldVars, steps);
 
       case INTO:
-        // from i in [1,2,3] into f
-        //   f: int list -> string
-        //   expression: string
+        // "into f" applies f to the entire input collection. We use
+        // collectionKind to determine how to link the function's parameter
+        // to the input, and deduceApplyFnType for overloaded dispatch.
         final Ast.Into into = (Ast.Into) step;
-        final Variable v13 = unifier.variable();
-        final Variable v14 = unifier.variable();
-        final Ast.Exp intoExp = deduceExpType(p.env, into.exp, v14);
-        final Sequence fnType = fnTerm(requireNonNull(p.c), v13);
-        equiv(v14, fnType);
+        requireNonNull(p.c);
+        final Variable rv = unifier.variable();
+        final int intoCK = collectionKind(p.env, into.exp);
+        final Ast.Exp intoExp;
+        switch (intoCK) {
+          case -2:
+            // User-defined function whose type is not yet available.
+            // Link directly to p.c to preserve record type propagation.
+            intoExp =
+                deduceExpType(p.env, into.exp, toVariable(fnTerm(p.c, rv)));
+            break;
+          case 0:
+            {
+              // Bag-only function: decouple from input ordering so that
+              // a bag function works with list input.
+              final Variable intoCArg0 = unifier.variable();
+              equiv(intoCArg0, bagTerm(p.v));
+              intoExp =
+                  deduceExpType(
+                      p.env, into.exp, toVariable(fnTerm(intoCArg0, rv)));
+              break;
+            }
+          case 1:
+            {
+              // List-only function: decouple from input ordering.
+              final Variable intoCArg1 = unifier.variable();
+              equiv(intoCArg1, listTerm(p.v));
+              intoExp =
+                  deduceExpType(
+                      p.env, into.exp, toVariable(fnTerm(intoCArg1, rv)));
+              break;
+            }
+          default:
+            {
+              // Overloaded or polymorphic: use deduceApplyFnType for
+              // dispatch, linked to input ordering.
+              final Variable intoCArg = unifier.variable();
+              isListOrBagMatchingInput(intoCArg, p.v, p.c, p.v);
+              final Variable intoVFn = unifier.variable();
+              intoExp =
+                  deduceApplyFnType(p.env, into.exp, intoVFn, intoCArg, rv);
+              reg(into.exp, intoVFn);
+              equiv(intoVFn, fnTerm(intoCArg, rv));
+              break;
+            }
+        }
         steps.add(into.copy(intoExp));
-        // Ordering is irrelevant because result is a singleton.
-        return Triple.singleton(p.rootEnv, p.rootEnv, v13);
+        return Triple.singleton(p.rootEnv, p.env, rv);
 
       case THROUGH:
         // from i in [1,2,3] through p in f
