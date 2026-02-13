@@ -289,17 +289,13 @@ val prefixes = List.map (fn s =>
 prefixes ["cat", "dog", "", "car", "cart"];
 > val it = ["ca","do","","ca","car"] : string list
 
-(* Workaround for [MOREL-270] Ambiguous collection types. *)
-fun mustBeList (list: 'a list) = list;
-> val mustBeList = fn : 'a list -> 'a list
-
 (*) Fixed-point over union.
 (*) A naive algorithm recomputes the whole set each hop,
 (*) so is not very efficient.
 fun fixu_naive f a =
   let
     val a2 = f a
-    val a3 = from i in mustBeList a union mustBeList a2 group i
+    val a3 = from i in (a : 'a list) union (a2 : 'a list) group i
   in
     if a3 = a then
       a
