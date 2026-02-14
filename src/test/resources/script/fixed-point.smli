@@ -368,9 +368,8 @@ val edges =
 >    {source="b",target="c",weight=3},{source="c",target="d",weight=2},
 >    {source="d",target="b",weight=~1}]
 >   : {source:string, target:string, weight:int} list
-fun shortest_path edges =
+fun shortest_path (edges: 'a list) =
   let
-    val _ = List.length edges (* force edges to be a list *)
     val vertices =
       from v in (from {source, target, weight} in edges yield source)
           union
