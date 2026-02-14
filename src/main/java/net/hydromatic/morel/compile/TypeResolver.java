@@ -125,11 +125,8 @@ public class TypeResolver {
   private final List<Constraint> constraints = new ArrayList<>();
   private final Deque<AggFrame> aggregateTripleStack = new ArrayDeque<>();
 
-  /**
-   * Type variable scope for the current val/fun declaration. Null when outside
-   * a declaration.
-   */
-  private Map<String, Variable> tyVarScope;
+  /** Type variable scopes for val/fun declarations (innermost last). */
+  private final Deque<Map<String, Variable>> tyVarScopes = new ArrayDeque<>();
 
   static final String BAG_TY_CON = BuiltIn.Eqtype.BAG.mlName();
   static final String TUPLE_TY_CON = "tuple";
@@ -821,7 +818,7 @@ public class TypeResolver {
 
   private Ast.Type deduceTypeType(TypeEnv env, Ast.Type type, Variable v) {
     final Map<String, Variable> scope =
-        tyVarScope != null ? tyVarScope : new HashMap<>();
+        tyVarScopes.isEmpty() ? ImmutableMap.of() : tyVarScopes.peek();
     return new TypeToTermConverter(env, scope).typeTerm(type, v);
   }
 
@@ -1716,8 +1713,7 @@ public class TypeResolver {
       Ast.ValBind valBind,
       PairList<Ast.IdPat, Term> termMap,
       Variable vPat) {
-    final Map<String, Variable> savedScope = tyVarScope;
-    tyVarScope = new HashMap<>();
+    tyVarScopes.push(new HashMap<>());
     try {
       final Consumer<PatTerm> consumer = p -> termMap.add(p.id, p.term);
       final Ast.Pat pat =
@@ -1744,7 +1740,7 @@ public class TypeResolver {
       map.put(valBind2, toTerm(PrimitiveType.UNIT));
       return valBind2;
     } finally {
-      tyVarScope = savedScope;
+      tyVarScopes.pop();
     }
   }
 
