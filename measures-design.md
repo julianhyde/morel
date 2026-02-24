@@ -129,28 +129,91 @@ fun sumRevenueCtx {prodName = pn, year = yr, custName = cn} =
 
 ## Proposed Design
 
-### Relations
+### The `relation` abstract type
 
-A **relation** is a collection (list or bag) plus a lambda that
-creates a context. The `define` keyword is syntactic sugar that
-generates that lambda.
+A **relation** is an abstract type parameterized by the row type and
+the context type:
 
 ```sml
-val orders = [
-  {year = 2023, custName = "Alice", prodName = "Widgets",
-   revenue = 100, cost = 80}, ...]
-  define
-    sumRevenue = sum over revenue,
-    sumCost = sum over cost;
+abstype ('row, 'ctx) relation = Relation of 'row list * ('row list -> 'ctx)
+with
+  fun collection (Relation (rows, _)) = rows
+  fun mkContext (Relation (_, mk)) rows = mk rows
+end;
 ```
 
+At runtime, a relation is a pair: the row data and a function that
+creates a context from a set of active rows. The context type `'ctx`
+varies per relation — it's a record whose fields are the evaluated
+measures and parameters.
+
+Relations must support both ordered (list) and unordered (bag)
+collections. Morel's `from` already works with both `list` and `bag`;
+the `relation` type should be similarly polymorphic in the collection
+kind. The abstract type could be parameterized by the collection type
+constructor, or there could be separate `relation` and `bag_relation`
+types. This choice affects whether `order` steps are valid (only for
+ordered relations). Neither list nor bag eliminates duplicates; if
+you want uniqueness, use constraints.
+
 A relation works in a `from` clause just like a raw list or bag.
-Code that doesn't use measures sees no difference.
+Code that doesn't use measures sees no difference — `from` calls
+`collection` to extract the rows.
+
+### The `reltype` keyword
+
+A new declaration keyword `reltype` (analogous to `datatype` and
+`abstype`) defines a relation type including its context:
+
+```sml
+reltype orders of {year: int, prodName: string,
+                   revenue: int, cost: int}
+  define
+    sumRevenue = sum over revenue,
+    sumCost = sum over cost,
+    profit = fn ctx => eval sumRevenue ctx - eval sumCost ctx,
+    interest_rate = 0.05;
+```
+
+This is syntactic sugar. It generates:
+
+```sml
+(*) Row type
+type order_row = {year: int, prodName: string,
+                  revenue: int, cost: int};
+
+(*) Context type — one field per measure/parameter
+type order_ctx = {sumRevenue: int,
+                  sumCost: int,
+                  profit: int,
+                  interest_rate: real};
+
+(*) Relation type — a specific instantiation
+type orders = (order_row, order_ctx) relation;
+
+(*) Constructor — takes a row list, returns a relation
+val orders : order_row list -> orders =
+  fn rows =>
+    Relation (rows,
+      fn activeRows =>
+        let val sumRevenue =
+              from r in activeRows compute sum over r.revenue
+            val sumCost =
+              from r in activeRows compute sum over r.cost
+        in {sumRevenue = sumRevenue,
+            sumCost = sumCost,
+            profit = sumRevenue - sumCost,
+            interest_rate = 0.05}
+        end);
+```
+
+Like `datatype`, `reltype` defines both a type name and a
+constructor. The context factory lambda is baked into the constructor.
 
 ### The `measure` type
 
-A measure has type `'a measure`. It is opaque — internally like a
-lambda from context to value, but not a plain function.
+A measure has type `'a measure`. It is opaque — internally a function
+from context to value, but not a plain lambda.
 
 Operations:
 
@@ -160,13 +223,10 @@ Operations:
 | `at` | `context -> modifier -> context` | Modify the context |
 
 A measure definition can be any Morel expression, including queries
-and literals. Measures compose via explicit lambdas:
+and literals. Measures compose via explicit lambdas — no lifted
+arithmetic:
 
 ```sml
-val orders = [...]
-  define
-    sumRevenue = sum over revenue,
-    sumCost = sum over cost,
     profit = fn ctx => eval sumRevenue ctx - eval sumCost ctx,
     yoyGrowth = fn ctx =>
       eval sumRevenue ctx
@@ -174,10 +234,7 @@ val orders = [...]
 ```
 
 Each measure explicitly takes a context. References to other measures
-use `eval` to extract values. The only thing `define` adds beyond
-`fun` is: these functions are attached to the relation and are
-automatically called with the right context when referenced in a
-query.
+use `eval` to extract values.
 
 A possible future sugar `measure { ... }` could implicitly wrap in a
 lambda and insert `eval` on bare measure names:
@@ -189,46 +246,69 @@ lambda and insert `eval` on bare measure names:
 
 But that is not needed initially.
 
+### Creating a value
+
+```sml
+val myOrders = orders [
+  {year = 2023, prodName = "Widgets", revenue = 100, cost = 80},
+  {year = 2024, prodName = "Gadgets", revenue = 200, cost = 150}];
+(*) val myOrders : orders
+```
+
+At runtime, `myOrders` is the pair (row list, context factory). The
+type is `orders`, not `order_row list` — but `from` knows how to
+extract the collection.
+
 ### Context is (mostly) a predicate
 
 The context is primarily a predicate — a `row -> bool` lambda. It
 does not have a field per dimension. This keeps the context simple and
 avoids a record type that grows with the number of dimensions.
 
-```sml
-type context  (* opaque, internally row -> bool *)
-```
-
-When `from r in orders` executes and a `group` narrows the active
+When `from r in myOrders` executes and a `group` narrows the active
 rows, the `from` machinery builds the predicate (e.g.,
-`fn r => r.prodName = "Widgets" andalso r.year = 2024`) and passes it
-as the context to each measure.
+`fn r => r.prodName = "Widgets" andalso r.year = 2024`), filters the
+rows, and passes the active rows to the context factory. The factory
+returns a context record with evaluated measures.
 
 ### How measures enter scope in `from`
 
-When `from r in orders` processes a relation (not a raw list), the
+When `from r in myOrders` processes a relation (not a raw list), the
 measures are available qualified by relation name:
 
 ```sml
-from r in orders
+from r in myOrders
   group r.prodName
-  yield {prodName, revenue = orders.sumRevenue};
+  yield {prodName,
+         revenue = myOrders.sumRevenue,
+         profit = myOrders.profit};
 ```
 
 The `from` machinery supplies the context (derived from the current
-group). The user never writes `eval orders.sumRevenue ctx` in a
+group). The user never writes `eval myOrders.sumRevenue ctx` in a
 query — that is what being "in a `from` context" gives you.
 
 In a join, each relation's measures are qualified:
 
 ```sml
-from r in orders, c in customers
-  where r.custName = c.name
-  group r.prodName
-  yield {prodName,
-         revenue = orders.sumRevenue,
-         numCustomers = customers.custCount};
+reltype products of {prodName: string, category: string}
+  define
+    prodCount = count over ();
+
+val prods = products [
+  {prodName = "Widgets", category = "Hardware"},
+  {prodName = "Gadgets", category = "Electronics"}];
+
+from r in myOrders, p in prods
+  where r.prodName = p.prodName
+  group p.category
+  yield {category,
+         revenue = myOrders.sumRevenue,
+         numProducts = prods.prodCount};
 ```
+
+Different relation types have different context types and different
+measures. Qualified names disambiguate in joins.
 
 ### The `at` operator
 
@@ -237,14 +317,14 @@ requires AST introspection — finding and replacing a conjunct in the
 predicate.
 
 ```sml
-from r in orders
+from r in myOrders
   group {r.prodName, r.year}
   yield {prodName, year,
-         revenue = orders.sumRevenue,
-         revPrior = orders.sumRevenue at {year = year - 1}};
+         revenue = myOrders.sumRevenue,
+         revPrior = myOrders.sumRevenue at {year = year - 1}};
 ```
 
-`orders.sumRevenue at {year = year - 1}` means: take the current
+`myOrders.sumRevenue at {year = year - 1}` means: take the current
 context predicate (e.g.,
 `fn r => r.prodName = "Widgets" andalso r.year = 2024`), find the
 conjunct matching `r.year = <expr>`, and rewrite it to
@@ -267,12 +347,13 @@ the implicit context from `group` — no `at` needed.
 
 ### Parameters
 
-The context can also include **parameters** — values that are the
-same for every row but can be overridden. Parameters are defined
-alongside measures:
+Parameters are defined alongside measures in `reltype`. A parameter
+is a context field whose value doesn't depend on which rows are
+active — it's a constant, overridable via `at`:
 
 ```sml
-val orders = [...]
+reltype orders of {year: int, prodName: string,
+                   revenue: int, cost: int}
   define
     sumRevenue = sum over revenue,
     interest_rate = 0.05,
@@ -280,17 +361,37 @@ val orders = [...]
       eval sumRevenue ctx * interest_rate;
 ```
 
-A parameter is a measure whose value doesn't depend on which rows
-are active. It's a constant in the context, overridable via `at`:
-
 ```sml
 (*) Override interest_rate for a scenario
-orders.financing_cost at {interest_rate = 0.10}
+myOrders.financing_cost at {interest_rate = 0.10}
 ```
 
-Parameters and measures live in the same namespace — the context.
-The difference is internal: measures re-evaluate as the context
-narrows, parameters stay fixed unless explicitly overridden.
+Parameters and measures live in the same namespace — the context
+record. The difference is internal: measures re-evaluate as the
+context narrows, parameters stay fixed unless explicitly overridden.
+
+### Design alternatives considered
+
+**Structures.** SML structures can attach operations to a type, but
+structures are not first-class values — you cannot pass them as
+function arguments or put different relations in a list.
+
+**First-class modules (OCaml-style).** A relation is a module packed
+as a value, conforming to a `RELATION` signature. This works, but
+every relation with a different set of measures needs a different
+signature, and you can't easily say "any relation with at least
+`sumRevenue`."
+
+**Type classes (Haskell-style).** Measures are declared as instances
+on the row type. This is clean for generic functions (`fun
+topByRevenue rows = ...` works for any row type with `HasRevenue`),
+but measures are on the row *type*, not the relation *value* — so all
+`order list` values share the same measures. Different measure sets
+for the same row type require newtype wrappers.
+
+**The `reltype` approach** avoids all three problems: relations are
+first-class values, each relation has its own measures (via its own
+`'ctx` type), and the collection is the only runtime data.
 
 ## Challenges
 
@@ -313,9 +414,9 @@ their values can be used in arithmetic.
 
 ### 3. Attached to a relation
 
-A measure is bound to a specific relation. The `define` keyword
-attaches it. When `from r in orders` sees a relation, it makes the
-measures available. A raw list has no measures.
+A measure is bound to a specific relation via `reltype`. When
+`from r in myOrders` sees a relation, it makes the measures available.
+A raw list has no measures.
 
 ### 4. AST introspection for `at`
 
@@ -326,30 +427,32 @@ system, which already pattern-matches on predicate conjuncts.
 
 ## Open Questions
 
-1. **Syntax for `define`**: Is it part of the `val` declaration, or a
-   separate declaration? Part of `val` means the definition travels
-   with the data. Separate means you could add measures to an existing
-   relation.
-
-2. **Semi-additive measures** (e.g., inventory that sums across
+1. **Semi-additive measures** (e.g., inventory that sums across
    products but uses `last_value` across time) — these need
    per-dimension aggregate specifications. Probably out of scope
    initially.
 
-3. **The `visible` modifier** — should `where` clauses restrict
+2. **The `visible` modifier** — should `where` clauses restrict
    measures? The paper's default is no (measures see the full base
    table); `visible` opts in to the query's filters. For Morel, the
    default matters for user expectations.
 
-4. **Widening**: How to remove a dimension constraint (the old `ALL`
+3. **Widening**: How to remove a dimension constraint (the old `ALL`
    case). Options: `at {prodName = ALL}` with a keyword, or just
    construct the predicate manually for this rare case.
 
-5. **`measure { ... }` sugar**: Should measure definitions support
+4. **`measure { ... }` sugar**: Should measure definitions support
    implicit `eval` on bare measure names, so you can write
    `profit = measure { sumRevenue - sumCost }` instead of
    `profit = fn ctx => eval sumRevenue ctx - eval sumCost ctx`?
    Deferred — start with explicit lambdas.
+
+5. **Generic functions over relations**: Can you write a function that
+   takes any relation with a `sumRevenue` measure? The `'ctx` type
+   parameter is specific to each `reltype`. A generic function would
+   need either structural subtyping on `'ctx` or a type class
+   constraint. Probably not needed initially — most queries name their
+   relations explicitly.
 
 ## References
 
