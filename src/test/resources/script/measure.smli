@@ -1,0 +1,219 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Measures (and other dimensional expressions).
+ *)
+
+Sys.set ("lineWidth", 78);
+> val it = () : unit
+
+(* Data sets ------------------------------------------------------ *)
+
+(*) Orders table (from the "Measures in SQL" paper)
+val orders = [
+  {year = 2023, custName = "Alice", prodName = "Widgets",
+   revenue = 100, cost = 80},
+  {year = 2023, custName = "Bob", prodName = "Gadgets",
+   revenue = 200, cost = 150},
+  {year = 2023, custName = "Alice", prodName = "Gadgets",
+   revenue = 150, cost = 100},
+  {year = 2024, custName = "Alice", prodName = "Widgets",
+   revenue = 120, cost = 90},
+  {year = 2024, custName = "Carol", prodName = "Widgets",
+   revenue = 80, cost = 60},
+  {year = 2024, custName = "Bob", prodName = "Gadgets",
+   revenue = 250, cost = 180},
+  {year = 2024, custName = "Carol", prodName = "Gadgets",
+   revenue = 175, cost = 130}];
+> val orders =
+>   [{cost=80,custName="Alice",prodName="Widgets",revenue=100,year=2023},
+>    {cost=150,custName="Bob",prodName="Gadgets",revenue=200,year=2023},
+>    {cost=100,custName="Alice",prodName="Gadgets",revenue=150,year=2023},
+>    {cost=90,custName="Alice",prodName="Widgets",revenue=120,year=2024},
+>    {cost=60,custName="Carol",prodName="Widgets",revenue=80,year=2024},
+>    {cost=180,custName="Bob",prodName="Gadgets",revenue=250,year=2024},
+>    {cost=130,custName="Carol",prodName="Gadgets",revenue=175,year=2024}]
+>   : {cost:int, custName:string, prodName:string, revenue:int, year:int} list
+
+(* Measures as predicate functions --------------------------------------
+ *
+ * A "measure" is a function that takes a predicate to filter rows,
+ * then aggregates. This is the longhand approach. *)
+
+fun sumRevenue pred =
+  from r in orders where pred r compute sum over r.revenue;
+> val sumRevenue = fn
+>   :
+>     (
+>     {cost:int, custName:string, prodName:string, revenue:int, year:int}
+>     -> bool) -> int
+
+fun sumCost pred =
+  from r in orders where pred r compute sum over r.cost;
+> val sumCost = fn
+>   :
+>     (
+>     {cost:int, custName:string, prodName:string, revenue:int, year:int}
+>     -> bool) -> int
+
+(*) Total revenue (no filter)
+sumRevenue (fn _ => true);
+> val it = 1075 : int
+
+(*) Revenue for Widgets
+sumRevenue (fn r => r.prodName = "Widgets");
+> val it = 300 : int
+
+(*) Revenue by product
+from p in (from r in orders group r.prodName)
+  yield {prodName = p,
+         revenue = sumRevenue (fn r => r.prodName = p)}
+  order prodName;
+> val it = [{prodName="Gadgets",revenue=775},{prodName="Widgets",revenue=300}]
+>   : {prodName:string, revenue:int} list
+
+(*) Revenue and cost by product
+from p in (from r in orders group r.prodName)
+  yield {prodName = p,
+         revenue = sumRevenue (fn r => r.prodName = p),
+         cost = sumCost (fn r => r.prodName = p)}
+  order prodName;
+> val it =
+>   [{cost=560,prodName="Gadgets",revenue=775},
+>    {cost=230,prodName="Widgets",revenue=300}]
+>   : {cost:int, prodName:string, revenue:int} list
+
+(*) Revenue by product and year
+from g in (from r in orders group {r.prodName, r.year})
+  yield {prodName = g.prodName,
+         year = g.year,
+         revenue = sumRevenue (fn r => r.prodName = g.prodName
+                                       andalso r.year = g.year)}
+  order (prodName, year);
+> val it =
+>   [{prodName="Gadgets",revenue=350,year=2023},
+>    {prodName="Gadgets",revenue=425,year=2024},
+>    {prodName="Widgets",revenue=100,year=2023},
+>    {prodName="Widgets",revenue=200,year=2024}]
+>   : {prodName:string, revenue:int, year:int} list
+
+(*) Year-over-year: prior year revenue
+from g in (from r in orders group {r.prodName, r.year})
+  yield {prodName = g.prodName,
+         year = g.year,
+         revenue = sumRevenue (fn r => r.prodName = g.prodName
+                                       andalso r.year = g.year),
+         revPrior = sumRevenue (fn r => r.prodName = g.prodName
+                                        andalso r.year = g.year - 1)}
+  order (prodName, year);
+> val it =
+>   [{prodName="Gadgets",revPrior=0,revenue=350,year=2023},
+>    {prodName="Gadgets",revPrior=350,revenue=425,year=2024},
+>    {prodName="Widgets",revPrior=0,revenue=100,year=2023},
+>    {prodName="Widgets",revPrior=100,revenue=200,year=2024}]
+>   : {prodName:string, revPrior:int, revenue:int, year:int} list
+
+(* Proportion of total ---------------------------------
+ * Revenue for each product as a fraction of total revenue.
+ * (sumRevenue (fn _ => true) is re-evaluated per row, but a measure
+ * system could optimize this.)
+ *)
+from p in (from r in orders group r.prodName)
+  yield {prodName = p,
+         revenue = sumRevenue (fn r => r.prodName = p),
+         total = sumRevenue (fn _ => true)}
+  order prodName;
+> val it =
+>   [{prodName="Gadgets",revenue=775,total=1075},
+>    {prodName="Widgets",revenue=300,total=1075}]
+>   : {prodName:string, revenue:int, total:int} list
+
+(* Context-as-record approach -----------------------
+ * Instead of a raw predicate, the context is a record of optional
+ * dimension values. Each NONE means "all values".
+ * We destructure the record in the function parameter to avoid
+ * flex-record errors.
+ *)
+fun sumRevenueCtx {prodName = pn, year = yr, custName = cn} =
+  from r in orders
+    where (case pn of NONE => true | SOME p => r.prodName = p)
+    where (case yr of NONE => true | SOME y => r.year = y)
+    where (case cn of NONE => true | SOME c => r.custName = c)
+    compute sum over r.revenue;
+> val sumRevenueCtx = fn
+>   : {custName:string option, prodName:string option, year:int option} -> int
+
+fun sumCostCtx {prodName = pn, year = yr, custName = cn} =
+  from r in orders
+    where (case pn of NONE => true | SOME p => r.prodName = p)
+    where (case yr of NONE => true | SOME y => r.year = y)
+    where (case cn of NONE => true | SOME c => r.custName = c)
+    compute sum over r.cost;
+> val sumCostCtx = fn
+>   : {custName:string option, prodName:string option, year:int option} -> int
+
+val allCtx = {prodName = NONE, year = NONE, custName = NONE};
+> val allCtx = {custName=NONE,prodName=NONE,year=NONE}
+>   : {custName:'a option, prodName:'b option, year:'c option}
+
+(*) Total revenue via context
+sumRevenueCtx allCtx;
+> val it = 1075 : int
+
+(*) Revenue for Widgets in 2024 via context
+sumRevenueCtx {prodName = SOME "Widgets", year = SOME 2024,
+               custName = NONE};
+> val it = 200 : int
+
+(*) Revenue by product and year using context
+from g in (from r in orders group {r.prodName, r.year})
+  yield {prodName = g.prodName,
+         year = g.year,
+         revenue = sumRevenueCtx {prodName = SOME g.prodName,
+                                  year = SOME g.year,
+                                  custName = NONE},
+         cost = sumCostCtx {prodName = SOME g.prodName,
+                            year = SOME g.year,
+                            custName = NONE}}
+  order (prodName, year);
+> val it =
+>   [{cost=250,prodName="Gadgets",revenue=350,year=2023},
+>    {cost=310,prodName="Gadgets",revenue=425,year=2024},
+>    {cost=80,prodName="Widgets",revenue=100,year=2023},
+>    {cost=150,prodName="Widgets",revenue=200,year=2024}]
+>   : {cost:int, prodName:string, revenue:int, year:int} list
+
+(*) Year-over-year using context
+from g in (from r in orders group {r.prodName, r.year})
+  yield {prodName = g.prodName,
+         year = g.year,
+         revenue = sumRevenueCtx {prodName = SOME g.prodName,
+                                  year = SOME g.year,
+                                  custName = NONE},
+         revPrior = sumRevenueCtx {prodName = SOME g.prodName,
+                                   year = SOME (g.year - 1),
+                                   custName = NONE}}
+  order (prodName, year);
+> val it =
+>   [{prodName="Gadgets",revPrior=0,revenue=350,year=2023},
+>    {prodName="Gadgets",revPrior=350,revenue=425,year=2024},
+>    {prodName="Widgets",revPrior=0,revenue=100,year=2023},
+>    {prodName="Widgets",revPrior=100,revenue=200,year=2024}]
+>   : {prodName:string, revPrior:int, revenue:int, year:int} list
+
+(*) End measure.smli
