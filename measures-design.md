@@ -166,8 +166,9 @@ A new declaration keyword `reltype` (analogous to `datatype` and
 `abstype`) defines a relation type including its context:
 
 ```sml
-reltype orders of {year: int, prodName: string,
+reltype orders of {year: int, quarter: string, prodName: string,
                    revenue: int, cost: int}
+  where quarter -> year
   define
     sumRevenue = sum over revenue,
     sumCost = sum over cost,
@@ -230,7 +231,7 @@ arithmetic:
     profit = fn ctx => eval sumRevenue ctx - eval sumCost ctx,
     yoyGrowth = fn ctx =>
       eval sumRevenue ctx
-      - eval sumRevenue (ctx at {year = year - 1});
+      - eval sumRevenue (ctx at {year shift fn y => y - 1});
 ```
 
 Each measure explicitly takes a context. References to other measures
@@ -312,38 +313,195 @@ measures. Qualified names disambiguate in joins.
 
 ### The `at` operator
 
-`at` modifies the context predicate. It is the one operation that
-requires AST introspection — finding and replacing a conjunct in the
-predicate.
+`at` is a measure combinator. It takes a measure and a context
+transformer, and returns a new measure:
 
-```sml
-from r in myOrders
-  group {r.prodName, r.year}
-  yield {prodName, year,
-         revenue = myOrders.sumRevenue,
-         revPrior = myOrders.sumRevenue at {year = year - 1}};
+```
+eval (m at modifier) ctx  =  eval m (transform modifier ctx)
 ```
 
-`myOrders.sumRevenue at {year = year - 1}` means: take the current
-context predicate (e.g.,
-`fn r => r.prodName = "Widgets" andalso r.year = 2024`), find the
-conjunct matching `r.year = <expr>`, and rewrite it to
-`r.year = 2024 - 1`. The result predicate is
-`fn r => r.prodName = "Widgets" andalso r.year = 2023`.
+The result of `at` is a first-class measure — you can bind it to a
+name, pass it around, or use it in `define`:
 
-The compiler:
+```sml
+reltype orders of ...
+  define
+    sumRevenue = sum over revenue,
+    revPrior = sumRevenue at {year shift fn y => y - 1};
+```
 
-1. Decomposes the predicate into `andalso` conjuncts
-2. Finds the conjunct where the LHS matches the field named in `at`
-3. Replaces the RHS expression
-4. Reconstructs the predicate
+#### Context operations
 
-If no matching conjunct exists, `at` adds the constraint. This is
-the same kind of predicate decomposition that Morel's
+The context is primarily a predicate — a `row -> bool` lambda
+built from a conjunction of field-level predicates. The `at` operator
+modifies this predicate. The primitive operations are:
+
+**Whole-predicate operations:**
+
+| Operation | Syntax | Description |
+|-----------|--------|-------------|
+| **And** | `at (fn r => expr)` | Narrow by conjoining an additional predicate |
+| **Or** | `at or (fn r => expr)` | Widen by disjoining an additional predicate |
+| **Set** | `at set (fn r => expr)` | Replace the entire predicate |
+| **Clear** | `at clear` | Remove all predicates (set to `fn _ => true`) |
+
+**Field-level operations** (inside `at { ... }`):
+
+| Operation | Syntax | Description |
+|-----------|--------|-------------|
+| **Equality** | `year = 2024` | Remove conjuncts for field, add equality |
+| **Predicate** | `year check fn y => y elem [2024, 2026]` | Remove conjuncts, add general predicate |
+| **Remove** | `any year` | Remove all conjuncts for field |
+| **Shift** | `year shift fn y => y - 1` | Replace with function of current unique value |
+| **Set parameter** | `interest_rate = 0.10` | Override a parameter value |
+
+The `check` keyword (cf. [MOREL-239]) creates a clear syntactic
+boundary between value and predicate forms: in `year = 2024` the
+right-hand side is a value (`int`); in `year check fn y => ...` it is
+a predicate (`int -> bool`). The compiler knows from the keyword which
+form to expect, simplifying type deduction.
+
+The `shift` form takes a function `fieldType -> fieldType` and applies
+it to the current unique value of the field. If the field has no
+unique value (option is `NONE`), the shift is a no-op (the constraint
+is removed). This handles the common year-over-year case concisely:
+
+```sml
+at {year shift fn y => y - 1}
+```
+
+Some operations are compositions of primitives: equality is
+remove + and with equality predicate; clear is set with
+`fn _ => true`.
+
+#### Field values in `at` expressions
+
+Within an `at { ... }` expression, the current value of each field is
+in scope as a `fieldType option`:
+
+- `SOME v` if the current context uniquely determines the field's value
+- `NONE` if it does not
+
+This makes non-uniqueness explicit in the type system. The different
+field operation forms use the current value differently:
+
+- **Equality** (`year = 2024`): The right-hand side is a plain value
+  (`int`). The current value is available but not needed.
+- **Predicate** (`year check fn y => ...`): The bound variable `y`
+  is the per-row field value (`int`). The current option value is
+  also available for reference.
+- **Remove** (`any year`): No expression needed.
+- **Shift** (`year shift fn y => y - 1`): The bound variable `y`
+  is the current unique value (`int`, not `int option`). If the
+  field has no unique value, the shift is a no-op (constraint
+  removed).
+
+Common cases:
+
+```sml
+at {year = 2024}                     (*) set year = 2024
+at {any year}                        (*) remove year constraint
+at {year shift fn y => y - 1}        (*) shift back 1 if determined
+at {year check fn y => y >= 2020}    (*) non-equality predicate
+```
+
+For advanced cases, `check` can reference the current option value:
+
+```sml
+at {year check fn y =>
+      case year of
+        SOME v => y = v - 1
+      | NONE => true}
+```
+
+#### Predicate decomposition
+
+Several `at` operations (replace field, remove field, transform
+field) require decomposing the context predicate into parts and
+identifying which parts apply to a specific field. The algorithm:
+
+1. Decompose the predicate into top-level `andalso` conjuncts
+2. For each conjunct, inspect the AST to determine which field(s) it
+   references
+3. Conjuncts referencing only the target field are the "field
+   predicate"
+4. Remove/replace those conjuncts, keep the rest
+
+A conjunct like `r.year = 2024` clearly belongs to `year`. A
+conjunct like `r.year >= 2020 andalso r.year <= 2025` (if it were a
+single top-level conjunct) belongs to `year`. The predicate per field
+is not limited to equality — it can be any boolean expression on that
+field: equality, range, membership (`year in [2024, 2026]`), etc.
+
+Cross-field conjuncts (e.g., `r.year + r.revenue > 100`) are not
+attributed to any single field and are not touched by field-level
+operations.
+
+This is the same kind of conjunct decomposition that Morel's
 generator/constraint system already performs in `Generators.java`.
 
-Year-over-year is an uncommon case. Most measure usage just relies on
-the implicit context from `group` — no `at` needed.
+#### Functional dependencies and `at`
+
+When `at` replaces or removes a field constraint, it must also remove
+constraints on **functionally dependent** fields, to avoid creating
+unsatisfiable predicates.
+
+For example, given FDs `orderDate -> quarter -> year`:
+
+- Context: `r.quarter >= "2024-Q2" andalso r.quarter <= "2024-Q3"`
+- Operation: `at {year = SOME 2023}`
+- The quarter constraint implies year 2024, conflicting with year 2023
+- So `at` must also remove the quarter constraint
+
+The algorithm: when replacing field `F`, compute the FD closure of
+`F` — all fields connected via functional dependencies in either
+direction, chasing transitively — and remove conjuncts on all fields
+in the closure before adding the new constraint.
+
+Functional dependencies are declared in the `reltype` `where` clause:
+
+```sml
+reltype orders of {orderDate: date, year: int, quarter: string,
+                   prodName: string, custName: string,
+                   revenue: int, cost: int}
+  where unique {orderDate, prodName, custName},
+        orderDate -> quarter -> year
+  define
+    sumRevenue = sum over revenue;
+```
+
+The chain `orderDate -> quarter -> year` declares: `orderDate`
+determines `quarter`, `quarter` determines `year`, and transitively
+`orderDate` determines `year`. The `unique` clause declares a key.
+
+For derived fields — e.g., `year = yearOf r.orderDate` and
+`quarter = quarterOf r.orderDate` — Morel can infer FDs automatically
+from known function hierarchies (temporal extraction functions have a
+known granularity order: `date -> month -> quarter -> year`), without
+requiring explicit declaration.
+
+#### Determining unique field values
+
+When the `at` expression references a field's current value (e.g.,
+`year` in `at {year = Option.map (fn y => y - 1) year}`), the system
+must determine whether the current context implies a unique value:
+
+- **Direct**: The predicate contains `r.year = 2024`. Unique value is
+  `SOME 2024`.
+- **Via FD**: The predicate contains `r.quarter = "2024-Q3"`. Via
+  `quarter -> year` and the known mapping, unique value is
+  `SOME 2024`.
+- **Via FD with range**: The predicate contains
+  `r.quarter >= "2024-Q2" andalso r.quarter <= "2024-Q3"`. All
+  quarters in that range map to year 2024, so unique value is
+  `SOME 2024`.
+- **Non-unique**: The predicate contains
+  `r.quarter >= "2023-Q4" andalso r.quarter <= "2024-Q2"`. The range
+  spans two years. Value is `NONE`.
+
+Most measure usage relies on the implicit context from `group` — no
+`at` needed. The `at` operator handles the less common but important
+case of dimensional calculations like year-over-year.
 
 ### Parameters
 
@@ -364,6 +522,7 @@ reltype orders of {year: int, prodName: string,
 ```sml
 (*) Override interest_rate for a scenario
 myOrders.financing_cost at {interest_rate = 0.10}
+(*) 'interest_rate = 0.10' uses the equality form — same as for fields
 ```
 
 Parameters and measures live in the same namespace — the context
@@ -437,17 +596,13 @@ system, which already pattern-matches on predicate conjuncts.
    table); `visible` opts in to the query's filters. For Morel, the
    default matters for user expectations.
 
-3. **Widening**: How to remove a dimension constraint (the old `ALL`
-   case). Options: `at {prodName = ALL}` with a keyword, or just
-   construct the predicate manually for this rare case.
-
-4. **`measure { ... }` sugar**: Should measure definitions support
+3. **`measure { ... }` sugar**: Should measure definitions support
    implicit `eval` on bare measure names, so you can write
    `profit = measure { sumRevenue - sumCost }` instead of
    `profit = fn ctx => eval sumRevenue ctx - eval sumCost ctx`?
    Deferred — start with explicit lambdas.
 
-5. **Generic functions over relations**: Can you write a function that
+4. **Generic functions over relations**: Can you write a function that
    takes any relation with a `sumRevenue` measure? The `'ctx` type
    parameter is specific to each `reltype`. A generic function would
    need either structural subtyping on `'ctx` or a type class
