@@ -414,31 +414,60 @@ at {year check fn y =>
       | NONE => true}
 ```
 
-#### Predicate decomposition
+#### Runtime representation of context
 
-Several `at` operations (replace field, remove field, transform
-field) require decomposing the context predicate into parts and
-identifying which parts apply to a specific field. The algorithm:
+The context is not a compiled `row -> bool` lambda — you cannot
+decompose or extract field values from opaque code. Instead, the
+context is a **structured data value**: a map from field name to
+constraint, plus a list of global (cross-field) predicates.
 
-1. Decompose the predicate into top-level `andalso` conjuncts
-2. For each conjunct, inspect the AST to determine which field(s) it
-   references
-3. Conjuncts referencing only the target field are the "field
-   predicate"
-4. Remove/replace those conjuncts, keep the rest
+```sml
+type context = {
+  fields: (string, constraint) map,   (* per-field *)
+  globals: (row -> bool) list          (* cross-field *)
+}
+```
 
-A conjunct like `r.year = 2024` clearly belongs to `year`. A
-conjunct like `r.year >= 2020 andalso r.year <= 2025` (if it were a
-single top-level conjunct) belongs to `year`. The predicate per field
-is not limited to equality — it can be any boolean expression on that
-field: equality, range, membership (`year in [2024, 2026]`), etc.
+Each field constraint is one of:
 
-Cross-field conjuncts (e.g., `r.year + r.revenue > 100`) are not
-attributed to any single field and are not touched by field-level
-operations.
+| Constraint | Current value | Description |
+|------------|---------------|-------------|
+| `Eq v` | `SOME v` | Equality: field = v |
+| `Check pred` | `NONE` | General predicate: `fieldType -> bool` |
 
-This is the same kind of conjunct decomposition that Morel's
-generator/constraint system already performs in `Generators.java`.
+The `fields` map is sparse — only fields with active constraints
+appear. A field absent from the map is implicitly unconstrained
+(`Any`). This means:
+
+- `any year` removes the `year` key from the map
+- `year = 2024` inserts `("year", Eq 2024)`
+- `year check fn y => ...` inserts `("year", Check (fn y => ...))`
+- `year shift f` on `Eq v` inserts `("year", Eq (f v))`; on
+  `Check` or absent, removes the key (no unique value to shift)
+
+Global predicates (from `at (fn r => expr)` or cross-field
+constraints like `r.year + r.revenue > 100`) live in the `globals`
+list. They cannot be attributed to a single field and are not
+touched by field-level operations.
+
+The filtering predicate is derived by walking the map entries and
+the globals list, conjoining everything:
+
+```sml
+fun toPredicate {fields, globals} row =
+  Map.all (fn (field, Eq v) => getField row field = v
+            | (field, Check p) => p (getField row field)) fields
+  andalso List.all (fn p => p row) globals
+```
+
+The `from` machinery builds this structured context from `group`
+clauses — `group r.year` produces an `Eq` constraint for each group
+key. The `at` operator transforms the structure directly, with no
+AST introspection at runtime.
+
+This is analogous to how SQL optimizers represent predicates: not as
+opaque expressions but as structured filter lists that support
+pushdown, combination, and field-level replacement.
 
 #### Functional dependencies and `at`
 
@@ -449,7 +478,7 @@ unsatisfiable predicates.
 For example, given FDs `orderDate -> quarter -> year`:
 
 - Context: `r.quarter >= "2024-Q2" andalso r.quarter <= "2024-Q3"`
-- Operation: `at {year = SOME 2023}`
+- Operation: `at {year = 2023}`
 - The quarter constraint implies year 2024, conflicting with year 2023
 - So `at` must also remove the quarter constraint
 
@@ -482,22 +511,26 @@ requiring explicit declaration.
 
 #### Determining unique field values
 
-When the `at` expression references a field's current value (e.g.,
-`year` in `at {year = Option.map (fn y => y - 1) year}`), the system
-must determine whether the current context implies a unique value:
+The current value of a field is determined directly from the
+structured context — no AST introspection needed:
 
-- **Direct**: The predicate contains `r.year = 2024`. Unique value is
-  `SOME 2024`.
-- **Via FD**: The predicate contains `r.quarter = "2024-Q3"`. Via
-  `quarter -> year` and the known mapping, unique value is
-  `SOME 2024`.
-- **Via FD with range**: The predicate contains
-  `r.quarter >= "2024-Q2" andalso r.quarter <= "2024-Q3"`. All
-  quarters in that range map to year 2024, so unique value is
-  `SOME 2024`.
-- **Non-unique**: The predicate contains
-  `r.quarter >= "2023-Q4" andalso r.quarter <= "2024-Q2"`. The range
-  spans two years. Value is `NONE`.
+- **`Eq v`**: Current value is `SOME v`. This is the common case,
+  produced by `group` clauses and equality `at` operations.
+- **`Check pred`**: Current value is `NONE`. A general predicate
+  does not imply a unique value.
+- **Absent** (unconstrained): Current value is `NONE`.
+
+FD chasing can propagate unique values between fields:
+
+- **Via FD**: Field `quarter` has `Eq "2024-Q3"`. Via
+  `quarter -> year` and the known mapping, `year`'s current value is
+  `SOME 2024` even if `year` is absent from the map.
+- **Via FD with range**: Field `quarter` has
+  `Check (fn q => q >= "2024-Q2" andalso q <= "2024-Q3")`. All
+  quarters in that range map to year 2024, so `year`'s current value
+  is `SOME 2024`. (This requires evaluating the FD mapping over the
+  range — more expensive, and only applies to known hierarchies.)
+- **Non-unique via FD**: The range spans two years. Value is `NONE`.
 
 Most measure usage relies on the implicit context from `group` — no
 `at` needed. The `at` operator handles the less common but important
