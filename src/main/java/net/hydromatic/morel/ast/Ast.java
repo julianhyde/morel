@@ -3023,6 +3023,51 @@ public class Ast {
     }
   }
 
+  /** Postfix method call: {@code x.f ()} or {@code x.f arg}. */
+  public static class PostfixApp extends Exp {
+    public final Exp receiver;
+    public final String methodName;
+
+    /**
+     * Null when written as {@code x.f ()} &mdash; unit is the syntactic marker,
+     * not an argument. Non-null for {@code x.f arg} or {@code x.f (a,b)}.
+     */
+    public final @Nullable Exp arg;
+
+    PostfixApp(Pos pos, Exp receiver, String methodName, @Nullable Exp arg) {
+      super(pos, Op.POSTFIX_APP);
+      this.receiver = requireNonNull(receiver);
+      this.methodName = requireNonNull(methodName);
+      this.arg = arg;
+    }
+
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(receiver, left, op.left).append(".").append(methodName);
+      if (arg != null) {
+        w.append(" ").append(arg, op.right, right);
+      } else {
+        w.append(" ()");
+      }
+      return w;
+    }
+
+    public PostfixApp copy(Exp receiver, @Nullable Exp arg) {
+      return this.receiver.equals(receiver) && Objects.equals(this.arg, arg)
+          ? this
+          : new PostfixApp(pos, receiver, methodName, arg);
+    }
+  }
+
   /**
    * Call to an aggregate function. It is an expression but may only occur in a
    * {@code compute} step or a {@code compute} clause of a {@code group} step.

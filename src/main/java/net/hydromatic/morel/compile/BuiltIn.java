@@ -28,7 +28,9 @@ import static net.hydromatic.morel.type.PrimitiveType.UNIT;
 import static net.hydromatic.morel.util.Static.SKIP;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -1501,6 +1503,7 @@ public enum BuiltIn {
   LIST_DROP(
       "List",
       "drop",
+      true,
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.list(0), INT), h.list(0)))),
@@ -1617,6 +1620,7 @@ public enum BuiltIn {
   LIST_GET_ITEM(
       "List",
       "getItem",
+      true,
       ts ->
           ts.forallType(
               1,
@@ -1635,6 +1639,7 @@ public enum BuiltIn {
       "List",
       "hd",
       "hd",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
 
   /**
@@ -1658,6 +1663,7 @@ public enum BuiltIn {
   LIST_LAST(
       "List",
       "last",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0)))),
 
   /**
@@ -1669,6 +1675,7 @@ public enum BuiltIn {
       "List",
       "length",
       "length",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), INT))),
 
   /**
@@ -1746,6 +1753,7 @@ public enum BuiltIn {
   LIST_NTH(
       "List",
       "nth",
+      true,
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.list(0), INT), h.get(0)))),
@@ -1759,6 +1767,7 @@ public enum BuiltIn {
       "List",
       "null",
       "null",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), BOOL))),
 
   /**
@@ -2135,6 +2144,7 @@ public enum BuiltIn {
       "List",
       "rev",
       "rev",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.list(0)))),
 
   /**
@@ -2146,6 +2156,7 @@ public enum BuiltIn {
   LIST_REV_APPEND(
       "List",
       "revAppend",
+      true,
       ts ->
           ts.forallType(
               1,
@@ -2179,6 +2190,7 @@ public enum BuiltIn {
   LIST_TAKE(
       "List",
       "take",
+      true,
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.list(0), INT), h.list(0)))),
@@ -2193,6 +2205,7 @@ public enum BuiltIn {
       "List",
       "tl",
       "tl",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.list(0), h.list(0)))),
 
   /**
@@ -2920,6 +2933,7 @@ public enum BuiltIn {
       "Relational",
       "count",
       "count",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), INT))),
 
   /**
@@ -2952,6 +2966,7 @@ public enum BuiltIn {
       "Relational",
       "empty",
       "empty",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
 
   /**
@@ -2965,6 +2980,7 @@ public enum BuiltIn {
       "Relational",
       "iterate",
       "iterate",
+      true,
       ts ->
           ts.multi(
               ts.forallType(
@@ -3029,6 +3045,7 @@ public enum BuiltIn {
       "Relational",
       "nonEmpty",
       "nonEmpty",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
 
   /**
@@ -3052,6 +3069,7 @@ public enum BuiltIn {
       "Relational",
       "only",
       "only",
+      true,
       ts ->
           ts.multi(
               ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
@@ -3073,6 +3091,7 @@ public enum BuiltIn {
       "Relational",
       "sum",
       "sum",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
   /**
@@ -3092,6 +3111,7 @@ public enum BuiltIn {
   STRING_COMPARE(
       "String",
       "compare",
+      true,
       ts -> ts.fnType(ts.tupleType(STRING, STRING), ts.order())),
 
   /**
@@ -3129,6 +3149,7 @@ public enum BuiltIn {
       "String",
       "explode",
       "explode",
+      true,
       ts -> ts.fnType(STRING, ts.listType(CHAR))),
 
   /**
@@ -3150,6 +3171,7 @@ public enum BuiltIn {
   STRING_EXTRACT(
       "String",
       "extract",
+      true,
       ts -> ts.fnType(ts.tupleType(STRING, INT, ts.option(INT)), STRING)),
 
   /**
@@ -3247,7 +3269,7 @@ public enum BuiltIn {
    *
    * <p>"size s" returns |s|, the number of characters in string s.
    */
-  STRING_SIZE("String", "size", "size", ts -> ts.fnType(STRING, INT)),
+  STRING_SIZE("String", "size", "size", true, ts -> ts.fnType(STRING, INT)),
 
   /**
    * Function "String.str", of type "char &rarr; string".
@@ -3263,7 +3285,8 @@ public enum BuiltIn {
    * from zero. This raises {@link BuiltInExn#SUBSCRIPT Subscript} if i &lt; 0
    * or |s| &le; i.
    */
-  STRING_SUB("String", "sub", ts -> ts.fnType(ts.tupleType(STRING, INT), CHAR)),
+  STRING_SUB(
+      "String", "sub", true, ts -> ts.fnType(ts.tupleType(STRING, INT), CHAR)),
 
   /**
    * Function "String.substring", of type "string * int * int &rarr; string".
@@ -3276,6 +3299,7 @@ public enum BuiltIn {
       "String",
       "substring",
       "substring",
+      true,
       ts -> ts.fnType(ts.tupleType(STRING, INT, INT), STRING)),
 
   /**
@@ -3709,6 +3733,7 @@ public enum BuiltIn {
   VECTOR_LENGTH(
       "Vector",
       "length",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.vector(0), INT))),
 
   /**
@@ -3778,6 +3803,7 @@ public enum BuiltIn {
   VECTOR_SUB(
       "Vector",
       "sub",
+      true,
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.vector(0), INT), h.get(0)))),
@@ -3944,7 +3970,18 @@ public enum BuiltIn {
   /** Computes a value for a particular session. */
   public final @Nullable Function<Session, Object> sessionValue;
 
+  /**
+   * True if the first parameter is named {@code self} (postfix-eligible).
+   *
+   * <p>When true, {@code f x} can be written {@code x.f ()}, and {@code f (x,
+   * y)} can be written {@code x.f y}.
+   */
+  public final boolean selfFirst;
+
   public static final ImmutableMap<String, BuiltIn> BY_ML_NAME;
+
+  /** Built-ins eligible for postfix dispatch, keyed by unqualified name. */
+  public static final ImmutableMultimap<String, BuiltIn> BY_SELF_FIRST_NAME;
 
   public static final SortedMap<String, Structure> BY_STRUCTURE;
 
@@ -3978,13 +4015,21 @@ public enum BuiltIn {
         (structure, mapBuilder) ->
             b.put(structure, new Structure(structure, mapBuilder.build())));
     BY_STRUCTURE = b.build();
+    final ImmutableListMultimap.Builder<String, BuiltIn> selfFirstBuilder =
+        ImmutableListMultimap.builder();
+    for (BuiltIn builtIn : values()) {
+      if (builtIn.selfFirst) {
+        selfFirstBuilder.put(builtIn.mlName, builtIn);
+      }
+    }
+    BY_SELF_FIRST_NAME = selfFirstBuilder.build();
   }
 
   BuiltIn(
       @Nullable String structure,
       String mlName,
       Function<TypeSystem, Type> typeFunction) {
-    this(structure, mlName, null, typeFunction, null, null);
+    this(structure, mlName, null, typeFunction, null, null, false);
   }
 
   BuiltIn(
@@ -3992,7 +4037,7 @@ public enum BuiltIn {
       String mlName,
       PrimitiveType preferredType,
       Function<TypeSystem, Type> typeFunction) {
-    this(structure, mlName, null, typeFunction, preferredType, null);
+    this(structure, mlName, null, typeFunction, preferredType, null, false);
   }
 
   BuiltIn(
@@ -4000,7 +4045,26 @@ public enum BuiltIn {
       String mlName,
       @Nullable String alias,
       Function<TypeSystem, Type> typeFunction) {
-    this(structure, mlName, alias, typeFunction, null, null);
+    this(structure, mlName, alias, typeFunction, null, null, false);
+  }
+
+  /** Constructor for a selfFirst built-in without an alias. */
+  BuiltIn(
+      @Nullable String structure,
+      String mlName,
+      boolean selfFirst,
+      Function<TypeSystem, Type> typeFunction) {
+    this(structure, mlName, null, typeFunction, null, null, selfFirst);
+  }
+
+  /** Constructor for a selfFirst built-in with an alias. */
+  BuiltIn(
+      @Nullable String structure,
+      String mlName,
+      @Nullable String alias,
+      boolean selfFirst,
+      Function<TypeSystem, Type> typeFunction) {
+    this(structure, mlName, alias, typeFunction, null, null, selfFirst);
   }
 
   BuiltIn(
@@ -4010,12 +4074,31 @@ public enum BuiltIn {
       Function<TypeSystem, Type> typeFunction,
       @Nullable PrimitiveType preferredType,
       @Nullable Function<Session, Object> sessionValue) {
+    this(
+        structure,
+        mlName,
+        alias,
+        typeFunction,
+        preferredType,
+        sessionValue,
+        false);
+  }
+
+  BuiltIn(
+      @Nullable String structure,
+      String mlName,
+      @Nullable String alias,
+      Function<TypeSystem, Type> typeFunction,
+      @Nullable PrimitiveType preferredType,
+      @Nullable Function<Session, Object> sessionValue,
+      boolean selfFirst) {
     this.structure = structure;
     this.mlName = requireNonNull(mlName, "mlName");
     this.alias = alias;
     this.typeFunction = requireNonNull(typeFunction, "typeFunction");
     this.preferredType = preferredType;
     this.sessionValue = sessionValue;
+    this.selfFirst = selfFirst;
   }
 
   /** Calls a consumer once per value. */

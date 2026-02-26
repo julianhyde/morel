@@ -37,6 +37,7 @@ import static org.apache.calcite.util.Util.first;
 import static org.apache.calcite.util.Util.firstDuplicate;
 
 import com.google.common.base.Suppliers;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
@@ -48,11 +49,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.NavigableSet;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -123,6 +126,18 @@ public class TypeResolver {
   private final List<Inst> overloads = new ArrayList<>();
   private final List<Constraint> constraints = new ArrayList<>();
   private final Deque<AggFrame> aggregateTripleStack = new ArrayDeque<>();
+
+  /**
+   * Names of user-defined functions whose first parameter is named {@code self}
+   * (curried form).
+   */
+  private final Set<String> selfFirstNames = new HashSet<>();
+
+  /**
+   * Names of user-defined functions whose first parameter is a tuple whose
+   * first element is named {@code self} (tuple-splicing form).
+   */
+  private final Set<String> selfFirstTupleNames = new HashSet<>();
 
   /** Type variable scopes for val/fun declarations (innermost last). */
   private final Deque<Map<String, Variable>> tyVarScopes = new ArrayDeque<>();
@@ -793,6 +808,8 @@ public class TypeResolver {
 
       case APPLY:
         return deduceApplyType(env, (Ast.Apply) node, v);
+      case POSTFIX_APP:
+        return deducePostfixAppType(env, (Ast.PostfixApp) node, v);
 
       case AGGREGATE:
         final AggFrame aggFrame = aggregateTripleStack.peek();
@@ -1567,6 +1584,129 @@ public class TypeResolver {
   }
 
   /**
+   * Deduces the type of a postfix method call {@code x.f ()} or {@code x.f
+   * arg}, desugaring to a regular function application.
+   *
+   * <p>For example:
+   *
+   * <ul>
+   *   <li>{@code xs.length ()} &rarr; {@code length xs}
+   *   <li>{@code xs.drop n} &rarr; {@code List.drop (xs, n)}
+   *   <li>{@code s.size ()} &rarr; {@code size s}
+   * </ul>
+   */
+  private Ast.Exp deducePostfixAppType(
+      TypeEnv env, Ast.PostfixApp postfixApp, Variable v) {
+    final String name = postfixApp.methodName;
+    final Pos pos = postfixApp.pos;
+
+    // If the receiver is an identifier that names a record/structure containing
+    // field 'name', treat this as a field projection + application rather than
+    // a postfix call.  This preserves existing syntax such as
+    // {@code String.size "hello"} and {@code Sys.set ("x", 1)}.
+    if (postfixApp.receiver instanceof Ast.Id) {
+      final Type receiverType =
+          env.getTypeOpt(((Ast.Id) postfixApp.receiver).name);
+      if (receiverType instanceof RecordType
+          && ((RecordType) receiverType).argNameTypes.containsKey(name)) {
+        return deduceFieldProjectionApp(env, postfixApp, v);
+      }
+    }
+
+    // Collect built-in candidates.
+    final ImmutableCollection<BuiltIn> builtInCandidates =
+        BuiltIn.BY_SELF_FIRST_NAME.get(name);
+    final boolean hasUserFn = selfFirstNames.contains(name) && env.has(name);
+
+    if (builtInCandidates.isEmpty() && !hasUserFn) {
+      // No postfix-eligible function found; fall back to field projection.
+      return deduceFieldProjectionApp(env, postfixApp, v);
+    }
+
+    // Elaborate the receiver.
+    final Variable vReceiver = unifier.variable();
+    final Ast.Exp receiver2 =
+        deduceExpType(env, postfixApp.receiver, vReceiver);
+
+    // Pick a candidate and determine the calling form.
+    final Ast.Exp fnExp;
+    final boolean isTuple;
+    if (!builtInCandidates.isEmpty()) {
+      final BuiltIn builtIn = builtInCandidates.iterator().next();
+      fnExp = postfixBuiltInFnExp(pos, builtIn);
+      isTuple = isPostfixBuiltInTuple(builtIn);
+    } else {
+      fnExp = ast.id(pos, name);
+      isTuple = selfFirstTupleNames.contains(name);
+    }
+
+    // Desugar the postfix call to a regular application.
+    if (postfixApp.arg == null) {
+      // x.f () → f x  (curried, no extra argument)
+      return deduceExpType(env, ast.apply(fnExp, receiver2), v);
+    } else if (isTuple) {
+      // x.f y → f (x, y)  or  x.f (a, b) → f (x, a, b)
+      final List<Ast.Exp> elems = new ArrayList<>();
+      elems.add(receiver2);
+      if (postfixApp.arg instanceof Ast.Tuple) {
+        elems.addAll(((Ast.Tuple) postfixApp.arg).args);
+      } else {
+        elems.add(postfixApp.arg);
+      }
+      final Ast.Tuple spliced = ast.tuple(pos, elems);
+      return deduceExpType(env, ast.apply(fnExp, spliced), v);
+    } else {
+      // x.f y → f x y  (curried with one extra argument)
+      return deduceExpType(
+          env, ast.apply(ast.apply(fnExp, receiver2), postfixApp.arg), v);
+    }
+  }
+
+  /**
+   * Desugars a {@link Ast.PostfixApp} as a field projection plus application:
+   * {@code x.f arg} &rarr; {@code (#f x) arg}, {@code x.f ()} &rarr; {@code (#f
+   * x) ()}.
+   */
+  private Ast.Exp deduceFieldProjectionApp(
+      TypeEnv env, Ast.PostfixApp postfixApp, Variable v) {
+    final Pos pos = postfixApp.pos;
+    final Ast.Exp selector = ast.recordSelector(pos, postfixApp.methodName);
+    final Ast.Exp projected = ast.apply(selector, postfixApp.receiver);
+    final Ast.Exp arg =
+        postfixApp.arg == null ? ast.unitLiteral(pos) : postfixApp.arg;
+    return deduceExpType(env, ast.apply(projected, arg), v);
+  }
+
+  /**
+   * Returns an expression that refers to a built-in function eligible for
+   * postfix dispatch.
+   */
+  private static Ast.Exp postfixBuiltInFnExp(Pos pos, BuiltIn builtIn) {
+    if (builtIn.alias != null) {
+      return ast.id(pos, builtIn.alias);
+    } else if (builtIn.structure != null && !builtIn.structure.equals("$")) {
+      return ast.apply(
+          ast.recordSelector(pos, builtIn.mlName),
+          ast.id(pos, builtIn.structure));
+    } else {
+      return ast.id(pos, builtIn.mlName);
+    }
+  }
+
+  /**
+   * Returns true if the built-in function takes its first argument as part of a
+   * tuple (tuple-splicing form), false if it takes it as a curried argument.
+   */
+  private boolean isPostfixBuiltInTuple(BuiltIn builtIn) {
+    Type type = builtIn.typeFunction.apply(typeSystem);
+    if (type instanceof ForallType) {
+      type = ((ForallType) type).type;
+    }
+    return type instanceof FnType
+        && ((FnType) type).paramType instanceof TupleType;
+  }
+
+  /**
    * Deduces the datatype of a function being applied to an argument. If the
    * function is overloaded, the argument will help us resolve the overloading.
    *
@@ -2316,8 +2456,42 @@ public class TypeResolver {
     final List<Ast.ValBind> valBindList = new ArrayList<>();
     for (Ast.FunBind funBind : funDecl.funBinds) {
       valBindList.add(toValBind(env, funBind));
+      registerSelfFirst(funBind);
     }
     return ast.valDecl(funDecl.pos, true, false, valBindList);
+  }
+
+  /** Records whether a function's first parameter is named {@code self}. */
+  private void registerSelfFirst(Ast.FunBind funBind) {
+    if (funBind.matchList.isEmpty()) {
+      return;
+    }
+    final List<Ast.Pat> patList = funBind.matchList.get(0).patList;
+    if (patList.isEmpty()) {
+      return;
+    }
+    final Ast.Pat first = unwrapPat(patList.get(0));
+    if (first instanceof Ast.IdPat && ((Ast.IdPat) first).name.equals("self")) {
+      selfFirstNames.add(funBind.name);
+    } else if (first instanceof Ast.TuplePat) {
+      final Ast.TuplePat tp = (Ast.TuplePat) first;
+      if (!tp.args.isEmpty()) {
+        final Ast.Pat firstTupleElem = unwrapPat(tp.args.get(0));
+        if (firstTupleElem instanceof Ast.IdPat
+            && ((Ast.IdPat) firstTupleElem).name.equals("self")) {
+          selfFirstNames.add(funBind.name);
+          selfFirstTupleNames.add(funBind.name);
+        }
+      }
+    }
+  }
+
+  /** Unwraps an annotated pattern to get the underlying pattern. */
+  private static Ast.Pat unwrapPat(Ast.Pat pat) {
+    while (pat instanceof Ast.AnnotatedPat) {
+      pat = ((Ast.AnnotatedPat) pat).pat;
+    }
+    return pat;
   }
 
   private Ast.ValBind toValBind(TypeEnv env, Ast.FunBind funBind) {

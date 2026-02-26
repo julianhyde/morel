@@ -768,23 +768,78 @@ Match match() :
  * <li>infix 0 {@code before implies}
  * </ul>
  */
+JAVACODE boolean isAtomStart() {
+  int kind = getToken(1).kind;
+  return kind == LPAREN
+      || kind == LBRACKET
+      || kind == LBRACE
+      || kind == IDENTIFIER
+      || kind == QUOTED_IDENTIFIER
+      || kind == OP
+      || kind == NATURAL_LITERAL
+      || kind == NON_NEGATIVE_INTEGER_LITERAL
+      || kind == NEGATIVE_INTEGER_LITERAL
+      || kind == REAL_LITERAL
+      || kind == QUOTED_STRING
+      || kind == CHAR_LITERAL
+      || kind == LABEL
+      || kind == FN
+      || kind == LET
+      || kind == IF
+      || kind == CASE
+      || kind == FROM
+      || kind == EXISTS
+      || kind == FORALL
+      || kind == CURRENT
+      || kind == ELEMENTS
+      || kind == ORDINAL;
+}
+
 Exp expression9() :
 {
   Exp e;
+  Exp arg;
   Id id;
   String fieldName;
+  /* True while e is a bare identifier (potential module/structure name).
+     Used to suppress paren-arg postfix when the receiver looks like a module,
+     e.g. to preserve "Module.fn (args)" as a field-projection + apply. */
+  boolean eIsId;
 }
 {
-  e = atom()
+  e = atom() { eIsId = (e instanceof Ast.Id); }
   (
     <DOT>
     ( id = identifier() { fieldName = id.name; }
     | <NATURAL_LITERAL> { fieldName = token.image; }
     )
-    {
-      final Exp s = ast.recordSelector(pos(), fieldName);
-      e = ast.apply(s, e);
-    }
+    (
+      /* x.f () -- no-arg postfix method call */
+      LOOKAHEAD(<LPAREN> <RPAREN>)
+      <LPAREN> <RPAREN>
+      { e = ast.postfixApp(pos(), e, fieldName, null); eIsId = false; }
+    |
+      /* x.f arg -- postfix method call with one atom arg.
+         Two guards prevent common mis-parses:
+         1. !eIsId: allows postfix args only when the receiver is NOT a bare
+            identifier.  A bare identifier could be a module/structure name
+            (e.g. "Module", "List", "String"), and "Module.fn arg" should
+            always be parsed as field-projection + apply, not as a postfix call.
+            For identifier receivers, only "x.f ()" (no-arg form) is supported.
+            Literal receivers (strings, lists, tuples, etc.) allow "x.f arg".
+         2. getToken(2).kind != DOT: prevents "expr.fn Id.g" from consuming
+            "Id" (an identifier followed by ".") as the postfix arg. */
+      LOOKAHEAD({ isAtomStart() && !eIsId && getToken(2).kind != DOT })
+      arg = atom()
+      { e = ast.postfixApp(pos(), e, fieldName, arg); eIsId = false; }
+    |
+      /* x.f -- field projection, existing behaviour */
+      {
+        final Exp s = ast.recordSelector(pos(), fieldName);
+        e = ast.apply(s, e);
+        eIsId = false;
+      }
+    )
   )*
   { return e; }
 }
