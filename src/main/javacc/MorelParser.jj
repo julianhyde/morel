@@ -817,7 +817,7 @@ Exp expression9() :
       /* x.f () -- no-arg postfix method call */
       LOOKAHEAD(<LPAREN> <RPAREN>)
       <LPAREN> <RPAREN>
-      { e = ast.postfixApp(pos(), e, fieldName, null); eIsId = false; }
+      { e = ast.postfixApp(pos(), e, fieldName, ast.unitLiteral(pos())); eIsId = false; }
     |
       /* x.f arg -- postfix method call with one atom arg.
          Two guards prevent common mis-parses:

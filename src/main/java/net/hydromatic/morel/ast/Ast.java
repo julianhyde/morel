@@ -3027,18 +3027,13 @@ public class Ast {
   public static class PostfixApp extends Exp {
     public final Exp receiver;
     public final String methodName;
+    public final Exp arg;
 
-    /**
-     * Null when written as {@code x.f ()} &mdash; unit is the syntactic marker,
-     * not an argument. Non-null for {@code x.f arg} or {@code x.f (a,b)}.
-     */
-    public final @Nullable Exp arg;
-
-    PostfixApp(Pos pos, Exp receiver, String methodName, @Nullable Exp arg) {
+    PostfixApp(Pos pos, Exp receiver, String methodName, Exp arg) {
       super(pos, Op.POSTFIX_APP);
       this.receiver = requireNonNull(receiver);
       this.methodName = requireNonNull(methodName);
-      this.arg = arg;
+      this.arg = requireNonNull(arg);
     }
 
     public Exp accept(Shuttle shuttle) {
@@ -3052,17 +3047,15 @@ public class Ast {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(receiver, left, op.left).append(".").append(methodName);
-      if (arg != null) {
-        w.append(" ").append(arg, op.right, right);
-      } else {
-        w.append(" ()");
-      }
-      return w;
+      return w.append(receiver, left, op.left)
+          .append(".")
+          .append(methodName)
+          .append(" ")
+          .append(arg, op.right, right);
     }
 
-    public PostfixApp copy(Exp receiver, @Nullable Exp arg) {
-      return this.receiver.equals(receiver) && Objects.equals(this.arg, arg)
+    public PostfixApp copy(Exp receiver, Exp arg) {
+      return this.receiver.equals(receiver) && this.arg.equals(arg)
           ? this
           : new PostfixApp(pos, receiver, methodName, arg);
     }

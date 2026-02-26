@@ -1643,7 +1643,7 @@ public class TypeResolver {
     }
 
     // Desugar the postfix call to a regular application.
-    if (postfixApp.arg == null) {
+    if (postfixApp.arg.op == Op.UNIT_LITERAL) {
       // x.f () → f x  (curried, no extra argument)
       return deduceExpType(env, ast.apply(fnExp, receiver2), v);
     } else if (isTuple) {
@@ -1674,9 +1674,7 @@ public class TypeResolver {
     final Pos pos = postfixApp.pos;
     final Ast.Exp selector = ast.recordSelector(pos, postfixApp.methodName);
     final Ast.Exp projected = ast.apply(selector, postfixApp.receiver);
-    final Ast.Exp arg =
-        postfixApp.arg == null ? ast.unitLiteral(pos) : postfixApp.arg;
-    return deduceExpType(env, ast.apply(projected, arg), v);
+    return deduceExpType(env, ast.apply(projected, postfixApp.arg), v);
   }
 
   /**

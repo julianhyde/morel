@@ -210,11 +210,8 @@ public class Shuttle {
     return ast.apply(apply.fn.accept(this), apply.arg.accept(this));
   }
 
-  protected Ast.Exp visit(Ast.PostfixApp postfixApp) {
-    Ast.Exp receiver2 = (Ast.Exp) postfixApp.receiver.accept(this);
-    Ast.Exp arg2 =
-        postfixApp.arg == null ? null : (Ast.Exp) postfixApp.arg.accept(this);
-    return postfixApp.copy(receiver2, arg2);
+  protected Ast.Exp visit(Ast.PostfixApp app) {
+    return app.copy(app.receiver.accept(this), app.arg.accept(this));
   }
 
   protected Ast.Exp visit(Ast.RecordSelector recordSelector) {

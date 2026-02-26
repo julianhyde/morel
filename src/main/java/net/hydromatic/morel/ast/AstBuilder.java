@@ -543,7 +543,7 @@ public enum AstBuilder {
   }
 
   public Ast.PostfixApp postfixApp(
-      Pos pos, Ast.Exp receiver, String methodName, Ast.@Nullable Exp arg) {
+      Pos pos, Ast.Exp receiver, String methodName, Ast.Exp arg) {
     return new Ast.PostfixApp(pos, receiver, methodName, arg);
   }
 

@@ -143,11 +143,9 @@ public class Visitor {
     apply.arg.accept(this);
   }
 
-  protected void visit(Ast.PostfixApp postfixApp) {
-    postfixApp.receiver.accept(this);
-    if (postfixApp.arg != null) {
-      postfixApp.arg.accept(this);
-    }
+  protected void visit(Ast.PostfixApp app) {
+    app.receiver.accept(this);
+    app.arg.accept(this);
   }
 
   protected void visit(Ast.RecordSelector recordSelector) {}
