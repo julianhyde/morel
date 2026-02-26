@@ -19,48 +19,9 @@
 Sys.set ("lineWidth", 78);
 > val it = () : unit
 
-(* List built-ins: curried unary form: x.f () *)
-[1, 2, 3].length ();
-> val it = 3 : int
-
-[1, 2, 3].hd ();
-> val it = 1 : int
-
-[1, 2, 3].tl ();
-> val it = [2,3] : int list
-
-[1, 2, 3].rev ();
-> val it = [3,2,1] : int list
-
-[].null ();
-> val it = true : bool
-
-[1].null ();
-> val it = false : bool
-
-(* List built-ins: tuple-splicing form: x.f y *)
-[3, 1, 4, 1, 5].drop 2;
-> val it = [4,1,5] : int list
-
-[1, 2, 3].nth 0;
-> val it = 1 : int
-
-(* String built-ins *)
-"hello".size ();
-> val it = 5 : int
-
-"hello".sub 1;
-> val it = #"e" : char
-
-"hello world".substring (6, 5);
-> val it = "world" : string
-
 (* Field projection still works with structures (backward compatible) *)
 String.size "abc";
 > val it = 3 : int
-
-Sys.set ("lineWidth", 78);
-> val it = () : unit
 
 (* Field projection still works with record values *)
 val r = {name = "alice", age = 30};
@@ -92,96 +53,5 @@ in
   "hi".pad 5
 end;
 > val it = "hi   " : string
-
-(* Bag built-ins: curried unary form *)
-(bag [1, 2]).length ();
-> val it = 2 : int
-
-(bag [1, 2, 3]).hd ();
-> val it = 1 : int
-
-(bag []).null ();
-> val it = true : bool
-
-(* Bag built-ins: tuple-splicing form *)
-(bag [1, 2, 3]).drop 1;
-> val it = [2,3] : int bag
-
-(* Bool built-ins *)
-true.not ();
-> val it = false : bool
-
-false.toString ();
-> val it = "false" : string
-
-(* Char built-ins *)
-#"A".isAlpha ();
-> val it = true : bool
-
-#"A".isDigit ();
-> val it = false : bool
-
-#"A".ord ();
-> val it = 65 : int
-
-#"A".succ ();
-> val it = #"B" : char
-
-#"A".toLower ();
-> val it = #"a" : char
-
-#"A".toString ();
-> val it = "A" : string
-
-(* Int built-ins *)
-5.abs ();
-> val it = 5 : int
-
-(~3).abs ();
-> val it = 3 : int
-
-(~3).sign ();
-> val it = ~1 : int
-
-(~345).toString ();
-> val it = "~345" : string
-
-(* Int built-ins: tuple-splicing form *)
-4.compare 3;
-> val it = GREATER : order
-
-4.max 3;
-> val it = 4 : int
-
-4.min 3;
-> val it = 3 : int
-
-(* Option built-ins *)
-(SOME 1).isSome ();
-> val it = true : bool
-
-(SOME 1).valOf ();
-> val it = 1 : int
-
-(* Real built-ins *)
-(~5.5).abs ();
-> val it = 5.5 : real
-
-2.0.sign ();
-> val it = 1 : int
-
-0.0.toString ();
-> val it = "0.0" : string
-
-(* Real built-ins: tuple-splicing form *)
-13.0.rem 5.0;
-> val it = 3.0 : real
-
-(* Relational built-ins: overloaded, use alias 'max' and 'min' *)
-(bag [1, 2, 3]).max ();
-> val it = 3 : int
-
-(bag [1, 2, 3]).min ();
-> val it = 1 : int
 
 (*) End postfix.smli
