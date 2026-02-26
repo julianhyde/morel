@@ -1632,7 +1632,9 @@ public class TypeResolver {
     final Ast.Exp fnExp;
     final boolean isTuple;
     if (!builtInCandidates.isEmpty()) {
-      final BuiltIn builtIn = builtInCandidates.iterator().next();
+      final BuiltIn builtIn =
+          pickBuiltInCandidate(
+              env, postfixApp.receiver, vReceiver, builtInCandidates);
       fnExp = postfixBuiltInFnExp(pos, builtIn);
       isTuple = isPostfixBuiltInTuple(builtIn);
     } else {
@@ -1704,6 +1706,177 @@ public class TypeResolver {
     }
     return type instanceof FnType
         && ((FnType) type).paramType instanceof TupleType;
+  }
+
+  /**
+   * Picks the best built-in candidate for a postfix call by matching the
+   * receiver's type constructor.
+   *
+   * <p>When multiple built-ins share an {@code mlName} (e.g. {@code
+   * List.length}, {@code Bag.length}, {@code Vector.length}), we use two
+   * strategies to determine the receiver's type constructor:
+   *
+   * <ol>
+   *   <li>Scan recently-added type constraints ({@link #termOperatorOf}) — fast
+   *       for literals and bound variables.
+   *   <li>Inspect the receiver AST ({@link #receiverTypeHint}) — handles {@code
+   *       Apply} nodes such as {@code bag [1,2]}.
+   * </ol>
+   *
+   * <p>If only one candidate exists, or we cannot determine the receiver's type
+   * operator, we return the first candidate (which may still fail type-checking
+   * if the type is wrong).
+   */
+  private BuiltIn pickBuiltInCandidate(
+      TypeEnv env,
+      Ast.Exp receiver,
+      Variable vReceiver,
+      ImmutableCollection<BuiltIn> candidates) {
+    if (candidates.size() == 1) {
+      return candidates.iterator().next();
+    }
+    String op = termOperatorOf(vReceiver);
+    if (op == null) {
+      op = receiverTypeHint(env, receiver);
+    }
+    if (op != null) {
+      for (BuiltIn b : candidates) {
+        if (firstParamReceiverTypeOp(b).equals(op)) {
+          return b;
+        }
+      }
+    }
+    return candidates.iterator().next();
+  }
+
+  /**
+   * Infers the type-term operator for a receiver expression by inspecting its
+   * AST structure, before full type elaboration.
+   *
+   * <p>Supplements {@link #termOperatorOf} for cases such as {@code Apply}
+   * nodes (e.g. {@code bag [1,2]}) where the type variable is only indirectly
+   * constrained.
+   */
+  private @Nullable String receiverTypeHint(TypeEnv env, Ast.Exp receiver) {
+    switch (receiver.op) {
+      case LIST:
+        return LIST_TY_CON;
+      case ID:
+        {
+          final Type type = env.getTypeOpt(((Ast.Id) receiver).name);
+          return type != null ? headTypeTermOp(type) : null;
+        }
+      case APPLY:
+        {
+          final Ast.Apply apply = (Ast.Apply) receiver;
+          if (apply.fn instanceof Ast.Id) {
+            final Type fnType = env.getTypeOpt(((Ast.Id) apply.fn).name);
+            return fnType != null ? fnResultTypeTermOp(fnType) : null;
+          }
+          return null;
+        }
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Returns the top-level type-term operator for the given type, unwrapping
+   * {@link ForallType} if needed.
+   */
+  private @Nullable String headTypeTermOp(Type type) {
+    if (type instanceof ForallType) {
+      type = ((ForallType) type).type;
+    }
+    final String op = typeTermOp(type);
+    return op.isEmpty() ? null : op;
+  }
+
+  /**
+   * Returns the result type's operator for a function type, unwrapping {@link
+   * ForallType} if needed.
+   */
+  private @Nullable String fnResultTypeTermOp(Type type) {
+    if (type instanceof ForallType) {
+      type = ((ForallType) type).type;
+    }
+    if (type instanceof FnType) {
+      return headTypeTermOp(((FnType) type).resultType);
+    }
+    return null;
+  }
+
+  /**
+   * Returns the type-term operator of the receiver type for a {@code selfFirst}
+   * built-in function.
+   *
+   * <p>For example, {@code List.length} has first-param type {@code list('a)},
+   * so this returns "list"; {@code Bag.length} returns "bag"; {@code Int.abs}
+   * returns "int". For tuple-splicing forms (e.g. {@code List.drop}), the first
+   * element of the tuple is the receiver.
+   */
+  private String firstParamReceiverTypeOp(BuiltIn b) {
+    Type type = b.typeFunction.apply(typeSystem);
+    if (type instanceof ForallType) {
+      type = ((ForallType) type).type;
+    }
+    if (!(type instanceof FnType)) {
+      return "";
+    }
+    return typeTermOp(((FnType) type).paramType);
+  }
+
+  /**
+   * Returns the type-term operator for the given type, extracting the first
+   * element for tuple types (used to identify the receiver type in
+   * tuple-splicing form).
+   */
+  private String typeTermOp(Type type) {
+    if (type instanceof ListType) {
+      return LIST_TY_CON;
+    }
+    if (type instanceof DataType) {
+      return ((DataType) type).name;
+    }
+    if (type instanceof PrimitiveType) {
+      return ((PrimitiveType) type).moniker;
+    }
+    if (type instanceof TupleType) {
+      // Tuple-splicing form: receiver is the first element of the tuple.
+      final List<Type> argTypes = ((TupleType) type).argTypes;
+      if (!argTypes.isEmpty()) {
+        return typeTermOp(argTypes.get(0));
+      }
+    }
+    return "";
+  }
+
+  /**
+   * Scans the accumulated type constraints to find the type-term operator most
+   * recently assigned to a variable.
+   *
+   * <p>After elaborating a receiver expression {@code e} with variable {@code
+   * v}, the constraint {@code v = list(T)} (or "bag", "vector", etc.) will have
+   * been added to {@link #terms}. This method scans backwards to find the
+   * operator.
+   *
+   * @return the operator string (e.g. "list", "bag", "vector"), or null if the
+   *     variable is not yet constrained to a concrete type constructor
+   */
+  private @Nullable String termOperatorOf(Variable v) {
+    for (int i = terms.size() - 1; i >= 0; i--) {
+      final TermVariable tv = terms.get(i);
+      if (tv.variable.equals(v) && tv.term instanceof Sequence) {
+        final String op = ((Sequence) tv.term).operator;
+        // Skip structural operators that are not type constructors.
+        if (!op.equals(FN_TY_CON)
+            && !op.equals(TUPLE_TY_CON)
+            && !op.startsWith(RECORD_TY_CON)) {
+          return op;
+        }
+      }
+    }
+    return null;
   }
 
   /**

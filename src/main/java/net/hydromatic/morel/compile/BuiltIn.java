@@ -302,6 +302,7 @@ public enum BuiltIn {
   BAG_DROP(
       "Bag",
       "drop",
+      true,
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.bag(0), INT), h.bag(0)))),
@@ -397,6 +398,7 @@ public enum BuiltIn {
   BAG_GET_ITEM(
       "Bag",
       "getItem",
+      true,
       ts ->
           ts.forallType(
               1,
@@ -412,7 +414,10 @@ public enum BuiltIn {
    * nil. Results are nondeterministic because bag elements are unordered.
    */
   BAG_HD(
-      "Bag", "hd", ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
+      "Bag",
+      "hd",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
   /**
    * Function "Bag.length", of type "&alpha; bag &rarr; int".
@@ -420,7 +425,10 @@ public enum BuiltIn {
    * <p>"length b" returns the number of elements in the bag {@code b}.
    */
   BAG_LENGTH(
-      "Bag", "length", ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), INT))),
+      "Bag",
+      "length",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), INT))),
 
   /**
    * Function "Bag.map", of type "(&alpha; &rarr; &beta;) &rarr; &alpha; bag
@@ -478,6 +486,7 @@ public enum BuiltIn {
   BAG_NTH(
       "Bag",
       "nth",
+      true,
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.bag(0), INT), h.get(0)))),
@@ -488,7 +497,10 @@ public enum BuiltIn {
    * <p>"null b" returns true if the bag {@code b} is empty.
    */
   BAG_NULL(
-      "Bag", "null", ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
+      "Bag",
+      "null",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), BOOL))),
 
   /**
    * Function "Bag.partition", of type "(&alpha; &rarr; bool) &rarr; &alpha; bag
@@ -541,6 +553,7 @@ public enum BuiltIn {
   BAG_TAKE(
       "Bag",
       "take",
+      true,
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.bag(0), INT), h.bag(0)))),
@@ -553,7 +566,10 @@ public enum BuiltIn {
    * Results are nondeterministic because bag elements are unordered.
    */
   BAG_TL(
-      "Bag", "tl", ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.bag(0)))),
+      "Bag",
+      "tl",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.bag(0)))),
 
   /**
    * Function "Bag.toList" of type "&alpha; bag &rarr; &alpha; list".
@@ -569,6 +585,7 @@ public enum BuiltIn {
   BAG_TO_LIST(
       "Bag",
       "toList",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.list(0)))),
 
   /**
@@ -586,7 +603,7 @@ public enum BuiltIn {
    *
    * <p>"not b" returns the logical negation of the boolean value <em>b</em>.
    */
-  BOOL_NOT("Bool", "not", ts -> ts.fnType(BOOL, BOOL)),
+  BOOL_NOT("Bool", "not", true, ts -> ts.fnType(BOOL, BOOL)),
 
   /**
    * Function "Bool.toString", of type "bool &rarr; string".
@@ -594,7 +611,7 @@ public enum BuiltIn {
    * <p>"toString b" returns the string representation of <em>b</em>, either
    * "true" or "false".
    */
-  BOOL_TO_STRING("Bool", "toString", ts -> ts.fnType(BOOL, STRING)),
+  BOOL_TO_STRING("Bool", "toString", true, ts -> ts.fnType(BOOL, STRING)),
 
   /**
    * Function "Char.chr" of type "int &rarr; char".
@@ -612,7 +629,10 @@ public enum BuiltIn {
    * {@code d} in the character ordering.
    */
   CHAR_COMPARE(
-      "Char", "compare", ts -> ts.fnType(ts.tupleType(CHAR, CHAR), ts.order())),
+      "Char",
+      "compare",
+      true,
+      ts -> ts.fnType(ts.tupleType(CHAR, CHAR), ts.order())),
 
   /**
    * Function "Char.contains" of type "string &rarr; char &rarr; bool".
@@ -652,7 +672,7 @@ public enum BuiltIn {
    * <p>"isAlpha c" returns true if {@code c} is a letter (lowercase or
    * uppercase).
    */
-  CHAR_IS_ALPHA("Char", "isAlpha", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_ALPHA("Char", "isAlpha", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isAlphaNum" of type "char &rarr; bool".
@@ -660,14 +680,14 @@ public enum BuiltIn {
    * <p>"isAlphaNum c" returns true if {@code c} is alphanumeric (a letter or a
    * decimal digit).
    */
-  CHAR_IS_ALPHA_NUM("Char", "isAlphaNum", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_ALPHA_NUM("Char", "isAlphaNum", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isAscii" of type "char &rarr; bool".
    *
    * <p>"isAscii c" returns true if {@code 0 <= ord c <= 127}.
    */
-  CHAR_IS_ASCII("Char", "isAscii", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_ASCII("Char", "isAscii", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isCntrl" of type "char &rarr; bool".
@@ -675,14 +695,14 @@ public enum BuiltIn {
    * <p>"isCntrl c" returns true if {@code c} is a control character, that is,
    * if {@code not (isPrint c)}.
    */
-  CHAR_IS_CNTRL("Char", "isCntrl", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_CNTRL("Char", "isCntrl", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isDigit" of type "char &rarr; bool".
    *
    * <p>"isDigit c" returns true if {@code c} is a decimal digit (0 to 9).
    */
-  CHAR_IS_DIGIT("Char", "isDigit", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_DIGIT("Char", "isDigit", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isGraph" of type "char &rarr; bool".
@@ -690,7 +710,7 @@ public enum BuiltIn {
    * <p>"isGraph c" returns true if {@code c} is a graphical character, that is,
    * it is printable and not a whitespace character.
    */
-  CHAR_IS_GRAPH("Char", "isGraph", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_GRAPH("Char", "isGraph", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isHexDigit" of type "char &rarr; bool".
@@ -698,14 +718,14 @@ public enum BuiltIn {
    * <p>"isHexDigit c" returns true if {@code c} is a hexadecimal digit (0 to 9
    * or a to f or A to F).
    */
-  CHAR_IS_HEX_DIGIT("Char", "isHexDigit", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_HEX_DIGIT("Char", "isHexDigit", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isLower" of type "char &rarr; bool".
    *
    * <p>"isLower c" returns true if {@code c} is a lowercase letter (a to z).
    */
-  CHAR_IS_LOWER("Char", "isLower", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_LOWER("Char", "isLower", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isPrint" of type "char &rarr; bool".
@@ -713,7 +733,7 @@ public enum BuiltIn {
    * <p>"isPrint c" returns true if {@code c} is a printable character (space or
    * visible).
    */
-  CHAR_IS_PRINT("Char", "isPrint", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_PRINT("Char", "isPrint", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isPunct" of type "char &rarr; bool".
@@ -721,7 +741,7 @@ public enum BuiltIn {
    * <p>"isPunct c" returns true if {@code c} is a punctuation character, that
    * is, graphical but not alphanumeric.
    */
-  CHAR_IS_PUNCT("Char", "isPunct", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_PUNCT("Char", "isPunct", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isSpace" of type "char &rarr; bool".
@@ -729,14 +749,14 @@ public enum BuiltIn {
    * <p>"isSpace c" returns true if {@code c} is a whitespace character (blank,
    * newline, tab, vertical tab, new page).
    */
-  CHAR_IS_SPACE("Char", "isSpace", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_SPACE("Char", "isSpace", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Function "Char.isUpper" of type "char &rarr; bool".
    *
    * <p>"isUpper c" returns true if {@code c} is an uppercase letter (A to Z).
    */
-  CHAR_IS_UPPER("Char", "isUpper", ts -> ts.fnType(CHAR, BOOL)),
+  CHAR_IS_UPPER("Char", "isUpper", true, ts -> ts.fnType(CHAR, BOOL)),
 
   /**
    * Constant "Char.maxChar", of type "char".
@@ -801,7 +821,7 @@ public enum BuiltIn {
    *
    * <p>"ord c" returns the code of character {@code c}.
    */
-  CHAR_ORD("Char", "ord", ts -> ts.fnType(CHAR, INT)),
+  CHAR_ORD("Char", "ord", true, ts -> ts.fnType(CHAR, INT)),
 
   /**
    * Function "Char.pred" of type "char &rarr; char".
@@ -809,7 +829,7 @@ public enum BuiltIn {
    * <p>"pred c" returns the character immediately preceding {@code c}, or
    * raises {@link BuiltInExn#CHR Chr} if {@code c = minChar}.
    */
-  CHAR_PRED("Char", "pred", ts -> ts.fnType(CHAR, CHAR)),
+  CHAR_PRED("Char", "pred", true, ts -> ts.fnType(CHAR, CHAR)),
 
   /**
    * Function "Char.succ" of type "char &rarr; char".
@@ -818,7 +838,7 @@ public enum BuiltIn {
    * ordering, or raises {@link BuiltInExn#CHR Chr} if {@code c = maxChar}. When
    * defined, {@code succ c} is equivalent to {@code chr(ord c + 1)}.
    */
-  CHAR_SUCC("Char", "succ", ts -> ts.fnType(CHAR, CHAR)),
+  CHAR_SUCC("Char", "succ", true, ts -> ts.fnType(CHAR, CHAR)),
 
   /**
    * Function "Char.toCString" of type "char &rarr; string".
@@ -852,7 +872,7 @@ public enum BuiltIn {
    *   <li>{@code toCString (chr 128)} equals {@code "\\200"}
    * </ul>
    */
-  CHAR_TO_CSTRING("Char", "toCString", ts -> ts.fnType(CHAR, STRING)),
+  CHAR_TO_CSTRING("Char", "toCString", true, ts -> ts.fnType(CHAR, STRING)),
 
   /**
    * Function "Char.toLower" of type "char &rarr; char".
@@ -860,7 +880,7 @@ public enum BuiltIn {
    * <p>"toLower c" returns the lowercase letter corresponding to {@code c}, if
    * {@code c} is a letter (a to z or A to Z); otherwise returns {@code c}.
    */
-  CHAR_TO_LOWER("Char", "toLower", ts -> ts.fnType(CHAR, CHAR)),
+  CHAR_TO_LOWER("Char", "toLower", true, ts -> ts.fnType(CHAR, CHAR)),
 
   /**
    * Function "Char.toString" of type "char &rarr; string".
@@ -894,7 +914,7 @@ public enum BuiltIn {
    *   <li>{@code toString (chr 128)} equals "\\128"
    * </ul>
    */
-  CHAR_TO_STRING("Char", "toString", ts -> ts.fnType(CHAR, STRING)),
+  CHAR_TO_STRING("Char", "toString", true, ts -> ts.fnType(CHAR, STRING)),
 
   /**
    * Function "Char.toUpper" of type "char &rarr; char".
@@ -902,7 +922,7 @@ public enum BuiltIn {
    * <p>"toUpper c" returns the uppercase letter corresponding to {@code c}, if
    * {@code c} is a letter (a to z or A to Z); otherwise returns {@code c}.
    */
-  CHAR_TO_UPPER("Char", "toUpper", ts -> ts.fnType(CHAR, CHAR)),
+  CHAR_TO_UPPER("Char", "toUpper", true, ts -> ts.fnType(CHAR, CHAR)),
 
   /**
    * Function "Datalog.execute", of type "string &rarr; variant".
@@ -979,6 +999,7 @@ public enum BuiltIn {
   EITHER_AS_LEFT(
       "Either",
       "asLeft",
+      true,
       ts -> ts.forallType(2, h -> ts.fnType(h.either(0, 1), h.option(0)))),
 
   /**
@@ -988,6 +1009,7 @@ public enum BuiltIn {
   EITHER_AS_RIGHT(
       "Either",
       "asRight",
+      true,
       ts -> ts.forallType(2, h -> ts.fnType(h.either(0, 1), h.option(1)))),
 
   /**
@@ -1017,6 +1039,7 @@ public enum BuiltIn {
   EITHER_IS_LEFT(
       "Either",
       "isLeft",
+      true,
       ts -> ts.forallType(2, h -> ts.fnType(h.either(0, 1), BOOL))),
 
   /**
@@ -1025,6 +1048,7 @@ public enum BuiltIn {
   EITHER_IS_RIGHT(
       "Either",
       "isRight",
+      true,
       ts -> ts.forallType(2, h -> ts.fnType(h.either(0, 1), BOOL))),
 
   /**
@@ -1099,6 +1123,7 @@ public enum BuiltIn {
   EITHER_PROJ(
       "Either",
       "proj",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.either(0, 0), h.get(0)))),
 
   /**
@@ -1291,14 +1316,17 @@ public enum BuiltIn {
    */
 
   /** Function "Int.abs" of type "int &rarr; int". */
-  INT_ABS("Int", "abs", ts -> ts.fnType(INT, INT)),
+  INT_ABS("Int", "abs", true, ts -> ts.fnType(INT, INT)),
 
   /** Function "Int.compare", of type "int * int &rarr; order". */
   INT_COMPARE(
-      "Int", "compare", ts -> ts.fnType(ts.tupleType(INT, INT), ts.order())),
+      "Int",
+      "compare",
+      true,
+      ts -> ts.fnType(ts.tupleType(INT, INT), ts.order())),
 
   /** Function "Int.div", of type "int * int &rarr; int". */
-  INT_DIV("Int", "div", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+  INT_DIV("Int", "div", true, ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /** Function "Int.fromInt", of type "int &rarr; int". */
   INT_FROM_INT("Int", "fromInt", ts -> ts.fnType(INT, INT)),
@@ -1321,7 +1349,7 @@ public enum BuiltIn {
    * <p>Returns the larger of the arguments. If exactly one argument is NaN,
    * returns the other argument. If both arguments are NaN, returns NaN.
    */
-  INT_MAX("Int", "max", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+  INT_MAX("Int", "max", true, ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /** Constant "Int.maxInt", of type "int option". */
   INT_MAX_INT("Int", "maxInt", ts -> ts.option(INT)),
@@ -1332,7 +1360,7 @@ public enum BuiltIn {
    * <p>Returns the smaller of the arguments. If exactly one argument is NaN,
    * returns the other argument. If both arguments are NaN, returns NaN.
    */
-  INT_MIN("Int", "min", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+  INT_MIN("Int", "min", true, ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /** Constant "Int.minInt", of type "int option". */
   INT_MIN_INT("Int", "minInt", ts -> ts.option(INT)),
@@ -1343,13 +1371,13 @@ public enum BuiltIn {
    * <p>Returns the fractional part of r. "intMod" is equivalent to "#frac o
    * split".
    */
-  INT_MOD("Int", "mod", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+  INT_MOD("Int", "mod", true, ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /** Constant "Int.precision", of type "int option". */
   INT_PRECISION("Int", "precision", ts -> ts.option(INT)),
 
   /** Function "Int.quot", of type "int * int &rarr; int". */
-  INT_QUOT("Int", "quot", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+  INT_QUOT("Int", "quot", true, ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /**
    * Function "Int.rem", of type "int * int &rarr; int".
@@ -1359,7 +1387,7 @@ public enum BuiltIn {
    * than the absolute value of {@code y}. If {@code x} is an infinity or {@code
    * y} is 0, returns NaN. If {@code y} is an infinity, returns {@code x}.
    */
-  INT_REM("Int", "rem", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+  INT_REM("Int", "rem", true, ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /**
    * Function "Int.sameSign", of type "int * int &rarr; bool".
@@ -1368,7 +1396,7 @@ public enum BuiltIn {
    * r2}.
    */
   INT_SAME_SIGN(
-      "Int", "sameSign", ts -> ts.fnType(ts.tupleType(INT, INT), BOOL)),
+      "Int", "sameSign", true, ts -> ts.fnType(ts.tupleType(INT, INT), BOOL)),
 
   /**
    * Function "Int.sign", of type "int &rarr; int".
@@ -1377,7 +1405,7 @@ public enum BuiltIn {
    * infinity returns its sign; a zero returns 0 regardless of its sign. It
    * raises {@link BuiltInExn#DOMAIN Domain} on NaN.
    */
-  INT_SIGN("Int", "sign", ts -> ts.fnType(INT, INT)),
+  INT_SIGN("Int", "sign", true, ts -> ts.fnType(INT, INT)),
 
   /** Function "Int.toInt", of type "int &rarr; int". */
   INT_TO_INT("Int", "toInt", ts -> ts.fnType(INT, INT)),
@@ -1395,7 +1423,7 @@ public enum BuiltIn {
    * (fmt (StringCvt.GEN NONE) r)
    * }</pre>
    */
-  INT_TO_STRING("Int", "toString", ts -> ts.fnType(INT, STRING)),
+  INT_TO_STRING("Int", "toString", true, ts -> ts.fnType(INT, STRING)),
 
   /**
    * Function "Interact.use" of type "string &rarr; unit"
@@ -2491,6 +2519,7 @@ public enum BuiltIn {
       "Option",
       "getOpt",
       "getOpt",
+      true,
       ts ->
           ts.forallType(
               1,
@@ -2506,6 +2535,7 @@ public enum BuiltIn {
       "Option",
       "isSome",
       "isSome",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), BOOL))),
 
   /**
@@ -2575,6 +2605,7 @@ public enum BuiltIn {
       "Option",
       "valOf",
       "valOf",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
   /**
@@ -2582,14 +2613,14 @@ public enum BuiltIn {
    *
    * <p>Returns the absolute value of {@code r}.
    */
-  REAL_ABS("Real", "abs", ts -> ts.fnType(REAL, REAL)),
+  REAL_ABS("Real", "abs", true, ts -> ts.fnType(REAL, REAL)),
 
   /**
    * Function "Real.ceil", of type "real &rarr; int".
    *
    * <p>Returns largest int not larger than {@code r}.
    */
-  REAL_CEIL("Real", "ceil", "ceil", ts -> ts.fnType(REAL, INT)),
+  REAL_CEIL("Real", "ceil", "ceil", true, ts -> ts.fnType(REAL, INT)),
 
   /**
    * Function "Real.checkFloat", of type "real &rarr; real".
@@ -2598,7 +2629,7 @@ public enum BuiltIn {
    * is an infinity, and raises {@link BuiltInExn#DIV Div} if {@code x} is NaN.
    * Otherwise, it returns its argument.
    */
-  REAL_CHECK_FLOAT("Real", "checkFloat", ts -> ts.fnType(REAL, REAL)),
+  REAL_CHECK_FLOAT("Real", "checkFloat", true, ts -> ts.fnType(REAL, REAL)),
 
   /**
    * Function "Real.compare", of type "real * real &rarr; real".
@@ -2606,7 +2637,10 @@ public enum BuiltIn {
    * <p>Returns {@code x} with the sign of {@code y}, even if y is NaN.
    */
   REAL_COMPARE(
-      "Real", "compare", ts -> ts.fnType(ts.tupleType(REAL, REAL), ts.order())),
+      "Real",
+      "compare",
+      true,
+      ts -> ts.fnType(ts.tupleType(REAL, REAL), ts.order())),
 
   /**
    * Function "Real.copySign", of type "real * real &rarr; real".
@@ -2614,7 +2648,10 @@ public enum BuiltIn {
    * <p>Returns {@code x} with the sign of {@code y}, even if y is NaN.
    */
   REAL_COPY_SIGN(
-      "Real", "copySign", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
+      "Real",
+      "copySign",
+      true,
+      ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
 
   /** Function "Real./", of type "real * real &rarr; real". */
   REAL_DIVIDE(
@@ -2625,7 +2662,7 @@ public enum BuiltIn {
    *
    * <p>Returns smallest int not less than {@code r}.
    */
-  REAL_FLOOR("Real", "floor", "floor", ts -> ts.fnType(REAL, INT)),
+  REAL_FLOOR("Real", "floor", "floor", true, ts -> ts.fnType(REAL, INT)),
 
   /**
    * Function "Real.fromInt", of type "int &rarr; real". Converts the integer
@@ -2664,14 +2701,14 @@ public enum BuiltIn {
    *
    * <p>"isFinite x" returns true if {@code x} is neither NaN nor an infinity.
    */
-  REAL_IS_FINITE("Real", "isFinite", ts -> ts.fnType(REAL, BOOL)),
+  REAL_IS_FINITE("Real", "isFinite", true, ts -> ts.fnType(REAL, BOOL)),
 
   /**
    * Function "Real.isNan", of type "real &rarr; bool".
    *
    * <p>"isNan x" returns true if {@code x} is NaN.
    */
-  REAL_IS_NAN("Real", "isNan", ts -> ts.fnType(REAL, BOOL)),
+  REAL_IS_NAN("Real", "isNan", true, ts -> ts.fnType(REAL, BOOL)),
 
   /**
    * Function "Real.isNormal", of type "real &rarr; bool".
@@ -2679,7 +2716,7 @@ public enum BuiltIn {
    * <p>"isNormal x" returns true if {@code x} is normal, i.e., neither zero,
    * subnormal, infinite nor NaN.
    */
-  REAL_IS_NORMAL("Real", "isNormal", ts -> ts.fnType(REAL, BOOL)),
+  REAL_IS_NORMAL("Real", "isNormal", true, ts -> ts.fnType(REAL, BOOL)),
 
   /**
    * Function "Real.max", of type "real * real &rarr; real".
@@ -2687,7 +2724,8 @@ public enum BuiltIn {
    * <p>Returns the returns the larger of the arguments. If exactly one argument
    * is NaN, returns the other argument. If both arguments are NaN, returns NaN.
    */
-  REAL_MAX("Real", "max", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
+  REAL_MAX(
+      "Real", "max", true, ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
 
   /**
    * Constant "Real.maxFinite", of type "real".
@@ -2702,7 +2740,8 @@ public enum BuiltIn {
    * <p>Returns the returns the larger of the arguments. If exactly one argument
    * is NaN, returns the other argument. If both arguments are NaN, returns NaN.
    */
-  REAL_MIN("Real", "min", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
+  REAL_MIN(
+      "Real", "min", true, ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
 
   /**
    * Constant "Real.minNormalPos", of type "real".
@@ -2754,14 +2793,14 @@ public enum BuiltIn {
    *
    * <p>Returns the smallest integer-valued real not less than {@code r}.
    */
-  REAL_REAL_CEIL("Real", "realCeil", ts -> ts.fnType(REAL, REAL)),
+  REAL_REAL_CEIL("Real", "realCeil", true, ts -> ts.fnType(REAL, REAL)),
 
   /**
    * Function "Real.realFloor", of type "real &rarr; real".
    *
    * <p>Returns the largest integer-valued real not larger than {@code r}.
    */
-  REAL_REAL_FLOOR("Real", "realFloor", ts -> ts.fnType(REAL, REAL)),
+  REAL_REAL_FLOOR("Real", "realFloor", true, ts -> ts.fnType(REAL, REAL)),
 
   /**
    * Function "Real.realMod", of type "real * real &rarr; real".
@@ -2769,7 +2808,7 @@ public enum BuiltIn {
    * <p>Returns the fractional part of r. "realMod" is equivalent to "#frac o
    * split".
    */
-  REAL_REAL_MOD("Real", "realMod", ts -> ts.fnType(REAL, REAL)),
+  REAL_REAL_MOD("Real", "realMod", true, ts -> ts.fnType(REAL, REAL)),
 
   /**
    * Function "Real.realRound", of type "real &rarr; real".
@@ -2777,14 +2816,14 @@ public enum BuiltIn {
    * <p>Returns the integer-valued real nearest to {@code r}. In the case of a
    * tie, it rounds to the nearest even integer.
    */
-  REAL_REAL_ROUND("Real", "realRound", ts -> ts.fnType(REAL, REAL)),
+  REAL_REAL_ROUND("Real", "realRound", true, ts -> ts.fnType(REAL, REAL)),
 
   /**
    * Function "Real.realTrunc", of type "real &rarr; real".
    *
    * <p>Returns the {@code r} rounded towards zero.
    */
-  REAL_REAL_TRUNC("Real", "realTrunc", ts -> ts.fnType(REAL, REAL)),
+  REAL_REAL_TRUNC("Real", "realTrunc", true, ts -> ts.fnType(REAL, REAL)),
 
   /**
    * Function "Real.rem", of type "real * real &rarr; real".
@@ -2794,7 +2833,8 @@ public enum BuiltIn {
    * than the absolute value of {@code y}. If {@code x} is an infinity or {@code
    * y} is 0, returns NaN. If {@code y} is an infinity, returns {@code x}.
    */
-  REAL_REM("Real", "rem", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
+  REAL_REM(
+      "Real", "rem", true, ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
 
   /**
    * Function "Real.round", of type "real &rarr; int".
@@ -2802,7 +2842,7 @@ public enum BuiltIn {
    * <p>Returns the integer nearest to {@code r}. In the case of a tie, it
    * rounds to the nearest even integer.
    */
-  REAL_ROUND("Real", "round", "round", ts -> ts.fnType(REAL, INT)),
+  REAL_ROUND("Real", "round", "round", true, ts -> ts.fnType(REAL, INT)),
 
   /**
    * Function "Real.sameSign", of type "real * real &rarr; bool".
@@ -2811,7 +2851,10 @@ public enum BuiltIn {
    * r2}.
    */
   REAL_SAME_SIGN(
-      "Real", "sameSign", ts -> ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
+      "Real",
+      "sameSign",
+      true,
+      ts -> ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
 
   /**
    * Function "Real.sign", of type "real &rarr; int".
@@ -2820,7 +2863,7 @@ public enum BuiltIn {
    * infinity returns its sign; a zero returns 0 regardless of its sign. It
    * raises {@link BuiltInExn#DOMAIN Domain} on NaN.
    */
-  REAL_SIGN("Real", "sign", ts -> ts.fnType(REAL, INT)),
+  REAL_SIGN("Real", "sign", true, ts -> ts.fnType(REAL, INT)),
 
   /**
    * Function "Real.signBit", of type "real &rarr; bool".
@@ -2828,7 +2871,7 @@ public enum BuiltIn {
    * <p>Returns true if and only if the sign of {@code r} (infinities, zeros,
    * and NaN, included) is negative.
    */
-  REAL_SIGN_BIT("Real", "signBit", ts -> ts.fnType(REAL, BOOL)),
+  REAL_SIGN_BIT("Real", "signBit", true, ts -> ts.fnType(REAL, BOOL)),
 
   /**
    * Function "Real.split", of type "real &rarr; {frac:real, whole:real}".
@@ -2846,6 +2889,7 @@ public enum BuiltIn {
   REAL_SPLIT(
       "Real",
       "split",
+      true,
       ts ->
           ts.fnType(
               REAL,
@@ -2859,6 +2903,7 @@ public enum BuiltIn {
   REAL_TO_MAN_EXP(
       "Real",
       "toManExp",
+      true,
       ts ->
           ts.fnType(
               REAL, ts.recordType(RecordType.map("exp", INT, "man", REAL)))),
@@ -2873,14 +2918,14 @@ public enum BuiltIn {
    * (fmt (StringCvt.GEN NONE) r)
    * }</pre>
    */
-  REAL_TO_STRING("Real", "toString", ts -> ts.fnType(REAL, STRING)),
+  REAL_TO_STRING("Real", "toString", true, ts -> ts.fnType(REAL, STRING)),
 
   /**
    * Function "Real.trunc", of type "real &rarr; int".
    *
    * <p>Returns {@code r} rounded towards zero.
    */
-  REAL_TRUNC("Real", "trunc", "trunc", ts -> ts.fnType(REAL, INT)),
+  REAL_TRUNC("Real", "trunc", "trunc", true, ts -> ts.fnType(REAL, INT)),
 
   /**
    * Function "Real.unordered", of type "real * real &rarr; bool".
@@ -2889,7 +2934,10 @@ public enum BuiltIn {
    * i.e., at least one of {@code x} and {@code y} is NaN.
    */
   REAL_UNORDERED(
-      "Real", "unordered", ts -> ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
+      "Real",
+      "unordered",
+      true,
+      ts -> ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
 
   /**
    * Function "Relational.compare", of type "&alpha; * &alpha; &rarr; order".
@@ -3007,6 +3055,7 @@ public enum BuiltIn {
       "Relational",
       "max",
       "max",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
   /**
@@ -3017,6 +3066,7 @@ public enum BuiltIn {
       "Relational",
       "min",
       "min",
+      true,
       ts -> ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0)))),
 
   /**
@@ -3452,7 +3502,10 @@ public enum BuiltIn {
    * <p>"print v" converts a variant to its compact string representation.
    */
   VARIANT_PRINT(
-      "Variant", "print", ts -> ts.fnType(ts.lookup(Datatype.VARIANT), STRING)),
+      "Variant",
+      "print",
+      true,
+      ts -> ts.fnType(ts.lookup(Datatype.VARIANT), STRING)),
 
   /**
    * Function "Vector.all" of type "(&alpha; &rarr; bool) &rarr; &alpha; vector

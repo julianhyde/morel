@@ -1352,6 +1352,8 @@ List.length [];
 > val it = 0 : int
 List.length [1,2];
 > val it = 2 : int
+[1,2].length ();
+> val it = 2 : int
 Sys.plan ();
 > val it = "apply(fnValue List.length, argCode tuple(constant(1), constant(2)))"
 >   : string

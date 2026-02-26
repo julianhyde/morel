@@ -515,6 +515,28 @@ public class MainTest {
                 + "    ");
   }
 
+  /** Tests postfix method-call syntax: {@code x.f ()} and {@code x.f arg}. */
+  @Test
+  void testParsePostfix() {
+    // No-arg form "x.f ()" works even when receiver is a bare identifier.
+    // (The atom-arg form "x.f arg" is suppressed for bare-id receivers to
+    // preserve "Module.fn arg" as field-projection + apply.)
+    ml("xs.length ()").assertParseSame();
+
+    // Atom-arg form with a bare-id receiver falls back to field-projection +
+    // apply.
+    ml("#drop xs 2").assertParseEquivalent("xs.drop 2");
+
+    // Atom-arg form works when the receiver is a list literal (not a bare id).
+    ml("[1, 2, 3].drop 2").assertParseSame();
+
+    // Postfix calls chain: the result of one call is the receiver of the next.
+    ml("[1, 2, 3].rev ().length ()").assertParseSame();
+
+    // Module-qualified calls are preserved as field-projection + apply.
+    ml("#size String \"abc\"").assertParseEquivalent("String.size \"abc\"");
+  }
+
   /**
    * Tests that the abbreviated record syntax "{a, e.b, #c e, d = e}" is
    * expanded to "{a = a, b = e.b, c = #c e, d = e}".
