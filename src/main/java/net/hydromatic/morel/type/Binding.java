@@ -43,34 +43,29 @@ public class Binding {
 
   public final Core.@Nullable IdPat overloadId;
 
-  /** True if this function's first parameter is named {@code self}. */
-  public final boolean selfFirst;
-
   private Binding(
       Core.NamedPat id,
       Core.@Nullable IdPat overloadId,
       Core.@Nullable Exp exp,
       Object value,
       boolean parameter,
-      Kind kind,
-      boolean selfFirst) {
+      Kind kind) {
     this.id = requireNonNull(id);
     this.overloadId = overloadId;
     this.exp = exp;
     this.value = requireNonNull(value);
     this.parameter = parameter;
     this.kind = requireNonNull(kind);
-    this.selfFirst = selfFirst;
     checkArgument(!(value instanceof Core.IdPat));
     checkArgument((kind == Kind.INST) == (overloadId != null));
   }
 
   public static Binding of(Core.NamedPat id) {
-    return new Binding(id, null, null, Unit.INSTANCE, false, Kind.VAL, false);
+    return new Binding(id, null, null, Unit.INSTANCE, false, Kind.VAL);
   }
 
   public static Binding over(Core.NamedPat id, Object value) {
-    return new Binding(id, null, null, value, false, Kind.OVER, false);
+    return new Binding(id, null, null, value, false, Kind.OVER);
   }
 
   public static Binding over(Core.NamedPat id) {
@@ -78,31 +73,30 @@ public class Binding {
   }
 
   public static Binding of(Core.NamedPat id, Core.Exp exp) {
-    return new Binding(id, null, exp, Unit.INSTANCE, false, Kind.VAL, false);
+    return new Binding(id, null, exp, Unit.INSTANCE, false, Kind.VAL);
   }
 
   public static Binding inst(
       Core.NamedPat id, Core.IdPat overloadId, Core.Exp exp) {
-    return new Binding(
-        id, overloadId, exp, Unit.INSTANCE, false, Kind.INST, false);
+    return new Binding(id, overloadId, exp, Unit.INSTANCE, false, Kind.INST);
   }
 
   public static Binding of(Core.NamedPat id, Object value) {
-    return new Binding(id, null, null, value, false, Kind.VAL, false);
+    return new Binding(id, null, null, value, false, Kind.VAL);
   }
 
   public static Binding of(Core.NamedPat id, Core.Exp exp, Object value) {
-    return new Binding(id, null, exp, value, false, Kind.VAL, false);
+    return new Binding(id, null, exp, value, false, Kind.VAL);
   }
 
   public static Binding inst(
       Core.NamedPat id, Core.IdPat overloadId, Object value) {
-    return new Binding(id, overloadId, null, value, false, Kind.INST, false);
+    return new Binding(id, overloadId, null, value, false, Kind.INST);
   }
 
   public static Binding inst(
       Core.NamedPat id, Core.IdPat overloadId, Core.Exp exp, Object value) {
-    return new Binding(id, overloadId, exp, value, false, Kind.INST, false);
+    return new Binding(id, overloadId, exp, value, false, Kind.INST);
   }
 
   /** Used by {@link Environment#renumber()}. */
@@ -111,7 +105,7 @@ public class Binding {
       return this;
     }
     Core.NamedPat id1 = id.withName(id.name + '_' + id.i);
-    return new Binding(id1, overloadId, exp, value, parameter, kind, selfFirst);
+    return new Binding(id1, overloadId, exp, value, parameter, kind);
   }
 
   @Override
@@ -131,19 +125,13 @@ public class Binding {
   public Binding withParameter(boolean parameter) {
     return parameter == this.parameter
         ? this
-        : new Binding(id, overloadId, exp, value, parameter, kind, selfFirst);
+        : new Binding(id, overloadId, exp, value, parameter, kind);
   }
 
   public Binding withKind(Kind kind) {
     return kind == this.kind
         ? this
-        : new Binding(id, overloadId, exp, value, parameter, kind, selfFirst);
-  }
-
-  public Binding withSelfFirst(boolean selfFirst) {
-    return selfFirst == this.selfFirst
-        ? this
-        : new Binding(id, overloadId, exp, value, parameter, kind, selfFirst);
+        : new Binding(id, overloadId, exp, value, parameter, kind);
   }
 
   /** Returns whether this binding is an instance of an overloaded name. */

@@ -1997,21 +1997,37 @@ public class TypeResolver {
    * <p>After elaborating a receiver expression {@code e} with variable {@code
    * v}, the constraint {@code v = list(T)} (or "bag", "vector", etc.) will have
    * been added to {@link #terms}. This method scans backwards to find the
-   * operator.
+   * operator, following {@link Variable}-to-{@link Variable} links (which arise
+   * when the receiver is a bound identifier whose type was inferred earlier).
    *
    * @return the operator string (e.g. "list", "bag", "vector"), or null if the
    *     variable is not yet constrained to a concrete type constructor
    */
   private @Nullable String termOperatorOf(Variable v) {
+    return termOperatorOf(v, new HashSet<>());
+  }
+
+  private @Nullable String termOperatorOf(Variable v, Set<Variable> visited) {
+    if (!visited.add(v)) {
+      return null; // cycle guard
+    }
     for (int i = terms.size() - 1; i >= 0; i--) {
       final TermVariable tv = terms.get(i);
-      if (tv.variable.equals(v) && tv.term instanceof Sequence) {
-        final String op = ((Sequence) tv.term).operator;
-        // Skip structural operators that are not type constructors.
-        if (!op.equals(FN_TY_CON)
-            && !op.equals(TUPLE_TY_CON)
-            && !op.startsWith(RECORD_TY_CON)) {
-          return op;
+      if (tv.variable.equals(v)) {
+        if (tv.term instanceof Sequence) {
+          final String op = ((Sequence) tv.term).operator;
+          // Skip structural operators that are not type constructors.
+          if (!op.equals(FN_TY_CON)
+              && !op.equals(TUPLE_TY_CON)
+              && !op.startsWith(RECORD_TY_CON)) {
+            return op;
+          }
+        } else if (tv.term instanceof Variable) {
+          // Follow variable-to-variable links (e.g. bound identifier).
+          final String op = termOperatorOf((Variable) tv.term, visited);
+          if (op != null) {
+            return op;
+          }
         }
       }
     }
