@@ -32,6 +32,7 @@ import net.hydromatic.morel.ast.Ast.*;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.util.Folder;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Pair;
@@ -795,49 +796,72 @@ JAVACODE boolean isAtomStart() {
       || kind == ORDINAL;
 }
 
+/** True when {@code e} is a bare identifier (any case). */
+JAVACODE boolean isId(Exp e) {
+  return e instanceof Ast.Id;
+}
+
+/** True when {@code e} is an uppercase-initial identifier (a module or
+ * structure name, e.g. {@code List}, {@code String}, {@code Char}). */
+JAVACODE boolean isModule(Exp e) {
+  return e instanceof Ast.Id
+      && !((Ast.Id) e).name.isEmpty()
+      && Character.isUpperCase(((Ast.Id) e).name.charAt(0));
+}
+
 Exp expression9() :
 {
   Exp e;
   Exp arg;
   Id id;
   String fieldName;
-  /* True while e is a bare identifier (potential module/structure name).
-     Used to suppress paren-arg postfix when the receiver looks like a module,
-     e.g. to preserve "Module.fn (args)" as a field-projection + apply. */
-  boolean eIsId;
 }
 {
-  e = atom() { eIsId = (e instanceof Ast.Id); }
+  e = atom()
   (
     <DOT>
     ( id = identifier() { fieldName = id.name; }
     | <NATURAL_LITERAL> { fieldName = token.image; }
     )
     (
-      /* x.f () -- no-arg postfix method call */
-      LOOKAHEAD(<LPAREN> <RPAREN>)
-      <LPAREN> <RPAREN>
-      { e = ast.postfixApp(pos(), e, fieldName, ast.unitLiteral(pos())); eIsId = false; }
-    |
-      /* x.f arg -- postfix method call with one atom arg.
-         Two guards prevent common mis-parses:
-         1. !eIsId: allows postfix args only when the receiver is NOT a bare
-            identifier.  A bare identifier could be a module/structure name
-            (e.g. "Module", "List", "String"), and "Module.fn arg" should
-            always be parsed as field-projection + apply, not as a postfix call.
-            For identifier receivers, only "x.f ()" (no-arg form) is supported.
-            Literal receivers (strings, lists, tuples, etc.) allow "x.f arg".
-         2. getToken(2).kind != DOT: prevents "expr.fn Id.g" from consuming
-            "Id" (an identifier followed by ".") as the postfix arg. */
-      LOOKAHEAD({ isAtomStart() && !eIsId && getToken(2).kind != DOT })
+      /* x.f arg -- postfix method call (paren or bare-atom arg form).
+         Both forms share the same action; the LOOKAHEAD distinguishes
+         them from the field-projection case and from each other.
+
+         When the next token is "(":
+           - Blocked for uppercase-initial receivers (isModule), so that
+             "Char.compare(...)" is not consumed as a postfix call.
+           - For a bare-Id receiver, only fires when fieldName is a
+             known selfFirst built-in; otherwise "(arg)" belongs to
+             expression8's application level (e.g. "p.adjacent(n-1)").
+           - For non-Id receivers, always fires; atom() handles all three
+             sub-forms: "()" unit, "(e)" single arg, "(e1,e2)" tuple.
+             Staying inside the DOT loop enables chaining:
+               xs.drop(1).length ()
+               ≡ PostfixApp(PostfixApp(xs,"drop",1),"length",())
+
+         When the next token is not "(":
+           - Only fires for non-Id receivers (isId(e) = false), which
+             occur after a prior PostfixApp or field-projection step.
+             Bare-Id receivers fall through to field projection;
+             TypeResolver rewrites those later if appropriate.
+           - getToken(2) != DOT prevents consuming an identifier that is
+             itself followed by "." as a postfix arg (e.g. "expr.fn Id.g"
+             must not consume "Id"). */
+      LOOKAHEAD({
+          isAtomStart()
+          && !isModule(e)
+          && (getToken(1).kind == LPAREN
+              ? !isId(e) || BuiltIn.BY_SELF_FIRST_NAME.containsKey(fieldName)
+              : !isId(e) && getToken(2).kind != DOT)
+      })
       arg = atom()
-      { e = ast.postfixApp(pos(), e, fieldName, arg); eIsId = false; }
+      { e = ast.postfixApp(pos(), e, fieldName, arg); }
     |
       /* x.f -- field projection, existing behaviour */
       {
         final Exp s = ast.recordSelector(pos(), fieldName);
         e = ast.apply(s, e);
-        eIsId = false;
       }
     )
   )*

@@ -807,7 +807,7 @@ public class TypeResolver {
         return reg(fn2b, v);
 
       case APPLY:
-        return deduceApplyType(env, (Ast.Apply) node, v);
+        return deduceApplyOrPostfixType(env, (Ast.Apply) node, v);
       case POSTFIX_APP:
         return deducePostfixAppType(env, (Ast.PostfixApp) node, v);
 
@@ -1542,6 +1542,44 @@ public class TypeResolver {
     }
   }
 
+  /**
+   * Handles an {@link Ast.Apply} node, intercepting the pattern {@code
+   * Apply(Apply(RecordSelector(name), receiverExpr), arg)} that the parser
+   * emits for {@code receiverExpr.name arg} when {@code receiverExpr} is a bare
+   * identifier (because the {@code eIsId} guard in the parser suppresses the
+   * atom-arg LOOKAHEAD for bare-identifier receivers).
+   *
+   * <p>When the receiver is a non-record value and {@code name} is a {@code
+   * selfFirst}-eligible built-in or user-defined function, the apply is
+   * desugared into an equivalent {@link Ast.PostfixApp} and dispatched to
+   * {@link #deducePostfixAppType}.
+   *
+   * <p>Otherwise, the call is forwarded to {@link #deduceApplyType}.
+   */
+  private Ast.Exp deduceApplyOrPostfixType(
+      TypeEnv env, Ast.Apply apply, Variable v) {
+    // Pattern: Apply(Apply(RecordSelector(name), Id(receiver)), arg)
+    if (apply.fn instanceof Ast.Apply) {
+      final Ast.Apply fnApply = (Ast.Apply) apply.fn;
+      if (fnApply.fn instanceof Ast.RecordSelector
+          && fnApply.arg instanceof Ast.Id) {
+        final String name = ((Ast.RecordSelector) fnApply.fn).name;
+        final Ast.Id receiverId = (Ast.Id) fnApply.arg;
+        final Type receiverType = env.getTypeOpt(receiverId.name);
+        // Intercept only when the receiver is a known non-record type and
+        // 'name' is a selfFirst-eligible function.
+        if (receiverType != null
+            && !(receiverType instanceof RecordType)
+            && (!BuiltIn.BY_SELF_FIRST_NAME.get(name).isEmpty()
+                || selfFirstNames.contains(name) && env.has(name))) {
+          return deducePostfixAppType(
+              env, ast.postfixApp(apply.pos, receiverId, name, apply.arg), v);
+        }
+      }
+    }
+    return deduceApplyType(env, apply, v);
+  }
+
   private Ast.Apply deduceApplyType(TypeEnv env, Ast.Apply apply, Variable v) {
     final Variable vFn = unifier.variable();
     final Variable vArg = unifier.variable();
@@ -1765,17 +1803,120 @@ public class TypeResolver {
           return type != null ? headTypeTermOp(type) : null;
         }
       case APPLY:
-        {
-          final Ast.Apply apply = (Ast.Apply) receiver;
-          if (apply.fn instanceof Ast.Id) {
-            final Type fnType = env.getTypeOpt(((Ast.Id) apply.fn).name);
-            return fnType != null ? fnResultTypeTermOp(fnType) : null;
-          }
-          return null;
-        }
+        return applyReceiverTypeHint(env, (Ast.Apply) receiver);
+      case POSTFIX_APP:
+        return postfixReceiverTypeHint(env, (Ast.PostfixApp) receiver);
       default:
         return null;
     }
+  }
+
+  /**
+   * Returns the type-term operator for the result of a {@link Ast.PostfixApp}
+   * receiver, examined before full elaboration.
+   *
+   * <p>For example, {@code xs.drop(1)} (a PostfixApp whose method is "drop" and
+   * whose receiver is {@code xs : int list}) has result type {@code int list},
+   * so this returns "list". This allows the outer call in {@code
+   * xs.drop(1).drop 1} to disambiguate its candidate (List.drop vs Bag.drop vs
+   * Vector.drop).
+   */
+  private @Nullable String postfixReceiverTypeHint(
+      TypeEnv env, Ast.PostfixApp postfixApp) {
+    final String name = postfixApp.methodName;
+    final ImmutableCollection<BuiltIn> candidates =
+        BuiltIn.BY_SELF_FIRST_NAME.get(name);
+    if (candidates.isEmpty()) {
+      return null;
+    }
+    final String innerHint = receiverTypeHint(env, postfixApp.receiver);
+    if (innerHint == null && candidates.size() > 1) {
+      return null;
+    }
+    final BuiltIn best;
+    if (candidates.size() == 1) {
+      best = candidates.iterator().next();
+    } else {
+      best =
+          candidates.stream()
+              .filter(b -> firstParamReceiverTypeOp(b).equals(innerHint))
+              .findFirst()
+              .orElse(null);
+      if (best == null) {
+        return null;
+      }
+    }
+    return fnResultTypeTermOp(best.typeFunction.apply(typeSystem));
+  }
+
+  /**
+   * Returns the type-term operator for the result of an {@link Ast.Apply}
+   * receiver expression, examining its structure before full elaboration.
+   *
+   * <p>Handles three shapes:
+   *
+   * <ol>
+   *   <li>{@code Id(f) arg} — result type of function {@code f} in env.
+   *   <li>{@code RecordSelector(field) Id(r)} — type of field {@code field} in
+   *       the record type of {@code r}.
+   *   <li>{@code Apply(RecordSelector(name), Id(r)) arg} — result type of the
+   *       selfFirst built-in {@code name} applied to receiver {@code r}; used
+   *       when {@code r.name arg} was parsed as a field-projection chain due to
+   *       the {@code eIsId} guard in the parser.
+   * </ol>
+   */
+  private @Nullable String applyReceiverTypeHint(TypeEnv env, Ast.Apply apply) {
+    if (apply.fn instanceof Ast.Id) {
+      // e.g. bag [1, 2] → result type of bag()
+      final Type fnType = env.getTypeOpt(((Ast.Id) apply.fn).name);
+      return fnType != null ? fnResultTypeTermOp(fnType) : null;
+    }
+    if (apply.fn instanceof Ast.RecordSelector && apply.arg instanceof Ast.Id) {
+      // e.g. Apply(#i, r) where r : {i:int, ...} → "int"
+      final String fieldName = ((Ast.RecordSelector) apply.fn).name;
+      final Type argType = env.getTypeOpt(((Ast.Id) apply.arg).name);
+      if (argType instanceof RecordType) {
+        final Type fieldType =
+            ((RecordType) argType).argNameTypes.get(fieldName);
+        if (fieldType != null) {
+          return headTypeTermOp(fieldType);
+        }
+      }
+      return null;
+    }
+    if (apply.fn instanceof Ast.Apply) {
+      // e.g. Apply(Apply(RecordSelector("drop"), Id("xs")), 2)
+      // — the result of xs.drop 2 intercepted as a postfix call.
+      // Return the result type of the selfFirst built-in "drop" on xs.
+      final Ast.Apply innerApply = (Ast.Apply) apply.fn;
+      if (innerApply.fn instanceof Ast.RecordSelector
+          && innerApply.arg instanceof Ast.Id) {
+        final String name = ((Ast.RecordSelector) innerApply.fn).name;
+        final ImmutableCollection<BuiltIn> candidates =
+            BuiltIn.BY_SELF_FIRST_NAME.get(name);
+        if (!candidates.isEmpty()) {
+          final String innerHint = receiverTypeHint(env, innerApply.arg);
+          if (innerHint == null && candidates.size() > 1) {
+            return null;
+          }
+          final BuiltIn best;
+          if (candidates.size() == 1) {
+            best = candidates.iterator().next();
+          } else {
+            best =
+                candidates.stream()
+                    .filter(b -> firstParamReceiverTypeOp(b).equals(innerHint))
+                    .findFirst()
+                    .orElse(null);
+            if (best == null) {
+              return null;
+            }
+          }
+          return fnResultTypeTermOp(best.typeFunction.apply(typeSystem));
+        }
+      }
+    }
+    return null;
   }
 
   /**

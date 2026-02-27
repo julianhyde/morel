@@ -3047,11 +3047,24 @@ public class Ast {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(receiver, left, op.left)
+      w.append(receiver, left, op.left)
           .append(".")
           .append(methodName)
-          .append(" ")
-          .append(arg, op.right, right);
+          .append(" ");
+      if (arg.op == Op.UNIT_LITERAL
+          || arg.op == Op.TUPLE
+          || right < Op.POSTFIX_APP.left) {
+        // No need to add parentheses to the arguments of 'x.f ()' or
+        // 'x.f (1, 2)' because as tuples they already have parentheses; or to
+        // 'x.f 1'
+        // if it is not followed by another postfix call.
+        w.append(arg, 0, right);
+      } else {
+        // x.f(arg) -- parenthesised so the result can be dot-chained:
+        //   x.f (e).g ()
+        w.append("(").append(arg, 0, 0).append(")");
+      }
+      return w;
     }
 
     public PostfixApp copy(Exp receiver, Exp arg) {
