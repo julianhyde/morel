@@ -1672,7 +1672,11 @@ public class TypeResolver {
     if (!builtInCandidates.isEmpty()) {
       final BuiltIn builtIn =
           pickBuiltInCandidate(
-              env, postfixApp.receiver, vReceiver, builtInCandidates);
+              env,
+              postfixApp.receiver,
+              vReceiver,
+              postfixApp.arg,
+              builtInCandidates);
       fnExp = postfixBuiltInFnExp(pos, builtIn);
       isTuple = isPostfixBuiltInTuple(builtIn);
     } else {
@@ -1749,7 +1753,7 @@ public class TypeResolver {
    * receiver's type constructor.
    *
    * <p>When multiple built-ins share an {@code mlName} (e.g. {@code
-   * List.length}, {@code Bag.length}, {@code Vector.length}), we use two
+   * List.length}, {@code Bag.length}, {@code Vector.length}), we use three
    * strategies to determine the receiver's type constructor:
    *
    * <ol>
@@ -1757,6 +1761,10 @@ public class TypeResolver {
    *       for literals and bound variables.
    *   <li>Inspect the receiver AST ({@link #receiverTypeHint}) — handles {@code
    *       Apply} nodes such as {@code bag [1,2]}.
+   *   <li>Inspect the argument type ({@link #argTypeHint}) — handles chains
+   *       through polymorphic functions such as {@code getOpt}, where the
+   *       receiver type equals the argument type (e.g. {@code compare}, {@code
+   *       max}, {@code min}, {@code rem}).
    * </ol>
    *
    * <p>If only one candidate exists, or we cannot determine the receiver's type
@@ -1767,6 +1775,7 @@ public class TypeResolver {
       TypeEnv env,
       Ast.Exp receiver,
       Variable vReceiver,
+      Ast.Exp arg,
       ImmutableCollection<BuiltIn> candidates) {
     if (candidates.size() == 1) {
       return candidates.iterator().next();
@@ -1774,6 +1783,9 @@ public class TypeResolver {
     String op = termOperatorOf(vReceiver);
     if (op == null) {
       op = receiverTypeHint(env, receiver);
+    }
+    if (op == null) {
+      op = argTypeHint(env, arg, candidates);
     }
     if (op != null) {
       for (BuiltIn b : candidates) {
@@ -1783,6 +1795,38 @@ public class TypeResolver {
       }
     }
     return candidates.iterator().next();
+  }
+
+  /**
+   * Returns the type-term operator of the argument, used as a fallback
+   * disambiguation strategy when the receiver's type is not directly
+   * determinable.
+   *
+   * <p>Applies only to tuple-splicing built-ins where receiver type equals
+   * argument type (e.g. {@code compare : T * T → order}, {@code max : T * T →
+   * T}). For such functions, the argument's static type identifies the right
+   * candidate.
+   *
+   * <p>Only uses the result if exactly one candidate matches, to avoid false
+   * disambiguation.
+   */
+  private @Nullable String argTypeHint(
+      TypeEnv env, Ast.Exp arg, ImmutableCollection<BuiltIn> candidates) {
+    final Type argType = getType(env, arg);
+    if (argType == null) {
+      return null;
+    }
+    final String op = headTypeTermOp(argType);
+    if (op == null) {
+      return null;
+    }
+    // Accept only when exactly one candidate has this receiver type,
+    // to avoid false disambiguation.
+    long matches =
+        candidates.stream()
+            .filter(b -> firstParamReceiverTypeOp(b).equals(op))
+            .count();
+    return matches == 1 ? op : null;
   }
 
   /**

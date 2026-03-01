@@ -58,6 +58,21 @@ val n = 4;
 n.compare 3;
 > val it = GREATER : order
 
+(SOME 5).getOpt(0).compare(3);
+> val it = GREATER : order
+NONE.getOpt(0).compare(3);
+> val it = LESS : order
+(SOME #"a").getOpt(#"p").compare(#"g");
+> val it = LESS : order
+fun f (x: int option) = x.getOpt(0).compare(3);
+> val f = fn : int option -> order
+f (SOME 5);
+> val it = GREATER : order
+f (SOME ~5);
+> val it = LESS : order
+f NONE;
+> val it = LESS : order
+
 val r = {i = 1, n};
 > val r = {i=1,n=4} : {i:int, n:int}
 r.i.compare (r.n);
