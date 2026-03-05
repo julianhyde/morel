@@ -19,6 +19,7 @@ License.
 
 TODO:
 insert hyperlinks;
+note that the impl is in java but could be ported to rust;
 proof read for spelling and grammar;
 proof read for sentence flow.
 {% endcomment %}
@@ -26,110 +27,103 @@ proof read for sentence flow.
 
 # Datalog on Morel
 
-<!-- TODO: Add a lede that announces Datalog support AND states the
-     thesis: this demonstrates that Morel can now mix calculus and
-     algebra styles in one language. -->
+I am pleased to announce that Morel
+[now supports Datalog](https://github.com/hydromatic/morel/commit/62581437ac9c8dc415b159fdc9d6abc7eb588e9a).
+
+You can write queries in the
+[Souffl&eacute;](https://souffle-lang.github.io/) dialect of Datalog
+and execute them using Morel's usual runtime.
+
+More impressive is that the Datalog implementation is extremely
+simple.  This demonstrates that Morel supports both query language
+paradigms &mdash; relational calculus and relational algebra &mdash;
+and you can freely switch between them, even in the same query.
 
 ## The two paradigms
 
-<!-- TODO: Add a brief intro sentence connecting this section to the
-     thesis - something like "To understand why this matters, we need
-     to understand the two paradigms for writing queries." -->
+To understand why this matters, we need
+to understand the two paradigms for writing queries.
+The two paradigms originate in set theory, and continued
+through the relational model into modern query languages.
 
-Datalog represents the *other* great paradigm for writing queries and
-logic programs.
-
-In the beginning, set theory provided two ways to define a set: you
-could define a set by its properties (for example, the "red cars" set
-is the set of all cars that are red) or by performing operations on
-existing sets (intersect the set of all cars with the set of all red
-objects).
+Set theory provides two ways to define a set: the **intensional**
+method defines the set by its properties (for example, "red cars" is
+the set of all cars whose color is red), and the **extensional**
+method creates the set by performing operations on existing sets
+(intersect the set of all cars with the set of all red objects).
 
 The relational model for databases provides two ways to specify a
-query.  In *relational calculus*, one specifies the logical properties
-of the tuples to retrieve; in *relational algebra*, one specifies the
-input relations and a sequence of operations (intersect, join, filter,
-project) to apply to them.
+query which mirror intensional and extensional set definitions.  In
+**relational calculus**, one specifies the logical properties of the
+tuples to retrieve from the input relations; in **relational
+algebra**, one specifies the input relations and a sequence of
+operations (intersect, join, filter, project) to apply to them.
 [Codd's Theorem](https://en.wikipedia.org/wiki/Codd%27s_theorem)
 proves that these languages have equivalent expressive power.
 
-Datalog is based on relational calculus; Morel and SQL belong to the
-relational algebra camp.
+Query languages are generally based on one of those paradigms.  SQL is
+largely based on algebra (although its `EXISTS` keyword shows the
+influence of calculus).  Datalog is based on calculus.  Functional
+programming languages (including Morel) are in the algebra camp; they
+provide relational operators via higher-order functions like `map`,
+`filter` and `reduce`, and sometimes provide syntactic sugar like
+list-comprehensions.
 
 If the languages are equivalent, why does it matter? The languages
 have different strengths.
 
-We often wish to integrate queries with other programs, and relational
-algebra fits more easily, especially into functional programs.
-Relational algebra is essentially a subset of functional programming,
-where the system provides a built-in function for each relational
-operator.  Many modern languages do this, either in the form of
-functions such as `List.map` and `List.filter` or in syntax such as
-list comprehensions.
+Algebra's strengths:
+ * Algebra naturally extends to **bags and lists** (collections with
+   ordering and/or duplicate values), while calculus only works on
+   sets;
+ * **Aggregate functions** are a more natural extension to algebra
+     than calculus;
+ * Mainstream programming languages are functional or procedural, so
+   there is lower **impedance mismatch** embedding a query in a
+   program or writing a user-defined function to be called from a
+   query;
+ * Developers familiar with mainstream programming languages
+   find the calculus paradigm **difficult to learn**.
 
-Some kinds of query are easier to express in one paradigm than the
-other. Queries that iterate until they reach a fixed point are easier
-to express in the calculus (Datalog). In the algebra, a query reaches
-a fixed point when a value stops 'growing'.  For simple fixed-point
-queries such as computing transitive closure, that value is a set,
-combined using union. But for more complex fixed-point queries the
-programmer needs to define a data type with the properties of a
-partially-ordered set. In the calculus, the data type is boolean.
+<!-- Calculus is often said to be more 'declarative' and algebra more
+     'prescriptive'. It is true that algebra is a better language for
+     plans (given a particular physical algebra). But both are
+     declarative (e.g. a planner has license to re-order the joins in
+     an algebra program, and knows whether a particular order is
+     required by the program semantics or is just a convenient
+     physical representation). -->
 
-Consider, for example, a query to find all nodes in a graph reachable
-from a given node in under five steps, and the length of the shortest
-path. In algebra, the data type is a set of nodes and the length of
-the shortest known path.
+Calculus (epitomized by Datalog) excels at graph and deductive
+queries, such as queries that iterate until they reach a fixed
+point. As we shall see, it is just easier to write recursive queries
+if they return a boolean than if they return a complex data type like
+a set of tuples.
 
-<!-- TODO: Add a concluding sentence that connects back to Morel,
-     e.g., "With predicate inversion, Morel now supports both
-     paradigms, and the Datalog interface demonstrates this." -->
+For simple fixed-point queries such as computing the transitive
+closure of a relation, the algebra query returns a set,
+combined using union. In calculus, the value is boolean: whether
+there is a path from one point to another.
 
-## How Morel does it
+For more complex fixed-point queries, the algebra programmer must
+define a data type with a semilattice structure.  Consider, for
+example, a query to all pairs of nodes connected by no more than five
+steps.  In algebra, the data type is now a set of `(source,
+destination, distance)` triples combined by taking the minimum
+distance.  In calculus, the data type remains boolean: the result of
+the function `has_path_within(source, destination, distance)`.  The
+boolean function is easier to write, and easier for the query planner
+to understand.
 
-<!-- TODO: This section should be a brief (2-3 paragraph) summary.
-     Consider linking to a separate predicate inversion post for
-     details. -->
+Until now, if a programmer had to solve a problem with mixed workload,
+they would need to switch languages.
+Because of a new feature called predicate inversion,
+Morel now supports both paradigms.
 
-That magic lies not in the Datalog-to-Morel converter but in the Morel
-language itself. Over the last few months, we have added to Morel a
-capability called *predicate inversion*, the ability to deduce a set
-from a boolean expression.
+## The Datalog interface
 
-At heart of the generated Morel program is a query: `from x, y where
-path (x, y)`.  It differs from a regular query in that the variables
-`x` and `y` are *unbounded*.  (In a conventional query, every variable
-is *bounded*, meaning it iterates over a collection, as do `d` and `e`
-in `from d in depts, e in employees`.)
-
-In principle, an unbounded variable iterates over every possible value
-of its data type. This is fine for "small" data types like `boolean`,
-`char`, and `enum Color { RED | GREEN | BLUE }`, but problematic for
-"large" data types like `int` and `{b: boolean, i: int}` and infinite
-data types like `string` and `int list`.
-
-Morel allows unbounded variables in a program as long as there is a
-predicate like `where x > 0 andalso x < 10` or `where e elem
-employees` that connects it with a finite set. Invertible predicates
-provide a way to generate the values of the variable. In Datalog
-parlance, they ensure that the variable is *grounded*.
-
-Morel's predicate inversion algorithm recognizes various predicate
-patterns, including boolean functions
-that check membership in a collection (like `edge`)
-and that compute transitive closure (like `path`).
-
-## Datalog on Morel
-
-Following a recent
-[commit to Morel](https://github.com/hydromatic/morel/commit/62581437ac9c8dc415b159fdc9d6abc7eb588e9a),
-you can now parse, validate and execute programs in Datalog. Consider
-the following program, in the
+The following program, in the
 [Souffl&eacute;](https://souffle-lang.github.io/) dialect of Datalog,
-to compute transitive closure of an `edge` relation.
-
-<!-- TODO: The Souffle example below uses :number but Morel uses :int.
-     Either change to :int, or add a note explaining the difference. -->
+computes the transitive closure of an `edge` relation.
 
 <pre><code>.decl edge(x:number, y:number)
 .decl path(x:number, y:number)
@@ -148,7 +142,8 @@ intermediate node to the destination node.  From the edges {1 &rarr;
 2, 2 &rarr; 3} it deduces the paths {1 &rarr; 2, 2 &rarr; 3, 1 &rarr;
 3}.
 
-The same program can be executed from Morel's shell:
+You can now run that program from Morel's shell
+practically unchanged:
 
 <pre><code>Datalog.execute <span style="color: brown;">"
 .decl edge(x:int, y:int)
@@ -163,14 +158,19 @@ path(X,Z) :- path(X,Y), edge(Y,Z).
 &gt;   : {path:{x:int, y:int} list} variant</i>
 </code></pre>
 
-Morel's dialect is very similar to Souffl&eacute;. Facts and rules
-have the same syntax, as does the `.output` directive. In the `.decl`
+The main change is that the program has been wrapped as a string
+literal and passed as an argument to a new built-in function,
+`Datalog.execute`.  (This seemed preferable to writing a
+Datalog-specifc shell and testing framework.)
+
+There are also minor changes to the dialect. Facts and rules
+have the same syntax as Souffl&eacute;, as does the `.output` directive. In the `.decl`
 directive, we have changed the `symbol` and `number` types to `string`
 and `int`, to be consistent with Morel's type system. (The `.input`
 directive, not shown in this example, is also implemented, and has a
 new optional *filePath* argument.)
 
-### Translation
+## Translating Datalog to Morel
 
 <!-- TODO: Add a sentence connecting this to the thesis - the
      translation shows the structural correspondence between
@@ -223,6 +223,40 @@ directive. This program has one directive, `.output path`, so the
 record has a single field named `path` that is a `bag` of
 `{x:int, y:int}` records.
 
+## How Morel does it
+
+<!-- TODO: This section should be a brief (2-3 paragraph) summary.
+     Consider linking to a separate predicate inversion post for
+     details. -->
+
+That magic lies not in the Datalog-to-Morel converter but in the Morel
+language itself. Over the last few months, we have added to Morel a
+capability called *predicate inversion*, the ability to deduce a set
+from a boolean expression.
+
+At heart of the generated Morel program is a query: `from x, y where
+path (x, y)`.  It differs from a regular query in that the variables
+`x` and `y` are *unbounded*.  (In a conventional query, every variable
+is *bounded*, meaning it iterates over a collection, as do `d` and `e`
+in `from d in depts, e in employees`.)
+
+In principle, an unbounded variable iterates over every possible value
+of its data type. This is fine for "small" data types like `boolean`,
+`char`, and `enum Color { RED | GREEN | BLUE }`, but problematic for
+"large" data types like `int` and `{b: boolean, i: int}` and infinite
+data types like `string` and `int list`.
+
+Morel allows unbounded variables in a program as long as there is a
+predicate like `where x > 0 andalso x < 10` or `where e elem
+employees` that connects it with a finite set. Invertible predicates
+provide a way to generate the values of the variable. In Datalog
+parlance, they ensure that the variable is *grounded*.
+
+Morel's predicate inversion algorithm recognizes various predicate
+patterns, including boolean functions
+that check membership in a collection (like `edge`)
+and that compute transitive closure (like `path`).
+
 ## Mixing styles
 
 The net result is that predicate inversion allows you to freely mix
@@ -231,7 +265,8 @@ with the relational algebra-style queries (defined by `from`,
 `exists`, `join` and set operations).
 
 <!-- TODO: Add an example that shows both styles in one program.
-     Could adapt from the "Mixing Paradigms" example in datalog.md. -->
+     Could adapt from the "Mixing Paradigms" example in
+     datalog.md. -->
 
 ## Library functions
 
