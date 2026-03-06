@@ -78,15 +78,11 @@ public class Generation {
         mapper.readerForMapOf(Object.class).readValues(file)) {
       while (it.hasNextValue()) {
         final Map<String, Object> row = (Map<String, Object>) it.nextValue();
-        for (Map<String, Object> entry :
-            (List<Map<String, Object>>) row.get("functions")) {
-          String structure = (String) entry.get("structure");
-          String name = (String) entry.get("name");
-          int comma = name.indexOf(", ");
-          if (comma >= 0) {
-            name = name.substring(0, comma);
-          }
-          names.add(structure + "." + name);
+        for (FnDef fn :
+            transformEager(
+                (List<Map<String, Object>>) row.get("functions"),
+                FnDef::create)) {
+          names.add(fn.structure + "." + fn.canonicalName());
         }
       }
     }
@@ -162,14 +158,30 @@ public class Generation {
                   (List<Map<String, Object>>) row.get("functions"),
                   FnDef::create);
 
-          // Check [[structures]] entries are sorted by name.
           final Object structuresObj = row.get("structures");
-          final List<Map<String, Object>> structs =
+          final List<StrDef> strDefs =
               structuresObj != null
-                  ? (List<Map<String, Object>>) structuresObj
+                  ? transformEager(
+                      (List<Map<String, Object>>) structuresObj, StrDef::create)
                   : new ArrayList<>();
+
+          final Object typesObj = row.get("types");
+          final List<TyDef> tyDefs =
+              typesObj != null
+                  ? transformEager(
+                      (List<Map<String, Object>>) typesObj, TyDef::create)
+                  : new ArrayList<>();
+
+          final Object exceptionsObj = row.get("exceptions");
+          final List<ExnDef> exnDefs =
+              exceptionsObj != null
+                  ? transformEager(
+                      (List<Map<String, Object>>) exceptionsObj, ExnDef::create)
+                  : new ArrayList<>();
+
+          // Check [[structures]] entries are sorted by name.
           final List<String> structureNames =
-              transformEager(structs, s -> (String) s.get("name"));
+              transformEager(strDefs, s -> s.name);
           if (!Ordering.natural().isOrdered(structureNames)) {
             fail(
                 "Structure names are not sorted\n"
@@ -320,6 +332,12 @@ public class Generation {
       return structure + '.' + name;
     }
 
+    /** Returns the name, stripping any disambiguation qualifier. */
+    String canonicalName() {
+      int comma = name.indexOf(", ");
+      return comma >= 0 ? name.substring(0, comma) : name;
+    }
+
     static FnDef create(Map<String, Object> map) {
       return new FnDef(
           (String) map.get("structure"),
@@ -328,6 +346,100 @@ public class Generation {
           (String) map.get("prototype"),
           (String) map.get("description"),
           (String) map.get("extra"),
+          first((Boolean) map.get("implemented"), true),
+          map.containsKey("ordinal") ? (Integer) map.get("ordinal") : -1);
+    }
+  }
+
+  /** Structure definition (from {@code [[structures]]} in functions.toml). */
+  private static class StrDef {
+    final String name;
+    final String description;
+    final String overview;
+
+    StrDef(String name, String description, String overview) {
+      this.name = requireNonNull(name, "name");
+      this.description = requireNonNull(description, "description");
+      this.overview = requireNonNull(overview, "overview");
+    }
+
+    static StrDef create(Map<String, Object> map) {
+      return new StrDef(
+          (String) map.get("name"),
+          (String) map.get("description"),
+          (String) map.get("overview"));
+    }
+  }
+
+  /** Type definition (from {@code [[types]]} in functions.toml). */
+  private static class TyDef {
+    final String structure;
+    final String name;
+    final String type;
+    final String description;
+    final boolean implemented;
+
+    TyDef(
+        String structure,
+        String name,
+        String type,
+        String description,
+        boolean implemented) {
+      this.structure = requireNonNull(structure, "structure");
+      this.name = requireNonNull(name, "name");
+      this.type = requireNonNull(type, "type");
+      this.description = requireNonNull(description, "description");
+      this.implemented = implemented;
+    }
+
+    String qualifiedName() {
+      return structure + '.' + name;
+    }
+
+    static TyDef create(Map<String, Object> map) {
+      return new TyDef(
+          (String) map.get("structure"),
+          (String) map.get("name"),
+          (String) map.get("type"),
+          (String) map.get("description"),
+          first((Boolean) map.get("implemented"), true));
+    }
+  }
+
+  /** Exception definition (from {@code [[exceptions]]} in functions.toml). */
+  private static class ExnDef {
+    final String structure;
+    final String name;
+    final @Nullable String type;
+    final String description;
+    final boolean implemented;
+    final int ordinal;
+
+    ExnDef(
+        String structure,
+        String name,
+        @Nullable String type,
+        String description,
+        boolean implemented,
+        int ordinal) {
+      this.structure = requireNonNull(structure, "structure");
+      this.name = requireNonNull(name, "name");
+      this.type = type;
+      this.description = requireNonNull(description, "description");
+      this.implemented = implemented;
+      this.ordinal = ordinal;
+    }
+
+    String qualifiedName() {
+      return structure + '.' + name;
+    }
+
+    static ExnDef create(Map<String, Object> map) {
+      return new ExnDef(
+          (String) map.get("structure"),
+          (String) map.get("name"),
+          (String) map.get("type"),
+          (String) map.get("description"),
           first((Boolean) map.get("implemented"), true),
           map.containsKey("ordinal") ? (Integer) map.get("ordinal") : -1);
     }
