@@ -42,10 +42,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.util.Generation;
 import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.PairList;
@@ -881,7 +884,7 @@ public class LintTest {
   }
 
   @Test
-  void testProgramWorksMorel() throws IOException {
+  void testProgramWorksMorel() {
     // We write test content to a temp .smli file so isMorel matches.
     final String code =
         "(* single-line comment *)\n"
@@ -1077,6 +1080,43 @@ public class LintTest {
               + genFile
               + "\n" //
               + diff);
+    }
+  }
+
+  /**
+   * Checks that every non-internal {@link BuiltIn} entry (i.e., those belonging
+   * to a named structure such as {@code Char}, {@code List}, etc.) has a
+   * corresponding entry in {@code functions.toml}.
+   *
+   * <p>Entries in the internal {@code "$"} pseudo-structure are excluded.
+   * Entries in the {@code "Test"} pseudo-structure (test-only built-ins) are
+   * also excluded. Null-structure entries (top-level built-ins such as {@code
+   * not}, {@code abs}) are also excluded.
+   */
+  @Test
+  void testBuiltInsDocumented() throws IOException {
+    final Set<String> documented = Generation.functionNames();
+    final File file = Generation.getFile();
+
+    final Set<String> missing = new TreeSet<>();
+    for (BuiltIn builtIn : BuiltIn.values()) {
+      final String structure = builtIn.structure;
+      if (structure == null
+          || structure.equals("$")
+          || structure.equals("Test")) {
+        continue;
+      }
+      final String key = structure + "." + builtIn.mlName;
+      if (!documented.contains(key)) {
+        missing.add(key);
+      }
+    }
+    if (!missing.isEmpty()) {
+      fail(
+          format(
+              "BuiltIn entries not documented in functions.toml: %s\n"
+                  + "Add an entry for each to %s",
+              missing, file.getAbsolutePath()));
     }
   }
 

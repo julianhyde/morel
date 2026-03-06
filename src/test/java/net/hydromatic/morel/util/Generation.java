@@ -24,8 +24,6 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.filterEager;
 import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.first;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import com.fasterxml.jackson.databind.MappingIterator;
@@ -38,8 +36,10 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 import net.hydromatic.morel.Main;
 import net.hydromatic.morel.TestUtils;
@@ -58,6 +58,49 @@ public class Generation {
     new FunctionTableGenerator(pw).generate();
   }
 
+  /**
+   * Returns the set of "Structure.name" keys documented in {@code
+   * functions.toml}.
+   *
+   * <p>Names with a disambiguation qualifier (e.g. {@code "fromInt, int"}) are
+   * normalized by stripping everything from the first {@code ", "} onwards, so
+   * the returned key for such an entry is {@code "Int.fromInt"}.
+   */
+  @SuppressWarnings("unchecked")
+  public static Set<String> functionNames() throws IOException {
+    final File file = getFile();
+
+    final Set<String> names = new HashSet<>();
+    final TomlMapper mapper = new TomlMapper();
+    try (MappingIterator<Object> it =
+        mapper.readerForMapOf(Object.class).readValues(file)) {
+      while (it.hasNextValue()) {
+        final Map<String, Object> row = (Map<String, Object>) it.nextValue();
+        for (Map<String, Object> entry :
+            (List<Map<String, Object>>) row.get("functions")) {
+          String structure = (String) entry.get("structure");
+          String name = (String) entry.get("name");
+          int comma = name.indexOf(", ");
+          if (comma >= 0) {
+            name = name.substring(0, comma);
+          }
+          names.add(structure + "." + name);
+        }
+      }
+    }
+    return names;
+  }
+
+  /** The {@code functions.toml} file as a URL. */
+  public static URL getResource() {
+    return requireNonNull(Main.class.getResource("/functions.toml"));
+  }
+
+  /** The {@code functions.toml} file. */
+  public static File getFile() {
+    return requireNonNull(TestUtils.urlToFile(getResource()));
+  }
+
   private static class FunctionTableGenerator {
     private final PrintWriter pw;
 
@@ -67,9 +110,7 @@ public class Generation {
 
     @SuppressWarnings("unchecked")
     void generate() throws IOException {
-      final URL inUrl = Main.class.getResource("/functions.toml");
-      assertThat(inUrl, notNullValue());
-      final File file = TestUtils.urlToFile(inUrl);
+      final File file = getFile();
 
       final TomlMapper mapper = new TomlMapper();
       try (MappingIterator<Object> it =

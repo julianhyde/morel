@@ -494,6 +494,7 @@ Exception:
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | Bag.nil | &alpha; bag | "nil" is the empty bag. |
+| Bag.nth | &alpha; bag * int &rarr; &alpha; | "nth (b, i)" returns the `i`th element of the bag `b`, counting from 0. Raises `Subscript` if `i` &lt; 0 or `i` &gt;= `length b`. We have `nth(b,0) = hd b`, ignoring exceptions. |
 | Bag.null | &alpha; bag &rarr; bool | "null b" returns `true` if the bag `b` is empty. |
 | Bag.fromList | &alpha; list &rarr; &alpha; bag | "fromList l" creates a new bag from `l`, whose length is `length l` and whose elements are the same as those of `l`. Raises `Size` if `maxLen` &lt; `n`. |
 | Bag.toList | &alpha; bag &rarr; &alpha; list | "toList b" creates a new bag from `b`, whose length is `length b` and whose elements are the same as those of `b`. Raises `Size` if `maxLen` &lt; `n`. |
@@ -520,6 +521,10 @@ Exception:
 | Bool.implies | bool * bool &rarr; bool | "b1 implies b2" returns `true` if `b1` is `false` or `b2` is `true`. |
 | Bool.not | bool &rarr; bool | "not b" returns the logical inverse of `b`. |
 | Bool.toString | bool &rarr; string | "toString b" returns the string representation of `b`, either "true" or "false". |
+| Char.&lt; | char * char &rarr; bool | "c1 &lt; c2" returns true if `c1` is less than `c2` in the character ordering. |
+| Char.&lt;= | char * char &rarr; bool | "c1 &lt;= c2" returns true if `c1` is less than or equal to `c2` in the character ordering. |
+| Char.&gt; | char * char &rarr; bool | "c1 &gt; c2" returns true if `c1` is greater than `c2` in the character ordering. |
+| Char.&gt;= | char * char &rarr; bool | "c1 &gt;= c2" returns true if `c1` is greater than or equal to `c2` in the character ordering. |
 | Char.chr | int &rarr; char | "chr i" returns the character whose code is `i`. Raises `Chr` if `i` &lt; 0 or `i` &gt; `maxOrd`. |
 | Char.compare | char * char &rarr; order | "compare (c1, c2)" returns `LESS`, `EQUAL`, or `GREATER` according to whether its first argument is less than, equal to, or greater than the second. |
 | Char.contains | char &rarr; string &rarr; bool | "contains s c" returns true if character `c` occurs in the string `s`; false otherwise. The function, when applied to `s`, builds a table and returns a function which uses table lookup to decide whether a given character is in the string or not. Hence it is relatively expensive to compute `val p = contains s` but very fast to compute `p(c)` for any given character. |
@@ -550,6 +555,9 @@ Exception:
 | Char.toLower | char &rarr; char | "toLower c" returns the lowercase letter corresponding to `c`, if `c` is a letter (a to z or A to Z); otherwise returns `c`. |
 | Char.toString | char &rarr; string | "toString c" converts a `char` into a `string`; equivalent to `(fmt StringCvt.ORD r)`. |
 | Char.toUpper | char &rarr; char | "toUpper c" returns the uppercase letter corresponding to `c`, if `c` is a letter (a to z or A to Z); otherwise returns `c`. |
+| Datalog.execute | string &rarr; variant | "execute program" executes a Datalog program and returns formatted output as a variant. |
+| Datalog.translate | string &rarr; string option | "translate program" translates a Datalog program to Morel source code, returning `SOME code` if valid or `NONE` if invalid. |
+| Datalog.validate | string &rarr; string | "validate program" validates a Datalog program and returns type information or error message. |
 | Either.isLeft | ('left, 'right) either &rarr; bool | "isLeft sm" returns true if `sm` is a left value. |
 | Either.isRight | ('left, 'right) either &rarr; bool | "isRight sm" returns true if `sm` is a right value. |
 | Either.asLeft | ('left, 'right) either &rarr; 'left option | "asLeft sm" returns `SOME (x)` if `sm` is a left value with contents `x`, otherwise it returns `NONE`. |
@@ -582,11 +590,13 @@ Exception:
 | Int.+ | int * int &rarr; int | "i + j" is the sum of `i` and `j`. It raises `Overflow` when the result is not representable. |
 | Int.- | int * int &rarr; int | "i - j" is the difference of `i` and `j`. It raises `Overflow` when the result is not representable. |
 | Int.div | int * int &rarr; int | "i div j" returns the greatest integer less than or equal to the quotient of `i` by j, i.e., `floor(i / j)`. It raises `Overflow` when the result is not representable, or Div when `j = 0`. Note that rounding is towards negative infinity, not zero. |
+| Int.fromLarge | int &rarr; int | "fromLarge i" converts a value from the default integer type to type `int`. In Morel, this is an identity function as there is only one integer type. |
 | Int.mod | int * int &rarr; int | "i mod j" returns the remainder of the division of `i` by `j`. It raises `Div` when `j = 0`. When defined, `(i mod j)` has the same sign as `j`, and `(i div j) * j + (i mod j) = i`. |
 | Int.&lt; | int * int &rarr; bool | "i &lt; j" returns true if `i` is less than `j`. |
 | Int.&lt;= | int * int &rarr; bool | "i &lt;= j" returns true if `i` is less than or equal to `j`. |
 | Int.&gt; | int * int &rarr; bool | "i &gt; j" returns true if `i` is greater than `j`. |
 | Int.&gt;= | int * int &rarr; bool | "i &gt;= j" returns true if `i` is greater than or equal to `j`. |
+| Int.toLarge | int &rarr; int | "toLarge i" converts a value of type `int` to the default integer type. In Morel, this is an identity function as there is only one integer type. |
 | Int.~ | int &rarr; int | "~ i" returns the negation of `i`. |
 | Int.abs | int &rarr; int | "abs i" returns the absolute value of `i`. |
 | Int.compare | int * int &rarr; order | "compare (i, j)" returns `LESS`, `EQUAL`, or `GREATER` according to whether its first argument is less than, equal to, or greater than the second. |
@@ -732,6 +742,10 @@ Exception:
 | Relational.elem | &alpha; * &alpha; bag &rarr; bool, &alpha; * &alpha; list &rarr; bool | "e elem collection" returns whether `e` is a member of `collection`. |
 | Relational.notelem | &alpha; * &alpha; bag &rarr; bool, &alpha; * &alpha; list &rarr; bool | "e notelem collection" returns whether `e` is not a member of `collection`. |
 | Relational.sum, sum | int list &rarr; int | "sum list" returns the sum of the elements of `list`. Often used with `group`, for example `from e in emps group e.deptno compute sumId = sum of e.id`. |
+| String.&lt; | string * string &rarr; bool | "s &lt; t" returns true if `s` is less than `t` in the string ordering. |
+| String.&lt;= | string * string &rarr; bool | "s &lt;= t" returns true if `s` is less than or equal to `t` in the string ordering. |
+| String.&gt; | string * string &rarr; bool | "s &gt; t" returns true if `s` is greater than `t` in the string ordering. |
+| String.&gt;= | string * string &rarr; bool | "s &gt;= t" returns true if `s` is greater than or equal to `t` in the string ordering. |
 | String.collate | (char * char &rarr; order) &rarr; string * string &rarr; order | "collate (f, (s, t))" performs lexicographic comparison of the two strings using the given ordering `f` on characters. |
 | String.compare | string * string &rarr; order | "compare (s, t)" does a lexicographic comparison of the two strings using the ordering `Char.compare` on the characters. It returns `LESS`, `EQUAL`, or `GREATER`, if `s` is less than, equal to, or greater than `t`, respectively. |
 | String.^ | string * string &rarr; string | "s ^ t" is the concatenation of the strings `s` and `t`. This raises `Size` if `\|s\| + \|t\| &gt; maxSize`. |
@@ -754,6 +768,7 @@ Exception:
 | String.tokens | (char &rarr; bool) &rarr; string &rarr; string list | "tokens f s" returns a list of tokens derived from `s` from left to right. A token is a non-empty maximal substring of `s` not containing any delimiter. A delimiter is a character satisfying the predicate `f`.  Two tokens may be separated by more than one delimiter, whereas two fields are separated by exactly one delimiter. For example, if the only delimiter is the character `#"\|"`, then the string `"\|abc\|\|def"` contains two tokens `"abc"` and `"def"`, whereas it contains the four fields `""`, `"abc"`, `""` and `"def"`. |
 | Sys.clearEnv | unit &rarr; unit | "clearEnv ()" restores the environment to the initial environment. |
 | Sys.env, env | unit &rarr; string list | "env ()" prints the environment. |
+| Sys.file | {...} | "file" is a view of the file system as a record. The fields of the record depend on the files and directories under the configured directory. |
 | Sys.plan | unit &rarr; string | "plan ()" prints the plan of the most recently executed expression. |
 | Sys.planEx | string &rarr; string | "planEx phase" re-plans the most recently executed expression and returns the Core representation at the specified phase. The phase argument can be "0" (initial), "-1" (final), or a specific pass number. |
 | Sys.set | string * &alpha; &rarr; unit | "set (property, value)" sets the value of `property` to `value`. (See [Properties](#properties) below.) |

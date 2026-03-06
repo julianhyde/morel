@@ -252,6 +252,18 @@ is the empty bag.
 """
 
 [[functions]]
+structure = "Bag"
+name = "nth"
+specified = "morel"
+type = "α bag * int → α"
+prototype = "nth (b, i)"
+description = """
+returns the `i`th element of the bag `b`, counting from 0. Raises
+`Subscript` if `i` < 0 or `i` >= `length b`. We have `nth(b,0) = hd
+b`, ignoring exceptions.
+"""
+
+[[functions]]
 ordinal = 4
 structure = "Bag"
 name = "null"
@@ -402,6 +414,52 @@ returns the string representation of `b`, either "true" or "false".
 """
 
 # === Char structure =================================================
+
+[[functions]]
+structure = "Char"
+name = "<"
+specified = "basis"
+syntax = "infix"
+type = "char * char → bool"
+prototype = "c1 < c2"
+description = """
+returns true if `c1` is less than `c2` in the character ordering.
+"""
+
+[[functions]]
+structure = "Char"
+name = "<="
+specified = "basis"
+syntax = "infix"
+type = "char * char → bool"
+prototype = "c1 <= c2"
+description = """
+returns true if `c1` is less than or equal to `c2` in the character
+ordering.
+"""
+
+[[functions]]
+structure = "Char"
+name = ">"
+specified = "basis"
+syntax = "infix"
+type = "char * char → bool"
+prototype = "c1 > c2"
+description = """
+returns true if `c1` is greater than `c2` in the character ordering.
+"""
+
+[[functions]]
+structure = "Char"
+name = ">="
+specified = "basis"
+syntax = "infix"
+type = "char * char → bool"
+prototype = "c1 >= c2"
+description = """
+returns true if `c1` is greater than or equal to `c2` in the character
+ordering.
+"""
 
 [[functions]]
 ordinal = 26
@@ -763,6 +821,40 @@ prototype = "toUpper c"
 description = """
 returns the uppercase letter corresponding to `c`, if `c`
 is a letter (a to z or A to Z); otherwise returns `c`.
+"""
+
+# === Datalog structure ==============================================
+
+[[functions]]
+structure = "Datalog"
+name = "execute"
+specified = "morel"
+type = "string → variant"
+prototype = "execute program"
+description = """
+executes a Datalog program and returns formatted output as a variant.
+"""
+
+[[functions]]
+structure = "Datalog"
+name = "translate"
+specified = "morel"
+type = "string → string option"
+prototype = "translate program"
+description = """
+translates a Datalog program to Morel source code, returning `SOME
+code` if valid or `NONE` if invalid.
+"""
+
+[[functions]]
+structure = "Datalog"
+name = "validate"
+specified = "morel"
+type = "string → string"
+prototype = "validate program"
+description = """
+validates a Datalog program and returns type information or error
+message.
 """
 
 # === Either structure ===============================================
@@ -1266,6 +1358,17 @@ type. Raises `Overflow` if the value does not fit.
 """
 
 [[functions]]
+structure = "Int"
+name = "fromLarge"
+specified = "basis"
+type = "int → int"
+prototype = "fromLarge i"
+description = """
+converts a value from the default integer type to type `int`. In Morel,
+this is an identity function as there is only one integer type.
+"""
+
+[[functions]]
 ordinal = 73
 structure = "Int"
 name = "fromString"
@@ -1439,6 +1542,17 @@ prototype = "toInt i"
 description = """
 converts a value from the default integer type to type
 `int`. Raises `Overflow` if the value does not fit.
+"""
+
+[[functions]]
+structure = "Int"
+name = "toLarge"
+specified = "basis"
+type = "int → int"
+prototype = "toLarge i"
+description = """
+converts a value of type `int` to the default integer type. In Morel,
+this is an identity function as there is only one integer type.
 """
 
 [[functions]]
@@ -3424,6 +3538,51 @@ sum of e.id`.
 # === String structure ===============================================
 
 [[functions]]
+structure = "String"
+name = "<"
+specified = "basis"
+syntax = "infix"
+type = "string * string → bool"
+prototype = "s < t"
+description = """
+returns true if `s` is less than `t` in the string ordering.
+"""
+
+[[functions]]
+structure = "String"
+name = "<="
+specified = "basis"
+syntax = "infix"
+type = "string * string → bool"
+prototype = "s <= t"
+description = """
+returns true if `s` is less than or equal to `t` in the string ordering.
+"""
+
+[[functions]]
+structure = "String"
+name = ">"
+specified = "basis"
+syntax = "infix"
+type = "string * string → bool"
+prototype = "s > t"
+description = """
+returns true if `s` is greater than `t` in the string ordering.
+"""
+
+[[functions]]
+structure = "String"
+name = ">="
+specified = "basis"
+syntax = "infix"
+type = "string * string → bool"
+prototype = "s >= t"
+description = """
+returns true if `s` is greater than or equal to `t` in the string
+ordering.
+"""
+
+[[functions]]
 ordinal = 196
 structure = "String"
 name = "^"
@@ -3840,6 +3999,17 @@ type = "unit → string list"
 prototype = "env ()"
 description = """
 prints the environment.
+"""
+
+[[functions]]
+structure = "Sys"
+name = "file"
+specified = "morel"
+type = "{...}"
+prototype = "file"
+description = """
+is a view of the file system as a record. The fields of the record
+depend on the files and directories under the configured directory.
 """
 
 [[functions]]
