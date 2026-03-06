@@ -20,6 +20,7 @@ package net.hydromatic.morel.util;
 
 import static com.google.common.base.Strings.repeat;
 import static com.google.common.collect.ImmutableList.sortedCopyOf;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.filterEager;
 import static net.hydromatic.morel.util.Static.transformEager;
@@ -104,9 +105,10 @@ public class Generation {
    * [[types]]}, and {@code [[exceptions]]} blocks. {@code [[values]]} and
    * {@code [[structures]]} blocks are excluded.
    *
-   * <p>Each key is {@code "function Foo.bar"}, {@code "type Foo.bar"}, or
-   * {@code "exception Foo.Bar"} — the element kind followed by the qualified
-   * name. Each value is the 1-based line number of the {@code [[...]]} header.
+   * <p>Each key is {@code "Foo.bar (function)"}, {@code "Foo.bar (type)"}, or
+   * {@code "Foo.Bar (exception)"} — the qualified name followed by the element
+   * kind in parentheses. Each value is the 1-based line number of the {@code
+   * [[...]]} header.
    */
   static PairList<String, Integer> allEntryNamesInOrder(File file)
       throws IOException {
@@ -121,7 +123,8 @@ public class Generation {
         lineNumber++;
         if (line.startsWith("[[")) {
           if (blockType != null && structure != null && name != null) {
-            entries.add(blockType + " " + structure + "." + name, headerLine);
+            entries.add(
+                structure + "." + name + " (" + blockType + ")", headerLine);
           }
           structure = null;
           name = null;
@@ -153,15 +156,9 @@ public class Generation {
       }
     }
     if (blockType != null && structure != null && name != null) {
-      entries.add(blockType + " " + structure + "." + name, headerLine);
+      entries.add(structure + "." + name + " (" + blockType + ")", headerLine);
     }
     return entries;
-  }
-
-  /** Extracts the qualified name from a key like {@code "function Foo.bar"}. */
-  private static String qualifiedNameOf(String typeAndName) {
-    int space = typeAndName.indexOf(' ');
-    return space >= 0 ? typeAndName.substring(space + 1) : typeAndName;
   }
 
   private static class FunctionTableGenerator {
@@ -218,30 +215,28 @@ public class Generation {
 
           // All entries (functions, types, exceptions) must be sorted.
           // This reduces the chance of merge conflicts.
-          final PairList<String, Integer> allEntries =
-              allEntryNamesInOrder(file);
-          for (int i = 1; i < allEntries.size(); i++) {
-            final String curr = allEntries.get(i).getKey();
-            final String prev = allEntries.get(i - 1).getKey();
-            if (qualifiedNameOf(prev).compareTo(qualifiedNameOf(curr)) > 0) {
-              final int currLine = allEntries.get(i).getValue();
-              // Find the first entry whose qualified name exceeds curr's;
-              // that is where curr should be inserted.
+          final PairList<String, Integer> entries = allEntryNamesInOrder(file);
+          final List<String> names = entries.leftList();
+          final List<Integer> lines = entries.rightList();
+          for (int i = 1; i < names.size(); i++) {
+            final String curr = names.get(i);
+            final String prev = names.get(i - 1);
+            if (prev.compareTo(curr) > 0) {
+              final int currLine = lines.get(i);
+              // Find the first entry whose name exceeds curr's; that is
+              // where curr should be inserted.
               for (int j = 0; j < i; j++) {
-                final String jEntry = allEntries.get(j).getKey();
-                if (qualifiedNameOf(jEntry).compareTo(qualifiedNameOf(curr))
-                    > 0) {
+                final String targetName = names.get(j);
+                if (targetName.compareTo(curr) > 0) {
+                  Integer targetLine = lines.get(j);
                   fail(
-                      file.getName()
-                          + ":"
-                          + currLine
-                          + ": "
-                          + curr
-                          + " is out of order;"
-                          + " move before "
-                          + jEntry
-                          + " at line "
-                          + allEntries.get(j).getValue());
+                      format(
+                          "%s:%d: %s is out of order; move before %s at line %d",
+                          file.getName(),
+                          currLine,
+                          curr,
+                          targetName,
+                          targetLine));
                   break;
                 }
               }
