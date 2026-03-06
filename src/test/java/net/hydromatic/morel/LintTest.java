@@ -1050,49 +1050,73 @@ public class LintTest {
     assertThat(g.messages, hasToString(Arrays.toString(expectedMessages)));
   }
 
-  /** Checks the "reference.md" structure index and properties sections. */
+  /**
+   * Checks all generated sections in all {@code .md} files under {@code docs/}.
+   *
+   * <p>Scans every {@code .md} file, finds {@code [//]: # (start:KEY)} markers,
+   * calls {@link Generation#generateSection} with the key, and diffs the result
+   * against the committed file.
+   */
   @Test
-  void testStructureIndex() throws IOException {
-    File baseDir = TestUtils.getBaseDir(TestUtils.class);
-    final File file = new File(baseDir, "docs/reference.md");
-    final File genFile = new File(baseDir, "target/reference.md");
-    try (Reader r = new FileReader(file);
-        BufferedReader br = new BufferedReader(r);
-        Writer w = new FileWriter(genFile);
-        PrintWriter pw = new PrintWriter(w)) {
-      boolean emit = true;
-      for (; ; ) {
-        String line = br.readLine();
-        if (line == null) {
-          break;
-        }
-        if (line.equals("[//]: # (end:structures)")
-            || line.equals("[//]: # (end:properties)")) {
-          emit = true;
-        }
-        if (emit) {
-          pw.println(line);
-        }
-        if (line.equals("[//]: # (start:structures)")) {
-          emit = false;
-          Generation.generateStructureIndex(pw);
-        }
-        if (line.equals("[//]: # (start:properties)")) {
-          emit = false;
-          Generation.generatePropertyTable(pw);
+  void testGeneratedSections() throws IOException {
+    final File baseDir = TestUtils.getBaseDir(TestUtils.class);
+    final File docsDir = new File(baseDir, "docs");
+    final File targetDocsDir = new File(baseDir, "target/docs");
+    final List<String> errors = new ArrayList<>();
+    final List<File> mdFiles = new ArrayList<>();
+    collectMdFiles(docsDir, mdFiles);
+    mdFiles.sort(Comparator.comparing(File::getPath));
+    for (File file : mdFiles) {
+      final String relPath = docsDir.toURI().relativize(file.toURI()).getPath();
+      final File genFile = new File(targetDocsDir, relPath);
+      genFile.getParentFile().mkdirs();
+      try (Reader r = new FileReader(file);
+          BufferedReader br = new BufferedReader(r);
+          Writer w = new FileWriter(genFile);
+          PrintWriter pw = new PrintWriter(w)) {
+        boolean emit = true;
+        for (String line = br.readLine(); line != null; line = br.readLine()) {
+          if (line.startsWith("[//]: # (end:")) {
+            emit = true;
+          }
+          if (emit) {
+            pw.println(line);
+          }
+          if (line.startsWith("[//]: # (start:")) {
+            final String key = line.substring(15, line.length() - 1);
+            emit = false;
+            Generation.generateSection(key, pw);
+          }
         }
       }
+      final String diff = TestUtils.diff(file, genFile);
+      if (!diff.isEmpty()) {
+        errors.add(
+            "Files differ: "
+                + file
+                + " "
+                + genFile
+                + "\n" //
+                + diff);
+      }
     }
+    if (!errors.isEmpty()) {
+      fail(String.join("\n", errors));
+    }
+  }
 
-    final String diff = TestUtils.diff(file, genFile);
-    if (!diff.isEmpty()) {
-      fail(
-          "Files differ: "
-              + file
-              + " "
-              + genFile
-              + "\n" //
-              + diff);
+  /** Collects all {@code .md} files recursively under {@code dir}. */
+  private static void collectMdFiles(File dir, List<File> files) {
+    final File[] children = dir.listFiles();
+    if (children == null) {
+      return;
+    }
+    for (File f : children) {
+      if (f.isDirectory()) {
+        collectMdFiles(f, files);
+      } else if (f.getName().endsWith(".md")) {
+        files.add(f);
+      }
     }
   }
 
@@ -1182,65 +1206,6 @@ public class LintTest {
               "Missing docs/lib files: %s\n" //
                   + "Create a file for each in %s",
               missing, libDir.getAbsolutePath()));
-    }
-  }
-
-  /**
-   * Checks that every existing {@code docs/lib/{structure}.md} file matches the
-   * content that {@link Generation#generateStructureDoc} would produce.
-   *
-   * <p>The generated file is written to {@code target/lib/{name}.md} so that
-   * the developer can diff it against the source file.
-   */
-  @Test
-  void testStructureDoc() throws IOException {
-    final File baseDir = TestUtils.getBaseDir(TestUtils.class);
-    final File libDir = new File(baseDir, "docs/lib");
-    final File targetDir = new File(baseDir, "target/lib");
-    targetDir.mkdirs();
-    final List<String> errors = new ArrayList<>();
-    for (String structureName : Generation.structureNames()) {
-      final String fileName = Generation.toKebab(structureName) + ".md";
-      final File file = new File(libDir, fileName);
-      if (!file.exists()) {
-        continue; // missing files reported by testStructureDocs
-      }
-      final File genFile = new File(targetDir, fileName);
-      final String startMarker =
-          "[//]: # (start:lib/" + Generation.toKebab(structureName) + ")";
-      final String endMarker =
-          "[//]: # (end:lib/" + Generation.toKebab(structureName) + ")";
-      try (Reader r = new FileReader(file);
-          BufferedReader br = new BufferedReader(r);
-          Writer w = new FileWriter(genFile);
-          PrintWriter pw = new PrintWriter(w)) {
-        boolean emit = true;
-        for (String line = br.readLine(); line != null; line = br.readLine()) {
-          if (line.equals(endMarker)) {
-            emit = true;
-          }
-          if (emit) {
-            pw.println(line);
-          }
-          if (line.equals(startMarker)) {
-            emit = false;
-            Generation.generateStructureDoc(structureName, pw);
-          }
-        }
-      }
-      final String diff = TestUtils.diff(file, genFile);
-      if (!diff.isEmpty()) {
-        errors.add(
-            "Files differ: "
-                + file
-                + " "
-                + genFile
-                + "\n" //
-                + diff);
-      }
-    }
-    if (!errors.isEmpty()) {
-      fail(String.join("\n", errors));
     }
   }
 

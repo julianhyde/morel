@@ -209,19 +209,36 @@ public class Generation {
   }
 
   /**
-   * Reads the {@code functions.toml} file and generates a three-column index
+   * Reads the {@code functions.toml} file and generates a two-column index
    * table of structures into {@code reference.md}.
    *
    * <p>Each row links the structure name to its {@code docs/lib/{name}.md}
-   * page, shows the one-sentence description, and lists its members (types,
-   * exceptions, functions) as a comma-separated list.
+   * page; the description column contains the one-sentence description followed
+   * by a comma-separated list of hyperlinked members (types, exceptions,
+   * functions).
    *
    * <p>Also validates that {@code [[structures]]} entries are sorted by name,
    * and that all {@code [[functions]]}, {@code [[types]]}, and {@code
    * [[exceptions]]} entries are sorted within each structure.
    */
-  @SuppressWarnings("unchecked")
   public static void generateStructureIndex(PrintWriter pw) throws IOException {
+    generateStructureIndexImpl(pw, "lib/", true);
+  }
+
+  /**
+   * Reads the {@code functions.toml} file and generates a two-column index
+   * table of structures into {@code docs/lib/index.md}.
+   *
+   * <p>Like {@link #generateStructureIndex} but uses local links (no {@code
+   * lib/} prefix) since the file is already inside {@code docs/lib/}.
+   */
+  public static void generateLibIndex(PrintWriter pw) throws IOException {
+    generateStructureIndexImpl(pw, "", false);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void generateStructureIndexImpl(
+      PrintWriter pw, String linkPrefix, boolean checkSort) throws IOException {
     final File file = getFile();
     final List<StrDef> allStrDefs = new ArrayList<>();
     final Map<String, LinkedHashSet<String>> membersByStructure =
@@ -236,13 +253,15 @@ public class Generation {
           final List<StrDef> strDefs =
               transformEager(
                   (List<Map<String, Object>>) structuresObj, StrDef::create);
-          final List<String> structureNames =
-              transformEager(strDefs, s -> s.name);
-          if (!Ordering.natural().isOrdered(structureNames)) {
-            fail(
-                "Structure names are not sorted\n"
-                    + TestUtils.diffLines(
-                        structureNames, sortedCopyOf(structureNames)));
+          if (checkSort) {
+            final List<String> structureNames =
+                transformEager(strDefs, s -> s.name);
+            if (!Ordering.natural().isOrdered(structureNames)) {
+              fail(
+                  "Structure names are not sorted\n"
+                      + TestUtils.diffLines(
+                          structureNames, sortedCopyOf(structureNames)));
+            }
           }
           allStrDefs.addAll(strDefs);
           for (StrDef s : strDefs) {
@@ -282,42 +301,46 @@ public class Generation {
       }
     }
 
-    // All entries (functions, types, exceptions) must be sorted.
-    final PairList<String, Integer> entries = allEntryNamesInOrder(file);
-    final List<String> names = entries.leftList();
-    final List<Integer> lines = entries.rightList();
-    for (int i = 1; i < names.size(); i++) {
-      final String curr = names.get(i);
-      final String prev = names.get(i - 1);
-      if (prev.compareTo(curr) > 0) {
-        final int currLine = lines.get(i);
-        for (int j = 0; j < i; j++) {
-          final String targetName = names.get(j);
-          if (targetName.compareTo(curr) > 0) {
-            Integer targetLine = lines.get(j);
-            fail(
-                format(
-                    "%s:%d: %s is out of order; move before %s at line %d",
-                    file.getName(), currLine, curr, targetName, targetLine));
-            break;
+    if (checkSort) {
+      // All entries (functions, types, exceptions) must be sorted.
+      final PairList<String, Integer> entries = allEntryNamesInOrder(file);
+      final List<String> names = entries.leftList();
+      final List<Integer> lines = entries.rightList();
+      for (int i = 1; i < names.size(); i++) {
+        final String curr = names.get(i);
+        final String prev = names.get(i - 1);
+        if (prev.compareTo(curr) > 0) {
+          final int currLine = lines.get(i);
+          for (int j = 0; j < i; j++) {
+            final String targetName = names.get(j);
+            if (targetName.compareTo(curr) > 0) {
+              Integer targetLine = lines.get(j);
+              fail(
+                  format(
+                      "%s:%d: %s is out of order; move before %s at line %d",
+                      file.getName(), currLine, curr, targetName, targetLine));
+              break;
+            }
           }
+          break;
         }
-        break;
       }
     }
 
     pw.printf("%n");
-    final Tabulator tabulator = new Tabulator(pw, -1, -1, -1);
-    tabulator.header("Structure", "Description", "Members");
+    final Tabulator tabulator = new Tabulator(pw, -1, -1);
+    tabulator.header("Structure", "Description");
     for (StrDef strDef : allStrDefs) {
+      final String kebab = toKebab(strDef.name);
       final String link =
-          "[" + strDef.name + "](lib/" + toKebab(strDef.name) + ".md)";
+          "[" + strDef.name + "](" + linkPrefix + kebab + ".md)";
+      final String linkBase = linkPrefix + kebab + ".md";
       final String memberList =
           membersByStructure.getOrDefault(strDef.name, new LinkedHashSet<>())
               .stream()
-              .map(m -> "`" + m + "`")
+              .map(m -> "[`" + m + "`](" + linkBase + "#" + m + "-impl)")
               .collect(Collectors.joining(", "));
-      tabulator.row(link, munge(strDef.description), memberList);
+      tabulator.row(link, munge(strDef.description) + "<br>" + memberList);
     }
     pw.printf("%n");
   }
@@ -347,6 +370,52 @@ public class Generation {
   /** Generates a table of properties into {@code reference.md}. */
   public static void generatePropertyTable(PrintWriter pw) {
     new PropertyTableGenerator(pw).generate();
+  }
+
+  /**
+   * Dispatches to the appropriate generator based on a start-marker key.
+   *
+   * <p>Called by the unified {@code testGeneratedSections} lint test when it
+   * encounters a {@code [//]: # (start:KEY)} marker in any {@code .md} file
+   * under {@code docs/}. Supported keys:
+   *
+   * <ul>
+   *   <li>{@code "structures"} &rarr; {@link #generateStructureIndex}
+   *   <li>{@code "properties"} &rarr; {@link #generatePropertyTable}
+   *   <li>{@code "lib/index"} &rarr; {@link #generateLibIndex}
+   *   <li>{@code "lib/{name}"} &rarr; {@link #generateStructureDoc} for the
+   *       structure whose kebab name is {@code name}
+   * </ul>
+   *
+   * <p>Unrecognized keys are silently ignored (no output written).
+   */
+  public static void generateSection(String key, PrintWriter pw)
+      throws IOException {
+    switch (key) {
+      case "structures":
+        generateStructureIndex(pw);
+        break;
+      case "properties":
+        generatePropertyTable(pw);
+        break;
+      case "lib/index":
+        generateLibIndex(pw);
+        break;
+      default:
+        if (key.startsWith("lib/")) {
+          final String kebab = key.substring(4);
+          final String structureName =
+              structureNames().stream()
+                  .filter(n -> toKebab(n).equals(kebab))
+                  .findFirst()
+                  .orElseThrow(
+                      () ->
+                          new IllegalArgumentException(
+                              "No structure for key: " + key));
+          generateStructureDoc(structureName, pw);
+        }
+        break;
+    }
   }
 
   private static String munge(String s) {
