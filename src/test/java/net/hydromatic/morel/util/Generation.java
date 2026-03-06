@@ -343,6 +343,32 @@ public class Generation {
   }
 
   /**
+   * Reads the {@code functions.toml} file and returns the set of (structure,
+   * name) pairs from {@code [[types]]} entries.
+   */
+  @SuppressWarnings("unchecked")
+  public static Set<List<String>> typeNames() throws IOException {
+    final File file = getFile();
+    final Set<List<String>> names = new HashSet<>();
+    final TomlMapper mapper = new TomlMapper();
+    try (MappingIterator<Object> it =
+        mapper.readerForMapOf(Object.class).readValues(file)) {
+      while (it.hasNextValue()) {
+        final Map<String, Object> row = (Map<String, Object>) it.nextValue();
+        final Object typesObj = row.get("types");
+        if (typesObj != null) {
+          for (TyDef ty :
+              transformEager(
+                  (List<Map<String, Object>>) typesObj, TyDef::create)) {
+            names.add(Arrays.asList(ty.structure, ty.name));
+          }
+        }
+      }
+    }
+    return names;
+  }
+
+  /**
    * Reads the {@code functions.toml} file and generates a two-column index
    * table of structures into {@code reference.md}.
    *
@@ -759,10 +785,26 @@ public class Generation {
       if (nameIdx < 0) {
         return ty.type;
       }
-      return def.substring(0, nameIdx)
-          + link
-          + def.substring(nameIdx + ty.name.length())
-          + rest;
+      final String line =
+          def.substring(0, nameIdx)
+              + link
+              + def.substring(nameIdx + ty.name.length())
+              + rest;
+      if (ty.type.length() > 70
+          && line.contains(" = ")
+          && line.contains(" | ")) {
+        final int sepIdx = line.indexOf(" = ");
+        final String prefix = line.substring(0, sepIdx);
+        final String constructors = line.substring(sepIdx + 3);
+        return prefix
+            + "\n" //
+            + "  = "
+            + String.join(
+                "\n" //
+                    + "  | ",
+                constructors.split(" \\| "));
+      }
+      return line;
     }
 
     String synopsisExnLine(ExnDef exn) {
@@ -793,7 +835,11 @@ public class Generation {
           ty.type.startsWith("datatype ")
               ? "datatype"
               : ty.type.startsWith("eqtype ") ? "eqtype" : "type";
-      final String rest = ty.type.substring(keyword.length());
+      final int eqIdx = ty.type.indexOf('=');
+      final String rest =
+          eqIdx >= 0
+              ? ty.type.substring(keyword.length(), eqIdx).stripTrailing()
+              : ty.type.substring(keyword.length());
       pw.format(
           Locale.ROOT,
           "<h3><code><strong>%s</strong>%s</code></h3>%n",

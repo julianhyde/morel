@@ -1134,6 +1134,34 @@ public class LintTest {
   }
 
   /**
+   * Checks that every non-internal {@link BuiltIn.Datatype} entry has a
+   * corresponding {@code [[types]]} entry in {@code functions.toml}.
+   */
+  @Test
+  void testDatatypesDocumented() throws IOException {
+    final Set<List<String>> documented = Generation.typeNames();
+    final File file = Generation.getFile();
+
+    final List<String> missing = new ArrayList<>();
+    for (BuiltIn.Datatype datatype : BuiltIn.Datatype.values()) {
+      final String structure = datatype.structure;
+      if (structure.equals("$")) {
+        continue;
+      }
+      if (!documented.contains(Arrays.asList(structure, datatype.mlName()))) {
+        missing.add(structure + "." + datatype.mlName());
+      }
+    }
+    if (!missing.isEmpty()) {
+      fail(
+          format(
+              "Datatype entries not documented in functions.toml: %s\n" //
+                  + "Add a [[types]] entry for each to %s",
+              missing, file.getAbsolutePath()));
+    }
+  }
+
+  /**
    * Checks that for every {@code [[structures]]} entry in {@code
    * functions.toml} there is a corresponding {@code docs/lib/{name}.md} file.
    */

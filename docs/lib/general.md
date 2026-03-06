@@ -57,13 +57,13 @@ val <a id='ignore' href="#ignore-impl">ignore</a> : 'a -> unit
 </pre>
 
 <a id="exn-impl"></a>
-<h3><code><strong>type</strong> exn = exn</code></h3>
+<h3><code><strong>type</strong> exn</code></h3>
 
 is the type of exceptions. Every exception constructor creates a value
 of this type, and the `raise` and `handle` constructs operate on it.
 
 <a id="order-impl"></a>
-<h3><code><strong>datatype</strong> order = LESS | EQUAL | GREATER</code></h3>
+<h3><code><strong>datatype</strong> order</code></h3>
 
 is the type for comparing two values. `LESS`, `EQUAL`, or `GREATER`
 indicates the result of the comparison.

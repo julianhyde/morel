@@ -50,7 +50,7 @@ val <a id='valOf' href="#valOf-impl">valOf</a> : 'a option -> 'a
 </pre>
 
 <a id="option-impl"></a>
-<h3><code><strong>datatype</strong> 'a option = NONE | SOME of 'a</code></h3>
+<h3><code><strong>datatype</strong> 'a option</code></h3>
 
 The type `option` provides a distinction between some value and no
 value, and is often used for representing the result of partially

@@ -31,9 +31,30 @@ fashion.
 ## Synopsis
 
 <pre>
+datatype <a id='variant' href="#variant-impl">variant</a>
+  = UNIT
+  | BOOL of bool
+  | INT of int
+  | REAL of real
+  | CHAR of char
+  | STRING of string
+  | LIST of variant list
+  | BAG of variant list
+  | VECTOR of variant list
+  | VARIANT_NONE
+  | VARIANT_SOME of variant
+  | RECORD of (string * variant) list
+  | CONSTANT of string
+  | CONSTRUCT of string * variant
+
 val <a id='parse' href="#parse-impl">parse</a> : string -> variant
 val <a id='print' href="#print-impl">print</a> : variant -> string
 </pre>
+
+<a id="variant-impl"></a>
+<h3><code><strong>datatype</strong> variant</code></h3>
+
+is a dynamically-typed value that can hold any Morel value.
 
 <a id="parse-impl"></a>
 <h3><code>parse</code></h3>

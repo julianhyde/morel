@@ -982,6 +982,15 @@ returns `SOME (x)` if `sm` is a right value with contents `x`,
 otherwise it returns `NONE`.
 """
 
+[[types]]
+structure = "Either"
+name = "either"
+type = "datatype ('left, 'right) either = INL of 'left | INR of 'right"
+description = """
+is the type of disjoint-sum values; `INL v` represents a left value and
+`INR v` represents a right value.
+"""
+
 [[functions]]
 ordinal = 11
 structure = "Either"
@@ -3796,6 +3805,16 @@ returns the number of elements in `list`. Often used with
 count`.
 """
 
+[[types]]
+structure = "Relational"
+name = "descending"
+type = "datatype 'a descending = DESC of 'a"
+specified = "morel"
+description = """
+wraps a value so that it sorts in descending order when used with
+`Relational.compare`.
+"""
+
 [[functions]]
 ordinal = 194
 structure = "Relational"
@@ -4563,6 +4582,15 @@ converts a variant to a string.
 For example,
 `print (BOOL true)` returns `"BOOL true"`;
 `print (LIST [INT 1, INT 2])` returns `"LIST [INT 1, INT 2]"`.
+"""
+
+[[types]]
+structure = "Variant"
+name = "variant"
+type = "datatype variant = UNIT | BOOL of bool | INT of int | REAL of real | CHAR of char | STRING of string | LIST of variant list | BAG of variant list | VECTOR of variant list | VARIANT_NONE | VARIANT_SOME of variant | RECORD of (string * variant) list | CONSTANT of string | CONSTRUCT of string * variant"
+specified = "morel"
+description = """
+is a dynamically-typed value that can hold any Morel value.
 """
 
 # === Vector structure ===============================================

@@ -31,6 +31,8 @@ extend Standard ML with relational-algebra capabilities.
 ## Synopsis
 
 <pre>
+datatype 'a <a id='descending' href="#descending-impl">descending</a> = DESC of 'a
+
 val <a id='count' href="#count-impl">count</a> : int list -> int
 val <a id='empty' href="#empty-impl">empty</a> : 'a list -> bool
 val <a id='iterate' href="#iterate-impl">iterate</a> : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
@@ -43,6 +45,12 @@ val <a id='notelem' href="#notelem-impl">notelem</a> : 'a * 'a bag -> bool, 'a *
 val <a id='sum' href="#sum-impl">sum</a> : int list -> int
 val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 </pre>
+
+<a id="descending-impl"></a>
+<h3><code><strong>datatype</strong> 'a descending</code></h3>
+
+wraps a value so that it sorts in descending order when used with
+`Relational.compare`.
 
 <a id="count-impl"></a>
 <h3><code>count</code></h3>

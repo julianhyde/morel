@@ -32,6 +32,8 @@ such values.
 ## Synopsis
 
 <pre>
+datatype ('left, 'right) <a id='either' href="#either-impl">either</a> = INL of 'left | INR of 'right
+
 val <a id='isLeft' href="#isLeft-impl">isLeft</a> : ('left, 'right) either -> bool
 val <a id='isRight' href="#isRight-impl">isRight</a> : ('left, 'right) either -> bool
 val <a id='asLeft' href="#asLeft-impl">asLeft</a> : ('left, 'right) either -> 'left option
@@ -46,6 +48,12 @@ val <a id='fold' href="#fold-impl">fold</a> : ('left * 'b -> 'b) * ('right * 'b 
 val <a id='proj' href="#proj-impl">proj</a> : ('a, 'a) either -> 'a
 val <a id='partition' href="#partition-impl">partition</a> : ('left, 'right) either list -> ('left list * 'right list)
 </pre>
+
+<a id="either-impl"></a>
+<h3><code><strong>datatype</strong> ('left, 'right) either</code></h3>
+
+is the type of disjoint-sum values; `INL v` represents a left value and
+`INR v` represents a right value.
 
 <a id="isLeft-impl"></a>
 <h3><code>isLeft</code></h3>

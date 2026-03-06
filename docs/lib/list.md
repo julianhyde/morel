@@ -72,7 +72,7 @@ val <a id='intersect' href="#intersect-impl">intersect</a> : 'a list list -> 'a 
 </pre>
 
 <a id="list-impl"></a>
-<h3><code><strong>datatype</strong> 'a list = nil | :: of 'a * 'a list</code></h3>
+<h3><code><strong>datatype</strong> 'a list</code></h3>
 
 is the type of polymorphic singly-linked lists.
 

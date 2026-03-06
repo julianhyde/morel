@@ -46,17 +46,17 @@ is a record type representing a decimal approximation of a
 floating-point number.
 
 <a id="float_class-impl"></a>
-<h3><code><strong>datatype</strong> float_class = NAN | INF | ZERO | NORMAL | SUBNORMAL</code></h3>
+<h3><code><strong>datatype</strong> float_class</code></h3>
 
 classifies a floating-point value.
 
 <a id="real_order-impl"></a>
-<h3><code><strong>datatype</strong> real_order = LESS | EQUAL | GREATER | UNORDERED</code></h3>
+<h3><code><strong>datatype</strong> real_order</code></h3>
 
 is like `order` but adds `UNORDERED` for comparisons involving NaN.
 
 <a id="rounding_mode-impl"></a>
-<h3><code><strong>datatype</strong> rounding_mode = TO_NEAREST | TO_NEGINF | TO_POSINF | TO_ZERO</code></h3>
+<h3><code><strong>datatype</strong> rounding_mode</code></h3>
 
 specifies the IEEE 754 rounding mode for floating-point operations.
 
