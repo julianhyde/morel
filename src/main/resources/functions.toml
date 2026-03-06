@@ -38,6 +38,7 @@
 
 [[structures]]
 name = "Bag"
+specified = "morel"
 description = "Unordered collection of elements with duplicates."
 overview = """
 The `Bag` structure provides operations on bags (also known as
@@ -869,6 +870,7 @@ is a letter (a to z or A to Z); otherwise returns `c`.
 
 [[structures]]
 name = "Datalog"
+specified = "morel"
 description = "Datalog query interface."
 overview = """
 The `Datalog` structure provides functions to parse, validate, translate,
@@ -913,6 +915,7 @@ message.
 
 [[structures]]
 name = "Either"
+specified = "morel"
 description = "Values that are one of two types."
 overview = """
 The `Either` structure provides a polymorphic disjoint-sum type
@@ -1844,6 +1847,7 @@ is the type of arbitrary-precision integers.
 
 [[structures]]
 name = "Interact"
+specified = "morel"
 description = "Interactive session utilities."
 overview = """
 The `Interact` structure provides functions for interacting with the
@@ -2931,8 +2935,10 @@ structure = "Option"
 name = "option"
 type = "datatype 'a option = NONE | SOME of 'a"
 description = """
-is the type of optional values; `NONE` represents absence and `SOME v`
-represents presence of value `v`.
+The type `option` provides a distinction between some value and no
+value, and is often used for representing the result of partially
+defined functions. It can be viewed as a typed version of the C
+convention of returning a NULL pointer to indicate no value.
 """
 
 [[functions]]
@@ -3746,6 +3752,7 @@ returns the negation of `r`.
 
 [[structures]]
 name = "Relational"
+specified = "morel"
 description = "Relational algebra operations for Morel queries."
 overview = """
 The `Relational` structure provides aggregation, comparison, and set
@@ -4405,6 +4412,7 @@ specifies the format for converting real numbers to strings.
 
 [[structures]]
 name = "Sys"
+specified = "morel"
 description = "System interface utilities."
 overview = """
 The `Sys` structure provides functions for interacting with the Morel
@@ -4522,6 +4530,7 @@ clears the current the value of `property`.
 
 [[structures]]
 name = "Variant"
+specified = "morel"
 description = "Dynamically-typed variant values."
 overview = """
 The `Variant` structure provides operations for working with the
@@ -4616,7 +4625,7 @@ ordinal = 222
 structure = "Vector"
 name = "collate"
 specified = "basis"
-type = ""
+type = "(α * α -> order) -> α vector * α vector -> order"
 prototype = "collate f (v1, v2)"
 description = """
 performs lexicographic comparison of the two
@@ -4641,7 +4650,7 @@ ordinal = 224
 structure = "Vector"
 name = "exists"
 specified = "basis"
-type = ""
+type = "(α -> bool) -> α vector -> bool"
 prototype = "exists f vec"
 description = """
 applies `f` to each element `x` of the vector `vec`,

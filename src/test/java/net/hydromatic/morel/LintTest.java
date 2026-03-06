@@ -601,6 +601,18 @@ public class LintTest {
   }
 
   private static void addProgram4(Puffin.Builder<GlobalState, FileState> b) {
+    // Track generated blocks in Markdown ([//]: # (start:...) / (end:...))
+    b.add(
+        line ->
+            line.state().language == Language.MARKDOWN
+                && line.line().startsWith("[//]: # (start:"),
+        line -> line.state().inGeneratedBlock = true);
+    b.add(
+        line ->
+            line.state().language == Language.MARKDOWN
+                && line.line().startsWith("[//]: # (end:"),
+        line -> line.state().inGeneratedBlock = false);
+
     // Markdown: line length check (MD_WIDTH chars, with exceptions)
     b.add(
         line ->
@@ -609,6 +621,7 @@ public class LintTest {
                 && !line.state().inCodeBlock
                 && !line.state().inPreBlock
                 && !line.state().inComment
+                && !line.state().inGeneratedBlock
                 && !line.line().contains("http://")
                 && !line.line().contains("https://")
                 && !line.line().contains("src=\"") // HTML img tags
@@ -1121,6 +1134,89 @@ public class LintTest {
   }
 
   /**
+   * Checks that for every {@code [[structures]]} entry in {@code
+   * functions.toml} there is a corresponding {@code docs/lib/{name}.md} file.
+   */
+  @Test
+  void testStructureDocs() throws IOException {
+    final File baseDir = TestUtils.getBaseDir(TestUtils.class);
+    final File libDir = new File(baseDir, "docs/lib");
+    final List<String> missing = new ArrayList<>();
+    for (String structureName : Generation.structureNames()) {
+      final String fileName = Generation.toKebab(structureName) + ".md";
+      if (!new File(libDir, fileName).exists()) {
+        missing.add(fileName);
+      }
+    }
+    if (!missing.isEmpty()) {
+      fail(
+          format(
+              "Missing docs/lib files: %s\n" //
+                  + "Create a file for each in %s",
+              missing, libDir.getAbsolutePath()));
+    }
+  }
+
+  /**
+   * Checks that every existing {@code docs/lib/{structure}.md} file matches the
+   * content that {@link Generation#generateStructureDoc} would produce.
+   *
+   * <p>The generated file is written to {@code target/lib/{name}.md} so that
+   * the developer can diff it against the source file.
+   */
+  @Test
+  void testStructureDoc() throws IOException {
+    final File baseDir = TestUtils.getBaseDir(TestUtils.class);
+    final File libDir = new File(baseDir, "docs/lib");
+    final File targetDir = new File(baseDir, "target/lib");
+    targetDir.mkdirs();
+    final List<String> errors = new ArrayList<>();
+    for (String structureName : Generation.structureNames()) {
+      final String fileName = Generation.toKebab(structureName) + ".md";
+      final File file = new File(libDir, fileName);
+      if (!file.exists()) {
+        continue; // missing files reported by testStructureDocs
+      }
+      final File genFile = new File(targetDir, fileName);
+      final String startMarker =
+          "[//]: # (start:lib/" + Generation.toKebab(structureName) + ")";
+      final String endMarker =
+          "[//]: # (end:lib/" + Generation.toKebab(structureName) + ")";
+      try (Reader r = new FileReader(file);
+          BufferedReader br = new BufferedReader(r);
+          Writer w = new FileWriter(genFile);
+          PrintWriter pw = new PrintWriter(w)) {
+        boolean emit = true;
+        for (String line = br.readLine(); line != null; line = br.readLine()) {
+          if (line.equals(endMarker)) {
+            emit = true;
+          }
+          if (emit) {
+            pw.println(line);
+          }
+          if (line.equals(startMarker)) {
+            emit = false;
+            Generation.generateStructureDoc(structureName, pw);
+          }
+        }
+      }
+      final String diff = TestUtils.diff(file, genFile);
+      if (!diff.isEmpty()) {
+        errors.add(
+            "Files differ: "
+                + file
+                + " "
+                + genFile
+                + "\n" //
+                + diff);
+      }
+    }
+    if (!errors.isEmpty()) {
+      fail(String.join("\n", errors));
+    }
+  }
+
+  /**
    * Validates that signature files in the lib directory are well-formed and
    * that their value and exception declarations match the corresponding entries
    * in the {@link net.hydromatic.morel.compile.BuiltIn} and {@link
@@ -1187,6 +1283,7 @@ public class LintTest {
     boolean inCodeBlock;
     boolean inPreBlock;
     boolean inComment;
+    boolean inGeneratedBlock;
 
     FileState(GlobalState global) {
       this.global = global;
