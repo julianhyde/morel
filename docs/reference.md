@@ -517,3 +517,33 @@ Exception:
 | [Vector](lib/vector.md) | Immutable fixed-length arrays.<br>[`vector`](lib/vector.md#vector-impl), [`all`](lib/vector.md#all-impl), [`app`](lib/vector.md#app-impl), [`appi`](lib/vector.md#appi-impl), [`collate`](lib/vector.md#collate-impl), [`concat`](lib/vector.md#concat-impl), [`exists`](lib/vector.md#exists-impl), [`find`](lib/vector.md#find-impl), [`findi`](lib/vector.md#findi-impl), [`foldl`](lib/vector.md#foldl-impl), [`foldli`](lib/vector.md#foldli-impl), [`foldr`](lib/vector.md#foldr-impl), [`foldri`](lib/vector.md#foldri-impl), [`fromList`](lib/vector.md#fromList-impl), [`length`](lib/vector.md#length-impl), [`map`](lib/vector.md#map-impl), [`mapi`](lib/vector.md#mapi-impl), [`maxLen`](lib/vector.md#maxLen-impl), [`sub`](lib/vector.md#sub-impl), [`tabulate`](lib/vector.md#tabulate-impl), [`update`](lib/vector.md#update-impl) |
 
 [//]: # (end:structures)
+
+## Properties
+
+Each property is set using the function `Sys.set (name, value)`,
+displayed using `Sys.show name`,
+and unset using `Sys.unset name`.
+`Sys.showAll ()` shows all properties and their values.
+
+[//]: # (start:properties)
+
+| Name                 | Type   | Default | Description |
+| -------------------- | ------ | ------- | ----------- |
+| banner               | string | Morel version ... | Startup banner message displayed when launching the Morel shell. |
+| directory            | file   |         | Path of the directory that the 'file' variable maps to in this connection. |
+| excludeStructures    | string | ^Test$  | Regular expression that controls which built-in structures are excluded from the environment. |
+| hybrid               | bool   | false   | Whether to try to create a hybrid execution plan that uses Apache Calcite relational algebra. |
+| inlinePassCount      | int    | 5       | Maximum number of inlining passes. |
+| lineWidth            | int    | 79      | When printing, the length at which lines are wrapped. |
+| matchCoverageEnabled | bool   | true    | Whether to check whether patterns are exhaustive and/or redundant. |
+| optionalInt          | int    | null    | For testing. |
+| output               | enum   | classic | How values should be formatted. "classic" (the default) prints values in a compact nested format; "tabular" prints values in a table if their type is a list of records. |
+| printDepth           | int    | 5       | When printing, the depth of nesting of recursive data structure at which ellipsis begins. |
+| printLength          | int    | 12      | When printing, the length of lists at which ellipsis begins. |
+| productName          | string | morel-java | Name of the Morel product. |
+| productVersion       | string | 0.7.0   | Current version of Morel. |
+| relationalize        | bool   | false   | Whether to convert to relational algebra. |
+| scriptDirectory      | file   |         | Path of the directory where the 'use' command looks for scripts. When running a script, it is generally set to the directory that contains the script. |
+| stringDepth          | int    | 70      | When printing, the length of strings at which ellipsis begins. |
+
+[//]: # (end:properties)
