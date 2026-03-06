@@ -29,7 +29,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import com.google.common.collect.Ordering;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URL;
@@ -101,6 +103,44 @@ public class Generation {
     return requireNonNull(TestUtils.urlToFile(getResource()));
   }
 
+  /**
+   * Returns entry names in file order from {@code [[functions]]}, {@code
+   * [[types]]}, and {@code [[exceptions]]} blocks. {@code [[values]]} and
+   * {@code [[structures]]} blocks are excluded.
+   */
+  static List<String> allEntryNamesInOrder(File file) throws IOException {
+    final List<String> names = new ArrayList<>();
+    boolean skip = false;
+    String structure = null;
+    String name = null;
+    try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+      for (String line = br.readLine(); line != null; line = br.readLine()) {
+        if (line.startsWith("[[")) {
+          if (!skip && structure != null && name != null) {
+            names.add(structure + "." + name);
+          }
+          structure = null;
+          name = null;
+          skip = line.equals("[[values]]") || line.equals("[[structures]]");
+        } else if (!skip) {
+          if (line.startsWith("structure = \"")) {
+            structure = line.substring(13, line.length() - 1);
+          } else if (line.startsWith("name = \"")) {
+            name = line.substring(8, line.length() - 1);
+            final int comma = name.indexOf(", ");
+            if (comma >= 0) {
+              name = name.substring(0, comma);
+            }
+          }
+        }
+      }
+    }
+    if (!skip && structure != null && name != null) {
+      names.add(structure + "." + name);
+    }
+    return names;
+  }
+
   private static class FunctionTableGenerator {
     private final PrintWriter pw;
 
@@ -122,16 +162,28 @@ public class Generation {
                   (List<Map<String, Object>>) row.get("functions"),
                   FnDef::create);
 
-          // The functions in the toml file must be sorted by name.
-          // This reduces the chance of merge conflicts.
-          final List<String> names = new ArrayList<>();
-          for (FnDef fnDef : fnDefs) {
-            names.add(fnDef.structure + '.' + fnDef.name);
+          // Check [[structures]] entries are sorted by name.
+          final Object structuresObj = row.get("structures");
+          final List<Map<String, Object>> structs =
+              structuresObj != null
+                  ? (List<Map<String, Object>>) structuresObj
+                  : new ArrayList<>();
+          final List<String> structureNames =
+              transformEager(structs, s -> (String) s.get("name"));
+          if (!Ordering.natural().isOrdered(structureNames)) {
+            fail(
+                "Structure names are not sorted\n"
+                    + TestUtils.diffLines(
+                        structureNames, sortedCopyOf(structureNames)));
           }
-          if (!Ordering.natural().isOrdered(names)) {
+
+          // All entries (functions, types, exceptions) must be sorted.
+          // This reduces the chance of merge conflicts.
+          final List<String> allNames = allEntryNamesInOrder(file);
+          if (!Ordering.natural().isOrdered(allNames)) {
             fail(
                 "Names are not sorted\n"
-                    + TestUtils.diffLines(names, sortedCopyOf(names)));
+                    + TestUtils.diffLines(allNames, sortedCopyOf(allNames)));
           }
 
           // Build sorted list of functions. First add the ones with ordinals,
