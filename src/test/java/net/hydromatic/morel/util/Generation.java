@@ -831,18 +831,16 @@ public class Generation {
 
     void typeSection(TyDef ty) {
       pw.format(Locale.ROOT, "<a id=\"%s-impl\"></a>%n", ty.name);
-      final String keyword =
-          ty.type.startsWith("datatype ")
-              ? "datatype"
-              : ty.type.startsWith("eqtype ") ? "eqtype" : "type";
-      final int eqIdx = ty.type.indexOf('=');
-      final String rest =
-          eqIdx >= 0
-              ? ty.type.substring(keyword.length(), eqIdx).stripTrailing()
-              : ty.type.substring(keyword.length());
+
+      // Parse "datatype 'a list = ..." into keyword "datatype", rest "'a list".
+      final int space = ty.type.indexOf(' ');
+      final int eq = ty.type.indexOf('=');
+      final String keyword = ty.type.substring(0, space);
+      final String rest = (eq < 0 ? ty.type.substring(space)
+          : ty.type.substring(space, eq)).trim();
       pw.format(
           Locale.ROOT,
-          "<h3><code><strong>%s</strong>%s</code></h3>%n",
+          "<h3><code><strong>%s</strong> %s</code></h3>%n",
           keyword,
           rest);
       pw.println();
