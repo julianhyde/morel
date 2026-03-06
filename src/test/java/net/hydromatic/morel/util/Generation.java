@@ -100,25 +100,46 @@ public class Generation {
   }
 
   /**
-   * Returns entry names in file order from {@code [[functions]]}, {@code
+   * Returns entries in file order from {@code [[functions]]}, {@code
    * [[types]]}, and {@code [[exceptions]]} blocks. {@code [[values]]} and
    * {@code [[structures]]} blocks are excluded.
+   *
+   * <p>Each key is {@code "function Foo.bar"}, {@code "type Foo.bar"}, or
+   * {@code "exception Foo.Bar"} — the element kind followed by the qualified
+   * name. Each value is the 1-based line number of the {@code [[...]]} header.
    */
-  static List<String> allEntryNamesInOrder(File file) throws IOException {
-    final List<String> names = new ArrayList<>();
-    boolean skip = false;
+  static PairList<String, Integer> allEntryNamesInOrder(File file)
+      throws IOException {
+    final PairList<String, Integer> entries = PairList.of();
+    String blockType = null; // "function", "type", "exception", or null (skip)
+    int headerLine = -1;
     String structure = null;
     String name = null;
+    int lineNumber = 0;
     try (BufferedReader br = new BufferedReader(new FileReader(file))) {
       for (String line = br.readLine(); line != null; line = br.readLine()) {
+        lineNumber++;
         if (line.startsWith("[[")) {
-          if (!skip && structure != null && name != null) {
-            names.add(structure + "." + name);
+          if (blockType != null && structure != null && name != null) {
+            entries.add(blockType + " " + structure + "." + name, headerLine);
           }
           structure = null;
           name = null;
-          skip = line.equals("[[values]]") || line.equals("[[structures]]");
-        } else if (!skip) {
+          headerLine = lineNumber;
+          switch (line) {
+            case "[[functions]]":
+              blockType = "function";
+              break;
+            case "[[types]]":
+              blockType = "type";
+              break;
+            case "[[exceptions]]":
+              blockType = "exception";
+              break;
+            default:
+              blockType = null; // skip [[values]], [[structures]], etc.
+          }
+        } else if (blockType != null) {
           if (line.startsWith("structure = \"")) {
             structure = line.substring(13, line.length() - 1);
           } else if (line.startsWith("name = \"")) {
@@ -131,10 +152,16 @@ public class Generation {
         }
       }
     }
-    if (!skip && structure != null && name != null) {
-      names.add(structure + "." + name);
+    if (blockType != null && structure != null && name != null) {
+      entries.add(blockType + " " + structure + "." + name, headerLine);
     }
-    return names;
+    return entries;
+  }
+
+  /** Extracts the qualified name from a key like {@code "function Foo.bar"}. */
+  private static String qualifiedNameOf(String typeAndName) {
+    int space = typeAndName.indexOf(' ');
+    return space >= 0 ? typeAndName.substring(space + 1) : typeAndName;
   }
 
   private static class FunctionTableGenerator {
@@ -191,11 +218,35 @@ public class Generation {
 
           // All entries (functions, types, exceptions) must be sorted.
           // This reduces the chance of merge conflicts.
-          final List<String> allNames = allEntryNamesInOrder(file);
-          if (!Ordering.natural().isOrdered(allNames)) {
-            fail(
-                "Names are not sorted\n"
-                    + TestUtils.diffLines(allNames, sortedCopyOf(allNames)));
+          final PairList<String, Integer> allEntries =
+              allEntryNamesInOrder(file);
+          for (int i = 1; i < allEntries.size(); i++) {
+            final String curr = allEntries.get(i).getKey();
+            final String prev = allEntries.get(i - 1).getKey();
+            if (qualifiedNameOf(prev).compareTo(qualifiedNameOf(curr)) > 0) {
+              final int currLine = allEntries.get(i).getValue();
+              // Find the first entry whose qualified name exceeds curr's;
+              // that is where curr should be inserted.
+              for (int j = 0; j < i; j++) {
+                final String jEntry = allEntries.get(j).getKey();
+                if (qualifiedNameOf(jEntry).compareTo(qualifiedNameOf(curr))
+                    > 0) {
+                  fail(
+                      file.getName()
+                          + ":"
+                          + currLine
+                          + ": "
+                          + curr
+                          + " is out of order;"
+                          + " move before "
+                          + jEntry
+                          + " at line "
+                          + allEntries.get(j).getValue());
+                  break;
+                }
+              }
+              break;
+            }
           }
 
           // Build sorted list of functions. First add the ones with ordinals,
