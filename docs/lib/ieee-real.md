@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# IEEEReal
+# IEEEReal structure
 
 [Up to index](index.md)
 

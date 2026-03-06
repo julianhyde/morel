@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Char
+# Char structure
 
 [Up to index](index.md)
 

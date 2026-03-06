@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Bag
+# Bag structure
 
 [Up to index](index.md)
 

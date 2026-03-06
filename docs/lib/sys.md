@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Sys
+# Sys structure
 
 [Up to index](index.md)
 

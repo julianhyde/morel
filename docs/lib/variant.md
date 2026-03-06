@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Variant
+# Variant structure
 
 [Up to index](index.md)
 

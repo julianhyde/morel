@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# String
+# String structure
 
 [Up to index](index.md)
 

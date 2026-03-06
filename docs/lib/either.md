@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Either
+# Either structure
 
 [Up to index](index.md)
 

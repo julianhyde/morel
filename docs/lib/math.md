@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Math
+# Math structure
 
 [Up to index](index.md)
 

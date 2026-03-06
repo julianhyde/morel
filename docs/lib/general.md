@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# General
+# General structure
 
 [Up to index](index.md)
 

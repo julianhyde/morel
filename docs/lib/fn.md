@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Fn
+# Fn structure
 
 [Up to index](index.md)
 

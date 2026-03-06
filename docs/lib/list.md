@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# List
+# List structure
 
 [Up to index](index.md)
 

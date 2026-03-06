@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Bool
+# Bool structure
 
 [Up to index](index.md)
 

@@ -1050,9 +1050,9 @@ public class LintTest {
     assertThat(g.messages, hasToString(Arrays.toString(expectedMessages)));
   }
 
-  /** Parses the "reference.md" file. */
+  /** Checks the "reference.md" structure index and properties sections. */
   @Test
-  void testFunctionTable() throws IOException {
+  void testStructureIndex() throws IOException {
     File baseDir = TestUtils.getBaseDir(TestUtils.class);
     final File file = new File(baseDir, "docs/reference.md");
     final File genFile = new File(baseDir, "target/reference.md");
@@ -1066,16 +1066,16 @@ public class LintTest {
         if (line == null) {
           break;
         }
-        if (line.equals("[//]: # (end:built-in-functions)")
+        if (line.equals("[//]: # (end:structures)")
             || line.equals("[//]: # (end:properties)")) {
           emit = true;
         }
         if (emit) {
           pw.println(line);
         }
-        if (line.equals("[//]: # (start:built-in-functions)")) {
+        if (line.equals("[//]: # (start:structures)")) {
           emit = false;
-          Generation.generateFunctionTable(pw);
+          Generation.generateStructureIndex(pw);
         }
         if (line.equals("[//]: # (start:properties)")) {
           emit = false;

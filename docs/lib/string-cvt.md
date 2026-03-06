@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# StringCvt
+# StringCvt structure
 
 [Up to index](index.md)
 

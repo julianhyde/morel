@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Datalog
+# Datalog structure
 
 [Up to index](index.md)
 

@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Interact
+# Interact structure
 
 [Up to index](index.md)
 

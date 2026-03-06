@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Option
+# Option structure
 
 [Up to index](index.md)
 

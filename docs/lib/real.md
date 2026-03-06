@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Real
+# Real structure
 
 [Up to index](index.md)
 

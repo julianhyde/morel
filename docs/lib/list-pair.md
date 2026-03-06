@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# ListPair
+# ListPair structure
 
 [Up to index](index.md)
 

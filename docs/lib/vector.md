@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Vector
+# Vector structure
 
 [Up to index](index.md)
 

@@ -23,7 +23,6 @@ import static com.google.common.base.Strings.repeat;
 import static com.google.common.collect.ImmutableList.sortedCopyOf;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
-import static net.hydromatic.morel.util.Static.filterEager;
 import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.first;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -42,11 +41,12 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import net.hydromatic.morel.Main;
 import net.hydromatic.morel.TestUtils;
 import net.hydromatic.morel.eval.Prop;
@@ -55,14 +55,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /** Generates code from metadata. */
 public class Generation {
   private Generation() {}
-
-  /**
-   * Reads the {@code functions.toml} file and generates a table of function
-   * definitions into {@code reference.md}.
-   */
-  public static void generateFunctionTable(PrintWriter pw) throws IOException {
-    new FunctionTableGenerator(pw).generate();
-  }
 
   /**
    * Returns the set of "Structure.name" keys documented in {@code
@@ -164,158 +156,6 @@ public class Generation {
     return entries;
   }
 
-  private static class FunctionTableGenerator {
-    private final PrintWriter pw;
-
-    FunctionTableGenerator(PrintWriter pw) {
-      this.pw = pw;
-    }
-
-    @SuppressWarnings("unchecked")
-    void generate() throws IOException {
-      final File file = getFile();
-
-      final TomlMapper mapper = new TomlMapper();
-      try (MappingIterator<Object> it =
-          mapper.readerForMapOf(Object.class).readValues(file)) {
-        while (it.hasNextValue()) {
-          final Map<String, Object> row = (Map<String, Object>) it.nextValue();
-          final List<FnDef> fnDefs =
-              transformEager(
-                  (List<Map<String, Object>>) row.get("functions"),
-                  FnDef::create);
-
-          final Object structuresObj = row.get("structures");
-          final List<StrDef> strDefs =
-              structuresObj != null
-                  ? transformEager(
-                      (List<Map<String, Object>>) structuresObj, StrDef::create)
-                  : new ArrayList<>();
-
-          final Object typesObj = row.get("types");
-          final List<TyDef> tyDefs =
-              typesObj != null
-                  ? transformEager(
-                      (List<Map<String, Object>>) typesObj, TyDef::create)
-                  : new ArrayList<>();
-
-          final Object exceptionsObj = row.get("exceptions");
-          final List<ExnDef> exnDefs =
-              exceptionsObj != null
-                  ? transformEager(
-                      (List<Map<String, Object>>) exceptionsObj, ExnDef::create)
-                  : new ArrayList<>();
-
-          // Check [[structures]] entries are sorted by name.
-          final List<String> structureNames =
-              transformEager(strDefs, s -> s.name);
-          if (!Ordering.natural().isOrdered(structureNames)) {
-            fail(
-                "Structure names are not sorted\n"
-                    + TestUtils.diffLines(
-                        structureNames, sortedCopyOf(structureNames)));
-          }
-
-          // All entries (functions, types, exceptions) must be sorted.
-          // This reduces the chance of merge conflicts.
-          final PairList<String, Integer> entries = allEntryNamesInOrder(file);
-          final List<String> names = entries.leftList();
-          final List<Integer> lines = entries.rightList();
-          for (int i = 1; i < names.size(); i++) {
-            final String curr = names.get(i);
-            final String prev = names.get(i - 1);
-            if (prev.compareTo(curr) > 0) {
-              final int currLine = lines.get(i);
-              // Find the first entry whose name exceeds curr's; that is
-              // where curr should be inserted.
-              for (int j = 0; j < i; j++) {
-                final String targetName = names.get(j);
-                if (targetName.compareTo(curr) > 0) {
-                  Integer targetLine = lines.get(j);
-                  fail(
-                      format(
-                          "%s:%d: %s is out of order; move before %s at line %d",
-                          file.getName(),
-                          currLine,
-                          curr,
-                          targetName,
-                          targetLine));
-                  break;
-                }
-              }
-              break;
-            }
-          }
-
-          // Build sorted list of functions. First add the ones with ordinals,
-          // sorted by ordinal. Then add the rest, sorted by name.
-          final List<FnDef> sortedFnDefs = new ArrayList<>();
-          for (FnDef fnDef : fnDefs) {
-            if (fnDef.ordinal >= 0) {
-              sortedFnDefs.add(fnDef);
-            }
-          }
-          sortedFnDefs.sort(
-              Comparator.<FnDef, String>comparing(f -> f.structure)
-                  .thenComparingInt(f -> f.ordinal));
-          for (FnDef fnDef : fnDefs) {
-            if (fnDef.ordinal <= 0) {
-              int i =
-                  findMax(
-                      sortedFnDefs,
-                      f ->
-                          f.qualifiedName().compareTo(fnDef.qualifiedName())
-                              < 0);
-              sortedFnDefs.add(i, fnDef);
-            }
-          }
-
-          List<FnDef> implemented =
-              filterEager(sortedFnDefs, fn -> fn.implemented);
-          generateTable(implemented);
-
-          List<FnDef> notImplemented =
-              filterEager(sortedFnDefs, fn -> !fn.implemented);
-          if (!notImplemented.isEmpty()) {
-            pw.printf("Not yet implemented%n");
-            generateTable(notImplemented);
-          }
-        }
-      }
-    }
-
-    /** Returns the first index of the list where the predicate is false. */
-    private static <E> int findMax(List<E> list, Predicate<E> predicate) {
-      for (int i = 0; i < list.size(); i++) {
-        E e = list.get(i);
-        if (!predicate.test(e)) {
-          return i;
-        }
-      }
-      return -1;
-    }
-
-    void generateTable(List<FnDef> functions) {
-      pw.printf("%n");
-      final Tabulator tabulator = new Tabulator(pw, 4, -1, -1);
-      tabulator.header("Name", "Type", "Description");
-      for (FnDef function : functions) {
-        String name2 = munge(function.structure + '.' + function.name);
-        String type2 = munge(function.type);
-        String description2 =
-            munge(
-                function.description.startsWith("As ")
-                    ? function.description
-                    : '"' + function.prototype + "\" " + function.description);
-        if (function.extra != null) {
-          description2 += " " + function.extra.trim();
-        }
-        tabulator.row(name2, type2, description2);
-      }
-      pw.printf("%n");
-    }
-  }
-
   /**
    * Returns the list of structure names declared in {@code functions.toml}, in
    * file order.
@@ -369,17 +209,23 @@ public class Generation {
   }
 
   /**
-   * Reads the {@code functions.toml} file and generates a two-column index
+   * Reads the {@code functions.toml} file and generates a three-column index
    * table of structures into {@code reference.md}.
    *
-   * <p>Each row links the structure name to its {@code docs/lib/{name}.md} page
-   * and shows the one-sentence description from the {@code [[structures]]}
-   * entry.
+   * <p>Each row links the structure name to its {@code docs/lib/{name}.md}
+   * page, shows the one-sentence description, and lists its members (types,
+   * exceptions, functions) as a comma-separated list.
+   *
+   * <p>Also validates that {@code [[structures]]} entries are sorted by name,
+   * and that all {@code [[functions]]}, {@code [[types]]}, and {@code
+   * [[exceptions]]} entries are sorted within each structure.
    */
   @SuppressWarnings("unchecked")
   public static void generateStructureIndex(PrintWriter pw) throws IOException {
     final File file = getFile();
     final List<StrDef> allStrDefs = new ArrayList<>();
+    final Map<String, LinkedHashSet<String>> membersByStructure =
+        new LinkedHashMap<>();
     final TomlMapper mapper = new TomlMapper();
     try (MappingIterator<Object> it =
         mapper.readerForMapOf(Object.class).readValues(file)) {
@@ -387,19 +233,91 @@ public class Generation {
         final Map<String, Object> row = (Map<String, Object>) it.nextValue();
         final Object structuresObj = row.get("structures");
         if (structuresObj != null) {
-          allStrDefs.addAll(
+          final List<StrDef> strDefs =
               transformEager(
-                  (List<Map<String, Object>>) structuresObj, StrDef::create));
+                  (List<Map<String, Object>>) structuresObj, StrDef::create);
+          final List<String> structureNames =
+              transformEager(strDefs, s -> s.name);
+          if (!Ordering.natural().isOrdered(structureNames)) {
+            fail(
+                "Structure names are not sorted\n"
+                    + TestUtils.diffLines(
+                        structureNames, sortedCopyOf(structureNames)));
+          }
+          allStrDefs.addAll(strDefs);
+          for (StrDef s : strDefs) {
+            membersByStructure.put(s.name, new LinkedHashSet<>());
+          }
+        }
+        final Object typesObj = row.get("types");
+        if (typesObj != null) {
+          for (TyDef ty :
+              transformEager(
+                  (List<Map<String, Object>>) typesObj, TyDef::create)) {
+            membersByStructure
+                .computeIfAbsent(ty.structure, k -> new LinkedHashSet<>())
+                .add(ty.name);
+          }
+        }
+        final Object exceptionsObj = row.get("exceptions");
+        if (exceptionsObj != null) {
+          for (ExnDef e :
+              transformEager(
+                  (List<Map<String, Object>>) exceptionsObj, ExnDef::create)) {
+            membersByStructure
+                .computeIfAbsent(e.structure, k -> new LinkedHashSet<>())
+                .add(e.name);
+          }
+        }
+        final Object functionsObj = row.get("functions");
+        if (functionsObj != null) {
+          for (FnDef fn :
+              transformEager(
+                  (List<Map<String, Object>>) functionsObj, FnDef::create)) {
+            membersByStructure
+                .computeIfAbsent(fn.structure, k -> new LinkedHashSet<>())
+                .add(fn.canonicalName());
+          }
         }
       }
     }
+
+    // All entries (functions, types, exceptions) must be sorted.
+    final PairList<String, Integer> entries = allEntryNamesInOrder(file);
+    final List<String> names = entries.leftList();
+    final List<Integer> lines = entries.rightList();
+    for (int i = 1; i < names.size(); i++) {
+      final String curr = names.get(i);
+      final String prev = names.get(i - 1);
+      if (prev.compareTo(curr) > 0) {
+        final int currLine = lines.get(i);
+        for (int j = 0; j < i; j++) {
+          final String targetName = names.get(j);
+          if (targetName.compareTo(curr) > 0) {
+            Integer targetLine = lines.get(j);
+            fail(
+                format(
+                    "%s:%d: %s is out of order; move before %s at line %d",
+                    file.getName(), currLine, curr, targetName, targetLine));
+            break;
+          }
+        }
+        break;
+      }
+    }
+
     pw.printf("%n");
-    final Tabulator tabulator = new Tabulator(pw, -1, -1);
-    tabulator.header("Structure", "Description");
+    final Tabulator tabulator = new Tabulator(pw, -1, -1, -1);
+    tabulator.header("Structure", "Description", "Members");
     for (StrDef strDef : allStrDefs) {
       final String link =
           "[" + strDef.name + "](lib/" + toKebab(strDef.name) + ".md)";
-      tabulator.row(link, munge(strDef.description));
+      final String memberList =
+          membersByStructure.getOrDefault(strDef.name, new LinkedHashSet<>())
+              .stream()
+              .map(m -> "`" + m + "`")
+              .collect(Collectors.joining(", "));
+      tabulator.row(link, munge(strDef.description), memberList);
     }
     pw.printf("%n");
   }
@@ -836,8 +754,9 @@ public class Generation {
       final int space = ty.type.indexOf(' ');
       final int eq = ty.type.indexOf('=');
       final String keyword = ty.type.substring(0, space);
-      final String rest = (eq < 0 ? ty.type.substring(space)
-          : ty.type.substring(space, eq)).trim();
+      final String rest =
+          (eq < 0 ? ty.type.substring(space) : ty.type.substring(space, eq))
+              .trim();
       pw.format(
           Locale.ROOT,
           "<h3><code><strong>%s</strong> %s</code></h3>%n",

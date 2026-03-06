@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Int
+# Int structure
 
 [Up to index](index.md)
 

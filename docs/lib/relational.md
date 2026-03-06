@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 
-# Relational
+# Relational structure
 
 [Up to index](index.md)
 
