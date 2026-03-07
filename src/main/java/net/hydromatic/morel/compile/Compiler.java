@@ -308,7 +308,7 @@ public class Compiler {
 
       case FN:
         final Core.Fn fn = (Core.Fn) expression;
-        return compileMatchList(
+        return compileMatchListTail(
             cx, ImmutableList.of(core.match(fn.pos, fn.idPat, fn.exp)));
 
       case CASE:
@@ -354,6 +354,10 @@ public class Compiler {
   }
 
   protected Code compileApply(Context cx, Core.Apply apply) {
+    return compileApply(cx, apply, false);
+  }
+
+  private Code compileApply(Context cx, Core.Apply apply, boolean tailPos) {
     // Is this is a call to a built-in operator?
     switch (apply.fn.op) {
       case FN_LITERAL:
@@ -479,10 +483,14 @@ public class Compiler {
     final Applicable fnValue =
         compileApplicable(cx, apply.fn, argType, apply.pos);
     if (fnValue != null) {
-      return finishCompileApply(cx, fnValue, argCode, argType);
+      return tailPos
+          ? Codes.tailApply(fnValue, argCode)
+          : finishCompileApply(cx, fnValue, argCode, argType);
     }
     final Code fnCode = compile(cx, apply.fn);
-    return finishCompileApply(cx, fnCode, argCode, argType);
+    return tailPos
+        ? Codes.tailApply(fnCode, argCode)
+        : finishCompileApply(cx, fnCode, argCode, argType);
   }
 
   /**
@@ -934,6 +942,52 @@ public class Compiler {
     final List<Binding> bindings = new ArrayList<>();
     Compiles.acceptBinding(typeSystem, match.pat, bindings);
     final Code code = compile(cx.bindAll(bindings), match.exp);
+    consumer.accept(match.pat, code);
+  }
+
+  /**
+   * Compiles an expression in tail position, emitting {@link Codes#tailApply}
+   * at tail-call sites so that the trampoline in {@link Closure#bindEval} can
+   * execute them in O(1) stack space.
+   */
+  protected Code compileTail(Context cx, Core.Exp expression) {
+    switch (expression.op) {
+      case APPLY:
+        return compileApply(cx, (Core.Apply) expression, true);
+
+      case CASE:
+        final Core.Case case_ = (Core.Case) expression;
+        final Code matchCode = compileMatchListTail(cx, case_.matchList);
+        final Code argCode = compile(cx, case_.exp);
+        return Codes.tailApply(matchCode, argCode);
+
+      case LET:
+        final Core.Let let = (Core.Let) expression;
+        final List<Code> matchCodes = new ArrayList<>();
+        final List<Binding> bindings = new ArrayList<>();
+        compileValDecl(
+            cx, let.decl, null, ImmutableSet.of(), matchCodes, bindings, null);
+        final Context cx2 = cx.bindAll(bindings);
+        final Code resultCode = compileTail(cx2, let.exp);
+        return finishCompileLet(cx2, matchCodes, resultCode, let.type);
+
+      default:
+        return compile(cx, expression);
+    }
+  }
+
+  /** Compiles a match list where each arm is in tail position. */
+  private Code compileMatchListTail(Context cx, List<Core.Match> matchList) {
+    final PairList<Core.Pat, Code> patCodes = PairList.of();
+    matchList.forEach(match -> compileMatchTail(cx, match, patCodes::add));
+    return new MatchCode(patCodes.immutable(), last(matchList).pos);
+  }
+
+  private void compileMatchTail(
+      Context cx, Core.Match match, BiConsumer<Core.Pat, Code> consumer) {
+    final List<Binding> bindings = new ArrayList<>();
+    Compiles.acceptBinding(typeSystem, match.pat, bindings);
+    final Code code = compileTail(cx.bindAll(bindings), match.exp);
     consumer.accept(match.pat, code);
   }
 

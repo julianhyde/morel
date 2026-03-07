@@ -16,10 +16,8 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Tests that require tail-call optimization (TCO) to run without stack
- * overflow. See https://github.com/hydromatic/morel/issues/151.
- *
- * Tests marked "TODO requires TCO" currently throw StackOverflowError.
+ * Tests for tail-call optimization (TCO).
+ * See https://github.com/hydromatic/morel/issues/151.
  *)
 
 (*) resum: a simple tail-recursive accumulator.
@@ -33,10 +31,9 @@ in
 end;
 > val it = 1000 : int
 
-(*) TODO requires TCO: resum (1000000, 0) currently throws StackOverflowError.
-(*) let fun resum (m, n) = if m = 0 then n else resum (m - 1, n + 1)
-(*) in resum (1000000, 0) end;
-(*) > val it = 1000000 : int
+let fun resum (m, n) = if m = 0 then n else resum (m - 1, n + 1)
+in resum (1000000, 0) end;
+> val it = 1000000 : int
 
 (*) coprime: tests whether two numbers are coprime.
 (*) a and b are coprime if their greatest common divisor is 1.
@@ -116,7 +113,7 @@ queens 6;
 queens 8;
 > val it = SOME [(8,4),(7,2),(6,7),(5,3),(4,6),(3,8),(2,5),(1,1)] : (int * int) list option
 
-(*) TODO requires TCO: queens 100 currently throws StackOverflowError.
+(*) TODO requires TCO: queens 100 is correct but takes too long to run.
 (*) queens 100;
 (*) > val it = SOME [...] : (int * int) list option
 

@@ -1080,7 +1080,7 @@ public class MainTest {
     // With inlining, we want the plan to simplify to
     // "fn (a, b, c) => (a + b) * 3 - c"
     final String plan =
-        "match(v, apply(fnCode match((a, b, c), "
+        "match(v, tailApply(fnCode match((a, b, c), "
             + "apply2(fnValue -, apply2(fnValue *, "
             + "apply2(fnValue +, get(name a), get(name b)), "
             + "constant(3)), get(name c))), argCode get(name v)))";

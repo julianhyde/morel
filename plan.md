@@ -1,3 +1,24 @@
+<!--
+{% comment %}
+Licensed to Julian Hyde under one or more contributor license
+agreements.  See the NOTICE file distributed with this work
+for additional information regarding copyright ownership.
+Julian Hyde licenses this file to you under the Apache
+License, Version 2.0 (the "License"); you may not use this
+file except in compliance with the License.  You may obtain a
+copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied.  See the License for the specific
+language governing permissions and limitations under the
+License.
+{% endcomment %}
+-->
+
 # Plan: Tail-Call Optimization (Issues #151, #148)
 
 ## Infrastructure status
@@ -44,49 +65,45 @@ Add `src/test/resources/script/queens.smli` covering:
     with depth bounded by n)
   - `queens 100` → needs TCO; include with TODO comment.
 
-### Step 2: Implement trampolining [ ]
+### Step 2: Implement trampolining [x]
 
-Changes required:
+Changes made:
 
-1. **`TailCall` record** (new file or inner class in `Codes`):
+1. **`TailCall` sentinel** (`Codes.TailCall`): inner class in `Codes`
+   with `fn: Applicable` and `arg: Object`.
+
+2. **`TailApplyCode`** and **`TailApplyCodeCode`** in `Codes.java`:
+   eval returns `TailCall(fn, arg)` instead of calling `fn.apply()`.
+
+3. **Trampoline in `Closure.bindEval`**: `bindEvalBody` evaluates the
+   body (may return `TailCall`); `bindEval` loops on `TailCall` calling
+   `closure.bindEvalBody(arg)` directly (bypassing the inner trampoline):
    ```java
-   // Sentinel returned from tail-call positions
-   static final class TailCall {
-     final Applicable fn;
-     final Object arg;
-   }
-   ```
-
-2. **`TailApplyCode`** (in `Codes.java`): a `Code` that, instead of
-   calling `fn.apply(env, arg)`, constructs and returns a `TailCall`.
-   Used at syntactic tail-call positions.
-
-3. **Trampoline in `Closure.bindEval`**: after evaluating the body,
-   loop while the result is a `TailCall`:
-   ```java
-   Object result = code.eval(env);
-   while (result instanceof TailCall tc) {
-     result = tc.fn.apply(env, tc.arg);
+   Object result = bindEvalBody(argValue);
+   while (result instanceof TailCall) {
+     TailCall tc = (TailCall) result;
+     if (tc.fn instanceof Closure)
+       result = ((Closure) tc.fn).bindEvalBody(tc.arg);
+     else
+       result = tc.fn.apply(evalEnv, tc.arg);
    }
    return result;
    ```
-   This keeps the Java stack frame for the outermost `bindEval` call
-   and avoids growing the stack for each recursive Morel call.
+   This keeps the Java stack at O(1) depth for tail-recursive calls.
 
-4. **Compiler tail-position detection** (in `Compiler.java`): pass an
-   `isTailPos` flag through `compile()`/`compileApply()`. Tail position
-   propagates through `if`, `case`, `let`, `fn` bodies. Emit
-   `TailApplyCode` when `isTailPos` is true.
+4. **Compiler tail-position detection** (`Compiler.compileTail`):
+   - FN bodies: always compiled in tail position via `compileMatchListTail`
+   - CASE arms: compiled in tail position when CASE is in tail position
+   - LET body: compiled in tail position
+   - APPLY: emits `TailApplyCode`/`TailApplyCodeCode` instead of regular apply
 
-5. **Works with `RowSink`**: `RowSink.accept(EvalEnv)` calls
-   `code.eval(env)`, which returns a real value (the trampoline runs
-   inside any `Closure` that is called). No changes needed in any
-   `RowSink` implementation.
+5. **Works with `RowSink`**: no changes needed (trampoline runs inside
+   `Closure.bindEval` transparently).
 
-### Step 3: Enable TODO tests [ ]
+### Step 3: Enable TODO tests [x]
 
-Remove TODO comments from `resum (1000000, 0)` and `queens 100` once
-Step 2 is complete and tests pass.
+- `resum (1000000, 0)` is now enabled and passes.
+- `queens 100` is correct but computationally expensive; left as TODO.
 
 ### Step 4: Enable disabled Java tests [ ]
 
