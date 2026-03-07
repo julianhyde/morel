@@ -61,7 +61,7 @@ Add `src/test/resources/script/queens.smli` covering:
   - `queens 2` → `NONE` (works today)
   - `queens 6` → `SOME [...]` (works today)
   - `queens 8` → `SOME [...]` (works today — the CPS style stays
-    shallow because `tryCol` and `addQueen` are mutually tail-recursive
+    shallow because `try` and `addQueen` are mutually tail-recursive
     with depth bounded by n)
   - `queens 100` → needs TCO; include with TODO comment.
 

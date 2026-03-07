@@ -1004,11 +1004,8 @@ public class Compiler {
     final Map<Core.NamedPat, LinkCode> linkCodes = new HashMap<>();
     if (valDecl.op == Op.REC_VAL_DECL) {
       valDecl.forEachBinding(
-          (pat, exp, overloadPat, pos) -> {
-            final LinkCode linkCode = new LinkCode();
-            linkCodes.put(pat, linkCode);
-            bindings.add(Binding.of(pat, linkCode));
-          });
+          (pat, exp, overloadPat, pos) ->
+              addLinkCodes(pat, linkCodes, bindings));
     }
 
     final Context cx1 = cx.bindAll(newBindings);
@@ -1035,6 +1032,32 @@ public class Compiler {
     newBindings.clear();
   }
 
+  /**
+   * Recursively creates {@link LinkCode}s for all named patterns in {@code
+   * pat}, adding them to {@code linkCodes} and {@code bindings}.
+   *
+   * <p>Handles {@link Core.IdPat}, {@link Core.AsPat}, and {@link
+   * Core.TuplePat} (so that mutual-recursion patterns like {@code it as (f, g)}
+   * correctly expose {@code f} and {@code g} in the compile context).
+   */
+  private void addLinkCodes(
+      Core.Pat pat,
+      Map<Core.NamedPat, LinkCode> linkCodes,
+      List<Binding> bindings) {
+    if (pat instanceof Core.IdPat || pat instanceof Core.AsPat) {
+      final Core.NamedPat namedPat = (Core.NamedPat) pat;
+      final LinkCode linkCode = new LinkCode();
+      linkCodes.put(namedPat, linkCode);
+      bindings.add(Binding.of(namedPat, linkCode));
+      if (pat instanceof Core.AsPat) {
+        addLinkCodes(((Core.AsPat) pat).pat, linkCodes, bindings);
+      }
+    } else if (pat instanceof Core.TuplePat) {
+      ((Core.TuplePat) pat)
+          .args.forEach(p -> addLinkCodes(p, linkCodes, bindings));
+    }
+  }
+
   private void link(
       Map<Core.NamedPat, LinkCode> linkCodes, Core.Pat pat, Code code) {
     if (pat instanceof Core.IdPat) {
@@ -1042,6 +1065,13 @@ public class Compiler {
       if (linkCode != null) {
         linkCode.refCode = code; // link the reference to the definition
       }
+    } else if (pat instanceof Core.AsPat) {
+      final Core.AsPat asPat = (Core.AsPat) pat;
+      final LinkCode linkCode = linkCodes.get(asPat);
+      if (linkCode != null) {
+        linkCode.refCode = code;
+      }
+      link(linkCodes, asPat.pat, code);
     } else if (pat instanceof Core.TuplePat) {
       if (code instanceof Codes.TupleCode) {
         // Recurse into the tuple, binding names to code in parallel
