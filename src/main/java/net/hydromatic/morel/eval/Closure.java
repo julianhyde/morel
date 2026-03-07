@@ -109,7 +109,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
    * Codes.TailCall} sentinel; callers must trampoline if they need a real
    * value.
    */
-  Object bindEvalBody(Object argValue) {
+  private Object bindEvalBody(Object argValue) {
     final EvalEnvHolder envRef = new EvalEnvHolder(evalEnv);
     for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
       final Core.Pat pat = patCode.getKey();
@@ -125,7 +125,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
    * Similar to {@link #bindEvalBody}, but trampolines {@link Codes.TailCall}
    * sentinels so that tail-recursive calls execute in O(1) Java stack space.
    */
-  Object bindEval(Object argValue) {
+  private Object bindEval(Object argValue) {
     Object result = bindEvalBody(argValue);
     while (result instanceof Codes.TailCall) {
       final Codes.TailCall tc = (Codes.TailCall) result;

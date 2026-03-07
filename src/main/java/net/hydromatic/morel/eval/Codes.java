@@ -5201,7 +5201,7 @@ public abstract class Codes {
     final Applicable fn;
     final Object arg;
 
-    TailCall(Applicable fn, Object arg) {
+    private TailCall(Applicable fn, Object arg) {
       this.fn = fn;
       this.arg = arg;
     }
