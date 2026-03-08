@@ -22,6 +22,18 @@ package net.hydromatic.morel.eval;
 public interface Code extends Describable {
   Object eval(EvalEnv evalEnv);
 
+  /**
+   * Evaluates this expression using a {@link Stack}.
+   *
+   * <p>In Step 2 of the stack-based evaluation migration, this default
+   * implementation delegates to {@link #eval(EvalEnv)} via {@link
+   * Stack#globalEnv}. In Step 4 and beyond, implementations will override this
+   * method to access local variables directly from {@link Stack#slots}.
+   */
+  default Object eval(final Stack stack) {
+    return eval(stack.globalEnv);
+  }
+
   default boolean isConstant() {
     return false;
   }

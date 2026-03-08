@@ -634,7 +634,8 @@ public abstract class Codes {
           return init ->
               either -> {
                 Applicable a = isEitherLeft(either) ? f : g;
-                return a.apply(null, FlatLists.of(eitherProj(either), init));
+                return a.apply(
+                    (EvalEnv) null, FlatLists.of(eitherProj(either), init));
               };
         }
       };
@@ -745,7 +746,7 @@ public abstract class Codes {
           BuiltIn.FN_CURRY) {
         @Override
         public Object apply(Applicable applicable, Object o, Object o2) {
-          return applicable.apply(null, FlatLists.of(o, o2));
+          return applicable.apply((EvalEnv) null, FlatLists.of(o, o2));
         }
       };
 

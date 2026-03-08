@@ -27,6 +27,39 @@ public interface RowSink extends Describable {
   void accept(EvalEnv env);
 
   List<Object> result(EvalEnv env);
+
+  /**
+   * Initializes this row sink with a {@link Stack}.
+   *
+   * <p>In Step 2, delegates to {@link #start(EvalEnv)} via {@link
+   * Stack#globalEnv}. In Step 5, implementations will override this to push/pop
+   * iteration variables on the stack.
+   */
+  default void start(final Stack stack) {
+    start(stack.globalEnv);
+  }
+
+  /**
+   * Accepts a row using a {@link Stack}.
+   *
+   * <p>In Step 2, delegates to {@link #accept(EvalEnv)} via {@link
+   * Stack#globalEnv}. In Step 5, implementations will override this to read
+   * iteration variables from the stack.
+   */
+  default void accept(final Stack stack) {
+    accept(stack.globalEnv);
+  }
+
+  /**
+   * Returns the collected results using a {@link Stack}.
+   *
+   * <p>In Step 2, delegates to {@link #result(EvalEnv)} via {@link
+   * Stack#globalEnv}. In Step 5, implementations will override this if they
+   * need stack access.
+   */
+  default List<Object> result(final Stack stack) {
+    return result(stack.globalEnv);
+  }
 }
 
 // End RowSink.java

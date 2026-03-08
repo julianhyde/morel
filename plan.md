@@ -57,7 +57,7 @@ only because the outer environment was always a `MapEnvironment` where
 
 ---
 
-## Step 2: Add `Stack` and change `Code`/`Applicable`/`RowSink` signatures [ ]
+## Step 2: Add `Stack` and change `Code`/`Applicable`/`RowSink` signatures [x]
 
 Change the evaluation interfaces to take `Stack` instead of `EvalEnv`:
 
@@ -90,14 +90,15 @@ For this step, `Stack` is just a thin wrapper around an `EvalEnv`: every
 This step is purely mechanical — it changes signatures throughout but
 preserves all behavior. The build must be green at the end of this step.
 
-**Files changed**: `Code.java`, `Applicable.java`, `Applicable1.java`,
-`RowSink.java`, `Stack.java` (new), `Closure.java`, `Codes.java`,
-`RowSinks.java`, `Compiler.java`, `CalciteCompiler.java`, `Main.java`,
-`Shell.java`, all tests.
+**Files changed**: `Code.java` (add `eval(Stack)` default),
+`Applicable.java` (add `apply(Stack, Object)` default),
+`RowSink.java` (add `start/accept/result(Stack)` defaults),
+`Stack.java` (new — thin wrapper around `EvalEnv`),
+`Codes.java` (fix two `apply(null,...)` ambiguities by casting to `EvalEnv`).
 
-**Tip**: do the interface changes first (with a default `eval(stack)` bridge
-on `Code` that calls `eval(stack.globalEnv)`), then update implementations
-one file at a time.
+**Note**: Approach used was purely additive — default methods on interfaces
+delegate to existing `EvalEnv` versions. No implementations or callers needed
+updating. `Stack` carries only `EvalEnv globalEnv` in this step.
 
 ---
 
