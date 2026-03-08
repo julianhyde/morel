@@ -182,8 +182,31 @@ public class Compiler {
   public static class Context {
     final Environment env;
 
+    /**
+     * The current stack layout, or {@code null} until Step 4 activates
+     * stack-based compilation.
+     */
+    final @Nullable StackLayout layout;
+
+    /**
+     * The number of local variable slots currently live on the stack above the
+     * frame base.
+     *
+     * <p>This counter is incremented when pushing a binding (e.g., {@code let}
+     * or {@code fn} argument) and decremented when the scope exits. It must
+     * equal the number of entries pushed onto {@link
+     * net.hydromatic.morel.eval.Stack#slots} at every code point.
+     */
+    final int localDepth;
+
     Context(Environment env) {
+      this(env, null, 0);
+    }
+
+    Context(Environment env, @Nullable StackLayout layout, int localDepth) {
       this.env = env;
+      this.layout = layout;
+      this.localDepth = localDepth;
     }
 
     static Context of(Environment env) {
@@ -191,7 +214,7 @@ public class Compiler {
     }
 
     Context bindAll(Iterable<Binding> bindings) {
-      return of(env.bindAll(bindings));
+      return new Context(env.bindAll(bindings), layout, localDepth);
     }
   }
 

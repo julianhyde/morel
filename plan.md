@@ -102,7 +102,7 @@ updating. `Stack` carries only `EvalEnv globalEnv` in this step.
 
 ---
 
-## Step 3: Add `StackCode` and `StackLayout`; keep `GetCode` as fallback [ ]
+## Step 3: Add `StackCode` and `StackLayout`; keep `GetCode` as fallback [x]
 
 Add compile-time machinery without yet using it:
 
@@ -122,12 +122,16 @@ final int localDepth;     // virtual frame depth (grows/shrinks with let/case)
 Add `Codes.stackGet(offset, name)` factory method. The `name` field is kept
 for debuggability (printing `stack(offset=N, name=x)` in `Sys.plan` output).
 
-**Files**: `eval/Stack.java`, new `compile/StackLayout.java` (or inner class
-in `Environment`), `eval/Codes.java`, `compile/Compiler.java`,
-`compile/Context.java`.
+**Files**: new `compile/StackLayout.java`, `eval/Codes.java` (added
+`StackCode` class and `stackGet` factory), `compile/Compiler.java` (extended
+`Context` with `layout` and `localDepth`).
 
-**Test**: verify `Sys.plan` output includes `stack(...)` nodes for locally
-bound variables and `get(...)` for globals.
+**Test**: `compile/StackLayoutTest.java` — 7 tests covering `StackLayout`
+immutability, slot allocation, and `StackCode` evaluation from the stack.
+
+**Note**: `Sys.plan` will show `stack(...)` nodes once Step 4 activates
+emission of `StackCode`; Step 3 only verifies the infrastructure compiles
+and the runtime slot-access logic is correct.
 
 ---
 

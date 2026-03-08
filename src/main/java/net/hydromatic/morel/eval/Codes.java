@@ -4046,6 +4046,19 @@ public abstract class Codes {
   }
 
   /**
+   * Returns a Code that retrieves a local variable from the stack at {@code
+   * offset} slots below the top.
+   *
+   * <p>{@code offset} is 1-based relative to {@link Stack#top}: the most
+   * recently pushed value is at offset 1, the one before that at offset 2, etc.
+   * The {@code name} field is retained for debuggability and appears in {@link
+   * net.hydromatic.morel.eval.Describer} / {@code Sys.plan} output.
+   */
+  public static Code stackGet(int offset, String name) {
+    return new StackCode(offset, name);
+  }
+
+  /**
    * Returns a Code that returns a tuple consisting of the values of variables
    * "name0", ... "nameN" in the current environment.
    */
@@ -4749,6 +4762,45 @@ public abstract class Codes {
 
     public Object eval(EvalEnv env) {
       return env.getOpt(name);
+    }
+  }
+
+  /**
+   * Code that retrieves a local variable from the stack at a fixed offset below
+   * the top.
+   *
+   * <p>{@code offset} is 1-based: offset 1 is the most recently pushed value,
+   * offset 2 is the one before that, etc. The slot accessed is {@code
+   * stack.slots[stack.top - offset]}.
+   */
+  static class StackCode implements Code {
+    final int offset;
+    final String name;
+
+    StackCode(int offset, String name) {
+      this.offset = offset;
+      this.name = requireNonNull(name);
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "stack", d -> d.arg("offset", offset).arg("name", name));
+    }
+
+    @Override
+    public String toString() {
+      return "stack(offset=" + offset + ", name=" + name + ")";
+    }
+
+    @Override
+    public Object eval(EvalEnv env) {
+      throw new UnsupportedOperationException("StackCode requires a Stack");
+    }
+
+    @Override
+    public Object eval(final Stack stack) {
+      return stack.slots[stack.top - offset];
     }
   }
 
