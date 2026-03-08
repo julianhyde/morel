@@ -752,7 +752,9 @@ public class Compiler {
         return toApplicable(cx, literal.unwrap(Object.class), argType, pos);
 
       case ID:
-        Binding binding = cx.env.getOpt2(((Core.Id) fn).idPat);
+        final Pair<Binding, Environment> bindingPair =
+            cx.env.getOpt2(((Core.Id) fn).idPat);
+        Binding binding = bindingPair == null ? null : bindingPair.left;
         if (binding == null
             || binding.value instanceof LinkCode
             || binding.value == Unit.INSTANCE) {
