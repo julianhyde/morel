@@ -21,6 +21,7 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Static.skip;
+import static net.hydromatic.morel.util.Static.transformEager;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ImmutablePairList;
 
 /**
@@ -273,6 +275,231 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     @Override
     public void accept(Core.NamedPat namedPat, Object o) {
       env = env.bind(namedPat.name, o);
+    }
+  }
+
+  /**
+   * A closure that uses the evaluation stack for local variable access.
+   *
+   * <p>At creation time, {@link #capturedValues} are snapshotted from the
+   * stack. At call time, they are pushed onto the stack, followed by the
+   * argument bindings, and the body code is evaluated with {@link
+   * Code#eval(Stack)}.
+   */
+  public static class StackClosure
+      implements Comparable<StackClosure>, Applicable {
+    final Object[] capturedValues;
+    private final ImmutablePairList<Core.Pat, Code> patCodes;
+    private final Pos pos;
+
+    public StackClosure(
+        Object[] capturedValues,
+        ImmutablePairList<Core.Pat, Code> patCodes,
+        Pos pos) {
+      this.capturedValues = capturedValues;
+      this.patCodes = patCodes;
+      this.pos = pos;
+    }
+
+    @Override
+    public int compareTo(StackClosure o) {
+      return 0;
+    }
+
+    @Override
+    public String toString() {
+      return "StackClosure(captured=" + capturedValues.length + ")";
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start("stackClosure", d -> {});
+    }
+
+    /**
+     * Applies this closure to {@code argValue}, using the stack for local
+     * variable storage.
+     */
+    @Override
+    public Object apply(Stack stack, Object argValue) {
+      int savedTop = stack.save();
+      Object result = applyOnce(stack, argValue);
+      while (result instanceof Codes.TailCall) {
+        final Codes.TailCall tc = (Codes.TailCall) result;
+        stack.restore(savedTop);
+        if (tc.fn instanceof StackClosure) {
+          result = ((StackClosure) tc.fn).applyOnce(stack, tc.arg);
+        } else {
+          result = tc.fn.apply(stack, tc.arg);
+          break;
+        }
+      }
+      stack.restore(savedTop);
+      return result;
+    }
+
+    private Object applyOnce(Stack stack, Object argValue) {
+      // Push captured values
+      for (Object v : capturedValues) {
+        stack.push(v);
+      }
+      // Try each pattern arm
+      for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
+        final int armTop = stack.save();
+        if (pushBindings(patCode.getKey(), argValue, stack)) {
+          return patCode.getValue().eval(stack);
+        }
+        stack.restore(armTop);
+      }
+      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
+    }
+
+    /**
+     * Creates a new EvalEnv-based {@link Stack} and delegates to {@link
+     * #apply(Stack, Object)}. Called when invoked from old-style (non-stack)
+     * evaluation code.
+     */
+    @Override
+    public Object apply(EvalEnv env, Object argValue) {
+      return apply(new Stack(env, 4096), argValue);
+    }
+
+    /**
+     * Matches {@code pat} against {@code argValue}, pushing bound values onto
+     * {@code stack} in the same order as {@link Closure#bindRecurse}.
+     *
+     * <p>Returns true if the pattern matched, false otherwise. On false, the
+     * caller is responsible for restoring {@code stack.top}.
+     */
+    @SuppressWarnings("unchecked")
+    public static boolean pushBindings(
+        Core.Pat pat, Object argValue, Stack stack) {
+      final Core.LiteralPat literalPat;
+      switch (pat.op) {
+        case ID_PAT:
+          stack.push(argValue);
+          return true;
+
+        case WILDCARD_PAT:
+          return true;
+
+        case AS_PAT:
+          final Core.AsPat asPat = (Core.AsPat) pat;
+          stack.push(argValue);
+          return pushBindings(asPat.pat, argValue, stack);
+
+        case BOOL_LITERAL_PAT:
+        case CHAR_LITERAL_PAT:
+        case STRING_LITERAL_PAT:
+          literalPat = (Core.LiteralPat) pat;
+          return literalPat.value.equals(argValue);
+
+        case INT_LITERAL_PAT:
+          literalPat = (Core.LiteralPat) pat;
+          return ((BigDecimal) literalPat.value).intValue()
+              == (Integer) argValue;
+
+        case REAL_LITERAL_PAT:
+          literalPat = (Core.LiteralPat) pat;
+          return ((BigDecimal) literalPat.value).doubleValue()
+              == (Double) argValue;
+
+        case TUPLE_PAT:
+          final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+          final List<Object> tupleValue = (List<Object>) argValue;
+          for (int i = 0; i < tuplePat.args.size(); i++) {
+            if (!pushBindings(tuplePat.args.get(i), tupleValue.get(i), stack)) {
+              return false;
+            }
+          }
+          return true;
+
+        case RECORD_PAT:
+          final Core.RecordPat recordPat = (Core.RecordPat) pat;
+          final List<Object> recordValue = (List<Object>) argValue;
+          for (int i = 0; i < recordPat.args.size(); i++) {
+            if (!pushBindings(
+                recordPat.args.get(i), recordValue.get(i), stack)) {
+              return false;
+            }
+          }
+          return true;
+
+        case LIST_PAT:
+          final Core.ListPat listPat = (Core.ListPat) pat;
+          final List<Object> listValue = (List<Object>) argValue;
+          if (listValue.size() != listPat.args.size()) {
+            return false;
+          }
+          for (int i = 0; i < listPat.args.size(); i++) {
+            if (!pushBindings(listPat.args.get(i), listValue.get(i), stack)) {
+              return false;
+            }
+          }
+          return true;
+
+        case CONS_PAT:
+          final Core.ConPat consPat = (Core.ConPat) pat;
+          if (argValue instanceof Variant) {
+            return pushVariantConsPat((Variant) argValue, consPat, stack);
+          }
+          final List<Object> consValue = (List<Object>) argValue;
+          if (consValue.isEmpty()) {
+            return false;
+          }
+          final Object head = consValue.get(0);
+          final List<Object> tail = skip(consValue);
+          final List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
+          return pushBindings(patArgs.get(0), head, stack)
+              && pushBindings(patArgs.get(1), tail, stack);
+
+        case CON0_PAT:
+          final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;
+          final List con0Value = (List) argValue;
+          return con0Value.get(0).equals(con0Pat.tyCon);
+
+        case CON_PAT:
+          final Core.ConPat conPat = (Core.ConPat) pat;
+          if (argValue instanceof Variant) {
+            return pushVariantConPat((Variant) argValue, conPat, stack);
+          }
+          final List conValue = (List) argValue;
+          return conValue.get(0).equals(conPat.tyCon)
+              && pushBindings(conPat.pat, conValue.get(1), stack);
+
+        default:
+          throw new AssertionError(
+              "cannot push bindings for " + pat.op + ": " + pat);
+      }
+    }
+
+    private static boolean pushVariantConsPat(
+        Variant variant, Core.ConPat consPat, Stack stack) {
+      @SuppressWarnings("unchecked")
+      final List<Object> consValue = (List<Object>) variant.value;
+      if (consValue.isEmpty()) {
+        return false;
+      }
+      final Type elementType = variant.type.elementType();
+      final Variant head = Variant.of(elementType, consValue.get(0));
+      final List<Variant> tail =
+          transformEager(
+              skip(consValue),
+              e ->
+                  e instanceof Variant
+                      ? (Variant) e
+                      : Variant.of(elementType, e));
+      List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
+      return pushBindings(patArgs.get(0), head, stack)
+          && pushBindings(patArgs.get(1), tail, stack);
+    }
+
+    private static boolean pushVariantConPat(
+        Variant variant, Core.ConPat conPat, Stack stack) {
+      if (!variant.constructor().constructor.equals(conPat.tyCon)) {
+        return false;
+      }
+      return pushBindings(conPat.pat, variant, stack);
     }
   }
 }

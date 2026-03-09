@@ -36,6 +36,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -61,6 +62,7 @@ import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.RowSink;
 import net.hydromatic.morel.eval.RowSinks;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.AliasType;
@@ -216,6 +218,14 @@ public class Compiler {
     Context bindAll(Iterable<Binding> bindings) {
       return new Context(env.bindAll(bindings), layout, localDepth);
     }
+
+    /**
+     * Returns a new context with stack compilation activated, using an empty
+     * layout and localDepth reset to 0.
+     */
+    Context withFreshStack() {
+      return new Context(env, StackLayout.EMPTY, 0);
+    }
   }
 
   public final Code compile(Environment env, Core.Exp expression) {
@@ -369,6 +379,15 @@ public class Compiler {
   }
 
   private Code compileFieldName(Context cx, Core.NamedPat idPat) {
+    if (cx.layout != null) {
+      final int slotIndex = cx.layout.get(idPat);
+      if (slotIndex >= 0) {
+        // Offset is 1-based from the current top of the stack.
+        // localDepth is the number of slots currently allocated;
+        // slot i (0-based) is at offset (localDepth - i) from the top.
+        return Codes.stackGet(cx.localDepth - slotIndex, idPat.name);
+      }
+    }
     final Binding binding = cx.env.getOpt(idPat);
     if (binding != null && binding.value instanceof Code) {
       return (Code) binding.value;
@@ -844,6 +863,13 @@ public class Compiler {
   }
 
   private Code compileLet(Context cx, Core.Let let) {
+    if (cx.layout != null && let.decl.op == Op.VAL_DECL) {
+      final Code stackLetCode =
+          tryCompileLetStack(cx, (Core.NonRecValDecl) let.decl, let.exp);
+      if (stackLetCode != null) {
+        return stackLetCode;
+      }
+    }
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
     compileValDecl(
@@ -851,6 +877,48 @@ public class Compiler {
     Context cx2 = cx.bindAll(bindings);
     final Code resultCode = compile(cx2, let.exp);
     return finishCompileLet(cx2, matchCodes, resultCode, let.type);
+  }
+
+  /**
+   * Tries to compile a {@code let val x = expr in body} as a stack-based
+   * push/pop. Returns null if the pattern is too complex (fall back to old-mode
+   * let).
+   */
+  private @Nullable Code tryCompileLetStack(
+      Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
+    if (valDecl.pat.op != Op.ID_PAT) {
+      return null; // only handle simple ID_PAT for now
+    }
+    final Core.NamedPat xPat = (Core.NamedPat) valDecl.pat;
+    final Code expCode = compile(cx, valDecl.exp);
+    final StackLayout newLayout = cx.layout.with(xPat, cx.localDepth);
+    final List<Binding> bindings = new ArrayList<>();
+    Compiles.acceptBinding(typeSystem, valDecl.pat, bindings);
+    final Context cx2 =
+        new Context(cx.env.bindAll(bindings), newLayout, cx.localDepth + 1);
+    final Code bodyCode = compile(cx2, bodyExp);
+    return Codes.stackLet1(expCode, bodyCode);
+  }
+
+  /**
+   * Tries to compile a {@code let val x = expr in body} as a stack-based
+   * push/pop, with the body in tail position. Returns null if the pattern is
+   * too complex (fall back to old-mode let).
+   */
+  private @Nullable Code tryCompileLetStackTail(
+      Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
+    if (valDecl.pat.op != Op.ID_PAT) {
+      return null; // only handle simple ID_PAT for now
+    }
+    final Core.NamedPat xPat = (Core.NamedPat) valDecl.pat;
+    final Code expCode = compile(cx, valDecl.exp);
+    final StackLayout newLayout = cx.layout.with(xPat, cx.localDepth);
+    final List<Binding> bindings = new ArrayList<>();
+    Compiles.acceptBinding(typeSystem, valDecl.pat, bindings);
+    final Context cx2 =
+        new Context(cx.env.bindAll(bindings), newLayout, cx.localDepth + 1);
+    final Code bodyCode = compileTail(cx2, bodyExp);
+    return Codes.stackLet1(expCode, bodyCode);
   }
 
   protected Code finishCompileLet(
@@ -950,6 +1018,54 @@ public class Compiler {
   }
 
   /**
+   * Returns the named patterns that {@link Closure#bindRecurse} (and {@link
+   * Closure.StackClosure#pushBindings}) would bind when matching {@code pat},
+   * in the order they are bound.
+   */
+  private static List<Core.NamedPat> namedPatsOf(Core.Pat pat) {
+    final List<Core.NamedPat> result = new ArrayList<>();
+    collectNamedPats(pat, result);
+    return result;
+  }
+
+  private static void collectNamedPats(
+      Core.Pat pat, List<Core.NamedPat> result) {
+    switch (pat.op) {
+      case ID_PAT:
+        result.add((Core.IdPat) pat);
+        break;
+      case WILDCARD_PAT:
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+      case CON0_PAT:
+        break;
+      case AS_PAT:
+        final Core.AsPat asPat = (Core.AsPat) pat;
+        result.add(asPat);
+        collectNamedPats(asPat.pat, result);
+        break;
+      case TUPLE_PAT:
+        ((Core.TuplePat) pat).args.forEach(p -> collectNamedPats(p, result));
+        break;
+      case RECORD_PAT:
+        ((Core.RecordPat) pat).args.forEach(p -> collectNamedPats(p, result));
+        break;
+      case LIST_PAT:
+        ((Core.ListPat) pat).args.forEach(p -> collectNamedPats(p, result));
+        break;
+      case CONS_PAT:
+      case CON_PAT:
+        collectNamedPats(((Core.ConPat) pat).pat, result);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
    * Compiles a {@code match} expression.
    *
    * @param cx Compile context
@@ -957,6 +1073,9 @@ public class Compiler {
    * @return Code for match
    */
   private Code compileMatchList(Context cx, List<Core.Match> matchList) {
+    if (cx.layout != null) {
+      return compileMatchListImpl(cx, matchList, false);
+    }
     final PairList<Core.Pat, Code> patCodes = PairList.of();
     matchList.forEach(match -> compileMatch(cx, match, patCodes::add));
     return new MatchCode(patCodes.immutable(), last(matchList).pos);
@@ -988,6 +1107,14 @@ public class Compiler {
 
       case LET:
         final Core.Let let = (Core.Let) expression;
+        if (cx.layout != null && let.decl.op == Op.VAL_DECL) {
+          final Code stackLetCode =
+              tryCompileLetStackTail(
+                  cx, (Core.NonRecValDecl) let.decl, let.exp);
+          if (stackLetCode != null) {
+            return stackLetCode;
+          }
+        }
         final List<Code> matchCodes = new ArrayList<>();
         final List<Binding> bindings = new ArrayList<>();
         compileValDecl(
@@ -1003,9 +1130,154 @@ public class Compiler {
 
   /** Compiles a match list where each arm is in tail position. */
   private Code compileMatchListTail(Context cx, List<Core.Match> matchList) {
+    return compileMatchListImpl(cx, matchList, true);
+  }
+
+  /**
+   * Core implementation for compiling a match list.
+   *
+   * <p>If the outer context has a stack layout, emits a {@link StackMatchCode}
+   * that captures currently live stack variables and assigns inner slots for
+   * the pattern-bound variables.
+   *
+   * <p>If the outer context has no stack layout, emits an old-mode {@link
+   * MatchCode} that creates a {@link Closure}.
+   *
+   * @param cx Outer compile context
+   * @param matchList The match arms to compile
+   * @param tailPos Whether the arm bodies are in tail position
+   */
+  private Code compileMatchListImpl(
+      Context cx, List<Core.Match> matchList, boolean tailPos) {
+    if (cx.layout == null) {
+      // Old-mode: no stack, compile with environment-based closures.
+      final PairList<Core.Pat, Code> patCodes = PairList.of();
+      if (tailPos) {
+        matchList.forEach(match -> compileMatchTail(cx, match, patCodes::add));
+      } else {
+        matchList.forEach(match -> compileMatch(cx, match, patCodes::add));
+      }
+      return new MatchCode(patCodes.immutable(), last(matchList).pos);
+    }
+
+    // Stack-mode: collect variables currently live in the outer stack layout.
+    // These become the captured variables in the new StackClosure.
+    // We use a LinkedHashMap to maintain a stable insertion order.
+    final LinkedHashMap<Core.NamedPat, Integer> captureMap =
+        new LinkedHashMap<>();
+    // For simplicity in this step, we collect all referenced stack variables.
+    // Safe but conservative: captures all live stack vars even if unused.
+    // A future step can optimize this with VariableCollector.
+    for (Core.Match match : matchList) {
+      collectReferencedStackVars(cx, match.exp, captureMap);
+    }
+
+    final int numCapture = captureMap.size();
+
+    // Build capture offsets: for each captured var, compute 1-based offset from
+    // the current stack top.
+    final int[] captureOffsets = new int[numCapture];
+    for (Map.Entry<Core.NamedPat, Integer> e : captureMap.entrySet()) {
+      final int outerSlot = cx.layout.get(e.getKey());
+      // offset = localDepth - outerSlot (1-based from top = localDepth)
+      captureOffsets[e.getValue()] = cx.localDepth - outerSlot;
+    }
+
+    // Compile each arm with a fresh inner context.
     final PairList<Core.Pat, Code> patCodes = PairList.of();
-    matchList.forEach(match -> compileMatchTail(cx, match, patCodes::add));
-    return new MatchCode(patCodes.immutable(), last(matchList).pos);
+    for (Core.Match match : matchList) {
+      final List<Core.NamedPat> argPats = namedPatsOf(match.pat);
+      final int numArgs = argPats.size();
+
+      // Build inner layout: captured vars at 0..numCapture-1, arg vars next.
+      StackLayout innerLayout = StackLayout.EMPTY;
+      for (Map.Entry<Core.NamedPat, Integer> e : captureMap.entrySet()) {
+        innerLayout = innerLayout.with(e.getKey(), e.getValue());
+      }
+      for (int i = 0; i < argPats.size(); i++) {
+        innerLayout = innerLayout.with(argPats.get(i), numCapture + i);
+      }
+      final int innerDepth = numCapture + numArgs;
+
+      final List<Binding> bindings = new ArrayList<>();
+      Compiles.acceptBinding(typeSystem, match.pat, bindings);
+      final Context innerCx =
+          new Context(cx.env.bindAll(bindings), innerLayout, innerDepth);
+
+      final Code bodyCode =
+          tailPos
+              ? compileTail(innerCx, match.exp)
+              : compile(innerCx, match.exp);
+      patCodes.add(match.pat, bodyCode);
+    }
+
+    return new StackMatchCode(
+        captureOffsets, patCodes.immutable(), last(matchList).pos);
+  }
+
+  /**
+   * Collects stack variables from {@code exp} that are in {@code cx.layout}
+   * into {@code captureMap}, assigning each a unique capture index.
+   *
+   * <p>Walks the expression tree (including into nested {@code fn} bodies) and
+   * records any ID reference whose pattern is allocated in the outer layout.
+   */
+  private static void collectReferencedStackVars(
+      Context cx,
+      Core.Exp exp,
+      LinkedHashMap<Core.NamedPat, Integer> captureMap) {
+    collectReferencedStackVarsRec(cx.layout, exp, captureMap);
+  }
+
+  private static void collectReferencedStackVarsRec(
+      StackLayout layout,
+      Core.Exp exp,
+      LinkedHashMap<Core.NamedPat, Integer> captureMap) {
+    switch (exp.op) {
+      case ID:
+        final Core.Id id = (Core.Id) exp;
+        if (layout.get(id.idPat) >= 0) {
+          captureMap.computeIfAbsent(id.idPat, k -> captureMap.size());
+        }
+        break;
+      case LET:
+        final Core.Let let = (Core.Let) exp;
+        // Visit the decl's expressions
+        let.decl.forEachBinding(
+            (pat, e, overloadPat, pos) ->
+                collectReferencedStackVarsRec(layout, e, captureMap));
+        collectReferencedStackVarsRec(layout, let.exp, captureMap);
+        break;
+      case FN:
+        final Core.Fn fn = (Core.Fn) exp;
+        // The fn body uses a new scope; we still need to check references in it
+        // that point to the outer layout.
+        collectReferencedStackVarsRec(layout, fn.exp, captureMap);
+        break;
+      case APPLY:
+        final Core.Apply apply = (Core.Apply) exp;
+        collectReferencedStackVarsRec(layout, apply.fn, captureMap);
+        collectReferencedStackVarsRec(layout, apply.arg, captureMap);
+        break;
+      case TUPLE:
+        final Core.Tuple tuple = (Core.Tuple) exp;
+        tuple.args.forEach(
+            e -> collectReferencedStackVarsRec(layout, e, captureMap));
+        break;
+      case CASE:
+        final Core.Case case_ = (Core.Case) exp;
+        collectReferencedStackVarsRec(layout, case_.exp, captureMap);
+        case_.matchList.forEach(
+            m -> collectReferencedStackVarsRec(layout, m.exp, captureMap));
+        break;
+      case LOCAL:
+        final Core.Local local = (Core.Local) exp;
+        collectReferencedStackVarsRec(layout, local.exp, captureMap);
+        break;
+      default:
+        // Literals and other leaf nodes: no ID references.
+        break;
+    }
   }
 
   private void compileMatchTail(
@@ -1131,6 +1403,12 @@ public class Compiler {
       assert refCode != null; // link should have completed by now
       return refCode.eval(env);
     }
+
+    @Override
+    public Object eval(Stack stack) {
+      assert refCode != null;
+      return refCode.eval(stack);
+    }
   }
 
   /** Code that implements {@link Compiler#compileMatchList(Context, List)}. */
@@ -1156,6 +1434,52 @@ public class Compiler {
     @Override
     public Object eval(EvalEnv evalEnv) {
       return new Closure(evalEnv, patCodes, pos);
+    }
+  }
+
+  /**
+   * Code that creates a {@link Closure.StackClosure} when evaluated.
+   *
+   * <p>At compile time, {@code captureOffsets[i]} is the offset (1-based from
+   * stack top) at which the i-th captured variable lives at closure-creation
+   * time.
+   *
+   * <p>At runtime, snapshots those stack slots into {@code capturedValues[]}
+   * and returns a {@link Closure.StackClosure}.
+   */
+  private static class StackMatchCode implements Code {
+    private final int[] captureOffsets;
+    private final ImmutablePairList<Core.Pat, Code> patCodes;
+    private final Pos pos;
+
+    StackMatchCode(
+        int[] captureOffsets,
+        ImmutablePairList<Core.Pat, Code> patCodes,
+        Pos pos) {
+      this.captureOffsets = captureOffsets;
+      this.patCodes = patCodes;
+      this.pos = pos;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start("stackMatch", d -> {});
+    }
+
+    @Override
+    public Object eval(EvalEnv env) {
+      // Called from old-mode context: no stack, create closure with no
+      // captures.
+      return new Closure.StackClosure(new Object[0], patCodes, pos);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final Object[] captured = new Object[captureOffsets.length];
+      for (int i = 0; i < captureOffsets.length; i++) {
+        captured[i] = stack.slots[stack.top - captureOffsets[i]];
+      }
+      return new Closure.StackClosure(captured, patCodes, pos);
     }
   }
 

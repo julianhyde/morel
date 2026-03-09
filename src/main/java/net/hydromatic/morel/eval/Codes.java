@@ -4740,6 +4740,15 @@ public abstract class Codes {
       }
       return Arrays.asList(values);
     }
+
+    @Override
+    public Object eval(Stack stack) {
+      final Object[] values = new Object[codes.size()];
+      for (int i = 0; i < values.length; i++) {
+        values[i] = codes.get(i).eval(stack);
+      }
+      return Arrays.asList(values);
+    }
   }
 
   /** Code that retrieves the value of a variable from the environment. */
@@ -4941,6 +4950,11 @@ public abstract class Codes {
       // Lazy evaluation. If code0 returns false, code1 is never evaluated.
       return (boolean) code0.eval(evalEnv) && (boolean) code1.eval(evalEnv);
     }
+
+    @Override
+    public Object eval(Stack stack) {
+      return (boolean) code0.eval(stack) && (boolean) code1.eval(stack);
+    }
   }
 
   /** Code that implements {@link #orElse(Code, Code)}. */
@@ -4962,6 +4976,11 @@ public abstract class Codes {
     public Object eval(EvalEnv evalEnv) {
       // Lazy evaluation. If code0 returns true, code1 is never evaluated.
       return (boolean) code0.eval(evalEnv) || (boolean) code1.eval(evalEnv);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return (boolean) code0.eval(stack) || (boolean) code1.eval(stack);
     }
   }
 
@@ -5023,6 +5042,48 @@ public abstract class Codes {
     }
   }
 
+  /**
+   * Code that implements a stack-based {@code let} binding.
+   *
+   * <p>Evaluates {@code expCode}, pushes the result onto the stack, evaluates
+   * {@code resultCode}, then restores the stack top.
+   */
+  private static class StackLet1Code implements Code {
+    private final Code expCode;
+    private final Code resultCode;
+
+    StackLet1Code(Code expCode, Code resultCode) {
+      this.expCode = expCode;
+      this.resultCode = resultCode;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "stackLet1",
+          d -> d.arg("expCode", expCode).arg("resultCode", resultCode));
+    }
+
+    @Override
+    public Object eval(EvalEnv env) {
+      throw new UnsupportedOperationException("StackLet1Code requires a Stack");
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final int savedTop = stack.save();
+      stack.push(expCode.eval(stack));
+      final Object result = resultCode.eval(stack);
+      stack.restore(savedTop);
+      return result;
+    }
+  }
+
+  /** Creates stack-based let code that pushes one value and pops after. */
+  public static Code stackLet1(Code expCode, Code resultCode) {
+    return new StackLet1Code(expCode, resultCode);
+  }
+
   /** Applies an {@link Applicable} to a {@link Code}. */
   private static class ApplyCode implements Code {
     private final Applicable fnValue;
@@ -5037,6 +5098,12 @@ public abstract class Codes {
     public Object eval(EvalEnv env) {
       final Object arg = argCode.eval(env);
       return fnValue.apply(env, arg);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final Object arg = argCode.eval(stack);
+      return fnValue.apply(stack, arg);
     }
 
     @Override
@@ -5060,6 +5127,11 @@ public abstract class Codes {
     public Object eval(EvalEnv env) {
       final Object arg0 = argCode0.eval(env);
       return fnValue.apply(arg0);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return fnValue.apply(argCode0.eval(stack));
     }
 
     @Override
@@ -5089,6 +5161,11 @@ public abstract class Codes {
     }
 
     @Override
+    public Object eval(Stack stack) {
+      return fnValue.apply(argCode0.eval(stack), argCode1.eval(stack));
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start(
           "apply2",
@@ -5110,6 +5187,12 @@ public abstract class Codes {
     public Object eval(EvalEnv env) {
       final List arg = (List) argCode.eval(env);
       return fnValue.apply(arg.get(0), arg.get(1));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final List<?> args = (List<?>) argCode.eval(stack);
+      return fnValue.apply(args.get(0), args.get(1));
     }
 
     @Override
@@ -5143,6 +5226,12 @@ public abstract class Codes {
     }
 
     @Override
+    public Object eval(Stack stack) {
+      return fnValue.apply(
+          argCode0.eval(stack), argCode1.eval(stack), argCode2.eval(stack));
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start(
           "apply3",
@@ -5168,6 +5257,12 @@ public abstract class Codes {
     public Object eval(EvalEnv env) {
       final List arg = (List) argCode.eval(env);
       return fnValue.apply(arg.get(0), arg.get(1), arg.get(2));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final List<?> args = (List<?>) argCode.eval(stack);
+      return fnValue.apply(args.get(0), args.get(1), args.get(2));
     }
 
     @Override
@@ -5208,6 +5303,15 @@ public abstract class Codes {
     }
 
     @Override
+    public Object eval(Stack stack) {
+      return fnValue.apply(
+          argCode0.eval(stack),
+          argCode1.eval(stack),
+          argCode2.eval(stack),
+          argCode3.eval(stack));
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start(
           "apply4",
@@ -5243,9 +5347,19 @@ public abstract class Codes {
 
     @Override
     public Object eval(EvalEnv env) {
-      final Applicable1 fnValue = (Applicable1) fnCode.eval(env);
+      final Object fn = fnCode.eval(env);
       final Object arg = argCode.eval(env);
-      return fnValue.apply(arg);
+      if (fn instanceof Applicable1) {
+        return ((Applicable1) fn).apply(arg);
+      }
+      return ((Applicable) fn).apply(env, arg);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final Applicable fnValue = (Applicable) fnCode.eval(stack);
+      final Object arg = argCode.eval(stack);
+      return fnValue.apply(stack, arg);
     }
   }
 
@@ -5276,6 +5390,11 @@ public abstract class Codes {
     }
 
     @Override
+    public Object eval(Stack stack) {
+      return new TailCall(fnValue, argCode.eval(stack));
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start(
           "tailApply", d -> d.arg("fnValue", fnValue).arg("argCode", argCode));
@@ -5296,6 +5415,11 @@ public abstract class Codes {
     public Object eval(EvalEnv env) {
       final Applicable fn = (Applicable) fnCode.eval(env);
       return new TailCall(fn, argCode.eval(env));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return new TailCall((Applicable) fnCode.eval(stack), argCode.eval(stack));
     }
 
     @Override
@@ -5669,6 +5793,12 @@ public abstract class Codes {
     public Object eval(EvalEnv evalEnv) {
       ++ordinalSlots[0];
       return nextCode.eval(evalEnv);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      ++ordinalSlots[0];
+      return nextCode.eval(stack);
     }
 
     @Override

@@ -85,6 +85,21 @@ public final class Stack {
     this.slots = new Object[capacity];
     this.top = 0;
   }
+
+  /** Pushes {@code value} onto the stack. */
+  public void push(Object value) {
+    slots[top++] = value;
+  }
+
+  /** Returns the current top (for save/restore). */
+  public int save() {
+    return top;
+  }
+
+  /** Restores top to a previously saved value. */
+  public void restore(int savedTop) {
+    top = savedTop;
+  }
 }
 
 // End Stack.java
