@@ -5084,6 +5084,69 @@ public abstract class Codes {
     return new StackLet1Code(expCode, resultCode);
   }
 
+  /**
+   * Evaluates {@code expCode}, uses {@link Closure.StackClosure#pushBindings}
+   * to push all pattern-bound variables onto the stack, evaluates {@code
+   * resultCode}, then restores the stack top.
+   *
+   * <p>This handles the general case of {@code let val pat = expr in body end},
+   * including tuple and record patterns.
+   */
+  private static class StackLetPatCode implements Code {
+    private final Core.Pat pat;
+    private final Code expCode;
+    private final Code resultCode;
+    private final Pos pos;
+
+    StackLetPatCode(Core.Pat pat, Code expCode, Code resultCode, Pos pos) {
+      this.pat = pat;
+      this.expCode = expCode;
+      this.resultCode = resultCode;
+      this.pos = pos;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "stackLetPat",
+          d ->
+              d.arg("pat", pat.toString())
+                  .arg("expCode", expCode)
+                  .arg("resultCode", resultCode));
+    }
+
+    @Override
+    public Object eval(EvalEnv env) {
+      throw new UnsupportedOperationException(
+          "StackLetPatCode requires a Stack");
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final int savedTop = stack.save();
+      final Object val = expCode.eval(stack);
+      if (!Closure.StackClosure.pushBindings(pat, val, stack)) {
+        throw new MorelRuntimeException(BuiltInExn.BIND, pos);
+      }
+      final Object result = resultCode.eval(stack);
+      stack.restore(savedTop);
+      return result;
+    }
+  }
+
+  /**
+   * Creates stack-based let code for a general pattern.
+   *
+   * <p>Evaluates {@code expCode}, pushes each pattern-bound variable from
+   * {@code pat} onto the stack (in the same order as {@link
+   * Closure.StackClosure#pushBindings}), evaluates {@code resultCode}, then
+   * restores the stack.
+   */
+  public static Code stackLetPat(
+      Core.Pat pat, Code expCode, Code resultCode, Pos pos) {
+    return new StackLetPatCode(pat, expCode, resultCode, pos);
+  }
+
   /** Applies an {@link Applicable} to a {@link Code}. */
   private static class ApplyCode implements Code {
     private final Applicable fnValue;

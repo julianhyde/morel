@@ -218,14 +218,6 @@ public class Compiler {
     Context bindAll(Iterable<Binding> bindings) {
       return new Context(env.bindAll(bindings), layout, localDepth);
     }
-
-    /**
-     * Returns a new context with stack compilation activated, using an empty
-     * layout and localDepth reset to 0.
-     */
-    Context withFreshStack() {
-      return new Context(env, StackLayout.EMPTY, 0);
-    }
   }
 
   public final Code compile(Environment env, Core.Exp expression) {
@@ -887,9 +879,22 @@ public class Compiler {
   private @Nullable Code tryCompileLetStack(
       Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
     if (valDecl.pat.op != Op.ID_PAT) {
-      return null; // only handle simple ID_PAT for now
+      return null;
     }
     final Core.NamedPat xPat = (Core.NamedPat) valDecl.pat;
+    // Detect the form "let val $tmp = expr in case $tmp of pat => body end",
+    // which is how the Resolver desugars "let val (x, y) = expr in body end".
+    // Compile directly as a multi-variable stack push, avoiding an intermediate
+    // closure.
+    if (bodyExp.op == Op.CASE) {
+      final Core.Case case_ = (Core.Case) bodyExp;
+      if (case_.matchList.size() == 1
+          && case_.exp.op == Op.ID
+          && ((Core.Id) case_.exp).idPat == xPat) {
+        return compileLetStackPat(
+            cx, valDecl.exp, case_.matchList.get(0), false);
+      }
+    }
     final Code expCode = compile(cx, valDecl.exp);
     final StackLayout newLayout = cx.layout.with(xPat, cx.localDepth);
     final List<Binding> bindings = new ArrayList<>();
@@ -908,9 +913,19 @@ public class Compiler {
   private @Nullable Code tryCompileLetStackTail(
       Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
     if (valDecl.pat.op != Op.ID_PAT) {
-      return null; // only handle simple ID_PAT for now
+      return null;
     }
     final Core.NamedPat xPat = (Core.NamedPat) valDecl.pat;
+    // Detect the desugared form (tail position); see tryCompileLetStack.
+    if (bodyExp.op == Op.CASE) {
+      final Core.Case case_ = (Core.Case) bodyExp;
+      if (case_.matchList.size() == 1
+          && case_.exp.op == Op.ID
+          && ((Core.Id) case_.exp).idPat == xPat) {
+        return compileLetStackPat(
+            cx, valDecl.exp, case_.matchList.get(0), true);
+      }
+    }
     final Code expCode = compile(cx, valDecl.exp);
     final StackLayout newLayout = cx.layout.with(xPat, cx.localDepth);
     final List<Binding> bindings = new ArrayList<>();
@@ -919,6 +934,39 @@ public class Compiler {
         new Context(cx.env.bindAll(bindings), newLayout, cx.localDepth + 1);
     final Code bodyCode = compileTail(cx2, bodyExp);
     return Codes.stackLet1(expCode, bodyCode);
+  }
+
+  /**
+   * Compiles a let binding with a general pattern (tuple, record, etc.) as
+   * direct stack pushes, avoiding an intermediate closure.
+   *
+   * <p>Called when the Resolver's desugared form {@code let val $tmp = expr in
+   * case $tmp of pat => body end} is detected. Emits a {@link
+   * Codes#stackLetPat} node that evaluates {@code valueExp}, calls {@link
+   * Closure.StackClosure#pushBindings} to push each pattern-bound variable,
+   * evaluates the body, then restores the stack.
+   */
+  private Code compileLetStackPat(
+      Context cx, Core.Exp valueExp, Core.Match match, boolean tailPos) {
+    final Core.Pat pat = match.pat;
+    final List<Core.NamedPat> namedPats = namedPatsOf(pat);
+    final Code expCode = compile(cx, valueExp);
+    // Assign sequential slots starting at cx.localDepth, in the same order
+    // that pushBindings pushes them.
+    StackLayout newLayout = cx.layout;
+    for (int i = 0; i < namedPats.size(); i++) {
+      newLayout = newLayout.with(namedPats.get(i), cx.localDepth + i);
+    }
+    final List<Binding> bindings = new ArrayList<>();
+    Compiles.acceptBinding(typeSystem, pat, bindings);
+    final Context cx2 =
+        new Context(
+            cx.env.bindAll(bindings),
+            newLayout,
+            cx.localDepth + namedPats.size());
+    final Code bodyCode =
+        tailPos ? compileTail(cx2, match.exp) : compile(cx2, match.exp);
+    return Codes.stackLetPat(pat, expCode, bodyCode, match.pos);
   }
 
   protected Code finishCompileLet(
