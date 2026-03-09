@@ -84,12 +84,27 @@ public class Main {
    */
   public static void main(String[] args) {
     final List<String> argList = ImmutableList.copyOf(args);
-    final Map<String, ForeignValue> valueMap = ImmutableMap.of();
-    final Map<Prop, Object> propMap = new LinkedHashMap<>();
-    Prop.DIRECTORY.set(propMap, new File(System.getProperty("user.dir")));
-    final Main main =
-        new Main(argList, System.in, System.out, valueMap, propMap, false);
     try {
+      // Check for --md or --md-verify flags.
+      boolean mdVerify = argList.contains("--md-verify");
+      boolean md = mdVerify || argList.contains("--md");
+      if (md) {
+        boolean anyChanges = false;
+        for (String arg : argList) {
+          if (!arg.startsWith("--")) {
+            anyChanges |= MarkdownProcessor.process(new File(arg), mdVerify);
+          }
+        }
+        if (mdVerify && anyChanges) {
+          System.exit(1);
+        }
+        return;
+      }
+      final Map<String, ForeignValue> valueMap = ImmutableMap.of();
+      final Map<Prop, Object> propMap = new LinkedHashMap<>();
+      Prop.DIRECTORY.set(propMap, new File(System.getProperty("user.dir")));
+      final Main main =
+          new Main(argList, System.in, System.out, valueMap, propMap, false);
       main.run();
     } catch (Throwable e) {
       e.printStackTrace();
