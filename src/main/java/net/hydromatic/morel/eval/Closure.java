@@ -287,15 +287,20 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
    * Code#eval(Stack)}.
    */
   public static class StackClosure
-      implements Comparable<StackClosure>, Applicable {
+      implements Comparable<StackClosure>, Applicable, Applicable1 {
+    /** Global (top-level and built-in) bindings, captured at creation time. */
+    private final EvalEnv globalEnv;
+
     final Object[] capturedValues;
     private final ImmutablePairList<Core.Pat, Code> patCodes;
     private final Pos pos;
 
     public StackClosure(
+        EvalEnv globalEnv,
         Object[] capturedValues,
         ImmutablePairList<Core.Pat, Code> patCodes,
         Pos pos) {
+      this.globalEnv = globalEnv;
       this.capturedValues = capturedValues;
       this.patCodes = patCodes;
       this.pos = pos;
@@ -355,13 +360,25 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     }
 
     /**
-     * Creates a new EvalEnv-based {@link Stack} and delegates to {@link
-     * #apply(Stack, Object)}. Called when invoked from old-style (non-stack)
-     * evaluation code.
+     * Applies this closure without a pre-existing {@link Stack}.
+     *
+     * <p>Implements {@link Applicable1} so that built-in higher-order functions
+     * (e.g. {@code List.map}) can call user-defined functions without needing
+     * to supply an {@link EvalEnv}.
+     */
+    @Override
+    public Object apply(Object argValue) {
+      return apply(new Stack(globalEnv, 4096), argValue);
+    }
+
+    /**
+     * Creates a new {@link Stack} from the stored {@link #globalEnv} and
+     * delegates to {@link #apply(Stack, Object)}. Called when invoked from
+     * old-style (non-stack) evaluation code.
      */
     @Override
     public Object apply(EvalEnv env, Object argValue) {
-      return apply(new Stack(env, 4096), argValue);
+      return apply(new Stack(globalEnv, 4096), argValue);
     }
 
     /**

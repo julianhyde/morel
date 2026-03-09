@@ -1518,7 +1518,7 @@ public class Compiler {
     public Object eval(EvalEnv env) {
       // Called from old-mode context: no stack, create closure with no
       // captures.
-      return new Closure.StackClosure(new Object[0], patCodes, pos);
+      return new Closure.StackClosure(env, new Object[0], patCodes, pos);
     }
 
     @Override
@@ -1527,7 +1527,7 @@ public class Compiler {
       for (int i = 0; i < captureOffsets.length; i++) {
         captured[i] = stack.slots[stack.top - captureOffsets[i]];
       }
-      return new Closure.StackClosure(captured, patCodes, pos);
+      return new Closure.StackClosure(stack.globalEnv, captured, patCodes, pos);
     }
   }
 
