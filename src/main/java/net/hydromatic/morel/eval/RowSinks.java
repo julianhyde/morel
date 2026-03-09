@@ -184,6 +184,14 @@ public abstract class RowSinks {
       rowSink.accept(env);
       return rowSink.result(env);
     }
+
+    @Override
+    public Object eval(Stack stack) {
+      final RowSink rowSink = rowSinkFactory.get();
+      rowSink.start(stack);
+      rowSink.accept(stack);
+      return rowSink.result(stack);
+    }
   }
 
   /** Abstract implementation for row sinks that have one successor. */
@@ -207,6 +215,21 @@ public abstract class RowSinks {
     @Override
     public List<Object> result(EvalEnv env) {
       return rowSink.result(env);
+    }
+
+    @Override
+    public void start(Stack stack) {
+      rowSink.start(stack);
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      rowSink.accept(stack);
+    }
+
+    @Override
+    public List<Object> result(Stack stack) {
+      return rowSink.result(stack);
     }
   }
 
@@ -259,6 +282,29 @@ public abstract class RowSinks {
         }
       }
     }
+
+    @Override
+    public void accept(Stack stack) {
+      // Evaluate the collection expression using the full stack so that outer
+      // variables (StackCode nodes) resolve correctly.
+      final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+      // Extend the env with the iteration-variable pattern binding. The inner
+      // stack shares the parent's slots array (for StackCode outer variables)
+      // but uses an extended globalEnv so that Codes.get nodes for the
+      // iteration variable also resolve correctly.
+      final MutableEvalEnv mutableEvalEnv = stack.globalEnv.bindMutablePat(pat);
+      final Stack innerStack =
+          new Stack(mutableEvalEnv, stack.slots, stack.top);
+      for (Object element : elements) {
+        innerStack.top = stack.top;
+        if (mutableEvalEnv.setOpt(element)) {
+          Boolean b = (Boolean) conditionCode.eval(innerStack);
+          if (b) {
+            rowSink.accept(innerStack);
+          }
+        }
+      }
+    }
   }
 
   /** Implementation of {@link RowSink} for a {@code where} step. */
@@ -280,6 +326,13 @@ public abstract class RowSinks {
     public void accept(EvalEnv env) {
       if ((Boolean) filterCode.eval(env)) {
         rowSink.accept(env);
+      }
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      if ((Boolean) filterCode.eval(stack)) {
+        rowSink.accept(stack);
       }
     }
   }
@@ -314,6 +367,21 @@ public abstract class RowSinks {
         rowSink.accept(env);
       }
     }
+
+    @Override
+    public void start(Stack stack) {
+      skip = (Integer) skipCode.eval(stack);
+      rowSink.start(stack);
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      if (skip > 0) {
+        --skip;
+      } else {
+        rowSink.accept(stack);
+      }
+    }
   }
 
   /** Implementation of {@link RowSink} for a {@code take} step. */
@@ -343,6 +411,20 @@ public abstract class RowSinks {
       if (take > 0) {
         --take;
         rowSink.accept(env);
+      }
+    }
+
+    @Override
+    public void start(Stack stack) {
+      take = (Integer) takeCode.eval(stack);
+      rowSink.start(stack);
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      if (take > 0) {
+        --take;
+        rowSink.accept(stack);
       }
     }
   }
@@ -498,6 +580,36 @@ public abstract class RowSinks {
       }
       map.computeIfAbsent(value, fn);
     }
+
+    // Stack-based helpers delegate to EvalEnv helpers via the extended
+    // globalEnv (which contains the iteration variables in stack mode).
+    boolean add(Stack stack) {
+      return add(stack.globalEnv);
+    }
+
+    void remove(Stack stack) {
+      remove(stack.globalEnv);
+    }
+
+    void inc(Stack stack) {
+      inc(stack.globalEnv);
+    }
+
+    void dec(Stack stack) {
+      dec(stack.globalEnv);
+    }
+
+    void compute(Stack stack, BiFunction<Object, int[], int[]> fn) {
+      compute(stack.globalEnv, fn);
+    }
+
+    void computeIfPresent(Stack stack, BiFunction<Object, int[], int[]> fn) {
+      computeIfPresent(stack.globalEnv, fn);
+    }
+
+    void computeIfAbsent(Stack stack, Function<Object, int[]> fn) {
+      computeIfAbsent(stack.globalEnv, fn);
+    }
   }
 
   /** Implementation of {@link RowSink} for non-distinct {@code except} step. */
@@ -553,6 +665,40 @@ public abstract class RowSinks {
     }
 
     @Override
+    public void accept(Stack stack) {
+      if (!initialized) {
+        initialized = true;
+        final MutableEvalEnv mutableEvalEnv =
+            stack.globalEnv.bindMutableArray(names);
+        for (Code code : codes) {
+          final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+          for (Object element : elements) {
+            mutableEvalEnv.set(element);
+            inc(mutableEvalEnv);
+          }
+        }
+      }
+      Object value;
+      if (names.size() == 1) {
+        value = stack.globalEnv.getOpt(names.get(0));
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = stack.globalEnv.getOpt(names.get(i));
+        }
+        value = ImmutableList.copyOf(values);
+      }
+      int[] count = map.get(value);
+      if (count != null && count[0] > 0) {
+        --count[0];
+        if (count[0] == 0) {
+          map.remove(value);
+        }
+      } else {
+        rowSink.accept(stack);
+      }
+    }
+
+    @Override
     public List<Object> result(EvalEnv env) {
       return rowSink.result(env);
     }
@@ -570,6 +716,11 @@ public abstract class RowSinks {
     @Override
     public void accept(EvalEnv env) {
       add(env);
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      add(stack);
     }
 
     @Override
@@ -593,6 +744,32 @@ public abstract class RowSinks {
                 });
       }
       return rowSink.result(env);
+    }
+
+    @Override
+    public List<Object> result(Stack stack) {
+      final MutableEvalEnv mutableEvalEnv =
+          stack.globalEnv.bindMutableArray(names);
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          remove(mutableEvalEnv);
+        }
+      }
+      if (!map.isEmpty()) {
+        final MutableEvalEnv mutableEvalEnv2 =
+            stack.globalEnv.bindMutableList(names);
+        final Stack innerStack =
+            new Stack(mutableEvalEnv2, stack.slots, stack.top);
+        map.keySet()
+            .forEach(
+                element -> {
+                  mutableEvalEnv2.set(element);
+                  rowSink.accept(innerStack);
+                });
+      }
+      return rowSink.result(stack);
     }
   }
 
@@ -688,6 +865,59 @@ public abstract class RowSinks {
     }
 
     @Override
+    public void accept(Stack stack) {
+      if (!initialized) {
+        initialized = true;
+        final int n = codes.size();
+        final MutableEvalEnv mutableEvalEnv =
+            stack.globalEnv.bindMutableArray(names);
+        for (int i = 0; i < codes.size(); i++) {
+          final int slot = i;
+          final Code code = codes.get(i);
+          final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+          for (Object element : elements) {
+            mutableEvalEnv.set(element);
+            compute(
+                mutableEvalEnv,
+                (k, v) -> {
+                  if (v == null) {
+                    v = new int[n];
+                  }
+                  ++v[slot];
+                  return v;
+                });
+          }
+        }
+        map.entrySet()
+            .removeIf(
+                e -> {
+                  int[] counts = e.getValue();
+                  int minCount = counts[0];
+                  for (int i = 1; i < n; i++) {
+                    minCount = Math.min(minCount, counts[i]);
+                  }
+                  counts[0] = minCount;
+                  return minCount == 0;
+                });
+      }
+      Object value;
+      if (names.size() == 1) {
+        value = stack.globalEnv.getOpt(names.get(0));
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = stack.globalEnv.getOpt(names.get(i));
+        }
+        value = ImmutableList.copyOf(values);
+      }
+      map.computeIfPresent(
+          value,
+          (k, counts) -> {
+            rowSink.accept(stack);
+            return --counts[0] == 0 ? null : counts;
+          });
+    }
+
+    @Override
     public List<Object> result(EvalEnv env) {
       return rowSink.result(env);
     }
@@ -718,6 +948,11 @@ public abstract class RowSinks {
     public void accept(EvalEnv env) {
       // Initialize each distinct key to 0.
       computeIfAbsent(env, k -> new int[] {0});
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      computeIfAbsent(stack, k -> new int[] {0});
     }
 
     @Override
@@ -758,6 +993,43 @@ public abstract class RowSinks {
       }
       return rowSink.result(env);
     }
+
+    @Override
+    public List<Object> result(Stack stack) {
+      final MutableEvalEnv mutableEvalEnv =
+          stack.globalEnv.bindMutableArray(names);
+      int pass = 0;
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+        if (pass++ > 0) {
+          map.entrySet().removeIf(e -> e.getValue()[0] == 0);
+          map.forEach((k, v) -> v[0] = 0);
+        }
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          computeIfPresent(
+              mutableEvalEnv,
+              (k, v) -> {
+                ++v[0];
+                return v;
+              });
+        }
+      }
+      if (!map.isEmpty()) {
+        final MutableEvalEnv mutableEvalEnv2 =
+            stack.globalEnv.bindMutableList(names);
+        final Stack innerStack =
+            new Stack(mutableEvalEnv2, stack.slots, stack.top);
+        map.forEach(
+            (k, v) -> {
+              if (v[0] > 0) {
+                mutableEvalEnv2.set(k);
+                rowSink.accept(innerStack);
+              }
+            });
+      }
+      return rowSink.result(stack);
+    }
   }
 
   /** Implementation of {@link RowSink} for a {@code union} step. */
@@ -778,6 +1050,13 @@ public abstract class RowSinks {
     }
 
     @Override
+    public void accept(Stack stack) {
+      if (!distinct || add(stack)) {
+        rowSink.accept(stack);
+      }
+    }
+
+    @Override
     public List<Object> result(EvalEnv env) {
       MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
       for (Code code : codes) {
@@ -790,6 +1069,24 @@ public abstract class RowSinks {
         }
       }
       return rowSink.result(env);
+    }
+
+    @Override
+    public List<Object> result(Stack stack) {
+      final MutableEvalEnv mutableEvalEnv =
+          stack.globalEnv.bindMutableArray(names);
+      final Stack innerStack =
+          new Stack(mutableEvalEnv, stack.slots, stack.top);
+      for (Code code : codes) {
+        final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+        for (Object element : elements) {
+          mutableEvalEnv.set(element);
+          if (!distinct || add(mutableEvalEnv)) {
+            rowSink.accept(innerStack);
+          }
+        }
+      }
+      return rowSink.result(stack);
     }
   }
 
@@ -851,6 +1148,18 @@ public abstract class RowSinks {
     }
 
     @Override
+    public void accept(Stack stack) {
+      if (inNames.size() == 1) {
+        map.put(keyCode.eval(stack), stack.globalEnv.getOpt(inNames.get(0)));
+      } else {
+        for (int i = 0; i < inNames.size(); i++) {
+          values[i] = stack.globalEnv.getOpt(inNames.get(i));
+        }
+        map.put(keyCode.eval(stack), values.clone());
+      }
+    }
+
+    @Override
     public List<Object> result(final EvalEnv env) {
       // Derive env2, the environment for our consumer. It consists of our input
       // environment plus output names.
@@ -888,6 +1197,40 @@ public abstract class RowSinks {
         rowSink.accept(env2);
       }
       return rowSink.result(env);
+    }
+
+    @Override
+    public List<Object> result(Stack stack) {
+      EvalEnv env2 = stack.globalEnv;
+      final MutableEvalEnv[] groupEnvs = new MutableEvalEnv[outNames.size()];
+      int i = 0;
+      for (String name : outNames) {
+        env2 = groupEnvs[i++] = env2.bindMutable(name);
+      }
+      final EvalEnv env3 =
+          keyNames.isEmpty() ? stack.globalEnv : groupEnvs[keyNames.size() - 1];
+      final Stack innerStack = new Stack(env2, stack.slots, stack.top);
+      final Map<Object, List<Object>> map2;
+      if (map.isEmpty()
+          && keyCode instanceof Codes.TupleCode
+          && ((Codes.TupleCode) keyCode).codes.isEmpty()) {
+        map2 = ImmutableMap.of(ImmutableList.of(), ImmutableList.of());
+      } else {
+        //noinspection UnstableApiUsage
+        map2 = Multimaps.asMap(map);
+      }
+      for (Map.Entry<Object, List<Object>> entry : map2.entrySet()) {
+        final List list = (List) entry.getKey();
+        for (i = 0; i < list.size(); i++) {
+          groupEnvs[i].set(list.get(i));
+        }
+        final List<Object> rows = entry.getValue();
+        for (Applicable aggregateCode : aggregateCodes) {
+          groupEnvs[i++].set(aggregateCode.apply(env3, rows));
+        }
+        rowSink.accept(innerStack);
+      }
+      return rowSink.result(innerStack);
     }
   }
 
@@ -930,6 +1273,18 @@ public abstract class RowSinks {
     }
 
     @Override
+    public void accept(Stack stack) {
+      if (values == null) {
+        rows.add(stack.globalEnv.getOpt(names.get(0)));
+      } else {
+        for (int i = 0; i < names.size(); i++) {
+          values[i] = stack.globalEnv.getOpt(names.get(i));
+        }
+        rows.add(values.clone());
+      }
+    }
+
+    @Override
     public List<Object> result(final EvalEnv env) {
       final MutableEvalEnv leftEnv = env.bindMutableArray(names);
       final MutableEvalEnv rightEnv = env.bindMutableArray(names);
@@ -946,6 +1301,27 @@ public abstract class RowSinks {
         rowSink.accept(leftEnv);
       }
       return rowSink.result(env);
+    }
+
+    @Override
+    public List<Object> result(Stack stack) {
+      final MutableEvalEnv leftEnv = stack.globalEnv.bindMutableArray(names);
+      final MutableEvalEnv rightEnv = stack.globalEnv.bindMutableArray(names);
+      final Stack leftStack = new Stack(leftEnv, stack.slots, stack.top);
+      final Stack rightStack = new Stack(rightEnv, stack.slots, stack.top);
+      rows.sort(
+          (left, right) -> {
+            leftEnv.set(left);
+            rightEnv.set(right);
+            final Object leftVal = code.eval(leftStack);
+            final Object rightVal = code.eval(rightStack);
+            return comparator.compare(leftVal, rightVal);
+          });
+      for (Object row : rows) {
+        leftEnv.set(row);
+        rowSink.accept(leftStack);
+      }
+      return rowSink.result(leftStack);
     }
   }
 
@@ -993,6 +1369,20 @@ public abstract class RowSinks {
       }
       rowSink.accept(env2);
     }
+
+    @Override
+    public void accept(Stack stack) {
+      final MutableEvalEnv env2 = stack.globalEnv.bindMutableArray(names);
+      if (values == null) {
+        env2.set(codes.get(0).eval(stack));
+      } else {
+        for (int i = 0; i < codes.size(); i++) {
+          values[i] = codes.get(i).eval(stack);
+        }
+        env2.set(values);
+      }
+      rowSink.accept(new Stack(env2, stack.slots, stack.top));
+    }
   }
 
   /**
@@ -1026,6 +1416,21 @@ public abstract class RowSinks {
     public List<Object> result(EvalEnv env) {
       return list;
     }
+
+    @Override
+    public void start(Stack stack) {
+      list.clear();
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      list.add(code.eval(stack));
+    }
+
+    @Override
+    public List<Object> result(Stack stack) {
+      return list;
+    }
   }
 
   /** First row sink in the chain. */
@@ -1046,6 +1451,12 @@ public abstract class RowSinks {
     public void start(EvalEnv env) {
       startActions.forEach(Runnable::run);
       rowSink.start(env);
+    }
+
+    @Override
+    public void start(Stack stack) {
+      startActions.forEach(Runnable::run);
+      rowSink.start(stack);
     }
   }
 }

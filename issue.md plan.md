@@ -57,14 +57,24 @@ This unblocks builtins like `List.map`, `List.filter` etc. that
 receive user functions typed as `Applicable1`.
 
 ### ✅ Step 6: RowSinks use Stack
-Update `RowSink` interface: add `accept(Stack)` as the primary method;
-default falls back to EvalEnv.
-Update all `RowSinks` implementations to override `accept(Stack)`,
-using `stack.push` / `stack.restore` for iteration variables instead
-of `EvalEnv.bind`.
-Update `Compiler.createRowSinkFactory` to pass stack context.
+Add `FromCode.eval(Stack)` to route `from` evaluation through the stack
+path. Override `start/accept/result(Stack)` in every `RowSinks`
+implementation:
+- `ScanRowSink`: `code.eval(stack)` for the list; creates an `innerStack`
+  with a `MutableEvalEnv` for the iteration variable so `Codes.get` nodes
+  resolve via the extended env and `StackCode` nodes still read from the
+  shared slots array.
+- `WhereRowSink`, `SkipRowSink`, `TakeRowSink`: call `code.eval(stack)`.
+- `CollectRowSink`, `YieldRowSink`: call `code.eval(stack)`; YieldRowSink
+  builds an `innerStack` to expose yield outputs downstream.
+- `OrderRowSink`, `GroupRowSink`: save row values from `stack.globalEnv`;
+  re-emit via innerStack in `result(Stack)`.
+- `SetRowSink` variants (except/intersect/union): call `code.eval(stack)`
+  for RHS codes, access row values from `stack.globalEnv`.
+- `BaseRowSink` and `FirstRowSink`: delegate to `rowSink` stack methods.
+Added `Stack(EvalEnv, Object[], int)` constructor for sharing slots arrays.
 
-### ✅ Step 7: Activate stack mode globally
+### Step 7: Activate stack mode globally
 Remove the `if (cx.layout == null)` old-mode guard from
 `compileMatchListImpl` (and the corresponding guard in
 `compileMatchList`).

@@ -86,6 +86,27 @@ public final class Stack {
     this.top = 0;
   }
 
+  /**
+   * Creates a Stack that shares the slots array of a parent stack but has a
+   * different {@link #globalEnv}.
+   *
+   * <p>Used by row sinks to create an inner evaluation context: outer variables
+   * remain accessible via the shared {@link #slots} (StackCode nodes), while
+   * new iteration-variable bindings are in the extended {@code globalEnv}
+   * ({@code Codes.get} nodes).
+   *
+   * @param globalEnv Extended env that includes the new iteration variable
+   * @param parentSlots The slots array from the parent stack (shared by
+   *     reference)
+   * @param top The current stack top, copied from the parent
+   */
+  public Stack(
+      final EvalEnv globalEnv, final Object[] parentSlots, final int top) {
+    this.globalEnv = globalEnv;
+    this.slots = parentSlots;
+    this.top = top;
+  }
+
   /** Pushes {@code value} onto the stack. */
   public void push(Object value) {
     slots[top++] = value;
