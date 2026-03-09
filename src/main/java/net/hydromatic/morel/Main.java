@@ -24,8 +24,10 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
+import com.google.common.io.ByteStreams;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FilterReader;
@@ -38,6 +40,8 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -59,6 +63,8 @@ import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.foreign.Calcite;
+import net.hydromatic.morel.foreign.DataSet;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.parse.MorelParseException;
 import net.hydromatic.morel.parse.MorelParserImpl;
@@ -82,19 +88,88 @@ public class Main {
    *
    * @param args Command-line arguments
    */
+  @SuppressWarnings("CallToPrintStackTrace")
   public static void main(String[] args) {
-    final List<String> argList = ImmutableList.copyOf(args);
-    final Map<String, ForeignValue> valueMap = ImmutableMap.of();
+    int status;
+    try {
+      status = run(ImmutableList.copyOf(args));
+    } catch (Throwable e) {
+      e.printStackTrace();
+      status = 1;
+    }
+    System.exit(status);
+  }
+
+  /**
+   * Runs the program and returns an exit code.
+   *
+   * <p>Returns 0 on success. Returns 1 if there is an error, or if {@code
+   * darn-verify} finds mismatches.
+   *
+   * @param args Command-line arguments
+   * @return Exit code
+   */
+  public static int run(List<String> args) throws Exception {
+    // Detect sub-command: first arg if it matches a known sub-command name.
+    // Default is "execute".
+    final List<String> argList = new ArrayList<>(args);
+    final String subCommand;
+    if (!argList.isEmpty()) {
+      switch (argList.get(0)) {
+        case "execute":
+        case "darn-update":
+        case "darn-verify":
+        case "darn-probe":
+          subCommand = argList.remove(0);
+          break;
+        default:
+          subCommand = "execute";
+      }
+    } else {
+      subCommand = "execute";
+    }
+
+    // Build foreign value map from --foreign= args (same as Shell does).
+    // Use LinkedHashMap so that later --foreign= entries overwrite earlier
+    // ones; duplicate keys are allowed (last-wins).
+    final Map<String, ForeignValue> valueMap = new LinkedHashMap<>();
+    for (String arg : argList) {
+      if (arg.startsWith("--foreign=")) {
+        String className = arg.substring("--foreign=".length());
+        @SuppressWarnings("unchecked")
+        Map<String, DataSet> map = instantiate(className, Map.class);
+        valueMap.putAll(Calcite.withDataSets(map).foreignValues());
+      }
+    }
+
+    if (!subCommand.equals("execute")) {
+      boolean darnVerify = subCommand.equals("darn-verify");
+      boolean darnProbe = subCommand.equals("darn-probe");
+      boolean verbose = argList.contains("--verbose");
+      boolean anyChanges = false;
+      for (String arg : argList) {
+        if (!arg.startsWith("--")) {
+          if (darnProbe) {
+            Darn.probe(new File(arg), System.out, () -> kernel(valueMap));
+          } else {
+            anyChanges |=
+                Darn.process(
+                    new File(arg), darnVerify, () -> kernel(valueMap), verbose);
+          }
+        }
+      }
+      if (darnVerify && anyChanges) {
+        return 1;
+      }
+      return 0;
+    }
+
     final Map<Prop, Object> propMap = new LinkedHashMap<>();
     Prop.DIRECTORY.set(propMap, new File(System.getProperty("user.dir")));
     final Main main =
         new Main(argList, System.in, System.out, valueMap, propMap, false);
-    try {
-      main.run();
-    } catch (Throwable e) {
-      e.printStackTrace();
-      System.exit(1);
-    }
+    main.run();
+    return 0;
   }
 
   /** Creates a Main. */
@@ -134,6 +209,20 @@ public class Main {
               new StringReader(result.code), result.expectedOutputByOffset);
     } else {
       this.in = new BufferingReader(buffer(in));
+    }
+  }
+
+  /** Instantiates a class by name, using a no-arg constructor. */
+  private static <T> T instantiate(String className, Class<T> clazz) {
+    try {
+      final Class<?> aClass = Class.forName(className);
+      return clazz.cast(aClass.getConstructor().newInstance());
+    } catch (ClassNotFoundException
+        | NoSuchMethodException
+        | InstantiationException
+        | InvocationTargetException
+        | IllegalAccessException e) {
+      throw new RuntimeException("Cannot load class: " + className, e);
     }
   }
 
@@ -339,6 +428,16 @@ public class Main {
     } else {
       return new BufferedReader(in);
     }
+  }
+
+  /**
+   * Creates a new {@link Kernel} with the given foreign values.
+   *
+   * <p>The kernel maintains accumulated bindings across calls to {@link
+   * Kernel#execute}, so each cell sees definitions from all prior cells.
+   */
+  public static Kernel kernel(Map<String, ForeignValue> valueMap) {
+    return new KernelImpl(valueMap);
   }
 
   public void run() {
@@ -762,6 +861,54 @@ public class Main {
         String code, NavigableMap<Integer, String> expectedOutputByOffset) {
       this.code = code;
       this.expectedOutputByOffset = expectedOutputByOffset;
+    }
+  }
+
+  /** Implementation of {@link Kernel}. */
+  private static class KernelImpl implements Kernel {
+    private final Shell shell;
+
+    KernelImpl(Map<String, ForeignValue> valueMap) {
+      final Main main =
+          new Main(
+              ImmutableList.of(),
+              new ByteArrayInputStream(new byte[0]),
+              new PrintStream(ByteStreams.nullOutputStream()),
+              valueMap,
+              new LinkedHashMap<>(),
+              false);
+      final Environment env =
+          Environments.env(main.typeSystem, main.session, valueMap);
+      final Multimap<String, Binding> bindingMap =
+          ArrayListMultimap.create(100, 2);
+      final Consumer<String> noOp = line -> {};
+      shell = new Shell(main, env, noOp, noOp, bindingMap);
+    }
+
+    @Override
+    public List<String> execute(String code) {
+      if (code.trim().isEmpty()) {
+        return ImmutableList.of();
+      }
+      final List<String> lines = new ArrayList<>();
+      final Consumer<String> capture = lines::add;
+      final byte[] inputBytes = code.getBytes(StandardCharsets.UTF_8);
+      final BufferingReader reader =
+          new BufferingReader(
+              new BufferedReader(
+                  new InputStreamReader(
+                      new ByteArrayInputStream(inputBytes),
+                      StandardCharsets.UTF_8)));
+      shell.main.session.withShell(
+          shell,
+          capture,
+          session -> shell.run(session, reader, capture, capture));
+      return ImmutableList.copyOf(lines);
+    }
+
+    @Override
+    public void close() {
+      // Nothing to close; GC will collect.
     }
   }
 

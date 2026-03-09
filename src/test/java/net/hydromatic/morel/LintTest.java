@@ -375,14 +375,11 @@ public class LintTest {
     b.add(line -> line.contains("<ul>"), line -> line.state().ulCount++);
     b.add(line -> line.contains("</ul>"), line -> line.state().ulCount--);
 
-    // In markdown, <code> and </code> must be on same line
+    // In Markdown, <code> and </code> must be on same line
     b.add(
         line ->
-            line.contains("code>")
-                && !line.source()
-                    .fileOpt()
-                    .filter(f -> f.getName().equals("LintTest.java"))
-                    .isPresent(),
+            line.state().language == Language.MARKDOWN
+                && line.contains("code>"),
         line -> {
           int openCount = count(line.line(), "<code>");
           int closeCount = count(line.line(), "</code>");
@@ -630,6 +627,8 @@ public class LintTest {
                 && !line.line().startsWith("```")
                 && !line.line().startsWith("    ") // indented code
                 && !line.line().startsWith("<i>") // syntax definition
+                && !line.line().contains("<pre class=") // pre blocks w/ attrs
+                && !line.line().contains("<div class=") // div blocks w/ attrs
                 && !line.line().matches("^[-|:]+$") // table separator
                 && !lintSkip(line),
         line ->
@@ -647,16 +646,19 @@ public class LintTest {
                 && line.line().startsWith("```"),
         line -> line.state().inCodeBlock = !line.state().inCodeBlock);
 
-    // Track <pre> blocks in Markdown
+    // Track <pre> and <div class="code-"> blocks in Markdown
     b.add(
         line ->
             line.state().language == Language.MARKDOWN
-                && line.line().contains("<pre>"),
+                && (line.line().contains("<pre>")
+                    || line.line().contains("<pre ")
+                    || line.line().contains("<div class=\"code-")),
         line -> line.state().inPreBlock = true);
     b.add(
         line ->
             line.state().language == Language.MARKDOWN
-                && line.line().contains("</pre>"),
+                && (line.line().contains("</pre>")
+                    || line.line().contains("</div>")),
         line -> line.state().inPreBlock = false);
 
     // Track Jekyll comment blocks
@@ -797,6 +799,19 @@ public class LintTest {
     return count;
   }
 
+  private String programResult(String fileName, String code) {
+    final Puffin.Program<GlobalState> program = makeProgram();
+    final StringWriter sw = new StringWriter();
+    final GlobalState g;
+    try (PrintWriter pw = new PrintWriter(sw)) {
+      THREAD_FILE_NAME.set(fileName);
+      g = program.execute(Stream.of(Sources.of(code)), pw);
+    } finally {
+      THREAD_FILE_NAME.remove();
+    }
+    return g.messages.toString().replace(", ", "\n").replace(']', '\n');
+  }
+
   @Test
   void testProgramWorks() {
     final String code =
@@ -874,31 +889,15 @@ public class LintTest {
             + "newline should be at end of string literal\n"
             + "GuavaCharSource{memory}:30:"
             + "newline should be at end of string literal\n"
-            + "GuavaCharSource{memory}:33:"
-            + "<code> and </code> must be on same line\n"
-            + "GuavaCharSource{memory}:34:"
-            + "<code> and </code> must be on same line\n"
             + "GuavaCharSource{memory}:35:"
             + "fully-qualified class name; use import\n"
             + "GuavaCharSource{memory}:40:"
             + "fully-qualified class name; use import\n";
-    final Puffin.Program<GlobalState> program = makeProgram();
-    final StringWriter sw = new StringWriter();
-    final GlobalState g;
-    try (PrintWriter pw = new PrintWriter(sw)) {
-      THREAD_FILE_NAME.set("Foo.java");
-      g = program.execute(Stream.of(Sources.of(code)), pw);
-    } finally {
-      THREAD_FILE_NAME.remove();
-    }
-    assertThat(
-        g.messages.toString().replace(", ", "\n").replace(']', '\n'),
-        is(expectedMessages));
+    assertThat(programResult("Foo.java", code), is(expectedMessages));
   }
 
   @Test
   void testProgramWorksMorel() {
-    // We write test content to a temp .smli file so isMorel matches.
     final String code =
         "(* single-line comment *)\n"
             + "(*\n"
@@ -927,18 +926,25 @@ public class LintTest {
             + "\n"
             + "GuavaCharSource{memory}:15:"
             + "decorative comment; use '---' not '***'\n";
-    final Puffin.Program<GlobalState> program = makeProgram();
-    final StringWriter sw = new StringWriter();
-    final GlobalState g;
-    try (PrintWriter pw = new PrintWriter(sw)) {
-      THREAD_FILE_NAME.set("foo.smli");
-      g = program.execute(Stream.of(Sources.of(code)), pw);
-    } finally {
-      THREAD_FILE_NAME.remove();
-    }
-    assertThat(
-        g.messages.toString().replace(", ", "\n").replace(']', '\n'),
-        is(expectedMessages));
+    assertThat(programResult("foo.smli", code), is(expectedMessages));
+  }
+
+  @Test
+  void testProgramWorksMarkdown() {
+    final String code =
+        "  // A comment with <code>on one line and\n"
+            + "  // </code> on the next.\n";
+    final String expectedMessages =
+        "["
+            + "GuavaCharSource{memory}:1:"
+            + "<code> and </code> must be on same line\n"
+            + "GuavaCharSource{memory}:1:"
+            + "missing license header\n"
+            + "GuavaCharSource{memory}:2:"
+            + "<code> and </code> must be on same line\n";
+    final String fileName = "foo.md";
+    final String replace = programResult(fileName, code);
+    assertThat(replace, is(expectedMessages));
   }
 
   /** Tests that source code has no flaws. */
