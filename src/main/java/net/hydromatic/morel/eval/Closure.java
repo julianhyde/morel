@@ -157,7 +157,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
   public static void patchStackClosureEnv(Object value, EvalEnv env) {
     if (value instanceof StackClosure) {
       ((StackClosure) value).globalEnv = env;
-    } else if (value instanceof List) {
+    } else if (value instanceof List && !(value instanceof Variant)) {
       for (Object element : (List<?>) value) {
         patchStackClosureEnv(element, env);
       }
@@ -633,7 +633,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       if (!variant.constructor().constructor.equals(conPat.tyCon)) {
         return false;
       }
-      return pushBindings(conPat.pat, variant, stack);
+      return pushBindings(conPat.pat, Variant.innerValue(variant), stack);
     }
   }
 }

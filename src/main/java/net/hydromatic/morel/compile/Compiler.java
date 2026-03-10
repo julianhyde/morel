@@ -63,6 +63,7 @@ import net.hydromatic.morel.eval.RowSinks;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
+import net.hydromatic.morel.eval.Variant;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
@@ -1756,7 +1757,7 @@ public class Compiler {
       if (value instanceof Closure.StackClosure) {
         return ((Closure.StackClosure) value).hasGlobalEnv(baseEnv);
       }
-      if (value instanceof List) {
+      if (value instanceof List && !(value instanceof Variant)) {
         for (Object element : (List<?>) value) {
           if (needsGlobalEnvPatch(element, baseEnv)) {
             return true;
