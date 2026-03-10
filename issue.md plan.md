@@ -167,21 +167,40 @@ built-in bindings. These can't use stack slots today because global
 bindings are added dynamically by the REPL, so no fixed offset is
 known at compile time.
 
-Fix: maintain a monotonically-growing **global slot array** alongside
-the existing EvalEnv chain:
-- `Session` (or `Environment`) carries a `globalSlots: Object[]` and a
-  `globalSlotMap: Map<Name, Integer>` assigning each top-level binding
-  a stable integer index. New bindings are appended; old indices never
-  change, so previously-compiled code remains valid.
-- `Stack` gains a `globalSlots` reference (or reuses `slots[0..base-1]`).
-- `compileFieldName` emits `GlobalSlotCode(index)` (reads
-  `stack.globalSlots[index]`) instead of `GetCode(name)` for bindings
-  found in the global slot map.
-- `GetCode` / `GetTupleCode` are removed once all global references are
-  slot-based.
+Fix: keep `EvalEnv` as the authoritative linked-list/linked-hash-map
+store of global bindings (easy to extend at the REPL prompt), but
+**transcribe it into a flat `Object[]` at the start of each statement
+evaluation**, before any `Code.eval(Stack)` call:
 
-This makes all variable access O(1) and uniform, and eliminates the
-last runtime use of EvalEnv name lookup.
+**Compile time** (once per statement, in `Compiler.compile`):
+- Walk the current `EvalEnv` from innermost to outermost, visiting each
+  binding exactly once (innermost wins when a name is shadowed). This is
+  the same traversal the linked structure already does for `getOpt`.
+- Assign a stable slot index 0, 1, 2, … to each visible binding,
+  producing a `globalSlotMap: ImmutableMap<Name, Integer>`.
+- Attach `globalSlotMap` to `Context` for use during compilation.
+- `compileFieldName` emits `GlobalSlotCode(index)` for names found in
+  `globalSlotMap`, instead of `GetCode(name)`.
+
+**Runtime** (once per statement, before `code.eval(stack)`):
+- Walk the same `EvalEnv` in the same order; fill `globalSlots: Object[]`
+  at the corresponding indices.
+- Pass `globalSlots` to the initial `Stack`.
+
+**Properties of this design:**
+- Shadowed (obscured) bindings do not appear in the snapshot — their
+  values are not held by `globalSlots` and become GC-eligible immediately.
+- Slot indices are local to one compilation + execution pair; they do not
+  need to be stable across REPL iterations (recompile = fresh slot map).
+- Previously-compiled closures captured before a redefinition still hold
+  their own `globalEnv` snapshot (via `StackClosure.globalEnv`), so they
+  continue to see the old binding — correct ML semantics.
+- Type constructors: in standard SML, redefining a datatype obscures the
+  old constructors; verify Morel matches this behaviour (separate issue).
+
+Remove `GetCode` / `GetTupleCode` once all global references are
+slot-based; `globalSlots` replaces the role of `Stack.globalEnv` for
+value lookup (though `globalEnv` may remain for other metadata).
 
 ### Step 14: Remove EvalEnv from eval interfaces
 After Steps 11–13, no `Code` class will have a meaningful
