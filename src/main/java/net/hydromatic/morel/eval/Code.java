@@ -45,6 +45,18 @@ public interface Code extends Describable {
         getClass().getSimpleName() + " requires a Stack");
   }
 
+  /**
+   * Returns the maximum number of stack slots that this code node (and its
+   * descendants) will push beyond the current stack top during evaluation. Used
+   * to compute a tight array size for newly allocated {@link Stack} instances.
+   *
+   * <p>The default returns 0 (no slots pushed). {@code StackLet1Code} and
+   * {@code StackLetPatCode} override this to return their contribution.
+   */
+  default int maxSlots() {
+    return 0;
+  }
+
   default boolean isConstant() {
     return false;
   }

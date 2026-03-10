@@ -223,7 +223,7 @@ public class CalciteCompiler extends Compiler {
 
       @Override
       public Object eval(EvalEnv evalEnv) {
-        return code.eval(new Stack(evalEnv, 256));
+        return code.eval(new Stack(evalEnv, code.maxSlots()));
       }
 
       @Override
@@ -256,7 +256,7 @@ public class CalciteCompiler extends Compiler {
 
       @Override
       public Object eval(EvalEnv env) {
-        return code.eval(new Stack(env, 256));
+        return code.eval(new Stack(env, code.maxSlots()));
       }
 
       @Override
@@ -458,7 +458,7 @@ public class CalciteCompiler extends Compiler {
 
       @Override
       public Object eval(EvalEnv env) {
-        return code.eval(new Stack(env, 256));
+        return code.eval(new Stack(env, code.maxSlots()));
       }
 
       @Override
@@ -1059,7 +1059,7 @@ public class CalciteCompiler extends Compiler {
 
         @Override
         public Object eval(EvalEnv env) {
-          return code.eval(new Stack(env, 256));
+          return code.eval(new Stack(env, code.maxSlots()));
         }
 
         @Override

@@ -357,18 +357,28 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
     final Object[] capturedValues;
     private final ImmutablePairList<Core.Pat, Code> patCodes;
+    /**
+     * Minimum stack capacity needed when this closure is invoked without a
+     * pre-existing {@link Stack}. Computed at compile time by {@code
+     * StackMatchCode} from {@code captureOffsets.length} plus the maximum body
+     * depth.
+     */
+    final int capacity;
+
     private final Pos pos;
 
     public StackClosure(
         EvalEnv globalEnv,
         Object[] capturedValues,
         ImmutablePairList<Core.Pat, Code> patCodes,
+        int capacity,
         Pos pos) {
       // Snapshot the env so that subsequent mutations (e.g. ScanRowSink
       // advancing to the next row) do not change what this closure sees.
       this.globalEnv = requireNonNull(globalEnv).fix();
       this.capturedValues = capturedValues;
       this.patCodes = patCodes;
+      this.capacity = capacity;
       this.pos = pos;
     }
 
@@ -405,10 +415,22 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      */
     @Override
     public Object apply(Stack stack, Object argValue) {
-      // Create an evalStack sharing the slots array but using this closure's
-      // globalEnv. This ensures recursive lookups (via Codes.get) find the
-      // function in globalEnv regardless of what the caller's stack has.
-      Stack evalStack = new Stack(globalEnv, stack.slots, stack.top);
+      // Create an evalStack using this closure's globalEnv. This ensures
+      // recursive lookups (via Codes.get) find the function in globalEnv
+      // regardless of what the caller's stack has.
+      //
+      // If the caller's slots array doesn't have room for this closure's
+      // capacity (e.g., a non-tail recursive call where the outer frame's
+      // bindings are still live), allocate a larger array so that pushBindings
+      // can store the new frame's variables without going out of bounds.
+      Stack evalStack;
+      if (stack.slots.length < stack.top + capacity) {
+        final Object[] newSlots = new Object[stack.top + capacity];
+        System.arraycopy(stack.slots, 0, newSlots, 0, stack.top);
+        evalStack = new Stack(globalEnv, newSlots, stack.top);
+      } else {
+        evalStack = new Stack(globalEnv, stack.slots, stack.top);
+      }
       int savedTop = evalStack.save();
       Object result = applyOnce(evalStack, argValue);
       while (result instanceof Codes.TailCall) {
@@ -416,7 +438,15 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
         evalStack.restore(savedTop);
         if (tc.fn instanceof StackClosure) {
           final StackClosure nextFn = (StackClosure) tc.fn;
-          if (nextFn.globalEnv != evalStack.globalEnv) {
+          // Ensure slots array is large enough for the tail-called closure.
+          // The outer closure may have a smaller capacity than the tail-called
+          // closure needs (e.g., fn x => case x of head::tail => ...).
+          final int needed = savedTop + nextFn.capacity;
+          if (evalStack.slots.length < needed) {
+            final Object[] newSlots = new Object[needed];
+            System.arraycopy(evalStack.slots, 0, newSlots, 0, savedTop);
+            evalStack = new Stack(nextFn.globalEnv, newSlots, savedTop);
+          } else if (nextFn.globalEnv != evalStack.globalEnv) {
             evalStack =
                 new Stack(nextFn.globalEnv, evalStack.slots, evalStack.top);
           }
@@ -455,7 +485,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      */
     @Override
     public Object apply(Object argValue) {
-      return apply(new Stack(globalEnv, 4096), argValue);
+      return apply(new Stack(globalEnv, capacity), argValue);
     }
 
     /**
@@ -465,7 +495,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      */
     @Override
     public Object apply(EvalEnv env, Object argValue) {
-      return apply(new Stack(globalEnv, 4096), argValue);
+      return apply(new Stack(globalEnv, capacity), argValue);
     }
 
     /**

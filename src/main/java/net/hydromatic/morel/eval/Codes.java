@@ -4741,6 +4741,15 @@ public abstract class Codes {
           "tuple", d -> codes.forEach(code -> d.arg("", code)));
     }
 
+    @Override
+    public int maxSlots() {
+      int max = 0;
+      for (Code code : codes) {
+        max = Math.max(max, code.maxSlots());
+      }
+      return max;
+    }
+
     public Object eval(EvalEnv env) {
       final Object[] values = new Object[codes.size()];
       for (int i = 0; i < values.length; i++) {
@@ -4944,6 +4953,11 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return Math.max(code0.maxSlots(), code1.maxSlots());
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start("andalso", d -> d.arg("", code0).arg("", code1));
     }
@@ -4968,6 +4982,11 @@ public abstract class Codes {
     OrElseCode(Code code0, Code code1) {
       this.code0 = code0;
       this.code1 = code1;
+    }
+
+    @Override
+    public int maxSlots() {
+      return Math.max(code0.maxSlots(), code1.maxSlots());
     }
 
     @Override
@@ -5094,6 +5113,11 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return 1 + resultCode.maxSlots();
+    }
+
+    @Override
     public Object eval(Stack stack) {
       final int savedTop = stack.save();
       stack.push(expCode.eval(stack));
@@ -5118,12 +5142,15 @@ public abstract class Codes {
    */
   private static class StackLetPatCode implements Code {
     private final Core.Pat pat;
+    private final int numVars;
     private final Code expCode;
     private final Code resultCode;
     private final Pos pos;
 
-    StackLetPatCode(Core.Pat pat, Code expCode, Code resultCode, Pos pos) {
+    StackLetPatCode(
+        Core.Pat pat, int numVars, Code expCode, Code resultCode, Pos pos) {
       this.pat = pat;
+      this.numVars = numVars;
       this.expCode = expCode;
       this.resultCode = resultCode;
       this.pos = pos;
@@ -5137,6 +5164,11 @@ public abstract class Codes {
               d.arg("pat", pat.toString())
                   .arg("expCode", expCode)
                   .arg("resultCode", resultCode));
+    }
+
+    @Override
+    public int maxSlots() {
+      return numVars + resultCode.maxSlots();
     }
 
     @Override
@@ -5161,8 +5193,8 @@ public abstract class Codes {
    * restores the stack.
    */
   public static Code stackLetPat(
-      Core.Pat pat, Code expCode, Code resultCode, Pos pos) {
-    return new StackLetPatCode(pat, expCode, resultCode, pos);
+      Core.Pat pat, int numVars, Code expCode, Code resultCode, Pos pos) {
+    return new StackLetPatCode(pat, numVars, expCode, resultCode, pos);
   }
 
   /** Applies an {@link Applicable} to a {@link Code}. */
@@ -5173,6 +5205,11 @@ public abstract class Codes {
     ApplyCode(Applicable fnValue, Code argCode) {
       this.fnValue = fnValue;
       this.argCode = argCode;
+    }
+
+    @Override
+    public int maxSlots() {
+      return argCode.maxSlots();
     }
 
     @Override
@@ -5202,6 +5239,11 @@ public abstract class Codes {
     ApplyCode1(Applicable1 fnValue, Code argCode0) {
       this.fnValue = fnValue;
       this.argCode0 = argCode0;
+    }
+
+    @Override
+    public int maxSlots() {
+      return argCode0.maxSlots();
     }
 
     @Override
@@ -5235,6 +5277,11 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return Math.max(argCode0.maxSlots(), argCode1.maxSlots());
+    }
+
+    @Override
     public Object eval(EvalEnv env) {
       final Object arg0 = argCode0.eval(env);
       final Object arg1 = argCode1.eval(env);
@@ -5262,6 +5309,11 @@ public abstract class Codes {
     ApplyCode2Tuple(Applicable2 fnValue, Code argCode) {
       this.fnValue = fnValue;
       this.argCode = argCode;
+    }
+
+    @Override
+    public int maxSlots() {
+      return argCode.maxSlots();
     }
 
     @Override
@@ -5299,6 +5351,13 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return Math.max(
+          argCode0.maxSlots(),
+          Math.max(argCode1.maxSlots(), argCode2.maxSlots()));
+    }
+
+    @Override
     public Object eval(EvalEnv env) {
       final Object arg0 = argCode0.eval(env);
       final Object arg1 = argCode1.eval(env);
@@ -5332,6 +5391,11 @@ public abstract class Codes {
     ApplyCode3Tuple(Applicable3 fnValue, Code argCode) {
       this.fnValue = fnValue;
       this.argCode = argCode;
+    }
+
+    @Override
+    public int maxSlots() {
+      return argCode.maxSlots();
     }
 
     @Override
@@ -5372,6 +5436,13 @@ public abstract class Codes {
       this.argCode1 = argCode1;
       this.argCode2 = argCode2;
       this.argCode3 = argCode3;
+    }
+
+    @Override
+    public int maxSlots() {
+      return Math.max(
+          Math.max(argCode0.maxSlots(), argCode1.maxSlots()),
+          Math.max(argCode2.maxSlots(), argCode3.maxSlots()));
     }
 
     @Override
@@ -5418,6 +5489,11 @@ public abstract class Codes {
     ApplyCodeCode(Code fnCode, Code argCode) {
       this.fnCode = fnCode;
       this.argCode = argCode;
+    }
+
+    @Override
+    public int maxSlots() {
+      return Math.max(fnCode.maxSlots(), argCode.maxSlots());
     }
 
     @Override
@@ -5469,6 +5545,11 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return argCode.maxSlots();
+    }
+
+    @Override
     public Object eval(EvalEnv env) {
       return new TailCall(fnValue, argCode.eval(env));
     }
@@ -5493,6 +5574,11 @@ public abstract class Codes {
     TailApplyCodeCode(Code fnCode, Code argCode) {
       this.fnCode = fnCode;
       this.argCode = argCode;
+    }
+
+    @Override
+    public int maxSlots() {
+      return Math.max(fnCode.maxSlots(), argCode.maxSlots());
     }
 
     @Override
@@ -5523,6 +5609,11 @@ public abstract class Codes {
 
     WrapRelList(Code code) {
       this.code = code;
+    }
+
+    @Override
+    public int maxSlots() {
+      return code.maxSlots();
     }
 
     @Override

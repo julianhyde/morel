@@ -1794,6 +1794,70 @@ public class MainTest {
     ml(ml).assertParseSame().assertType("int").assertEval(is(0));
   }
 
+  /** Tests height of a binary tree (multi-arg CON_PAT with wildcard). */
+  @Test
+  void testHeight() {
+    ml("let\n"
+            + " datatype inttree = Empty | Node of inttree * int * inttree;\n"
+            + " fun greater (x, y) = if x < y then y else x;\n"
+            + " fun height Empty = 0\n"
+            + "   | height (Node (lft, _, rht)) = 1 + greater (height lft, height rht)\n"
+            + " in height (Node(Empty, 2, Node(Node(Empty, 3, Empty), 4, Empty)))\n"
+            + "end")
+        .assertEval(is(3));
+  }
+
+  /** Tests program function from type.smli (multi-statement context). */
+  @Test
+  void testProgram() {
+    ml("let\n"
+            + "  fun factorize n =\n"
+            + "    let\n"
+            + "      fun findSmallestDivisor (n, start) =\n"
+            + "        if start * start > n then n\n"
+            + "        else if n mod start = 0 then start\n"
+            + "        else findSmallestDivisor (n, start + 1);\n"
+            + "      fun smallestFactor n =\n"
+            + "        if n <= 1 then n\n"
+            + "        else findSmallestDivisor (n, 2);\n"
+            + "    in\n"
+            + "      if n <= 1 then [n]\n"
+            + "      else\n"
+            + "        let\n"
+            + "          val factor = smallestFactor n\n"
+            + "        in\n"
+            + "          if factor = n then [n]\n"
+            + "          else factor :: factorize (n div factor)\n"
+            + "        end\n"
+            + "    end;\n"
+            + "  fun program n =\n"
+            + "    let\n"
+            + "      fun concat2 (start, sep, e, list) =\n"
+            + "        start ^\n"
+            + "          (case list of\n"
+            + "              [] => \"\"\n"
+            + "            | [s] => s\n"
+            + "            | first :: rest =>"
+            + " first ^ (String.concat (List.map (fn s => sep ^ s) rest))) ^\n"
+            + "          e;\n"
+            + "      fun f i =\n"
+            + "        let\n"
+            + "          val factors = factorize i\n"
+            + "        in\n"
+            + "          if length factors = 1 then Int.toString (hd factors)\n"
+            + "          else concat2 (\"\", \" * \","
+            + " \"\", List.map (fn x => \"i\" ^ Int.toString x) factors)\n"
+            + "        end;\n"
+            + "    in\n"
+            + "      concat2 (\"(\", \", \", \")\", List.tabulate (n, fn i =>"
+            + " \"i\" ^ Int.toString i))\n"
+            + "    end\n"
+            + "in\n"
+            + "  program 5\n"
+            + "end")
+        .assertEval(is("(i0, i1, i2, i3, i4)"));
+  }
+
   /** As {@link #testDatatype4()} but with deeper expression. */
   @Test
   void testDatatype4a() {

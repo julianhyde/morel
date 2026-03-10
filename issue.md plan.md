@@ -74,7 +74,7 @@ implementation:
 - `BaseRowSink` and `FirstRowSink`: delegate to `rowSink` stack methods.
 Added `Stack(EvalEnv, Object[], int)` constructor for sharing slots arrays.
 
-### Step 7: Activate stack mode globally
+### ✅ Step 7: Activate stack mode globally (ab921c71)
 Remove the `if (cx.layout == null)` old-mode guard from
 `compileMatchListImpl` (and the corresponding guard in
 `compileMatchList`).
@@ -94,6 +94,19 @@ Make `Code.eval(EvalEnv)` the fallback / deprecated path.
 Remove `eval(EvalEnv)` overrides from all stack-based code nodes
 (`StackCode`, `StackLet1Code`, `StackLetPatCode`, `StackMatchCode`).
 
-### Step 10: Shrink Stack slots array
+### ✅ Step 10: Shrink Stack slots array
 Replace `new Object[4096]` with a properly sized array based on the
 maximum stack depth computed at compile time from `StackLayout`.
+
+Compute `capacity` in `StackMatchCode` as `max over arms of
+(captureOffsets.length + numArgVars + body.maxSlots())`.
+Propagate `maxSlots()` through `StackLet1Code` and `StackLetPatCode`.
+Also propagate through `ApplyCode*`, `TupleCode`, `AndAlsoCode`,
+`OrElseCode`, `WrapRelList` (all code nodes with sub-expression children).
+
+Fix two runtime array-growth issues:
+1. Trampoline in `StackClosure.apply(Stack, Object)`: when a tail call
+   targets a closure with larger `capacity`, grow the slots array.
+2. Non-tail recursive calls: when `StackClosure.apply(Stack, Object)` is
+   called with `stack.slots.length < stack.top + capacity`, allocate a
+   larger array and copy live slots.

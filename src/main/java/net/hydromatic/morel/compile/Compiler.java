@@ -982,7 +982,8 @@ public class Compiler {
             cx.localDepth + namedPats.size());
     final Code bodyCode =
         tailPos ? compileTail(cx2, match.exp) : compile(cx2, match.exp);
-    return Codes.stackLetPat(pat, expCode, bodyCode, match.pos);
+    return Codes.stackLetPat(
+        pat, namedPats.size(), expCode, bodyCode, match.pos);
   }
 
   protected Code finishCompileLet(
@@ -1247,8 +1248,20 @@ public class Compiler {
       patCodes.add(match.pat, bodyCode);
     }
 
+    // Compute minimum slots needed when this closure is invoked fresh
+    // (no pre-existing Stack). Max over all arms of:
+    //   captureOffsets.length + numArgVars + bodyCode.maxSlots()
+    int capacity = 0;
+    for (Map.Entry<Core.Pat, Code> e : patCodes) {
+      final int numArgs = namedPatsOf(e.getKey()).size();
+      capacity =
+          Math.max(
+              capacity,
+              captureOffsets.length + numArgs + e.getValue().maxSlots());
+    }
+
     return new StackMatchCode(
-        captureOffsets, patCodes.immutable(), last(matchList).pos);
+        captureOffsets, patCodes.immutable(), capacity, last(matchList).pos);
   }
 
   /**
@@ -1530,14 +1543,19 @@ public class Compiler {
   private static class StackMatchCode implements Code {
     private final int[] captureOffsets;
     private final ImmutablePairList<Core.Pat, Code> patCodes;
+    /** Minimum slots needed for a fresh {@link Closure.StackClosure} call. */
+    private final int capacity;
+
     private final Pos pos;
 
     StackMatchCode(
         int[] captureOffsets,
         ImmutablePairList<Core.Pat, Code> patCodes,
+        int capacity,
         Pos pos) {
       this.captureOffsets = captureOffsets;
       this.patCodes = patCodes;
+      this.capacity = capacity;
       this.pos = pos;
     }
 
@@ -1550,7 +1568,8 @@ public class Compiler {
     public Object eval(EvalEnv env) {
       // Called from old-mode context: no stack, create closure with no
       // captures.
-      return new Closure.StackClosure(env, new Object[0], patCodes, pos);
+      return new Closure.StackClosure(
+          env, new Object[0], patCodes, capacity, pos);
     }
 
     @Override
@@ -1559,7 +1578,8 @@ public class Compiler {
       for (int i = 0; i < captureOffsets.length; i++) {
         captured[i] = stack.slots[stack.top - captureOffsets[i]];
       }
-      return new Closure.StackClosure(stack.globalEnv, captured, patCodes, pos);
+      return new Closure.StackClosure(
+          stack.globalEnv, captured, patCodes, capacity, pos);
     }
   }
 
@@ -1665,7 +1685,8 @@ public class Compiler {
       final StringBuilder buf = new StringBuilder();
       final List<String> outs = new ArrayList<>();
       try {
-        final Object o = code.eval(new Stack(evalEnv, 256));
+        final Object o =
+            code.eval(new Stack(evalEnv, Math.max(code.maxSlots(), 256)));
         final List<Binding> outBindings0 = new ArrayList<>();
         // For simple IdPat bindings, store the expression so it can be inlined
         // in subsequent compile units. For compound patterns (tuples), we don't
