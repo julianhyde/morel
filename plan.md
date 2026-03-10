@@ -173,7 +173,7 @@ New test class `DarnTest` that processes markdown fixtures in
 
 ### Step 9 — Rationalize CLI sub-commands
 
-Status: TODO
+Status: DONE
 
 Currently `morel` has a flat flag space (`--darn`, `--darn-verify`, `-e`,
 `--echo`, etc.). As the tool grows, introduce an explicit sub-command

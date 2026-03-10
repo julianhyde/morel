@@ -66,8 +66,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * <p>Usage:
  *
  * <pre>
- * ./morel --darn file.md          # execute cells and update in-place
- * ./morel --darn-verify file.md   # verify only, report mismatches
+ * ./morel darn-update file.md   # execute cells and update in-place
+ * ./morel darn-verify file.md   # verify only, report mismatches
+ * ./morel darn-probe file.md    # probe skip cells, report OK/ERROR
  * </pre>
  */
 public class Darn {

@@ -27,30 +27,45 @@
 usage() {
   cd $(dirname $0)
   head -1 ./README
-  echo "Usage: morel [option...] [file...]"
+  echo "Usage: morel [command] [option...] [file...]"
   echo
-  echo Options:
+  echo "Commands:"
+  echo "  execute             Run script or REPL (default if no command given)."
+  echo "  darn-update         Execute <!-- morel --> cells and update files in-place."
+  echo "  darn-verify         Verify <!-- morel --> cells; report mismatches."
+  echo "  darn-probe          Probe skip cells: try executing each, report OK/ERROR."
+  echo
+  echo "Options (execute):"
   echo "  --build             Compile the source code first."
   echo "  --echo              Send script output stdout as well as file."
   echo "  -e, --eval <expr>   Evaluate expression and exit."
   echo "  -h, --help          Print this help, then exit."
   echo "  --idempotent        Treat all files (and stdin) as SMLI format."
   echo "                      Set implicitly if the first file has suffix '.smli'."
-  echo "  --darn <file>...    Execute <!-- morel --> cells in document files and"
-  echo "                      update the files in-place with highlighted output."
-  echo "  --darn-verify <f>.. Verify <!-- morel --> cells; report mismatches."
-  echo "  --darn-probe <f>... Probe skip cells: try executing each, report OK/ERROR."
   echo "  --no-build          Don't compile the source code first. (This is the"
   echo "                      default, but a limited build will always occur if"
   echo "                      'target/classpath.txt' is not present.)"
+  echo
+  echo "Options (all commands):"
+  echo "  --foreign=CLASS     Load foreign dataset from Java class."
 }
+
+# Detect sub-command: first arg if it is a known sub-command name.
+SUBCMD=execute
+case "$1" in
+  (execute|darn-update|darn-verify|darn-probe)
+    SUBCMD="$1"
+    shift
+    ;;
+esac
 
 # Process options.
 BUILD=
 HELP=
-FORMAT=
 EVAL_EXPR=
+ECHO=
 FOREIGN=
+FILES=
 while [ $# -gt 0 ]; do
   case "$1" in
     (--help|-h)
@@ -78,19 +93,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     (--idempotent)
-      FORMAT=smli
-      shift
-      ;;
-    (--darn)
-      FORMAT=darn
-      shift
-      ;;
-    (--darn-verify)
-      FORMAT=darn-verify
-      shift
-      ;;
-    (--darn-probe)
-      FORMAT=darn-probe
+      SUBCMD=smli
       shift
       ;;
     (--foreign=*)
@@ -98,20 +101,14 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     (*.smli)
-      if [ "$FILES" = "" ]; then
-        FORMAT=smli
-        FILES="$1"
-      else
-        FILES="$FILES $1"
+      if [ "$FILES" = "" ] && [ "$SUBCMD" = "execute" ]; then
+        SUBCMD=smli
       fi
+      FILES="$FILES $1"
       shift
       ;;
     (*)
-      if [ "$FILES" = "" ]; then
-        FILES="$1"
-      else
-        FILES="$FILES $1"
-      fi
+      FILES="$FILES $1"
       shift
       ;;
   esac
@@ -155,7 +152,10 @@ fi
 
 export JAVA_OPTS=-Djavax.xml.parsers.DocumentBuilderFactory=com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl
 
-case "$FORMAT" in
+# Default foreign dataset for execute/smli modes if none specified.
+DEFAULT_FOREIGN="--foreign=net.hydromatic.morel.BuiltInDataSet\$Dictionary"
+
+case "$SUBCMD" in
   (smli)
     if [ "$FILES" = "" ]; then
       FILES=-
@@ -165,23 +165,25 @@ case "$FORMAT" in
         --directory="$(pwd)" \
         "$FILES"
     ;;
-  (darn|darn-verify|darn-probe)
+  (darn-update|darn-verify|darn-probe)
     exec java $VM_OPTS -cp "${CP}" $JAVA_OPTS net.hydromatic.morel.Main \
-        --"$FORMAT" \
+        "$SUBCMD" \
         $FOREIGN \
         $FILES
     ;;
-  (*)
+  (execute)
     if [ -n "$EVAL_EXPR" ]; then
       exec java $VM_OPTS -cp "${CP}" $JAVA_OPTS net.hydromatic.morel.Shell \
-           --foreign='net.hydromatic.morel.BuiltInDataSet$Dictionary' \
+           "$DEFAULT_FOREIGN" \
+           $FOREIGN \
            --directory="$(pwd)" \
            --terminal=dumb \
            --banner=false \
            -e "$EVAL_EXPR"
     else
       exec java $VM_OPTS -cp "${CP}" $JAVA_OPTS net.hydromatic.morel.Shell \
-           --foreign='net.hydromatic.morel.BuiltInDataSet$Dictionary' \
+           "$DEFAULT_FOREIGN" \
+           $FOREIGN \
            --directory="$(pwd)" \
            "$FILES"
     fi

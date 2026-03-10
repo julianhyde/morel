@@ -101,31 +101,49 @@ public class Main {
    * Runs the program and returns an exit code.
    *
    * <p>Returns 0 on success. Returns 1 if there is an error, or if {@code
-   * --md-verify} finds mismatches.
+   * darn-verify} finds mismatches.
    *
    * @param args Command-line arguments
    * @return Exit code
    */
   public static int run(List<String> args) throws Exception {
-    // Check for --darn, --darn-verify, or --darn-probe flags.
-    boolean darnVerify = args.contains("--darn-verify");
-    boolean darnProbe = args.contains("--darn-probe");
-    boolean darn = darnVerify || darnProbe || args.contains("--darn");
-    if (darn) {
-      // Build foreign value map from --foreign= args (same as Shell does).
-      ImmutableMap.Builder<String, ForeignValue> valueMapBuilder =
-          ImmutableMap.builder();
-      for (String arg : args) {
-        if (arg.startsWith("--foreign=")) {
-          String className = arg.substring("--foreign=".length());
-          @SuppressWarnings("unchecked")
-          Map<String, DataSet> map = instantiate(className, Map.class);
-          valueMapBuilder.putAll(Calcite.withDataSets(map).foreignValues());
-        }
+    // Detect sub-command: first arg if it matches a known sub-command name.
+    // Default is "execute".
+    final List<String> argList = new ArrayList<>(args);
+    final String subCommand;
+    if (!argList.isEmpty()) {
+      switch (argList.get(0)) {
+        case "execute":
+        case "darn-update":
+        case "darn-verify":
+        case "darn-probe":
+          subCommand = argList.remove(0);
+          break;
+        default:
+          subCommand = "execute";
       }
-      Map<String, ForeignValue> valueMap = valueMapBuilder.build();
+    } else {
+      subCommand = "execute";
+    }
+
+    // Build foreign value map from --foreign= args (same as Shell does).
+    ImmutableMap.Builder<String, ForeignValue> valueMapBuilder =
+        ImmutableMap.builder();
+    for (String arg : argList) {
+      if (arg.startsWith("--foreign=")) {
+        String className = arg.substring("--foreign=".length());
+        @SuppressWarnings("unchecked")
+        Map<String, DataSet> map = instantiate(className, Map.class);
+        valueMapBuilder.putAll(Calcite.withDataSets(map).foreignValues());
+      }
+    }
+    final Map<String, ForeignValue> valueMap = valueMapBuilder.build();
+
+    if (!subCommand.equals("execute")) {
+      boolean darnVerify = subCommand.equals("darn-verify");
+      boolean darnProbe = subCommand.equals("darn-probe");
       boolean anyChanges = false;
-      for (String arg : args) {
+      for (String arg : argList) {
         if (!arg.startsWith("--")) {
           if (darnProbe) {
             Darn.probe(new File(arg), System.out, valueMap);
@@ -139,11 +157,11 @@ public class Main {
       }
       return 0;
     }
-    final Map<String, ForeignValue> valueMap = ImmutableMap.of();
+
     final Map<Prop, Object> propMap = new LinkedHashMap<>();
     Prop.DIRECTORY.set(propMap, new File(System.getProperty("user.dir")));
     final Main main =
-        new Main(args, System.in, System.out, valueMap, propMap, false);
+        new Main(argList, System.in, System.out, valueMap, propMap, false);
     main.run();
     return 0;
   }
