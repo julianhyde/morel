@@ -63,19 +63,6 @@ public final class Stack {
   public int top;
 
   /**
-   * Creates a Stack backed only by the global environment, with no local
-   * variable slots. Suitable for contexts where no local variables are
-   * introduced (e.g., top-level expression evaluation).
-   *
-   * @param globalEnv The environment for top-level and built-in bindings
-   */
-  public Stack(final EvalEnv globalEnv) {
-    this.globalEnv = globalEnv;
-    this.slots = new Object[0];
-    this.top = 0;
-  }
-
-  /**
    * Creates a Stack with a pre-allocated slots array.
    *
    * @param globalEnv The environment for top-level and built-in bindings

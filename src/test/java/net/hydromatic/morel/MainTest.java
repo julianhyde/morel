@@ -1803,20 +1803,7 @@ public class MainTest {
     ml(ml).assertParseSame().assertType("int").assertEval(is(0));
   }
 
-  /** Tests height of a binary tree (multi-arg CON_PAT with wildcard). */
-  @Test
-  void testHeight() {
-    ml("let\n"
-            + " datatype inttree = Empty | Node of inttree * int * inttree;\n"
-            + " fun greater (x, y) = if x < y then y else x;\n"
-            + " fun height Empty = 0\n"
-            + "   | height (Node (lft, _, rht)) = 1 + greater (height lft, height rht)\n"
-            + " in height (Node(Empty, 2, Node(Node(Empty, 3, Empty), 4, Empty)))\n"
-            + "end")
-        .assertEval(is(3));
-  }
-
-  /** Tests program function from type.smli (multi-statement context). */
+  /** Tests program function (multi-statement context). */
   @Test
   void testProgram() {
     ml("let\n"

@@ -368,14 +368,12 @@ public class Compiler {
   }
 
   private Code compileFieldName(Context cx, Core.NamedPat idPat) {
-    if (cx.layout != null) {
-      final int slotIndex = cx.layout.get(idPat);
-      if (slotIndex >= 0) {
-        // Offset is 1-based from the current top of the stack.
-        // localDepth is the number of slots currently allocated;
-        // slot i (0-based) is at offset (localDepth - i) from the top.
-        return Codes.stackGet(cx.localDepth - slotIndex, idPat.name);
-      }
+    final int slotIndex = cx.layout.get(idPat);
+    if (slotIndex >= 0) {
+      // Offset is 1-based from the current top of the stack.
+      // localDepth is the number of slots currently allocated;
+      // slot i (0-based) is at offset (localDepth - i) from the top.
+      return Codes.stackGet(cx.localDepth - slotIndex, idPat.name);
     }
     final Binding binding = cx.env.getOpt(idPat);
     if (binding != null && binding.value instanceof Code) {
