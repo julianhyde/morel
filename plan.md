@@ -171,6 +171,39 @@ Status: DONE
 New test class `DarnTest` that processes markdown fixtures in
 `src/test/resources/` and validates generated HTML.
 
+### Step 9 — Rationalize CLI sub-commands
+
+Status: TODO
+
+Currently `morel` has a flat flag space (`--darn`, `--darn-verify`, `-e`,
+`--echo`, etc.). As the tool grows, introduce an explicit sub-command
+structure so that `morel` becomes shorthand for a default sub-command.
+
+Proposed sub-commands:
+
+| Invocation | Equivalent to | Description |
+|---|---|---|
+| `morel [flags] [file]` | `morel execute [flags] [file]` | Default: REPL or script |
+| `morel execute [flags] [file]` | — | Run script or REPL |
+| `morel darn [flags] file...` | `--darn` today | Execute cells, update in-place |
+| `morel darn --verify file...` | `--darn-verify` today | Verify only, exit non-zero on mismatch |
+
+Design notes:
+
+- `morel` with no sub-command and no file starts the interactive REPL (as
+  today). With a file, it runs the file as a script (as today with `-e` or a
+  positional argument).
+- Boolean flags follow the `--flag` / `--no-flag` convention (established by
+  the `no-output` cell attribute). For example, `--verify` / `--no-verify`
+  instead of separate `--darn` / `--darn-verify` flags.
+- Long-form flags should have short aliases where unambiguous (e.g., `-v` for
+  `--verify`).
+- The current `--darn FILE` and `--darn-verify FILE` flags remain supported
+  during a deprecation period, then removed.
+- `Main.run(String[])` already returns an int exit code; the sub-command
+  dispatch can be layered on top without further refactoring of the core
+  execution path.
+
 ## Completed steps
 
 ### Step 1 — Convert blog post to `<!-- morel -->` format (share repo)
