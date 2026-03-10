@@ -174,12 +174,11 @@ public class DarnTest {
         new Darn.Segment(ImmutableList.of("fun f x = x;"), ImmutableList.of());
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
     // "fun" should be wrapped in <b>...</b>
-    assertThat(
-        html.get(1),
-        is(
-            "<pre class=\"morel-input\"><code>"
-                + "<b>fun</b> f x = x;"
-                + "</code></pre>"));
+    final String expected =
+        "<pre class=\"morel-input\"><code>"
+            + "<b>fun</b> f x = x;"
+            + "</code></pre>";
+    assertThat(html.get(1), is(expected));
   }
 
   @Test

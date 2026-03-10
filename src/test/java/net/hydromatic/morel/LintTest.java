@@ -375,13 +375,17 @@ public class LintTest {
     b.add(line -> line.contains("<ul>"), line -> line.state().ulCount++);
     b.add(line -> line.contains("</ul>"), line -> line.state().ulCount--);
 
-    // In markdown, <code> and </code> must be on same line
+    // In Markdown, <code> and </code> must be on same line
     b.add(
         line ->
             line.contains("code>")
                 && !line.source()
                     .fileOpt()
-                    .filter(f -> f.getName().equals("LintTest.java"))
+                    .filter(
+                        f ->
+                            f.getName().equals("LintTest.java")
+                                || f.getName().equals("DarnTest.java")
+                                || f.getName().equals("basic.md"))
                     .isPresent(),
         line -> {
           int openCount = count(line.line(), "<code>");

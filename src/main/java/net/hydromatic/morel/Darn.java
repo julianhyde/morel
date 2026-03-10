@@ -354,7 +354,8 @@ public class Darn {
       return "";
     }
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try (PrintStream ps = new PrintStream(baos, true, StandardCharsets.UTF_8)) {
+    try (PrintStream ps =
+        new PrintStream(baos, true, StandardCharsets.UTF_8.name())) {
       byte[] inputBytes = code.getBytes(StandardCharsets.UTF_8);
       ByteArrayInputStream bais = new ByteArrayInputStream(inputBytes);
       List<String> argList = ImmutableList.of();
@@ -363,7 +364,7 @@ public class Darn {
       Main main = new Main(argList, bais, ps, valueMap, propMap, false);
       main.run();
     }
-    return baos.toString(StandardCharsets.UTF_8);
+    return baos.toString(StandardCharsets.UTF_8.name());
   }
 
   /** Generates the HTML lines for a {@code <div class="morel">} block. */
