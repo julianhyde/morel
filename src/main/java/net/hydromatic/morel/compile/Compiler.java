@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.hydromatic.morel.ast.Core;
@@ -381,7 +382,7 @@ public class Compiler {
       // StackMatchCode whose capture offsets were computed at the outer
       // context's depth. Inlining it here (at a different stack depth)
       // produces wrong captures. Use a runtime lookup instead so that the
-      // StackClosure placed in globalEnv by Let1Code/LetCode is found.
+      // StackClosure placed in globalEnv by StackMultiLetCode is found.
       if (binding.value instanceof LinkCode) {
         return Codes.get(idPat.name);
       }
@@ -987,7 +988,14 @@ public class Compiler {
 
   protected Code finishCompileLet(
       Context cx, List<Code> matchCodes, Code resultCode, Type resultType) {
-    return Codes.let(matchCodes, resultCode);
+    // Extract (pat, expCode) pairs from the MatchCode wrappers and emit a
+    // stack-based multi-let that avoids the old Closure/EvalEnv indirection.
+    final PairList<Core.Pat, Code> pairs = PairList.of();
+    for (Code mc : matchCodes) {
+      ((MatchCode) mc)
+          .patCodes.forEach((BiConsumer<Core.Pat, Code>) pairs::add);
+    }
+    return Codes.stackMultiLet(ImmutablePairList.copyOf(pairs), resultCode);
   }
 
   private Code compileLocal(Context cx, Core.Local local) {
@@ -1712,7 +1720,7 @@ public class Compiler {
         // themselves (recursive calls) and sibling bindings in globalEnv.
         // Only patch closures whose globalEnv is still evalEnv (i.e., they
         // were created directly by this code and have not already been
-        // patched by an inner LetCode). Closures returned from let
+        // patched by an inner StackMultiLetCode). Closures returned from let
         // expressions have a properly patched globalEnv and must not be
         // overwritten here.
         EvalEnv env2 = evalEnv;
@@ -1751,7 +1759,7 @@ public class Compiler {
     /**
      * Returns true if {@code value} is a {@link Closure.StackClosure} whose
      * {@code globalEnv} is still {@code baseEnv} (i.e., it was just created and
-     * has not yet been patched by an inner {@code LetCode}).
+     * has not yet been patched by an inner {@code StackMultiLetCode}).
      *
      * <p>Used to avoid overwriting a closure's already-complete {@code
      * globalEnv} when binding the result of a {@code let} expression.

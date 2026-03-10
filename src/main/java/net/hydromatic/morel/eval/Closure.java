@@ -147,6 +147,27 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
   }
 
   /**
+   * Binds {@code value} to {@code pat} in {@code env}, appends {@code value} to
+   * {@code out}, and patches any {@link StackClosure} in {@code value} with the
+   * updated environment.
+   *
+   * <p>Used by multi-binding {@code let} to bind each value directly, without
+   * going through an intermediate {@link Closure}.
+   *
+   * @return the extended environment with {@code pat}'s names bound
+   */
+  public static EvalEnv bindPatGetValue(
+      Core.Pat pat, Object value, EvalEnv env, List<Object> out) {
+    final EvalEnvHolder envRef = new EvalEnvHolder(env);
+    if (bindRecurse(pat, value, envRef)) {
+      out.add(value);
+      patchStackClosureEnv(value, envRef.env);
+      return envRef.env;
+    }
+    throw new AssertionError("no match");
+  }
+
+  /**
    * Updates {@link StackClosure#globalEnv} to {@code env} for any {@link
    * StackClosure} reachable via {@code value}.
    *
@@ -408,10 +429,10 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      *
      * <p>Uses {@link #globalEnv} (not {@code stack.globalEnv}) as the global
      * environment for body evaluation. This is essential for recursive closures
-     * created by {@link Let1Code}/{@link LetCode}: their {@code globalEnv} is
-     * patched (by {@link Closure#evalBind(Stack)}) to include the recursive
-     * binding, so that the body can look up the function by name even when
-     * invoked via the tail-call trampoline (which uses the caller's stack).
+     * created by {@code StackMultiLetCode}: their {@code globalEnv} is patched
+     * (by {@link Closure#evalBind(Stack)}) to include the recursive binding, so
+     * that the body can look up the function by name even when invoked via the
+     * tail-call trampoline (which uses the caller's stack).
      */
     @Override
     public Object apply(Stack stack, Object argValue) {

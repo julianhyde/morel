@@ -68,6 +68,7 @@ import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MorelException;
@@ -4069,21 +4070,6 @@ public abstract class Codes {
     return new GetTupleCode(ImmutableList.copyOf(names));
   }
 
-  public static Code let(List<Code> matchCodes, Code resultCode) {
-    switch (matchCodes.size()) {
-      case 0:
-        return resultCode;
-
-      case 1:
-        // Use a more efficient runtime path if the list has only one element.
-        // The effect is the same.
-        return new Let1Code(matchCodes.get(0), resultCode);
-
-      default:
-        return new LetCode(ImmutableList.copyOf(matchCodes), resultCode);
-    }
-  }
-
   /**
    * Generates the code for applying a function (or function value) to an
    * argument.
@@ -5007,89 +4993,6 @@ public abstract class Codes {
   }
 
   /** Code that implements {@link #let(List, Code)} with one argument. */
-  private static class Let1Code implements Code {
-    private final Code matchCode;
-    private final Code resultCode;
-
-    Let1Code(Code matchCode, Code resultCode) {
-      this.matchCode = matchCode;
-      this.resultCode = resultCode;
-    }
-
-    @Override
-    public Describer describe(Describer describer) {
-      return describer.start(
-          "let1",
-          d -> d.arg("matchCode", matchCode).arg("resultCode", resultCode));
-    }
-
-    @Override
-    public Object eval(EvalEnv evalEnv) {
-      final Closure fnValue = (Closure) matchCode.eval(evalEnv);
-      EvalEnv env2 = fnValue.evalBind(evalEnv);
-      return resultCode.eval(env2);
-    }
-
-    @Override
-    public Object eval(Stack stack) {
-      final Closure fnValue = (Closure) matchCode.eval(stack.globalEnv);
-      EvalEnv env2 = fnValue.evalBind(stack);
-      return resultCode.eval(new Stack(env2, stack.slots, stack.top));
-    }
-  }
-
-  /** Code that implements {@link #let(List, Code)} with multiple arguments. */
-  private static class LetCode implements Code {
-    private final ImmutableList<Code> matchCodes;
-    private final Code resultCode;
-
-    LetCode(ImmutableList<Code> matchCodes, Code resultCode) {
-      this.matchCodes = matchCodes;
-      this.resultCode = resultCode;
-    }
-
-    @Override
-    public Describer describe(Describer describer) {
-      return describer.start(
-          "let",
-          d -> {
-            forEachIndexed(
-                matchCodes,
-                (matchCode, i) -> d.arg("matchCode" + i, matchCode));
-            d.arg("resultCode", resultCode);
-          });
-    }
-
-    @Override
-    public Object eval(EvalEnv evalEnv) {
-      EvalEnv evalEnv2 = evalEnv;
-      for (Code matchCode : matchCodes) {
-        final Closure fnValue = (Closure) matchCode.eval(evalEnv);
-        evalEnv2 = fnValue.evalBind(evalEnv2);
-      }
-      return resultCode.eval(evalEnv2);
-    }
-
-    @Override
-    public Object eval(Stack stack) {
-      EvalEnv env2 = stack.globalEnv;
-      // Collect bound values so we can re-patch for mutual recursion.
-      final List<Object> boundValues = new ArrayList<>();
-      for (Code matchCode : matchCodes) {
-        final Closure fnValue = (Closure) matchCode.eval(env2);
-        env2 =
-            fnValue.evalBindGetValue(
-                new Stack(env2, stack.slots, stack.top), boundValues);
-      }
-      // Re-patch all collected closures with the final env so that
-      // cross-references (mutual recursion) are resolved correctly.
-      for (Object value : boundValues) {
-        Closure.patchStackClosureEnv(value, env2);
-      }
-      return resultCode.eval(new Stack(env2, stack.slots, stack.top));
-    }
-  }
-
   /**
    * Code that implements a stack-based {@code let} binding.
    *
@@ -5194,6 +5097,74 @@ public abstract class Codes {
   public static Code stackLetPat(
       Core.Pat pat, int numVars, Code expCode, Code resultCode, Pos pos) {
     return new StackLetPatCode(pat, numVars, expCode, resultCode, pos);
+  }
+
+  /**
+   * Code that implements a stack-aware multi-binding {@code let}.
+   *
+   * <p>Each binding evaluates its expression code against the current stack,
+   * then binds the result to its pattern by extending {@link Stack#globalEnv}.
+   * After all bindings, a second pass re-patches mutual-recursion references in
+   * any {@link Closure.StackClosure} values. The result code is then evaluated
+   * with the fully-extended environment.
+   *
+   * <p>This is used for recursive function declarations ({@code fun f x = ...})
+   * and mutually recursive bindings ({@code let val f = ... and g = ...}).
+   */
+  private static class StackMultiLetCode implements Code {
+    private final ImmutablePairList<Core.Pat, Code> patCodes;
+    private final Code resultCode;
+
+    StackMultiLetCode(
+        ImmutablePairList<Core.Pat, Code> patCodes, Code resultCode) {
+      this.patCodes = patCodes;
+      this.resultCode = resultCode;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "let",
+          d -> {
+            forEachIndexed(
+                patCodes,
+                (entry, i) -> d.arg("matchCode" + i, entry.getValue()));
+            d.arg("resultCode", resultCode);
+          });
+    }
+
+    @Override
+    public int maxSlots() {
+      int max = resultCode.maxSlots();
+      for (Map.Entry<Core.Pat, Code> entry : patCodes) {
+        max = Math.max(max, entry.getValue().maxSlots());
+      }
+      return max;
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      EvalEnv env = stack.globalEnv;
+      final List<Object> boundValues = new ArrayList<>();
+      for (Map.Entry<Core.Pat, Code> entry : patCodes) {
+        final Object value =
+            entry.getValue().eval(new Stack(env, stack.slots, stack.top));
+        env = Closure.bindPatGetValue(entry.getKey(), value, env, boundValues);
+      }
+      // Re-patch with final env so that mutual-recursion references resolve.
+      for (Object value : boundValues) {
+        Closure.patchStackClosureEnv(value, env);
+      }
+      return resultCode.eval(new Stack(env, stack.slots, stack.top));
+    }
+  }
+
+  /** Creates a stack-aware multi-binding {@code let} code node. */
+  public static Code stackMultiLet(
+      ImmutablePairList<Core.Pat, Code> patCodes, Code resultCode) {
+    return patCodes.isEmpty()
+        ? resultCode
+        : new StackMultiLetCode(patCodes, resultCode);
   }
 
   /** Applies an {@link Applicable} to a {@link Code}. */

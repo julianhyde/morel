@@ -1,5 +1,4 @@
 <!--
-{% comment %}
 Licensed to Julian Hyde under one or more contributor license
 agreements.  See the NOTICE file distributed with this work
 for additional information regarding copyright ownership.
@@ -16,230 +15,213 @@ software distributed under the License is distributed on an
 either express or implied.  See the License for the specific
 language governing permissions and limitations under the
 License.
-{% endcomment %}
 -->
 
-# Plan: Stack-based Evaluation
+# Stack-based Evaluation: Implementation Plan
+
+See `issue.md` for the full design.
+
+## Steps
+
+### ✅ Step 1: VariableCollector (c93e39a0)
+Port `VariableCollector` from the `151-tail-call` branch.
+Identifies free/captured variables by traversing `fn` boundaries.
+
+### ✅ Step 2: Stack and default methods (b722a61e)
+Add `Stack` class (`globalEnv`, `slots[]`, `top`).
+Add default `eval(Stack)` / `apply(Stack, Object)` / RowSink `Stack`
+methods that fall back to EvalEnv.
+
+### ✅ Step 3: StackLayout, StackCode, Context (a077739f)
+Add `StackLayout` (compile-time slot map).
+Add `Codes.stackGet` / `StackCode` (reads `stack.slots[top - offset]`).
+Extend `Context` with `layout` and `localDepth` fields.
+
+### ✅ Step 4: Emit StackCode for fn arguments and let bindings (f7986493)
+`compileMatchListImpl`: when `cx.layout != null`, emit `StackMatchCode`
+→ `StackClosure` (captures free vars from outer stack).
+`tryCompileLetStack` / `tryCompileLetStackTail`: emit `StackLet1Code`
+for simple `val x = expr` bindings.
+
+### ✅ Step 4b: let val (x, y) = expr directly as stack pushes (21ba8d6f)
+Detect the Resolver's desugared form
+`let val $tmp = expr in case $tmp of (x, y) => body`
+and compile as `StackLetPatCode` (calls `pushBindings` at runtime),
+avoiding an intermediate closure.
+Remove dead `withFreshStack()` method.
+
+### ✅ Step 5: StackClosure implements Applicable1
+Store `globalEnv` in `StackClosure` at creation time.
+Implement `Applicable1.apply(Object)` via `apply(new Stack(globalEnv), arg)`.
+This unblocks builtins like `List.map`, `List.filter` etc. that
+receive user functions typed as `Applicable1`.
+
+### ✅ Step 6: RowSinks use Stack
+Add `FromCode.eval(Stack)` to route `from` evaluation through the stack
+path. Override `start/accept/result(Stack)` in every `RowSinks`
+implementation:
+- `ScanRowSink`: `code.eval(stack)` for the list; creates an `innerStack`
+  with a `MutableEvalEnv` for the iteration variable so `Codes.get` nodes
+  resolve via the extended env and `StackCode` nodes still read from the
+  shared slots array.
+- `WhereRowSink`, `SkipRowSink`, `TakeRowSink`: call `code.eval(stack)`.
+- `CollectRowSink`, `YieldRowSink`: call `code.eval(stack)`; YieldRowSink
+  builds an `innerStack` to expose yield outputs downstream.
+- `OrderRowSink`, `GroupRowSink`: save row values from `stack.globalEnv`;
+  re-emit via innerStack in `result(Stack)`.
+- `SetRowSink` variants (except/intersect/union): call `code.eval(stack)`
+  for RHS codes, access row values from `stack.globalEnv`.
+- `BaseRowSink` and `FirstRowSink`: delegate to `rowSink` stack methods.
+Added `Stack(EvalEnv, Object[], int)` constructor for sharing slots arrays.
+
+### ✅ Step 7: Activate stack mode globally (ab921c71)
+Remove the `if (cx.layout == null)` old-mode guard from
+`compileMatchListImpl` (and the corresponding guard in
+`compileMatchList`).
+Remove `compileMatch`, `compileMatchTail`, and the old `MatchCode`
+closure creation path.
+All function bodies now use `StackMatchCode` / `StackClosure`.
+
+### ✅ Step 8: CalciteCompiler / ThreadLocal<Stack> (7e866584)
+Replace `ThreadLocal<EvalEnv>` in `CalciteFunctions` with
+`ThreadLocal<Stack>`.
+Update `CalciteCompiler`'s inline `Code` overrides to use
+`eval(Stack)` rather than `eval(EvalEnv)`.
+
+### ✅ Step 9: Remove EvalEnv from inner evaluation (d06cb01f)
+Make `Code.eval(Stack)` the primary method (non-default).
+Make `Code.eval(EvalEnv)` the fallback / deprecated path.
+Remove `eval(EvalEnv)` overrides from all stack-based code nodes
+(`StackCode`, `StackLet1Code`, `StackLetPatCode`, `StackMatchCode`).
+
+### ✅ Step 10: Shrink Stack slots array
+Replace `new Object[4096]` with a properly sized array based on the
+maximum stack depth computed at compile time from `StackLayout`.
+
+Compute `capacity` in `StackMatchCode` as `max over arms of
+(captureOffsets.length + numArgVars + body.maxSlots())`.
+Propagate `maxSlots()` through `StackLet1Code` and `StackLetPatCode`.
+Also propagate through `ApplyCode*`, `TupleCode`, `AndAlsoCode`,
+`OrElseCode`, `WrapRelList` (all code nodes with sub-expression children).
+
+Fix two runtime array-growth issues:
+1. Trampoline in `StackClosure.apply(Stack, Object)`: when a tail call
+   targets a closure with larger `capacity`, grow the slots array.
+2. Non-tail recursive calls: when `StackClosure.apply(Stack, Object)` is
+   called with `stack.slots.length < stack.top + capacity`, allocate a
+   larger array and copy live slots.
+
+### ✅ Fix: Variant handling in StackClosure (1a152437)
+Three bugs surfaced after Step 10 fixed AIOOB errors:
+1. `needsGlobalEnvPatch` / `patchStackClosureEnv`: `Variant extends
+   AbstractImmutableList` and `Variant.get(1)` returns `this`, causing
+   infinite recursion. Fix: add `!(value instanceof Variant)` guard.
+2. `pushVariantConPat` passed the whole `Variant` to `pushBindings`
+   instead of the extracted inner value. Fix: extract via new
+   `Variant.innerValue()` helper shared with `Variant.bindConPat`.
+3. `built-in.smli` and other test expected outputs updated throughout.
+
+### ✅ Fix: Restore detailed describe output; rename stackLet1 → let1
+1. `StackMatchCode.describe()` restored to full `match(pat, body)` format
+   (was simplified to `"stackMatch"`). Updated all test strings accordingly.
+2. `StackLet1Code.describe()` renamed from `"stackLet1"` to `"let1"` to
+   align with origin/main naming.
+3. Test code reorganized: restored `final String plan = ...` variable style
+   in `testLet6`, `testLet7` (MainTest), and `testInline` (InlineTest).
+
+### Step 11: Convert multi-binding `let` to stack-based
+`finishCompileLet` still emits `Codes.let()` → `LetCode`/`Let1Code`,
+which evaluates via `MatchCode` → old `Closure` → EvalEnv extension.
+This path is reached for:
+- multi-binding `let` (`let val f = ... and g = ...`, mutual recursion)
+- any complex pattern not caught by `tryCompileLetStack*`
+
+Convert `finishCompileLet` to emit stack-based code:
+- Emit `StackLetPatCode` (or a new `StackLetMultiCode`) for each binding,
+  pushing values onto the stack sequentially.
+- Handle mutual recursion by pushing placeholder slots, then
+  back-patching `StackClosure.globalEnv` (as `needsGlobalEnvPatch` already
+  does) after all bindings are pushed.
+- Remove `MatchCode`, old `Closure`, `Let1Code`, `LetCode` once no
+  longer emitted.
+
+### Step 12: Convert RowSink iteration variables to stack slots
+`ScanRowSink` (and `YieldRowSink`) currently bind each iteration
+variable by creating a `MutableEvalEnv` extension of `stack.globalEnv`,
+then constructing a new `Stack(mutableEnv, stack.slots, stack.top)`.
+This keeps iteration variables in the env rather than on the stack, so
+inner `StackCode` nodes cannot reference them by slot offset.
+
+Replace with genuine stack allocation:
+- At `from`-expression compile time, extend `cx.layout` with a slot for
+  each scan variable, exactly as `tryCompileLetStack` does for `let`.
+- At runtime in `ScanRowSink.accept(Stack)`, push the row value onto
+  the stack instead of extending the env; pop in `result(Stack)`.
+- This makes inner filter/yield/order codes pure stack operations and
+  eliminates all `MutableEvalEnv` usage in the hot evaluation path.
+
+### Step 13: Marshal referenced globals onto the stack at statement start
+The only remaining EvalEnv lookups at runtime are `GetCode` /
+`GetTupleCode`, which call `env.getOpt(name)` to find top-level and
+built-in bindings.
+
+Fix: at compile time, determine exactly which global names the
+expression references (those not covered by the local `StackLayout`).
+Emit a **`GlobalMarshalCode` prologue** that fetches just those names
+from `globalEnv` and pushes their values onto the stack before the body
+runs. The body then uses `StackCode` offsets for all variable access,
+including globals.
+
+This is the same mechanism `StackClosure` already uses to capture local
+variables from an outer stack frame — extended to the global level.
+
+**Compile time:**
+- `VariableCollector` (or a new pass) identifies every free global name
+  referenced in the expression.
+- Assign slot offsets 0, 1, … to those names, producing a
+  `globalSlotMap: ImmutableMap<Name, Integer>` stored in `Context`.
+- `compileFieldName` emits `StackCode(offset, name)` for names found
+  in `globalSlotMap`, instead of `GetCode(name)`.
+- Wrap the compiled body in `GlobalMarshalCode(names, body)`.
+
+**Runtime** (`GlobalMarshalCode.eval(Stack)`):
+- For each name in order, call `stack.globalEnv.getOpt(name)` and push
+  the value onto the stack.
+- Evaluate the body; pop the global slots on return.
+
+**Properties:**
+- Only referenced globals are marshaled — minimal stack footprint and
+  no spurious references keeping old values alive.
+- Shadowed bindings are never fetched (the compiler resolved the visible
+  name at compile time); their values are GC-eligible immediately.
+- Slot indices are local to one compilation + execution pair (recompile
+  = fresh slot map), so REPL redefinition is handled naturally.
+- Previously-compiled `StackClosure` values captured their `globalEnv`
+  at creation time and continue to see the binding visible then —
+  correct ML semantics across redefinitions.
+- `GlobalMarshalCode` is the only node that touches `EvalEnv` at
+  runtime; it runs once per statement, outside the hot inner loop.
+- Type constructors: in standard SML, redefining a datatype obscures
+  the old constructors; verify Morel matches this (separate issue).
+
+Remove `GetCode` / `GetTupleCode` once all global references are
+handled by `GlobalMarshalCode` + `StackCode`.
+
+### Step 14: Remove EvalEnv from eval interfaces
+After Steps 11–13, no `Code` class will have a meaningful
+`eval(EvalEnv)` body, no `Applicable` will be called via
+`apply(EvalEnv, Object)`, and no `RowSink` will need
+`start/accept/result(EvalEnv)`.
+Remove:
+- `Code.eval(EvalEnv)` default throw method (and any remaining overrides)
+- `Applicable.apply(EvalEnv, Object)` abstract method (and overrides)
+- `RowSink.start/accept/result(EvalEnv)` abstract methods (and overrides)
+- `Stack.globalEnv` field (replaced by `Stack.globalSlots`)
+- `EvalEnvs` factory / `MutableEvalEnv` implementations used only in
+  the now-deleted paths
+- `Closure` (old non-stack closure) — replaced entirely by `StackClosure`
+
+`EvalEnv` as a type may survive as the compile-time `Environment`
+interface (used by `TypeResolver`, `Compiler.Context`, etc.) but is no
+longer part of the runtime evaluation contract.
 
-See [issue.md](issue.md) for the specification and design.
-
-The migration replaces `Code.eval(EvalEnv)` with `Code.eval(Stack)` across
-the entire evaluator. It is large enough to be split into steps that each
-leave the build green. The key invariant maintained throughout: any variable
-not yet compiled for stack access falls back to `GetCode` (name lookup in
-`globalEnv`), so partial migration is always correct.
-
----
-
-## Step 1: Port `VariableCollector` [x]
-
-Port `VariableCollector` from the `julianhyde/151-tail-call` branch.
-This is the static analysis pass that walks a function body and identifies
-which variables are free (i.e., captured from an enclosing scope) versus
-local. It is needed in Step 4 to compute `captureCodes`.
-
-The branch version is mostly complete; it just needs to be adjusted for
-changes to `Core` and `Environment` since 2023.
-
-**Files**: new `compile/VariableCollector.java` (ported from branch,
-with corrected `isAncestorOf` check), `compile/Environment.java` (added
-`forEachAncestor`, `isAncestorOf`, changed `getOpt2` to return
-`Pair<Binding, Environment>`), `compile/Environments.java` (implementations).
-
-**Test**: `compile/VariableCollectorTest.java` — 8 tests covering free-variable
-detection, nested lambdas, boundary-crossing semantics, and `isAncestorOf`.
-
-**Note**: The branch's `VariableCollector` had its `isAncestorOf` condition
-reversed (`lambdaBoundary.isAncestorOf(declaringEnv)` should be
-`declaringEnv.isAncestorOf(lambdaBoundary)`). The branch worked in practice
-only because the outer environment was always a `MapEnvironment` where
-`lambdaBoundary == declaringEnv`. Fixed in this port.
-
----
-
-## Step 2: Add `Stack` and change `Code`/`Applicable`/`RowSink` signatures [x]
-
-Change the evaluation interfaces to take `Stack` instead of `EvalEnv`:
-
-```java
-// Code.java
-Object eval(Stack stack);
-
-// Applicable.java
-Object apply(Stack stack, Object argValue);
-
-// RowSink.java
-void start(Stack stack);
-void accept(Stack stack);
-List<Object> result(Stack stack);
-```
-
-Add `Stack`:
-
-```java
-public final class Stack {
-  public EvalEnv globalEnv;
-  public Object[] slots;
-  public int top;
-  // push, pop, peek, save, restore
-}
-```
-
-For this step, `Stack` is just a thin wrapper around an `EvalEnv`: every
-`eval(stack)` call delegates to the existing `eval(stack.globalEnv)` logic.
-This step is purely mechanical — it changes signatures throughout but
-preserves all behavior. The build must be green at the end of this step.
-
-**Files changed**: `Code.java` (add `eval(Stack)` default),
-`Applicable.java` (add `apply(Stack, Object)` default),
-`RowSink.java` (add `start/accept/result(Stack)` defaults),
-`Stack.java` (new — thin wrapper around `EvalEnv`),
-`Codes.java` (fix two `apply(null,...)` ambiguities by casting to `EvalEnv`).
-
-**Note**: Approach used was purely additive — default methods on interfaces
-delegate to existing `EvalEnv` versions. No implementations or callers needed
-updating. `Stack` carries only `EvalEnv globalEnv` in this step.
-
----
-
-## Step 3: Add `StackCode` and `StackLayout`; keep `GetCode` as fallback [x]
-
-Add compile-time machinery without yet using it:
-
-- `StackLayout`: maps `Core.NamedPat` → slot index within the current frame.
-  Stored in `Context` alongside `scopeMap`.
-
-- `StackCode`: `Code` implementation that reads `stack.slots[top - offset]`.
-
-- `GetCode` (unchanged): reads from `stack.globalEnv` by name.
-
-Extend `Context` with:
-```java
-final StackLayout layout; // null until Step 4 activates stack compilation
-final int localDepth;     // virtual frame depth (grows/shrinks with let/case)
-```
-
-Add `Codes.stackGet(offset, name)` factory method. The `name` field is kept
-for debuggability (printing `stack(offset=N, name=x)` in `Sys.plan` output).
-
-**Files**: new `compile/StackLayout.java`, `eval/Codes.java` (added
-`StackCode` class and `stackGet` factory), `compile/Compiler.java` (extended
-`Context` with `layout` and `localDepth`).
-
-**Test**: `compile/StackLayoutTest.java` — 7 tests covering `StackLayout`
-immutability, slot allocation, and `StackCode` evaluation from the stack.
-
-**Note**: `Sys.plan` will show `stack(...)` nodes once Step 4 activates
-emission of `StackCode`; Step 3 only verifies the infrastructure compiles
-and the runtime slot-access logic is correct.
-
----
-
-## Step 4: Emit `StackCode` for `fn` arguments and `let` bindings [ ]
-
-This is the core step. Enable stack-based access for all locals by:
-
-1. In `compileFn` / `compileMatchList`: after pattern-binding the argument,
-   emit `StackCode` for each bound variable instead of `GetCode`.
-
-2. In `compileLet`: emit stack push/pop around the let body, and compile the
-   body with `StackCode` for the let-bound variable.
-
-3. In `compileValDecl` (function definitions): use `VariableCollector` to
-   identify captured variables. Emit code to push them onto the stack at
-   closure-call entry. Update `Closure` to store only `capturedValues[]` and
-   push them in `apply(stack, arg)`.
-
-4. Update `compileFieldName` to emit `StackCode` when the variable is in the
-   current `StackLayout`, and `GetCode` when it is in `globalEnv`.
-
-The `localDepth` counter in `Context` is the key invariant: it must equal
-the number of local slots on the stack above the frame base at every code
-point. The compiler increments it when pushing bindings and decrements when
-popping.
-
-**Files**: `compile/Compiler.java`, `eval/Closure.java`, `eval/Codes.java`.
-
-**Tests**: run the full test suite. The two currently-disabled tests
-(`testCompositeRecursiveLet`, `testMutualRecursionComplex`) should now pass
-and be re-enabled.
-
----
-
-## Step 5: Port `RowSink` implementations to use the stack [ ]
-
-Update `RowSinks.java` (16 `RowSink` subclasses) to push/pop iteration
-variables via the stack instead of constructing new `EvalEnv` nodes. Each
-scan step:
-
-1. Pushes the iteration variable(s) for the current row.
-2. Calls `nextSink.accept(stack)`.
-3. Pops the iteration variable(s).
-
-The `MutableEvalEnv` used today by `ScanRowSink` to avoid allocation per row
-becomes a pair of `(int savedTop, stack)` — equally allocation-free.
-
-**Files**: `eval/RowSinks.java`, `compile/Compiler.java` (RowSink factory
-methods).
-
----
-
-## Step 6: Port `CalciteCompiler` and Calcite integration [ ]
-
-Update the Calcite evaluation path:
-- `CalciteFunctions.THREAD_ENV` becomes `CalciteFunctions.THREAD_STACK`.
-- When Calcite calls back into Morel (UDFs, expressions), the `Stack` is
-  retrieved from the thread local.
-- The `CalciteCompiler.createContext` and surrounding machinery use the new
-  `Stack`-based signatures.
-
-**Files**: `compile/CalciteCompiler.java`, `foreign/Calcite.java`,
-`foreign/CalciteFunctions.java`.
-
----
-
-## Step 7: Remove `EvalEnv` from inner evaluation [ ]
-
-After Step 6, `EvalEnv` should only appear as `stack.globalEnv` (for
-top-level bindings and built-ins), and in the REPL's `bindingMap` (which is
-separate from evaluation). The inner `EvalEnv` chain (the linked list that
-grows per `let`-binding) is gone.
-
-- Remove `MutableEvalEnv` and `EvalEnvs.bind(...)` (used for per-let nodes).
-- Simplify `EvalEnv` to a flat name-lookup structure (e.g., a
-  `HashMap<String, Object>`) since it is now only used for globals.
-- Remove `Applicable.apply(EvalEnv, Object)` default methods and any
-  remaining bridges.
-
-**Files**: `eval/EvalEnv.java`, `eval/EvalEnvs.java`,
-`eval/MutableEvalEnv.java` (possibly deleted).
-
----
-
-## Step 8: Performance benchmarks [ ]
-
-Add micro-benchmarks (JMH or a simple timing loop) for:
-- Deep recursion: `resum (10000000, 0)` — measures call overhead.
-- Nested `let` chains — measures variable lookup depth.
-- N-queens: `queens 20` — exercises the full evaluator.
-
-Compare with the `main` branch baseline. Expected improvements: 2–5× for
-recursive functions, 1.5–2× for relational queries.
-
----
-
-## Key risks
-
-- **Offset arithmetic bugs**: the `localDepth` counter must be exactly right
-  at every code point. A systematic test strategy is to add assertions in
-  debug builds that the stack depth on function exit equals the depth on
-  function entry.
-
-- **`case` arms with different binding counts**: each arm must restore the
-  stack to the same depth; the compiler must pad arms that bind fewer
-  variables.
-
-- **Calcite boundary**: variables that cross the Morel/Calcite boundary must
-  still be reachable by name. `stack.globalEnv` handles this, but any local
-  variable captured in a Calcite expression (e.g., an inline lambda in a
-  `from` step) must be promoted to a captured value before entering Calcite.
