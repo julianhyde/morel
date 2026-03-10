@@ -82,8 +82,16 @@ public class Main {
    *
    * @param args Command-line arguments
    */
+  @SuppressWarnings("CallToPrintStackTrace")
   public static void main(String[] args) {
-    System.exit(run(args));
+    int status;
+    try {
+      status = run(ImmutableList.copyOf(args));
+    } catch (Throwable e) {
+      e.printStackTrace();
+      status = 1;
+    }
+    System.exit(status);
   }
 
   /**
@@ -95,35 +103,29 @@ public class Main {
    * @param args Command-line arguments
    * @return Exit code
    */
-  public static int run(String[] args) {
-    final List<String> argList = ImmutableList.copyOf(args);
-    try {
-      // Check for --darn or --darn-verify flags.
-      boolean darnVerify = argList.contains("--darn-verify");
-      boolean darn = darnVerify || argList.contains("--darn");
-      if (darn) {
-        boolean anyChanges = false;
-        for (String arg : argList) {
-          if (!arg.startsWith("--")) {
-            anyChanges |= Darn.process(new File(arg), darnVerify);
-          }
+  public static int run(List<String> args) throws Exception {
+    // Check for --darn or --darn-verify flags.
+    boolean darnVerify = args.contains("--darn-verify");
+    boolean darn = darnVerify || args.contains("--darn");
+    if (darn) {
+      boolean anyChanges = false;
+      for (String arg : args) {
+        if (!arg.startsWith("--")) {
+          anyChanges |= Darn.process(new File(arg), darnVerify);
         }
-        if (darnVerify && anyChanges) {
-          return 1;
-        }
-        return 0;
       }
-      final Map<String, ForeignValue> valueMap = ImmutableMap.of();
-      final Map<Prop, Object> propMap = new LinkedHashMap<>();
-      Prop.DIRECTORY.set(propMap, new File(System.getProperty("user.dir")));
-      final Main main =
-          new Main(argList, System.in, System.out, valueMap, propMap, false);
-      main.run();
+      if (darnVerify && anyChanges) {
+        return 1;
+      }
       return 0;
-    } catch (Throwable e) {
-      e.printStackTrace();
-      return 1;
     }
+    final Map<String, ForeignValue> valueMap = ImmutableMap.of();
+    final Map<Prop, Object> propMap = new LinkedHashMap<>();
+    Prop.DIRECTORY.set(propMap, new File(System.getProperty("user.dir")));
+    final Main main =
+        new Main(args, System.in, System.out, valueMap, propMap, false);
+    main.run();
+    return 0;
   }
 
   /** Creates a Main. */
