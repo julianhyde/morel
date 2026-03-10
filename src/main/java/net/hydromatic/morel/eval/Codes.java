@@ -4811,11 +4811,6 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      throw new UnsupportedOperationException("StackCode requires a Stack");
-    }
-
-    @Override
     public Object eval(final Stack stack) {
       return stack.slots[stack.top - offset];
     }
@@ -5099,11 +5094,6 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      throw new UnsupportedOperationException("StackLet1Code requires a Stack");
-    }
-
-    @Override
     public Object eval(Stack stack) {
       final int savedTop = stack.save();
       stack.push(expCode.eval(stack));
@@ -5147,12 +5137,6 @@ public abstract class Codes {
               d.arg("pat", pat.toString())
                   .arg("expCode", expCode)
                   .arg("resultCode", resultCode));
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      throw new UnsupportedOperationException(
-          "StackLetPatCode requires a Stack");
     }
 
     @Override
