@@ -634,6 +634,7 @@ public class LintTest {
                 && !line.line().startsWith("```")
                 && !line.line().startsWith("    ") // indented code
                 && !line.line().startsWith("<i>") // syntax definition
+                && !line.line().contains("<pre class=") // pre blocks w/ attrs
                 && !line.line().matches("^[-|:]+$") // table separator
                 && !lintSkip(line),
         line ->
@@ -655,7 +656,8 @@ public class LintTest {
     b.add(
         line ->
             line.state().language == Language.MARKDOWN
-                && line.line().contains("<pre>"),
+                && (line.line().contains("<pre>")
+                    || line.line().contains("<pre ")),
         line -> line.state().inPreBlock = true);
     b.add(
         line ->

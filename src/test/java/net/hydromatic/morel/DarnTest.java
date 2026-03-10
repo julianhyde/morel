@@ -143,9 +143,16 @@ public class DarnTest {
         new Darn.Segment(ImmutableList.of("1 + 2;"), ImmutableList.of());
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
     assertThat(html.get(0), is("<div class=\"morel\">"));
+    // 1 -> mi, + -> o, 2 -> mi, ; -> p
     assertThat(
         html.get(1),
-        is("<pre class=\"morel-input\"><code>1 + 2;</code></pre>"));
+        is(
+            "<pre class=\"morel-input\"><code>"
+                + "<span class=\"mi\">1</span>"
+                + " <span class=\"o\">+</span>"
+                + " <span class=\"mi\">2</span>"
+                + "<span class=\"p\">;</span>"
+                + "</code></pre>"));
     assertThat(html.get(html.size() - 1), is("</div>"));
   }
 
@@ -156,46 +163,64 @@ public class DarnTest {
             ImmutableList.of("1 + 2;"), ImmutableList.of("val it = 3 : int"));
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
     assertThat(html.get(0), is("<div class=\"morel\">"));
-    assertThat(
-        html.get(1),
-        is("<pre class=\"morel-input\"><code>1 + 2;</code></pre>"));
+    // Output line wrapped in <span class="c"> (comment style, like after.sh)
     assertThat(
         html.get(2),
         is(
             "<pre class=\"morel-output\"><code>"
-                + "val it = 3 : int"
+                + "<span class=\"c\">val it = 3 : int</span>"
                 + "</code></pre>"));
     assertThat(html.get(3), is("</div>"));
   }
 
   @Test
-  void testGenerateHtmlLinesKeywordBolding() {
+  void testGenerateHtmlLinesKeywords() {
     Darn.Segment seg =
         new Darn.Segment(ImmutableList.of("fun f x = x;"), ImmutableList.of());
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
-    // "fun" should be wrapped in <b>...</b>
+    // "fun" -> kr, "f" -> nf (after fun), "x" -> n, "=" -> p, "x" -> n,
+    // ";" -> p
     final String expected =
         "<pre class=\"morel-input\"><code>"
-            + "<b>fun</b> f x = x;"
+            + "<span class=\"kr\">fun</span>"
+            + " <span class=\"nf\">f</span>"
+            + " <span class=\"n\">x</span>"
+            + " <span class=\"p\">=</span>"
+            + " <span class=\"n\">x</span>"
+            + "<span class=\"p\">;</span>"
             + "</code></pre>";
     assertThat(html.get(1), is(expected));
   }
 
   @Test
-  void testGenerateHtmlLinesTypeVariable() {
+  void testHighlightOutputWrapsInCommentSpan() {
+    // Output is wrapped per-line in <span class="c">, matching after.sh style.
     String highlighted = MorelHighlighter.highlightOutput("'a list -> int");
-    // > is HTML-escaped; type variable is italicized
-    assertThat(highlighted, is("<i>'a</i> list -&gt; int"));
+    assertThat(highlighted, is("<span class=\"c\">'a list -&gt; int</span>"));
+  }
+
+  @Test
+  void testHighlightOutputMultiLine() {
+    String highlighted =
+        MorelHighlighter.highlightOutput(
+            "line1\n" //
+                + "line2");
+    assertThat(
+        highlighted,
+        is(
+            "<span class=\"c\">line1</span>\n" //
+                + "<span class=\"c\">line2</span>"));
   }
 
   @Test
   void testGenerateHtmlLinesHtmlEscape() {
     String highlighted =
         MorelHighlighter.highlightInput("val x = a < b andalso c > d;");
-    // < and > must be escaped; "andalso" must be bolded
+    // < and > must be escaped; "andalso" must use kr span
     assertThat(highlighted.contains("&lt;"), is(true));
     assertThat(highlighted.contains("&gt;"), is(true));
-    assertThat(highlighted.contains("<b>andalso</b>"), is(true));
+    assertThat(
+        highlighted.contains("<span class=\"kr\">andalso</span>"), is(true));
   }
 
   // -----------------------------------------------------------------------
@@ -280,7 +305,8 @@ public class DarnTest {
     Darn.ProcessResult result = Darn.processLines(input);
     assertThat(result.mismatchCount, is(0));
     assertThat(
-        result.lines.stream().anyMatch(l -> l.contains("<b>fun</b>")),
+        result.lines.stream()
+            .anyMatch(l -> l.contains("<span class=\"kr\">fun</span>")),
         is(true));
   }
 

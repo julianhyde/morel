@@ -27,8 +27,8 @@ License.
 -->
 
 <div class="morel">
-<pre class="morel-input"><code>1 + 2;</code></pre>
-<pre class="morel-output"><code>val it = 3 : int</code></pre>
+<pre class="morel-input"><code><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">;</span></code></pre>
+<pre class="morel-output"><code><span class="c">val it = 3 : int</span></code></pre>
 </div>
 
 ## Morel keywords and type variables
@@ -39,8 +39,8 @@ fun len [] = 0
 -->
 
 <div class="morel">
-<pre class="morel-input"><code><b>fun</b> len [] = 0
-  | len (_ :: tl) = 1 + len tl;</code></pre>
+<pre class="morel-input"><code><span class="kr">fun</span> <span class="nf">len</span> <span class="p">[]</span> <span class="p">=</span> <span class="mi">0</span>
+  <span class="p">|</span> <span class="n">len</span> <span class="p">(</span><span class="n">_</span> <span class="o">::</span> <span class="n">tl</span><span class="p">)</span> <span class="p">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">len</span> <span class="n">tl</span><span class="p">;</span></code></pre>
 </div>
 
 ## Silent cell (no HTML block generated)
