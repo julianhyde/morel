@@ -5108,8 +5108,7 @@ public abstract class Codes {
     @Override
     public Describer describe(Describer describer) {
       return describer.start(
-          "stackLet1",
-          d -> d.arg("expCode", expCode).arg("resultCode", resultCode));
+          "let1", d -> d.arg("expCode", expCode).arg("resultCode", resultCode));
     }
 
     @Override

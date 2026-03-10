@@ -34,7 +34,7 @@ let val x = 1 + 1 in x + x end;
 > val it = 4 : int
 Sys.plan ();
 > val it =
->   "stackLet1(expCode apply2(fnValue +, constant(1), constant(1)), resultCode apply2(fnValue +, stack(offset 1, name x), stack(offset 1, name x)))"
+>   "let1(expCode apply2(fnValue +, constant(1), constant(1)), resultCode apply2(fnValue +, stack(offset 1, name x), stack(offset 1, name x)))"
 >   : string
 
 (*) An atomic variable (bound to a literal) used twice is inlined.

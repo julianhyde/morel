@@ -110,3 +110,22 @@ Fix two runtime array-growth issues:
 2. Non-tail recursive calls: when `StackClosure.apply(Stack, Object)` is
    called with `stack.slots.length < stack.top + capacity`, allocate a
    larger array and copy live slots.
+
+### ✅ Fix: Variant handling in StackClosure (1a152437)
+Three bugs surfaced after Step 10 fixed AIOOB errors:
+1. `needsGlobalEnvPatch` / `patchStackClosureEnv`: `Variant extends
+   AbstractImmutableList` and `Variant.get(1)` returns `this`, causing
+   infinite recursion. Fix: add `!(value instanceof Variant)` guard.
+2. `pushVariantConPat` passed the whole `Variant` to `pushBindings`
+   instead of the extracted inner value. Fix: extract via new
+   `Variant.innerValue()` helper shared with `Variant.bindConPat`.
+3. `built-in.smli` and other test expected outputs updated throughout.
+
+### ✅ Fix: Restore detailed describe output; rename stackLet1 → let1
+1. `StackMatchCode.describe()` restored to full `match(pat, body)` format
+   (was simplified to `"stackMatch"`). Updated all test strings accordingly.
+2. `StackLet1Code.describe()` renamed from `"stackLet1"` to `"let1"` to
+   align with origin/main naming.
+3. Test code reorganized: restored `final String plan = ...` variable style
+   in `testLet6`, `testLet7` (MainTest), and `testInline` (InlineTest).
+
