@@ -54,6 +54,7 @@ import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.EvalEnvs;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.CalciteFunctions;
@@ -190,6 +191,24 @@ public class CalciteCompiler extends Compiler {
   }
 
   @Override
+  protected @Nullable Code tryCompileLetStack(
+      Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
+    // Disable stack-based let in CalciteCompiler so that finishCompileLet can
+    // apply toRel4 to the body, enabling Calcite optimization for hybrid
+    // queries.
+    return null;
+  }
+
+  @Override
+  protected @Nullable Code tryCompileLetStackTail(
+      Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
+    // Disable stack-based let in CalciteCompiler so that finishCompileLet can
+    // apply toRel4 to the body, enabling Calcite optimization for hybrid
+    // queries.
+    return null;
+  }
+
+  @Override
   protected Code finishCompileLet(
       Context cx, List<Code> matchCodes_, Code resultCode_, Type resultType) {
     final Code resultCode = toRel4(cx.env, resultCode_, resultType);
@@ -204,7 +223,12 @@ public class CalciteCompiler extends Compiler {
 
       @Override
       public Object eval(EvalEnv evalEnv) {
-        return code.eval(evalEnv);
+        return code.eval(new Stack(evalEnv, 256));
+      }
+
+      @Override
+      public Object eval(Stack stack) {
+        return code.eval(stack);
       }
 
       @Override
@@ -232,7 +256,12 @@ public class CalciteCompiler extends Compiler {
 
       @Override
       public Object eval(EvalEnv env) {
-        return code.eval(env);
+        return code.eval(new Stack(env, 256));
+      }
+
+      @Override
+      public Object eval(Stack stack) {
+        return code.eval(stack);
       }
 
       @Override
@@ -244,7 +273,7 @@ public class CalciteCompiler extends Compiler {
           case RECORD_SELECTOR:
             if (apply.arg instanceof Core.Id) {
               // Something like '#emps scott', 'scott' is a foreign value
-              final Object o = code.eval(evalEnvOf(cx.env));
+              final Object o = code.eval(new Stack(evalEnvOf(cx.env), 256));
               if (o instanceof RelList) {
                 cx.relBuilder.push(((RelList) o).rel);
                 return true;
@@ -429,7 +458,12 @@ public class CalciteCompiler extends Compiler {
 
       @Override
       public Object eval(EvalEnv env) {
-        return code.eval(env);
+        return code.eval(new Stack(env, 256));
+      }
+
+      @Override
+      public Object eval(Stack stack) {
+        return code.eval(stack);
       }
 
       @Override
@@ -1025,7 +1059,12 @@ public class CalciteCompiler extends Compiler {
 
         @Override
         public Object eval(EvalEnv env) {
-          return code.eval(env);
+          return code.eval(new Stack(env, 256));
+        }
+
+        @Override
+        public Object eval(Stack stack) {
+          return code.eval(stack);
         }
 
         @Override

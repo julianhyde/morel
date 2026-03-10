@@ -41,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.hydromatic.morel.ast.Core;
@@ -184,11 +183,8 @@ public class Compiler {
   public static class Context {
     final Environment env;
 
-    /**
-     * The current stack layout, or {@code null} until Step 4 activates
-     * stack-based compilation.
-     */
-    final @Nullable StackLayout layout;
+    /** The current stack layout, mapping named patterns to slot indices. */
+    final StackLayout layout;
 
     /**
      * The number of local variable slots currently live on the stack above the
@@ -202,17 +198,17 @@ public class Compiler {
     final int localDepth;
 
     Context(Environment env) {
-      this(env, null, 0);
+      this(env, StackLayout.EMPTY, 0);
     }
 
-    Context(Environment env, @Nullable StackLayout layout, int localDepth) {
+    Context(Environment env, StackLayout layout, int localDepth) {
       this.env = env;
       this.layout = layout;
       this.localDepth = localDepth;
     }
 
     static Context of(Environment env) {
-      return new Context(env);
+      return new Context(env, StackLayout.EMPTY, 0);
     }
 
     Context bindAll(Iterable<Binding> bindings) {
@@ -382,6 +378,14 @@ public class Compiler {
     }
     final Binding binding = cx.env.getOpt(idPat);
     if (binding != null && binding.value instanceof Code) {
+      // Don't inline LinkCode (recursive bindings): the code will be a
+      // StackMatchCode whose capture offsets were computed at the outer
+      // context's depth. Inlining it here (at a different stack depth)
+      // produces wrong captures. Use a runtime lookup instead so that the
+      // StackClosure placed in globalEnv by Let1Code/LetCode is found.
+      if (binding.value instanceof LinkCode) {
+        return Codes.get(idPat.name);
+      }
       return (Code) binding.value;
     }
     return Codes.get(idPat.name);
@@ -855,7 +859,7 @@ public class Compiler {
   }
 
   private Code compileLet(Context cx, Core.Let let) {
-    if (cx.layout != null && let.decl.op == Op.VAL_DECL) {
+    if (let.decl.op == Op.VAL_DECL) {
       final Code stackLetCode =
           tryCompileLetStack(cx, (Core.NonRecValDecl) let.decl, let.exp);
       if (stackLetCode != null) {
@@ -876,8 +880,14 @@ public class Compiler {
    * push/pop. Returns null if the pattern is too complex (fall back to old-mode
    * let).
    */
-  private @Nullable Code tryCompileLetStack(
+  protected @Nullable Code tryCompileLetStack(
       Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
+    if (valDecl.pat.op == Op.WILDCARD_PAT) {
+      // "val _ = expr in body": evaluate expr for side effects, ignore result.
+      final Code expCode = compile(cx, valDecl.exp);
+      final Code bodyCode = compile(cx, bodyExp);
+      return Codes.stackLet1(expCode, bodyCode);
+    }
     if (valDecl.pat.op != Op.ID_PAT) {
       return null;
     }
@@ -910,8 +920,14 @@ public class Compiler {
    * push/pop, with the body in tail position. Returns null if the pattern is
    * too complex (fall back to old-mode let).
    */
-  private @Nullable Code tryCompileLetStackTail(
+  protected @Nullable Code tryCompileLetStackTail(
       Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
+    if (valDecl.pat.op == Op.WILDCARD_PAT) {
+      // "val _ = expr in body": evaluate expr for side effects, ignore result.
+      final Code expCode = compile(cx, valDecl.exp);
+      final Code bodyCode = compileTail(cx, bodyExp);
+      return Codes.stackLet1(expCode, bodyCode);
+    }
     if (valDecl.pat.op != Op.ID_PAT) {
       return null;
     }
@@ -1121,20 +1137,7 @@ public class Compiler {
    * @return Code for match
    */
   private Code compileMatchList(Context cx, List<Core.Match> matchList) {
-    if (cx.layout != null) {
-      return compileMatchListImpl(cx, matchList, false);
-    }
-    final PairList<Core.Pat, Code> patCodes = PairList.of();
-    matchList.forEach(match -> compileMatch(cx, match, patCodes::add));
-    return new MatchCode(patCodes.immutable(), last(matchList).pos);
-  }
-
-  private void compileMatch(
-      Context cx, Core.Match match, BiConsumer<Core.Pat, Code> consumer) {
-    final List<Binding> bindings = new ArrayList<>();
-    Compiles.acceptBinding(typeSystem, match.pat, bindings);
-    final Code code = compile(cx.bindAll(bindings), match.exp);
-    consumer.accept(match.pat, code);
+    return compileMatchListImpl(cx, matchList, false);
   }
 
   /**
@@ -1155,7 +1158,7 @@ public class Compiler {
 
       case LET:
         final Core.Let let = (Core.Let) expression;
-        if (cx.layout != null && let.decl.op == Op.VAL_DECL) {
+        if (let.decl.op == Op.VAL_DECL) {
           final Code stackLetCode =
               tryCompileLetStackTail(
                   cx, (Core.NonRecValDecl) let.decl, let.exp);
@@ -1184,12 +1187,8 @@ public class Compiler {
   /**
    * Core implementation for compiling a match list.
    *
-   * <p>If the outer context has a stack layout, emits a {@link StackMatchCode}
-   * that captures currently live stack variables and assigns inner slots for
-   * the pattern-bound variables.
-   *
-   * <p>If the outer context has no stack layout, emits an old-mode {@link
-   * MatchCode} that creates a {@link Closure}.
+   * <p>Emits a {@link StackMatchCode} that captures currently live stack
+   * variables and assigns inner slots for the pattern-bound variables.
    *
    * @param cx Outer compile context
    * @param matchList The match arms to compile
@@ -1197,17 +1196,6 @@ public class Compiler {
    */
   private Code compileMatchListImpl(
       Context cx, List<Core.Match> matchList, boolean tailPos) {
-    if (cx.layout == null) {
-      // Old-mode: no stack, compile with environment-based closures.
-      final PairList<Core.Pat, Code> patCodes = PairList.of();
-      if (tailPos) {
-        matchList.forEach(match -> compileMatchTail(cx, match, patCodes::add));
-      } else {
-        matchList.forEach(match -> compileMatch(cx, match, patCodes::add));
-      }
-      return new MatchCode(patCodes.immutable(), last(matchList).pos);
-    }
-
     // Stack-mode: collect variables currently live in the outer stack layout.
     // These become the captured variables in the new StackClosure.
     // We use a LinkedHashMap to maintain a stable insertion order.
@@ -1322,18 +1310,62 @@ public class Compiler {
         final Core.Local local = (Core.Local) exp;
         collectReferencedStackVarsRec(layout, local.exp, captureMap);
         break;
+      case FROM:
+        final Core.From from = (Core.From) exp;
+        for (Core.FromStep step : from.steps) {
+          if (step instanceof Core.Scan) {
+            final Core.Scan scan = (Core.Scan) step;
+            collectReferencedStackVarsRec(layout, scan.exp, captureMap);
+            collectReferencedStackVarsRec(layout, scan.condition, captureMap);
+          } else if (step instanceof Core.Where) {
+            collectReferencedStackVarsRec(
+                layout, ((Core.Where) step).exp, captureMap);
+          } else if (step instanceof Core.Skip) {
+            collectReferencedStackVarsRec(
+                layout, ((Core.Skip) step).exp, captureMap);
+          } else if (step instanceof Core.Take) {
+            collectReferencedStackVarsRec(
+                layout, ((Core.Take) step).exp, captureMap);
+          } else if (step instanceof Core.Order) {
+            collectReferencedStackVarsRec(
+                layout, ((Core.Order) step).exp, captureMap);
+          } else if (step instanceof Core.Group) {
+            final Core.Group group = (Core.Group) step;
+            group
+                .groupExps
+                .values()
+                .forEach(
+                    e -> collectReferencedStackVarsRec(layout, e, captureMap));
+            group
+                .aggregates
+                .values()
+                .forEach(
+                    agg -> {
+                      collectReferencedStackVarsRec(
+                          layout, agg.aggregate, captureMap);
+                      if (agg.argument != null) {
+                        collectReferencedStackVarsRec(
+                            layout, agg.argument, captureMap);
+                      }
+                    });
+          } else if (step instanceof Core.Yield) {
+            collectReferencedStackVarsRec(
+                layout, ((Core.Yield) step).exp, captureMap);
+          } else if (step instanceof Core.SetStep) {
+            // Handles Core.Union, Core.Intersect, Core.Except
+            ((Core.SetStep) step)
+                .args.forEach(
+                    arg ->
+                        collectReferencedStackVarsRec(layout, arg, captureMap));
+          }
+          // Unorder has no sub-expressions.
+        }
+        break;
+
       default:
         // Literals and other leaf nodes: no ID references.
         break;
     }
-  }
-
-  private void compileMatchTail(
-      Context cx, Core.Match match, BiConsumer<Core.Pat, Code> consumer) {
-    final List<Binding> bindings = new ArrayList<>();
-    Compiles.acceptBinding(typeSystem, match.pat, bindings);
-    final Code code = compileTail(cx.bindAll(bindings), match.exp);
-    consumer.accept(match.pat, code);
   }
 
   private void compileValDecl(
@@ -1459,7 +1491,7 @@ public class Compiler {
     }
   }
 
-  /** Code that implements {@link Compiler#compileMatchList(Context, List)}. */
+  /** Code that creates a {@link Closure} for a match expression. */
   private static class MatchCode implements Code {
     private final ImmutablePairList<Core.Pat, Code> patCodes;
     private final Pos pos;
@@ -1633,7 +1665,7 @@ public class Compiler {
       final StringBuilder buf = new StringBuilder();
       final List<String> outs = new ArrayList<>();
       try {
-        final Object o = code.eval(evalEnv);
+        final Object o = code.eval(new Stack(evalEnv, 256));
         final List<Binding> outBindings0 = new ArrayList<>();
         // For simple IdPat bindings, store the expression so it can be inlined
         // in subsequent compile units. For compound patterns (tuples), we don't
@@ -1650,6 +1682,22 @@ public class Compiler {
                         : Binding.inst(
                             pat2, overloadPat, expForBinding, o2)))) {
           throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
+        }
+        // Patch globalEnv in any StackClosure values so that they can look up
+        // themselves (recursive calls) and sibling bindings in globalEnv.
+        // Only patch closures whose globalEnv is still evalEnv (i.e., they
+        // were created directly by this code and have not already been
+        // patched by an inner LetCode). Closures returned from let
+        // expressions have a properly patched globalEnv and must not be
+        // overwritten here.
+        EvalEnv env2 = evalEnv;
+        for (Binding b : outBindings0) {
+          env2 = env2.bind(b.id.name, b.value);
+        }
+        for (Binding b : outBindings0) {
+          if (needsGlobalEnvPatch(b.value, evalEnv)) {
+            Closure.patchStackClosureEnv(b.value, env2);
+          }
         }
         for (Binding binding : outBindings0) {
           outBindings.accept(binding);
@@ -1673,6 +1721,28 @@ public class Compiler {
       }
       session.code = code;
       session.out = ImmutableList.copyOf(outs);
+    }
+
+    /**
+     * Returns true if {@code value} is a {@link Closure.StackClosure} whose
+     * {@code globalEnv} is still {@code baseEnv} (i.e., it was just created and
+     * has not yet been patched by an inner {@code LetCode}).
+     *
+     * <p>Used to avoid overwriting a closure's already-complete {@code
+     * globalEnv} when binding the result of a {@code let} expression.
+     */
+    private static boolean needsGlobalEnvPatch(Object value, EvalEnv baseEnv) {
+      if (value instanceof Closure.StackClosure) {
+        return ((Closure.StackClosure) value).hasGlobalEnv(baseEnv);
+      }
+      if (value instanceof List) {
+        for (Object element : (List<?>) value) {
+          if (needsGlobalEnvPatch(element, baseEnv)) {
+            return true;
+          }
+        }
+      }
+      return false;
     }
 
     private Pretty.TypedVal getTypedVal(Binding binding, Core.NamedPat id) {

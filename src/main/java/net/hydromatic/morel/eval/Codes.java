@@ -4285,15 +4285,23 @@ public abstract class Codes {
 
       @Override
       public Object apply(EvalEnv env, Object arg) {
+        return apply(new Stack(env, 256), arg);
+      }
+
+      @Override
+      public Object apply(Stack stack, Object arg) {
         @SuppressWarnings("unchecked")
         final List<Object> rows = (List<Object>) arg;
         final List<Object> argRows;
         if (argumentCode != null) {
-          final MutableEvalEnv env2 = env.bindMutableArray(names);
+          final MutableEvalEnv env2 = stack.globalEnv.bindMutableArray(names);
           argRows = new ArrayList<>(rows.size());
           for (Object row : rows) {
             env2.set(row);
-            argRows.add(argumentCode.eval(env2));
+            // Use a Stack so that StackCode nodes (outer let-bound variables)
+            // in argumentCode are evaluated correctly.
+            argRows.add(
+                argumentCode.eval(new Stack(env2, stack.slots, stack.top)));
           }
         } else if (names.size() != 1) {
           // Reconcile the fact that we internally represent rows as arrays when
@@ -4302,8 +4310,8 @@ public abstract class Codes {
         } else {
           argRows = rows;
         }
-        final Applicable aggregate = (Applicable) aggregateCode.eval(env);
-        return aggregate.apply(env, argRows);
+        final Applicable aggregate = (Applicable) aggregateCode.eval(stack);
+        return aggregate.apply(stack, argRows);
       }
     };
   }
@@ -5007,6 +5015,13 @@ public abstract class Codes {
       EvalEnv env2 = fnValue.evalBind(evalEnv);
       return resultCode.eval(env2);
     }
+
+    @Override
+    public Object eval(Stack stack) {
+      final Closure fnValue = (Closure) matchCode.eval(stack.globalEnv);
+      EvalEnv env2 = fnValue.evalBind(stack);
+      return resultCode.eval(new Stack(env2, stack.slots, stack.top));
+    }
   }
 
   /** Code that implements {@link #let(List, Code)} with multiple arguments. */
@@ -5039,6 +5054,25 @@ public abstract class Codes {
         evalEnv2 = fnValue.evalBind(evalEnv2);
       }
       return resultCode.eval(evalEnv2);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      EvalEnv env2 = stack.globalEnv;
+      // Collect bound values so we can re-patch for mutual recursion.
+      final List<Object> boundValues = new ArrayList<>();
+      for (Code matchCode : matchCodes) {
+        final Closure fnValue = (Closure) matchCode.eval(env2);
+        env2 =
+            fnValue.evalBindGetValue(
+                new Stack(env2, stack.slots, stack.top), boundValues);
+      }
+      // Re-patch all collected closures with the final env so that
+      // cross-references (mutual recursion) are resolved correctly.
+      for (Object value : boundValues) {
+        Closure.patchStackClosureEnv(value, env2);
+      }
+      return resultCode.eval(new Stack(env2, stack.slots, stack.top));
     }
   }
 
@@ -5420,9 +5454,12 @@ public abstract class Codes {
 
     @Override
     public Object eval(Stack stack) {
-      final Applicable fnValue = (Applicable) fnCode.eval(stack);
+      final Object fn = fnCode.eval(stack);
       final Object arg = argCode.eval(stack);
-      return fnValue.apply(stack, arg);
+      if (fn instanceof Applicable1) {
+        return ((Applicable1) fn).apply(arg);
+      }
+      return ((Applicable) fn).apply(stack, arg);
     }
   }
 

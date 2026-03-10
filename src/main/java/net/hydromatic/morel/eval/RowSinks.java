@@ -1226,7 +1226,11 @@ public abstract class RowSinks {
         }
         final List<Object> rows = entry.getValue();
         for (Applicable aggregateCode : aggregateCodes) {
-          groupEnvs[i++].set(aggregateCode.apply(env3, rows));
+          // Pass a Stack so that StackCode nodes in the argument expression
+          // (outer let-bound variables) are evaluated with the correct slots.
+          groupEnvs[i++].set(
+              aggregateCode.apply(
+                  new Stack(env3, stack.slots, stack.top), rows));
         }
         rowSink.accept(innerStack);
       }

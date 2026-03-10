@@ -36,7 +36,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Inliner;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
-import net.hydromatic.morel.eval.Closure;
+import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
@@ -410,10 +410,10 @@ public class CalciteFunctions {
           this.compiled != null
               ? this.compiled
               : new Compiled(morelArgTypeJson, typeFactory, cx.typeSystem);
-      final Closure fn = (Closure) closure;
+      final Applicable fn = (Applicable) closure;
       final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
       final Object o = compiled.converter.apply(arg);
-      return fn.apply(o);
+      return fn.apply(evalEnv, o);
     }
 
     /** Compiled state. */

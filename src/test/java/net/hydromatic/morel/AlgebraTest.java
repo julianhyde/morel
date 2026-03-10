@@ -322,9 +322,7 @@ public class AlgebraTest {
     String plan =
         ""
             + "apply2(fnValue Bag.filter, "
-            + "match(x, apply2(fnValue <, "
-            + "apply(fnValue nth:2, argCode get(name x)),"
-            + " constant(7500))), "
+            + "stackMatch, "
             + "calcite("
             + "plan LogicalProject(d5=[+($1, 5)], deptno=[$1], empno=[$2])\n"
             + "  LogicalFilter(condition=[=($5, 'CLERK')])\n"
@@ -501,8 +499,7 @@ public class AlgebraTest {
             + "  yield twice d.deptno\n"
             + "end";
     String plan =
-        "let(matchCode0 match(twice, match(x, "
-            + "apply2(fnValue +, get(name x), get(name x)))), "
+        "let(matchCode0 match(twice, stackMatch), "
             + "resultCode calcite(plan "
             + "LogicalProject($f0=[morelScalar('int', "
             + "morelScalar('twice', '{\n"
@@ -538,10 +535,7 @@ public class AlgebraTest {
             + "  yield plus (d.deptno, five)\n"
             + "end";
     String plan =
-        "let(matchCode0 match(plus, match(v, "
-            + "tailApply(fnCode match((x, y), apply2(fnValue +, "
-            + "get(name x), get(name y))), "
-            + "argCode get(name v)))), "
+        "let(matchCode0 match(plus, stackMatch), "
             + "resultCode let(matchCode0 match(five, constant(5)), "
             + "resultCode calcite(plan "
             + "LogicalProject($f0=[morelScalar('int * int', "

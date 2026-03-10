@@ -100,10 +100,68 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       final Object argValue = patCode.getValue().eval(env);
       final Core.Pat pat = patCode.getKey();
       if (bindRecurse(pat, argValue, envRef)) {
+        patchStackClosureEnv(argValue, envRef.env);
         return envRef.env;
       }
     }
     throw new AssertionError("no match");
+  }
+
+  /**
+   * Like {@link #evalBind(Stack)}, but also appends the bound value to {@code
+   * out}. Used by multi-binding {@code let} to re-patch mutual-recursion
+   * closures after all bindings are established.
+   */
+  EvalEnv evalBindGetValue(Stack stack, List<Object> out) {
+    final EvalEnvHolder envRef = new EvalEnvHolder(stack.globalEnv);
+    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
+      final Object argValue = patCode.getValue().eval(stack);
+      final Core.Pat pat = patCode.getKey();
+      if (bindRecurse(pat, argValue, envRef)) {
+        out.add(argValue);
+        patchStackClosureEnv(argValue, envRef.env);
+        return envRef.env;
+      }
+    }
+    throw new AssertionError("no match");
+  }
+
+  /**
+   * Similar to {@link #evalBind(EvalEnv)}, but evaluates value codes using a
+   * {@link Stack} so that stack-based code nodes (e.g., {@code StackMatchCode})
+   * can capture the correct values from the stack.
+   */
+  EvalEnv evalBind(Stack stack) {
+    final EvalEnvHolder envRef = new EvalEnvHolder(stack.globalEnv);
+    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
+      final Object argValue = patCode.getValue().eval(stack);
+      final Core.Pat pat = patCode.getKey();
+      if (bindRecurse(pat, argValue, envRef)) {
+        // Patch globalEnv in any StackClosure that was just bound, so it can
+        // find itself via Codes.get(name) in its own body (recursion).
+        patchStackClosureEnv(argValue, envRef.env);
+        return envRef.env;
+      }
+    }
+    throw new AssertionError("no match");
+  }
+
+  /**
+   * Updates {@link StackClosure#globalEnv} to {@code env} for any {@link
+   * StackClosure} reachable via {@code value}.
+   *
+   * <p>Called after a binding environment is extended (e.g., after {@link
+   * #evalBind} or a top-level declaration) so that recursive functions can find
+   * themselves via {@code Codes.get(name)}.
+   */
+  public static void patchStackClosureEnv(Object value, EvalEnv env) {
+    if (value instanceof StackClosure) {
+      ((StackClosure) value).globalEnv = env;
+    } else if (value instanceof List) {
+      for (Object element : (List<?>) value) {
+        patchStackClosureEnv(element, env);
+      }
+    }
   }
 
   /**
@@ -288,8 +346,14 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
    */
   public static class StackClosure
       implements Comparable<StackClosure>, Applicable, Applicable1 {
-    /** Global (top-level and built-in) bindings, captured at creation time. */
-    private final EvalEnv globalEnv;
+    /**
+     * Global (top-level and built-in) bindings, captured at creation time.
+     *
+     * <p>Not final: for recursive functions, {@link Closure#evalBind(Stack)}
+     * patches this to point to the post-binding env that includes the recursive
+     * function itself.
+     */
+    EvalEnv globalEnv;
 
     final Object[] capturedValues;
     private final ImmutablePairList<Core.Pat, Code> patCodes;
@@ -300,7 +364,9 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
         Object[] capturedValues,
         ImmutablePairList<Core.Pat, Code> patCodes,
         Pos pos) {
-      this.globalEnv = globalEnv;
+      // Snapshot the env so that subsequent mutations (e.g. ScanRowSink
+      // advancing to the next row) do not change what this closure sees.
+      this.globalEnv = requireNonNull(globalEnv).fix();
       this.capturedValues = capturedValues;
       this.patCodes = patCodes;
       this.pos = pos;
@@ -321,25 +387,46 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       return describer.start("stackClosure", d -> {});
     }
 
+    /** Returns true if this closure's global env is exactly {@code env}. */
+    public boolean hasGlobalEnv(EvalEnv env) {
+      return globalEnv == env;
+    }
+
     /**
      * Applies this closure to {@code argValue}, using the stack for local
      * variable storage.
+     *
+     * <p>Uses {@link #globalEnv} (not {@code stack.globalEnv}) as the global
+     * environment for body evaluation. This is essential for recursive closures
+     * created by {@link Let1Code}/{@link LetCode}: their {@code globalEnv} is
+     * patched (by {@link Closure#evalBind(Stack)}) to include the recursive
+     * binding, so that the body can look up the function by name even when
+     * invoked via the tail-call trampoline (which uses the caller's stack).
      */
     @Override
     public Object apply(Stack stack, Object argValue) {
-      int savedTop = stack.save();
-      Object result = applyOnce(stack, argValue);
+      // Create an evalStack sharing the slots array but using this closure's
+      // globalEnv. This ensures recursive lookups (via Codes.get) find the
+      // function in globalEnv regardless of what the caller's stack has.
+      Stack evalStack = new Stack(globalEnv, stack.slots, stack.top);
+      int savedTop = evalStack.save();
+      Object result = applyOnce(evalStack, argValue);
       while (result instanceof Codes.TailCall) {
         final Codes.TailCall tc = (Codes.TailCall) result;
-        stack.restore(savedTop);
+        evalStack.restore(savedTop);
         if (tc.fn instanceof StackClosure) {
-          result = ((StackClosure) tc.fn).applyOnce(stack, tc.arg);
+          final StackClosure nextFn = (StackClosure) tc.fn;
+          if (nextFn.globalEnv != evalStack.globalEnv) {
+            evalStack =
+                new Stack(nextFn.globalEnv, evalStack.slots, evalStack.top);
+          }
+          result = nextFn.applyOnce(evalStack, tc.arg);
         } else {
-          result = tc.fn.apply(stack, tc.arg);
+          result = tc.fn.apply(evalStack, tc.arg);
           break;
         }
       }
-      stack.restore(savedTop);
+      evalStack.restore(savedTop);
       return result;
     }
 

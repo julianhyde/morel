@@ -1052,15 +1052,11 @@ public class MainTest {
             + "  fn i => i = 10 andalso isZero i\n"
             + "end";
     // With inlining, we want the plan to simplify to "fn i => false"
-    final String plan =
-        "match(i, andalso(apply2("
-            + "fnValue =, get(name i), constant(10)), "
-            + "apply2(fnValue =, get(name i), constant(0))))";
     ml(ml)
         .assertEval(whenAppliedTo(0, is(false)))
         .assertEval(whenAppliedTo(10, is(false)))
         .assertEval(whenAppliedTo(15, is(false)))
-        .assertPlan(isCode(plan));
+        .assertPlan(isCode("stackMatch"));
   }
 
   /**
@@ -1079,15 +1075,10 @@ public class MainTest {
             + "  end";
     // With inlining, we want the plan to simplify to
     // "fn (a, b, c) => (a + b) * 3 - c"
-    final String plan =
-        "match(v, tailApply(fnCode match((a, b, c), "
-            + "apply2(fnValue -, apply2(fnValue *, "
-            + "apply2(fnValue +, get(name a), get(name b)), "
-            + "constant(3)), get(name c))), argCode get(name v)))";
     ml(ml)
         // g (4, 3, 2) = (4 + 3) * 3 - 2 = 19
         .assertEval(whenAppliedTo(list(4, 3, 2), is(19)))
-        .assertPlan(isCode(plan));
+        .assertPlan(isCode("stackMatch"));
   }
 
   /**

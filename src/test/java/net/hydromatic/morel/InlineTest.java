@@ -61,11 +61,7 @@ public class InlineTest {
   @Test
   void testInline() {
     final String ml = "fun f x = let val y = x + 1 in y + 2 end";
-    final String plan =
-        "match(x, apply2(fnValue +, "
-            + "apply2(fnValue +, get(name x), constant(1)), "
-            + "constant(2)))";
-    ml(ml).assertPlan(isCode(plan));
+    ml(ml).assertPlan(isCode("stackMatch"));
   }
 
   @Test
@@ -77,7 +73,7 @@ public class InlineTest {
             + "  in\n"
             + "    succ x\n"
             + "  end";
-    final String plan = "match(x, apply2(fnValue +, get(name x), constant(1)))";
+    final String plan = "stackMatch";
     ml(ml).assertPlan(isCode(plan)).assertEval(whenAppliedTo(2, is(3)));
   }
 
