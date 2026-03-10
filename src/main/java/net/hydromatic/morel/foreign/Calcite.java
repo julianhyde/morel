@@ -28,6 +28,7 @@ import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ThreadLocals;
 import org.apache.calcite.DataContext;
@@ -229,6 +230,26 @@ public class Calcite {
                         new Interpreter(dataContext, rel);
                     return converter.apply(interpreter);
                   }));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return ThreadLocals.let(
+          CalciteFunctions.THREAD_STACK,
+          stack,
+          () ->
+              ThreadLocals.let(
+                  CalciteFunctions.THREAD_EVAL_ENV,
+                  stack.globalEnv,
+                  () ->
+                      ThreadLocals.mutate(
+                          CalciteFunctions.THREAD_ENV,
+                          c -> c.withEnv(env),
+                          () -> {
+                            final Interpreter interpreter =
+                                new Interpreter(dataContext, rel);
+                            return converter.apply(interpreter);
+                          })));
     }
   }
 

@@ -41,6 +41,7 @@ import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.parse.MorelParseException;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.Type;
@@ -93,6 +94,14 @@ public class CalciteFunctions {
    * #SCALAR_OPERATOR}) boundaries.
    */
   public static final ThreadLocal<@Nullable EvalEnv> THREAD_EVAL_ENV =
+      new ThreadLocal<>();
+
+  /**
+   * Used to pass the full Morel evaluation stack into Calcite, so that stack
+   * slots are available if Calcite calls back into Morel via {@link
+   * MorelScalarFunction} or {@link MorelApplyFunction}.
+   */
+  public static final ThreadLocal<@Nullable Stack> THREAD_STACK =
       new ThreadLocal<>();
 
   private CalciteFunctions() {}
@@ -338,8 +347,11 @@ public class CalciteFunctions {
           this.compiled != null
               ? this.compiled
               : new Compiled(cx.env, cx.typeSystem, typeFactory, ml, typeJson);
-      final EvalEnv evalEnv = requireNonNull(THREAD_EVAL_ENV.get());
-      Object v = compiled.code.eval(evalEnv);
+      final Stack stack = THREAD_STACK.get();
+      final Object v =
+          stack != null
+              ? compiled.code.eval(stack)
+              : compiled.code.eval(requireNonNull(THREAD_EVAL_ENV.get()));
       return compiled.f.apply(v);
     }
 
@@ -411,9 +423,11 @@ public class CalciteFunctions {
               ? this.compiled
               : new Compiled(morelArgTypeJson, typeFactory, cx.typeSystem);
       final Applicable fn = (Applicable) closure;
-      final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
+      final Stack stack = THREAD_STACK.get();
       final Object o = compiled.converter.apply(arg);
-      return fn.apply(evalEnv, o);
+      return stack != null
+          ? fn.apply(stack, o)
+          : fn.apply(THREAD_EVAL_ENV.get(), o);
     }
 
     /** Compiled state. */
