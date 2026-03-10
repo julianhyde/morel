@@ -82,13 +82,13 @@ Remove `compileMatch`, `compileMatchTail`, and the old `MatchCode`
 closure creation path.
 All function bodies now use `StackMatchCode` / `StackClosure`.
 
-### Step 8: CalciteCompiler / ThreadLocal<Stack>
+### ✅ Step 8: CalciteCompiler / ThreadLocal<Stack> (7e866584)
 Replace `ThreadLocal<EvalEnv>` in `CalciteFunctions` with
 `ThreadLocal<Stack>`.
 Update `CalciteCompiler`'s inline `Code` overrides to use
 `eval(Stack)` rather than `eval(EvalEnv)`.
 
-### Step 9: Remove EvalEnv from inner evaluation
+### ✅ Step 9: Remove EvalEnv from inner evaluation (d06cb01f)
 Make `Code.eval(Stack)` the primary method (non-default).
 Make `Code.eval(EvalEnv)` the fallback / deprecated path.
 Remove `eval(EvalEnv)` overrides from all stack-based code nodes
@@ -128,4 +128,75 @@ Three bugs surfaced after Step 10 fixed AIOOB errors:
    align with origin/main naming.
 3. Test code reorganized: restored `final String plan = ...` variable style
    in `testLet6`, `testLet7` (MainTest), and `testInline` (InlineTest).
+
+### Step 11: Convert multi-binding `let` to stack-based
+`finishCompileLet` still emits `Codes.let()` → `LetCode`/`Let1Code`,
+which evaluates via `MatchCode` → old `Closure` → EvalEnv extension.
+This path is reached for:
+- multi-binding `let` (`let val f = ... and g = ...`, mutual recursion)
+- any complex pattern not caught by `tryCompileLetStack*`
+
+Convert `finishCompileLet` to emit stack-based code:
+- Emit `StackLetPatCode` (or a new `StackLetMultiCode`) for each binding,
+  pushing values onto the stack sequentially.
+- Handle mutual recursion by pushing placeholder slots, then
+  back-patching `StackClosure.globalEnv` (as `needsGlobalEnvPatch` already
+  does) after all bindings are pushed.
+- Remove `MatchCode`, old `Closure`, `Let1Code`, `LetCode` once no
+  longer emitted.
+
+### Step 12: Convert RowSink iteration variables to stack slots
+`ScanRowSink` (and `YieldRowSink`) currently bind each iteration
+variable by creating a `MutableEvalEnv` extension of `stack.globalEnv`,
+then constructing a new `Stack(mutableEnv, stack.slots, stack.top)`.
+This keeps iteration variables in the env rather than on the stack, so
+inner `StackCode` nodes cannot reference them by slot offset.
+
+Replace with genuine stack allocation:
+- At `from`-expression compile time, extend `cx.layout` with a slot for
+  each scan variable, exactly as `tryCompileLetStack` does for `let`.
+- At runtime in `ScanRowSink.accept(Stack)`, push the row value onto
+  the stack instead of extending the env; pop in `result(Stack)`.
+- This makes inner filter/yield/order codes pure stack operations and
+  eliminates all `MutableEvalEnv` usage in the hot evaluation path.
+
+### Step 13: Global slot allocation — transcribe globalEnv into a frame
+The only remaining EvalEnv lookups at runtime are `GetCode` /
+`GetTupleCode`, which call `env.getOpt(name)` to find top-level and
+built-in bindings. These can't use stack slots today because global
+bindings are added dynamically by the REPL, so no fixed offset is
+known at compile time.
+
+Fix: maintain a monotonically-growing **global slot array** alongside
+the existing EvalEnv chain:
+- `Session` (or `Environment`) carries a `globalSlots: Object[]` and a
+  `globalSlotMap: Map<Name, Integer>` assigning each top-level binding
+  a stable integer index. New bindings are appended; old indices never
+  change, so previously-compiled code remains valid.
+- `Stack` gains a `globalSlots` reference (or reuses `slots[0..base-1]`).
+- `compileFieldName` emits `GlobalSlotCode(index)` (reads
+  `stack.globalSlots[index]`) instead of `GetCode(name)` for bindings
+  found in the global slot map.
+- `GetCode` / `GetTupleCode` are removed once all global references are
+  slot-based.
+
+This makes all variable access O(1) and uniform, and eliminates the
+last runtime use of EvalEnv name lookup.
+
+### Step 14: Remove EvalEnv from eval interfaces
+After Steps 11–13, no `Code` class will have a meaningful
+`eval(EvalEnv)` body, no `Applicable` will be called via
+`apply(EvalEnv, Object)`, and no `RowSink` will need `start/accept/result(EvalEnv)`.
+Remove:
+- `Code.eval(EvalEnv)` default throw method (and any remaining overrides)
+- `Applicable.apply(EvalEnv, Object)` abstract method (and overrides)
+- `RowSink.start/accept/result(EvalEnv)` abstract methods (and overrides)
+- `Stack.globalEnv` field (replaced by `Stack.globalSlots`)
+- `EvalEnvs` factory / `MutableEvalEnv` implementations used only in
+  the now-deleted paths
+- `Closure` (old non-stack closure) — replaced entirely by `StackClosure`
+
+`EvalEnv` as a type may survive as the compile-time `Environment`
+interface (used by `TypeResolver`, `Compiler.Context`, etc.) but is no
+longer part of the runtime evaluation contract.
 
