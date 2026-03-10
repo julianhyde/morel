@@ -83,6 +83,19 @@ public class Main {
    * @param args Command-line arguments
    */
   public static void main(String[] args) {
+    System.exit(run(args));
+  }
+
+  /**
+   * Runs the program and returns an exit code.
+   *
+   * <p>Returns 0 on success. Returns 1 if there is an error, or if {@code
+   * --md-verify} finds mismatches.
+   *
+   * @param args Command-line arguments
+   * @return Exit code
+   */
+  public static int run(String[] args) {
     final List<String> argList = ImmutableList.copyOf(args);
     try {
       // Check for --md or --md-verify flags.
@@ -96,9 +109,9 @@ public class Main {
           }
         }
         if (mdVerify && anyChanges) {
-          System.exit(1);
+          return 1;
         }
-        return;
+        return 0;
       }
       final Map<String, ForeignValue> valueMap = ImmutableMap.of();
       final Map<Prop, Object> propMap = new LinkedHashMap<>();
@@ -106,9 +119,10 @@ public class Main {
       final Main main =
           new Main(argList, System.in, System.out, valueMap, propMap, false);
       main.run();
+      return 0;
     } catch (Throwable e) {
       e.printStackTrace();
-      System.exit(1);
+      return 1;
     }
   }
 

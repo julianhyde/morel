@@ -368,20 +368,21 @@ public class MarkdownProcessor {
       if (!segment.input.isEmpty()) {
         String inputHtml =
             MorelHighlighter.highlightInput(String.join("\n", segment.input));
-        lines.add(
-            "<pre><code class=\"morel-input\">" + inputHtml + "</code></pre>");
+        lines.add(codeBlock("morel-input", inputHtml));
       }
       if (!segment.output.isEmpty()) {
         String outputHtml =
             MorelHighlighter.highlightOutput(String.join("\n", segment.output));
-        lines.add(
-            "<pre><code class=\"morel-output\">"
-                + outputHtml
-                + "</code></pre>");
+        lines.add(codeBlock("morel-output", outputHtml));
       }
     }
     lines.add(DIV_CLOSE);
     return lines;
+  }
+
+  /** Wraps content in a {@code pre} block with the given CSS class. */
+  private static String codeBlock(String cls, String content) {
+    return "<pre class=\"" + cls + "\"><code>" + content + "</code></pre>";
   }
 
   /** Attributes parsed from the {@code <!-- morel [attrs] } opening line. */
@@ -439,3 +440,5 @@ public class MarkdownProcessor {
     }
   }
 }
+
+// End MarkdownProcessor.java

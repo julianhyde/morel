@@ -1,3 +1,24 @@
+<!--
+{% comment %}
+Licensed to Julian Hyde under one or more contributor license
+agreements.  See the NOTICE file distributed with this work
+for additional information regarding copyright ownership.
+Julian Hyde licenses this file to you under the Apache
+License, Version 2.0 (the "License"); you may not use this
+file except in compliance with the License.  You may obtain a
+copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied.  See the License for the specific
+language governing permissions and limitations under the
+License.
+{% endcomment %}
+-->
+
 # Plan: Issue #345 — Markdown code block validation and rendering
 
 ## Goal
@@ -34,7 +55,7 @@ Rules:
 Blocks to convert:
 - Lines 100–108 (`prolog`): leave as fenced code block.
 - Lines 120–131 (`sml`, has `(*[...]*)` output): convert to `<!-- morel -->`.
-- Lines 171–181 (`sml`, illustrative translation): convert to `<!-- morel skip -->`.
+- Lines 171–181 (`sml`, illustrative): convert to `<!-- morel skip -->`.
 - Lines 241–253 (`sml`, hybrid style example): convert to `<!-- morel skip -->`.
 
 ### Step 2 — Implement `MorelHighlighter`
@@ -71,12 +92,11 @@ New class `net.hydromatic.morel.MarkdownProcessor`:
    and updates `> ` lines if output differs. Writes file in-place.
 7. In `--md-verify` mode: reports mismatches, exits non-zero if any.
 
-Generated HTML format:
+Generated HTML format (content abbreviated):
 ```html
 <div class="morel">
-<pre><code class="morel-input"><b>fun</b> len [] = 0
-  | len (_ :: tl) = 1 + len tl;</code></pre>
-<pre><code class="morel-output">val len = fn : <i>'a</i> list -> int</code></pre>
+<pre class="morel-input"><code>...</code></pre>
+<pre class="morel-output"><code>...</code></pre>
 </div>
 ```
 
@@ -90,7 +110,7 @@ specified.
 
 ### Step 5 — Refactor `Main.main()` into two methods
 
-Status: TODO
+Status: DONE
 
 Split `Main.main(String[])` into:
 - `Main.run(String[]) : int` — does all the work and returns an exit code

@@ -264,3 +264,5 @@ public class MorelHighlighter {
     }
   }
 }
+
+// End MorelHighlighter.java
