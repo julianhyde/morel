@@ -89,9 +89,16 @@ public class Darn {
    */
   public static boolean process(File file, boolean verifyOnly)
       throws IOException {
+    return process(file, verifyOnly, ImmutableMap.of());
+  }
+
+  /** As {@link #process(File, boolean)}, with foreign values available. */
+  public static boolean process(
+      File file, boolean verifyOnly, Map<String, ForeignValue> valueMap)
+      throws IOException {
     List<String> inputLines =
         Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-    ProcessResult result = processLines(inputLines);
+    ProcessResult result = processLines(inputLines, valueMap);
     if (!result.lines.equals(inputLines)) {
       if (!verifyOnly) {
         Files.write(file.toPath(), result.lines, StandardCharsets.UTF_8);
@@ -110,6 +117,12 @@ public class Darn {
 
   /** Processes a list of lines and returns the updated list. */
   static ProcessResult processLines(List<String> lines) {
+    return processLines(lines, ImmutableMap.of());
+  }
+
+  /** As {@link #processLines(List)}, with foreign values available. */
+  static ProcessResult processLines(
+      List<String> lines, Map<String, ForeignValue> valueMap) {
     List<String> result = new ArrayList<>();
     int mismatchCount = 0;
     int i = 0;
@@ -175,16 +188,17 @@ public class Darn {
         i -= blankLines;
       }
 
-      // Execute the cell (unless skip).
-      if (!attrs.skip && !attrs.silent) {
+      // Execute the cell (unless skip). Silent cells execute to build env
+      // state but do not emit a div; only skip cells are not executed.
+      if (!attrs.skip) {
         String preamble = envState.getOrDefault(attrs.env, "");
         String allInput = buildInput(segments);
         try {
-          String actual = executeCode(preamble + allInput);
+          String actual = executeCode(preamble + allInput, valueMap);
           // Strip preamble output from actual (run preamble alone to get its
           // output).
           String preambleOutput =
-              preamble.isEmpty() ? "" : executeCode(preamble);
+              preamble.isEmpty() ? "" : executeCode(preamble, valueMap);
           if (actual.startsWith(preambleOutput)) {
             actual = actual.substring(preambleOutput.length());
           }
@@ -376,9 +390,16 @@ public class Darn {
    * depend on earlier definitions are tested in context.
    */
   public static void probe(File file, PrintStream out) throws IOException {
+    probe(file, out, ImmutableMap.of());
+  }
+
+  /** As {@link #probe(File, PrintStream)}, with foreign values available. */
+  public static void probe(
+      File file, PrintStream out, Map<String, ForeignValue> valueMap)
+      throws IOException {
     List<String> lines =
         Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-    List<ProbeResult> results = probeLines(lines);
+    List<ProbeResult> results = probeLines(lines, valueMap);
     String name = file.getName();
     for (ProbeResult r : results) {
       if (r.isOk()) {
@@ -423,6 +444,12 @@ public class Darn {
    * that skip cells can be tested in their natural context.
    */
   static List<ProbeResult> probeLines(List<String> lines) {
+    return probeLines(lines, ImmutableMap.of());
+  }
+
+  /** As {@link #probeLines(List)}, with foreign values available. */
+  static List<ProbeResult> probeLines(
+      List<String> lines, Map<String, ForeignValue> valueMap) {
     List<ProbeResult> results = new ArrayList<>();
     int i = 0;
     int n = lines.size();
@@ -458,9 +485,9 @@ public class Darn {
       if (attrs.skip) {
         // Probe: try executing this cell.
         try {
-          String actual = executeCode(preamble + allInput);
+          String actual = executeCode(preamble + allInput, valueMap);
           String preambleOutput =
-              preamble.isEmpty() ? "" : executeCode(preamble);
+              preamble.isEmpty() ? "" : executeCode(preamble, valueMap);
           if (actual.startsWith(preambleOutput)) {
             actual = actual.substring(preambleOutput.length());
           }
@@ -473,11 +500,11 @@ public class Darn {
                   : e.getClass().getSimpleName();
           results.add(new ProbeResult(lineNumber, null, msg));
         }
-      } else if (!attrs.silent) {
-        // Normal cell: execute silently to accumulate env state for later
-        // skip cells.
+      } else {
+        // Non-skip cell (normal or silent): execute to accumulate env state
+        // for later skip cells. Silent cells execute but don't show a div.
         try {
-          executeCode(preamble + allInput);
+          executeCode(preamble + allInput, valueMap);
         } catch (Exception ignored) {
           // Already-broken non-skip cells are not our concern here.
         }
@@ -489,6 +516,12 @@ public class Darn {
 
   /** Executes Morel code and returns the captured output as a string. */
   static String executeCode(String code) throws IOException {
+    return executeCode(code, ImmutableMap.of());
+  }
+
+  /** As {@link #executeCode(String)}, with foreign values available. */
+  static String executeCode(String code, Map<String, ForeignValue> valueMap)
+      throws IOException {
     if (code.trim().isEmpty()) {
       return "";
     }
@@ -498,7 +531,6 @@ public class Darn {
       byte[] inputBytes = code.getBytes(StandardCharsets.UTF_8);
       ByteArrayInputStream bais = new ByteArrayInputStream(inputBytes);
       List<String> argList = ImmutableList.of();
-      Map<String, ForeignValue> valueMap = ImmutableMap.of();
       Map<Prop, Object> propMap = ImmutableMap.of();
       Main main = new Main(argList, bais, ps, valueMap, propMap, false);
       main.run();

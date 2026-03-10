@@ -412,9 +412,33 @@ public class DarnTest {
             "> val hidden = 99 : int",
             "-->");
     Darn.ProcessResult result = Darn.processLines(input);
+    assertThat(result.mismatchCount, is(0));
     assertThat(
         result.lines.stream().anyMatch(l -> l.equals("<div class=\"morel\">")),
         is(false));
+  }
+
+  @Test
+  void testSilentCellBuildsEnvForSubsequentCell() {
+    // A silent cell executes and its bindings are available to the next cell.
+    List<String> input =
+        Arrays.asList(
+            "<!-- morel silent",
+            "val x = 42;",
+            "> val x = 42 : int",
+            "-->",
+            "<!-- morel",
+            "x + 1;",
+            "> val it = 43 : int",
+            "-->");
+    Darn.ProcessResult result = Darn.processLines(input);
+    assertThat(result.mismatchCount, is(0));
+    // Only one div — from the non-silent cell.
+    assertThat(
+        result.lines.stream()
+            .filter(l -> l.equals("<div class=\"morel\">"))
+            .count(),
+        is(1L));
   }
 }
 

@@ -38,6 +38,7 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -59,6 +60,8 @@ import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.foreign.Calcite;
+import net.hydromatic.morel.foreign.DataSet;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.parse.MorelParseException;
 import net.hydromatic.morel.parse.MorelParserImpl;
@@ -109,13 +112,25 @@ public class Main {
     boolean darnProbe = args.contains("--darn-probe");
     boolean darn = darnVerify || darnProbe || args.contains("--darn");
     if (darn) {
+      // Build foreign value map from --foreign= args (same as Shell does).
+      ImmutableMap.Builder<String, ForeignValue> valueMapBuilder =
+          ImmutableMap.builder();
+      for (String arg : args) {
+        if (arg.startsWith("--foreign=")) {
+          String className = arg.substring("--foreign=".length());
+          @SuppressWarnings("unchecked")
+          Map<String, DataSet> map = instantiate(className, Map.class);
+          valueMapBuilder.putAll(Calcite.withDataSets(map).foreignValues());
+        }
+      }
+      Map<String, ForeignValue> valueMap = valueMapBuilder.build();
       boolean anyChanges = false;
       for (String arg : args) {
         if (!arg.startsWith("--")) {
           if (darnProbe) {
-            Darn.probe(new File(arg), System.out);
+            Darn.probe(new File(arg), System.out, valueMap);
           } else {
-            anyChanges |= Darn.process(new File(arg), darnVerify);
+            anyChanges |= Darn.process(new File(arg), darnVerify, valueMap);
           }
         }
       }
@@ -170,6 +185,20 @@ public class Main {
               new StringReader(result.code), result.expectedOutputByOffset);
     } else {
       this.in = new BufferingReader(buffer(in));
+    }
+  }
+
+  /** Instantiates a class by name, using a no-arg constructor. */
+  private static <T> T instantiate(String className, Class<T> clazz) {
+    try {
+      final Class<?> aClass = Class.forName(className);
+      return clazz.cast(aClass.getConstructor().newInstance());
+    } catch (ClassNotFoundException
+        | NoSuchMethodException
+        | InstantiationException
+        | InvocationTargetException
+        | IllegalAccessException e) {
+      throw new RuntimeException("Cannot load class: " + className, e);
     }
   }
 

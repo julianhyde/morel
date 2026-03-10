@@ -50,6 +50,7 @@ BUILD=
 HELP=
 FORMAT=
 EVAL_EXPR=
+FOREIGN=
 while [ $# -gt 0 ]; do
   case "$1" in
     (--help|-h)
@@ -90,6 +91,10 @@ while [ $# -gt 0 ]; do
       ;;
     (--darn-probe)
       FORMAT=darn-probe
+      shift
+      ;;
+    (--foreign=*)
+      FOREIGN="$FOREIGN $1"
       shift
       ;;
     (*.smli)
@@ -163,6 +168,7 @@ case "$FORMAT" in
   (darn|darn-verify|darn-probe)
     exec java $VM_OPTS -cp "${CP}" $JAVA_OPTS net.hydromatic.morel.Main \
         --"$FORMAT" \
+        $FOREIGN \
         $FILES
     ;;
   (*)
