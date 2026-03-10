@@ -50,6 +50,19 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * HTML, or any file that accepts HTML comments) rather than a JSON notebook
  * format.
  *
+ * <p>Cell attributes on the {@code <!-- morel} opening line:
+ *
+ * <ul>
+ *   <li>{@code silent} &mdash; execute but do not emit a {@code <div>} block;
+ *   <li>{@code skip} &mdash; emit a {@code <div>} but do not execute;
+ *   <li>{@code no-output} &mdash; execute and emit a {@code <div>} showing only
+ *       the input, not the output (output is still stored in the comment for
+ *       validation);
+ *   <li>{@code fail} &mdash; expect execution to fail;
+ *   <li>{@code env=NAME} &mdash; share kernel state with other cells that use
+ *       the same environment name.
+ * </ul>
+ *
  * <p>Usage:
  *
  * <pre>
@@ -196,7 +209,7 @@ public class Darn {
       // Generate and insert a <div class="morel"> block (unless silent).
       if (!attrs.silent) {
         result.add("");
-        result.addAll(generateHtmlLines(segments));
+        result.addAll(generateHtmlLines(segments, attrs.noOutput));
         result.add("");
       }
     }
@@ -210,6 +223,7 @@ public class Darn {
     String rest = openingLine.substring(COMMENT_PREFIX.length()).trim();
     boolean silent = false;
     boolean skip = false;
+    boolean noOutput = false;
     boolean fail = false;
     String env = "default";
     for (String token : rest.split("\\s+")) {
@@ -223,6 +237,9 @@ public class Darn {
         case "skip":
           skip = true;
           break;
+        case "no-output":
+          noOutput = true;
+          break;
         case "fail":
           fail = true;
           break;
@@ -233,7 +250,7 @@ public class Darn {
           break;
       }
     }
-    return new Attrs(silent, skip, fail, env);
+    return new Attrs(silent, skip, noOutput, fail, env);
   }
 
   /**
@@ -369,6 +386,17 @@ public class Darn {
 
   /** Generates the HTML lines for a {@code <div class="morel">} block. */
   static List<String> generateHtmlLines(List<Segment> segments) {
+    return generateHtmlLines(segments, false);
+  }
+
+  /**
+   * Generates the HTML lines for a {@code <div class="morel">} block.
+   *
+   * @param noOutput If true, omit the {@code morel-output} pre block (the
+   *     output is stored in the comment for validation but not rendered)
+   */
+  static List<String> generateHtmlLines(
+      List<Segment> segments, boolean noOutput) {
     List<String> lines = new ArrayList<>();
     lines.add(DIV_OPEN);
     for (Segment segment : segments) {
@@ -377,7 +405,7 @@ public class Darn {
             MorelHighlighter.highlightInput(String.join("\n", segment.input));
         addCodeBlock(lines, "morel-input", inputHtml);
       }
-      if (!segment.output.isEmpty()) {
+      if (!noOutput && !segment.output.isEmpty()) {
         String outputHtml =
             MorelHighlighter.highlightOutput(String.join("\n", segment.output));
         addCodeBlock(lines, "morel-output", outputHtml);
@@ -406,13 +434,22 @@ public class Darn {
   static class Attrs {
     final boolean silent;
     final boolean skip;
+    /** If true, execute but suppress the output block in the rendered div. */
+    final boolean noOutput;
+
     final boolean fail;
     /** Kernel environment name; never null (defaults to {@code "default"}). */
     final String env;
 
-    Attrs(boolean silent, boolean skip, boolean fail, String env) {
+    Attrs(
+        boolean silent,
+        boolean skip,
+        boolean noOutput,
+        boolean fail,
+        String env) {
       this.silent = silent;
       this.skip = skip;
+      this.noOutput = noOutput;
       this.fail = fail;
       this.env = env;
     }

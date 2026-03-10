@@ -68,6 +68,14 @@ public class DarnTest {
   }
 
   @Test
+  void testParseAttrsNoOutput() {
+    Darn.Attrs attrs = Darn.parseAttrs("<!-- morel no-output");
+    assertThat(attrs.noOutput, is(true));
+    assertThat(attrs.silent, is(false));
+    assertThat(attrs.skip, is(false));
+  }
+
+  @Test
   void testParseAttrsEnv() {
     Darn.Attrs attrs = Darn.parseAttrs("<!-- morel env=mykernel");
     assertThat(attrs.env, is("mykernel"));
@@ -210,6 +218,43 @@ public class DarnTest {
         is(
             "<span class=\"c\">line1</span>\n" //
                 + "<span class=\"c\">line2</span>"));
+  }
+
+  @Test
+  void testGenerateHtmlLinesNoOutput() {
+    // no-output: div shows input block only; output pre is suppressed.
+    Darn.Segment seg =
+        new Darn.Segment(
+            ImmutableList.of("val x = 5;"),
+            ImmutableList.of("val x = 5 : int"));
+    List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg), true);
+    assertThat(html.get(0), is("<div class=\"morel\">"));
+    assertThat(html.get(html.size() - 1), is("</div>"));
+    // Input pre block is present.
+    assertThat(
+        html.stream().anyMatch(l -> l.contains("morel-input")), is(true));
+    // Output pre block is absent.
+    assertThat(
+        html.stream().anyMatch(l -> l.contains("morel-output")), is(false));
+  }
+
+  @Test
+  void testProcessLinesNoOutputCellNoOutputDiv() {
+    // A no-output cell is executed, div is emitted, but output pre is absent.
+    List<String> input =
+        Arrays.asList(
+            "<!-- morel no-output", "val x = 5;", "> val x = 5 : int", "-->");
+    Darn.ProcessResult result = Darn.processLines(input);
+    assertThat(result.mismatchCount, is(0));
+    assertThat(
+        result.lines.stream().anyMatch(l -> l.equals("<div class=\"morel\">")),
+        is(true));
+    assertThat(
+        result.lines.stream().anyMatch(l -> l.contains("morel-input")),
+        is(true));
+    assertThat(
+        result.lines.stream().anyMatch(l -> l.contains("morel-output")),
+        is(false));
   }
 
   @Test
