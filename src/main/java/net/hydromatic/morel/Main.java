@@ -98,17 +98,17 @@ public class Main {
   public static int run(String[] args) {
     final List<String> argList = ImmutableList.copyOf(args);
     try {
-      // Check for --md or --md-verify flags.
-      boolean mdVerify = argList.contains("--md-verify");
-      boolean md = mdVerify || argList.contains("--md");
-      if (md) {
+      // Check for --darn or --darn-verify flags.
+      boolean darnVerify = argList.contains("--darn-verify");
+      boolean darn = darnVerify || argList.contains("--darn");
+      if (darn) {
         boolean anyChanges = false;
         for (String arg : argList) {
           if (!arg.startsWith("--")) {
-            anyChanges |= MarkdownProcessor.process(new File(arg), mdVerify);
+            anyChanges |= Darn.process(new File(arg), darnVerify);
           }
         }
-        if (mdVerify && anyChanges) {
+        if (darnVerify && anyChanges) {
           return 1;
         }
         return 0;

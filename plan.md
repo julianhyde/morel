@@ -75,22 +75,23 @@ source and generates HTML:
 For output lines, apply lighter treatment: escape HTML and italicize type
 variables only.
 
-### Step 3 — Implement `MarkdownProcessor`
+### Step 3 — Implement `Darn`
 
-Status: DONE
+Status: DONE (as `MarkdownProcessor`; rename in Step 6)
 
-New class `net.hydromatic.morel.MarkdownProcessor`:
-1. Reads a markdown file.
-2. Detects `<!-- morel` blocks and parses attributes (`silent`, `skip`,
+New class `net.hydromatic.morel.Darn` — a Morel notebook kernel that
+processes documents containing embedded Morel cells:
+1. Reads a document file (markdown, HTML, or any file with HTML comments).
+2. Detects `<!-- morel` cell blocks and parses attributes (`silent`, `skip`,
    `fail`, `env=NAME`).
-3. Splits content into input/output segments.
-4. For non-`skip` blocks: executes Morel code via the interpreter and
+3. Splits each cell's content into input/output segments.
+4. For non-`skip` cells: executes Morel code via the interpreter and
    compares actual vs. expected output.
 5. Generates `<div class="morel">...</div>` HTML after each non-`silent`
-   comment using `MorelHighlighter`.
-6. In `--md` mode: replaces/inserts `<div class="morel">...</div>` blocks
+   cell using `MorelHighlighter`.
+6. In `--darn` mode: replaces/inserts `<div class="morel">...</div>` blocks
    and updates `> ` lines if output differs. Writes file in-place.
-7. In `--md-verify` mode: reports mismatches, exits non-zero if any.
+7. In `--darn-verify` mode: reports mismatches, exits non-zero if any.
 
 Generated HTML format (content abbreviated):
 ```html
@@ -102,11 +103,10 @@ Generated HTML format (content abbreviated):
 
 ### Step 4 — Wire up CLI flags
 
-Status: DONE
+Status: DONE (as `--md`/`--md-verify`; rename in Step 6)
 
-In `Main.java`, detect `--md FILE` and `--md-verify FILE` arguments and
-dispatch to `MarkdownProcessor` instead of the REPL. Multiple files may be
-specified.
+In `Main.java`, detect `--darn FILE` and `--darn-verify FILE` arguments and
+dispatch to `Darn` instead of the REPL. Multiple files may be specified.
 
 ### Step 5 — Refactor `Main.main()` into two methods
 
@@ -125,7 +125,7 @@ from `run()` and only `main()` calls `System.exit`.
 
 ### Step 6 — Revisit feature and class naming
 
-Status: TODO
+Status: DONE
 
 The name "markdown" is too narrow. The `<!-- morel -->` comment format works
 in any file that can contain HTML comments — plain HTML, Jekyll templates,
@@ -133,14 +133,26 @@ AsciiDoc with passthrough blocks, etc. The concept is closer to a *notebook
 kernel*: a document contains code cells, the kernel executes them and writes
 the results back into the document.
 
-Decide on better names for:
-- The CLI flags (currently `--md` / `--md-verify`).
-- The processor class (currently `MarkdownProcessor`).
-- The feature name in user-facing documentation.
+**Decision**: use "darn" throughout.
 
-Candidate terms: `notebook`, `doc`, `literate`. Consider what similar tools
-use (ocaml-mdx, Scala mdoc, Rust doctests) and what fits Morel's conventions.
-Update class names, flag names, plan, and documentation accordingly.
+- CLI flags: `--darn` / `--darn-verify` (replacing `--md` / `--md-verify`).
+- Processor class: `Darn` (replacing `MarkdownProcessor`).
+- `MorelHighlighter` is unchanged — it is a Morel-specific utility,
+  not coupled to the document format.
+
+**Inspiration**: Donald Knuth's literate programming system (1984) introduced
+TANGLE (extracts runnable code from a document) and WEAVE (produces a
+typeset document with syntax highlighting). Darn is in the spirit of WEAVE:
+it takes a document containing embedded Morel *cells*, executes them via a
+Morel *kernel*, and weaves the highlighted output back into the document.
+
+Unlike WEAVE, Darn operates on documents that already contain both the code
+and the prose (no separate source file), and it updates the document in-place
+rather than producing a separate output file. This is closer to the model
+used by Jupyter notebooks, where a kernel executes cells embedded in the
+document and the results are stored alongside the code. Darn can be thought
+of as a Morel notebook kernel that works on plain text files (markdown, HTML,
+or any file that accepts HTML comments) rather than the `.ipynb` JSON format.
 
 ### Step 7 — Generate initial HTML for the blog post (share repo)
 

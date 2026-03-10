@@ -37,31 +37,40 @@ import net.hydromatic.morel.util.MorelHighlighter;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * Processes markdown files containing {@code <!-- morel ... -->} blocks,
- * executes the embedded Morel code, and generates {@code <div
- * class="morel">...</div>} blocks with syntax highlighting.
+ * Morel notebook kernel: processes documents containing {@code <!-- morel ...
+ * -->} cells, executes the embedded Morel code, and weaves {@code <div
+ * class="morel">...</div>} blocks with syntax-highlighted output back into the
+ * document.
+ *
+ * <p>Inspired by Donald Knuth's WEAVE (part of the WEB literate programming
+ * system, 1984), which produced a typeset document from source containing both
+ * code and prose. Like Jupyter notebooks, Darn treats each {@code <!-- morel
+ * -->} comment as a cell, executes it via the Morel kernel, and stores the
+ * results alongside the code — but operating on plain text files (markdown,
+ * HTML, or any file that accepts HTML comments) rather than a JSON notebook
+ * format.
  *
  * <p>Usage:
  *
  * <pre>
- * ./morel --md file.md          # execute and update in-place
- * ./morel --md-verify file.md   # verify only, report mismatches
+ * ./morel --darn file.md          # execute cells and update in-place
+ * ./morel --darn-verify file.md   # verify only, report mismatches
  * </pre>
  */
-public class MarkdownProcessor {
+public class Darn {
 
   static final String DIV_OPEN = "<div class=\"morel\">";
   static final String DIV_CLOSE = "</div>";
   static final String COMMENT_PREFIX = "<!-- morel";
   static final String COMMENT_CLOSE = "-->";
 
-  private MarkdownProcessor() {}
+  private Darn() {}
 
   /**
-   * Processes a markdown file. In update mode, writes changes in-place. In
+   * Processes a document file. In update mode, writes changes in-place. In
    * verify mode, reports mismatches.
    *
-   * @param file The markdown file to process
+   * @param file The document file to process
    * @param verifyOnly If true, report mismatches but do not modify the file
    * @return true if there were any changes (or mismatches in verify mode)
    */
@@ -79,7 +88,7 @@ public class MarkdownProcessor {
                 + file
                 + ": "
                 + result.mismatchCount
-                + " block(s) differ");
+                + " cell(s) differ");
       }
       return true;
     }
@@ -94,7 +103,7 @@ public class MarkdownProcessor {
     int n = lines.size();
 
     // Map from environment name to the accumulated input run so far (for
-    // state sharing across blocks in the same environment).
+    // state sharing across cells in the same kernel environment).
     Map<String, String> envState = new LinkedHashMap<>();
 
     while (i < n) {
@@ -107,7 +116,6 @@ public class MarkdownProcessor {
       }
 
       // Found a "<!-- morel ..." opening. Collect lines through "-->".
-      int commentStart = i;
       List<String> commentLines = new ArrayList<>();
       commentLines.add(line);
       i++;
@@ -154,7 +162,7 @@ public class MarkdownProcessor {
         i -= blankLines;
       }
 
-      // Execute the block (unless skip).
+      // Execute the cell (unless skip).
       if (!attrs.skip && !attrs.silent) {
         String preamble = envState.getOrDefault(attrs.env, "");
         String allInput = buildInput(segments);
@@ -232,8 +240,8 @@ public class MarkdownProcessor {
    * Parses comment content lines into a list of {@link Segment}s.
    *
    * <p>Input lines are plain text; output lines are prefixed with {@code "> "}.
-   * Adjacent input lines form a single segment's input; adjacent output lines
-   * form the following segment's output.
+   * Adjacent input lines form a single cell's input; adjacent output lines form
+   * the following cell's output.
    */
   static List<Segment> parseSegments(List<String> contentLines) {
     List<Segment> segments = new ArrayList<>();
@@ -306,8 +314,6 @@ public class MarkdownProcessor {
    * output as having zero output.
    */
   static List<Segment> updateSegments(List<Segment> segments, String actual) {
-    // Simple case: one segment or all output goes to last segment with output.
-    // For now, assign all output to the single combined expected output.
     List<String> actualLines = new ArrayList<>();
     for (String line : actual.split("\n", -1)) {
       actualLines.add(line);
@@ -328,7 +334,7 @@ public class MarkdownProcessor {
       return segments; // no change
     }
 
-    // Put all actual output in the last segment that had output, or the last.
+    // Put all actual output in the last segment.
     List<Segment> updated = new ArrayList<>();
     for (int i = 0; i < segments.size(); i++) {
       Segment segment = segments.get(i);
@@ -390,7 +396,7 @@ public class MarkdownProcessor {
     final boolean silent;
     final boolean skip;
     final boolean fail;
-    /** Environment name; never null (defaults to {@code "default"}). */
+    /** Kernel environment name; never null (defaults to {@code "default"}). */
     final String env;
 
     Attrs(boolean silent, boolean skip, boolean fail, String env) {
@@ -401,7 +407,10 @@ public class MarkdownProcessor {
     }
   }
 
-  /** A segment: one group of input lines paired with its expected output. */
+  /**
+   * A segment: one group of input lines (a cell's code) paired with its
+   * expected kernel output.
+   */
   static class Segment {
     final List<String> input;
     final List<String> output;
@@ -429,7 +438,7 @@ public class MarkdownProcessor {
     }
   }
 
-  /** Result of processing a markdown file. */
+  /** Result of processing a document file. */
   static class ProcessResult {
     final List<String> lines;
     final int mismatchCount;
@@ -441,4 +450,4 @@ public class MarkdownProcessor {
   }
 }
 
-// End MarkdownProcessor.java
+// End Darn.java
