@@ -36,6 +36,9 @@ usage() {
   echo "  -h, --help          Print this help, then exit."
   echo "  --idempotent        Treat all files (and stdin) as SMLI format."
   echo "                      Set implicitly if the first file has suffix '.smli'."
+  echo "  --darn <file>...    Execute <!-- morel --> cells in document files and"
+  echo "                      update the files in-place with highlighted output."
+  echo "  --darn-verify <f>.. Verify <!-- morel --> cells; report mismatches."
   echo "  --no-build          Don't compile the source code first. (This is the"
   echo "                      default, but a limited build will always occur if"
   echo "                      'target/classpath.txt' is not present.)"
@@ -74,6 +77,14 @@ while [ $# -gt 0 ]; do
       ;;
     (--idempotent)
       FORMAT=smli
+      shift
+      ;;
+    (--darn)
+      FORMAT=darn
+      shift
+      ;;
+    (--darn-verify)
+      FORMAT=darn-verify
       shift
       ;;
     (*.smli)
@@ -143,6 +154,11 @@ case "$FORMAT" in
         $(if [ "$ECHO" ]; then echo --echo; fi) \
         --directory="$(pwd)" \
         "$FILES"
+    ;;
+  (darn|darn-verify)
+    exec java $VM_OPTS -cp "${CP}" $JAVA_OPTS net.hydromatic.morel.Main \
+        --"$FORMAT" \
+        $FILES
     ;;
   (*)
     if [ -n "$EVAL_EXPR" ]; then

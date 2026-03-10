@@ -156,7 +156,7 @@ or any file that accepts HTML comments) rather than the `.ipynb` JSON format.
 
 ### Step 7 — Generate initial HTML for the blog post (share repo)
 
-Status: TODO
+Status: DONE
 
 Run `./morel --md blog/_posts/2026-03-09-datalog-in-morel.md` against the
 converted blog post to:
