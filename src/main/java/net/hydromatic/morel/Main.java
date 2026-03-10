@@ -104,14 +104,19 @@ public class Main {
    * @return Exit code
    */
   public static int run(List<String> args) throws Exception {
-    // Check for --darn or --darn-verify flags.
+    // Check for --darn, --darn-verify, or --darn-probe flags.
     boolean darnVerify = args.contains("--darn-verify");
-    boolean darn = darnVerify || args.contains("--darn");
+    boolean darnProbe = args.contains("--darn-probe");
+    boolean darn = darnVerify || darnProbe || args.contains("--darn");
     if (darn) {
       boolean anyChanges = false;
       for (String arg : args) {
         if (!arg.startsWith("--")) {
-          anyChanges |= Darn.process(new File(arg), darnVerify);
+          if (darnProbe) {
+            Darn.probe(new File(arg), System.out);
+          } else {
+            anyChanges |= Darn.process(new File(arg), darnVerify);
+          }
         }
       }
       if (darnVerify && anyChanges) {

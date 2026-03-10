@@ -365,6 +365,128 @@ public class Darn {
     return updated;
   }
 
+  /**
+   * Probes each {@code skip} cell in a document by attempting to execute it,
+   * and prints a report to {@code out}.
+   *
+   * <p>For each {@code skip} cell, reports whether it would execute
+   * successfully (suggesting {@code no-output} or plain {@code morel}) or fail
+   * (suggesting it stay as {@code skip}). Non-skip cells are executed silently
+   * to build up the kernel environment, so that later {@code skip} cells that
+   * depend on earlier definitions are tested in context.
+   */
+  public static void probe(File file, PrintStream out) throws IOException {
+    List<String> lines =
+        Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+    List<ProbeResult> results = probeLines(lines);
+    String name = file.getName();
+    for (ProbeResult r : results) {
+      if (r.isOk()) {
+        String summary;
+        if (r.output.isEmpty()) {
+          summary = "(no output)";
+        } else if (r.output.length() > 60) {
+          summary = r.output.substring(0, 60) + "...";
+        } else {
+          summary = r.output;
+        }
+        String suggestion = r.output.isEmpty() ? "no-output" : "morel";
+        out.println(
+            name
+                + ":"
+                + r.lineNumber
+                + ": skip — OK: "
+                + summary
+                + " [suggest: "
+                + suggestion
+                + "]");
+      } else {
+        // Error: either a Java exception (r.error non-null) or interpreter
+        // error output (r.output doesn't match the val/type pattern).
+        String detail =
+            r.error != null
+                ? r.error
+                : r.output != null ? r.output : "(unknown error)";
+        if (detail.length() > 80) {
+          detail = detail.substring(0, 80) + "...";
+        }
+        out.println(name + ":" + r.lineNumber + ": skip — ERROR: " + detail);
+      }
+    }
+  }
+
+  /**
+   * Probes {@code skip} cells in a list of document lines, attempting to
+   * execute each one.
+   *
+   * <p>Non-skip, non-silent cells are executed to accumulate kernel state, so
+   * that skip cells can be tested in their natural context.
+   */
+  static List<ProbeResult> probeLines(List<String> lines) {
+    List<ProbeResult> results = new ArrayList<>();
+    int i = 0;
+    int n = lines.size();
+    Map<String, String> envState = new LinkedHashMap<>();
+
+    while (i < n) {
+      String line = lines.get(i);
+      if (!line.startsWith(COMMENT_PREFIX)) {
+        i++;
+        continue;
+      }
+
+      int lineNumber = i + 1; // 1-based
+      List<String> commentLines = new ArrayList<>();
+      commentLines.add(line);
+      i++;
+      while (i < n && !lines.get(i).equals(COMMENT_CLOSE)) {
+        commentLines.add(lines.get(i));
+        i++;
+      }
+      if (i < n) {
+        commentLines.add(COMMENT_CLOSE);
+        i++;
+      }
+
+      Attrs attrs = parseAttrs(line);
+      List<String> contentLines =
+          commentLines.subList(1, commentLines.size() - 1);
+      List<Segment> segments = parseSegments(contentLines);
+      String allInput = buildInput(segments);
+      String preamble = envState.getOrDefault(attrs.env, "");
+
+      if (attrs.skip) {
+        // Probe: try executing this cell.
+        try {
+          String actual = executeCode(preamble + allInput);
+          String preambleOutput =
+              preamble.isEmpty() ? "" : executeCode(preamble);
+          if (actual.startsWith(preambleOutput)) {
+            actual = actual.substring(preambleOutput.length());
+          }
+          actual = actual.trim();
+          results.add(new ProbeResult(lineNumber, actual, null));
+        } catch (Exception e) {
+          String msg =
+              e.getMessage() != null
+                  ? e.getMessage()
+                  : e.getClass().getSimpleName();
+          results.add(new ProbeResult(lineNumber, null, msg));
+        }
+      } else if (!attrs.silent) {
+        // Normal cell: execute silently to accumulate env state for later
+        // skip cells.
+        try {
+          executeCode(preamble + allInput);
+        } catch (Exception ignored) {
+          // Already-broken non-skip cells are not our concern here.
+        }
+        envState.put(attrs.env, preamble + allInput);
+      }
+    }
+    return results;
+  }
+
   /** Executes Morel code and returns the captured output as a string. */
   static String executeCode(String code) throws IOException {
     if (code.trim().isEmpty()) {
@@ -483,6 +605,49 @@ public class Darn {
     @Override
     public int hashCode() {
       return 31 * input.hashCode() + output.hashCode();
+    }
+  }
+
+  /** Result of probing a single {@code skip} cell. */
+  static class ProbeResult {
+    /** 1-based line number of the {@code <!-- morel skip} opening line. */
+    final int lineNumber;
+
+    /**
+     * Trimmed actual output if execution succeeded; empty string means the cell
+     * produced no output. {@code null} if execution failed.
+     */
+    final @Nullable String output;
+
+    /**
+     * Error message if execution failed; {@code null} if execution succeeded.
+     */
+    final @Nullable String error;
+
+    ProbeResult(
+        int lineNumber, @Nullable String output, @Nullable String error) {
+      this.lineNumber = lineNumber;
+      this.output = output;
+      this.error = error;
+    }
+
+    /**
+     * Returns true if execution succeeded. Success is detected heuristically:
+     * no Java exception was thrown, and the first non-empty output line starts
+     * with {@code "val "} or {@code "type "} (matching the Morel REPL's output
+     * format). Continuation lines (indented value or type text) are not
+     * checked, since they do not follow the {@code val }/{@code type } pattern.
+     */
+    boolean isOk() {
+      if (error != null || output == null) {
+        return false;
+      }
+      for (String line : output.split("\n", -1)) {
+        if (!line.isEmpty()) {
+          return line.startsWith("val ") || line.startsWith("type ");
+        }
+      }
+      return true; // empty output (e.g. unit-returning expression)
     }
   }
 

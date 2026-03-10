@@ -310,6 +310,53 @@ public class DarnTest {
   }
 
   // -----------------------------------------------------------------------
+  // probeLines
+
+  @Test
+  void testProbeLinesSkipOkNoOutput() {
+    // A skip cell that executes with no output → suggest no-output.
+    List<String> input = Arrays.asList("<!-- morel skip", "val x = 5;", "-->");
+    List<Darn.ProbeResult> results = Darn.probeLines(input);
+    assertThat(results, hasSize(1));
+    assertThat(results.get(0).isOk(), is(true));
+    assertThat(results.get(0).output, is("val x = 5 : int"));
+    assertThat(results.get(0).lineNumber, is(1));
+  }
+
+  @Test
+  void testProbeLinesSkipError() {
+    // A skip cell with an unbound name: interpreter prints an error message
+    // (no Java exception), captured as output. isOk() returns false because
+    // the output does not match the "val ..." / "type ..." success pattern.
+    List<String> input =
+        Arrays.asList("<!-- morel skip", "unboundName;", "-->");
+    List<Darn.ProbeResult> results = Darn.probeLines(input);
+    assertThat(results, hasSize(1));
+    assertThat(results.get(0).isOk(), is(false));
+    assertThat(results.get(0).error, is((String) null)); // no Java exception
+    assertThat(results.get(0).output.contains("unbound"), is(true));
+  }
+
+  @Test
+  void testProbeLinesNonSkipBuildsEnv() {
+    // A non-skip cell before a skip cell contributes to the environment, so
+    // the skip cell can reference the definition.
+    List<String> input =
+        Arrays.asList(
+            "<!-- morel",
+            "val x = 42;",
+            "> val x = 42 : int",
+            "-->",
+            "<!-- morel skip",
+            "x + 1;",
+            "-->");
+    List<Darn.ProbeResult> results = Darn.probeLines(input);
+    assertThat(results, hasSize(1));
+    assertThat(results.get(0).isOk(), is(true));
+    assertThat(results.get(0).output, is("val it = 43 : int"));
+  }
+
+  // -----------------------------------------------------------------------
   // processLines — idempotency test against the basic.md fixture
 
   @Test

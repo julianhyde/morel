@@ -39,6 +39,7 @@ usage() {
   echo "  --darn <file>...    Execute <!-- morel --> cells in document files and"
   echo "                      update the files in-place with highlighted output."
   echo "  --darn-verify <f>.. Verify <!-- morel --> cells; report mismatches."
+  echo "  --darn-probe <f>... Probe skip cells: try executing each, report OK/ERROR."
   echo "  --no-build          Don't compile the source code first. (This is the"
   echo "                      default, but a limited build will always occur if"
   echo "                      'target/classpath.txt' is not present.)"
@@ -85,6 +86,10 @@ while [ $# -gt 0 ]; do
       ;;
     (--darn-verify)
       FORMAT=darn-verify
+      shift
+      ;;
+    (--darn-probe)
+      FORMAT=darn-probe
       shift
       ;;
     (*.smli)
@@ -155,7 +160,7 @@ case "$FORMAT" in
         --directory="$(pwd)" \
         "$FILES"
     ;;
-  (darn|darn-verify)
+  (darn|darn-verify|darn-probe)
     exec java $VM_OPTS -cp "${CP}" $JAVA_OPTS net.hydromatic.morel.Main \
         --"$FORMAT" \
         $FILES
