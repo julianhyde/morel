@@ -34,8 +34,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * given function body — i.e., the free (captured) variables.
  *
  * <p>Free variables must be captured into a closure at closure-creation time.
- * This information is used in Step 4 of the stack-based evaluation migration to
- * compute {@code captureCodes} for each compiled function.
+ * This information is used when compiling functions to compute {@code
+ * captureCodes}: the set of stack-reads that snapshot outer variables into the
+ * new closure.
  *
  * <p>Usage:
  *

@@ -32,8 +32,8 @@ import net.hydromatic.morel.ast.Core;
  * StackLayout} instance; restoring a previous layout is done by returning to a
  * previously-saved reference.
  *
- * <p>Created in Step 3; first used in Step 4 when the compiler begins emitting
- * {@code Codes.StackCode} for local variables.
+ * <p>The compiler builds a {@code StackLayout} while traversing a function body
+ * and uses it to emit {@code Codes.StackCode} nodes for local variables.
  */
 public class StackLayout {
   /** An empty layout with no allocated slots. */

@@ -30,10 +30,10 @@ package net.hydromatic.morel.eval;
  * declarations and built-ins. It is set once at the start of each statement
  * evaluation and never mutated.
  *
- * <p>In Step 2 of the stack-based evaluation migration, {@code Stack} acts as a
- * thin wrapper around {@link EvalEnv}: the {@code slots} array is empty and all
- * variable lookup falls through to {@link #globalEnv}. Subsequent steps will
- * introduce slot-based access for local variables.
+ * <p>{@code Stack} is shared across a function call chain. Built-in functions
+ * that do not bind local variables pass the {@code Stack} through unchanged;
+ * user-defined functions push their arguments and let-bindings onto {@link
+ * #slots} and pop them on return.
  *
  * <p>{@code Stack} is NOT thread-safe. Each evaluation thread must use its own
  * {@code Stack} instance.
@@ -44,7 +44,7 @@ public final class Stack {
    *
    * <p>This is set once when evaluation begins and is never mutated. Variables
    * introduced by {@code let} or pattern-matching during evaluation are stored
-   * in {@link #slots} (starting from Step 4), not here.
+   * in {@link #slots}, not here.
    */
   public final EvalEnv globalEnv;
 
@@ -52,8 +52,7 @@ public final class Stack {
    * Storage for local variables. Each slot holds one value.
    *
    * <p>The stack grows upward: {@code slots[top - 1]} is the most recently
-   * pushed value. In Step 2, this array is always empty (all lookups go through
-   * {@link #globalEnv}).
+   * pushed value.
    */
   public final Object[] slots;
 
@@ -64,7 +63,9 @@ public final class Stack {
   public int top;
 
   /**
-   * Creates a Stack with no local variable slots (Step 2 placeholder).
+   * Creates a Stack backed only by the global environment, with no local
+   * variable slots. Suitable for contexts where no local variables are
+   * introduced (e.g., top-level expression evaluation).
    *
    * @param globalEnv The environment for top-level and built-in bindings
    */

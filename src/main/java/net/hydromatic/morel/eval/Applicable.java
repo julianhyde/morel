@@ -31,10 +31,11 @@ public interface Applicable extends Describable {
   /**
    * Calls this function with a {@link Stack} and an argument value.
    *
-   * <p>In Step 2 of the stack-based evaluation migration, this default
-   * implementation delegates to {@link #apply(EvalEnv, Object)} via {@link
-   * Stack#globalEnv}. In Step 4 and beyond, implementations will override this
-   * method to push/pop local variables on {@link Stack#slots}.
+   * <p>The default implementation delegates to {@link #apply(EvalEnv, Object)}
+   * via {@link Stack#globalEnv}. Built-in functions that do not use local stack
+   * slots can rely on this default; user-defined functions compiled to {@link
+   * net.hydromatic.morel.eval.Closure.StackClosure} override this to push/pop
+   * local variables on {@link Stack#slots}.
    */
   default Object apply(final Stack stack, final Object argValue) {
     return apply(stack.globalEnv, argValue);
