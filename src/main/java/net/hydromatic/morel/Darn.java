@@ -374,21 +374,31 @@ public class Darn {
       if (!segment.input.isEmpty()) {
         String inputHtml =
             MorelHighlighter.highlightInput(String.join("\n", segment.input));
-        lines.add(codeBlock("morel-input", inputHtml));
+        addCodeBlock(lines, "morel-input", inputHtml);
       }
       if (!segment.output.isEmpty()) {
         String outputHtml =
             MorelHighlighter.highlightOutput(String.join("\n", segment.output));
-        lines.add(codeBlock("morel-output", outputHtml));
+        addCodeBlock(lines, "morel-output", outputHtml);
       }
     }
     lines.add(DIV_CLOSE);
     return lines;
   }
 
-  /** Wraps content in a {@code pre} block with the given CSS class. */
-  private static String codeBlock(String cls, String content) {
-    return "<pre class=\"" + cls + "\"><code>" + content + "</code></pre>";
+  /**
+   * Wraps content in a {@code pre} block with the given CSS class, splitting on
+   * newlines so that multi-line blocks occupy multiple list entries (and thus
+   * round-trip correctly through {@link java.nio.file.Files#readAllLines} and
+   * {@link java.nio.file.Files#write}).
+   */
+  private static void addCodeBlock(
+      List<String> lines, String cls, String content) {
+    String block =
+        "<pre class=\"" + cls + "\"><code>" + content + "</code></pre>";
+    for (String line : block.split("\n", -1)) {
+      lines.add(line);
+    }
   }
 
   /** Attributes parsed from the {@code <!-- morel [attrs] } opening line. */

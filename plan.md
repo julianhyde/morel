@@ -166,11 +166,10 @@ converted blog post to:
 
 ### Step 8 — Tests
 
-Status: TODO
+Status: DONE
 
-New test class `MarkdownTest` (or renamed equivalent after Step 6) that
-processes markdown fixtures in `src/test/resources/` and validates generated
-HTML.
+New test class `DarnTest` that processes markdown fixtures in
+`src/test/resources/` and validates generated HTML.
 
 ## Completed steps
 
