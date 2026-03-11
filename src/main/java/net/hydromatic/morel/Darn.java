@@ -598,7 +598,8 @@ public class Darn {
   private static void addCodeBlock(
       List<String> lines, String cls, String content) {
     String block =
-        "<pre class=\"" + cls + "\"><code>" + content + "</code></pre>";
+        String.format(
+            "<pre class=\"%s highlight\"><code>%s</code></pre>", cls, content);
     for (String line : block.split("\n", -1)) {
       lines.add(line);
     }

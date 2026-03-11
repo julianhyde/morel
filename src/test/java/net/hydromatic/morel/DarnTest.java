@@ -169,7 +169,7 @@ public class DarnTest {
     assertThat(
         html.get(1),
         is(
-            "<pre class=\"morel-input\"><code>"
+            "<pre class=\"morel-input highlight\"><code>"
                 + "<span class=\"mi\">1</span>"
                 + " <span class=\"o\">+</span>"
                 + " <span class=\"mi\">2</span>"
@@ -189,7 +189,7 @@ public class DarnTest {
     assertThat(
         html.get(2),
         is(
-            "<pre class=\"morel-output\"><code>"
+            "<pre class=\"morel-output highlight\"><code>"
                 + "<span class=\"c\">val it = 3 : int</span>"
                 + "</code></pre>"));
     assertThat(html.get(3), is("</div>"));
@@ -203,7 +203,7 @@ public class DarnTest {
     // "fun" -> kr, "f" -> nf (after fun), "x" -> n, "=" -> p, "x" -> n,
     // ";" -> p
     final String expected =
-        "<pre class=\"morel-input\"><code>"
+        "<pre class=\"morel-input highlight\"><code>"
             + "<span class=\"kr\">fun</span>"
             + " <span class=\"nf\">f</span>"
             + " <span class=\"n\">x</span>"
