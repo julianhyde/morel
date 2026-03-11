@@ -50,17 +50,28 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * HTML, or any file that accepts HTML comments) rather than a JSON notebook
  * format.
  *
- * <p>Cell attributes on the {@code <!-- morel} opening line:
+ * <p>Each cell has exactly one <em>command</em> and zero or more
+ * <em>options</em> on the {@code <!-- morel} opening line.
+ *
+ * <p>Commands (mutually exclusive; default is {@code run}):
  *
  * <ul>
+ *   <li>{@code run} &mdash; execute the code and emit a {@code <div>} block
+ *       (this is the default; the token may be omitted);
  *   <li>{@code silent} &mdash; execute but do not emit a {@code <div>} block;
- *   <li>{@code skip} &mdash; emit a {@code <div>} but do not execute;
- *   <li>{@code no-output} &mdash; execute and emit a {@code <div>} showing only
- *       the input, not the output (output is still stored in the comment for
- *       validation);
- *   <li>{@code fail} &mdash; expect execution to fail;
+ *   <li>{@code skip} &mdash; emit a {@code <div>} but do not execute.
+ * </ul>
+ *
+ * <p>Options (boolean, use {@code no-} prefix to negate):
+ *
+ * <ul>
+ *   <li>{@code output} / {@code no-output} (default: {@code output}) &mdash;
+ *       include or suppress the output {@code <pre>} block in the div; the
+ *       output is still stored in the comment for validation;
+ *   <li>{@code fail} / {@code no-fail} (default: {@code no-fail}) &mdash;
+ *       expect execution to produce an error;
  *   <li>{@code env=NAME} &mdash; share kernel state with other cells that use
- *       the same environment name.
+ *       the same environment name (default: {@code "default"}).
  * </ul>
  *
  * <p>Usage:
@@ -191,7 +202,7 @@ public class Darn {
 
       // Execute the cell (unless skip). Silent cells execute to build env
       // state but do not emit a div; only skip cells are not executed.
-      if (!attrs.skip) {
+      if (attrs.command != Command.SKIP) {
         String preamble = envState.getOrDefault(attrs.env, "");
         String allInput = buildInput(segments);
         try {
@@ -222,7 +233,7 @@ public class Darn {
       }
 
       // Generate and insert a <div class="morel"> block (unless silent).
-      if (!attrs.silent) {
+      if (attrs.command != Command.SILENT) {
         result.add("");
         result.addAll(generateHtmlLines(segments, attrs.noOutput));
         result.add("");
@@ -236,8 +247,7 @@ public class Darn {
   static Attrs parseAttrs(String openingLine) {
     // Strip "<!-- morel" prefix and optional trailing whitespace.
     String rest = openingLine.substring(COMMENT_PREFIX.length()).trim();
-    boolean silent = false;
-    boolean skip = false;
+    Command command = Command.RUN;
     boolean noOutput = false;
     boolean fail = false;
     String env = "default";
@@ -246,17 +256,26 @@ public class Darn {
         continue;
       }
       switch (token) {
+        case "run":
+          command = Command.RUN;
+          break;
         case "silent":
-          silent = true;
+          command = Command.SILENT;
           break;
         case "skip":
-          skip = true;
+          command = Command.SKIP;
+          break;
+        case "output":
+          noOutput = false;
           break;
         case "no-output":
           noOutput = true;
           break;
         case "fail":
           fail = true;
+          break;
+        case "no-fail":
+          fail = false;
           break;
         default:
           if (token.startsWith("env=")) {
@@ -265,7 +284,7 @@ public class Darn {
           break;
       }
     }
-    return new Attrs(silent, skip, noOutput, fail, env);
+    return new Attrs(command, noOutput, fail, env);
   }
 
   /**
@@ -483,7 +502,7 @@ public class Darn {
       String allInput = buildInput(segments);
       String preamble = envState.getOrDefault(attrs.env, "");
 
-      if (attrs.skip) {
+      if (attrs.command == Command.SKIP) {
         // Probe: try executing this cell.
         try {
           String actual = executeCode(preamble + allInput, valueMap);
@@ -502,8 +521,8 @@ public class Darn {
           results.add(new ProbeResult(lineNumber, null, msg));
         }
       } else {
-        // Non-skip cell (normal or silent): execute to accumulate env state
-        // for later skip cells. Silent cells execute but don't show a div.
+        // Run or silent cell: execute to accumulate env state for later skip
+        // cells. Silent cells execute but don't show a div.
         try {
           executeCode(preamble + allInput, valueMap);
         } catch (Exception ignored) {
@@ -586,24 +605,28 @@ public class Darn {
   }
 
   /** Attributes parsed from the {@code <!-- morel [attrs] } opening line. */
-  static class Attrs {
-    final boolean silent;
-    final boolean skip;
-    /** If true, execute but suppress the output block in the rendered div. */
-    final boolean noOutput;
+  /** The command for a {@code <!-- morel -->} cell. */
+  enum Command {
+    /** Execute the code and emit a {@code <div>} block (the default). */
+    RUN,
+    /** Execute the code but do not emit a {@code <div>} block. */
+    SILENT,
+    /** Emit a {@code <div>} block but do not execute the code. */
+    SKIP
+  }
 
+  static class Attrs {
+    /** The cell command; never null (defaults to {@link Command#RUN}). */
+    final Command command;
+    /** If true, suppress the output {@code <pre>} block in the rendered div. */
+    final boolean noOutput;
+    /** If true, expect execution to produce an error. */
     final boolean fail;
     /** Kernel environment name; never null (defaults to {@code "default"}). */
     final String env;
 
-    Attrs(
-        boolean silent,
-        boolean skip,
-        boolean noOutput,
-        boolean fail,
-        String env) {
-      this.silent = silent;
-      this.skip = skip;
+    Attrs(Command command, boolean noOutput, boolean fail, String env) {
+      this.command = command;
       this.noOutput = noOutput;
       this.fail = fail;
       this.env = env;

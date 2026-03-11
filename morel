@@ -48,6 +48,16 @@ usage() {
   echo
   echo "Options (all commands):"
   echo "  --foreign=CLASS     Load foreign dataset from Java class."
+  echo
+  echo "Cell syntax (inside <!-- morel ... --> comments):"
+  echo "  Commands (mutually exclusive; default is 'run'):"
+  echo "    run               Execute code and show div with input and output."
+  echo "    silent            Execute code but show no div."
+  echo "    skip              Show div but do not execute."
+  echo "  Options:"
+  echo "    output / no-output  Include or suppress the output block (default: output)."
+  echo "    fail / no-fail      Expect execution to produce an error (default: no-fail)."
+  echo "    env=NAME            Share kernel state with other cells of the same name."
 }
 
 # Detect sub-command: first arg if it is a known sub-command name.

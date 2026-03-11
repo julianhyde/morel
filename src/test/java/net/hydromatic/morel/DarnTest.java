@@ -41,24 +41,27 @@ public class DarnTest {
   @Test
   void testParseAttrsDefault() {
     Darn.Attrs attrs = Darn.parseAttrs("<!-- morel");
-    assertThat(attrs.silent, is(false));
-    assertThat(attrs.skip, is(false));
+    assertThat(attrs.command, is(Darn.Command.RUN));
     assertThat(attrs.fail, is(false));
     assertThat(attrs.env, is("default"));
   }
 
   @Test
+  void testParseAttrsRun() {
+    Darn.Attrs attrs = Darn.parseAttrs("<!-- morel run");
+    assertThat(attrs.command, is(Darn.Command.RUN));
+  }
+
+  @Test
   void testParseAttrsSilent() {
     Darn.Attrs attrs = Darn.parseAttrs("<!-- morel silent");
-    assertThat(attrs.silent, is(true));
-    assertThat(attrs.skip, is(false));
+    assertThat(attrs.command, is(Darn.Command.SILENT));
   }
 
   @Test
   void testParseAttrsSkip() {
     Darn.Attrs attrs = Darn.parseAttrs("<!-- morel skip");
-    assertThat(attrs.silent, is(false));
-    assertThat(attrs.skip, is(true));
+    assertThat(attrs.command, is(Darn.Command.SKIP));
   }
 
   @Test
@@ -68,11 +71,22 @@ public class DarnTest {
   }
 
   @Test
+  void testParseAttrsNoFail() {
+    Darn.Attrs attrs = Darn.parseAttrs("<!-- morel fail no-fail");
+    assertThat(attrs.fail, is(false));
+  }
+
+  @Test
   void testParseAttrsNoOutput() {
     Darn.Attrs attrs = Darn.parseAttrs("<!-- morel no-output");
     assertThat(attrs.noOutput, is(true));
-    assertThat(attrs.silent, is(false));
-    assertThat(attrs.skip, is(false));
+    assertThat(attrs.command, is(Darn.Command.RUN));
+  }
+
+  @Test
+  void testParseAttrsOutput() {
+    Darn.Attrs attrs = Darn.parseAttrs("<!-- morel no-output output");
+    assertThat(attrs.noOutput, is(false));
   }
 
   @Test
@@ -84,7 +98,7 @@ public class DarnTest {
   @Test
   void testParseAttrsMultiple() {
     Darn.Attrs attrs = Darn.parseAttrs("<!-- morel silent env=foo");
-    assertThat(attrs.silent, is(true));
+    assertThat(attrs.command, is(Darn.Command.SILENT));
     assertThat(attrs.env, is("foo"));
   }
 
