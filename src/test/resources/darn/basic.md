@@ -26,7 +26,7 @@ License.
 > val it = 3 : int
 -->
 
-<div class="morel">
+<div class="highlighter-rouge morel">
 <pre class="morel-input highlight"><code><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">;</span></code></pre>
 <pre class="morel-output highlight"><code><span class="c">val it = 3 : int</span></code></pre>
 </div>
@@ -38,7 +38,7 @@ fun len [] = 0
   | len (_ :: tl) = 1 + len tl;
 -->
 
-<div class="morel">
+<div class="highlighter-rouge morel">
 <pre class="morel-input highlight"><code><span class="kr">fun</span> <span class="nf">len</span> <span class="p">[]</span> <span class="p">=</span> <span class="mi">0</span>
   <span class="p">|</span> <span class="n">len</span> <span class="p">(</span><span class="n">_</span> <span class="o">::</span> <span class="n">tl</span><span class="p">)</span> <span class="p">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">len</span> <span class="n">tl</span><span class="p">;</span></code></pre>
 </div>

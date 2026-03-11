@@ -164,7 +164,7 @@ public class DarnTest {
     Darn.Segment seg =
         new Darn.Segment(ImmutableList.of("1 + 2;"), ImmutableList.of());
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
-    assertThat(html.get(0), is("<div class=\"morel\">"));
+    assertThat(html.get(0), is("<div class=\"highlighter-rouge morel\">"));
     // 1 -> mi, + -> o, 2 -> mi, ; -> p
     assertThat(
         html.get(1),
@@ -184,7 +184,7 @@ public class DarnTest {
         new Darn.Segment(
             ImmutableList.of("1 + 2;"), ImmutableList.of("val it = 3 : int"));
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
-    assertThat(html.get(0), is("<div class=\"morel\">"));
+    assertThat(html.get(0), is("<div class=\"highlighter-rouge morel\">"));
     // Output line wrapped in <span class="c"> (comment style, like after.sh)
     assertThat(
         html.get(2),
@@ -242,7 +242,7 @@ public class DarnTest {
             ImmutableList.of("val x = 5;"),
             ImmutableList.of("val x = 5 : int"));
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg), true);
-    assertThat(html.get(0), is("<div class=\"morel\">"));
+    assertThat(html.get(0), is("<div class=\"highlighter-rouge morel\">"));
     assertThat(html.get(html.size() - 1), is("</div>"));
     // Input pre block is present.
     assertThat(
@@ -261,7 +261,8 @@ public class DarnTest {
     Darn.ProcessResult result = Darn.processLines(input);
     assertThat(result.mismatchCount, is(0));
     assertThat(
-        result.lines.stream().anyMatch(l -> l.equals("<div class=\"morel\">")),
+        result.lines.stream()
+            .anyMatch(l -> l.equals("<div class=\"highlighter-rouge morel\">")),
         is(true));
     assertThat(
         result.lines.stream().anyMatch(l -> l.contains("morel-input")),
@@ -399,7 +400,8 @@ public class DarnTest {
     assertThat(result.mismatchCount, is(0));
     // Output should contain the div block.
     assertThat(
-        result.lines.stream().anyMatch(l -> l.equals("<div class=\"morel\">")),
+        result.lines.stream()
+            .anyMatch(l -> l.equals("<div class=\"highlighter-rouge morel\">")),
         is(true));
   }
 
@@ -428,7 +430,8 @@ public class DarnTest {
     Darn.ProcessResult result = Darn.processLines(input);
     assertThat(result.mismatchCount, is(0));
     assertThat(
-        result.lines.stream().anyMatch(l -> l.equals("<div class=\"morel\">")),
+        result.lines.stream()
+            .anyMatch(l -> l.equals("<div class=\"highlighter-rouge morel\">")),
         is(false));
   }
 
@@ -450,7 +453,7 @@ public class DarnTest {
     // Only one div — from the non-silent cell.
     assertThat(
         result.lines.stream()
-            .filter(l -> l.equals("<div class=\"morel\">"))
+            .filter(l -> l.equals("<div class=\"highlighter-rouge morel\">"))
             .count(),
         is(1L));
   }

@@ -84,7 +84,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class Darn {
 
-  static final String DIV_OPEN = "<div class=\"morel\">";
+  static final String DIV_OPEN = "<div class=\"highlighter-rouge morel\">";
   static final String DIV_CLOSE = "</div>";
   static final String COMMENT_PREFIX = "<!-- morel";
   static final String COMMENT_CLOSE = "-->";
@@ -182,7 +182,10 @@ public class Darn {
         blankLines++;
         i++;
       }
-      if (i < n && lines.get(i).equals(DIV_OPEN)) {
+      if (i < n
+          && lines.get(i).contains("class=")
+          && lines.get(i).contains("morel")
+          && lines.get(i).startsWith("<div ")) {
         // Skip through </div>.
         i++;
         while (i < n && !lines.get(i).equals(DIV_CLOSE)) {
