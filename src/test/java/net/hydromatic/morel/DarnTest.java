@@ -164,17 +164,17 @@ public class DarnTest {
     Darn.Segment seg =
         new Darn.Segment(ImmutableList.of("1 + 2;"), ImmutableList.of());
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
-    assertThat(html.get(0), is("<div class=\"highlighter-rouge morel\">"));
-    // 1 -> mi, + -> o, 2 -> mi, ; -> p
+    assertThat(html.get(0), is("<div class=\"code-block\">"));
+    // 1 -> num, + -> op, 2 -> num, ; -> plain
     assertThat(
         html.get(1),
         is(
-            "<pre class=\"morel-input highlight\"><code>"
-                + "<span class=\"mi\">1</span>"
-                + " <span class=\"o\">+</span>"
-                + " <span class=\"mi\">2</span>"
-                + "<span class=\"p\">;</span>"
-                + "</code></pre>"));
+            "<div class=\"code-input\">"
+                + "<span class=\"num\">1</span>"
+                + " <span class=\"op\">+</span>"
+                + " <span class=\"num\">2</span>"
+                + ";"
+                + "</div>"));
     assertThat(html.get(html.size() - 1), is("</div>"));
   }
 
@@ -184,14 +184,11 @@ public class DarnTest {
         new Darn.Segment(
             ImmutableList.of("1 + 2;"), ImmutableList.of("val it = 3 : int"));
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
-    assertThat(html.get(0), is("<div class=\"highlighter-rouge morel\">"));
-    // Output line wrapped in <span class="c"> (comment style, like after.sh)
+    assertThat(html.get(0), is("<div class=\"code-block\">"));
+    // Output line as plain HTML-escaped text
     assertThat(
         html.get(2),
-        is(
-            "<pre class=\"morel-output highlight\"><code>"
-                + "<span class=\"c\">val it = 3 : int</span>"
-                + "</code></pre>"));
+        is("<div class=\"code-output\">" + "val it = 3 : int" + "</div>"));
     assertThat(html.get(3), is("</div>"));
   }
 
@@ -200,25 +197,24 @@ public class DarnTest {
     Darn.Segment seg =
         new Darn.Segment(ImmutableList.of("fun f x = x;"), ImmutableList.of());
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
-    // "fun" -> kr, "f" -> nf (after fun), "x" -> n, "=" -> p, "x" -> n,
-    // ";" -> p
+    // "fun" -> kw, "f" -> plain, "x" -> plain, "=" -> plain, ";" -> plain
     final String expected =
-        "<pre class=\"morel-input highlight\"><code>"
-            + "<span class=\"kr\">fun</span>"
-            + " <span class=\"nf\">f</span>"
-            + " <span class=\"n\">x</span>"
-            + " <span class=\"p\">=</span>"
-            + " <span class=\"n\">x</span>"
-            + "<span class=\"p\">;</span>"
-            + "</code></pre>";
+        "<div class=\"code-input\">"
+            + "<span class=\"kw\">fun</span>"
+            + " f"
+            + " x"
+            + " ="
+            + " x"
+            + ";"
+            + "</div>";
     assertThat(html.get(1), is(expected));
   }
 
   @Test
-  void testHighlightOutputWrapsInCommentSpan() {
-    // Output is wrapped per-line in <span class="c">, matching after.sh style.
+  void testHighlightOutputHtmlEscapes() {
+    // Output is HTML-escaped but otherwise plain (no spans).
     String highlighted = MorelHighlighter.highlightOutput("'a list -> int");
-    assertThat(highlighted, is("<span class=\"c\">'a list -&gt; int</span>"));
+    assertThat(highlighted, is("'a list -&gt; int"));
   }
 
   @Test
@@ -230,8 +226,8 @@ public class DarnTest {
     assertThat(
         highlighted,
         is(
-            "<span class=\"c\">line1</span>\n" //
-                + "<span class=\"c\">line2</span>"));
+            "line1\n" //
+                + "line2"));
   }
 
   @Test
@@ -242,14 +238,13 @@ public class DarnTest {
             ImmutableList.of("val x = 5;"),
             ImmutableList.of("val x = 5 : int"));
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg), true);
-    assertThat(html.get(0), is("<div class=\"highlighter-rouge morel\">"));
+    assertThat(html.get(0), is("<div class=\"code-block\">"));
     assertThat(html.get(html.size() - 1), is("</div>"));
-    // Input pre block is present.
+    // Input div block is present.
+    assertThat(html.stream().anyMatch(l -> l.contains("code-input")), is(true));
+    // Output div block is absent.
     assertThat(
-        html.stream().anyMatch(l -> l.contains("morel-input")), is(true));
-    // Output pre block is absent.
-    assertThat(
-        html.stream().anyMatch(l -> l.contains("morel-output")), is(false));
+        html.stream().anyMatch(l -> l.contains("code-output")), is(false));
   }
 
   @Test
@@ -262,13 +257,13 @@ public class DarnTest {
     assertThat(result.mismatchCount, is(0));
     assertThat(
         result.lines.stream()
-            .anyMatch(l -> l.equals("<div class=\"highlighter-rouge morel\">")),
+            .anyMatch(l -> l.equals("<div class=\"code-block\">")),
         is(true));
     assertThat(
-        result.lines.stream().anyMatch(l -> l.contains("morel-input")),
+        result.lines.stream().anyMatch(l -> l.contains("code-input")),
         is(true));
     assertThat(
-        result.lines.stream().anyMatch(l -> l.contains("morel-output")),
+        result.lines.stream().anyMatch(l -> l.contains("code-output")),
         is(false));
   }
 
@@ -276,11 +271,11 @@ public class DarnTest {
   void testGenerateHtmlLinesHtmlEscape() {
     String highlighted =
         MorelHighlighter.highlightInput("val x = a < b andalso c > d;");
-    // < and > must be escaped; "andalso" must use kr span
+    // < and > must be escaped; "andalso" must use kw span
     assertThat(highlighted.contains("&lt;"), is(true));
     assertThat(highlighted.contains("&gt;"), is(true));
     assertThat(
-        highlighted.contains("<span class=\"kr\">andalso</span>"), is(true));
+        highlighted.contains("<span class=\"kw\">andalso</span>"), is(true));
   }
 
   // -----------------------------------------------------------------------
@@ -401,7 +396,7 @@ public class DarnTest {
     // Output should contain the div block.
     assertThat(
         result.lines.stream()
-            .anyMatch(l -> l.equals("<div class=\"highlighter-rouge morel\">")),
+            .anyMatch(l -> l.equals("<div class=\"code-block\">")),
         is(true));
   }
 
@@ -414,7 +409,7 @@ public class DarnTest {
     assertThat(result.mismatchCount, is(0));
     assertThat(
         result.lines.stream()
-            .anyMatch(l -> l.contains("<span class=\"kr\">fun</span>")),
+            .anyMatch(l -> l.contains("<span class=\"kw\">fun</span>")),
         is(true));
   }
 
@@ -431,7 +426,7 @@ public class DarnTest {
     assertThat(result.mismatchCount, is(0));
     assertThat(
         result.lines.stream()
-            .anyMatch(l -> l.equals("<div class=\"highlighter-rouge morel\">")),
+            .anyMatch(l -> l.equals("<div class=\"code-block\">")),
         is(false));
   }
 
@@ -453,7 +448,7 @@ public class DarnTest {
     // Only one div — from the non-silent cell.
     assertThat(
         result.lines.stream()
-            .filter(l -> l.equals("<div class=\"highlighter-rouge morel\">"))
+            .filter(l -> l.equals("<div class=\"code-block\">"))
             .count(),
         is(1L));
   }

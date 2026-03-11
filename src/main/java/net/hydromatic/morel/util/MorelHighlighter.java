@@ -22,37 +22,29 @@ import com.google.common.collect.ImmutableSet;
 import java.util.Set;
 
 /**
- * Syntax-highlights Morel source code as HTML, using Rouge-compatible CSS token
- * classes.
+ * Syntax-highlights Morel source code as HTML.
  *
  * <p>Token classes produced for input code:
  *
  * <ul>
- *   <li>{@code kr} &mdash; SML and Morel reserved words;
- *   <li>{@code n} &mdash; plain identifiers;
- *   <li>{@code nf} &mdash; function name (identifier after {@code fun});
- *   <li>{@code nv} &mdash; variable name (identifier after {@code val});
- *   <li>{@code nn} &mdash; structure name (identifier before {@code .});
- *   <li>{@code nd} &mdash; type variables ({@code 'a}, {@code 'alpha},
- *       &hellip;);
- *   <li>{@code mi} &mdash; integer literals;
- *   <li>{@code p} &mdash; punctuation ({@code ()[]{}=,;|.}), consecutive
- *       punctuation characters are grouped into one span;
- *   <li>{@code o} &mdash; operators ({@code ::}, {@code ->}, {@code :=}, {@code
- *       +}, {@code -}, {@code *}, {@code /}, {@code :});
- *   <li>{@code c} + {@code cm} &mdash; SML comments ({@code (*} &hellip; {@code
- *       *)});
- *   <li>{@code s2} &mdash; double-quoted string literals.
+ *   <li>{@code kw} &mdash; SML and Morel reserved words;
+ *   <li>{@code str} &mdash; double-quoted string literals;
+ *   <li>{@code cmt} &mdash; SML comments ({@code (*} &hellip; {@code *)});
+ *   <li>{@code num} &mdash; numeric literals;
+ *   <li>{@code ctor} &mdash; type variables ({@code 'a}, {@code 'alpha},
+ *       &hellip;) and structure names (identifier before {@code .});
+ *   <li>{@code op} &mdash; operators ({@code ::}, {@code ->}, {@code :=},
+ *       {@code +}, {@code -}, {@code *}, {@code /}, {@code :}).
  * </ul>
  *
- * <p>For output lines (REPL responses), {@link #highlightOutput} wraps each
- * line in {@code <span class="c">} (comment style), matching the treatment
- * produced by Rouge plus the {@code after.sh} post-processor.
+ * <p>Plain identifiers and punctuation are emitted as undecorated text.
+ *
+ * <p>For output text (REPL responses), {@link #highlightOutput} returns the
+ * text HTML-escaped but otherwise undecorated.
  *
  * <p>Morel-specific keywords (such as {@code from}, {@code yield}, {@code
- * elem}, {@code exists}) are given the {@code kr} class, just as {@code
- * after.sh} patches them on the live blog. Adding a new Morel keyword requires
- * only adding it to {@link #MOREL_KEYWORDS}.
+ * elem}, {@code exists}) are given the {@code kw} class. Adding a new Morel
+ * keyword requires only adding it to {@link #MOREL_KEYWORDS}.
  */
 public class MorelHighlighter {
 
@@ -131,7 +123,7 @@ public class MorelHighlighter {
           "union",
           "yield");
 
-  /** All keywords highlighted as {@code kr} in input code. */
+  /** All keywords highlighted as {@code kw} in input code. */
   private static final Set<String> ALL_KEYWORDS;
 
   static {
@@ -142,20 +134,20 @@ public class MorelHighlighter {
   }
 
   /**
-   * Punctuation characters. Consecutive punctuation characters are grouped into
-   * a single {@code <span class="p">} span, matching Rouge's behavior.
+   * Punctuation characters. Consecutive punctuation characters are grouped and
+   * emitted as plain text (no span).
    */
   private static final String PUNCT_CHARS = "()[]{}=,;|.";
 
   private MorelHighlighter() {}
 
   /**
-   * Highlights Morel input code using Rouge-compatible span classes.
+   * Highlights Morel input code using span classes.
    *
-   * <p>Keywords become {@code kr}, identifiers {@code n}/{@code nf}/{@code nv}/
-   * {@code nn}, type variables {@code nd}, integers {@code mi}, punctuation
-   * {@code p}, operators {@code o}, comments {@code c}/{@code cm}, and string
-   * literals {@code s2}.
+   * <p>Keywords become {@code kw}, type variables and structure names {@code
+   * ctor}, integers {@code num}, operators {@code op}, comments {@code cmt},
+   * and string literals {@code str}. Plain identifiers and punctuation are
+   * emitted without spans.
    */
   public static String highlightInput(String code) {
     StringBuilder sb = new StringBuilder();
@@ -164,23 +156,12 @@ public class MorelHighlighter {
   }
 
   /**
-   * Highlights Morel output text (REPL responses).
-   *
-   * <p>Each output line is wrapped in {@code <span class="c">} (comment style),
-   * matching the live blog's treatment of output lines (originally {@code (*[>
-   * ... ]*)}, kept gray by Rouge's comment CSS).
+   * Returns HTML-escaped output text (REPL responses), without any span
+   * decoration.
    */
   public static String highlightOutput(String text) {
     StringBuilder sb = new StringBuilder();
-    String[] lines = text.split("\n", -1);
-    for (int j = 0; j < lines.length; j++) {
-      sb.append("<span class=\"c\">");
-      appendEscaped(lines[j], 0, lines[j].length(), sb);
-      sb.append("</span>");
-      if (j < lines.length - 1) {
-        sb.append('\n');
-      }
-    }
+    appendEscaped(text, 0, text.length(), sb);
     return sb.toString();
   }
 
@@ -188,39 +169,30 @@ public class MorelHighlighter {
       String s, StringBuilder out, boolean keywords) {
     int i = 0;
     int n = s.length();
-    // Context for context-sensitive identifier classification.
-    // Set to "fun" or "val" after those keywords; whitespace preserves it;
-    // any other token clears it.
-    String prevKeyword = null;
 
     while (i < n) {
       char c = s.charAt(i);
 
       if (c == '(' && i + 1 < n && s.charAt(i + 1) == '*') {
-        // SML comment (* ... *): opening (* in "c", body+close in "cm".
+        // SML comment (* ... *): entire comment in "cmt".
         int end = scanComment(s, i, n);
-        out.append("<span class=\"c\">(*</span>");
-        if (i + 2 < end) {
-          out.append("<span class=\"cm\">");
-          appendEscaped(s, i + 2, end, out);
-          out.append("</span>");
-        }
+        out.append("<span class=\"cmt\">");
+        appendEscaped(s, i, end, out);
+        out.append("</span>");
         i = end;
-        prevKeyword = null;
 
       } else if (c == '"') {
         // String literal
         int end = scanString(s, i, n);
-        out.append("<span class=\"s2\">");
+        out.append("<span class=\"str\">");
         appendEscaped(s, i, end, out);
         out.append("</span>");
         i = end;
-        prevKeyword = null;
 
       } else if (c == '\''
           && i + 1 < n
           && Character.isLetter(s.charAt(i + 1))) {
-        // Type variable: 'a, 'b, 'alpha, etc.
+        // Type variable: 'a, 'b, 'alpha, etc. → ctor class
         int end = i + 1;
         while (end < n
             && (Character.isLetterOrDigit(s.charAt(end))
@@ -228,11 +200,10 @@ public class MorelHighlighter {
                 || s.charAt(end) == '\'')) {
           end++;
         }
-        out.append("<span class=\"nd\">");
+        out.append("<span class=\"ctor\">");
         appendEscaped(s, i, end, out);
         out.append("</span>");
         i = end;
-        prevKeyword = null;
 
       } else if (Character.isLetter(c) || c == '_') {
         // Identifier or keyword
@@ -244,32 +215,19 @@ public class MorelHighlighter {
           end++;
         }
         String word = s.substring(i, end);
-        String cls;
-        String nextPrev;
-        if (keywords && ALL_KEYWORDS.contains(word)) {
-          cls = "kr";
-          nextPrev = word;
-        } else if (!keywords && SML_KEYWORDS.contains(word)) {
-          cls = "kr";
-          nextPrev = word;
-        } else if ("fun".equals(prevKeyword)) {
-          cls = "nf";
-          nextPrev = null;
-        } else if ("val".equals(prevKeyword)) {
-          cls = "nv";
-          nextPrev = null;
+        if (keywords && ALL_KEYWORDS.contains(word)
+            || !keywords && SML_KEYWORDS.contains(word)) {
+          out.append("<span class=\"kw\">");
+          out.append(word);
+          out.append("</span>");
         } else if (end < n && s.charAt(end) == '.') {
-          // Identifier immediately followed by '.' is a structure name.
-          cls = "nn";
-          nextPrev = null;
+          // Identifier immediately followed by '.' is a structure name → ctor
+          out.append("<span class=\"ctor\">");
+          out.append(word);
+          out.append("</span>");
         } else {
-          cls = "n";
-          nextPrev = null;
+          out.append(word);
         }
-        out.append("<span class=\"").append(cls).append("\">");
-        out.append(word);
-        out.append("</span>");
-        prevKeyword = nextPrev;
         i = end;
 
       } else if (Character.isDigit(c)) {
@@ -278,79 +236,64 @@ public class MorelHighlighter {
         while (end < n && Character.isDigit(s.charAt(end))) {
           end++;
         }
-        out.append("<span class=\"mi\">");
+        out.append("<span class=\"num\">");
         out.append(s, i, end);
         out.append("</span>");
         i = end;
-        prevKeyword = null;
 
       } else if (c == ':' && i + 1 < n && s.charAt(i + 1) == ':') {
         // :: list-cons operator (check before lone ':')
-        out.append("<span class=\"o\">::</span>");
+        out.append("<span class=\"op\">::</span>");
         i += 2;
-        prevKeyword = null;
 
       } else if (c == ':' && i + 1 < n && s.charAt(i + 1) == '=') {
         // := reference assignment operator
-        out.append("<span class=\"o\">:=</span>");
+        out.append("<span class=\"op\">:=</span>");
         i += 2;
-        prevKeyword = null;
 
       } else if (c == '=' && i + 1 < n && s.charAt(i + 1) == '>') {
         // => pattern-match arrow (check before '=' alone in PUNCT_CHARS)
-        out.append("<span class=\"o\">=&gt;</span>");
+        out.append("<span class=\"op\">=&gt;</span>");
         i += 2;
-        prevKeyword = null;
 
       } else if (c == '-' && i + 1 < n && s.charAt(i + 1) == '>') {
         // -> function-type arrow
-        out.append("<span class=\"o\">-&gt;</span>");
+        out.append("<span class=\"op\">-&gt;</span>");
         i += 2;
-        prevKeyword = null;
 
       } else if (PUNCT_CHARS.indexOf(c) >= 0) {
-        // Punctuation: group consecutive punctuation characters into one span,
-        // matching Rouge's behavior (e.g., "[(" and ")," are single spans).
+        // Punctuation: plain text, group consecutive punctuation characters.
         int end = i + 1;
         while (end < n && PUNCT_CHARS.indexOf(s.charAt(end)) >= 0) {
           end++;
         }
-        out.append("<span class=\"p\">");
         out.append(s, i, end);
-        out.append("</span>");
         i = end;
-        prevKeyword = null;
 
       } else if (c == ':') {
-        // Lone colon (type annotation)
-        out.append("<span class=\"o\">:</span>");
+        // Lone colon (type annotation) → op class
+        out.append("<span class=\"op\">:</span>");
         i++;
-        prevKeyword = null;
 
       } else if (c == '+' || c == '*' || c == '/' || c == '-') {
         // Arithmetic operators (single character; - and -> handled above)
-        out.append("<span class=\"o\">").append(c).append("</span>");
+        out.append("<span class=\"op\">").append(c).append("</span>");
         i++;
-        prevKeyword = null;
 
       } else if (c == '<') {
         out.append("&lt;");
         i++;
-        prevKeyword = null;
 
       } else if (c == '>') {
         out.append("&gt;");
         i++;
-        prevKeyword = null;
 
       } else if (c == '&') {
         out.append("&amp;");
         i++;
-        prevKeyword = null;
 
       } else {
-        // Whitespace, newlines, and other characters. Whitespace intentionally
-        // does NOT reset prevKeyword, so "fun  name" and "val\n  x" work.
+        // Whitespace, newlines, and other characters.
         out.append(c);
         i++;
       }

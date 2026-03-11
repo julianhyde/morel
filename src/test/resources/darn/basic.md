@@ -26,9 +26,9 @@ License.
 > val it = 3 : int
 -->
 
-<div class="highlighter-rouge morel">
-<pre class="morel-input highlight"><code><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">;</span></code></pre>
-<pre class="morel-output highlight"><code><span class="c">val it = 3 : int</span></code></pre>
+<div class="code-block">
+<div class="code-input"><span class="num">1</span> <span class="op">+</span> <span class="num">2</span>;</div>
+<div class="code-output">val it = 3 : int</div>
 </div>
 
 ## Morel keywords and type variables
@@ -38,9 +38,9 @@ fun len [] = 0
   | len (_ :: tl) = 1 + len tl;
 -->
 
-<div class="highlighter-rouge morel">
-<pre class="morel-input highlight"><code><span class="kr">fun</span> <span class="nf">len</span> <span class="p">[]</span> <span class="p">=</span> <span class="mi">0</span>
-  <span class="p">|</span> <span class="n">len</span> <span class="p">(</span><span class="n">_</span> <span class="o">::</span> <span class="n">tl</span><span class="p">)</span> <span class="p">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">len</span> <span class="n">tl</span><span class="p">;</span></code></pre>
+<div class="code-block">
+<div class="code-input"><span class="kw">fun</span> len [] = <span class="num">0</span>
+  | len (_ <span class="op">::</span> tl) = <span class="num">1</span> <span class="op">+</span> len tl;</div>
 </div>
 
 ## Silent cell (no HTML block generated)

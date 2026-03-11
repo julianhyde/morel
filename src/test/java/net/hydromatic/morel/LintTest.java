@@ -635,6 +635,7 @@ public class LintTest {
                 && !line.line().startsWith("    ") // indented code
                 && !line.line().startsWith("<i>") // syntax definition
                 && !line.line().contains("<pre class=") // pre blocks w/ attrs
+                && !line.line().contains("<div class=") // div blocks w/ attrs
                 && !line.line().matches("^[-|:]+$") // table separator
                 && !lintSkip(line),
         line ->
@@ -652,17 +653,19 @@ public class LintTest {
                 && line.line().startsWith("```"),
         line -> line.state().inCodeBlock = !line.state().inCodeBlock);
 
-    // Track <pre> blocks in Markdown
+    // Track <pre> and <div class="code-"> blocks in Markdown
     b.add(
         line ->
             line.state().language == Language.MARKDOWN
                 && (line.line().contains("<pre>")
-                    || line.line().contains("<pre ")),
+                    || line.line().contains("<pre ")
+                    || line.line().contains("<div class=\"code-")),
         line -> line.state().inPreBlock = true);
     b.add(
         line ->
             line.state().language == Language.MARKDOWN
-                && line.line().contains("</pre>"),
+                && (line.line().contains("</pre>")
+                    || line.line().contains("</div>")),
         line -> line.state().inPreBlock = false);
 
     // Track Jekyll comment blocks

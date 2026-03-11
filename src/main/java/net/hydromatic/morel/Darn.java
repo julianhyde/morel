@@ -84,7 +84,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class Darn {
 
-  static final String DIV_OPEN = "<div class=\"highlighter-rouge morel\">";
+  static final String DIV_OPEN = "<div class=\"code-block\">";
   static final String DIV_CLOSE = "</div>";
   static final String COMMENT_PREFIX = "<!-- morel";
   static final String COMMENT_CLOSE = "-->";
@@ -183,9 +183,10 @@ public class Darn {
         i++;
       }
       if (i < n
-          && lines.get(i).contains("class=")
-          && lines.get(i).contains("morel")
-          && lines.get(i).startsWith("<div ")) {
+          && lines.get(i).startsWith("<div ")
+          && (lines.get(i).contains("code-block")
+              || lines.get(i).contains("class=")
+                  && lines.get(i).contains("morel"))) {
         // Skip through </div>.
         i++;
         while (i < n && !lines.get(i).equals(DIV_CLOSE)) {
@@ -580,12 +581,12 @@ public class Darn {
       if (!segment.input.isEmpty()) {
         String inputHtml =
             MorelHighlighter.highlightInput(String.join("\n", segment.input));
-        addCodeBlock(lines, "morel-input", inputHtml);
+        addCodeBlock(lines, "code-input", inputHtml);
       }
       if (!noOutput && !segment.output.isEmpty()) {
         String outputHtml =
             MorelHighlighter.highlightOutput(String.join("\n", segment.output));
-        addCodeBlock(lines, "morel-output", outputHtml);
+        addCodeBlock(lines, "code-output", outputHtml);
       }
     }
     lines.add(DIV_CLOSE);
@@ -593,16 +594,14 @@ public class Darn {
   }
 
   /**
-   * Wraps content in a {@code pre} block with the given CSS class, splitting on
+   * Wraps content in a {@code div} block with the given CSS class, splitting on
    * newlines so that multi-line blocks occupy multiple list entries (and thus
    * round-trip correctly through {@link java.nio.file.Files#readAllLines} and
    * {@link java.nio.file.Files#write}).
    */
   private static void addCodeBlock(
       List<String> lines, String cls, String content) {
-    String block =
-        String.format(
-            "<pre class=\"%s highlight\"><code>%s</code></pre>", cls, content);
+    String block = String.format("<div class=\"%s\">%s</div>", cls, content);
     for (String line : block.split("\n", -1)) {
       lines.add(line);
     }
