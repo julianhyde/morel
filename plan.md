@@ -145,20 +145,166 @@ Convert `finishCompileLet` to emit stack-based code:
 - Remove `MatchCode`, old `Closure`, `Let1Code`, `LetCode` once no
   longer emitted.
 
-### Step 12: Convert RowSink iteration variables to stack slots
-`ScanRowSink` (and `YieldRowSink`) currently bind each iteration
-variable by creating a `MutableEvalEnv` extension of `stack.globalEnv`,
-then constructing a new `Stack(mutableEnv, stack.slots, stack.top)`.
-This keeps iteration variables in the env rather than on the stack, so
-inner `StackCode` nodes cannot reference them by slot offset.
+### Step 12: Convert RowSink scan variables to stack slots
 
-Replace with genuine stack allocation:
-- At `from`-expression compile time, extend `cx.layout` with a slot for
-  each scan variable, exactly as `tryCompileLetStack` does for `let`.
-- At runtime in `ScanRowSink.accept(Stack)`, push the row value onto
-  the stack instead of extending the env; pop in `result(Stack)`.
-- This makes inner filter/yield/order codes pure stack operations and
-  eliminates all `MutableEvalEnv` usage in the hot evaluation path.
+Goal: eliminate `MutableEvalEnv` from the hot `ScanRowSink.accept()`
+inner loop by pushing scan variables directly onto `stack.slots`.
+
+#### Background: the deferred-sink problem
+
+Simple sinks (`WhereRowSink`, `YieldRowSink`, `CollectRowSink`) run
+their code immediately while the scan variable is still live on the
+stack — no special treatment needed.
+
+The hard cases are **deferred sinks** that collect rows during
+`accept()` and replay them during `result()`:
+
+| Sink | What it defers |
+|------|----------------|
+| `OrderRowSink` | Emits rows in sorted order after all rows are collected |
+| `GroupRowSink` | Emits aggregated groups after all rows are scanned |
+| `ExceptRowSink`, `IntersectRowSink`, `UnionRowSink` | Emits set-operation result after both sides are collected |
+
+During `accept()` the scan variable is on the stack.  During
+`result()` the scan loop is finished and those stack slots are gone.
+Code compiled to run at `result()` time must therefore **not** use
+`StackCode` for scan variables — it must use `GetCode` so the
+deferred sink can rebind values by name in a `MutableEvalEnv` chain.
+
+**Previous attempt** (tagged `step-12-partial-2026-03-12`, branch
+`349-stack.0`): compiled all downstream code with the scan context
+(`cx`), then tried to reconstruct `stack.top` at `result()` time.
+This was fragile and produced 8 test failures (wrong offsets, CCE,
+AIOBE).
+
+#### Correct approach: two compile-time contexts per deferred sink
+
+The insight: code that runs at **`accept()` time** (condition, key,
+`inCodes`) must be compiled with the scan context `cxScan` (scan vars
+in layout → `StackCode`).  Code that runs at **`result()` time** (the
+downstream `RowSink` factory) must be compiled with `cxFrom` (scan
+vars **not** in layout → `GetCode`).
+
+`cxFrom` is threaded through `createRowSinkFactory` as the "result-
+time context" — the context that has no scan-variable layout entries.
+It is initialized to `cx` at `compileFrom` entry and propagated
+unchanged through each `SCAN` step (the SCAN case passes `cxFrom` —
+not the newly extended `cxScan` — as the `cxFrom` for the nested
+calls).
+
+Additionally, deferred sinks must capture **all variables currently in
+scope**, not just those from the immediately preceding `SCAN` step.
+After a `YIELD` step, yield-produced variables live in
+`stack.globalEnv` (bound by `YieldRowSink.accept`) but not in the
+stack layout.  An `ORDER` step after `YIELD` must capture these
+env-based variables via `GetCode` during `accept()` so it can rebind
+them in `result()`.  This requires an `allScopeBindings` accumulator
+— a shadow-merging map threaded through `createRowSinkFactory` that
+tracks every binding introduced since the start of the `from`
+expression.
+
+#### Step 12a: ScanRowSink push-based; deferred sinks rebind via env
+
+**All tests pass after this step.**
+
+Starting from commit **4df45130** (Step 11).
+
+##### Changes to `Compiler.java`
+
+1. **Private `createRowSinkFactory` overload** with new parameters:
+   - `cxFrom: Context` — result-time context (no scan vars in layout)
+   - `allScopeBindings: ImmutableMap<String, Binding>` — all
+     query-level bindings accumulated since `from` entry, shadow-
+     merged (later binding wins by name)
+
+   The public overload `createRowSinkFactory(cx0, stepEnv, steps,
+   elementType)` delegates to the private one with `cxFrom = cx0` and
+   `allScopeBindings = ImmutableMap.of()`.
+
+2. **SCAN case**: at compile time, extend `cx.layout` with each
+   `NamedPat` from `scan.pat` at slot index `cx.localDepth + i`,
+   producing `cxScan`.  Compile `conditionCode` and the scan's
+   immediate downstream factory with `cxScan`.  Recurse with:
+   - `cx0 = cxScan` (scan vars in layout for immediate children)
+   - `cxFrom = cxFrom` (unchanged — **not** `cxScan` — so that nested
+     deferred sinks never see the outer scan var in the layout)
+   - `allScopeBindings` updated by shadow-merging `scan.env.bindings`
+
+3. **YIELD case**: update `allScopeBindings` by shadow-merging
+   `yield.env.bindings` before recursing.  YIELD itself stays
+   env-based (`YieldRowSink` unchanged).
+
+4. **ORDER case** — extract to `compileOrderSink(cx, cxFrom,
+   allScopeBindings, order, remainingSteps, elementType)`:
+   - `code` (sort key) compiled with `cx` (`cxScan`) → `StackCode`
+   - `inCodes` = `buildInCodes(cx, allScopeBindings.values())` —
+     for each binding: `StackCode` if in layout, `GetCode` otherwise
+   - `inNames` = parallel name list (sorted by slot index, non-layout
+     vars last)
+   - downstream `RowSink` factory = `createRowSinkFactory(cxFrom,
+     cxFrom, order.env, remainingSteps, elementType)` → `GetCode`
+
+5. **GROUP case** — in `compileGroupSink`, change `inCodes` to use
+   `allScopeBindings.values()` instead of `stepEnv.bindings`.
+   Downstream factory already uses `cxFrom`.
+
+6. **SET cases** (EXCEPT/INTERSECT/UNION) — extract to
+   `compileSetSink(cx, cxFrom, allScopeBindings, stepEnv, args,
+   distinct, op, remainingSteps, elementType)`:
+   - `codes` (RHS expressions) compiled with `cx` → evaluated during
+     first `accept()` when scan vars are live on the stack
+   - `inCodes` = `buildInCodes(cx, allScopeBindings.values())`
+   - downstream factory = `createRowSinkFactory(cxFrom, cxFrom,
+     stepEnv, remainingSteps, elementType)` → `GetCode`
+
+7. **Terminal collect** (empty `steps`): use `compileFieldName(cx, ...)`
+   so scan vars that reach the collect directly still use `StackCode`.
+
+##### Changes to `RowSinks.java`
+
+8. **`ScanRowSink.accept(Stack)`**: replace `bindMutablePat` +
+   `innerStack` with `pushBindings(pat, element, stack)` and direct
+   `rowSink.accept(stack)`.  Grow `stack.slots` if needed before the
+   loop (`stack.top + varCount > slots.length`).
+
+9. **`OrderRowSink`**:
+   - `accept(Stack)`: capture all scope var values via `inCodes`
+     (StackCode reads slots; GetCode reads `stack.globalEnv`); store
+     per-row.
+   - `result(Stack)`: for each sorted row, **rebind** all captured
+     values into a `MutableEvalEnv` chain keyed by `inNames`; call
+     `rowSink.accept(new Stack(env2, stack.slots, stack.top))` — same
+     `stack.top`, no pushes.
+
+10. **SET sinks `result(Stack)`**: same pattern as ORDER — rebind
+    captured values in `MutableEvalEnv`, call downstream with same
+    `stack.top`.  (GROUP already does this correctly.)
+
+11. **`ScanRowSink.varCount`**: new field, set from `scanPats.size()`
+    at compile time, used only for the slots-growth check.
+
+##### Test expectation updates
+
+12. **`built-in.smli`**: update description strings where
+    `get(name x)` becomes `stack(offset N, name x)` for variables
+    that are now in the scan layout.
+
+#### Step 12b: Pure-stack deferred sink result() [later, optional]
+
+After Step 12a the deferred sinks still create a `MutableEvalEnv`
+chain in `result()`.  This is the cold path (called once per `from`,
+not per row) so it is not a performance bottleneck, but it blocks the
+eventual removal of `EvalEnv` from the runtime (Step 14).
+
+Approach: at compile time record `scanDepth` (the exact number of
+stack slots that were live when this deferred sink was compiled).  In
+`result()`, push the stored per-row values back onto the stack to
+exactly `stack.top + scanDepth`, so that `StackCode` offsets computed
+in the scan context resolve correctly.  Compile downstream with the
+scan context (not `cxFrom`).
+
+This step can be done incrementally (one sink type at a time) once
+Step 12a has all tests green.
 
 ### Step 13: Marshal referenced globals onto the stack at statement start
 The only remaining EvalEnv lookups at runtime are `GetCode` /
