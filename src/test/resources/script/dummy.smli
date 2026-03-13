@@ -16,7 +16,8 @@
  * language governing permissions and limitations under the
  * License.
  *)
-"this is a simple script; modify it for debugging test cases";
-> val it = "this is a simple script; modify it for debugging test cases" : string
+from (k, v) in [(1, 5), (1, 6), (2, 7), (2, 10)]
+  group k compute {x = (fn vs => k + List.length vs) over v};
+> val it = [{k=1,x=3},{k=2,x=4}] : {k:int, x:int} list
 
 (*) End dummy.smli

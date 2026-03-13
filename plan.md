@@ -129,7 +129,7 @@ Three bugs surfaced after Step 10 fixed AIOOB errors:
 3. Test code reorganized: restored `final String plan = ...` variable style
    in `testLet6`, `testLet7` (MainTest), and `testInline` (InlineTest).
 
-### Step 11: Convert multi-binding `let` to stack-based
+### ✅ Step 11: Convert multi-binding `let` to stack-based (4df45130)
 `finishCompileLet` still emits `Codes.let()` → `LetCode`/`Let1Code`,
 which evaluates via `MatchCode` → old `Closure` → EvalEnv extension.
 This path is reached for:

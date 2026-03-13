@@ -590,36 +590,81 @@ public class Compiler {
       Core.StepEnv stepEnv,
       List<Core.FromStep> steps,
       Type elementType) {
+    return createRowSinkFactory(cx0, cx0, stepEnv, steps, elementType);
+  }
+
+  /**
+   * Creates a {@link RowSink} factory for the given steps.
+   *
+   * @param cx0 the context before applying {@code stepEnv} bindings
+   * @param cxFrom the pre-scan context, used to compile SET-step arguments
+   *     (UNION/EXCEPT/INTERSECT RHS) which are evaluated at {@code result} time
+   *     when no scan variables are live on the stack
+   * @param stepEnv the step environment (bindings introduced by the prior step)
+   * @param steps the remaining steps to compile
+   * @param elementType the element type of the enclosing {@code from}
+   *     expression
+   */
+  private Supplier<RowSink> createRowSinkFactory(
+      Context cx0,
+      Context cxFrom,
+      Core.StepEnv stepEnv,
+      List<Core.FromStep> steps,
+      Type elementType) {
     final Context cx = cx0.bindAll(stepEnv.bindings);
     if (steps.isEmpty()) {
-      final List<String> fieldNames =
+      final List<Binding> sortedBindings =
           stepEnv.bindings.stream()
-              .map(b -> b.id.name)
-              .sorted()
+              .sorted(Comparator.comparing(b -> b.id.name))
               .collect(toImmutableList());
       final Code code;
-      if (fieldNames.size() == 1
-          && stepEnv.bindings.get(0).id.type.equals(elementType)) {
-        code = Codes.get(fieldNames.get(0));
+      if (sortedBindings.size() == 1
+          && sortedBindings.get(0).id.type.equals(elementType)) {
+        code = compileFieldName(cx, sortedBindings.get(0).id);
       } else {
-        code = Codes.getTuple(fieldNames);
+        final List<Code> codes =
+            transformEager(sortedBindings, b -> compileFieldName(cx, b.id));
+        code = Codes.tuple(codes);
       }
       return () -> RowSinks.collect(code);
     }
     final Core.FromStep firstStep = steps.get(0);
     final Supplier<RowSink> nextFactory =
-        createRowSinkFactory(cx, firstStep.env, skip(steps), elementType);
-    final ImmutableList<Code> inputCodes;
+        createRowSinkFactory(
+            cx, cxFrom, firstStep.env, skip(steps), elementType);
     final ImmutableList<String> outNames;
     final Code code;
     switch (firstStep.op) {
       case SCAN:
         final Core.Scan scan = (Core.Scan) firstStep;
         code = compileRow(cx, scan.exp);
-        final Code conditionCode = compile(cx, scan.condition);
+        // Extend the context with stack slots for the scan-variable pattern,
+        // so the condition and all downstream steps use StackCode for them.
+        final List<Core.NamedPat> scanPats = namedPatsOf(scan.pat);
+        StackLayout scanLayout = cx.layout;
+        for (int i = 0; i < scanPats.size(); i++) {
+          scanLayout = scanLayout.with(scanPats.get(i), cx.localDepth + i);
+        }
+        final List<Binding> scanBindings = new ArrayList<>();
+        Compiles.acceptBinding(typeSystem, scan.pat, scanBindings);
+        final Context cxScan =
+            new Context(
+                cx.env.bindAll(scanBindings),
+                scanLayout,
+                cx.localDepth + scanPats.size());
+        final Code conditionCode = compile(cxScan, scan.condition);
+        final Supplier<RowSink> scanNextFactory =
+            createRowSinkFactory(
+                cxScan, cx, firstStep.env, skip(steps), elementType);
+        final int scanVarCount = scanPats.size();
         return () ->
             RowSinks.scan(
-                firstStep.op, scan.pat, code, conditionCode, nextFactory.get());
+                firstStep.op,
+                scan.pat,
+                scanVarCount,
+                code,
+                conditionCode,
+                scanNextFactory.get());
 
       case WHERE:
         final Core.Where where = (Core.Where) firstStep;
@@ -628,37 +673,46 @@ public class Compiler {
 
       case SKIP:
         final Core.Skip skip = (Core.Skip) firstStep;
-        final Code skipCode = compile(cx, skip.exp);
+        final Code skipCode = compile(cxFrom, skip.exp);
         return () -> RowSinks.skip(skipCode, nextFactory.get());
 
       case TAKE:
         final Core.Take take = (Core.Take) firstStep;
-        final Code takeCode = compile(cx, take.exp);
+        final Code takeCode = compile(cxFrom, take.exp);
         return () -> RowSinks.take(takeCode, nextFactory.get());
 
       case EXCEPT:
         final Core.Except except = (Core.Except) firstStep;
-        inputCodes = transformEager(except.args, arg -> compile(cx, arg));
-        outNames = bindingNames(stepEnv.bindings);
-        return () ->
-            RowSinks.except(
-                except.distinct, inputCodes, outNames, nextFactory.get());
+        return compileSetSink(
+            cx,
+            cxFrom,
+            stepEnv,
+            except.args,
+            except.distinct,
+            Op.EXCEPT,
+            nextFactory);
 
       case INTERSECT:
         final Core.Intersect intersect = (Core.Intersect) firstStep;
-        inputCodes = transformEager(intersect.args, arg -> compile(cx, arg));
-        outNames = bindingNames(stepEnv.bindings);
-        return () ->
-            RowSinks.intersect(
-                intersect.distinct, inputCodes, outNames, nextFactory.get());
+        return compileSetSink(
+            cx,
+            cxFrom,
+            stepEnv,
+            intersect.args,
+            intersect.distinct,
+            Op.INTERSECT,
+            nextFactory);
 
       case UNION:
         final Core.Union union = (Core.Union) firstStep;
-        inputCodes = transformEager(union.args, arg -> compile(cx, arg));
-        outNames = bindingNames(stepEnv.bindings);
-        return () ->
-            RowSinks.union(
-                union.distinct, inputCodes, outNames, nextFactory.get());
+        return compileSetSink(
+            cx,
+            cxFrom,
+            stepEnv,
+            union.args,
+            union.distinct,
+            Op.UNION,
+            nextFactory);
 
       case YIELD:
         final Core.Yield yield = (Core.Yield) firstStep;
@@ -681,12 +735,8 @@ public class Compiler {
         }
 
       case ORDER:
-        final Core.Order order = (Core.Order) firstStep;
-        code = compile(cx, order.exp);
-        final Comparator comparator =
-            Comparators.comparatorFor(typeSystem, order.exp.type);
-        return () ->
-            RowSinks.order(code, comparator, stepEnv, nextFactory.get());
+        return compileOrderSink(
+            cx, (Core.Order) firstStep, stepEnv, nextFactory);
 
       case UNORDER:
         // No explicit step is required. Unorder is a change in type, but
@@ -694,70 +744,182 @@ public class Compiler {
         return nextFactory;
 
       case GROUP:
-        final Core.Group group = (Core.Group) firstStep;
-        final ImmutableList.Builder<Code> groupCodesB = ImmutableList.builder();
-        for (Core.Exp exp : group.groupExps.values()) {
-          groupCodesB.add(compile(cx, exp));
-        }
-        final ImmutableList.Builder<Code> valueCodesB = ImmutableList.builder();
-        final SortedMap<String, Binding> bindingMap =
-            sortedBindingMap(stepEnv.bindings);
-        for (Binding binding : bindingMap.values()) {
-          valueCodesB.add(compile(cx, core.id(binding.id)));
-        }
-        final ImmutableList<String> names =
-            ImmutableList.copyOf(bindingMap.keySet());
-        final ImmutableList.Builder<Applicable> aggregateCodesB =
-            ImmutableList.builder();
-        for (Core.Aggregate aggregate : group.aggregates.values()) {
-          final Code argumentCode;
-          final Type argumentType;
-          if (aggregate.argument == null) {
-            final PairList<String, Type> argNameTypes = PairList.of();
-            stepEnv.bindings.forEach(
-                b -> argNameTypes.add(b.id.name, b.id.type));
-            argumentType = typeSystem.recordOrScalarType(argNameTypes);
-            argumentCode = null;
-          } else {
-            argumentType = aggregate.argument.type;
-            argumentCode = compile(cx, aggregate.argument);
-          }
-          Type aggType = aggregate.aggregate.type;
-          if (aggType instanceof ForallType) {
-            aggType = ((ForallType) aggType).type;
-          }
-          final Type aggParamType = ((FnType) aggType).paramType;
-          final Applicable aggregateApplicable =
-              compileApplicable(
-                  cx, aggregate.aggregate, aggParamType, aggregate.pos);
-          final Code aggregateCode;
-          if (aggregateApplicable == null) {
-            aggregateCode = compile(cx, aggregate.aggregate);
-          } else {
-            aggregateCode = aggregateApplicable.asCode();
-          }
-          aggregateCodesB.add(
-              Codes.aggregate(cx.env, aggregateCode, names, argumentCode));
-        }
-        final ImmutableList<Code> groupCodes = groupCodesB.build();
-        final Code keyCode = Codes.tuple(groupCodes);
-        final ImmutableList<Applicable> aggregateCodes =
-            aggregateCodesB.build();
-        outNames = bindingNames(firstStep.env.bindings);
-        final ImmutableList<String> keyNames =
-            outNames.subList(0, group.groupExps.size());
-        return () ->
-            RowSinks.group(
-                keyCode,
-                aggregateCodes,
-                names,
-                keyNames,
-                outNames,
-                nextFactory.get());
+        return compileGroupSink(
+            cx,
+            cxFrom,
+            (Core.Group) firstStep,
+            stepEnv,
+            skip(steps),
+            elementType);
 
       default:
         throw new AssertionError("unknown step type " + firstStep.op);
     }
+  }
+
+  private Supplier<RowSink> compileOrderSink(
+      Context cx,
+      Core.Order order,
+      Core.StepEnv stepEnv,
+      Supplier<RowSink> nextFactory) {
+    final Code code = compile(cx, order.exp);
+    final Comparator comparator =
+        Comparators.comparatorFor(typeSystem, order.exp.type);
+    final ImmutableList<Code> inCodes = buildInCodes(cx, stepEnv.bindings);
+    final ImmutableList<String> inNames = buildInNames(cx, stepEnv.bindings);
+    return () ->
+        RowSinks.order(code, comparator, inCodes, inNames, nextFactory.get());
+  }
+
+  private Supplier<RowSink> compileGroupSink(
+      Context cx,
+      Context cxFrom,
+      Core.Group group,
+      Core.StepEnv stepEnv,
+      List<Core.FromStep> remainingSteps,
+      Type elementType) {
+    final ImmutableList.Builder<Code> groupCodesB = ImmutableList.builder();
+    for (Core.Exp exp : group.groupExps.values()) {
+      groupCodesB.add(compile(cx, exp));
+    }
+    final SortedMap<String, Binding> bindingMap =
+        sortedBindingMap(stepEnv.bindings);
+    final ImmutableList<String> names =
+        ImmutableList.copyOf(bindingMap.keySet());
+    final ImmutableList.Builder<Applicable> aggregateCodesB =
+        ImmutableList.builder();
+    for (Core.Aggregate aggregate : group.aggregates.values()) {
+      final Code argumentCode;
+      if (aggregate.argument == null) {
+        final PairList<String, Type> argNameTypes = PairList.of();
+        stepEnv.bindings.forEach(b -> argNameTypes.add(b.id.name, b.id.type));
+        argumentCode = null;
+      } else {
+        argumentCode = compile(cx, aggregate.argument);
+      }
+      Type aggType = aggregate.aggregate.type;
+      if (aggType instanceof ForallType) {
+        aggType = ((ForallType) aggType).type;
+      }
+      final Type aggParamType = ((FnType) aggType).paramType;
+      final Applicable aggregateApplicable =
+          compileApplicable(
+              cx, aggregate.aggregate, aggParamType, aggregate.pos);
+      final Code aggregateCode;
+      if (aggregateApplicable == null) {
+        aggregateCode = compile(cx, aggregate.aggregate);
+      } else {
+        aggregateCode = aggregateApplicable.asCode();
+      }
+      aggregateCodesB.add(
+          Codes.aggregate(cx.env, aggregateCode, names, argumentCode));
+    }
+    final Code keyCode = Codes.tuple(groupCodesB.build());
+    final ImmutableList<Applicable> aggregateCodes = aggregateCodesB.build();
+    final ImmutableList<String> outNames = bindingNames(group.env.bindings);
+    final ImmutableList<String> keyNames =
+        outNames.subList(0, group.groupExps.size());
+    final ImmutableList<Code> groupInCodes =
+        buildInCodes(cx, bindingMap.values());
+    // Compile GROUP's downstream with cxFrom (pre-scan context) so that
+    // scan-variable names do not appear in the collect code's layout.
+    // At result() time the scan variable slots are no longer live, so any
+    // StackCode referencing them would cause AIOBE.  Using cxFrom forces
+    // group-output variables to be resolved via GetCode (env lookup) instead.
+    final Supplier<RowSink> groupNextFactory =
+        createRowSinkFactory(
+            cxFrom, cxFrom, group.env, remainingSteps, elementType);
+    return () ->
+        RowSinks.group(
+            keyCode,
+            aggregateCodes,
+            names,
+            keyNames,
+            outNames,
+            groupInCodes,
+            groupNextFactory.get());
+  }
+
+  private Supplier<RowSink> compileSetSink(
+      Context cx,
+      Context cxFrom,
+      Core.StepEnv stepEnv,
+      List<Core.Exp> args,
+      boolean distinct,
+      Op op,
+      Supplier<RowSink> nextFactory) {
+    // Compile args with cx (scan context): these are evaluated during the first
+    // accept() call, when scan variables ARE live on the stack.
+    final ImmutableList<Code> codes = transformEager(args, a -> compile(cx, a));
+    final ImmutableList<String> names = bindingNames(stepEnv.bindings);
+    // Compile inCodes with cx (scan context): these are evaluated during
+    // accept() while scan variables are live on the stack.
+    final ImmutableList<Code> inCodes = buildInCodesDecl(cx, stepEnv.bindings);
+    switch (op) {
+      case EXCEPT:
+        return () ->
+            RowSinks.except(distinct, codes, names, inCodes, nextFactory.get());
+      case INTERSECT:
+        return () ->
+            RowSinks.intersect(
+                distinct, codes, names, inCodes, nextFactory.get());
+      case UNION:
+        return () ->
+            RowSinks.union(distinct, codes, names, inCodes, nextFactory.get());
+      default:
+        throw new AssertionError(op);
+    }
+  }
+
+  /**
+   * Sorts bindings by stack slot index (ascending); bindings not in the layout
+   * sort last. Used by GROUP and ORDER to determine push order for deferred
+   * evaluation.
+   */
+  private List<Binding> sortedInBindings(
+      Context cx, Iterable<Binding> bindings) {
+    final List<Binding> sorted = new ArrayList<>();
+    bindings.forEach(sorted::add);
+    sorted.sort(
+        Comparator.comparingInt(
+            b -> {
+              int slot = cx.layout.get(b.id);
+              return slot >= 0 ? slot : Integer.MAX_VALUE;
+            }));
+    return sorted;
+  }
+
+  /**
+   * Builds a list of codes for reading scan variables, sorted by their slot
+   * index (ascending). The sort order determines how values are pushed onto the
+   * stack during GROUP/ORDER deferred evaluation.
+   */
+  private ImmutableList<Code> buildInCodes(
+      Context cx, Iterable<Binding> bindings) {
+    return ImmutableList.copyOf(
+        transformEager(
+            sortedInBindings(cx, bindings), b -> compileFieldName(cx, b.id)));
+  }
+
+  /**
+   * Builds a list of codes for reading scan variables in declaration order (not
+   * slot-sorted). Used for EXCEPT/INTERSECT/UNION sinks where key order must
+   * match {@code names} (declaration order).
+   */
+  private ImmutableList<Code> buildInCodesDecl(
+      Context cx, Iterable<Binding> bindings) {
+    return ImmutableList.copyOf(
+        transformEager(bindings, b -> compileFieldName(cx, b.id)));
+  }
+
+  /**
+   * Builds a list of variable names in slot-sorted order, parallel to {@link
+   * #buildInCodes}. Used for env binding during ORDER deferred evaluation.
+   */
+  private ImmutableList<String> buildInNames(
+      Context cx, Iterable<Binding> bindings) {
+    return ImmutableList.copyOf(
+        transformEager(sortedInBindings(cx, bindings), b -> b.id.name));
   }
 
   private ImmutableSortedMap<String, Binding> sortedBindingMap(
@@ -1215,6 +1377,18 @@ public class Compiler {
     for (Core.Match match : matchList) {
       collectReferencedStackVars(cx, match.exp, captureMap);
     }
+    // Remove any captures that are bound by an arm's own pattern: arm patterns
+    // shadow outer variables with the same name+ordinal, so they must not also
+    // appear as captured outer variables (which would cause duplicate keys in
+    // the inner layout).
+    for (Core.Match match : matchList) {
+      namedPatsOf(match.pat).forEach(captureMap::remove);
+    }
+    // Re-index the capture map so indices are contiguous starting at 0.
+    int captureIdx = 0;
+    for (Core.NamedPat key : new ArrayList<>(captureMap.keySet())) {
+      captureMap.put(key, captureIdx++);
+    }
 
     final int numCapture = captureMap.size();
 
@@ -1267,8 +1441,17 @@ public class Compiler {
               captureOffsets.length + numArgs + e.getValue().maxSlots());
     }
 
+    final String[] captureNames = new String[numCapture];
+    for (Map.Entry<Core.NamedPat, Integer> e : captureMap.entrySet()) {
+      captureNames[e.getValue()] = e.getKey().name;
+    }
+
     return new StackMatchCode(
-        captureOffsets, patCodes.immutable(), capacity, last(matchList).pos);
+        captureOffsets,
+        captureNames,
+        patCodes.immutable(),
+        capacity,
+        last(matchList).pos);
   }
 
   /**
@@ -1549,6 +1732,12 @@ public class Compiler {
    */
   private static class StackMatchCode implements Code {
     private final int[] captureOffsets;
+    /**
+     * Names of captured variables, in capture-slot order (parallel to
+     * captureOffsets).
+     */
+    private final String[] captureNames;
+
     private final ImmutablePairList<Core.Pat, Code> patCodes;
     /** Minimum slots needed for a fresh {@link Closure.StackClosure} call. */
     private final int capacity;
@@ -1557,10 +1746,12 @@ public class Compiler {
 
     StackMatchCode(
         int[] captureOffsets,
+        String[] captureNames,
         ImmutablePairList<Core.Pat, Code> patCodes,
         int capacity,
         Pos pos) {
       this.captureOffsets = captureOffsets;
+      this.captureNames = captureNames;
       this.patCodes = patCodes;
       this.capacity = capacity;
       this.pos = pos;
@@ -1578,10 +1769,12 @@ public class Compiler {
 
     @Override
     public Object eval(EvalEnv env) {
-      // Called from old-mode context: no stack, create closure with no
-      // captures.
-      return new Closure.StackClosure(
-          env, new Object[0], patCodes, capacity, pos);
+      // Called from old-mode context: populate captures by name lookup in env.
+      final Object[] captured = new Object[captureNames.length];
+      for (int i = 0; i < captureNames.length; i++) {
+        captured[i] = env.getOpt(captureNames[i]);
+      }
+      return new Closure.StackClosure(env, captured, patCodes, capacity, pos);
     }
 
     @Override

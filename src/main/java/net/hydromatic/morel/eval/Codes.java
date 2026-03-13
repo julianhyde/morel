@@ -4280,14 +4280,36 @@ public abstract class Codes {
         final List<Object> rows = (List<Object>) arg;
         final List<Object> argRows;
         if (argumentCode != null) {
-          final MutableEvalEnv env2 = stack.globalEnv.bindMutableArray(names);
+          // Ensure slots can hold the row values we are about to push.
+          final int needed = stack.top + names.size();
+          if (stack.slots.length < needed) {
+            stack =
+                new Stack(
+                    stack.globalEnv,
+                    Arrays.copyOf(stack.slots, needed),
+                    stack.top);
+          }
           argRows = new ArrayList<>(rows.size());
           for (Object row : rows) {
-            env2.set(row);
-            // Use a Stack so that StackCode nodes (outer let-bound variables)
-            // in argumentCode are evaluated correctly.
+            final int savedTop = stack.save();
+            // Bind row values in a MutableEvalEnv so that GetCode-based
+            // argument expressions (variables from yield, not scan) can look
+            // them up by name, in addition to StackCode reading from slots.
+            final MutableEvalEnv rowEnv;
+            if (names.size() == 1) {
+              stack.push(row);
+              rowEnv = stack.globalEnv.bindMutable(names.get(0));
+              rowEnv.set(row);
+            } else {
+              rowEnv = stack.globalEnv.bindMutableArray(names);
+              rowEnv.set(row);
+              for (Object val : (Object[]) row) {
+                stack.push(val);
+              }
+            }
             argRows.add(
-                argumentCode.eval(new Stack(env2, stack.slots, stack.top)));
+                argumentCode.eval(new Stack(rowEnv, stack.slots, stack.top)));
+            stack.restore(savedTop);
           }
         } else if (names.size() != 1) {
           // Reconcile the fact that we internally represent rows as arrays when
@@ -4807,7 +4829,19 @@ public abstract class Codes {
 
     @Override
     public Object eval(final Stack stack) {
-      return stack.slots[stack.top - offset];
+      final int idx = stack.top - offset;
+      if (idx < 0 || idx >= stack.slots.length) {
+        System.err.println(
+            "StackCode("
+                + name
+                + ","
+                + offset
+                + "): top="
+                + stack.top
+                + " => idx="
+                + idx);
+      }
+      return stack.slots[idx];
     }
   }
 
@@ -5593,7 +5627,15 @@ public abstract class Codes {
 
     @Override
     public Object eval(EvalEnv env) {
-      final Object arg = code.eval(env);
+      return wrap(code.eval(env));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return wrap(code.eval(stack));
+    }
+
+    private static Object wrap(Object arg) {
       if (arg instanceof RelList) {
         final RelList list = (RelList) arg;
         return new AbstractList<Object>() {

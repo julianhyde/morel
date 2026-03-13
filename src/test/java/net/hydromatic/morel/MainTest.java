@@ -2888,7 +2888,7 @@ public class MainTest {
     final String plan =
         "from("
             + "sink join(pat r, exp tuple(tuple(constant(2), constant(3))), "
-            + "sink group(key tuple(apply(fnValue nth:0, argCode get(name r))), "
+            + "sink group(key tuple(apply(fnValue nth:0, argCode stack(offset 1, name r))), "
             + "agg aggregate, "
             + "sink collect(tuple(get(name a), "
             + "apply2(fnValue +, get(name a), get(name a)), "

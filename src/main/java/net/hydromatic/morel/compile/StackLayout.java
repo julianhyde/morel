@@ -19,6 +19,8 @@
 package net.hydromatic.morel.compile;
 
 import com.google.common.collect.ImmutableMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import net.hydromatic.morel.ast.Core;
 
 /**
@@ -56,14 +58,13 @@ public class StackLayout {
 
   /**
    * Returns a new layout that is identical to this one but also assigns {@code
-   * slotIndex} to {@code pat}.
+   * slotIndex} to {@code pat}. If {@code pat} is already present, the new slot
+   * overwrites the old one (later bindings shadow earlier bindings).
    */
   public StackLayout with(Core.NamedPat pat, int slotIndex) {
-    return new StackLayout(
-        ImmutableMap.<Core.NamedPat, Integer>builder()
-            .putAll(slotMap)
-            .put(pat, slotIndex)
-            .build());
+    final Map<Core.NamedPat, Integer> map = new LinkedHashMap<>(slotMap);
+    map.put(pat, slotIndex);
+    return new StackLayout(ImmutableMap.copyOf(map));
   }
 
   /** Returns the number of slots allocated in this layout. */

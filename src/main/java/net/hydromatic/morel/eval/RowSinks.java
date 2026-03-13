@@ -21,7 +21,6 @@ package net.hydromatic.morel.eval;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
-import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
@@ -29,6 +28,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -82,10 +82,11 @@ public abstract class RowSinks {
       boolean distinct,
       ImmutableList<Code> codes,
       ImmutableList<String> names,
+      ImmutableList<Code> inCodes,
       RowSink rowSink) {
     return distinct
-        ? new ExceptDistinctRowSink(codes, names, rowSink)
-        : new ExceptAllRowSink(codes, names, rowSink);
+        ? new ExceptDistinctRowSink(codes, names, inCodes, rowSink)
+        : new ExceptAllRowSink(codes, names, inCodes, rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code group} step. */
@@ -95,9 +96,10 @@ public abstract class RowSinks {
       ImmutableList<String> inNames,
       ImmutableList<String> keyNames,
       ImmutableList<String> outNames,
+      ImmutableList<Code> inCodes,
       RowSink rowSink) {
     return new GroupRowSink(
-        keyCode, aggregateCodes, inNames, keyNames, outNames, rowSink);
+        keyCode, aggregateCodes, inNames, keyNames, outNames, inCodes, rowSink);
   }
 
   /** Creates a {@link RowSink} for an {@code intersect} step. */
@@ -105,23 +107,32 @@ public abstract class RowSinks {
       boolean distinct,
       ImmutableList<Code> codes,
       ImmutableList<String> names,
+      ImmutableList<Code> inCodes,
       RowSink rowSink) {
     return distinct
-        ? new IntersectDistinctRowSink(codes, names, rowSink)
-        : new IntersectAllRowSink(codes, names, rowSink);
+        ? new IntersectDistinctRowSink(codes, names, inCodes, rowSink)
+        : new IntersectAllRowSink(codes, names, inCodes, rowSink);
   }
 
   /** Creates a {@link RowSink} for an {@code order} step. */
   public static RowSink order(
-      Code code, Comparator comparator, Core.StepEnv env, RowSink rowSink) {
-    ImmutableList<String> names = transformEager(env.bindings, b -> b.id.name);
-    return new OrderRowSink(code, comparator, names, rowSink);
+      Code code,
+      Comparator comparator,
+      ImmutableList<Code> inCodes,
+      ImmutableList<String> inNames,
+      RowSink rowSink) {
+    return new OrderRowSink(code, comparator, inCodes, inNames, rowSink);
   }
 
   /** Creates a {@link RowSink} for a scan or {@code join} step. */
   public static RowSink scan(
-      Op op, Core.Pat pat, Code code, Code conditionCode, RowSink rowSink) {
-    return new ScanRowSink(op, pat, code, conditionCode, rowSink);
+      Op op,
+      Core.Pat pat,
+      int varCount,
+      Code code,
+      Code conditionCode,
+      RowSink rowSink) {
+    return new ScanRowSink(op, pat, varCount, code, conditionCode, rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code skip} step. */
@@ -139,8 +150,9 @@ public abstract class RowSinks {
       boolean distinct,
       ImmutableList<Code> codes,
       ImmutableList<String> names,
+      ImmutableList<Code> inCodes,
       RowSink rowSink) {
-    return new UnionRowSink(distinct, codes, names, rowSink);
+    return new UnionRowSink(distinct, codes, names, inCodes, rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code where} step. */
@@ -237,15 +249,24 @@ public abstract class RowSinks {
   private static class ScanRowSink extends BaseRowSink {
     final Op op; // inner, left, right, full
     final Core.Pat pat;
+    /** Number of stack slots pushed by {@link #pat} per element. */
+    final int varCount;
+
     final Code code;
     final Code conditionCode;
 
     ScanRowSink(
-        Op op, Core.Pat pat, Code code, Code conditionCode, RowSink rowSink) {
+        Op op,
+        Core.Pat pat,
+        int varCount,
+        Code code,
+        Code conditionCode,
+        RowSink rowSink) {
       super(rowSink);
       checkArgument(op == Op.SCAN);
       this.op = op;
       this.pat = pat;
+      this.varCount = varCount;
       this.code = code;
       this.conditionCode = conditionCode;
     }
@@ -285,25 +306,25 @@ public abstract class RowSinks {
 
     @Override
     public void accept(Stack stack) {
-      // Evaluate the collection expression using the full stack so that outer
-      // variables (StackCode nodes) resolve correctly.
       final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
-      // Extend the env with the iteration-variable pattern binding. The inner
-      // stack shares the parent's slots array (for StackCode outer variables)
-      // but uses an extended globalEnv so that Codes.get nodes for the
-      // iteration variable also resolve correctly.
-      final MutableEvalEnv mutableEvalEnv = stack.globalEnv.bindMutablePat(pat);
-      final Stack innerStack =
-          new Stack(mutableEvalEnv, stack.slots, stack.top);
+      // Grow the slots array if it is too small for our scan variables.
+      // This can happen when a 'from' expression is called inside a closure
+      // whose capacity does not account for scan-variable slots.
+      if (stack.slots.length < stack.top + varCount) {
+        final Object[] newSlots =
+            Arrays.copyOf(stack.slots, stack.top + varCount);
+        stack = new Stack(stack.globalEnv, newSlots, stack.top);
+      }
+      final int savedTop = stack.save();
       for (Object element : elements) {
-        innerStack.top = stack.top;
-        if (mutableEvalEnv.setOpt(element)) {
-          Boolean b = (Boolean) conditionCode.eval(innerStack);
-          if (b) {
-            rowSink.accept(innerStack);
+        stack.restore(savedTop);
+        if (Closure.StackClosure.pushBindings(pat, element, stack)) {
+          if ((Boolean) conditionCode.eval(stack)) {
+            rowSink.accept(stack);
           }
         }
       }
+      stack.restore(savedTop);
     }
   }
 
@@ -440,6 +461,12 @@ public abstract class RowSinks {
     final boolean distinct;
     final ImmutableList<Code> codes;
     final ImmutableList<String> names;
+    /**
+     * Codes for reading the current scan variables in stack mode, in
+     * declaration order (parallel to {@link #names}).
+     */
+    final ImmutableList<Code> inCodes;
+
     final Map<Object, int[]> map;
 
     final Object[] values;
@@ -449,6 +476,7 @@ public abstract class RowSinks {
         boolean distinct,
         ImmutableList<Code> codes,
         ImmutableList<String> names,
+        ImmutableList<Code> inCodes,
         RowSink rowSink) {
       super(rowSink);
       checkArgument(
@@ -459,6 +487,7 @@ public abstract class RowSinks {
       this.distinct = distinct;
       this.codes = requireNonNull(codes);
       this.names = requireNonNull(names);
+      this.inCodes = requireNonNull(inCodes);
       this.values = new Object[names.size()];
       if (op == Op.UNION && !distinct) {
         // Union-all does not require storage.
@@ -471,6 +500,17 @@ public abstract class RowSinks {
         // is fine.
         map = new HashMap<>();
       }
+    }
+
+    /** Returns the map key for the current scan variable(s) from the stack. */
+    Object rowKey(Stack stack) {
+      if (inCodes.size() == 1) {
+        return inCodes.get(0).eval(stack);
+      }
+      for (int i = 0; i < inCodes.size(); i++) {
+        values[i] = inCodes.get(i).eval(stack);
+      }
+      return ImmutableList.copyOf(values);
     }
 
     @Override
@@ -581,34 +621,48 @@ public abstract class RowSinks {
       map.computeIfAbsent(value, fn);
     }
 
-    // Stack-based helpers delegate to EvalEnv helpers via the extended
-    // globalEnv (which contains the iteration variables in stack mode).
+    // Stack-based helpers read scan variables via inCodes (not globalEnv),
+    // since after Step 12, scan variables live on the stack slots.
     boolean add(Stack stack) {
-      return add(stack.globalEnv);
+      return map.put(rowKey(stack), ZERO) == null;
     }
 
     void remove(Stack stack) {
-      remove(stack.globalEnv);
+      map.remove(rowKey(stack));
     }
 
     void inc(Stack stack) {
-      inc(stack.globalEnv);
+      final Object key = rowKey(stack);
+      map.compute(
+          key,
+          (k, v) -> {
+            if (v == null) {
+              return new int[] {1};
+            }
+            ++v[0];
+            return v;
+          });
     }
 
     void dec(Stack stack) {
-      dec(stack.globalEnv);
+      map.computeIfPresent(
+          rowKey(stack),
+          (k, v) -> {
+            --v[0];
+            return v;
+          });
     }
 
     void compute(Stack stack, BiFunction<Object, int[], int[]> fn) {
-      compute(stack.globalEnv, fn);
+      map.compute(rowKey(stack), fn);
     }
 
     void computeIfPresent(Stack stack, BiFunction<Object, int[], int[]> fn) {
-      computeIfPresent(stack.globalEnv, fn);
+      map.computeIfPresent(rowKey(stack), fn);
     }
 
     void computeIfAbsent(Stack stack, Function<Object, int[]> fn) {
-      computeIfAbsent(stack.globalEnv, fn);
+      map.computeIfAbsent(rowKey(stack), fn);
     }
   }
 
@@ -619,8 +673,9 @@ public abstract class RowSinks {
     ExceptAllRowSink(
         ImmutableList<Code> codes,
         ImmutableList<String> names,
+        ImmutableList<Code> inCodes,
         RowSink rowSink) {
-      super(Op.EXCEPT, false, codes, names, rowSink);
+      super(Op.EXCEPT, false, codes, names, inCodes, rowSink);
     }
 
     @Override
@@ -678,15 +733,7 @@ public abstract class RowSinks {
           }
         }
       }
-      Object value;
-      if (names.size() == 1) {
-        value = stack.globalEnv.getOpt(names.get(0));
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = stack.globalEnv.getOpt(names.get(i));
-        }
-        value = ImmutableList.copyOf(values);
-      }
+      final Object value = rowKey(stack);
       int[] count = map.get(value);
       if (count != null && count[0] > 0) {
         --count[0];
@@ -709,8 +756,9 @@ public abstract class RowSinks {
     ExceptDistinctRowSink(
         ImmutableList<Code> codes,
         ImmutableList<String> names,
+        ImmutableList<Code> inCodes,
         RowSink rowSink) {
-      super(Op.EXCEPT, true, codes, names, rowSink);
+      super(Op.EXCEPT, true, codes, names, inCodes, rowSink);
     }
 
     @Override
@@ -758,13 +806,21 @@ public abstract class RowSinks {
         }
       }
       if (!map.isEmpty()) {
+        final Stack stack2 =
+            stack.slots.length <= stack.top
+                ? new Stack(
+                    stack.globalEnv,
+                    Arrays.copyOf(stack.slots, stack.top + 1),
+                    stack.top)
+                : stack;
         final MutableEvalEnv mutableEvalEnv2 =
             stack.globalEnv.bindMutableList(names);
         final Stack innerStack =
-            new Stack(mutableEvalEnv2, stack.slots, stack.top);
+            new Stack(mutableEvalEnv2, stack2.slots, stack2.top + 1);
         map.keySet()
             .forEach(
                 element -> {
+                  stack2.slots[stack2.top] = element;
                   mutableEvalEnv2.set(element);
                   rowSink.accept(innerStack);
                 });
@@ -797,8 +853,9 @@ public abstract class RowSinks {
     IntersectAllRowSink(
         ImmutableList<Code> codes,
         ImmutableList<String> names,
+        ImmutableList<Code> inCodes,
         RowSink rowSink) {
-      super(Op.INTERSECT, false, codes, names, rowSink);
+      super(Op.INTERSECT, false, codes, names, inCodes, rowSink);
     }
 
     @Override
@@ -900,17 +957,8 @@ public abstract class RowSinks {
                   return minCount == 0;
                 });
       }
-      Object value;
-      if (names.size() == 1) {
-        value = stack.globalEnv.getOpt(names.get(0));
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = stack.globalEnv.getOpt(names.get(i));
-        }
-        value = ImmutableList.copyOf(values);
-      }
       map.computeIfPresent(
-          value,
+          rowKey(stack),
           (k, counts) -> {
             rowSink.accept(stack);
             return --counts[0] == 0 ? null : counts;
@@ -940,8 +988,9 @@ public abstract class RowSinks {
     IntersectDistinctRowSink(
         ImmutableList<Code> codes,
         ImmutableList<String> names,
+        ImmutableList<Code> inCodes,
         RowSink rowSink) {
-      super(Op.INTERSECT, true, codes, names, rowSink);
+      super(Op.INTERSECT, true, codes, names, inCodes, rowSink);
     }
 
     @Override
@@ -1016,13 +1065,21 @@ public abstract class RowSinks {
         }
       }
       if (!map.isEmpty()) {
+        final Stack stack2 =
+            stack.slots.length <= stack.top
+                ? new Stack(
+                    stack.globalEnv,
+                    Arrays.copyOf(stack.slots, stack.top + 1),
+                    stack.top)
+                : stack;
         final MutableEvalEnv mutableEvalEnv2 =
             stack.globalEnv.bindMutableList(names);
         final Stack innerStack =
-            new Stack(mutableEvalEnv2, stack.slots, stack.top);
+            new Stack(mutableEvalEnv2, stack2.slots, stack2.top + 1);
         map.forEach(
             (k, v) -> {
               if (v[0] > 0) {
+                stack2.slots[stack2.top] = k;
                 mutableEvalEnv2.set(k);
                 rowSink.accept(innerStack);
               }
@@ -1038,8 +1095,9 @@ public abstract class RowSinks {
         boolean distinct,
         ImmutableList<Code> codes,
         ImmutableList<String> names,
+        ImmutableList<Code> inCodes,
         RowSink rowSink) {
-      super(Op.UNION, distinct, codes, names, rowSink);
+      super(Op.UNION, distinct, codes, names, inCodes, rowSink);
     }
 
     @Override
@@ -1075,11 +1133,20 @@ public abstract class RowSinks {
     public List<Object> result(Stack stack) {
       final MutableEvalEnv mutableEvalEnv =
           stack.globalEnv.bindMutableArray(names);
+      // innerStack.top = stack.top + 1: each RHS element is pushed at
+      // slots[stack.top] so that StackCode nodes (compiled when the scan
+      // variable occupied that slot) find the value at the correct offset.
+      // Grow slots if needed to ensure room at stack.top.
+      if (stack.slots.length <= stack.top) {
+        final Object[] newSlots = Arrays.copyOf(stack.slots, stack.top + 1);
+        stack = new Stack(stack.globalEnv, newSlots, stack.top);
+      }
       final Stack innerStack =
-          new Stack(mutableEvalEnv, stack.slots, stack.top);
+          new Stack(mutableEvalEnv, stack.slots, stack.top + 1);
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
         for (Object element : elements) {
+          stack.slots[stack.top] = element;
           mutableEvalEnv.set(element);
           if (!distinct || add(mutableEvalEnv)) {
             rowSink.accept(innerStack);
@@ -1099,6 +1166,9 @@ public abstract class RowSinks {
     final ImmutableList<String> outNames;
 
     final ImmutableList<Applicable> aggregateCodes;
+    /** Codes for reading scan variable values, sorted by slot index. */
+    final ImmutableList<Code> inCodes;
+
     final ListMultimap<Object, Object> map = ArrayListMultimap.create();
     final Object[] values;
 
@@ -1108,6 +1178,7 @@ public abstract class RowSinks {
         ImmutableList<String> inNames,
         ImmutableList<String> keyNames,
         ImmutableList<String> outNames,
+        ImmutableList<Code> inCodes,
         RowSink rowSink) {
       super(rowSink);
       this.keyCode = requireNonNull(keyCode);
@@ -1115,7 +1186,8 @@ public abstract class RowSinks {
       this.inNames = requireNonNull(inNames);
       this.keyNames = requireNonNull(keyNames);
       this.outNames = requireNonNull(outNames);
-      this.values = inNames.size() == 1 ? null : new Object[inNames.size()];
+      this.inCodes = requireNonNull(inCodes);
+      this.values = inCodes.size() == 1 ? null : new Object[inCodes.size()];
       checkArgument(isPrefix(keyNames, outNames));
     }
 
@@ -1149,11 +1221,11 @@ public abstract class RowSinks {
 
     @Override
     public void accept(Stack stack) {
-      if (inNames.size() == 1) {
-        map.put(keyCode.eval(stack), stack.globalEnv.getOpt(inNames.get(0)));
+      if (inCodes.size() == 1) {
+        map.put(keyCode.eval(stack), inCodes.get(0).eval(stack));
       } else {
-        for (int i = 0; i < inNames.size(); i++) {
-          values[i] = stack.globalEnv.getOpt(inNames.get(i));
+        for (int i = 0; i < inCodes.size(); i++) {
+          values[i] = inCodes.get(i).eval(stack);
         }
         map.put(keyCode.eval(stack), values.clone());
       }
@@ -1207,9 +1279,21 @@ public abstract class RowSinks {
       for (String name : outNames) {
         env2 = groupEnvs[i++] = env2.bindMutable(name);
       }
+      // env3 is the env after the key bindings but before any aggregate output
+      // bindings. Aggregate code is evaluated with env3 so that the actual
+      // aggregate function (e.g., "my_sum") is found in the outer scope rather
+      // than being shadowed by the (not-yet-computed) aggregate output of the
+      // same name.
       final EvalEnv env3 =
           keyNames.isEmpty() ? stack.globalEnv : groupEnvs[keyNames.size() - 1];
+      // innerStack shares the same slots and top as the pre-GROUP stack.
+      // Its globalEnv includes all group outputs (keys + aggregates) so that
+      // downstream collect/yield codes that look up group outputs by name work.
       final Stack innerStack = new Stack(env2, stack.slots, stack.top);
+      // keyStack: globalEnv only includes key bindings (not aggregate outputs),
+      // preventing aggregate-output names from shadowing the aggregate
+      // functions.
+      final Stack keyStack = new Stack(env3, stack.slots, stack.top);
       final Map<Object, List<Object>> map2;
       if (map.isEmpty()
           && keyCode instanceof Codes.TupleCode
@@ -1221,16 +1305,16 @@ public abstract class RowSinks {
       }
       for (Map.Entry<Object, List<Object>> entry : map2.entrySet()) {
         final List list = (List) entry.getKey();
+        // Set key values first so that aggregate closures can reference them.
         for (i = 0; i < list.size(); i++) {
           groupEnvs[i].set(list.get(i));
         }
         final List<Object> rows = entry.getValue();
         for (Applicable aggregateCode : aggregateCodes) {
-          // Pass a Stack so that StackCode nodes in the argument expression
-          // (outer let-bound variables) are evaluated with the correct slots.
-          groupEnvs[i++].set(
-              aggregateCode.apply(
-                  new Stack(env3, stack.slots, stack.top), rows));
+          // Use keyStack (not innerStack): its globalEnv has key bindings but
+          // not the (null) aggregate-output bindings, preventing name shadowing
+          // when the aggregate function name equals the aggregate output name.
+          groupEnvs[i++].set(aggregateCode.apply(keyStack, rows));
         }
         rowSink.accept(innerStack);
       }
@@ -1242,20 +1326,29 @@ public abstract class RowSinks {
   private static class OrderRowSink extends BaseRowSink {
     final Code code;
     final Comparator comparator;
-    final ImmutableList<String> names;
+    /** Codes for reading input variable values, sorted by slot index. */
+    final ImmutableList<Code> inCodes;
+    /**
+     * Names of input variables, parallel to {@link #inCodes}. Used to bind
+     * env-based (non-layout) variables during deferred evaluation in result().
+     */
+    final ImmutableList<String> inNames;
+
     final List<Object> rows = new ArrayList<>();
     final Object @Nullable [] values;
 
     OrderRowSink(
         Code code,
         Comparator comparator,
-        ImmutableList<String> names,
+        ImmutableList<Code> inCodes,
+        ImmutableList<String> inNames,
         RowSink rowSink) {
       super(rowSink);
       this.code = code;
       this.comparator = comparator;
-      this.names = names;
-      this.values = names.size() == 1 ? null : new Object[names.size()];
+      this.inCodes = inCodes;
+      this.inNames = inNames;
+      this.values = inCodes.size() == 1 ? null : new Object[inCodes.size()];
     }
 
     @Override
@@ -1265,67 +1358,64 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      if (values == null) {
-        rows.add(env.getOpt(names.get(0)));
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = env.getOpt(names.get(i));
-        }
-        rows.add(values.clone());
-      }
-    }
-
-    @Override
     public void accept(Stack stack) {
       if (values == null) {
-        rows.add(stack.globalEnv.getOpt(names.get(0)));
+        rows.add(inCodes.get(0).eval(stack));
       } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = stack.globalEnv.getOpt(names.get(i));
+        for (int i = 0; i < inCodes.size(); i++) {
+          values[i] = inCodes.get(i).eval(stack);
         }
         rows.add(values.clone());
       }
     }
 
-    @Override
-    public List<Object> result(final EvalEnv env) {
-      final MutableEvalEnv leftEnv = env.bindMutableArray(names);
-      final MutableEvalEnv rightEnv = env.bindMutableArray(names);
-      rows.sort(
-          (left, right) -> {
-            leftEnv.set(left);
-            rightEnv.set(right);
-            final Object leftVal = code.eval(leftEnv);
-            final Object rightVal = code.eval(rightEnv);
-            return comparator.compare(leftVal, rightVal);
-          });
-      for (Object row : rows) {
-        leftEnv.set(row);
-        rowSink.accept(leftEnv);
+    /**
+     * Pushes a saved row's values onto the stack AND binds them in an env (for
+     * variables not on the stack), returning a Stack suitable for evaluating
+     * both StackCode and GetCode expressions.
+     */
+    private Stack pushRowAndBindEnv(Stack stack, Object row) {
+      final MutableEvalEnv env2 = stack.globalEnv.bindMutableArray(inNames);
+      env2.set(row);
+      if (values == null) {
+        stack.push(row);
+      } else {
+        for (Object val : (Object[]) row) {
+          stack.push(val);
+        }
       }
-      return rowSink.result(env);
+      return new Stack(env2, stack.slots, stack.top);
     }
 
     @Override
     public List<Object> result(Stack stack) {
-      final MutableEvalEnv leftEnv = stack.globalEnv.bindMutableArray(names);
-      final MutableEvalEnv rightEnv = stack.globalEnv.bindMutableArray(names);
-      final Stack leftStack = new Stack(leftEnv, stack.slots, stack.top);
-      final Stack rightStack = new Stack(rightEnv, stack.slots, stack.top);
+      // Grow slots so that pushRowAndBindEnv can push inCodes.size() values.
+      final int needed = stack.top + inCodes.size();
+      final Stack stack2 =
+          stack.slots.length < needed
+              ? new Stack(
+                  stack.globalEnv,
+                  Arrays.copyOf(stack.slots, needed),
+                  stack.top)
+              : stack;
       rows.sort(
           (left, right) -> {
-            leftEnv.set(left);
-            rightEnv.set(right);
+            final int savedTop = stack2.save();
+            final Stack leftStack = pushRowAndBindEnv(stack2, left);
             final Object leftVal = code.eval(leftStack);
+            stack2.restore(savedTop);
+            final Stack rightStack = pushRowAndBindEnv(stack2, right);
             final Object rightVal = code.eval(rightStack);
+            stack2.restore(savedTop);
             return comparator.compare(leftVal, rightVal);
           });
       for (Object row : rows) {
-        leftEnv.set(row);
-        rowSink.accept(leftStack);
+        final int savedTop = stack2.save();
+        final Stack rowStack = pushRowAndBindEnv(stack2, row);
+        rowSink.accept(rowStack);
+        stack2.restore(savedTop);
       }
-      return rowSink.result(leftStack);
+      return rowSink.result(stack2);
     }
   }
 
