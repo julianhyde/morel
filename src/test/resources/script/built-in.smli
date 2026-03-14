@@ -2957,12 +2957,12 @@ Date.toString (Date.fromTimeUniv (Time.fromSeconds (~86400)));
 (*) Date exception: day out of range
 Date.date {year=1970, month=Jan, day=32, hour=0, minute=0, second=0, offset=NONE};
 > uncaught exception Date
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.82
 
 (*) Date exception: hour out of range
 Date.date {year=1970, month=Jan, day=1, hour=25, minute=0, second=0, offset=NONE};
 > uncaught exception Date
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.82
 
 (* Int ------------------------------------------------------------ *)
 

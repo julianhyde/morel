@@ -558,39 +558,50 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#DATE_DATE */
-  private static final Applicable DATE_DATE =
-      new BaseApplicable1<OffsetDateTime, List>(BuiltIn.DATE_DATE) {
-        @Override
-        public OffsetDateTime apply(List r) {
-          // Record fields in alphabetical order:
-          // day, hour, minute, month, offset, second, year
-          final int day = (Integer) r.get(0);
-          final int hour = (Integer) r.get(1);
-          final int minute = (Integer) r.get(2);
-          final List monthVal = (List) r.get(3);
-          final List offsetOpt = (List) r.get(4);
-          final int second = (Integer) r.get(5);
-          final int year = (Integer) r.get(6);
-          final Month month = dateMonthFromName((String) monthVal.get(0));
-          try {
-            final LocalDateTime ldt =
-                LocalDateTime.of(
-                    year, month.getValue(), day, hour, minute, second, 0);
-            final ZoneOffset zone;
-            if (offsetOpt.size() == 2) {
-              final long offsetNanos = (Long) offsetOpt.get(1);
-              zone =
-                  ZoneOffset.ofTotalSeconds(
-                      (int) (offsetNanos / 1_000_000_000L));
-            } else {
-              zone = ZoneId.systemDefault().getRules().getOffset(ldt);
-            }
-            return OffsetDateTime.of(ldt, zone);
-          } catch (DateTimeException e) {
-            throw new MorelRuntimeException(BuiltInExn.DATE, Pos.ZERO);
-          }
+  private static final Applicable DATE_DATE = new DateDate(Pos.ZERO);
+
+  /** Implements {@link #DATE_DATE}. */
+  private static class DateDate
+      extends BasePositionedApplicable1<OffsetDateTime, List> {
+    DateDate(Pos pos) {
+      super(BuiltIn.DATE_DATE, pos);
+    }
+
+    @Override
+    public DateDate withPos(Pos pos) {
+      return new DateDate(pos);
+    }
+
+    @Override
+    public OffsetDateTime apply(List r) {
+      // Record fields in alphabetical order:
+      // day, hour, minute, month, offset, second, year
+      final int day = (Integer) r.get(0);
+      final int hour = (Integer) r.get(1);
+      final int minute = (Integer) r.get(2);
+      final List monthVal = (List) r.get(3);
+      final List offsetOpt = (List) r.get(4);
+      final int second = (Integer) r.get(5);
+      final int year = (Integer) r.get(6);
+      final Month month = dateMonthFromName((String) monthVal.get(0));
+      try {
+        final LocalDateTime ldt =
+            LocalDateTime.of(
+                year, month.getValue(), day, hour, minute, second, 0);
+        final ZoneOffset zone;
+        if (offsetOpt.size() == 2) {
+          final long offsetNanos = (Long) offsetOpt.get(1);
+          zone =
+              ZoneOffset.ofTotalSeconds((int) (offsetNanos / 1_000_000_000L));
+        } else {
+          zone = ZoneId.systemDefault().getRules().getOffset(ldt);
         }
-      };
+        return OffsetDateTime.of(ldt, zone);
+      } catch (DateTimeException e) {
+        throw new MorelRuntimeException(BuiltInExn.DATE, pos);
+      }
+    }
+  }
 
   /** @see BuiltIn#DATE_DAY */
   private static final Applicable DATE_DAY =
