@@ -573,7 +573,16 @@ public abstract class Codes {
     }
 
     @Override
+    public Object apply(EvalEnv env, Object arg) {
+      return apply((List) arg, sessionZone(env.getSession()));
+    }
+
+    @Override
     public OffsetDateTime apply(List r) {
+      return apply(r, ZoneId.systemDefault());
+    }
+
+    private OffsetDateTime apply(List r, ZoneId defaultZone) {
       // Record fields in alphabetical order:
       // day, hour, minute, month, offset, second, year
       final int day = (Integer) r.get(0);
@@ -594,7 +603,7 @@ public abstract class Codes {
           zone =
               ZoneOffset.ofTotalSeconds((int) (offsetNanos / 1_000_000_000L));
         } else {
-          zone = ZoneId.systemDefault().getRules().getOffset(ldt);
+          zone = defaultZone.getRules().getOffset(ldt);
         }
         return OffsetDateTime.of(ldt, zone);
       } catch (DateTimeException e) {
@@ -641,10 +650,10 @@ public abstract class Codes {
 
   /** @see BuiltIn#DATE_FROM_TIME_LOCAL */
   private static final Applicable DATE_FROM_TIME_LOCAL =
-      new BaseApplicable1<OffsetDateTime, Long>(BuiltIn.DATE_FROM_TIME_LOCAL) {
+      new ApplicableImpl(BuiltIn.DATE_FROM_TIME_LOCAL) {
         @Override
-        public OffsetDateTime apply(Long t) {
-          return timeToDate(t, ZoneId.systemDefault());
+        public Object apply(EvalEnv env, Object arg) {
+          return timeToDate((Long) arg, sessionZone(env.getSession()));
         }
       };
 
@@ -680,10 +689,11 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.DATE_LOCAL_OFFSET) {
         @Override
         public Long apply(EvalEnv env, Object arg) {
+          final Session session = env.getSession();
           final int totalSeconds =
-              ZoneId.systemDefault()
+              sessionZone(session)
                   .getRules()
-                  .getOffset(Instant.now())
+                  .getOffset(sessionNow(session))
                   .getTotalSeconds();
           return (long) totalSeconds * 1_000_000_000L;
         }
@@ -782,6 +792,24 @@ public abstract class Codes {
   private static OffsetDateTime timeToDate(long t, ZoneId zone) {
     return OffsetDateTime.ofInstant(
         Instant.ofEpochSecond(t / 1_000_000_000L, t % 1_000_000_000L), zone);
+  }
+
+  /**
+   * Returns the local timezone from the session's {@code timeZone} property, or
+   * the JVM default if the property is not set.
+   */
+  private static ZoneId sessionZone(Session session) {
+    final String zoneId = (String) Prop.TIME_ZONE.get(session.map);
+    return zoneId != null ? ZoneId.of(zoneId) : ZoneId.systemDefault();
+  }
+
+  /**
+   * Returns the current instant from the session's {@code now} property, or
+   * {@link Instant#now()} if the property is not set.
+   */
+  private static Instant sessionNow(Session session) {
+    final String now = (String) Prop.NOW.get(session.map);
+    return now != null ? Instant.parse(now) : Instant.now();
   }
 
   /** Converts a month constructor name (e.g., "Jan") to a {@link Month}. */
@@ -4126,7 +4154,7 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.TIME_NOW) {
         @Override
         public Long apply(EvalEnv env, Object arg) {
-          final Instant now = Instant.now();
+          final Instant now = sessionNow(env.getSession());
           return now.getEpochSecond() * 1_000_000_000L + now.getNano();
         }
       };

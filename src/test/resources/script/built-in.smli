@@ -2935,6 +2935,12 @@ Char.compare (#"a", #"D");
 > val it = GREATER : order
 
 (* Date ----------------------------------------------------------- *)
+(*) Set properties for deterministic Date/Time tests.
+Sys.set ("timeZone", "UTC");
+> val it = () : unit
+Sys.set ("now", "2024-01-01T00:00:00Z");
+> val it = () : unit
+
 Date.fromString "Wed Mar 08 19:06:45 1995";
 > val it = SOME 1995-03-08T19:06:45Z : date option
 
@@ -2953,6 +2959,18 @@ Date.fromTimeUniv (Time.fromSeconds (~86400));
 
 Date.toString (Date.fromTimeUniv (Time.fromSeconds (~86400)));
 > val it = "Wed Dec 31 00:00:00 1969" : string
+
+(*) With timeZone=UTC, fromTimeLocal same as fromTimeUniv
+Date.fromTimeLocal (Time.zeroTime);
+> val it = 1970-01-01T00:00Z : date
+
+(*) localOffset returns 0 when timeZone=UTC
+Date.localOffset ();
+> val it = 0 : time
+
+(*) Date.date with offset=NONE uses timeZone property (UTC)
+Date.date {year=1970, month=Jan, day=1, hour=0, minute=0, second=0, offset=NONE};
+> val it = 1970-01-01T00:00Z : date
 
 (*) Date exception: day out of range
 Date.date {year=1970, month=Jan, day=32, hour=0, minute=0, second=0, offset=NONE};
@@ -4816,16 +4834,16 @@ map
 >   [("banner",SOME "?"),("directory",SOME "?"),
 >    ("excludeStructures",SOME "^Test$"),("hybrid",SOME "true"),
 >    ("inlinePassCount",SOME "5"),("lineWidth",SOME "78"),
->    ("matchCoverageEnabled",SOME "true"),("optionalInt",NONE),
->    ("output",SOME "CLASSIC"),("printDepth",SOME "5"),
+>    ("matchCoverageEnabled",SOME "true"),("now",SOME "2024-01-01T00:00:00Z"),
+>    ("optionalInt",NONE),("output",SOME "CLASSIC"),("printDepth",SOME "5"),
 >    ("printLength",SOME "999"),("productName",SOME "morel-java"),
 >    ("productVersion",SOME "?"),("relationalize",SOME "false"),
->    ("scriptDirectory",SOME "?"),("stringDepth",SOME "-1")]
->   : (string * string option) list
+>    ("scriptDirectory",SOME "?"),("stringDepth",SOME "-1"),
+>    ("timeZone",SOME "UTC")] : (string * string option) list
 List.length (Sys.showAll ());
-> val it = 16 : int
+> val it = 18 : int
 List.length (showAll ());
-> val it = 16 : int
+> val it = 18 : int
 Sys.plan ();
 > val it =
 >   "apply(fnValue List.length, argCode apply(fnValue Sys.showAll, argCode constant([])))"
@@ -5284,8 +5302,8 @@ Time.fromReal (0.0/0.0);
 > uncaught exception Time
 >   raised at: stdIn:1.1-1.23
 
-(* Now returns the current time; test just that it has a plausible value *)
-Time.toReal (Time.now ()) > 1.0e9;
-> val it = true : bool
+(*) Time.now uses the 'now' property (set to 2024-01-01T00:00:00Z above)
+Time.now ();
+> val it = 1704067200000000000 : time
 
 (*) End built-in.smli
