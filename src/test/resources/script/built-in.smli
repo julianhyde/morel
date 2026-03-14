@@ -702,6 +702,9 @@ Date.compare (Date.fromTimeUniv (Time.zeroTime), Date.fromTimeUniv (Time.zeroTim
 Date.compare (Date.fromTimeUniv (Time.zeroTime), Date.fromTimeUniv (Time.fromSeconds 1));
 > val it = LESS : order
 
+(Date.fromTimeUniv (Time.zeroTime)).compare (Date.fromTimeUniv (Time.fromSeconds 1));
+> val it = LESS : order
+
 Date.fmt "%Y-%m-%d" (Date.fromTimeUniv (Time.zeroTime));
 > val it = "1970-01-01" : string
 
@@ -5054,6 +5057,12 @@ Time.compare (Time.fromSeconds 2, Time.fromSeconds 1);
 
 Time.compare (Time.fromSeconds 1, Time.fromSeconds 1);
 > val it = EQUAL : order
+
+(Time.fromSeconds 1).compare (Time.fromSeconds 2);
+> val it = LESS : order
+
+(Time.fromSeconds 2).compare (Time.fromSeconds 1);
+> val it = GREATER : order
 
 Time.`+` (Time.fromSeconds 1, Time.fromSeconds 2);
 > val it = 3000000000 : time
