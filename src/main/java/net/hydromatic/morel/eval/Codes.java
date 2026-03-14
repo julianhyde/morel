@@ -4806,6 +4806,13 @@ public abstract class Codes {
     }
 
     @Override
+    public Object eval(EvalEnv env) {
+      // Fallback for the EvalEnv path (e.g. when RowSinks are evaluated
+      // without a Stack). The variable was bound by bindMutablePat.
+      return env.getOpt(name);
+    }
+
+    @Override
     public Object eval(final Stack stack) {
       return stack.slots[stack.top - offset];
     }
@@ -5593,7 +5600,15 @@ public abstract class Codes {
 
     @Override
     public Object eval(EvalEnv env) {
-      final Object arg = code.eval(env);
+      return wrap(code.eval(env));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return wrap(code.eval(stack));
+    }
+
+    private static Object wrap(Object arg) {
       if (arg instanceof RelList) {
         final RelList list = (RelList) arg;
         return new AbstractList<Object>() {

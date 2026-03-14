@@ -41,6 +41,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.hasToString;
 
 import com.google.common.collect.ImmutableList;
@@ -62,6 +63,7 @@ import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.TypeVar;
 import org.hamcrest.CustomTypeSafeMatcher;
+import org.hamcrest.Matcher;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -2888,7 +2890,7 @@ public class MainTest {
     final String plan =
         "from("
             + "sink join(pat r, exp tuple(tuple(constant(2), constant(3))), "
-            + "sink group(key tuple(apply(fnValue nth:0, argCode get(name r))), "
+            + "sink group(key tuple(apply(fnValue nth:0, argCode stack(offset 1, name r))), "
             + "agg aggregate, "
             + "sink collect(tuple(get(name a), "
             + "apply2(fnValue +, get(name a), get(name a)), "
@@ -2951,6 +2953,17 @@ public class MainTest {
         .assertParse(expected)
         .assertType(hasMoniker("{a:int, b10:int} list"))
         .assertEvalIter(equalsOrdered(list(2, 10), list(1, 0), list(1, 20)));
+  }
+
+  @Test
+  void testFromOrderFunction() {
+    // Closure applied during ORDER sort; should sort by foo(1) = x*1+y.
+    // Values: {x=1,y=2}->3, {x=2,y=6}->8, {x=3,y=5}->8; already in order.
+    ml("let val triples =\n" //
+            + "  from t in [{x=1,y=2}, {x=2,y=6}, {x=3, y=5}]\n" //
+            + "    yield {t.x, t.y, foo = fn z => t.x * z + t.y}\n" //
+            + "in from t in triples order t.foo 1 end")
+        .assertEvalIter((Matcher) hasSize(3));
   }
 
   @Test
@@ -3106,6 +3119,32 @@ public class MainTest {
         .assertError(
             "stdIn:3.5-3.46 Error: clauses don't all have same "
                 + "function name");
+  }
+
+  /** Tests the union-in-fixpoint loop that previously caused a hang. */
+  @Test
+  void testUnionLoop() {
+    ml("let\n"
+            + "  fun minus (list1, list2) =\n"
+            + "    List.filter (fn e =>\n"
+            + "      not (List.`exists` (fn e2 => e = e2) list2)) list1\n"
+            + "  val prefixes =\n"
+            + "    List.map (fn s =>\n"
+            + "      if s = \"\" then s\n"
+            + "      else String.substring (s, 0, String.size s - 1))\n"
+            + "  fun fixInc (a, delta, i) =\n"
+            + "    let\n"
+            + "      val a2 = prefixes delta\n"
+            + "      val newDelta = minus (a2, a)\n"
+            + "    in\n"
+            + "      if newDelta = [] then a\n"
+            + "      else fixInc ((from z in a union newDelta), newDelta,\n"
+            + "        i + 1)\n"
+            + "    end\n"
+            + "in\n"
+            + "  fixInc ([], [\"cat\", \"dog\"], 0)\n"
+            + "end")
+        .assertEvalIter(equalsUnordered("ca", "do", "c", "d", ""));
   }
 }
 

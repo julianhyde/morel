@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import com.google.common.collect.ImmutableMap;
+import java.util.LinkedHashMap;
 import net.hydromatic.morel.ast.Core;
 
 /**
@@ -55,15 +56,27 @@ public class StackLayout {
   }
 
   /**
-   * Returns a new layout that is identical to this one but also assigns {@code
-   * slotIndex} to {@code pat}.
+   * Returns a new layout that is identical to this one but assigns {@code
+   * slotIndex} to {@code pat}, replacing any prior assignment for that pat.
+   *
+   * <p>Replacement is needed when an inner scan re-binds a variable that
+   * already has a slot in an outer scope (e.g. a join variable {@code v0} that
+   * appears in both the outer layout and an inner {@code from} step). The inner
+   * binding takes precedence.
    */
   public StackLayout with(Core.NamedPat pat, int slotIndex) {
-    return new StackLayout(
-        ImmutableMap.<Core.NamedPat, Integer>builder()
-            .putAll(slotMap)
-            .put(pat, slotIndex)
-            .build());
+    if (!slotMap.containsKey(pat)) {
+      return new StackLayout(
+          ImmutableMap.<Core.NamedPat, Integer>builder()
+              .putAll(slotMap)
+              .put(pat, slotIndex)
+              .build());
+    }
+    // Replace existing entry.
+    final LinkedHashMap<Core.NamedPat, Integer> map =
+        new LinkedHashMap<>(slotMap);
+    map.put(pat, slotIndex);
+    return new StackLayout(ImmutableMap.copyOf(map));
   }
 
   /** Returns the number of slots allocated in this layout. */
