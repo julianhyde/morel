@@ -559,7 +559,6 @@ Sys.plan ();
 >   : string
 
 (* Bool ----------------------------------------------------------- *)
-
 Bool;
 > val it = {fromString=fn,not=fn,toString=fn}
 >   : {fromString:string -> bool option, not:bool -> bool,
@@ -709,7 +708,6 @@ Date.fmt "%Y-%m-%d" (Date.fromTimeUniv (Time.zeroTime));
 > val it = "1970-01-01" : string
 
 (* Either --------------------------------------------------------- *)
-
 Either;
 > val it =
 >   {app=fn,appLeft=fn,appRight=fn,asLeft=fn,asRight=fn,fold=fn,isLeft=fn,

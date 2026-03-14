@@ -19,6 +19,7 @@
 package net.hydromatic.morel.eval;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
@@ -248,7 +249,7 @@ public abstract class Codes {
       new BaseApplicable1<String, Boolean>(BuiltIn.BOOL_TO_STRING) {
         @Override
         public String apply(Boolean b) {
-          return b ? "true" : "false";
+          return b.toString();
         }
       };
 
@@ -845,7 +846,8 @@ public abstract class Codes {
   }
 
   /**
-   * Formats a {@link OffsetDateTime} using an SML strftime-style format string.
+   * Formats an {@link OffsetDateTime} using an SML {@code strftime}-style
+   * format string.
    */
   private static String dateFmt(String fmt, OffsetDateTime d) {
     final StringBuilder sb = new StringBuilder();
@@ -855,45 +857,41 @@ public abstract class Codes {
         final char code = fmt.charAt(++i);
         switch (code) {
           case 'a':
-            sb.append(
-                d.format(DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)));
+            sb.append(d.format(Formatters.EEE));
             break;
           case 'A':
-            sb.append(
-                d.format(DateTimeFormatter.ofPattern("EEEE", Locale.ENGLISH)));
+            sb.append(d.format(Formatters.EEEE));
             break;
           case 'b':
           case 'h':
-            sb.append(
-                d.format(DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH)));
+            sb.append(d.format(Formatters.MMM));
             break;
           case 'B':
-            sb.append(
-                d.format(DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH)));
+            sb.append(d.format(Formatters.MMMM));
             break;
           case 'c':
             sb.append(dateToString(d));
             break;
           case 'd':
-            sb.append(String.format("%02d", d.getDayOfMonth()));
+            sb.append(format("%02d", d.getDayOfMonth()));
             break;
           case 'e':
-            sb.append(String.format("%2d", d.getDayOfMonth()));
+            sb.append(format("%2d", d.getDayOfMonth()));
             break;
           case 'H':
-            sb.append(String.format("%02d", d.getHour()));
+            sb.append(format("%02d", d.getHour()));
             break;
           case 'I':
-            sb.append(String.format("%02d", ((d.getHour() - 1 + 12) % 12) + 1));
+            sb.append(format("%02d", ((d.getHour() - 1 + 12) % 12) + 1));
             break;
           case 'j':
-            sb.append(String.format("%03d", d.getDayOfYear()));
+            sb.append(format("%03d", d.getDayOfYear()));
             break;
           case 'm':
-            sb.append(String.format("%02d", d.getMonthValue()));
+            sb.append(format("%02d", d.getMonthValue()));
             break;
           case 'M':
-            sb.append(String.format("%02d", d.getMinute()));
+            sb.append(format("%02d", d.getMinute()));
             break;
           case 'n':
             sb.append('\n');
@@ -902,7 +900,7 @@ public abstract class Codes {
             sb.append(d.getHour() < 12 ? "AM" : "PM");
             break;
           case 'S':
-            sb.append(String.format("%02d", d.getSecond()));
+            sb.append(format("%02d", d.getSecond()));
             break;
           case 't':
             sb.append('\t');
@@ -911,10 +909,10 @@ public abstract class Codes {
             sb.append(d.getDayOfWeek().getValue() % 7); // 0=Sun, 6=Sat
             break;
           case 'y':
-            sb.append(String.format("%02d", d.getYear() % 100));
+            sb.append(format("%02d", d.getYear() % 100));
             break;
           case 'Y':
-            sb.append(String.format("%04d", d.getYear()));
+            sb.append(format("%04d", d.getYear()));
             break;
           case 'Z':
             sb.append(d.getOffset().getId());
@@ -933,15 +931,15 @@ public abstract class Codes {
   }
 
   /**
-   * Formats a {@link OffsetDateTime} as "Www Mmm DD HH:MM:SS YYYY", the format
+   * Formats an {@link OffsetDateTime} as "Www Mmm DD HH:MM:SS YYYY", the format
    * used by SML's {@code Date.toString}.
    */
   private static String dateToString(OffsetDateTime d) {
-    return String.format(
-        Locale.ENGLISH,
+    return format(
+        Locale.ROOT,
         "%s %s %2d %02d:%02d:%02d %4d",
-        d.format(DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)),
-        d.format(DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH)),
+        d.format(Formatters.EEE),
+        d.format(Formatters.MMM),
         d.getDayOfMonth(),
         d.getHour(),
         d.getMinute(),
@@ -4233,17 +4231,22 @@ public abstract class Codes {
     final boolean negative = t < 0;
     final long abs = negative ? -t : t;
     final long seconds = abs / 1_000_000_000L;
-    final long nanos = abs % 1_000_000_000L;
-    final String prefix = negative ? "~" : "";
-    if (n <= 0) {
-      return prefix + seconds;
+    final StringBuilder b = new StringBuilder();
+    if (negative) {
+      b.append('~');
     }
-    String frac = String.format("%09d", nanos);
-    frac = frac.substring(0, Math.min(n, 9));
-    while (frac.length() < n) {
-      frac += "0";
+    b.append(seconds);
+    if (n > 0) {
+      b.append('.');
+      final long nanos = abs % 1_000_000_000L;
+      String frac = format("%09d", nanos).substring(0, Math.min(n, 9));
+      b.append(frac);
+      while (frac.length() < n) {
+        b.append('0');
+        --n;
+      }
     }
-    return prefix + seconds + "." + frac;
+    return b.toString();
   }
 
   /** Value of {@link BuiltIn.Constructor#VARIANT_UNIT}. */
@@ -6417,6 +6420,17 @@ public abstract class Codes {
     public Describer describe(Describer describer) {
       return parent.describe(describer);
     }
+  }
+
+  static class Formatters {
+    static final DateTimeFormatter EEE =
+        DateTimeFormatter.ofPattern("EEE", Locale.ROOT);
+    static final DateTimeFormatter EEEE =
+        DateTimeFormatter.ofPattern("EEEE", Locale.ROOT);
+    static final DateTimeFormatter MMM =
+        DateTimeFormatter.ofPattern("MMM", Locale.ROOT);
+    static final DateTimeFormatter MMMM =
+        DateTimeFormatter.ofPattern("MMMM", Locale.ROOT);
   }
 }
 
