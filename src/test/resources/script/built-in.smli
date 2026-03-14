@@ -4523,6 +4523,8 @@ Sys.env ();
 >     "{<:string * string -> bool, <=:string * string -> bool, >:string * string -> bool, >=:string * string -> bool, ^:string * string -> string, collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, planEx:string -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
+>    ("Time",
+>     "{+:time * time -> time, -:time * time -> time, <:time * time -> bool, <=:time * time -> bool, >:time * time -> bool, >=:time * time -> bool, compare:time * time -> order, fmt:int -> time -> string, fromMicroseconds:int -> time, fromMilliseconds:int -> time, fromNanoseconds:int -> time, fromReal:real -> time, fromSeconds:int -> time, fromString:string -> time option, now:unit -> time, toMicroseconds:time -> int, toMilliseconds:time -> int, toNanoseconds:time -> int, toReal:time -> real, toSeconds:time -> int, toString:time -> string, zeroTime:time}"),
 >    ("UNIT","variant"),("VARIANT_NONE","variant"),
 >    ("VARIANT_SOME","variant -> variant"),("VECTOR","variant list -> variant"),
 >    ("Variant","{parse:string -> variant, print:variant -> string}"),
@@ -4632,6 +4634,8 @@ env ();
 >     "{<:string * string -> bool, <=:string * string -> bool, >:string * string -> bool, >=:string * string -> bool, ^:string * string -> string, collate:(char * char -> order) -> string * string -> order, compare:string * string -> order, concat:string list -> string, concatWith:string -> string list -> string, explode:string -> char list, extract:string * int * int option -> string, fields:(char -> bool) -> string -> string list, implode:char list -> string, isPrefix:string -> string -> bool, isSubstring:string -> string -> bool, isSuffix:string -> string -> bool, map:(char -> char) -> string -> string, maxSize:int, size:string -> int, str:char -> string, sub:string * int -> char, substring:string * int * int -> string, tokens:(char -> bool) -> string -> string list, translate:(char -> string) -> string -> string}"),
 >    ("Sys",
 >     "{clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...}, plan:unit -> string, planEx:string -> string, set:forall 'a. string * 'a -> unit, show:string -> string option, showAll:unit -> (string * string option) list, unset:string -> unit}"),
+>    ("Time",
+>     "{+:time * time -> time, -:time * time -> time, <:time * time -> bool, <=:time * time -> bool, >:time * time -> bool, >=:time * time -> bool, compare:time * time -> order, fmt:int -> time -> string, fromMicroseconds:int -> time, fromMilliseconds:int -> time, fromNanoseconds:int -> time, fromReal:real -> time, fromSeconds:int -> time, fromString:string -> time option, now:unit -> time, toMicroseconds:time -> int, toMilliseconds:time -> int, toNanoseconds:time -> int, toReal:time -> real, toSeconds:time -> int, toString:time -> string, zeroTime:time}"),
 >    ("UNIT","variant"),("VARIANT_NONE","variant"),
 >    ("VARIANT_SOME","variant -> variant"),("VECTOR","variant list -> variant"),
 >    ("Variant","{parse:string -> variant, print:variant -> string}"),
@@ -5112,5 +5116,101 @@ Value.parse "42";
 Value.parse "true";
 > val it = BOOL true : value
 *)
+
+(*) Time structure
+Time;
+> val it =
+>   {+=fn,-=fn,<=fn,<==fn,>=fn,>==fn,compare=fn,fmt=fn,fromMicroseconds=fn,
+>    fromMilliseconds=fn,fromNanoseconds=fn,fromReal=fn,fromSeconds=fn,
+>    fromString=fn,now=fn,toMicroseconds=fn,toMilliseconds=fn,toNanoseconds=fn,
+>    toReal=fn,toSeconds=fn,toString=fn,zeroTime=0}
+>   : {+:time * time -> time, -:time * time -> time, <:time * time -> bool,
+>      <=:time * time -> bool, >:time * time -> bool, >=:time * time -> bool,
+>      compare:time * time -> order, fmt:int -> time -> string,
+>      fromMicroseconds:int -> time, fromMilliseconds:int -> time,
+>      fromNanoseconds:int -> time, fromReal:real -> time,
+>      fromSeconds:int -> time, fromString:string -> time option,
+>      now:unit -> time, toMicroseconds:time -> int, toMilliseconds:time -> int,
+>      toNanoseconds:time -> int, toReal:time -> real, toSeconds:time -> int,
+>      toString:time -> string, zeroTime:time}
+
+Time.zeroTime;
+> val it = 0 : time
+
+Time.fromSeconds 1;
+> val it = 1000000000 : time
+
+Time.toSeconds (Time.fromSeconds 42);
+> val it = 42 : int
+
+(Time.fromSeconds 42).toSeconds ();
+> val it = 42 : int
+
+Time.fromMilliseconds 1500;
+> val it = 1500000000 : time
+
+Time.toMilliseconds (Time.fromSeconds 2);
+> val it = 2000 : int
+
+(Time.fromSeconds 2).toMilliseconds ();
+> val it = 2000 : int
+
+Time.fromMicroseconds 1000000;
+> val it = 1000000000 : time
+
+Time.toMicroseconds (Time.fromSeconds 1);
+> val it = 1000000 : int
+
+(Time.fromSeconds 1).toMicroseconds ();
+> val it = 1000000 : int
+
+Time.fromNanoseconds 1000000000;
+> val it = 1000000000 : time
+
+Time.toNanoseconds (Time.fromSeconds 1);
+> val it = 1000000000 : int
+
+(Time.fromSeconds 1).toNanoseconds ();
+> val it = 1000000000 : int
+
+Time.fromReal 1.5;
+> val it = 1500000000 : time
+
+Time.toReal (Time.fromReal 2.5);
+> val it = 2.5 : real
+
+(Time.fromReal 2.5).toReal ();
+> val it = 2.5 : real
+
+Time.toString Time.zeroTime;
+> val it = "0.000" : string
+
+Time.zeroTime.toString ();
+> val it = "0.000" : string
+
+Time.fmt 0 Time.zeroTime;
+> val it = "0" : string
+
+Time.fmt 6 (Time.fromReal 1.5);
+> val it = "1.500000" : string
+
+Time.fromString "1.5";
+> val it = SOME 1500000000 : time option
+
+Time.fromString "bad";
+> val it = NONE : time option
+
+Time.compare (Time.fromSeconds 1, Time.fromSeconds 2);
+> val it = LESS : order
+
+Time.compare (Time.fromSeconds 2, Time.fromSeconds 1);
+> val it = GREATER : order
+
+Time.compare (Time.fromSeconds 1, Time.fromSeconds 1);
+> val it = EQUAL : order
+
+(* Now returns the current time; test just that it has a plausible value *)
+Time.toReal (Time.now ()) > 1.0e9;
+> val it = true : bool
 
 (*) End built-in.smli
