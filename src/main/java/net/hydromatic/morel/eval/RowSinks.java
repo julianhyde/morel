@@ -493,7 +493,7 @@ public abstract class RowSinks {
       this.names = requireNonNull(names);
       this.inCodes = requireNonNull(inCodes);
       this.inNames = requireNonNull(inNames);
-      this.values = new Object[inCodes.size()];
+      this.values = new Object[names.size()];
       if (op == Op.UNION && !distinct) {
         // Union-all does not require storage.
         map = ImmutableMap.of();

@@ -865,14 +865,9 @@ public class Compiler {
         ImmutableList.builder();
     for (Core.Aggregate aggregate : group.aggregates.values()) {
       final Code argumentCode;
-      final Type argumentType;
       if (aggregate.argument == null) {
-        final PairList<String, Type> argNameTypes = PairList.of();
-        stepEnv.bindings.forEach(b -> argNameTypes.add(b.id.name, b.id.type));
-        argumentType = typeSystem.recordOrScalarType(argNameTypes);
         argumentCode = null;
       } else {
-        argumentType = aggregate.argument.type;
         // Argument code evaluated at result() time (env-based), use cxFrom.
         argumentCode = compile(cxFrom, aggregate.argument);
       }
