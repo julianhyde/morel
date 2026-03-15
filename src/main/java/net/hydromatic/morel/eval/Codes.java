@@ -513,8 +513,13 @@ public abstract class Codes {
       new BaseApplicable(BuiltIn.DATALOG_EXECUTE) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
-          return DatalogEvaluator.execute(program, env.getSession());
+          return DatalogEvaluator.execute(program, stack.session);
         }
       };
 
@@ -523,8 +528,13 @@ public abstract class Codes {
       new BaseApplicable(BuiltIn.DATALOG_TRANSLATE) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
-          return DatalogEvaluator.translate(program, env.getSession());
+          return DatalogEvaluator.translate(program, stack.session);
         }
       };
 
@@ -533,8 +543,13 @@ public abstract class Codes {
       new BaseApplicable(BuiltIn.DATALOG_VALIDATE) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
-          return DatalogEvaluator.validate(program, env.getSession());
+          return DatalogEvaluator.validate(program, stack.session);
         }
       };
 
@@ -1089,9 +1104,13 @@ public abstract class Codes {
 
     @Override
     public Object apply(EvalEnv env, Object arg) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Object apply(Stack stack, Object arg) {
       final String f = (String) arg;
-      final Session session = env.getSession();
-      session.use(f, silent, pos);
+      stack.session.use(f, silent, pos);
       return Unit.INSTANCE;
     }
   }
@@ -3422,8 +3441,12 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.SYS_CLEAR_ENV) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
-          session.clearEnv();
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          stack.session.clearEnv();
           return Unit.INSTANCE;
         }
       };
@@ -3455,8 +3478,12 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.SYS_PLAN) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
-          return Codes.describe(requireNonNull(session.code));
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          return Codes.describe(requireNonNull(stack.session.code));
         }
       };
 
@@ -3465,7 +3492,12 @@ public abstract class Codes {
       new ApplicableImpl(BuiltIn.SYS_PLAN_EX) {
         @Override
         public Object apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final Session session = stack.session;
           final String phase = (String) arg;
           if (session.coreDecl == null) {
             return "No previous command to re-plan";
@@ -3495,12 +3527,16 @@ public abstract class Codes {
   private static final Applicable SYS_SET =
       new ApplicableImpl(BuiltIn.SYS_SET) {
         @Override
-        public Unit apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
           final List list = (List) arg;
           final String propName = (String) list.get(0);
           final Object value = list.get(1);
-          Prop.lookup(propName).setLenient(session.map, value);
+          Prop.lookup(propName).setLenient(stack.session.map, value);
           return Unit.INSTANCE;
         }
       };
@@ -3509,10 +3545,14 @@ public abstract class Codes {
   private static final Applicable SYS_SHOW =
       new ApplicableImpl(BuiltIn.SYS_SHOW) {
         @Override
-        public List apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
           final String propName = (String) arg;
-          final Object value = Prop.lookup(propName).get(session.map);
+          final Object value = Prop.lookup(propName).get(stack.session.map);
           return value == null ? OPTION_NONE : optionSome(value.toString());
         }
       };
@@ -3521,12 +3561,16 @@ public abstract class Codes {
   private static final Applicable SYS_SHOW_ALL =
       new ApplicableImpl(BuiltIn.SYS_SHOW_ALL) {
         @Override
-        public List apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
           final ImmutableList.Builder<List<List>> list =
               ImmutableList.builder();
           for (Prop prop : Prop.BY_CAMEL_NAME) {
-            final @Nullable Object value = prop.get(session.map);
+            final @Nullable Object value = prop.get(stack.session.map);
             List option =
                 value == null ? OPTION_NONE : optionSome(value.toString());
             list.add((List) ImmutableList.of(prop.camelName, option));
@@ -3539,12 +3583,16 @@ public abstract class Codes {
   private static final Applicable SYS_UNSET =
       new ApplicableImpl(BuiltIn.SYS_UNSET) {
         @Override
-        public Unit apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(EvalEnv env, Object arg) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
           final String propName = (String) arg;
           final Prop prop = Prop.lookup(propName);
           @SuppressWarnings("unused")
-          final Object value = prop.remove(session.map);
+          final Object value = prop.remove(stack.session.map);
           return Unit.INSTANCE;
         }
       };
@@ -4180,9 +4228,9 @@ public abstract class Codes {
    * Type constructor for {@code variant} datatype that creates {@link Variant}
    * instances.
    *
-   * <p>To ensure {@code apply(EvalEnv, Object)} is always called, only
-   * implements {@link Applicable} (not {@link Applicable1}). This provides
-   * access to {@link TypeSystem} via {@link Session}.
+   * <p>Only implements {@link Applicable} (not {@link Applicable1}), so that
+   * {@code apply(Stack, Object)} is called and provides access to {@link
+   * TypeSystem} via {@link Session}.
    */
   static class ValueTyCon extends ApplicableImpl {
     private final String tyConName;
@@ -4199,8 +4247,12 @@ public abstract class Codes {
 
     @Override
     public Object apply(EvalEnv env, Object arg) {
-      final Session session = env.getSession();
-      final TypeSystem typeSystem = session.typeSystem;
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Object apply(Stack stack, Object arg) {
+      final TypeSystem typeSystem = stack.session.typeSystem;
       if (typeSystem == null) {
         throw new IllegalStateException(
             "Variant constructor "
@@ -5661,6 +5713,11 @@ public abstract class Codes {
 
     @Override // Applicable
     public Object apply(EvalEnv env, Object argValue) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override // Applicable
+    public Object apply(Stack stack, Object argValue) {
       return apply((A0) argValue);
     }
   }
@@ -5703,6 +5760,11 @@ public abstract class Codes {
 
     @Override // Applicable
     public Object apply(EvalEnv env, Object argValue) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override // Applicable
+    public Object apply(Stack stack, Object argValue) {
       final List list = (List) argValue;
       return apply((A0) list.get(0), (A1) list.get(1));
     }
@@ -5763,6 +5825,11 @@ public abstract class Codes {
 
     @Override // Applicable
     public Object apply(EvalEnv env, Object argValue) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override // Applicable
+    public Object apply(Stack stack, Object argValue) {
       final List list = (List) argValue;
       return apply((A0) list.get(0), (A1) list.get(1), (A2) list.get(2));
     }

@@ -446,3 +446,34 @@ Fix `Inliner`, `Applicable.asCode()`, and `CalciteFunctions` to use
 present (used internally by `StackMultiLetCode`, `ValueTyCon`,
 `withRowFromKey`, etc.) and are candidates for a future cleanup step.
 
+### ✅ Step 16: Add `Stack.session` field
+
+Add `public final @Nullable Session session` to `Stack`, derived from
+`globalEnv.getOpt(EvalEnv.SESSION)` in both constructors.
+Migrate all 13 built-ins that called `env.getSession()` to override
+`apply(Stack, Object)` using `stack.session` instead:
+`DATALOG_EXECUTE/TRANSLATE/VALIDATE`, `InteractUse`,
+`SYS_CLEAR_ENV/PLAN/PLAN_EX/SET/SHOW/SHOW_ALL/UNSET`, `ValueTyCon`.
+Also add `apply(Stack, Object)` to `BaseApplicable1/2/3` delegating
+to their typed `apply(...)` methods.
+Each migrated built-in retains a stub `apply(EvalEnv, Object)` that
+throws; `Applicable.apply(EvalEnv, Object)` is still abstract
+(cleaned up in the next step).
+
+### Task: Consider Option 2 — session/globals in a root stack frame
+
+Before or instead of keeping `Stack.session` long-term, evaluate
+whether a **root stack frame** (a persistent `Stack` held by the REPL
+session, parent of every evaluation stack) is the right home for both
+the session metadata and the global-variable slots currently held in
+`Stack.globalEnv`.
+
+Questions to answer:
+- Would a parent-stack link simplify `StackMultiLetCode` (recursive
+  bindings currently chained through `MutableEvalEnv`)?
+- Would `GlobalMarshalCode` become unnecessary if globals live
+  permanently in the root frame?
+- What is the right lookup protocol when a `StackCode` offset would
+  span a frame boundary?
+- Is the added indirection worth the architectural uniformity?
+

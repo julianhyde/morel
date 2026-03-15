@@ -19,6 +19,7 @@
 package net.hydromatic.morel.eval;
 
 import java.util.Arrays;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Evaluation stack for the Morel interpreter.
@@ -51,6 +52,18 @@ public final class Stack {
   public final EvalEnv globalEnv;
 
   /**
+   * The current session, derived from {@link #globalEnv} at construction time.
+   *
+   * <p>Cached here so that built-in functions can access the session via {@code
+   * stack.session} without calling {@link EvalEnv#getSession()} on every
+   * invocation.
+   *
+   * <p>May be {@code null} when a stack is created from an empty environment
+   * (e.g. during compile-time constant evaluation).
+   */
+  public final @Nullable Session session;
+
+  /**
    * Storage for local variables. Each slot holds one value.
    *
    * <p>The stack grows upward: {@code slots[top - 1]} is the most recently
@@ -72,6 +85,7 @@ public final class Stack {
    */
   public Stack(final EvalEnv globalEnv, final int capacity) {
     this.globalEnv = globalEnv;
+    this.session = (Session) globalEnv.getOpt(EvalEnv.SESSION);
     this.slots = new Object[capacity];
     this.top = 0;
   }
@@ -93,6 +107,7 @@ public final class Stack {
   public Stack(
       final EvalEnv globalEnv, final Object[] parentSlots, final int top) {
     this.globalEnv = globalEnv;
+    this.session = (Session) globalEnv.getOpt(EvalEnv.SESSION);
     this.slots = parentSlots;
     this.top = top;
   }
