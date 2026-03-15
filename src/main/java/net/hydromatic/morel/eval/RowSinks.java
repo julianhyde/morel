@@ -119,8 +119,9 @@ public abstract class RowSinks {
       Code code,
       Comparator comparator,
       ImmutablePairList<String, Code> inSlots,
+      int scanDepth,
       RowSink rowSink) {
-    return new OrderRowSink(code, comparator, inSlots, rowSink);
+    return new OrderRowSink(code, comparator, inSlots, scanDepth, rowSink);
   }
 
   /** Creates a {@link RowSink} for a scan or {@code join} step. */
@@ -1320,6 +1321,11 @@ public abstract class RowSinks {
      * accept(Stack)}.
      */
     final ImmutablePairList<String, Code> inSlots;
+    /**
+     * Number of {@code inSlots} entries that are stack-layout-based. These are
+     * pushed back onto the stack at {@code result()} time.
+     */
+    final int scanDepth;
 
     final List<Object> rows = new ArrayList<>();
     final Object @Nullable [] values;
@@ -1328,11 +1334,13 @@ public abstract class RowSinks {
         Code code,
         Comparator comparator,
         ImmutablePairList<String, Code> inSlots,
+        int scanDepth,
         RowSink rowSink) {
       super(rowSink);
       this.code = code;
       this.comparator = comparator;
       this.inSlots = inSlots;
+      this.scanDepth = scanDepth;
       this.values = inSlots.size() == 1 ? null : new Object[inSlots.size()];
     }
 
@@ -1391,24 +1399,63 @@ public abstract class RowSinks {
 
     @Override
     public List<Object> result(Stack stack) {
-      final List<String> names = inSlots.leftList();
-      final MutableEvalEnv leftEnv = stack.globalEnv.bindMutableArray(names);
-      final MutableEvalEnv rightEnv = stack.globalEnv.bindMutableArray(names);
-      final Stack leftStack = new Stack(leftEnv, stack.slots, stack.top);
-      final Stack rightStack = new Stack(rightEnv, stack.slots, stack.top);
+      // Grow slots if needed to accommodate push-back of scan variables.
+      Stack s = stack;
+      if (scanDepth > 0 && s.slots.length < s.top + scanDepth) {
+        s =
+            new Stack(
+                s.globalEnv, Arrays.copyOf(s.slots, s.top + scanDepth), s.top);
+      }
+      final int savedTop = s.top;
+      final int envCount = inSlots.size() - scanDepth;
+      final Stack s2 = s; // effectively final for lambda
       rows.sort(
           (left, right) -> {
-            leftEnv.set(left);
-            rightEnv.set(right);
-            final Object leftVal = code.eval(leftStack);
-            final Object rightVal = code.eval(rightStack);
+            final Object leftVal =
+                code.eval(withRow(s2, left, savedTop, envCount));
+            s2.restore(savedTop);
+            final Object rightVal =
+                code.eval(withRow(s2, right, savedTop, envCount));
+            s2.restore(savedTop);
             return comparator.compare(leftVal, rightVal);
           });
       for (Object row : rows) {
-        leftEnv.set(row);
-        rowSink.accept(leftStack);
+        rowSink.accept(withRow(s, row, savedTop, envCount));
+        s.restore(savedTop);
       }
-      return rowSink.result(leftStack);
+      return rowSink.result(stack);
+    }
+
+    /**
+     * Pushes per-row captured values back onto the stack (and into globalEnv
+     * for env-based slots), restoring the scan-time context so that downstream
+     * {@code StackCode} nodes resolve correctly.
+     */
+    private Stack withRow(Stack s, Object row, int savedTop, int envCount) {
+      if (inSlots.size() == 1) {
+        if (scanDepth == 1) {
+          s.push(row);
+        } else { // scanDepth == 0: single env-based slot
+          final MutableEvalEnv mEnv = s.globalEnv.bindMutable(inSlots.left(0));
+          mEnv.set(row);
+          return new Stack(mEnv, s.slots, s.top);
+        }
+      } else {
+        final Object[] arr = (Object[]) row;
+        for (int i = 0; i < scanDepth; i++) {
+          s.push(arr[i]);
+        }
+        if (envCount > 0) {
+          EvalEnv env2 = s.globalEnv;
+          for (int i = scanDepth; i < inSlots.size(); i++) {
+            final MutableEvalEnv mEnv = env2.bindMutable(inSlots.left(i));
+            mEnv.set(arr[i]);
+            env2 = mEnv;
+          }
+          return new Stack(env2, s.slots, s.top);
+        }
+      }
+      return s;
     }
   }
 

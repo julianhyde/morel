@@ -819,21 +819,31 @@ public class Compiler {
       Core.StepEnv stepEnv,
       List<Core.FromStep> remainingSteps,
       Type elementType) {
-    // Sort key is evaluated at result() time (env-based), so use cxFrom.
-    final Code code = compile(cxFrom, order.exp);
+    // Sort key compiled with cx: scan vars are pushed back onto the stack at
+    // result() time, so StackCode offsets are valid.
+    final Code code = compile(cx, order.exp);
     final Comparator comparator =
         Comparators.comparatorFor(typeSystem, order.exp.type);
     final ImmutablePairList<String, Code> inSlots =
         buildInSlots(cx, allScopeBindings.values());
+    // scanDepth: number of allScopeBindings entries that are in the stack
+    // layout. These are pushed back onto the stack during result().
+    final int scanDepth =
+        (int)
+            allScopeBindings.values().stream()
+                .filter(b -> cx.layout.get(b.id) >= 0)
+                .count();
+    // Downstream compiled with cx so StackCode offsets match the push-back.
     final Supplier<RowSink> nextFactory =
         createRowSinkFactory(
-            cxFrom,
+            cx,
             cxFrom,
             ImmutableMap.of(),
             order.env,
             remainingSteps,
             elementType);
-    return () -> RowSinks.order(code, comparator, inSlots, nextFactory.get());
+    return () ->
+        RowSinks.order(code, comparator, inSlots, scanDepth, nextFactory.get());
   }
 
   /** Compiles a GROUP step into a {@link RowSink} factory. */

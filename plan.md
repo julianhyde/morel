@@ -289,22 +289,37 @@ Starting from commit **4df45130** (Step 11).
     `get(name x)` becomes `stack(offset N, name x)` for variables
     that are now in the scan layout.
 
-#### Step 12b: Pure-stack deferred sink result() [later, optional]
+#### Step 12b: Pure-stack deferred sink result()
 
 After Step 12a the deferred sinks still create a `MutableEvalEnv`
 chain in `result()`.  This is the cold path (called once per `from`,
 not per row) so it is not a performance bottleneck, but it blocks the
 eventual removal of `EvalEnv` from the runtime (Step 14).
 
-Approach: at compile time record `scanDepth` (the exact number of
-stack slots that were live when this deferred sink was compiled).  In
-`result()`, push the stored per-row values back onto the stack to
-exactly `stack.top + scanDepth`, so that `StackCode` offsets computed
-in the scan context resolve correctly.  Compile downstream with the
-scan context (not `cxFrom`).
+Approach: at compile time record `scanDepth` (the number of
+`allScopeBindings` entries that are in the stack layout).  In
+`result()`, push the stored per-row values back onto the stack at
+`stack.top`..`stack.top + scanDepth - 1`, so that `StackCode` offsets
+computed in the scan context resolve correctly.  Compile downstream
+with the scan context `cx` (not `cxFrom`) as the `cx0` argument to
+`createRowSinkFactory`.  For env-based slots (from YIELD steps, not
+in the layout), bind their values into `stack.globalEnv` per row via
+a `MutableEvalEnv` chain — a smaller partial chain than before.
 
-This step can be done incrementally (one sink type at a time) once
-Step 12a has all tests green.
+Done one sink type at a time:
+
+##### ✅ OrderRowSink
+
+- `compileOrderSink`: compile sort-key `code` with `cx`; compute
+  `scanDepth`; pass `cx` (not `cxFrom`) as `cx0` to downstream
+  factory; pass `scanDepth` to `RowSinks.order()`.
+- `OrderRowSink`: add `scanDepth` field; replace `result(Stack)` with
+  push-back loop using a `withRow()` helper; no `MutableEvalEnv` for
+  stack-based slots.
+
+##### GroupRowSink — TODO
+
+##### SetRowSink (accept pass-through and result paths) — TODO
 
 ### Step 13: Marshal referenced globals onto the stack at statement start
 The only remaining EvalEnv lookups at runtime are `GetCode` /
