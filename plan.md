@@ -386,7 +386,7 @@ in `YieldRowSink.accept()`.
 `get(name eN)` → `stack(offset 1, name eN)` for yield output vars in
 downstream `collect()` code.
 
-### Step 14: Marshal referenced globals onto the stack at statement start
+### ✅ Step 14: Marshal referenced globals onto the stack at statement start (bf5cfc1c)
 The only remaining EvalEnv lookups at runtime are `GetCode` /
 `GetTupleCode`, which call `env.getOpt(name)` to find top-level and
 built-in bindings.
@@ -433,21 +433,16 @@ variables from an outer stack frame — extended to the global level.
 Remove `GetCode` / `GetTupleCode` once all global references are
 handled by `GlobalMarshalCode` + `StackCode`.
 
-### Step 14: Remove EvalEnv from eval interfaces
-After Steps 11–13, no `Code` class will have a meaningful
-`eval(EvalEnv)` body, no `Applicable` will be called via
-`apply(EvalEnv, Object)`, and no `RowSink` will need
-`start/accept/result(EvalEnv)`.
-Remove:
-- `Code.eval(EvalEnv)` default throw method (and any remaining overrides)
-- `Applicable.apply(EvalEnv, Object)` abstract method (and overrides)
-- `RowSink.start/accept/result(EvalEnv)` abstract methods (and overrides)
-- `Stack.globalEnv` field (replaced by `Stack.globalSlots`)
-- `EvalEnvs` factory / `MutableEvalEnv` implementations used only in
-  the now-deleted paths
-- `Closure` (old non-stack closure) — replaced entirely by `StackClosure`
+### ✅ Step 15: Remove EvalEnv from Code and RowSink eval interfaces
+Remove all `eval(EvalEnv)` overrides from `Code` nodes; make
+`eval(Stack)` the sole required method (default now throws).
+Remove `start/accept/result(EvalEnv)` from `RowSink` interface;
+make the `Stack` variants abstract.
+Delete dead `GetTupleCode` class.
+Fix `Inliner`, `Applicable.asCode()`, and `CalciteFunctions` to use
+`eval(Stack)` / `apply(Stack, Object)` throughout.
 
-`EvalEnv` as a type may survive as the compile-time `Environment`
-interface (used by `TypeResolver`, `Compiler.Context`, etc.) but is no
-longer part of the runtime evaluation contract.
+`Applicable.apply(EvalEnv, Object)` and `Stack.globalEnv` are still
+present (used internally by `StackMultiLetCode`, `ValueTyCon`,
+`withRowFromKey`, etc.) and are candidates for a future cleanup step.
 

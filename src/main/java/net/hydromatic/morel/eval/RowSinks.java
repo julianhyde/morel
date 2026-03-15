@@ -206,14 +206,6 @@ public abstract class RowSinks {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final RowSink rowSink = rowSinkFactory.get();
-      rowSink.start(env);
-      rowSink.accept(env);
-      return rowSink.result(env);
-    }
-
-    @Override
     public Object eval(Stack stack) {
       final RowSink rowSink = rowSinkFactory.get();
       rowSink.start(stack);
@@ -228,21 +220,6 @@ public abstract class RowSinks {
 
     BaseRowSink(RowSink rowSink) {
       this.rowSink = requireNonNull(rowSink);
-    }
-
-    @Override
-    public void start(EvalEnv env) {
-      rowSink.start(env);
-    }
-
-    @Override
-    public void accept(EvalEnv env) {
-      rowSink.accept(env);
-    }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      return rowSink.result(env);
     }
 
     @Override
@@ -308,21 +285,8 @@ public abstract class RowSinks {
 
     static boolean isConstantTrue(Code code) {
       return code.isConstant()
-          && Objects.equals(code.eval(EvalEnvs.empty()), true);
-    }
-
-    @Override
-    public void accept(EvalEnv env) {
-      final MutableEvalEnv mutableEvalEnv = env.bindMutablePat(pat);
-      final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-      for (Object element : elements) {
-        if (mutableEvalEnv.setOpt(element)) {
-          Boolean b = (Boolean) conditionCode.eval(mutableEvalEnv);
-          if (b) {
-            rowSink.accept(mutableEvalEnv);
-          }
-        }
-      }
+          && Objects.equals(
+              code.eval(new Stack(EvalEnvs.empty(), code.maxSlots())), true);
     }
 
     @Override
@@ -367,13 +331,6 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      if ((Boolean) filterCode.eval(env)) {
-        rowSink.accept(env);
-      }
-    }
-
-    @Override
     public void accept(Stack stack) {
       if ((Boolean) filterCode.eval(stack)) {
         rowSink.accept(stack);
@@ -395,21 +352,6 @@ public abstract class RowSinks {
     public Describer describe(Describer describer) {
       return describer.start(
           "skip", d -> d.arg("count", skipCode).arg("sink", rowSink));
-    }
-
-    @Override
-    public void start(EvalEnv env) {
-      skip = (Integer) skipCode.eval(env);
-      super.start(env);
-    }
-
-    @Override
-    public void accept(EvalEnv env) {
-      if (skip > 0) {
-        --skip;
-      } else {
-        rowSink.accept(env);
-      }
     }
 
     @Override
@@ -442,20 +384,6 @@ public abstract class RowSinks {
     public Describer describe(Describer describer) {
       return describer.start(
           "take", d -> d.arg("count", takeCode).arg("sink", rowSink));
-    }
-
-    @Override
-    public void start(EvalEnv env) {
-      take = (Integer) takeCode.eval(env);
-      super.start(env);
-    }
-
-    @Override
-    public void accept(EvalEnv env) {
-      if (take > 0) {
-        --take;
-        rowSink.accept(env);
-      }
     }
 
     @Override
@@ -755,47 +683,6 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      // On first call, build the multiset from the right-hand side(s).
-      if (!initialized) {
-        initialized = true;
-        final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
-        for (Code code : codes) {
-          final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-          for (Object element : elements) {
-            mutableEvalEnv.set(element);
-            // Build multiset of elements to exclude.
-            inc(mutableEvalEnv);
-          }
-        }
-      }
-
-      // For each element from the left, check if it's in the exclusion
-      // multiset.
-      Object value;
-      if (names.size() == 1) {
-        value = env.getOpt(names.get(0));
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = env.getOpt(names.get(i));
-        }
-        value = ImmutableList.copyOf(values);
-      }
-
-      int[] count = map.get(value);
-      if (count != null && count[0] > 0) {
-        // Element is in the exclusion multiset; decrement and don't emit.
-        --count[0];
-        if (count[0] == 0) {
-          map.remove(value);
-        }
-      } else {
-        // Element is not in the exclusion multiset; emit it.
-        rowSink.accept(env);
-      }
-    }
-
-    @Override
     public void accept(Stack stack) {
       if (!initialized) {
         initialized = true;
@@ -822,11 +709,6 @@ public abstract class RowSinks {
         rowSink.accept(stack);
       }
     }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      return rowSink.result(env);
-    }
   }
 
   /** Implementation of {@link RowSink} for a distinct {@code except} step. */
@@ -841,36 +723,8 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      add(env);
-    }
-
-    @Override
     public void accept(Stack stack) {
       add(stack);
-    }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
-      for (Code code : codes) {
-        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-        for (Object element : elements) {
-          mutableEvalEnv.set(element);
-          remove(mutableEvalEnv);
-        }
-      }
-      // Output any elements remaining in the collection.
-      if (!map.isEmpty()) {
-        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
-        map.keySet()
-            .forEach(
-                element -> {
-                  mutableEvalEnv2.set(element);
-                  rowSink.accept(mutableEvalEnv2);
-                });
-      }
-      return rowSink.result(env);
     }
 
     @Override
@@ -930,69 +784,6 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      // On first call, populate map with the right input (or inputs).
-      if (!initialized) {
-        initialized = true;
-
-        final int n = codes.size();
-        final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
-        // Process inputs #1 through #N-1 from codes[0] through codes[N-2]
-        for (int i = 0; i < codes.size(); i++) {
-          final int slot = i;
-          final Code code = codes.get(i);
-          final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-          for (Object element : elements) {
-            mutableEvalEnv.set(element);
-            compute(
-                mutableEvalEnv,
-                (k, v) -> {
-                  if (v == null) {
-                    v = new int[n];
-                  }
-                  ++v[slot];
-                  return v;
-                });
-          }
-        }
-
-        // Compute the minimum count for each slot and put it into slot 0.
-        // Remove any keys with a min count of 0.
-        map.entrySet()
-            .removeIf(
-                e -> {
-                  int[] counts = e.getValue();
-                  int minCount = counts[0];
-                  for (int i = 1; i < n; i++) {
-                    minCount = Math.min(minCount, counts[i]);
-                  }
-                  counts[0] = minCount;
-                  return minCount == 0;
-                });
-      }
-
-      // Build the current element.
-      Object value;
-      if (names.size() == 1) {
-        value = env.getOpt(names.get(0));
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = env.getOpt(names.get(i));
-        }
-        value = ImmutableList.copyOf(values);
-      }
-
-      // Emit element if it's in the map, decrement count, and remove if count
-      // reaches 0. Returning null from computeIfPresent removes the entry.
-      map.computeIfPresent(
-          value,
-          (k, counts) -> {
-            rowSink.accept(env);
-            return --counts[0] == 0 ? null : counts;
-          });
-    }
-
-    @Override
     public void accept(Stack stack) {
       if (!initialized) {
         initialized = true;
@@ -1038,11 +829,6 @@ public abstract class RowSinks {
             return --counts[0] == 0 ? null : counts;
           });
     }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      return rowSink.result(env);
-    }
   }
 
   /**
@@ -1069,54 +855,9 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      // Initialize each distinct key to 0.
-      computeIfAbsent(env, k -> new int[] {0});
-    }
-
-    @Override
     public void accept(Stack stack) {
       // Use inCodes to compute the key for the current row from stack.
       map.computeIfAbsent(computeKey(stack), k -> new int[] {0});
-    }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      final MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
-      int pass = 0;
-      for (Code code : codes) {
-        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-        // If there was a previous step, remove all keys with count 0, and
-        // zero the counts of the other keys.
-        if (pass++ > 0) {
-          map.entrySet().removeIf(e -> e.getValue()[0] == 0);
-          map.forEach((k, v) -> v[0] = 0);
-        }
-
-        // Increment the count of each key; ignore keys not present.
-        for (Object element : elements) {
-          mutableEvalEnv.set(element);
-          computeIfPresent(
-              mutableEvalEnv,
-              (k, v) -> {
-                ++v[0];
-                return v;
-              });
-        }
-      }
-      // Output any elements remaining in the collection.
-      if (!map.isEmpty()) {
-        final MutableEvalEnv mutableEvalEnv2 = env.bindMutableList(names);
-        // Output keys that have a positive count than 0 from the last pass.
-        map.forEach(
-            (k, v) -> {
-              if (v[0] > 0) {
-                mutableEvalEnv2.set(k);
-                rowSink.accept(mutableEvalEnv2);
-              }
-            });
-      }
-      return rowSink.result(env);
     }
 
     @Override
@@ -1169,33 +910,11 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      if (!distinct || add(env)) {
-        rowSink.accept(env);
-      }
-    }
-
-    @Override
     public void accept(Stack stack) {
       if (!distinct || add(stack)) {
         // Scan vars are live on the stack; pass through directly.
         rowSink.accept(stack);
       }
-    }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      MutableEvalEnv mutableEvalEnv = env.bindMutableArray(names);
-      for (Code code : codes) {
-        final Iterable<Object> elements = (Iterable<Object>) code.eval(env);
-        for (Object element : elements) {
-          mutableEvalEnv.set(element);
-          if (!distinct || add(mutableEvalEnv)) {
-            rowSink.accept(mutableEvalEnv);
-          }
-        }
-      }
-      return rowSink.result(env);
     }
 
     @Override
@@ -1282,18 +1001,6 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      if (inSlots.size() == 1) {
-        map.put(keyCode.eval(env), env.getOpt(inSlots.left(0)));
-      } else {
-        for (int i = 0; i < inSlots.size(); i++) {
-          values[i] = env.getOpt(inSlots.left(i));
-        }
-        map.put(keyCode.eval(env), values.clone());
-      }
-    }
-
-    @Override
     public void accept(Stack stack) {
       if (inSlots.size() == 1) {
         map.put(keyCode.eval(stack), inSlots.right(0).eval(stack));
@@ -1303,46 +1010,6 @@ public abstract class RowSinks {
         }
         map.put(keyCode.eval(stack), values.clone());
       }
-    }
-
-    @Override
-    public List<Object> result(final EvalEnv env) {
-      // Derive env2, the environment for our consumer. It consists of our input
-      // environment plus output names.
-      EvalEnv env2 = env;
-      final MutableEvalEnv[] groupEnvs = new MutableEvalEnv[outNames.size()];
-      int i = 0;
-      for (String name : outNames) {
-        env2 = groupEnvs[i++] = env2.bindMutable(name);
-      }
-
-      // Also derive env3, the environment wherein the aggregate functions are
-      // evaluated.
-      final EvalEnv env3 =
-          keyNames.isEmpty() ? env : groupEnvs[keyNames.size() - 1];
-
-      final Map<Object, List<Object>> map2;
-      if (map.isEmpty()
-          && keyCode instanceof Codes.TupleCode
-          && ((Codes.TupleCode) keyCode).codes.isEmpty()) {
-        // There are no keys, and there were no input rows.
-        map2 = ImmutableMap.of(ImmutableList.of(), ImmutableList.of());
-      } else {
-        //noinspection UnstableApiUsage
-        map2 = Multimaps.asMap(map);
-      }
-      for (Map.Entry<Object, List<Object>> entry : map2.entrySet()) {
-        final List list = (List) entry.getKey();
-        for (i = 0; i < list.size(); i++) {
-          groupEnvs[i].set(list.get(i));
-        }
-        final List<Object> rows = entry.getValue(); // rows in this bucket
-        for (Applicable aggregateCode : aggregateCodes) {
-          groupEnvs[i++].set(aggregateCode.apply(env3, rows));
-        }
-        rowSink.accept(env2);
-      }
-      return rowSink.result(env);
     }
 
     @Override
@@ -1423,18 +1090,6 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      if (values == null) {
-        rows.add(env.getOpt(inSlots.left(0)));
-      } else {
-        for (int i = 0; i < inSlots.size(); i++) {
-          values[i] = env.getOpt(inSlots.left(i));
-        }
-        rows.add(values.clone());
-      }
-    }
-
-    @Override
     public void accept(Stack stack) {
       // Use inSlots to capture scope variables from stack/env.
       if (inSlots.size() == 1) {
@@ -1446,27 +1101,6 @@ public abstract class RowSinks {
         }
         rows.add(row);
       }
-    }
-
-    @Override
-    public List<Object> result(final EvalEnv env) {
-      final ImmutableList<String> names =
-          ImmutableList.copyOf(inSlots.leftList());
-      final MutableEvalEnv leftEnv = env.bindMutableArray(names);
-      final MutableEvalEnv rightEnv = env.bindMutableArray(names);
-      rows.sort(
-          (left, right) -> {
-            leftEnv.set(left);
-            rightEnv.set(right);
-            final Object leftVal = code.eval(leftEnv);
-            final Object rightVal = code.eval(rightEnv);
-            return comparator.compare(leftVal, rightVal);
-          });
-      for (Object row : rows) {
-        leftEnv.set(row);
-        rowSink.accept(leftEnv);
-      }
-      return rowSink.result(env);
     }
 
     @Override
@@ -1561,21 +1195,6 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void accept(EvalEnv env) {
-      final MutableEvalEnv env2 = env.bindMutableArray(names);
-      if (values == null) {
-        final Object value = codes.get(0).eval(env);
-        env2.set(value);
-      } else {
-        for (int i = 0; i < codes.size(); i++) {
-          values[i] = codes.get(i).eval(env);
-        }
-        env2.set(values);
-      }
-      rowSink.accept(env2);
-    }
-
-    @Override
     public int maxSlots() {
       return codes.size() + rowSink.maxSlots();
     }
@@ -1621,21 +1240,6 @@ public abstract class RowSinks {
     }
 
     @Override
-    public void start(EvalEnv env) {
-      list.clear();
-    }
-
-    @Override
-    public void accept(EvalEnv env) {
-      list.add(code.eval(env));
-    }
-
-    @Override
-    public List<Object> result(EvalEnv env) {
-      return list;
-    }
-
-    @Override
     public void start(Stack stack) {
       list.clear();
     }
@@ -1663,12 +1267,6 @@ public abstract class RowSinks {
     @Override
     public Describer describe(Describer describer) {
       return rowSink.describe(describer);
-    }
-
-    @Override
-    public void start(EvalEnv env) {
-      startActions.forEach(Runnable::run);
-      rowSink.start(env);
     }
 
     @Override

@@ -227,7 +227,9 @@ public class CalciteFunctions {
 
         @Override
         public Enumerable<Object[]> scan(DataContext root) {
-          Object v = compiled.code.eval(compiled.evalEnv);
+          Object v =
+              compiled.code.eval(
+                  new Stack(compiled.evalEnv, compiled.code.maxSlots()));
           return compiled.f.apply(v);
         }
 
@@ -348,10 +350,13 @@ public class CalciteFunctions {
               ? this.compiled
               : new Compiled(cx.env, cx.typeSystem, typeFactory, ml, typeJson);
       final Stack stack = THREAD_STACK.get();
-      final Object v =
-          stack != null
-              ? compiled.code.eval(stack)
-              : compiled.code.eval(requireNonNull(THREAD_EVAL_ENV.get()));
+      final Object v;
+      if (stack != null) {
+        v = compiled.code.eval(stack);
+      } else {
+        final EvalEnv evalEnv = requireNonNull(THREAD_EVAL_ENV.get());
+        v = compiled.code.eval(new Stack(evalEnv, compiled.code.maxSlots()));
+      }
       return compiled.f.apply(v);
     }
 

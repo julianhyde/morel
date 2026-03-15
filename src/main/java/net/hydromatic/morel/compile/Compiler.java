@@ -1213,7 +1213,12 @@ public class Compiler {
 
         @Override
         public Object apply(EvalEnv evalEnv, Object arg) {
-          return code.eval(evalEnv);
+          throw new UnsupportedOperationException("use apply(Stack, Object)");
+        }
+
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          return code.eval(stack);
         }
       };
     }
@@ -2019,11 +2024,6 @@ public class Compiler {
           });
     }
 
-    public Object eval(EvalEnv env) {
-      assert refCode != null; // link should have completed by now
-      return refCode.eval(env);
-    }
-
     @Override
     public Object eval(Stack stack) {
       assert refCode != null;
@@ -2049,11 +2049,6 @@ public class Compiler {
               patCodes.forEach(
                   (pat, code) ->
                       d.arg("", pat.describe(describer)).arg("", code)));
-    }
-
-    @Override
-    public Object eval(EvalEnv evalEnv) {
-      return new Closure(evalEnv, patCodes, pos);
     }
   }
 
@@ -2094,14 +2089,6 @@ public class Compiler {
               patCodes.forEach(
                   (pat, code) ->
                       d.arg("", pat.describe(describer)).arg("", code)));
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      // Called from old-mode context: no stack, create closure with no
-      // captures.
-      return new Closure.StackClosure(
-          env, new Object[0], patCodes, capacity, pos);
     }
 
     @Override

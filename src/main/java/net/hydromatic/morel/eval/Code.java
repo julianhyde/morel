@@ -23,13 +23,14 @@ public interface Code extends Describable {
   /**
    * Evaluates this expression using a {@link Stack}.
    *
-   * <p>This is the primary evaluation method. Stack-based code nodes override
-   * this method to access local variables directly from {@link Stack#slots}.
-   * Other code nodes rely on the default, which delegates to {@link
-   * #eval(EvalEnv)} via {@link Stack#globalEnv}.
+   * <p>This is the primary evaluation method. All concrete {@code Code} nodes
+   * must override this method. The default throws {@link
+   * UnsupportedOperationException} to catch any node that has not yet been
+   * migrated.
    */
   default Object eval(final Stack stack) {
-    return eval(stack.globalEnv);
+    throw new UnsupportedOperationException(
+        getClass().getSimpleName() + " requires eval(Stack) override");
   }
 
   /**

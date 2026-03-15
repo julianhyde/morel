@@ -4786,14 +4786,6 @@ public abstract class Codes {
       return max;
     }
 
-    public Object eval(EvalEnv env) {
-      final Object[] values = new Object[codes.size()];
-      for (int i = 0; i < values.length; i++) {
-        values[i] = codes.get(i).eval(env);
-      }
-      return Arrays.asList(values);
-    }
-
     @Override
     public Object eval(Stack stack) {
       final Object[] values = new Object[codes.size()];
@@ -4822,8 +4814,9 @@ public abstract class Codes {
       return "get(" + name + ")";
     }
 
-    public Object eval(EvalEnv env) {
-      return env.getOpt(name);
+    @Override
+    public Object eval(Stack stack) {
+      return stack.globalEnv.getOpt(name);
     }
   }
 
@@ -4896,47 +4889,8 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      // Fallback for the EvalEnv path (e.g. when RowSinks are evaluated
-      // without a Stack). The variable was bound by bindMutablePat.
-      return env.getOpt(name);
-    }
-
-    @Override
     public Object eval(final Stack stack) {
       return stack.slots[stack.top - offset];
-    }
-  }
-
-  /**
-   * Code that retrieves, as a tuple, the value of several variables from the
-   * environment.
-   */
-  private static class GetTupleCode implements Code {
-    private final ImmutableList<String> names;
-    private final Object[] values; // work space
-
-    GetTupleCode(ImmutableList<String> names) {
-      this.names = requireNonNull(names);
-      this.values = new Object[names.size()];
-    }
-
-    @Override
-    public Describer describe(Describer describer) {
-      return describer.start("getTuple", d -> d.args("names", names));
-    }
-
-    @Override
-    public String toString() {
-      return "getTuple(" + names + ")";
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      for (int i = 0; i < names.size(); i++) {
-        values[i] = env.getOpt(names.get(i));
-      }
-      return Arrays.asList(values.clone());
     }
   }
 
@@ -5015,7 +4969,8 @@ public abstract class Codes {
       return describer.start("constant", d -> d.arg("", value));
     }
 
-    public Object eval(EvalEnv env) {
+    @Override
+    public Object eval(Stack stack) {
       return value;
     }
 
@@ -5046,13 +5001,8 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
-      // Lazy evaluation. If code0 returns false, code1 is never evaluated.
-      return (boolean) code0.eval(evalEnv) && (boolean) code1.eval(evalEnv);
-    }
-
-    @Override
     public Object eval(Stack stack) {
+      // Lazy evaluation. If code0 returns false, code1 is never evaluated.
       return (boolean) code0.eval(stack) && (boolean) code1.eval(stack);
     }
   }
@@ -5078,13 +5028,8 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
-      // Lazy evaluation. If code0 returns true, code1 is never evaluated.
-      return (boolean) code0.eval(evalEnv) || (boolean) code1.eval(evalEnv);
-    }
-
-    @Override
     public Object eval(Stack stack) {
+      // Lazy evaluation. If code0 returns true, code1 is never evaluated.
       return (boolean) code0.eval(stack) || (boolean) code1.eval(stack);
     }
   }
@@ -5280,12 +5225,6 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg = argCode.eval(env);
-      return fnValue.apply(env, arg);
-    }
-
-    @Override
     public Object eval(Stack stack) {
       final Object arg = argCode.eval(stack);
       return fnValue.apply(stack, arg);
@@ -5311,12 +5250,6 @@ public abstract class Codes {
     @Override
     public int maxSlots() {
       return argCode0.maxSlots();
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      final Object arg0 = argCode0.eval(env);
-      return fnValue.apply(arg0);
     }
 
     @Override
@@ -5349,13 +5282,6 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg0 = argCode0.eval(env);
-      final Object arg1 = argCode1.eval(env);
-      return fnValue.apply(arg0, arg1);
-    }
-
-    @Override
     public Object eval(Stack stack) {
       return fnValue.apply(argCode0.eval(stack), argCode1.eval(stack));
     }
@@ -5381,12 +5307,6 @@ public abstract class Codes {
     @Override
     public int maxSlots() {
       return argCode.maxSlots();
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      final List arg = (List) argCode.eval(env);
-      return fnValue.apply(arg.get(0), arg.get(1));
     }
 
     @Override
@@ -5425,14 +5345,6 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg0 = argCode0.eval(env);
-      final Object arg1 = argCode1.eval(env);
-      final Object arg2 = argCode2.eval(env);
-      return fnValue.apply(arg0, arg1, arg2);
-    }
-
-    @Override
     public Object eval(Stack stack) {
       return fnValue.apply(
           argCode0.eval(stack), argCode1.eval(stack), argCode2.eval(stack));
@@ -5463,12 +5375,6 @@ public abstract class Codes {
     @Override
     public int maxSlots() {
       return argCode.maxSlots();
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      final List arg = (List) argCode.eval(env);
-      return fnValue.apply(arg.get(0), arg.get(1), arg.get(2));
     }
 
     @Override
@@ -5510,15 +5416,6 @@ public abstract class Codes {
       return Math.max(
           Math.max(argCode0.maxSlots(), argCode1.maxSlots()),
           Math.max(argCode2.maxSlots(), argCode3.maxSlots()));
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      final Object arg0 = argCode0.eval(env);
-      final Object arg1 = argCode1.eval(env);
-      final Object arg2 = argCode2.eval(env);
-      final Object arg3 = argCode3.eval(env);
-      return fnValue.apply(arg0, arg1, arg2, arg3);
     }
 
     @Override
@@ -5570,16 +5467,6 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object fn = fnCode.eval(env);
-      final Object arg = argCode.eval(env);
-      if (fn instanceof Applicable1) {
-        return ((Applicable1) fn).apply(arg);
-      }
-      return ((Applicable) fn).apply(env, arg);
-    }
-
-    @Override
     public Object eval(Stack stack) {
       final Object fn = fnCode.eval(stack);
       final Object arg = argCode.eval(stack);
@@ -5617,11 +5504,6 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      return new TailCall(fnValue, argCode.eval(env));
-    }
-
-    @Override
     public Object eval(Stack stack) {
       return new TailCall(fnValue, argCode.eval(stack));
     }
@@ -5646,12 +5528,6 @@ public abstract class Codes {
     @Override
     public int maxSlots() {
       return Math.max(fnCode.maxSlots(), argCode.maxSlots());
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      final Applicable fn = (Applicable) fnCode.eval(env);
-      return new TailCall(fn, argCode.eval(env));
     }
 
     @Override
@@ -5686,11 +5562,6 @@ public abstract class Codes {
     @Override
     public Describer describe(Describer describer) {
       return describer.start("wrapRelList", d -> d.arg("code", code));
-    }
-
-    @Override
-    public Object eval(EvalEnv env) {
-      return wrap(code.eval(env));
     }
 
     @Override
@@ -6015,7 +5886,7 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
+    public Object eval(Stack stack) {
       return ordinalSlots[0];
     }
 
@@ -6037,12 +5908,6 @@ public abstract class Codes {
       this.ordinalSlots = requireNonNull(ordinalSlots);
       this.nextCode = requireNonNull(nextCode);
       checkArgument(ordinalSlots.length == 1);
-    }
-
-    @Override
-    public Object eval(EvalEnv evalEnv) {
-      ++ordinalSlots[0];
-      return nextCode.eval(evalEnv);
     }
 
     @Override

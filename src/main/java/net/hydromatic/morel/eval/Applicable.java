@@ -54,7 +54,7 @@ public interface Applicable extends Describable {
       }
 
       @Override
-      public Object eval(EvalEnv env) {
+      public Object eval(Stack stack) {
         return Applicable.this;
       }
 

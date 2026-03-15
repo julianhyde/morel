@@ -22,43 +22,25 @@ import java.util.List;
 
 /** Accepts rows produced by a supplier as part of a {@code from} step. */
 public interface RowSink extends Describable {
-  void start(EvalEnv env);
+  /** Initializes this row sink with a {@link Stack}. */
+  void start(Stack stack);
 
-  void accept(EvalEnv env);
+  /** Accepts a row using a {@link Stack}. */
+  void accept(Stack stack);
 
-  List<Object> result(EvalEnv env);
+  /** Returns the collected results using a {@link Stack}. */
+  List<Object> result(Stack stack);
 
-  /**
-   * Initializes this row sink with a {@link Stack}.
-   *
-   * <p>The default implementation delegates to {@link #start(EvalEnv)} via
-   * {@link Stack#globalEnv}. Implementations that push iteration variables onto
-   * the stack override this method.
-   */
-  default void start(final Stack stack) {
-    start(stack.globalEnv);
+  default void start(EvalEnv env) {
+    throw new UnsupportedOperationException("use start(Stack)");
   }
 
-  /**
-   * Accepts a row using a {@link Stack}.
-   *
-   * <p>The default implementation delegates to {@link #accept(EvalEnv)} via
-   * {@link Stack#globalEnv}. Implementations that read iteration variables from
-   * the stack override this method.
-   */
-  default void accept(final Stack stack) {
-    accept(stack.globalEnv);
+  default void accept(EvalEnv env) {
+    throw new UnsupportedOperationException("use accept(Stack)");
   }
 
-  /**
-   * Returns the collected results using a {@link Stack}.
-   *
-   * <p>The default implementation delegates to {@link #result(EvalEnv)} via
-   * {@link Stack#globalEnv}. Implementations that need stack access override
-   * this method.
-   */
-  default List<Object> result(final Stack stack) {
-    return result(stack.globalEnv);
+  default List<Object> result(EvalEnv env) {
+    throw new UnsupportedOperationException("use result(Stack)");
   }
 
   /**
