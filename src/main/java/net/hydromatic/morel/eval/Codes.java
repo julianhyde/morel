@@ -5073,15 +5073,15 @@ public abstract class Codes {
    */
   private static class StackLetPatCode implements Code {
     private final Core.Pat pat;
-    private final int numVars;
+    private final int varCount;
     private final Code expCode;
     private final Code resultCode;
     private final Pos pos;
 
     StackLetPatCode(
-        Core.Pat pat, int numVars, Code expCode, Code resultCode, Pos pos) {
+        Core.Pat pat, int varCount, Code expCode, Code resultCode, Pos pos) {
       this.pat = pat;
-      this.numVars = numVars;
+      this.varCount = varCount;
       this.expCode = expCode;
       this.resultCode = resultCode;
       this.pos = pos;
@@ -5099,7 +5099,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      return numVars + resultCode.maxSlots();
+      return varCount + resultCode.maxSlots();
     }
 
     @Override
@@ -5148,7 +5148,7 @@ public abstract class Codes {
      * Equals the sum of {@link #countSlots} over all patterns in {@link
      * #patCodes}.
      */
-    private final int numSlots;
+    private final int slotCount;
     /**
      * If true, binding values are pushed onto the stack before evaluating
      * {@link #resultCode}, so result code can access them via {@link
@@ -5165,11 +5165,7 @@ public abstract class Codes {
       this.patCodes = patCodes;
       this.resultCode = resultCode;
       this.useSlots = useSlots;
-      int n = 0;
-      for (Core.Pat pat : patCodes.leftList()) {
-        n += countSlots(pat);
-      }
-      this.numSlots = n;
+      this.slotCount = sumSlots(patCodes.leftList());
     }
 
     /** Counts the number of stack slots that {@code pushBindings} pushes. */
@@ -5177,6 +5173,17 @@ public abstract class Codes {
       switch (pat.op) {
         case ID_PAT:
           return 1;
+        case AS_PAT:
+          return 1 + countSlots(((Core.AsPat) pat).pat);
+        case TUPLE_PAT:
+            return sumSlots(((Core.TuplePat) pat).args);
+        case RECORD_PAT:
+            return sumSlots(((Core.RecordPat) pat).args);
+        case LIST_PAT:
+            return sumSlots(((Core.ListPat) pat).args);
+        case CONS_PAT:
+        case CON_PAT:
+          return countSlots(((Core.ConPat) pat).pat);
         case WILDCARD_PAT:
         case BOOL_LITERAL_PAT:
         case CHAR_LITERAL_PAT:
@@ -5184,39 +5191,17 @@ public abstract class Codes {
         case REAL_LITERAL_PAT:
         case STRING_LITERAL_PAT:
         case CON0_PAT:
-          return 0;
-        case AS_PAT:
-          return 1 + countSlots(((Core.AsPat) pat).pat);
-        case TUPLE_PAT:
-          {
-            int n = 0;
-            for (Core.Pat p : ((Core.TuplePat) pat).args) {
-              n += countSlots(p);
-            }
-            return n;
-          }
-        case RECORD_PAT:
-          {
-            int n = 0;
-            for (Core.Pat p : ((Core.RecordPat) pat).args) {
-              n += countSlots(p);
-            }
-            return n;
-          }
-        case LIST_PAT:
-          {
-            int n = 0;
-            for (Core.Pat p : ((Core.ListPat) pat).args) {
-              n += countSlots(p);
-            }
-            return n;
-          }
-        case CONS_PAT:
-        case CON_PAT:
-          return countSlots(((Core.ConPat) pat).pat);
         default:
           return 0;
       }
+    }
+
+    private static int sumSlots(List<Core.Pat> args) {
+      int n = 0;
+      for (Core.Pat p : args) {
+        n += countSlots(p);
+      }
+      return n;
     }
 
     @Override
@@ -5237,7 +5222,7 @@ public abstract class Codes {
       if (useSlots) {
         // RHSs evaluated before slots pushed; resultCode runs with N extra
         // slots live, so needs numSlots + resultCode.maxSlots() from base.
-        max = numSlots + max;
+        max = slotCount + max;
       }
       for (Map.Entry<Core.Pat, Code> entry : patCodes) {
         max = Math.max(max, entry.getValue().maxSlots());
