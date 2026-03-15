@@ -216,12 +216,27 @@ public class Compiler {
      */
     final ImmutableMap<String, Integer> globalSlotMap;
 
+    /**
+     * Named patterns of all bindings in the current mutually-recursive {@code
+     * fun}/{@code val rec} group, or empty if not compiling a rec group.
+     *
+     * <p>Set by {@link #compileLet} for {@code REC_VAL_DECL} and threaded into
+     * {@link #compileMatchListImpl}. Each closure body compiled in this context
+     * gets the rec peers added to its inner {@link StackLayout} so that
+     * recursive self-references and mutual references compile to {@link
+     * Codes#stackGet} rather than {@link Codes#get}.
+     *
+     * <p>Always empty inside function bodies (the fresh {@link Context} in
+     * {@link #compileMatchListImpl} does not inherit this field).
+     */
+    final ImmutableList<Core.NamedPat> recPeers;
+
     Context(Environment env) {
-      this(env, StackLayout.EMPTY, 0, ImmutableMap.of());
+      this(env, StackLayout.EMPTY, 0, ImmutableMap.of(), ImmutableList.of());
     }
 
     Context(Environment env, StackLayout layout, int localDepth) {
-      this(env, layout, localDepth, ImmutableMap.of());
+      this(env, layout, localDepth, ImmutableMap.of(), ImmutableList.of());
     }
 
     Context(
@@ -229,10 +244,20 @@ public class Compiler {
         StackLayout layout,
         int localDepth,
         ImmutableMap<String, Integer> globalSlotMap) {
+      this(env, layout, localDepth, globalSlotMap, ImmutableList.of());
+    }
+
+    Context(
+        Environment env,
+        StackLayout layout,
+        int localDepth,
+        ImmutableMap<String, Integer> globalSlotMap,
+        ImmutableList<Core.NamedPat> recPeers) {
       this.env = env;
       this.layout = layout;
       this.localDepth = localDepth;
       this.globalSlotMap = globalSlotMap;
+      this.recPeers = recPeers;
     }
 
     static Context of(Environment env) {
@@ -241,7 +266,12 @@ public class Compiler {
 
     Context bindAll(Iterable<Binding> bindings) {
       return new Context(
-          env.bindAll(bindings), layout, localDepth, globalSlotMap);
+          env.bindAll(bindings), layout, localDepth, globalSlotMap, recPeers);
+    }
+
+    /** Returns a copy of this context with the given rec-group peers. */
+    Context withRecPeers(ImmutableList<Core.NamedPat> newRecPeers) {
+      return new Context(env, layout, localDepth, globalSlotMap, newRecPeers);
     }
   }
 
@@ -1242,15 +1272,37 @@ public class Compiler {
     }
     final List<Code> matchCodes = new ArrayList<>();
     final List<Binding> bindings = new ArrayList<>();
+    // For REC_VAL_DECL, collect peer pats and thread them into the compile
+    // context so that closure bodies compile recursive refs as StackCode.
+    final boolean useSlots = let.decl.op == Op.REC_VAL_DECL;
+    final Context cxForDecl;
+    if (useSlots) {
+      final ImmutableList.Builder<Core.NamedPat> peersB =
+          ImmutableList.builder();
+      let.decl.forEachBinding(
+          (pat, exp, overloadPat, pos) -> {
+            if (pat instanceof Core.NamedPat) {
+              peersB.add((Core.NamedPat) pat);
+            }
+          });
+      cxForDecl = cx.withRecPeers(peersB.build());
+    } else {
+      cxForDecl = cx;
+    }
     compileValDecl(
-        cx, let.decl, null, ImmutableSet.of(), matchCodes, bindings, null);
+        cxForDecl,
+        let.decl,
+        null,
+        ImmutableSet.of(),
+        matchCodes,
+        bindings,
+        null);
     // For recursive declarations, assign stack slots to binding names so the
     // result body can access them via StackCode rather than GetCode.
     final Context cx2 =
-        let.decl.op == Op.REC_VAL_DECL
+        useSlots
             ? buildLetContext(cx, bindings, matchCodes)
             : cx.bindAll(bindings);
-    final boolean useSlots = let.decl.op == Op.REC_VAL_DECL;
     final Code resultCode = compile(cx2, let.exp);
     return finishCompileLet(cx2, matchCodes, resultCode, let.type, useSlots);
   }
@@ -1586,13 +1638,33 @@ public class Compiler {
         }
         final List<Code> matchCodes = new ArrayList<>();
         final List<Binding> bindings = new ArrayList<>();
+        final boolean useSlots = let.decl.op == Op.REC_VAL_DECL;
+        final Context cxForDecl;
+        if (useSlots) {
+          final ImmutableList.Builder<Core.NamedPat> peersB =
+              ImmutableList.builder();
+          let.decl.forEachBinding(
+              (pat, exp2, overloadPat, pos) -> {
+                if (pat instanceof Core.NamedPat) {
+                  peersB.add((Core.NamedPat) pat);
+                }
+              });
+          cxForDecl = cx.withRecPeers(peersB.build());
+        } else {
+          cxForDecl = cx;
+        }
         compileValDecl(
-            cx, let.decl, null, ImmutableSet.of(), matchCodes, bindings, null);
+            cxForDecl,
+            let.decl,
+            null,
+            ImmutableSet.of(),
+            matchCodes,
+            bindings,
+            null);
         final Context cx2 =
-            let.decl.op == Op.REC_VAL_DECL
+            useSlots
                 ? buildLetContext(cx, bindings, matchCodes)
                 : cx.bindAll(bindings);
-        final boolean useSlots = let.decl.op == Op.REC_VAL_DECL;
         final Code resultCode = compileTail(cx2, let.exp);
         return finishCompileLet(
             cx2, matchCodes, resultCode, let.type, useSlots);
@@ -1645,23 +1717,34 @@ public class Compiler {
     }
 
     // Compile each arm with a fresh inner context.
+    final ImmutableList<Core.NamedPat> recPeers = cx.recPeers;
+    final int numRecPeers = recPeers.size();
     final PairList<Core.Pat, Code> patCodes = PairList.of();
     for (Core.Match match : matchList) {
       final List<Core.NamedPat> argPats = namedPatsOf(match.pat);
       final int numArgs = argPats.size();
 
-      // Build inner layout: captured vars at 0..numCapture-1, arg vars next.
+      // Build inner layout:
+      //   slots 0..numCapture-1: captured outer vars
+      //   slots numCapture..numCapture+numRecPeers-1: rec-group peers (if any)
+      //   slots numCapture+numRecPeers..: arg vars
       StackLayout innerLayout = StackLayout.EMPTY;
       for (Map.Entry<Core.NamedPat, Integer> e : captureMap.entrySet()) {
         innerLayout = innerLayout.with(e.getKey(), e.getValue());
       }
-      for (int i = 0; i < argPats.size(); i++) {
-        innerLayout = innerLayout.with(argPats.get(i), numCapture + i);
+      for (int i = 0; i < numRecPeers; i++) {
+        innerLayout = innerLayout.with(recPeers.get(i), numCapture + i);
       }
-      final int innerDepth = numCapture + numArgs;
+      for (int i = 0; i < argPats.size(); i++) {
+        innerLayout =
+            innerLayout.with(argPats.get(i), numCapture + numRecPeers + i);
+      }
+      final int innerDepth = numCapture + numRecPeers + numArgs;
 
       final List<Binding> bindings = new ArrayList<>();
       Compiles.acceptBinding(typeSystem, match.pat, bindings);
+      // Fresh context: no globalSlotMap, no recPeers (nested closures start
+      // a new scope).
       final Context innerCx =
           new Context(cx.env.bindAll(bindings), innerLayout, innerDepth);
 
@@ -1674,14 +1757,17 @@ public class Compiler {
 
     // Compute minimum slots needed when this closure is invoked fresh
     // (no pre-existing Stack). Max over all arms of:
-    //   captureOffsets.length + numArgVars + bodyCode.maxSlots()
+    //   captureOffsets.length + numRecPeers + numArgVars + bodyCode.maxSlots()
     int capacity = 0;
     for (Map.Entry<Core.Pat, Code> e : patCodes) {
       final int numArgs = namedPatsOf(e.getKey()).size();
       capacity =
           Math.max(
               capacity,
-              captureOffsets.length + numArgs + e.getValue().maxSlots());
+              captureOffsets.length
+                  + numRecPeers
+                  + numArgs
+                  + e.getValue().maxSlots());
     }
 
     return new StackMatchCode(
@@ -2146,7 +2232,7 @@ public class Compiler {
         captured[i] = stack.slots[stack.top - captureOffsets[i]];
       }
       return new Closure.StackClosure(
-          stack.globalEnv, captured, patCodes, capacity, pos);
+          stack.globalEnv, captured, null, patCodes, capacity, pos);
     }
   }
 

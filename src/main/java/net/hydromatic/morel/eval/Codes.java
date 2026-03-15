@@ -5259,26 +5259,25 @@ public abstract class Codes {
       if (useSlots) {
         // Slot-based path (REC_VAL_DECL): push binding values onto the stack
         // so resultCode can access them via StackCode.
+        //
+        // Allocate a shared RecFrame before creating any closure. Each
+        // StackClosure in the group gets a reference to this frame so that
+        // recursive/mutual calls resolve via StackCode (not GetCode).
+        final Closure.RecFrame rf = new Closure.RecFrame(patCodes.size());
+        for (int i = 0; i < patCodes.size(); i++) {
+          rf.bindings[i] = values[i];
+          if (values[i] instanceof Closure.StackClosure) {
+            ((Closure.StackClosure) values[i]).recFrame = rf;
+          }
+        }
         for (int i = 0; i < patCodes.size(); i++) {
           if (!Closure.StackClosure.pushBindings(
               patCodes.get(i).getKey(), values[i], stack)) {
             throw new AssertionError("no match in StackMultiLetCode");
           }
         }
-        // Build the extended env for patching StackClosures' globalEnv.
-        EvalEnv env = stack.globalEnv;
-        final List<Object> boundValues = new ArrayList<>();
-        for (int i = 0; i < patCodes.size(); i++) {
-          env =
-              Closure.bindPatGetValue(
-                  patCodes.get(i).getKey(), values[i], env, boundValues);
-        }
-        for (Object value : boundValues) {
-          Closure.patchStackClosureEnv(value, env);
-        }
-        // resultCode sees the N pushed slots via StackCode.
-        final Object result =
-            resultCode.eval(new Stack(env, stack.slots, stack.top));
+        // resultCode sees the N pushed slots via StackCode; no env extension.
+        final Object result = resultCode.eval(stack);
         stack.restore(savedTop);
         return result;
       } else {

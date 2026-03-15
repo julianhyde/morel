@@ -365,24 +365,58 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
    * argument bindings, and the body code is evaluated with {@link
    * Code#eval(Stack)}.
    */
+  /**
+   * Shared mutable array for a mutually-recursive function group.
+   *
+   * <p>Allocated by {@code StackMultiLetCode.eval} before any closure in the
+   * group is created. Each closure in the group holds a reference to the same
+   * {@code RecFrame} object. After all closures are created, {@code
+   * StackMultiLetCode.eval} fills {@code bindings[i]} with closure {@code i}.
+   *
+   * <p>When a closure is applied, {@code StackClosure.applyOnce} pushes all
+   * {@code bindings} onto the stack before the argument, so that body code
+   * compiled with a {@code StackCode} for each peer resolves correctly.
+   */
+  public static final class RecFrame {
+    /**
+     * One slot per binding in the rec group; filled after all closures exist.
+     */
+    public final Object[] bindings;
+
+    public RecFrame(int size) {
+      bindings = new Object[size];
+    }
+  }
+
   public static class StackClosure
       implements Comparable<StackClosure>, Applicable, Applicable1 {
     /**
      * Global (top-level and built-in) bindings, captured at creation time.
      *
-     * <p>Not final: for recursive functions, {@link Closure#evalBind(Stack)}
-     * patches this to point to the post-binding env that includes the recursive
-     * function itself.
+     * <p>Used by {@link #apply(Object)} to bootstrap a fresh {@link Stack}. Not
+     * patched for rec-group closures (RecFrame handles those); may still be
+     * patched for the {@code useSlots=false} (VAL_DECL) fallback path via
+     * {@link Closure#patchStackClosureEnv}.
      */
     EvalEnv globalEnv;
 
     final Object[] capturedValues;
+
+    /**
+     * Shared frame for the mutual-recursion group this closure belongs to, or
+     * {@code null} for non-recursive closures.
+     *
+     * <p>Set by {@code StackMultiLetCode.eval} immediately after closure
+     * creation, before any call can observe it.
+     */
+    RecFrame recFrame;
+
     private final ImmutablePairList<Core.Pat, Code> patCodes;
     /**
      * Minimum stack capacity needed when this closure is invoked without a
      * pre-existing {@link Stack}. Computed at compile time by {@code
      * StackMatchCode} from {@code captureOffsets.length} plus the maximum body
-     * depth.
+     * depth (including rec-group peers when in a rec group).
      */
     final int capacity;
 
@@ -391,6 +425,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     public StackClosure(
         EvalEnv globalEnv,
         Object[] capturedValues,
+        RecFrame recFrame,
         ImmutablePairList<Core.Pat, Code> patCodes,
         int capacity,
         Pos pos) {
@@ -398,6 +433,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       // advancing to the next row) do not change what this closure sees.
       this.globalEnv = requireNonNull(globalEnv).fix();
       this.capturedValues = capturedValues;
+      this.recFrame = recFrame;
       this.patCodes = patCodes;
       this.capacity = capacity;
       this.pos = pos;
@@ -427,25 +463,14 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      * Applies this closure to {@code argValue}, using the stack for local
      * variable storage.
      *
-     * <p>Uses {@link #globalEnv} (not {@code stack.globalEnv}) as the global
-     * environment for body evaluation. This is essential for recursive closures
-     * created by {@code StackMultiLetCode}: their {@code globalEnv} is patched
-     * (by {@link Closure#evalBind(Stack)}) to include the recursive binding, so
-     * that the body can look up the function by name even when invoked via the
-     * tail-call trampoline (which uses the caller's stack).
+     * <p>If the caller's slots array doesn't have room for this closure's
+     * capacity (e.g., a non-tail recursive call where the outer frame's
+     * bindings are still live), allocates a larger array so that pushBindings
+     * can store the new frame's variables without going out of bounds.
      */
     @Override
     public Object apply(Stack stack, Object argValue) {
-      // Create an evalStack using this closure's globalEnv. This ensures
-      // recursive lookups (via Codes.get) find the function in globalEnv
-      // regardless of what the caller's stack has.
-      //
-      // If the caller's slots array doesn't have room for this closure's
-      // capacity (e.g., a non-tail recursive call where the outer frame's
-      // bindings are still live), allocate a larger array so that pushBindings
-      // can store the new frame's variables without going out of bounds.
       Stack evalStack = stack.ensureSize(capacity);
-      evalStack = new Stack(globalEnv, evalStack.slots, evalStack.top);
       int savedTop = evalStack.save();
       Object result = applyOnce(evalStack, argValue);
       while (result instanceof Codes.TailCall) {
@@ -457,10 +482,6 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
           // The outer closure may have a smaller capacity than the tail-called
           // closure needs (e.g., fn x => case x of head::tail => ...).
           evalStack = evalStack.ensureSize(nextFn.capacity);
-          if (nextFn.globalEnv != evalStack.globalEnv) {
-            evalStack =
-                new Stack(nextFn.globalEnv, evalStack.slots, evalStack.top);
-          }
           result = nextFn.applyOnce(evalStack, tc.arg);
         } else {
           result = tc.fn.apply(evalStack, tc.arg);
@@ -472,9 +493,17 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     }
 
     private Object applyOnce(Stack stack, Object argValue) {
-      // Push captured values
+      // Push captured values from the outer frame.
       for (Object v : capturedValues) {
         stack.push(v);
+      }
+      // Push rec-group peers (if this closure is part of a rec group).
+      // These are at slots captureLen..captureLen+N-1 in the body context,
+      // matching the StackCode offsets assigned at compile time.
+      if (recFrame != null) {
+        for (Object v : recFrame.bindings) {
+          stack.push(v);
+        }
       }
       // Try each pattern arm
       for (Map.Entry<Core.Pat, Code> patCode : patCodes) {

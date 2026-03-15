@@ -511,7 +511,7 @@ as `GetCode` (reading from `groupEnvs` in `globalEnv`).
 measure — it mutates each closure's `globalEnv` after creation.
 Step 17b replaces it with the `RecFrame` design.
 
-### Step 17b: `RecFrame` for mutual recursion
+### ✅ Step 17b: `RecFrame` for mutual recursion
 
 **Problem**: `patchStackClosureEnv` (used by `StackMultiLetCode`) keeps
 `globalEnv` alive in `StackClosure` for recursive self-references.
