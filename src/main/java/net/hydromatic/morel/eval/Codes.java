@@ -512,11 +512,6 @@ public abstract class Codes {
   private static final Applicable DATALOG_EXECUTE =
       new BaseApplicable(BuiltIn.DATALOG_EXECUTE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
           return DatalogEvaluator.execute(program, stack.session);
@@ -527,11 +522,6 @@ public abstract class Codes {
   private static final Applicable DATALOG_TRANSLATE =
       new BaseApplicable(BuiltIn.DATALOG_TRANSLATE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
           return DatalogEvaluator.translate(program, stack.session);
@@ -541,11 +531,6 @@ public abstract class Codes {
   /** @see BuiltIn#DATALOG_VALIDATE */
   private static final Applicable DATALOG_VALIDATE =
       new BaseApplicable(BuiltIn.DATALOG_VALIDATE) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
         @Override
         public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
@@ -649,8 +634,8 @@ public abstract class Codes {
           return init ->
               either -> {
                 Applicable a = isEitherLeft(either) ? f : g;
-                return a.apply(
-                    (EvalEnv) null, FlatLists.of(eitherProj(either), init));
+                return ((Applicable1) a)
+                    .apply(FlatLists.of(eitherProj(either), init));
               };
         }
       };
@@ -761,7 +746,7 @@ public abstract class Codes {
           BuiltIn.FN_CURRY) {
         @Override
         public Object apply(Applicable applicable, Object o, Object o2) {
-          return applicable.apply((EvalEnv) null, FlatLists.of(o, o2));
+          return ((Applicable1) applicable).apply(FlatLists.of(o, o2));
         }
       };
 
@@ -1100,11 +1085,6 @@ public abstract class Codes {
     @Override
     public Applicable withPos(Pos pos) {
       return new InteractUse(pos, silent);
-    }
-
-    @Override
-    public Object apply(EvalEnv env, Object arg) {
-      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -3440,11 +3420,6 @@ public abstract class Codes {
   private static final Applicable SYS_CLEAR_ENV =
       new ApplicableImpl(BuiltIn.SYS_CLEAR_ENV) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Object apply(Stack stack, Object arg) {
           stack.session.clearEnv();
           return Unit.INSTANCE;
@@ -3477,11 +3452,6 @@ public abstract class Codes {
   private static final Applicable SYS_PLAN =
       new ApplicableImpl(BuiltIn.SYS_PLAN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Object apply(Stack stack, Object arg) {
           return Codes.describe(requireNonNull(stack.session.code));
         }
@@ -3490,11 +3460,6 @@ public abstract class Codes {
   /** @see BuiltIn#SYS_PLAN_EX */
   private static final Applicable SYS_PLAN_EX =
       new ApplicableImpl(BuiltIn.SYS_PLAN_EX) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
         @Override
         public Object apply(Stack stack, Object arg) {
           final Session session = stack.session;
@@ -3527,11 +3492,6 @@ public abstract class Codes {
   private static final Applicable SYS_SET =
       new ApplicableImpl(BuiltIn.SYS_SET) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Object apply(Stack stack, Object arg) {
           final List list = (List) arg;
           final String propName = (String) list.get(0);
@@ -3545,11 +3505,6 @@ public abstract class Codes {
   private static final Applicable SYS_SHOW =
       new ApplicableImpl(BuiltIn.SYS_SHOW) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Object apply(Stack stack, Object arg) {
           final String propName = (String) arg;
           final Object value = Prop.lookup(propName).get(stack.session.map);
@@ -3560,11 +3515,6 @@ public abstract class Codes {
   /** @see BuiltIn#SYS_SHOW_ALL */
   private static final Applicable SYS_SHOW_ALL =
       new ApplicableImpl(BuiltIn.SYS_SHOW_ALL) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
         @Override
         public Object apply(Stack stack, Object arg) {
           final ImmutableList.Builder<List<List>> list =
@@ -3582,11 +3532,6 @@ public abstract class Codes {
   /** @see BuiltIn#SYS_UNSET */
   private static final Applicable SYS_UNSET =
       new ApplicableImpl(BuiltIn.SYS_UNSET) {
-        @Override
-        public Object apply(EvalEnv env, Object arg) {
-          throw new UnsupportedOperationException();
-        }
-
         @Override
         public Object apply(Stack stack, Object arg) {
           final String propName = (String) arg;
@@ -4246,11 +4191,6 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public Object apply(Stack stack, Object arg) {
       final TypeSystem typeSystem = stack.session.typeSystem;
       if (typeSystem == null) {
@@ -4325,11 +4265,6 @@ public abstract class Codes {
       @Override
       public Describer describe(Describer describer) {
         return describer.start("aggregate", d -> {});
-      }
-
-      @Override
-      public Object apply(EvalEnv env, Object arg) {
-        return apply(new Stack(env, 256), arg);
       }
 
       @Override
@@ -5712,11 +5647,6 @@ public abstract class Codes {
     }
 
     @Override // Applicable
-    public Object apply(EvalEnv env, Object argValue) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override // Applicable
     public Object apply(Stack stack, Object argValue) {
       return apply((A0) argValue);
     }
@@ -5756,11 +5686,6 @@ public abstract class Codes {
     @Override // Applicable1
     public R apply(List list) {
       return apply((A0) list.get(0), (A1) list.get(1));
-    }
-
-    @Override // Applicable
-    public Object apply(EvalEnv env, Object argValue) {
-      throw new UnsupportedOperationException();
     }
 
     @Override // Applicable
@@ -5821,11 +5746,6 @@ public abstract class Codes {
     @Override // Applicable1
     public R apply(List list) {
       return apply((A0) list.get(0), (A1) list.get(1), (A2) list.get(2));
-    }
-
-    @Override // Applicable
-    public Object apply(EvalEnv env, Object argValue) {
-      throw new UnsupportedOperationException();
     }
 
     @Override // Applicable

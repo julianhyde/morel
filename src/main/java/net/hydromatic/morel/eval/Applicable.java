@@ -25,20 +25,23 @@ package net.hydromatic.morel.eval;
  * creating a new runtime environment.
  */
 public interface Applicable extends Describable {
-  /** Calls this function with an environment and an argument value. */
-  Object apply(EvalEnv env, Object argValue);
-
   /**
    * Calls this function with a {@link Stack} and an argument value.
    *
-   * <p>The default implementation delegates to {@link #apply(EvalEnv, Object)}
-   * via {@link Stack#globalEnv}. Built-in functions that do not use local stack
-   * slots can rely on this default; user-defined functions compiled to {@link
-   * net.hydromatic.morel.eval.Closure.StackClosure} override this to push/pop
-   * local variables on {@link Stack#slots}.
+   * <p>This is the primary apply method. User-defined functions compiled to
+   * {@link net.hydromatic.morel.eval.Closure.StackClosure} override this to
+   * push/pop local variables on {@link Stack#slots}.
    */
-  default Object apply(final Stack stack, final Object argValue) {
-    return apply(stack.globalEnv, argValue);
+  Object apply(Stack stack, Object argValue);
+
+  /**
+   * Calls this function with an environment and an argument value.
+   *
+   * @deprecated Use {@link #apply(Stack, Object)} instead.
+   */
+  @Deprecated
+  default Object apply(EvalEnv env, Object argValue) {
+    throw new UnsupportedOperationException("use apply(Stack, Object)");
   }
 
   /**

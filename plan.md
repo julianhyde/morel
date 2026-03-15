@@ -386,7 +386,8 @@ in `YieldRowSink.accept()`.
 `get(name eN)` → `stack(offset 1, name eN)` for yield output vars in
 downstream `collect()` code.
 
-### ✅ Step 14: Marshal referenced globals onto the stack at statement start (bf5cfc1c)
+### ✅ Step 14: Marshal referenced globals onto the stack at statement
+start (bf5cfc1c)
 The only remaining EvalEnv lookups at runtime are `GetCode` /
 `GetTupleCode`, which call `env.getOpt(name)` to find top-level and
 built-in bindings.
@@ -459,6 +460,15 @@ to their typed `apply(...)` methods.
 Each migrated built-in retains a stub `apply(EvalEnv, Object)` that
 throws; `Applicable.apply(EvalEnv, Object)` is still abstract
 (cleaned up in the next step).
+
+### ✅ Step 16b: Remove `Applicable.apply(EvalEnv, Object)` from interface
+
+Make `apply(Stack, Object)` the sole abstract method on `Applicable`;
+change `apply(EvalEnv, Object)` to a `@Deprecated` default that throws.
+Delete all throw stubs from Codes.java (15 locations) and the dead
+EvalEnv overrides from `Closure` and `StackClosure`.
+Fix two call sites (`EITHER_FOLD`, `FN_CURRY`) that passed
+`(EvalEnv) null` — changed to `((Applicable1) a).apply(arg)`.
 
 ### Task: Consider Option 2 — session/globals in a root stack frame
 

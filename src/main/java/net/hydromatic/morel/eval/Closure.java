@@ -220,7 +220,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
   }
 
   @Override
-  public Object apply(EvalEnv env, Object argValue) {
+  public Object apply(Stack stack, Object argValue) {
     return bindEval(argValue);
   }
 
@@ -496,16 +496,6 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      */
     @Override
     public Object apply(Object argValue) {
-      return apply(new Stack(globalEnv, capacity), argValue);
-    }
-
-    /**
-     * Creates a new {@link Stack} from the stored {@link #globalEnv} and
-     * delegates to {@link #apply(Stack, Object)}. Called when invoked from
-     * old-style (non-stack) evaluation code.
-     */
-    @Override
-    public Object apply(EvalEnv env, Object argValue) {
       return apply(new Stack(globalEnv, capacity), argValue);
     }
 
