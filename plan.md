@@ -470,20 +470,154 @@ EvalEnv overrides from `Closure` and `StackClosure`.
 Fix two call sites (`EITHER_FOLD`, `FN_CURRY`) that passed
 `(EvalEnv) null` — changed to `((Applicable1) a).apply(arg)`.
 
-### Task: Consider Option 2 — session/globals in a root stack frame
+### ✅ Task: Consider Option 2 — session/globals in a root stack frame
 
-Before or instead of keeping `Stack.session` long-term, evaluate
-whether a **root stack frame** (a persistent `Stack` held by the REPL
-session, parent of every evaluation stack) is the right home for both
-the session metadata and the global-variable slots currently held in
-`Stack.globalEnv`.
+**Conclusion**: Root-frame approach rejected. Benefits (no
+`GlobalMarshalCode`, no `patchStackClosureEnv`, no
+`StackClosure.globalEnv`) are outweighed by costs: two kinds of slot
+access (root-frame slots vs local slots), monotonically growing root
+frame, and added complexity in the lookup protocol when a `StackCode`
+offset spans a frame boundary.
 
-Questions to answer:
-- Would a parent-stack link simplify `StackMultiLetCode` (recursive
-  bindings currently chained through `MutableEvalEnv`)?
-- Would `GlobalMarshalCode` become unnecessary if globals live
-  permanently in the root frame?
-- What is the right lookup protocol when a `StackCode` offset would
-  span a frame boundary?
-- Is the added indirection worth the architectural uniformity?
+Preferred path: the three-step sequence below (Steps 17–19).
+
+### ✅ Step 17: Convert `StackMultiLetCode` to stack-slot let-bindings
+
+`StackMultiLetCode` (used for `REC_VAL_DECL` — `fun` and mutually-
+recursive `val ... and ...` bindings) still uses `MutableEvalEnv`
+chains for recursive self-references. Convert the result-code context
+to use stack slots.
+
+**What was implemented**: Added `useSlots` flag to `StackMultiLetCode`.
+For `REC_VAL_DECL` (`useSlots=true`): `buildLetContext` assigns each
+binding a consecutive stack slot in the outer `cx2`; `resultCode` is
+compiled with `cx2` so it uses `StackCode` for the bound names.
+All RHSs are evaluated first (before any push), then values are pushed
+onto the stack, then `resultCode` runs. `patchStackClosureEnv` is still
+called to wire up recursive refs inside closure bodies via `globalEnv`.
+
+**Bug fixed**: GROUP result tuple for `fun my_sum ... in from e in emps
+group ... compute {my_sum over e.id}` raised `ClassCastException:
+StackClosure cannot be cast to Integer`. Root cause: `buildLetContext`
+put `my_sum` into `cxFrom.layout` at slot 1; the GROUP result tuple
+compiled `my_sum` as `StackCode(offset=1)`, which at result()-time reads
+the slot still holding the `StackClosure`, not the aggregate result.
+Fix: `StackLayout.without(names)` strips GROUP output names from the
+layout; `compileGroupSink` creates `cxResult = cxFrom.without(outNames)`
+before passing it to `groupNextFactory`, forcing those names to compile
+as `GetCode` (reading from `groupEnvs` in `globalEnv`).
+
+**Limitation of this step**: `patchStackClosureEnv` is a temporary
+measure — it mutates each closure's `globalEnv` after creation.
+Step 17b replaces it with the `RecFrame` design.
+
+### Step 17b: `RecFrame` for mutual recursion
+
+**Problem**: `patchStackClosureEnv` (used by `StackMultiLetCode`) keeps
+`globalEnv` alive in `StackClosure` for recursive self-references.
+Every recursive call does a name-keyed `EvalEnv` lookup, even though
+the slot indices are known at compile time.
+
+**Key insight — two complementary concepts**:
+
+1. *`StackLayout` as compile-time map*: `StackLayout` already records
+   `{binding → slot index}` for the outer context. `buildLetContext`
+   uses it to assign the N rec-group bindings to slots `D..D+N-1`.
+   This is exactly the compile-time information needed to emit
+   `StackCode` for recursive refs inside closure bodies — no new
+   compile-time structure is required.
+
+2. *`RecFrame` as runtime indirection*: When closure `f` is created,
+   `g` does not yet exist — so `f`'s captured-slots snapshot cannot
+   contain `g`. `RecFrame` is an `Object[N]` allocated *before* any
+   closure is created, shared by all closures in the group, and filled
+   in *after* all closures exist. All closures hold a reference to the
+   same frame; there is no snapshot-then-patch problem.
+
+**Data structures**:
+
+```
+RecFrame { Object[] bindings; }   // N slots; one per rec-group binding
+                                  // allocated before closures; filled after
+
+StackClosure {
+    Object[] slots;               // captured outer stack region (snapshot)
+    int captureLen;
+    int recGroupSize;             // 0 if not in a rec group
+    @Nullable RecFrame recFrame;  // shared with all peers; null if non-rec
+    StackMatchCode code;
+    // EvalEnv globalEnv — removed in this step
+}
+```
+
+`RecFrame` provides the indirection that avoids snapshot-then-patch:
+because all closures share the same `RecFrame` object, filling it in
+once makes the values visible to every closure immediately.
+
+**Why offsets are independent of `captureLen`**: When `apply()` seeds a
+new stack, it copies `captureLen` outer slots (indices `0..captureLen-1`),
+then pushes the N RecFrame bindings (indices `captureLen..captureLen+N-1`),
+then pushes the single argument (index `captureLen+N`). The body context
+starts at depth `captureLen+N+1`. The StackCode offset for rec peer `j`
+is `(captureLen+N+1) − (captureLen+j) = N+1−j`. The `captureLen` terms
+cancel, so the offset is a compile-time constant depending only on `N`
+and `j`, not on how many variables a particular closure happens to
+capture.
+
+**Compile-time changes**:
+
+- Pass `RecGroupInfo(N, j, peers)` through to `compileMatchListImpl`
+  for each binding in a `REC_VAL_DECL`.
+- After `VariableCollector` determines `captureLen`, extend the
+  body context with the N rec peers at slots
+  `captureLen+0 .. captureLen+N-1`.
+  Since the offset formula `N+1−j` is independent of `captureLen`, the
+  offsets can be stored as compile-time constants in the `StackCode`
+  nodes.
+- Remove `GetCode` emission for recursive self-references inside
+  rec-group closure bodies; they all become `StackCode`.
+
+**Runtime changes**:
+
+- `StackMultiLetCode.eval()` (`useSlots=true`):
+  1. Allocate `RecFrame rf = new RecFrame(N)`.
+  2. Evaluate each RHS (`StackMatchCode.eval(stack)`) — each creates a
+     `StackClosure`; attach `rf` to it immediately.
+  3. Fill `rf.bindings[i] = closure_i`.
+  4. Push closures onto the N stack slots.
+  5. Evaluate `resultCode`.
+  - Remove `patchStackClosureEnv`, `bindPatGetValue` calls.
+- `StackClosure.apply(Stack, Object)`:
+  - After seeding the new stack from `captureLen` captured slots, push
+    `recFrame.bindings[0..N-1]` before pushing the argument.
+
+**Eliminate after this step**:
+`patchStackClosureEnv`, `needsGlobalEnvPatch`, `bindPatGetValue`,
+`EvalEnv globalEnv` field in `StackClosure`, `GetCode` emissions for
+rec-group self-references.
+
+### Step 18: Move `globalEnv` from `Stack` into `Session`
+
+After Step 17b, `StackClosure` no longer carries a `globalEnv` field.
+`Stack.globalEnv` remains — it is read by `GlobalMarshalCode` to fetch
+top-level bindings, and by `StackClosure.apply()` to seed the child
+`Stack`.
+
+Move the authoritative `globalEnv` into `Session` as a mutable field.
+
+Changes:
+- Add `EvalEnv globalEnv` field to `Session`.
+- `Stack` constructor: derive `session` from `globalEnv`, or accept
+  `Session` directly; keep `globalEnv` as an alias until Step 19.
+- `StackClosure.apply()`: reads `stack.session.globalEnv` to seed the
+  child `Stack` instead of carrying its own copy.
+- Top-level redefinition in the REPL: update `session.globalEnv`
+  directly; no closure-by-closure patching needed.
+
+### Step 19: Remove `Stack.globalEnv` field
+
+After Step 18, replace every `stack.globalEnv` read with
+`stack.session.globalEnv` and delete the field.
+
+`Stack` then contains exactly three fields: `session`, `slots`, `top`.
 

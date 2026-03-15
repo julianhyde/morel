@@ -968,12 +968,19 @@ public class Compiler {
     final ImmutableList<String> outNames = bindingNames(group.env.bindings);
     final ImmutableList<String> keyNames =
         outNames.subList(0, group.groupExps.size());
-    // Downstream uses cxFrom so scan vars are GetCode (for result() env
-    // rebinding).
+    // Downstream uses cxFrom with GROUP output names stripped from the layout,
+    // so those names compile to GetCode (reading from groupEnvs in globalEnv)
+    // rather than StackCode (reading the pre-GROUP slot value, e.g. a closure).
+    final Context cxResult =
+        new Context(
+            cxFrom.env,
+            cxFrom.layout.without(outNames),
+            cxFrom.localDepth,
+            cxFrom.globalSlotMap);
     final Supplier<RowSink> groupNextFactory =
         createRowSinkFactory(
-            cxFrom,
-            cxFrom,
+            cxResult,
+            cxResult,
             ImmutableMap.of(),
             group.env,
             remainingSteps,
@@ -1237,9 +1244,15 @@ public class Compiler {
     final List<Binding> bindings = new ArrayList<>();
     compileValDecl(
         cx, let.decl, null, ImmutableSet.of(), matchCodes, bindings, null);
-    Context cx2 = cx.bindAll(bindings);
+    // For recursive declarations, assign stack slots to binding names so the
+    // result body can access them via StackCode rather than GetCode.
+    final Context cx2 =
+        let.decl.op == Op.REC_VAL_DECL
+            ? buildLetContext(cx, bindings, matchCodes)
+            : cx.bindAll(bindings);
+    final boolean useSlots = let.decl.op == Op.REC_VAL_DECL;
     final Code resultCode = compile(cx2, let.exp);
-    return finishCompileLet(cx2, matchCodes, resultCode, let.type);
+    return finishCompileLet(cx2, matchCodes, resultCode, let.type, useSlots);
   }
 
   /**
@@ -1353,16 +1366,46 @@ public class Compiler {
         pat, namedPats.size(), expCode, bodyCode, match.pos);
   }
 
+  /**
+   * Builds a let-body context with stack-slot assignments for all named
+   * patterns in the match codes. The named patterns are assigned consecutive
+   * slots starting at {@code cx.localDepth}, in the order that {@link
+   * Closure.StackClosure#pushBindings} pushes them.
+   *
+   * <p>The returned context has {@code localDepth = cx.localDepth + numSlots}
+   * so that body code compiled in it can access each binding via {@link
+   * Codes#stackGet}.
+   */
+  private Context buildLetContext(
+      Context cx, List<Binding> bindings, List<Code> matchCodes) {
+    StackLayout newLayout = cx.layout;
+    int depth = cx.localDepth;
+    for (Code mc : matchCodes) {
+      for (Core.Pat pat : ((MatchCode) mc).patCodes.leftList()) {
+        for (Core.NamedPat namedPat : namedPatsOf(pat)) {
+          newLayout = newLayout.with(namedPat, depth++);
+        }
+      }
+    }
+    return new Context(
+        cx.env.bindAll(bindings), newLayout, depth, cx.globalSlotMap);
+  }
+
   protected Code finishCompileLet(
-      Context cx, List<Code> matchCodes, Code resultCode, Type resultType) {
+      Context cx,
+      List<Code> matchCodes,
+      Code resultCode,
+      Type resultType,
+      boolean useSlots) {
     // Extract (pat, expCode) pairs from the MatchCode wrappers and emit a
-    // stack-based multi-let that avoids the old Closure/EvalEnv indirection.
+    // stack-based multi-let.
     final PairList<Core.Pat, Code> pairs = PairList.of();
     for (Code mc : matchCodes) {
       ((MatchCode) mc)
           .patCodes.forEach((BiConsumer<Core.Pat, Code>) pairs::add);
     }
-    return Codes.stackMultiLet(ImmutablePairList.copyOf(pairs), resultCode);
+    return Codes.stackMultiLet(
+        ImmutablePairList.copyOf(pairs), resultCode, useSlots);
   }
 
   private Code compileLocal(Context cx, Core.Local local) {
@@ -1545,9 +1588,14 @@ public class Compiler {
         final List<Binding> bindings = new ArrayList<>();
         compileValDecl(
             cx, let.decl, null, ImmutableSet.of(), matchCodes, bindings, null);
-        final Context cx2 = cx.bindAll(bindings);
+        final Context cx2 =
+            let.decl.op == Op.REC_VAL_DECL
+                ? buildLetContext(cx, bindings, matchCodes)
+                : cx.bindAll(bindings);
+        final boolean useSlots = let.decl.op == Op.REC_VAL_DECL;
         final Code resultCode = compileTail(cx2, let.exp);
-        return finishCompileLet(cx2, matchCodes, resultCode, let.type);
+        return finishCompileLet(
+            cx2, matchCodes, resultCode, let.type, useSlots);
 
       default:
         return compile(cx, expression);

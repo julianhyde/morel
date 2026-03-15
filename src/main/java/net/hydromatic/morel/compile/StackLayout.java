@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import com.google.common.collect.ImmutableMap;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import net.hydromatic.morel.ast.Core;
 
@@ -76,6 +77,26 @@ public class StackLayout {
     final LinkedHashMap<Core.NamedPat, Integer> map =
         new LinkedHashMap<>(slotMap);
     map.put(pat, slotIndex);
+    return new StackLayout(ImmutableMap.copyOf(map));
+  }
+
+  /**
+   * Returns a new layout that is identical to this one but has all entries
+   * whose variable name is in {@code names} removed.
+   *
+   * <p>Used when compiling GROUP result expressions: the GROUP output names
+   * (group keys and aggregate names) are rebound in {@code groupEnvs} at
+   * result() time, so they must be read via {@code GetCode} (from {@code
+   * globalEnv}) rather than {@code StackCode} (from the stack slot that still
+   * holds the pre-GROUP value).
+   */
+  public StackLayout without(Collection<String> names) {
+    if (names.isEmpty()) {
+      return this;
+    }
+    final LinkedHashMap<Core.NamedPat, Integer> map =
+        new LinkedHashMap<>(slotMap);
+    map.keySet().removeIf(pat -> names.contains(pat.name));
     return new StackLayout(ImmutableMap.copyOf(map));
   }
 

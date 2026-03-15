@@ -210,11 +210,16 @@ public class CalciteCompiler extends Compiler {
 
   @Override
   protected Code finishCompileLet(
-      Context cx, List<Code> matchCodes_, Code resultCode_, Type resultType) {
+      Context cx,
+      List<Code> matchCodes_,
+      Code resultCode_,
+      Type resultType,
+      boolean useSlots) {
     final Code resultCode = toRel4(cx.env, resultCode_, resultType);
     final List<Code> matchCodes = ImmutableList.copyOf(matchCodes_);
     final Code code =
-        super.finishCompileLet(cx, matchCodes, resultCode, resultType);
+        super.finishCompileLet(
+            cx, matchCodes, resultCode, resultType, useSlots);
     return new RelCode() {
       @Override
       public boolean toRel(RelContext cx, boolean aggressive) {
