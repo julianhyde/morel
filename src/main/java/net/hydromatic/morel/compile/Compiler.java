@@ -823,10 +823,8 @@ public class Compiler {
     final Code code = compile(cxFrom, order.exp);
     final Comparator comparator =
         Comparators.comparatorFor(typeSystem, order.exp.type);
-    final ImmutableList<Code> inCodes =
-        buildInCodes(cx, allScopeBindings.values());
-    final ImmutableList<String> inNames =
-        buildInNames(cx, allScopeBindings.values());
+    final ImmutablePairList<String, Code> inSlots =
+        buildInSlots(cx, allScopeBindings.values());
     final Supplier<RowSink> nextFactory =
         createRowSinkFactory(
             cxFrom,
@@ -835,8 +833,7 @@ public class Compiler {
             order.env,
             remainingSteps,
             elementType);
-    return () ->
-        RowSinks.order(code, comparator, inCodes, inNames, nextFactory.get());
+    return () -> RowSinks.order(code, comparator, inSlots, nextFactory.get());
   }
 
   /** Compiles a GROUP step into a {@link RowSink} factory. */
@@ -854,13 +851,11 @@ public class Compiler {
       // cx.
       groupCodesB.add(compile(cx, exp));
     }
-    // Compute inCodes/inNames first so we can use inNames for Codes.aggregate.
-    // inNames is the order in which values are captured via inCodes (by slot
-    // index). This order must match what Codes.aggregate uses to rebind rows.
-    final ImmutableList<Code> inCodes =
-        buildInCodes(cx, allScopeBindings.values());
-    final ImmutableList<String> inNames =
-        buildInNames(cx, allScopeBindings.values());
+    // Compute inSlots first so we can use inSlots.leftList() for
+    // Codes.aggregate. The name order in which values are captured (by slot
+    // index) must match what Codes.aggregate uses to rebind rows.
+    final ImmutablePairList<String, Code> inSlots =
+        buildInSlots(cx, allScopeBindings.values());
     final ImmutableList.Builder<Applicable> aggregateCodesB =
         ImmutableList.builder();
     for (Core.Aggregate aggregate : group.aggregates.values()) {
@@ -888,10 +883,11 @@ public class Compiler {
       } else {
         aggregateCode = aggregateApplicable.asCode();
       }
-      // Use inNames (not sorted names) so the row-rebinding order in
-      // Codes.aggregate matches the capture order used in inCodes.
+      // Use inSlots.leftList() (not sorted names) so the row-rebinding order
+      // in Codes.aggregate matches the capture order used in inSlots.
       aggregateCodesB.add(
-          Codes.aggregate(cx.env, aggregateCode, inNames, argumentCode));
+          Codes.aggregate(
+              cx.env, aggregateCode, inSlots.leftList(), argumentCode));
     }
     final ImmutableList<Code> groupCodes = groupCodesB.build();
     final Code keyCode = Codes.tuple(groupCodes);
@@ -913,10 +909,9 @@ public class Compiler {
         RowSinks.group(
             keyCode,
             aggregateCodes,
-            inNames,
+            inSlots,
             keyNames,
             outNames,
-            inCodes,
             groupNextFactory.get());
   }
 
@@ -960,11 +955,9 @@ public class Compiler {
     final ImmutableList<Code> codes =
         transformEager(args, a -> compile(codeCx, a));
     final ImmutableList<String> names = bindingNames(stepEnv.bindings);
-    // inCodes: capture all scope vars during accept() using cx.
-    final ImmutableList<Code> inCodes =
-        buildInCodes(cx, allScopeBindings.values());
-    final ImmutableList<String> inNames =
-        buildInNames(cx, allScopeBindings.values());
+    // inSlots: capture all scope vars during accept() using cx.
+    final ImmutablePairList<String, Code> inSlots =
+        buildInSlots(cx, allScopeBindings.values());
     // Downstream uses cxFrom -> GetCode for all scan vars.
     final Supplier<RowSink> nextFactory =
         createRowSinkFactory(
@@ -977,34 +970,28 @@ public class Compiler {
     switch (op) {
       case EXCEPT:
         return () ->
-            RowSinks.except(
-                distinct, codes, names, inCodes, inNames, nextFactory.get());
+            RowSinks.except(distinct, codes, names, inSlots, nextFactory.get());
       case INTERSECT:
         return () ->
             RowSinks.intersect(
-                distinct, codes, names, inCodes, inNames, nextFactory.get());
+                distinct, codes, names, inSlots, nextFactory.get());
       case UNION:
         return () ->
-            RowSinks.union(
-                distinct, codes, names, inCodes, inNames, nextFactory.get());
+            RowSinks.union(distinct, codes, names, inSlots, nextFactory.get());
       default:
         throw new AssertionError(op);
     }
   }
 
-  /** Builds inCodes sorted by slot index (stack vars first, env vars last). */
-  private ImmutableList<Code> buildInCodes(
+  /**
+   * Builds inSlots sorted by slot index (stack vars first, env vars last). Each
+   * slot is a (name, code) pair.
+   */
+  private ImmutablePairList<String, Code> buildInSlots(
       Context cx, Collection<Binding> bindings) {
-    return ImmutableList.copyOf(
-        transformEager(
-            sortedInBindings(cx, bindings), b -> compileFieldName(cx, b.id)));
-  }
-
-  /** Builds inNames parallel to {@link #buildInCodes}. */
-  private ImmutableList<String> buildInNames(
-      Context cx, Collection<Binding> bindings) {
-    return ImmutableList.copyOf(
-        transformEager(sortedInBindings(cx, bindings), b -> b.id.name));
+    return ImmutablePairList.fromTransformed(
+        sortedInBindings(cx, bindings),
+        (b, add) -> add.accept(b.id.name, compileFieldName(cx, b.id)));
   }
 
   /** Sorts bindings: those in the layout by slot index, then the rest. */
