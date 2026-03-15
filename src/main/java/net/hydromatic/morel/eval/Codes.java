@@ -30,7 +30,6 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
@@ -4055,19 +4054,25 @@ public abstract class Codes {
    * The {@code name} field is retained for debuggability and appears in {@link
    * net.hydromatic.morel.eval.Describer} / {@code Sys.plan} output.
    */
-  public static Code stackGet(int offset, String name) {
-    return new StackCode(offset, name);
+  /**
+   * Returns a {@link Code} that pushes a set of global values onto the stack
+   * before evaluating {@code body}, then restores the stack top afterwards.
+   *
+   * <p>At statement-evaluation time, the wrapper fetches each name from {@link
+   * Stack#globalEnv} once and stores the value in a stack slot, so that the
+   * body can access those globals via fast {@link StackCode} reads instead of
+   * repeated {@link GetCode} / {@code EvalEnv} lookups.
+   *
+   * <p>If {@code names} is empty the body is returned unchanged.
+   */
+  public static Code globalMarshal(List<String> names, Code body) {
+    return names.isEmpty()
+        ? body
+        : new GlobalMarshalCode(ImmutableList.copyOf(names), body);
   }
 
-  /**
-   * Returns a Code that returns a tuple consisting of the values of variables
-   * "name0", ... "nameN" in the current environment.
-   */
-  public static Code getTuple(Iterable<String> names) {
-    if (Iterables.isEmpty(names)) {
-      return new ConstantCode(Unit.INSTANCE);
-    }
-    return new GetTupleCode(ImmutableList.copyOf(names));
+  public static Code stackGet(int offset, String name) {
+    return new StackCode(offset, name);
   }
 
   /**
@@ -4819,6 +4824,46 @@ public abstract class Codes {
 
     public Object eval(EvalEnv env) {
       return env.getOpt(name);
+    }
+  }
+
+  /**
+   * Code that pushes pre-existing globals onto the stack, evaluates {@code
+   * body}, then restores the stack.
+   *
+   * <p>Emitted at the outermost statement level so that the body can use fast
+   * {@link StackCode} reads for globals instead of calling {@link GetCode} on
+   * every evaluation.
+   */
+  private static class GlobalMarshalCode implements Code {
+    final ImmutableList<String> names;
+    final Code body;
+
+    GlobalMarshalCode(ImmutableList<String> names, Code body) {
+      this.names = requireNonNull(names);
+      this.body = requireNonNull(body);
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "globalMarshal", d -> d.args("globals", names).arg("body", body));
+    }
+
+    @Override
+    public int maxSlots() {
+      return names.size() + body.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final int savedTop = stack.save();
+      for (String name : names) {
+        stack.push(stack.globalEnv.getOpt(name));
+      }
+      final Object result = body.eval(stack);
+      stack.restore(savedTop);
+      return result;
     }
   }
 
