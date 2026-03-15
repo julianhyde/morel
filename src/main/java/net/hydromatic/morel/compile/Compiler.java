@@ -755,9 +755,14 @@ public class Compiler {
           final RecordLikeType recordType = tuple.type();
           final Map<String, Code> codeMap =
               compileRowMap(cx, Pair.zip(recordType.argNames(), tuple.args));
+          // Extend layout: assign yield output vars to stack slots in the same
+          // order as codeMap.keySet() (alphabetical) so that the push order in
+          // YieldRowSink.accept(Stack) matches the slot indices.
+          final Context cxYield =
+              yieldContext(cx, firstStep.env.bindings, codeMap.keySet());
           final Supplier<RowSink> yieldNextFactory =
               createRowSinkFactory(
-                  cx,
+                  cxYield,
                   cxFrom,
                   yieldAllScope,
                   firstStep.env,
@@ -768,9 +773,12 @@ public class Compiler {
           final Binding binding = yield.env.bindings.get(0);
           Map<String, Code> codeMap =
               compileRowMap(cx, PairList.of(binding.id.name, yield.exp));
+          // Single yield output var: extend layout with one more stack slot.
+          final Context cxYield =
+              yieldContext(cx, firstStep.env.bindings, codeMap.keySet());
           final Supplier<RowSink> yieldNextFactory =
               createRowSinkFactory(
-                  cx,
+                  cxYield,
                   cxFrom,
                   yieldAllScope,
                   firstStep.env,
@@ -1020,6 +1028,33 @@ public class Compiler {
       default:
         throw new AssertionError(op);
     }
+  }
+
+  /**
+   * Builds a new {@link Context} that extends {@code cx} with yield output
+   * variables as stack slots.
+   *
+   * <p>Slot indices are assigned in {@code nameOrder} order (which matches the
+   * push order used by {@link net.hydromatic.morel.eval.RowSinks}'s yield
+   * implementation), starting at {@code cx.localDepth}.
+   */
+  private Context yieldContext(
+      Context cx, List<Binding> yieldBindings, Iterable<String> nameOrder) {
+    // Build name → NamedPat index so we can look up pats by name.
+    final Map<String, Core.NamedPat> nameToPatMap = new LinkedHashMap<>();
+    for (Binding b : yieldBindings) {
+      nameToPatMap.put(b.id.name, b.id);
+    }
+    StackLayout layout = cx.layout;
+    int count = 0;
+    for (String name : nameOrder) {
+      final Core.NamedPat pat = nameToPatMap.get(name);
+      if (pat != null) {
+        layout = layout.with(pat, cx.localDepth + count++);
+      }
+    }
+    return new Context(
+        cx.env.bindAll(yieldBindings), layout, cx.localDepth + count);
   }
 
   /**

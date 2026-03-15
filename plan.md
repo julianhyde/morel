@@ -360,7 +360,33 @@ Done one sink type at a time:
   `withRowFromKey()` then `rowSink.accept()`; finally call
   `rowSink.result(stack)`.
 
-### Step 13: Marshal referenced globals onto the stack at statement start
+### ✅ Step 13: Yield vars as stack slots (#349)
+
+Convert yield output variables from `GetCode`/`MutableEvalEnv` bindings to
+`StackCode`/slot-push, eliminating the per-row `MutableEvalEnv` allocation
+in `YieldRowSink.accept()`.
+
+**Compiler.java** — YIELD case in `createRowSinkFactory`:
+- Add `yieldContext(cx, yieldBindings, nameOrder)` helper: extends `cx.layout`
+  with each yield output pat at slot `cx.localDepth + i`, in `codeMap.keySet()`
+  order (alphabetical, matching YieldRowSink's push order).  Returns a new
+  `Context` (`cxYield`) with updated layout and `localDepth`.
+- Pass `cxYield` (not `cx`) as `cx0` to the downstream factory.
+- `cxFrom` is unchanged: yield vars are per-row, not baseline globals.
+
+**RowSinks.java** — `YieldRowSink.accept(Stack)`:
+- Pre-evaluate all yield codes against the input `stack` (before any push),
+  then push all values in order onto `s` (grown if needed).
+- After `rowSink.accept(s)`, restore to `savedTop`.
+- Downstream `StackCode` offsets for yield vars resolve correctly because
+  `withRow()` / `withRowFromKey()` in deferred sinks now include yield vars
+  in `scanDepth` (they are in `cx.layout`), and push them back at result() time.
+
+**Test updates**: `relational.smli` plan-string tests updated:
+`get(name eN)` → `stack(offset 1, name eN)` for yield output vars in
+downstream `collect()` code.
+
+### Step 14: Marshal referenced globals onto the stack at statement start
 The only remaining EvalEnv lookups at runtime are `GetCode` /
 `GetTupleCode`, which call `env.getOpt(name)` to find top-level and
 built-in bindings.

@@ -1562,16 +1562,32 @@ public abstract class RowSinks {
 
     @Override
     public void accept(Stack stack) {
-      final MutableEvalEnv env2 = stack.globalEnv.bindMutableArray(names);
+      // Grow slots if needed to hold yield values.
+      Stack s = stack;
+      if (s.slots.length < s.top + codes.size()) {
+        s =
+            new Stack(
+                s.globalEnv,
+                Arrays.copyOf(s.slots, s.top + codes.size()),
+                s.top);
+      }
+      final int savedTop = s.top;
+      // Evaluate all yield codes from the input stack before pushing any
+      // value: simultaneous evaluation prevents one yield's value from
+      // affecting another yield's expression, and keeps StackCode offsets
+      // valid throughout.
       if (values == null) {
-        env2.set(codes.get(0).eval(stack));
+        s.push(codes.get(0).eval(stack));
       } else {
         for (int i = 0; i < codes.size(); i++) {
           values[i] = codes.get(i).eval(stack);
         }
-        env2.set(values);
+        for (Object v : values) {
+          s.push(v);
+        }
       }
-      rowSink.accept(new Stack(env2, stack.slots, stack.top));
+      rowSink.accept(s);
+      s.restore(savedTop);
     }
   }
 
