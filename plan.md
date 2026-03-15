@@ -334,7 +334,31 @@ Done one sink type at a time:
 - `GroupRowSink` itself unchanged (no `scanDepth` field needed since
   `Codes.aggregate` handles the push-back).
 
-##### SetRowSink (accept pass-through and result paths) — TODO
+##### ✅ SetRowSink (accept pass-through and result paths)
+
+- `compileSetSink`: compute `scanDepth` from `stepEnv.bindings ∩ cx.layout`;
+  compile RHS `codes` with `codeCx` (either `cx` with a `localDepth` bump for
+  `EXCEPT-ALL`/`INTERSECT-ALL`, or `cxFrom` for union/distinct cases); pass
+  `scanDepth` and `inSlots` to `RowSinks.except/intersect/union()`.
+- **Downstream boundary**: pass `ImmutableMap.of()` as `allScopeBindings` to
+  the downstream factory.  The SET step is a scope boundary (like GROUP): outer
+  scan vars must not appear in the downstream's `inSlots`, because those vars
+  are not on the stack at result()-time and would cause an AIOBE
+  (`slots[-1]`).
+- `SetRowSink` (abstract base): add `scanDepth` field and `withRowFromKey()`
+  helper.  `withRowFromKey` pushes the first `scanDepth` names back onto the
+  stack (for `StackCode` resolution) and binds any remaining env-based names
+  into a `MutableEvalEnv` chain.
+- `ExceptAllRowSink.accept(Stack)`: pass through to `rowSink.accept(stack)`
+  (no rebind needed — scan vars are live).
+- `ExceptDistinctRowSink.result(Stack)`: call `withRowFromKey()` per key,
+  then `rowSink.accept()`.
+- `IntersectAllRowSink.accept(Stack)`: pass through as above.
+- `IntersectDistinctRowSink.result(Stack)`: call `withRowFromKey()` per key.
+- `UnionRowSink.accept(Stack)`: pass through for both distinct and all cases.
+- `UnionRowSink.result(Stack)`: iterate RHS code elements; for each call
+  `withRowFromKey()` then `rowSink.accept()`; finally call
+  `rowSink.result(stack)`.
 
 ### Step 13: Marshal referenced globals onto the stack at statement start
 The only remaining EvalEnv lookups at runtime are `GetCode` /

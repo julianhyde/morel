@@ -983,26 +983,40 @@ public class Compiler {
     // inSlots: capture all scope vars during accept() using cx.
     final ImmutablePairList<String, Code> inSlots =
         buildInSlots(cx, allScopeBindings.values());
-    // Downstream uses cxFrom -> GetCode for all scan vars.
+    // scanDepth: how many of the SET step's output vars are in the stack
+    // layout. These are pushed back at result() time via withRowFromKey().
+    final int scanDepth =
+        (int)
+            stepEnv.bindings.stream()
+                .filter(b -> cx.layout.get(b.id) >= 0)
+                .count();
+    // Downstream compiled with ImmutableMap.of() as allScopeBindings: the SET
+    // step is a scope boundary (like GROUP), so outer scan vars (e.g. the
+    // SCAN var 'e' that fed into the SET step) must not appear in the
+    // downstream's inSlots.  If they did, deferred sinks (GROUP, ORDER) would
+    // try to capture/restore them via StackCode at result() time when the scan
+    // vars are no longer on the stack, causing an AIOBE.
     final Supplier<RowSink> nextFactory =
         createRowSinkFactory(
+            cx,
             cxFrom,
-            cxFrom,
-            allScopeBindings,
+            ImmutableMap.of(),
             stepEnv,
             remainingSteps,
             elementType);
     switch (op) {
       case EXCEPT:
         return () ->
-            RowSinks.except(distinct, codes, names, inSlots, nextFactory.get());
+            RowSinks.except(
+                distinct, codes, names, inSlots, scanDepth, nextFactory.get());
       case INTERSECT:
         return () ->
             RowSinks.intersect(
-                distinct, codes, names, inSlots, nextFactory.get());
+                distinct, codes, names, inSlots, scanDepth, nextFactory.get());
       case UNION:
         return () ->
-            RowSinks.union(distinct, codes, names, inSlots, nextFactory.get());
+            RowSinks.union(
+                distinct, codes, names, inSlots, scanDepth, nextFactory.get());
       default:
         throw new AssertionError(op);
     }
