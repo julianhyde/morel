@@ -317,7 +317,22 @@ Done one sink type at a time:
   push-back loop using a `withRow()` helper; no `MutableEvalEnv` for
   stack-based slots.
 
-##### GroupRowSink — TODO
+##### ✅ GroupRowSink
+
+- `compileGroupSink`: compute `scanDepth`; compile `argumentCode` with
+  `cx` (not `cxFrom`) so scan variables use `StackCode`; pass `scanDepth`
+  to `Codes.aggregate()`.
+- `Codes.aggregate()`: add `scanDepth` parameter.  In `apply(Stack, arg)`:
+  - Single stack-based var (`names.size()==1 && scanDepth==1`): push row,
+    eval, restore.
+  - Single env-based var (`names.size()==1 && scanDepth==0`): bind into
+    `MutableEvalEnv` per row (legacy path).
+  - All stack-based (`envCount==0`): push all `scanDepth` values, eval,
+    restore; no `MutableEvalEnv`.
+  - Mixed (scan + env-based, e.g. after YIELD): push stack-based values,
+    bind env-based values into a `MutableEvalEnv` chain, eval, restore.
+- `GroupRowSink` itself unchanged (no `scanDepth` field needed since
+  `Codes.aggregate` handles the push-back).
 
 ##### SetRowSink (accept pass-through and result paths) — TODO
 

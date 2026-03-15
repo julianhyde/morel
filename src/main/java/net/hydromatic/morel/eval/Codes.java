@@ -4262,7 +4262,8 @@ public abstract class Codes {
       Environment env0,
       Code aggregateCode,
       List<String> names,
-      @Nullable Code argumentCode) {
+      @Nullable Code argumentCode,
+      int scanDepth) {
     return new Applicable() {
       @Override
       public Describer describe(Describer describer) {
@@ -4280,14 +4281,77 @@ public abstract class Codes {
         final List<Object> rows = (List<Object>) arg;
         final List<Object> argRows;
         if (argumentCode != null) {
-          final MutableEvalEnv env2 = stack.globalEnv.bindMutableArray(names);
           argRows = new ArrayList<>(rows.size());
-          for (Object row : rows) {
-            env2.set(row);
-            // Use a Stack so that StackCode nodes (outer let-bound variables)
-            // in argumentCode are evaluated correctly.
-            argRows.add(
-                argumentCode.eval(new Stack(env2, stack.slots, stack.top)));
+          final int envCount = names.size() - scanDepth;
+          if (names.size() == 1) {
+            if (scanDepth == 1) {
+              // Single stack-based variable: push value, eval, restore.
+              Stack s = stack;
+              if (s.slots.length < s.top + 1) {
+                s =
+                    new Stack(
+                        s.globalEnv, Arrays.copyOf(s.slots, s.top + 1), s.top);
+              }
+              final int savedTop = s.top;
+              for (Object row : rows) {
+                s.push(row);
+                argRows.add(argumentCode.eval(s));
+                s.restore(savedTop);
+              }
+            } else {
+              // Single env-based variable (scanDepth == 0): bind into env.
+              final MutableEvalEnv mEnv =
+                  stack.globalEnv.bindMutable(names.get(0));
+              final Stack s = new Stack(mEnv, stack.slots, stack.top);
+              for (Object row : rows) {
+                mEnv.set(row);
+                argRows.add(argumentCode.eval(s));
+              }
+            }
+          } else if (envCount == 0) {
+            // All variables are stack-based: push-back only, no env binding.
+            Stack s = stack;
+            if (s.slots.length < s.top + scanDepth) {
+              s =
+                  new Stack(
+                      s.globalEnv,
+                      Arrays.copyOf(s.slots, s.top + scanDepth),
+                      s.top);
+            }
+            final int savedTop = s.top;
+            for (Object row : rows) {
+              final Object[] arr = (Object[]) row;
+              for (int j = 0; j < scanDepth; j++) {
+                s.push(arr[j]);
+              }
+              argRows.add(argumentCode.eval(s));
+              s.restore(savedTop);
+            }
+          } else {
+            // Mixed: push stack-based vars, bind env-based vars per row.
+            Stack s = stack;
+            if (scanDepth > 0 && s.slots.length < s.top + scanDepth) {
+              s =
+                  new Stack(
+                      s.globalEnv,
+                      Arrays.copyOf(s.slots, s.top + scanDepth),
+                      s.top);
+            }
+            final int savedTop = s.top;
+            for (Object row : rows) {
+              final Object[] arr = (Object[]) row;
+              for (int j = 0; j < scanDepth; j++) {
+                s.push(arr[j]);
+              }
+              EvalEnv env2 = s.globalEnv;
+              for (int j = scanDepth; j < names.size(); j++) {
+                final MutableEvalEnv mEnv = env2.bindMutable(names.get(j));
+                mEnv.set(arr[j]);
+                env2 = mEnv;
+              }
+              argRows.add(argumentCode.eval(new Stack(env2, s.slots, s.top)));
+              s.restore(savedTop);
+            }
           }
         } else if (names.size() != 1) {
           // Reconcile the fact that we internally represent rows as arrays when

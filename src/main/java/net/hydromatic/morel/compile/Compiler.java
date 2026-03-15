@@ -866,6 +866,15 @@ public class Compiler {
     // index) must match what Codes.aggregate uses to rebind rows.
     final ImmutablePairList<String, Code> inSlots =
         buildInSlots(cx, allScopeBindings.values());
+    // scanDepth: number of allScopeBindings entries in the stack layout.
+    // These are pushed back onto the stack at result() time inside
+    // Codes.aggregate so that argumentCode (compiled with cx) can read them
+    // via StackCode.
+    final int scanDepth =
+        (int)
+            allScopeBindings.values().stream()
+                .filter(b -> cx.layout.get(b.id) >= 0)
+                .count();
     final ImmutableList.Builder<Applicable> aggregateCodesB =
         ImmutableList.builder();
     for (Core.Aggregate aggregate : group.aggregates.values()) {
@@ -873,8 +882,10 @@ public class Compiler {
       if (aggregate.argument == null) {
         argumentCode = null;
       } else {
-        // Argument code evaluated at result() time (env-based), use cxFrom.
-        argumentCode = compile(cxFrom, aggregate.argument);
+        // Argument code compiled with cx: scan variables use StackCode.
+        // Codes.aggregate.apply() pushes stored row values back onto the
+        // stack so that StackCode nodes resolve correctly at result() time.
+        argumentCode = compile(cx, aggregate.argument);
       }
       Type aggType = aggregate.aggregate.type;
       if (aggType instanceof ForallType) {
@@ -897,7 +908,11 @@ public class Compiler {
       // in Codes.aggregate matches the capture order used in inSlots.
       aggregateCodesB.add(
           Codes.aggregate(
-              cx.env, aggregateCode, inSlots.leftList(), argumentCode));
+              cx.env,
+              aggregateCode,
+              inSlots.leftList(),
+              argumentCode,
+              scanDepth));
     }
     final ImmutableList<Code> groupCodes = groupCodesB.build();
     final Code keyCode = Codes.tuple(groupCodes);
