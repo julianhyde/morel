@@ -31,6 +31,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ImmutablePairList;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Value that is sufficient for a function to bind its argument and evaluate its
@@ -93,63 +94,9 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     throw new AssertionError("no match");
   }
 
-  /** Similar to {@link #bind}, but evaluates an expression first. */
-  EvalEnv evalBind(EvalEnv env) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(env);
-    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Object argValue = patCode.getValue().eval(env);
-      final Core.Pat pat = patCode.getKey();
-      if (bindRecurse(pat, argValue, envRef)) {
-        patchStackClosureEnv(argValue, envRef.env);
-        return envRef.env;
-      }
-    }
-    throw new AssertionError("no match");
-  }
-
   /**
-   * Like {@link #evalBind(Stack)}, but also appends the bound value to {@code
-   * out}. Used by multi-binding {@code let} to re-patch mutual-recursion
-   * closures after all bindings are established.
-   */
-  EvalEnv evalBindGetValue(Stack stack, List<Object> out) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(stack.globalEnv);
-    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Object argValue = patCode.getValue().eval(stack);
-      final Core.Pat pat = patCode.getKey();
-      if (bindRecurse(pat, argValue, envRef)) {
-        out.add(argValue);
-        patchStackClosureEnv(argValue, envRef.env);
-        return envRef.env;
-      }
-    }
-    throw new AssertionError("no match");
-  }
-
-  /**
-   * Similar to {@link #evalBind(EvalEnv)}, but evaluates value codes using a
-   * {@link Stack} so that stack-based code nodes (e.g., {@code StackMatchCode})
-   * can capture the correct values from the stack.
-   */
-  EvalEnv evalBind(Stack stack) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(stack.globalEnv);
-    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Object argValue = patCode.getValue().eval(stack);
-      final Core.Pat pat = patCode.getKey();
-      if (bindRecurse(pat, argValue, envRef)) {
-        // Patch globalEnv in any StackClosure that was just bound, so it can
-        // find itself via Codes.get(name) in its own body (recursion).
-        patchStackClosureEnv(argValue, envRef.env);
-        return envRef.env;
-      }
-    }
-    throw new AssertionError("no match");
-  }
-
-  /**
-   * Binds {@code value} to {@code pat} in {@code env}, appends {@code value} to
-   * {@code out}, and patches any {@link StackClosure} in {@code value} with the
-   * updated environment.
+   * Binds {@code value} to {@code pat} in {@code env} and appends {@code value}
+   * to {@code out}.
    *
    * <p>Used by multi-binding {@code let} to bind each value directly, without
    * going through an intermediate {@link Closure}.
@@ -161,28 +108,9 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     final EvalEnvHolder envRef = new EvalEnvHolder(env);
     if (bindRecurse(pat, value, envRef)) {
       out.add(value);
-      patchStackClosureEnv(value, envRef.env);
       return envRef.env;
     }
     throw new AssertionError("no match");
-  }
-
-  /**
-   * Updates {@link StackClosure#globalEnv} to {@code env} for any {@link
-   * StackClosure} reachable via {@code value}.
-   *
-   * <p>Called after a binding environment is extended (e.g., after {@link
-   * #evalBind} or a top-level declaration) so that recursive functions can find
-   * themselves via {@code Codes.get(name)}.
-   */
-  public static void patchStackClosureEnv(Object value, EvalEnv env) {
-    if (value instanceof StackClosure) {
-      ((StackClosure) value).globalEnv = env;
-    } else if (value instanceof List && !(value instanceof Variant)) {
-      for (Object element : (List<?>) value) {
-        patchStackClosureEnv(element, env);
-      }
-    }
   }
 
   /**
@@ -393,12 +321,23 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     /**
      * Global (top-level and built-in) bindings, captured at creation time.
      *
-     * <p>Used by {@link #apply(Object)} to bootstrap a fresh {@link Stack}. Not
-     * patched for rec-group closures (RecFrame handles those); may still be
-     * patched for the {@code useSlots=false} (VAL_DECL) fallback path via
-     * {@link Closure#patchStackClosureEnv}.
+     * <p>Used by {@link #apply(Object)} as a fallback when {@link #session} is
+     * null (e.g. in compile-time constant evaluation). When {@link #session} is
+     * non-null, {@code apply(Object)} uses {@link Session#globalEnv} instead so
+     * that it always sees the latest top-level bindings without per-closure
+     * patching.
      */
-    EvalEnv globalEnv;
+    final EvalEnv globalEnv;
+
+    /**
+     * The current session, shared with all closures in this evaluation.
+     *
+     * <p>When non-null, {@link #apply(Object)} creates a fresh {@link Stack}
+     * from {@link Session#globalEnv} rather than the snapshot {@link
+     * #globalEnv}, so it automatically sees bindings added after this closure
+     * was created (e.g. the closure's own top-level definition).
+     */
+    final @Nullable Session session;
 
     final Object[] capturedValues;
 
@@ -424,6 +363,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
     public StackClosure(
         EvalEnv globalEnv,
+        @Nullable Session session,
         Object[] capturedValues,
         RecFrame recFrame,
         ImmutablePairList<Core.Pat, Code> patCodes,
@@ -432,6 +372,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       // Snapshot the env so that subsequent mutations (e.g. ScanRowSink
       // advancing to the next row) do not change what this closure sees.
       this.globalEnv = requireNonNull(globalEnv).fix();
+      this.session = session;
       this.capturedValues = capturedValues;
       this.recFrame = recFrame;
       this.patCodes = patCodes;
@@ -452,11 +393,6 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     @Override
     public Describer describe(Describer describer) {
       return describer.start("stackClosure", d -> {});
-    }
-
-    /** Returns true if this closure's global env is exactly {@code env}. */
-    public boolean hasGlobalEnv(EvalEnv env) {
-      return globalEnv == env;
     }
 
     /**
@@ -525,7 +461,16 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      */
     @Override
     public Object apply(Object argValue) {
-      return apply(new Stack(globalEnv, capacity), argValue);
+      // Use session.globalEnv when available: it is always up-to-date with
+      // the latest top-level bindings, so no per-closure patching is needed.
+      // Fall back to the creation-time snapshot (globalEnv) when session is
+      // null or session.globalEnv has not yet been initialized (e.g. for
+      // CalciteCompiler's dummy sessions).
+      final EvalEnv env =
+          (session != null && session.globalEnv != null)
+              ? session.globalEnv
+              : globalEnv;
+      return apply(new Stack(env, capacity), argValue);
     }
 
     /**

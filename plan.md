@@ -596,7 +596,7 @@ capture.
 `EvalEnv globalEnv` field in `StackClosure`, `GetCode` emissions for
 rec-group self-references.
 
-### Step 18: Move `globalEnv` from `Stack` into `Session`
+### ✅ Step 18: Move `globalEnv` from `Stack` into `Session`
 
 After Step 17b, `StackClosure` no longer carries a `globalEnv` field.
 `Stack.globalEnv` remains — it is read by `GlobalMarshalCode` to fetch

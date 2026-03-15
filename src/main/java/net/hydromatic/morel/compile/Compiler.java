@@ -65,7 +65,6 @@ import net.hydromatic.morel.eval.RowSinks;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
-import net.hydromatic.morel.eval.Variant;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
@@ -451,8 +450,7 @@ public class Compiler {
       // Don't inline LinkCode (recursive bindings): the code will be a
       // StackMatchCode whose capture offsets were computed at the outer
       // context's depth. Inlining it here (at a different stack depth)
-      // produces wrong captures. Use a runtime lookup instead so that the
-      // StackClosure placed in globalEnv by StackMultiLetCode is found.
+      // produces wrong captures. Use a runtime lookup instead.
       if (binding.value instanceof LinkCode) {
         return Codes.get(idPat.name);
       }
@@ -2232,7 +2230,13 @@ public class Compiler {
         captured[i] = stack.slots[stack.top - captureOffsets[i]];
       }
       return new Closure.StackClosure(
-          stack.globalEnv, captured, null, patCodes, capacity, pos);
+          stack.globalEnv,
+          stack.session,
+          captured,
+          null,
+          patCodes,
+          capacity,
+          pos);
     }
   }
 
@@ -2337,6 +2341,9 @@ public class Compiler {
       final Session session = evalEnv.getSession();
       final StringBuilder buf = new StringBuilder();
       final List<String> outs = new ArrayList<>();
+      // Set session.globalEnv before evaluation so that closures created
+      // during eval (which capture session) start with a valid globalEnv.
+      session.globalEnv = evalEnv;
       try {
         final Object o =
             code.eval(new Stack(evalEnv, Math.max(code.maxSlots(), 256)));
@@ -2357,22 +2364,15 @@ public class Compiler {
                             pat2, overloadPat, expForBinding, o2)))) {
           throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
         }
-        // Patch globalEnv in any StackClosure values so that they can look up
-        // themselves (recursive calls) and sibling bindings in globalEnv.
-        // Only patch closures whose globalEnv is still evalEnv (i.e., they
-        // were created directly by this code and have not already been
-        // patched by an inner StackMultiLetCode). Closures returned from let
-        // expressions have a properly patched globalEnv and must not be
-        // overwritten here.
+        // Build env2 and update session.globalEnv so closures created by this
+        // statement automatically see the latest bindings (including
+        // themselves)
+        // when they are eventually invoked.
         EvalEnv env2 = evalEnv;
         for (Binding b : outBindings0) {
           env2 = env2.bind(b.id.name, b.value);
         }
-        for (Binding b : outBindings0) {
-          if (needsGlobalEnvPatch(b.value, evalEnv)) {
-            Closure.patchStackClosureEnv(b.value, env2);
-          }
-        }
+        session.globalEnv = env2;
         for (Binding binding : outBindings0) {
           outBindings.accept(binding);
           if (binding.id == skipPat) {
@@ -2395,28 +2395,6 @@ public class Compiler {
       }
       session.code = code;
       session.out = ImmutableList.copyOf(outs);
-    }
-
-    /**
-     * Returns true if {@code value} is a {@link Closure.StackClosure} whose
-     * {@code globalEnv} is still {@code baseEnv} (i.e., it was just created and
-     * has not yet been patched by an inner {@code StackMultiLetCode}).
-     *
-     * <p>Used to avoid overwriting a closure's already-complete {@code
-     * globalEnv} when binding the result of a {@code let} expression.
-     */
-    private static boolean needsGlobalEnvPatch(Object value, EvalEnv baseEnv) {
-      if (value instanceof Closure.StackClosure) {
-        return ((Closure.StackClosure) value).hasGlobalEnv(baseEnv);
-      }
-      if (value instanceof List && !(value instanceof Variant)) {
-        for (Object element : (List<?>) value) {
-          if (needsGlobalEnvPatch(element, baseEnv)) {
-            return true;
-          }
-        }
-      }
-      return false;
     }
 
     private Pretty.TypedVal getTypedVal(Binding binding, Core.NamedPat id) {

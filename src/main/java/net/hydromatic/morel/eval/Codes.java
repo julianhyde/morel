@@ -5290,9 +5290,6 @@ public abstract class Codes {
               Closure.bindPatGetValue(
                   patCodes.get(i).getKey(), values[i], env, boundValues);
         }
-        for (Object value : boundValues) {
-          Closure.patchStackClosureEnv(value, env);
-        }
         return resultCode.eval(new Stack(env, stack.slots, savedTop));
       }
     }

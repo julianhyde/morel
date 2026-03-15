@@ -43,6 +43,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * variable.
  */
 public class Session {
+  /**
+   * The authoritative global environment.
+   *
+   * <p>Updated after each top-level statement so that closures created during
+   * that statement always see the latest bindings when invoked later, without
+   * per-closure patching.
+   */
+  public EvalEnv globalEnv;
+
   /** The plan of the previous command. */
   public @Nullable Code code;
   /** The output lines of the previous command. */
