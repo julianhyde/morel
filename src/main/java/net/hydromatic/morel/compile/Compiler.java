@@ -943,6 +943,7 @@ public class Compiler {
             keyCode,
             aggregateCodes,
             inSlots,
+            scanDepth,
             keyNames,
             outNames,
             groupNextFactory.get());

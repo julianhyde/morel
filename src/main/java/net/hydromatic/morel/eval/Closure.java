@@ -444,14 +444,8 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       // capacity (e.g., a non-tail recursive call where the outer frame's
       // bindings are still live), allocate a larger array so that pushBindings
       // can store the new frame's variables without going out of bounds.
-      Stack evalStack;
-      if (stack.slots.length < stack.top + capacity) {
-        final Object[] newSlots = new Object[stack.top + capacity];
-        System.arraycopy(stack.slots, 0, newSlots, 0, stack.top);
-        evalStack = new Stack(globalEnv, newSlots, stack.top);
-      } else {
-        evalStack = new Stack(globalEnv, stack.slots, stack.top);
-      }
+      Stack evalStack = stack.ensureSize(capacity);
+      evalStack = new Stack(globalEnv, evalStack.slots, evalStack.top);
       int savedTop = evalStack.save();
       Object result = applyOnce(evalStack, argValue);
       while (result instanceof Codes.TailCall) {
@@ -462,12 +456,8 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
           // Ensure slots array is large enough for the tail-called closure.
           // The outer closure may have a smaller capacity than the tail-called
           // closure needs (e.g., fn x => case x of head::tail => ...).
-          final int needed = savedTop + nextFn.capacity;
-          if (evalStack.slots.length < needed) {
-            final Object[] newSlots = new Object[needed];
-            System.arraycopy(evalStack.slots, 0, newSlots, 0, savedTop);
-            evalStack = new Stack(nextFn.globalEnv, newSlots, savedTop);
-          } else if (nextFn.globalEnv != evalStack.globalEnv) {
+          evalStack = evalStack.ensureSize(nextFn.capacity);
+          if (nextFn.globalEnv != evalStack.globalEnv) {
             evalStack =
                 new Stack(nextFn.globalEnv, evalStack.slots, evalStack.top);
           }

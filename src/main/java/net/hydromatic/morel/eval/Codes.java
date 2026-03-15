@@ -4286,12 +4286,7 @@ public abstract class Codes {
           if (names.size() == 1) {
             if (scanDepth == 1) {
               // Single stack-based variable: push value, eval, restore.
-              Stack s = stack;
-              if (s.slots.length < s.top + 1) {
-                s =
-                    new Stack(
-                        s.globalEnv, Arrays.copyOf(s.slots, s.top + 1), s.top);
-              }
+              Stack s = stack.ensureSize(1);
               final int savedTop = s.top;
               for (Object row : rows) {
                 s.push(row);
@@ -4310,14 +4305,7 @@ public abstract class Codes {
             }
           } else if (envCount == 0) {
             // All variables are stack-based: push-back only, no env binding.
-            Stack s = stack;
-            if (s.slots.length < s.top + scanDepth) {
-              s =
-                  new Stack(
-                      s.globalEnv,
-                      Arrays.copyOf(s.slots, s.top + scanDepth),
-                      s.top);
-            }
+            Stack s = stack.ensureSize(scanDepth);
             final int savedTop = s.top;
             for (Object row : rows) {
               final Object[] arr = (Object[]) row;
@@ -4329,14 +4317,7 @@ public abstract class Codes {
             }
           } else {
             // Mixed: push stack-based vars, bind env-based vars per row.
-            Stack s = stack;
-            if (scanDepth > 0 && s.slots.length < s.top + scanDepth) {
-              s =
-                  new Stack(
-                      s.globalEnv,
-                      Arrays.copyOf(s.slots, s.top + scanDepth),
-                      s.top);
-            }
+            Stack s = stack.ensureSize(scanDepth);
             final int savedTop = s.top;
             for (Object row : rows) {
               final Object[] arr = (Object[]) row;

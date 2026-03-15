@@ -28,7 +28,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -96,11 +95,18 @@ public abstract class RowSinks {
       Code keyCode,
       ImmutableList<Applicable> aggregateCodes,
       ImmutablePairList<String, Code> inSlots,
+      int scanDepth,
       ImmutableList<String> keyNames,
       ImmutableList<String> outNames,
       RowSink rowSink) {
     return new GroupRowSink(
-        keyCode, aggregateCodes, inSlots, keyNames, outNames, rowSink);
+        keyCode,
+        aggregateCodes,
+        inSlots,
+        scanDepth,
+        keyNames,
+        outNames,
+        rowSink);
   }
 
   /** Creates a {@link RowSink} for an {@code intersect} step. */
@@ -195,6 +201,11 @@ public abstract class RowSinks {
     }
 
     @Override
+    public int maxSlots() {
+      return rowSinkFactory.get().maxSlots();
+    }
+
+    @Override
     public Object eval(EvalEnv env) {
       final RowSink rowSink = rowSinkFactory.get();
       rowSink.start(env);
@@ -247,6 +258,11 @@ public abstract class RowSinks {
     @Override
     public List<Object> result(Stack stack) {
       return rowSink.result(stack);
+    }
+
+    @Override
+    public int maxSlots() {
+      return rowSink.maxSlots();
     }
   }
 
@@ -310,16 +326,17 @@ public abstract class RowSinks {
     }
 
     @Override
+    public int maxSlots() {
+      return varCount + rowSink.maxSlots();
+    }
+
+    @Override
     public void accept(Stack stack) {
       // Evaluate the collection expression using the full stack so that outer
       // variables (StackCode nodes) resolve correctly.
       final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
       // Grow slots if needed for scan variable slots.
-      Stack s = stack;
-      if (s.slots.length < s.top + varCount) {
-        final Object[] newSlots = Arrays.copyOf(s.slots, s.top + varCount);
-        s = new Stack(s.globalEnv, newSlots, s.top);
-      }
+      Stack s = stack.ensureSize(varCount);
       final int savedTop = s.save();
       for (Object element : elements) {
         s.restore(savedTop);
@@ -680,6 +697,11 @@ public abstract class RowSinks {
       map.computeIfAbsent(computeKey(stack), fn);
     }
 
+    @Override
+    public int maxSlots() {
+      return scanDepth + rowSink.maxSlots();
+    }
+
     /**
      * Prepares the stack for a downstream {@code accept()} or {@code result()}
      * call by pushing stack-based key values back onto the stack and binding
@@ -863,14 +885,7 @@ public abstract class RowSinks {
         }
       }
       if (!map.isEmpty()) {
-        Stack s = stack;
-        if (scanDepth > 0 && s.slots.length < s.top + scanDepth) {
-          s =
-              new Stack(
-                  s.globalEnv,
-                  Arrays.copyOf(s.slots, s.top + scanDepth),
-                  s.top);
-        }
+        Stack s = stack.ensureSize(scanDepth);
         final int savedTop = s.top;
         final Stack s2 = s;
         map.keySet()
@@ -1126,14 +1141,7 @@ public abstract class RowSinks {
         }
       }
       if (!map.isEmpty()) {
-        Stack s = stack;
-        if (scanDepth > 0 && s.slots.length < s.top + scanDepth) {
-          s =
-              new Stack(
-                  s.globalEnv,
-                  Arrays.copyOf(s.slots, s.top + scanDepth),
-                  s.top);
-        }
+        Stack s = stack.ensureSize(scanDepth);
         final int savedTop = s.top;
         final Stack s2 = s;
         map.forEach(
@@ -1194,12 +1202,7 @@ public abstract class RowSinks {
     public List<Object> result(Stack stack) {
       // keyEnv is used only for distinctness checks (add(keyEnv)).
       final MutableEvalEnv keyEnv = stack.globalEnv.bindMutableArray(names);
-      Stack s = stack;
-      if (scanDepth > 0 && s.slots.length < s.top + scanDepth) {
-        s =
-            new Stack(
-                s.globalEnv, Arrays.copyOf(s.slots, s.top + scanDepth), s.top);
-      }
+      Stack s = stack.ensureSize(scanDepth);
       final int savedTop = s.top;
       final Stack s2 = s;
       for (Code code : codes) {
@@ -1227,6 +1230,12 @@ public abstract class RowSinks {
      * accept(Stack)}.
      */
     final ImmutablePairList<String, Code> inSlots;
+    /**
+     * Number of {@code inSlots} entries that are stack-layout-based. These are
+     * pushed back onto the stack inside {@link Codes#aggregate} at result()
+     * time so that {@code argumentCode} can read them via StackCode.
+     */
+    final int scanDepth;
 
     final ImmutableList<Applicable> aggregateCodes;
     final ListMultimap<Object, Object> map = ArrayListMultimap.create();
@@ -1236,6 +1245,7 @@ public abstract class RowSinks {
         Code keyCode,
         ImmutableList<Applicable> aggregateCodes,
         ImmutablePairList<String, Code> inSlots,
+        int scanDepth,
         ImmutableList<String> keyNames,
         ImmutableList<String> outNames,
         RowSink rowSink) {
@@ -1243,10 +1253,16 @@ public abstract class RowSinks {
       this.keyCode = requireNonNull(keyCode);
       this.aggregateCodes = requireNonNull(aggregateCodes);
       this.inSlots = requireNonNull(inSlots);
+      this.scanDepth = scanDepth;
       this.keyNames = requireNonNull(keyNames);
       this.outNames = requireNonNull(outNames);
       this.values = inSlots.size() == 1 ? null : new Object[inSlots.size()];
       checkArgument(isPrefix(keyNames, outNames));
+    }
+
+    @Override
+    public int maxSlots() {
+      return scanDepth + rowSink.maxSlots();
     }
 
     static <E> boolean isPrefix(List<E> list0, List<E> list1) {
@@ -1454,14 +1470,13 @@ public abstract class RowSinks {
     }
 
     @Override
+    public int maxSlots() {
+      return scanDepth + rowSink.maxSlots();
+    }
+
+    @Override
     public List<Object> result(Stack stack) {
-      // Grow slots if needed to accommodate push-back of scan variables.
-      Stack s = stack;
-      if (scanDepth > 0 && s.slots.length < s.top + scanDepth) {
-        s =
-            new Stack(
-                s.globalEnv, Arrays.copyOf(s.slots, s.top + scanDepth), s.top);
-      }
+      Stack s = stack.ensureSize(scanDepth);
       final int savedTop = s.top;
       final int envCount = inSlots.size() - scanDepth;
       final Stack s2 = s; // effectively final for lambda
@@ -1561,16 +1576,13 @@ public abstract class RowSinks {
     }
 
     @Override
+    public int maxSlots() {
+      return codes.size() + rowSink.maxSlots();
+    }
+
+    @Override
     public void accept(Stack stack) {
-      // Grow slots if needed to hold yield values.
-      Stack s = stack;
-      if (s.slots.length < s.top + codes.size()) {
-        s =
-            new Stack(
-                s.globalEnv,
-                Arrays.copyOf(s.slots, s.top + codes.size()),
-                s.top);
-      }
+      Stack s = stack.ensureSize(codes.size());
       final int savedTop = s.top;
       // Evaluate all yield codes from the input stack before pushing any
       // value: simultaneous evaluation prevents one yield's value from

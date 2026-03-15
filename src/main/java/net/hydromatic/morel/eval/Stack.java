@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.eval;
 
+import java.util.Arrays;
+
 /**
  * Evaluation stack for the Morel interpreter.
  *
@@ -108,6 +110,21 @@ public final class Stack {
   /** Restores top to a previously saved value. */
   public void restore(int savedTop) {
     top = savedTop;
+  }
+
+  /**
+   * Returns this stack if it already has room for {@code needed} slots above
+   * {@link #top}, or a new stack with a grown {@link #slots} array otherwise.
+   *
+   * <p>When compile-time slot estimates are accurate this method always returns
+   * {@code this}; it exists as a safe fallback for cases (e.g. deep recursion)
+   * where the required depth was not predictable at compile time.
+   */
+  public Stack ensureSize(int needed) {
+    if (slots.length >= top + needed) {
+      return this;
+    }
+    return new Stack(globalEnv, Arrays.copyOf(slots, top + needed), top);
   }
 }
 

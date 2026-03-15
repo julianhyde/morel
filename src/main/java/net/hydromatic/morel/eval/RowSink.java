@@ -60,6 +60,18 @@ public interface RowSink extends Describable {
   default List<Object> result(final Stack stack) {
     return result(stack.globalEnv);
   }
+
+  /**
+   * Returns the maximum number of stack slots this sink (and all its
+   * descendants) may push above {@code stack.top} at any point during
+   * processing (across both {@link #accept} and {@link #result} calls).
+   *
+   * <p>Used by {@link Code#maxSlots()} implementations to size the initial
+   * {@link Stack} array at statement-evaluation time.
+   */
+  default int maxSlots() {
+    return 0;
+  }
 }
 
 // End RowSink.java
