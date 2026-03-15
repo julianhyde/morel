@@ -621,3 +621,14 @@ After Step 18, replace every `stack.globalEnv` read with
 
 `Stack` then contains exactly three fields: `session`, `slots`, `top`.
 
+**Prerequisite**: Several callers in `RowSinks.java` and `Codes.java` create
+inner stacks via `new Stack(extendedEnv, slots, top)` where `extendedEnv` is
+a `MutableEvalEnv` with rebound row values for deferred-sink rebinding
+(`withRow`, `withRowFromKey`). `GetCode` nodes compiled for those names look
+up in `stack.globalEnv = extendedEnv`. Until those are converted to slot-push
+(as Step 12b described for deferred sinks), `Stack.globalEnv` cannot be
+removed. The simple reads (`GetCode.eval`, `GlobalMarshalCode.eval`,
+`StackMultiLetCode.useSlots=false`, `StackMatchCode.eval`, `Calcite.eval`)
+can be converted to `stack.session.globalEnv` immediately; the
+`new Stack(extendedEnv, ...)` constructors are the blocking dependency.
+
