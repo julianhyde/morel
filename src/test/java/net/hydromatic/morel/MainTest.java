@@ -1054,8 +1054,8 @@ public class MainTest {
     // With inlining, we want the plan to simplify to "fn i => false"
     final String plan =
         "match(i, andalso(apply2("
-            + "fnValue =, get(name i), constant(10)), "
-            + "apply2(fnValue =, get(name i), constant(0))))";
+            + "fnValue =, stack(offset 1, name i), constant(10)), "
+            + "apply2(fnValue =, stack(offset 1, name i), constant(0))))";
     ml(ml)
         .assertEval(whenAppliedTo(0, is(false)))
         .assertEval(whenAppliedTo(10, is(false)))
@@ -1082,8 +1082,8 @@ public class MainTest {
     final String plan =
         "match(v, tailApply(fnCode match((a, b, c), "
             + "apply2(fnValue -, apply2(fnValue *, "
-            + "apply2(fnValue +, get(name a), get(name b)), "
-            + "constant(3)), get(name c))), argCode get(name v)))";
+            + "apply2(fnValue +, stack(offset 3, name a), stack(offset 2, name b)), "
+            + "constant(3)), stack(offset 1, name c))), argCode stack(offset 1, name v)))";
     ml(ml)
         // g (4, 3, 2) = (4 + 3) * 3 - 2 = 19
         .assertEval(whenAppliedTo(list(4, 3, 2), is(19)))
@@ -1801,6 +1801,57 @@ public class MainTest {
             + " depth NIL\n"
             + "end";
     ml(ml).assertParseSame().assertType("int").assertEval(is(0));
+  }
+
+  /** Tests program function (multi-statement context). */
+  @Test
+  void testProgram() {
+    ml("let\n"
+            + "  fun factorize n =\n"
+            + "    let\n"
+            + "      fun findSmallestDivisor (n, start) =\n"
+            + "        if start * start > n then n\n"
+            + "        else if n mod start = 0 then start\n"
+            + "        else findSmallestDivisor (n, start + 1);\n"
+            + "      fun smallestFactor n =\n"
+            + "        if n <= 1 then n\n"
+            + "        else findSmallestDivisor (n, 2);\n"
+            + "    in\n"
+            + "      if n <= 1 then [n]\n"
+            + "      else\n"
+            + "        let\n"
+            + "          val factor = smallestFactor n\n"
+            + "        in\n"
+            + "          if factor = n then [n]\n"
+            + "          else factor :: factorize (n div factor)\n"
+            + "        end\n"
+            + "    end;\n"
+            + "  fun program n =\n"
+            + "    let\n"
+            + "      fun concat2 (start, sep, e, list) =\n"
+            + "        start ^\n"
+            + "          (case list of\n"
+            + "              [] => \"\"\n"
+            + "            | [s] => s\n"
+            + "            | first :: rest =>"
+            + " first ^ (String.concat (List.map (fn s => sep ^ s) rest))) ^\n"
+            + "          e;\n"
+            + "      fun f i =\n"
+            + "        let\n"
+            + "          val factors = factorize i\n"
+            + "        in\n"
+            + "          if length factors = 1 then Int.toString (hd factors)\n"
+            + "          else concat2 (\"\", \" * \","
+            + " \"\", List.map (fn x => \"i\" ^ Int.toString x) factors)\n"
+            + "        end;\n"
+            + "    in\n"
+            + "      concat2 (\"(\", \", \", \")\", List.tabulate (n, fn i =>"
+            + " \"i\" ^ Int.toString i))\n"
+            + "    end\n"
+            + "in\n"
+            + "  program 5\n"
+            + "end")
+        .assertEval(is("(i0, i1, i2, i3, i4)"));
   }
 
   /** As {@link #testDatatype4()} but with deeper expression. */
@@ -2837,7 +2888,7 @@ public class MainTest {
     final String plan =
         "from("
             + "sink join(pat r, exp tuple(tuple(constant(2), constant(3))), "
-            + "sink group(key tuple(apply(fnValue nth:0, argCode get(name r))), "
+            + "sink group(key tuple(apply(fnValue nth:0, argCode stack(offset 1, name r))), "
             + "agg aggregate, "
             + "sink collect(tuple(get(name a), "
             + "apply2(fnValue +, get(name a), get(name a)), "

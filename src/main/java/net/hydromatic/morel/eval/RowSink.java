@@ -22,11 +22,38 @@ import java.util.List;
 
 /** Accepts rows produced by a supplier as part of a {@code from} step. */
 public interface RowSink extends Describable {
-  void start(EvalEnv env);
+  /** Initializes this row sink with a {@link Stack}. */
+  void start(Stack stack);
 
-  void accept(EvalEnv env);
+  /** Accepts a row using a {@link Stack}. */
+  void accept(Stack stack);
 
-  List<Object> result(EvalEnv env);
+  /** Returns the collected results using a {@link Stack}. */
+  List<Object> result(Stack stack);
+
+  default void start(EvalEnv env) {
+    throw new UnsupportedOperationException("use start(Stack)");
+  }
+
+  default void accept(EvalEnv env) {
+    throw new UnsupportedOperationException("use accept(Stack)");
+  }
+
+  default List<Object> result(EvalEnv env) {
+    throw new UnsupportedOperationException("use result(Stack)");
+  }
+
+  /**
+   * Returns the maximum number of stack slots this sink (and all its
+   * descendants) may push above {@code stack.top} at any point during
+   * processing (across both {@link #accept} and {@link #result} calls).
+   *
+   * <p>Used by {@link Code#maxSlots()} implementations to size the initial
+   * {@link Stack} array at statement-evaluation time.
+   */
+  default int maxSlots() {
+    return 0;
+  }
 }
 
 // End RowSink.java

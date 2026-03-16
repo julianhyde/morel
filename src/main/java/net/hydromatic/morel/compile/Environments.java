@@ -48,6 +48,7 @@ import net.hydromatic.morel.type.MultiType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Pair;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Helpers for {@link Environment}. */
@@ -261,14 +262,20 @@ public abstract class Environments {
     }
 
     @Override
-    public @Nullable Binding getOpt2(Core.NamedPat id) {
+    public @Nullable Pair<Binding, Environment> getOpt2(Core.NamedPat id) {
       if (binding.id.equals(id)) {
-        return binding;
+        return Pair.of(binding, this);
       }
       if (binding.overloadId != null && binding.overloadId.equals(id)) {
-        return binding;
+        return Pair.of(binding, this);
       }
       return parent.getOpt2(id);
+    }
+
+    @Override
+    void forEachAncestor(Consumer<Environment> consumer) {
+      consumer.accept(this);
+      parent.forEachAncestor(consumer);
     }
 
     @Override
@@ -356,8 +363,13 @@ public abstract class Environments {
     }
 
     @Override
-    public @Nullable Binding getOpt2(Core.NamedPat id) {
+    public @Nullable Pair<Binding, Environment> getOpt2(Core.NamedPat id) {
       return null;
+    }
+
+    @Override
+    void forEachAncestor(Consumer<Environment> consumer) {
+      consumer.accept(this);
     }
 
     @Override
@@ -437,12 +449,18 @@ public abstract class Environments {
     }
 
     @Override
-    public @Nullable Binding getOpt2(Core.NamedPat id) {
+    public @Nullable Pair<Binding, Environment> getOpt2(Core.NamedPat id) {
       final Binding binding = map.get(id);
       if (binding != null && binding.id.i == id.i) {
-        return binding;
+        return Pair.of(binding, this);
       }
       return parent.getOpt2(id);
+    }
+
+    @Override
+    void forEachAncestor(Consumer<Environment> consumer) {
+      consumer.accept(this);
+      parent.forEachAncestor(consumer);
     }
 
     @Override

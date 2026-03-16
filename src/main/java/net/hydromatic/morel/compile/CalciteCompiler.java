@@ -33,6 +33,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -54,6 +55,7 @@ import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.EvalEnvs;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.CalciteFunctions;
@@ -190,9 +192,61 @@ public class CalciteCompiler extends Compiler {
   }
 
   @Override
+  protected Code postProcessLetBody(Context cx, Code bodyCode, Type bodyType) {
+    final Code calciteCode = toRel4(cx.env, bodyCode, bodyType);
+    if (calciteCode == bodyCode) {
+      return bodyCode;
+    }
+    if (cx.layout.size() == 0) {
+      return calciteCode;
+    }
+    // There are slot-bound variables that morelScalar may reference at runtime.
+    // Build a bridge that copies those slot values into globalEnv before
+    // running the Calcite plan, so that GetCode can find them.
+    final ImmutableMap<String, Integer> offsets =
+        cx.layout.nameToOffsetMap(cx.localDepth);
+    return new Code() {
+      @Override
+      public Describer describe(Describer describer) {
+        return calciteCode.describe(describer);
+      }
+
+      @Override
+      public int maxSlots() {
+        return calciteCode.maxSlots();
+      }
+
+      @Override
+      public Object eval(Stack stack) {
+        // Temporarily add slot-bound variables to session.globalEnv so
+        // that morelScalar's GetCode lookups can find them at runtime.
+        final Map<String, Object> env = stack.currentEnv();
+        final Map<String, @Nullable Object> savedValues = new HashMap<>();
+        offsets.forEach(
+            (key, value) -> {
+              savedValues.put(key, env.get(key));
+              env.put(key, stack.slots[stack.top - value]);
+            });
+        try {
+          return calciteCode.eval(stack);
+        } finally {
+          savedValues.forEach(
+              (key, value) -> {
+                if (value == null) {
+                  env.remove(key);
+                } else {
+                  env.put(key, value);
+                }
+              });
+        }
+      }
+    };
+  }
+
+  @Override
   protected Code finishCompileLet(
       Context cx, List<Code> matchCodes_, Code resultCode_, Type resultType) {
-    final Code resultCode = toRel4(cx.env, resultCode_, resultType);
+    final Code resultCode = postProcessLetBody(cx, resultCode_, resultType);
     final List<Code> matchCodes = ImmutableList.copyOf(matchCodes_);
     final Code code =
         super.finishCompileLet(cx, matchCodes, resultCode, resultType);
@@ -203,8 +257,8 @@ public class CalciteCompiler extends Compiler {
       }
 
       @Override
-      public Object eval(EvalEnv evalEnv) {
-        return code.eval(evalEnv);
+      public Object eval(Stack stack) {
+        return code.eval(stack);
       }
 
       @Override
@@ -231,8 +285,8 @@ public class CalciteCompiler extends Compiler {
       }
 
       @Override
-      public Object eval(EvalEnv env) {
-        return code.eval(env);
+      public Object eval(Stack stack) {
+        return code.eval(stack);
       }
 
       @Override
@@ -244,7 +298,10 @@ public class CalciteCompiler extends Compiler {
           case RECORD_SELECTOR:
             if (apply.arg instanceof Core.Id) {
               // Something like '#emps scott', 'scott' is a foreign value
-              final Object o = code.eval(evalEnvOf(cx.env));
+              final Session miniSession = new Session(ImmutableMap.of());
+              miniSession.globalEnv =
+                  new HashMap<>(evalEnvOf(cx.env).valueMap());
+              final Object o = code.eval(new Stack(miniSession, 256));
               if (o instanceof RelList) {
                 cx.relBuilder.push(((RelList) o).rel);
                 return true;
@@ -320,7 +377,7 @@ public class CalciteCompiler extends Compiler {
         final String jsonRowType = jsonBuilder.toJsonString(json);
         final String morelCode = apply.toString();
         ThreadLocals.let(
-            CalciteFunctions.THREAD_ENV,
+            CalciteFunctions.THREAD_CX,
             new CalciteFunctions.Context(
                 new Session(ImmutableMap.of()),
                 cx.env,
@@ -428,8 +485,8 @@ public class CalciteCompiler extends Compiler {
       }
 
       @Override
-      public Object eval(EvalEnv env) {
-        return code.eval(env);
+      public Object eval(Stack stack) {
+        return code.eval(stack);
       }
 
       @Override
@@ -1024,8 +1081,8 @@ public class CalciteCompiler extends Compiler {
         }
 
         @Override
-        public Object eval(EvalEnv env) {
-          return code.eval(env);
+        public Object eval(Stack stack) {
+          return code.eval(stack);
         }
 
         @Override

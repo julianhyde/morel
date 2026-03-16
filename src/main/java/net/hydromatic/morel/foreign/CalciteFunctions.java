@@ -36,11 +36,11 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Inliner;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
-import net.hydromatic.morel.eval.Closure;
+import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
-import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.parse.MorelParseException;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.Type;
@@ -80,19 +80,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * and returns the result as a relation.
  */
 public class CalciteFunctions {
-  public static final ThreadLocal<@Nullable Context> THREAD_ENV =
+  public static final ThreadLocal<@Nullable Context> THREAD_CX =
       new ThreadLocal<>();
 
   /**
-   * Used to pass Morel's evaluation environment into Calcite, so that it is
-   * available if Calcite calls back into Morel.
-   *
-   * <p>It would be better if we passed the environment, or variables we know
-   * are needed, as an argument at the Calcite-to-Morel (see {@link
-   * Calcite#code}) and Morel-to-Calcite (see {@link #TABLE_OPERATOR} and {@link
-   * #SCALAR_OPERATOR}) boundaries.
+   * Used to pass the full Morel evaluation stack into Calcite, so that stack
+   * slots are available if Calcite calls back into Morel via {@link
+   * MorelScalarFunction} or {@link MorelApplyFunction}.
    */
-  public static final ThreadLocal<@Nullable EvalEnv> THREAD_EVAL_ENV =
+  public static final ThreadLocal<@Nullable Stack> THREAD_STACK =
       new ThreadLocal<>();
 
   private CalciteFunctions() {}
@@ -174,7 +170,7 @@ public class CalciteFunctions {
    * table.
    */
   public static class MorelTableFunction {
-    private final Context cx = requireNonNull(THREAD_ENV.get());
+    private final Context cx = requireNonNull(THREAD_CX.get());
     private final RelDataTypeFactory typeFactory =
         requireNonNull(cx.typeFactory);
     private final @Nullable Compiled compiled;
@@ -218,7 +214,9 @@ public class CalciteFunctions {
 
         @Override
         public Enumerable<Object[]> scan(DataContext root) {
-          Object v = compiled.code.eval(compiled.evalEnv);
+          final Stack stack =
+              new Stack(compiled.session, compiled.code.maxSlots());
+          final Object v = compiled.code.eval(stack);
           return compiled.f.apply(v);
         }
 
@@ -251,16 +249,16 @@ public class CalciteFunctions {
     /** Compiled state. */
     private static class Compiled {
       final Code code;
-      final EvalEnv evalEnv;
+      final Session session;
       final Function<Object, Enumerable<Object[]>> f;
 
       Compiled(
           String ml,
           Code code,
-          EvalEnv evalEnv,
+          Session session,
           Function<Object, Enumerable<Object[]>> f) {
         this.code = code;
-        this.evalEnv = evalEnv;
+        this.session = session;
         this.f = f;
       }
 
@@ -294,10 +292,13 @@ public class CalciteFunctions {
 
         final Core.Exp e3 = Compiles.toExp(valDecl4);
         final Compiler compiler = new Compiler(typeSystem);
+        // Initialize session.globalEnv so that closures created during
+        // evaluation (via StackMatchCode) have a valid globalEnv.
+        session.globalEnv = Codes.globalEnvOf(Codes.emptyEnvWith(session, env));
         return new Compiled(
             ml,
             compiler.compile(env, e3),
-            Codes.emptyEnvWith(session, env),
+            session,
             Converters.toCalciteEnumerable(e3.type, typeFactory));
       }
     }
@@ -308,7 +309,7 @@ public class CalciteFunctions {
    * scalar value.
    */
   public static class MorelScalarFunction {
-    private final Context cx = requireNonNull(THREAD_ENV.get());
+    private final Context cx = requireNonNull(THREAD_CX.get());
     private final RelDataTypeFactory typeFactory =
         requireNonNull(cx.typeFactory);
     private final @Nullable Compiled compiled;
@@ -338,8 +339,8 @@ public class CalciteFunctions {
           this.compiled != null
               ? this.compiled
               : new Compiled(cx.env, cx.typeSystem, typeFactory, ml, typeJson);
-      final EvalEnv evalEnv = requireNonNull(THREAD_EVAL_ENV.get());
-      Object v = compiled.code.eval(evalEnv);
+      final Stack stack = requireNonNull(THREAD_STACK.get());
+      final Object v = compiled.code.eval(stack);
       return compiled.f.apply(v);
     }
 
@@ -382,7 +383,7 @@ public class CalciteFunctions {
    * an argument.
    */
   public static class MorelApplyFunction {
-    private final Context cx = requireNonNull(THREAD_ENV.get());
+    private final Context cx = requireNonNull(THREAD_CX.get());
     private final RelDataTypeFactory typeFactory =
         requireNonNull(cx.typeFactory);
     private final @Nullable Compiled compiled;
@@ -410,10 +411,10 @@ public class CalciteFunctions {
           this.compiled != null
               ? this.compiled
               : new Compiled(morelArgTypeJson, typeFactory, cx.typeSystem);
-      final Closure fn = (Closure) closure;
-      final EvalEnv evalEnv = THREAD_EVAL_ENV.get();
+      final Applicable fn = (Applicable) closure;
+      final Stack stack = requireNonNull(THREAD_STACK.get());
       final Object o = compiled.converter.apply(arg);
-      return fn.apply(o);
+      return fn.apply(stack, o);
     }
 
     /** Compiled state. */

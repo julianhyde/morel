@@ -21,6 +21,7 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Pair.allMatch;
 import static net.hydromatic.morel.util.Static.skip;
+import static net.hydromatic.morel.util.Static.transformEager;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ImmutablePairList;
 
 /**
@@ -91,19 +93,6 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     throw new AssertionError("no match");
   }
 
-  /** Similar to {@link #bind}, but evaluates an expression first. */
-  EvalEnv evalBind(EvalEnv env) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(env);
-    for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
-      final Object argValue = patCode.getValue().eval(env);
-      final Core.Pat pat = patCode.getKey();
-      if (bindRecurse(pat, argValue, envRef)) {
-        return envRef.env;
-      }
-    }
-    throw new AssertionError("no match");
-  }
-
   /**
    * Similar to {@link #bind}, but also evaluates. May return a {@link
    * Codes.TailCall} sentinel; callers must trampoline if they need a real
@@ -115,7 +104,8 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       final Core.Pat pat = patCode.getKey();
       if (bindRecurse(pat, argValue, envRef)) {
         final Code code = patCode.getValue();
-        return code.eval(envRef.env);
+        final Session session = (Session) envRef.env.getOpt(EvalEnv.SESSION);
+        return code.eval(new Stack(session, code.maxSlots()));
       }
     }
     throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
@@ -139,7 +129,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
   }
 
   @Override
-  public Object apply(EvalEnv env, Object argValue) {
+  public Object apply(Stack stack, Object argValue) {
     return bindEval(argValue);
   }
 
@@ -273,6 +263,285 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     @Override
     public void accept(Core.NamedPat namedPat, Object o) {
       env = env.bind(namedPat.name, o);
+    }
+  }
+
+  /**
+   * A closure that uses the evaluation stack for local variable access.
+   *
+   * <p>At creation time, outer-scope values are snapshotted from the stack into
+   * {@link #captured}. If the closure belongs to a mutual-recursion group,
+   * {@link #extendWithRecPeers} appends the peer closures to {@code captured}
+   * before any call can observe it. At call time, all captured values are
+   * pushed onto the stack, followed by the argument bindings, and the body code
+   * is evaluated with {@link Code#eval(Stack)}.
+   *
+   * <p>Compile-time constants ({@link Codes.StackMatchCode#patCodes}, {@link
+   * Codes.StackMatchCode#capacity}, {@link Codes.StackMatchCode#pos}) live in
+   * the shared {@link #matchCode} template rather than being duplicated in
+   * every closure instance.
+   */
+  public static class StackClosure
+      implements Comparable<StackClosure>, Applicable, Applicable1 {
+    /**
+     * The session for this closure, used to create a fresh {@link Stack} when
+     * called without a pre-existing one (see {@link #apply(Object)}). Is {@link
+     * Session#EMPTY} for closures created during compile-time constant
+     * evaluation.
+     */
+    final Session session;
+
+    /**
+     * Captured values from the outer stack frame, plus any rec-group peers
+     * filled in by {@link #extendWithRecPeers}.
+     *
+     * <p>Layout: {@code [capturedOuter..., recPeer0, recPeer1, ...]}. The array
+     * is pre-allocated to the full size by {@link Codes.StackMatchCode#eval}.
+     * The rec-peer tail is zero-filled until {@link #extendWithRecPeers} writes
+     * the peer values in; for non-recursive closures the array has no tail.
+     */
+    final Object[] captured;
+
+    /**
+     * Compile-time template shared by all closures created from the same {@code
+     * fn} expression. Holds {@link Codes.StackMatchCode#patCodes}, {@link
+     * Codes.StackMatchCode#capacity}, and {@link Codes.StackMatchCode#pos}.
+     */
+    final Codes.StackMatchCode matchCode;
+
+    public StackClosure(
+        Session session, Object[] captured, Codes.StackMatchCode matchCode) {
+      this.session = session;
+      this.captured = captured;
+      this.matchCode = matchCode;
+    }
+
+    @Override
+    public int compareTo(StackClosure o) {
+      return 0;
+    }
+
+    @Override
+    public String toString() {
+      return "StackClosure(captured=" + captured.length + ")";
+    }
+
+    /**
+     * Fills the pre-allocated rec-peer tail of {@link #captured} with the
+     * mutual-recursion group values.
+     *
+     * <p>Called by {@code StackMultiLetCode.eval} immediately after closure
+     * creation, before any call can observe it. No allocation occurs; the array
+     * was sized by {@link Codes.StackMatchCode#eval}.
+     */
+    public void extendWithRecPeers(Object[] peers) {
+      System.arraycopy(
+          peers, 0, captured, matchCode.captureOffsets.length, peers.length);
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start("stackClosure", d -> {});
+    }
+
+    /**
+     * Applies this closure to {@code argValue}, using the stack for local
+     * variable storage.
+     *
+     * <p>If the caller's slots array doesn't have room for this closure's
+     * capacity (e.g., a non-tail recursive call where the outer frame's
+     * bindings are still live), allocates a larger array so that pushBindings
+     * can store the new frame's variables without going out of bounds.
+     */
+    @Override
+    public Object apply(Stack stack, Object argValue) {
+      Stack evalStack = stack.ensureSize(matchCode.capacity);
+      int savedTop = evalStack.save();
+      Object result = applyOnce(evalStack, argValue);
+      while (result instanceof Codes.TailCall) {
+        final Codes.TailCall tc = (Codes.TailCall) result;
+        evalStack.restore(savedTop);
+        if (tc.fn instanceof StackClosure) {
+          final StackClosure nextFn = (StackClosure) tc.fn;
+          // Ensure slots array is large enough for the tail-called closure.
+          // The outer closure may have a smaller capacity than the tail-called
+          // closure needs (e.g., fn x => case x of head::tail => ...).
+          evalStack = evalStack.ensureSize(nextFn.matchCode.capacity);
+          result = nextFn.applyOnce(evalStack, tc.arg);
+        } else {
+          result = tc.fn.apply(evalStack, tc.arg);
+          break;
+        }
+      }
+      evalStack.restore(savedTop);
+      return result;
+    }
+
+    private Object applyOnce(Stack stack, Object argValue) {
+      // Push all captured values (outer vars, then rec-group peers if any).
+      for (Object v : captured) {
+        stack.push(v);
+      }
+      // Try each pattern arm.
+      for (Map.Entry<Core.Pat, Code> patCode : matchCode.patCodes) {
+        final int armTop = stack.save();
+        if (pushBindings(patCode.getKey(), argValue, stack)) {
+          return patCode.getValue().eval(stack);
+        }
+        stack.restore(armTop);
+      }
+      throw new Codes.MorelRuntimeException(
+          Codes.BuiltInExn.BIND, matchCode.pos);
+    }
+
+    /**
+     * Applies this closure without a pre-existing {@link Stack}.
+     *
+     * <p>Implements {@link Applicable1} so that built-in higher-order functions
+     * (e.g. {@code List.map}) can call user-defined functions without needing
+     * to supply an {@link EvalEnv}.
+     */
+    @Override
+    public Object apply(Object argValue) {
+      return apply(new Stack(session, matchCode.capacity), argValue);
+    }
+
+    /**
+     * Matches {@code pat} against {@code argValue}, pushing bound values onto
+     * {@code stack} in the same order as {@link Closure#bindRecurse}.
+     *
+     * <p>Returns true if the pattern matched, false otherwise. On false, the
+     * caller is responsible for restoring {@code stack.top}.
+     */
+    @SuppressWarnings("unchecked")
+    public static boolean pushBindings(
+        Core.Pat pat, Object argValue, Stack stack) {
+      final Core.LiteralPat literalPat;
+      switch (pat.op) {
+        case ID_PAT:
+          stack.push(argValue);
+          return true;
+
+        case WILDCARD_PAT:
+          return true;
+
+        case AS_PAT:
+          final Core.AsPat asPat = (Core.AsPat) pat;
+          stack.push(argValue);
+          return pushBindings(asPat.pat, argValue, stack);
+
+        case BOOL_LITERAL_PAT:
+        case CHAR_LITERAL_PAT:
+        case STRING_LITERAL_PAT:
+          literalPat = (Core.LiteralPat) pat;
+          return literalPat.value.equals(argValue);
+
+        case INT_LITERAL_PAT:
+          literalPat = (Core.LiteralPat) pat;
+          return ((BigDecimal) literalPat.value).intValue()
+              == (Integer) argValue;
+
+        case REAL_LITERAL_PAT:
+          literalPat = (Core.LiteralPat) pat;
+          return ((BigDecimal) literalPat.value).doubleValue()
+              == (Double) argValue;
+
+        case TUPLE_PAT:
+          final Core.TuplePat tuplePat = (Core.TuplePat) pat;
+          final List<Object> tupleValue = (List<Object>) argValue;
+          for (int i = 0; i < tuplePat.args.size(); i++) {
+            if (!pushBindings(tuplePat.args.get(i), tupleValue.get(i), stack)) {
+              return false;
+            }
+          }
+          return true;
+
+        case RECORD_PAT:
+          final Core.RecordPat recordPat = (Core.RecordPat) pat;
+          final List<Object> recordValue = (List<Object>) argValue;
+          for (int i = 0; i < recordPat.args.size(); i++) {
+            if (!pushBindings(
+                recordPat.args.get(i), recordValue.get(i), stack)) {
+              return false;
+            }
+          }
+          return true;
+
+        case LIST_PAT:
+          final Core.ListPat listPat = (Core.ListPat) pat;
+          final List<Object> listValue = (List<Object>) argValue;
+          if (listValue.size() != listPat.args.size()) {
+            return false;
+          }
+          for (int i = 0; i < listPat.args.size(); i++) {
+            if (!pushBindings(listPat.args.get(i), listValue.get(i), stack)) {
+              return false;
+            }
+          }
+          return true;
+
+        case CONS_PAT:
+          final Core.ConPat consPat = (Core.ConPat) pat;
+          if (argValue instanceof Variant) {
+            return pushVariantConsPat((Variant) argValue, consPat, stack);
+          }
+          final List<Object> consValue = (List<Object>) argValue;
+          if (consValue.isEmpty()) {
+            return false;
+          }
+          final Object head = consValue.get(0);
+          final List<Object> tail = skip(consValue);
+          final List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
+          return pushBindings(patArgs.get(0), head, stack)
+              && pushBindings(patArgs.get(1), tail, stack);
+
+        case CON0_PAT:
+          final Core.Con0Pat con0Pat = (Core.Con0Pat) pat;
+          final List con0Value = (List) argValue;
+          return con0Value.get(0).equals(con0Pat.tyCon);
+
+        case CON_PAT:
+          final Core.ConPat conPat = (Core.ConPat) pat;
+          if (argValue instanceof Variant) {
+            return pushVariantConPat((Variant) argValue, conPat, stack);
+          }
+          final List conValue = (List) argValue;
+          return conValue.get(0).equals(conPat.tyCon)
+              && pushBindings(conPat.pat, conValue.get(1), stack);
+
+        default:
+          throw new AssertionError(
+              "cannot push bindings for " + pat.op + ": " + pat);
+      }
+    }
+
+    private static boolean pushVariantConsPat(
+        Variant variant, Core.ConPat consPat, Stack stack) {
+      @SuppressWarnings("unchecked")
+      final List<Object> consValue = (List<Object>) variant.value;
+      if (consValue.isEmpty()) {
+        return false;
+      }
+      final Type elementType = variant.type.elementType();
+      final Variant head = Variant.of(elementType, consValue.get(0));
+      final List<Variant> tail =
+          transformEager(
+              skip(consValue),
+              e ->
+                  e instanceof Variant
+                      ? (Variant) e
+                      : Variant.of(elementType, e));
+      List<Core.Pat> patArgs = ((Core.TuplePat) consPat.pat).args;
+      return pushBindings(patArgs.get(0), head, stack)
+          && pushBindings(patArgs.get(1), tail, stack);
+    }
+
+    private static boolean pushVariantConPat(
+        Variant variant, Core.ConPat conPat, Stack stack) {
+      if (!variant.constructor().constructor.equals(conPat.tyCon)) {
+        return false;
+      }
+      return pushBindings(conPat.pat, Variant.innerValue(variant), stack);
     }
   }
 }
