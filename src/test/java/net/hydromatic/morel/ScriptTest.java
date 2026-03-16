@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -69,6 +70,7 @@ public class ScriptTest {
 
   @ParameterizedTest
   @MethodSource("data")
+  @Timeout(60)
   void test(String path) throws Exception {
     Method method = findMethod(path);
     if (method != null) {

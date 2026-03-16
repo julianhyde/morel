@@ -24,7 +24,7 @@ import static java.util.Objects.requireNonNull;
 public class Visitor {
 
   /** For use as a method reference. */
-  protected <E extends AstNode> void accept(E e) {
+  public <E extends AstNode> void accept(E e) {
     e.accept(this);
   }
 

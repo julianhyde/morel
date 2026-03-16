@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.eval.Slots.maxOf;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.SKIP;
@@ -31,7 +32,6 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
@@ -78,6 +78,7 @@ import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MorelException;
@@ -522,9 +523,9 @@ public abstract class Codes {
   private static final Applicable DATALOG_EXECUTE =
       new BaseApplicable(BuiltIn.DATALOG_EXECUTE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
+        public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
-          return DatalogEvaluator.execute(program, env.getSession());
+          return DatalogEvaluator.execute(program, stack.session);
         }
       };
 
@@ -532,9 +533,9 @@ public abstract class Codes {
   private static final Applicable DATALOG_TRANSLATE =
       new BaseApplicable(BuiltIn.DATALOG_TRANSLATE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
+        public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
-          return DatalogEvaluator.translate(program, env.getSession());
+          return DatalogEvaluator.translate(program, stack.session);
         }
       };
 
@@ -542,9 +543,9 @@ public abstract class Codes {
   private static final Applicable DATALOG_VALIDATE =
       new BaseApplicable(BuiltIn.DATALOG_VALIDATE) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
+        public Object apply(Stack stack, Object arg) {
           String program = (String) arg;
-          return DatalogEvaluator.validate(program, env.getSession());
+          return DatalogEvaluator.validate(program, stack.session);
         }
       };
 
@@ -574,8 +575,8 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      return apply((List) arg, sessionZone(env.getSession()));
+    public Object apply(Stack stack, Object arg) {
+      return apply((List) arg, sessionZone(stack.session));
     }
 
     @Override
@@ -653,8 +654,8 @@ public abstract class Codes {
   private static final Applicable DATE_FROM_TIME_LOCAL =
       new ApplicableImpl(BuiltIn.DATE_FROM_TIME_LOCAL) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          return timeToDate((Long) arg, sessionZone(env.getSession()));
+        public Object apply(Stack stack, Object arg) {
+          return timeToDate((Long) arg, sessionZone(stack.session));
         }
       };
 
@@ -689,13 +690,11 @@ public abstract class Codes {
   private static final ApplicableImpl DATE_LOCAL_OFFSET =
       new ApplicableImpl(BuiltIn.DATE_LOCAL_OFFSET) {
         @Override
-        public Long apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(Stack stack, Object arg) {
+          final Session session = stack.session;
+          final Instant now = sessionNow(session);
           final int totalSeconds =
-              sessionZone(session)
-                  .getRules()
-                  .getOffset(sessionNow(session))
-                  .getTotalSeconds();
+              sessionZone(session).getRules().getOffset(now).getTotalSeconds();
           return (long) totalSeconds * 1_000_000_000L;
         }
       };
@@ -1063,7 +1062,8 @@ public abstract class Codes {
           return init ->
               either -> {
                 Applicable a = isEitherLeft(either) ? f : g;
-                return a.apply(null, FlatLists.of(eitherProj(either), init));
+                return ((Applicable1) a)
+                    .apply(FlatLists.of(eitherProj(either), init));
               };
         }
       };
@@ -1174,7 +1174,7 @@ public abstract class Codes {
           BuiltIn.FN_CURRY) {
         @Override
         public Object apply(Applicable applicable, Object o, Object o2) {
-          return applicable.apply(null, FlatLists.of(o, o2));
+          return ((Applicable1) applicable).apply(FlatLists.of(o, o2));
         }
       };
 
@@ -1516,10 +1516,9 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
+    public Object apply(Stack stack, Object arg) {
       final String f = (String) arg;
-      final Session session = env.getSession();
-      session.use(f, silent, pos);
+      stack.session.use(f, silent, pos);
       return Unit.INSTANCE;
     }
   }
@@ -3849,9 +3848,8 @@ public abstract class Codes {
   private static final Applicable SYS_CLEAR_ENV =
       new ApplicableImpl(BuiltIn.SYS_CLEAR_ENV) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
-          session.clearEnv();
+        public Object apply(Stack stack, Object arg) {
+          stack.session.clearEnv();
           return Unit.INSTANCE;
         }
       };
@@ -3882,9 +3880,8 @@ public abstract class Codes {
   private static final Applicable SYS_PLAN =
       new ApplicableImpl(BuiltIn.SYS_PLAN) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
-          return Codes.describe(requireNonNull(session.code));
+        public Object apply(Stack stack, Object arg) {
+          return Codes.describe(requireNonNull(stack.session.code));
         }
       };
 
@@ -3892,8 +3889,8 @@ public abstract class Codes {
   private static final Applicable SYS_PLAN_EX =
       new ApplicableImpl(BuiltIn.SYS_PLAN_EX) {
         @Override
-        public Object apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(Stack stack, Object arg) {
+          final Session session = stack.session;
           final String phase = (String) arg;
           if (session.coreDecl == null) {
             return "No previous command to re-plan";
@@ -3923,12 +3920,12 @@ public abstract class Codes {
   private static final Applicable SYS_SET =
       new ApplicableImpl(BuiltIn.SYS_SET) {
         @Override
-        public Unit apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(Stack stack, Object arg) {
           final List list = (List) arg;
           final String propName = (String) list.get(0);
           final Object value = list.get(1);
-          Prop.lookup(propName).setLenient(session.map, value);
+          final Prop prop = Prop.lookup(propName);
+          prop.setLenient(stack.session.map, value);
           return Unit.INSTANCE;
         }
       };
@@ -3937,10 +3934,10 @@ public abstract class Codes {
   private static final Applicable SYS_SHOW =
       new ApplicableImpl(BuiltIn.SYS_SHOW) {
         @Override
-        public List apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(Stack stack, Object arg) {
           final String propName = (String) arg;
-          final Object value = Prop.lookup(propName).get(session.map);
+          final Prop prop = Prop.lookup(propName);
+          final Object value = prop.get(stack.session.map);
           return value == null ? OPTION_NONE : optionSome(value.toString());
         }
       };
@@ -3949,8 +3946,8 @@ public abstract class Codes {
   private static final Applicable SYS_SHOW_ALL =
       new ApplicableImpl(BuiltIn.SYS_SHOW_ALL) {
         @Override
-        public List apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(Stack stack, Object arg) {
+          final Session session = stack.session;
           final ImmutableList.Builder<List<List>> list =
               ImmutableList.builder();
           for (Prop prop : Prop.BY_CAMEL_NAME) {
@@ -3967,10 +3964,10 @@ public abstract class Codes {
   private static final Applicable SYS_UNSET =
       new ApplicableImpl(BuiltIn.SYS_UNSET) {
         @Override
-        public Unit apply(EvalEnv env, Object arg) {
-          final Session session = env.getSession();
+        public Object apply(Stack stack, Object arg) {
           final String propName = (String) arg;
           final Prop prop = Prop.lookup(propName);
+          final Session session = stack.session;
           @SuppressWarnings("unused")
           final Object value = prop.remove(session.map);
           return Unit.INSTANCE;
@@ -4151,8 +4148,8 @@ public abstract class Codes {
   private static final ApplicableImpl TIME_NOW =
       new ApplicableImpl(BuiltIn.TIME_NOW) {
         @Override
-        public Long apply(EvalEnv env, Object arg) {
-          final Instant now = sessionNow(env.getSession());
+        public Object apply(Stack stack, Object arg) {
+          final Instant now = sessionNow(stack.session);
           return now.getEpochSecond() * 1_000_000_000L + now.getNano();
         }
       };
@@ -4718,29 +4715,33 @@ public abstract class Codes {
   }
 
   /**
-   * Returns a Code that returns a tuple consisting of the values of variables
-   * "name0", ... "nameN" in the current environment.
+   * Returns a {@link Code} that pushes a set of global values onto the stack
+   * before evaluating {@code body}, then restores the stack top afterward.
+   *
+   * <p>At statement-evaluation time, the wrapper fetches each name from {@link
+   * Session#globalEnv} once and stores the value in a stack slot, so that the
+   * body can access those globals via fast {@link StackCode} reads instead of
+   * repeated {@link GetCode} / {@code EvalEnv} lookups.
+   *
+   * <p>If {@code names} is empty the body is returned unchanged.
    */
-  public static Code getTuple(Iterable<String> names) {
-    if (Iterables.isEmpty(names)) {
-      return new ConstantCode(Unit.INSTANCE);
-    }
-    return new GetTupleCode(ImmutableList.copyOf(names));
+  public static Code globalMarshal(Map<String, Integer> slotMap, Code body) {
+    return slotMap.isEmpty()
+        ? body
+        : new GlobalMarshalCode(ImmutableList.copyOf(slotMap.keySet()), body);
   }
 
-  public static Code let(List<Code> matchCodes, Code resultCode) {
-    switch (matchCodes.size()) {
-      case 0:
-        return resultCode;
-
-      case 1:
-        // Use a more efficient runtime path if the list has only one element.
-        // The effect is the same.
-        return new Let1Code(matchCodes.get(0), resultCode);
-
-      default:
-        return new LetCode(ImmutableList.copyOf(matchCodes), resultCode);
-    }
+  /**
+   * Returns a Code that retrieves a local variable from the stack at {@code
+   * offset} slots below the top.
+   *
+   * <p>{@code offset} is 1-based relative to {@link Stack#top}: the most
+   * recently pushed value is at offset 1, the one before that at offset 2, etc.
+   * The {@code name} field is retained for debuggability and appears in {@link
+   * net.hydromatic.morel.eval.Describer} / {@code Sys.plan} output.
+   */
+  public static Code stackGet(int offset, String name) {
+    return new StackCode(offset, name);
   }
 
   /**
@@ -4848,9 +4849,9 @@ public abstract class Codes {
    * Type constructor for {@code variant} datatype that creates {@link Variant}
    * instances.
    *
-   * <p>To ensure {@code apply(EvalEnv, Object)} is always called, only
-   * implements {@link Applicable} (not {@link Applicable1}). This provides
-   * access to {@link TypeSystem} via {@link Session}.
+   * <p>Only implements {@link Applicable} (not {@link Applicable1}), so that
+   * {@code apply(Stack, Object)} is called and provides access to {@link
+   * TypeSystem} via {@link Session}.
    */
   static class ValueTyCon extends ApplicableImpl {
     private final String tyConName;
@@ -4866,14 +4867,11 @@ public abstract class Codes {
     }
 
     @Override
-    public Object apply(EvalEnv env, Object arg) {
-      final Session session = env.getSession();
-      final TypeSystem typeSystem = session.typeSystem;
+    public Object apply(Stack stack, Object arg) {
+      final TypeSystem typeSystem = stack.session.typeSystem;
       if (typeSystem == null) {
         throw new IllegalStateException(
-            "Variant constructor "
-                + tyConName
-                + " requires TypeSystem but session.typeSystem is null");
+            format("Variant constructor %s requires TypeSystem", tyConName));
       }
       // Create Value instance based on constructor name
       return Variants.fromConstructor(tyConName, arg, typeSystem);
@@ -4894,6 +4892,21 @@ public abstract class Codes {
     env.forEachValue(map::put);
     map.put(EvalEnv.SESSION, session);
     return EvalEnvs.copyOf(map);
+  }
+
+  /**
+   * Creates a flat {@link Map} for {@link Session#globalEnv} from an evaluation
+   * environment, excluding the internal {@code $session} binding.
+   */
+  public static Map<String, Object> globalEnvOf(EvalEnv evalEnv) {
+    final Map<String, Object> map = new HashMap<>();
+    evalEnv.visit(
+        (k, v) -> {
+          if (!EvalEnv.SESSION.equals(k)) {
+            map.put(k, v);
+          }
+        });
+    return map;
   }
 
   /** Creates a compilation environment. */
@@ -4935,7 +4948,8 @@ public abstract class Codes {
       Environment env0,
       Code aggregateCode,
       List<String> names,
-      @Nullable Code argumentCode) {
+      @Nullable Code argumentCode,
+      int scanDepth) {
     return new Applicable() {
       @Override
       public Describer describe(Describer describer) {
@@ -4943,16 +4957,88 @@ public abstract class Codes {
       }
 
       @Override
-      public Object apply(EvalEnv env, Object arg) {
+      public Object apply(Stack stack, Object arg) {
         @SuppressWarnings("unchecked")
         final List<Object> rows = (List<Object>) arg;
         final List<Object> argRows;
         if (argumentCode != null) {
-          final MutableEvalEnv env2 = env.bindMutableArray(names);
           argRows = new ArrayList<>(rows.size());
-          for (Object row : rows) {
-            env2.set(row);
-            argRows.add(argumentCode.eval(env2));
+          final int envCount = names.size() - scanDepth;
+          if (names.size() == 1) {
+            if (scanDepth == 1) {
+              // Single stack-based variable: push value, eval, restore.
+              Stack s = stack.ensureSize(1);
+              final int savedTop = s.top;
+              for (Object row : rows) {
+                s.push(row);
+                argRows.add(argumentCode.eval(s));
+                s.restore(savedTop);
+              }
+            } else {
+              // Single env-based variable (scanDepth == 0): bind into
+              // session.globalEnv so GetCode can find it.
+              final Map<String, Object> env = stack.currentEnv();
+              final String varName = names.get(0);
+              final Object savedValue = env.get(varName);
+              try {
+                for (Object row : rows) {
+                  env.put(varName, row);
+                  argRows.add(argumentCode.eval(stack));
+                }
+              } finally {
+                if (savedValue == null) {
+                  env.remove(varName);
+                } else {
+                  env.put(varName, savedValue);
+                }
+              }
+            }
+          } else if (envCount == 0) {
+            // All variables are stack-based: push-back only, no env binding.
+            Stack s = stack.ensureSize(scanDepth);
+            final int savedTop = s.top;
+            for (Object row : rows) {
+              final Object[] arr = (Object[]) row;
+              for (int j = 0; j < scanDepth; j++) {
+                s.push(arr[j]);
+              }
+              argRows.add(argumentCode.eval(s));
+              s.restore(savedTop);
+            }
+          } else {
+            // Mixed: push stack-based vars, bind env-based vars per row via
+            // session.globalEnv so GetCode can find them.
+            Stack s = stack.ensureSize(scanDepth);
+            final int savedTop = s.top;
+            final Map<String, Object> env = stack.currentEnv();
+            // Save old values for the env-based variables.
+            final int envCount2 = names.size() - scanDepth;
+            final Object[] savedEnvValues = new Object[envCount2];
+            for (int j = 0; j < envCount2; j++) {
+              savedEnvValues[j] = env.get(names.get(scanDepth + j));
+            }
+            try {
+              for (Object row : rows) {
+                final Object[] arr = (Object[]) row;
+                for (int j = 0; j < scanDepth; j++) {
+                  s.push(arr[j]);
+                }
+                for (int j = scanDepth; j < names.size(); j++) {
+                  env.put(names.get(j), arr[j]);
+                }
+                argRows.add(argumentCode.eval(s));
+                s.restore(savedTop);
+              }
+            } finally {
+              for (int j = 0; j < envCount2; j++) {
+                final Object saved = savedEnvValues[j];
+                if (saved == null) {
+                  env.remove(names.get(scanDepth + j));
+                } else {
+                  env.put(names.get(scanDepth + j), saved);
+                }
+              }
+            }
           }
         } else if (names.size() != 1) {
           // Reconcile the fact that we internally represent rows as arrays when
@@ -4961,8 +5047,8 @@ public abstract class Codes {
         } else {
           argRows = rows;
         }
-        final Applicable aggregate = (Applicable) aggregateCode.eval(env);
-        return aggregate.apply(env, argRows);
+        final Applicable aggregate = (Applicable) aggregateCode.eval(stack);
+        return aggregate.apply(stack, argRows);
       }
     };
   }
@@ -5432,10 +5518,16 @@ public abstract class Codes {
           "tuple", d -> codes.forEach(code -> d.arg("", code)));
     }
 
-    public Object eval(EvalEnv env) {
+    @Override
+    public int maxSlots() {
+      return maxOf(codes);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
       final Object[] values = new Object[codes.size()];
       for (int i = 0; i < values.length; i++) {
-        values[i] = codes.get(i).eval(env);
+        values[i] = codes.get(i).eval(stack);
       }
       return Arrays.asList(values);
     }
@@ -5459,40 +5551,85 @@ public abstract class Codes {
       return "get(" + name + ")";
     }
 
-    public Object eval(EvalEnv env) {
-      return env.getOpt(name);
+    @Override
+    public Object eval(Stack stack) {
+      final Map<String, Object> env = stack.currentEnv();
+      return env.get(name);
     }
   }
 
   /**
-   * Code that retrieves, as a tuple, the value of several variables from the
-   * environment.
+   * Code that pushes pre-existing globals onto the stack, evaluates {@code
+   * body}, then restores the stack.
+   *
+   * <p>Emitted at the outermost statement level so that the body can use fast
+   * {@link StackCode} reads for globals instead of calling {@link GetCode} on
+   * every evaluation.
    */
-  private static class GetTupleCode implements Code {
-    private final ImmutableList<String> names;
-    private final Object[] values; // work space
+  private static class GlobalMarshalCode implements Code {
+    final ImmutableList<String> names;
+    final Code body;
 
-    GetTupleCode(ImmutableList<String> names) {
+    GlobalMarshalCode(ImmutableList<String> names, Code body) {
       this.names = requireNonNull(names);
-      this.values = new Object[names.size()];
+      this.body = requireNonNull(body);
     }
 
     @Override
     public Describer describe(Describer describer) {
-      return describer.start("getTuple", d -> d.args("names", names));
+      return describer.start(
+          "globalMarshal", d -> d.args("globals", names).arg("body", body));
+    }
+
+    @Override
+    public int maxSlots() {
+      return names.size() + body.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final int savedTop = stack.save();
+      final Map<String, Object> env = stack.currentEnv();
+      for (String name : names) {
+        stack.push(env.get(name));
+      }
+      final Object result = body.eval(stack);
+      stack.restore(savedTop);
+      return result;
+    }
+  }
+
+  /**
+   * Code that retrieves a local variable from the stack at a fixed offset below
+   * the top.
+   *
+   * <p>{@code offset} is 1-based: offset 1 is the most recently pushed value,
+   * offset 2 is the one before that, etc. The slot accessed is {@code
+   * stack.slots[stack.top - offset]}.
+   */
+  static class StackCode implements Code {
+    final int offset;
+    final String name;
+
+    StackCode(int offset, String name) {
+      this.offset = offset;
+      this.name = requireNonNull(name);
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "stack", d -> d.arg("offset", offset).arg("name", name));
     }
 
     @Override
     public String toString() {
-      return "getTuple(" + names + ")";
+      return "stack(offset=" + offset + ", name=" + name + ")";
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      for (int i = 0; i < names.size(); i++) {
-        values[i] = env.getOpt(names.get(i));
-      }
-      return Arrays.asList(values.clone());
+    public Object eval(final Stack stack) {
+      return stack.slots[stack.top - offset];
     }
   }
 
@@ -5573,7 +5710,8 @@ public abstract class Codes {
       return describer.start("constant", d -> d.arg("", value));
     }
 
-    public Object eval(EvalEnv env) {
+    @Override
+    public Object eval(Stack stack) {
       return value;
     }
 
@@ -5594,14 +5732,19 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return maxOf(code0, code1);
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start("andalso", d -> d.arg("", code0).arg("", code1));
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
+    public Object eval(Stack stack) {
       // Lazy evaluation. If code0 returns false, code1 is never evaluated.
-      return (boolean) code0.eval(evalEnv) && (boolean) code1.eval(evalEnv);
+      return (boolean) code0.eval(stack) && (boolean) code1.eval(stack);
     }
   }
 
@@ -5616,50 +5759,153 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return maxOf(code0, code1);
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start("orelse", d -> d.arg("", code0).arg("", code1));
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
+    public Object eval(Stack stack) {
       // Lazy evaluation. If code0 returns true, code1 is never evaluated.
-      return (boolean) code0.eval(evalEnv) || (boolean) code1.eval(evalEnv);
+      return (boolean) code0.eval(stack) || (boolean) code1.eval(stack);
     }
   }
 
   /** Code that implements {@link #let(List, Code)} with one argument. */
-  private static class Let1Code implements Code {
-    private final Code matchCode;
+  /**
+   * Code that implements a stack-based {@code let} binding.
+   *
+   * <p>Evaluates {@code expCode}, pushes the result onto the stack, evaluates
+   * {@code resultCode}, then restores the stack top.
+   */
+  private static class StackLet1Code implements Code {
+    private final Code expCode;
     private final Code resultCode;
 
-    Let1Code(Code matchCode, Code resultCode) {
-      this.matchCode = matchCode;
+    StackLet1Code(Code expCode, Code resultCode) {
+      this.expCode = expCode;
       this.resultCode = resultCode;
     }
 
     @Override
     public Describer describe(Describer describer) {
       return describer.start(
-          "let1",
-          d -> d.arg("matchCode", matchCode).arg("resultCode", resultCode));
+          "let1", d -> d.arg("expCode", expCode).arg("resultCode", resultCode));
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
-      final Closure fnValue = (Closure) matchCode.eval(evalEnv);
-      EvalEnv env2 = fnValue.evalBind(evalEnv);
-      return resultCode.eval(env2);
+    public int maxSlots() {
+      return 1 + resultCode.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final int savedTop = stack.save();
+      stack.push(expCode.eval(stack));
+      final Object result = resultCode.eval(stack);
+      stack.restore(savedTop);
+      return result;
     }
   }
 
-  /** Code that implements {@link #let(List, Code)} with multiple arguments. */
-  private static class LetCode implements Code {
-    private final ImmutableList<Code> matchCodes;
-    private final Code resultCode;
+  /** Creates stack-based let code that pushes one value and pops after. */
+  public static Code stackLet1(Code expCode, Code resultCode) {
+    return new StackLet1Code(expCode, resultCode);
+  }
 
-    LetCode(ImmutableList<Code> matchCodes, Code resultCode) {
-      this.matchCodes = matchCodes;
+  /**
+   * Evaluates {@code expCode}, uses {@link Closure.StackClosure#pushBindings}
+   * to push all pattern-bound variables onto the stack, evaluates {@code
+   * resultCode}, then restores the stack top.
+   *
+   * <p>This handles the general case of {@code let val pat = expr in body end},
+   * including tuple and record patterns.
+   */
+  private static class StackLetPatCode implements Code {
+    private final Core.Pat pat;
+    private final int varCount;
+    private final Code expCode;
+    private final Code resultCode;
+    private final Pos pos;
+
+    StackLetPatCode(
+        Core.Pat pat, int varCount, Code expCode, Code resultCode, Pos pos) {
+      this.pat = pat;
+      this.varCount = varCount;
+      this.expCode = expCode;
       this.resultCode = resultCode;
+      this.pos = pos;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "stackLetPat",
+          d ->
+              d.arg("pat", pat.toString())
+                  .arg("expCode", expCode)
+                  .arg("resultCode", resultCode));
+    }
+
+    @Override
+    public int maxSlots() {
+      return varCount + resultCode.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final int savedTop = stack.save();
+      final Object val = expCode.eval(stack);
+      if (!Closure.StackClosure.pushBindings(pat, val, stack)) {
+        throw new MorelRuntimeException(BuiltInExn.BIND, pos);
+      }
+      final Object result = resultCode.eval(stack);
+      stack.restore(savedTop);
+      return result;
+    }
+  }
+
+  /**
+   * Creates stack-based let code for a general pattern.
+   *
+   * <p>Evaluates {@code expCode}, pushes each pattern-bound variable from
+   * {@code pat} onto the stack (in the same order as {@link
+   * Closure.StackClosure#pushBindings}), evaluates {@code resultCode}, then
+   * restores the stack.
+   */
+  public static Code stackLetPat(
+      Core.Pat pat, int numVars, Code expCode, Code resultCode, Pos pos) {
+    return new StackLetPatCode(pat, numVars, expCode, resultCode, pos);
+  }
+
+  /**
+   * Code that implements a stack-aware multi-binding {@code let}.
+   *
+   * <p>Each binding evaluates its expression code against the current stack,
+   * then binds the result to its pattern by pushing it onto the stack. After
+   * all bindings, a second pass re-patches mutual-recursion references in any
+   * {@link Closure.StackClosure} values. The result code is then evaluated with
+   * the fully-extended environment.
+   *
+   * <p>This is used for recursive function declarations ({@code fun f x = ...})
+   * and mutually recursive bindings ({@code let val f = ... and g = ...}).
+   */
+  private static class StackMultiLetCode implements Code {
+    private final ImmutablePairList<Core.Pat, Code> patCodes;
+    private final Code resultCode;
+    /** Total number of stack slots pushed for all binding patterns combined. */
+    private final int slotCount;
+
+    StackMultiLetCode(
+        ImmutablePairList<Core.Pat, Code> patCodes, Code resultCode) {
+      this.patCodes = patCodes;
+      this.resultCode = resultCode;
+      this.slotCount =
+          patCodes.leftList().stream().mapToInt(p -> p.expand().size()).sum();
     }
 
     @Override
@@ -5668,20 +5914,127 @@ public abstract class Codes {
           "let",
           d -> {
             forEachIndexed(
-                matchCodes,
-                (matchCode, i) -> d.arg("matchCode" + i, matchCode));
+                patCodes,
+                (entry, i) -> d.arg("matchCode" + i, entry.getValue()));
             d.arg("resultCode", resultCode);
           });
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
-      EvalEnv evalEnv2 = evalEnv;
-      for (Code matchCode : matchCodes) {
-        final Closure fnValue = (Closure) matchCode.eval(evalEnv);
-        evalEnv2 = fnValue.evalBind(evalEnv2);
+    public int maxSlots() {
+      // RHSs evaluated before slots pushed; resultCode runs with N extra
+      // slots live, so needs numSlots + resultCode.maxSlots() from base.
+      return maxOf(slotCount + resultCode.maxSlots(), patCodes.rightList());
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final int savedTop = stack.save();
+      // Evaluate all RHSs first at the current stack depth. This ensures
+      // StackMatchCode captures use the correct outer offsets, and that RHSs
+      // see a consistent environment (mutual recursion handled via RecFrame).
+      final Object[] values = new Object[patCodes.size()];
+      for (int i = 0; i < patCodes.size(); i++) {
+        values[i] = patCodes.get(i).getValue().eval(stack);
       }
-      return resultCode.eval(evalEnv2);
+      // Extend each StackClosure's captured array with the rec-group peers so
+      // that recursive/mutual calls resolve via StackCode (not GetCode).
+      for (Object value : values) {
+        if (value instanceof Closure.StackClosure) {
+          ((Closure.StackClosure) value).extendWithRecPeers(values);
+        }
+      }
+      for (int i = 0; i < patCodes.size(); i++) {
+        if (!Closure.StackClosure.pushBindings(
+            patCodes.get(i).getKey(), values[i], stack)) {
+          throw new AssertionError("no match in StackMultiLetCode");
+        }
+      }
+      // resultCode sees the N pushed slots via StackCode; no env extension.
+      final Object result = resultCode.eval(stack);
+      stack.restore(savedTop);
+      return result;
+    }
+  }
+
+  /**
+   * Creates a stack-aware multi-binding {@code let} code node.
+   *
+   * <p>Binding values are pushed onto the stack before evaluating {@code
+   * resultCode} so that it can read them via {@link StackCode}.
+   */
+  public static Code stackMultiLet(
+      ImmutablePairList<Core.Pat, Code> patCodes, Code resultCode) {
+    return patCodes.isEmpty()
+        ? resultCode
+        : new StackMultiLetCode(patCodes, resultCode);
+  }
+
+  /**
+   * Code that snapshots live stack slots into a {@link Closure.StackClosure}.
+   *
+   * <p>At compile time, {@code captureOffsets[i]} is the 1-based offset from
+   * the current stack top at which the i-th captured variable lives.
+   *
+   * <p>At runtime, those slots are copied into a pre-allocated {@code
+   * captured[]} array of size {@code captureLen + numRecPeers} and returned as
+   * a new {@link Closure.StackClosure}. If the closure belongs to a
+   * mutual-recursion group, {@link
+   * Closure.StackClosure#extendWithRecPeers(Object[])} fills the tail of that
+   * array without further allocation. The shared {@code StackMatchCode}
+   * instance also carries the {@link #patCodes}, {@link #capacity}, and {@link
+   * #pos} used by every closure it creates, so those fields need not be
+   * duplicated per closure.
+   */
+  public static class StackMatchCode implements Code {
+    /** Stack offsets of outer variables to be copied on closure creation. */
+    final int[] captureOffsets;
+    /**
+     * Number of mutual-recursion peers in this closure's rec group; 0 for
+     * non-recursive closures. Determines the pre-allocated tail of {@code
+     * captured[]} that {@link Closure.StackClosure#extendWithRecPeers} fills.
+     */
+    private final int recPeerCount;
+
+    final ImmutablePairList<Core.Pat, Code> patCodes;
+    /** Minimum slots needed for a fresh {@link Closure.StackClosure} call. */
+    final int capacity;
+
+    final Pos pos;
+
+    public StackMatchCode(
+        int[] captureOffsets,
+        int recPeerCount,
+        ImmutablePairList<Core.Pat, Code> patCodes,
+        int capacity,
+        Pos pos) {
+      this.captureOffsets = captureOffsets;
+      this.recPeerCount = recPeerCount;
+      this.patCodes = patCodes;
+      this.capacity = capacity;
+      this.pos = pos;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "match",
+          d ->
+              patCodes.forEach(
+                  (pat, code) ->
+                      d.arg("", pat.describe(describer)).arg("", code)));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      // Pre-allocate with room for rec-group peers (filled later by
+      // extendWithRecPeers); for non-recursive closures numRecPeers == 0.
+      final Object[] captured =
+          new Object[captureOffsets.length + recPeerCount];
+      for (int i = 0; i < captureOffsets.length; i++) {
+        captured[i] = stack.slots[stack.top - captureOffsets[i]];
+      }
+      return new Closure.StackClosure(stack.session, captured, this);
     }
   }
 
@@ -5696,9 +6049,14 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg = argCode.eval(env);
-      return fnValue.apply(env, arg);
+    public int maxSlots() {
+      return argCode.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final Object arg = argCode.eval(stack);
+      return fnValue.apply(stack, arg);
     }
 
     @Override
@@ -5719,9 +6077,13 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg0 = argCode0.eval(env);
-      return fnValue.apply(arg0);
+    public int maxSlots() {
+      return argCode0.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return fnValue.apply(argCode0.eval(stack));
     }
 
     @Override
@@ -5744,10 +6106,13 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg0 = argCode0.eval(env);
-      final Object arg1 = argCode1.eval(env);
-      return fnValue.apply(arg0, arg1);
+    public int maxSlots() {
+      return maxOf(argCode0, argCode1);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return fnValue.apply(argCode0.eval(stack), argCode1.eval(stack));
     }
 
     @Override
@@ -5769,9 +6134,14 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final List arg = (List) argCode.eval(env);
-      return fnValue.apply(arg.get(0), arg.get(1));
+    public int maxSlots() {
+      return argCode.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final List<?> args = (List<?>) argCode.eval(stack);
+      return fnValue.apply(args.get(0), args.get(1));
     }
 
     @Override
@@ -5797,11 +6167,14 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg0 = argCode0.eval(env);
-      final Object arg1 = argCode1.eval(env);
-      final Object arg2 = argCode2.eval(env);
-      return fnValue.apply(arg0, arg1, arg2);
+    public int maxSlots() {
+      return maxOf(argCode0, argCode1, argCode2);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return fnValue.apply(
+          argCode0.eval(stack), argCode1.eval(stack), argCode2.eval(stack));
     }
 
     @Override
@@ -5827,9 +6200,14 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final List arg = (List) argCode.eval(env);
-      return fnValue.apply(arg.get(0), arg.get(1), arg.get(2));
+    public int maxSlots() {
+      return argCode.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final List<?> args = (List<?>) argCode.eval(stack);
+      return fnValue.apply(args.get(0), args.get(1), args.get(2));
     }
 
     @Override
@@ -5861,12 +6239,17 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg0 = argCode0.eval(env);
-      final Object arg1 = argCode1.eval(env);
-      final Object arg2 = argCode2.eval(env);
-      final Object arg3 = argCode3.eval(env);
-      return fnValue.apply(arg0, arg1, arg2, arg3);
+    public int maxSlots() {
+      return maxOf(argCode0, argCode1, argCode2, argCode3);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return fnValue.apply(
+          argCode0.eval(stack),
+          argCode1.eval(stack),
+          argCode2.eval(stack),
+          argCode3.eval(stack));
     }
 
     @Override
@@ -5898,16 +6281,24 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return maxOf(fnCode, argCode);
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start(
           "apply", d -> d.arg("fnCode", fnCode).arg("argCode", argCode));
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Applicable1 fnValue = (Applicable1) fnCode.eval(env);
-      final Object arg = argCode.eval(env);
-      return fnValue.apply(arg);
+    public Object eval(Stack stack) {
+      final Object fn = fnCode.eval(stack);
+      final Object arg = argCode.eval(stack);
+      if (fn instanceof Applicable1) {
+        return ((Applicable1) fn).apply(arg);
+      }
+      return ((Applicable) fn).apply(stack, arg);
     }
   }
 
@@ -5933,8 +6324,13 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      return new TailCall(fnValue, argCode.eval(env));
+    public int maxSlots() {
+      return argCode.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return new TailCall(fnValue, argCode.eval(stack));
     }
 
     @Override
@@ -5955,9 +6351,13 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Applicable fn = (Applicable) fnCode.eval(env);
-      return new TailCall(fn, argCode.eval(env));
+    public int maxSlots() {
+      return maxOf(fnCode, argCode);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return new TailCall((Applicable) fnCode.eval(stack), argCode.eval(stack));
     }
 
     @Override
@@ -5980,13 +6380,21 @@ public abstract class Codes {
     }
 
     @Override
+    public int maxSlots() {
+      return code.maxSlots();
+    }
+
+    @Override
     public Describer describe(Describer describer) {
       return describer.start("wrapRelList", d -> d.arg("code", code));
     }
 
     @Override
-    public Object eval(EvalEnv env) {
-      final Object arg = code.eval(env);
+    public Object eval(Stack stack) {
+      return wrap(code.eval(stack));
+    }
+
+    private static Object wrap(Object arg) {
       if (arg instanceof RelList) {
         final RelList list = (RelList) arg;
         return new AbstractList<Object>() {
@@ -6077,7 +6485,7 @@ public abstract class Codes {
     }
 
     @Override // Applicable
-    public Object apply(EvalEnv env, Object argValue) {
+    public Object apply(Stack stack, Object argValue) {
       return apply((A0) argValue);
     }
   }
@@ -6119,7 +6527,7 @@ public abstract class Codes {
     }
 
     @Override // Applicable
-    public Object apply(EvalEnv env, Object argValue) {
+    public Object apply(Stack stack, Object argValue) {
       final List list = (List) argValue;
       return apply((A0) list.get(0), (A1) list.get(1));
     }
@@ -6179,7 +6587,7 @@ public abstract class Codes {
     }
 
     @Override // Applicable
-    public Object apply(EvalEnv env, Object argValue) {
+    public Object apply(Stack stack, Object argValue) {
       final List list = (List) argValue;
       return apply((A0) list.get(0), (A1) list.get(1), (A2) list.get(2));
     }
@@ -6303,7 +6711,7 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
+    public Object eval(Stack stack) {
       return ordinalSlots[0];
     }
 
@@ -6328,9 +6736,9 @@ public abstract class Codes {
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
+    public Object eval(Stack stack) {
       ++ordinalSlots[0];
-      return nextCode.eval(evalEnv);
+      return nextCode.eval(stack);
     }
 
     @Override

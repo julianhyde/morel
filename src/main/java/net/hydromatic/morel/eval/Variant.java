@@ -324,23 +324,34 @@ public class Variant extends AbstractImmutableList<Object> {
     if (!variant.constructor().constructor.equals(conPat.tyCon)) {
       return false;
     }
-    // For list types, rewrap elements as Variants if needed.
-    // For record types, reconstruct (name, value) pairs.
-    Object innerValue;
+    return Closure.bindRecurse(conPat.pat, innerValue(variant), envRef);
+  }
+
+  /**
+   * Extracts the inner value of a {@link Variant} for use in pattern matching.
+   *
+   * <p>For list-typed variants, rewraps raw elements as {@link Variant}
+   * instances if needed. For record-typed variants, reconstructs the list of
+   * {@code (name, variant)} pairs that the pattern matcher expects. For all
+   * other types, returns {@link #value} directly.
+   *
+   * <p>Shared by {@link #bindConPat} and {@link
+   * Closure.StackClosure#pushVariantConPat}.
+   */
+  static Object innerValue(Variant variant) {
     if (variant.type instanceof ListType) {
       final List<?> list = (List<?>) variant.value;
       // Check if elements are already Variants
       if (!list.isEmpty() && !(list.get(0) instanceof Variant)) {
         // Elements are unwrapped, rewrap them
-        innerValue =
-            transformEager(
-                list,
-                e ->
-                    e instanceof Variant
-                        ? (Variant) e
-                        : of(variant.type.elementType(), e));
+        return transformEager(
+            list,
+            e ->
+                e instanceof Variant
+                    ? (Variant) e
+                    : of(variant.type.elementType(), e));
       } else {
-        innerValue = variant.value;
+        return variant.value;
       }
     } else if (variant.type instanceof RecordType) {
       final RecordType recordType = (RecordType) variant.type;
@@ -360,11 +371,10 @@ public class Variant extends AbstractImmutableList<Object> {
                 : of(fieldType, rawValue);
         pairsBuilder.add(ImmutableList.of(name, fieldValue));
       }
-      innerValue = pairsBuilder.build();
+      return pairsBuilder.build();
     } else {
-      innerValue = variant.value;
+      return variant.value;
     }
-    return Closure.bindRecurse(conPat.pat, innerValue, envRef);
   }
 
   /** Returns this variant's constructor name. */

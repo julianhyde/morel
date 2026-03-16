@@ -37,6 +37,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
+import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.TriConsumer;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -108,8 +109,42 @@ public abstract class Environment {
   /** Returns the binding of {@code id} if bound, null if not. */
   public abstract @Nullable Binding getOpt(Core.NamedPat id);
 
-  /** Alternative version of {@link #getOpt(Core.NamedPat)}. */
-  public abstract @Nullable Binding getOpt2(Core.NamedPat id);
+  /**
+   * Returns the binding of {@code id} and the environment that declared it, or
+   * null if not bound.
+   *
+   * <p>Unlike {@link #getOpt(Core.NamedPat)}, this method returns the specific
+   * environment node that declared the binding, which is useful for determining
+   * whether a variable was declared before or after a given environment
+   * boundary (e.g., a lambda boundary).
+   */
+  public abstract @Nullable Pair<Binding, Environment> getOpt2(
+      Core.NamedPat id);
+
+  /**
+   * Visits this environment and each of its ancestors, from newest (this) to
+   * oldest (root).
+   *
+   * @param consumer Called for each environment node
+   */
+  abstract void forEachAncestor(Consumer<Environment> consumer);
+
+  /**
+   * Returns whether this environment is an ancestor of (or equal to) {@code
+   * other}.
+   *
+   * <p>An environment A is an ancestor of B if B was created by binding
+   * variables into A (i.e., A appears in B's parent chain). A is its own
+   * ancestor.
+   *
+   * @param other The environment to check ancestry against
+   * @return true if this environment is an ancestor of {@code other}
+   */
+  public boolean isAncestorOf(final Environment other) {
+    final List<Environment> ancestors = new ArrayList<>();
+    other.forEachAncestor(ancestors::add);
+    return ancestors.contains(this);
+  }
 
   /** Calls a consumer for all bindings of {@code id}. */
   public abstract void collect(Core.NamedPat id, Consumer<Binding> consumer);

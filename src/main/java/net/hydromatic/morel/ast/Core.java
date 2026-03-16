@@ -1141,6 +1141,13 @@ public class Core {
     public abstract ValDecl accept(Shuttle shuttle);
 
     public abstract void forEachBinding(BindingConsumer consumer);
+
+    /** Returns all patterns bound. */
+    public List<NamedPat> boundPats() {
+      final ImmutableList.Builder<Core.NamedPat> list = ImmutableList.builder();
+      forEachBinding((pat, exp2, overloadPat, pos) -> list.add(pat));
+      return list.build();
+    }
   }
 
   /** Consumer of bindings. */

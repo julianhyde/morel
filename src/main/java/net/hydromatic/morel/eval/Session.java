@@ -21,6 +21,7 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.Suppliers;
+import com.google.common.collect.ImmutableMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,32 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * variable.
  */
 public class Session {
+  /**
+   * A dummy session for use in compile-time constant evaluation (e.g. inlining,
+   * constant-folding). It has an empty {@link #globalEnv}, no type system, and
+   * throws {@link UnsupportedOperationException} for any shell-level operations
+   * ({@code use}, {@code clearEnv}).
+   */
+  public static final Session EMPTY = createEmpty();
+
+  private static Session createEmpty() {
+    final Session s = new Session(ImmutableMap.of());
+    s.globalEnv = ImmutableMap.of();
+    return s;
+  }
+
+  /**
+   * The authoritative global environment, as a flat name-to-value map.
+   *
+   * <p>Updated after each top-level statement so that closures created during
+   * that statement always see the latest bindings when invoked later, without
+   * per-closure patching.
+   *
+   * <p>Group/aggregate and CalciteCompiler bridge code temporarily mutate this
+   * map (put + restore) during evaluation.
+   */
+  public Map<String, Object> globalEnv;
+
   /** The plan of the previous command. */
   public @Nullable Code code;
   /** The output lines of the previous command. */

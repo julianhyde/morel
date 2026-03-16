@@ -27,7 +27,7 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Describer;
-import net.hydromatic.morel.eval.EvalEnv;
+import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ThreadLocals;
 import org.apache.calcite.DataContext;
@@ -216,13 +216,13 @@ public class Calcite {
     }
 
     @Override
-    public Object eval(EvalEnv evalEnv) {
+    public Object eval(Stack stack) {
       return ThreadLocals.let(
-          CalciteFunctions.THREAD_EVAL_ENV,
-          evalEnv,
+          CalciteFunctions.THREAD_STACK,
+          stack,
           () ->
               ThreadLocals.mutate(
-                  CalciteFunctions.THREAD_ENV,
+                  CalciteFunctions.THREAD_CX,
                   c -> c.withEnv(env),
                   () -> {
                     final Interpreter interpreter =

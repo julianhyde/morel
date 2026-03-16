@@ -109,7 +109,7 @@ public abstract class Matchers {
     return new CustomTypeSafeMatcher<Code>("code " + expected) {
       @Override
       protected boolean matchesSafely(Code code) {
-        final String plan = Codes.describe(code);
+        final String plan = stripGlobalMarshal(Codes.describe(code));
         return plan.equals(expected);
       }
 
@@ -120,6 +120,23 @@ public abstract class Matchers {
         description.appendText("was ").appendValue(plan);
       }
     };
+  }
+
+  /**
+   * Strips a {@code globalMarshal(globals [...], body X)} wrapper from a plan
+   * string, returning the inner body {@code X}. If the plan does not start with
+   * {@code "globalMarshal("} it is returned unchanged.
+   */
+  private static String stripGlobalMarshal(String plan) {
+    if (!plan.startsWith("globalMarshal(")) {
+      return plan;
+    }
+    final int bodyIdx = plan.indexOf(", body ");
+    if (bodyIdx < 0) {
+      return plan;
+    }
+    // Remove the trailing ')' that closes the globalMarshal(...)
+    return plan.substring(bodyIdx + 7, plan.length() - 1);
   }
 
   /**
@@ -136,7 +153,8 @@ public abstract class Matchers {
   static Matcher<Code> isFullyCalcite() {
     return new CustomTypeSafeMatcher<Code>("code is all Calcite") {
       protected boolean matchesSafely(Code code) {
-        final String plan = Codes.describe(code);
+        // Strip a globalMarshal wrapper: the body may still be fully Calcite.
+        final String plan = stripGlobalMarshal(Codes.describe(code));
         return plan.startsWith("calcite(") // instanceof CalciteCode
             && !plan.contains("morelScalar")
             && !plan.contains("morelTable");

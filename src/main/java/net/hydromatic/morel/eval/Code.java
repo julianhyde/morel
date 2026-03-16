@@ -20,7 +20,32 @@ package net.hydromatic.morel.eval;
 
 /** A compiled expression, that can be evaluated. */
 public interface Code extends Describable {
-  Object eval(EvalEnv evalEnv);
+  /**
+   * Evaluates this expression using a {@link Stack}.
+   *
+   * <p>This is the primary evaluation method. All concrete {@code Code} nodes
+   * must override this method. The default throws {@link
+   * UnsupportedOperationException} to catch any node that has not yet been
+   * migrated.
+   */
+  default Object eval(final Stack stack) {
+    throw new UnsupportedOperationException(
+        getClass().getSimpleName() + " requires eval(Stack) override");
+  }
+
+  /**
+   * Returns the maximum number of stack slots that this code node (and its
+   * descendants) will push beyond the current stack top during evaluation. Used
+   * to compute a tight array size for newly allocated {@link Stack} instances.
+   *
+   * <p>The default returns 0 (no slots pushed). {@code StackLet1Code} and
+   * {@code StackLetPatCode} override this to return their contribution.
+   *
+   * @see Slots
+   */
+  default int maxSlots() {
+    return 0;
+  }
 
   default boolean isConstant() {
     return false;

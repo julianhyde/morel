@@ -20,20 +20,15 @@ package net.hydromatic.morel.eval;
 
 import static java.util.Objects.requireNonNull;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.ast.Visitor;
-import net.hydromatic.morel.compile.Environment;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Evaluation environment.
  *
- * <p>Whereas {@link Environment} contains both types and values, because it is
+ * <p>Whereas {@code Environment} contains both types and values, because it is
  * used for validation/compilation, EvalEnv contains only values.
  */
 public interface EvalEnv {
@@ -60,67 +55,6 @@ public interface EvalEnv {
    */
   default EvalEnv bind(String name, Object value) {
     return new EvalEnvs.SubEvalEnv(this, name, value);
-  }
-
-  /**
-   * Creates an evaluation environment that has the same content as this one,
-   * plus a mutable slot.
-   */
-  default MutableEvalEnv bindMutable(String name) {
-    return new EvalEnvs.MutableSubEvalEnv(this, name);
-  }
-
-  /**
-   * Creates an evaluation environment that has the same content as this one,
-   * plus mutable slots for each name in a pattern.
-   */
-  default MutableEvalEnv bindMutablePat(Core.Pat pat) {
-    if (pat instanceof Core.IdPat) {
-      // Pattern is simple; use a simple implementation.
-      return bindMutable(((Core.IdPat) pat).name);
-    }
-    final List<String> names = new ArrayList<>();
-    pat.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Core.IdPat idPat) {
-            names.add(idPat.name);
-          }
-
-          @Override
-          protected void visit(Core.AsPat asPat) {
-            names.add(asPat.name);
-            super.visit(asPat);
-          }
-        });
-    return new EvalEnvs.MutablePatSubEvalEnv(this, pat, names);
-  }
-
-  /**
-   * Creates an evaluation environment that has the same content as this one,
-   * plus a mutable slot or slots.
-   *
-   * <p>If {@code names} has one element, calling {@link
-   * MutableEvalEnv#set(Object)} will populate the slot will be filled by an
-   * object; if {@code names} has more than one element, {@code set} will expect
-   * to be given an array with the same number of elements.
-   */
-  default MutableEvalEnv bindMutableArray(List<String> names) {
-    if (names.size() == 1) {
-      return bindMutable(names.get(0));
-    }
-    return new EvalEnvs.MutableArraySubEvalEnv(this, names);
-  }
-
-  /**
-   * Creates an evaluation environment that has the same content as this one,
-   * plus a mutable slot or slots.
-   */
-  default MutableEvalEnv bindMutableList(List<String> names) {
-    if (names.size() == 1) {
-      return bindMutable(names.get(0));
-    }
-    return new EvalEnvs.MutableListSubEvalEnv(this, names);
   }
 
   /**
