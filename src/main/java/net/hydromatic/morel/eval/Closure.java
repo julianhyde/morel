@@ -31,6 +31,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ImmutablePairList;
+import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -275,29 +276,6 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
    * argument bindings, and the body code is evaluated with {@link
    * Code#eval(Stack)}.
    */
-  /**
-   * Shared mutable array for a mutually-recursive function group.
-   *
-   * <p>Allocated by {@code StackMultiLetCode.eval} before any closure in the
-   * group is created. Each closure in the group holds a reference to the same
-   * {@code RecFrame} object. After all closures are created, {@code
-   * StackMultiLetCode.eval} fills {@code bindings[i]} with closure {@code i}.
-   *
-   * <p>When a closure is applied, {@code StackClosure.applyOnce} pushes all
-   * {@code bindings} onto the stack before the argument, so that body code
-   * compiled with a {@code StackCode} for each peer resolves correctly.
-   */
-  public static final class RecFrame {
-    /**
-     * One slot per binding in the rec group; filled after all closures exist.
-     */
-    public final Object[] bindings;
-
-    public RecFrame(int size) {
-      bindings = new Object[size];
-    }
-  }
-
   public static class StackClosure
       implements Comparable<StackClosure>, Applicable, Applicable1 {
     /**
@@ -319,7 +297,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      * <p>Set by {@code StackMultiLetCode.eval} immediately after closure
      * creation, before any call can observe it.
      */
-    RecFrame recFrame;
+    Object @MonotonicNonNull [] recBindings;
 
     private final ImmutablePairList<Core.Pat, Code> patCodes;
     /**
@@ -335,13 +313,13 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     public StackClosure(
         @Nullable Session session,
         Object[] capturedValues,
-        RecFrame recFrame,
+        Object @Nullable [] recBindings,
         ImmutablePairList<Core.Pat, Code> patCodes,
         int capacity,
         Pos pos) {
       this.session = session;
       this.capturedValues = capturedValues;
-      this.recFrame = recFrame;
+      this.recBindings = recBindings;
       this.patCodes = patCodes;
       this.capacity = capacity;
       this.pos = pos;
@@ -403,8 +381,8 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       // Push rec-group peers (if this closure is part of a rec group).
       // These are at slots captureLen..captureLen+N-1 in the body context,
       // matching the StackCode offsets assigned at compile time.
-      if (recFrame != null) {
-        for (Object v : recFrame.bindings) {
+      if (recBindings != null) {
+        for (Object v : recBindings) {
           stack.push(v);
         }
       }

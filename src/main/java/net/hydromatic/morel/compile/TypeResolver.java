@@ -89,7 +89,6 @@ import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
 import net.hydromatic.morel.type.TypedValue;
-import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MartelliUnifier;
 import net.hydromatic.morel.util.Ord;
@@ -1345,7 +1344,7 @@ public class TypeResolver {
     final Ast.Exp compute2 =
         args2.size() == 1 && group.isAtom()
             ? args2.right(0)
-            : compute.copy(compute.with, ImmutablePairList.copyOf(args2));
+            : compute.copy(compute.with, args2.immutable());
 
     final Variable v2 = fieldVar(fieldVars, group.isAtom());
     if (group.op == Op.GROUP) {

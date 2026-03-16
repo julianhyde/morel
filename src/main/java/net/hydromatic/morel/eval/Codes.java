@@ -19,6 +19,7 @@
 package net.hydromatic.morel.eval;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
@@ -4192,12 +4193,11 @@ public abstract class Codes {
 
     @Override
     public Object apply(Stack stack, Object arg) {
+      requireNonNull(stack.session);
       final TypeSystem typeSystem = stack.session.typeSystem;
       if (typeSystem == null) {
         throw new IllegalStateException(
-            "Variant constructor "
-                + tyConName
-                + " requires TypeSystem but session.typeSystem is null");
+            format("Variant constructor %s requires TypeSystem", tyConName));
       }
       // Create Value instance based on constructor name
       return Variants.fromConstructor(tyConName, arg, typeSystem);
@@ -4221,11 +4221,11 @@ public abstract class Codes {
   }
 
   /**
-   * Creates a flat {@link HashMap} for {@link Session#globalEnv} from an
-   * evaluation environment, excluding the internal {@code $session} binding.
+   * Creates a flat {@link Map} for {@link Session#globalEnv} from an evaluation
+   * environment, excluding the internal {@code $session} binding.
    */
-  public static HashMap<String, Object> globalEnvOf(EvalEnv evalEnv) {
-    final HashMap<String, Object> map = new HashMap<>();
+  public static Map<String, Object> globalEnvOf(EvalEnv evalEnv) {
+    final Map<String, Object> map = new HashMap<>();
     evalEnv.visit(
         (k, v) -> {
           if (!EvalEnv.SESSION.equals(k)) {
@@ -4303,20 +4303,19 @@ public abstract class Codes {
             } else {
               // Single env-based variable (scanDepth == 0): bind into
               // session.globalEnv so GetCode can find it.
-              final Session session = requireNonNull(stack.session, "session");
-              final HashMap<String, Object> globalEnv = session.globalEnv;
+              final Map<String, Object> env = stack.currentEnv();
               final String varName = names.get(0);
-              final Object savedValue = globalEnv.get(varName);
+              final Object savedValue = env.get(varName);
               try {
                 for (Object row : rows) {
-                  globalEnv.put(varName, row);
+                  env.put(varName, row);
                   argRows.add(argumentCode.eval(stack));
                 }
               } finally {
                 if (savedValue == null) {
-                  globalEnv.remove(varName);
+                  env.remove(varName);
                 } else {
-                  globalEnv.put(varName, savedValue);
+                  env.put(varName, savedValue);
                 }
               }
             }
@@ -4337,13 +4336,12 @@ public abstract class Codes {
             // session.globalEnv so GetCode can find them.
             Stack s = stack.ensureSize(scanDepth);
             final int savedTop = s.top;
-            final Session session = requireNonNull(s.session, "session");
-            final HashMap<String, Object> globalEnv = session.globalEnv;
+            final Map<String, Object> env = stack.currentEnv();
             // Save old values for the env-based variables.
             final int envCount2 = names.size() - scanDepth;
             final Object[] savedEnvValues = new Object[envCount2];
             for (int j = 0; j < envCount2; j++) {
-              savedEnvValues[j] = globalEnv.get(names.get(scanDepth + j));
+              savedEnvValues[j] = env.get(names.get(scanDepth + j));
             }
             try {
               for (Object row : rows) {
@@ -4352,7 +4350,7 @@ public abstract class Codes {
                   s.push(arr[j]);
                 }
                 for (int j = scanDepth; j < names.size(); j++) {
-                  globalEnv.put(names.get(j), arr[j]);
+                  env.put(names.get(j), arr[j]);
                 }
                 argRows.add(argumentCode.eval(s));
                 s.restore(savedTop);
@@ -4361,9 +4359,9 @@ public abstract class Codes {
               for (int j = 0; j < envCount2; j++) {
                 final Object saved = savedEnvValues[j];
                 if (saved == null) {
-                  globalEnv.remove(names.get(scanDepth + j));
+                  env.remove(names.get(scanDepth + j));
                 } else {
-                  globalEnv.put(names.get(scanDepth + j), saved);
+                  env.put(names.get(scanDepth + j), saved);
                 }
               }
             }
@@ -4845,7 +4843,8 @@ public abstract class Codes {
 
     @Override
     public Object eval(Stack stack) {
-      return requireNonNull(stack.session, "session").globalEnv.get(name);
+      final Map<String, Object> env = stack.currentEnv();
+      return env.get(name);
     }
   }
 
@@ -4880,10 +4879,9 @@ public abstract class Codes {
     @Override
     public Object eval(Stack stack) {
       final int savedTop = stack.save();
-      final HashMap<String, Object> globalEnv =
-          requireNonNull(stack.session, "session").globalEnv;
+      final Map<String, Object> env = stack.currentEnv();
       for (String name : names) {
-        stack.push(globalEnv.get(name));
+        stack.push(env.get(name));
       }
       final Object result = body.eval(stack);
       stack.restore(savedTop);
@@ -5198,43 +5196,8 @@ public abstract class Codes {
         ImmutablePairList<Core.Pat, Code> patCodes, Code resultCode) {
       this.patCodes = patCodes;
       this.resultCode = resultCode;
-      this.slotCount = sumSlots(patCodes.leftList());
-    }
-
-    /** Counts the number of stack slots that {@code pushBindings} pushes. */
-    private static int countSlots(Core.Pat pat) {
-      switch (pat.op) {
-        case ID_PAT:
-          return 1;
-        case AS_PAT:
-          return 1 + countSlots(((Core.AsPat) pat).pat);
-        case TUPLE_PAT:
-          return sumSlots(((Core.TuplePat) pat).args);
-        case RECORD_PAT:
-          return sumSlots(((Core.RecordPat) pat).args);
-        case LIST_PAT:
-          return sumSlots(((Core.ListPat) pat).args);
-        case CONS_PAT:
-        case CON_PAT:
-          return countSlots(((Core.ConPat) pat).pat);
-        case WILDCARD_PAT:
-        case BOOL_LITERAL_PAT:
-        case CHAR_LITERAL_PAT:
-        case INT_LITERAL_PAT:
-        case REAL_LITERAL_PAT:
-        case STRING_LITERAL_PAT:
-        case CON0_PAT:
-        default:
-          return 0;
-      }
-    }
-
-    private static int sumSlots(List<Core.Pat> args) {
-      int n = 0;
-      for (Core.Pat p : args) {
-        n += countSlots(p);
-      }
-      return n;
+      this.slotCount =
+          patCodes.leftList().stream().mapToInt(p -> p.expand().size()).sum();
     }
 
     @Override
@@ -5270,14 +5233,13 @@ public abstract class Codes {
       for (int i = 0; i < patCodes.size(); i++) {
         values[i] = patCodes.get(i).getValue().eval(stack);
       }
-      // Allocate a shared RecFrame before creating any closure. Each
+      // Allocate a shared frame of bindings before creating any closure. Each
       // StackClosure in the group gets a reference to this frame so that
       // recursive/mutual calls resolve via StackCode (not GetCode).
-      final Closure.RecFrame rf = new Closure.RecFrame(patCodes.size());
-      for (int i = 0; i < patCodes.size(); i++) {
-        rf.bindings[i] = values[i];
-        if (values[i] instanceof Closure.StackClosure) {
-          ((Closure.StackClosure) values[i]).recFrame = rf;
+      final Object[] recBindings = values.clone();
+      for (Object value : values) {
+        if (value instanceof Closure.StackClosure) {
+          ((Closure.StackClosure) value).recBindings = recBindings;
         }
       }
       for (int i = 0; i < patCodes.size(); i++) {

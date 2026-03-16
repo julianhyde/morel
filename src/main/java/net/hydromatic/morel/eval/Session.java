@@ -21,7 +21,6 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.Suppliers;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,7 +53,7 @@ public class Session {
    * <p>Group/aggregate and CalciteCompiler bridge code temporarily mutate this
    * map (put + restore) during evaluation.
    */
-  public HashMap<String, Object> globalEnv;
+  public Map<String, Object> globalEnv;
 
   /** The plan of the previous command. */
   public @Nullable Code code;

@@ -424,16 +424,16 @@ public class AlgebraTest {
     final String plan =
         "let1(expCode apply2(fnValue +, constant(2), constant(3)), "
             + "resultCode calcite(plan "
-            + "LogicalProject(d5=[+($1, morelScalar('five', '{\n" //
-            + "  \"type\": \"INTEGER\",\n" //
+            + "LogicalProject(d5=[+($1, morelScalar('five', '{\n"
+            + "  \"type\": \"INTEGER\",\n"
             + "  \"nullable\": false\n"
             + "}'))], deptno=[$1], empno=[$2])\n"
             + "  LogicalFilter(condition=[<($2, +(7500,"
-            + " +(morelScalar('five', '{\n" //
-            + "  \"type\": \"INTEGER\",\n" //
+            + " +(morelScalar('five', '{\n"
+            + "  \"type\": \"INTEGER\",\n"
             + "  \"nullable\": false\n"
-            + "}'), morelScalar('five', '{\n" //
-            + "  \"type\": \"INTEGER\",\n" //
+            + "}'), morelScalar('five', '{\n"
+            + "  \"type\": \"INTEGER\",\n"
             + "  \"nullable\": false\n"
             + "}'))))])\n"
             + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
@@ -451,12 +451,12 @@ public class AlgebraTest {
             + "resultCode let1(expCode apply2(fnValue +, "
             + "stack(offset 1, name five), stack(offset 1, name five)), "
             + "resultCode calcite(plan "
-            + "LogicalProject(d5=[+($1, morelScalar('five', '{\n" //
-            + "  \"type\": \"INTEGER\",\n" //
+            + "LogicalProject(d5=[+($1, morelScalar('five', '{\n"
+            + "  \"type\": \"INTEGER\",\n"
             + "  \"nullable\": false\n"
             + "}'))], deptno=[$1], empno=[$2])\n"
-            + "  LogicalFilter(condition=[<($2, +(7500, morelScalar('ten', '{\n" //
-            + "  \"type\": \"INTEGER\",\n" //
+            + "  LogicalFilter(condition=[<($2, +(7500, morelScalar('ten', '{\n"
+            + "  \"type\": \"INTEGER\",\n"
             + "  \"nullable\": false\n"
             + "}')))])\n"
             + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
@@ -503,10 +503,10 @@ public class AlgebraTest {
             + " stack(offset 1, name x), stack(offset 1, name x))), "
             + "resultCode calcite(plan "
             + "LogicalProject($f0=[morelScalar('int', "
-            + "morelScalar('twice', '{\n" //
-            + "  \"type\": \"ANY\",\n" //
-            + "  \"nullable\": false,\n" //
-            + "  \"precision\": -1,\n" //
+            + "morelScalar('twice', '{\n"
+            + "  \"type\": \"ANY\",\n"
+            + "  \"nullable\": false,\n"
+            + "  \"precision\": -1,\n"
             + "  \"scale\": -2147483648\n"
             + "}'), $0)])\n"
             + "  JdbcTableScan(table=[[scott, DEPT]])\n"
@@ -542,13 +542,13 @@ public class AlgebraTest {
             + "resultCode let1(expCode constant(5), "
             + "resultCode calcite(plan "
             + "LogicalProject($f0=[morelScalar('int * int', "
-            + "morelScalar('plus', '{\n" //
-            + "  \"type\": \"ANY\",\n" //
-            + "  \"nullable\": false,\n" //
-            + "  \"precision\": -1,\n" //
+            + "morelScalar('plus', '{\n"
+            + "  \"type\": \"ANY\",\n"
+            + "  \"nullable\": false,\n"
+            + "  \"precision\": -1,\n"
             + "  \"scale\": -2147483648\n"
-            + "}'), ROW($0, morelScalar('five', '{\n" //
-            + "  \"type\": \"INTEGER\",\n" //
+            + "}'), ROW($0, morelScalar('five', '{\n"
+            + "  \"type\": \"INTEGER\",\n"
             + "  \"nullable\": false\n"
             + "}')))])\n"
             + "  JdbcTableScan(table=[[scott, DEPT]])\n"

@@ -80,7 +80,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * and returns the result as a relation.
  */
 public class CalciteFunctions {
-  public static final ThreadLocal<@Nullable Context> THREAD_ENV =
+  public static final ThreadLocal<@Nullable Context> THREAD_CX =
       new ThreadLocal<>();
 
   /**
@@ -170,7 +170,7 @@ public class CalciteFunctions {
    * table.
    */
   public static class MorelTableFunction {
-    private final Context cx = requireNonNull(THREAD_ENV.get());
+    private final Context cx = requireNonNull(THREAD_CX.get());
     private final RelDataTypeFactory typeFactory =
         requireNonNull(cx.typeFactory);
     private final @Nullable Compiled compiled;
@@ -214,9 +214,9 @@ public class CalciteFunctions {
 
         @Override
         public Enumerable<Object[]> scan(DataContext root) {
-          Object v =
-              compiled.code.eval(
-                  new Stack(compiled.session, compiled.code.maxSlots()));
+          final Stack stack =
+              new Stack(compiled.session, compiled.code.maxSlots());
+          final Object v = compiled.code.eval(stack);
           return compiled.f.apply(v);
         }
 
@@ -309,7 +309,7 @@ public class CalciteFunctions {
    * scalar value.
    */
   public static class MorelScalarFunction {
-    private final Context cx = requireNonNull(THREAD_ENV.get());
+    private final Context cx = requireNonNull(THREAD_CX.get());
     private final RelDataTypeFactory typeFactory =
         requireNonNull(cx.typeFactory);
     private final @Nullable Compiled compiled;
@@ -339,8 +339,8 @@ public class CalciteFunctions {
           this.compiled != null
               ? this.compiled
               : new Compiled(cx.env, cx.typeSystem, typeFactory, ml, typeJson);
-      // THREAD_STACK is always set during Calcite plan execution.
-      final Object v = compiled.code.eval(requireNonNull(THREAD_STACK.get()));
+      final Stack stack = requireNonNull(THREAD_STACK.get());
+      final Object v = compiled.code.eval(stack);
       return compiled.f.apply(v);
     }
 
@@ -383,7 +383,7 @@ public class CalciteFunctions {
    * an argument.
    */
   public static class MorelApplyFunction {
-    private final Context cx = requireNonNull(THREAD_ENV.get());
+    private final Context cx = requireNonNull(THREAD_CX.get());
     private final RelDataTypeFactory typeFactory =
         requireNonNull(cx.typeFactory);
     private final @Nullable Compiled compiled;
@@ -412,9 +412,9 @@ public class CalciteFunctions {
               ? this.compiled
               : new Compiled(morelArgTypeJson, typeFactory, cx.typeSystem);
       final Applicable fn = (Applicable) closure;
-      // THREAD_STACK is always set during Calcite plan execution.
+      final Stack stack = requireNonNull(THREAD_STACK.get());
       final Object o = compiled.converter.apply(arg);
-      return fn.apply(requireNonNull(THREAD_STACK.get()), o);
+      return fn.apply(stack, o);
     }
 
     /** Compiled state. */

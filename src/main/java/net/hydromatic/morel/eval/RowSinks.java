@@ -938,8 +938,7 @@ public abstract class RowSinks {
 
     @Override
     public List<Object> result(Stack stack) {
-      final Session session = requireNonNull(stack.session, "session");
-      final HashMap<String, Object> globalEnv = session.globalEnv;
+      final Map<String, Object> globalEnv = stack.currentEnv();
       // Save old values for all output names.
       final Object[] savedValues = new Object[outNames.size()];
       for (int j = 0; j < outNames.size(); j++) {

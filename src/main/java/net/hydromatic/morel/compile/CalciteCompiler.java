@@ -220,23 +220,24 @@ public class CalciteCompiler extends Compiler {
       public Object eval(Stack stack) {
         // Temporarily add slot-bound variables to session.globalEnv so
         // that morelScalar's GetCode lookups can find them at runtime.
-        final Session session = requireNonNull(stack.session, "session");
-        final HashMap<String, Object> globalEnv = session.globalEnv;
-        final HashMap<String, Object> savedValues = new HashMap<>();
-        for (Map.Entry<String, Integer> e : offsets.entrySet()) {
-          savedValues.put(e.getKey(), globalEnv.get(e.getKey()));
-          globalEnv.put(e.getKey(), stack.slots[stack.top - e.getValue()]);
-        }
+        final Map<String, Object> env = stack.currentEnv();
+        final Map<String, @Nullable Object> savedValues = new HashMap<>();
+        offsets.forEach(
+            (key, value) -> {
+              savedValues.put(key, env.get(key));
+              env.put(key, stack.slots[stack.top - value]);
+            });
         try {
           return calciteCode.eval(stack);
         } finally {
-          for (Map.Entry<String, Object> e : savedValues.entrySet()) {
-            if (e.getValue() == null) {
-              globalEnv.remove(e.getKey());
-            } else {
-              globalEnv.put(e.getKey(), e.getValue());
-            }
-          }
+          savedValues.forEach(
+              (key, value) -> {
+                if (value == null) {
+                  env.remove(key);
+                } else {
+                  env.put(key, value);
+                }
+              });
         }
       }
     };
@@ -376,7 +377,7 @@ public class CalciteCompiler extends Compiler {
         final String jsonRowType = jsonBuilder.toJsonString(json);
         final String morelCode = apply.toString();
         ThreadLocals.let(
-            CalciteFunctions.THREAD_ENV,
+            CalciteFunctions.THREAD_CX,
             new CalciteFunctions.Context(
                 new Session(ImmutableMap.of()),
                 cx.env,

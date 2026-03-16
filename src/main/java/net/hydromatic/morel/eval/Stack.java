@@ -22,6 +22,7 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -108,8 +109,9 @@ public final class Stack {
    * <p>Delegates to {@link Session#globalEnv}, which may have been temporarily
    * mutated by row-sink or aggregate code.
    */
-  public HashMap<String, Object> currentEnv() {
-    return requireNonNull(session, "session").globalEnv;
+  public Map<String, Object> currentEnv() {
+    requireNonNull(session, "session");
+    return requireNonNull(session.globalEnv, "globalEnv");
   }
 
   /** Pushes {@code value} onto the stack. */

@@ -42,7 +42,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.hydromatic.morel.ast.Core;
@@ -128,7 +127,7 @@ public class Compiler {
           Consumer<String> outLines,
           Consumer<Binding> outBindings) {
         ThreadLocals.let(
-            CalciteFunctions.THREAD_ENV,
+            CalciteFunctions.THREAD_CX,
             context,
             () -> {
               final EvalEnv evalEnv = Codes.emptyEnvWith(session, env);
@@ -205,9 +204,9 @@ public class Compiler {
      * <p>Populated at the outermost REPL-statement level by {@link
      * #compileValDecl} after {@link #collectFreeGlobals} identifies which
      * globals are referenced. A {@link Codes#globalMarshal} prologue pushes
-     * those values from {@link Stack#globalEnv} before the body runs, so the
+     * those values from {@link Stack#currentEnv()} before the body runs, so the
      * body can use fast {@link Codes#stackGet} reads instead of {@link
-     * Codes#get} lookups.
+     * Codes#get(String)} lookups.
      *
      * <p>Empty inside function bodies: function bodies are compiled with a
      * fresh {@link Context} (in {@link #compileMatchListImpl}) whose {@code
@@ -223,7 +222,7 @@ public class Compiler {
      * {@link #compileMatchListImpl}. Each closure body compiled in this context
      * gets the rec peers added to its inner {@link StackLayout} so that
      * recursive self-references and mutual references compile to {@link
-     * Codes#stackGet} rather than {@link Codes#get}.
+     * Codes#stackGet} rather than {@link Codes#get(String)}.
      *
      * <p>Always empty inside function bodies (the fresh {@link Context} in
      * {@link #compileMatchListImpl} does not inherit this field).
@@ -713,18 +712,15 @@ public class Compiler {
         final Core.Scan scan = (Core.Scan) firstStep;
         code = compileRow(cx, scan.exp);
         // Extend the layout with scan variable patterns at stack slots.
-        final List<Core.NamedPat> scanPats = namedPatsOf(scan.pat);
         StackLayout scanLayout = cx.layout;
-        for (int i = 0; i < scanPats.size(); i++) {
-          scanLayout = scanLayout.with(scanPats.get(i), cx.localDepth + i);
+        int depth = cx.localDepth;
+        for (Core.NamedPat scanPat : scan.pat.expand()) {
+          scanLayout = scanLayout.with(scanPat, depth++);
         }
         final List<Binding> scanBindings = new ArrayList<>();
         Compiles.acceptBinding(typeSystem, scan.pat, scanBindings);
         final Context cxScan =
-            new Context(
-                cx.env.bindAll(scanBindings),
-                scanLayout,
-                cx.localDepth + scanPats.size());
+            new Context(cx.env.bindAll(scanBindings), scanLayout, depth);
         final Code conditionCode = compile(cxScan, scan.condition);
         final ImmutableMap<String, Binding> scanAllScope =
             shadowMerge(allScope2, firstStep.env.bindings);
@@ -736,7 +732,7 @@ public class Compiler {
                 firstStep.env,
                 skip(steps),
                 elementType);
-        final int scanVarCount = scanPats.size();
+        final int scanVarCount = depth - cx.localDepth;
         return () ->
             RowSinks.scan(
                 firstStep.op,
@@ -1170,7 +1166,7 @@ public class Compiler {
       Context cx, Collection<Binding> bindings) {
     StackLayout extLayout = cx.layout;
     int extLocalDepth = cx.localDepth;
-    for (Binding b : sortedInBindings(cx, bindings)) {
+    for (Binding b : bindings) {
       if (cx.layout.get(b.id) < 0) {
         extLayout = extLayout.with(b.id, extLocalDepth++);
       }
@@ -1184,22 +1180,13 @@ public class Compiler {
   /** Sorts bindings: those in the layout by slot index, then the rest. */
   private List<Binding> sortedInBindings(
       Context cx, Collection<Binding> bindings) {
-    final List<Binding> sorted = new ArrayList<>(bindings);
-    sorted.sort(
+    return ImmutableList.sortedCopyOf(
         Comparator.comparingInt(
             b -> {
               int slot = cx.layout.get(b.id);
               return slot >= 0 ? slot : Integer.MAX_VALUE;
-            }));
-    return sorted;
-  }
-
-  private ImmutableSortedMap<String, Binding> sortedBindingMap(
-      Iterable<Binding> bindings) {
-    final ImmutableSortedMap.Builder<String, Binding> b =
-        ImmutableSortedMap.orderedBy(RecordType.ORDERING);
-    bindings.forEach(binding -> b.put(binding.id.name, binding));
-    return b.build();
+            }),
+        bindings);
   }
 
   private ImmutableList<String> bindingNames(List<Binding> bindings) {
@@ -1432,27 +1419,23 @@ public class Compiler {
   private Code compileLetStackPat(
       Context cx, Core.Exp valueExp, Core.Match match, boolean tailPos) {
     final Core.Pat pat = match.pat;
-    final List<Core.NamedPat> namedPats = namedPatsOf(pat);
     final Code expCode = compile(cx, valueExp);
     // Assign sequential slots starting at cx.localDepth, in the same order
     // that pushBindings pushes them.
     StackLayout newLayout = cx.layout;
-    for (int i = 0; i < namedPats.size(); i++) {
-      newLayout = newLayout.with(namedPats.get(i), cx.localDepth + i);
+    int depth = cx.localDepth;
+    for (Core.NamedPat namedPat : pat.expand()) {
+      newLayout = newLayout.with(namedPat, depth++);
     }
     final List<Binding> bindings = new ArrayList<>();
     Compiles.acceptBinding(typeSystem, pat, bindings);
-    final Context cx2 =
-        new Context(
-            cx.env.bindAll(bindings),
-            newLayout,
-            cx.localDepth + namedPats.size());
+    final Context cx2 = new Context(cx.env.bindAll(bindings), newLayout, depth);
     final Code bodyCode =
         tailPos ? compileTail(cx2, match.exp) : compile(cx2, match.exp);
     final Code processedBody =
         postProcessLetBody(cx2, bodyCode, match.exp.type);
-    return Codes.stackLetPat(
-        pat, namedPats.size(), expCode, processedBody, match.pos);
+    final int varCount = depth - cx.localDepth;
+    return Codes.stackLetPat(pat, varCount, expCode, processedBody, match.pos);
   }
 
   /** Hook for subclasses to post-process a compiled let body. */
@@ -1476,7 +1459,7 @@ public class Compiler {
     int depth = cx.localDepth;
     for (Code mc : matchCodes) {
       for (Core.Pat pat : ((MatchCode) mc).patCodes.leftList()) {
-        for (Core.NamedPat namedPat : namedPatsOf(pat)) {
+        for (Core.NamedPat namedPat : pat.expand()) {
           newLayout = newLayout.with(namedPat, depth++);
         }
       }
@@ -1491,10 +1474,9 @@ public class Compiler {
     // stack-based multi-let.
     final PairList<Core.Pat, Code> pairs = PairList.of();
     for (Code mc : matchCodes) {
-      ((MatchCode) mc)
-          .patCodes.forEach((BiConsumer<Core.Pat, Code>) pairs::add);
+      pairs.addAll(((MatchCode) mc).patCodes);
     }
-    return Codes.stackMultiLet(ImmutablePairList.copyOf(pairs), resultCode);
+    return Codes.stackMultiLet(pairs.immutable(), resultCode);
   }
 
   private Code compileLocal(Context cx, Core.Local local) {
@@ -1589,54 +1571,6 @@ public class Compiler {
   }
 
   /**
-   * Returns the named patterns that {@link Closure#bindRecurse} (and {@link
-   * Closure.StackClosure#pushBindings}) would bind when matching {@code pat},
-   * in the order they are bound.
-   */
-  private static List<Core.NamedPat> namedPatsOf(Core.Pat pat) {
-    final List<Core.NamedPat> result = new ArrayList<>();
-    collectNamedPats(pat, result);
-    return result;
-  }
-
-  private static void collectNamedPats(
-      Core.Pat pat, List<Core.NamedPat> result) {
-    switch (pat.op) {
-      case ID_PAT:
-        result.add((Core.IdPat) pat);
-        break;
-      case WILDCARD_PAT:
-      case BOOL_LITERAL_PAT:
-      case CHAR_LITERAL_PAT:
-      case INT_LITERAL_PAT:
-      case REAL_LITERAL_PAT:
-      case STRING_LITERAL_PAT:
-      case CON0_PAT:
-        break;
-      case AS_PAT:
-        final Core.AsPat asPat = (Core.AsPat) pat;
-        result.add(asPat);
-        collectNamedPats(asPat.pat, result);
-        break;
-      case TUPLE_PAT:
-        ((Core.TuplePat) pat).args.forEach(p -> collectNamedPats(p, result));
-        break;
-      case RECORD_PAT:
-        ((Core.RecordPat) pat).args.forEach(p -> collectNamedPats(p, result));
-        break;
-      case LIST_PAT:
-        ((Core.ListPat) pat).args.forEach(p -> collectNamedPats(p, result));
-        break;
-      case CONS_PAT:
-      case CON_PAT:
-        collectNamedPats(((Core.ConPat) pat).pat, result);
-        break;
-      default:
-        break;
-    }
-  }
-
-  /**
    * Compiles a {@code match} expression.
    *
    * @param cx Compile context
@@ -1649,7 +1583,7 @@ public class Compiler {
 
   /**
    * Compiles an expression in tail position, emitting {@link Codes#tailApply}
-   * at tail-call sites so that the trampoline in {@link Closure#bindEval} can
+   * at tail-call sites so that the trampoline in {@code Closure#bindEval} can
    * execute them in O(1) stack space.
    */
   protected Code compileTail(Context cx, Core.Exp expression) {
@@ -1732,16 +1666,14 @@ public class Compiler {
     // outer layout. Exclude variables bound by each arm's own pattern, because
     // those are freshly bound (not captured) at the inner level.
     for (Core.Match match : matchList) {
-      final Set<Core.NamedPat> patVars =
-          ImmutableSet.copyOf(namedPatsOf(match.pat));
-      collectReferencedStackVars(cx, match.exp, patVars, captureMap);
+      final List<Core.NamedPat> patVars = match.pat.expand();
+      collectReferencedStackVars(
+          cx, match.exp, ImmutableSet.copyOf(patVars), captureMap);
     }
-
-    final int numCapture = captureMap.size();
 
     // Build capture offsets: for each captured var, compute 1-based offset from
     // the current stack top.
-    final int[] captureOffsets = new int[numCapture];
+    final int[] captureOffsets = new int[captureMap.size()];
     for (Map.Entry<Core.NamedPat, Integer> e : captureMap.entrySet()) {
       final int outerSlot = cx.layout.get(e.getKey());
       // offset = localDepth - outerSlot (1-based from top = localDepth)
@@ -1749,13 +1681,8 @@ public class Compiler {
     }
 
     // Compile each arm with a fresh inner context.
-    final ImmutableList<Core.NamedPat> recPeers = cx.recPeers;
-    final int numRecPeers = recPeers.size();
     final PairList<Core.Pat, Code> patCodes = PairList.of();
     for (Core.Match match : matchList) {
-      final List<Core.NamedPat> argPats = namedPatsOf(match.pat);
-      final int numArgs = argPats.size();
-
       // Build inner layout:
       //   slots 0..numCapture-1: captured outer vars
       //   slots numCapture..numCapture+numRecPeers-1: rec-group peers (if any)
@@ -1764,21 +1691,20 @@ public class Compiler {
       for (Map.Entry<Core.NamedPat, Integer> e : captureMap.entrySet()) {
         innerLayout = innerLayout.with(e.getKey(), e.getValue());
       }
-      for (int i = 0; i < numRecPeers; i++) {
-        innerLayout = innerLayout.with(recPeers.get(i), numCapture + i);
+      int depth = captureMap.size();
+      for (final Core.NamedPat namedPat : cx.recPeers) {
+        innerLayout = innerLayout.with(namedPat, depth++);
       }
-      for (int i = 0; i < argPats.size(); i++) {
-        innerLayout =
-            innerLayout.with(argPats.get(i), numCapture + numRecPeers + i);
+      for (Core.NamedPat argPat : match.pat.expand()) {
+        innerLayout = innerLayout.with(argPat, depth++);
       }
-      final int innerDepth = numCapture + numRecPeers + numArgs;
 
       final List<Binding> bindings = new ArrayList<>();
       Compiles.acceptBinding(typeSystem, match.pat, bindings);
       // Fresh context: no globalSlotMap, no recPeers (nested closures start
       // a new scope).
       final Context innerCx =
-          new Context(cx.env.bindAll(bindings), innerLayout, innerDepth);
+          new Context(cx.env.bindAll(bindings), innerLayout, depth);
 
       final Code bodyCode =
           tailPos
@@ -1792,12 +1718,12 @@ public class Compiler {
     //   captureOffsets.length + numRecPeers + numArgVars + bodyCode.maxSlots()
     int capacity = 0;
     for (Map.Entry<Core.Pat, Code> e : patCodes) {
-      final int numArgs = namedPatsOf(e.getKey()).size();
+      final int numArgs = e.getKey().expand().size();
       capacity =
           Math.max(
               capacity,
               captureOffsets.length
-                  + numRecPeers
+                  + ((List<Core.NamedPat>) cx.recPeers).size()
                   + numArgs
                   + e.getValue().maxSlots());
     }
@@ -1819,14 +1745,6 @@ public class Compiler {
       Set<Core.NamedPat> excludePats,
       LinkedHashMap<Core.NamedPat, Integer> captureMap) {
     collectReferencedStackVarsRec(cx.layout, exp, excludePats, captureMap);
-  }
-
-  private static void collectReferencedStackVars(
-      Context cx,
-      Core.Exp exp,
-      LinkedHashMap<Core.NamedPat, Integer> captureMap) {
-    collectReferencedStackVarsRec(
-        cx.layout, exp, ImmutableSet.of(), captureMap);
   }
 
   private static void collectReferencedStackVarsRec(
@@ -1949,7 +1867,7 @@ public class Compiler {
 
   /**
    * Collects names referenced in {@code exp} that would be compiled to {@link
-   * Codes#get} (i.e., runtime globals) into {@code globals}.
+   * Codes#get(String)} (i.e., runtime globals) into {@code globals}.
    *
    * <p>Does not recurse into {@code fn} bodies, because function bodies are
    * compiled with a fresh {@link Context} that resets {@code globalSlotMap}.

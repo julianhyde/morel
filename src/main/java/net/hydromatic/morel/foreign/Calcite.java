@@ -222,7 +222,7 @@ public class Calcite {
           stack,
           () ->
               ThreadLocals.mutate(
-                  CalciteFunctions.THREAD_ENV,
+                  CalciteFunctions.THREAD_CX,
                   c -> c.withEnv(env),
                   () -> {
                     final Interpreter interpreter =
