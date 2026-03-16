@@ -250,12 +250,12 @@ public class Compiler {
         StackLayout layout,
         int localDepth,
         ImmutableMap<String, Integer> globalSlotMap,
-        ImmutableList<Core.NamedPat> recPeers) {
+        List<Core.NamedPat> recPeers) {
       this.env = env;
       this.layout = layout;
       this.localDepth = localDepth;
       this.globalSlotMap = globalSlotMap;
-      this.recPeers = recPeers;
+      this.recPeers = ImmutableList.copyOf(recPeers);
     }
 
     static Context of(Environment env) {
@@ -268,8 +268,8 @@ public class Compiler {
     }
 
     /** Returns a copy of this context with the given rec-group peers. */
-    Context withRecPeers(ImmutableList<Core.NamedPat> newRecPeers) {
-      return new Context(env, layout, localDepth, globalSlotMap, newRecPeers);
+    Context withRecPeers(List<Core.NamedPat> recPeers) {
+      return new Context(env, layout, localDepth, globalSlotMap, recPeers);
     }
   }
 
@@ -1295,20 +1295,10 @@ public class Compiler {
     final List<Binding> bindings = new ArrayList<>();
     // For REC_VAL_DECL, collect peer pats and thread them into the compile
     // context so that closure bodies compile recursive refs as StackCode.
-    final Context cxForDecl;
-    if (let.decl.op == Op.REC_VAL_DECL) {
-      final ImmutableList.Builder<Core.NamedPat> peersB =
-          ImmutableList.builder();
-      let.decl.forEachBinding(
-          (pat, exp, overloadPat, pos) -> {
-            if (pat instanceof Core.NamedPat) {
-              peersB.add((Core.NamedPat) pat);
-            }
-          });
-      cxForDecl = cx.withRecPeers(peersB.build());
-    } else {
-      cxForDecl = cx;
-    }
+    final Context cxForDecl =
+        let.decl.op == Op.REC_VAL_DECL
+            ? cx.withRecPeers(let.decl.boundPats())
+            : cx;
     compileValDecl(
         cxForDecl,
         let.decl,
@@ -1608,20 +1598,10 @@ public class Compiler {
         }
         final List<Code> matchCodes = new ArrayList<>();
         final List<Binding> bindings = new ArrayList<>();
-        final Context cxForDecl;
-        if (let.decl.op == Op.REC_VAL_DECL) {
-          final ImmutableList.Builder<Core.NamedPat> peersB =
-              ImmutableList.builder();
-          let.decl.forEachBinding(
-              (pat, exp2, overloadPat, pos) -> {
-                if (pat instanceof Core.NamedPat) {
-                  peersB.add((Core.NamedPat) pat);
-                }
-              });
-          cxForDecl = cx.withRecPeers(peersB.build());
-        } else {
-          cxForDecl = cx;
-        }
+        final Context cxForDecl =
+            let.decl.op == Op.REC_VAL_DECL
+                ? cx.withRecPeers(let.decl.boundPats())
+                : cx;
         compileValDecl(
             cxForDecl,
             let.decl,
