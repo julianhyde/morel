@@ -721,16 +721,21 @@ variable in the layout (offset = `localDepth − slotIndex`), used by the bridge
 whose body can be converted by `toRel4`; the bridge approach subsumes the
 previously-planned Step 19c-ii.
 
-#### Step 19c: Convert remaining `StackMultiLetCode.useSlots=false` to slot-push
+#### ✅ Step 19c: Convert remaining `StackMultiLetCode.useSlots=false` to slot-push
 
-The remaining env-extension site is `StackMultiLetCode.eval` when
-`useSlots=false`: it calls `Closure.bindPatGetValue` to extend
-`stack.globalEnv` and then creates `new Stack(env2, stack.slots, savedTop)`.
-This branch is now only reached for complex patterns not handled by
-`tryCompileLetStack*` (multi-binding `let val … and …`, etc.).
+Changed `compileLet` (both the normal and tail-position paths) to always use
+`buildLetContext` and always pass `useSlots=true` to `finishCompileLet`.
+Removed `boolean useSlots` parameter from `Compiler.finishCompileLet` and
+`CalciteCompiler.finishCompileLet`; `CalciteCompiler.finishCompileLet` now
+calls `postProcessLetBody(cx, resultCode_, resultType)` instead of
+`toRel4(cx.env, resultCode_, resultType)` so that the slot-to-env bridge is
+applied when the result code is a Calcite plan and there are slot-bound
+variables in scope.
 
-After this step `StackMultiLetCode.useSlots` and the env-extension branch
-can be deleted; `Closure.bindPatGetValue` becomes dead code.
+Removed `useSlots` field and `useSlots=false` branch from
+`StackMultiLetCode`; `Codes.stackMultiLet` no longer takes a `useSlots`
+parameter. `Closure.bindPatGetValue` is now dead code (will be deleted with
+`Stack.globalEnv` in Step 19d).
 
 #### Step 19d: Remove `Stack.globalEnv`
 

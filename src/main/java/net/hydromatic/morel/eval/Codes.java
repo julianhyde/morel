@@ -5149,22 +5149,11 @@ public abstract class Codes {
      * #patCodes}.
      */
     private final int slotCount;
-    /**
-     * If true, binding values are pushed onto the stack before evaluating
-     * {@link #resultCode}, so result code can access them via {@link
-     * StackCode}. If false, the old env-extension approach is used: bindings
-     * are added to {@link Stack#globalEnv} only and result code uses {@link
-     * GetCode}.
-     */
-    private final boolean useSlots;
 
     StackMultiLetCode(
-        ImmutablePairList<Core.Pat, Code> patCodes,
-        Code resultCode,
-        boolean useSlots) {
+        ImmutablePairList<Core.Pat, Code> patCodes, Code resultCode) {
       this.patCodes = patCodes;
       this.resultCode = resultCode;
-      this.useSlots = useSlots;
       this.slotCount = sumSlots(patCodes.leftList());
     }
 
@@ -5218,12 +5207,9 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      int max = resultCode.maxSlots();
-      if (useSlots) {
-        // RHSs evaluated before slots pushed; resultCode runs with N extra
-        // slots live, so needs numSlots + resultCode.maxSlots() from base.
-        max = slotCount + max;
-      }
+      // RHSs evaluated before slots pushed; resultCode runs with N extra
+      // slots live, so needs numSlots + resultCode.maxSlots() from base.
+      int max = slotCount + resultCode.maxSlots();
       for (Map.Entry<Core.Pat, Code> entry : patCodes) {
         max = Math.max(max, entry.getValue().maxSlots());
       }
@@ -5235,66 +5221,45 @@ public abstract class Codes {
       final int savedTop = stack.save();
       // Evaluate all RHSs first at the current stack depth. This ensures
       // StackMatchCode captures use the correct outer offsets, and that RHSs
-      // see a consistent environment (mutual recursion is handled by the env
-      // patch below, not by sequentially-extended env).
+      // see a consistent environment (mutual recursion handled via RecFrame).
       final Object[] values = new Object[patCodes.size()];
       for (int i = 0; i < patCodes.size(); i++) {
         values[i] = patCodes.get(i).getValue().eval(stack);
       }
-      if (useSlots) {
-        // Slot-based path (REC_VAL_DECL): push binding values onto the stack
-        // so resultCode can access them via StackCode.
-        //
-        // Allocate a shared RecFrame before creating any closure. Each
-        // StackClosure in the group gets a reference to this frame so that
-        // recursive/mutual calls resolve via StackCode (not GetCode).
-        final Closure.RecFrame rf = new Closure.RecFrame(patCodes.size());
-        for (int i = 0; i < patCodes.size(); i++) {
-          rf.bindings[i] = values[i];
-          if (values[i] instanceof Closure.StackClosure) {
-            ((Closure.StackClosure) values[i]).recFrame = rf;
-          }
+      // Allocate a shared RecFrame before creating any closure. Each
+      // StackClosure in the group gets a reference to this frame so that
+      // recursive/mutual calls resolve via StackCode (not GetCode).
+      final Closure.RecFrame rf = new Closure.RecFrame(patCodes.size());
+      for (int i = 0; i < patCodes.size(); i++) {
+        rf.bindings[i] = values[i];
+        if (values[i] instanceof Closure.StackClosure) {
+          ((Closure.StackClosure) values[i]).recFrame = rf;
         }
-        for (int i = 0; i < patCodes.size(); i++) {
-          if (!Closure.StackClosure.pushBindings(
-              patCodes.get(i).getKey(), values[i], stack)) {
-            throw new AssertionError("no match in StackMultiLetCode");
-          }
-        }
-        // resultCode sees the N pushed slots via StackCode; no env extension.
-        final Object result = resultCode.eval(stack);
-        stack.restore(savedTop);
-        return result;
-      } else {
-        // Env-based path (VAL_DECL fallthrough): no slot push; bindings go
-        // into globalEnv so resultCode can find them via GetCode.
-        EvalEnv env = stack.globalEnv;
-        final List<Object> boundValues = new ArrayList<>();
-        for (int i = 0; i < patCodes.size(); i++) {
-          env =
-              Closure.bindPatGetValue(
-                  patCodes.get(i).getKey(), values[i], env, boundValues);
-        }
-        return resultCode.eval(new Stack(env, stack.slots, savedTop));
       }
+      for (int i = 0; i < patCodes.size(); i++) {
+        if (!Closure.StackClosure.pushBindings(
+            patCodes.get(i).getKey(), values[i], stack)) {
+          throw new AssertionError("no match in StackMultiLetCode");
+        }
+      }
+      // resultCode sees the N pushed slots via StackCode; no env extension.
+      final Object result = resultCode.eval(stack);
+      stack.restore(savedTop);
+      return result;
     }
   }
 
   /**
    * Creates a stack-aware multi-binding {@code let} code node.
    *
-   * @param useSlots if true, binding values are pushed onto the stack before
-   *     evaluating {@code resultCode} so that it can read them via {@link
-   *     StackCode}; if false, the old env-based approach is used and {@code
-   *     resultCode} reads bindings via {@link GetCode}
+   * <p>Binding values are pushed onto the stack before evaluating {@code
+   * resultCode} so that it can read them via {@link StackCode}.
    */
   public static Code stackMultiLet(
-      ImmutablePairList<Core.Pat, Code> patCodes,
-      Code resultCode,
-      boolean useSlots) {
+      ImmutablePairList<Core.Pat, Code> patCodes, Code resultCode) {
     return patCodes.isEmpty()
         ? resultCode
-        : new StackMultiLetCode(patCodes, resultCode, useSlots);
+        : new StackMultiLetCode(patCodes, resultCode);
   }
 
   /** Applies an {@link Applicable} to a {@link Code}. */

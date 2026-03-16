@@ -1309,9 +1309,8 @@ public class Compiler {
     final List<Binding> bindings = new ArrayList<>();
     // For REC_VAL_DECL, collect peer pats and thread them into the compile
     // context so that closure bodies compile recursive refs as StackCode.
-    final boolean useSlots = let.decl.op == Op.REC_VAL_DECL;
     final Context cxForDecl;
-    if (useSlots) {
+    if (let.decl.op == Op.REC_VAL_DECL) {
       final ImmutableList.Builder<Core.NamedPat> peersB =
           ImmutableList.builder();
       let.decl.forEachBinding(
@@ -1332,14 +1331,11 @@ public class Compiler {
         matchCodes,
         bindings,
         null);
-    // For recursive declarations, assign stack slots to binding names so the
-    // result body can access them via StackCode rather than GetCode.
-    final Context cx2 =
-        useSlots
-            ? buildLetContext(cx, bindings, matchCodes)
-            : cx.bindAll(bindings);
+    // Assign stack slots to binding names so the result body can access them
+    // via StackCode rather than GetCode (for both REC_VAL_DECL and VAL_DECL).
+    final Context cx2 = buildLetContext(cx, bindings, matchCodes);
     final Code resultCode = compile(cx2, let.exp);
-    return finishCompileLet(cx2, matchCodes, resultCode, let.type, useSlots);
+    return finishCompileLet(cx2, matchCodes, resultCode, let.type);
   }
 
   /**
@@ -1490,11 +1486,7 @@ public class Compiler {
   }
 
   protected Code finishCompileLet(
-      Context cx,
-      List<Code> matchCodes,
-      Code resultCode,
-      Type resultType,
-      boolean useSlots) {
+      Context cx, List<Code> matchCodes, Code resultCode, Type resultType) {
     // Extract (pat, expCode) pairs from the MatchCode wrappers and emit a
     // stack-based multi-let.
     final PairList<Core.Pat, Code> pairs = PairList.of();
@@ -1502,8 +1494,7 @@ public class Compiler {
       ((MatchCode) mc)
           .patCodes.forEach((BiConsumer<Core.Pat, Code>) pairs::add);
     }
-    return Codes.stackMultiLet(
-        ImmutablePairList.copyOf(pairs), resultCode, useSlots);
+    return Codes.stackMultiLet(ImmutablePairList.copyOf(pairs), resultCode);
   }
 
   private Code compileLocal(Context cx, Core.Local local) {
@@ -1684,9 +1675,8 @@ public class Compiler {
         }
         final List<Code> matchCodes = new ArrayList<>();
         final List<Binding> bindings = new ArrayList<>();
-        final boolean useSlots = let.decl.op == Op.REC_VAL_DECL;
         final Context cxForDecl;
-        if (useSlots) {
+        if (let.decl.op == Op.REC_VAL_DECL) {
           final ImmutableList.Builder<Core.NamedPat> peersB =
               ImmutableList.builder();
           let.decl.forEachBinding(
@@ -1707,13 +1697,9 @@ public class Compiler {
             matchCodes,
             bindings,
             null);
-        final Context cx2 =
-            useSlots
-                ? buildLetContext(cx, bindings, matchCodes)
-                : cx.bindAll(bindings);
+        final Context cx2 = buildLetContext(cx, bindings, matchCodes);
         final Code resultCode = compileTail(cx2, let.exp);
-        return finishCompileLet(
-            cx2, matchCodes, resultCode, let.type, useSlots);
+        return finishCompileLet(cx2, matchCodes, resultCode, let.type);
 
       default:
         return compile(cx, expression);
