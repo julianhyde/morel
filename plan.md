@@ -773,11 +773,21 @@ so `bindEvalBody` is dead code, but its fix keeps the class compilable.
 
 ### Step 22: Simplify `EvalEnv` to a flat map
 
+**Blocked by Steps 19c/19d.**
+
 After all the steps above, `EvalEnv` is used only as the authoritative
 store of top-level REPL bindings — accessed exclusively via
 `session.globalEnv` (a single read per `GlobalMarshalCode` invocation).
 The lookup chain and `MutableEvalEnv` mechanism are no longer needed at
 runtime.
+
+However, `stack.globalEnv` (an `EvalEnv`) is still read in:
+- `GetCode.eval(Stack)` for env-based variable lookups
+- GROUP row sinks (`bindMutableArray` calls in `RowSinks.java`)
+- Aggregate argument evaluation in `Codes.java`
+
+These will be eliminated by Steps 19c/19d (convert remaining env-based
+lookups to slots, then delete `Stack.globalEnv`). Once those are done:
 
 - Replace `Session.globalEnv: EvalEnv` with
   `Session.globalEnv: ImmutableMap<String, Object>` (or a similar flat
