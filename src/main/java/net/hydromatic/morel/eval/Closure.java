@@ -301,23 +301,12 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
   public static class StackClosure
       implements Comparable<StackClosure>, Applicable, Applicable1 {
     /**
-     * Global (top-level and built-in) bindings, captured at creation time.
-     *
-     * <p>Used by {@link #apply(Object)} as a fallback when {@link #session} is
-     * null (e.g. in compile-time constant evaluation). When {@link #session} is
-     * non-null, {@code apply(Object)} uses {@link Session#globalEnv} instead so
-     * that it always sees the latest top-level bindings without per-closure
-     * patching.
-     */
-    final EvalEnv globalEnv;
-
-    /**
      * The current session, shared with all closures in this evaluation.
      *
      * <p>When non-null, {@link #apply(Object)} creates a fresh {@link Stack}
-     * from {@link Session#globalEnv} rather than the snapshot {@link
-     * #globalEnv}, so it automatically sees bindings added after this closure
-     * was created (e.g. the closure's own top-level definition).
+     * from {@link Session#globalEnv} so it automatically sees bindings added
+     * after this closure was created (e.g. the closure's own top-level
+     * definition).
      */
     final @Nullable Session session;
 
@@ -344,16 +333,12 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     private final Pos pos;
 
     public StackClosure(
-        EvalEnv globalEnv,
         @Nullable Session session,
         Object[] capturedValues,
         RecFrame recFrame,
         ImmutablePairList<Core.Pat, Code> patCodes,
         int capacity,
         Pos pos) {
-      // Snapshot the env so that subsequent mutations (e.g. ScanRowSink
-      // advancing to the next row) do not change what this closure sees.
-      this.globalEnv = requireNonNull(globalEnv).fix();
       this.session = session;
       this.capturedValues = capturedValues;
       this.recFrame = recFrame;

@@ -293,8 +293,8 @@ public class CalciteFunctions {
         final Core.Exp e3 = Compiles.toExp(valDecl4);
         final Compiler compiler = new Compiler(typeSystem);
         // Initialize session.globalEnv so that closures created during
-        // evaluation (via StackMatchCode) have a non-null globalEnv fallback.
-        session.globalEnv = Codes.emptyEnvWith(session, env);
+        // evaluation (via StackMatchCode) have a valid globalEnv.
+        session.globalEnv = Codes.globalEnvOf(Codes.emptyEnvWith(session, env));
         return new Compiled(
             ml,
             compiler.compile(env, e3),

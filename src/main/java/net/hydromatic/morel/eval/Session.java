@@ -21,6 +21,7 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.Suppliers;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,13 +45,16 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class Session {
   /**
-   * The authoritative global environment.
+   * The authoritative global environment, as a flat name-to-value map.
    *
    * <p>Updated after each top-level statement so that closures created during
    * that statement always see the latest bindings when invoked later, without
    * per-closure patching.
+   *
+   * <p>Group/aggregate and CalciteCompiler bridge code temporarily mutate this
+   * map (put + restore) during evaluation.
    */
-  public EvalEnv globalEnv;
+  public HashMap<String, Object> globalEnv;
 
   /** The plan of the previous command. */
   public @Nullable Code code;

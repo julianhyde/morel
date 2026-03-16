@@ -4220,6 +4220,21 @@ public abstract class Codes {
     return EvalEnvs.copyOf(map);
   }
 
+  /**
+   * Creates a flat {@link HashMap} for {@link Session#globalEnv} from an
+   * evaluation environment, excluding the internal {@code $session} binding.
+   */
+  public static HashMap<String, Object> globalEnvOf(EvalEnv evalEnv) {
+    final HashMap<String, Object> map = new HashMap<>();
+    evalEnv.visit(
+        (k, v) -> {
+          if (!EvalEnv.SESSION.equals(k)) {
+            map.put(k, v);
+          }
+        });
+    return map;
+  }
+
   /** Creates a compilation environment. */
   public static Environment env(
       TypeSystem typeSystem, Environment environment) {
@@ -4286,20 +4301,23 @@ public abstract class Codes {
                 s.restore(savedTop);
               }
             } else {
-              // Single env-based variable (scanDepth == 0): bind into env via
+              // Single env-based variable (scanDepth == 0): bind into
               // session.globalEnv so GetCode can find it.
               final Session session = requireNonNull(stack.session, "session");
-              final MutableEvalEnv mEnv =
-                  session.globalEnv.bindMutable(names.get(0));
-              final EvalEnv savedGlobal = session.globalEnv;
-              session.globalEnv = mEnv;
+              final HashMap<String, Object> globalEnv = session.globalEnv;
+              final String varName = names.get(0);
+              final Object savedValue = globalEnv.get(varName);
               try {
                 for (Object row : rows) {
-                  mEnv.set(row);
+                  globalEnv.put(varName, row);
                   argRows.add(argumentCode.eval(stack));
                 }
               } finally {
-                session.globalEnv = savedGlobal;
+                if (savedValue == null) {
+                  globalEnv.remove(varName);
+                } else {
+                  globalEnv.put(varName, savedValue);
+                }
               }
             }
           } else if (envCount == 0) {
@@ -4320,25 +4338,34 @@ public abstract class Codes {
             Stack s = stack.ensureSize(scanDepth);
             final int savedTop = s.top;
             final Session session = requireNonNull(s.session, "session");
-            final EvalEnv savedGlobal = session.globalEnv;
+            final HashMap<String, Object> globalEnv = session.globalEnv;
+            // Save old values for the env-based variables.
+            final int envCount2 = names.size() - scanDepth;
+            final Object[] savedEnvValues = new Object[envCount2];
+            for (int j = 0; j < envCount2; j++) {
+              savedEnvValues[j] = globalEnv.get(names.get(scanDepth + j));
+            }
             try {
               for (Object row : rows) {
                 final Object[] arr = (Object[]) row;
                 for (int j = 0; j < scanDepth; j++) {
                   s.push(arr[j]);
                 }
-                EvalEnv env2 = savedGlobal;
                 for (int j = scanDepth; j < names.size(); j++) {
-                  final MutableEvalEnv mEnv = env2.bindMutable(names.get(j));
-                  mEnv.set(arr[j]);
-                  env2 = mEnv;
+                  globalEnv.put(names.get(j), arr[j]);
                 }
-                session.globalEnv = env2;
                 argRows.add(argumentCode.eval(s));
                 s.restore(savedTop);
               }
             } finally {
-              session.globalEnv = savedGlobal;
+              for (int j = 0; j < envCount2; j++) {
+                final Object saved = savedEnvValues[j];
+                if (saved == null) {
+                  globalEnv.remove(names.get(scanDepth + j));
+                } else {
+                  globalEnv.put(names.get(scanDepth + j), saved);
+                }
+              }
             }
           }
         } else if (names.size() != 1) {
@@ -4818,7 +4845,7 @@ public abstract class Codes {
 
     @Override
     public Object eval(Stack stack) {
-      return stack.currentEnv().getOpt(name);
+      return requireNonNull(stack.session, "session").globalEnv.get(name);
     }
   }
 
@@ -4853,8 +4880,10 @@ public abstract class Codes {
     @Override
     public Object eval(Stack stack) {
       final int savedTop = stack.save();
+      final HashMap<String, Object> globalEnv =
+          requireNonNull(stack.session, "session").globalEnv;
       for (String name : names) {
-        stack.push(stack.currentEnv().getOpt(name));
+        stack.push(globalEnv.get(name));
       }
       final Object result = body.eval(stack);
       stack.restore(savedTop);

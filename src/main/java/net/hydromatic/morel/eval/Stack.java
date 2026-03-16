@@ -21,6 +21,7 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -32,8 +33,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * giving O(1) access without walking an environment chain.
  *
  * <p>Global (top-level and built-in) bindings are accessed via {@link
- * Session#globalEnv}, which is temporarily extended by row-sink and aggregate
- * code during relational evaluation.
+ * Session#globalEnv}, a flat {@link HashMap} that row-sink and aggregate code
+ * temporarily mutate (put + restore) during relational evaluation.
  *
  * <p>{@code Stack} is shared across a function call chain. Built-in functions
  * that do not bind local variables pass the {@code Stack} through unchanged;
@@ -105,9 +106,9 @@ public final class Stack {
    * Returns the current global environment.
    *
    * <p>Delegates to {@link Session#globalEnv}, which may have been temporarily
-   * extended by row-sink or aggregate code.
+   * mutated by row-sink or aggregate code.
    */
-  public EvalEnv currentEnv() {
+  public HashMap<String, Object> currentEnv() {
     return requireNonNull(session, "session").globalEnv;
   }
 

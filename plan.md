@@ -830,9 +830,7 @@ Deleted:
 `Closure` is never directly instantiated (only `StackClosure` is),
 so `bindEvalBody` is dead code, but its fix keeps the class compilable.
 
-### Step 22: Simplify `EvalEnv` to a flat map
-
-**Blocked by Steps 19c/19d.**
+### ✅ Step 22: Simplify `EvalEnv` to a flat map
 
 After all the steps above, `EvalEnv` is used only as the authoritative
 store of top-level REPL bindings — accessed exclusively via

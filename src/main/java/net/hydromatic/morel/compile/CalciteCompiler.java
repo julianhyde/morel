@@ -33,6 +33,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -217,19 +218,25 @@ public class CalciteCompiler extends Compiler {
 
       @Override
       public Object eval(Stack stack) {
-        // Temporarily extend session.globalEnv with the slot-bound variables
-        // so that morelScalar's GetCode lookups can find them at runtime.
+        // Temporarily add slot-bound variables to session.globalEnv so
+        // that morelScalar's GetCode lookups can find them at runtime.
         final Session session = requireNonNull(stack.session, "session");
-        final EvalEnv savedEnv = session.globalEnv;
-        EvalEnv env = savedEnv;
+        final HashMap<String, Object> globalEnv = session.globalEnv;
+        final HashMap<String, Object> savedValues = new HashMap<>();
         for (Map.Entry<String, Integer> e : offsets.entrySet()) {
-          env = env.bind(e.getKey(), stack.slots[stack.top - e.getValue()]);
+          savedValues.put(e.getKey(), globalEnv.get(e.getKey()));
+          globalEnv.put(e.getKey(), stack.slots[stack.top - e.getValue()]);
         }
-        session.globalEnv = env;
         try {
           return calciteCode.eval(stack);
         } finally {
-          session.globalEnv = savedEnv;
+          for (Map.Entry<String, Object> e : savedValues.entrySet()) {
+            if (e.getValue() == null) {
+              globalEnv.remove(e.getKey());
+            } else {
+              globalEnv.put(e.getKey(), e.getValue());
+            }
+          }
         }
       }
     };
@@ -290,9 +297,9 @@ public class CalciteCompiler extends Compiler {
           case RECORD_SELECTOR:
             if (apply.arg instanceof Core.Id) {
               // Something like '#emps scott', 'scott' is a foreign value
-              final EvalEnv evalEnv = evalEnvOf(cx.env);
               final Session miniSession = new Session(ImmutableMap.of());
-              miniSession.globalEnv = evalEnv;
+              miniSession.globalEnv =
+                  new HashMap<>(evalEnvOf(cx.env).valueMap());
               final Object o = code.eval(new Stack(miniSession, 256));
               if (o instanceof RelList) {
                 cx.relBuilder.push(((RelList) o).rel);

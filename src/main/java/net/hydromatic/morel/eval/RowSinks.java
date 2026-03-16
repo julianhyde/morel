@@ -472,38 +472,36 @@ public abstract class RowSinks {
     }
 
     /**
-     * Adds the current element to the collection, and returns whether it was
-     * added.
+     * Returns the map key for {@code element}.
+     *
+     * <p>For a single-name row, the key is the element itself. For a multi-name
+     * row, the element is an {@code Object[]} and the key is an {@link
+     * ImmutableList} of its entries.
      */
-    boolean add(EvalEnv env) {
+    Object elementKey(Object element) {
       if (names.size() == 1) {
-        Object value = env.getOpt(names.get(0));
-        return map.put(value, ZERO) == null;
+        return element;
       } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = env.getOpt(names.get(i));
-        }
-        return map.put(ImmutableList.copyOf(values), ZERO) == null;
+        return ImmutableList.copyOf((Object[]) element);
       }
     }
 
-    /** Removes the current element from the collection. */
-    void remove(EvalEnv env) {
-      if (names.size() == 1) {
-        Object value = env.getOpt(names.get(0));
-        map.remove(value);
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = env.getOpt(names.get(i));
-        }
-        map.remove(ImmutableList.copyOf(values));
-      }
+    /**
+     * Adds {@code element} to the collection, and returns whether it was added.
+     */
+    boolean addElement(Object element) {
+      return map.put(elementKey(element), ZERO) == null;
     }
 
-    /** Increments the count of the current element in the collection. */
-    void inc(EvalEnv env) {
-      compute(
-          env,
+    /** Removes {@code element} from the collection. */
+    void removeElement(Object element) {
+      map.remove(elementKey(element));
+    }
+
+    /** Increments the count of {@code element} in the collection. */
+    void incElement(Object element) {
+      map.compute(
+          elementKey(element),
           (k, v) -> {
             if (v == null) {
               return new int[] {1};
@@ -513,59 +511,15 @@ public abstract class RowSinks {
           });
     }
 
-    /**
-     * Decrements the count of the current element in the collection, if it is
-     * present.
-     */
-    void dec(EvalEnv env) {
-      computeIfPresent(
-          env,
-          (k, v) -> {
-            --v[0];
-            return v;
-          });
+    /** Does something to the count of {@code element} in the collection. */
+    void computeElement(Object element, BiFunction<Object, int[], int[]> fn) {
+      map.compute(elementKey(element), fn);
     }
 
-    /** Does something to the count of the current element in the collection. */
-    void compute(EvalEnv env, BiFunction<Object, int[], int[]> fn) {
-      Object value;
-      if (names.size() == 1) {
-        value = env.getOpt(names.get(0));
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = env.getOpt(names.get(i));
-        }
-        value = ImmutableList.copyOf(values);
-      }
-      map.compute(value, fn);
-    }
-
-    /** Does something to the count of the current element in the collection. */
-    void computeIfPresent(EvalEnv env, BiFunction<Object, int[], int[]> fn) {
-      Object value;
-      if (names.size() == 1) {
-        value = env.getOpt(names.get(0));
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = env.getOpt(names.get(i));
-        }
-        value = ImmutableList.copyOf(values);
-      }
-      map.computeIfPresent(value, fn);
-    }
-
-    /** Does something to the count of the current element in the collection. */
-    void computeIfAbsent(EvalEnv env, Function<Object, int[]> fn) {
-      Object value;
-      if (names.size() == 1) {
-        value = env.getOpt(names.get(0));
-      } else {
-        for (int i = 0; i < names.size(); i++) {
-          values[i] = env.getOpt(names.get(i));
-        }
-        value = ImmutableList.copyOf(values);
-      }
-      map.computeIfAbsent(value, fn);
+    /** Does something to the count of {@code element} in the collection. */
+    void computeIfPresentElement(
+        Object element, BiFunction<Object, int[], int[]> fn) {
+      map.computeIfPresent(elementKey(element), fn);
     }
 
     /** Computes the key for the current row using codes for {@code names}. */
@@ -671,13 +625,10 @@ public abstract class RowSinks {
     public void accept(Stack stack) {
       if (!initialized) {
         initialized = true;
-        final MutableEvalEnv mutableEvalEnv =
-            stack.currentEnv().bindMutableArray(names);
         for (Code code : codes) {
           final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
           for (Object element : elements) {
-            mutableEvalEnv.set(element);
-            inc(mutableEvalEnv);
+            incElement(element);
           }
         }
       }
@@ -714,13 +665,10 @@ public abstract class RowSinks {
 
     @Override
     public List<Object> result(Stack stack) {
-      final MutableEvalEnv mutableEvalEnv =
-          stack.currentEnv().bindMutableArray(names);
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
         for (Object element : elements) {
-          mutableEvalEnv.set(element);
-          remove(mutableEvalEnv);
+          removeElement(element);
         }
       }
       if (!map.isEmpty()) {
@@ -773,16 +721,13 @@ public abstract class RowSinks {
       if (!initialized) {
         initialized = true;
         final int n = codes.size();
-        final MutableEvalEnv mutableEvalEnv =
-            stack.currentEnv().bindMutableArray(names);
         for (int i = 0; i < codes.size(); i++) {
           final int slot = i;
           final Code code = codes.get(i);
           final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
           for (Object element : elements) {
-            mutableEvalEnv.set(element);
-            compute(
-                mutableEvalEnv,
+            computeElement(
+                element,
                 (k, v) -> {
                   if (v == null) {
                     v = new int[n];
@@ -847,8 +792,6 @@ public abstract class RowSinks {
 
     @Override
     public List<Object> result(Stack stack) {
-      final MutableEvalEnv mutableEvalEnv =
-          stack.currentEnv().bindMutableArray(names);
       int pass = 0;
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
@@ -857,9 +800,8 @@ public abstract class RowSinks {
           map.forEach((k, v) -> v[0] = 0);
         }
         for (Object element : elements) {
-          mutableEvalEnv.set(element);
-          computeIfPresent(
-              mutableEvalEnv,
+          computeIfPresentElement(
+              element,
               (k, v) -> {
                 ++v[0];
                 return v;
@@ -904,16 +846,13 @@ public abstract class RowSinks {
 
     @Override
     public List<Object> result(Stack stack) {
-      // keyEnv is used only for distinctness checks (add(keyEnv)).
-      final MutableEvalEnv keyEnv = stack.currentEnv().bindMutableArray(names);
       Stack s = stack.ensureSize(names.size());
       final int savedTop = s.top;
       final Stack s2 = s;
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
         for (Object element : elements) {
-          keyEnv.set(element);
-          if (!distinct || add(keyEnv)) {
+          if (!distinct || addElement(element)) {
             rowSink.accept(withRowFromKey(s2, element));
             s2.restore(savedTop);
           }
@@ -1000,20 +939,12 @@ public abstract class RowSinks {
     @Override
     public List<Object> result(Stack stack) {
       final Session session = requireNonNull(stack.session, "session");
-      final EvalEnv savedGlobal = session.globalEnv;
-      EvalEnv env2 = savedGlobal;
-      final MutableEvalEnv[] groupEnvs = new MutableEvalEnv[outNames.size()];
-      int i = 0;
-      for (String name : outNames) {
-        env2 = groupEnvs[i++] = env2.bindMutable(name);
+      final HashMap<String, Object> globalEnv = session.globalEnv;
+      // Save old values for all output names.
+      final Object[] savedValues = new Object[outNames.size()];
+      for (int j = 0; j < outNames.size(); j++) {
+        savedValues[j] = globalEnv.get(outNames.get(j));
       }
-      // env3 is the env containing only the key variable bindings (not yet the
-      // aggregate result bindings); used when calling aggregate functions so
-      // that
-      // their argument expressions can reference GROUP key vars but not agg
-      // vars.
-      final EvalEnv env3 =
-          keyNames.isEmpty() ? savedGlobal : groupEnvs[keyNames.size() - 1];
       final Map<Object, List<Object>> map2;
       if (map.isEmpty()
           && keyCode instanceof Codes.TupleCode
@@ -1023,29 +954,37 @@ public abstract class RowSinks {
         //noinspection UnstableApiUsage
         map2 = Multimaps.asMap(map);
       }
-      // Temporarily set session.globalEnv to the fully-extended env (env2) so
-      // that GetCode nodes in the downstream sink can find GROUP output vars.
-      session.globalEnv = env2;
       try {
         for (Map.Entry<Object, List<Object>> entry : map2.entrySet()) {
           final List list = (List) entry.getKey();
-          for (i = 0; i < list.size(); i++) {
-            groupEnvs[i].set(list.get(i));
+          // Set key vars in globalEnv so GetCode-based aggregate argument
+          // expressions can read them.
+          for (int j = 0; j < list.size(); j++) {
+            globalEnv.put(keyNames.get(j), list.get(j));
           }
+          // Compute all aggregates.
           final List<Object> rows = entry.getValue();
-          for (Applicable aggregateCode : aggregateCodes) {
-            // Use env3 for aggregate arg eval: key vars visible, agg vars not.
-            session.globalEnv = env3;
-            groupEnvs[i++].set(aggregateCode.apply(stack, rows));
+          final Object[] aggResults = new Object[aggregateCodes.size()];
+          for (int j = 0; j < aggregateCodes.size(); j++) {
+            aggResults[j] = aggregateCodes.get(j).apply(stack, rows);
           }
-          // Restore env2 for downstream rowSink (all GROUP output vars
-          // visible).
-          session.globalEnv = env2;
+          // Put agg results; downstream rowSink sees key + all agg vars.
+          for (int j = 0; j < aggResults.length; j++) {
+            globalEnv.put(outNames.get(keyNames.size() + j), aggResults[j]);
+          }
           rowSink.accept(stack);
         }
         return rowSink.result(stack);
       } finally {
-        session.globalEnv = savedGlobal;
+        // Restore saved values.
+        for (int j = 0; j < outNames.size(); j++) {
+          final Object saved = savedValues[j];
+          if (saved == null) {
+            globalEnv.remove(outNames.get(j));
+          } else {
+            globalEnv.put(outNames.get(j), saved);
+          }
+        }
       }
     }
   }

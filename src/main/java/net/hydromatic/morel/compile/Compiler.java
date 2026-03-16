@@ -2264,13 +2264,7 @@ public class Compiler {
         captured[i] = stack.slots[stack.top - captureOffsets[i]];
       }
       return new Closure.StackClosure(
-          stack.currentEnv(),
-          stack.session,
-          captured,
-          null,
-          patCodes,
-          capacity,
-          pos);
+          stack.session, captured, null, patCodes, capacity, pos);
     }
   }
 
@@ -2375,9 +2369,10 @@ public class Compiler {
       final Session session = evalEnv.getSession();
       final StringBuilder buf = new StringBuilder();
       final List<String> outs = new ArrayList<>();
-      // Set session.globalEnv before evaluation so that closures created
-      // during eval (which capture session) start with a valid globalEnv.
-      session.globalEnv = evalEnv;
+      // Rebuild session.globalEnv as a flat map from the current compilation
+      // env so closures created during eval (which capture session) start with
+      // a valid globalEnv.
+      session.globalEnv = Codes.globalEnvOf(evalEnv);
       try {
         final Object o =
             code.eval(new Stack(session, Math.max(code.maxSlots(), 256)));
@@ -2398,15 +2393,12 @@ public class Compiler {
                             pat2, overloadPat, expForBinding, o2)))) {
           throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
         }
-        // Build env2 and update session.globalEnv so closures created by this
-        // statement automatically see the latest bindings (including
-        // themselves)
-        // when they are eventually invoked.
-        EvalEnv env2 = evalEnv;
+        // Add the new bindings to session.globalEnv so closures created by
+        // this statement automatically see the latest bindings (including
+        // themselves) when they are eventually invoked.
         for (Binding b : outBindings0) {
-          env2 = env2.bind(b.id.name, b.value);
+          session.globalEnv.put(b.id.name, b.value);
         }
-        session.globalEnv = env2;
         for (Binding binding : outBindings0) {
           outBindings.accept(binding);
           if (binding.id == skipPat) {
