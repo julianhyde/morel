@@ -2230,7 +2230,7 @@ public class Compiler {
         captured[i] = stack.slots[stack.top - captureOffsets[i]];
       }
       return new Closure.StackClosure(
-          stack.globalEnv,
+          stack.session.globalEnv,
           stack.session,
           captured,
           null,

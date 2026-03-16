@@ -4839,7 +4839,7 @@ public abstract class Codes {
     public Object eval(Stack stack) {
       final int savedTop = stack.save();
       for (String name : names) {
-        stack.push(stack.globalEnv.getOpt(name));
+        stack.push(stack.session.globalEnv.getOpt(name));
       }
       final Object result = body.eval(stack);
       stack.restore(savedTop);
@@ -5176,11 +5176,11 @@ public abstract class Codes {
         case AS_PAT:
           return 1 + countSlots(((Core.AsPat) pat).pat);
         case TUPLE_PAT:
-            return sumSlots(((Core.TuplePat) pat).args);
+          return sumSlots(((Core.TuplePat) pat).args);
         case RECORD_PAT:
-            return sumSlots(((Core.RecordPat) pat).args);
+          return sumSlots(((Core.RecordPat) pat).args);
         case LIST_PAT:
-            return sumSlots(((Core.ListPat) pat).args);
+          return sumSlots(((Core.ListPat) pat).args);
         case CONS_PAT:
         case CON_PAT:
           return countSlots(((Core.ConPat) pat).pat);

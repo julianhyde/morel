@@ -632,3 +632,168 @@ removed. The simple reads (`GetCode.eval`, `GlobalMarshalCode.eval`,
 can be converted to `stack.session.globalEnv` immediately; the
 `new Stack(extendedEnv, ...)` constructors are the blocking dependency.
 
+This step therefore decomposes into three sub-steps, each independently
+committable:
+
+#### ✅ Step 19a: Partial `stack.globalEnv` → `stack.session.globalEnv`
+
+Replace reads that access only top-level globals (not locally-extended
+envs) with `stack.session.globalEnv`:
+
+- `GlobalMarshalCode.eval`: pushes top-level globals onto the stack at
+  statement start — use `stack.session.globalEnv.getOpt(name)`.
+- `Calcite.CalciteCode.eval(Stack)`: sets
+  `THREAD_EVAL_ENV = stack.globalEnv` for the legacy scalar-fallback
+  path — change to `stack.session.globalEnv`.
+- `StackMatchCode.eval` in `Compiler.java`: passes `stack.globalEnv`
+  as the `globalEnv` argument to `StackClosure` constructor (snapshot
+  for dummy-session fallback) — change to `stack.session.globalEnv`.
+
+The `Calcite.CalciteCode.eval(Stack)` `THREAD_EVAL_ENV` assignment is kept as
+`stack.globalEnv` (not changed): `session.globalEnv` lacks the SESSION key
+so Stacks built from it would have null sessions.
+
+A companion fix: `CalciteFunctions.MorelTableFunction.Compiled.create` now
+initialises `session.globalEnv = evalEnv` so that the dummy session used
+by `CalciteCompiler.createContext` has a non-null `globalEnv`, preventing
+NPEs when `StackMatchCode` creates `StackClosure` objects during table-
+function scan evaluation.
+
+After this step `Stack.globalEnv` is still read by `GetCode.eval` (for
+locally-extended envs in `StackMultiLetCode` and `withRow` / `withRowFromKey`)
+and by the `new Stack(extendedEnv, …)` constructors.
+
+#### Step 19b: Convert RowSink deferred-result env-extension to slot-push
+
+The remaining `new Stack(extendedEnv, slots, top)` calls are in
+`RowSinks.withRow()` and `RowSinks.withRowFromKey()`. These methods
+rebind captured row-variable values into a `MutableEvalEnv` chain so
+that downstream `GetCode` lookups find them during `result()`. The same
+scope-variable tracking already present for stack-based variables (`inSlots`,
+`scanDepth`) must be extended to cover all env-based variables (those from
+`YIELD` steps, which currently land in `globalEnv`).
+
+Approach:
+- Track `envDepth` alongside `scanDepth`: the number of env-based
+  bindings beyond the stack-resident ones.
+- In `withRow` / `withRowFromKey`, push all per-row values (both
+  stack-based and formerly-env-based) onto the stack in a single block,
+  eliminating the `MutableEvalEnv` chain entirely.
+- Downstream code compiled with `cxFrom` uses `GetCode` for YIELD-output
+  variables; that `GetCode` must be changed to `StackCode` with the
+  correct offset into the pushed block, which requires passing a richer
+  `cxFrom` context.
+- Alternatively: extend `withRow` to push only the stack-based values
+  (as today) and rebuild the env extension only for the env-based ones
+  (a partial improvement that narrows the gap before full elimination).
+
+After this step no `new Stack(extendedEnv, …)` constructor calls remain.
+
+#### Step 19c: Convert `StackMultiLetCode.useSlots=false` to slot-push
+
+The only remaining env-extension site is `StackMultiLetCode.eval` when
+`useSlots=false` (non-recursive `VAL_DECL`): it calls
+`Closure.bindPatGetValue` to extend `stack.globalEnv` and then creates
+`new Stack(env2, stack.slots, savedTop)`.  This branch exists because
+`CalciteCompiler` disables stack-based let (returns `null` from
+`tryCompileLetStack`) and the `morelScalar` fresh-compilation uses
+`GetCode` rather than `StackCode`.
+
+Two changes required:
+1. **`CalciteCompiler`**: re-enable stack-based let for non-recursive
+   `VAL_DECL` (`tryCompileLetStack` returns a real result), so the body
+   context includes the binding in the slot layout.
+2. **`MorelScalarFunction`**: when fresh-compiling a name reference,
+   the `GetCode` it emits reads from `stack.globalEnv`. Replace by
+   passing the current stack's slot layout to the `Compiled` constructor
+   so it can emit `StackCode` instead. Alternatively, re-use the
+   already-compiled `StackCode` from the enclosing context rather than
+   fresh-compiling from string (removes the parse/type-check overhead too).
+
+After this step `StackMultiLetCode.useSlots` and the env-extension branch
+can be deleted; `Closure.bindPatGetValue` becomes dead code.
+
+#### Step 19d: Remove `Stack.globalEnv`
+
+After Steps 19a–19c, no code reads `stack.globalEnv` at runtime.
+Delete the field, the `Stack(EvalEnv, int)` constructor, and the
+`Stack(EvalEnv, Object[], int)` constructor.  `Stack` then has exactly
+three fields: `session`, `slots`, `top`.
+
+Also delete the now-dead `Closure.bindPatGetValue` and simplify
+`StackClosure.apply(Object)` (no more `globalEnv` fallback needed).
+
+### Step 20: Eliminate `THREAD_EVAL_ENV`
+
+`THREAD_EVAL_ENV` is a `ThreadLocal<EvalEnv>` that carries the
+evaluation environment into Calcite so that callbacks from Calcite SQL
+evaluation back into Morel (`morelScalar`, `morelApply`) can reconstruct
+a `Stack`.  After Step 19d, `Stack.globalEnv` no longer exists, making
+`THREAD_EVAL_ENV` (which held its value) redundant.
+
+#### Analysis of all three Calcite thread-locals
+
+| ThreadLocal | Set where | Read where | Purpose |
+|---|---|---|---|
+| `THREAD_ENV` | `CalciteCode.eval(Stack/EvalEnv)` | `MorelTableFunction`, `MorelScalarFunction`, `MorelApplyFunction` constructors | Compile-time context (env + typeSystem + session) passed at plan build time |
+| `THREAD_EVAL_ENV` | `CalciteCode.eval(Stack/EvalEnv)` | `MorelScalarFunction.eval`, `MorelApplyFunction.eval` fallback | Runtime env for constructing a Stack when `THREAD_STACK` is null |
+| `THREAD_STACK` | `CalciteCode.eval(Stack)` | `MorelScalarFunction.eval`, `MorelApplyFunction.eval` primary | Full runtime stack passed through Calcite evaluation |
+
+`THREAD_EVAL_ENV` is a fallback used only when `THREAD_STACK` is null.
+`THREAD_STACK` is null only when `CalciteCode.eval(EvalEnv)` is called
+instead of `eval(Stack)`.  After Step 19d that path must create a
+`Stack` from `session.globalEnv` anyway, so it can just call
+`eval(Stack)`.
+
+Elimination plan:
+- Convert `CalciteCode.eval(EvalEnv)` to delegate to `eval(Stack)`:
+  create `new Stack(session, evalEnv, capacity)` (a new constructor
+  that takes a `Session` and an `EvalEnv` used only as the initial
+  `session.globalEnv`) and call `eval(stack)`.
+- This ensures `THREAD_STACK` is always set for the duration of every
+  Calcite plan execution, including the legacy EvalEnv path.
+- Delete `THREAD_EVAL_ENV` and both its set-sites in `CalciteCode` and
+  its read-sites in `MorelScalarFunction` / `MorelApplyFunction`.
+
+After this step `THREAD_STACK` and `THREAD_ENV` are the only Calcite
+thread-locals.  `THREAD_STACK` carries everything `THREAD_EVAL_ENV` did
+and more (full slots, session, top).
+
+### Step 21: Remove `CalciteCode.eval(EvalEnv)` and `Code.eval(EvalEnv)`
+
+After Step 20 every `Code` node uses only `eval(Stack)`.
+
+- Delete the `@Override eval(EvalEnv)` method from `CalciteCode` (now
+  implemented as a thin delegate — remove the delegate too once
+  all callers are gone).
+- Make `Code.eval(EvalEnv)` an error at compile time by deleting the
+  default method entirely (it already throws; removing it turns any
+  remaining call into a compile error, flushing out any missed callers).
+- Delete `MorelTableFunction.Compiled.evalEnv` field and the
+  `Compiled(String, Code, EvalEnv, Function)` constructor overload;
+  replace `new Stack(compiled.evalEnv, …)` in `scan()` with
+  `new Stack(session, capacity)`.
+- Delete `Closure.eval(EvalEnv)` override if still present.
+
+### Step 22: Simplify `EvalEnv` to a flat map
+
+After all the steps above, `EvalEnv` is used only as the authoritative
+store of top-level REPL bindings — accessed exclusively via
+`session.globalEnv` (a single read per `GlobalMarshalCode` invocation).
+The lookup chain and `MutableEvalEnv` mechanism are no longer needed at
+runtime.
+
+- Replace `Session.globalEnv: EvalEnv` with
+  `Session.globalEnv: ImmutableMap<String, Object>` (or a similar flat
+  structure).
+- Update `GlobalMarshalCode.eval` to call `session.globalEnv.get(name)`.
+- Update `ActionImpl.apply` (REPL redefinition) to rebuild the map with
+  the new binding.
+- Delete `MutableEvalEnv`, `EvalEnvs`, and the `EvalEnv` interface once
+  no code constructs or traverses the old chain form.
+
+This is the end of the stack-based evaluation migration.  After Step 22
+the runtime contains no linked-list environment chains — all variable
+access is either a direct array slot read (`StackCode`) or a flat-map
+lookup (`GlobalMarshalCode`).
+

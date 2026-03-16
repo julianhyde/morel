@@ -305,10 +305,14 @@ public class CalciteFunctions {
 
         final Core.Exp e3 = Compiles.toExp(valDecl4);
         final Compiler compiler = new Compiler(typeSystem);
+        final EvalEnv evalEnv = Codes.emptyEnvWith(session, env);
+        // Initialize session.globalEnv so that closures created during
+        // evaluation (via StackMatchCode) have a non-null globalEnv fallback.
+        session.globalEnv = evalEnv;
         return new Compiled(
             ml,
             compiler.compile(env, e3),
-            Codes.emptyEnvWith(session, env),
+            evalEnv,
             Converters.toCalciteEnumerable(e3.type, typeFactory));
       }
     }
