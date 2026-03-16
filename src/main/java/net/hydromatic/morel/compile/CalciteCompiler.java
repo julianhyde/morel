@@ -217,11 +217,20 @@ public class CalciteCompiler extends Compiler {
 
       @Override
       public Object eval(Stack stack) {
-        EvalEnv env = stack.globalEnv;
+        // Temporarily extend session.globalEnv with the slot-bound variables
+        // so that morelScalar's GetCode lookups can find them at runtime.
+        final Session session = requireNonNull(stack.session, "session");
+        final EvalEnv savedEnv = session.globalEnv;
+        EvalEnv env = savedEnv;
         for (Map.Entry<String, Integer> e : offsets.entrySet()) {
           env = env.bind(e.getKey(), stack.slots[stack.top - e.getValue()]);
         }
-        return calciteCode.eval(new Stack(env, stack.slots, stack.top));
+        session.globalEnv = env;
+        try {
+          return calciteCode.eval(stack);
+        } finally {
+          session.globalEnv = savedEnv;
+        }
       }
     };
   }

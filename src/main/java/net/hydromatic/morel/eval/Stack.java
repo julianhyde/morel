@@ -112,6 +112,17 @@ public final class Stack {
     this.top = top;
   }
 
+  /**
+   * Returns the current global environment.
+   *
+   * <p>If a {@link Session} is present, returns {@link Session#globalEnv},
+   * which may have been temporarily extended by row-sink or aggregate code.
+   * Otherwise falls back to {@link #globalEnv}.
+   */
+  public EvalEnv currentEnv() {
+    return session != null ? session.globalEnv : globalEnv;
+  }
+
   /** Pushes {@code value} onto the stack. */
   public void push(Object value) {
     slots[top++] = value;

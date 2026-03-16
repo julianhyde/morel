@@ -672,7 +672,7 @@ public abstract class RowSinks {
       if (!initialized) {
         initialized = true;
         final MutableEvalEnv mutableEvalEnv =
-            stack.globalEnv.bindMutableArray(names);
+            stack.currentEnv().bindMutableArray(names);
         for (Code code : codes) {
           final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
           for (Object element : elements) {
@@ -715,7 +715,7 @@ public abstract class RowSinks {
     @Override
     public List<Object> result(Stack stack) {
       final MutableEvalEnv mutableEvalEnv =
-          stack.globalEnv.bindMutableArray(names);
+          stack.currentEnv().bindMutableArray(names);
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
         for (Object element : elements) {
@@ -774,7 +774,7 @@ public abstract class RowSinks {
         initialized = true;
         final int n = codes.size();
         final MutableEvalEnv mutableEvalEnv =
-            stack.globalEnv.bindMutableArray(names);
+            stack.currentEnv().bindMutableArray(names);
         for (int i = 0; i < codes.size(); i++) {
           final int slot = i;
           final Code code = codes.get(i);
@@ -848,7 +848,7 @@ public abstract class RowSinks {
     @Override
     public List<Object> result(Stack stack) {
       final MutableEvalEnv mutableEvalEnv =
-          stack.globalEnv.bindMutableArray(names);
+          stack.currentEnv().bindMutableArray(names);
       int pass = 0;
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
@@ -905,7 +905,7 @@ public abstract class RowSinks {
     @Override
     public List<Object> result(Stack stack) {
       // keyEnv is used only for distinctness checks (add(keyEnv)).
-      final MutableEvalEnv keyEnv = stack.globalEnv.bindMutableArray(names);
+      final MutableEvalEnv keyEnv = stack.currentEnv().bindMutableArray(names);
       Stack s = stack.ensureSize(names.size());
       final int savedTop = s.top;
       final Stack s2 = s;
@@ -999,15 +999,21 @@ public abstract class RowSinks {
 
     @Override
     public List<Object> result(Stack stack) {
-      EvalEnv env2 = stack.globalEnv;
+      final Session session = requireNonNull(stack.session, "session");
+      final EvalEnv savedGlobal = session.globalEnv;
+      EvalEnv env2 = savedGlobal;
       final MutableEvalEnv[] groupEnvs = new MutableEvalEnv[outNames.size()];
       int i = 0;
       for (String name : outNames) {
         env2 = groupEnvs[i++] = env2.bindMutable(name);
       }
+      // env3 is the env containing only the key variable bindings (not yet the
+      // aggregate result bindings); used when calling aggregate functions so
+      // that
+      // their argument expressions can reference GROUP key vars but not agg
+      // vars.
       final EvalEnv env3 =
-          keyNames.isEmpty() ? stack.globalEnv : groupEnvs[keyNames.size() - 1];
-      final Stack innerStack = new Stack(env2, stack.slots, stack.top);
+          keyNames.isEmpty() ? savedGlobal : groupEnvs[keyNames.size() - 1];
       final Map<Object, List<Object>> map2;
       if (map.isEmpty()
           && keyCode instanceof Codes.TupleCode
@@ -1017,22 +1023,30 @@ public abstract class RowSinks {
         //noinspection UnstableApiUsage
         map2 = Multimaps.asMap(map);
       }
-      for (Map.Entry<Object, List<Object>> entry : map2.entrySet()) {
-        final List list = (List) entry.getKey();
-        for (i = 0; i < list.size(); i++) {
-          groupEnvs[i].set(list.get(i));
+      // Temporarily set session.globalEnv to the fully-extended env (env2) so
+      // that GetCode nodes in the downstream sink can find GROUP output vars.
+      session.globalEnv = env2;
+      try {
+        for (Map.Entry<Object, List<Object>> entry : map2.entrySet()) {
+          final List list = (List) entry.getKey();
+          for (i = 0; i < list.size(); i++) {
+            groupEnvs[i].set(list.get(i));
+          }
+          final List<Object> rows = entry.getValue();
+          for (Applicable aggregateCode : aggregateCodes) {
+            // Use env3 for aggregate arg eval: key vars visible, agg vars not.
+            session.globalEnv = env3;
+            groupEnvs[i++].set(aggregateCode.apply(stack, rows));
+          }
+          // Restore env2 for downstream rowSink (all GROUP output vars
+          // visible).
+          session.globalEnv = env2;
+          rowSink.accept(stack);
         }
-        final List<Object> rows = entry.getValue();
-        for (Applicable aggregateCode : aggregateCodes) {
-          // Pass a Stack so that StackCode nodes in the argument expression
-          // (outer let-bound variables) are evaluated with the correct slots.
-          groupEnvs[i++].set(
-              aggregateCode.apply(
-                  new Stack(env3, stack.slots, stack.top), rows));
-        }
-        rowSink.accept(innerStack);
+        return rowSink.result(stack);
+      } finally {
+        session.globalEnv = savedGlobal;
       }
-      return rowSink.result(innerStack);
     }
   }
 

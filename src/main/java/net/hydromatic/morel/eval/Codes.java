@@ -4286,13 +4286,20 @@ public abstract class Codes {
                 s.restore(savedTop);
               }
             } else {
-              // Single env-based variable (scanDepth == 0): bind into env.
+              // Single env-based variable (scanDepth == 0): bind into env via
+              // session.globalEnv so GetCode can find it.
+              final Session session = requireNonNull(stack.session, "session");
               final MutableEvalEnv mEnv =
-                  stack.globalEnv.bindMutable(names.get(0));
-              final Stack s = new Stack(mEnv, stack.slots, stack.top);
-              for (Object row : rows) {
-                mEnv.set(row);
-                argRows.add(argumentCode.eval(s));
+                  session.globalEnv.bindMutable(names.get(0));
+              final EvalEnv savedGlobal = session.globalEnv;
+              session.globalEnv = mEnv;
+              try {
+                for (Object row : rows) {
+                  mEnv.set(row);
+                  argRows.add(argumentCode.eval(stack));
+                }
+              } finally {
+                session.globalEnv = savedGlobal;
               }
             }
           } else if (envCount == 0) {
@@ -4308,22 +4315,30 @@ public abstract class Codes {
               s.restore(savedTop);
             }
           } else {
-            // Mixed: push stack-based vars, bind env-based vars per row.
+            // Mixed: push stack-based vars, bind env-based vars per row via
+            // session.globalEnv so GetCode can find them.
             Stack s = stack.ensureSize(scanDepth);
             final int savedTop = s.top;
-            for (Object row : rows) {
-              final Object[] arr = (Object[]) row;
-              for (int j = 0; j < scanDepth; j++) {
-                s.push(arr[j]);
+            final Session session = requireNonNull(s.session, "session");
+            final EvalEnv savedGlobal = session.globalEnv;
+            try {
+              for (Object row : rows) {
+                final Object[] arr = (Object[]) row;
+                for (int j = 0; j < scanDepth; j++) {
+                  s.push(arr[j]);
+                }
+                EvalEnv env2 = savedGlobal;
+                for (int j = scanDepth; j < names.size(); j++) {
+                  final MutableEvalEnv mEnv = env2.bindMutable(names.get(j));
+                  mEnv.set(arr[j]);
+                  env2 = mEnv;
+                }
+                session.globalEnv = env2;
+                argRows.add(argumentCode.eval(s));
+                s.restore(savedTop);
               }
-              EvalEnv env2 = s.globalEnv;
-              for (int j = scanDepth; j < names.size(); j++) {
-                final MutableEvalEnv mEnv = env2.bindMutable(names.get(j));
-                mEnv.set(arr[j]);
-                env2 = mEnv;
-              }
-              argRows.add(argumentCode.eval(new Stack(env2, s.slots, s.top)));
-              s.restore(savedTop);
+            } finally {
+              session.globalEnv = savedGlobal;
             }
           }
         } else if (names.size() != 1) {
@@ -4803,7 +4818,7 @@ public abstract class Codes {
 
     @Override
     public Object eval(Stack stack) {
-      return stack.globalEnv.getOpt(name);
+      return stack.currentEnv().getOpt(name);
     }
   }
 
@@ -4839,7 +4854,7 @@ public abstract class Codes {
     public Object eval(Stack stack) {
       final int savedTop = stack.save();
       for (String name : names) {
-        stack.push(stack.session.globalEnv.getOpt(name));
+        stack.push(stack.currentEnv().getOpt(name));
       }
       final Object result = body.eval(stack);
       stack.restore(savedTop);

@@ -696,11 +696,12 @@ Remaining `new Stack(extendedEnv, …)` calls:
   GROUP-after-GROUP). Deferred to a later step.
 - `StackMultiLetCode.useSlots=false` (line 5278): Step 19c.
 
-#### ✅ Step 19c-i: Re-enable `CalciteCompiler.tryCompileLetStack` via `postProcessLetBody` hook
+#### ✅ Step 19c-i: Add `postProcessLetBody` hook; re-enable let-stack path
 
 Added a `postProcessLetBody(cx, bodyCode, bodyType)` hook to `Compiler.java`
-(default: identity). Called it from `tryCompileLetStack`, `tryCompileLetStackTail`,
-and `compileLetStackPat` so subclasses can post-process the compiled let body.
+(default: identity). Called it from `tryCompileLetStack`,
+`tryCompileLetStackTail`, and `compileLetStackPat` so subclasses can
+post-process the compiled let body.
 
 In `CalciteCompiler.java`:
 - Deleted the null-returning `tryCompileLetStack` and `tryCompileLetStackTail`
@@ -715,13 +716,14 @@ In `CalciteCompiler.java`:
 
 Added `StackLayout.nameToOffsetMap(int localDepth)`: returns a
 `Map<String, Integer>` giving the 1-based runtime stack offset for each
-variable in the layout (offset = `localDepth − slotIndex`), used by the bridge.
+variable in the layout (offset = `localDepth − slotIndex`),
+used by the bridge.
 
 `StackMultiLetCode.useSlots=false` is no longer reached for `VAL_DECL` lets
 whose body can be converted by `toRel4`; the bridge approach subsumes the
 previously-planned Step 19c-ii.
 
-#### ✅ Step 19c: Convert remaining `StackMultiLetCode.useSlots=false` to slot-push
+#### ✅ Step 19c: Remove `StackMultiLetCode.useSlots=false` path
 
 Changed `compileLet` (both the normal and tail-position paths) to always use
 `buildLetContext` and always pass `useSlots=true` to `finishCompileLet`.
@@ -737,9 +739,35 @@ Removed `useSlots` field and `useSlots=false` branch from
 parameter. `Closure.bindPatGetValue` is now dead code (will be deleted with
 `Stack.globalEnv` in Step 19d).
 
+#### ✅ Step 19e: Convert remaining `globalEnv` reads to `stack.currentEnv()`
+
+Changed all remaining runtime reads of `stack.globalEnv` to go through
+`session.globalEnv` (when session is non-null) or `stack.globalEnv` as a
+fallback. The mechanism:
+
+- Added `Stack.currentEnv()` method: returns `session.globalEnv` when
+  the session is non-null, else falls back to `stack.globalEnv`. Used by
+  all read-only lookups (`GetCode.eval`, `GlobalMarshalCode.eval`,
+  `StackMatchCode.eval`, SET-sink `bindMutableArray` calls in
+  `RowSinks.java`).
+
+- `GroupRowSink.result()` and `Codes.aggregate` (env-based paths):
+  these require a session (they call `requireNonNull(stack.session)`).
+  They mutate `session.globalEnv` for the duration of the evaluation
+  then restore it. Updated to use a local `session` variable.
+
+- `CalciteCompiler.postProcessLetBody` bridge: likewise uses
+  `requireNonNull(stack.session)`.
+
+- `AlgebraTest`: updated four plan-string assertions to match the new
+  `let1(expCode ...)` format (the `globalMarshal` wrapper is stripped
+  by `Matchers.stripGlobalMarshal`).
+
+- `plan.md`: shortened two overly-long section headings.
+
 #### Step 19d: Remove `Stack.globalEnv`
 
-After Steps 19a–19c, no code reads `stack.globalEnv` at runtime.
+After Steps 19a–19e, no code reads `stack.globalEnv` at runtime.
 Delete the field, the `Stack(EvalEnv, int)` constructor, and the
 `Stack(EvalEnv, Object[], int)` constructor.  `Stack` then has exactly
 three fields: `session`, `slots`, `top`.
