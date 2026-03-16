@@ -696,26 +696,38 @@ Remaining `new Stack(extendedEnv, …)` calls:
   GROUP-after-GROUP). Deferred to a later step.
 - `StackMultiLetCode.useSlots=false` (line 5278): Step 19c.
 
-#### Step 19c: Convert `StackMultiLetCode.useSlots=false` to slot-push
+#### ✅ Step 19c-i: Re-enable `CalciteCompiler.tryCompileLetStack` via `postProcessLetBody` hook
 
-The only remaining env-extension site is `StackMultiLetCode.eval` when
-`useSlots=false` (non-recursive `VAL_DECL`): it calls
-`Closure.bindPatGetValue` to extend `stack.globalEnv` and then creates
-`new Stack(env2, stack.slots, savedTop)`.  This branch exists because
-`CalciteCompiler` disables stack-based let (returns `null` from
-`tryCompileLetStack`) and the `morelScalar` fresh-compilation uses
-`GetCode` rather than `StackCode`.
+Added a `postProcessLetBody(cx, bodyCode, bodyType)` hook to `Compiler.java`
+(default: identity). Called it from `tryCompileLetStack`, `tryCompileLetStackTail`,
+and `compileLetStackPat` so subclasses can post-process the compiled let body.
 
-Two changes required:
-1. **`CalciteCompiler`**: re-enable stack-based let for non-recursive
-   `VAL_DECL` (`tryCompileLetStack` returns a real result), so the body
-   context includes the binding in the slot layout.
-2. **`MorelScalarFunction`**: when fresh-compiling a name reference,
-   the `GetCode` it emits reads from `stack.globalEnv`. Replace by
-   passing the current stack's slot layout to the `Compiled` constructor
-   so it can emit `StackCode` instead. Alternatively, re-use the
-   already-compiled `StackCode` from the enclosing context rather than
-   fresh-compiling from string (removes the parse/type-check overhead too).
+In `CalciteCompiler.java`:
+- Deleted the null-returning `tryCompileLetStack` and `tryCompileLetStackTail`
+  overrides (which had previously disabled the stack-based let path so that
+  `finishCompileLet` could call `toRel4`).
+- Added `postProcessLetBody` override that calls `toRel4` on the body code.
+  If `toRel4` converts it to a `CalciteCode` **and** there are slot-bound
+  variables in the current layout, a slot-to-env bridge is emitted: an
+  anonymous `Code` that copies each slot value into `stack.globalEnv` before
+  evaluating the `CalciteCode`, so that `morelScalar`'s `GetCode` references
+  can find them via `stack.globalEnv`.
+
+Added `StackLayout.nameToOffsetMap(int localDepth)`: returns a
+`Map<String, Integer>` giving the 1-based runtime stack offset for each
+variable in the layout (offset = `localDepth − slotIndex`), used by the bridge.
+
+`StackMultiLetCode.useSlots=false` is no longer reached for `VAL_DECL` lets
+whose body can be converted by `toRel4`; the bridge approach subsumes the
+previously-planned Step 19c-ii.
+
+#### Step 19c: Convert remaining `StackMultiLetCode.useSlots=false` to slot-push
+
+The remaining env-extension site is `StackMultiLetCode.eval` when
+`useSlots=false`: it calls `Closure.bindPatGetValue` to extend
+`stack.globalEnv` and then creates `new Stack(env2, stack.slots, savedTop)`.
+This branch is now only reached for complex patterns not handled by
+`tryCompileLetStack*` (multi-binding `let val … and …`, etc.).
 
 After this step `StackMultiLetCode.useSlots` and the env-extension branch
 can be deleted; `Closure.bindPatGetValue` becomes dead code.

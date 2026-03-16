@@ -73,7 +73,7 @@ end;
 > val it = [7372,7569,7791,7879,7905] : int bag
 Sys.plan();
 > val it =
->   "globalMarshal(globals [scott], body let(matchCode0 match(ten, apply2(fnValue +, constant(7), constant(3))), resultCode calcite(plan LogicalProject($f0=[+($2, MOD(13, morelScalar('ten', '{\n  \"type\": \"INTEGER\",\n  \"nullable\": false\n}')))])\n  LogicalFilter(condition=[=($1, morelScalar('#nth List (ten :: 20 :: 30 :: [40], 1)', '{\n  \"type\": \"INTEGER\",\n  \"nullable\": false\n}'))])\n    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n      JdbcTableScan(table=[[scott, EMP]])\n)))"
+>   "globalMarshal(globals [scott], body let1(expCode apply2(fnValue +, constant(7), constant(3)), resultCode calcite(plan LogicalProject($f0=[+($2, MOD(13, morelScalar('ten', '{\n  \"type\": \"INTEGER\",\n  \"nullable\": false\n}')))])\n  LogicalFilter(condition=[=($1, morelScalar('#nth List (ten :: 20 :: 30 :: [40], 1)', '{\n  \"type\": \"INTEGER\",\n  \"nullable\": false\n}'))])\n    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n      JdbcTableScan(table=[[scott, EMP]])\n)))"
 >   : string
 
 (*) Query in Hybrid mode (90% Calcite; Calcite code references a function

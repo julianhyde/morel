@@ -104,6 +104,23 @@ public class StackLayout {
   public int size() {
     return slotMap.size();
   }
+
+  /**
+   * Returns a mapping from each variable name in this layout to its runtime
+   * stack offset (1-based from the current stack top), given the current {@code
+   * localDepth}.
+   *
+   * <p>The runtime offset for slot index {@code i} is {@code localDepth - i}. A
+   * value of 1 means the most recently pushed slot.
+   */
+  public ImmutableMap<String, Integer> nameToOffsetMap(int localDepth) {
+    if (slotMap.isEmpty()) {
+      return ImmutableMap.of();
+    }
+    final ImmutableMap.Builder<String, Integer> b = ImmutableMap.builder();
+    slotMap.forEach((pat, slot) -> b.put(pat.name, localDepth - slot));
+    return b.build();
+  }
 }
 
 // End StackLayout.java

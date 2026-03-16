@@ -1353,7 +1353,8 @@ public class Compiler {
       // "val _ = expr in body": evaluate expr for side effects, ignore result.
       final Code expCode = compile(cx, valDecl.exp);
       final Code bodyCode = compile(cx, bodyExp);
-      return Codes.stackLet1(expCode, bodyCode);
+      return Codes.stackLet1(
+          expCode, postProcessLetBody(cx, bodyCode, bodyExp.type));
     }
     if (valDecl.pat.op != Op.ID_PAT) {
       return null;
@@ -1379,7 +1380,8 @@ public class Compiler {
     final Context cx2 =
         new Context(cx.env.bindAll(bindings), newLayout, cx.localDepth + 1);
     final Code bodyCode = compile(cx2, bodyExp);
-    return Codes.stackLet1(expCode, bodyCode);
+    return Codes.stackLet1(
+        expCode, postProcessLetBody(cx2, bodyCode, bodyExp.type));
   }
 
   /**
@@ -1393,7 +1395,8 @@ public class Compiler {
       // "val _ = expr in body": evaluate expr for side effects, ignore result.
       final Code expCode = compile(cx, valDecl.exp);
       final Code bodyCode = compileTail(cx, bodyExp);
-      return Codes.stackLet1(expCode, bodyCode);
+      return Codes.stackLet1(
+          expCode, postProcessLetBody(cx, bodyCode, bodyExp.type));
     }
     if (valDecl.pat.op != Op.ID_PAT) {
       return null;
@@ -1416,7 +1419,8 @@ public class Compiler {
     final Context cx2 =
         new Context(cx.env.bindAll(bindings), newLayout, cx.localDepth + 1);
     final Code bodyCode = compileTail(cx2, bodyExp);
-    return Codes.stackLet1(expCode, bodyCode);
+    return Codes.stackLet1(
+        expCode, postProcessLetBody(cx2, bodyCode, bodyExp.type));
   }
 
   /**
@@ -1449,8 +1453,15 @@ public class Compiler {
             cx.localDepth + namedPats.size());
     final Code bodyCode =
         tailPos ? compileTail(cx2, match.exp) : compile(cx2, match.exp);
+    final Code processedBody =
+        postProcessLetBody(cx2, bodyCode, match.exp.type);
     return Codes.stackLetPat(
-        pat, namedPats.size(), expCode, bodyCode, match.pos);
+        pat, namedPats.size(), expCode, processedBody, match.pos);
+  }
+
+  /** Hook for subclasses to post-process a compiled let body. */
+  protected Code postProcessLetBody(Context cx, Code bodyCode, Type bodyType) {
+    return bodyCode;
   }
 
   /**

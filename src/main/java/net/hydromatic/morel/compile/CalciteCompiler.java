@@ -191,21 +191,39 @@ public class CalciteCompiler extends Compiler {
   }
 
   @Override
-  protected @Nullable Code tryCompileLetStack(
-      Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
-    // Disable stack-based let in CalciteCompiler so that finishCompileLet can
-    // apply toRel4 to the body, enabling Calcite optimization for hybrid
-    // queries.
-    return null;
-  }
+  protected Code postProcessLetBody(Context cx, Code bodyCode, Type bodyType) {
+    final Code calciteCode = toRel4(cx.env, bodyCode, bodyType);
+    if (calciteCode == bodyCode) {
+      return bodyCode;
+    }
+    if (cx.layout.size() == 0) {
+      return calciteCode;
+    }
+    // There are slot-bound variables that morelScalar may reference at runtime.
+    // Build a bridge that copies those slot values into globalEnv before
+    // running the Calcite plan, so that GetCode can find them.
+    final ImmutableMap<String, Integer> offsets =
+        cx.layout.nameToOffsetMap(cx.localDepth);
+    return new Code() {
+      @Override
+      public Describer describe(Describer describer) {
+        return calciteCode.describe(describer);
+      }
 
-  @Override
-  protected @Nullable Code tryCompileLetStackTail(
-      Context cx, Core.NonRecValDecl valDecl, Core.Exp bodyExp) {
-    // Disable stack-based let in CalciteCompiler so that finishCompileLet can
-    // apply toRel4 to the body, enabling Calcite optimization for hybrid
-    // queries.
-    return null;
+      @Override
+      public int maxSlots() {
+        return calciteCode.maxSlots();
+      }
+
+      @Override
+      public Object eval(Stack stack) {
+        EvalEnv env = stack.globalEnv;
+        for (Map.Entry<String, Integer> e : offsets.entrySet()) {
+          env = env.bind(e.getKey(), stack.slots[stack.top - e.getValue()]);
+        }
+        return calciteCode.eval(new Stack(env, stack.slots, stack.top));
+      }
+    };
   }
 
   @Override
