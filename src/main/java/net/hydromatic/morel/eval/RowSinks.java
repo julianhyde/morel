@@ -286,7 +286,7 @@ public abstract class RowSinks {
     static boolean isConstantTrue(Code code) {
       return code.isConstant()
           && Objects.equals(
-              code.eval(new Stack((Session) null, code.maxSlots())), true);
+              code.eval(Stack.withCapacity(code.maxSlots())), true);
     }
 
     @Override
@@ -1093,7 +1093,7 @@ public abstract class RowSinks {
   private static class YieldRowSink extends BaseRowSink {
     final ImmutableList<String> names;
     final ImmutableList<Code> codes;
-    final Object[] values;
+    final Object @Nullable [] values;
 
     YieldRowSink(
         ImmutableList<String> names,

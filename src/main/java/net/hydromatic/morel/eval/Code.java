@@ -40,6 +40,8 @@ public interface Code extends Describable {
    *
    * <p>The default returns 0 (no slots pushed). {@code StackLet1Code} and
    * {@code StackLetPatCode} override this to return their contribution.
+   *
+   * @see Slots
    */
   default int maxSlots() {
     return 0;

@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.eval.Slots.maxOf;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.SKIP;
@@ -4806,11 +4807,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      int max = 0;
-      for (Code code : codes) {
-        max = Math.max(max, code.maxSlots());
-      }
-      return max;
+      return maxOf(codes);
     }
 
     @Override
@@ -5021,7 +5018,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      return Math.max(code0.maxSlots(), code1.maxSlots());
+      return maxOf(code0, code1);
     }
 
     @Override
@@ -5048,7 +5045,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      return Math.max(code0.maxSlots(), code1.maxSlots());
+      return maxOf(code0, code1);
     }
 
     @Override
@@ -5212,11 +5209,7 @@ public abstract class Codes {
     public int maxSlots() {
       // RHSs evaluated before slots pushed; resultCode runs with N extra
       // slots live, so needs numSlots + resultCode.maxSlots() from base.
-      int max = slotCount + resultCode.maxSlots();
-      for (Code entry : patCodes.rightList()) {
-        max = Math.max(max, entry.maxSlots());
-      }
-      return max;
+      return maxOf(slotCount + resultCode.maxSlots(), patCodes.rightList());
     }
 
     @Override
@@ -5333,7 +5326,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      return Math.max(argCode0.maxSlots(), argCode1.maxSlots());
+      return maxOf(argCode0, argCode1);
     }
 
     @Override
@@ -5394,9 +5387,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      return Math.max(
-          argCode0.maxSlots(),
-          Math.max(argCode1.maxSlots(), argCode2.maxSlots()));
+      return maxOf(argCode0, argCode1, argCode2);
     }
 
     @Override
@@ -5468,9 +5459,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      return Math.max(
-          Math.max(argCode0.maxSlots(), argCode1.maxSlots()),
-          Math.max(argCode2.maxSlots(), argCode3.maxSlots()));
+      return maxOf(argCode0, argCode1, argCode2, argCode3);
     }
 
     @Override
@@ -5512,7 +5501,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      return Math.max(fnCode.maxSlots(), argCode.maxSlots());
+      return maxOf(fnCode, argCode);
     }
 
     @Override
@@ -5582,7 +5571,7 @@ public abstract class Codes {
 
     @Override
     public int maxSlots() {
-      return Math.max(fnCode.maxSlots(), argCode.maxSlots());
+      return maxOf(fnCode, argCode);
     }
 
     @Override

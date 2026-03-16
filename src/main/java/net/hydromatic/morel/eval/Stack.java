@@ -46,6 +46,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * {@code Stack} instance.
  */
 public final class Stack {
+  /** Empty stack with no session, for trivial calculations. */
+  private static final Stack EMPTY = new Stack(null, new Object[0], 0);
+
   /**
    * The current session.
    *
@@ -81,9 +84,7 @@ public final class Stack {
    * @param capacity The number of slots to pre-allocate
    */
   public Stack(final @Nullable Session session, final int capacity) {
-    this.session = session;
-    this.slots = new Object[capacity];
-    this.top = 0;
+    this(session, new Object[capacity], 0);
   }
 
   /**
@@ -101,6 +102,14 @@ public final class Stack {
     this.session = session;
     this.slots = parentSlots;
     this.top = top;
+  }
+
+  /** Creates a stack with no session and given size. */
+  public static Stack withCapacity(final int capacity) {
+    if (capacity == 0) {
+      return EMPTY;
+    }
+    return new Stack(null, capacity);
   }
 
   /**
