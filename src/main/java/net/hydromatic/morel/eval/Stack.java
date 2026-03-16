@@ -18,13 +18,11 @@
  */
 package net.hydromatic.morel.eval;
 
-import static java.util.Objects.requireNonNull;
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import org.checkerframework.checker.nullness.qual.Nullable;
-import org.jspecify.annotations.NonNull;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * Evaluation stack for the Morel interpreter.
@@ -47,8 +45,8 @@ import org.jspecify.annotations.NonNull;
  * {@code Stack} instance.
  */
 public final class Stack {
-  /** Empty stack with no session, for trivial calculations. */
-  private static final Stack EMPTY = new Stack(null, new Object[0], 0);
+  /** Empty stack with an empty session, for trivial calculations. */
+  private static final Stack EMPTY = new Stack(Session.EMPTY, new Object[0], 0);
 
   /**
    * The current session.
@@ -58,10 +56,10 @@ public final class Stack {
    * aggregate code temporarily extend {@code session.globalEnv} during
    * evaluation.
    *
-   * <p>May be {@code null} when a stack is created for compile-time constant
-   * evaluation (e.g. inlining or constant-folding in tests).
+   * <p>Is {@link Session#EMPTY} when a stack is created for compile-time
+   * constant evaluation (e.g. inlining or constant-folding in tests).
    */
-  public final @Nullable Session session;
+  public final Session session;
 
   /**
    * Storage for local variables. Each slot holds one value.
@@ -80,42 +78,35 @@ public final class Stack {
   /**
    * Creates a Stack with a pre-allocated slots array.
    *
-   * @param session The session holding top-level and built-in bindings; may be
-   *     {@code null} for compile-time constant evaluation
+   * @param session The session holding top-level and built-in bindings; use
+   *     {@link Session#EMPTY} for compile-time constant evaluation
    * @param capacity The number of slots to pre-allocate
    */
-  public Stack(final @Nullable Session session, final int capacity) {
+  public Stack(final Session session, final int capacity) {
     this(session, new Object[capacity], 0);
   }
 
   /**
    * Creates a Stack that shares the slots array of a parent stack.
    *
-   * @param session The session; may be {@code null} for constant eval
+   * @param session The session; use {@link Session#EMPTY} for constant eval
    * @param parentSlots The slots array from the parent stack (shared by
    *     reference)
    * @param top The current stack top, copied from the parent
    */
   public Stack(
-      final @Nullable Session session,
-      final Object[] parentSlots,
-      final int top) {
+      final Session session, final Object[] parentSlots, final int top) {
     this.session = session;
     this.slots = parentSlots;
     this.top = top;
   }
 
-  /** Creates a stack with no session and given size. */
+  /** Creates a stack with {@link Session#EMPTY} and given capacity. */
   public static Stack withCapacity(final int capacity) {
     if (capacity == 0) {
       return EMPTY;
     }
-    return new Stack(null, capacity);
-  }
-
-  /** Returns the current session, never null. */
-  public Session getSession() {
-    return requireNonNull(session, "session");
+    return new Stack(Session.EMPTY, capacity);
   }
 
   /**
@@ -125,7 +116,7 @@ public final class Stack {
    * mutated by row-sink or aggregate code.
    */
   public Map<String, Object> currentEnv() {
-    return requireNonNull(getSession().globalEnv, "globalEnv");
+    return requireNonNull(session.globalEnv, "globalEnv");
   }
 
   /** Pushes {@code value} onto the stack. */
