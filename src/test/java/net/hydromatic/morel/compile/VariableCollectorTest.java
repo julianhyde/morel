@@ -56,7 +56,7 @@ public class VariableCollectorTest {
         new LinkedHashMap<>();
     VariableCollector.create(
             typeSystem, outerEnv, (id, scope) -> scopeMap.put(id.idPat, scope))
-        .collect(exp);
+        .accept(exp);
     return scopeMap.keySet().stream()
         .map(p -> p.name)
         .collect(Collectors.joining(", "));

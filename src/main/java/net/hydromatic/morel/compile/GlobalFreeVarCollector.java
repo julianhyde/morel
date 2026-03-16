@@ -78,7 +78,7 @@ class GlobalFreeVarCollector extends EnvVisitor {
       Core.Exp exp,
       Consumer<String> consumer) {
     new GlobalFreeVarCollector(typeSystem, env, new ArrayDeque<>(), consumer)
-        .collect(exp);
+        .accept(exp);
   }
 
   @Override
