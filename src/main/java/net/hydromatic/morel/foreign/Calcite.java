@@ -27,7 +27,6 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Describer;
-import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ThreadLocals;
@@ -214,13 +213,6 @@ public class Calcite {
     public Describer describe(Describer describer) {
       return describer.start(
           "calcite", d -> d.arg("plan", RelOptUtil.toString(rel)));
-    }
-
-    @Override
-    public Object eval(EvalEnv evalEnv) {
-      // Delegate to eval(Stack) so that THREAD_STACK is always set during
-      // Calcite plan execution. This makes THREAD_EVAL_ENV unnecessary.
-      return eval(new Stack(evalEnv, 0));
     }
 
     @Override

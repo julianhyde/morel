@@ -39,7 +39,6 @@ import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
-import net.hydromatic.morel.eval.EvalEnv;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.parse.MorelParseException;
@@ -217,7 +216,8 @@ public class CalciteFunctions {
         public Enumerable<Object[]> scan(DataContext root) {
           Object v =
               compiled.code.eval(
-                  new Stack(compiled.evalEnv, compiled.code.maxSlots()));
+                  new Stack(
+                      compiled.session.globalEnv, compiled.code.maxSlots()));
           return compiled.f.apply(v);
         }
 
@@ -250,16 +250,16 @@ public class CalciteFunctions {
     /** Compiled state. */
     private static class Compiled {
       final Code code;
-      final EvalEnv evalEnv;
+      final Session session;
       final Function<Object, Enumerable<Object[]>> f;
 
       Compiled(
           String ml,
           Code code,
-          EvalEnv evalEnv,
+          Session session,
           Function<Object, Enumerable<Object[]>> f) {
         this.code = code;
-        this.evalEnv = evalEnv;
+        this.session = session;
         this.f = f;
       }
 
@@ -293,14 +293,13 @@ public class CalciteFunctions {
 
         final Core.Exp e3 = Compiles.toExp(valDecl4);
         final Compiler compiler = new Compiler(typeSystem);
-        final EvalEnv evalEnv = Codes.emptyEnvWith(session, env);
         // Initialize session.globalEnv so that closures created during
         // evaluation (via StackMatchCode) have a non-null globalEnv fallback.
-        session.globalEnv = evalEnv;
+        session.globalEnv = Codes.emptyEnvWith(session, env);
         return new Compiled(
             ml,
             compiler.compile(env, e3),
-            evalEnv,
+            session,
             Converters.toCalciteEnumerable(e3.type, typeFactory));
       }
     }
@@ -341,8 +340,7 @@ public class CalciteFunctions {
           this.compiled != null
               ? this.compiled
               : new Compiled(cx.env, cx.typeSystem, typeFactory, ml, typeJson);
-      // THREAD_STACK is always set: CalciteCode.eval(EvalEnv) now delegates
-      // to eval(Stack), so every Calcite plan execution sets THREAD_STACK.
+      // THREAD_STACK is always set during Calcite plan execution.
       final Object v = compiled.code.eval(requireNonNull(THREAD_STACK.get()));
       return compiled.f.apply(v);
     }
@@ -415,8 +413,7 @@ public class CalciteFunctions {
               ? this.compiled
               : new Compiled(morelArgTypeJson, typeFactory, cx.typeSystem);
       final Applicable fn = (Applicable) closure;
-      // THREAD_STACK is always set: CalciteCode.eval(EvalEnv) now delegates
-      // to eval(Stack), so every Calcite plan execution sets THREAD_STACK.
+      // THREAD_STACK is always set during Calcite plan execution.
       final Object o = compiled.converter.apply(arg);
       return fn.apply(requireNonNull(THREAD_STACK.get()), o);
     }

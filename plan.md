@@ -752,21 +752,24 @@ Deleted:
 After this step `THREAD_STACK` and `THREAD_ENV` are the only Calcite
 thread-locals.
 
-### Step 21: Remove `CalciteCode.eval(EvalEnv)` and `Code.eval(EvalEnv)`
+### ✅ Step 21: Remove `CalciteCode.eval(EvalEnv)` and `Code.eval(EvalEnv)`
 
 After Step 20 every `Code` node uses only `eval(Stack)`.
 
-- Delete the `@Override eval(EvalEnv)` method from `CalciteCode` (now
-  implemented as a thin delegate — remove the delegate too once
-  all callers are gone).
-- Make `Code.eval(EvalEnv)` an error at compile time by deleting the
-  default method entirely (it already throws; removing it turns any
-  remaining call into a compile error, flushing out any missed callers).
-- Delete `MorelTableFunction.Compiled.evalEnv` field and the
-  `Compiled(String, Code, EvalEnv, Function)` constructor overload;
-  replace `new Stack(compiled.evalEnv, …)` in `scan()` with
-  `new Stack(session, capacity)`.
-- Delete `Closure.eval(EvalEnv)` override if still present.
+Deleted:
+- `CalciteCode.eval(EvalEnv)` thin-delegate override in `Calcite.java`
+- `Code.eval(EvalEnv)` default method in `Code.java`; its removal turned
+  any remaining caller into a compile error, exposing:
+  - Four `@Override eval(EvalEnv)` methods in `RelCode` anonymous classes
+    in `CalciteCompiler.java` (all deleted)
+  - `Closure.bindEvalBody()` calling `code.eval(envRef.env)` (changed to
+    `code.eval(new Stack(envRef.env, code.maxSlots()))`)
+- `MorelTableFunction.Compiled.evalEnv` field; replaced with `session`
+  field; `scan()` now uses `compiled.session.globalEnv` to create the
+  `Stack`; `EvalEnv` import removed from `CalciteFunctions.java`
+
+`Closure` is never directly instantiated (only `StackClosure` is),
+so `bindEvalBody` is dead code, but its fix keeps the class compilable.
 
 ### Step 22: Simplify `EvalEnv` to a flat map
 

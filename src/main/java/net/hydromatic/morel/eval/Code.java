@@ -34,19 +34,6 @@ public interface Code extends Describable {
   }
 
   /**
-   * Evaluates this expression using an {@link EvalEnv}.
-   *
-   * <p>This is the fallback / legacy evaluation path. Most non-stack code nodes
-   * implement this method. Stack-only nodes (e.g. {@code StackCode}, {@code
-   * StackLet1Code}) do not override this; callers must use {@link #eval(Stack)}
-   * instead.
-   */
-  default Object eval(EvalEnv evalEnv) {
-    throw new UnsupportedOperationException(
-        getClass().getSimpleName() + " requires a Stack");
-  }
-
-  /**
    * Returns the maximum number of stack slots that this code node (and its
    * descendants) will push beyond the current stack top during evaluation. Used
    * to compute a tight array size for newly allocated {@link Stack} instances.

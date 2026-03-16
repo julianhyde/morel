@@ -124,7 +124,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       final Core.Pat pat = patCode.getKey();
       if (bindRecurse(pat, argValue, envRef)) {
         final Code code = patCode.getValue();
-        return code.eval(envRef.env);
+        return code.eval(new Stack(envRef.env, code.maxSlots()));
       }
     }
     throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
