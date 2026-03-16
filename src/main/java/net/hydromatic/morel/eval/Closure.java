@@ -31,8 +31,6 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ImmutablePairList;
-import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Value that is sufficient for a function to bind its argument and evaluate its
@@ -271,58 +269,51 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
   /**
    * A closure that uses the evaluation stack for local variable access.
    *
-   * <p>At creation time, {@link #capturedValues} are snapshotted from the
-   * stack. At call time, they are pushed onto the stack, followed by the
-   * argument bindings, and the body code is evaluated with {@link
-   * Code#eval(Stack)}.
+   * <p>At creation time, outer-scope values are snapshotted from the stack into
+   * {@link #captured}. If the closure belongs to a mutual-recursion group,
+   * {@link #extendWithRecPeers} appends the peer closures to {@code captured}
+   * before any call can observe it. At call time, all captured values are
+   * pushed onto the stack, followed by the argument bindings, and the body code
+   * is evaluated with {@link Code#eval(Stack)}.
+   *
+   * <p>Compile-time constants ({@link Codes.StackMatchCode#patCodes}, {@link
+   * Codes.StackMatchCode#capacity}, {@link Codes.StackMatchCode#pos}) live in
+   * the shared {@link #matchCode} template rather than being duplicated in
+   * every closure instance.
    */
   public static class StackClosure
       implements Comparable<StackClosure>, Applicable, Applicable1 {
     /**
-     * The current session, shared with all closures in this evaluation.
-     *
-     * <p>When non-null, {@link #apply(Object)} creates a fresh {@link Stack}
-     * from {@link Session#globalEnv} so it automatically sees bindings added
-     * after this closure was created (e.g. the closure's own top-level
-     * definition).
+     * The session for this closure, used to create a fresh {@link Stack} when
+     * called without a pre-existing one (see {@link #apply(Object)}). Is {@link
+     * Session#EMPTY} for closures created during compile-time constant
+     * evaluation.
      */
-    final @Nullable Session session;
-
-    final Object[] capturedValues;
+    final Session session;
 
     /**
-     * Shared frame for the mutual-recursion group this closure belongs to, or
-     * {@code null} for non-recursive closures.
+     * Captured values from the outer stack frame, plus any rec-group peers
+     * filled in by {@link #extendWithRecPeers}.
      *
-     * <p>Set by {@code StackMultiLetCode.eval} immediately after closure
-     * creation, before any call can observe it.
+     * <p>Layout: {@code [capturedOuter..., recPeer0, recPeer1, ...]}. The array
+     * is pre-allocated to the full size by {@link Codes.StackMatchCode#eval}.
+     * The rec-peer tail is zero-filled until {@link #extendWithRecPeers} writes
+     * the peer values in; for non-recursive closures the array has no tail.
      */
-    Object @MonotonicNonNull [] recBindings;
+    final Object[] captured;
 
-    private final ImmutablePairList<Core.Pat, Code> patCodes;
     /**
-     * Minimum stack capacity needed when this closure is invoked without a
-     * pre-existing {@link Stack}. Computed at compile time by {@code
-     * StackMatchCode} from {@code captureOffsets.length} plus the maximum body
-     * depth (including rec-group peers when in a rec group).
+     * Compile-time template shared by all closures created from the same {@code
+     * fn} expression. Holds {@link Codes.StackMatchCode#patCodes}, {@link
+     * Codes.StackMatchCode#capacity}, and {@link Codes.StackMatchCode#pos}.
      */
-    final int capacity;
-
-    private final Pos pos;
+    final Codes.StackMatchCode matchCode;
 
     public StackClosure(
-        @Nullable Session session,
-        Object[] capturedValues,
-        Object @Nullable [] recBindings,
-        ImmutablePairList<Core.Pat, Code> patCodes,
-        int capacity,
-        Pos pos) {
+        Session session, Object[] captured, Codes.StackMatchCode matchCode) {
       this.session = session;
-      this.capturedValues = capturedValues;
-      this.recBindings = recBindings;
-      this.patCodes = patCodes;
-      this.capacity = capacity;
-      this.pos = pos;
+      this.captured = captured;
+      this.matchCode = matchCode;
     }
 
     @Override
@@ -332,7 +323,19 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
 
     @Override
     public String toString() {
-      return "StackClosure(captured=" + capturedValues.length + ")";
+      return "StackClosure(captured=" + captured.length + ")";
+    }
+
+    /**
+     * Fills the pre-allocated rec-peer tail of {@link #captured} with the
+     * mutual-recursion group values.
+     *
+     * <p>Called by {@code StackMultiLetCode.eval} immediately after closure
+     * creation, before any call can observe it. No allocation occurs; the array
+     * was sized by {@link Codes.StackMatchCode#eval}.
+     */
+    public void extendWithRecPeers(Object[] peers) {
+      System.arraycopy(peers, 0, captured, matchCode.captureLen, peers.length);
     }
 
     @Override
@@ -351,7 +354,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      */
     @Override
     public Object apply(Stack stack, Object argValue) {
-      Stack evalStack = stack.ensureSize(capacity);
+      Stack evalStack = stack.ensureSize(matchCode.capacity);
       int savedTop = evalStack.save();
       Object result = applyOnce(evalStack, argValue);
       while (result instanceof Codes.TailCall) {
@@ -362,7 +365,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
           // Ensure slots array is large enough for the tail-called closure.
           // The outer closure may have a smaller capacity than the tail-called
           // closure needs (e.g., fn x => case x of head::tail => ...).
-          evalStack = evalStack.ensureSize(nextFn.capacity);
+          evalStack = evalStack.ensureSize(nextFn.matchCode.capacity);
           result = nextFn.applyOnce(evalStack, tc.arg);
         } else {
           result = tc.fn.apply(evalStack, tc.arg);
@@ -374,27 +377,20 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     }
 
     private Object applyOnce(Stack stack, Object argValue) {
-      // Push captured values from the outer frame.
-      for (Object v : capturedValues) {
+      // Push all captured values (outer vars, then rec-group peers if any).
+      for (Object v : captured) {
         stack.push(v);
       }
-      // Push rec-group peers (if this closure is part of a rec group).
-      // These are at slots captureLen..captureLen+N-1 in the body context,
-      // matching the StackCode offsets assigned at compile time.
-      if (recBindings != null) {
-        for (Object v : recBindings) {
-          stack.push(v);
-        }
-      }
-      // Try each pattern arm
-      for (Map.Entry<Core.Pat, Code> patCode : patCodes) {
+      // Try each pattern arm.
+      for (Map.Entry<Core.Pat, Code> patCode : matchCode.patCodes) {
         final int armTop = stack.save();
         if (pushBindings(patCode.getKey(), argValue, stack)) {
           return patCode.getValue().eval(stack);
         }
         stack.restore(armTop);
       }
-      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
+      throw new Codes.MorelRuntimeException(
+          Codes.BuiltInExn.BIND, matchCode.pos);
     }
 
     /**
@@ -406,7 +402,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      */
     @Override
     public Object apply(Object argValue) {
-      return apply(new Stack(session, capacity), argValue);
+      return apply(new Stack(session, matchCode.capacity), argValue);
     }
 
     /**

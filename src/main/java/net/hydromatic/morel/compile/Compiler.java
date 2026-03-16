@@ -1625,7 +1625,7 @@ public class Compiler {
   /**
    * Core implementation for compiling a match list.
    *
-   * <p>Emits a {@link StackMatchCode} that captures currently live stack
+   * <p>Emits a {@link Codes.StackMatchCode} that captures currently live stack
    * variables and assigns inner slots for the pattern-bound variables.
    *
    * @param cx Outer compile context
@@ -1705,8 +1705,12 @@ public class Compiler {
                   + e.getValue().maxSlots());
     }
 
-    return new StackMatchCode(
-        captureOffsets, patCodes.immutable(), capacity, last(matchList).pos);
+    return new Codes.StackMatchCode(
+        captureOffsets,
+        cx.recPeers.size(),
+        patCodes.immutable(),
+        capacity,
+        last(matchList).pos);
   }
 
   /**
@@ -1997,56 +2001,6 @@ public class Compiler {
               patCodes.forEach(
                   (pat, code) ->
                       d.arg("", pat.describe(describer)).arg("", code)));
-    }
-  }
-
-  /**
-   * Code that creates a {@link Closure.StackClosure} when evaluated.
-   *
-   * <p>At compile time, {@code captureOffsets[i]} is the offset (1-based from
-   * stack top) at which the i-th captured variable lives at closure-creation
-   * time.
-   *
-   * <p>At runtime, snapshots those stack slots into {@code capturedValues[]}
-   * and returns a {@link Closure.StackClosure}.
-   */
-  private static class StackMatchCode implements Code {
-    private final int[] captureOffsets;
-    private final ImmutablePairList<Core.Pat, Code> patCodes;
-    /** Minimum slots needed for a fresh {@link Closure.StackClosure} call. */
-    private final int capacity;
-
-    private final Pos pos;
-
-    StackMatchCode(
-        int[] captureOffsets,
-        ImmutablePairList<Core.Pat, Code> patCodes,
-        int capacity,
-        Pos pos) {
-      this.captureOffsets = captureOffsets;
-      this.patCodes = patCodes;
-      this.capacity = capacity;
-      this.pos = pos;
-    }
-
-    @Override
-    public Describer describe(Describer describer) {
-      return describer.start(
-          "match",
-          d ->
-              patCodes.forEach(
-                  (pat, code) ->
-                      d.arg("", pat.describe(describer)).arg("", code)));
-    }
-
-    @Override
-    public Object eval(Stack stack) {
-      final Object[] captured = new Object[captureOffsets.length];
-      for (int i = 0; i < captureOffsets.length; i++) {
-        captured[i] = stack.slots[stack.top - captureOffsets[i]];
-      }
-      return new Closure.StackClosure(
-          stack.session, captured, null, patCodes, capacity, pos);
     }
   }
 

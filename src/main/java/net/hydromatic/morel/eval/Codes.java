@@ -5222,13 +5222,11 @@ public abstract class Codes {
       for (int i = 0; i < patCodes.size(); i++) {
         values[i] = patCodes.get(i).getValue().eval(stack);
       }
-      // Allocate a shared frame of bindings before creating any closure. Each
-      // StackClosure in the group gets a reference to this frame so that
-      // recursive/mutual calls resolve via StackCode (not GetCode).
-      final Object[] recBindings = values.clone();
+      // Extend each StackClosure's captured array with the rec-group peers so
+      // that recursive/mutual calls resolve via StackCode (not GetCode).
       for (Object value : values) {
         if (value instanceof Closure.StackClosure) {
-          ((Closure.StackClosure) value).recBindings = recBindings;
+          ((Closure.StackClosure) value).extendWithRecPeers(values);
         }
       }
       for (int i = 0; i < patCodes.size(); i++) {
@@ -5255,6 +5253,75 @@ public abstract class Codes {
     return patCodes.isEmpty()
         ? resultCode
         : new StackMultiLetCode(patCodes, resultCode);
+  }
+
+  /**
+   * Code that snapshots live stack slots into a {@link Closure.StackClosure}.
+   *
+   * <p>At compile time, {@code captureOffsets[i]} is the 1-based offset from
+   * the current stack top at which the i-th captured variable lives.
+   *
+   * <p>At runtime, those slots are copied into a pre-allocated {@code
+   * captured[]} array of size {@code captureLen + numRecPeers} and returned as
+   * a new {@link Closure.StackClosure}. If the closure belongs to a
+   * mutual-recursion group, {@link
+   * Closure.StackClosure#extendWithRecPeers(Object[])} fills the tail of that
+   * array without further allocation. The shared {@code StackMatchCode}
+   * instance also carries the {@link #patCodes}, {@link #capacity}, and {@link
+   * #pos} used by every closure it creates, so those fields need not be
+   * duplicated per closure.
+   */
+  public static class StackMatchCode implements Code {
+    private final int[] captureOffsets;
+    /** Number of outer variables snapshotted at closure-creation time. */
+    final int captureLen;
+    /**
+     * Number of mutual-recursion peers in this closure's rec group; 0 for
+     * non-recursive closures. Determines the pre-allocated tail of {@code
+     * captured[]} that {@link Closure.StackClosure#extendWithRecPeers} fills.
+     */
+    private final int numRecPeers;
+
+    final ImmutablePairList<Core.Pat, Code> patCodes;
+    /** Minimum slots needed for a fresh {@link Closure.StackClosure} call. */
+    final int capacity;
+
+    final Pos pos;
+
+    public StackMatchCode(
+        int[] captureOffsets,
+        int numRecPeers,
+        ImmutablePairList<Core.Pat, Code> patCodes,
+        int capacity,
+        Pos pos) {
+      this.captureOffsets = captureOffsets;
+      this.captureLen = captureOffsets.length;
+      this.numRecPeers = numRecPeers;
+      this.patCodes = patCodes;
+      this.capacity = capacity;
+      this.pos = pos;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "match",
+          d ->
+              patCodes.forEach(
+                  (pat, code) ->
+                      d.arg("", pat.describe(describer)).arg("", code)));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      // Pre-allocate with room for rec-group peers (filled later by
+      // extendWithRecPeers); for non-recursive closures numRecPeers == 0.
+      final Object[] captured = new Object[captureLen + numRecPeers];
+      for (int i = 0; i < captureLen; i++) {
+        captured[i] = stack.slots[stack.top - captureOffsets[i]];
+      }
+      return new Closure.StackClosure(stack.session, captured, this);
+    }
   }
 
   /** Applies an {@link Applicable} to a {@link Code}. */
