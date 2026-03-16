@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Evaluation stack for the Morel interpreter.
@@ -112,6 +113,11 @@ public final class Stack {
     return new Stack(null, capacity);
   }
 
+  /** Returns the current session, never null. */
+  public Session getSession() {
+    return requireNonNull(session, "session");
+  }
+
   /**
    * Returns the current global environment.
    *
@@ -119,8 +125,7 @@ public final class Stack {
    * mutated by row-sink or aggregate code.
    */
   public Map<String, Object> currentEnv() {
-    requireNonNull(session, "session");
-    return requireNonNull(session.globalEnv, "globalEnv");
+    return requireNonNull(getSession().globalEnv, "globalEnv");
   }
 
   /** Pushes {@code value} onto the stack. */
