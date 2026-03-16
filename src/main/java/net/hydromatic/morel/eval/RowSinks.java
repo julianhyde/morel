@@ -627,45 +627,30 @@ public abstract class RowSinks {
 
     @Override
     public int maxSlots() {
-      return scanDepth + rowSink.maxSlots();
+      return names.size() + rowSink.maxSlots();
     }
 
     /**
      * Prepares the stack for a downstream {@code accept()} or {@code result()}
-     * call by pushing stack-based key values back onto the stack and binding
-     * env-based key values into {@code globalEnv}.
+     * call by pushing all key values back onto the stack as stack slots.
+     *
+     * <p>All scope vars (both formerly stack-based and formerly env-based) are
+     * now pushed as stack slots; no {@code globalEnv} extension is needed.
      *
      * <p>The {@code key} is the value stored in the map: a single value when
      * {@code names.size() == 1}, or an {@code ImmutableList} otherwise.
      */
-    Stack withRowFromKey(Stack s, Object key, int savedTop) {
+    Stack withRowFromKey(Stack s, Object key) {
       if (names.size() == 1) {
-        if (scanDepth == 1) {
-          s.push(key);
-          return s;
-        } else {
-          // env-based: bind in MutableEvalEnv
-          final MutableEvalEnv mEnv = s.globalEnv.bindMutable(names.get(0));
-          mEnv.set(key);
-          return new Stack(mEnv, s.slots, s.top);
-        }
+        s.push(key);
       } else {
         @SuppressWarnings("unchecked")
         final List<Object> keyList = (List<Object>) key;
-        for (int i = 0; i < scanDepth; i++) {
+        for (int i = 0; i < names.size(); i++) {
           s.push(keyList.get(i));
         }
-        if (scanDepth < names.size()) {
-          EvalEnv env2 = s.globalEnv;
-          for (int i = scanDepth; i < names.size(); i++) {
-            final MutableEvalEnv mEnv = env2.bindMutable(names.get(i));
-            mEnv.set(keyList.get(i));
-            env2 = mEnv;
-          }
-          return new Stack(env2, s.slots, s.top);
-        }
-        return s;
       }
+      return s;
     }
   }
 
@@ -739,13 +724,13 @@ public abstract class RowSinks {
         }
       }
       if (!map.isEmpty()) {
-        Stack s = stack.ensureSize(scanDepth);
+        Stack s = stack.ensureSize(names.size());
         final int savedTop = s.top;
         final Stack s2 = s;
         map.keySet()
             .forEach(
                 element -> {
-                  rowSink.accept(withRowFromKey(s2, element, savedTop));
+                  rowSink.accept(withRowFromKey(s2, element));
                   s2.restore(savedTop);
                 });
       }
@@ -882,13 +867,13 @@ public abstract class RowSinks {
         }
       }
       if (!map.isEmpty()) {
-        Stack s = stack.ensureSize(scanDepth);
+        Stack s = stack.ensureSize(names.size());
         final int savedTop = s.top;
         final Stack s2 = s;
         map.forEach(
             (k, v) -> {
               if (v[0] > 0) {
-                rowSink.accept(withRowFromKey(s2, k, savedTop));
+                rowSink.accept(withRowFromKey(s2, k));
                 s2.restore(savedTop);
               }
             });
@@ -921,7 +906,7 @@ public abstract class RowSinks {
     public List<Object> result(Stack stack) {
       // keyEnv is used only for distinctness checks (add(keyEnv)).
       final MutableEvalEnv keyEnv = stack.globalEnv.bindMutableArray(names);
-      Stack s = stack.ensureSize(scanDepth);
+      Stack s = stack.ensureSize(names.size());
       final int savedTop = s.top;
       final Stack s2 = s;
       for (Code code : codes) {
@@ -929,7 +914,7 @@ public abstract class RowSinks {
         for (Object element : elements) {
           keyEnv.set(element);
           if (!distinct || add(keyEnv)) {
-            rowSink.accept(withRowFromKey(s2, element, savedTop));
+            rowSink.accept(withRowFromKey(s2, element));
             s2.restore(savedTop);
           }
         }
@@ -1105,59 +1090,44 @@ public abstract class RowSinks {
 
     @Override
     public int maxSlots() {
-      return scanDepth + rowSink.maxSlots();
+      return inSlots.size() + rowSink.maxSlots();
     }
 
     @Override
     public List<Object> result(Stack stack) {
-      Stack s = stack.ensureSize(scanDepth);
+      Stack s = stack.ensureSize(inSlots.size());
       final int savedTop = s.top;
-      final int envCount = inSlots.size() - scanDepth;
       final Stack s2 = s; // effectively final for lambda
       rows.sort(
           (left, right) -> {
-            final Object leftVal =
-                code.eval(withRow(s2, left, savedTop, envCount));
+            final Object leftVal = code.eval(withRow(s2, left));
             s2.restore(savedTop);
-            final Object rightVal =
-                code.eval(withRow(s2, right, savedTop, envCount));
+            final Object rightVal = code.eval(withRow(s2, right));
             s2.restore(savedTop);
             return comparator.compare(leftVal, rightVal);
           });
       for (Object row : rows) {
-        rowSink.accept(withRow(s, row, savedTop, envCount));
+        rowSink.accept(withRow(s, row));
         s.restore(savedTop);
       }
       return rowSink.result(stack);
     }
 
     /**
-     * Pushes per-row captured values back onto the stack (and into globalEnv
-     * for env-based slots), restoring the scan-time context so that downstream
-     * {@code StackCode} nodes resolve correctly.
+     * Pushes all per-row captured values back onto the stack, restoring the
+     * scan-time context so that downstream {@code StackCode} nodes resolve
+     * correctly.
+     *
+     * <p>All scope vars (both formerly stack-based and formerly env-based) are
+     * now pushed as stack slots; no {@code globalEnv} extension is needed.
      */
-    private Stack withRow(Stack s, Object row, int savedTop, int envCount) {
+    private Stack withRow(Stack s, Object row) {
       if (inSlots.size() == 1) {
-        if (scanDepth == 1) {
-          s.push(row);
-        } else { // scanDepth == 0: single env-based slot
-          final MutableEvalEnv mEnv = s.globalEnv.bindMutable(inSlots.left(0));
-          mEnv.set(row);
-          return new Stack(mEnv, s.slots, s.top);
-        }
+        s.push(row);
       } else {
         final Object[] arr = (Object[]) row;
-        for (int i = 0; i < scanDepth; i++) {
+        for (int i = 0; i < inSlots.size(); i++) {
           s.push(arr[i]);
-        }
-        if (envCount > 0) {
-          EvalEnv env2 = s.globalEnv;
-          for (int i = scanDepth; i < inSlots.size(); i++) {
-            final MutableEvalEnv mEnv = env2.bindMutable(inSlots.left(i));
-            mEnv.set(arr[i]);
-            env2 = mEnv;
-          }
-          return new Stack(env2, s.slots, s.top);
         }
       }
       return s;

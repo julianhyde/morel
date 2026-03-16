@@ -895,24 +895,31 @@ public class Compiler {
       Core.StepEnv stepEnv,
       List<Core.FromStep> remainingSteps,
       Type elementType) {
-    // Sort key compiled with cx: scan vars are pushed back onto the stack at
-    // result() time, so StackCode offsets are valid.
-    final Code code = compile(cx, order.exp);
-    final Comparator comparator =
-        Comparators.comparatorFor(typeSystem, order.exp.type);
     final ImmutablePairList<String, Code> inSlots =
         buildInSlots(cx, allScopeBindings.values());
-    // scanDepth: number of allScopeBindings entries that are in the stack
-    // layout. These are pushed back onto the stack during result().
+    // cxResult: extends cx so that env-based allScopeBindings vars (those not
+    // yet in the stack layout, e.g. GROUP output vars) are assigned new slot
+    // indices starting at cx.localDepth. This allows sort key and downstream
+    // code to reference all scope vars via StackCode (no GetCode/env lookup).
+    final Context cxResult =
+        buildEnvSlotsContext(cx, allScopeBindings.values());
+    // Sort key compiled with cxResult: all scope vars use StackCode.
+    final Code code = compile(cxResult, order.exp);
+    final Comparator comparator =
+        Comparators.comparatorFor(typeSystem, order.exp.type);
+    // scanDepth: number of allScopeBindings entries that are in the original cx
+    // stack layout (stack-based vars). Used only to partition inSlots for the
+    // row sink; after cxResult extension all vars become stack-based.
     final int scanDepth =
         (int)
             allScopeBindings.values().stream()
                 .filter(b -> cx.layout.get(b.id) >= 0)
                 .count();
-    // Downstream compiled with cx so StackCode offsets match the push-back.
+    // Downstream compiled with cxResult so StackCode offsets match the
+    // push-back of all inSlots values (including formerly env-based vars).
     final Supplier<RowSink> nextFactory =
         createRowSinkFactory(
-            cx,
+            cxResult,
             cxFrom,
             ImmutableMap.of(),
             order.env,
@@ -1074,6 +1081,10 @@ public class Compiler {
             stepEnv.bindings.stream()
                 .filter(b -> cx.layout.get(b.id) >= 0)
                 .count();
+    // cxResult: extends cx so that env-based stepEnv output vars (those not
+    // yet in the stack layout) are assigned new slot indices. This allows
+    // downstream code to reference all SET output vars via StackCode.
+    final Context cxResult = buildEnvSlotsContext(cx, stepEnv.bindings);
     // Downstream compiled with ImmutableMap.of() as allScopeBindings: the SET
     // step is a scope boundary (like GROUP), so outer scan vars (e.g. the
     // SCAN var 'e' that fed into the SET step) must not appear in the
@@ -1082,7 +1093,7 @@ public class Compiler {
     // vars are no longer on the stack, causing an AIOBE.
     final Supplier<RowSink> nextFactory =
         createRowSinkFactory(
-            cx,
+            cxResult,
             cxFrom,
             ImmutableMap.of(),
             stepEnv,
@@ -1142,6 +1153,32 @@ public class Compiler {
     return ImmutablePairList.fromTransformed(
         sortedInBindings(cx, bindings),
         (b, add) -> add.accept(b.id.name, compileFieldName(cx, b.id)));
+  }
+
+  /**
+   * Returns a context that extends {@code cx} by assigning stack slot indices
+   * to any bindings in {@code bindings} that are not already in the layout.
+   *
+   * <p>Stack-based bindings keep their existing slot indices. Env-based
+   * bindings are assigned new slots starting at {@code cx.localDepth}, in the
+   * order returned by {@link #sortedInBindings} (which matches the capture
+   * order in {@link #buildInSlots}).
+   *
+   * <p>If all bindings are already in the layout, returns {@code cx} unchanged.
+   */
+  private Context buildEnvSlotsContext(
+      Context cx, Collection<Binding> bindings) {
+    StackLayout extLayout = cx.layout;
+    int extLocalDepth = cx.localDepth;
+    for (Binding b : sortedInBindings(cx, bindings)) {
+      if (cx.layout.get(b.id) < 0) {
+        extLayout = extLayout.with(b.id, extLocalDepth++);
+      }
+    }
+    if (extLocalDepth == cx.localDepth) {
+      return cx;
+    }
+    return new Context(cx.env, extLayout, extLocalDepth, cx.globalSlotMap);
   }
 
   /** Sorts bindings: those in the layout by slot index, then the rest. */

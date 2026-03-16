@@ -663,31 +663,35 @@ After this step `Stack.globalEnv` is still read by `GetCode.eval` (for
 locally-extended envs in `StackMultiLetCode` and `withRow` / `withRowFromKey`)
 and by the `new Stack(extendedEnv, …)` constructors.
 
-#### Step 19b: Convert RowSink deferred-result env-extension to slot-push
+#### ✅ Step 19b: Convert RowSink deferred-result env-extension to slot-push
 
-The remaining `new Stack(extendedEnv, slots, top)` calls are in
-`RowSinks.withRow()` and `RowSinks.withRowFromKey()`. These methods
-rebind captured row-variable values into a `MutableEvalEnv` chain so
-that downstream `GetCode` lookups find them during `result()`. The same
-scope-variable tracking already present for stack-based variables (`inSlots`,
-`scanDepth`) must be extended to cover all env-based variables (those from
-`YIELD` steps, which currently land in `globalEnv`).
+Eliminated `new Stack(extendedEnv, slots, top)` from `OrderRowSink.withRow()`
+and `SetRowSink.withRowFromKey()`.
 
-Approach:
-- Track `envDepth` alongside `scanDepth`: the number of env-based
-  bindings beyond the stack-resident ones.
-- In `withRow` / `withRowFromKey`, push all per-row values (both
-  stack-based and formerly-env-based) onto the stack in a single block,
-  eliminating the `MutableEvalEnv` chain entirely.
-- Downstream code compiled with `cxFrom` uses `GetCode` for YIELD-output
-  variables; that `GetCode` must be changed to `StackCode` with the
-  correct offset into the pushed block, which requires passing a richer
-  `cxFrom` context.
-- Alternatively: extend `withRow` to push only the stack-based values
-  (as today) and rebuild the env extension only for the env-based ones
-  (a partial improvement that narrows the gap before full elimination).
+Approach taken:
+- Added `Compiler.buildEnvSlotsContext()`: extends a context's `StackLayout`
+  by assigning new slot indices to bindings not yet in the layout (env-based
+  vars such as GROUP output vars). Slot assignment order matches
+  `sortedInBindings` (stack vars first by slot, then env vars in original
+  order), which matches the push order in `withRow`/`withRowFromKey`.
+- `compileOrderSink`: builds `cxResult = buildEnvSlotsContext(cx, allScopeBindings)`;
+  compiles sort key and downstream `nextFactory` with `cxResult` so that
+  all scope vars (including formerly env-based GROUP output vars) use `StackCode`.
+- `compileSetSink`: builds `cxResult = buildEnvSlotsContext(cx, stepEnv.bindings)`;
+  compiles `nextFactory` with `cxResult`.
+- `OrderRowSink.withRow()`: simplified to push all `inSlots.size()` values
+  onto the stack; `maxSlots()` now returns `inSlots.size() + rowSink.maxSlots()`.
+- `SetRowSink.withRowFromKey()`: simplified to push all `names.size()` values;
+  `maxSlots()` returns `names.size() + rowSink.maxSlots()`.
 
-After this step no `new Stack(extendedEnv, …)` constructor calls remain.
+Remaining `new Stack(extendedEnv, …)` calls:
+- `GroupRowSink.result()` (lines 1025, 1046): GROUP output vars are still bound
+  via `MutableEvalEnv` chains. Converting GROUP requires restructuring
+  `Codes.aggregate` and the `GroupRowSink`; deferred to a later step.
+- `Codes.aggregate` (lines 4292, 4325): env-based paths for aggregate argument
+  evaluation; only triggered when scan vars are env-based (rare, e.g.
+  GROUP-after-GROUP). Deferred to a later step.
+- `StackMultiLetCode.useSlots=false` (line 5278): Step 19c.
 
 #### Step 19c: Convert `StackMultiLetCode.useSlots=false` to slot-push
 
