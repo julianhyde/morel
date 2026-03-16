@@ -28,7 +28,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /**
  * Evaluation environment.
  *
- * <p>Whereas {@link Environment} contains both types and values, because it is
+ * <p>Whereas {@code Environment} contains both types and values, because it is
  * used for validation/compilation, EvalEnv contains only values.
  */
 public interface EvalEnv {

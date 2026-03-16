@@ -4052,7 +4052,7 @@ public abstract class Codes {
    * before evaluating {@code body}, then restores the stack top afterwards.
    *
    * <p>At statement-evaluation time, the wrapper fetches each name from {@link
-   * Stack#globalEnv} once and stores the value in a stack slot, so that the
+   * Session#globalEnv} once and stores the value in a stack slot, so that the
    * body can access those globals via fast {@link StackCode} reads instead of
    * repeated {@link GetCode} / {@code EvalEnv} lookups.
    *
@@ -5176,10 +5176,10 @@ public abstract class Codes {
    * Code that implements a stack-aware multi-binding {@code let}.
    *
    * <p>Each binding evaluates its expression code against the current stack,
-   * then binds the result to its pattern by extending {@link Stack#globalEnv}.
-   * After all bindings, a second pass re-patches mutual-recursion references in
-   * any {@link Closure.StackClosure} values. The result code is then evaluated
-   * with the fully-extended environment.
+   * then binds the result to its pattern by pushing it onto the stack. After
+   * all bindings, a second pass re-patches mutual-recursion references in any
+   * {@link Closure.StackClosure} values. The result code is then evaluated with
+   * the fully-extended environment.
    *
    * <p>This is used for recursive function declarations ({@code fun f x = ...})
    * and mutually recursive bindings ({@code let val f = ... and g = ...}).
