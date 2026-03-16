@@ -5185,11 +5185,7 @@ public abstract class Codes {
   private static class StackMultiLetCode implements Code {
     private final ImmutablePairList<Core.Pat, Code> patCodes;
     private final Code resultCode;
-    /**
-     * Total number of stack slots pushed for all binding patterns combined.
-     * Equals the sum of {@link #countSlots} over all patterns in {@link
-     * #patCodes}.
-     */
+    /** Total number of stack slots pushed for all binding patterns combined. */
     private final int slotCount;
 
     StackMultiLetCode(
@@ -5217,8 +5213,8 @@ public abstract class Codes {
       // RHSs evaluated before slots pushed; resultCode runs with N extra
       // slots live, so needs numSlots + resultCode.maxSlots() from base.
       int max = slotCount + resultCode.maxSlots();
-      for (Map.Entry<Core.Pat, Code> entry : patCodes) {
-        max = Math.max(max, entry.getValue().maxSlots());
+      for (Code entry : patCodes.rightList()) {
+        max = Math.max(max, entry.maxSlots());
       }
       return max;
     }

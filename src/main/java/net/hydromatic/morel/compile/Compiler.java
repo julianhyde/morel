@@ -906,11 +906,7 @@ public class Compiler {
     // scanDepth: number of allScopeBindings entries that are in the original cx
     // stack layout (stack-based vars). Used only to partition inSlots for the
     // row sink; after cxResult extension all vars become stack-based.
-    final int scanDepth =
-        (int)
-            allScopeBindings.values().stream()
-                .filter(b -> cx.layout.get(b.id) >= 0)
-                .count();
+    final int scanDepth = countStackBased(cx, allScopeBindings.values());
     // Downstream compiled with cxResult so StackCode offsets match the
     // push-back of all inSlots values (including formerly env-based vars).
     final Supplier<RowSink> nextFactory =
@@ -949,11 +945,7 @@ public class Compiler {
     // These are pushed back onto the stack at result() time inside
     // Codes.aggregate so that argumentCode (compiled with cx) can read them
     // via StackCode.
-    final int scanDepth =
-        (int)
-            allScopeBindings.values().stream()
-                .filter(b -> cx.layout.get(b.id) >= 0)
-                .count();
+    final int scanDepth = countStackBased(cx, allScopeBindings.values());
     final ImmutableList.Builder<Applicable> aggregateCodesB =
         ImmutableList.builder();
     for (Core.Aggregate aggregate : group.aggregates.values()) {
@@ -977,8 +969,9 @@ public class Compiler {
       final Code aggregateCode;
       if (aggregateApplicable == null) {
         // Compile with cxFrom so scan variables use GetCode (read from
-        // EvalEnv) rather than StackCode, because aggregate functions are
-        // evaluated at result() time when scan vars are no longer on stack.
+        // session.globalEnv) rather than StackCode, because aggregate
+        // functions are evaluated at result() time when scan vars are no
+        // longer on stack.
         aggregateCode = compile(cxFrom, aggregate.aggregate);
       } else {
         aggregateCode = aggregateApplicable.asCode();
@@ -1191,6 +1184,12 @@ public class Compiler {
 
   private ImmutableList<String> bindingNames(List<Binding> bindings) {
     return transformEager(bindings, b -> b.id.name);
+  }
+
+  /** Returns the number of bindings whose pattern is in {@code cx.layout}. */
+  private static int countStackBased(Context cx, Collection<Binding> bindings) {
+    return (int)
+        bindings.stream().filter(b -> cx.layout.get(b.id) >= 0).count();
   }
 
   /**

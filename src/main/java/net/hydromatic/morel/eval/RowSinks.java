@@ -537,7 +537,7 @@ public abstract class RowSinks {
       }
     }
 
-    // Stack-based helpers use inCodes to read scope variables from stack.
+    // Stack-based helpers use inSlots to read scope variables from stack.
     boolean add(Stack stack) {
       return map.put(computeKey(stack), ZERO) == null;
     }
@@ -632,7 +632,7 @@ public abstract class RowSinks {
           }
         }
       }
-      // Use inCodes to compute the key for the current row from stack.
+      // Use inSlots to compute the key for the current row from stack.
       final Object value = computeKey(stack);
       int[] count = map.get(value);
       if (count != null && count[0] > 0) {
@@ -674,13 +674,10 @@ public abstract class RowSinks {
       if (!map.isEmpty()) {
         Stack s = stack.ensureSize(names.size());
         final int savedTop = s.top;
-        final Stack s2 = s;
-        map.keySet()
-            .forEach(
-                element -> {
-                  rowSink.accept(withRowFromKey(s2, element));
-                  s2.restore(savedTop);
-                });
+        for (Object element : map.keySet()) {
+          rowSink.accept(withRowFromKey(s, element));
+          s.restore(savedTop);
+        }
       }
       return rowSink.result(stack);
     }
@@ -749,7 +746,7 @@ public abstract class RowSinks {
                   return minCount == 0;
                 });
       }
-      // Use inCodes to compute the key for the current row from stack.
+      // Use inSlots to compute the key for the current row from stack.
       final Object value = computeKey(stack);
       map.computeIfPresent(
           value,
@@ -786,7 +783,7 @@ public abstract class RowSinks {
 
     @Override
     public void accept(Stack stack) {
-      // Use inCodes to compute the key for the current row from stack.
+      // Use inSlots to compute the key for the current row from stack.
       map.computeIfAbsent(computeKey(stack), k -> new int[] {0});
     }
 
@@ -811,12 +808,11 @@ public abstract class RowSinks {
       if (!map.isEmpty()) {
         Stack s = stack.ensureSize(names.size());
         final int savedTop = s.top;
-        final Stack s2 = s;
         map.forEach(
             (k, v) -> {
               if (v[0] > 0) {
-                rowSink.accept(withRowFromKey(s2, k));
-                s2.restore(savedTop);
+                rowSink.accept(withRowFromKey(s, k));
+                s.restore(savedTop);
               }
             });
       }
@@ -848,13 +844,12 @@ public abstract class RowSinks {
     public List<Object> result(Stack stack) {
       Stack s = stack.ensureSize(names.size());
       final int savedTop = s.top;
-      final Stack s2 = s;
       for (Code code : codes) {
         final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
         for (Object element : elements) {
           if (!distinct || addElement(element)) {
-            rowSink.accept(withRowFromKey(s2, element));
-            s2.restore(savedTop);
+            rowSink.accept(withRowFromKey(s, element));
+            s.restore(savedTop);
           }
         }
       }
