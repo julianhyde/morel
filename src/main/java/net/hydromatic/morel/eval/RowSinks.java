@@ -286,7 +286,7 @@ public abstract class RowSinks {
     static boolean isConstantTrue(Code code) {
       return code.isConstant()
           && Objects.equals(
-              code.eval(new Stack(EvalEnvs.empty(), code.maxSlots())), true);
+              code.eval(new Stack((Session) null, code.maxSlots())), true);
     }
 
     @Override

@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.eval;
 
+import static java.util.Objects.requireNonNull;
+
 import java.util.Arrays;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -29,9 +31,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * stored in a flat {@code Object[]} array at compile-time-computed offsets,
  * giving O(1) access without walking an environment chain.
  *
- * <p>The {@link #globalEnv} field holds an {@link EvalEnv} for top-level
- * declarations and built-ins. It is set once at the start of each statement
- * evaluation and never mutated.
+ * <p>Global (top-level and built-in) bindings are accessed via {@link
+ * Session#globalEnv}, which is temporarily extended by row-sink and aggregate
+ * code during relational evaluation.
  *
  * <p>{@code Stack} is shared across a function call chain. Built-in functions
  * that do not bind local variables pass the {@code Stack} through unchanged;
@@ -43,23 +45,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class Stack {
   /**
-   * The global environment holding top-level declarations and built-ins.
+   * The current session.
    *
-   * <p>This is set once when evaluation begins and is never mutated. Variables
-   * introduced by {@code let} or pattern-matching during evaluation are stored
-   * in {@link #slots}, not here.
-   */
-  public final EvalEnv globalEnv;
-
-  /**
-   * The current session, derived from {@link #globalEnv} at construction time.
+   * <p>Provides access to {@link Session#globalEnv}, the authoritative
+   * environment for top-level declarations and built-ins. Row-sink and
+   * aggregate code temporarily extend {@code session.globalEnv} during
+   * evaluation.
    *
-   * <p>Cached here so that built-in functions can access the session via {@code
-   * stack.session} without calling {@link EvalEnv#getSession()} on every
-   * invocation.
-   *
-   * <p>May be {@code null} when a stack is created from an empty environment
-   * (e.g. during compile-time constant evaluation).
+   * <p>May be {@code null} when a stack is created for compile-time constant
+   * evaluation (e.g. inlining or constant-folding in tests).
    */
   public final @Nullable Session session;
 
@@ -80,34 +74,29 @@ public final class Stack {
   /**
    * Creates a Stack with a pre-allocated slots array.
    *
-   * @param globalEnv The environment for top-level and built-in bindings
+   * @param session The session holding top-level and built-in bindings; may be
+   *     {@code null} for compile-time constant evaluation
    * @param capacity The number of slots to pre-allocate
    */
-  public Stack(final EvalEnv globalEnv, final int capacity) {
-    this.globalEnv = globalEnv;
-    this.session = (Session) globalEnv.getOpt(EvalEnv.SESSION);
+  public Stack(final @Nullable Session session, final int capacity) {
+    this.session = session;
     this.slots = new Object[capacity];
     this.top = 0;
   }
 
   /**
-   * Creates a Stack that shares the slots array of a parent stack but has a
-   * different {@link #globalEnv}.
+   * Creates a Stack that shares the slots array of a parent stack.
    *
-   * <p>Used by row sinks to create an inner evaluation context: outer variables
-   * remain accessible via the shared {@link #slots} (StackCode nodes), while
-   * new iteration-variable bindings are in the extended {@code globalEnv}
-   * ({@code Codes.get} nodes).
-   *
-   * @param globalEnv Extended env that includes the new iteration variable
+   * @param session The session; may be {@code null} for constant eval
    * @param parentSlots The slots array from the parent stack (shared by
    *     reference)
    * @param top The current stack top, copied from the parent
    */
   public Stack(
-      final EvalEnv globalEnv, final Object[] parentSlots, final int top) {
-    this.globalEnv = globalEnv;
-    this.session = (Session) globalEnv.getOpt(EvalEnv.SESSION);
+      final @Nullable Session session,
+      final Object[] parentSlots,
+      final int top) {
+    this.session = session;
     this.slots = parentSlots;
     this.top = top;
   }
@@ -115,12 +104,11 @@ public final class Stack {
   /**
    * Returns the current global environment.
    *
-   * <p>If a {@link Session} is present, returns {@link Session#globalEnv},
-   * which may have been temporarily extended by row-sink or aggregate code.
-   * Otherwise falls back to {@link #globalEnv}.
+   * <p>Delegates to {@link Session#globalEnv}, which may have been temporarily
+   * extended by row-sink or aggregate code.
    */
   public EvalEnv currentEnv() {
-    return session != null ? session.globalEnv : globalEnv;
+    return requireNonNull(session, "session").globalEnv;
   }
 
   /** Pushes {@code value} onto the stack. */
@@ -150,7 +138,7 @@ public final class Stack {
     if (slots.length >= top + needed) {
       return this;
     }
-    return new Stack(globalEnv, Arrays.copyOf(slots, top + needed), top);
+    return new Stack(session, Arrays.copyOf(slots, top + needed), top);
   }
 }
 

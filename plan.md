@@ -765,15 +765,29 @@ fallback. The mechanism:
 
 - `plan.md`: shortened two overly-long section headings.
 
-#### Step 19d: Remove `Stack.globalEnv`
+#### ✅ Step 19d: Remove `Stack.globalEnv`
 
-After Steps 19a–19e, no code reads `stack.globalEnv` at runtime.
-Delete the field, the `Stack(EvalEnv, int)` constructor, and the
-`Stack(EvalEnv, Object[], int)` constructor.  `Stack` then has exactly
-three fields: `session`, `slots`, `top`.
+Deleted `Stack.globalEnv` field and the two `Stack(EvalEnv, …)`
+constructors. `Stack` now has exactly three fields: `session`, `slots`,
+`top`. New constructors take `@Nullable Session` directly.
 
-Also delete the now-dead `Closure.bindPatGetValue` and simplify
-`StackClosure.apply(Object)` (no more `globalEnv` fallback needed).
+- `Stack.currentEnv()` now simply returns `session.globalEnv` (no
+  fallback needed since all runtime stacks have sessions).
+- `Stack.ensureSize()` passes `session` to the new constructor.
+- Call-site updates:
+  - `Compiler.java`: uses local `session` variable already in scope.
+  - `CalciteCompiler.java` line 293: creates a mini-session
+    (`miniSession.globalEnv = evalEnvOf(cx.env)`) for the temporary
+    stack used to evaluate foreign-value lookups during planning.
+  - `CalciteFunctions.java`: passes `compiled.session` directly.
+  - `Inliner.java`: passes `null` session (constant eval, never calls
+    `currentEnv()`).
+  - `Closure.bindEvalBody` (dead code): extracts session from env.
+  - `RowSinks.isConstantTrue`: passes `null` session (constant eval).
+  - `StackLayoutTest`: passes `null` session (slot-only tests).
+
+Also deleted `Closure.bindPatGetValue` (dead code) and simplified
+`StackClosure.apply(Object)` (removed `globalEnv` fallback).
 
 ### ✅ Step 20: Eliminate `THREAD_EVAL_ENV`
 

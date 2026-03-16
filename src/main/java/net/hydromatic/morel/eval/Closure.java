@@ -95,25 +95,6 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
   }
 
   /**
-   * Binds {@code value} to {@code pat} in {@code env} and appends {@code value}
-   * to {@code out}.
-   *
-   * <p>Used by multi-binding {@code let} to bind each value directly, without
-   * going through an intermediate {@link Closure}.
-   *
-   * @return the extended environment with {@code pat}'s names bound
-   */
-  public static EvalEnv bindPatGetValue(
-      Core.Pat pat, Object value, EvalEnv env, List<Object> out) {
-    final EvalEnvHolder envRef = new EvalEnvHolder(env);
-    if (bindRecurse(pat, value, envRef)) {
-      out.add(value);
-      return envRef.env;
-    }
-    throw new AssertionError("no match");
-  }
-
-  /**
    * Similar to {@link #bind}, but also evaluates. May return a {@link
    * Codes.TailCall} sentinel; callers must trampoline if they need a real
    * value.
@@ -124,7 +105,8 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
       final Core.Pat pat = patCode.getKey();
       if (bindRecurse(pat, argValue, envRef)) {
         final Code code = patCode.getValue();
-        return code.eval(new Stack(envRef.env, code.maxSlots()));
+        final Session session = (Session) envRef.env.getOpt(EvalEnv.SESSION);
+        return code.eval(new Stack(session, code.maxSlots()));
       }
     }
     throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
@@ -461,16 +443,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      */
     @Override
     public Object apply(Object argValue) {
-      // Use session.globalEnv when available: it is always up-to-date with
-      // the latest top-level bindings, so no per-closure patching is needed.
-      // Fall back to the creation-time snapshot (globalEnv) when session is
-      // null or session.globalEnv has not yet been initialized (e.g. for
-      // CalciteCompiler's dummy sessions).
-      final EvalEnv env =
-          (session != null && session.globalEnv != null)
-              ? session.globalEnv
-              : globalEnv;
-      return apply(new Stack(env, capacity), argValue);
+      return apply(new Stack(session, capacity), argValue);
     }
 
     /**

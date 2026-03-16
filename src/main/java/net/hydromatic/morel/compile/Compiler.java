@@ -2380,7 +2380,7 @@ public class Compiler {
       session.globalEnv = evalEnv;
       try {
         final Object o =
-            code.eval(new Stack(evalEnv, Math.max(code.maxSlots(), 256)));
+            code.eval(new Stack(session, Math.max(code.maxSlots(), 256)));
         final List<Binding> outBindings0 = new ArrayList<>();
         // For simple IdPat bindings, store the expression so it can be inlined
         // in subsequent compile units. For compound patterns (tuples), we don't

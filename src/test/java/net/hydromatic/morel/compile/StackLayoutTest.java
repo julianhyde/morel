@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.TypeSystem;
@@ -100,7 +101,7 @@ public class StackLayoutTest {
   public void testStackCodeEval() {
     // Verify that StackCode reads the correct slot from the stack.
     final Code code = Codes.stackGet(1, "x");
-    final Stack stack = new Stack(Codes.emptyEnv(), 4);
+    final Stack stack = new Stack((Session) null, 4);
     stack.slots[0] = "value-at-slot-0";
     stack.top = 1;
     // offset=1 means stack.slots[top - 1] = stack.slots[0]
@@ -111,7 +112,7 @@ public class StackLayoutTest {
   public void testStackCodeEvalDeep() {
     // Two values on stack; offset 2 reaches the deeper one.
     final Code code = Codes.stackGet(2, "y");
-    final Stack stack = new Stack(Codes.emptyEnv(), 4);
+    final Stack stack = new Stack((Session) null, 4);
     stack.slots[0] = "deep";
     stack.slots[1] = "shallow";
     stack.top = 2;

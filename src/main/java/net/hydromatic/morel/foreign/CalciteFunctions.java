@@ -216,8 +216,7 @@ public class CalciteFunctions {
         public Enumerable<Object[]> scan(DataContext root) {
           Object v =
               compiled.code.eval(
-                  new Stack(
-                      compiled.session.globalEnv, compiled.code.maxSlots()));
+                  new Stack(compiled.session, compiled.code.maxSlots()));
           return compiled.f.apply(v);
         }
 

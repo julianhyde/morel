@@ -39,7 +39,7 @@ import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
-import net.hydromatic.morel.eval.EvalEnvs;
+import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
@@ -159,7 +159,7 @@ public class Inliner extends EnvShuttle {
           default:
             if (v instanceof Code) {
               final Code code = (Code) v;
-              v = code.eval(new Stack(EvalEnvs.empty(), code.maxSlots()));
+              v = code.eval(new Stack((Session) null, code.maxSlots()));
               if (v == null) {
                 // Cannot inline SYS_FILE; it requires a session.
                 break;
