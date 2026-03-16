@@ -218,9 +218,16 @@ public class Calcite {
 
     @Override
     public Object eval(EvalEnv evalEnv) {
+      // Delegate to eval(Stack) so that THREAD_STACK is always set during
+      // Calcite plan execution. This makes THREAD_EVAL_ENV unnecessary.
+      return eval(new Stack(evalEnv, 0));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
       return ThreadLocals.let(
-          CalciteFunctions.THREAD_EVAL_ENV,
-          evalEnv,
+          CalciteFunctions.THREAD_STACK,
+          stack,
           () ->
               ThreadLocals.mutate(
                   CalciteFunctions.THREAD_ENV,
@@ -230,26 +237,6 @@ public class Calcite {
                         new Interpreter(dataContext, rel);
                     return converter.apply(interpreter);
                   }));
-    }
-
-    @Override
-    public Object eval(Stack stack) {
-      return ThreadLocals.let(
-          CalciteFunctions.THREAD_STACK,
-          stack,
-          () ->
-              ThreadLocals.let(
-                  CalciteFunctions.THREAD_EVAL_ENV,
-                  stack.globalEnv,
-                  () ->
-                      ThreadLocals.mutate(
-                          CalciteFunctions.THREAD_ENV,
-                          c -> c.withEnv(env),
-                          () -> {
-                            final Interpreter interpreter =
-                                new Interpreter(dataContext, rel);
-                            return converter.apply(interpreter);
-                          })));
     }
   }
 

@@ -674,15 +674,18 @@ Approach taken:
   vars such as GROUP output vars). Slot assignment order matches
   `sortedInBindings` (stack vars first by slot, then env vars in original
   order), which matches the push order in `withRow`/`withRowFromKey`.
-- `compileOrderSink`: builds `cxResult = buildEnvSlotsContext(cx, allScopeBindings)`;
-  compiles sort key and downstream `nextFactory` with `cxResult` so that
-  all scope vars (including formerly env-based GROUP output vars) use `StackCode`.
-- `compileSetSink`: builds `cxResult = buildEnvSlotsContext(cx, stepEnv.bindings)`;
-  compiles `nextFactory` with `cxResult`.
+- `compileOrderSink`: builds
+  `cxResult = buildEnvSlotsContext(cx, allScopeBindings)`; compiles sort
+  key and downstream `nextFactory` with `cxResult` so that all scope vars
+  (including formerly env-based GROUP output vars) use `StackCode`.
+- `compileSetSink`: builds
+  `cxResult = buildEnvSlotsContext(cx, stepEnv.bindings)`; compiles
+  `nextFactory` with `cxResult`.
 - `OrderRowSink.withRow()`: simplified to push all `inSlots.size()` values
-  onto the stack; `maxSlots()` now returns `inSlots.size() + rowSink.maxSlots()`.
-- `SetRowSink.withRowFromKey()`: simplified to push all `names.size()` values;
-  `maxSlots()` returns `names.size() + rowSink.maxSlots()`.
+  onto the stack; `maxSlots()` returns
+  `inSlots.size() + rowSink.maxSlots()`.
+- `SetRowSink.withRowFromKey()`: simplified to push all `names.size()`
+  values; `maxSlots()` returns `names.size() + rowSink.maxSlots()`.
 
 Remaining `new Stack(extendedEnv, …)` calls:
 - `GroupRowSink.result()` (lines 1025, 1046): GROUP output vars are still bound
@@ -727,41 +730,27 @@ three fields: `session`, `slots`, `top`.
 Also delete the now-dead `Closure.bindPatGetValue` and simplify
 `StackClosure.apply(Object)` (no more `globalEnv` fallback needed).
 
-### Step 20: Eliminate `THREAD_EVAL_ENV`
+### ✅ Step 20: Eliminate `THREAD_EVAL_ENV`
 
-`THREAD_EVAL_ENV` is a `ThreadLocal<EvalEnv>` that carries the
+`THREAD_EVAL_ENV` was a `ThreadLocal<EvalEnv>` that carried the
 evaluation environment into Calcite so that callbacks from Calcite SQL
-evaluation back into Morel (`morelScalar`, `morelApply`) can reconstruct
-a `Stack`.  After Step 19d, `Stack.globalEnv` no longer exists, making
-`THREAD_EVAL_ENV` (which held its value) redundant.
+evaluation back into Morel (`morelScalar`, `morelApply`) could
+reconstruct a `Stack`.
 
-#### Analysis of all three Calcite thread-locals
+Eliminated by converting `CalciteCode.eval(EvalEnv)` to delegate to
+`eval(Stack)` (creates `new Stack(evalEnv, 0)` and calls `eval(stack)`).
+This ensures `THREAD_STACK` is always set during Calcite plan execution,
+making `THREAD_EVAL_ENV` unnecessary.
 
-| ThreadLocal | Set where | Read where | Purpose |
-|---|---|---|---|
-| `THREAD_ENV` | `CalciteCode.eval(Stack/EvalEnv)` | `MorelTableFunction`, `MorelScalarFunction`, `MorelApplyFunction` constructors | Compile-time context (env + typeSystem + session) passed at plan build time |
-| `THREAD_EVAL_ENV` | `CalciteCode.eval(Stack/EvalEnv)` | `MorelScalarFunction.eval`, `MorelApplyFunction.eval` fallback | Runtime env for constructing a Stack when `THREAD_STACK` is null |
-| `THREAD_STACK` | `CalciteCode.eval(Stack)` | `MorelScalarFunction.eval`, `MorelApplyFunction.eval` primary | Full runtime stack passed through Calcite evaluation |
-
-`THREAD_EVAL_ENV` is a fallback used only when `THREAD_STACK` is null.
-`THREAD_STACK` is null only when `CalciteCode.eval(EvalEnv)` is called
-instead of `eval(Stack)`.  After Step 19d that path must create a
-`Stack` from `session.globalEnv` anyway, so it can just call
-`eval(Stack)`.
-
-Elimination plan:
-- Convert `CalciteCode.eval(EvalEnv)` to delegate to `eval(Stack)`:
-  create `new Stack(session, evalEnv, capacity)` (a new constructor
-  that takes a `Session` and an `EvalEnv` used only as the initial
-  `session.globalEnv`) and call `eval(stack)`.
-- This ensures `THREAD_STACK` is always set for the duration of every
-  Calcite plan execution, including the legacy EvalEnv path.
-- Delete `THREAD_EVAL_ENV` and both its set-sites in `CalciteCode` and
-  its read-sites in `MorelScalarFunction` / `MorelApplyFunction`.
+Deleted:
+- `CalciteFunctions.THREAD_EVAL_ENV` ThreadLocal field
+- `THREAD_EVAL_ENV` set-sites in `CalciteCode.eval(EvalEnv)` and
+  `eval(Stack)` in `Calcite.java`
+- `THREAD_EVAL_ENV` read-sites in `MorelScalarFunction.eval` and
+  `MorelApplyFunction.eval` in `CalciteFunctions.java`
 
 After this step `THREAD_STACK` and `THREAD_ENV` are the only Calcite
-thread-locals.  `THREAD_STACK` carries everything `THREAD_EVAL_ENV` did
-and more (full slots, session, top).
+thread-locals.
 
 ### Step 21: Remove `CalciteCode.eval(EvalEnv)` and `Code.eval(EvalEnv)`
 

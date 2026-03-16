@@ -85,18 +85,6 @@ public class CalciteFunctions {
       new ThreadLocal<>();
 
   /**
-   * Used to pass Morel's evaluation environment into Calcite, so that it is
-   * available if Calcite calls back into Morel.
-   *
-   * <p>It would be better if we passed the environment, or variables we know
-   * are needed, as an argument at the Calcite-to-Morel (see {@link
-   * Calcite#code}) and Morel-to-Calcite (see {@link #TABLE_OPERATOR} and {@link
-   * #SCALAR_OPERATOR}) boundaries.
-   */
-  public static final ThreadLocal<@Nullable EvalEnv> THREAD_EVAL_ENV =
-      new ThreadLocal<>();
-
-  /**
    * Used to pass the full Morel evaluation stack into Calcite, so that stack
    * slots are available if Calcite calls back into Morel via {@link
    * MorelScalarFunction} or {@link MorelApplyFunction}.
@@ -353,14 +341,9 @@ public class CalciteFunctions {
           this.compiled != null
               ? this.compiled
               : new Compiled(cx.env, cx.typeSystem, typeFactory, ml, typeJson);
-      final Stack stack = THREAD_STACK.get();
-      final Object v;
-      if (stack != null) {
-        v = compiled.code.eval(stack);
-      } else {
-        final EvalEnv evalEnv = requireNonNull(THREAD_EVAL_ENV.get());
-        v = compiled.code.eval(new Stack(evalEnv, compiled.code.maxSlots()));
-      }
+      // THREAD_STACK is always set: CalciteCode.eval(EvalEnv) now delegates
+      // to eval(Stack), so every Calcite plan execution sets THREAD_STACK.
+      final Object v = compiled.code.eval(requireNonNull(THREAD_STACK.get()));
       return compiled.f.apply(v);
     }
 
@@ -432,11 +415,10 @@ public class CalciteFunctions {
               ? this.compiled
               : new Compiled(morelArgTypeJson, typeFactory, cx.typeSystem);
       final Applicable fn = (Applicable) closure;
-      final Stack stack = THREAD_STACK.get();
+      // THREAD_STACK is always set: CalciteCode.eval(EvalEnv) now delegates
+      // to eval(Stack), so every Calcite plan execution sets THREAD_STACK.
       final Object o = compiled.converter.apply(arg);
-      return stack != null
-          ? fn.apply(stack, o)
-          : fn.apply(THREAD_EVAL_ENV.get(), o);
+      return fn.apply(requireNonNull(THREAD_STACK.get()), o);
     }
 
     /** Compiled state. */
