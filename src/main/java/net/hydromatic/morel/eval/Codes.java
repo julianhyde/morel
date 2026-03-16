@@ -5272,15 +5272,14 @@ public abstract class Codes {
    * duplicated per closure.
    */
   public static class StackMatchCode implements Code {
-    private final int[] captureOffsets;
-    /** Number of outer variables snapshotted at closure-creation time. */
-    final int captureLen;
+    /** Stack offsets of outer variables to be copied on closure creation. */
+    final int[] captureOffsets;
     /**
      * Number of mutual-recursion peers in this closure's rec group; 0 for
      * non-recursive closures. Determines the pre-allocated tail of {@code
      * captured[]} that {@link Closure.StackClosure#extendWithRecPeers} fills.
      */
-    private final int numRecPeers;
+    private final int recPeerCount;
 
     final ImmutablePairList<Core.Pat, Code> patCodes;
     /** Minimum slots needed for a fresh {@link Closure.StackClosure} call. */
@@ -5290,13 +5289,12 @@ public abstract class Codes {
 
     public StackMatchCode(
         int[] captureOffsets,
-        int numRecPeers,
+        int recPeerCount,
         ImmutablePairList<Core.Pat, Code> patCodes,
         int capacity,
         Pos pos) {
       this.captureOffsets = captureOffsets;
-      this.captureLen = captureOffsets.length;
-      this.numRecPeers = numRecPeers;
+      this.recPeerCount = recPeerCount;
       this.patCodes = patCodes;
       this.capacity = capacity;
       this.pos = pos;
@@ -5316,8 +5314,9 @@ public abstract class Codes {
     public Object eval(Stack stack) {
       // Pre-allocate with room for rec-group peers (filled later by
       // extendWithRecPeers); for non-recursive closures numRecPeers == 0.
-      final Object[] captured = new Object[captureLen + numRecPeers];
-      for (int i = 0; i < captureLen; i++) {
+      final Object[] captured =
+          new Object[captureOffsets.length + recPeerCount];
+      for (int i = 0; i < captureOffsets.length; i++) {
         captured[i] = stack.slots[stack.top - captureOffsets[i]];
       }
       return new Closure.StackClosure(stack.session, captured, this);

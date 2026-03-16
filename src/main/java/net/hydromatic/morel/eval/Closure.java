@@ -335,7 +335,8 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
      * was sized by {@link Codes.StackMatchCode#eval}.
      */
     public void extendWithRecPeers(Object[] peers) {
-      System.arraycopy(peers, 0, captured, matchCode.captureLen, peers.length);
+      System.arraycopy(
+          peers, 0, captured, matchCode.captureOffsets.length, peers.length);
     }
 
     @Override
