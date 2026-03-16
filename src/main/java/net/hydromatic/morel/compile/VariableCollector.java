@@ -106,7 +106,7 @@ abstract class VariableCollector extends EnvVisitor {
   }
 
   @Override
-  protected SubVariableCollector push(Environment env) {
+  protected VariableCollector push(Environment env) {
     return new SubVariableCollector(env, this);
   }
 
@@ -155,11 +155,6 @@ abstract class VariableCollector extends EnvVisitor {
   @Override
   protected void visit(Core.Id id) {
     visitX(id);
-  }
-
-  /** Visits an expression, collecting free variables. */
-  public void collect(Core.Exp exp) {
-    accept(exp);
   }
 
   /** Handles a variable reference. */

@@ -38,7 +38,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -202,7 +201,7 @@ public class Compiler {
      * Maps pre-existing global names to their stack slot indices (0-based).
      *
      * <p>Populated at the outermost REPL-statement level by {@link
-     * #compileValDecl} after {@link #collectFreeGlobals} identifies which
+     * #compileValDecl} after {@link GlobalFreeVarCollector} identifies which
      * globals are referenced. A {@link Codes#globalMarshal} prologue pushes
      * those values from {@link Stack#currentEnv()} before the body runs, so the
      * body can use fast {@link Codes#stackGet} reads instead of {@link
@@ -241,7 +240,7 @@ public class Compiler {
         Environment env,
         StackLayout layout,
         int localDepth,
-        ImmutableMap<String, Integer> globalSlotMap) {
+        Map<String, Integer> globalSlotMap) {
       this(env, layout, localDepth, globalSlotMap, ImmutableList.of());
     }
 
@@ -249,12 +248,12 @@ public class Compiler {
         Environment env,
         StackLayout layout,
         int localDepth,
-        ImmutableMap<String, Integer> globalSlotMap,
+        Map<String, Integer> globalSlotMap,
         List<Core.NamedPat> recPeers) {
       this.env = env;
       this.layout = layout;
       this.localDepth = localDepth;
-      this.globalSlotMap = globalSlotMap;
+      this.globalSlotMap = ImmutableMap.copyOf(globalSlotMap);
       this.recPeers = ImmutableList.copyOf(recPeers);
     }
 
@@ -1033,9 +1032,8 @@ public class Compiler {
       Type elementType) {
     // RHS codes: non-distinct EXCEPT/INTERSECT evaluate codes in accept() when
     // scan vars ARE on the stack, so use cx. UNION and distinct
-    // EXCEPT/INTERSECT
-    // evaluate codes in result() when scan vars are NOT on the stack, so use
-    // cxFrom (which has the correct offsets without scan vars).
+    // EXCEPT/INTERSECT evaluate codes in result() when scan vars are NOT on the
+    // stack, so use cxFrom (which has the correct offsets without scan vars).
     final boolean codesAtAcceptTime =
         !distinct && (op == Op.EXCEPT || op == Op.INTERSECT);
     final Context codeCx;
@@ -1844,112 +1842,6 @@ public class Compiler {
     }
   }
 
-  /**
-   * Collects names referenced in {@code exp} that would be compiled to {@link
-   * Codes#get(String)} (i.e., runtime globals) into {@code globals}.
-   *
-   * <p>Does not recurse into {@code fn} bodies, because function bodies are
-   * compiled with a fresh {@link Context} that resets {@code globalSlotMap}.
-   *
-   * <p>Skips names that are: (1) already in the stack layout, (2) bound to an
-   * inlined {@link Code} value, or (3) the current statement's own placeholder
-   * bindings ({@link Unit#INSTANCE}).
-   */
-  private static void collectFreeGlobals(
-      Context cx, Core.Exp exp, LinkedHashSet<String> globals) {
-    collectFreeGlobalsRec(cx, exp, globals);
-  }
-
-  private static void collectFreeGlobalsRec(
-      Context cx, Core.Exp exp, LinkedHashSet<String> globals) {
-    switch (exp.op) {
-      case ID:
-        final Core.Id id = (Core.Id) exp;
-        if (cx.layout.get(id.idPat) >= 0) {
-          break; // local stack variable
-        }
-        final Binding binding = cx.env.getOpt(id.idPat);
-        if (binding == null
-            || binding.value instanceof Code
-            || binding.value == Unit.INSTANCE) {
-          break; // not a marshallable global
-        }
-        globals.add(id.idPat.name);
-        break;
-      case LET:
-        final Core.Let let = (Core.Let) exp;
-        let.decl.forEachBinding(
-            (pat, e, overloadPat, pos) ->
-                collectFreeGlobalsRec(cx, e, globals));
-        collectFreeGlobalsRec(cx, let.exp, globals);
-        break;
-      case FN:
-        // Do NOT recurse into fn bodies: they use their own closed-over env.
-        break;
-      case APPLY:
-        final Core.Apply apply = (Core.Apply) exp;
-        collectFreeGlobalsRec(cx, apply.fn, globals);
-        collectFreeGlobalsRec(cx, apply.arg, globals);
-        break;
-      case TUPLE:
-        final Core.Tuple tuple = (Core.Tuple) exp;
-        tuple.args.forEach(e -> collectFreeGlobalsRec(cx, e, globals));
-        break;
-      case CASE:
-        final Core.Case case_ = (Core.Case) exp;
-        collectFreeGlobalsRec(cx, case_.exp, globals);
-        case_.matchList.forEach(m -> collectFreeGlobalsRec(cx, m.exp, globals));
-        break;
-      case LOCAL:
-        final Core.Local local = (Core.Local) exp;
-        collectFreeGlobalsRec(cx, local.exp, globals);
-        break;
-      case FROM:
-        final Core.From from = (Core.From) exp;
-        for (Core.FromStep step : from.steps) {
-          if (step instanceof Core.Scan) {
-            final Core.Scan scan = (Core.Scan) step;
-            collectFreeGlobalsRec(cx, scan.exp, globals);
-            collectFreeGlobalsRec(cx, scan.condition, globals);
-          } else if (step instanceof Core.Where) {
-            collectFreeGlobalsRec(cx, ((Core.Where) step).exp, globals);
-          } else if (step instanceof Core.Skip) {
-            collectFreeGlobalsRec(cx, ((Core.Skip) step).exp, globals);
-          } else if (step instanceof Core.Take) {
-            collectFreeGlobalsRec(cx, ((Core.Take) step).exp, globals);
-          } else if (step instanceof Core.Order) {
-            collectFreeGlobalsRec(cx, ((Core.Order) step).exp, globals);
-          } else if (step instanceof Core.Group) {
-            final Core.Group group = (Core.Group) step;
-            group
-                .groupExps
-                .values()
-                .forEach(e -> collectFreeGlobalsRec(cx, e, globals));
-            group
-                .aggregates
-                .values()
-                .forEach(
-                    agg -> {
-                      collectFreeGlobalsRec(cx, agg.aggregate, globals);
-                      if (agg.argument != null) {
-                        collectFreeGlobalsRec(cx, agg.argument, globals);
-                      }
-                    });
-          } else if (step instanceof Core.Yield) {
-            collectFreeGlobalsRec(cx, ((Core.Yield) step).exp, globals);
-          } else if (step instanceof Core.SetStep) {
-            ((Core.SetStep) step)
-                .args.forEach(arg -> collectFreeGlobalsRec(cx, arg, globals));
-          }
-          // Unorder has no sub-expressions.
-        }
-        break;
-      default:
-        // Literals and other leaf nodes: no global references.
-        break;
-    }
-  }
-
   private void compileValDecl(
       Context cx,
       Core.ValDecl valDecl,
@@ -1977,23 +1869,16 @@ public class Compiler {
           if (actions != null) {
             // Top-level REPL statement: marshal referenced globals onto the
             // stack so the body can access them via fast StackCode reads.
-            final LinkedHashSet<String> freeGlobals = new LinkedHashSet<>();
-            collectFreeGlobals(cx1, exp, freeGlobals);
-            if (!freeGlobals.isEmpty()) {
-              final ImmutableList<String> globalNames =
-                  ImmutableList.copyOf(freeGlobals);
-              final ImmutableMap.Builder<String, Integer> gsBuilder =
-                  ImmutableMap.builder();
-              for (int i = 0; i < globalNames.size(); i++) {
-                gsBuilder.put(globalNames.get(i), i);
-              }
+            final Map<String, Integer> m = new LinkedHashMap<>();
+            GlobalFreeVarCollector.collect(
+                typeSystem, cx1.env, exp, s -> m.putIfAbsent(s, m.size()));
+            if (!m.isEmpty()) {
               final Context cx1g =
                   new Context(
-                      cx1.env,
-                      cx1.layout,
-                      cx1.localDepth + globalNames.size(),
-                      gsBuilder.build());
-              code0 = Codes.globalMarshal(globalNames, compileArg(cx1g, exp));
+                      cx1.env, cx1.layout, cx1.localDepth + m.size(), m);
+              code0 =
+                  Codes.globalMarshal(
+                      cx1g.globalSlotMap, compileArg(cx1g, exp));
             } else {
               code0 = compileArg(cx1, exp);
             }

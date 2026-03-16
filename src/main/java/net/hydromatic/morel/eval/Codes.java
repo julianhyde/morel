@@ -4041,17 +4041,8 @@ public abstract class Codes {
   }
 
   /**
-   * Returns a Code that retrieves a local variable from the stack at {@code
-   * offset} slots below the top.
-   *
-   * <p>{@code offset} is 1-based relative to {@link Stack#top}: the most
-   * recently pushed value is at offset 1, the one before that at offset 2, etc.
-   * The {@code name} field is retained for debuggability and appears in {@link
-   * net.hydromatic.morel.eval.Describer} / {@code Sys.plan} output.
-   */
-  /**
    * Returns a {@link Code} that pushes a set of global values onto the stack
-   * before evaluating {@code body}, then restores the stack top afterwards.
+   * before evaluating {@code body}, then restores the stack top afterward.
    *
    * <p>At statement-evaluation time, the wrapper fetches each name from {@link
    * Session#globalEnv} once and stores the value in a stack slot, so that the
@@ -4060,12 +4051,21 @@ public abstract class Codes {
    *
    * <p>If {@code names} is empty the body is returned unchanged.
    */
-  public static Code globalMarshal(List<String> names, Code body) {
-    return names.isEmpty()
+  public static Code globalMarshal(Map<String, Integer> slotMap, Code body) {
+    return slotMap.isEmpty()
         ? body
-        : new GlobalMarshalCode(ImmutableList.copyOf(names), body);
+        : new GlobalMarshalCode(ImmutableList.copyOf(slotMap.keySet()), body);
   }
 
+  /**
+   * Returns a Code that retrieves a local variable from the stack at {@code
+   * offset} slots below the top.
+   *
+   * <p>{@code offset} is 1-based relative to {@link Stack#top}: the most
+   * recently pushed value is at offset 1, the one before that at offset 2, etc.
+   * The {@code name} field is retained for debuggability and appears in {@link
+   * net.hydromatic.morel.eval.Describer} / {@code Sys.plan} output.
+   */
   public static Code stackGet(int offset, String name) {
     return new StackCode(offset, name);
   }

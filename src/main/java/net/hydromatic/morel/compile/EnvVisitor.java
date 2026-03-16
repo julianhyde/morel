@@ -45,6 +45,11 @@ abstract class EnvVisitor extends Visitor {
   /** Creates a visitor the same as this but with a new environment. */
   protected abstract EnvVisitor push(Environment env);
 
+  /** Visits an expression, collecting whatever this visitor accumulates. */
+  public void collect(Core.Exp exp) {
+    accept(exp);
+  }
+
   /** Creates a visitor the same as this but overriding a binding. */
   protected EnvVisitor bind(Binding binding) {
     return push(env.bind(binding));
