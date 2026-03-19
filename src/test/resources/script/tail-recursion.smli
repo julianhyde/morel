@@ -22,7 +22,7 @@
 Sys.set ("printLength", ~1);
 > val it = () : unit
 
-(* Simple tail recursion ------------------------------------------
+(* Simple tail recursion ---------------------------------------------
  * resum: a simple tail-recursive accumulator.
  * Needs TCO to handle large inputs (depth > ~1,000).
  *)
@@ -39,7 +39,7 @@ let fun resum (m, n) = if m = 0 then n else resum (m - 1, n + 1)
 in resum (1000000, 0) end;
 > val it = 1000000 : int
 
-(* Coprime numbers -------------------------------------------------------
+(* Coprime numbers ---------------------------------------------------
  * coprime: tests whether two numbers are coprime.
  * a and b are coprime if their greatest common divisor is 1.
  * Uses mutual tail recursion.
@@ -80,7 +80,7 @@ coprime (21, 10);
 coprime (1836311903, 1134903170);
 > val it = true : bool
 
-(* N-queens --------------------------------------------------------
+(* N-queens ----------------------------------------------------------
  * N-queens: find one solution to the N-queens puzzle.
  * Based on https://rosettacode.org/wiki/N-queens_problem#Standard_ML
  * See https://github.com/hydromatic/morel/issues/148.
@@ -165,9 +165,10 @@ queens 28;
 
 *)
 
-(* Mutual tail recursion ------------------------------------------
+(* Mutual tail recursion ---------------------------------------------
  * Mutual tail recursion: even/odd parity test.
- * Uses 'fun ... and ...' to declare two mutually tail-recursive functions.
+ * Uses 'fun ... and ...' to declare two mutually tail-recursive
+ * functions.
  *)
 fun even n = if n = 0 then true else odd (n - 1)
 and odd n = if n = 0 then false else even (n - 1);

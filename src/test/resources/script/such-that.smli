@@ -807,6 +807,7 @@ fun enumerate predicate =
 *)
 
 (* Join inversion ------------------------------------------------- *)
+
 let
   fun empInDept (empno, deptno) =
     exists e in scott.emps where e.empno = empno andalso e.deptno = deptno
@@ -821,6 +822,7 @@ end;
 > val it = [7521,7844,7654,7499,7698,7900] : int bag
 
 (* Invert a function that tests membership of table --------------- *)
+
 fun isClerk e =
   e elem scott.emps andalso e.job = "CLERK";
 > val isClerk = fn
@@ -843,7 +845,7 @@ end;
 >
 > val it : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
 
-(* ------------------------------------------------------------------
+(* -------------------------------------------------------------------
  * Datalog programming in Morel.
  *
  * The following queries are "simple" examples of functional
@@ -1126,14 +1128,16 @@ end;
  * 2. S(x) <- R(y) AND NOT R(x)
  * 3. S(x) <- R(y) AND x < y
  *
- * In each case, an infinite number of values of x can satisfy the rule, even
- * if R is a finite relation.
+ * In each case, an infinite number of values of x can satisfy the
+ * rule, even if R is a finite relation.
  *
  * If rules are safe, we can use the following evaluation approach:
  * For each subgoal, consider all tuples that make the subgoal true.
  * If a selection of tuples define a single value for each variable,
  * then add the head to the result.
- * Leads to finite search for P(x) <- Q(x), but P(x) <- Q(y) is problematic.
+ *
+ * Leads to finite search for P(x) <- Q(x), but P(x) <- Q(y) is
+ * problematic.
  *)
 fun isR y = true;
 > val isR = fn : 'a -> bool
@@ -1168,7 +1172,7 @@ from x where isS3 x;
 > Unsafe
 *)
 
-(* Joe's bar --------------------------------------------------------
+(* Joe's bar ---------------------------------------------------------
  *
  * See http://infolab.stanford.edu/~ullman/fcdb/aut07/slides/dlog.pdf.
  *)
