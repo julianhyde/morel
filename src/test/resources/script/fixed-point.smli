@@ -451,15 +451,34 @@ shortest_path edges;
    adjacency.
 *)
 
+(*) Western U.S. states
+val western_states = ["AZ","CA","CO","ID","NM","NV","OR","UT","WA"];
+> val western_states =
+>   ["AZ","CA","CO","ID","NM","NV","OR","UT","WA"] : string list
+
+(*) Adjacency pairs restricted to western states
+val western_pairs =
+  from (x, y) in pairs
+    where x elem western_states
+      andalso y elem western_states
+    yield (x, y);
+> val western_pairs =
+>   [("AZ","CA"),("AZ","NV"),("AZ","UT"),("AZ","CO"),("AZ","NM"),("CA","OR"),
+>    ("CA","NV"),("CA","AZ"),("CO","NM"),("CO","AZ"),("CO","UT"),("ID","UT"),
+>    ("ID","NV"),("ID","OR"),("ID","WA"),("NM","AZ"),("NM","UT"),("NM","CO"),
+>    ("NV","ID"),("NV","UT"),("NV","AZ"),("NV","CA"),("NV","OR"),("OR","CA"),
+>    ("OR","NV"),("OR","ID"),("OR","WA"),("UT","ID"),("UT","CO"),("UT","NM"),
+>    ("UT","AZ"),("UT","NV"),("WA","ID"),("WA","OR")] : (string * string) list
+
 (* 1. Triangles --------------------------------------------------- *)
 (*) In Datalog:
 (*)   Triangle(x, y, z) :- R(x, y), S(y, z), T(x, z).
 
-(*) TODO remove 'in states' when bug is fixed
-from x in states, y in states, z in states
+from x, y, z
   where (x, y) elem pairs
     andalso (y, z) elem pairs
-    andalso (z, x) elem pairs;
+    andalso (z, x) elem pairs
+  order (x, y, z);
 > val it =
 >   [{x="AL",y="FL",z="GA"},{x="AL",y="GA",z="FL"},{x="AL",y="GA",z="TN"},
 >    {x="AL",y="MS",z="TN"},{x="AL",y="TN",z="GA"},{x="AL",y="TN",z="MS"},
@@ -521,46 +540,85 @@ from x in states, y in states, z in states
 (*)       R(x, y), S(y, z), T(z, x); w=<<COUNT(*)>>.
 (*) (The formula in the EmptyHeaded paper contains an error.)
 
-(*) TODO remove 'in states' when bug is fixed
-from x in states, y in states, z in states
+from x, y, z
   where (x, y) elem pairs
     andalso (y, z) elem pairs
     andalso (z, x) elem pairs
   group {} compute count over ();
-> val it = [366] : int list
+> val it = [366] : int bag
 
 (* 3. 4-Clique ---------------------------------------------------- *)
 (*) In Datalog:
 (*)   4Clique(x, y, z, w) :- R(x, y), S(y, z), T(x, z), U(x, w),
 (*)       V(y, w), Q(z, w).
-(* TODO enable when we have an efficient implementation (currently O(n^4))
-from x in states, y in states, z in states, w in states
-  where (x, y) elem pairs
-    andalso (y, z) elem pairs
-    andalso (x, z) elem pairs
-    andalso (x, w) elem pairs
-    andalso (y, w) elem pairs
-    andalso (z, w) elem pairs;
+from x, y, z, w
+  where (x, y) elem western_pairs
+    andalso (y, z) elem western_pairs
+    andalso (x, z) elem western_pairs
+    andalso (x, w) elem western_pairs
+    andalso (y, w) elem western_pairs
+    andalso (z, w) elem western_pairs
+  order (w, x, y, z);
 > val it =
->   [{w="UT",x="AZ",y="CO",z="NM"},...]
+>   [{w="AZ",x="CO",y="NM",z="UT"},{w="AZ",x="CO",y="UT",z="NM"},
+>    {w="AZ",x="NM",y="CO",z="UT"},{w="AZ",x="NM",y="UT",z="CO"},
+>    {w="AZ",x="UT",y="CO",z="NM"},{w="AZ",x="UT",y="NM",z="CO"},
+>    {w="CO",x="AZ",y="NM",z="UT"},{w="CO",x="AZ",y="UT",z="NM"},
+>    {w="CO",x="NM",y="AZ",z="UT"},{w="CO",x="NM",y="UT",z="AZ"},
+>    {w="CO",x="UT",y="AZ",z="NM"},{w="CO",x="UT",y="NM",z="AZ"},
+>    {w="NM",x="AZ",y="CO",z="UT"},{w="NM",x="AZ",y="UT",z="CO"},
+>    {w="NM",x="CO",y="AZ",z="UT"},{w="NM",x="CO",y="UT",z="AZ"},
+>    {w="NM",x="UT",y="AZ",z="CO"},{w="NM",x="UT",y="CO",z="AZ"},
+>    {w="UT",x="AZ",y="CO",z="NM"},{w="UT",x="AZ",y="NM",z="CO"},
+>    {w="UT",x="CO",y="AZ",z="NM"},{w="UT",x="CO",y="NM",z="AZ"},
+>    {w="UT",x="NM",y="AZ",z="CO"},{w="UT",x="NM",y="CO",z="AZ"}]
 >   : {w:string, x:string, y:string, z:string} list
-*)
 
 (* 4. Lollipop ---------------------------------------------------- *)
 (*) In Datalog:
 (*)   Lollipop(x, y, z, w) :- R(x, y), S(y, z), T(x, z), U(x, w).
-(* TODO enable when we have an efficient implementation (currently O(n^4))
-from x in states, y in states, z in states, w in states
-  where (x, y) elem pairs
-    andalso (y, z) elem pairs
-    andalso (x, z) elem pairs
-    andalso (x, w) elem pairs
+from x, y, z, w
+  where (x, y) elem western_pairs
+    andalso (y, z) elem western_pairs
+    andalso (x, z) elem western_pairs
+    andalso (x, w) elem western_pairs
     andalso w <> y
-    andalso y <> z;
+    andalso y <> z
+  order (w, x, y, z);
 > val it =
->   [{w="GA",x="AL",y="FL",z="GA"},...]
+>   [{w="AZ",x="CA",y="NV",z="AZ"},{w="AZ",x="CA",y="NV",z="OR"},
+>    {w="AZ",x="CA",y="OR",z="NV"},{w="AZ",x="CO",y="NM",z="AZ"},
+>    {w="AZ",x="CO",y="NM",z="UT"},{w="AZ",x="CO",y="UT",z="AZ"},
+>    {w="AZ",x="CO",y="UT",z="NM"},{w="AZ",x="NM",y="CO",z="AZ"},
+>    {w="AZ",x="NM",y="CO",z="UT"},{w="AZ",x="NM",y="UT",z="AZ"},
+>    {w="AZ",x="NM",y="UT",z="CO"},{w="AZ",x="NV",y="CA",z="AZ"},
+>    {w="AZ",x="NV",y="CA",z="OR"},{w="AZ",x="NV",y="ID",z="OR"},
+>    {w="AZ",x="NV",y="ID",z="UT"},{w="AZ",x="NV",y="OR",z="CA"},
+>    {w="AZ",x="NV",y="OR",z="ID"},{w="AZ",x="NV",y="UT",z="AZ"},
+>    {w="AZ",x="NV",y="UT",z="ID"},{w="AZ",x="UT",y="CO",z="AZ"},
+>    {w="AZ",x="UT",y="CO",z="NM"},{w="AZ",x="UT",y="ID",z="NV"},
+>    {w="AZ",x="UT",y="NM",z="AZ"},{w="AZ",x="UT",y="NM",z="CO"},
+>    {w="AZ",x="UT",y="NV",z="AZ"},{w="AZ",x="UT",y="NV",z="ID"},
+>    {w="CA",x="AZ",y="CO",z="NM"},{w="CA",x="AZ",y="CO",z="UT"},
+>    {w="CA",x="AZ",y="NM",z="CO"},{w="CA",x="AZ",y="NM",z="UT"},
+>    {w="CA",x="AZ",y="NV",z="CA"},{w="CA",x="AZ",y="NV",z="UT"},
+>    {w="CA",x="AZ",y="UT",z="CO"},{w="CA",x="AZ",y="UT",z="NM"},
+>    {w="CA",x="AZ",y="UT",z="NV"},{w="CA",x="NV",y="AZ",z="CA"},
+>    {w="CA",x="NV",y="AZ",z="UT"},{w="CA",x="NV",y="ID",z="OR"},
+>    {w="CA",x="NV",y="ID",z="UT"},{w="CA",x="NV",y="OR",z="CA"},
+>    {w="CA",x="NV",y="OR",z="ID"},{w="CA",x="NV",y="UT",z="AZ"},
+>    {w="CA",x="NV",y="UT",z="ID"},{w="CA",x="OR",y="ID",z="NV"},
+>    {w="CA",x="OR",y="ID",z="WA"},{w="CA",x="OR",y="NV",z="CA"},
+>    {w="CA",x="OR",y="NV",z="ID"},{w="CA",x="OR",y="WA",z="ID"},
+>    {w="CO",x="AZ",y="CA",z="NV"},{w="CO",x="AZ",y="NM",z="CO"},
+>    {w="CO",x="AZ",y="NM",z="UT"},{w="CO",x="AZ",y="NV",z="CA"},
+>    {w="CO",x="AZ",y="NV",z="UT"},{w="CO",x="AZ",y="UT",z="CO"},
+>    {w="CO",x="AZ",y="UT",z="NM"},{w="CO",x="AZ",y="UT",z="NV"},
+>    {w="CO",x="NM",y="AZ",z="CO"},{w="CO",x="NM",y="AZ",z="UT"},
+>    {w="CO",x="NM",y="UT",z="AZ"},{w="CO",x="NM",y="UT",z="CO"},
+>    {w="CO",x="UT",y="AZ",z="CO"},{w="CO",x="UT",y="AZ",z="NM"},
+>    {w="CO",x="UT",y="AZ",z="NV"},{w="CO",x="UT",y="ID",z="NV"},...]
 >   : {w:string, x:string, y:string, z:string} list
-*)
 
 (* 5. Barbell ----------------------------------------------------- *)
 (*) In Datalog:
@@ -658,14 +716,76 @@ from (x, x') in pairs, (y, z) in pairs, (y', z') in pairs
 (*)   PageRank(x; y: float) :- Edge(x, z); y = 1 / N.
 (*)   PageRank(x; y: float)*[i=5] :- Edge(x, z), PageRank(z), InvDeg(z);
 (*)       y = 0.15 + 0.85 * << SUM(z)>>.
-
-(*) TODO
+(*) Applied to western states (9 nodes, 34 directed edges), 10 iterations,
+(*) damping factor d=0.85.
+let
+  val n = real (List.length western_states)
+  val d = 0.85
+  val out_deg =
+    from (x, y) in western_pairs
+      group x compute {deg = count over ()}
+  fun step pr =
+    let
+      val contribs =
+        from p in pr, q in out_deg, (a, v) in western_pairs
+          where q.x = p.state andalso a = p.state
+          yield {v, contrib = p.rank / real q.deg}
+      val totals =
+        from c in contribs
+          group c.v compute {total = sum over c.contrib}
+    in
+      from t in totals
+        yield {state = t.v, rank = (1.0 - d) / n + d * t.total}
+    end
+  val init = from s in western_states yield {state = s, rank = 1.0 / n}
+in
+  from r in
+    List.foldl (fn (_, pr) => step pr) init [1,2,3,4,5,6,7,8,9,10]
+  order r.state
+end;
+> val it =
+>   [{rank=0.14123239,state="AZ"},{rank=0.090164624,state="CA"},
+>    {rank=0.0901931,state="CO"},{rank=0.11877356,state="ID"},
+>    {rank=0.0901931,state="NM"},{rank=0.14095598,state="NV"},
+>    {rank=0.120069236,state="OR"},{rank=0.14098151,state="UT"},
+>    {rank=0.06743651,state="WA"}] : {rank:real, state:string} list
 
 (* 7. Single-Source Shortest Paths (SSSP) ------------------------- *)
 (*) In Datalog:
-(*)   SSSP(x; y: int) :- Edge(" start ", x); y = 1.
+(*)   SSSP(x; y: int) :- Edge("start", x); y = 1.
 (*)   SSSP(x; y: int)* :- Edge(w, x), SSSP(w); y = <<MIN(w)>> + 1.
-
-(*) TODO
+(*) BFS from "CA" using fixp: shortest hop count to each reachable state.
+let
+  val source = "CA"
+  fun step d =
+    let
+      val extended =
+        from {node = n, dist = di} in d,
+             (x, y) in pairs
+          where x = n
+          yield {node = y, dist = di + 1}
+      val d2 =
+        from p in d union extended
+          group p.node compute {dist = min over p.dist}
+    in
+      from r in d2 order r.node
+    end
+in
+  fixp step [{node = source, dist = 0}]
+end;
+> val it =
+>   [{dist=6,node="AL"},{dist=4,node="AR"},{dist=1,node="AZ"},{dist=0,node="CA"},
+>    {dist=2,node="CO"},{dist=9,node="CT"},{dist=7,node="DC"},{dist=8,node="DE"},
+>    {dist=7,node="FL"},{dist=6,node="GA"},{dist=4,node="IA"},{dist=2,node="ID"},
+>    {dist=5,node="IL"},{dist=6,node="IN"},{dist=3,node="KS"},{dist=5,node="KY"},
+>    {dist=4,node="LA"},{dist=9,node="MA"},{dist=7,node="MD"},{dist=11,node="ME"},
+>    {dist=6,node="MI"},{dist=5,node="MN"},{dist=4,node="MO"},{dist=5,node="MS"},
+>    {dist=3,node="MT"},{dist=6,node="NC"},{dist=4,node="ND"},{dist=3,node="NE"},
+>    {dist=10,node="NH"},{dist=8,node="NJ"},{dist=2,node="NM"},{dist=1,node="NV"},
+>    {dist=8,node="NY"},{dist=6,node="OH"},{dist=3,node="OK"},{dist=1,node="OR"},
+>    {dist=7,node="PA"},{dist=10,node="RI"},{dist=7,node="SC"},{dist=4,node="SD"},
+>    {dist=5,node="TN"},{dist=3,node="TX"},{dist=2,node="UT"},{dist=6,node="VA"},
+>    {dist=9,node="VT"},{dist=2,node="WA"},{dist=5,node="WI"},{dist=6,node="WV"},
+>    {dist=3,node="WY"}] : {dist:int, node:string} list
 
 (*) End fixed-point.smli
