@@ -503,7 +503,7 @@ fib(idx + 1, x + y) :- fib(idx, x), fib(idx - 1, y), idx <= 9.
 >   SOME "let\n  val fib =\n    Relational.iterate [(1, 1), (2, 1)]\n      (fn (allFib, newFib) =>\n        from (idx, x) in newFib, (v0, y) in allFib where v0 = idx - 1 andalso idx <= 9 yield (idx + 1, x + y))\nin\n  {fib = from (idx, value) in fib}\nend"
 >   : string option
 
-(* Queries for existence of odd cycle ------------------------------
+(* Queries for existence of odd cycle --------------------------------
  *
  * "Linear Datalog and bounded path duality of relational structures"
  * (Dalmau, 2004) gives the query more concisely as

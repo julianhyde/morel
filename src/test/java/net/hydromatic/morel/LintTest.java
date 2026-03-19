@@ -562,7 +562,7 @@ public class LintTest {
         line ->
             line.state().language == Language.MOREL
                 && line.line().startsWith("(*")
-                && line.line().endsWith("*)")
+                && (line.line().endsWith("*)") || line.line().endsWith("--"))
                 && line.line().contains("---"),
         line -> {
           if (line.line().length() != MOREL_WIDTH) {

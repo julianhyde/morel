@@ -19,7 +19,7 @@
  * Miscellaneous stuff - often test cases for bugs
  *)
 
-(* -------------------------------------------------------------
+(* -------------------------------------------------------------------
  * [MOREL-251] Add function `Sys.clearEnv ()`
  *
  * This test needs an empty environment, so must be the first
@@ -67,7 +67,7 @@ List.length (Sys.env());
 List.last (Sys.env());
 > val it = ("vector","forall 'a. 'a list -> 'a vector") : string * string
 
-(* -------------------------------------------------------------
+(* -------------------------------------------------------------------
  * Setting properties whose values are enums
  *)
 Sys.set ("output", "classic");
@@ -101,13 +101,13 @@ Sys.unset "optionalInt";
 Sys.show "optionalInt";
 > val it = NONE : string option
 
-(* -------------------------------------------------------------
+(* -------------------------------------------------------------------
  * Bug gave 'AssertionError: op not handled: EQ'
  *)
 from p in (from p in [{a=1,b=2}] where p.a = 1);
 > val it = [{a=1,b=2}] : {a:int, b:int} list
 
-(* -------------------------------------------------------------
+(* -------------------------------------------------------------------
  * [MOREL-250] Inliner generates invalid plan if dead code
  * occurs in a nested let.
  *)
@@ -122,7 +122,7 @@ in
 end;
 > val it = ["a"] : string list
 
-(* -------------------------------------------------------------
+(* -------------------------------------------------------------------
  * [MOREL-311] op
  *)
 foldl (op +) 0 [2,3,4];
@@ -170,7 +170,7 @@ it 5;
 (op @) ([1,2],[3,4]);
 > val it = [1,2,3,4] : int list
 
-(* -------------------------------------------------------------
+(* -------------------------------------------------------------------
  * [MOREL-342] Conditional inclusion of built-in structures
  *)
 

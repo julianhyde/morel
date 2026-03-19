@@ -885,9 +885,10 @@ f ~1;
 > uncaught exception Subscript [subscript out of bounds]
 >   raised at: stdIn:1.11-1.43
 
-(* Bag printing with various data types --------------------------- *)
-(*) Tests that the BagPrinter reordering handles various element
-(*) types, whitespace, and line breaks in expected output.
+(* Bag printing with various data types ------------------------------
+ * Tests that the BagPrinter reordering handles various element
+ * types, whitespace, and line breaks in expected output.
+ *)
 
 (*) bag of ints, including a negative value;
 (*) elements reordered vs natural iteration order
