@@ -544,14 +544,14 @@ shortest_path edges;
 >    {source="d",target="c",weight=1},{source="d",target="d",weight=0}]
 >   : {source:string, target:string, weight:int} list
 
-(* -- Graph algorithms -------------------------------------------- *)
-(* The paper "EmptyHeaded: A Relational Engine for Graph Processing" (Aberger,
-   Tu, Olukotun, Ré, 2016) gives a list of important graph algorithms
-   expressed in an extended version of Datalog. They are Triangle, 4-Clique,
-   Lollipop, Barball, Count-Triangle, PageRank, SSSP. In the following, we
-   translate those algorithms to Morel and apply them to the graph of state
-   adjacency.
-*)
+(* -- Graph algorithms -----------------------------------------------
+ * The paper "EmptyHeaded: A Relational Engine for Graph Processing"
+ * (Aberger, Tu, Olukotun, Ré, 2016) gives a list of important graph
+ * algorithms expressed in an extended version of Datalog. They are
+ * Triangle, 4-Clique, Lollipop, Barball, Count-Triangle, PageRank,
+ * SSSP. In the following, we translate those algorithms to Morel and
+ * apply them to the graph of state adjacency.
+ *)
 
 (*) Western U.S. states
 val western_states = ["AZ","CA","CO","ID","NM","NV","OR","UT","WA"];
@@ -572,9 +572,10 @@ val western_pairs =
 >    ("OR","NV"),("OR","ID"),("OR","WA"),("UT","ID"),("UT","CO"),("UT","NM"),
 >    ("UT","AZ"),("UT","NV"),("WA","ID"),("WA","OR")] : (string * string) list
 
-(* 1. Triangles --------------------------------------------------- *)
-(*) In Datalog:
-(*)   Triangle(x, y, z) :- R(x, y), S(y, z), T(x, z).
+(* 1. Triangles ------------------------------------------------------
+ * In Datalog:
+ *   Triangle(x, y, z) :- R(x, y), S(y, z), T(x, z).
+ *)
 
 from x, y, z
   where (x, y) elem pairs
@@ -737,11 +738,12 @@ from x in states, y in states, z in states
 >    {x="GA",y="NC",z="SC"},...] : {x:string, y:string, z:string} list
 *)
 
-(* 2. Count Triangles --------------------------------------------- *)
-(*) In Datalog:
-(*)   CountTriangle(; w: long) :-
-(*)       R(x, y), S(y, z), T(z, x); w=<<COUNT(*)>>.
-(*) (The formula in the EmptyHeaded paper contains an error.)
+(* 2. Count Triangles ------------------------------------------------
+ * In Datalog:
+ *   CountTriangle(; w: long) :-
+ *       R(x, y), S(y, z), T(z, x); w=<<COUNT(*)>>.
+ * (The formula in the EmptyHeaded paper contains an error.)
+ *)
 
 from x, y, z
   where (x, y) elem pairs
@@ -750,10 +752,12 @@ from x, y, z
   group {} compute count over ();
 > val it = [366] : int bag
 
-(* 3. 4-Clique ---------------------------------------------------- *)
-(*) In Datalog:
-(*)   4Clique(x, y, z, w) :- R(x, y), S(y, z), T(x, z), U(x, w),
-(*)       V(y, w), Q(z, w).
+(* 3. 4-Clique -------------------------------------------------------
+ * In Datalog:
+ *   4Clique(x, y, z, w) :- R(x, y), S(y, z), T(x, z), U(x, w),
+ *       V(y, w), Q(z, w).
+ *)
+
 from x, y, z, w
   where (x, y) elem western_pairs
     andalso (y, z) elem western_pairs
@@ -777,9 +781,11 @@ from x, y, z, w
 >    {w="UT",x="NM",y="AZ",z="CO"},{w="UT",x="NM",y="CO",z="AZ"}]
 >   : {w:string, x:string, y:string, z:string} list
 
-(* 4. Lollipop ---------------------------------------------------- *)
-(*) In Datalog:
-(*)   Lollipop(x, y, z, w) :- R(x, y), S(y, z), T(x, z), U(x, w).
+(* 4. Lollipop -------------------------------------------------------
+ * In Datalog:
+ *   Lollipop(x, y, z, w) :- R(x, y), S(y, z), T(x, z), U(x, w).
+ *)
+
 from x, y, z, w
   where (x, y) elem western_pairs
     andalso (y, z) elem western_pairs
@@ -886,14 +892,15 @@ from x, y, z, w
 >    {w="WA",x="OR",y="NV",z="CA"},{w="WA",x="OR",y="NV",z="ID"}]
 >   : {w:string, x:string, y:string, z:string} list
 
-(* 5. Barbell ----------------------------------------------------- *)
-(*) In Datalog:
-(*)   Barbell(x, y, z, x', y', z') :-
-(*)           R(x, y), S(y, z), T(x, z),
-(*)           U(x, x'),
-(*)           R'(x', y'), S'(y', z'), T'(x', z').
-(*) Using predicate inversion (equivalent to the hand-optimized version below):
-(*
+(* 5. Barbell --------------------------------------------------------
+ * In Datalog:
+ *    Barbell(x, y, z, x', y', z') :-
+ *            R(x, y), S(y, z), T(x, z),
+ *            U(x, x'),
+ *            R'(x', y'), S'(y', z'), T'(x', z').
+ *)
+
+(* TODO enable when there is an efficient implementation
 from x, y, z, x', y', z'
   where (x, y) elem western_pairs
     andalso (y, z) elem western_pairs
@@ -904,23 +911,78 @@ from x, y, z, x', y', z'
     andalso (x', z') elem western_pairs;
 *)
 
-(*) Count Barbell in western states
-from (x, x') in western_pairs, (y, z) in western_pairs, (y', z') in western_pairs
-  where (x, y) elem western_pairs
+(* The following query is more efficient because it covers just the
+ * nine western states, because it drives from the pair-lists rather
+ * than unqualified variables, and because we add conditions like
+ * "x < x'" to orient the bridge and the two triangles.
+ *
+ * The western states graph is densely connected — 9 states, 10
+ * distinct triangles — so there are many vertex-disjoint triangle
+ * pairs linked by a bridge edge. NV is the most active bridge vertex,
+ * appearing in 19 of the 35 rows, because it sits at the junction of
+ * the AZ/CA/UT/CO cluster and the ID/OR cluster. *)
+from (x, x') in western_pairs,
+    (y, z) in western_pairs,
+    (y', z') in western_pairs
+  where x < x'
+    andalso y < z
+    andalso y' < z'
+    andalso (x, y) elem western_pairs
     andalso (x, z) elem western_pairs
     andalso (x', y') elem western_pairs
     andalso (x', z') elem western_pairs
-  group {} compute {n = count over ()};
-> val it = [{n=1840}] : {n:int} list
+    andalso x <> y' andalso x <> z'
+    andalso y <> x' andalso y <> y' andalso y <> z'
+    andalso z <> x' andalso z <> y' andalso z <> z'
+  order (x, x', y, y', z, z');
+> val it =
+>   [{x="AZ",x'="CA",y="CO",y'="NV",z="NM",z'="OR"},
+>    {x="AZ",x'="CA",y="CO",y'="NV",z="UT",z'="OR"},
+>    {x="AZ",x'="CA",y="NM",y'="NV",z="UT",z'="OR"},
+>    {x="AZ",x'="CO",y="CA",y'="NM",z="NV",z'="UT"},
+>    {x="AZ",x'="NM",y="CA",y'="CO",z="NV",z'="UT"},
+>    {x="AZ",x'="NV",y="CO",y'="CA",z="NM",z'="OR"},
+>    {x="AZ",x'="NV",y="CO",y'="CA",z="UT",z'="OR"},
+>    {x="AZ",x'="NV",y="CO",y'="ID",z="NM",z'="OR"},
+>    {x="AZ",x'="NV",y="CO",y'="ID",z="NM",z'="UT"},
+>    {x="AZ",x'="NV",y="CO",y'="ID",z="UT",z'="OR"},
+>    {x="AZ",x'="NV",y="NM",y'="CA",z="UT",z'="OR"},
+>    {x="AZ",x'="NV",y="NM",y'="ID",z="UT",z'="OR"},
+>    {x="AZ",x'="UT",y="CA",y'="CO",z="NV",z'="NM"},
+>    {x="AZ",x'="UT",y="CO",y'="ID",z="NM",z'="NV"},
+>    {x="CA",x'="OR",y="AZ",y'="ID",z="NV",z'="WA"},
+>    {x="CO",x'="UT",y="AZ",y'="ID",z="NM",z'="NV"},
+>    {x="ID",x'="NV",y="OR",y'="AZ",z="WA",z'="CA"},
+>    {x="ID",x'="NV",y="OR",y'="AZ",z="WA",z'="UT"},
+>    {x="ID",x'="UT",y="NV",y'="AZ",z="OR",z'="CO"},
+>    {x="ID",x'="UT",y="NV",y'="AZ",z="OR",z'="NM"},
+>    {x="ID",x'="UT",y="NV",y'="CO",z="OR",z'="NM"},
+>    {x="ID",x'="UT",y="OR",y'="AZ",z="WA",z'="CO"},
+>    {x="ID",x'="UT",y="OR",y'="AZ",z="WA",z'="NM"},
+>    {x="ID",x'="UT",y="OR",y'="AZ",z="WA",z'="NV"},
+>    {x="ID",x'="UT",y="OR",y'="CO",z="WA",z'="NM"},
+>    {x="NM",x'="UT",y="AZ",y'="ID",z="CO",z'="NV"},
+>    {x="NV",x'="OR",y="AZ",y'="ID",z="CA",z'="WA"},
+>    {x="NV",x'="OR",y="AZ",y'="ID",z="UT",z'="WA"},
+>    {x="NV",x'="UT",y="AZ",y'="CO",z="CA",z'="NM"},
+>    {x="NV",x'="UT",y="CA",y'="AZ",z="OR",z'="CO"},
+>    {x="NV",x'="UT",y="CA",y'="AZ",z="OR",z'="NM"},
+>    {x="NV",x'="UT",y="CA",y'="CO",z="OR",z'="NM"},
+>    {x="NV",x'="UT",y="ID",y'="AZ",z="OR",z'="CO"},
+>    {x="NV",x'="UT",y="ID",y'="AZ",z="OR",z'="NM"},
+>    {x="NV",x'="UT",y="ID",y'="CO",z="OR",z'="NM"}]
+>   : {x:string, x':string, y:string, y':string, z:string, z':string} list
 
-(* 6. PageRank ---------------------------------------------------- *)
-(*) In Datalog:
-(*)   PageRank  N(; w: int) :- Edge(x, y); w=<<COUNT(x)>>.
-(*)   PageRank(x; y: float) :- Edge(x, z); y = 1 / N.
-(*)   PageRank(x; y: float)*[i=5] :- Edge(x, z), PageRank(z), InvDeg(z);
-(*)       y = 0.15 + 0.85 * << SUM(z)>>.
-(*) Applied to western states (9 nodes, 34 directed edges), 10 iterations,
-(*) damping factor d=0.85.
+(* 6. PageRank -------------------------------------------------------
+ * In Datalog:
+ *   PageRank  N(; w: int) :- Edge(x, y); w=<<COUNT(x)>>.
+ *   PageRank(x; y: float) :- Edge(x, z); y = 1 / N.
+ *   PageRank(x; y: float)*[i=5] :- Edge(x, z), PageRank(z), InvDeg(z);
+ *       y = 0.15 + 0.85 * << SUM(z)>>.
+ *)
+
+(* Applied to western states (9 nodes, 34 directed edges), 10
+ * iterations, damping factor d=0.85. *)
 let
   val n = real (List.length western_states)
   val d = 0.85
@@ -953,11 +1015,13 @@ end;
 >    {rank=0.120069236,state="OR"},{rank=0.14098151,state="UT"},
 >    {rank=0.06743651,state="WA"}] : {rank:real, state:string} list
 
-(* 7. Single-Source Shortest Paths (SSSP) ------------------------- *)
-(*) In Datalog:
-(*)   SSSP(x; y: int) :- Edge("start", x); y = 1.
-(*)   SSSP(x; y: int)* :- Edge(w, x), SSSP(w); y = <<MIN(w)>> + 1.
-(*) BFS from "CA" using fixp: shortest hop count to each reachable state.
+(* 7. Single-Source Shortest Paths (SSSP) ----------------------------
+ * In Datalog:
+ *   SSSP(x; y: int) :- Edge("start", x); y = 1.
+ *   SSSP(x; y: int)* :- Edge(w, x), SSSP(w); y = <<MIN(w)>> + 1.
+ * BFS from "CA" using fixp: shortest hop count to each reachable
+ * state.
+ *)
 let
   val source = "CA"
   fun step d =
