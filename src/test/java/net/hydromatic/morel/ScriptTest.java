@@ -48,7 +48,7 @@ public class ScriptTest {
   private static final Map<String, Integer> TEST_TIMINGS =
       ImmutableMap.<String, Integer>builder()
           .put("script/wordle.smli", 44)
-          .put("script/fixed-point.smli", 34)
+          .put("script/fixed-point.smli", 1)
           .put("script/built-in.smli", 5)
           .put("script/blog.smli", 20)
           .put("script/pretty.smli", 14)
