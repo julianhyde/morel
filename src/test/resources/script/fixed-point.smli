@@ -990,23 +990,18 @@ let
     from (x, y) in western_pairs
       group x compute {deg = count over ()}
   fun step pr =
-    let
-      val contribs =
-        from p in pr, q in out_deg, (a, v) in western_pairs
-          where q.x = p.state andalso a = p.state
-          yield {v, contrib = p.rank / real q.deg}
-      val totals =
-        from c in contribs
-          group c.v compute {total = sum over c.contrib}
-    in
-      from t in totals
-        yield {state = t.v, rank = (1.0 - d) / n + d * t.total}
-    end
+      from p in pr,
+          q in out_deg,
+          (a, v) in western_pairs
+        where q.x = p.state andalso a = p.state
+        group {state = v}
+          compute {rank = (1.0 - d) / n
+                          + d * sum over (p.rank / real q.deg : real)}
+  fun loop 0 pr = pr
+    | loop k pr = loop (k - 1) (step pr)
   val init = from s in western_states yield {state = s, rank = 1.0 / n}
 in
-  from r in
-    List.foldl (fn (_, pr) => step pr) init [1,2,3,4,5,6,7,8,9,10]
-  order r.state
+  from r in loop 10 init order r.state
 end;
 > val it =
 >   [{rank=0.14123239,state="AZ"},{rank=0.090164624,state="CA"},
