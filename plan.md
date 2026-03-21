@@ -162,7 +162,7 @@ public class Discretes {
 }
 ```
 
-### 3. `src/main/java/net/hydromatic/morel/compile/BuiltIn.java`
+### 3. `src/main/java/net/hydromatic/morel/compile/BuiltIn.java` *(done)*
 
 **Add `Datatype.RANGE`** (alphabetically after `PSEUDO_LIST`):
 
@@ -224,7 +224,7 @@ RANGE_TO_LIST("Range", "toList", ts ->
 (Note: `ts.range(0)` assumes a new helper on the type-helper analogous to
 `h.list(0)`, `h.bag(0)`, `h.option(0)`, `h.vector(0)`.)
 
-### 4. `src/main/java/net/hydromatic/morel/eval/Codes.java`
+### 4. `src/main/java/net/hydromatic/morel/eval/Codes.java` *(done)*
 
 **Add `Applicable` implementations** for each function, all implementing
 `Typed`:
@@ -289,7 +289,7 @@ assertThat(unitD.next(Unit.INSTANCE)).isEmpty();
 assertThrows(..., () -> Discretes.discreteFor(typeSystem, REAL));
 ```
 
-### 6. `src/main/resources/net/hydromatic/morel/functions.toml`
+### 6. `src/main/resources/net/hydromatic/morel/functions.toml` *(done)*
 
 Add (alphabetically between `Relational` and the next structure):
 
@@ -301,7 +301,7 @@ Add (alphabetically between `Relational` and the next structure):
 Assign new ordinals continuing from the current maximum. Use
 `specified = "morel"` (not a standard SML Basis function).
 
-### 7. `src/test/resources/script/built-in.smli`
+### 7. `src/test/resources/script/built-in.smli` *(done)*
 
 Add a `Range` section (alphabetically). Tests should include:
 
@@ -357,7 +357,7 @@ Range.toBag [CLOSED (1, 3)];
 (* bag {1,2,3} *)
 ```
 
-### 8. `docs/lib/range.md` *(new file)*
+### 8. `docs/lib/range.md` *(new file)* *(done)*
 
 Create with the standard license header and doc markers:
 
@@ -369,7 +369,7 @@ Create with the standard license header and doc markers:
 Content between the markers is auto-generated from `functions.toml` by
 `LintTest`.
 
-### 9. `docs/lib/index.md` and `docs/reference.md`
+### 9. `docs/lib/index.md` and `docs/reference.md` *(done)*
 
 Add a link to `range.md` in both files (alphabetically under `R`).
 

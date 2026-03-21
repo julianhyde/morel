@@ -2735,6 +2735,46 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
   /**
+   * Function "Range.isMember", of type "&alpha; &rarr; &alpha; range &rarr;
+   * bool".
+   */
+  RANGE_IS_MEMBER(
+      "Range",
+      "isMember",
+      ts -> ts.forallType(1, h -> ts.fnType(h.get(0), h.range(0), BOOL))),
+
+  /**
+   * Function "Range.normalize", of type "&alpha; range list &rarr; &alpha;
+   * range list".
+   */
+  RANGE_NORMALIZE(
+      "Range",
+      "normalize",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(ts.listType(h.range(0)), ts.listType(h.range(0))))),
+
+  /**
+   * Function "Range.toBag", of type "&alpha; range list &rarr; &alpha; bag".
+   */
+  RANGE_TO_BAG(
+      "Range",
+      "toBag",
+      ts ->
+          ts.forallType(1, h -> ts.fnType(ts.listType(h.range(0)), h.bag(0)))),
+
+  /**
+   * Function "Range.toList", of type "&alpha; range list &rarr; &alpha; list".
+   */
+  RANGE_TO_LIST(
+      "Range",
+      "toList",
+      ts ->
+          ts.forallType(1, h -> ts.fnType(ts.listType(h.range(0)), h.list(0)))),
+
+  /**
    * Function "Real.abs", of type "real &rarr; real".
    *
    * <p>Returns the absolute value of {@code r}.
@@ -4693,6 +4733,22 @@ public enum BuiltIn {
         1,
         h -> h.tyCon(Constructor.LIST_NIL).tyCon(Constructor.LIST_CONS)),
 
+    RANGE(
+        "Range",
+        "range",
+        false,
+        1,
+        h ->
+            h.tyCon(Constructor.RANGE_AT_LEAST)
+                .tyCon(Constructor.RANGE_AT_MOST)
+                .tyCon(Constructor.RANGE_CLOSED)
+                .tyCon(Constructor.RANGE_CLOSED_OPEN)
+                .tyCon(Constructor.RANGE_GREATER_THAN)
+                .tyCon(Constructor.RANGE_LESS_THAN)
+                .tyCon(Constructor.RANGE_OPEN)
+                .tyCon(Constructor.RANGE_OPEN_CLOSED)
+                .tyCon(Constructor.RANGE_POINT)),
+
     /**
      * Universal value representation for embedded language interoperability.
      *
@@ -4852,6 +4908,27 @@ public enum BuiltIn {
     ORDER_EQUAL(Datatype.ORDER, "EQUAL"),
     ORDER_GREATER(Datatype.ORDER, "GREATER"),
     ORDER_LESS(Datatype.ORDER, "LESS"),
+    RANGE_AT_LEAST(Datatype.RANGE, "AT_LEAST", h -> h.get(0)),
+    RANGE_AT_MOST(Datatype.RANGE, "AT_MOST", h -> h.get(0)),
+    RANGE_CLOSED(
+        Datatype.RANGE,
+        "CLOSED",
+        h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
+    RANGE_CLOSED_OPEN(
+        Datatype.RANGE,
+        "CLOSED_OPEN",
+        h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
+    RANGE_GREATER_THAN(Datatype.RANGE, "GREATER_THAN", h -> h.get(0)),
+    RANGE_LESS_THAN(Datatype.RANGE, "LESS_THAN", h -> h.get(0)),
+    RANGE_OPEN(
+        Datatype.RANGE,
+        "OPEN",
+        h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
+    RANGE_OPEN_CLOSED(
+        Datatype.RANGE,
+        "OPEN_CLOSED",
+        h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
+    RANGE_POINT(Datatype.RANGE, "POINT", h -> h.get(0)),
     VARIANT_BAG(Datatype.VARIANT, "BAG", h -> Keys.list(Keys.name("variant"))),
     VARIANT_BOOL(Datatype.VARIANT, "BOOL", h -> BOOL.key()),
     VARIANT_CHAR(Datatype.VARIANT, "CHAR", h -> CHAR.key()),

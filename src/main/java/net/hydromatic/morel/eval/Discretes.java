@@ -132,7 +132,7 @@ public class Discretes {
 
         @Override
         public Optional<Object> minValue() {
-          return Optional.of(net.hydromatic.morel.eval.Unit.INSTANCE);
+          return Optional.of(Unit.INSTANCE);
         }
       };
 }
