@@ -19,7 +19,7 @@
 package net.hydromatic.morel.eval;
 
 import java.util.Comparator;
-import java.util.Optional;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Represents a discrete ordered type, supporting enumeration of its values.
@@ -29,35 +29,41 @@ import java.util.Optional;
  * bool}, {@code unit}. Non-examples: {@code real}, {@code string}.
  *
  * <p>Analogous to Guava's {@code DiscreteDomain}.
+ *
+ * @param <T> the type of values in this domain
  */
-public interface Discrete {
+public interface Discrete<T> {
 
   /** Returns the comparator for this type. */
   Comparator<Object> comparator();
 
   /**
-   * Returns the successor of {@code v}, or empty if {@code v} is the maximum
+   * Returns the successor of {@code v}, or null if {@code v} is the maximum
    * value of this type.
    */
-  Optional<Object> next(Object v);
+  @Nullable
+  T next(T v);
 
   /**
-   * Returns the predecessor of {@code v}, or empty if {@code v} is the minimum
+   * Returns the predecessor of {@code v}, or null if {@code v} is the minimum
    * value of this type.
    */
-  Optional<Object> prev(Object v);
+  @Nullable
+  T prev(T v);
 
   /**
-   * Returns the minimum value of this type, or empty if the type is unbounded
+   * Returns the minimum value of this type, or null if the type is unbounded
    * below (e.g. {@code int}).
    */
-  Optional<Object> minValue();
+  @Nullable
+  T minValue();
 
   /**
-   * Returns the maximum value of this type, or empty if the type is unbounded
+   * Returns the maximum value of this type, or null if the type is unbounded
    * above (e.g. {@code int}).
    */
-  Optional<Object> maxValue();
+  @Nullable
+  T maxValue();
 }
 
 // End Discrete.java

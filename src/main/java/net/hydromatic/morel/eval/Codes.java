@@ -54,7 +54,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -7125,9 +7124,9 @@ public abstract class Codes {
   @SuppressWarnings({"rawtypes", "unchecked"})
   private static class RangeEnumerate extends BaseApplicable1<List, List>
       implements Typed {
-    private final @Nullable Discrete discrete;
+    private final @Nullable Discrete<Object> discrete;
 
-    RangeEnumerate(BuiltIn builtIn, @Nullable Discrete discrete) {
+    RangeEnumerate(BuiltIn builtIn, @Nullable Discrete<Object> discrete) {
       super(builtIn);
       this.discrete = discrete;
     }
@@ -7135,7 +7134,7 @@ public abstract class Codes {
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type) {
       Type elemType = rangeElementType(type);
-      Discrete d = Discretes.discreteFor(typeSystem, elemType);
+      Discrete<Object> d = Discretes.discreteFor(typeSystem, elemType);
       return new RangeEnumerate(builtIn, d);
     }
 
@@ -7159,23 +7158,19 @@ public abstract class Codes {
       // Determine start value
       Object start;
       if (lo.negInf) {
-        start =
-            discrete
-                .minValue()
-                .orElseThrow(
-                    () ->
-                        new MorelRuntimeException(
-                            BuiltInExn.SIZE, Pos.ZERO)); // no minimum
+        start = discrete.minValue();
+        if (start == null) {
+          throw new MorelRuntimeException(
+              BuiltInExn.SIZE, Pos.ZERO); // no minimum
+        }
       } else if (lo.inclusive) {
         start = lo.value;
       } else {
-        start =
-            discrete
-                .next(lo.value)
-                .orElseThrow(
-                    () ->
-                        new MorelRuntimeException(
-                            BuiltInExn.SIZE, Pos.ZERO)); // empty range
+        start = discrete.next(lo.value);
+        if (start == null) {
+          throw new MorelRuntimeException(
+              BuiltInExn.SIZE, Pos.ZERO); // empty range
+        }
       }
       Comparator cmp = discrete.comparator();
       Object v = start;
@@ -7185,11 +7180,11 @@ public abstract class Codes {
           break;
         }
         out.add(v);
-        Optional<Object> next = discrete.next(v);
-        if (!next.isPresent()) {
+        Object next = discrete.next(v);
+        if (next == null) {
           break;
         }
-        v = next.get();
+        v = next;
       }
     }
   }
