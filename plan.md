@@ -1,3 +1,24 @@
+<!--
+{% comment %}
+Licensed to Julian Hyde under one or more contributor license
+agreements.  See the NOTICE file distributed with this work
+for additional information regarding copyright ownership.
+Julian Hyde licenses this file to you under the Apache
+License, Version 2.0 (the "License"); you may not use this
+file except in compliance with the License.  You may obtain a
+copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied.  See the License for the specific
+language governing permissions and limitations under the
+License.
+{% endcomment %}
+-->
+
 # Plan: Issue #338 — `range` datatype and structure
 
 ## Overview
@@ -116,7 +137,7 @@ enumeration starts from `minValue()`. `POINT v` returns the singleton `[v]`.
 
 ## Files to modify
 
-### 1. `src/main/java/net/hydromatic/morel/eval/Discrete.java` *(new file)*
+### 1. `src/main/java/net/hydromatic/morel/eval/Discrete.java` *(done)*
 
 Top-level public interface, analogous to how `Comparator` is separate from
 `Collections`. Package `net.hydromatic.morel.eval`.
@@ -129,7 +150,7 @@ public interface Discrete {
 }
 ```
 
-### 2. `src/main/java/net/hydromatic/morel/eval/Discretes.java` *(new file)*
+### 2. `src/main/java/net/hydromatic/morel/eval/Discretes.java` *(done)*
 
 Top-level factory/utility class, analogous to `Comparators.java`.
 Package `net.hydromatic.morel.eval`.
@@ -234,7 +255,7 @@ RANGE_TO_LIST("Range", "toList", ts ->
 | `CLOSED_OPEN (lo, hi)` | `cmp(x, lo) ≠ LESS   && cmp(x, hi) = LESS`           |
 | `OPEN_CLOSED (lo, hi)` | `cmp(x, lo) = GREATER && cmp(x, hi) ≠ GREATER`       |
 
-### 5. `src/test/java/net/hydromatic/morel/DiscreteTest.java` *(new file)*
+### 5. `src/test/java/net/hydromatic/morel/DiscreteTest.java` *(done)*
 
 Unit test for `Discrete` and `Discretes` directly, without going through the
 Morel evaluator. Follows the style of `PairListTest` / `UtilTest`.
