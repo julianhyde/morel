@@ -2584,8 +2584,7 @@ class Generators {
         ordered ? BuiltIn.RANGE_TO_LIST : BuiltIn.RANGE_TO_BAG;
     // Instantiate the forall type with the element type so that the literal
     // carries a concrete FnType; Typed.withType requires a concrete FnType.
-    final Type toListForallType =
-        toListOrBag.typeFunction.apply(typeSystem);
+    final Type toListForallType = toListOrBag.typeFunction.apply(typeSystem);
     final FnType toListFnType =
         (FnType) typeSystem.apply(toListForallType, type);
     Core.Apply exp =
@@ -2608,8 +2607,8 @@ class Generators {
             provenance.build()));
   }
 
-  private static BuiltIn.Constructor getConstructor(boolean lowerStrict,
-      boolean upperStrict) {
+  private static BuiltIn.Constructor getConstructor(
+      boolean lowerStrict, boolean upperStrict) {
     if (lowerStrict) {
       if (upperStrict) {
         return BuiltIn.Constructor.RANGE_OPEN;
