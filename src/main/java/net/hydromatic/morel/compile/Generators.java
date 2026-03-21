@@ -2562,44 +2562,38 @@ class Generators {
         provenance.add(c);
       }
     }
-    // For x > lower, we want x >= lower + 1
+    // Range.toList [CTOR (lower, upper)] or Range.toBag [CTOR (lower, upper)]
+    // where CTOR is CLOSED, CLOSED_OPEN, OPEN_CLOSED, or OPEN.
     final TypeSystem typeSystem = cache.typeSystem;
-    final Core.Exp lower2 =
-        lowerStrict
-            ? core.call(
-                typeSystem,
-                BuiltIn.Z_PLUS_INT,
-                lower,
-                core.intLiteral(BigDecimal.ONE))
-            : lower;
-    // For x < upper, we want x <= upper - 1
-    final Core.Exp upper2 =
-        upperStrict
-            ? core.call(
-                typeSystem,
-                BuiltIn.Z_MINUS_INT,
-                upper,
-                core.intLiteral(BigDecimal.ONE))
-            : upper;
-
-    // List.tabulate(upper - lower + 1, fn k => lower + k)
+    final BuiltIn.Constructor rangeCtor =
+        getConstructor(lowerStrict, upperStrict);
     final Type type = PrimitiveType.INT;
-    final Core.IdPat kPat = core.idPat(type, "k", 0);
-    final Core.Exp upperMinusLower =
-        core.call(typeSystem, BuiltIn.OP_MINUS, type, Pos.ZERO, upper2, lower2);
-    final Core.Exp count =
-        core.call(
-            typeSystem,
-            BuiltIn.OP_PLUS,
-            type,
+    final Type rangeType = typeSystem.range(type);
+    final FnType conFnType =
+        typeSystem.fnType(typeSystem.tupleType(type, type), rangeType);
+    final Core.IdPat conIdPat = core.idPat(conFnType, rangeCtor.constructor, 0);
+    final Core.Apply rangeExp =
+        core.apply(
             Pos.ZERO,
-            upperMinusLower,
-            core.intLiteral(BigDecimal.ONE));
-    final Core.Exp lowerPlusK =
-        core.call(typeSystem, BuiltIn.Z_PLUS_INT, lower2, core.id(kPat));
-    final Core.Fn fn = core.fn(typeSystem.fnType(type, type), kPat, lowerPlusK);
-    BuiltIn tabulate = ordered ? BuiltIn.LIST_TABULATE : BuiltIn.BAG_TABULATE;
-    Core.Apply exp = core.call(typeSystem, tabulate, type, Pos.ZERO, count, fn);
+            rangeType,
+            core.id(conIdPat),
+            core.tuple(typeSystem, lower, upper));
+    final Core.Exp rangeListExp =
+        core.list(typeSystem, rangeType, ImmutableList.of(rangeExp));
+    final BuiltIn toListOrBag =
+        ordered ? BuiltIn.RANGE_TO_LIST : BuiltIn.RANGE_TO_BAG;
+    // Instantiate the forall type with the element type so that the literal
+    // carries a concrete FnType; Typed.withType requires a concrete FnType.
+    final Type toListForallType =
+        toListOrBag.typeFunction.apply(typeSystem);
+    final FnType toListFnType =
+        (FnType) typeSystem.apply(toListForallType, type);
+    Core.Apply exp =
+        core.apply(
+            Pos.ZERO,
+            toListFnType.resultType,
+            core.functionLiteral(toListFnType, toListOrBag),
+            rangeListExp);
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
     final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
     return cache.add(
@@ -2612,6 +2606,23 @@ class Generators {
             upper,
             upperStrict,
             provenance.build()));
+  }
+
+  private static BuiltIn.Constructor getConstructor(boolean lowerStrict,
+      boolean upperStrict) {
+    if (lowerStrict) {
+      if (upperStrict) {
+        return BuiltIn.Constructor.RANGE_OPEN;
+      } else {
+        return BuiltIn.Constructor.RANGE_OPEN_CLOSED;
+      }
+    } else {
+      if (upperStrict) {
+        return BuiltIn.Constructor.RANGE_CLOSED_OPEN;
+      } else {
+        return BuiltIn.Constructor.RANGE_CLOSED;
+      }
+    }
   }
 
   /** Returns an extent generator, or null if expression is not an extent. */
