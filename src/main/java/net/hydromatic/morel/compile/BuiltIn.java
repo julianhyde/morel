@@ -2735,13 +2735,14 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
   /**
-   * Function "Range.isMember", of type "&alpha; &rarr; &alpha; range &rarr;
+   * Function "Range.contains", of type "&alpha; range &rarr; &alpha; &rarr;
    * bool".
    */
-  RANGE_IS_MEMBER(
+  RANGE_CONTAINS(
       "Range",
-      "isMember",
-      ts -> ts.forallType(1, h -> ts.fnType(h.get(0), h.range(0), BOOL))),
+      "contains",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.range(0), h.get(0), BOOL))),
 
   /**
    * Function "Range.normalize", of type "&alpha; range list &rarr; &alpha;

@@ -50,7 +50,7 @@ datatype 'a <a id='range' href="#range-impl">range</a> =
   | OPEN_CLOSED of 'a * 'a
   | POINT of 'a
 
-val <a id='isMember' href="#isMember-impl">isMember</a> : 'a -> 'a range -> bool
+val <a id='contains' href="#contains-impl">contains</a> : 'a range -> 'a -> bool
 val <a id='normalize' href="#normalize-impl">normalize</a> : 'a range list -> 'a range list
 val <a id='toBag' href="#toBag-impl">toBag</a> : 'a range list -> 'a bag
 val <a id='toList' href="#toList-impl">toList</a> : 'a range list -> 'a list
@@ -72,10 +72,10 @@ The constructors and their meanings are:
 * `OPEN_CLOSED (lo, hi)`: `x > lo andalso x <= hi`
 * `POINT v`: `x = v`
 
-<a id="isMember-impl"></a>
-<h3><code>isMember</code></h3>
+<a id="contains-impl"></a>
+<h3><code>contains</code></h3>
 
-`isMember x r` returns `true` if `x` is a member of range `r`.
+`contains r x` (or `r.contains x`) returns `true` if `x` is a member of range `r`.
 
 The ordering is implicit, derived from the type `α`.
 

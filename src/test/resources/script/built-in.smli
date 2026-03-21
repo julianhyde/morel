@@ -4223,8 +4223,8 @@ List.map (fn x => (x, Real.toString x))
 
 (* Range ---------------------------------------------------------- *)
 Range;
-> val it = {isMember=fn,normalize=fn,toBag=fn,toList=fn}
->   : {isMember:'a -> 'a range -> bool, normalize:'b range list -> 'b range list,
+> val it = {contains=fn,normalize=fn,toBag=fn,toList=fn}
+>   : {contains:'a range -> 'a -> bool, normalize:'b range list -> 'b range list,
 >      toBag:'c range list -> 'c bag, toList:'d range list -> 'd list}
 
 (*) Constructors.
@@ -4255,30 +4255,34 @@ CLOSED_OPEN (3, 7) : int range;
 OPEN_CLOSED (3, 7) : int range;
 > val it = OPEN_CLOSED (3,7) : int range
 
-(*) isMember on int ranges.
-Range.isMember 5 (CLOSED (3, 7));
+(*) contains on int ranges.
+Range.contains (CLOSED (3, 7)) 5;
 > val it = true : bool
 
-Range.isMember 3 (CLOSED (3, 7));
+Range.contains (CLOSED (3, 7)) 3;
 > val it = true : bool
 
-Range.isMember 2 (CLOSED (3, 7));
+Range.contains (CLOSED (3, 7)) 2;
 > val it = false : bool
 
-Range.isMember 5 (OPEN (3, 7));
+Range.contains (OPEN (3, 7)) 5;
 > val it = true : bool
 
-Range.isMember 3 (OPEN (3, 7));
+Range.contains (OPEN (3, 7)) 3;
 > val it = false : bool
 
-Range.isMember 5 (POINT 5);
+Range.contains (POINT 5) 5;
 > val it = true : bool
 
-Range.isMember 4 (POINT 5);
+Range.contains (POINT 5) 4;
 > val it = false : bool
 
-(*) isMember on char ranges.
-Range.isMember #"e" (CLOSED (#"a", #"z"));
+(*) Postfix (method) syntax.
+(CLOSED (3, 7)).contains 5;
+> val it = true : bool
+
+(*) contains on char ranges.
+Range.contains (CLOSED (#"a", #"z")) #"e";
 > val it = true : bool
 
 (*) normalize merges overlapping and adjacent ranges.
@@ -4731,7 +4735,7 @@ Sys.env ();
 >    ("POINT","forall 'a. 'a -> 'a range"),("REAL","real -> variant"),
 >    ("RECORD","(string * variant) list -> variant"),
 >    ("Range",
->     "{isMember:forall 'a. 'a -> 'a range -> bool, normalize:forall 'a. 'a range list -> 'a range list, toBag:forall 'a. 'a range list -> 'a bag, toList:forall 'a. 'a range list -> 'a list}"),
+>     "{contains:forall 'a. 'a range -> 'a -> bool, normalize:forall 'a. 'a range list -> 'a range list, toBag:forall 'a. 'a range list -> 'a bag, toList:forall 'a. 'a range list -> 'a list}"),
 >    ("Real",
 >     "{/:real * real -> real, abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",
@@ -4861,7 +4865,7 @@ env ();
 >    ("POINT","forall 'a. 'a -> 'a range"),("REAL","real -> variant"),
 >    ("RECORD","(string * variant) list -> variant"),
 >    ("Range",
->     "{isMember:forall 'a. 'a -> 'a range -> bool, normalize:forall 'a. 'a range list -> 'a range list, toBag:forall 'a. 'a range list -> 'a bag, toList:forall 'a. 'a range list -> 'a list}"),
+>     "{contains:forall 'a. 'a range -> 'a -> bool, normalize:forall 'a. 'a range list -> 'a range list, toBag:forall 'a. 'a range list -> 'a bag, toList:forall 'a. 'a range list -> 'a list}"),
 >    ("Real",
 >     "{/:real * real -> real, abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",

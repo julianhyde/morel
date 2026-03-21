@@ -3293,10 +3293,11 @@ OPEN endpoints are exclusive `(a, b)`.
 [[functions]]
 ordinal = 261
 structure = "Range"
-name = "isMember"
+name = "contains"
 specified = "morel"
-type = "α → α range → bool"
-prototype = "isMember x r"
+type = "α range → α → bool"
+prototype = "contains r x"
+method = true
 description = """
 returns `true` if `x` is a member of range `r`.
 

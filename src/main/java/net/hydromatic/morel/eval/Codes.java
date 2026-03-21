@@ -2858,9 +2858,9 @@ public abstract class Codes {
     return ORDER_EQUAL;
   }
 
-  /** @see BuiltIn#RANGE_IS_MEMBER */
-  private static final Applicable RANGE_IS_MEMBER =
-      new RangeIsMember(Comparators::compare);
+  /** @see BuiltIn#RANGE_CONTAINS */
+  private static final Applicable RANGE_CONTAINS =
+      new RangeContains(Comparators::compare);
 
   /** @see BuiltIn#RANGE_NORMALIZE */
   private static final Applicable RANGE_NORMALIZE =
@@ -5328,7 +5328,7 @@ public abstract class Codes {
           .put(BuiltIn.REAL_TO_STRING, REAL_TO_STRING)
           .put(BuiltIn.REAL_TRUNC, REAL_TRUNC)
           .put(BuiltIn.REAL_UNORDERED, REAL_UNORDERED)
-          .put(BuiltIn.RANGE_IS_MEMBER, RANGE_IS_MEMBER)
+          .put(BuiltIn.RANGE_CONTAINS, RANGE_CONTAINS)
           .put(BuiltIn.RANGE_NORMALIZE, RANGE_NORMALIZE)
           .put(BuiltIn.RANGE_TO_BAG, RANGE_TO_BAG)
           .put(BuiltIn.RANGE_TO_LIST, RANGE_TO_LIST)
@@ -6987,13 +6987,13 @@ public abstract class Codes {
   /** Extracts the element type from a Range function's concrete type. */
   private static Type rangeElementType(Type type) {
     // type is one of:
-    //   'a -> 'a range -> bool   (isMember: paramType = 'a)
+    //   'a range -> 'a -> bool   (contains: paramType = 'a range)
     //   'a range list -> ...     (normalize, toList, toBag: paramType = 'a
     // range list)
     checkArgument(type instanceof FnType);
     Type paramType = ((FnType) type).paramType;
     if (paramType instanceof DataType) {
-      // 'a range (single range) — shouldn't occur for current functions
+      // 'a range (single range, for contains)
       return ((DataType) paramType).arg(0);
     }
     if (paramType instanceof ListType) {
@@ -7003,33 +7003,32 @@ public abstract class Codes {
           elemType instanceof DataType, "expected 'a range list, got %s", type);
       return ((DataType) elemType).arg(0);
     }
-    // 'a (for isMember: first parameter is the element itself)
     return paramType;
   }
 
-  /** Implementation of {@link BuiltIn#RANGE_IS_MEMBER}. */
+  /** Implementation of {@link BuiltIn#RANGE_CONTAINS}. */
   @SuppressWarnings({"rawtypes", "unchecked"})
-  private static class RangeIsMember extends BaseApplicable implements Typed {
+  private static class RangeContains extends BaseApplicable implements Typed {
     private final Comparator cmp;
 
-    RangeIsMember(Comparator cmp) {
-      super(BuiltIn.RANGE_IS_MEMBER);
+    RangeContains(Comparator cmp) {
+      super(BuiltIn.RANGE_CONTAINS);
       this.cmp = requireNonNull(cmp);
     }
 
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type) {
       Type elemType = rangeElementType(type);
-      return new RangeIsMember(Comparators.comparatorFor(typeSystem, elemType));
+      return new RangeContains(Comparators.comparatorFor(typeSystem, elemType));
     }
 
     @Override
     public Object apply(Stack stack, Object argValue) {
-      // First application: receives the value x to test
-      final Object x = argValue;
-      return (Applicable1<Boolean, List>)
-          range -> {
-            String ctor = (String) range.get(0);
+      // First application: receives the range r
+      final List range = (List) argValue;
+      final String ctor = (String) range.get(0);
+      return (Applicable1<Boolean, Object>)
+          x -> {
             switch (ctor) {
               case "POINT":
                 return cmp.compare(x, range.get(1)) == 0;
