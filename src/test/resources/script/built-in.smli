@@ -4309,6 +4309,22 @@ Range.toList [CLOSED (#"a", #"e")];
 Range.toBag [CLOSED (1, 3)];
 > val it = [1,2,3] : int bag
 
+(*) contains on bool * DESC int ranges.
+Range.contains (CLOSED ((false, DESC 5), (false, DESC 3))) (false, DESC 4);
+> val it = true : bool
+
+Range.contains (CLOSED ((false, DESC 5), (false, DESC 3))) (false, DESC 6);
+> val it = false : bool
+
+(*) toList on bool * bool.
+Range.toList [CLOSED ((false, false), (true, true))];
+> val it = [(false,false),(false,true),(true,false),(true,true)] : (bool * bool) list
+
+(*) toList on bool * DESC int.
+Range.toList [CLOSED ((false, DESC 3), (false, DESC 1))];
+> val it = [(false,DESC 3),(false,DESC 2),(false,DESC 1)]
+>   : (bool * int descending) list
+
 (* Relational ----------------------------------------------------- *)
 Relational;
 > val it =

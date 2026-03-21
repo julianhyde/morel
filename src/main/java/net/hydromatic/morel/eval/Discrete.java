@@ -42,10 +42,22 @@ public interface Discrete {
   Optional<Object> next(Object v);
 
   /**
+   * Returns the predecessor of {@code v}, or empty if {@code v} is the minimum
+   * value of this type.
+   */
+  Optional<Object> prev(Object v);
+
+  /**
    * Returns the minimum value of this type, or empty if the type is unbounded
    * below (e.g. {@code int}).
    */
   Optional<Object> minValue();
+
+  /**
+   * Returns the maximum value of this type, or empty if the type is unbounded
+   * above (e.g. {@code int}).
+   */
+  Optional<Object> maxValue();
 }
 
 // End Discrete.java
