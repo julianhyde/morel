@@ -395,13 +395,15 @@ Add a link to `range.md` in both files (alphabetically under `R`).
 
 ---
 
-## Follow-up: issue #290
+## Follow-up: issue #290 *(done)*
 
 After this issue is complete, add a comment to
 https://github.com/hydromatic/morel/issues/290 noting that `Range.isMember`,
 `Range.normalize`, `Range.toList`, and `Range.toBag` all require reified types
 at runtime (via the `Typed` / `withType` mechanism) and are therefore affected
 by whatever solution is adopted in #290.
+
+Comment posted: https://github.com/hydromatic/morel/issues/290#issuecomment-4101821634
 
 ---
 
