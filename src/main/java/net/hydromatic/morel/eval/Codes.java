@@ -2867,11 +2867,11 @@ public abstract class Codes {
 
   /** @see BuiltIn#RANGE_TO_BAG */
   private static final Applicable RANGE_TO_BAG =
-      new RangeEnumerate(BuiltIn.RANGE_TO_BAG, null);
+      new RangeEnumerate(BuiltIn.RANGE_TO_BAG, (Discrete) Discretes.UNIT);
 
   /** @see BuiltIn#RANGE_TO_LIST */
   private static final Applicable RANGE_TO_LIST =
-      new RangeEnumerate(BuiltIn.RANGE_TO_LIST, null);
+      new RangeEnumerate(BuiltIn.RANGE_TO_LIST, (Discrete) Discretes.UNIT);
 
   /** @see BuiltIn#REAL_ABS */
   private static final Applicable REAL_ABS =
@@ -7124,9 +7124,9 @@ public abstract class Codes {
   @SuppressWarnings({"rawtypes", "unchecked"})
   private static class RangeEnumerate extends BaseApplicable1<List, List>
       implements Typed {
-    private final @Nullable Discrete<Object> discrete;
+    private final Discrete<Object> discrete;
 
-    RangeEnumerate(BuiltIn builtIn, @Nullable Discrete<Object> discrete) {
+    RangeEnumerate(BuiltIn builtIn, Discrete<Object> discrete) {
       super(builtIn);
       this.discrete = discrete;
     }
@@ -7140,8 +7140,7 @@ public abstract class Codes {
 
     @Override
     public List apply(List ranges) {
-      requireNonNull(discrete, "withType must be called before apply");
-      List<Object> result = new ArrayList<>();
+      final List<Object> result = new ArrayList<>();
       for (Object r : ranges) {
         enumerate((List) r, result);
       }
@@ -7159,10 +7158,6 @@ public abstract class Codes {
       Object start;
       if (lo.negInf) {
         start = discrete.minValue();
-        if (start == null) {
-          throw new MorelRuntimeException(
-              BuiltInExn.SIZE, Pos.ZERO); // no minimum
-        }
       } else if (lo.inclusive) {
         start = lo.value;
       } else {

@@ -51,18 +51,10 @@ public interface Discrete<T> {
   @Nullable
   T prev(T v);
 
-  /**
-   * Returns the minimum value of this type, or null if the type is unbounded
-   * below (e.g. {@code int}).
-   */
-  @Nullable
+  /** Returns the minimum value of this type. */
   T minValue();
 
-  /**
-   * Returns the maximum value of this type, or null if the type is unbounded
-   * above (e.g. {@code int}).
-   */
-  @Nullable
+  /** Returns the maximum value of this type. */
   T maxValue();
 }
 

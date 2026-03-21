@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import static net.hydromatic.morel.Matchers.list;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -54,8 +55,8 @@ class DiscreteTest {
   @Test
   void testIntDiscrete() {
     Discrete<Object> d = Discretes.discreteFor(typeSystem, PrimitiveType.INT);
-    assertThat(d.minValue(), nullValue());
-    assertThat(d.maxValue(), nullValue());
+    assertThat(d.minValue(), is(Integer.MIN_VALUE));
+    assertThat(d.maxValue(), is(Integer.MAX_VALUE));
     assertThat(d.next(0), is(1));
     assertThat(d.next(3), is(4));
     assertThat(d.next(-1), is(0));
@@ -115,9 +116,9 @@ class DiscreteTest {
         typeSystem.tupleType(PrimitiveType.BOOL, PrimitiveType.INT);
     final Discrete<Object> d = Discretes.discreteFor(typeSystem, boolIntType);
 
-    // min/max: bool has bounds, int does not
-    assertThat(d.minValue(), nullValue());
-    assertThat(d.maxValue(), nullValue());
+    // min/max
+    assertThat(d.minValue(), is(list(Boolean.FALSE, Integer.MIN_VALUE)));
+    assertThat(d.maxValue(), is(list(Boolean.TRUE, Integer.MAX_VALUE)));
 
     // next: increment rightmost (int) component first
     final List<Object> falseZero = ImmutableList.of(false, 0);
@@ -166,10 +167,9 @@ class DiscreteTest {
         (DataType) typeSystem.apply(descendingScheme, PrimitiveType.INT);
     final Discrete<Object> d = Discretes.discreteFor(typeSystem, descendingInt);
 
-    // In descending order, min is the largest int (no bound), max is smallest
-    // (no bound).
-    assertThat(d.minValue(), nullValue());
-    assertThat(d.maxValue(), nullValue());
+    // In descending order, min is the largest int, max is smallest.
+    assertThat(d.minValue(), is(list("DESC", Integer.MAX_VALUE)));
+    assertThat(d.maxValue(), is(list("DESC", Integer.MIN_VALUE)));
 
     // Runtime values: ["DESC", innerValue]
     final List<Object> desc5 = ImmutableList.of("DESC", 5);

@@ -24,6 +24,8 @@ import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -163,7 +165,7 @@ public class Discretes {
   /** Creates a {@link Discrete} for a DataType. */
   private static Discrete<Object> dataTypeDiscrete(
       TypeSystem typeSystem, DataType dt) {
-    if (dt.name.equals("descending")) {
+    if (dt.name.equals(BuiltIn.Datatype.DESCENDING.mlName())) {
       final Discrete<Object> inner = discreteFor(typeSystem, dt.arg(0));
       final Comparator<Object> cmp = Comparators.comparatorFor(typeSystem, dt);
       // Runtime value: ["DESC", innerValue]
@@ -205,7 +207,7 @@ public class Discretes {
     final ImmutableList<String> ctors =
         dt.typeConstructors.entrySet().stream()
             .filter(e -> e.getValue().equals(Keys.dummy()))
-            .map(e -> e.getKey())
+            .map(Map.Entry::getKey)
             .collect(toImmutableList());
     if (ctors.size() == dt.typeConstructors.size() && !ctors.isEmpty()) {
       final Comparator<Object> cmp = Comparators.comparatorFor(typeSystem, dt);
@@ -244,7 +246,6 @@ public class Discretes {
     throw new IllegalArgumentException("not a discrete type: " + dt);
   }
 
-  @SuppressWarnings("rawtypes")
   private static final Comparator<Object> NATURAL = Comparators::compare;
 
   /** {@link Discrete} for {@code int}. */
@@ -256,23 +257,23 @@ public class Discretes {
         }
 
         @Override
-        public Integer next(Integer v) {
-          return v + 1;
+        public @Nullable Integer next(Integer v) {
+          return v == Integer.MAX_VALUE ? null : v + 1;
         }
 
         @Override
-        public Integer prev(Integer v) {
-          return v - 1;
+        public @Nullable Integer prev(Integer v) {
+          return v == Integer.MIN_VALUE ? null : v - 1;
         }
 
         @Override
-        public @Nullable Integer minValue() {
-          return null; // int is unbounded below
+        public Integer minValue() {
+          return Integer.MIN_VALUE;
         }
 
         @Override
-        public @Nullable Integer maxValue() {
-          return null; // int is unbounded above
+        public Integer maxValue() {
+          return Integer.MAX_VALUE;
         }
       };
 
@@ -335,7 +336,7 @@ public class Discretes {
       };
 
   /** {@link Discrete} for {@code unit} (a single value). */
-  private static final Discrete<Unit> UNIT =
+  public static final Discrete<Unit> UNIT =
       new Discrete<Unit>() {
         private final Comparator<Object> cmp = (a, b) -> 0;
 
