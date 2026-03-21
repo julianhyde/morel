@@ -444,6 +444,10 @@ class Pretty {
       if (arg instanceof Variant) {
         arg = ((Variant) arg).value;
       }
+      if (dataType.name.equals("continuous_set")
+          || dataType.name.equals("discrete_set")) {
+        arg = Codes.setToRangeList(arg);
+      }
       buf.append(' ');
       final boolean needParentheses =
           typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;

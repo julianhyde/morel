@@ -33,6 +33,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -2735,6 +2736,131 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
   /**
+   * Function "Range.contains", of type "&alpha; range &rarr; &alpha; &rarr;
+   * bool".
+   */
+  RANGE_CONTAINS(
+      "Range",
+      "contains",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.range(0), h.get(0), BOOL))),
+
+  /**
+   * Function "Range.complement" (on continuous_set), of type "&alpha;
+   * continuous_set &rarr; &alpha; continuous_set".
+   */
+  RANGE_CONTINUOUS_SET_COMPLEMENT(
+      "Range",
+      "complement",
+      "$csComplement",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(h.continuousSet(0), h.continuousSet(0)))),
+
+  /**
+   * Function "Range.contains" (on continuous_set), of type "&alpha;
+   * continuous_set &rarr; &alpha; &rarr; bool".
+   */
+  RANGE_CONTINUOUS_SET_CONTAINS(
+      "Range",
+      "contains",
+      "$csContains",
+      true,
+      ts ->
+          ts.forallType(1, h -> ts.fnType(h.continuousSet(0), h.get(0), BOOL))),
+
+  /**
+   * Function "Range.continuousSetOf", of type "&alpha; range list &rarr;
+   * &alpha; continuous_set".
+   */
+  RANGE_CONTINUOUS_SET_OF(
+      "Range",
+      "continuousSetOf",
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.listType(h.range(0)), h.continuousSet(0)))),
+
+  /**
+   * Function "Range.ranges" (on continuous_set), of type "&alpha;
+   * continuous_set &rarr; &alpha; range list".
+   */
+  RANGE_CONTINUOUS_SET_RANGES(
+      "Range",
+      "ranges",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(h.continuousSet(0), ts.listType(h.range(0))))),
+
+  /**
+   * Function "Range.complement" (on discrete_set), of type "&alpha;
+   * discrete_set &rarr; &alpha; discrete_set".
+   */
+  RANGE_DISCRETE_SET_COMPLEMENT(
+      "Range",
+      "complement",
+      "$dsComplement",
+      true,
+      ts ->
+          ts.forallType(1, h -> ts.fnType(h.discreteSet(0), h.discreteSet(0)))),
+
+  /**
+   * Function "Range.contains" (on discrete_set), of type "&alpha; discrete_set
+   * &rarr; &alpha; &rarr; bool".
+   */
+  RANGE_DISCRETE_SET_CONTAINS(
+      "Range",
+      "contains",
+      "$dsContains",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.discreteSet(0), h.get(0), BOOL))),
+
+  /**
+   * Function "Range.discreteSetOf", of type "&alpha; range list &rarr; &alpha;
+   * discrete_set".
+   */
+  RANGE_DISCRETE_SET_OF(
+      "Range",
+      "discreteSetOf",
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.listType(h.range(0)), h.discreteSet(0)))),
+
+  /**
+   * Function "Range.ranges" (on discrete_set), of type "&alpha; discrete_set
+   * &rarr; &alpha; range list".
+   */
+  RANGE_DISCRETE_SET_RANGES(
+      "Range",
+      "ranges",
+      "$dsRanges",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(h.discreteSet(0), ts.listType(h.range(0))))),
+
+  /**
+   * Function "Range.toBag" (on discrete_set), of type "&alpha; discrete_set
+   * &rarr; &alpha; bag".
+   */
+  RANGE_DISCRETE_SET_TO_BAG(
+      "Range",
+      "toBag",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.discreteSet(0), h.bag(0)))),
+
+  /**
+   * Function "Range.toList" (on discrete_set), of type "&alpha; discrete_set
+   * &rarr; &alpha; list".
+   */
+  RANGE_DISCRETE_SET_TO_LIST(
+      "Range",
+      "toList",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.discreteSet(0), h.list(0)))),
+
+  /**
    * Function "Real.abs", of type "real &rarr; real".
    *
    * <p>Returns the absolute value of {@code r}.
@@ -4315,8 +4441,10 @@ public enum BuiltIn {
 
   static {
     ImmutableMap.Builder<String, BuiltIn> byMlName = ImmutableMap.builder();
-    final SortedMap<String, ImmutableSortedMap.Builder<String, BuiltIn>> map =
-        new TreeMap<>();
+    // Use TreeMap<String, BuiltIn> for each structure member map so that
+    // overloaded methods (e.g. multiple "contains" variants) do not cause
+    // duplicate-key errors; the first occurrence wins.
+    final SortedMap<String, SortedMap<String, BuiltIn>> map = new TreeMap<>();
     for (BuiltIn builtIn : values()) {
       if (builtIn.alias != null) {
         byMlName.put(builtIn.alias, builtIn);
@@ -4328,11 +4456,12 @@ public enum BuiltIn {
       } else {
         map.compute(
             builtIn.structure,
-            (name, mapBuilder) -> {
-              if (mapBuilder == null) {
-                mapBuilder = ImmutableSortedMap.naturalOrder();
+            (name, memberMap) -> {
+              if (memberMap == null) {
+                memberMap = new TreeMap<>();
               }
-              return mapBuilder.put(builtIn.mlName, builtIn);
+              memberMap.putIfAbsent(builtIn.mlName, builtIn);
+              return memberMap;
             });
       }
     }
@@ -4340,8 +4469,8 @@ public enum BuiltIn {
     final ImmutableSortedMap.Builder<String, Structure> b =
         ImmutableSortedMap.naturalOrder();
     map.forEach(
-        (structure, mapBuilder) ->
-            b.put(structure, new Structure(structure, mapBuilder.build())));
+        (structure, memberMap) ->
+            b.put(structure, new Structure(structure, memberMap)));
     BY_STRUCTURE = b.build();
     final ImmutableListMultimap.Builder<String, BuiltIn> methodBuilder =
         ImmutableListMultimap.builder();
@@ -4466,8 +4595,14 @@ public enum BuiltIn {
    * option}, {@code vector}.
    */
   public static void dataTypes(TypeSystem typeSystem, List<Binding> bindings) {
+    // RANGE must be registered before CONTINUOUS_SET and DISCRETE_SET, because
+    // their constructors reference the range type. Pre-register it here so the
+    // dependency is satisfied regardless of alphabetical enum order.
+    defineType(typeSystem, bindings, Datatype.RANGE);
     for (Datatype datatype : Datatype.values()) {
-      defineType(typeSystem, bindings, datatype);
+      if (datatype != Datatype.RANGE) {
+        defineType(typeSystem, bindings, datatype);
+      }
     }
     for (Eqtype eqtype : Eqtype.values()) {
       defineType(typeSystem, bindings, eqtype);
@@ -4597,6 +4732,13 @@ public enum BuiltIn {
   public enum Datatype implements BuiltInType {
     // lint: sort until '##private ' where '##[A-Z]'
 
+    CONTINUOUS_SET(
+        "Range",
+        "continuous_set",
+        false,
+        1,
+        h -> h.tyCon(Constructor.CONTINUOUS_SET_CONTINUOUS_SET)),
+
     DATE_MONTH(
         "Date",
         "month",
@@ -4636,6 +4778,13 @@ public enum BuiltIn {
         false,
         1,
         h -> h.tyCon(Constructor.DESCENDING_DESC)),
+
+    DISCRETE_SET(
+        "Range",
+        "discrete_set",
+        false,
+        1,
+        h -> h.tyCon(Constructor.DISCRETE_SET_DISCRETE_SET)),
 
     EITHER(
         "Either",
@@ -4692,6 +4841,23 @@ public enum BuiltIn {
         true,
         1,
         h -> h.tyCon(Constructor.LIST_NIL).tyCon(Constructor.LIST_CONS)),
+
+    RANGE(
+        "Range",
+        "range",
+        false,
+        1,
+        h ->
+            h.tyCon(Constructor.RANGE_ALL)
+                .tyCon(Constructor.RANGE_AT_LEAST)
+                .tyCon(Constructor.RANGE_AT_MOST)
+                .tyCon(Constructor.RANGE_CLOSED)
+                .tyCon(Constructor.RANGE_CLOSED_OPEN)
+                .tyCon(Constructor.RANGE_GREATER_THAN)
+                .tyCon(Constructor.RANGE_LESS_THAN)
+                .tyCon(Constructor.RANGE_OPEN)
+                .tyCon(Constructor.RANGE_OPEN_CLOSED)
+                .tyCon(Constructor.RANGE_POINT)),
 
     /**
      * Universal value representation for embedded language interoperability.
@@ -4823,6 +4989,12 @@ public enum BuiltIn {
     // lint: sort until '##public ' where '##[A-Z]'
     BOOL_FALSE(Datatype.PSEUDO_BOOL, "FALSE"),
     BOOL_TRUE(Datatype.PSEUDO_BOOL, "TRUE"),
+    CONTINUOUS_SET_CONTINUOUS_SET(
+        Datatype.CONTINUOUS_SET,
+        "CONTINUOUS_SET",
+        h ->
+            Keys.list(
+                Keys.apply(Keys.name("range"), ImmutableList.of(h.get(0))))),
     DATE_MONTH_APR(Datatype.DATE_MONTH, "Apr"),
     DATE_MONTH_AUG(Datatype.DATE_MONTH, "Aug"),
     DATE_MONTH_DEC(Datatype.DATE_MONTH, "Dec"),
@@ -4843,6 +5015,12 @@ public enum BuiltIn {
     DATE_WEEKDAY_TUE(Datatype.DATE_WEEKDAY, "Tue"),
     DATE_WEEKDAY_WED(Datatype.DATE_WEEKDAY, "Wed"),
     DESCENDING_DESC(Datatype.DESCENDING, "DESC", h -> h.get(0)),
+    DISCRETE_SET_DISCRETE_SET(
+        Datatype.DISCRETE_SET,
+        "DISCRETE_SET",
+        h ->
+            Keys.list(
+                Keys.apply(Keys.name("range"), ImmutableList.of(h.get(0))))),
     EITHER_INL(Datatype.EITHER, "INL", h -> h.get(0)),
     EITHER_INR(Datatype.EITHER, "INR", h -> h.get(1)),
     LIST_CONS(Datatype.PSEUDO_LIST, "CONS", h -> h.get(0)),
@@ -4852,6 +5030,28 @@ public enum BuiltIn {
     ORDER_EQUAL(Datatype.ORDER, "EQUAL"),
     ORDER_GREATER(Datatype.ORDER, "GREATER"),
     ORDER_LESS(Datatype.ORDER, "LESS"),
+    RANGE_ALL(Datatype.RANGE, "ALL"),
+    RANGE_AT_LEAST(Datatype.RANGE, "AT_LEAST", h -> h.get(0)),
+    RANGE_AT_MOST(Datatype.RANGE, "AT_MOST", h -> h.get(0)),
+    RANGE_CLOSED(
+        Datatype.RANGE,
+        "CLOSED",
+        h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
+    RANGE_CLOSED_OPEN(
+        Datatype.RANGE,
+        "CLOSED_OPEN",
+        h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
+    RANGE_GREATER_THAN(Datatype.RANGE, "GREATER_THAN", h -> h.get(0)),
+    RANGE_LESS_THAN(Datatype.RANGE, "LESS_THAN", h -> h.get(0)),
+    RANGE_OPEN(
+        Datatype.RANGE,
+        "OPEN",
+        h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
+    RANGE_OPEN_CLOSED(
+        Datatype.RANGE,
+        "OPEN_CLOSED",
+        h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
+    RANGE_POINT(Datatype.RANGE, "POINT", h -> h.get(0)),
     VARIANT_BAG(Datatype.VARIANT, "BAG", h -> Keys.list(Keys.name("variant"))),
     VARIANT_BOOL(Datatype.VARIANT, "BOOL", h -> BOOL.key()),
     VARIANT_CHAR(Datatype.VARIANT, "CHAR", h -> CHAR.key()),
@@ -4877,6 +5077,17 @@ public enum BuiltIn {
     VARIANT_UNIT(Datatype.VARIANT, "UNIT"),
     VARIANT_VECTOR(
         Datatype.VARIANT, "VECTOR", h -> Keys.list(Keys.name("variant")));
+
+    private static final ImmutableMap<String, Constructor> BY_ML_NAME =
+        Arrays.stream(Constructor.class.getEnumConstants())
+            .collect(
+                ImmutableMap.toImmutableMap(
+                    c -> c.constructor, c -> c, (a, b) -> a));
+
+    /** Returns the Constructor with the given ML-level name, or null. */
+    public static @Nullable Constructor forName(String name) {
+      return BY_ML_NAME.get(name);
+    }
 
     public final Datatype datatype;
     public final String constructor;

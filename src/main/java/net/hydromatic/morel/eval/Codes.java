@@ -2857,6 +2857,55 @@ public abstract class Codes {
     return ORDER_EQUAL;
   }
 
+  /** @see BuiltIn#RANGE_CONTAINS */
+  private static final Applicable RANGE_CONTAINS =
+      new RangeContains(Comparators::compare);
+
+  /** @see BuiltIn#RANGE_CONTINUOUS_SET_COMPLEMENT */
+  private static final Applicable RANGE_CONTINUOUS_SET_COMPLEMENT =
+      new SetComplement(BuiltIn.RANGE_CONTINUOUS_SET_COMPLEMENT, null);
+
+  /** @see BuiltIn#RANGE_CONTINUOUS_SET_CONTAINS */
+  private static final Applicable RANGE_CONTINUOUS_SET_CONTAINS =
+      new SetContains(
+          BuiltIn.RANGE_CONTINUOUS_SET_CONTAINS, Comparators::compare);
+
+  /** @see BuiltIn#RANGE_CONTINUOUS_SET_OF */
+  private static final Applicable RANGE_CONTINUOUS_SET_OF =
+      new ContinuousSetOf(Comparators::compare);
+
+  /** @see BuiltIn#RANGE_CONTINUOUS_SET_RANGES */
+  private static final Applicable RANGE_CONTINUOUS_SET_RANGES =
+      new SetRanges(BuiltIn.RANGE_CONTINUOUS_SET_RANGES);
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_COMPLEMENT */
+  private static final Applicable RANGE_DISCRETE_SET_COMPLEMENT =
+      new SetComplement(
+          BuiltIn.RANGE_DISCRETE_SET_COMPLEMENT, Discretes.dummy());
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_CONTAINS */
+  private static final Applicable RANGE_DISCRETE_SET_CONTAINS =
+      new SetContains(
+          BuiltIn.RANGE_DISCRETE_SET_CONTAINS, Comparators::compare);
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_OF */
+  private static final Applicable RANGE_DISCRETE_SET_OF =
+      new DiscreteSetOf(Comparators::compare, Discretes.dummy());
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_RANGES */
+  private static final Applicable RANGE_DISCRETE_SET_RANGES =
+      new SetRanges(BuiltIn.RANGE_DISCRETE_SET_RANGES);
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_TO_BAG */
+  private static final Applicable RANGE_DISCRETE_SET_TO_BAG =
+      new DiscreteSetEnumerate(
+          BuiltIn.RANGE_DISCRETE_SET_TO_BAG, Discretes.dummy());
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_TO_LIST */
+  private static final Applicable RANGE_DISCRETE_SET_TO_LIST =
+      new DiscreteSetEnumerate(
+          BuiltIn.RANGE_DISCRETE_SET_TO_LIST, Discretes.dummy());
+
   /** @see BuiltIn#REAL_ABS */
   private static final Applicable REAL_ABS =
       new BaseApplicable1<Float, Float>(BuiltIn.REAL_ABS) {
@@ -5311,6 +5360,23 @@ public abstract class Codes {
           .put(BuiltIn.REAL_TO_STRING, REAL_TO_STRING)
           .put(BuiltIn.REAL_TRUNC, REAL_TRUNC)
           .put(BuiltIn.REAL_UNORDERED, REAL_UNORDERED)
+          .put(BuiltIn.RANGE_CONTAINS, RANGE_CONTAINS)
+          .put(
+              BuiltIn.RANGE_CONTINUOUS_SET_COMPLEMENT,
+              RANGE_CONTINUOUS_SET_COMPLEMENT)
+          .put(
+              BuiltIn.RANGE_CONTINUOUS_SET_CONTAINS,
+              RANGE_CONTINUOUS_SET_CONTAINS)
+          .put(BuiltIn.RANGE_CONTINUOUS_SET_OF, RANGE_CONTINUOUS_SET_OF)
+          .put(BuiltIn.RANGE_CONTINUOUS_SET_RANGES, RANGE_CONTINUOUS_SET_RANGES)
+          .put(
+              BuiltIn.RANGE_DISCRETE_SET_COMPLEMENT,
+              RANGE_DISCRETE_SET_COMPLEMENT)
+          .put(BuiltIn.RANGE_DISCRETE_SET_CONTAINS, RANGE_DISCRETE_SET_CONTAINS)
+          .put(BuiltIn.RANGE_DISCRETE_SET_OF, RANGE_DISCRETE_SET_OF)
+          .put(BuiltIn.RANGE_DISCRETE_SET_RANGES, RANGE_DISCRETE_SET_RANGES)
+          .put(BuiltIn.RANGE_DISCRETE_SET_TO_BAG, RANGE_DISCRETE_SET_TO_BAG)
+          .put(BuiltIn.RANGE_DISCRETE_SET_TO_LIST, RANGE_DISCRETE_SET_TO_LIST)
           .put(BuiltIn.RELATIONAL_COMPARE, RELATIONAL_COMPARE)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY)
@@ -5775,7 +5841,6 @@ public abstract class Codes {
     }
   }
 
-  /** Code that implements {@link #let(List, Code)} with one argument. */
   /**
    * Code that implements a stack-based {@code let} binding.
    *
@@ -6751,6 +6816,273 @@ public abstract class Codes {
       ordinalSlots[0] = -1;
     }
   }
+
+  // -----------------------------------------------------------------------
+  // Range implementations
+
+  /** Extracts the element type from a Range function's concrete type. */
+  private static Type rangeElementType(Type type) {
+    // type is one of:
+    //   'a range -> 'a -> bool          (contains: paramType = 'a range)
+    //   'a continuous_set -> ...        (set functions: paramType = DataType)
+    //   'a discrete_set -> ...          (set functions: paramType = DataType)
+    //   'a range list -> ...            (continuousSetOf, discreteSetOf)
+    checkArgument(type instanceof FnType);
+    Type paramType = ((FnType) type).paramType;
+    if (paramType instanceof DataType) {
+      // 'a range, 'a continuous_set, or 'a discrete_set
+      return paramType.arg(0);
+    }
+    if (paramType instanceof ListType) {
+      // 'a range list
+      Type elemType = paramType.elementType();
+      checkArgument(
+          elemType instanceof DataType, "expected 'a range list, got %s", type);
+      return elemType.arg(0);
+    }
+    return paramType;
+  }
+
+  /** Implementation of {@link BuiltIn#RANGE_CONTAINS}. */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static class RangeContains extends BaseApplicable implements Typed {
+    private final Comparator cmp;
+
+    RangeContains(Comparator cmp) {
+      super(BuiltIn.RANGE_CONTAINS);
+      this.cmp = requireNonNull(cmp);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      Type elemType = rangeElementType(type);
+      return new RangeContains(Comparators.comparatorFor(typeSystem, elemType));
+    }
+
+    @Override
+    public Object apply(Stack stack, Object argValue) {
+      // First application: receives the range r
+      final List range = (List) argValue;
+      final BuiltIn.Constructor ctor =
+          requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
+      return (Applicable1<Boolean, Object>)
+          x -> {
+            final List bounds;
+            switch (ctor) {
+              case RANGE_ALL:
+                return true;
+              case RANGE_POINT:
+                return cmp.compare(x, range.get(1)) == 0;
+              case RANGE_AT_LEAST:
+                return cmp.compare(x, range.get(1)) >= 0;
+              case RANGE_GREATER_THAN:
+                return cmp.compare(x, range.get(1)) > 0;
+              case RANGE_AT_MOST:
+                return cmp.compare(x, range.get(1)) <= 0;
+              case RANGE_LESS_THAN:
+                return cmp.compare(x, range.get(1)) < 0;
+              case RANGE_CLOSED:
+                bounds = (List) range.get(1);
+                return cmp.compare(x, bounds.get(0)) >= 0
+                    && cmp.compare(x, bounds.get(1)) <= 0;
+              case RANGE_OPEN:
+                bounds = (List) range.get(1);
+                return cmp.compare(x, bounds.get(0)) > 0
+                    && cmp.compare(x, bounds.get(1)) < 0;
+              case RANGE_CLOSED_OPEN:
+                bounds = (List) range.get(1);
+                return cmp.compare(x, bounds.get(0)) >= 0
+                    && cmp.compare(x, bounds.get(1)) < 0;
+              case RANGE_OPEN_CLOSED:
+                bounds = (List) range.get(1);
+                return cmp.compare(x, bounds.get(0)) > 0
+                    && cmp.compare(x, bounds.get(1)) <= 0;
+              default:
+                throw new AssertionError("unknown range constructor: " + ctor);
+            }
+          };
+    }
+  }
+
+  /**
+   * Converts the representation of a {@code discrete_set} or {@code
+   * continuous_set} to a list of range values.
+   */
+  public static List setToRangeList(Object o) {
+    final PairList<Bound, Bound> pairList = (PairList<Bound, Bound>) o;
+    return pairList.transformEager(Bound::toRange);
+  }
+
+  /** Implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_OF}. */
+  @SuppressWarnings({"rawtypes"})
+  private static class ContinuousSetOf extends BaseApplicable1<List, List>
+      implements Typed {
+    private final Comparator cmp;
+
+    ContinuousSetOf(Comparator cmp) {
+      super(BuiltIn.RANGE_CONTINUOUS_SET_OF);
+      this.cmp = requireNonNull(cmp);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      Type elemType = rangeElementType(type);
+      return new ContinuousSetOf(
+          Comparators.comparatorFor(typeSystem, elemType));
+    }
+
+    @Override
+    public List apply(List ranges) {
+      return ImmutableList.of(
+          BuiltIn.Constructor.CONTINUOUS_SET_CONTINUOUS_SET.constructor,
+          Bound.fromRanges(ranges, cmp, null));
+    }
+  }
+
+  /** Implementation of {@link BuiltIn#RANGE_DISCRETE_SET_OF}. */
+  @SuppressWarnings({"rawtypes"})
+  private static class DiscreteSetOf extends BaseApplicable1<List, List>
+      implements Typed {
+    private final Comparator cmp;
+    private final Discrete<Object> discrete;
+
+    DiscreteSetOf(Comparator cmp, Discrete<Object> discrete) {
+      super(BuiltIn.RANGE_DISCRETE_SET_OF);
+      this.cmp = requireNonNull(cmp);
+      this.discrete = requireNonNull(discrete);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      Type elemType = rangeElementType(type);
+      return new DiscreteSetOf(
+          Comparators.comparatorFor(typeSystem, elemType),
+          Discretes.discreteFor(typeSystem, elemType));
+    }
+
+    @Override
+    public List apply(List ranges) {
+      return ImmutableList.of(
+          BuiltIn.Constructor.DISCRETE_SET_DISCRETE_SET.constructor,
+          Bound.fromRanges(ranges, cmp, discrete));
+    }
+  }
+
+  /**
+   * Shared implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_CONTAINS} and
+   * {@link BuiltIn#RANGE_DISCRETE_SET_CONTAINS}.
+   */
+  @SuppressWarnings({"rawtypes"})
+  private static class SetContains extends BaseApplicable implements Typed {
+    private final Comparator cmp;
+
+    SetContains(BuiltIn builtIn, Comparator cmp) {
+      super(builtIn);
+      this.cmp = requireNonNull(cmp);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      final Type elemType = rangeElementType(type);
+      final Comparator comparator =
+          Comparators.comparatorFor(typeSystem, elemType);
+      return new SetContains(builtIn, comparator);
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public Object apply(Stack stack, Object argValue) {
+      final List set = (List) argValue;
+      final PairList<Bound, Bound> ranges = (PairList<Bound, Bound>) set.get(1);
+      return (Applicable1<Boolean, Object>)
+          x -> Bound.rangeContaining(ranges, x, cmp) >= 0;
+    }
+  }
+
+  /**
+   * Shared implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_RANGES} and
+   * {@link BuiltIn#RANGE_DISCRETE_SET_RANGES}.
+   */
+  private static class SetRanges extends BaseApplicable1<List, List> {
+    SetRanges(BuiltIn builtIn) {
+      super(builtIn);
+    }
+
+    @Override
+    public List apply(List set) {
+      return setToRangeList(set.get(1));
+    }
+  }
+
+  /**
+   * Shared implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_COMPLEMENT}
+   * and {@link BuiltIn#RANGE_DISCRETE_SET_COMPLEMENT}.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static class SetComplement extends BaseApplicable1<List, List>
+      implements Typed {
+    private final @Nullable Discrete<Object> discrete;
+
+    SetComplement(BuiltIn builtIn, @Nullable Discrete<Object> discrete) {
+      super(builtIn);
+      this.discrete = discrete;
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      if (discrete == null) {
+        return this; // continuous: complement needs no type-specific logic
+      }
+      final Type elemType = rangeElementType(type);
+      return new SetComplement(
+          builtIn, Discretes.discreteFor(typeSystem, elemType));
+    }
+
+    @Override
+    public List apply(List set) {
+      final PairList<Bound, Bound> ranges = (PairList<Bound, Bound>) set.get(1);
+      final PairList<Bound, Bound> comp = Bound.complement(ranges, discrete);
+      final BuiltIn.Constructor ctor =
+          builtIn == BuiltIn.RANGE_CONTINUOUS_SET_COMPLEMENT
+              ? BuiltIn.Constructor.CONTINUOUS_SET_CONTINUOUS_SET
+              : BuiltIn.Constructor.DISCRETE_SET_DISCRETE_SET;
+      return ImmutableList.of(ctor.constructor, comp);
+    }
+  }
+
+  /**
+   * Implementation of {@link BuiltIn#RANGE_DISCRETE_SET_TO_LIST} and {@link
+   * BuiltIn#RANGE_DISCRETE_SET_TO_BAG}.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static class DiscreteSetEnumerate extends BaseApplicable1<List, List>
+      implements Typed {
+    private final Discrete<Object> discrete;
+
+    DiscreteSetEnumerate(BuiltIn builtIn, Discrete<Object> discrete) {
+      super(builtIn);
+      this.discrete = requireNonNull(discrete);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      Type elemType = rangeElementType(type);
+      return new DiscreteSetEnumerate(
+          builtIn, Discretes.discreteFor(typeSystem, elemType));
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public List apply(List set) {
+      final PairList<Bound, Bound> ranges = (PairList<Bound, Bound>) set.get(1);
+      final ImmutableList.Builder<Object> result = ImmutableList.builder();
+      ranges.forEach(
+          (lo, hi) -> Bound.enumerate(discrete, lo, hi, result::add));
+      return result.build();
+    }
+  }
+
+  // -----------------------------------------------------------------------
 
   /** Implementation of {@link #RELATIONAL_COMPARE}. */
   @SuppressWarnings("rawtypes")
