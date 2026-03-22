@@ -58,6 +58,9 @@ val <a id='toList' href="#toList-impl">toList</a> : 'a discrete_set -> 'a list
 val <a id='continuousSetOf' href="#continuousSetOf-impl">continuousSetOf</a> : 'a range list -> 'a continuous_set
 val <a id='discreteSetOf' href="#discreteSetOf-impl">discreteSetOf</a> : 'a range list -> 'a discrete_set
 val <a id='ranges' href="#ranges-impl">ranges</a> : 'a continuous_set -> 'a range list
+val <a id='contains-fn' href="#contains-fn-impl">contains</a> : 'a continuous_set -> 'a -> bool
+val <a id='contains-fn' href="#contains-fn-impl">contains</a> : 'a discrete_set -> 'a -> bool
+val <a id='ranges-fn' href="#ranges-fn-impl">ranges</a> : 'a discrete_set -> 'a range list
 </pre>
 
 <a id="continuous_set-impl"></a>
@@ -133,6 +136,25 @@ The ordering and discreteness are implicit, derived from the element type.
 <h3><code>ranges</code></h3>
 
 `ranges cs` (or `cs.ranges ()`) returns the list of ranges in the continuous set `cs`.
+
+<a id="contains-fn-impl"></a>
+<h3><code>contains</code></h3>
+
+`contains cs x` (or `cs.contains x`) returns `true` if `x` is a member of continuous set `cs`.
+
+The ordering is implicit, derived from the type `α`.
+
+<a id="contains-fn-impl"></a>
+<h3><code>contains</code></h3>
+
+`contains ds x` (or `ds.contains x`) returns `true` if `x` is a member of discrete set `ds`.
+
+The ordering is implicit, derived from the type `α`.
+
+<a id="ranges-fn-impl"></a>
+<h3><code>ranges</code></h3>
+
+`ranges ds` (or `ds.ranges ()`) returns the list of ranges in the discrete set `ds`.
 
 [//]: # (end:lib/range)
 

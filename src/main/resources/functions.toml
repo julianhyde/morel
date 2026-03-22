@@ -3305,6 +3305,34 @@ The ordering is implicit, derived from the type `α`.
 """
 
 [[functions]]
+ordinal = 268
+structure = "Range"
+name = "contains"
+specified = "morel"
+type = "α continuous_set → α → bool"
+prototype = "contains cs x"
+method = true
+description = """
+returns `true` if `x` is a member of continuous set `cs`.
+
+The ordering is implicit, derived from the type `α`.
+"""
+
+[[functions]]
+ordinal = 269
+structure = "Range"
+name = "contains"
+specified = "morel"
+type = "α discrete_set → α → bool"
+prototype = "contains ds x"
+method = true
+description = """
+returns `true` if `x` is a member of discrete set `ds`.
+
+The ordering is implicit, derived from the type `α`.
+"""
+
+[[functions]]
 ordinal = 265
 structure = "Range"
 name = "continuousSetOf"
@@ -3392,6 +3420,18 @@ prototype = "ranges cs"
 method = true
 description = """
 returns the list of ranges in the continuous set `cs`.
+"""
+
+[[functions]]
+ordinal = 270
+structure = "Range"
+name = "ranges"
+specified = "morel"
+type = "α discrete_set → α range list"
+prototype = "ranges ds"
+method = true
+description = """
+returns the list of ranges in the discrete set `ds`.
 """
 
 [[functions]]
