@@ -30,11 +30,11 @@ import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * One endpoint of a range: either unbounded (representing −∞ or +∞) or a
- * specific value with inclusivity.
+ * One endpoint of a range: either unbounded (representing −&infin; or +&infin;)
+ * or a specific value with inclusivity.
  */
-public class Bound {
-  /** Sentinel representing an unbounded endpoint (−∞ or +∞). */
+class Bound {
+  /** Sentinel representing an unbounded endpoint (−&infin or +&infin). */
   public static final Bound UNBOUNDED = new Bound(null, false);
 
   /** The endpoint value, or {@code null} if unbounded. */
@@ -296,15 +296,15 @@ public class Bound {
    */
   int compareValue(Object x, Comparator<Object> cmp) {
     if (value == null) {
-      return 1; // x is always past −∞
+      return 1; // x is always past −infinity
     }
     int c = cmp.compare(x, value);
     return (c == 0 && !inclusive) ? -1 : c;
   }
 
   /**
-   * Returns whether this upper bound reaches or exceeds {@code lo2} (the lower
-   * bound of the next range), meaning the two ranges overlap or touch.
+   * Returns whether this upper bound reaches or exceeds {@code bound} (the
+   * lower bound of the next range), meaning the two ranges overlap or touch.
    */
   boolean canMerge(Bound bound, Comparator<Object> cmp) {
     if (value == null || bound.value == null) {
@@ -341,7 +341,7 @@ public class Bound {
         && discrete.comparator().compare(nextAfterHi, loEffective) >= 0;
   }
 
-  /** Returns the greater of this upper bound and {@code hi2}. */
+  /** Returns the greater of this upper bound and {@code bound}. */
   public Bound max(Bound bound, Comparator<Object> cmp) {
     if (value == null || bound.value == null) {
       return UNBOUNDED;

@@ -6888,10 +6888,11 @@ public abstract class Codes {
   }
 
   /**
-   * Converts a {@link PairList}{@code <Bound, Bound>} to a list of range
-   * values.
+   * Converts the representation of a {@code discrete_set} or {@code
+   * continuous_set} to a list of range values.
    */
-  public static List boundsToRangeList(PairList<Bound, Bound> pairList) {
+  public static List setToRangeList(Object o) {
+    final PairList<Bound, Bound> pairList = (PairList<Bound, Bound>) o;
     return pairList.transformEager(Bound::toRange);
   }
 
@@ -6991,9 +6992,8 @@ public abstract class Codes {
     }
 
     @Override
-    @SuppressWarnings({"rawtypes", "unchecked"})
     public List apply(List set) {
-      return boundsToRangeList((PairList<Bound, Bound>) set.get(1));
+      return setToRangeList(set.get(1));
     }
   }
 
