@@ -65,6 +65,16 @@ public class MorelParserImpl implements MorelParser
   private int lineOffset;
   private String file = "";
 
+  /**
+   * True when expression9 is parsing a function argument inside expression8's
+   * application loop. When true, the outer DOT-chain loop in expression9 is
+   * suppressed for non-identifier receivers (e.g. tuple literals), so that
+   * {@code CLOSED (3,7).contains 5} is not mis-parsed as
+   * {@code CLOSED ((3,7).contains 5)}. expression8 handles the trailing DOT
+   * chain itself after building the full application.
+   */
+  private boolean inArg = false;
+
   public void setTabSize(int tabSize) {
     jj_input_stream.setTabSize(tabSize);
   }
@@ -819,6 +829,12 @@ Exp expression9() :
 {
   e = atom()
   (
+    /* When parsing a function argument (inArg=true), skip the
+       DOT chain for non-identifier receivers such as tuple literals. For
+       example, in "CLOSED (3,7).contains 5", the "(3,7)" is a non-Id atom
+       being passed as an argument; suppressing the DOT here lets expression8
+       attach ".contains 5" to the full "CLOSED (3,7)" application instead. */
+    LOOKAHEAD({ getToken(1).kind == DOT && !(inArg && !isId(e)) })
     <DOT>
     ( id = identifier() { fieldName = id.name; }
     | <NATURAL_LITERAL> { fieldName = token.image; }
@@ -873,13 +889,50 @@ Exp expression8() :
 {
   Exp e;
   Exp e2;
+  Exp arg;
+  Id id;
+  String fieldName;
+  boolean prevInArg;
 }
 {
   e = expression9()
   (
+    /* Set inArg so that expression9, when parsing the argument,
+       suppresses the outer DOT chain for non-Id atoms (see expression9). */
+    {
+      prevInArg = inArg;
+      inArg = true;
+    }
     e2 = expression9() {
+      inArg = prevInArg;
       e = ast.apply(e, e2);
     }
+  )*
+  /* After the full application is built, apply any trailing DOT chain that
+     expression9 deferred (because inArg was true).
+     E.g. "CLOSED (3,7).contains 5" → PostfixApp(CLOSED(3,7),"contains",5). */
+  (
+    LOOKAHEAD({ getToken(1).kind == DOT && !isId(e) })
+    <DOT>
+    ( id = identifier() { fieldName = id.name; }
+    | <NATURAL_LITERAL> { fieldName = token.image; }
+    )
+    (
+      LOOKAHEAD({
+          isAtomStart()
+          && !isModule(e)
+          && (getToken(1).kind == LPAREN
+              ? !isId(e) || BuiltIn.BY_METHOD_NAME.containsKey(fieldName)
+              : !isId(e) && getToken(2).kind != DOT)
+      })
+      arg = atom()
+      { e = ast.postfixApp(pos(), e, fieldName, arg); }
+    |
+      {
+        final Exp s = ast.recordSelector(pos(), fieldName);
+        e = ast.apply(s, e);
+      }
+    )
   )*
   { return e; }
 }

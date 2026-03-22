@@ -39,6 +39,8 @@ OPEN endpoints are exclusive `(a, b)`.
 ## Synopsis
 
 <pre>
+eqtype 'a <a id='continuous_set' href="#continuous_set-impl">continuous_set</a>
+eqtype 'a <a id='discrete_set' href="#discrete_set-impl">discrete_set</a>
 datatype 'a <a id='range' href="#range-impl">range</a> =
     AT_LEAST of 'a
   | AT_MOST of 'a
@@ -51,10 +53,24 @@ datatype 'a <a id='range' href="#range-impl">range</a> =
   | POINT of 'a
 
 val <a id='contains' href="#contains-impl">contains</a> : 'a range -> 'a -> bool
-val <a id='normalize' href="#normalize-impl">normalize</a> : 'a range list -> 'a range list
-val <a id='toBag' href="#toBag-impl">toBag</a> : 'a range list -> 'a bag
-val <a id='toList' href="#toList-impl">toList</a> : 'a range list -> 'a list
+val <a id='toBag' href="#toBag-impl">toBag</a> : 'a discrete_set -> 'a bag
+val <a id='toList' href="#toList-impl">toList</a> : 'a discrete_set -> 'a list
+val <a id='continuousSetOf' href="#continuousSetOf-impl">continuousSetOf</a> : 'a range list -> 'a continuous_set
+val <a id='discreteSetOf' href="#discreteSetOf-impl">discreteSetOf</a> : 'a range list -> 'a discrete_set
+val <a id='ranges' href="#ranges-impl">ranges</a> : 'a continuous_set -> 'a range list
 </pre>
+
+<a id="continuous_set-impl"></a>
+<h3><code><strong>eqtype</strong> 'a continuous_set</code></h3>
+
+represents a set of values as a normalized list of non-overlapping,
+non-adjacent ranges.
+
+<a id="discrete_set-impl"></a>
+<h3><code><strong>eqtype</strong> 'a discrete_set</code></h3>
+
+represents a set of discrete values as a normalized list of
+non-overlapping, non-adjacent ranges.
 
 <a id="range-impl"></a>
 <h3><code><strong>datatype</strong> 'a range</code></h3>
@@ -79,19 +95,10 @@ The constructors and their meanings are:
 
 The ordering is implicit, derived from the type `α`.
 
-<a id="normalize-impl"></a>
-<h3><code>normalize</code></h3>
-
-`normalize ranges` returns a minimal list of ranges that cover the same set of values as
-`ranges`. Overlapping and adjacent ranges are merged, and the result is
-sorted by lower bound.
-
-The ordering is implicit, derived from the element type.
-
 <a id="toBag-impl"></a>
 <h3><code>toBag</code></h3>
 
-`toBag ranges` enumerates all values covered by `ranges` and returns them as a bag.
+`toBag ds` (or `ds.toBag ()`) enumerates all values in the discrete set `ds` and returns them as a bag.
 The element type must be discrete (e.g., `int`, `char`, `bool`).
 Raises an exception if any range is unbounded below and the type has no
 minimum value (e.g., `LESS_THAN 5 : int range`).
@@ -99,11 +106,33 @@ minimum value (e.g., `LESS_THAN 5 : int range`).
 <a id="toList-impl"></a>
 <h3><code>toList</code></h3>
 
-`toList ranges` enumerates all values covered by `ranges` and returns them as a list,
-in ascending order. The element type must be discrete (e.g., `int`,
-`char`, `bool`).
+`toList ds` (or `ds.toList ()`) enumerates all values in the discrete set `ds` and returns them as a
+list, in ascending order. The element type must be discrete (e.g.,
+`int`, `char`, `bool`).
 Raises an exception if any range is unbounded below and the type has no
 minimum value (e.g., `LESS_THAN 5 : int range`).
+
+<a id="continuousSetOf-impl"></a>
+<h3><code>continuousSetOf</code></h3>
+
+`continuousSetOf ranges` normalizes `ranges` into a `continuous_set`. Overlapping and adjacent
+ranges are merged, and the result is sorted by lower bound.
+
+The ordering is implicit, derived from the element type.
+
+<a id="discreteSetOf-impl"></a>
+<h3><code>discreteSetOf</code></h3>
+
+`discreteSetOf ranges` normalizes `ranges` into a `discrete_set`. Overlapping and adjacent
+ranges are merged (treating adjacent discrete values as mergeable), and
+the result is sorted by lower bound.
+
+The ordering and discreteness are implicit, derived from the element type.
+
+<a id="ranges-impl"></a>
+<h3><code>ranges</code></h3>
+
+`ranges cs` (or `cs.ranges ()`) returns the list of ranges in the continuous set `cs`.
 
 [//]: # (end:lib/range)
 

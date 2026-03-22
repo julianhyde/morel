@@ -2861,17 +2861,41 @@ public abstract class Codes {
   private static final Applicable RANGE_CONTAINS =
       new RangeContains(Comparators::compare);
 
-  /** @see BuiltIn#RANGE_NORMALIZE */
-  private static final Applicable RANGE_NORMALIZE =
-      new RangeNormalize(Comparators::compare);
+  /** @see BuiltIn#RANGE_CONTINUOUS_SET_CONTAINS */
+  private static final Applicable RANGE_CONTINUOUS_SET_CONTAINS =
+      new SetContains(
+          BuiltIn.RANGE_CONTINUOUS_SET_CONTAINS, Comparators::compare);
 
-  /** @see BuiltIn#RANGE_TO_BAG */
-  private static final Applicable RANGE_TO_BAG =
-      new RangeEnumerate(BuiltIn.RANGE_TO_BAG, (Discrete) Discretes.UNIT);
+  /** @see BuiltIn#RANGE_CONTINUOUS_SET_OF */
+  private static final Applicable RANGE_CONTINUOUS_SET_OF =
+      new ContinuousSetOf(Comparators::compare);
 
-  /** @see BuiltIn#RANGE_TO_LIST */
-  private static final Applicable RANGE_TO_LIST =
-      new RangeEnumerate(BuiltIn.RANGE_TO_LIST, (Discrete) Discretes.UNIT);
+  /** @see BuiltIn#RANGE_CONTINUOUS_SET_RANGES */
+  private static final Applicable RANGE_CONTINUOUS_SET_RANGES =
+      new SetRanges(BuiltIn.RANGE_CONTINUOUS_SET_RANGES);
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_CONTAINS */
+  private static final Applicable RANGE_DISCRETE_SET_CONTAINS =
+      new SetContains(
+          BuiltIn.RANGE_DISCRETE_SET_CONTAINS, Comparators::compare);
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_OF */
+  private static final Applicable RANGE_DISCRETE_SET_OF =
+      new DiscreteSetOf(Comparators::compare, Discretes.dummy());
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_RANGES */
+  private static final Applicable RANGE_DISCRETE_SET_RANGES =
+      new SetRanges(BuiltIn.RANGE_DISCRETE_SET_RANGES);
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_TO_BAG */
+  private static final Applicable RANGE_DISCRETE_SET_TO_BAG =
+      new DiscreteSetEnumerate(
+          BuiltIn.RANGE_DISCRETE_SET_TO_BAG, Discretes.dummy());
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_TO_LIST */
+  private static final Applicable RANGE_DISCRETE_SET_TO_LIST =
+      new DiscreteSetEnumerate(
+          BuiltIn.RANGE_DISCRETE_SET_TO_LIST, Discretes.dummy());
 
   /** @see BuiltIn#REAL_ABS */
   private static final Applicable REAL_ABS =
@@ -5328,9 +5352,16 @@ public abstract class Codes {
           .put(BuiltIn.REAL_TRUNC, REAL_TRUNC)
           .put(BuiltIn.REAL_UNORDERED, REAL_UNORDERED)
           .put(BuiltIn.RANGE_CONTAINS, RANGE_CONTAINS)
-          .put(BuiltIn.RANGE_NORMALIZE, RANGE_NORMALIZE)
-          .put(BuiltIn.RANGE_TO_BAG, RANGE_TO_BAG)
-          .put(BuiltIn.RANGE_TO_LIST, RANGE_TO_LIST)
+          .put(
+              BuiltIn.RANGE_CONTINUOUS_SET_CONTAINS,
+              RANGE_CONTINUOUS_SET_CONTAINS)
+          .put(BuiltIn.RANGE_CONTINUOUS_SET_OF, RANGE_CONTINUOUS_SET_OF)
+          .put(BuiltIn.RANGE_CONTINUOUS_SET_RANGES, RANGE_CONTINUOUS_SET_RANGES)
+          .put(BuiltIn.RANGE_DISCRETE_SET_CONTAINS, RANGE_DISCRETE_SET_CONTAINS)
+          .put(BuiltIn.RANGE_DISCRETE_SET_OF, RANGE_DISCRETE_SET_OF)
+          .put(BuiltIn.RANGE_DISCRETE_SET_RANGES, RANGE_DISCRETE_SET_RANGES)
+          .put(BuiltIn.RANGE_DISCRETE_SET_TO_BAG, RANGE_DISCRETE_SET_TO_BAG)
+          .put(BuiltIn.RANGE_DISCRETE_SET_TO_LIST, RANGE_DISCRETE_SET_TO_LIST)
           .put(BuiltIn.RELATIONAL_COMPARE, RELATIONAL_COMPARE)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY)
@@ -5795,7 +5826,6 @@ public abstract class Codes {
     }
   }
 
-  /** Code that implements {@link #let(List, Code)} with one argument. */
   /**
    * Code that implements a stack-based {@code let} binding.
    *
@@ -6780,47 +6810,42 @@ public abstract class Codes {
    * infinity, positive infinity, or a specific value with inclusivity.
    */
   private static final class Bound {
-    static final Bound NEG_INF = new Bound(null, false, true, false);
-    static final Bound POS_INF = new Bound(null, false, false, true);
+    static final Bound UNBOUNDED = new Bound(null, false);
 
-    final Object value; // null if negInf or posInf
-    final boolean inclusive; // only meaningful if !negInf && !posInf
-    final boolean negInf;
-    final boolean posInf;
+    final @Nullable Object value; // null if unbounded
+    final boolean inclusive; // only meaningful if value != null
 
-    private Bound(
-        Object value, boolean inclusive, boolean negInf, boolean posInf) {
+    private Bound(@Nullable Object value, boolean inclusive) {
       this.value = value;
       this.inclusive = inclusive;
-      this.negInf = negInf;
-      this.posInf = posInf;
     }
 
     static Bound inclusive(Object v) {
-      return new Bound(v, true, false, false);
+      return new Bound(requireNonNull(v), true);
     }
 
     static Bound exclusive(Object v) {
-      return new Bound(v, false, false, false);
+      return new Bound(requireNonNull(v), false);
     }
   }
 
   /** Extracts the lower {@link Bound} from a runtime range value. */
   @SuppressWarnings("rawtypes")
   private static Bound lowerBound(List range) {
-    String ctor = (String) range.get(0);
+    BuiltIn.Constructor ctor =
+        requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
     switch (ctor) {
-      case "AT_MOST":
-      case "LESS_THAN":
-        return Bound.NEG_INF;
-      case "POINT":
-      case "AT_LEAST":
-      case "CLOSED":
-      case "CLOSED_OPEN":
+      case RANGE_AT_MOST:
+      case RANGE_LESS_THAN:
+        return Bound.UNBOUNDED;
+      case RANGE_POINT:
+      case RANGE_AT_LEAST:
+      case RANGE_CLOSED:
+      case RANGE_CLOSED_OPEN:
         return Bound.inclusive(arg0(range));
-      case "GREATER_THAN":
-      case "OPEN":
-      case "OPEN_CLOSED":
+      case RANGE_GREATER_THAN:
+      case RANGE_OPEN:
+      case RANGE_OPEN_CLOSED:
         return Bound.exclusive(arg0(range));
       default:
         throw new AssertionError("unknown range constructor: " + ctor);
@@ -6830,19 +6855,20 @@ public abstract class Codes {
   /** Extracts the upper {@link Bound} from a runtime range value. */
   @SuppressWarnings("rawtypes")
   private static Bound upperBound(List range) {
-    String ctor = (String) range.get(0);
+    BuiltIn.Constructor ctor =
+        requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
     switch (ctor) {
-      case "AT_LEAST":
-      case "GREATER_THAN":
-        return Bound.POS_INF;
-      case "POINT":
-      case "AT_MOST":
-      case "CLOSED":
-      case "OPEN_CLOSED":
+      case RANGE_AT_LEAST:
+      case RANGE_GREATER_THAN:
+        return Bound.UNBOUNDED;
+      case RANGE_POINT:
+      case RANGE_AT_MOST:
+      case RANGE_CLOSED:
+      case RANGE_OPEN_CLOSED:
         return Bound.inclusive(arg1(range));
-      case "LESS_THAN":
-      case "OPEN":
-      case "CLOSED_OPEN":
+      case RANGE_LESS_THAN:
+      case RANGE_OPEN:
+      case RANGE_CLOSED_OPEN:
         return Bound.exclusive(arg1(range));
       default:
         throw new AssertionError("unknown range constructor: " + ctor);
@@ -6873,35 +6899,39 @@ public abstract class Codes {
 
   /** Converts a (lo, hi) {@link Bound} pair back to a runtime range list. */
   private static List boundsToRange(Bound lo, Bound hi) {
-    if (lo.negInf) {
-      if (hi.posInf) {
+    if (lo.value == null) {
+      if (hi.value == null) {
         // All-encompassing range: represent as AT_LEAST of the min type —
         // this path should not normally be reached in practice.
         throw new AssertionError("cannot represent all-encompassing range");
       }
-      return hi.inclusive
-          ? ImmutableList.of("AT_MOST", hi.value)
-          : ImmutableList.of("LESS_THAN", hi.value);
+      return ImmutableList.of(
+          hi.inclusive
+              ? BuiltIn.Constructor.RANGE_AT_MOST.constructor
+              : BuiltIn.Constructor.RANGE_LESS_THAN.constructor,
+          hi.value);
     }
-    if (hi.posInf) {
-      return lo.inclusive
-          ? ImmutableList.of("AT_LEAST", lo.value)
-          : ImmutableList.of("GREATER_THAN", lo.value);
+    if (hi.value == null) {
+      return ImmutableList.of(
+          lo.inclusive
+              ? BuiltIn.Constructor.RANGE_AT_LEAST.constructor
+              : BuiltIn.Constructor.RANGE_GREATER_THAN.constructor,
+          lo.value);
     }
     // Both bounds are finite.
     if (lo.inclusive && hi.inclusive && lo.value.equals(hi.value)) {
-      return ImmutableList.of("POINT", lo.value);
+      return ImmutableList.of(
+          BuiltIn.Constructor.RANGE_POINT.constructor, lo.value);
     }
-    List<Object> tuple = ImmutableList.of(lo.value, hi.value);
-    if (lo.inclusive && hi.inclusive) {
-      return ImmutableList.of("CLOSED", tuple);
-    } else if (lo.inclusive) {
-      return ImmutableList.of("CLOSED_OPEN", tuple);
-    } else if (hi.inclusive) {
-      return ImmutableList.of("OPEN_CLOSED", tuple);
-    } else {
-      return ImmutableList.of("OPEN", tuple);
-    }
+    return ImmutableList.of(
+        lo.inclusive
+            ? (hi.inclusive
+                ? BuiltIn.Constructor.RANGE_CLOSED.constructor
+                : BuiltIn.Constructor.RANGE_CLOSED_OPEN.constructor)
+            : (hi.inclusive
+                ? BuiltIn.Constructor.RANGE_OPEN_CLOSED.constructor
+                : BuiltIn.Constructor.RANGE_OPEN.constructor),
+        ImmutableList.of(lo.value, hi.value));
   }
 
   /**
@@ -6910,11 +6940,8 @@ public abstract class Codes {
    */
   @SuppressWarnings("unchecked")
   private static boolean canMerge(Bound hi1, Bound lo2, Comparator cmp) {
-    if (hi1.posInf || lo2.negInf) {
+    if (hi1.value == null || lo2.value == null) {
       return true;
-    }
-    if (hi1.negInf || lo2.posInf) {
-      return false;
     }
     int c = cmp.compare(hi1.value, lo2.value);
     if (c > 0) {
@@ -6929,14 +6956,8 @@ public abstract class Codes {
   /** Returns the greater of two upper {@link Bound}s. */
   @SuppressWarnings("unchecked")
   private static Bound maxUpper(Bound hi1, Bound hi2, Comparator cmp) {
-    if (hi1.posInf || hi2.posInf) {
-      return Bound.POS_INF;
-    }
-    if (hi1.negInf) {
-      return hi2;
-    }
-    if (hi2.negInf) {
-      return hi1;
+    if (hi1.value == null || hi2.value == null) {
+      return Bound.UNBOUNDED;
     }
     int c = cmp.compare(hi1.value, hi2.value);
     if (c > 0) {
@@ -6951,23 +6972,14 @@ public abstract class Codes {
   /** Comparator for lower {@link Bound}s (earlier/smaller first). */
   @SuppressWarnings("unchecked")
   private static int compareLower(Bound lo1, Bound lo2, Comparator cmp) {
-    if (lo1.negInf && lo2.negInf) {
+    if (lo1.value == null && lo2.value == null) {
       return 0;
     }
-    if (lo1.negInf) {
+    if (lo1.value == null) {
       return -1;
     }
-    if (lo2.negInf) {
+    if (lo2.value == null) {
       return 1;
-    }
-    if (lo1.posInf && lo2.posInf) {
-      return 0;
-    }
-    if (lo1.posInf) {
-      return 1;
-    }
-    if (lo2.posInf) {
-      return -1;
     }
     int c = cmp.compare(lo1.value, lo2.value);
     if (c != 0) {
@@ -6986,21 +6998,22 @@ public abstract class Codes {
   /** Extracts the element type from a Range function's concrete type. */
   private static Type rangeElementType(Type type) {
     // type is one of:
-    //   'a range -> 'a -> bool   (contains: paramType = 'a range)
-    //   'a range list -> ...     (normalize, toList, toBag: paramType = 'a
-    // range list)
+    //   'a range -> 'a -> bool          (contains: paramType = 'a range)
+    //   'a continuous_set -> ...        (set functions: paramType = DataType)
+    //   'a discrete_set -> ...          (set functions: paramType = DataType)
+    //   'a range list -> ...            (continuousSetOf, discreteSetOf)
     checkArgument(type instanceof FnType);
     Type paramType = ((FnType) type).paramType;
     if (paramType instanceof DataType) {
-      // 'a range (single range, for contains)
-      return ((DataType) paramType).arg(0);
+      // 'a range, 'a continuous_set, or 'a discrete_set
+      return paramType.arg(0);
     }
     if (paramType instanceof ListType) {
       // 'a range list
-      Type elemType = ((ListType) paramType).elementType();
+      Type elemType = paramType.elementType();
       checkArgument(
           elemType instanceof DataType, "expected 'a range list, got %s", type);
-      return ((DataType) elemType).arg(0);
+      return elemType.arg(0);
     }
     return paramType;
   }
@@ -7025,44 +7038,38 @@ public abstract class Codes {
     public Object apply(Stack stack, Object argValue) {
       // First application: receives the range r
       final List range = (List) argValue;
-      final String ctor = (String) range.get(0);
+      final BuiltIn.Constructor ctor =
+          requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
       return (Applicable1<Boolean, Object>)
           x -> {
+            final List bounds;
             switch (ctor) {
-              case "POINT":
+              case RANGE_POINT:
                 return cmp.compare(x, range.get(1)) == 0;
-              case "AT_LEAST":
+              case RANGE_AT_LEAST:
                 return cmp.compare(x, range.get(1)) >= 0;
-              case "GREATER_THAN":
+              case RANGE_GREATER_THAN:
                 return cmp.compare(x, range.get(1)) > 0;
-              case "AT_MOST":
+              case RANGE_AT_MOST:
                 return cmp.compare(x, range.get(1)) <= 0;
-              case "LESS_THAN":
+              case RANGE_LESS_THAN:
                 return cmp.compare(x, range.get(1)) < 0;
-              case "CLOSED":
-                {
-                  List bounds = (List) range.get(1);
-                  return cmp.compare(x, bounds.get(0)) >= 0
-                      && cmp.compare(x, bounds.get(1)) <= 0;
-                }
-              case "OPEN":
-                {
-                  List bounds = (List) range.get(1);
-                  return cmp.compare(x, bounds.get(0)) > 0
-                      && cmp.compare(x, bounds.get(1)) < 0;
-                }
-              case "CLOSED_OPEN":
-                {
-                  List bounds = (List) range.get(1);
-                  return cmp.compare(x, bounds.get(0)) >= 0
-                      && cmp.compare(x, bounds.get(1)) < 0;
-                }
-              case "OPEN_CLOSED":
-                {
-                  List bounds = (List) range.get(1);
-                  return cmp.compare(x, bounds.get(0)) > 0
-                      && cmp.compare(x, bounds.get(1)) <= 0;
-                }
+              case RANGE_CLOSED:
+                bounds = (List) range.get(1);
+                return cmp.compare(x, bounds.get(0)) >= 0
+                    && cmp.compare(x, bounds.get(1)) <= 0;
+              case RANGE_OPEN:
+                bounds = (List) range.get(1);
+                return cmp.compare(x, bounds.get(0)) > 0
+                    && cmp.compare(x, bounds.get(1)) < 0;
+              case RANGE_CLOSED_OPEN:
+                bounds = (List) range.get(1);
+                return cmp.compare(x, bounds.get(0)) >= 0
+                    && cmp.compare(x, bounds.get(1)) < 0;
+              case RANGE_OPEN_CLOSED:
+                bounds = (List) range.get(1);
+                return cmp.compare(x, bounds.get(0)) > 0
+                    && cmp.compare(x, bounds.get(1)) <= 0;
               default:
                 throw new AssertionError("unknown range constructor: " + ctor);
             }
@@ -7070,76 +7077,243 @@ public abstract class Codes {
     }
   }
 
-  /** Implementation of {@link BuiltIn#RANGE_NORMALIZE}. */
+  /**
+   * Normalizes a list of ranges: sorts by lower bound, merges overlapping or
+   * touching ranges. If {@code discrete} is non-null, also merges adjacent
+   * ranges whose effective endpoints are one step apart.
+   */
   @SuppressWarnings({"rawtypes", "unchecked"})
-  private static class RangeNormalize extends BaseApplicable1<List, List>
+  private static List normalizeRangeList(
+      List ranges, Comparator cmp, @Nullable Discrete<Object> discrete) {
+    if (ranges.isEmpty()) {
+      return ImmutableList.of();
+    }
+    List<List> sorted = new ArrayList<>(ranges);
+    sorted.sort((r1, r2) -> compareLower(lowerBound(r1), lowerBound(r2), cmp));
+
+    List<List> result = new ArrayList<>();
+    Bound lo = lowerBound(sorted.get(0));
+    Bound hi = upperBound(sorted.get(0));
+    for (int i = 1; i < sorted.size(); i++) {
+      Bound nextLo = lowerBound(sorted.get(i));
+      Bound nextHi = upperBound(sorted.get(i));
+      boolean merge =
+          canMerge(hi, nextLo, cmp)
+              || discrete != null && canMergeDiscrete(hi, nextLo, discrete);
+      if (merge) {
+        hi = maxUpper(hi, nextHi, cmp);
+      } else {
+        result.add(boundsToRange(lo, hi));
+        lo = nextLo;
+        hi = nextHi;
+      }
+    }
+    result.add(boundsToRange(lo, hi));
+    return ImmutableList.copyOf(result);
+  }
+
+  /**
+   * Returns true when two ranges that do not overlap or touch are still
+   * adjacent in discrete order (e.g. CLOSED(1,3) and CLOSED(4,6) for int).
+   */
+  private static boolean canMergeDiscrete(
+      Bound hi1, Bound lo2, Discrete<Object> discrete) {
+    if (hi1.value == null || lo2.value == null) {
+      return false;
+    }
+    // Compute effective last-included value of the first range.
+    Object hiEffective = hi1.inclusive ? hi1.value : discrete.prev(hi1.value);
+    // Compute effective first-included value of the second range.
+    Object loEffective = lo2.inclusive ? lo2.value : discrete.next(lo2.value);
+    if (hiEffective == null || loEffective == null) {
+      return false;
+    }
+    Object nextAfterHi = discrete.next(hiEffective);
+    return nextAfterHi != null
+        && discrete.comparator().compare(nextAfterHi, loEffective) >= 0;
+  }
+
+  /**
+   * Tests whether a single range contains a given value. Extracted as a static
+   * helper so it can be shared by {@link RangeContains} and {@link
+   * SetContains}.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static boolean rangeContainsValue(
+      List range, Object x, Comparator cmp) {
+    final BuiltIn.Constructor ctor =
+        requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
+    switch (ctor) {
+      case RANGE_POINT:
+        return cmp.compare(x, range.get(1)) == 0;
+      case RANGE_AT_LEAST:
+        return cmp.compare(x, range.get(1)) >= 0;
+      case RANGE_GREATER_THAN:
+        return cmp.compare(x, range.get(1)) > 0;
+      case RANGE_AT_MOST:
+        return cmp.compare(x, range.get(1)) <= 0;
+      case RANGE_LESS_THAN:
+        return cmp.compare(x, range.get(1)) < 0;
+      case RANGE_CLOSED:
+        {
+          List bounds = (List) range.get(1);
+          return cmp.compare(x, bounds.get(0)) >= 0
+              && cmp.compare(x, bounds.get(1)) <= 0;
+        }
+      case RANGE_OPEN:
+        {
+          List bounds = (List) range.get(1);
+          return cmp.compare(x, bounds.get(0)) > 0
+              && cmp.compare(x, bounds.get(1)) < 0;
+        }
+      case RANGE_CLOSED_OPEN:
+        {
+          List bounds = (List) range.get(1);
+          return cmp.compare(x, bounds.get(0)) >= 0
+              && cmp.compare(x, bounds.get(1)) < 0;
+        }
+      case RANGE_OPEN_CLOSED:
+        {
+          List bounds = (List) range.get(1);
+          return cmp.compare(x, bounds.get(0)) > 0
+              && cmp.compare(x, bounds.get(1)) <= 0;
+        }
+      default:
+        throw new AssertionError("unknown range constructor: " + ctor);
+    }
+  }
+
+  /** Implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_OF}. */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static class ContinuousSetOf extends BaseApplicable1<List, List>
       implements Typed {
     private final Comparator cmp;
 
-    RangeNormalize(Comparator cmp) {
-      super(BuiltIn.RANGE_NORMALIZE);
+    ContinuousSetOf(Comparator cmp) {
+      super(BuiltIn.RANGE_CONTINUOUS_SET_OF);
       this.cmp = requireNonNull(cmp);
     }
 
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type) {
       Type elemType = rangeElementType(type);
-      return new RangeNormalize(
+      return new ContinuousSetOf(
           Comparators.comparatorFor(typeSystem, elemType));
     }
 
     @Override
     public List apply(List ranges) {
-      if (ranges.isEmpty()) {
-        return ImmutableList.of();
-      }
-      // Sort by lower bound, then merge overlapping/touching ranges.
-      List<List> sorted = new ArrayList<>(ranges);
-      sorted.sort(
-          (r1, r2) -> compareLower(lowerBound(r1), lowerBound(r2), cmp));
-
-      List<List> result = new ArrayList<>();
-      Bound lo = lowerBound(sorted.get(0));
-      Bound hi = upperBound(sorted.get(0));
-      for (int i = 1; i < sorted.size(); i++) {
-        Bound nextLo = lowerBound(sorted.get(i));
-        Bound nextHi = upperBound(sorted.get(i));
-        if (canMerge(hi, nextLo, cmp)) {
-          hi = maxUpper(hi, nextHi, cmp);
-        } else {
-          result.add(boundsToRange(lo, hi));
-          lo = nextLo;
-          hi = nextHi;
-        }
-      }
-      result.add(boundsToRange(lo, hi));
-      return ImmutableList.copyOf(result);
+      return ImmutableList.of(
+          BuiltIn.Constructor.CONTINUOUS_SET_CONTINUOUS_SET.constructor,
+          normalizeRangeList(ranges, cmp, null));
     }
   }
 
-  /**
-   * Implementation of {@link BuiltIn#RANGE_TO_LIST} and {@link
-   * BuiltIn#RANGE_TO_BAG}.
-   */
+  /** Implementation of {@link BuiltIn#RANGE_DISCRETE_SET_OF}. */
   @SuppressWarnings({"rawtypes", "unchecked"})
-  private static class RangeEnumerate extends BaseApplicable1<List, List>
+  private static class DiscreteSetOf extends BaseApplicable1<List, List>
       implements Typed {
+    private final Comparator cmp;
     private final Discrete<Object> discrete;
 
-    RangeEnumerate(BuiltIn builtIn, Discrete<Object> discrete) {
-      super(builtIn);
-      this.discrete = discrete;
+    DiscreteSetOf(Comparator cmp, Discrete<Object> discrete) {
+      super(BuiltIn.RANGE_DISCRETE_SET_OF);
+      this.cmp = requireNonNull(cmp);
+      this.discrete = requireNonNull(discrete);
     }
 
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type) {
       Type elemType = rangeElementType(type);
-      Discrete<Object> d = Discretes.discreteFor(typeSystem, elemType);
-      return new RangeEnumerate(builtIn, d);
+      return new DiscreteSetOf(
+          Comparators.comparatorFor(typeSystem, elemType),
+          Discretes.discreteFor(typeSystem, elemType));
     }
 
     @Override
     public List apply(List ranges) {
+      return ImmutableList.of(
+          BuiltIn.Constructor.DISCRETE_SET_DISCRETE_SET.constructor,
+          normalizeRangeList(ranges, cmp, discrete));
+    }
+  }
+
+  /**
+   * Shared implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_CONTAINS} and
+   * {@link BuiltIn#RANGE_DISCRETE_SET_CONTAINS}.
+   */
+  @SuppressWarnings({"rawtypes"})
+  private static class SetContains extends BaseApplicable implements Typed {
+    private final Comparator cmp;
+
+    SetContains(BuiltIn builtIn, Comparator cmp) {
+      super(builtIn);
+      this.cmp = requireNonNull(cmp);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      Type elemType = rangeElementType(type);
+      return new SetContains(
+          builtIn, Comparators.comparatorFor(typeSystem, elemType));
+    }
+
+    @Override
+    public Object apply(Stack stack, Object argValue) {
+      final List set = (List) argValue;
+      final List ranges = (List) set.get(1);
+      return (Applicable1<Boolean, Object>)
+          x -> {
+            for (Object r : ranges) {
+              if (rangeContainsValue((List) r, x, cmp)) {
+                return true;
+              }
+            }
+            return false;
+          };
+    }
+  }
+
+  /**
+   * Shared implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_RANGES} and
+   * {@link BuiltIn#RANGE_DISCRETE_SET_RANGES}.
+   */
+  private static class SetRanges extends BaseApplicable1<List, List> {
+    SetRanges(BuiltIn builtIn) {
+      super(builtIn);
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public List apply(List set) {
+      return (List) set.get(1);
+    }
+  }
+
+  /**
+   * Implementation of {@link BuiltIn#RANGE_DISCRETE_SET_TO_LIST} and {@link
+   * BuiltIn#RANGE_DISCRETE_SET_TO_BAG}.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static class DiscreteSetEnumerate extends BaseApplicable1<List, List>
+      implements Typed {
+    private final Discrete<Object> discrete;
+
+    DiscreteSetEnumerate(BuiltIn builtIn, Discrete<Object> discrete) {
+      super(builtIn);
+      this.discrete = requireNonNull(discrete);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      Type elemType = rangeElementType(type);
+      return new DiscreteSetEnumerate(
+          builtIn, Discretes.discreteFor(typeSystem, elemType));
+    }
+
+    @Override
+    public List apply(List set) {
+      final List ranges = (List) set.get(1);
       final List<Object> result = new ArrayList<>();
       for (Object r : ranges) {
         enumerate((List) r, result);
@@ -7150,21 +7324,22 @@ public abstract class Codes {
     private void enumerate(List range, List<Object> out) {
       Bound lo = lowerBound(range);
       Bound hi = upperBound(range);
-      if (hi.posInf) {
+      if (hi.value == null) {
         throw new MorelRuntimeException(
             BuiltInExn.SIZE, Pos.ZERO); // unbounded range
       }
-      // Determine start value
       Object start;
-      if (lo.negInf) {
+      if (lo.value == null) {
         start = discrete.minValue();
-      } else if (lo.inclusive) {
-        start = lo.value;
       } else {
-        start = discrete.next(lo.value);
-        if (start == null) {
-          throw new MorelRuntimeException(
-              BuiltInExn.SIZE, Pos.ZERO); // empty range
+        if (lo.inclusive) {
+          start = lo.value;
+        } else {
+          start = discrete.next(lo.value);
+          if (start == null) {
+            throw new MorelRuntimeException(
+                BuiltInExn.SIZE, Pos.ZERO); // empty range
+          }
         }
       }
       Comparator cmp = discrete.comparator();

@@ -1788,7 +1788,8 @@ public class TypeResolver {
     }
     if (op != null) {
       for (BuiltIn b : candidates) {
-        if (firstParamReceiverTypeOp(b).equals(op)) {
+        String bOp = firstParamReceiverTypeOp(b);
+        if (bOp.equals(op)) {
           return b;
         }
       }

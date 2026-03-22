@@ -42,6 +42,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class Discretes {
   private Discretes() {}
 
+  /** Returns a generic Discrete instance. */
+  @SuppressWarnings({"unchecked"})
+  static Discrete<Object> dummy() {
+    return (Discrete<Object>) (Discrete<?>) UNIT;
+  }
+
   /**
    * Returns a {@link Discrete} domain for the given type, or throws {@link
    * IllegalArgumentException} if the type is not discrete.
@@ -336,7 +342,7 @@ public class Discretes {
       };
 
   /** {@link Discrete} for {@code unit} (a single value). */
-  public static final Discrete<Unit> UNIT =
+  private static final Discrete<Unit> UNIT =
       new Discrete<Unit>() {
         private final Comparator<Object> cmp = (a, b) -> 0;
 

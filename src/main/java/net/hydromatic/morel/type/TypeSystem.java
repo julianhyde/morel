@@ -429,6 +429,14 @@ public class TypeSystem {
             return TypeSystem.this.option(get(i));
           }
 
+          public Type continuousSet(int i) {
+            return TypeSystem.this.continuousSet(get(i));
+          }
+
+          public Type discreteSet(int i) {
+            return TypeSystem.this.discreteSet(get(i));
+          }
+
           public Type range(int i) {
             return TypeSystem.this.range(get(i));
           }
@@ -610,6 +618,28 @@ public class TypeSystem {
   }
 
   /**
+   * Creates a "continuous_set" type.
+   *
+   * <p>"continuousSet(type)" is shorthand for "apply(lookup("continuous_set"),
+   * type)".
+   */
+  public Type continuousSet(Type type) {
+    final Type csType = lookup(BuiltIn.Datatype.CONTINUOUS_SET);
+    return apply(csType, type);
+  }
+
+  /**
+   * Creates a "discrete_set" type.
+   *
+   * <p>"discreteSet(type)" is shorthand for "apply(lookup("discrete_set"),
+   * type)".
+   */
+  public Type discreteSet(Type type) {
+    final Type dsType = lookup(BuiltIn.Datatype.DISCRETE_SET);
+    return apply(dsType, type);
+  }
+
+  /**
    * Creates a "range" type.
    *
    * <p>"range(type)" is shorthand for "apply(lookup("range"), type)".
@@ -713,6 +743,10 @@ public class TypeSystem {
     Type vector(int i);
     /** Creates type {@code `i option}. */
     Type option(int i);
+    /** Creates type {@code `i continuous_set}. */
+    Type continuousSet(int i);
+    /** Creates type {@code `i discrete_set}. */
+    Type discreteSet(int i);
     /** Creates type {@code `i range}. */
     Type range(int i);
     /** Creates type <code>`i &rarr; bool</code>. */

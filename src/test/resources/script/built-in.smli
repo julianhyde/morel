@@ -4223,107 +4223,51 @@ List.map (fn x => (x, Real.toString x))
 
 (* Range ---------------------------------------------------------- *)
 Range;
-> val it = {contains=fn,normalize=fn,toBag=fn,toList=fn}
->   : {contains:'a range -> 'a -> bool, normalize:'b range list -> 'b range list,
->      toBag:'c range list -> 'c bag, toList:'d range list -> 'd list}
-
-(*) Constructors.
-POINT 5 : int range;
-> val it = POINT 5 : int range
-
-AT_LEAST 3 : int range;
-> val it = AT_LEAST 3 : int range
-
-GREATER_THAN 3 : int range;
-> val it = GREATER_THAN 3 : int range
-
-AT_MOST 10 : int range;
-> val it = AT_MOST 10 : int range
-
-LESS_THAN 10 : int range;
-> val it = LESS_THAN 10 : int range
+> val it =
+>   {contains=fn,continuousSetOf=fn,discreteSetOf=fn,ranges=fn,toBag=fn,
+>    toList=fn}
+>   : {contains:'a range -> 'a -> bool,
+>      continuousSetOf:'b range list -> 'b continuous_set,
+>      discreteSetOf:'c range list -> 'c discrete_set,
+>      ranges:'d continuous_set -> 'd range list,
+>      toBag:'e discrete_set -> 'e bag, toList:'f discrete_set -> 'f list}
 
 CLOSED (3, 7) : int range;
 > val it = CLOSED (3,7) : int range
 
-OPEN (3, 7) : int range;
-> val it = OPEN (3,7) : int range
-
-CLOSED_OPEN (3, 7) : int range;
-> val it = CLOSED_OPEN (3,7) : int range
-
-OPEN_CLOSED (3, 7) : int range;
-> val it = OPEN_CLOSED (3,7) : int range
-
-(*) contains on int ranges.
+(*) Range.contains: prefix and postfix.
 Range.contains (CLOSED (3, 7)) 5;
 > val it = true : bool
 
-Range.contains (CLOSED (3, 7)) 3;
+CLOSED (3, 7).contains 5;
 > val it = true : bool
 
-Range.contains (CLOSED (3, 7)) 2;
-> val it = false : bool
+(*) Range.continuousSetOf normalizes overlapping ranges.
+Range.continuousSetOf [CLOSED (5, 10), CLOSED (1, 3), CLOSED (3, 6)];
+> val it = CONTINUOUS_SET [CLOSED (1,10)] : int continuous_set
 
-Range.contains (OPEN (3, 7)) 5;
+(*) Range.discreteSetOf normalizes overlapping and adjacent ranges.
+Range.discreteSetOf [CLOSED (5, 10), CLOSED (1, 3), CLOSED (3, 6)];
+> val it = DISCRETE_SET [CLOSED (1,10)] : int discrete_set
+
+(*) continuous_set.contains and discrete_set.contains (postfix).
+(Range.continuousSetOf [CLOSED (1, 3), CLOSED (7, 9)]).contains 2;
 > val it = true : bool
 
-Range.contains (OPEN (3, 7)) 3;
-> val it = false : bool
-
-Range.contains (POINT 5) 5;
+(Range.discreteSetOf [CLOSED (1, 3), CLOSED (7, 9)]).contains 2;
 > val it = true : bool
 
-Range.contains (POINT 5) 4;
-> val it = false : bool
+(*) Range.ranges returns the list of ranges in a continuous_set.
+(Range.continuousSetOf [CLOSED (1, 3), CLOSED (7, 9)]).ranges ();
+> val it = [CLOSED (1,3),CLOSED (7,9)] : int range list
 
-(*) Postfix (method) syntax.
-(CLOSED (3, 7)).contains 5;
-> val it = true : bool
-
-(*) contains on char ranges.
-Range.contains (CLOSED (#"a", #"z")) #"e";
-> val it = true : bool
-
-(*) normalize merges overlapping and adjacent ranges.
-Range.normalize [CLOSED (5, 10), CLOSED (1, 3), CLOSED (3, 6)];
-> val it = [CLOSED (1,10)] : int range list
-
-(*) toList enumerates values.
-Range.toList [CLOSED (5, 10)];
+(*) Range.toList enumerates values.
+(Range.discreteSetOf [CLOSED (5, 10)]).toList ();
 > val it = [5,6,7,8,9,10] : int list
 
-Range.toList [OPEN (5, 10)];
-> val it = [6,7,8,9] : int list
-
-Range.toList [POINT 5];
-> val it = [5] : int list
-
-Range.toList [CLOSED (1, 3), CLOSED (7, 9)];
-> val it = [1,2,3,7,8,9] : int list
-
-Range.toList [CLOSED (#"a", #"e")];
-> val it = [#"a",#"b",#"c",#"d",#"e"] : char list
-
-(*) toBag enumerates values as a bag.
-Range.toBag [CLOSED (1, 3)];
+(*) Range.toBag enumerates values as a bag.
+(Range.discreteSetOf [CLOSED (1, 3)]).toBag ();
 > val it = [1,2,3] : int bag
-
-(*) contains on bool * DESC int ranges.
-Range.contains (CLOSED ((false, DESC 5), (false, DESC 3))) (false, DESC 4);
-> val it = true : bool
-
-Range.contains (CLOSED ((false, DESC 5), (false, DESC 3))) (false, DESC 6);
-> val it = false : bool
-
-(*) toList on bool * bool.
-Range.toList [CLOSED ((false, false), (true, true))];
-> val it = [(false,false),(false,true),(true,false),(true,true)] : (bool * bool) list
-
-(*) toList on bool * DESC int.
-Range.toList [CLOSED ((false, DESC 3), (false, DESC 1))];
-> val it = [(false,DESC 3),(false,DESC 2),(false,DESC 1)]
->   : (bool * int descending) list
 
 (* Relational ----------------------------------------------------- *)
 Relational;
@@ -4700,10 +4644,12 @@ Sys.env;
 > val it = fn : unit -> (string * string) list
 Sys.env ();
 > val it =
->   [("AT_LEAST","forall 'a. 'a -> 'a range"),
+>   [("$csContains","forall 'a. 'a continuous_set -> 'a -> bool"),
+>    ("$dsContains","forall 'a. 'a discrete_set -> 'a -> bool"),
+>    ("$dsRanges","forall 'a. 'a discrete_set -> 'a range list"),
+>    ("AT_LEAST","forall 'a. 'a -> 'a range"),
 >    ("AT_MOST","forall 'a. 'a -> 'a range"),("Apr","month"),("Aug","month"),
->    ("BAG","variant list -> variant"),
->    ("BOOL","bool -> variant"),
+>    ("BAG","variant list -> variant"),("BOOL","bool -> variant"),
 >    ("Bag",
 >     "{@:forall 'a. 'a bag * 'a bag -> 'a bag, all:forall 'a. ('a -> bool) -> 'a bag -> bool, app:forall 'a. ('a -> unit) -> 'a bag -> unit, concat:forall 'a. 'a bag list -> 'a bag, drop:forall 'a. 'a bag * int -> 'a bag, exists:forall 'a. ('a -> bool) -> 'a bag -> bool, filter:forall 'a. ('a -> bool) -> 'a bag -> 'a bag, find:forall 'a. ('a -> bool) -> 'a bag -> 'a option, fold:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a bag -> 'b, fromList:forall 'a. 'a list -> 'a bag, getItem:forall 'a. 'a bag -> ('a * 'a bag) option, hd:forall 'a. 'a bag -> 'a, length:forall 'a. 'a bag -> int, map:forall 'a 'b. ('a -> 'b) -> 'a bag -> 'b bag, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a bag -> 'b bag, nil:forall 'a. 'a bag, nth:forall 'a. 'a bag * int -> 'a, null:forall 'a. 'a bag -> bool, partition:forall 'a. ('a -> bool) -> 'a bag -> 'a bag * 'a bag, tabulate:forall 'a. int * (int -> 'a) -> 'a bag, take:forall 'a. 'a bag * int -> 'a bag, tl:forall 'a. 'a bag -> 'a bag, toList:forall 'a. 'a bag -> 'a list}"),
 >    ("Bool",
@@ -4712,9 +4658,11 @@ Sys.env ();
 >    ("CLOSED_OPEN","forall 'a. 'a * 'a -> 'a range"),
 >    ("CONSTANT","string -> variant"),
 >    ("CONSTRUCT","string * variant -> variant"),
+>    ("CONTINUOUS_SET","forall 'a. 'a range list -> 'a continuous_set"),
 >    ("Char",
 >     "{<:char * char -> bool, <=:char * char -> bool, >:char * char -> bool, >=:char * char -> bool, chr:int -> char, compare:char * char -> order, contains:string -> char -> bool, fromCString:string -> char option, fromString:string -> char option, isAlpha:char -> bool, isAlphaNum:char -> bool, isAscii:char -> bool, isCntrl:char -> bool, isDigit:char -> bool, isGraph:char -> bool, isHexDigit:char -> bool, isLower:char -> bool, isPrint:char -> bool, isPunct:char -> bool, isSpace:char -> bool, isUpper:char -> bool, maxChar:char, maxOrd:int, minChar:char, notContains:string -> char -> bool, ord:char -> int, pred:char -> char, succ:char -> char, toCString:char -> string, toLower:char -> char, toString:char -> string, toUpper:char -> char}"),
 >    ("DESC","forall 'a. 'a -> 'a descending"),
+>    ("DISCRETE_SET","forall 'a. 'a range list -> 'a discrete_set"),
 >    ("Datalog",
 >     "{execute:string -> variant, translate:string -> string option, validate:string -> string}"),
 >    ("Date",
@@ -4725,7 +4673,8 @@ Sys.env ();
 >    ("Feb","month"),
 >    ("Fn",
 >     "{apply:forall 'a 'b. ('a -> 'b) * 'a -> 'b, const:forall 'a 'b. 'a -> 'b -> 'a, curry:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'a -> 'b -> 'c, equal:forall 'a. 'a -> 'a -> bool, flip:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'b * 'a -> 'c, id:forall 'a. 'a -> 'a, notEqual:forall 'a 'b. 'a -> 'a -> bool, o:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c, repeat:forall 'a. int -> ('a -> 'a) -> 'a -> 'a, uncurry:forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a * 'b -> 'c}"),
->    ("Fri","weekday"),("GREATER","order"),("GREATER_THAN","forall 'a. 'a -> 'a range"),
+>    ("Fri","weekday"),("GREATER","order"),
+>    ("GREATER_THAN","forall 'a. 'a -> 'a range"),
 >    ("General",
 >     "{before:forall 'a. 'a * unit -> 'a, exnMessage:exn -> string, exnName:exn -> string, ignore:forall 'a. 'a -> unit, o:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
 >    ("INL","forall 'a 'b. 'a -> ('a,'b) either"),
@@ -4751,7 +4700,7 @@ Sys.env ();
 >    ("POINT","forall 'a. 'a -> 'a range"),("REAL","real -> variant"),
 >    ("RECORD","(string * variant) list -> variant"),
 >    ("Range",
->     "{contains:forall 'a. 'a range -> 'a -> bool, normalize:forall 'a. 'a range list -> 'a range list, toBag:forall 'a. 'a range list -> 'a bag, toList:forall 'a. 'a range list -> 'a list}"),
+>     "{contains:forall 'a. 'a range -> 'a -> bool, continuousSetOf:forall 'a. 'a range list -> 'a continuous_set, discreteSetOf:forall 'a. 'a range list -> 'a discrete_set, ranges:forall 'a. 'a continuous_set -> 'a range list, toBag:forall 'a. 'a discrete_set -> 'a bag, toList:forall 'a. 'a discrete_set -> 'a list}"),
 >    ("Real",
 >     "{/:real * real -> real, abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",
@@ -4830,10 +4779,12 @@ env;
 > val it = fn : unit -> (string * string) list
 env ();
 > val it =
->   [("AT_LEAST","forall 'a. 'a -> 'a range"),
+>   [("$csContains","forall 'a. 'a continuous_set -> 'a -> bool"),
+>    ("$dsContains","forall 'a. 'a discrete_set -> 'a -> bool"),
+>    ("$dsRanges","forall 'a. 'a discrete_set -> 'a range list"),
+>    ("AT_LEAST","forall 'a. 'a -> 'a range"),
 >    ("AT_MOST","forall 'a. 'a -> 'a range"),("Apr","month"),("Aug","month"),
->    ("BAG","variant list -> variant"),
->    ("BOOL","bool -> variant"),
+>    ("BAG","variant list -> variant"),("BOOL","bool -> variant"),
 >    ("Bag",
 >     "{@:forall 'a. 'a bag * 'a bag -> 'a bag, all:forall 'a. ('a -> bool) -> 'a bag -> bool, app:forall 'a. ('a -> unit) -> 'a bag -> unit, concat:forall 'a. 'a bag list -> 'a bag, drop:forall 'a. 'a bag * int -> 'a bag, exists:forall 'a. ('a -> bool) -> 'a bag -> bool, filter:forall 'a. ('a -> bool) -> 'a bag -> 'a bag, find:forall 'a. ('a -> bool) -> 'a bag -> 'a option, fold:forall 'a 'b. ('a * 'b -> 'b) -> 'b -> 'a bag -> 'b, fromList:forall 'a. 'a list -> 'a bag, getItem:forall 'a. 'a bag -> ('a * 'a bag) option, hd:forall 'a. 'a bag -> 'a, length:forall 'a. 'a bag -> int, map:forall 'a 'b. ('a -> 'b) -> 'a bag -> 'b bag, mapPartial:forall 'a 'b. ('a -> 'b option) -> 'a bag -> 'b bag, nil:forall 'a. 'a bag, nth:forall 'a. 'a bag * int -> 'a, null:forall 'a. 'a bag -> bool, partition:forall 'a. ('a -> bool) -> 'a bag -> 'a bag * 'a bag, tabulate:forall 'a. int * (int -> 'a) -> 'a bag, take:forall 'a. 'a bag * int -> 'a bag, tl:forall 'a. 'a bag -> 'a bag, toList:forall 'a. 'a bag -> 'a list}"),
 >    ("Bool",
@@ -4842,9 +4793,11 @@ env ();
 >    ("CLOSED_OPEN","forall 'a. 'a * 'a -> 'a range"),
 >    ("CONSTANT","string -> variant"),
 >    ("CONSTRUCT","string * variant -> variant"),
+>    ("CONTINUOUS_SET","forall 'a. 'a range list -> 'a continuous_set"),
 >    ("Char",
 >     "{<:char * char -> bool, <=:char * char -> bool, >:char * char -> bool, >=:char * char -> bool, chr:int -> char, compare:char * char -> order, contains:string -> char -> bool, fromCString:string -> char option, fromString:string -> char option, isAlpha:char -> bool, isAlphaNum:char -> bool, isAscii:char -> bool, isCntrl:char -> bool, isDigit:char -> bool, isGraph:char -> bool, isHexDigit:char -> bool, isLower:char -> bool, isPrint:char -> bool, isPunct:char -> bool, isSpace:char -> bool, isUpper:char -> bool, maxChar:char, maxOrd:int, minChar:char, notContains:string -> char -> bool, ord:char -> int, pred:char -> char, succ:char -> char, toCString:char -> string, toLower:char -> char, toString:char -> string, toUpper:char -> char}"),
 >    ("DESC","forall 'a. 'a -> 'a descending"),
+>    ("DISCRETE_SET","forall 'a. 'a range list -> 'a discrete_set"),
 >    ("Datalog",
 >     "{execute:string -> variant, translate:string -> string option, validate:string -> string}"),
 >    ("Date",
@@ -4855,7 +4808,8 @@ env ();
 >    ("Feb","month"),
 >    ("Fn",
 >     "{apply:forall 'a 'b. ('a -> 'b) * 'a -> 'b, const:forall 'a 'b. 'a -> 'b -> 'a, curry:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'a -> 'b -> 'c, equal:forall 'a. 'a -> 'a -> bool, flip:forall 'a 'b 'c. ('a * 'b -> 'c) -> 'b * 'a -> 'c, id:forall 'a. 'a -> 'a, notEqual:forall 'a 'b. 'a -> 'a -> bool, o:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c, repeat:forall 'a. int -> ('a -> 'a) -> 'a -> 'a, uncurry:forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a * 'b -> 'c}"),
->    ("Fri","weekday"),("GREATER","order"),("GREATER_THAN","forall 'a. 'a -> 'a range"),
+>    ("Fri","weekday"),("GREATER","order"),
+>    ("GREATER_THAN","forall 'a. 'a -> 'a range"),
 >    ("General",
 >     "{before:forall 'a. 'a * unit -> 'a, exnMessage:exn -> string, exnName:exn -> string, ignore:forall 'a. 'a -> unit, o:forall 'a 'b 'c. ('b -> 'c) * ('a -> 'b) -> 'a -> 'c}"),
 >    ("INL","forall 'a 'b. 'a -> ('a,'b) either"),
@@ -4881,7 +4835,7 @@ env ();
 >    ("POINT","forall 'a. 'a -> 'a range"),("REAL","real -> variant"),
 >    ("RECORD","(string * variant) list -> variant"),
 >    ("Range",
->     "{contains:forall 'a. 'a range -> 'a -> bool, normalize:forall 'a. 'a range list -> 'a range list, toBag:forall 'a. 'a range list -> 'a bag, toList:forall 'a. 'a range list -> 'a list}"),
+>     "{contains:forall 'a. 'a range -> 'a -> bool, continuousSetOf:forall 'a. 'a range list -> 'a continuous_set, discreteSetOf:forall 'a. 'a range list -> 'a discrete_set, ranges:forall 'a. 'a continuous_set -> 'a range list, toBag:forall 'a. 'a discrete_set -> 'a bag, toList:forall 'a. 'a discrete_set -> 'a list}"),
 >    ("Real",
 >     "{/:real * real -> real, abs:real -> real, ceil:real -> int, checkFloat:real -> real, compare:real * real -> order, copySign:real * real -> real, floor:real -> int, fromInt:int -> real, fromManExp:{exp:int, man:real} -> real, fromString:string -> real option, isFinite:real -> bool, isNan:real -> bool, isNormal:real -> bool, max:real * real -> real, maxFinite:real, min:real * real -> real, minNormalPos:real, minPos:real, negInf:real, posInf:real, precision:int, radix:int, realCeil:real -> real, realFloor:real -> real, realMod:real -> real, realRound:real -> real, realTrunc:real -> real, rem:real * real -> real, round:real -> int, sameSign:real * real -> bool, sign:real -> int, signBit:real -> bool, split:real -> {frac:real, whole:real}, toManExp:real -> {exp:int, man:real}, toString:real -> string, trunc:real -> int, unordered:real * real -> bool}"),
 >    ("Relational",

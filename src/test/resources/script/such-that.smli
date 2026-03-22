@@ -34,18 +34,22 @@ Sys.set ("stringDepth", ~1);
 from i where i > 0 andalso i < 10;
 > val it = [1,2,3,4,5,6,7,8,9] : int bag
 Sys.planEx "3";
-> val it = "val it = from i in #toBag Range ([OPEN (0, 10)])" : string
+> val it =
+>   "val it = from i in #toBag Range (#discreteSetOf Range ([OPEN (0, 10)]))"
+>   : string
 
 from i where i >= 0 andalso i <= 10;
 > val it = [0,1,2,3,4,5,6,7,8,9,10] : int bag
 Sys.planEx "3";
-> val it = "val it = from i in #toBag Range ([CLOSED (0, 10)])" : string
+> val it =
+>   "val it = from i in #toBag Range (#discreteSetOf Range ([CLOSED (0, 10)]))"
+>   : string
 
 from i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22;
 > val it = [1,2,3,4,5,21,8,0] : int bag
 Sys.planEx "3";
 > val it =
->   "val it = from i in #concat Bag ([#toBag Range ([CLOSED (0, 5)]), #fromList Bag ([8]), #toBag Range ([OPEN (20, 22)])]) group i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22"
+>   "val it = from i in #concat Bag ([#toBag Range (#discreteSetOf Range ([CLOSED (0, 5)])), #fromList Bag ([8]), #toBag Range (#discreteSetOf Range ([OPEN (20, 22)]))]) group i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22"
 >   : string
 
 from i where i > 0 andalso i < 4 yield {j = i + 1};
@@ -301,7 +305,7 @@ from x in [3, 5, 7], y where x > y andalso x < y + 5 yield y;
 > val it = [~1,0,1,2,1,2,3,4,3,4,5,6] : int bag
 Sys.planEx "3";
 > val it =
->   "val it = from x in [3, 5, 7] join y in #toBag Range ([OPEN (-:int (x, 5), x)]) yield y"
+>   "val it = from x in [3, 5, 7] join y in #toBag Range (#discreteSetOf Range ([OPEN (-:int (x, 5), x)])) yield y"
 >   : string
 
 from x in [3, 5, 7], y

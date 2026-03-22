@@ -3305,18 +3305,52 @@ The ordering is implicit, derived from the type `α`.
 """
 
 [[functions]]
-ordinal = 262
+ordinal = 265
 structure = "Range"
-name = "normalize"
+name = "continuousSetOf"
 specified = "morel"
-type = "α range list → α range list"
-prototype = "normalize ranges"
+type = "α range list → α continuous_set"
+prototype = "continuousSetOf ranges"
 description = """
-returns a minimal list of ranges that cover the same set of values as
-`ranges`. Overlapping and adjacent ranges are merged, and the result is
-sorted by lower bound.
+normalizes `ranges` into a `continuous_set`. Overlapping and adjacent
+ranges are merged, and the result is sorted by lower bound.
 
 The ordering is implicit, derived from the element type.
+"""
+
+[[types]]
+structure = "Range"
+name = "continuous_set"
+type = "eqtype 'a continuous_set"
+specified = "morel"
+description = """
+represents a set of values as a normalized list of non-overlapping,
+non-adjacent ranges.
+"""
+
+[[functions]]
+ordinal = 266
+structure = "Range"
+name = "discreteSetOf"
+specified = "morel"
+type = "α range list → α discrete_set"
+prototype = "discreteSetOf ranges"
+description = """
+normalizes `ranges` into a `discrete_set`. Overlapping and adjacent
+ranges are merged (treating adjacent discrete values as mergeable), and
+the result is sorted by lower bound.
+
+The ordering and discreteness are implicit, derived from the element type.
+"""
+
+[[types]]
+structure = "Range"
+name = "discrete_set"
+type = "eqtype 'a discrete_set"
+specified = "morel"
+description = """
+represents a set of discrete values as a normalized list of
+non-overlapping, non-adjacent ranges.
 """
 
 [[types]]
@@ -3349,14 +3383,27 @@ The constructors and their meanings are:
 """
 
 [[functions]]
+ordinal = 267
+structure = "Range"
+name = "ranges"
+specified = "morel"
+type = "α continuous_set → α range list"
+prototype = "ranges cs"
+method = true
+description = """
+returns the list of ranges in the continuous set `cs`.
+"""
+
+[[functions]]
 ordinal = 263
 structure = "Range"
 name = "toBag"
 specified = "morel"
-type = "α range list → α bag"
-prototype = "toBag ranges"
+type = "α discrete_set → α bag"
+prototype = "toBag ds"
+method = true
 description = """
-enumerates all values covered by `ranges` and returns them as a bag.
+enumerates all values in the discrete set `ds` and returns them as a bag.
 The element type must be discrete (e.g., `int`, `char`, `bool`).
 Raises an exception if any range is unbounded below and the type has no
 minimum value (e.g., `LESS_THAN 5 : int range`).
@@ -3367,12 +3414,13 @@ ordinal = 264
 structure = "Range"
 name = "toList"
 specified = "morel"
-type = "α range list → α list"
-prototype = "toList ranges"
+type = "α discrete_set → α list"
+prototype = "toList ds"
+method = true
 description = """
-enumerates all values covered by `ranges` and returns them as a list,
-in ascending order. The element type must be discrete (e.g., `int`,
-`char`, `bool`).
+enumerates all values in the discrete set `ds` and returns them as a
+list, in ascending order. The element type must be discrete (e.g.,
+`int`, `char`, `bool`).
 Raises an exception if any range is unbounded below and the type has no
 minimum value (e.g., `LESS_THAN 5 : int range`).
 """

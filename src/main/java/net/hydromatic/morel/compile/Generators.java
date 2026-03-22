@@ -2562,7 +2562,8 @@ class Generators {
         provenance.add(c);
       }
     }
-    // Range.toList [CTOR (lower, upper)] or Range.toBag [CTOR (lower, upper)]
+    // Range.discreteSetOf [CTOR (lower, upper)] |> Range.toList
+    // or Range.discreteSetOf [CTOR (lower, upper)] |> Range.toBag
     // where CTOR is CLOSED, CLOSED_OPEN, OPEN_CLOSED, or OPEN.
     final TypeSystem typeSystem = cache.typeSystem;
     final BuiltIn.Constructor rangeCtor =
@@ -2580,10 +2581,25 @@ class Generators {
             core.tuple(typeSystem, lower, upper));
     final Core.Exp rangeListExp =
         core.list(typeSystem, rangeType, ImmutableList.of(rangeExp));
-    final BuiltIn toListOrBag =
-        ordered ? BuiltIn.RANGE_TO_LIST : BuiltIn.RANGE_TO_BAG;
+    // Step 1: Range.discreteSetOf rangeListExp -> 'a discrete_set
     // Instantiate the forall type with the element type so that the literal
     // carries a concrete FnType; Typed.withType requires a concrete FnType.
+    final Type discreteSetOfForallType =
+        BuiltIn.RANGE_DISCRETE_SET_OF.typeFunction.apply(typeSystem);
+    final FnType discreteSetOfFnType =
+        (FnType) typeSystem.apply(discreteSetOfForallType, type);
+    final Core.Apply discreteSetExp =
+        core.apply(
+            Pos.ZERO,
+            discreteSetOfFnType.resultType,
+            core.functionLiteral(
+                discreteSetOfFnType, BuiltIn.RANGE_DISCRETE_SET_OF),
+            rangeListExp);
+    // Step 2: Range.toList or Range.toBag on the discrete_set
+    final BuiltIn toListOrBag =
+        ordered
+            ? BuiltIn.RANGE_DISCRETE_SET_TO_LIST
+            : BuiltIn.RANGE_DISCRETE_SET_TO_BAG;
     final Type toListForallType = toListOrBag.typeFunction.apply(typeSystem);
     final FnType toListFnType =
         (FnType) typeSystem.apply(toListForallType, type);
@@ -2592,7 +2608,7 @@ class Generators {
             Pos.ZERO,
             toListFnType.resultType,
             core.functionLiteral(toListFnType, toListOrBag),
-            rangeListExp);
+            discreteSetExp);
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
     final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
     return cache.add(
