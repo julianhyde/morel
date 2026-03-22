@@ -2861,6 +2861,10 @@ public abstract class Codes {
   private static final Applicable RANGE_CONTAINS =
       new RangeContains(Comparators::compare);
 
+  /** @see BuiltIn#RANGE_CONTINUOUS_SET_COMPLEMENT */
+  private static final Applicable RANGE_CONTINUOUS_SET_COMPLEMENT =
+      new SetComplement(BuiltIn.RANGE_CONTINUOUS_SET_COMPLEMENT, null);
+
   /** @see BuiltIn#RANGE_CONTINUOUS_SET_CONTAINS */
   private static final Applicable RANGE_CONTINUOUS_SET_CONTAINS =
       new SetContains(
@@ -2873,6 +2877,11 @@ public abstract class Codes {
   /** @see BuiltIn#RANGE_CONTINUOUS_SET_RANGES */
   private static final Applicable RANGE_CONTINUOUS_SET_RANGES =
       new SetRanges(BuiltIn.RANGE_CONTINUOUS_SET_RANGES);
+
+  /** @see BuiltIn#RANGE_DISCRETE_SET_COMPLEMENT */
+  private static final Applicable RANGE_DISCRETE_SET_COMPLEMENT =
+      new SetComplement(
+          BuiltIn.RANGE_DISCRETE_SET_COMPLEMENT, Discretes.dummy());
 
   /** @see BuiltIn#RANGE_DISCRETE_SET_CONTAINS */
   private static final Applicable RANGE_DISCRETE_SET_CONTAINS =
@@ -5353,10 +5362,16 @@ public abstract class Codes {
           .put(BuiltIn.REAL_UNORDERED, REAL_UNORDERED)
           .put(BuiltIn.RANGE_CONTAINS, RANGE_CONTAINS)
           .put(
+              BuiltIn.RANGE_CONTINUOUS_SET_COMPLEMENT,
+              RANGE_CONTINUOUS_SET_COMPLEMENT)
+          .put(
               BuiltIn.RANGE_CONTINUOUS_SET_CONTAINS,
               RANGE_CONTINUOUS_SET_CONTAINS)
           .put(BuiltIn.RANGE_CONTINUOUS_SET_OF, RANGE_CONTINUOUS_SET_OF)
           .put(BuiltIn.RANGE_CONTINUOUS_SET_RANGES, RANGE_CONTINUOUS_SET_RANGES)
+          .put(
+              BuiltIn.RANGE_DISCRETE_SET_COMPLEMENT,
+              RANGE_DISCRETE_SET_COMPLEMENT)
           .put(BuiltIn.RANGE_DISCRETE_SET_CONTAINS, RANGE_DISCRETE_SET_CONTAINS)
           .put(BuiltIn.RANGE_DISCRETE_SET_OF, RANGE_DISCRETE_SET_OF)
           .put(BuiltIn.RANGE_DISCRETE_SET_RANGES, RANGE_DISCRETE_SET_RANGES)
@@ -6854,6 +6869,8 @@ public abstract class Codes {
           x -> {
             final List bounds;
             switch (ctor) {
+              case RANGE_ALL:
+                return true;
               case RANGE_POINT:
                 return cmp.compare(x, range.get(1)) == 0;
               case RANGE_AT_LEAST:
@@ -6994,6 +7011,42 @@ public abstract class Codes {
     @Override
     public List apply(List set) {
       return setToRangeList(set.get(1));
+    }
+  }
+
+  /**
+   * Shared implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_COMPLEMENT}
+   * and {@link BuiltIn#RANGE_DISCRETE_SET_COMPLEMENT}.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static class SetComplement extends BaseApplicable1<List, List>
+      implements Typed {
+    private final @Nullable Discrete<Object> discrete;
+
+    SetComplement(BuiltIn builtIn, @Nullable Discrete<Object> discrete) {
+      super(builtIn);
+      this.discrete = discrete;
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      if (discrete == null) {
+        return this; // continuous: complement needs no type-specific logic
+      }
+      final Type elemType = rangeElementType(type);
+      return new SetComplement(
+          builtIn, Discretes.discreteFor(typeSystem, elemType));
+    }
+
+    @Override
+    public List apply(List set) {
+      final PairList<Bound, Bound> ranges = (PairList<Bound, Bound>) set.get(1);
+      final PairList<Bound, Bound> comp = Bound.complement(ranges, discrete);
+      final BuiltIn.Constructor ctor =
+          builtIn == BuiltIn.RANGE_CONTINUOUS_SET_COMPLEMENT
+              ? BuiltIn.Constructor.CONTINUOUS_SET_CONTINUOUS_SET
+              : BuiltIn.Constructor.DISCRETE_SET_DISCRETE_SET;
+      return ImmutableList.of(ctor.constructor, comp);
     }
   }
 

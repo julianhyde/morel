@@ -85,32 +85,7 @@ public class Discretes {
             .map(t -> discreteFor(typeSystem, t))
             .collect(toImmutableList());
     final Comparator<Object> cmp = Comparators.comparatorFor(typeSystem, type);
-    return new Discrete<Object>() {
-      @Override
-      public Comparator<Object> comparator() {
-        return cmp;
-      }
-
-      @Override
-      public @Nullable Object next(Object v) {
-        return stepTuple((List<?>) v, components, /* forward= */ true);
-      }
-
-      @Override
-      public @Nullable Object prev(Object v) {
-        return stepTuple((List<?>) v, components, /* forward= */ false);
-      }
-
-      @Override
-      public @Nullable Object minValue() {
-        return tupleExtreme(components, /* min= */ true);
-      }
-
-      @Override
-      public @Nullable Object maxValue() {
-        return tupleExtreme(components, /* min= */ false);
-      }
-    };
+    return new TupleDiscrete(cmp, components);
   }
 
   /**
@@ -174,39 +149,7 @@ public class Discretes {
     if (dt.name.equals(BuiltIn.Datatype.DESCENDING.mlName())) {
       final Discrete<Object> inner = discreteFor(typeSystem, dt.arg(0));
       final Comparator<Object> cmp = Comparators.comparatorFor(typeSystem, dt);
-      // Runtime value: ["DESC", innerValue]
-      return new Discrete<Object>() {
-        @Override
-        public Comparator<Object> comparator() {
-          return cmp;
-        }
-
-        @Override
-        public @Nullable Object next(Object v) {
-          // In descending order, the successor is the predecessor in the inner
-          // order.
-          final Object p = inner.prev(((List<?>) v).get(1));
-          return p == null ? null : ImmutableList.of("DESC", p);
-        }
-
-        @Override
-        public @Nullable Object prev(Object v) {
-          final Object n = inner.next(((List<?>) v).get(1));
-          return n == null ? null : ImmutableList.of("DESC", n);
-        }
-
-        @Override
-        public @Nullable Object minValue() {
-          final Object max = inner.maxValue();
-          return max == null ? null : ImmutableList.of("DESC", max);
-        }
-
-        @Override
-        public @Nullable Object maxValue() {
-          final Object min = inner.minValue();
-          return min == null ? null : ImmutableList.of("DESC", min);
-        }
-      };
+      return new DescendingDiscrete(inner, cmp);
     }
 
     // Finite enum DataType: all constructors must be nullary.
@@ -217,36 +160,7 @@ public class Discretes {
             .collect(toImmutableList());
     if (ctors.size() == dt.typeConstructors.size() && !ctors.isEmpty()) {
       final Comparator<Object> cmp = Comparators.comparatorFor(typeSystem, dt);
-      return new Discrete<Object>() {
-        @Override
-        public Comparator<Object> comparator() {
-          return cmp;
-        }
-
-        @Override
-        public @Nullable Object next(Object v) {
-          final int i = ctors.indexOf(((List<?>) v).get(0));
-          return i < ctors.size() - 1
-              ? ImmutableList.of(ctors.get(i + 1))
-              : null;
-        }
-
-        @Override
-        public @Nullable Object prev(Object v) {
-          final int i = ctors.indexOf(((List<?>) v).get(0));
-          return i > 0 ? ImmutableList.of(ctors.get(i - 1)) : null;
-        }
-
-        @Override
-        public Object minValue() {
-          return ImmutableList.of(ctors.get(0));
-        }
-
-        @Override
-        public Object maxValue() {
-          return ImmutableList.of(ctors.get(ctors.size() - 1));
-        }
-      };
+      return new EnumDiscrete(cmp, ctors);
     }
 
     throw new IllegalArgumentException("not a discrete type: " + dt);
@@ -255,122 +169,250 @@ public class Discretes {
   private static final Comparator<Object> NATURAL = Comparators::compare;
 
   /** {@link Discrete} for {@code int}. */
-  private static final Discrete<Integer> INT =
-      new Discrete<Integer>() {
-        @Override
-        public Comparator<Object> comparator() {
-          return NATURAL;
-        }
-
-        @Override
-        public @Nullable Integer next(Integer v) {
-          return v == Integer.MAX_VALUE ? null : v + 1;
-        }
-
-        @Override
-        public @Nullable Integer prev(Integer v) {
-          return v == Integer.MIN_VALUE ? null : v - 1;
-        }
-
-        @Override
-        public Integer minValue() {
-          return Integer.MIN_VALUE;
-        }
-
-        @Override
-        public Integer maxValue() {
-          return Integer.MAX_VALUE;
-        }
-      };
+  private static final Discrete<Integer> INT = new IntDiscrete();
 
   /** {@link Discrete} for {@code char} (ordinals 0–255). */
-  private static final Discrete<Character> CHAR =
-      new Discrete<Character>() {
-        @Override
-        public Comparator<Object> comparator() {
-          return NATURAL;
-        }
-
-        @Override
-        public @Nullable Character next(Character v) {
-          return v == '\u00ff' ? null : (char) (v + 1);
-        }
-
-        @Override
-        public @Nullable Character prev(Character v) {
-          return v == '\u0000' ? null : (char) (v - 1);
-        }
-
-        @Override
-        public Character minValue() {
-          return '\u0000';
-        }
-
-        @Override
-        public Character maxValue() {
-          return '\u00ff';
-        }
-      };
+  private static final Discrete<Character> CHAR = new CharDiscrete();
 
   /** {@link Discrete} for {@code bool} (false &lt; true). */
-  private static final Discrete<Boolean> BOOL =
-      new Discrete<Boolean>() {
-        @Override
-        public Comparator<Object> comparator() {
-          return NATURAL;
-        }
-
-        @Override
-        public @Nullable Boolean next(Boolean v) {
-          return v ? null : Boolean.TRUE;
-        }
-
-        @Override
-        public @Nullable Boolean prev(Boolean v) {
-          return v ? Boolean.FALSE : null;
-        }
-
-        @Override
-        public Boolean minValue() {
-          return Boolean.FALSE;
-        }
-
-        @Override
-        public Boolean maxValue() {
-          return Boolean.TRUE;
-        }
-      };
+  private static final Discrete<Boolean> BOOL = new BoolDiscrete();
 
   /** {@link Discrete} for {@code unit} (a single value). */
-  private static final Discrete<Unit> UNIT =
-      new Discrete<Unit>() {
-        private final Comparator<Object> cmp = (a, b) -> 0;
+  private static final Discrete<Unit> UNIT = new UnitDiscrete();
 
-        @Override
-        public Comparator<Object> comparator() {
-          return cmp;
-        }
+  /** {@link Discrete} implementation for {@code int}. */
+  private static final class IntDiscrete implements Discrete<Integer> {
+    @Override
+    public Comparator<Object> comparator() {
+      return NATURAL;
+    }
 
-        @Override
-        public @Nullable Unit next(Unit v) {
-          return null;
-        }
+    @Override
+    public @Nullable Integer next(Integer v) {
+      return v == Integer.MAX_VALUE ? null : v + 1;
+    }
 
-        @Override
-        public @Nullable Unit prev(Unit v) {
-          return null;
-        }
+    @Override
+    public @Nullable Integer prev(Integer v) {
+      return v == Integer.MIN_VALUE ? null : v - 1;
+    }
 
-        @Override
-        public Unit minValue() {
-          return Unit.INSTANCE;
-        }
+    @Override
+    public Integer minValue() {
+      return Integer.MIN_VALUE;
+    }
 
-        @Override
-        public Unit maxValue() {
-          return Unit.INSTANCE;
-        }
-      };
+    @Override
+    public Integer maxValue() {
+      return Integer.MAX_VALUE;
+    }
+  }
+
+  /** {@link Discrete} implementation for {@code char} (ordinals 0–255). */
+  private static final class CharDiscrete implements Discrete<Character> {
+    @Override
+    public Comparator<Object> comparator() {
+      return NATURAL;
+    }
+
+    @Override
+    public @Nullable Character next(Character v) {
+      return v == '\u00ff' ? null : (char) (v + 1);
+    }
+
+    @Override
+    public @Nullable Character prev(Character v) {
+      return v == '\u0000' ? null : (char) (v - 1);
+    }
+
+    @Override
+    public Character minValue() {
+      return '\u0000';
+    }
+
+    @Override
+    public Character maxValue() {
+      return '\u00ff';
+    }
+  }
+
+  /** {@link Discrete} implementation for {@code bool} (false &lt; true). */
+  private static final class BoolDiscrete implements Discrete<Boolean> {
+    @Override
+    public Comparator<Object> comparator() {
+      return NATURAL;
+    }
+
+    @Override
+    public @Nullable Boolean next(Boolean v) {
+      return v ? null : Boolean.TRUE;
+    }
+
+    @Override
+    public @Nullable Boolean prev(Boolean v) {
+      return v ? Boolean.FALSE : null;
+    }
+
+    @Override
+    public Boolean minValue() {
+      return Boolean.FALSE;
+    }
+
+    @Override
+    public Boolean maxValue() {
+      return Boolean.TRUE;
+    }
+  }
+
+  /** {@link Discrete} implementation for {@code unit} (a single value). */
+  private static final class UnitDiscrete implements Discrete<Unit> {
+    private static final Comparator<Object> CMP = (a, b) -> 0;
+
+    @Override
+    public Comparator<Object> comparator() {
+      return CMP;
+    }
+
+    @Override
+    public @Nullable Unit next(Unit v) {
+      return null;
+    }
+
+    @Override
+    public @Nullable Unit prev(Unit v) {
+      return null;
+    }
+
+    @Override
+    public Unit minValue() {
+      return Unit.INSTANCE;
+    }
+
+    @Override
+    public Unit maxValue() {
+      return Unit.INSTANCE;
+    }
+  }
+
+  /** {@link Discrete} implementation for a tuple or record type. */
+  private static final class TupleDiscrete implements Discrete<Object> {
+    private final Comparator<Object> cmp;
+    private final List<Discrete<Object>> components;
+
+    TupleDiscrete(Comparator<Object> cmp, List<Discrete<Object>> components) {
+      this.cmp = cmp;
+      this.components = components;
+    }
+
+    @Override
+    public Comparator<Object> comparator() {
+      return cmp;
+    }
+
+    @Override
+    public @Nullable Object next(Object v) {
+      return stepTuple((List<?>) v, components, /* forward= */ true);
+    }
+
+    @Override
+    public @Nullable Object prev(Object v) {
+      return stepTuple((List<?>) v, components, /* forward= */ false);
+    }
+
+    @Override
+    public @Nullable Object minValue() {
+      return tupleExtreme(components, /* min= */ true);
+    }
+
+    @Override
+    public @Nullable Object maxValue() {
+      return tupleExtreme(components, /* min= */ false);
+    }
+  }
+
+  /**
+   * {@link Discrete} implementation for the {@code descending} datatype.
+   *
+   * <p>Runtime value: {@code ["DESC", innerValue]}.
+   */
+  private static final class DescendingDiscrete implements Discrete<Object> {
+    private final Discrete<Object> inner;
+    private final Comparator<Object> cmp;
+
+    DescendingDiscrete(Discrete<Object> inner, Comparator<Object> cmp) {
+      this.inner = inner;
+      this.cmp = cmp;
+    }
+
+    @Override
+    public Comparator<Object> comparator() {
+      return cmp;
+    }
+
+    @Override
+    public @Nullable Object next(Object v) {
+      // In descending order, the successor is the predecessor in the inner
+      // order.
+      final Object p = inner.prev(((List<?>) v).get(1));
+      return p == null ? null : ImmutableList.of("DESC", p);
+    }
+
+    @Override
+    public @Nullable Object prev(Object v) {
+      final Object n = inner.next(((List<?>) v).get(1));
+      return n == null ? null : ImmutableList.of("DESC", n);
+    }
+
+    @Override
+    public @Nullable Object minValue() {
+      final Object max = inner.maxValue();
+      return max == null ? null : ImmutableList.of("DESC", max);
+    }
+
+    @Override
+    public @Nullable Object maxValue() {
+      final Object min = inner.minValue();
+      return min == null ? null : ImmutableList.of("DESC", min);
+    }
+  }
+
+  /** {@link Discrete} implementation for a finite enum DataType. */
+  private static final class EnumDiscrete implements Discrete<Object> {
+    private final Comparator<Object> cmp;
+    private final ImmutableList<String> ctors;
+
+    EnumDiscrete(Comparator<Object> cmp, ImmutableList<String> ctors) {
+      this.cmp = cmp;
+      this.ctors = ctors;
+    }
+
+    @Override
+    public Comparator<Object> comparator() {
+      return cmp;
+    }
+
+    @Override
+    public @Nullable Object next(Object v) {
+      final int i = ctors.indexOf(((List<?>) v).get(0));
+      return i < ctors.size() - 1 ? ImmutableList.of(ctors.get(i + 1)) : null;
+    }
+
+    @Override
+    public @Nullable Object prev(Object v) {
+      final int i = ctors.indexOf(((List<?>) v).get(0));
+      return i > 0 ? ImmutableList.of(ctors.get(i - 1)) : null;
+    }
+
+    @Override
+    public Object minValue() {
+      return ImmutableList.of(ctors.get(0));
+    }
+
+    @Override
+    public Object maxValue() {
+      return ImmutableList.of(ctors.get(ctors.size() - 1));
+    }
+  }
 }
 
 // End Discretes.java

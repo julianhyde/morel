@@ -28,9 +28,9 @@ The `Range` structure represents contiguous intervals of values of an
 ordered type, including open, closed, and half-open intervals, as well as
 unbounded intervals.
 
-A range is a value of the `'a range` datatype, which has nine constructors:
-`AT_LEAST`, `AT_MOST`, `CLOSED`, `CLOSED_OPEN`, `GREATER_THAN`, `LESS_THAN`,
-`OPEN`, `OPEN_CLOSED`, and `POINT`.
+A range is a value of the `'a range` datatype, which has ten constructors:
+`ALL`, `AT_LEAST`, `AT_MOST`, `CLOSED`, `CLOSED_OPEN`, `GREATER_THAN`,
+`LESS_THAN`, `OPEN`, `OPEN_CLOSED`, and `POINT`.
 
 Naming conventions follow Guava and standard mathematical notation:
 CLOSED endpoints are inclusive `[a, b]`;
@@ -42,7 +42,8 @@ OPEN endpoints are exclusive `(a, b)`.
 eqtype 'a <a id='continuous_set' href="#continuous_set-impl">continuous_set</a>
 eqtype 'a <a id='discrete_set' href="#discrete_set-impl">discrete_set</a>
 datatype 'a <a id='range' href="#range-impl">range</a> =
-    AT_LEAST of 'a
+    ALL
+  | AT_LEAST of 'a
   | AT_MOST of 'a
   | CLOSED of 'a * 'a
   | CLOSED_OPEN of 'a * 'a
@@ -61,6 +62,8 @@ val <a id='ranges' href="#ranges-impl">ranges</a> : 'a continuous_set -> 'a rang
 val <a id='contains-fn' href="#contains-fn-impl">contains</a> : 'a continuous_set -> 'a -> bool
 val <a id='contains-fn' href="#contains-fn-impl">contains</a> : 'a discrete_set -> 'a -> bool
 val <a id='ranges-fn' href="#ranges-fn-impl">ranges</a> : 'a discrete_set -> 'a range list
+val <a id='complement' href="#complement-impl">complement</a> : 'a continuous_set -> 'a continuous_set
+val <a id='complement-fn' href="#complement-fn-impl">complement</a> : 'a discrete_set -> 'a discrete_set
 </pre>
 
 <a id="continuous_set-impl"></a>
@@ -81,6 +84,7 @@ non-overlapping, non-adjacent ranges.
 represents a contiguous interval of values of an ordered type.
 
 The constructors and their meanings are:
+* `ALL`: all values (equivalent to (−∞, +∞))
 * `AT_LEAST v`: `x >= v`
 * `AT_MOST v`: `x <= v`
 * `CLOSED (lo, hi)`: `x >= lo andalso x <= hi`
@@ -123,6 +127,19 @@ ranges are merged, and the result is sorted by lower bound.
 
 The ordering is implicit, derived from the element type.
 
+```
+- val cs = Range.continuousSetOf [OPEN (1.0, 3.0), AT_LEAST 7.0];
+val cs = CONTINUOUS_SET [OPEN (1.0,3.0),AT_LEAST 7.0] : real continuous_set
+- cs.contains 2.0;
+val it = true : bool
+- cs.contains 1.0;
+val it = false : bool
+- cs.contains 8.5;
+val it = true : bool
+- cs.complement ();
+val it = CONTINUOUS_SET [AT_MOST 1.0,CLOSED_OPEN (3.0,7.0)] : real continuous_set
+```
+
 <a id="discreteSetOf-impl"></a>
 <h3><code>discreteSetOf</code></h3>
 
@@ -131,6 +148,13 @@ ranges are merged (treating adjacent discrete values as mergeable), and
 the result is sorted by lower bound.
 
 The ordering and discreteness are implicit, derived from the element type.
+
+```
+- val evens = Range.discreteSetOf [CLOSED (0, 2), CLOSED (4, 6), CLOSED (8, 10)];
+val evens = DISCRETE_SET [CLOSED (0,2),CLOSED (4,6),CLOSED (8,10)] : int discrete_set
+- evens.toList ();
+val it = [0,1,2,4,5,6,8,9,10] : int list
+```
 
 <a id="ranges-impl"></a>
 <h3><code>ranges</code></h3>
@@ -155,6 +179,18 @@ The ordering is implicit, derived from the type `α`.
 <h3><code>ranges</code></h3>
 
 `ranges ds` (or `ds.ranges ()`) returns the list of ranges in the discrete set `ds`.
+
+<a id="complement-impl"></a>
+<h3><code>complement</code></h3>
+
+`complement cs` (or `cs.complement ()`) returns the complement of continuous set `cs`: a continuous set containing
+all values not in `cs`.
+
+<a id="complement-fn-impl"></a>
+<h3><code>complement</code></h3>
+
+`complement ds` (or `ds.complement ()`) returns the complement of discrete set `ds`: a discrete set containing all
+values of the element type not in `ds`.
 
 [//]: # (end:lib/range)
 

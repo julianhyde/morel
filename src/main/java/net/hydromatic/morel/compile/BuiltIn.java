@@ -2746,6 +2746,19 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.range(0), h.get(0), BOOL))),
 
   /**
+   * Function "Range.complement" (on continuous_set), of type "&alpha;
+   * continuous_set &rarr; &alpha; continuous_set".
+   */
+  RANGE_CONTINUOUS_SET_COMPLEMENT(
+      "Range",
+      "complement",
+      "$csComplement",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(h.continuousSet(0), h.continuousSet(0)))),
+
+  /**
    * Function "Range.contains" (on continuous_set), of type "&alpha;
    * continuous_set &rarr; &alpha; &rarr; bool".
    */
@@ -2779,6 +2792,18 @@ public enum BuiltIn {
       ts ->
           ts.forallType(
               1, h -> ts.fnType(h.continuousSet(0), ts.listType(h.range(0))))),
+
+  /**
+   * Function "Range.complement" (on discrete_set), of type "&alpha;
+   * discrete_set &rarr; &alpha; discrete_set".
+   */
+  RANGE_DISCRETE_SET_COMPLEMENT(
+      "Range",
+      "complement",
+      "$dsComplement",
+      true,
+      ts ->
+          ts.forallType(1, h -> ts.fnType(h.discreteSet(0), h.discreteSet(0)))),
 
   /**
    * Function "Range.contains" (on discrete_set), of type "&alpha; discrete_set
@@ -4823,7 +4848,8 @@ public enum BuiltIn {
         false,
         1,
         h ->
-            h.tyCon(Constructor.RANGE_AT_LEAST)
+            h.tyCon(Constructor.RANGE_ALL)
+                .tyCon(Constructor.RANGE_AT_LEAST)
                 .tyCon(Constructor.RANGE_AT_MOST)
                 .tyCon(Constructor.RANGE_CLOSED)
                 .tyCon(Constructor.RANGE_CLOSED_OPEN)
@@ -5004,6 +5030,7 @@ public enum BuiltIn {
     ORDER_EQUAL(Datatype.ORDER, "EQUAL"),
     ORDER_GREATER(Datatype.ORDER, "GREATER"),
     ORDER_LESS(Datatype.ORDER, "LESS"),
+    RANGE_ALL(Datatype.RANGE, "ALL"),
     RANGE_AT_LEAST(Datatype.RANGE, "AT_LEAST", h -> h.get(0)),
     RANGE_AT_MOST(Datatype.RANGE, "AT_MOST", h -> h.get(0)),
     RANGE_CLOSED(

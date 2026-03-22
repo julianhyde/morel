@@ -67,9 +67,7 @@ class Bound {
   public static List<Object> toRange(Bound lo, Bound hi) {
     if (lo.value == null) {
       if (hi.value == null) {
-        // All-encompassing range: represent as AT_LEAST of the min type —
-        // this path should not normally be reached in practice.
-        throw new AssertionError("cannot represent all-encompassing range");
+        return ImmutableList.of(BuiltIn.Constructor.RANGE_ALL.constructor);
       }
       return ImmutableList.of(
           hi.inclusive
@@ -142,6 +140,7 @@ class Bound {
     BuiltIn.Constructor ctor =
         requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
     switch (ctor) {
+      case RANGE_ALL:
       case RANGE_AT_MOST:
       case RANGE_LESS_THAN:
         return UNBOUNDED;
@@ -165,6 +164,7 @@ class Bound {
     BuiltIn.Constructor ctor =
         requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
     switch (ctor) {
+      case RANGE_ALL:
       case RANGE_AT_LEAST:
       case RANGE_GREATER_THAN:
         return UNBOUNDED;
@@ -237,6 +237,84 @@ class Bound {
       }
     }
     return -1;
+  }
+
+  /**
+   * Returns the complement of a normalized {@link PairList}{@code <Bound,
+   * Bound>}: the set of all values <em>not</em> covered by any range in {@code
+   * ranges}.
+   *
+   * <p>For continuous sets, each bound is flipped (inclusive &harr; exclusive).
+   * For discrete sets ({@code discrete} non-null), adjacent discrete values are
+   * used so that the result contains only {@code CLOSED} and unbounded
+   * constructors.
+   */
+  static PairList<Bound, Bound> complement(
+      PairList<Bound, Bound> ranges, @Nullable Discrete<Object> discrete) {
+    final PairList<Bound, Bound> result = PairList.of();
+    Bound lo = UNBOUNDED;
+    for (int i = 0; i < ranges.size(); i++) {
+      final Bound rangeLo = ranges.left(i);
+      final Bound rangeHi = ranges.right(i);
+      if (rangeLo.value != null) {
+        final Bound hi = complementHi(rangeLo, discrete);
+        if (hi != null) {
+          result.add(lo, hi);
+        }
+      }
+      if (rangeHi.value == null) {
+        // Range extends to +∞; no complement after this.
+        return result.immutable();
+      }
+      final Bound nextLo = complementLo(rangeHi, discrete);
+      if (nextLo == null) {
+        // Range ends at the maximum discrete value; nothing after it.
+        return result.immutable();
+      }
+      lo = nextLo;
+    }
+    result.add(lo, UNBOUNDED);
+    return result.immutable();
+  }
+
+  /**
+   * Returns the upper bound of the complement range that ends just before lower
+   * bound {@code lo}.
+   *
+   * <p>Returns {@code null} if the complement range is empty (i.e., {@code lo}
+   * is the minimum discrete value).
+   */
+  private static @Nullable Bound complementHi(
+      Bound lo, @Nullable Discrete<Object> discrete) {
+    if (discrete != null) {
+      if (lo.inclusive) {
+        Object prev = discrete.prev(lo.value);
+        return prev != null ? inclusive(prev) : null;
+      } else {
+        return inclusive(lo.value);
+      }
+    }
+    return lo.inclusive ? exclusive(lo.value) : inclusive(lo.value);
+  }
+
+  /**
+   * Returns the lower bound of the complement range that starts just after
+   * upper bound {@code hi}.
+   *
+   * <p>Returns {@code null} if there is no discrete value after {@code hi}
+   * (i.e., {@code hi} is the maximum discrete value).
+   */
+  private static @Nullable Bound complementLo(
+      Bound hi, @Nullable Discrete<Object> discrete) {
+    if (discrete != null) {
+      if (hi.inclusive) {
+        Object next = discrete.next(hi.value);
+        return next != null ? inclusive(next) : null;
+      } else {
+        return inclusive(hi.value);
+      }
+    }
+    return hi.inclusive ? exclusive(hi.value) : inclusive(hi.value);
   }
 
   /**
@@ -317,7 +395,7 @@ class Bound {
     if (c < 0) {
       return false;
     }
-    return inclusive && bound.inclusive;
+    return inclusive || bound.inclusive;
   }
 
   /**
@@ -326,7 +404,7 @@ class Bound {
    */
   boolean canMergeDiscrete(Bound bound, Discrete<Object> discrete) {
     if (value == null || bound.value == null) {
-      return false;
+      return true;
     }
     // Compute effective last-included value of this range.
     Object hiEffective = inclusive ? value : discrete.prev(value);
