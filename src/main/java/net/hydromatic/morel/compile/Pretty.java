@@ -444,6 +444,9 @@ class Pretty {
       if (arg instanceof Variant) {
         arg = ((Variant) arg).value;
       }
+      if (arg instanceof PairList) {
+        arg = Codes.boundsToRangeList((PairList) arg);
+      }
       buf.append(' ');
       final boolean needParentheses =
           typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;

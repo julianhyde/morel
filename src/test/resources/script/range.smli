@@ -167,6 +167,58 @@ cs.contains 2;
 cs.contains 5;
 > val it = false : bool
 
+(*) Boundary and corner cases for set contains (exercises binary search).
+(*) Before first range.
+cs.contains 0;
+> val it = false : bool
+
+(*) Inclusive lower boundary.
+cs.contains 1;
+> val it = true : bool
+
+(*) Inclusive upper boundary.
+cs.contains 3;
+> val it = true : bool
+
+(*) In gap between ranges.
+cs.contains 5;
+> val it = false : bool
+
+(*) Inclusive lower boundary of second range.
+cs.contains 7;
+> val it = true : bool
+
+(*) After last range.
+cs.contains 10;
+> val it = false : bool
+
+(*) Empty continuous_set contains nothing.
+(Range.continuousSetOf []).contains 5;
+> val it = false : bool
+
+(*) Exclusive boundary (OPEN range): endpoint is not a member.
+val csOpen = Range.continuousSetOf [OPEN (1, 5), OPEN (7, 9)];
+> val csOpen = CONTINUOUS_SET [OPEN (1,5),OPEN (7,9)] : int continuous_set
+
+csOpen.contains 1;
+> val it = false : bool
+
+csOpen.contains 2;
+> val it = true : bool
+
+csOpen.contains 5;
+> val it = false : bool
+
+(*) Unbounded lower (AT_MOST): values below bound are members.
+(Range.continuousSetOf [AT_MOST 3, AT_LEAST 7]).contains 2;
+> val it = true : bool
+
+(Range.continuousSetOf [AT_MOST 3, AT_LEAST 7]).contains 5;
+> val it = false : bool
+
+(Range.continuousSetOf [AT_MOST 3, AT_LEAST 7]).contains 8;
+> val it = true : bool
+
 (*) contains on discrete_set (postfix syntax).
 val ds = Range.discreteSetOf [CLOSED (1, 3), CLOSED (7, 9)];
 > val ds = DISCRETE_SET [CLOSED (1,3),CLOSED (7,9)] : int discrete_set

@@ -6809,7 +6809,7 @@ public abstract class Codes {
    * Internal representation of one endpoint of a range. Either negative
    * infinity, positive infinity, or a specific value with inclusivity.
    */
-  private static final class Bound {
+  public static class Bound {
     static final Bound UNBOUNDED = new Bound(null, false);
 
     final @Nullable Object value; // null if unbounded
@@ -6932,6 +6932,60 @@ public abstract class Codes {
                 ? BuiltIn.Constructor.RANGE_OPEN_CLOSED.constructor
                 : BuiltIn.Constructor.RANGE_OPEN.constructor),
         ImmutableList.of(lo.value, hi.value));
+  }
+
+  /**
+   * Compares a value {@code x} against a lower {@link Bound}.
+   *
+   * <p>Returns a positive number if {@code x} satisfies the bound (i.e., is at
+   * or past the lower endpoint), zero if {@code x} exactly equals an inclusive
+   * bound, or a negative number if {@code x} is strictly before the bound.
+   * Specifically, returns -1 when {@code x} equals an exclusive lower bound
+   * (because {@code x > lo} is required but not met).
+   */
+  @SuppressWarnings("unchecked")
+  private static int compareValueToLower(Object x, Bound lo, Comparator cmp) {
+    if (lo.value == null) {
+      return 1; // x is always past −∞
+    }
+    int c = cmp.compare(x, lo.value);
+    return (c == 0 && !lo.inclusive) ? -1 : c;
+  }
+
+  /**
+   * Returns the index of the range in {@code ranges} that contains {@code x},
+   * or {@code -1} if no range contains it.
+   *
+   * <p>Binary-searches for the last range whose lower bound is satisfied by
+   * {@code x}, then checks whether {@code x} also satisfies that range's upper
+   * bound.
+   */
+  @SuppressWarnings("unchecked")
+  private static int rangeContaining(
+      PairList<Bound, Bound> ranges, Object x, Comparator cmp) {
+    int lo = 0;
+    int hi = ranges.size() - 1;
+    int candidate = -1;
+    while (lo <= hi) {
+      int mid = (lo + hi) >>> 1;
+      if (compareValueToLower(x, ranges.left(mid), cmp) >= 0) {
+        candidate = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (candidate >= 0) {
+      Bound hiB = ranges.right(candidate);
+      if (hiB.value == null) {
+        return candidate; // unbounded above: x is in this range
+      }
+      int c = cmp.compare(x, hiB.value);
+      if (c < 0 || c == 0 && hiB.inclusive) {
+        return candidate;
+      }
+    }
+    return -1;
   }
 
   /**
@@ -7081,17 +7135,20 @@ public abstract class Codes {
    * Normalizes a list of ranges: sorts by lower bound, merges overlapping or
    * touching ranges. If {@code discrete} is non-null, also merges adjacent
    * ranges whose effective endpoints are one step apart.
+   *
+   * <p>Returns the normalized ranges as a {@link PairList} of (lower {@link
+   * Bound}, upper {@link Bound}) pairs.
    */
   @SuppressWarnings({"rawtypes", "unchecked"})
-  private static List normalizeRangeList(
+  private static PairList<Bound, Bound> normalizeRangeList(
       List ranges, Comparator cmp, @Nullable Discrete<Object> discrete) {
     if (ranges.isEmpty()) {
-      return ImmutableList.of();
+      return ImmutablePairList.of();
     }
     List<List> sorted = new ArrayList<>(ranges);
     sorted.sort((r1, r2) -> compareLower(lowerBound(r1), lowerBound(r2), cmp));
 
-    List<List> result = new ArrayList<>();
+    PairList.Builder<Bound, Bound> result = PairList.builder();
     Bound lo = lowerBound(sorted.get(0));
     Bound hi = upperBound(sorted.get(0));
     for (int i = 1; i < sorted.size(); i++) {
@@ -7103,13 +7160,21 @@ public abstract class Codes {
       if (merge) {
         hi = maxUpper(hi, nextHi, cmp);
       } else {
-        result.add(boundsToRange(lo, hi));
+        result.add(lo, hi);
         lo = nextLo;
         hi = nextHi;
       }
     }
-    result.add(boundsToRange(lo, hi));
-    return ImmutableList.copyOf(result);
+    result.add(lo, hi);
+    return result.build();
+  }
+
+  /**
+   * Converts a {@link PairList}{@code <Bound, Bound>} to a list of range
+   * values.
+   */
+  public static List boundsToRangeList(PairList<Bound, Bound> pairList) {
+    return pairList.transformEager(Codes::boundsToRange);
   }
 
   /**
@@ -7133,58 +7198,8 @@ public abstract class Codes {
         && discrete.comparator().compare(nextAfterHi, loEffective) >= 0;
   }
 
-  /**
-   * Tests whether a single range contains a given value. Extracted as a static
-   * helper so it can be shared by {@link RangeContains} and {@link
-   * SetContains}.
-   */
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  private static boolean rangeContainsValue(
-      List range, Object x, Comparator cmp) {
-    final BuiltIn.Constructor ctor =
-        requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
-    switch (ctor) {
-      case RANGE_POINT:
-        return cmp.compare(x, range.get(1)) == 0;
-      case RANGE_AT_LEAST:
-        return cmp.compare(x, range.get(1)) >= 0;
-      case RANGE_GREATER_THAN:
-        return cmp.compare(x, range.get(1)) > 0;
-      case RANGE_AT_MOST:
-        return cmp.compare(x, range.get(1)) <= 0;
-      case RANGE_LESS_THAN:
-        return cmp.compare(x, range.get(1)) < 0;
-      case RANGE_CLOSED:
-        {
-          List bounds = (List) range.get(1);
-          return cmp.compare(x, bounds.get(0)) >= 0
-              && cmp.compare(x, bounds.get(1)) <= 0;
-        }
-      case RANGE_OPEN:
-        {
-          List bounds = (List) range.get(1);
-          return cmp.compare(x, bounds.get(0)) > 0
-              && cmp.compare(x, bounds.get(1)) < 0;
-        }
-      case RANGE_CLOSED_OPEN:
-        {
-          List bounds = (List) range.get(1);
-          return cmp.compare(x, bounds.get(0)) >= 0
-              && cmp.compare(x, bounds.get(1)) < 0;
-        }
-      case RANGE_OPEN_CLOSED:
-        {
-          List bounds = (List) range.get(1);
-          return cmp.compare(x, bounds.get(0)) > 0
-              && cmp.compare(x, bounds.get(1)) <= 0;
-        }
-      default:
-        throw new AssertionError("unknown range constructor: " + ctor);
-    }
-  }
-
   /** Implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_OF}. */
-  @SuppressWarnings({"rawtypes", "unchecked"})
+  @SuppressWarnings({"rawtypes"})
   private static class ContinuousSetOf extends BaseApplicable1<List, List>
       implements Typed {
     private final Comparator cmp;
@@ -7210,7 +7225,7 @@ public abstract class Codes {
   }
 
   /** Implementation of {@link BuiltIn#RANGE_DISCRETE_SET_OF}. */
-  @SuppressWarnings({"rawtypes", "unchecked"})
+  @SuppressWarnings({"rawtypes"})
   private static class DiscreteSetOf extends BaseApplicable1<List, List>
       implements Typed {
     private final Comparator cmp;
@@ -7253,24 +7268,19 @@ public abstract class Codes {
 
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type) {
-      Type elemType = rangeElementType(type);
-      return new SetContains(
-          builtIn, Comparators.comparatorFor(typeSystem, elemType));
+      final Type elemType = rangeElementType(type);
+      final Comparator comparator =
+          Comparators.comparatorFor(typeSystem, elemType);
+      return new SetContains(builtIn, comparator);
     }
 
     @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public Object apply(Stack stack, Object argValue) {
       final List set = (List) argValue;
-      final List ranges = (List) set.get(1);
+      final PairList<Bound, Bound> ranges = (PairList<Bound, Bound>) set.get(1);
       return (Applicable1<Boolean, Object>)
-          x -> {
-            for (Object r : ranges) {
-              if (rangeContainsValue((List) r, x, cmp)) {
-                return true;
-              }
-            }
-            return false;
-          };
+          x -> rangeContaining(ranges, x, cmp) >= 0;
     }
   }
 
@@ -7286,7 +7296,7 @@ public abstract class Codes {
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
     public List apply(List set) {
-      return (List) set.get(1);
+      return boundsToRangeList((PairList<Bound, Bound>) set.get(1));
     }
   }
 
@@ -7312,18 +7322,17 @@ public abstract class Codes {
     }
 
     @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public List apply(List set) {
-      final List ranges = (List) set.get(1);
+      final PairList<Bound, Bound> ranges = (PairList<Bound, Bound>) set.get(1);
       final List<Object> result = new ArrayList<>();
-      for (Object r : ranges) {
-        enumerate((List) r, result);
+      for (int i = 0; i < ranges.size(); i++) {
+        enumerate(ranges.left(i), ranges.right(i), result);
       }
       return ImmutableList.copyOf(result);
     }
 
-    private void enumerate(List range, List<Object> out) {
-      Bound lo = lowerBound(range);
-      Bound hi = upperBound(range);
+    private void enumerate(Bound lo, Bound hi, List<Object> out) {
       if (hi.value == null) {
         throw new MorelRuntimeException(
             BuiltInExn.SIZE, Pos.ZERO); // unbounded range
