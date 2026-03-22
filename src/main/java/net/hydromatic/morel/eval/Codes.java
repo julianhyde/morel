@@ -6805,250 +6805,6 @@ public abstract class Codes {
   // -----------------------------------------------------------------------
   // Range implementations
 
-  /**
-   * Internal representation of one endpoint of a range. Either negative
-   * infinity, positive infinity, or a specific value with inclusivity.
-   */
-  public static class Bound {
-    static final Bound UNBOUNDED = new Bound(null, false);
-
-    final @Nullable Object value; // null if unbounded
-    final boolean inclusive; // only meaningful if value != null
-
-    private Bound(@Nullable Object value, boolean inclusive) {
-      this.value = value;
-      this.inclusive = inclusive;
-    }
-
-    static Bound inclusive(Object v) {
-      return new Bound(requireNonNull(v), true);
-    }
-
-    static Bound exclusive(Object v) {
-      return new Bound(requireNonNull(v), false);
-    }
-  }
-
-  /** Extracts the lower {@link Bound} from a runtime range value. */
-  @SuppressWarnings("rawtypes")
-  private static Bound lowerBound(List range) {
-    BuiltIn.Constructor ctor =
-        requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
-    switch (ctor) {
-      case RANGE_AT_MOST:
-      case RANGE_LESS_THAN:
-        return Bound.UNBOUNDED;
-      case RANGE_POINT:
-      case RANGE_AT_LEAST:
-      case RANGE_CLOSED:
-      case RANGE_CLOSED_OPEN:
-        return Bound.inclusive(arg0(range));
-      case RANGE_GREATER_THAN:
-      case RANGE_OPEN:
-      case RANGE_OPEN_CLOSED:
-        return Bound.exclusive(arg0(range));
-      default:
-        throw new AssertionError("unknown range constructor: " + ctor);
-    }
-  }
-
-  /** Extracts the upper {@link Bound} from a runtime range value. */
-  @SuppressWarnings("rawtypes")
-  private static Bound upperBound(List range) {
-    BuiltIn.Constructor ctor =
-        requireNonNull(BuiltIn.Constructor.forName((String) range.get(0)));
-    switch (ctor) {
-      case RANGE_AT_LEAST:
-      case RANGE_GREATER_THAN:
-        return Bound.UNBOUNDED;
-      case RANGE_POINT:
-      case RANGE_AT_MOST:
-      case RANGE_CLOSED:
-      case RANGE_OPEN_CLOSED:
-        return Bound.inclusive(arg1(range));
-      case RANGE_LESS_THAN:
-      case RANGE_OPEN:
-      case RANGE_CLOSED_OPEN:
-        return Bound.exclusive(arg1(range));
-      default:
-        throw new AssertionError("unknown range constructor: " + ctor);
-    }
-  }
-
-  /**
-   * Returns the first (or only) value argument of a range. For unary
-   * constructors (POINT, AT_LEAST, etc.) returns {@code range.get(1)}. For
-   * binary constructors (CLOSED, OPEN, etc.) returns the tuple's first element.
-   */
-  @SuppressWarnings("rawtypes")
-  private static Object arg0(List range) {
-    Object arg = range.get(1);
-    return arg instanceof List ? ((List) arg).get(0) : arg;
-  }
-
-  /**
-   * Returns the second value argument of a range. For unary constructors
-   * returns {@code range.get(1)}. For binary constructors returns the tuple's
-   * second element.
-   */
-  @SuppressWarnings("rawtypes")
-  private static Object arg1(List range) {
-    Object arg = range.get(1);
-    return arg instanceof List ? ((List) arg).get(1) : arg;
-  }
-
-  /** Converts a (lo, hi) {@link Bound} pair back to a runtime range list. */
-  private static List boundsToRange(Bound lo, Bound hi) {
-    if (lo.value == null) {
-      if (hi.value == null) {
-        // All-encompassing range: represent as AT_LEAST of the min type —
-        // this path should not normally be reached in practice.
-        throw new AssertionError("cannot represent all-encompassing range");
-      }
-      return ImmutableList.of(
-          hi.inclusive
-              ? BuiltIn.Constructor.RANGE_AT_MOST.constructor
-              : BuiltIn.Constructor.RANGE_LESS_THAN.constructor,
-          hi.value);
-    }
-    if (hi.value == null) {
-      return ImmutableList.of(
-          lo.inclusive
-              ? BuiltIn.Constructor.RANGE_AT_LEAST.constructor
-              : BuiltIn.Constructor.RANGE_GREATER_THAN.constructor,
-          lo.value);
-    }
-    // Both bounds are finite.
-    if (lo.inclusive && hi.inclusive && lo.value.equals(hi.value)) {
-      return ImmutableList.of(
-          BuiltIn.Constructor.RANGE_POINT.constructor, lo.value);
-    }
-    return ImmutableList.of(
-        lo.inclusive
-            ? (hi.inclusive
-                ? BuiltIn.Constructor.RANGE_CLOSED.constructor
-                : BuiltIn.Constructor.RANGE_CLOSED_OPEN.constructor)
-            : (hi.inclusive
-                ? BuiltIn.Constructor.RANGE_OPEN_CLOSED.constructor
-                : BuiltIn.Constructor.RANGE_OPEN.constructor),
-        ImmutableList.of(lo.value, hi.value));
-  }
-
-  /**
-   * Compares a value {@code x} against a lower {@link Bound}.
-   *
-   * <p>Returns a positive number if {@code x} satisfies the bound (i.e., is at
-   * or past the lower endpoint), zero if {@code x} exactly equals an inclusive
-   * bound, or a negative number if {@code x} is strictly before the bound.
-   * Specifically, returns -1 when {@code x} equals an exclusive lower bound
-   * (because {@code x > lo} is required but not met).
-   */
-  @SuppressWarnings("unchecked")
-  private static int compareValueToLower(Object x, Bound lo, Comparator cmp) {
-    if (lo.value == null) {
-      return 1; // x is always past −∞
-    }
-    int c = cmp.compare(x, lo.value);
-    return (c == 0 && !lo.inclusive) ? -1 : c;
-  }
-
-  /**
-   * Returns the index of the range in {@code ranges} that contains {@code x},
-   * or {@code -1} if no range contains it.
-   *
-   * <p>Binary-searches for the last range whose lower bound is satisfied by
-   * {@code x}, then checks whether {@code x} also satisfies that range's upper
-   * bound.
-   */
-  @SuppressWarnings("unchecked")
-  private static int rangeContaining(
-      PairList<Bound, Bound> ranges, Object x, Comparator cmp) {
-    int lo = 0;
-    int hi = ranges.size() - 1;
-    int candidate = -1;
-    while (lo <= hi) {
-      int mid = (lo + hi) >>> 1;
-      if (compareValueToLower(x, ranges.left(mid), cmp) >= 0) {
-        candidate = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    if (candidate >= 0) {
-      Bound hiB = ranges.right(candidate);
-      if (hiB.value == null) {
-        return candidate; // unbounded above: x is in this range
-      }
-      int c = cmp.compare(x, hiB.value);
-      if (c < 0 || c == 0 && hiB.inclusive) {
-        return candidate;
-      }
-    }
-    return -1;
-  }
-
-  /**
-   * Returns whether {@code hi1} (upper bound of range R1) reaches or exceeds
-   * {@code lo2} (lower bound of range R2), meaning R1 and R2 overlap or touch.
-   */
-  @SuppressWarnings("unchecked")
-  private static boolean canMerge(Bound hi1, Bound lo2, Comparator cmp) {
-    if (hi1.value == null || lo2.value == null) {
-      return true;
-    }
-    int c = cmp.compare(hi1.value, lo2.value);
-    if (c > 0) {
-      return true;
-    }
-    if (c < 0) {
-      return false;
-    }
-    return hi1.inclusive && lo2.inclusive;
-  }
-
-  /** Returns the greater of two upper {@link Bound}s. */
-  @SuppressWarnings("unchecked")
-  private static Bound maxUpper(Bound hi1, Bound hi2, Comparator cmp) {
-    if (hi1.value == null || hi2.value == null) {
-      return Bound.UNBOUNDED;
-    }
-    int c = cmp.compare(hi1.value, hi2.value);
-    if (c > 0) {
-      return hi1;
-    }
-    if (c < 0) {
-      return hi2;
-    }
-    return hi1.inclusive ? hi1 : hi2;
-  }
-
-  /** Comparator for lower {@link Bound}s (earlier/smaller first). */
-  @SuppressWarnings("unchecked")
-  private static int compareLower(Bound lo1, Bound lo2, Comparator cmp) {
-    if (lo1.value == null && lo2.value == null) {
-      return 0;
-    }
-    if (lo1.value == null) {
-      return -1;
-    }
-    if (lo2.value == null) {
-      return 1;
-    }
-    int c = cmp.compare(lo1.value, lo2.value);
-    if (c != 0) {
-      return c;
-    }
-    // Same value: inclusive sorts before exclusive (starts "earlier")
-    if (lo1.inclusive && !lo2.inclusive) {
-      return -1;
-    }
-    if (!lo1.inclusive && lo2.inclusive) {
-      return 1;
-    }
-    return 0;
-  }
-
   /** Extracts the element type from a Range function's concrete type. */
   private static Type rangeElementType(Type type) {
     // type is one of:
@@ -7132,70 +6888,11 @@ public abstract class Codes {
   }
 
   /**
-   * Normalizes a list of ranges: sorts by lower bound, merges overlapping or
-   * touching ranges. If {@code discrete} is non-null, also merges adjacent
-   * ranges whose effective endpoints are one step apart.
-   *
-   * <p>Returns the normalized ranges as a {@link PairList} of (lower {@link
-   * Bound}, upper {@link Bound}) pairs.
-   */
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  private static PairList<Bound, Bound> normalizeRangeList(
-      List ranges, Comparator cmp, @Nullable Discrete<Object> discrete) {
-    if (ranges.isEmpty()) {
-      return ImmutablePairList.of();
-    }
-    List<List> sorted = new ArrayList<>(ranges);
-    sorted.sort((r1, r2) -> compareLower(lowerBound(r1), lowerBound(r2), cmp));
-
-    PairList.Builder<Bound, Bound> result = PairList.builder();
-    Bound lo = lowerBound(sorted.get(0));
-    Bound hi = upperBound(sorted.get(0));
-    for (int i = 1; i < sorted.size(); i++) {
-      Bound nextLo = lowerBound(sorted.get(i));
-      Bound nextHi = upperBound(sorted.get(i));
-      boolean merge =
-          canMerge(hi, nextLo, cmp)
-              || discrete != null && canMergeDiscrete(hi, nextLo, discrete);
-      if (merge) {
-        hi = maxUpper(hi, nextHi, cmp);
-      } else {
-        result.add(lo, hi);
-        lo = nextLo;
-        hi = nextHi;
-      }
-    }
-    result.add(lo, hi);
-    return result.build();
-  }
-
-  /**
    * Converts a {@link PairList}{@code <Bound, Bound>} to a list of range
    * values.
    */
   public static List boundsToRangeList(PairList<Bound, Bound> pairList) {
-    return pairList.transformEager(Codes::boundsToRange);
-  }
-
-  /**
-   * Returns true when two ranges that do not overlap or touch are still
-   * adjacent in discrete order (e.g. CLOSED(1,3) and CLOSED(4,6) for int).
-   */
-  private static boolean canMergeDiscrete(
-      Bound hi1, Bound lo2, Discrete<Object> discrete) {
-    if (hi1.value == null || lo2.value == null) {
-      return false;
-    }
-    // Compute effective last-included value of the first range.
-    Object hiEffective = hi1.inclusive ? hi1.value : discrete.prev(hi1.value);
-    // Compute effective first-included value of the second range.
-    Object loEffective = lo2.inclusive ? lo2.value : discrete.next(lo2.value);
-    if (hiEffective == null || loEffective == null) {
-      return false;
-    }
-    Object nextAfterHi = discrete.next(hiEffective);
-    return nextAfterHi != null
-        && discrete.comparator().compare(nextAfterHi, loEffective) >= 0;
+    return pairList.transformEager(Bound::toRange);
   }
 
   /** Implementation of {@link BuiltIn#RANGE_CONTINUOUS_SET_OF}. */
@@ -7220,7 +6917,7 @@ public abstract class Codes {
     public List apply(List ranges) {
       return ImmutableList.of(
           BuiltIn.Constructor.CONTINUOUS_SET_CONTINUOUS_SET.constructor,
-          normalizeRangeList(ranges, cmp, null));
+          Bound.fromRanges(ranges, cmp, null));
     }
   }
 
@@ -7249,7 +6946,7 @@ public abstract class Codes {
     public List apply(List ranges) {
       return ImmutableList.of(
           BuiltIn.Constructor.DISCRETE_SET_DISCRETE_SET.constructor,
-          normalizeRangeList(ranges, cmp, discrete));
+          Bound.fromRanges(ranges, cmp, discrete));
     }
   }
 
@@ -7280,7 +6977,7 @@ public abstract class Codes {
       final List set = (List) argValue;
       final PairList<Bound, Bound> ranges = (PairList<Bound, Bound>) set.get(1);
       return (Applicable1<Boolean, Object>)
-          x -> rangeContaining(ranges, x, cmp) >= 0;
+          x -> Bound.rangeContaining(ranges, x, cmp) >= 0;
     }
   }
 
@@ -7325,46 +7022,10 @@ public abstract class Codes {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public List apply(List set) {
       final PairList<Bound, Bound> ranges = (PairList<Bound, Bound>) set.get(1);
-      final List<Object> result = new ArrayList<>();
-      for (int i = 0; i < ranges.size(); i++) {
-        enumerate(ranges.left(i), ranges.right(i), result);
-      }
-      return ImmutableList.copyOf(result);
-    }
-
-    private void enumerate(Bound lo, Bound hi, List<Object> out) {
-      if (hi.value == null) {
-        throw new MorelRuntimeException(
-            BuiltInExn.SIZE, Pos.ZERO); // unbounded range
-      }
-      Object start;
-      if (lo.value == null) {
-        start = discrete.minValue();
-      } else {
-        if (lo.inclusive) {
-          start = lo.value;
-        } else {
-          start = discrete.next(lo.value);
-          if (start == null) {
-            throw new MorelRuntimeException(
-                BuiltInExn.SIZE, Pos.ZERO); // empty range
-          }
-        }
-      }
-      Comparator cmp = discrete.comparator();
-      Object v = start;
-      while (true) {
-        int c = cmp.compare(v, hi.value);
-        if (c > 0 || c == 0 && !hi.inclusive) {
-          break;
-        }
-        out.add(v);
-        Object next = discrete.next(v);
-        if (next == null) {
-          break;
-        }
-        v = next;
-      }
+      final ImmutableList.Builder<Object> result = ImmutableList.builder();
+      ranges.forEach(
+          (lo, hi) -> Bound.enumerate(discrete, lo, hi, result::add));
+      return result.build();
     }
   }
 

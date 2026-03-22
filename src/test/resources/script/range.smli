@@ -137,6 +137,28 @@ Range.continuousSetOf [CLOSED (5, 10), CLOSED (1, 3), CLOSED (3, 6)];
 Range.continuousSetOf [CLOSED (1, 3), CLOSED (7, 9)];
 > val it = CONTINUOUS_SET [CLOSED (1,3),CLOSED (7,9)] : int continuous_set
 
+(*) Chain merge: three ranges [1,4], [4,7], [6,9] merge into [1,9], and 8 is subsumed.
+Range.continuousSetOf [CLOSED (1, 4), POINT 0, CLOSED (6, 9), POINT 8, POINT 10, CLOSED (4, 7)];
+> val it = CONTINUOUS_SET [POINT 0,CLOSED (1,9),POINT 10]
+>   : int continuous_set
+
+(*) Ranges do not merge because the domain is discrete.
+Range.continuousSetOf [CLOSED (1, 3), POINT 0, POINT 8, CLOSED (4, 7)];
+> val it = CONTINUOUS_SET [POINT 0,CLOSED (1,3),CLOSED (4,7),POINT 8]
+>   : int continuous_set
+
+(*) Three ranges where the first two merge, third stays separate.
+Range.continuousSetOf [CLOSED (1, 4), CLOSED (3, 7), CLOSED (20, 25)];
+> val it = CONTINUOUS_SET [CLOSED (1,7),CLOSED (20,25)] : int continuous_set
+
+(*) Three ranges where first stays separate, last two merge.
+Range.continuousSetOf [CLOSED (1, 3), CLOSED (6, 8), CLOSED (7, 10)];
+> val it = CONTINUOUS_SET [CLOSED (1,3),CLOSED (6,10)] : int continuous_set
+
+(*) Three ranges producing two separate groups.
+Range.continuousSetOf [CLOSED (1, 3), CLOSED (2, 5), CLOSED (8, 10)];
+> val it = CONTINUOUS_SET [CLOSED (1,5),CLOSED (8,10)] : int continuous_set
+
 (*) discreteSetOf normalizes a list of ranges into a discrete_set.
 Range.discreteSetOf [CLOSED (5, 10), CLOSED (1, 3), CLOSED (3, 6)];
 > val it = DISCRETE_SET [CLOSED (1,10)] : int discrete_set
@@ -144,6 +166,14 @@ Range.discreteSetOf [CLOSED (5, 10), CLOSED (1, 3), CLOSED (3, 6)];
 (*) Adjacent discrete ranges are merged: [1,3] and [4,7] become [1,7].
 Range.discreteSetOf [CLOSED (1, 3), CLOSED (4, 7)];
 > val it = DISCRETE_SET [CLOSED (1,7)] : int discrete_set
+
+(*) Three discrete ranges producing two groups.
+Range.discreteSetOf [CLOSED (1, 3), CLOSED (4, 6), CLOSED (10, 12)];
+> val it = DISCRETE_SET [CLOSED (1,6),CLOSED (10,12)] : int discrete_set
+
+(*) Chain merge: three ranges each extending the boundary merge into [0,8].
+Range.discreteSetOf [CLOSED (1, 3), POINT 0, CLOSED (7, 8), POINT 10, CLOSED (4, 7)];
+> val it = DISCRETE_SET [CLOSED (0,8),POINT 10] : int discrete_set
 
 (*) discreteSetOf requires a discrete element type; string is not discrete.
 Range.discreteSetOf [CLOSED ("a", "z")];

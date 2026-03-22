@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.eval.Bound;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Variant;
@@ -445,7 +446,7 @@ class Pretty {
         arg = ((Variant) arg).value;
       }
       if (arg instanceof PairList) {
-        arg = Codes.boundsToRangeList((PairList) arg);
+        arg = Codes.boundsToRangeList((PairList<Bound, Bound>) arg);
       }
       buf.append(' ');
       final boolean needParentheses =
