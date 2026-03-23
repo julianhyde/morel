@@ -145,13 +145,16 @@ public class Main {
     if (!subCommand.equals("execute")) {
       boolean darnVerify = subCommand.equals("darn-verify");
       boolean darnProbe = subCommand.equals("darn-probe");
+      boolean verbose = argList.contains("--verbose");
       boolean anyChanges = false;
       for (String arg : argList) {
         if (!arg.startsWith("--")) {
           if (darnProbe) {
-            Darn.probe(new File(arg), System.out, valueMap);
+            Darn.probe(new File(arg), System.out, () -> kernel(valueMap));
           } else {
-            anyChanges |= Darn.process(new File(arg), darnVerify, valueMap);
+            anyChanges |=
+                Darn.process(
+                    new File(arg), darnVerify, () -> kernel(valueMap), verbose);
           }
         }
       }

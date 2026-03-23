@@ -22,7 +22,6 @@ import static java.lang.String.join;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -33,7 +32,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import net.hydromatic.morel.foreign.ForeignValue;
+import java.util.function.Supplier;
 import net.hydromatic.morel.util.MorelHighlighter;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -94,50 +93,61 @@ public class Darn {
 
   /**
    * Processes a document file. In update mode, writes changes in-place. In
-   * verify mode, reports mismatches.
+   * verify mode, reports mismatches. Optionally prints per-file statistics to
+   * {@link System#out} when {@code verbose} is true.
    *
    * @param file The document file to process
    * @param verifyOnly If true, report mismatches but do not modify the file
+   * @param kernelSupplier Supplier that creates a fresh {@link Kernel} instance
+   *     for each new execution environment
+   * @param verbose If true, print per-file statistics
    * @return true if there were any changes (or mismatches in verify mode)
    */
-  public static boolean process(File file, boolean verifyOnly)
-      throws IOException {
-    return process(file, verifyOnly, ImmutableMap.of());
-  }
-
-  /** As {@link #process(File, boolean)}, with foreign values available. */
   public static boolean process(
-      File file, boolean verifyOnly, Map<String, ForeignValue> valueMap)
+      File file,
+      boolean verifyOnly,
+      Supplier<Kernel> kernelSupplier,
+      boolean verbose)
       throws IOException {
     List<String> inputLines =
         Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-    ProcessResult result = processLines(inputLines, valueMap);
-    if (!result.lines.equals(inputLines)) {
-      if (!verifyOnly) {
-        Files.write(file.toPath(), result.lines, StandardCharsets.UTF_8);
+    ProcessResult result = processLines(inputLines, kernelSupplier);
+    boolean changed = !result.lines.equals(inputLines);
+    if (changed) {
+      if (verifyOnly) {
+        System.err.printf(
+            "Mismatch in %s: %d cell(s) differ%n", file, result.mismatchCount);
       } else {
-        System.err.println(
-            "Mismatch in "
-                + file
-                + ": "
-                + result.mismatchCount
-                + " cell(s) differ");
+        Files.write(file.toPath(), result.lines, StandardCharsets.UTF_8);
       }
-      return true;
     }
-    return false;
+    if (verbose) {
+      System.out.println(result.toVerboseString(file.getName()));
+    }
+    return changed;
   }
 
   /** Processes a list of lines and returns the updated list. */
   static ProcessResult processLines(List<String> lines) {
-    return processLines(lines, ImmutableMap.of());
+    return processLines(lines, noKernel());
   }
 
-  /** As {@link #processLines(List)}, with foreign values available. */
+  /** Returns a supplier that refuses to make a {@link Kernel}. */
+  static Supplier<Kernel> noKernel() {
+    return () -> {
+      throw new IllegalArgumentException("no kernel");
+    };
+  }
+
+  /** As {@link #processLines(List)}, with a kernel supplier. */
   static ProcessResult processLines(
-      List<String> lines, Map<String, ForeignValue> valueMap) {
+      List<String> lines, Supplier<Kernel> kernelSupplier) {
     List<String> result = new ArrayList<>();
+    int cellCount = 0;
+    int executedCount = 0;
     int mismatchCount = 0;
+    int divCount = 0;
+    int divChangedCount = 0;
     int i = 0;
     int n = lines.size();
 
@@ -168,6 +178,7 @@ public class Darn {
 
       // Parse attributes and content.
       Attrs attrs = parseAttrs(line);
+      cellCount++;
       List<String> contentLines =
           commentLines.subList(1, commentLines.size() - 1);
       List<Segment> segments = parseSegments(contentLines);
@@ -182,18 +193,24 @@ public class Darn {
       while (i < n && lines.get(i).isEmpty()) {
         i++;
       }
+      // Capture the old div so we can detect whether the regenerated div
+      // has changed (for statistics).
+      List<String> oldDivLines = null;
       if (i < n
           && lines.get(i).startsWith("<div ")
           && (lines.get(i).contains("code-block")
               || lines.get(i).contains("class=")
                   && lines.get(i).contains("morel"))) {
-        // Skip through </div>.
+        oldDivLines = new ArrayList<>();
+        oldDivLines.add(lines.get(i)); // opening <div ...>
         i++;
         while (i < n && !lines.get(i).equals(DIV_CLOSE)) {
+          oldDivLines.add(lines.get(i));
           i++;
         }
         if (i < n) {
-          i++; // skip </div>
+          oldDivLines.add(lines.get(i)); // closing </div>
+          i++;
         }
         // Also skip a trailing blank line after </div> if present.
         if (i < n && lines.get(i).isEmpty()) {
@@ -204,13 +221,27 @@ public class Darn {
       // Execute the cell (unless skip). Silent cells execute to build env
       // state but do not emit a div; only skip cells are not executed.
       if (attrs.command != Command.SKIP) {
+        executedCount++;
         @SuppressWarnings("resource")
         final Kernel kernel =
-            kernels.computeIfAbsent(attrs.env, k -> Main.kernel(valueMap));
-        String allInput = buildInput(segments);
+            kernels.computeIfAbsent(attrs.env, k -> kernelSupplier.get());
         try {
-          final List<String> outLines = kernel.execute(allInput);
-          final List<Segment> updated = updateSegments(segments, outLines);
+          // Each segment may contain multiple statements. Split on ';'-
+          // terminated lines so output stays paired with its code, and
+          // flatten multi-line kernel output into physical lines.
+          final List<Segment> updated = new ArrayList<>();
+          for (Segment segment : segments) {
+            for (List<String> group : splitStatements(segment.input)) {
+              final List<String> outLines =
+                  flattenLines(kernel.execute(join("\n", group) + "\n"));
+              // Remove trailing empty lines.
+              while (!outLines.isEmpty()
+                  && outLines.get(outLines.size() - 1).isEmpty()) {
+                outLines.remove(outLines.size() - 1);
+              }
+              updated.add(new Segment(group, outLines));
+            }
+          }
           if (!updated.equals(segments)) {
             mismatchCount++;
             segments = updated;
@@ -228,14 +259,27 @@ public class Darn {
 
       // Generate and insert a <div class="morel"> block (unless silent).
       if (attrs.command != Command.SILENT) {
+        divCount++;
+        final List<String> newDivLines =
+            generateHtmlLines(segments, attrs.noOutput, attrs.fail);
+        if (!newDivLines.equals(
+            oldDivLines != null ? oldDivLines : ImmutableList.of())) {
+          divChangedCount++;
+        }
         result.add("");
-        result.addAll(generateHtmlLines(segments, attrs.noOutput, attrs.fail));
+        result.addAll(newDivLines);
         result.add("");
       }
     }
 
     kernels.values().forEach(Kernel::close);
-    return new ProcessResult(result, mismatchCount);
+    return new ProcessResult(
+        result,
+        cellCount,
+        executedCount,
+        mismatchCount,
+        divCount,
+        divChangedCount);
   }
 
   /** Parses attributes from the {@code <!-- morel [attrs] } opening line. */
@@ -326,6 +370,50 @@ public class Darn {
     return segments;
   }
 
+  /**
+   * Splits input lines into statement groups.
+   *
+   * <p>Each group ends with a line that ends with {@code ';'}, matching the
+   * convention for top-level Morel declarations ({@code val}, {@code fun},
+   * {@code datatype}, etc.). If no {@code ';'} is found, the entire input is
+   * returned as one group. Trailing lines after the last {@code ';'} form an
+   * additional group.
+   *
+   * <p>Note: this is a line-based heuristic and does not parse Morel syntax. It
+   * works correctly for simple top-level declarations but may produce incorrect
+   * splits for expressions containing {@code ;} in sub-expressions (e.g. {@code
+   * let...in...end} with inner {@code val} bindings).
+   */
+  static List<List<String>> splitStatements(List<String> inputLines) {
+    final List<List<String>> groups = new ArrayList<>();
+    List<String> current = new ArrayList<>();
+    for (String line : inputLines) {
+      current.add(line);
+      if (line.endsWith(";")) {
+        groups.add(ImmutableList.copyOf(current));
+        current = new ArrayList<>();
+      }
+    }
+    if (!current.isEmpty()) {
+      groups.add(ImmutableList.copyOf(current));
+    }
+    return groups.isEmpty()
+        ? ImmutableList.of(ImmutableList.copyOf(inputLines))
+        : ImmutableList.copyOf(groups);
+  }
+
+  /**
+   * Splits each element of {@code rawLines} on embedded {@code '\n'} so that
+   * multi-line pretty-printed values become individual physical lines.
+   */
+  private static List<String> flattenLines(List<String> rawLines) {
+    final List<String> flat = new ArrayList<>();
+    for (String s : rawLines) {
+      Collections.addAll(flat, s.split("\n", -1));
+    }
+    return flat;
+  }
+
   /** Builds the concatenated input string for all segments. */
   private static String buildInput(List<Segment> segments) {
     StringBuilder sb = new StringBuilder();
@@ -406,11 +494,11 @@ public class Darn {
    * depend on earlier definitions are tested in context.
    */
   public static void probe(
-      File file, PrintStream out, Map<String, ForeignValue> valueMap)
+      File file, PrintStream out, Supplier<Kernel> kernelSupplier)
       throws IOException {
     List<String> lines =
         Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-    List<ProbeResult> results = probeLines(lines, valueMap);
+    List<ProbeResult> results = probeLines(lines, kernelSupplier);
     String name = file.getName();
     for (ProbeResult r : results) {
       if (r.isOk()) {
@@ -454,12 +542,12 @@ public class Darn {
    * that skip cells can be tested in their natural context.
    */
   static List<ProbeResult> probeLines(List<String> lines) {
-    return probeLines(lines, ImmutableMap.of());
+    return probeLines(lines, noKernel());
   }
 
-  /** As {@link #probeLines(List)}, with foreign values available. */
+  /** As {@link #probeLines(List)}, with a kernel supplier. */
   static List<ProbeResult> probeLines(
-      List<String> lines, Map<String, ForeignValue> valueMap) {
+      List<String> lines, Supplier<Kernel> kernelSupplier) {
     List<ProbeResult> results = new ArrayList<>();
     int i = 0;
     final int n = lines.size();
@@ -492,7 +580,7 @@ public class Darn {
       String allInput = buildInput(segments);
       @SuppressWarnings("resource")
       final Kernel kernel =
-          kernels.computeIfAbsent(attrs.env, k -> Main.kernel(valueMap));
+          kernels.computeIfAbsent(attrs.env, k -> kernelSupplier.get());
 
       if (attrs.command == Command.SKIP) {
         // Probe: try executing this cell in the current kernel state.
@@ -683,11 +771,41 @@ public class Darn {
   /** Result of processing a document file. */
   static class ProcessResult {
     final List<String> lines;
+    /** Total number of {@code <!-- morel} cells in the file. */
+    final int cellCount;
+    /** Cells whose code was executed (command ≠ {@code skip}). */
+    final int executedCount;
+    /** Executed cells whose comment output differed from the actual output. */
     final int mismatchCount;
+    /** Cells that produce an HTML div block (command ≠ {@code silent}). */
+    final int divCount;
+    /** Div blocks whose HTML content changed (new ≠ old, or first time). */
+    final int divChangedCount;
 
-    ProcessResult(List<String> lines, int mismatchCount) {
+    ProcessResult(
+        List<String> lines,
+        int cellCount,
+        int executedCount,
+        int mismatchCount,
+        int divCount,
+        int divChangedCount) {
       this.lines = ImmutableList.copyOf(lines);
+      this.cellCount = cellCount;
+      this.executedCount = executedCount;
       this.mismatchCount = mismatchCount;
+      this.divCount = divCount;
+      this.divChangedCount = divChangedCount;
+    }
+
+    String toVerboseString(String fileName) {
+      return String.format(
+          "%s: %d cells, %d executed, %d different, %d divs, %d divs changed",
+          fileName,
+          cellCount,
+          executedCount,
+          mismatchCount,
+          divCount,
+          divChangedCount);
     }
   }
 }

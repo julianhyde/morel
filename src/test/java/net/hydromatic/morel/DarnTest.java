@@ -24,17 +24,70 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.core.Is.is;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Supplier;
 import net.hydromatic.morel.util.MorelHighlighter;
 import org.junit.jupiter.api.Test;
 
 /** Tests for {@link Darn}, the Morel notebook kernel. */
 public class DarnTest {
+
+  /** Kernel supplier for tests that execute Morel code. */
+  private static final Supplier<Kernel> KERNEL =
+      () -> Main.kernel(ImmutableMap.of());
+
+  // -----------------------------------------------------------------------
+  // ProcessResult statistics
+
+  @Test
+  void testProcessResultStatsMixed() {
+    // run=1, skip=1, silent=1: verify cellCount, executedCount, divCount.
+    List<String> input =
+        Arrays.asList(
+            "<!-- morel",
+            "1 + 2;",
+            "> val it = 3 : int",
+            "-->",
+            "<!-- morel skip",
+            "fun f x = x;",
+            "-->",
+            "<!-- morel silent",
+            "val z = 0;",
+            "> val z = 0 : int",
+            "-->");
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
+    assertThat(result.cellCount, is(3)); // run + skip + silent
+    assertThat(result.executedCount, is(2)); // run + silent (not skip)
+    assertThat(result.mismatchCount, is(0)); // all output already correct
+    assertThat(result.divCount, is(2)); // run + skip (not silent)
+  }
+
+  @Test
+  void testProcessResultDivChangedFreshFile() {
+    // No existing div in the input: the generated div counts as changed.
+    List<String> input =
+        Arrays.asList("<!-- morel", "1 + 2;", "> val it = 3 : int", "-->");
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
+    assertThat(result.divCount, is(1));
+    assertThat(result.divChangedCount, is(1));
+  }
+
+  @Test
+  void testProcessResultDivChangedIdempotent() {
+    // After the first run the div is present; a second run sees no change.
+    List<String> input =
+        Arrays.asList("<!-- morel", "1 + 2;", "> val it = 3 : int", "-->");
+    List<String> afterFirstRun = Darn.processLines(input, KERNEL).lines;
+    Darn.ProcessResult secondRun = Darn.processLines(afterFirstRun, KERNEL);
+    assertThat(secondRun.divChangedCount, is(0));
+    assertThat(secondRun.mismatchCount, is(0));
+  }
 
   // -----------------------------------------------------------------------
   // parseAttrs
@@ -266,7 +319,7 @@ public class DarnTest {
     List<String> input =
         Arrays.asList(
             "<!-- morel no-output", "val x = 5;", "> val x = 5 : int", "-->");
-    Darn.ProcessResult result = Darn.processLines(input);
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
     assertThat(result.mismatchCount, is(0));
     assertThat(
         result.lines.stream()
@@ -502,13 +555,126 @@ public class DarnTest {
   }
 
   // -----------------------------------------------------------------------
+  // splitStatements
+
+  @Test
+  void testSplitStatementsSingle() {
+    List<List<String>> groups =
+        Darn.splitStatements(ImmutableList.of("1 + 2;"));
+    assertThat(groups, hasSize(1));
+    assertThat(groups.get(0), is(ImmutableList.of("1 + 2;")));
+  }
+
+  @Test
+  void testSplitStatementsMultiple() {
+    List<List<String>> groups =
+        Darn.splitStatements(ImmutableList.of("val x = 1;", "val y = 2;"));
+    assertThat(groups, hasSize(2));
+    assertThat(groups.get(0), is(ImmutableList.of("val x = 1;")));
+    assertThat(groups.get(1), is(ImmutableList.of("val y = 2;")));
+  }
+
+  @Test
+  void testSplitStatementsMultiLine() {
+    // A multi-line val declaration is one group (';' only on last line).
+    List<List<String>> groups =
+        Darn.splitStatements(
+            ImmutableList.of(
+                "val emps =", "  [{id=1}];", "val depts =", "  [{d=10}];"));
+    assertThat(groups, hasSize(2));
+    assertThat(
+        groups.get(0), is(ImmutableList.of("val emps =", "  [{id=1}];")));
+    assertThat(
+        groups.get(1), is(ImmutableList.of("val depts =", "  [{d=10}];")));
+  }
+
+  @Test
+  void testSplitStatementsNoSemicolon() {
+    // Input without ';' is treated as one group.
+    List<List<String>> groups =
+        Darn.splitStatements(ImmutableList.of("1 + 2", "  + 3"));
+    assertThat(groups, hasSize(1));
+    assertThat(groups.get(0), is(ImmutableList.of("1 + 2", "  + 3")));
+  }
+
+  // -----------------------------------------------------------------------
+  // processLines — multi-segment and multi-line output
+
+  @Test
+  void testProcessLinesMultiSegmentUpdatedCorrectly() {
+    // Two segments with wrong output: after update, each segment's output
+    // stays next to its code, not all moved to the last segment.
+    List<String> input =
+        Arrays.asList(
+            "<!-- morel",
+            "val x = 1;",
+            "> WRONG",
+            "val y = 2;",
+            "> WRONG",
+            "-->");
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
+    assertThat(result.mismatchCount, is(1));
+    assertThat(result.lines.get(0), is("<!-- morel"));
+    assertThat(result.lines.get(1), is("val x = 1;"));
+    assertThat(result.lines.get(2), is("> val x = 1 : int"));
+    assertThat(result.lines.get(3), is("val y = 2;"));
+    assertThat(result.lines.get(4), is("> val y = 2 : int"));
+    assertThat(result.lines.get(5), is("-->"));
+  }
+
+  @Test
+  void testProcessLinesMultiLineOutputInterleaved() {
+    // Two statements; the first (List.tabulate with records) produces
+    // multi-line output. Each statement's output must remain adjacent to
+    // its code, not all collected at the end.
+    List<String> input =
+        Arrays.asList(
+            "<!-- morel",
+            "val a = List.tabulate (8, fn i =>"
+                + " {idx = i, sq = i * i, cube = i * i * i});",
+            "> WRONG",
+            "val b = 1 + 2;",
+            "> WRONG",
+            "-->");
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
+    assertThat(result.mismatchCount, is(1));
+    final List<String> ls = result.lines;
+    // Find a's first output line (starts with '> val a') and b's code line.
+    int aOutIdx = -1;
+    for (int i = 0; i < ls.size(); i++) {
+      if (ls.get(i).startsWith("> val a")) {
+        aOutIdx = i;
+        break;
+      }
+    }
+    final int bCodeIdx = ls.indexOf("val b = 1 + 2;");
+    assertThat("a has output", aOutIdx >= 0, is(true));
+    assertThat("b code present", bCodeIdx >= 0, is(true));
+    // a's output line must appear before b's code line in the comment.
+    assertThat(aOutIdx < bCodeIdx, is(true));
+    // Every line between the opening and '-->' that isn't a code line or
+    // output line is a continuation — it must start with '>'.
+    final int commentClose = ls.indexOf("-->");
+    for (int i = 1; i < commentClose; i++) {
+      String l = ls.get(i);
+      if (!l.isEmpty() && !l.startsWith("val ") && !l.startsWith("> ")) {
+        throw new AssertionError(
+            "Output continuation line missing '>' prefix at index "
+                + i
+                + ": "
+                + l);
+      }
+    }
+  }
+
+  // -----------------------------------------------------------------------
   // probeLines
 
   @Test
   void testProbeLinesSkipOkNoOutput() {
     // A skip cell that executes with no output → suggest no-output.
     List<String> input = Arrays.asList("<!-- morel skip", "val x = 5;", "-->");
-    List<Darn.ProbeResult> results = Darn.probeLines(input);
+    List<Darn.ProbeResult> results = Darn.probeLines(input, KERNEL);
     assertThat(results, hasSize(1));
     assertThat(results.get(0).isOk(), is(true));
     assertThat(results.get(0).output, is("val x = 5 : int"));
@@ -522,7 +688,7 @@ public class DarnTest {
     // the output does not match the "val ..." / "type ..." success pattern.
     List<String> input =
         Arrays.asList("<!-- morel skip", "unboundName;", "-->");
-    List<Darn.ProbeResult> results = Darn.probeLines(input);
+    List<Darn.ProbeResult> results = Darn.probeLines(input, KERNEL);
     assertThat(results, hasSize(1));
     assertThat(results.get(0).isOk(), is(false));
     assertThat(results.get(0).error, is((String) null)); // no Java exception
@@ -542,7 +708,7 @@ public class DarnTest {
             "<!-- morel skip",
             "x + 1;",
             "-->");
-    List<Darn.ProbeResult> results = Darn.probeLines(input);
+    List<Darn.ProbeResult> results = Darn.probeLines(input, KERNEL);
     assertThat(results, hasSize(1));
     assertThat(results.get(0).isOk(), is(true));
     assertThat(results.get(0).output, is("val it = 43 : int"));
@@ -558,7 +724,7 @@ public class DarnTest {
     File file = new File(url.toURI());
     List<String> original =
         Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-    Darn.ProcessResult result = Darn.processLines(original);
+    Darn.ProcessResult result = Darn.processLines(original, KERNEL);
     assertThat(
         "processLines should produce no changes on an already-processed file",
         result.lines,
@@ -579,7 +745,7 @@ public class DarnTest {
             "x + 2;",
             "> val it = 3 : int",
             "-->");
-    Darn.ProcessResult result = Darn.processLines(input);
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
     assertThat(result.mismatchCount, is(0));
     // Output should contain the div block.
     final String expected =
@@ -604,7 +770,7 @@ public class DarnTest {
     // A skip cell is not executed but its div block is generated.
     List<String> input =
         Arrays.asList("<!-- morel skip", "fun f x = x;", "-->");
-    Darn.ProcessResult result = Darn.processLines(input);
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
     assertThat(result.mismatchCount, is(0));
     assertThat(
         result.lines.stream()
@@ -621,7 +787,7 @@ public class DarnTest {
             "val hidden = 99;",
             "> val hidden = 99 : int",
             "-->");
-    Darn.ProcessResult result = Darn.processLines(input);
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
     assertThat(result.mismatchCount, is(0));
     assertThat(
         result.lines.stream()
@@ -642,7 +808,7 @@ public class DarnTest {
             "x + 1;",
             "> val it = 43 : int",
             "-->");
-    Darn.ProcessResult result = Darn.processLines(input);
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
     assertThat(result.mismatchCount, is(0));
     // Only one div — from the non-silent cell.
     assertThat(
