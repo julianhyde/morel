@@ -45,6 +45,11 @@ import java.util.Set;
  * <p>Morel-specific keywords (such as {@code from}, {@code yield}, {@code
  * elem}, {@code exists}) are given the {@code kw} class. Adding a new Morel
  * keyword requires only adding it to {@link #MOREL_KEYWORDS}.
+ *
+ * <p>Instances are created via {@link #of()} or {@link #of(boolean dml)}. When
+ * {@code dml} is true, the DML keywords ({@code commit}, {@code delete}, {@code
+ * insert}, {@code update}, {@code assign}) are also highlighted as keywords;
+ * use this for files whose name contains {@code "dml-in-morel"}.
  */
 public class MorelHighlighter {
 
@@ -125,7 +130,14 @@ public class MorelHighlighter {
           "union",
           "yield");
 
-  /** All keywords highlighted as {@code kw} in input code. */
+  /**
+   * DML keywords highlighted only when {@link #dml} is true (file name contains
+   * {@code "dml-in-morel"}).
+   */
+  private static final Set<String> DML_KEYWORDS =
+      ImmutableSet.of("assign", "commit", "delete", "insert", "update");
+
+  /** Union of {@link #SML_KEYWORDS} and {@link #MOREL_KEYWORDS}. */
   private static final Set<String> ALL_KEYWORDS;
 
   static {
@@ -141,7 +153,37 @@ public class MorelHighlighter {
    */
   private static final String PUNCT_CHARS = "()[]{}=,;|.";
 
-  private MorelHighlighter() {}
+  /** Whether DML keywords are active for this highlighter instance. */
+  private final boolean dml;
+
+  /** Active keyword set: SML + Morel, plus DML if {@link #dml} is true. */
+  private final Set<String> allKeywords;
+
+  private MorelHighlighter(boolean dml) {
+    this.dml = dml;
+    if (dml) {
+      ImmutableSet.Builder<String> b = ImmutableSet.builder();
+      b.addAll(ALL_KEYWORDS);
+      b.addAll(DML_KEYWORDS);
+      this.allKeywords = b.build();
+    } else {
+      this.allKeywords = ALL_KEYWORDS;
+    }
+  }
+
+  /** Returns a highlighter with standard (non-DML) keywords. */
+  public static MorelHighlighter of() {
+    return new MorelHighlighter(false);
+  }
+
+  /**
+   * Returns a highlighter; if {@code dml} is true, DML keywords ({@code
+   * commit}, {@code delete}, {@code insert}, {@code update}, {@code assign})
+   * are also highlighted.
+   */
+  public static MorelHighlighter of(boolean dml) {
+    return new MorelHighlighter(dml);
+  }
 
   /**
    * Receives highlighted token spans emitted by {@link #highlightCode}.
@@ -302,7 +344,7 @@ public class MorelHighlighter {
    * and string literals {@code str}. Plain identifiers and punctuation are
    * emitted without spans.
    */
-  public static String highlightInput(String code) {
+  public String highlightInput(String code) {
     StringBuilder sb = new StringBuilder();
     highlightCode(code, new RougeSink(code, sb), true);
     return sb.toString();
@@ -316,7 +358,7 @@ public class MorelHighlighter {
    * annotated using Rouge CSS classes ({@code kr}, {@code nv}, {@code nf},
    * {@code mi}, {@code n}, {@code p}, etc.).
    */
-  public static String highlightRouge(String code) {
+  public String highlightRouge(String code) {
     StringBuilder sb = new StringBuilder();
     sb.append("<div class=\"language-sml highlighter-rouge\">")
         .append("<div class=\"highlight\">")
@@ -330,7 +372,7 @@ public class MorelHighlighter {
   /**
    * As {@link #highlightRouge(String)} but more concise output. For testing.
    */
-  public static String highlightRouge2(String code) {
+  public String highlightRouge2(String code) {
     StringBuilder sb = new StringBuilder();
     highlightCode(code, new ConciseRougeSink(code, sb), true);
     return sb.toString();
@@ -340,7 +382,7 @@ public class MorelHighlighter {
    * Returns HTML-escaped output text (REPL responses), without any span
    * decoration.
    */
-  public static String highlightOutput(String text) {
+  public String highlightOutput(String text) {
     StringBuilder sb = new StringBuilder();
     appendEscaped(text, 0, text.length(), sb);
     return sb.toString();
@@ -354,15 +396,27 @@ public class MorelHighlighter {
    * {@link Sink#nv} and the first after {@code fun} via {@link Sink#nf}; all
    * other plain identifiers are emitted via {@link Sink#id}.
    *
+   * <p>Identifiers that appear as the bound variable in a {@code from}
+   * generator (between {@code from}/{@code ,}/{@code join} and the following
+   * {@code in} keyword) are also emitted via {@link Sink#nv}. For example, in
+   * {@code from x in emps, (y, z) in depts join w in customers}, the variables
+   * {@code x}, {@code y}, {@code z}, and {@code w} are all emitted as {@link
+   * Sink#nv}.
+   *
    * <p>Lines that start with {@code > } (REPL output) are emitted as a single
    * {@link Sink#c} token (treated as a comment in Rouge output).
    */
-  public static void highlightCode(String s, Sink sink, boolean keywords) {
+  public void highlightCode(String s, Sink sink, boolean keywords) {
     int i = 0;
     int n = s.length();
     // State for context-sensitive identifier classification.
     boolean awaitingValName = false;
     boolean awaitingFunName = false;
+    // fromState: 0=NONE, 1=PAT (expecting bound variables), 2=EXPR (in source
+    // expression after 'in'). fromDepth tracks parenthesis nesting in EXPR
+    // state so that a top-level comma triggers a new generator.
+    int fromState = 0;
+    int fromDepth = 0;
 
     while (i < n) {
       char c = s.charAt(i);
@@ -406,11 +460,46 @@ public class MorelHighlighter {
           end++;
         }
         String word = s.substring(i, end);
-        if (keywords && ALL_KEYWORDS.contains(word)
+        if (keywords && allKeywords.contains(word)
             || !keywords && SML_KEYWORDS.contains(word)) {
           sink.kr(i, end);
-          awaitingValName = word.equals("val");
-          awaitingFunName = word.equals("fun");
+          if (word.equals("val")) {
+            awaitingValName = true;
+            awaitingFunName = false;
+            fromState = 0;
+          } else if (word.equals("fun")) {
+            awaitingFunName = true;
+            awaitingValName = false;
+            fromState = 0;
+          } else if (word.equals("from")) {
+            fromState = 1; // PAT
+            fromDepth = 0;
+            awaitingValName = false;
+            awaitingFunName = false;
+          } else if (word.equals("in") && fromState == 1) {
+            // 'in' after a from-pattern: switch to expression mode.
+            fromState = 2; // EXPR
+            fromDepth = 0;
+            awaitingValName = false;
+            awaitingFunName = false;
+          } else if (word.equals("join") && fromState == 2) {
+            // 'join' introduces a new generator pattern.
+            fromState = 1; // PAT
+            awaitingValName = false;
+            awaitingFunName = false;
+          } else if ((word.equals("where")
+                  || word.equals("yield")
+                  || word.equals("group")
+                  || word.equals("order"))
+              && (fromState == 1 || fromState == 2 && fromDepth == 0)) {
+            // End of the generator list; no more patterns expected.
+            fromState = 0;
+            awaitingValName = false;
+            awaitingFunName = false;
+          } else {
+            awaitingValName = false;
+            awaitingFunName = false;
+          }
         } else if (end < n && s.charAt(end) == '.') {
           // Identifier immediately followed by '.' is a structure name → ctor
           sink.ct(i, end);
@@ -422,6 +511,9 @@ public class MorelHighlighter {
         } else if (awaitingFunName) {
           sink.nf(i, end);
           awaitingFunName = false;
+        } else if (fromState == 1) {
+          // Bound variable in a from-generator pattern.
+          sink.nv(i, end);
         } else {
           sink.id(i, end);
         }
@@ -457,10 +549,25 @@ public class MorelHighlighter {
         i += 2;
 
       } else if (PUNCT_CHARS.indexOf(c) >= 0) {
-        // Punctuation: group consecutive punctuation characters.
+        // Punctuation: group consecutive punctuation characters, and update
+        // from-state based on parenthesis depth and commas encountered.
         int end = i + 1;
         while (end < n && PUNCT_CHARS.indexOf(s.charAt(end)) >= 0) {
           end++;
+        }
+        if (fromState == 2) {
+          // In EXPR state: track nesting depth; a top-level comma starts a
+          // new generator pattern.
+          for (int j = i; j < end; j++) {
+            char p = s.charAt(j);
+            if (p == '(' || p == '[' || p == '{') {
+              fromDepth++;
+            } else if ((p == ')' || p == ']' || p == '}') && fromDepth > 0) {
+              fromDepth--;
+            } else if (p == ',' && fromDepth == 0) {
+              fromState = 1; // PAT
+            }
+          }
         }
         sink.p(i, end);
         i = end;

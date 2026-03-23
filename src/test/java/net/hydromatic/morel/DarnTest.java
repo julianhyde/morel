@@ -264,16 +264,18 @@ public class DarnTest {
   @Test
   void testHighlightOutputHtmlEscapes() {
     // Output is HTML-escaped but otherwise plain (no spans).
-    String highlighted = MorelHighlighter.highlightOutput("'a list -> int");
+    String highlighted =
+        MorelHighlighter.of().highlightOutput("'a list -> int");
     assertThat(highlighted, is("'a list -&gt; int"));
   }
 
   @Test
   void testHighlightOutputMultiLine() {
     String highlighted =
-        MorelHighlighter.highlightOutput(
-            "line1\n" //
-                + "line2");
+        MorelHighlighter.of()
+            .highlightOutput(
+                "line1\n" //
+                    + "line2");
     assertThat(
         highlighted,
         is(
@@ -418,9 +420,9 @@ public class DarnTest {
             + "<span class=\"n\">path</span>"
             + " <span class=\"p\">=</span>"
             + " <span class=\"kr\">from</span>"
-            + " <span class=\"n\">x</span>"
+            + " <span class=\"nv\">x</span>"
             + "<span class=\"p\">,</span>"
-            + " <span class=\"n\">y</span>"
+            + " <span class=\"nv\">y</span>"
             + " <span class=\"kr\">where</span>"
             + " <span class=\"n\">path</span>"
             + " <span class=\"p\">(</span>"
@@ -430,7 +432,7 @@ public class DarnTest {
             + "<span class=\"p\">)}</span>\n"
             + "<span class=\"kr\">end</span>\n"
             + "</code></pre></div></div>";
-    assertThat(MorelHighlighter.highlightRouge(code), is(expected));
+    assertThat(MorelHighlighter.of().highlightRouge(code), is(expected));
   }
 
   @Test
@@ -458,10 +460,10 @@ public class DarnTest {
             + "    p{(}kr{exists} n{v0} kr{where} n{path} p{(}n{x}p{,} n{v0}"
             + "p{)} kr{andalso} n{edge} p{(}n{v0}p{,} n{y}p{))}\n"
             + "kr{in}\n"
-            + "  p{{}n{path} p{=} kr{from} n{x}p{,} n{y} kr{where} n{path} p{(}"
+            + "  p{{}n{path} p{=} kr{from} nv{x}p{,} nv{y} kr{where} n{path} p{(}"
             + "n{x}p{,} n{y}p{)}}\n"
             + "kr{end}\n";
-    assertThat(MorelHighlighter.highlightRouge2(code), is(expected));
+    assertThat(MorelHighlighter.of().highlightRouge2(code), is(expected));
   }
 
   /** Tests highlighting the {@code gcd} function. */
@@ -471,10 +473,10 @@ public class DarnTest {
         "fun gcd (m, n) = from f in factorize m intersect factorize n"
             + " compute product;\n";
     final String expected =
-        "kr{fun} nf{gcd} p{(}n{m}p{,} n{n}p{)} p{=} kr{from} n{f} kr{in}"
+        "kr{fun} nf{gcd} p{(}n{m}p{,} n{n}p{)} p{=} kr{from} nv{f} kr{in}"
             + " n{factorize} n{m} kr{intersect} n{factorize} n{n}"
             + " kr{compute} n{product}p{;}\n";
-    assertThat(MorelHighlighter.highlightRouge2(code), is(expected));
+    assertThat(MorelHighlighter.of().highlightRouge2(code), is(expected));
   }
 
   /** Tests highlighting the {@code lcm} function. */
@@ -484,7 +486,7 @@ public class DarnTest {
     final String expected =
         "kr{fun} nf{lcm} p{(}n{m}p{,} n{n}p{)} p{=} p{(}n{m} o{*} n{n}p{)}"
             + " kr{div} n{gcd} p{(}n{m}p{,} n{n}p{);}\n";
-    assertThat(MorelHighlighter.highlightRouge2(code), is(expected));
+    assertThat(MorelHighlighter.of().highlightRouge2(code), is(expected));
   }
 
   /**
@@ -502,13 +504,13 @@ public class DarnTest {
             + " kr{if} n{x} o{<} n{y} kr{then} n{LESS}"
             + " kr{else} kr{if} n{x} o{>} n{y} kr{then} n{GREATER}"
             + " kr{else} n{EQUAL}\n";
-    assertThat(MorelHighlighter.highlightRouge2(code), is(expected));
+    assertThat(MorelHighlighter.of().highlightRouge2(code), is(expected));
   }
 
   @Test
   void testGenerateHtmlLinesHtmlEscape() {
     String highlighted =
-        MorelHighlighter.highlightInput("val x = a < b andalso c > d;");
+        MorelHighlighter.of().highlightInput("val x = a < b andalso c > d;");
     // < and > must be escaped; "andalso" must use kw span
     assertThat(highlighted.contains("&lt;"), is(true));
     assertThat(highlighted.contains("&gt;"), is(true));
@@ -816,6 +818,21 @@ public class DarnTest {
             .filter(l -> l.equals("<div class=\"code-block\">"))
             .count(),
         is(1L));
+  }
+
+  @Test
+  void testSysSetSucceeds() {
+    // Sys.set must not throw UnsupportedOperationException; the kernel's
+    // session must use a mutable prop map.
+    List<String> input =
+        Arrays.asList(
+            "<!-- morel silent",
+            "Sys.set (\"printLength\", ~1);",
+            "> val it = () : unit",
+            "-->");
+    Darn.ProcessResult result = Darn.processLines(input, KERNEL);
+    assertThat(result.mismatchCount, is(0));
+    assertThat(result.executedCount, is(1));
   }
 }
 

@@ -46,7 +46,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * system, 1984), which produced a typeset document from source containing both
  * code and prose. Like Jupyter notebooks, Darn treats each {@code <!-- morel
  * -->} comment as a cell, executes it via the Morel kernel, and stores the
- * results alongside the code — but operating on plain text files (markdown,
+ * results alongside the code — but operating on plain text files (Markdown,
  * HTML, or any file that accepts HTML comments) rather than a JSON notebook
  * format.
  *
@@ -91,6 +91,13 @@ public class Darn {
 
   private Darn() {}
 
+  /** Returns a supplier that refuses to make a {@link Kernel}. */
+  static Supplier<Kernel> noKernel() {
+    return () -> {
+      throw new IllegalArgumentException("no kernel");
+    };
+  }
+
   /**
    * Processes a document file. In update mode, writes changes in-place. In
    * verify mode, reports mismatches. Optionally prints per-file statistics to
@@ -111,7 +118,10 @@ public class Darn {
       throws IOException {
     List<String> inputLines =
         Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-    ProcessResult result = processLines(inputLines, kernelSupplier);
+    boolean dml = file.getName().contains("dml-in-morel");
+    MorelHighlighter highlighter = MorelHighlighter.of(dml);
+    ProcessResult result =
+        processLines(inputLines, kernelSupplier, highlighter);
     boolean changed = !result.lines.equals(inputLines);
     if (changed) {
       if (verifyOnly) {
@@ -128,20 +138,16 @@ public class Darn {
   }
 
   /** Processes a list of lines and returns the updated list. */
-  static ProcessResult processLines(List<String> lines) {
-    return processLines(lines, noKernel());
-  }
-
-  /** Returns a supplier that refuses to make a {@link Kernel}. */
-  static Supplier<Kernel> noKernel() {
-    return () -> {
-      throw new IllegalArgumentException("no kernel");
-    };
-  }
-
-  /** As {@link #processLines(List)}, with a kernel supplier. */
   static ProcessResult processLines(
       List<String> lines, Supplier<Kernel> kernelSupplier) {
+    return processLines(lines, kernelSupplier, MorelHighlighter.of());
+  }
+
+  /** As {@link #processLines(List, Supplier)}, with a highlighter. */
+  static ProcessResult processLines(
+      List<String> lines,
+      Supplier<Kernel> kernelSupplier,
+      MorelHighlighter highlighter) {
     List<String> result = new ArrayList<>();
     int cellCount = 0;
     int executedCount = 0;
@@ -261,7 +267,8 @@ public class Darn {
       if (attrs.command != Command.SILENT) {
         divCount++;
         final List<String> newDivLines =
-            generateHtmlLines(segments, attrs.noOutput, attrs.fail);
+            generateHtmlLines(
+                segments, attrs.noOutput, attrs.fail, highlighter);
         if (!newDivLines.equals(
             oldDivLines != null ? oldDivLines : ImmutableList.of())) {
           divChangedCount++;
@@ -611,18 +618,19 @@ public class Darn {
 
   /** Generates the HTML lines for a {@code <div class="morel">} block. */
   static List<String> generateHtmlLines(List<Segment> segments) {
-    return generateHtmlLines(segments, false, false);
+    return generateHtmlLines(segments, false, false, MorelHighlighter.of());
   }
 
-  /**
-   * Generates the HTML lines for a {@code <div class="morel">} block.
-   *
-   * @param noOutput If true, omit the {@code morel-output} pre block (the
-   *     output is stored in the comment for validation but not rendered)
-   */
+  /** As {@link #generateHtmlLines(List)}, with a {@code noOutput} flag. */
   static List<String> generateHtmlLines(
       List<Segment> segments, boolean noOutput) {
-    return generateHtmlLines(segments, noOutput, false);
+    return generateHtmlLines(segments, noOutput, false, MorelHighlighter.of());
+  }
+
+  /** As {@link #generateHtmlLines(List, boolean)}, with a {@code fail} flag. */
+  static List<String> generateHtmlLines(
+      List<Segment> segments, boolean noOutput, boolean fail) {
+    return generateHtmlLines(segments, noOutput, fail, MorelHighlighter.of());
   }
 
   /**
@@ -632,20 +640,24 @@ public class Darn {
    *     comment for validation but not rendered)
    * @param fail If true, use {@code code-error} class (red bar) instead of
    *     {@code code-output} (green bar) for output lines
+   * @param highlighter Syntax highlighter instance
    */
   static List<String> generateHtmlLines(
-      List<Segment> segments, boolean noOutput, boolean fail) {
+      List<Segment> segments,
+      boolean noOutput,
+      boolean fail,
+      MorelHighlighter highlighter) {
     List<String> lines = new ArrayList<>();
     lines.add(DIV_OPEN);
     for (Segment segment : segments) {
       if (!segment.input.isEmpty()) {
         String inputHtml =
-            MorelHighlighter.highlightInput(join("\n", segment.input));
+            highlighter.highlightInput(join("\n", segment.input));
         addCodeBlock(lines, "code-input", inputHtml);
       }
       if (!noOutput && !segment.output.isEmpty()) {
         String outputHtml =
-            MorelHighlighter.highlightOutput(join("\n", segment.output));
+            highlighter.highlightOutput(join("\n", segment.output));
         addCodeBlock(lines, fail ? "code-error" : "code-output", outputHtml);
       }
     }
