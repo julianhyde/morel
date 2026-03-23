@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.Keys;
@@ -152,15 +153,30 @@ public class Discretes {
       return new DescendingDiscrete(inner, cmp);
     }
 
-    // Finite enum DataType: all constructors must be nullary.
-    final ImmutableList<String> ctors =
-        dt.typeConstructors.entrySet().stream()
-            .filter(e -> e.getValue().equals(Keys.dummy()))
-            .map(Map.Entry::getKey)
-            .collect(toImmutableList());
-    if (ctors.size() == dt.typeConstructors.size() && !ctors.isEmpty()) {
+    // General sum type: each constructor is either nullary or wraps a discrete
+    // argument type. This handles both pure enums (all nullary) and mixed types
+    // like '(order, bool) either' (all unary with discrete argument).
+    final ImmutableList.Builder<String> ctorNames = ImmutableList.builder();
+    final ImmutableList.Builder<Optional<Discrete<Object>>> ctorDiscretes =
+        ImmutableList.builder();
+    final Map<String, Type> ctorTypes = dt.typeConstructors(typeSystem);
+    for (Map.Entry<String, Type.Key> e : dt.typeConstructors.entrySet()) {
+      ctorNames.add(e.getKey());
+      if (e.getValue().equals(Keys.dummy())) {
+        ctorDiscretes.add(Optional.empty());
+      } else {
+        try {
+          ctorDiscretes.add(
+              Optional.of(discreteFor(typeSystem, ctorTypes.get(e.getKey()))));
+        } catch (IllegalArgumentException ex) {
+          throw new IllegalArgumentException("not a discrete type: " + dt);
+        }
+      }
+    }
+    final ImmutableList<String> names = ctorNames.build();
+    if (!names.isEmpty()) {
       final Comparator<Object> cmp = Comparators.comparatorFor(typeSystem, dt);
-      return new EnumDiscrete(cmp, ctors);
+      return new SumDiscrete(cmp, names, ctorDiscretes.build());
     }
 
     throw new IllegalArgumentException("not a discrete type: " + dt);
@@ -376,14 +392,39 @@ public class Discretes {
     }
   }
 
-  /** {@link Discrete} implementation for a finite enum DataType. */
-  private static final class EnumDiscrete implements Discrete<Object> {
+  /**
+   * {@link Discrete} implementation for a sum DataType (all constructors are
+   * either nullary or wrap a discrete argument type).
+   *
+   * <p>Handles both pure enums (e.g., {@code order}) and mixed types (e.g.,
+   * {@code (order, bool) either}).
+   *
+   * <p>Runtime values: nullary constructor {@code C} is {@code ["C"]}; unary
+   * constructor {@code C of t} is {@code ["C", tValue]}.
+   */
+  /**
+   * {@link Discrete} implementation for a sum DataType (all constructors are
+   * either nullary or wrap a discrete argument type).
+   *
+   * <p>Handles both pure enums (e.g., {@code order}) and mixed types (e.g.,
+   * {@code (order, bool) either}).
+   *
+   * <p>Runtime values: nullary constructor {@code C} is {@code ["C"]}; unary
+   * constructor {@code C of t} is {@code ["C", tValue]}.
+   */
+  private static final class SumDiscrete implements Discrete<Object> {
     private final Comparator<Object> cmp;
-    private final ImmutableList<String> ctors;
+    private final ImmutableList<String> ctorNames;
+    /** Empty Optional means the corresponding constructor is nullary. */
+    private final ImmutableList<Optional<Discrete<Object>>> ctorDiscretes;
 
-    EnumDiscrete(Comparator<Object> cmp, ImmutableList<String> ctors) {
+    SumDiscrete(
+        Comparator<Object> cmp,
+        ImmutableList<String> ctorNames,
+        ImmutableList<Optional<Discrete<Object>>> ctorDiscretes) {
       this.cmp = cmp;
-      this.ctors = ctors;
+      this.ctorNames = ctorNames;
+      this.ctorDiscretes = ctorDiscretes;
     }
 
     @Override
@@ -393,24 +434,76 @@ public class Discretes {
 
     @Override
     public @Nullable Object next(Object v) {
-      final int i = ctors.indexOf(((List<?>) v).get(0));
-      return i < ctors.size() - 1 ? ImmutableList.of(ctors.get(i + 1)) : null;
+      final List<?> list = (List<?>) v;
+      final String name = (String) list.get(0);
+      final int i = ctorNames.indexOf(name);
+      final Optional<Discrete<Object>> d = ctorDiscretes.get(i);
+      if (d.isPresent()) {
+        // Unary constructor: try to advance its argument.
+        final Object next = d.get().next(list.get(1));
+        if (next != null) {
+          return ImmutableList.of(name, next);
+        }
+      }
+      // Move to the first value of the next constructor.
+      return firstOf(i + 1);
     }
 
     @Override
     public @Nullable Object prev(Object v) {
-      final int i = ctors.indexOf(((List<?>) v).get(0));
-      return i > 0 ? ImmutableList.of(ctors.get(i - 1)) : null;
+      final List<?> list = (List<?>) v;
+      final String name = (String) list.get(0);
+      final int i = ctorNames.indexOf(name);
+      final Optional<Discrete<Object>> d = ctorDiscretes.get(i);
+      if (d.isPresent()) {
+        // Unary constructor: try to retreat its argument.
+        final Object prev = d.get().prev(list.get(1));
+        if (prev != null) {
+          return ImmutableList.of(name, prev);
+        }
+      }
+      // Move to the last value of the previous constructor.
+      return lastOf(i - 1);
     }
 
     @Override
-    public Object minValue() {
-      return ImmutableList.of(ctors.get(0));
+    public @Nullable Object minValue() {
+      return firstOf(0);
     }
 
     @Override
-    public Object maxValue() {
-      return ImmutableList.of(ctors.get(ctors.size() - 1));
+    public @Nullable Object maxValue() {
+      return lastOf(ctorNames.size() - 1);
+    }
+
+    /** Returns the minimum value starting at constructor index {@code i}. */
+    private @Nullable Object firstOf(int i) {
+      if (i >= ctorNames.size()) {
+        return null;
+      }
+      final Optional<Discrete<Object>> d = ctorDiscretes.get(i);
+      if (!d.isPresent()) {
+        return ImmutableList.of(ctorNames.get(i));
+      }
+      final Object min = d.get().minValue();
+      return min != null
+          ? ImmutableList.of(ctorNames.get(i), min)
+          : firstOf(i + 1);
+    }
+
+    /** Returns the maximum value ending at constructor index {@code i}. */
+    private @Nullable Object lastOf(int i) {
+      if (i < 0) {
+        return null;
+      }
+      final Optional<Discrete<Object>> d = ctorDiscretes.get(i);
+      if (!d.isPresent()) {
+        return ImmutableList.of(ctorNames.get(i));
+      }
+      final Object max = d.get().maxValue();
+      return max != null
+          ? ImmutableList.of(ctorNames.get(i), max)
+          : lastOf(i - 1);
     }
   }
 }

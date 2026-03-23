@@ -34,7 +34,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * or a specific value with inclusivity.
  */
 class Bound {
-  /** Sentinel representing an unbounded endpoint (−&infin or +&infin). */
+  /** Sentinel representing an unbounded endpoint (−&infin; or +&infin;). */
   public static final Bound UNBOUNDED = new Bound(null, false);
 
   /** The endpoint value, or {@code null} if unbounded. */

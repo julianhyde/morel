@@ -380,4 +380,20 @@ val evens = Range.discreteSetOf [CLOSED (0, 2), CLOSED (4, 6), CLOSED (8, 10)];
 evens.toList ();
 > val it = [0,1,2,4,5,6,8,9,10] : int list
 
+(*) toList on (order, bool) either enumerates all 5 values.
+val eitherSet = Range.discreteSetOf [CLOSED (INL LESS, INR true)];
+> val eitherSet = DISCRETE_SET [CLOSED ([INL, [LESS]],[INR, true])]
+>   : (order,bool) either discrete_set
+
+eitherSet.toList ();
+> val it = [INL (LESS),INL (EQUAL),INL (GREATER),INR false,INR true]
+>   : (order,bool) either list
+
+(*) Apply f to each value in the set.
+fun f (INL LESS) = 1 | f (INR true) = 1 | f _ = 0;
+> val f = fn : (order,bool) either -> int
+
+List.map f (eitherSet.toList ());
+> val it = [1,0,0,0,1] : int list
+
 (*) End range.smli

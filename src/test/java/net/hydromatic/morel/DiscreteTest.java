@@ -40,7 +40,12 @@ import net.hydromatic.morel.type.TypeSystem;
 import org.junit.jupiter.api.Test;
 
 /** Unit test for {@link Discrete} and {@link Discretes}. */
+@SuppressWarnings({"EqualsWithItself", "UnnecessaryUnicodeEscape"})
 class DiscreteTest {
+  private static final char CHR_255 = '\u00ff';
+  private static final char CHR_0 = '\u0000';
+  private static final char CHR_1 = '\u0001';
+
   private final TypeSystem typeSystem = new TypeSystem();
 
   /**
@@ -71,13 +76,13 @@ class DiscreteTest {
   @Test
   void testCharDiscrete() {
     Discrete<Object> d = Discretes.discreteFor(typeSystem, PrimitiveType.CHAR);
-    assertThat(d.minValue(), is('\u0000'));
-    assertThat(d.maxValue(), is('\u00ff'));
-    assertThat(d.next('\u0000'), is('\u0001'));
+    assertThat(d.minValue(), is(CHR_0));
+    assertThat(d.maxValue(), is(CHR_255));
+    assertThat(d.next(CHR_0), is(CHR_1));
     assertThat(d.next('a'), is('b'));
     assertThat(d.next('z'), is('{'));
-    assertThat(d.next('\u00ff'), nullValue());
-    assertThat(d.prev('\u0000'), nullValue());
+    assertThat(d.next(CHR_255), nullValue());
+    assertThat(d.prev(CHR_0), nullValue());
     assertThat(d.prev('b'), is('a'));
     assertThat(d.prev('{'), is('z'));
     assertThat(d.comparator().compare('a', 'b') < 0, is(true));
@@ -191,8 +196,7 @@ class DiscreteTest {
   void testEnumDiscrete() {
     initBuiltIns();
     final Type orderType = typeSystem.order();
-    final Discrete<Object> d =
-        Discretes.discreteFor(typeSystem, (DataType) orderType);
+    final Discrete<Object> d = Discretes.discreteFor(typeSystem, orderType);
 
     // order has 3 constructors: LESS, EQUAL, GREATER
     final List<Object> less = ImmutableList.of("LESS");
