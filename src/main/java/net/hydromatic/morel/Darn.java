@@ -19,21 +19,20 @@
 package net.hydromatic.morel;
 
 import static java.lang.String.join;
+import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.util.MorelHighlighter;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -142,9 +141,8 @@ public class Darn {
     int i = 0;
     int n = lines.size();
 
-    // Map from environment name to the accumulated input run so far (for
-    // state sharing across cells in the same kernel environment).
-    Map<String, String> envState = new LinkedHashMap<>();
+    // Map from environment name to the persistent kernel for that environment.
+    Map<String, Kernel> kernels = new LinkedHashMap<>();
 
     while (i < n) {
       String line = lines.get(i);
@@ -206,19 +204,13 @@ public class Darn {
       // Execute the cell (unless skip). Silent cells execute to build env
       // state but do not emit a div; only skip cells are not executed.
       if (attrs.command != Command.SKIP) {
-        String preamble = envState.getOrDefault(attrs.env, "");
+        @SuppressWarnings("resource")
+        final Kernel kernel =
+            kernels.computeIfAbsent(attrs.env, k -> Main.kernel(valueMap));
         String allInput = buildInput(segments);
         try {
-          String actual = executeCode(preamble + allInput, valueMap);
-          // Strip preamble output from actual (run preamble alone to get its
-          // output).
-          String preambleOutput =
-              preamble.isEmpty() ? "" : executeCode(preamble, valueMap);
-          if (actual.startsWith(preambleOutput)) {
-            actual = actual.substring(preambleOutput.length());
-          }
-          actual = actual.trim();
-          List<Segment> updated = updateSegments(segments, actual);
+          final List<String> outLines = kernel.execute(allInput);
+          final List<Segment> updated = updateSegments(segments, outLines);
           if (!updated.equals(segments)) {
             mismatchCount++;
             segments = updated;
@@ -232,7 +224,6 @@ public class Darn {
         } catch (Exception e) {
           // Execution error: leave segments as-is.
         }
-        envState.put(attrs.env, preamble + allInput);
       }
 
       // Generate and insert a <div class="morel"> block (unless silent).
@@ -243,6 +234,7 @@ public class Darn {
       }
     }
 
+    kernels.values().forEach(Kernel::close);
     return new ProcessResult(result, mismatchCount);
   }
 
@@ -367,15 +359,16 @@ public class Darn {
    * the number of expected output lines, treating segments without expected
    * output as having zero output.
    */
-  static List<Segment> updateSegments(List<Segment> segments, String actual) {
-    List<String> actualLines = new ArrayList<>();
-    for (String line : actual.split("\n", -1)) {
-      actualLines.add(line);
-    }
+  static List<Segment> updateSegments(
+      List<Segment> segments, List<String> actualLines) {
     // Remove trailing empty lines from actualLines.
-    while (!actualLines.isEmpty()
-        && actualLines.get(actualLines.size() - 1).isEmpty()) {
-      actualLines.remove(actualLines.size() - 1);
+    if (actualLines.stream().anyMatch(String::isEmpty)) {
+      // Ensure mutable.
+      actualLines = new ArrayList<>(actualLines);
+      while (!actualLines.isEmpty()
+          && actualLines.get(actualLines.size() - 1).isEmpty()) {
+        actualLines.remove(actualLines.size() - 1);
+      }
     }
 
     // Collect existing expected output, flat.
@@ -412,11 +405,6 @@ public class Darn {
    * to build up the kernel environment, so that later {@code skip} cells that
    * depend on earlier definitions are tested in context.
    */
-  public static void probe(File file, PrintStream out) throws IOException {
-    probe(file, out, ImmutableMap.of());
-  }
-
-  /** As {@link #probe(File, PrintStream)}, with foreign values available. */
   public static void probe(
       File file, PrintStream out, Map<String, ForeignValue> valueMap)
       throws IOException {
@@ -426,24 +414,23 @@ public class Darn {
     String name = file.getName();
     for (ProbeResult r : results) {
       if (r.isOk()) {
-        String summary;
+        requireNonNull(r.output);
+        final String summary;
+        final String suggest;
         if (r.output.isEmpty()) {
           summary = "(no output)";
-        } else if (r.output.length() > 60) {
-          summary = r.output.substring(0, 60) + "...";
+          suggest = "no-output";
         } else {
-          summary = r.output;
+          suggest = "morel";
+          if (r.output.length() > 60) {
+            summary = r.output.substring(0, 60) + "...";
+          } else {
+            summary = r.output;
+          }
         }
-        String suggestion = r.output.isEmpty() ? "no-output" : "morel";
-        out.println(
-            name
-                + ":"
-                + r.lineNumber
-                + ": skip — OK: "
-                + summary
-                + " [suggest: "
-                + suggestion
-                + "]");
+        out.printf(
+            "%s:%d: skip — OK: %s [suggest: %s]%n",
+            name, r.lineNumber, summary, suggest);
       } else {
         // Error: either a Java exception (r.error non-null) or interpreter
         // error output (r.output doesn't match the val/type pattern).
@@ -475,8 +462,8 @@ public class Darn {
       List<String> lines, Map<String, ForeignValue> valueMap) {
     List<ProbeResult> results = new ArrayList<>();
     int i = 0;
-    int n = lines.size();
-    Map<String, String> envState = new LinkedHashMap<>();
+    final int n = lines.size();
+    final Map<String, Kernel> kernels = new LinkedHashMap<>();
 
     while (i < n) {
       String line = lines.get(i);
@@ -503,18 +490,15 @@ public class Darn {
           commentLines.subList(1, commentLines.size() - 1);
       List<Segment> segments = parseSegments(contentLines);
       String allInput = buildInput(segments);
-      String preamble = envState.getOrDefault(attrs.env, "");
+      @SuppressWarnings("resource")
+      final Kernel kernel =
+          kernels.computeIfAbsent(attrs.env, k -> Main.kernel(valueMap));
 
       if (attrs.command == Command.SKIP) {
-        // Probe: try executing this cell.
+        // Probe: try executing this cell in the current kernel state.
         try {
-          String actual = executeCode(preamble + allInput, valueMap);
-          String preambleOutput =
-              preamble.isEmpty() ? "" : executeCode(preamble, valueMap);
-          if (actual.startsWith(preambleOutput)) {
-            actual = actual.substring(preambleOutput.length());
-          }
-          actual = actual.trim();
+          final List<String> outLines = kernel.execute(allInput);
+          final String actual = join("\n", outLines).trim();
           results.add(new ProbeResult(lineNumber, actual, null));
         } catch (Exception e) {
           String msg =
@@ -527,38 +511,14 @@ public class Darn {
         // Run or silent cell: execute to accumulate env state for later skip
         // cells. Silent cells execute but don't show a div.
         try {
-          executeCode(preamble + allInput, valueMap);
+          kernel.execute(allInput);
         } catch (Exception ignored) {
           // Already-broken non-skip cells are not our concern here.
         }
-        envState.put(attrs.env, preamble + allInput);
       }
     }
+    kernels.values().forEach(Kernel::close);
     return results;
-  }
-
-  /** Executes Morel code and returns the captured output as a string. */
-  static String executeCode(String code) throws IOException {
-    return executeCode(code, ImmutableMap.of());
-  }
-
-  /** As {@link #executeCode(String)}, with foreign values available. */
-  static String executeCode(String code, Map<String, ForeignValue> valueMap)
-      throws IOException {
-    if (code.trim().isEmpty()) {
-      return "";
-    }
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try (PrintStream ps =
-        new PrintStream(baos, true, StandardCharsets.UTF_8.name())) {
-      byte[] inputBytes = code.getBytes(StandardCharsets.UTF_8);
-      ByteArrayInputStream bais = new ByteArrayInputStream(inputBytes);
-      List<String> argList = ImmutableList.of();
-      Map<Prop, Object> propMap = ImmutableMap.of();
-      Main main = new Main(argList, bais, ps, valueMap, propMap, false);
-      main.run();
-    }
-    return baos.toString(StandardCharsets.UTF_8.name());
   }
 
   /** Generates the HTML lines for a {@code <div class="morel">} block. */
@@ -614,12 +574,9 @@ public class Darn {
   private static void addCodeBlock(
       List<String> lines, String cls, String content) {
     String block = String.format("<div class=\"%s\">%s</div>", cls, content);
-    for (String line : block.split("\n", -1)) {
-      lines.add(line);
-    }
+    Collections.addAll(lines, block.split("\n", -1));
   }
 
-  /** Attributes parsed from the {@code <!-- morel [attrs] } opening line. */
   /** The command for a {@code <!-- morel -->} cell. */
   enum Command {
     /** Execute the code and emit a {@code <div>} block (the default). */
@@ -630,6 +587,7 @@ public class Darn {
     SKIP
   }
 
+  /** Attributes parsed from the {@code <!-- morel [attrs] } opening line. */
   static class Attrs {
     /** The cell command; never null (defaults to {@link Command#RUN}). */
     final Command command;

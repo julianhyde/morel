@@ -468,24 +468,21 @@ public class DarnTest {
 
   @Test
   void testUpdateSegmentsNoChange() {
-    Darn.Segment seg =
-        new Darn.Segment(
-            ImmutableList.of("1 + 2;"), ImmutableList.of("val it = 3 : int"));
+    final List<String> lines = ImmutableList.of("val it = 3 : int");
+    Darn.Segment seg = new Darn.Segment(ImmutableList.of("1 + 2;"), lines);
     List<Darn.Segment> segments = ImmutableList.of(seg);
-    List<Darn.Segment> updated =
-        Darn.updateSegments(segments, "val it = 3 : int");
+    List<Darn.Segment> updated = Darn.updateSegments(segments, lines);
     assertThat(updated, is(segments));
   }
 
   @Test
   void testUpdateSegmentsChanged() {
-    Darn.Segment seg =
-        new Darn.Segment(
-            ImmutableList.of("1 + 2;"), ImmutableList.of("val it = 99 : int"));
+    final List<String> inLines = ImmutableList.of("val it = 99 : int");
+    Darn.Segment seg = new Darn.Segment(ImmutableList.of("1 + 2;"), inLines);
     List<Darn.Segment> segments = ImmutableList.of(seg);
-    List<Darn.Segment> updated =
-        Darn.updateSegments(segments, "val it = 3 : int");
-    assertThat(updated.get(0).output, is(ImmutableList.of("val it = 3 : int")));
+    final List<String> lines = ImmutableList.of("val it = 3 : int");
+    List<Darn.Segment> updated = Darn.updateSegments(segments, lines);
+    assertThat(updated.get(0).output, is(lines));
   }
 
   // -----------------------------------------------------------------------

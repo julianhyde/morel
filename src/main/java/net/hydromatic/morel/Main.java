@@ -24,8 +24,10 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
+import com.google.common.io.ByteStreams;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FilterReader;
@@ -39,6 +41,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -422,6 +425,16 @@ public class Main {
     } else {
       return new BufferedReader(in);
     }
+  }
+
+  /**
+   * Creates a new {@link Kernel} with the given foreign values.
+   *
+   * <p>The kernel maintains accumulated bindings across calls to {@link
+   * Kernel#execute}, so each cell sees definitions from all prior cells.
+   */
+  public static Kernel kernel(Map<String, ForeignValue> valueMap) {
+    return new KernelImpl(valueMap);
   }
 
   public void run() {
@@ -845,6 +858,54 @@ public class Main {
         String code, NavigableMap<Integer, String> expectedOutputByOffset) {
       this.code = code;
       this.expectedOutputByOffset = expectedOutputByOffset;
+    }
+  }
+
+  /** Implementation of {@link Kernel}. */
+  private static class KernelImpl implements Kernel {
+    private final Shell shell;
+
+    KernelImpl(Map<String, ForeignValue> valueMap) {
+      final Main main =
+          new Main(
+              ImmutableList.of(),
+              new ByteArrayInputStream(new byte[0]),
+              new PrintStream(ByteStreams.nullOutputStream()),
+              valueMap,
+              ImmutableMap.of(),
+              false);
+      final Environment env =
+          Environments.env(main.typeSystem, main.session, valueMap);
+      final Multimap<String, Binding> bindingMap =
+          ArrayListMultimap.create(100, 2);
+      final Consumer<String> noOp = line -> {};
+      shell = new Shell(main, env, noOp, noOp, bindingMap);
+    }
+
+    @Override
+    public List<String> execute(String code) {
+      if (code.trim().isEmpty()) {
+        return ImmutableList.of();
+      }
+      final List<String> lines = new ArrayList<>();
+      final Consumer<String> capture = lines::add;
+      final byte[] inputBytes = code.getBytes(StandardCharsets.UTF_8);
+      final BufferingReader reader =
+          new BufferingReader(
+              new BufferedReader(
+                  new InputStreamReader(
+                      new ByteArrayInputStream(inputBytes),
+                      StandardCharsets.UTF_8)));
+      shell.main.session.withShell(
+          shell,
+          capture,
+          session -> shell.run(session, reader, capture, capture));
+      return ImmutableList.copyOf(lines);
+    }
+
+    @Override
+    public void close() {
+      // Nothing to close; GC will collect.
     }
   }
 
