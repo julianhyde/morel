@@ -131,8 +131,9 @@ public class Shell {
   /** Parses an argument list to an equivalent Config. */
   public static Config parse(Config config, List<String> argList) {
     ConfigImpl c = (ConfigImpl) config;
-    final ImmutableMap.Builder<String, ForeignValue> valueMapBuilder =
-        ImmutableMap.builder();
+    // Use LinkedHashMap so that later --foreign= entries overwrite earlier
+    // ones; duplicate keys are allowed (last-wins).
+    final Map<String, ForeignValue> valueMapBuilder = new LinkedHashMap<>();
     for (int i = 0; i < argList.size(); i++) {
       String arg = argList.get(i);
       if (arg.equals("--banner=false")) {
@@ -175,7 +176,7 @@ public class Shell {
       }
     }
 
-    return c.withValueMap(valueMapBuilder.build());
+    return c.withValueMap(ImmutableMap.copyOf(valueMapBuilder));
   }
 
   static void usage(Consumer<String> outLines) {

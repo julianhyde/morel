@@ -162,8 +162,15 @@ fi
 
 export JAVA_OPTS=-Djavax.xml.parsers.DocumentBuilderFactory=com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl
 
-# Default foreign dataset for execute/smli modes if none specified.
+# Default foreign dataset for all modes.
 DEFAULT_FOREIGN="--foreign=net.hydromatic.morel.BuiltInDataSet\$Dictionary"
+
+# In a headless environment (stdin is not a terminal), run the Shell in dumb
+# terminal mode so jline does not try to create an interactive terminal.
+HEADLESS_OPTS=
+if [ ! -t 0 ]; then
+  HEADLESS_OPTS="--terminal=dumb --banner=false"
+fi
 
 case "$SUBCMD" in
   (smli)
@@ -178,6 +185,7 @@ case "$SUBCMD" in
   (darn-update|darn-verify|darn-probe)
     exec java $VM_OPTS -cp "${CP}" $JAVA_OPTS net.hydromatic.morel.Main \
         "$SUBCMD" \
+        "$DEFAULT_FOREIGN" \
         $FOREIGN \
         $FILES
     ;;
@@ -195,6 +203,7 @@ case "$SUBCMD" in
            "$DEFAULT_FOREIGN" \
            $FOREIGN \
            --directory="$(pwd)" \
+           $HEADLESS_OPTS \
            "$FILES"
     fi
     ;;

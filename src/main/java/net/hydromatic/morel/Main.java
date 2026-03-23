@@ -130,17 +130,17 @@ public class Main {
     }
 
     // Build foreign value map from --foreign= args (same as Shell does).
-    ImmutableMap.Builder<String, ForeignValue> valueMapBuilder =
-        ImmutableMap.builder();
+    // Use LinkedHashMap so that later --foreign= entries overwrite earlier
+    // ones; duplicate keys are allowed (last-wins).
+    final Map<String, ForeignValue> valueMap = new LinkedHashMap<>();
     for (String arg : argList) {
       if (arg.startsWith("--foreign=")) {
         String className = arg.substring("--foreign=".length());
         @SuppressWarnings("unchecked")
         Map<String, DataSet> map = instantiate(className, Map.class);
-        valueMapBuilder.putAll(Calcite.withDataSets(map).foreignValues());
+        valueMap.putAll(Calcite.withDataSets(map).foreignValues());
       }
     }
-    final Map<String, ForeignValue> valueMap = valueMapBuilder.build();
 
     if (!subCommand.equals("execute")) {
       boolean darnVerify = subCommand.equals("darn-verify");
@@ -875,7 +875,7 @@ public class Main {
               new ByteArrayInputStream(new byte[0]),
               new PrintStream(ByteStreams.nullOutputStream()),
               valueMap,
-              ImmutableMap.of(),
+              new LinkedHashMap<>(),
               false);
       final Environment env =
           Environments.env(main.typeSystem, main.session, valueMap);
