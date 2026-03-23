@@ -40,7 +40,7 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.commons.dbcp2.BasicDataSource;
 
 /** Data sets for testing. */
-enum BuiltInDataSet implements DataSet {
+public enum BuiltInDataSet implements DataSet {
   /**
    * Returns a value based on the Foodmart JDBC database.
    *

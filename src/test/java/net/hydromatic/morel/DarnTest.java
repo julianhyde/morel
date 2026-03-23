@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import static java.lang.String.join;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.core.Is.is;
@@ -165,15 +166,15 @@ public class DarnTest {
         new Darn.Segment(ImmutableList.of("1 + 2;"), ImmutableList.of());
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
     assertThat(html.get(0), is("<div class=\"code-block\">"));
-    // 1 -> num, + -> op, 2 -> num, ; -> plain
+    // 1 -> mi, + -> o, 2 -> mi, ; -> p
     assertThat(
         html.get(1),
         is(
             "<div class=\"code-input\">"
-                + "<span class=\"num\">1</span>"
-                + " <span class=\"op\">+</span>"
-                + " <span class=\"num\">2</span>"
-                + ";"
+                + "<span class=\"mi\">1</span> "
+                + "<span class=\"o\">+</span> "
+                + "<span class=\"mi\">2</span>"
+                + "<span class=\"p\">;</span>"
                 + "</div>"));
     assertThat(html.get(html.size() - 1), is("</div>"));
   }
@@ -197,15 +198,12 @@ public class DarnTest {
     Darn.Segment seg =
         new Darn.Segment(ImmutableList.of("fun f x = x;"), ImmutableList.of());
     List<String> html = Darn.generateHtmlLines(ImmutableList.of(seg));
-    // "fun" -> kw, "f" -> plain, "x" -> plain, "=" -> plain, ";" -> plain
+    // "fun" -> kr, "f" -> nf, "x" -> n, "=" -> p, ";" -> p
     final String expected =
         "<div class=\"code-input\">"
-            + "<span class=\"kw\">fun</span>"
-            + " f"
-            + " x"
-            + " ="
-            + " x"
-            + ";"
+            + "<span class=\"kr\">fun</span> <span class=\"nf\">f</span> "
+            + "<span class=\"n\">x</span> <span class=\"p\">=</span> "
+            + "<span class=\"n\">x</span><span class=\"p\">;</span>"
             + "</div>";
     assertThat(html.get(1), is(expected));
   }
@@ -228,6 +226,21 @@ public class DarnTest {
         is(
             "line1\n" //
                 + "line2"));
+  }
+
+  @Test
+  void testGenerateHtmlLinesFailUsesErrorClass() {
+    // A fail cell uses code-error class, not code-output.
+    Darn.Segment seg =
+        new Darn.Segment(
+            ImmutableList.of("1 + \"hello\";"),
+            ImmutableList.of("0.0-0.0 Error: Type mismatch"));
+    List<String> html =
+        Darn.generateHtmlLines(ImmutableList.of(seg), false, true);
+    assertThat(
+        html.stream().anyMatch(l -> l.contains("\"code-error\"")), is(true));
+    assertThat(
+        html.stream().anyMatch(l -> l.contains("\"code-output\"")), is(false));
   }
 
   @Test
@@ -268,6 +281,178 @@ public class DarnTest {
   }
 
   @Test
+  void testHighlightRouge0() {
+    // Exercises keyword→kr, val-binding→nv, fun-binding→nf, number→mi,
+    // plain identifier→n, and punctuation→p in the Rouge output format.
+    String code =
+        "let\n"
+            + "  val edge_facts = [(1, 2), (2, 3)]\n"
+            + "  fun edge (x, y) = (x, y) elem edge_facts\n"
+            + "  fun path (x, y) =\n"
+            + "    edge (x, y) orelse\n"
+            + "    (exists v0 where path (x, v0) andalso edge (v0, y))\n"
+            + "in\n"
+            + "  {path = from x, y where path (x, y)}\n"
+            + "end\n";
+    final String expected =
+        "<div class=\"language-sml highlighter-rouge\">"
+            + "<div class=\"highlight\">"
+            + "<pre class=\"highlight\">"
+            + "<code>"
+            + "<span class=\"kr\">let</span>\n"
+            + "  <span class=\"kr\">val</span>"
+            + " <span class=\"nv\">edge_facts</span>"
+            + " <span class=\"p\">=</span>"
+            + " <span class=\"p\">[(</span>"
+            + "<span class=\"mi\">1</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"mi\">2</span>"
+            + "<span class=\"p\">),</span>"
+            + " <span class=\"p\">(</span>"
+            + "<span class=\"mi\">2</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"mi\">3</span>"
+            + "<span class=\"p\">)]</span>\n"
+            + "  <span class=\"kr\">fun</span>"
+            + " <span class=\"nf\">edge</span>"
+            + " <span class=\"p\">(</span>"
+            + "<span class=\"n\">x</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"n\">y</span>"
+            + "<span class=\"p\">)</span>"
+            + " <span class=\"p\">=</span>"
+            + " <span class=\"p\">(</span>"
+            + "<span class=\"n\">x</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"n\">y</span>"
+            + "<span class=\"p\">)</span>"
+            + " <span class=\"kr\">elem</span>"
+            + " <span class=\"n\">edge_facts</span>\n"
+            + "  <span class=\"kr\">fun</span>"
+            + " <span class=\"nf\">path</span>"
+            + " <span class=\"p\">(</span>"
+            + "<span class=\"n\">x</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"n\">y</span>"
+            + "<span class=\"p\">)</span>"
+            + " <span class=\"p\">=</span>\n"
+            + "    <span class=\"n\">edge</span>"
+            + " <span class=\"p\">(</span>"
+            + "<span class=\"n\">x</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"n\">y</span>"
+            + "<span class=\"p\">)</span>"
+            + " <span class=\"kr\">orelse</span>\n"
+            + "    <span class=\"p\">(</span>"
+            + "<span class=\"kr\">exists</span>"
+            + " <span class=\"n\">v0</span>"
+            + " <span class=\"kr\">where</span>"
+            + " <span class=\"n\">path</span>"
+            + " <span class=\"p\">(</span>"
+            + "<span class=\"n\">x</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"n\">v0</span>"
+            + "<span class=\"p\">)</span>"
+            + " <span class=\"kr\">andalso</span>"
+            + " <span class=\"n\">edge</span>"
+            + " <span class=\"p\">(</span>"
+            + "<span class=\"n\">v0</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"n\">y</span>"
+            + "<span class=\"p\">))</span>\n"
+            + "<span class=\"kr\">in</span>\n"
+            + "  <span class=\"p\">{</span>"
+            + "<span class=\"n\">path</span>"
+            + " <span class=\"p\">=</span>"
+            + " <span class=\"kr\">from</span>"
+            + " <span class=\"n\">x</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"n\">y</span>"
+            + " <span class=\"kr\">where</span>"
+            + " <span class=\"n\">path</span>"
+            + " <span class=\"p\">(</span>"
+            + "<span class=\"n\">x</span>"
+            + "<span class=\"p\">,</span>"
+            + " <span class=\"n\">y</span>"
+            + "<span class=\"p\">)}</span>\n"
+            + "<span class=\"kr\">end</span>\n"
+            + "</code></pre></div></div>";
+    assertThat(MorelHighlighter.highlightRouge(code), is(expected));
+  }
+
+  @Test
+  void testHighlightRouge() {
+    // Exercises keyword→kr, val-binding→nv, fun-binding→nf, number→mi,
+    // plain identifier→n, and punctuation→p in the Rouge output format.
+    String code =
+        "let\n" //
+            + "  val edge_facts = [(1, 2), (2, 3)]\n"
+            + "  fun edge (x, y) = (x, y) elem edge_facts\n"
+            + "  fun path (x, y) =\n"
+            + "    edge (x, y) orelse\n"
+            + "    (exists v0 where path (x, v0) andalso edge (v0, y))\n"
+            + "in\n"
+            + "  {path = from x, y where path (x, y)}\n"
+            + "end\n";
+    final String expected =
+        "kr{let}\n"
+            + "  kr{val} nv{edge_facts} p{=} p{[(}mi{1}p{,} mi{2}p{),} p{(}"
+            + "mi{2}p{,} mi{3}p{)]}\n"
+            + "  kr{fun} nf{edge} p{(}n{x}p{,} n{y}p{)} p{=} p{(}n{x}p{,}"
+            + " n{y}p{)} kr{elem} n{edge_facts}\n"
+            + "  kr{fun} nf{path} p{(}n{x}p{,} n{y}p{)} p{=}\n"
+            + "    n{edge} p{(}n{x}p{,} n{y}p{)} kr{orelse}\n"
+            + "    p{(}kr{exists} n{v0} kr{where} n{path} p{(}n{x}p{,} n{v0}"
+            + "p{)} kr{andalso} n{edge} p{(}n{v0}p{,} n{y}p{))}\n"
+            + "kr{in}\n"
+            + "  p{{}n{path} p{=} kr{from} n{x}p{,} n{y} kr{where} n{path} p{(}"
+            + "n{x}p{,} n{y}p{)}}\n"
+            + "kr{end}\n";
+    assertThat(MorelHighlighter.highlightRouge2(code), is(expected));
+  }
+
+  /** Tests highlighting the {@code gcd} function. */
+  @Test
+  void testHighlightRougeFunGcd() {
+    String code =
+        "fun gcd (m, n) = from f in factorize m intersect factorize n"
+            + " compute product;\n";
+    final String expected =
+        "kr{fun} nf{gcd} p{(}n{m}p{,} n{n}p{)} p{=} kr{from} n{f} kr{in}"
+            + " n{factorize} n{m} kr{intersect} n{factorize} n{n}"
+            + " kr{compute} n{product}p{;}\n";
+    assertThat(MorelHighlighter.highlightRouge2(code), is(expected));
+  }
+
+  /** Tests highlighting the {@code lcm} function. */
+  @Test
+  void testHighlightRougeFunLcm() {
+    String code = "fun lcm (m, n) = (m * n) div gcd (m, n);\n";
+    final String expected =
+        "kr{fun} nf{lcm} p{(}n{m}p{,} n{n}p{)} p{=} p{(}n{m} o{*} n{n}p{)}"
+            + " kr{div} n{gcd} p{(}n{m}p{,} n{n}p{);}\n";
+    assertThat(MorelHighlighter.highlightRouge2(code), is(expected));
+  }
+
+  /**
+   * Tests highlighting the {@code compareInt} function, including type
+   * annotation, {@code <} and {@code >} operators.
+   */
+  @Test
+  void testHighlightRougeCompareInt() {
+    String code =
+        "fun compareInt (x: int, y: int) ="
+            + " if x < y then LESS else if x > y then GREATER else EQUAL\n";
+    final String expected =
+        "kr{fun} nf{compareInt} p{(}n{x}p{:} n{int}p{,} n{y}p{:}"
+            + " n{int}p{)} p{=}"
+            + " kr{if} n{x} o{<} n{y} kr{then} n{LESS}"
+            + " kr{else} kr{if} n{x} o{>} n{y} kr{then} n{GREATER}"
+            + " kr{else} n{EQUAL}\n";
+    assertThat(MorelHighlighter.highlightRouge2(code), is(expected));
+  }
+
+  @Test
   void testGenerateHtmlLinesHtmlEscape() {
     String highlighted =
         MorelHighlighter.highlightInput("val x = a < b andalso c > d;");
@@ -275,7 +460,7 @@ public class DarnTest {
     assertThat(highlighted.contains("&lt;"), is(true));
     assertThat(highlighted.contains("&gt;"), is(true));
     assertThat(
-        highlighted.contains("<span class=\"kw\">andalso</span>"), is(true));
+        highlighted.contains("<span class=\"kr\">andalso</span>"), is(true));
   }
 
   // -----------------------------------------------------------------------
@@ -390,14 +575,31 @@ public class DarnTest {
   @Test
   void testProcessLinesSimpleExpression() {
     List<String> input =
-        Arrays.asList("<!-- morel", "1 + 2;", "> val it = 3 : int", "-->");
+        Arrays.asList(
+            "<!-- morel",
+            "val x = 1;",
+            "> val x = 1 : int",
+            "x + 2;",
+            "> val it = 3 : int",
+            "-->");
     Darn.ProcessResult result = Darn.processLines(input);
     assertThat(result.mismatchCount, is(0));
     // Output should contain the div block.
-    assertThat(
-        result.lines.stream()
-            .anyMatch(l -> l.equals("<div class=\"code-block\">")),
-        is(true));
+    final String expected =
+        "<!-- morel\n"
+            + "val x = 1;\n"
+            + "> val x = 1 : int\n"
+            + "x + 2;\n"
+            + "> val it = 3 : int\n"
+            + "-->\n"
+            + "\n"
+            + "<div class=\"code-block\">\n"
+            + "<div class=\"code-input\"><span class=\"kr\">val</span> <span class=\"nv\">x</span> <span class=\"p\">=</span> <span class=\"mi\">1</span><span class=\"p\">;</span></div>\n"
+            + "<div class=\"code-output\">val x = 1 : int</div>\n"
+            + "<div class=\"code-input\"><span class=\"n\">x</span> <span class=\"o\">+</span> <span class=\"mi\">2</span><span class=\"p\">;</span></div>\n"
+            + "<div class=\"code-output\">val it = 3 : int</div>\n"
+            + "</div>\n";
+    assertThat(join("\n", result.lines), is(expected));
   }
 
   @Test
@@ -409,7 +611,7 @@ public class DarnTest {
     assertThat(result.mismatchCount, is(0));
     assertThat(
         result.lines.stream()
-            .anyMatch(l -> l.contains("<span class=\"kw\">fun</span>")),
+            .anyMatch(l -> l.contains("<span class=\"kr\">fun</span>")),
         is(true));
   }
 

@@ -57,6 +57,7 @@ public class MorelHighlighter {
           "as",
           "case",
           "datatype",
+          "div",
           "do",
           "else",
           "end",
@@ -70,6 +71,7 @@ public class MorelHighlighter {
           "infixr",
           "let",
           "local",
+          "mod",
           "nonfix",
           "of",
           "op",
@@ -142,6 +144,157 @@ public class MorelHighlighter {
   private MorelHighlighter() {}
 
   /**
+   * Receives highlighted token spans emitted by {@link #highlightCode}.
+   *
+   * <p>Each method is named after the CSS class of the token it represents,
+   * abbreviated to one or two letters. {@code start} and {@code end} are
+   * character positions in the source string passed to {@code highlightCode}.
+   */
+  public interface Sink {
+    /** Keyword. */
+    void kr(int start, int end);
+
+    /** String literal. */
+    void s(int start, int end);
+
+    /** Comment opening {@code (*}. */
+    void c(int start, int end);
+
+    /**
+     * Comment continuation (everything after {@code (*} through {@code *)}).
+     */
+    void cm(int start, int end);
+
+    /** Constructor or type variable. */
+    void ct(int start, int end);
+
+    /** Numeric literal. */
+    void n(int start, int end);
+
+    /** Operator. */
+    void o(int start, int end);
+
+    /** Identifier that is the name bound by a {@code val} declaration. */
+    void nv(int start, int end);
+
+    /** Identifier that is the name bound by a {@code fun} declaration. */
+    void nf(int start, int end);
+
+    /** Plain identifier (not a keyword or binding name). */
+    void id(int start, int end);
+
+    /** Punctuation (grouped consecutive chars from {@code ()[]{}=,;|.}). */
+    void p(int start, int end);
+
+    /** Whitespace and other undecorated text. */
+    void plain(int start, int end);
+  }
+
+  /**
+   * Helper for {@link Sink} implementations that write HTML {@code <span>}s.
+   */
+  private abstract static class AbstractSpanSink implements Sink {
+    protected final String source;
+    protected final StringBuilder out;
+
+    AbstractSpanSink(String source, StringBuilder out) {
+      this.source = source;
+      this.out = out;
+    }
+
+    protected void span(String cls, int start, int end) {
+      out.append("<span class=\"").append(cls).append("\">");
+      appendEscaped(source, start, end, out);
+      out.append("</span>");
+    }
+
+    @Override
+    public void plain(int start, int end) {
+      appendEscaped(source, start, end, out);
+    }
+  }
+
+  /**
+   * {@link Sink} that wraps tokens in {@code <span>} elements using Rouge CSS
+   * classes, compatible with Jekyll's {@code highlighter-rouge} output.
+   */
+  private static class RougeSink extends AbstractSpanSink {
+    RougeSink(String source, StringBuilder out) {
+      super(source, out);
+    }
+
+    @Override
+    public void kr(int start, int end) {
+      span("kr", start, end);
+    }
+
+    @Override
+    public void s(int start, int end) {
+      span("s2", start, end);
+    }
+
+    @Override
+    public void c(int start, int end) {
+      span("c", start, end);
+    }
+
+    @Override
+    public void cm(int start, int end) {
+      span("cm", start, end);
+    }
+
+    @Override
+    public void ct(int start, int end) {
+      span("nn", start, end);
+    }
+
+    @Override
+    public void n(int start, int end) {
+      span("mi", start, end);
+    }
+
+    @Override
+    public void o(int start, int end) {
+      span("o", start, end);
+    }
+
+    @Override
+    public void nv(int start, int end) {
+      span("nv", start, end);
+    }
+
+    @Override
+    public void nf(int start, int end) {
+      span("nf", start, end);
+    }
+
+    @Override
+    public void id(int start, int end) {
+      span("n", start, end);
+    }
+
+    @Override
+    public void p(int start, int end) {
+      span("p", start, end);
+    }
+  }
+
+  /**
+   * {@link Sink} that converts {@code span(cls, start, end)} to "cls{source}",
+   * a concise format suitable for writing unit tests.
+   */
+  private static final class ConciseRougeSink extends RougeSink {
+    ConciseRougeSink(String source, StringBuilder out) {
+      super(source, out);
+    }
+
+    @Override
+    protected void span(String cls, int start, int end) {
+      out.append(cls).append('{').append(source, start, end).append('}');
+    }
+  }
+
+  /**
    * Highlights Morel input code using span classes.
    *
    * <p>Keywords become {@code kw}, type variables and structure names {@code
@@ -151,7 +304,35 @@ public class MorelHighlighter {
    */
   public static String highlightInput(String code) {
     StringBuilder sb = new StringBuilder();
-    highlightCode(code, sb, true);
+    highlightCode(code, new RougeSink(code, sb), true);
+    return sb.toString();
+  }
+
+  /**
+   * Highlights Morel input code as a Jekyll/Rouge-compatible HTML block.
+   *
+   * <p>Produces a {@code <div class="language-sml highlighter-rouge">} wrapper
+   * containing a {@code <pre class="highlight"><code>} block with tokens
+   * annotated using Rouge CSS classes ({@code kr}, {@code nv}, {@code nf},
+   * {@code mi}, {@code n}, {@code p}, etc.).
+   */
+  public static String highlightRouge(String code) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("<div class=\"language-sml highlighter-rouge\">")
+        .append("<div class=\"highlight\">")
+        .append("<pre class=\"highlight\">")
+        .append("<code>");
+    highlightCode(code, new RougeSink(code, sb), true);
+    sb.append("</code></pre></div></div>");
+    return sb.toString();
+  }
+
+  /**
+   * As {@link #highlightRouge(String)} but more concise output. For testing.
+   */
+  public static String highlightRouge2(String code) {
+    StringBuilder sb = new StringBuilder();
+    highlightCode(code, new ConciseRougeSink(code, sb), true);
     return sb.toString();
   }
 
@@ -165,28 +346,40 @@ public class MorelHighlighter {
     return sb.toString();
   }
 
-  private static void highlightCode(
-      String s, StringBuilder out, boolean keywords) {
+  /**
+   * Tokenizes {@code s} and emits each token to {@code sink}.
+   *
+   * <p>Tracks whether the immediately preceding keyword was {@code val} or
+   * {@code fun}: the first plain identifier after {@code val} is emitted via
+   * {@link Sink#nv} and the first after {@code fun} via {@link Sink#nf}; all
+   * other plain identifiers are emitted via {@link Sink#id}.
+   *
+   * <p>Lines that start with {@code > } (REPL output) are emitted as a single
+   * {@link Sink#c} token (treated as a comment in Rouge output).
+   */
+  public static void highlightCode(String s, Sink sink, boolean keywords) {
     int i = 0;
     int n = s.length();
+    // State for context-sensitive identifier classification.
+    boolean awaitingValName = false;
+    boolean awaitingFunName = false;
 
     while (i < n) {
       char c = s.charAt(i);
 
       if (c == '(' && i + 1 < n && s.charAt(i + 1) == '*') {
-        // SML comment (* ... *): entire comment in "cmt".
+        // SML comment (* ... *): emit "(*" as c() and the rest as cm().
         int end = scanComment(s, i, n);
-        out.append("<span class=\"cmt\">");
-        appendEscaped(s, i, end, out);
-        out.append("</span>");
+        sink.c(i, i + 2);
+        if (i + 2 < end) {
+          sink.cm(i + 2, end);
+        }
         i = end;
 
       } else if (c == '"') {
         // String literal
         int end = scanString(s, i, n);
-        out.append("<span class=\"str\">");
-        appendEscaped(s, i, end, out);
-        out.append("</span>");
+        sink.s(i, end);
         i = end;
 
       } else if (c == '\''
@@ -200,9 +393,7 @@ public class MorelHighlighter {
                 || s.charAt(end) == '\'')) {
           end++;
         }
-        out.append("<span class=\"ctor\">");
-        appendEscaped(s, i, end, out);
-        out.append("</span>");
+        sink.ct(i, end);
         i = end;
 
       } else if (Character.isLetter(c) || c == '_') {
@@ -217,16 +408,22 @@ public class MorelHighlighter {
         String word = s.substring(i, end);
         if (keywords && ALL_KEYWORDS.contains(word)
             || !keywords && SML_KEYWORDS.contains(word)) {
-          out.append("<span class=\"kw\">");
-          out.append(word);
-          out.append("</span>");
+          sink.kr(i, end);
+          awaitingValName = word.equals("val");
+          awaitingFunName = word.equals("fun");
         } else if (end < n && s.charAt(end) == '.') {
           // Identifier immediately followed by '.' is a structure name → ctor
-          out.append("<span class=\"ctor\">");
-          out.append(word);
-          out.append("</span>");
+          sink.ct(i, end);
+          awaitingValName = false;
+          awaitingFunName = false;
+        } else if (awaitingValName) {
+          sink.nv(i, end);
+          awaitingValName = false;
+        } else if (awaitingFunName) {
+          sink.nf(i, end);
+          awaitingFunName = false;
         } else {
-          out.append(word);
+          sink.id(i, end);
         }
         i = end;
 
@@ -236,65 +433,60 @@ public class MorelHighlighter {
         while (end < n && Character.isDigit(s.charAt(end))) {
           end++;
         }
-        out.append("<span class=\"num\">");
-        out.append(s, i, end);
-        out.append("</span>");
+        sink.n(i, end);
         i = end;
 
       } else if (c == ':' && i + 1 < n && s.charAt(i + 1) == ':') {
         // :: list-cons operator (check before lone ':')
-        out.append("<span class=\"op\">::</span>");
+        sink.o(i, i + 2);
         i += 2;
 
       } else if (c == ':' && i + 1 < n && s.charAt(i + 1) == '=') {
         // := reference assignment operator
-        out.append("<span class=\"op\">:=</span>");
+        sink.o(i, i + 2);
         i += 2;
 
       } else if (c == '=' && i + 1 < n && s.charAt(i + 1) == '>') {
         // => pattern-match arrow (check before '=' alone in PUNCT_CHARS)
-        out.append("<span class=\"op\">=&gt;</span>");
+        sink.o(i, i + 2);
         i += 2;
 
       } else if (c == '-' && i + 1 < n && s.charAt(i + 1) == '>') {
         // -> function-type arrow
-        out.append("<span class=\"op\">-&gt;</span>");
+        sink.o(i, i + 2);
         i += 2;
 
       } else if (PUNCT_CHARS.indexOf(c) >= 0) {
-        // Punctuation: plain text, group consecutive punctuation characters.
+        // Punctuation: group consecutive punctuation characters.
         int end = i + 1;
         while (end < n && PUNCT_CHARS.indexOf(s.charAt(end)) >= 0) {
           end++;
         }
-        out.append(s, i, end);
+        sink.p(i, end);
         i = end;
 
       } else if (c == ':') {
-        // Lone colon (type annotation) → op class
-        out.append("<span class=\"op\">:</span>");
+        // Lone colon (type annotation) → punctuation
+        sink.p(i, i + 1);
+        i++;
+
+      } else if (c == '<' || c == '>') {
+        // Comparison operators: SML treats these as identifiers → o() class
+        sink.o(i, i + 1);
         i++;
 
       } else if (c == '+' || c == '*' || c == '/' || c == '-') {
         // Arithmetic operators (single character; - and -> handled above)
-        out.append("<span class=\"op\">").append(c).append("</span>");
+        sink.o(i, i + 1);
         i++;
 
-      } else if (c == '<') {
-        out.append("&lt;");
-        i++;
-
-      } else if (c == '>') {
-        out.append("&gt;");
-        i++;
-
-      } else if (c == '&') {
-        out.append("&amp;");
+      } else if (c == '\n') {
+        sink.plain(i, i + 1);
         i++;
 
       } else {
-        // Whitespace, newlines, and other characters.
-        out.append(c);
+        // Whitespace, &, and other characters.
+        sink.plain(i, i + 1);
         i++;
       }
     }

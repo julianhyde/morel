@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel;
 
+import static java.lang.String.join;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.io.ByteArrayInputStream;
@@ -175,11 +177,11 @@ public class Darn {
       // Emit the comment block unchanged.
       result.addAll(commentLines);
 
-      // Skip any existing <div class="morel">...</div> block that follows.
-      // Consume a single blank line separator if present.
-      int blankLines = 0;
+      // Skip any existing <div class="morel">...</div> block that follows,
+      // along with surrounding blank lines. Blank lines before the div are
+      // always consumed; the generated div's surrounding blank lines come
+      // solely from the result.add("") calls below.
       while (i < n && lines.get(i).isEmpty()) {
-        blankLines++;
         i++;
       }
       if (i < n
@@ -199,9 +201,6 @@ public class Darn {
         if (i < n && lines.get(i).isEmpty()) {
           i++;
         }
-      } else {
-        // No existing div; put back the blank lines we consumed.
-        i -= blankLines;
       }
 
       // Execute the cell (unless skip). Silent cells execute to build env
@@ -239,7 +238,7 @@ public class Darn {
       // Generate and insert a <div class="morel"> block (unless silent).
       if (attrs.command != Command.SILENT) {
         result.add("");
-        result.addAll(generateHtmlLines(segments, attrs.noOutput));
+        result.addAll(generateHtmlLines(segments, attrs.noOutput, attrs.fail));
         result.add("");
       }
     }
@@ -564,7 +563,7 @@ public class Darn {
 
   /** Generates the HTML lines for a {@code <div class="morel">} block. */
   static List<String> generateHtmlLines(List<Segment> segments) {
-    return generateHtmlLines(segments, false);
+    return generateHtmlLines(segments, false, false);
   }
 
   /**
@@ -575,18 +574,31 @@ public class Darn {
    */
   static List<String> generateHtmlLines(
       List<Segment> segments, boolean noOutput) {
+    return generateHtmlLines(segments, noOutput, false);
+  }
+
+  /**
+   * Generates the HTML lines for a {@code <div class="morel">} block.
+   *
+   * @param noOutput If true, omit the output div (the output is stored in the
+   *     comment for validation but not rendered)
+   * @param fail If true, use {@code code-error} class (red bar) instead of
+   *     {@code code-output} (green bar) for output lines
+   */
+  static List<String> generateHtmlLines(
+      List<Segment> segments, boolean noOutput, boolean fail) {
     List<String> lines = new ArrayList<>();
     lines.add(DIV_OPEN);
     for (Segment segment : segments) {
       if (!segment.input.isEmpty()) {
         String inputHtml =
-            MorelHighlighter.highlightInput(String.join("\n", segment.input));
+            MorelHighlighter.highlightInput(join("\n", segment.input));
         addCodeBlock(lines, "code-input", inputHtml);
       }
       if (!noOutput && !segment.output.isEmpty()) {
         String outputHtml =
-            MorelHighlighter.highlightOutput(String.join("\n", segment.output));
-        addCodeBlock(lines, "code-output", outputHtml);
+            MorelHighlighter.highlightOutput(join("\n", segment.output));
+        addCodeBlock(lines, fail ? "code-error" : "code-output", outputHtml);
       }
     }
     lines.add(DIV_CLOSE);
