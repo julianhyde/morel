@@ -265,17 +265,16 @@ public class DarnTest {
   void testHighlightOutputHtmlEscapes() {
     // Output is HTML-escaped but otherwise plain (no spans).
     String highlighted =
-        MorelHighlighter.of().highlightOutput("'a list -> int");
+        MorelHighlighter.DEFAULT.highlightOutput("'a list -> int");
     assertThat(highlighted, is("'a list -&gt; int"));
   }
 
   @Test
   void testHighlightOutputMultiLine() {
     String highlighted =
-        MorelHighlighter.of()
-            .highlightOutput(
-                "line1\n" //
-                    + "line2");
+        MorelHighlighter.DEFAULT.highlightOutput(
+            "line1\n" //
+                + "line2");
     assertThat(
         highlighted,
         is(
@@ -432,7 +431,7 @@ public class DarnTest {
             + "<span class=\"p\">)}</span>\n"
             + "<span class=\"kr\">end</span>\n"
             + "</code></pre></div></div>";
-    assertThat(MorelHighlighter.of().highlightRouge(code), is(expected));
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge(code), is(expected));
   }
 
   @Test
@@ -463,7 +462,7 @@ public class DarnTest {
             + "  p{{}n{path} p{=} kr{from} nv{x}p{,} nv{y} kr{where} n{path} p{(}"
             + "n{x}p{,} n{y}p{)}}\n"
             + "kr{end}\n";
-    assertThat(MorelHighlighter.of().highlightRouge2(code), is(expected));
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
   }
 
   /** Tests highlighting the {@code gcd} function. */
@@ -476,7 +475,7 @@ public class DarnTest {
         "kr{fun} nf{gcd} p{(}n{m}p{,} n{n}p{)} p{=} kr{from} nv{f} kr{in}"
             + " n{factorize} n{m} kr{intersect} n{factorize} n{n}"
             + " kr{compute} n{product}p{;}\n";
-    assertThat(MorelHighlighter.of().highlightRouge2(code), is(expected));
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
   }
 
   /** Tests highlighting the {@code lcm} function. */
@@ -486,7 +485,7 @@ public class DarnTest {
     final String expected =
         "kr{fun} nf{lcm} p{(}n{m}p{,} n{n}p{)} p{=} p{(}n{m} o{*} n{n}p{)}"
             + " kr{div} n{gcd} p{(}n{m}p{,} n{n}p{);}\n";
-    assertThat(MorelHighlighter.of().highlightRouge2(code), is(expected));
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
   }
 
   /**
@@ -504,13 +503,13 @@ public class DarnTest {
             + " kr{if} n{x} o{<} n{y} kr{then} n{LESS}"
             + " kr{else} kr{if} n{x} o{>} n{y} kr{then} n{GREATER}"
             + " kr{else} n{EQUAL}\n";
-    assertThat(MorelHighlighter.of().highlightRouge2(code), is(expected));
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
   }
 
   @Test
   void testGenerateHtmlLinesHtmlEscape() {
     String highlighted =
-        MorelHighlighter.of().highlightInput("val x = a < b andalso c > d;");
+        MorelHighlighter.DEFAULT.highlightInput("val x = a < b andalso c > d;");
     // < and > must be escaped; "andalso" must use kw span
     assertThat(highlighted.contains("&lt;"), is(true));
     assertThat(highlighted.contains("&gt;"), is(true));

@@ -22,6 +22,7 @@ import static java.lang.String.join;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -119,7 +120,15 @@ public class Darn {
     List<String> inputLines =
         Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
     boolean dml = file.getName().contains("dml-in-morel");
-    MorelHighlighter highlighter = MorelHighlighter.of(dml);
+    MorelHighlighter highlighter =
+        dml
+            ? MorelHighlighter.DEFAULT.amendKeywords(
+                kws ->
+                    ImmutableSet.<String>builder()
+                        .addAll(kws)
+                        .addAll(MorelHighlighter.DML_KEYWORDS)
+                        .build())
+            : MorelHighlighter.DEFAULT;
     ProcessResult result =
         processLines(inputLines, kernelSupplier, highlighter);
     boolean changed = !result.lines.equals(inputLines);
@@ -140,7 +149,7 @@ public class Darn {
   /** Processes a list of lines and returns the updated list. */
   static ProcessResult processLines(
       List<String> lines, Supplier<Kernel> kernelSupplier) {
-    return processLines(lines, kernelSupplier, MorelHighlighter.of());
+    return processLines(lines, kernelSupplier, MorelHighlighter.DEFAULT);
   }
 
   /** As {@link #processLines(List, Supplier)}, with a highlighter. */
@@ -618,19 +627,21 @@ public class Darn {
 
   /** Generates the HTML lines for a {@code <div class="morel">} block. */
   static List<String> generateHtmlLines(List<Segment> segments) {
-    return generateHtmlLines(segments, false, false, MorelHighlighter.of());
+    return generateHtmlLines(segments, false, false, MorelHighlighter.DEFAULT);
   }
 
   /** As {@link #generateHtmlLines(List)}, with a {@code noOutput} flag. */
   static List<String> generateHtmlLines(
       List<Segment> segments, boolean noOutput) {
-    return generateHtmlLines(segments, noOutput, false, MorelHighlighter.of());
+    return generateHtmlLines(
+        segments, noOutput, false, MorelHighlighter.DEFAULT);
   }
 
   /** As {@link #generateHtmlLines(List, boolean)}, with a {@code fail} flag. */
   static List<String> generateHtmlLines(
       List<Segment> segments, boolean noOutput, boolean fail) {
-    return generateHtmlLines(segments, noOutput, fail, MorelHighlighter.of());
+    return generateHtmlLines(
+        segments, noOutput, fail, MorelHighlighter.DEFAULT);
   }
 
   /**

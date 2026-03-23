@@ -20,6 +20,7 @@ package net.hydromatic.morel.util;
 
 import com.google.common.collect.ImmutableSet;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 /**
  * Syntax-highlights Morel source code as HTML.
@@ -46,10 +47,9 @@ import java.util.Set;
  * elem}, {@code exists}) are given the {@code kw} class. Adding a new Morel
  * keyword requires only adding it to {@link #MOREL_KEYWORDS}.
  *
- * <p>Instances are created via {@link #of()} or {@link #of(boolean dml)}. When
- * {@code dml} is true, the DML keywords ({@code commit}, {@code delete}, {@code
- * insert}, {@code update}, {@code assign}) are also highlighted as keywords;
- * use this for files whose name contains {@code "dml-in-morel"}.
+ * <p>The {@link #DEFAULT} instance highlights SML and Morel keywords. To add
+ * further keywords (e.g. DML keywords from {@link #DML_KEYWORDS}), call {@link
+ * #amendKeywords(UnaryOperator)}.
  */
 public class MorelHighlighter {
 
@@ -131,21 +131,18 @@ public class MorelHighlighter {
           "yield");
 
   /**
-   * DML keywords highlighted only when {@link #dml} is true (file name contains
-   * {@code "dml-in-morel"}).
+   * DML keywords, not active by default. Pass to {@link
+   * #amendKeywords(UnaryOperator)} to enable them for a highlighter instance.
    */
-  private static final Set<String> DML_KEYWORDS =
+  public static final Set<String> DML_KEYWORDS =
       ImmutableSet.of("assign", "commit", "delete", "insert", "update");
 
   /** Union of {@link #SML_KEYWORDS} and {@link #MOREL_KEYWORDS}. */
-  private static final Set<String> ALL_KEYWORDS;
-
-  static {
-    ImmutableSet.Builder<String> b = ImmutableSet.builder();
-    b.addAll(SML_KEYWORDS);
-    b.addAll(MOREL_KEYWORDS);
-    ALL_KEYWORDS = b.build();
-  }
+  private static final Set<String> ALL_KEYWORDS =
+      ImmutableSet.<String>builder()
+          .addAll(SML_KEYWORDS)
+          .addAll(MOREL_KEYWORDS)
+          .build();
 
   /**
    * Punctuation characters. Consecutive punctuation characters are grouped and
@@ -153,36 +150,31 @@ public class MorelHighlighter {
    */
   private static final String PUNCT_CHARS = "()[]{}=,;|.";
 
-  /** Whether DML keywords are active for this highlighter instance. */
-  private final boolean dml;
+  /** Default highlighter instance, with SML and Morel keywords active. */
+  public static final MorelHighlighter DEFAULT =
+      new MorelHighlighter(ALL_KEYWORDS);
 
-  /** Active keyword set: SML + Morel, plus DML if {@link #dml} is true. */
+  /** Active keyword set for this highlighter instance. */
   private final Set<String> allKeywords;
 
-  private MorelHighlighter(boolean dml) {
-    this.dml = dml;
-    if (dml) {
-      ImmutableSet.Builder<String> b = ImmutableSet.builder();
-      b.addAll(ALL_KEYWORDS);
-      b.addAll(DML_KEYWORDS);
-      this.allKeywords = b.build();
-    } else {
-      this.allKeywords = ALL_KEYWORDS;
-    }
-  }
-
-  /** Returns a highlighter with standard (non-DML) keywords. */
-  public static MorelHighlighter of() {
-    return new MorelHighlighter(false);
+  private MorelHighlighter(Set<String> keywords) {
+    this.allKeywords = ImmutableSet.copyOf(keywords);
   }
 
   /**
-   * Returns a highlighter; if {@code dml} is true, DML keywords ({@code
-   * commit}, {@code delete}, {@code insert}, {@code update}, {@code assign})
-   * are also highlighted.
+   * Returns a new highlighter whose keyword set is the result of applying
+   * {@code fn} to this highlighter's keyword set.
+   *
+   * <p>For example, to add DML keywords:
+   *
+   * <pre>{@code
+   * MorelHighlighter.DEFAULT.amendKeywords(
+   *     kws -> ImmutableSet.<String>builder()
+   *         .addAll(kws).addAll(MorelHighlighter.DML_KEYWORDS).build())
+   * }</pre>
    */
-  public static MorelHighlighter of(boolean dml) {
-    return new MorelHighlighter(dml);
+  public MorelHighlighter amendKeywords(UnaryOperator<Set<String>> fn) {
+    return new MorelHighlighter(fn.apply(allKeywords));
   }
 
   /**
@@ -346,7 +338,7 @@ public class MorelHighlighter {
    */
   public String highlightInput(String code) {
     StringBuilder sb = new StringBuilder();
-    highlightCode(code, new RougeSink(code, sb), true);
+    highlightCode(code, new RougeSink(code, sb));
     return sb.toString();
   }
 
@@ -364,7 +356,7 @@ public class MorelHighlighter {
         .append("<div class=\"highlight\">")
         .append("<pre class=\"highlight\">")
         .append("<code>");
-    highlightCode(code, new RougeSink(code, sb), true);
+    highlightCode(code, new RougeSink(code, sb));
     sb.append("</code></pre></div></div>");
     return sb.toString();
   }
@@ -374,7 +366,7 @@ public class MorelHighlighter {
    */
   public String highlightRouge2(String code) {
     StringBuilder sb = new StringBuilder();
-    highlightCode(code, new ConciseRougeSink(code, sb), true);
+    highlightCode(code, new ConciseRougeSink(code, sb));
     return sb.toString();
   }
 
@@ -406,7 +398,7 @@ public class MorelHighlighter {
    * <p>Lines that start with {@code > } (REPL output) are emitted as a single
    * {@link Sink#c} token (treated as a comment in Rouge output).
    */
-  public void highlightCode(String s, Sink sink, boolean keywords) {
+  public void highlightCode(String s, Sink sink) {
     int i = 0;
     int n = s.length();
     // State for context-sensitive identifier classification.
@@ -460,8 +452,7 @@ public class MorelHighlighter {
           end++;
         }
         String word = s.substring(i, end);
-        if (keywords && allKeywords.contains(word)
-            || !keywords && SML_KEYWORDS.contains(word)) {
+        if (allKeywords.contains(word)) {
           sink.kr(i, end);
           if (word.equals("val")) {
             awaitingValName = true;
