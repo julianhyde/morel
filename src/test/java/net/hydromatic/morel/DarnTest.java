@@ -478,6 +478,32 @@ public class DarnTest {
     assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
   }
 
+  /**
+   * Tests that tuple patterns in {@code from} generators highlight as {@code
+   * nv}.
+   */
+  @Test
+  void testHighlightRougeFromTuplePattern() {
+    // (i, j) in from-pattern position: both i and j are bound variables.
+    String code = "from (i, j) in pairs order i desc, j";
+    final String expected =
+        "kr{from} p{(}nv{i}p{,} nv{j}p{)} kr{in} n{pairs}"
+            + " kr{order} n{i} kr{desc}p{,} n{j}";
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
+  }
+
+  /**
+   * Tests that tuple patterns in {@code val} bindings highlight as {@code nv}.
+   */
+  @Test
+  void testHighlightRougeValTuplePattern() {
+    // (i, j) in val-pattern position: both i and j are bound variables.
+    String code = "val (i, j) = (1, 2)";
+    final String expected =
+        "kr{val} p{(}nv{i}p{,} nv{j}p{)} p{=} p{(}mi{1}p{,} mi{2}p{)}";
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
+  }
+
   /** Tests highlighting the {@code lcm} function. */
   @Test
   void testHighlightRougeFunLcm() {

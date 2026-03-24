@@ -20,7 +20,7 @@ package net.hydromatic.morel.util;
 
 import com.google.common.collect.ImmutableSet;
 import java.util.Set;
-import java.util.function.UnaryOperator;
+import java.util.function.Function;
 
 /**
  * Syntax-highlights Morel source code as HTML.
@@ -49,7 +49,7 @@ import java.util.function.UnaryOperator;
  *
  * <p>The {@link #DEFAULT} instance highlights SML and Morel keywords. To add
  * further keywords (e.g. DML keywords from {@link #DML_KEYWORDS}), call {@link
- * #amendKeywords(UnaryOperator)}.
+ * #amendKeywords(Function)}.
  */
 public class MorelHighlighter {
 
@@ -132,7 +132,7 @@ public class MorelHighlighter {
 
   /**
    * DML keywords, not active by default. Pass to {@link
-   * #amendKeywords(UnaryOperator)} to enable them for a highlighter instance.
+   * #amendKeywords(Function)} to enable them for a highlighter instance.
    */
   public static final Set<String> DML_KEYWORDS =
       ImmutableSet.of("assign", "commit", "delete", "insert", "update");
@@ -155,10 +155,10 @@ public class MorelHighlighter {
       new MorelHighlighter(ALL_KEYWORDS);
 
   /** Active keyword set for this highlighter instance. */
-  private final Set<String> allKeywords;
+  private final Set<String> keywords;
 
   private MorelHighlighter(Set<String> keywords) {
-    this.allKeywords = ImmutableSet.copyOf(keywords);
+    this.keywords = ImmutableSet.copyOf(keywords);
   }
 
   /**
@@ -169,12 +169,12 @@ public class MorelHighlighter {
    *
    * <pre>{@code
    * MorelHighlighter.DEFAULT.amendKeywords(
-   *     kws -> ImmutableSet.<String>builder()
-   *         .addAll(kws).addAll(MorelHighlighter.DML_KEYWORDS).build())
+   *     keywords -> Iterables.concat(keywords, MorelHighlighter.DML_KEYWORDS))
    * }</pre>
    */
-  public MorelHighlighter amendKeywords(UnaryOperator<Set<String>> fn) {
-    return new MorelHighlighter(fn.apply(allKeywords));
+  public MorelHighlighter amendKeywords(
+      Function<Set<String>, Iterable<String>> fn) {
+    return new MorelHighlighter(ImmutableSet.copyOf(fn.apply(keywords)));
   }
 
   /**
@@ -402,11 +402,13 @@ public class MorelHighlighter {
     int i = 0;
     int n = s.length();
     // State for context-sensitive identifier classification.
-    boolean awaitingValName = false;
     boolean awaitingFunName = false;
-    // fromState: 0=NONE, 1=PAT (expecting bound variables), 2=EXPR (in source
-    // expression after 'in'). fromDepth tracks parenthesis nesting in EXPR
-    // state so that a top-level comma triggers a new generator.
+    // valPatDepth: -1=inactive, 0+=in val pattern (depth of brackets). All
+    // identifiers in val pattern mode are emitted as nv. Exits on '=' at
+    // depth 0. fromState: 0=NONE, 1=PAT (expecting bound variables), 2=EXPR
+    // (in source expression after 'in'). fromDepth tracks parenthesis nesting
+    // in EXPR state so that a top-level comma triggers a new generator.
+    int valPatDepth = -1;
     int fromState = 0;
     int fromDepth = 0;
 
@@ -452,31 +454,29 @@ public class MorelHighlighter {
           end++;
         }
         String word = s.substring(i, end);
-        if (allKeywords.contains(word)) {
+        if (keywords.contains(word)) {
           sink.kr(i, end);
           if (word.equals("val")) {
-            awaitingValName = true;
+            valPatDepth = 0;
             awaitingFunName = false;
             fromState = 0;
           } else if (word.equals("fun")) {
             awaitingFunName = true;
-            awaitingValName = false;
+            valPatDepth = -1;
             fromState = 0;
           } else if (word.equals("from")) {
             fromState = 1; // PAT
             fromDepth = 0;
-            awaitingValName = false;
+            valPatDepth = -1;
             awaitingFunName = false;
           } else if (word.equals("in") && fromState == 1) {
             // 'in' after a from-pattern: switch to expression mode.
             fromState = 2; // EXPR
             fromDepth = 0;
-            awaitingValName = false;
             awaitingFunName = false;
           } else if (word.equals("join") && fromState == 2) {
             // 'join' introduces a new generator pattern.
             fromState = 1; // PAT
-            awaitingValName = false;
             awaitingFunName = false;
           } else if ((word.equals("where")
                   || word.equals("yield")
@@ -485,20 +485,18 @@ public class MorelHighlighter {
               && (fromState == 1 || fromState == 2 && fromDepth == 0)) {
             // End of the generator list; no more patterns expected.
             fromState = 0;
-            awaitingValName = false;
             awaitingFunName = false;
           } else {
-            awaitingValName = false;
             awaitingFunName = false;
           }
         } else if (end < n && s.charAt(end) == '.') {
           // Identifier immediately followed by '.' is a structure name → ctor
           sink.ct(i, end);
-          awaitingValName = false;
+          valPatDepth = -1;
           awaitingFunName = false;
-        } else if (awaitingValName) {
+        } else if (valPatDepth >= 0) {
+          // Bound variable in a val pattern.
           sink.nv(i, end);
-          awaitingValName = false;
         } else if (awaitingFunName) {
           sink.nf(i, end);
           awaitingFunName = false;
@@ -546,17 +544,28 @@ public class MorelHighlighter {
         while (end < n && PUNCT_CHARS.indexOf(s.charAt(end)) >= 0) {
           end++;
         }
-        if (fromState == 2) {
-          // In EXPR state: track nesting depth; a top-level comma starts a
-          // new generator pattern.
+        if (valPatDepth >= 0 || fromState == 2) {
+          // Track bracket depth; ',' in EXPR starts a new generator; '=' at
+          // depth 0 ends a val pattern. valPatDepth and fromState==2 are
+          // mutually exclusive (from clears valPatDepth).
           for (int j = i; j < end; j++) {
             char p = s.charAt(j);
             if (p == '(' || p == '[' || p == '{') {
-              fromDepth++;
-            } else if ((p == ')' || p == ']' || p == '}') && fromDepth > 0) {
-              fromDepth--;
-            } else if (p == ',' && fromDepth == 0) {
+              if (valPatDepth >= 0) {
+                valPatDepth++;
+              } else {
+                fromDepth++;
+              }
+            } else if (p == ')' || p == ']' || p == '}') {
+              if (valPatDepth > 0) {
+                valPatDepth--;
+              } else if (fromDepth > 0) {
+                fromDepth--;
+              }
+            } else if (p == ',' && fromState == 2 && fromDepth == 0) {
               fromState = 1; // PAT
+            } else if (p == '=' && valPatDepth == 0) {
+              valPatDepth = -1;
             }
           }
         }
