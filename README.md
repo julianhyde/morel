@@ -19,7 +19,7 @@ License.
 {% endcomment %}
 -->
 [![Build Status](https://github.com/hydromatic/morel/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/hydromatic/morel/actions?query=branch%3Amain)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/net.hydromatic/morel/badge.svg)](https://maven-badges.herokuapp.com/maven-central/net.hydromatic/morel)
+[![Maven Central](https://img.shields.io/maven-central/v/net.hydromatic/morel)](https://central.sonatype.com/artifact/net.hydromatic/morel)
 [![javadoc](https://javadoc.io/badge2/net.hydromatic/morel/javadoc.svg)](https://javadoc.io/doc/net.hydromatic/morel)
 <img align="right" alt="Morel mushroom (credit: OldDesignShop.com)" src="etc/morel-1200x1200.jpg" with="300" height="300">
 
@@ -42,7 +42,7 @@ dependencies; see below.)
 ### From Maven
 
 Get Morel from
-<a href="https://search.maven.org/#search%7Cga%7C1%7Cg%3Anet.hydromatic%20a%3Amorel">Maven Central</a>:
+<a href="https://central.sonatype.com/artifact/net.hydromatic/morel">Maven Central</a>:
 
 ```xml
 <dependency>
