@@ -122,7 +122,7 @@ class Generators {
           cache, pat, ordered, pointValue, ImmutableSet.of(pointMatch));
       return true;
     }
-    if (hasBounds && pat.type == PrimitiveType.INT) {
+    if (hasBounds && pat.type.isDiscrete(cache.typeSystem)) {
       final @Nullable Pair<Core.Exp, Boolean> lower =
           lowerBound(cache.typeSystem, pat, context.constraints);
       final @Nullable Pair<Core.Exp, Boolean> upper =
@@ -2132,7 +2132,49 @@ class Generators {
    */
   @SuppressWarnings("UnusedReturnValue")
   static Generator generateUnion(
-      Cache cache, boolean ordered, List<Generator> generators) {
+      Cache cache,
+      boolean ordered,
+      List<Generator> generators,
+      Core.@Nullable Exp constraint) {
+    // If every branch is a RangeGenerator or PointGenerator, merge all range
+    // expressions into a single discreteSetOf call.
+    if (generators.stream()
+        .allMatch(
+            g -> g instanceof RangeGenerator || g instanceof PointGenerator)) {
+      final Generator firstGen = generators.get(0);
+      final TypeSystem typeSystem = cache.typeSystem;
+      final Type type = firstGen.pat.type;
+      final Type rangeType = typeSystem.range(type);
+      final List<Core.Apply> rangeExps =
+          generators.stream()
+              .flatMap(g -> g.rangeExp(typeSystem).stream())
+              .collect(ImmutableList.toImmutableList());
+      final Core.Exp rangeListExp = core.list(typeSystem, rangeType, rangeExps);
+      final Core.Apply discreteSetExp =
+          core.call(
+              typeSystem,
+              BuiltIn.RANGE_DISCRETE_SET_OF,
+              type,
+              Pos.ZERO,
+              rangeListExp);
+      final BuiltIn toListOrBag =
+          ordered
+              ? BuiltIn.RANGE_DISCRETE_SET_TO_LIST
+              : BuiltIn.RANGE_DISCRETE_SET_TO_BAG;
+      final Core.Apply mergedExp =
+          core.call(typeSystem, toListOrBag, type, Pos.ZERO, discreteSetExp);
+      final Core.Exp simplified = Simplifier.simplify(typeSystem, mergedExp);
+      final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
+      final ImmutableSet<Core.Exp> mergedProvenance =
+          constraint != null ? ImmutableSet.of(constraint) : ImmutableSet.of();
+      return cache.add(
+          new RangeGenerator(
+              (Core.NamedPat) firstGen.pat,
+              simplified,
+              freePats,
+              rangeExps,
+              mergedProvenance));
+    }
     final Core.Exp fn =
         core.functionLiteral(
             cache.typeSystem,
@@ -2506,7 +2548,7 @@ class Generators {
           }
           generators.add(getLast(cache.generators.get((Core.NamedPat) pat)));
         }
-        generateUnion(cache, ordered, generators);
+        generateUnion(cache, ordered, generators, constraint);
         return true;
       }
     }
@@ -2526,6 +2568,12 @@ class Generators {
             || references(constraint.arg(1), pat)
             || extractOffset(constraint.arg(0), pat) != null
             || extractOffset(constraint.arg(1), pat) != null;
+      case CHAR_OP_GT:
+      case CHAR_OP_GE:
+      case CHAR_OP_LT:
+      case CHAR_OP_LE:
+        return references(constraint.arg(0), pat)
+            || references(constraint.arg(1), pat);
       default:
         return false;
     }
@@ -2568,7 +2616,7 @@ class Generators {
     final TypeSystem typeSystem = cache.typeSystem;
     final BuiltIn.Constructor rangeCtor =
         getConstructor(lowerStrict, upperStrict);
-    final Type type = PrimitiveType.INT;
+    final Type type = pat.type;
     final Type rangeType = typeSystem.range(type);
     final FnType conFnType =
         typeSystem.fnType(typeSystem.tupleType(type, type), rangeType);
@@ -2581,34 +2629,19 @@ class Generators {
             core.tuple(typeSystem, lower, upper));
     final Core.Exp rangeListExp =
         core.list(typeSystem, rangeType, ImmutableList.of(rangeExp));
-    // Step 1: Range.discreteSetOf rangeListExp -> 'a discrete_set
-    // Instantiate the forall type with the element type so that the literal
-    // carries a concrete FnType; Typed.withType requires a concrete FnType.
-    final Type discreteSetOfForallType =
-        BuiltIn.RANGE_DISCRETE_SET_OF.typeFunction.apply(typeSystem);
-    final FnType discreteSetOfFnType =
-        (FnType) typeSystem.apply(discreteSetOfForallType, type);
     final Core.Apply discreteSetExp =
-        core.apply(
+        core.call(
+            typeSystem,
+            BuiltIn.RANGE_DISCRETE_SET_OF,
+            type,
             Pos.ZERO,
-            discreteSetOfFnType.resultType,
-            core.functionLiteral(
-                discreteSetOfFnType, BuiltIn.RANGE_DISCRETE_SET_OF),
             rangeListExp);
-    // Step 2: Range.toList or Range.toBag on the discrete_set
     final BuiltIn toListOrBag =
         ordered
             ? BuiltIn.RANGE_DISCRETE_SET_TO_LIST
             : BuiltIn.RANGE_DISCRETE_SET_TO_BAG;
-    final Type toListForallType = toListOrBag.typeFunction.apply(typeSystem);
-    final FnType toListFnType =
-        (FnType) typeSystem.apply(toListForallType, type);
-    Core.Apply exp =
-        core.apply(
-            Pos.ZERO,
-            toListFnType.resultType,
-            core.functionLiteral(toListFnType, toListOrBag),
-            discreteSetExp);
+    final Core.Apply exp =
+        core.call(typeSystem, toListOrBag, type, Pos.ZERO, discreteSetExp);
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
     final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
     return cache.add(
@@ -2616,10 +2649,7 @@ class Generators {
             pat,
             simplified,
             freePats,
-            lower,
-            lowerStrict,
-            upper,
-            upperStrict,
+            ImmutableList.of(rangeExp),
             provenance.build()));
   }
 
@@ -2690,6 +2720,13 @@ class Generators {
           }
           // Check for "e > p + k" -> "p < e - k" (this is an upper bound, skip)
           break;
+        case CHAR_OP_GT:
+        case CHAR_OP_GE:
+          if (references(constraint.arg(0), pat)) {
+            return Pair.of(
+                constraint.arg(1), constraint.builtIn() == BuiltIn.CHAR_OP_GT);
+          }
+          break;
         case OP_LT:
         case OP_LE:
           if (references(constraint.arg(1), pat)) {
@@ -2705,6 +2742,13 @@ class Generators {
             final Core.Exp bound =
                 adjustBound(constraint.arg(0), offset, typeSystem);
             return Pair.of(bound, strict);
+          }
+          break;
+        case CHAR_OP_LT:
+        case CHAR_OP_LE:
+          if (references(constraint.arg(1), pat)) {
+            return Pair.of(
+                constraint.arg(0), constraint.builtIn() == BuiltIn.CHAR_OP_LT);
           }
           break;
       }
@@ -2734,6 +2778,13 @@ class Generators {
           }
           // Check for "e < p + k" -> "p > e - k" (this is a lower bound, skip)
           break;
+        case CHAR_OP_LT:
+        case CHAR_OP_LE:
+          if (references(constraint.arg(0), pat)) {
+            return Pair.of(
+                constraint.arg(1), constraint.builtIn() == BuiltIn.CHAR_OP_LT);
+          }
+          break;
         case OP_GT:
         case OP_GE:
           if (references(constraint.arg(1), pat)) {
@@ -2749,6 +2800,13 @@ class Generators {
             final Core.Exp bound =
                 adjustBound(constraint.arg(0), offset, typeSystem);
             return Pair.of(bound, strict);
+          }
+          break;
+        case CHAR_OP_GT:
+        case CHAR_OP_GE:
+          if (references(constraint.arg(1), pat)) {
+            return Pair.of(
+                constraint.arg(0), constraint.builtIn() == BuiltIn.CHAR_OP_GT);
           }
           break;
       }
@@ -2947,26 +3005,27 @@ class Generators {
    * upper}.
    */
   static class RangeGenerator extends Generator {
-    private final Core.Exp lower;
-    private final Core.Exp upper;
+    /** The single {@code CTOR(lo, hi)} range expression, before wrapping. */
+    private final List<Core.Apply> rangeExps;
 
     RangeGenerator(
         Core.NamedPat pat,
         Core.Exp exp,
         Iterable<? extends Core.NamedPat> freePats,
-        Core.Exp lower,
-        boolean ignoreLowerStrict,
-        Core.Exp upper,
-        boolean ignoreUpperStrict,
+        List<Core.Apply> rangeExps,
         Set<Core.Exp> provenance) {
       super(exp, freePats, pat, Cardinality.FINITE, true, true, provenance);
-      this.lower = lower;
-      this.upper = upper;
+      this.rangeExps = ImmutableList.copyOf(rangeExps);
     }
 
     @Override
     Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp) {
       return exp;
+    }
+
+    @Override
+    protected List<Core.Apply> rangeExp(TypeSystem typeSystem) {
+      return rangeExps;
     }
   }
 
@@ -3022,6 +3081,18 @@ class Generators {
         }
       }
       return exp;
+    }
+
+    @Override
+    protected List<Core.Apply> rangeExp(TypeSystem typeSystem) {
+      // Return the constructor call: "POINT point".
+      final Type rangeType = typeSystem.range(point.type);
+      final FnType conFnType = typeSystem.fnType(point.type, rangeType);
+      final Core.IdPat conIdPat =
+          core.idPat(conFnType, BuiltIn.Constructor.RANGE_POINT.constructor, 0);
+      final Core.Apply apply =
+          core.apply(Pos.ZERO, rangeType, core.id(conIdPat), point);
+      return ImmutableList.of(apply);
     }
   }
 

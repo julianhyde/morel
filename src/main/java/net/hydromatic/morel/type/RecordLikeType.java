@@ -48,6 +48,11 @@ public interface RecordLikeType extends Type {
   default @Nullable TypedValue asTypedValue() {
     return null;
   }
+
+  @Override
+  default boolean isDiscrete(TypeSystem typeSystem) {
+    return argTypes().stream().allMatch(t -> t.isDiscrete(typeSystem));
+  }
 }
 
 // End RecordLikeType.java

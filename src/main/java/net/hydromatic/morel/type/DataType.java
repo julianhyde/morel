@@ -94,6 +94,12 @@ public class DataType extends ParameterizedType {
   }
 
   @Override
+  public boolean isDiscrete(TypeSystem typeSystem) {
+    return typeConstructors(typeSystem).values().stream()
+        .allMatch(t -> t.isDiscrete(typeSystem));
+  }
+
+  @Override
   public DataType copy(TypeSystem typeSystem, UnaryOperator<Type> transform) {
     final List<Type> arguments = transformEager(this.arguments, transform);
     if (arguments.equals(this.arguments)) {

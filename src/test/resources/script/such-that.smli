@@ -49,7 +49,7 @@ from i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22;
 > val it = [1,2,3,4,5,21,8,0] : int bag
 Sys.planEx "3";
 > val it =
->   "val it = from i in #concat Bag ([#toBag Range (#discreteSetOf Range ([CLOSED (0, 5)])), #fromList Bag ([8]), #toBag Range (#discreteSetOf Range ([OPEN (20, 22)]))]) group i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22"
+>   "val it = from i in #toBag Range (#discreteSetOf Range ([CLOSED (0, 5), POINT 8, OPEN (20, 22)]))"
 >   : string
 
 from i where i > 0 andalso i < 4 yield {j = i + 1};
@@ -84,6 +84,10 @@ from i where i = 0 orelse i = 12;
 
 from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
 > val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int bag
+Sys.planEx "3";
+> val it =
+>   "val it = from i in #toBag Range (#discreteSetOf Range ([OPEN (0, 10), OPEN_CLOSED (12, 15)]))"
+>   : string
 
 from i
 where i > 0 andalso i < 10
