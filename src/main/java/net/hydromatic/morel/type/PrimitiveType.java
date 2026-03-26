@@ -72,6 +72,19 @@ public enum PrimitiveType implements RecordLikeType {
   }
 
   @Override
+  public boolean isDiscrete(TypeSystem typeSystem) {
+    switch (this) {
+      case INT:
+      case CHAR:
+      case BOOL:
+      case UNIT:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  @Override
   public PrimitiveType copy(
       TypeSystem typeSystem, UnaryOperator<Type> transform) {
     return this;

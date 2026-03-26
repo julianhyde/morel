@@ -107,6 +107,11 @@ abstract class Generator {
    */
   abstract Core.Exp simplify(TypeSystem typeSystem, Core.Pat pat, Core.Exp exp);
 
+  /** Returns the range expression; throws if this generator is not a range. */
+  protected List<Core.Apply> rangeExp(TypeSystem typeSystem) {
+    throw new UnsupportedOperationException();
+  }
+
   /** Cardinality of a generator per binding of its free variables. */
   public enum Cardinality {
     /** Produces exactly one value (e.g., x = 5) */

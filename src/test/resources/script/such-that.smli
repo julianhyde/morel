@@ -49,7 +49,7 @@ from i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22;
 > val it = [1,2,3,4,5,21,8,0] : int bag
 Sys.planEx "3";
 > val it =
->   "val it = from i in #concat Bag ([#toBag Range (#discreteSetOf Range ([CLOSED (0, 5)])), #fromList Bag ([8]), #toBag Range (#discreteSetOf Range ([OPEN (20, 22)]))]) group i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22"
+>   "val it = from i in #toBag Range (#discreteSetOf Range ([CLOSED (0, 5), POINT 8, OPEN (20, 22)]))"
 >   : string
 
 from i where i > 0 andalso i < 4 yield {j = i + 1};
@@ -84,6 +84,36 @@ from i where i = 0 orelse i = 12;
 
 from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
 > val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int bag
+Sys.planEx "3";
+> val it =
+>   "val it = from i in #toBag Range (#discreteSetOf Range ([OPEN (0, 10), OPEN_CLOSED (12, 15)]))"
+>   : string
+
+(*) Ranges over int * bool: point constraints merged into a single discreteSetOf.
+from t where t = (1, true) orelse t = (3, false);
+> val it = [(1,true),(3,false)] : (int * bool) bag
+Sys.planEx "3";
+> val it =
+>   "val it = from t in #toBag Range (#discreteSetOf Range ([POINT (1, true), POINT (3, false)]))"
+>   : string
+
+(*) Ranges over bool * int: a point and a range.
+from t where t = (true, 1) orelse t >= (false, 3) andalso t <= (false, 5);
+> val it = [(false,3),(false,4),(false,5),(true,1)] : (bool * int) bag
+Sys.planEx "3";
+> val it =
+>   "val it = from t in #toBag Range (#discreteSetOf Range ([POINT (true, 1), CLOSED ((false, 3), (false, 5))]))"
+>   : string
+
+(*) Ranges over int * bool * int * bool (4-tuple): a single closed range.
+from t where t >= (1, false, 2, true) andalso t <= (1, false, 4, false);
+> val it =
+>   [(1,false,2,true),(1,false,3,false),(1,false,3,true),(1,false,4,false)]
+>   : (int * bool * int * bool) bag
+Sys.planEx "3";
+> val it =
+>   "val it = from t in #toBag Range (#discreteSetOf Range ([CLOSED ((1, false, 2, true), (1, false, 4, false))]))"
+>   : string
 
 from i
 where i > 0 andalso i < 10

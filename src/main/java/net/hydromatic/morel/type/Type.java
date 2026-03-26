@@ -121,6 +121,23 @@ public interface Type {
   }
 
   /**
+   * Whether this type has a discrete, ordered, enumerable domain.
+   *
+   * <p>This enables you to step from a value to its successor or predecessor,
+   * and thereby enumerate all values of a type within a range.
+   *
+   * <p>A type may be discrete even if {@link #isFinite()} returns false; for
+   * example, it is not practical to enumerate all values of {@code int} but you
+   * still wish to enumerate ranges.
+   *
+   * <p>True for {@code int}, {@code char}, {@code bool}, {@code unit}, enum
+   * types, and record/tuple types whose fields are all discrete.
+   */
+  default boolean isDiscrete(TypeSystem typeSystem) {
+    return false;
+  }
+
+  /**
    * Whether this is a collection type ({@code list} or {@code bag}).
    *
    * <p>{@code vector} is not currently regarded as a collection type.

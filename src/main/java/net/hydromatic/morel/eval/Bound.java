@@ -146,13 +146,15 @@ class Bound {
         return UNBOUNDED;
       case RANGE_POINT:
       case RANGE_AT_LEAST:
+        return inclusive(unaryArg(range));
       case RANGE_CLOSED:
       case RANGE_CLOSED_OPEN:
-        return inclusive(arg0(range));
+        return inclusive(binaryArg0(range));
       case RANGE_GREATER_THAN:
+        return exclusive(unaryArg(range));
       case RANGE_OPEN:
       case RANGE_OPEN_CLOSED:
-        return exclusive(arg0(range));
+        return exclusive(binaryArg0(range));
       default:
         throw new AssertionError("unknown range constructor: " + ctor);
     }
@@ -170,38 +172,48 @@ class Bound {
         return UNBOUNDED;
       case RANGE_POINT:
       case RANGE_AT_MOST:
+        return inclusive(unaryArg(range));
       case RANGE_CLOSED:
       case RANGE_OPEN_CLOSED:
-        return inclusive(arg1(range));
+        return inclusive(binaryArg1(range));
       case RANGE_LESS_THAN:
+        return exclusive(unaryArg(range));
       case RANGE_OPEN:
       case RANGE_CLOSED_OPEN:
-        return exclusive(arg1(range));
+        return exclusive(binaryArg1(range));
       default:
         throw new AssertionError("unknown range constructor: " + ctor);
     }
   }
 
   /**
-   * Returns the first (or only) value argument of a range. For unary
-   * constructors (POINT, AT_LEAST, etc.) returns {@code range.get(1)}. For
-   * binary constructors (CLOSED, OPEN, etc.) returns the tuple's first element.
+   * Returns the sole value argument of a unary range constructor (e.g. {@code
+   * POINT v}, {@code AT_LEAST v}).
+   *
+   * <p>Unlike binary constructors, the argument may itself be a tuple (stored
+   * as a {@code List}), so it must not be unwrapped.
    */
   @SuppressWarnings("rawtypes")
-  private static Object arg0(List range) {
-    Object arg = range.get(1);
-    return arg instanceof List ? ((List) arg).get(0) : arg;
+  private static Object unaryArg(List range) {
+    return range.get(1);
   }
 
   /**
-   * Returns the second value argument of a range. For unary constructors
-   * returns {@code range.get(1)}. For binary constructors returns the tuple's
-   * second element.
+   * Returns the lower-bound element of a binary range constructor's {@code (lo,
+   * hi)} argument (e.g. {@code CLOSED (lo, hi)}, {@code OPEN (lo, hi)}).
    */
   @SuppressWarnings("rawtypes")
-  private static Object arg1(List range) {
-    Object arg = range.get(1);
-    return arg instanceof List ? ((List) arg).get(1) : arg;
+  private static Object binaryArg0(List range) {
+    return ((List) range.get(1)).get(0);
+  }
+
+  /**
+   * Returns the upper-bound element of a binary range constructor's {@code (lo,
+   * hi)} argument.
+   */
+  @SuppressWarnings("rawtypes")
+  private static Object binaryArg1(List range) {
+    return ((List) range.get(1)).get(1);
   }
 
   /**

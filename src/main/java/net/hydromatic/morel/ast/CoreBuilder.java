@@ -770,7 +770,7 @@ public enum CoreBuilder {
 
   /** Creates a list. */
   public Core.Exp list(
-      TypeSystem typeSystem, Type elementType, List<Core.Exp> args) {
+      TypeSystem typeSystem, Type elementType, List<? extends Core.Exp> args) {
     final Core.Literal literal = functionLiteral(typeSystem, BuiltIn.Z_LIST);
     final ListType listType = typeSystem.listType(elementType);
     return apply(
@@ -1039,10 +1039,13 @@ public enum CoreBuilder {
       Type type,
       Pos pos,
       Core.Exp... args) {
-    final Core.Literal literal =
+    final Core.Literal forallLiteral =
         functionLiteral(typeSystem, builtIn, ImmutableList.copyOf(args));
-    final ForallType forallType = (ForallType) literal.type;
+    final ForallType forallType = (ForallType) forallLiteral.type;
     final FnType fnType = (FnType) typeSystem.apply(forallType, type);
+    // Use the concrete FnType for the literal so that Typed.withType can
+    // extract the element type at compile time (e.g. Range functions).
+    final Core.Literal literal = functionLiteral(fnType, builtIn);
     return apply(pos, fnType.resultType, literal, args(fnType.paramType, args));
   }
 
