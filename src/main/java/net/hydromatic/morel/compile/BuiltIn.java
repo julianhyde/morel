@@ -3912,6 +3912,32 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.collection(0), h.get(0)))),
 
   /**
+   * Function "Relational.maxBy", aka "maxBy", of type "(&alpha; &rarr; &beta;)
+   * &rarr; &alpha; bag &rarr; &alpha;".
+   *
+   * <p>Returns the element with the maximum key. Used for whole-row
+   * deduplication:
+   *
+   * <pre>{@code
+   * from h in horses
+   *   group h.horse_id
+   *     compute latest = maxBy #file_modified_at over h
+   * }</pre>
+   */
+  RELATIONAL_MAX_BY(
+      "Relational",
+      "maxBy",
+      "maxBy",
+      false,
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.fnType(h.get(0), h.get(1)),
+                      ts.fnType(h.list(0), h.get(0))))),
+
+  /**
    * Function "Relational.min", aka "min", of type "&alpha; collection &rarr;
    * &alpha;" (where &alpha; must be comparable); the collection is a list or a
    * bag, whichever the argument is.
@@ -3921,6 +3947,25 @@ public enum BuiltIn {
       "min",
       true,
       ts -> ts.forallType(1, h -> ts.fnType(h.collection(0), h.get(0)))),
+
+  /**
+   * Function "Relational.minBy", aka "minBy", of type "(&alpha; &rarr; &beta;)
+   * &rarr; &alpha; list &rarr; &alpha;".
+   *
+   * <p>Returns the element with the minimum key.
+   */
+  RELATIONAL_MIN_BY(
+      "Relational",
+      "minBy",
+      "minBy",
+      false,
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.fnType(h.get(0), h.get(1)),
+                      ts.fnType(h.list(0), h.get(0))))),
 
   /**
    * Function "Relational.nonEmpty", of type "&alpha; collection &rarr; bool";

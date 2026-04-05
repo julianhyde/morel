@@ -4843,6 +4843,31 @@ public abstract class Codes {
   private static final Applicable RELATIONAL_MAX =
       new RelationalMinMax(BuiltIn.RELATIONAL_MAX, Pos.ZERO, null);
 
+  /** @see BuiltIn#RELATIONAL_MAX_BY */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static final Applicable RELATIONAL_MAX_BY =
+      new ApplicableImpl(BuiltIn.RELATIONAL_MAX_BY) {
+        @Override
+        public Object apply(Stack stack, Object keyFn) {
+          return new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MAX_BY) {
+            @Override
+            public Object apply(List bag) {
+              Object best = null;
+              Comparable bestKey = null;
+              for (Object item : bag) {
+                final Comparable key =
+                    (Comparable) ((Applicable) keyFn).apply(stack, item);
+                if (bestKey == null || key.compareTo(bestKey) > 0) {
+                  bestKey = key;
+                  best = item;
+                }
+              }
+              return best;
+            }
+          };
+        }
+      };
+
   /** @see BuiltIn#RELATIONAL_MIN */
   private static final Applicable RELATIONAL_MIN =
       new RelationalMinMax(BuiltIn.RELATIONAL_MIN, Pos.ZERO, null);
@@ -4902,6 +4927,31 @@ public abstract class Codes {
           : ordering.min(list);
     }
   }
+
+  /** @see BuiltIn#RELATIONAL_MIN_BY */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static final Applicable RELATIONAL_MIN_BY =
+      new ApplicableImpl(BuiltIn.RELATIONAL_MIN_BY) {
+        @Override
+        public Object apply(Stack stack, Object keyFn) {
+          return new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MIN_BY) {
+            @Override
+            public Object apply(List bag) {
+              Object best = null;
+              Comparable bestKey = null;
+              for (Object item : bag) {
+                final Comparable key =
+                    (Comparable) ((Applicable) keyFn).apply(stack, item);
+                if (bestKey == null || key.compareTo(bestKey) < 0) {
+                  bestKey = key;
+                  best = item;
+                }
+              }
+              return best;
+            }
+          };
+        }
+      };
 
   /** @see BuiltIn#RELATIONAL_NON_EMPTY */
   private static final Applicable1 RELATIONAL_NON_EMPTY =
@@ -7632,7 +7682,9 @@ public abstract class Codes {
     b.add(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY);
     b.add(BuiltIn.RELATIONAL_ITERATE, RELATIONAL_ITERATE);
     b.add(BuiltIn.RELATIONAL_MAX, RELATIONAL_MAX);
+    b.add(BuiltIn.RELATIONAL_MAX_BY, RELATIONAL_MAX_BY);
     b.add(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN);
+    b.add(BuiltIn.RELATIONAL_MIN_BY, RELATIONAL_MIN_BY);
     b.add(BuiltIn.RELATIONAL_NON_EMPTY, RELATIONAL_NON_EMPTY);
     b.add(BuiltIn.RELATIONAL_ONLY, RELATIONAL_ONLY);
     b.add(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM);
