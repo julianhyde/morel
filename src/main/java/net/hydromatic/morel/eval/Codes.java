@@ -5525,11 +5525,14 @@ public abstract class Codes {
   /**
    * Converts a Java {@code float} to the format expected of Standard ML {@code
    * real} values.
+   *
+   * <p>Matches Standard ML's {@code Real.toString}, which drops the trailing
+   * ".0" from whole-number reals (so {@code 1.0} prints as "1" and {@code
+   * 1.0e10} prints as "1E10").
    */
   public static String floatToString(float f) {
     if (Float.isFinite(f)) {
-      final String s = FLOAT_TO_STRING.apply(f);
-      return s.replace('-', '~');
+      return stripTrailingZero(FLOAT_TO_STRING.apply(f)).replace('-', '~');
     } else if (f == Float.POSITIVE_INFINITY) {
       return "inf";
     } else if (f == Float.NEGATIVE_INFINITY) {
@@ -5539,6 +5542,22 @@ public abstract class Codes {
     } else {
       throw new AssertionError("unknown float " + f);
     }
+  }
+
+  /**
+   * If the mantissa part of the given Java float string ends with ".0", removes
+   * those two characters. For example, "1.0" becomes "1" and "1.0E10" becomes
+   * "1E10". Leaves strings like "1.5" and "1.5E10" unchanged.
+   */
+  private static String stripTrailingZero(String s) {
+    int e = s.indexOf('E');
+    int mantissaEnd = e < 0 ? s.length() : e;
+    if (mantissaEnd >= 2
+        && s.charAt(mantissaEnd - 1) == '0'
+        && s.charAt(mantissaEnd - 2) == '.') {
+      return s.substring(0, mantissaEnd - 2) + s.substring(mantissaEnd);
+    }
+    return s;
   }
 
   private static String floatToString0(float f) {

@@ -169,18 +169,6 @@ public class ShellTest {
     fixture().withInputString(in).assertOutput(is2(expected));
   }
 
-  /** Tests {@link Shell} printing some tricky real values. */
-  @Test
-  void testReal() {
-    final String in =
-        "val nan = Real.posInf / Real.negInf;\n"
-            + "(nan, Real.posInf, Real.negInf, 0.0, ~0.0);\n";
-    final String expected =
-        "val nan = nan : real\n"
-            + "val it = (nan,inf,~inf,0.0,~0.0) : real * real * real * real * real\n";
-    fixture().withRaw(true).withInputString(in).assertOutput(is(expected));
-  }
-
   /**
    * Tests {@link Shell} with a line that is a comment, another that is empty,
    * and another that has only a semicolon; all are treated as empty.

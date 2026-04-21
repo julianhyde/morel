@@ -48,7 +48,7 @@ INT ~5;
 
 (*) REAL constructor
 REAL 0.0;
-> val it = 0.0 : real variant
+> val it = 0 : real variant
 REAL 3.14;
 > val it = 3.14 : real variant
 REAL ~2.5;
@@ -316,7 +316,7 @@ Variant.parse "~5";
 Variant.parse "~3.14";
 > val it = ~3.14 : real variant
 Variant.parse "~20e~6";
-> val it = ~2.0E~5 : real variant
+> val it = ~2E~5 : real variant
 
 (*) Test round-trip for negative integers
 testRoundTrip (INT ~5);

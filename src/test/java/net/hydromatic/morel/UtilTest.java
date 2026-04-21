@@ -465,9 +465,15 @@ public class UtilTest {
     assertThat(fn.apply("1.23456792E8"), is("1.2345679E8"));
     assertThat(fn.apply("1.2345679E8"), is("1.2345679E8"));
 
-    assertThat(fn.apply("1.0"), is("1.0"));
+    assertThat(fn.apply("1.0"), is("1"));
+    assertThat(fn.apply("-1.0"), is("~1"));
+    assertThat(fn.apply("0.0"), is("0"));
+    assertThat(fn.apply("-0.0"), is("~0"));
     assertThat(fn.apply("-1.234"), is("~1.234"));
     assertThat(fn.apply("-1.234e-10"), is("~1.234E~10"));
+    assertThat(fn.apply("1.0e10"), is("1E10"));
+    assertThat(fn.apply("-1.0e10"), is("~1E10"));
+    assertThat(fn.apply("1.5e9"), is("1.5E9"));
   }
 
   /**

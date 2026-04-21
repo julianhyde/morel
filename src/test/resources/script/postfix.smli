@@ -123,35 +123,35 @@ end;
 > val it = 3 : int
 
 (~3.0).abs ();
-> val it = 3.0 : real
+> val it = 3 : real
 
 (* Int.abs vs Real.abs — bound-variable receivers *)
 let val n = ~3   in n.abs () end;
 > val it = 3 : int
 
 let val r = ~3.0 in r.abs () end;
-> val it = 3.0 : real
+> val it = 3 : real
 
 (* Int.max vs Real.max — tuple-splicing form *)
 (4).max 3;
 > val it = 4 : int
 
 (4.0).max 3.0;
-> val it = 4.0 : real
+> val it = 4 : real
 
 (* Int.min vs Real.min *)
 (4).min 3;
 > val it = 3 : int
 
 (4.0).min 3.0;
-> val it = 3.0 : real
+> val it = 3 : real
 
 (* Int.rem vs Real.rem *)
 (14).rem 3;
 > val it = 2 : int
 
 (14.0).rem 3.0;
-> val it = 2.0 : real
+> val it = 2 : real
 
 (* Int.sign vs Real.sign *)
 (~5).sign ();

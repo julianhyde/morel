@@ -2618,8 +2618,8 @@ in
   pipeline scott.emps
 end;
 > val it =
->   [{count=3,deptno=10,sum=8750.0},{count=4,deptno=20,sum=10075.0},
->    {count=5,deptno=30,sum=8450.0}] : {count:int, deptno:int, sum:real} list
+>   [{count=3,deptno=10,sum=8750},{count=4,deptno=20,sum=10075},
+>    {count=5,deptno=30,sum=8450}] : {count:int, deptno:int, sum:real} list
 
 from d in scott.depts
   through i2 in (Bag.map (fn x => [x]));

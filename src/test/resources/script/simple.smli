@@ -31,6 +31,22 @@ Sys.set ("lineWidth", 78);
 > val it = ~2147483648 : int
 2147483647;
 > val it = 2147483647 : int
+1.0;
+> val it = 1 : real
+0.0;
+> val it = 0 : real
+~0.0;
+> val it = ~0 : real
+~2.0;
+> val it = ~2 : real
+1.5;
+> val it = 1.5 : real
+1.0e10;
+> val it = 1E10 : real
+1.5e9;
+> val it = 1.5E9 : real
+(Real.posInf / Real.posInf, Real.posInf, Real.negInf, 0.0, ~0.0);
+> val it = (nan,inf,~inf,0,~0) : real * real * real * real * real
 "a string";
 > val it = "a string" : string
 "a \"quoted\" string\\with backslash";
@@ -617,7 +633,7 @@ fun distance (x, y) (x', y') =
   Math.sqrt ((x - x') * (x - x') + (y - y') * (y - y'));
 > val distance = fn : real * real -> real * real -> real
 distance (0.0, 1.0) (4.0, 4.0);
-> val it = 5.0 : real
+> val it = 5 : real
 
 (*) Composite declarations
 let
@@ -808,7 +824,7 @@ val t2 = (({x = (100, 200)}, "a"), "b");
 
 (*) 3.2e1 is scientific notation (32.0)
 3.2e1;
-> val it = 32.0 : real
+> val it = 32 : real
 
 (*) To access field of literal tuple, use parentheses
 (3, "three").1;

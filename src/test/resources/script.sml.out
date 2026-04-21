@@ -23,7 +23,7 @@ val n : int = 66;
 val n = 66 : int
 
 val x : real = ~23.0;
-val x = ~23.0 : real
+val x = ~23 : real
 
 
 (* Inference *)
@@ -260,7 +260,7 @@ val ip = INT_PAIR (1, 2);
 val ip = INT_PAIR (1,2) : int_pair
 
 val rp = REAL_PAIR (1.0, 2.0);
-val rp = REAL_PAIR (1.0,2.0) : real_pair
+val rp = REAL_PAIR (1,2) : real_pair
 
 val op0 = NONE;
 val op0 = NONE : 'a option
@@ -269,10 +269,10 @@ val op1 = SOME true;
 val op1 = SOME true : bool option
 
 val op2 = SOME 3.0;
-val op2 = SOME 3.0 : real option
+val op2 = SOME 3 : real option
 
 val r = 5.0;
-val r = 5.0 : real
+val r = 5 : real
 
 
 suit0 = suit0;
