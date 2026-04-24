@@ -327,12 +327,12 @@ cs.ranges ();
 
 (*) complement of a continuous_set.
 (Range.continuousSetOf [CLOSED (1.0, 3.0), CLOSED (7.0, 9.0)]).complement ();
-> val it = CONTINUOUS_SET [LESS_THAN 1.0,OPEN (3.0,7.0),GREATER_THAN 9.0]
+> val it = CONTINUOUS_SET [LESS_THAN 1,OPEN (3,7),GREATER_THAN 9]
 >   : real continuous_set
 
 (*) complement of a continuous_set with open bounds.
 val cs = Range.continuousSetOf [OPEN (1.0, 3.0), AT_LEAST 7.0];
-> val cs = CONTINUOUS_SET [OPEN (1.0,3.0),AT_LEAST 7.0] : real continuous_set
+> val cs = CONTINUOUS_SET [OPEN (1,3),AT_LEAST 7] : real continuous_set
 
 cs.contains 2.0;
 > val it = true : bool
@@ -344,7 +344,7 @@ cs.contains 8.5;
 > val it = true : bool
 
 cs.complement ();
-> val it = CONTINUOUS_SET [AT_MOST 1.0,CLOSED_OPEN (3.0,7.0)] : real continuous_set
+> val it = CONTINUOUS_SET [AT_MOST 1,CLOSED_OPEN (3,7)] : real continuous_set
 
 (*) complement of ALL is empty; complement of empty is ALL.
 (Range.continuousSetOf [ALL : real range]).complement ();
@@ -355,7 +355,7 @@ cs.complement ();
 
 (*) double complement.
 cs.complement ().complement ();
-> val it = CONTINUOUS_SET [OPEN (1.0,3.0),AT_LEAST 7.0] : real continuous_set
+> val it = CONTINUOUS_SET [OPEN (1,3),AT_LEAST 7] : real continuous_set
 
 (*) complement of a discrete_set.
 (Range.discreteSetOf [CLOSED (1, 3), CLOSED (7, 9)]).complement ();
@@ -382,7 +382,7 @@ evens.toList ();
 
 (*) toList on (order, bool) either enumerates all 5 values.
 val eitherSet = Range.discreteSetOf [CLOSED (INL LESS, INR true)];
-> val eitherSet = DISCRETE_SET [CLOSED ([INL, [LESS]],[INR, true])]
+> val eitherSet = DISCRETE_SET [CLOSED (INL LESS,INR true)]
 >   : (order,bool) either discrete_set
 
 eitherSet.toList ();

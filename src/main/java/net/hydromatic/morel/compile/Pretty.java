@@ -449,12 +449,21 @@ class Pretty {
         arg = Codes.setToRangeList(arg);
       }
       buf.append(' ');
+      // Parens disambiguate when the arg is itself a multi-token
+      // constructor (e.g. `SOME (INL x)`). Nullary constructor args
+      // (stored as a 1-element list like ["LESS"]) print as a single
+      // token and don't need parens.
       final boolean needParentheses =
-          typeConArgType.op() == Op.DATA_TYPE && arg instanceof List;
+          typeConArgType.op() == Op.DATA_TYPE
+              && arg instanceof List
+              && ((List<?>) arg).size() > 1;
       if (needParentheses) {
         buf.append('(');
       }
-      pretty2(buf, indent, lineEnd, depth + 1, typeConArgType, arg, 0, 0);
+      // Do not increment depth for a constructor's arg: the arg is at
+      // the same conceptual level as the constructor (e.g., `INL LESS`
+      // is one step, not two).
+      pretty2(buf, indent, lineEnd, depth, typeConArgType, arg, 0, 0);
       if (needParentheses) {
         buf.append(')');
       }

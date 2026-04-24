@@ -415,6 +415,17 @@ public class Keys {
           key.copy(transform),
           transformEager(args, arg -> arg.copy(transform)));
     }
+
+    @Override
+    Type.Key substitute(List<? extends Type> types) {
+      final Type.Key newKey = key.substitute(types);
+      final ImmutableList<Type.Key> newArgs =
+          transformEager(args, arg -> arg.substitute(types));
+      if (newKey == key && newArgs.equals(args)) {
+        return this;
+      }
+      return new ApplyKey(newKey, newArgs);
+    }
   }
 
   /**
@@ -468,6 +479,15 @@ public class Keys {
     }
 
     @Override
+    Type.Key substitute(List<? extends Type> types) {
+      final Type.Key newArg = args.get(0).substitute(types);
+      if (newArg == args.get(0)) {
+        return this;
+      }
+      return new ListKey(newArg);
+    }
+
+    @Override
     public Type toType(TypeSystem typeSystem) {
       return new ListType(typeSystem.typeFor(args.get(0)));
     }
@@ -478,6 +498,16 @@ public class Keys {
     FnKey(Type.Key paramType, Type.Key resultType) {
       super(Op.FN, ImmutableList.of(paramType, resultType));
       checkArgument(args.size() == 2);
+    }
+
+    @Override
+    Type.Key substitute(List<? extends Type> types) {
+      final Type.Key newParam = args.get(0).substitute(types);
+      final Type.Key newResult = args.get(1).substitute(types);
+      if (newParam == args.get(0) && newResult == args.get(1)) {
+        return this;
+      }
+      return new FnKey(newParam, newResult);
     }
 
     @Override
