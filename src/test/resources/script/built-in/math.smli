@@ -18,6 +18,17 @@
  *
  * Unit tests for the built-in `Math` structure, defined
  * by the Standard ML Basis Library.
+ *
+ * The signature MATH specifies basic mathematical constants, the
+ * square root function, and trigonometric, hyperbolic, exponential,
+ * and logarithmic functions based on a real type. The functions
+ * defined here have roughly the same semantics as their counterparts
+ * in ISO C's math.h.
+ *
+ * In the functions below, unless specified otherwise, if any argument
+ * is a NaN, the return value is a NaN. In a list of rules specifying
+ * the behavior of a function in special cases, the first matching
+ * rule defines the semantics.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit

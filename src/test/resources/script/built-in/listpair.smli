@@ -18,6 +18,26 @@
  *
  * Unit tests for the built-in `ListPair` structure, defined
  * by the Standard ML Basis Library.
+ *
+ * The ListPair structure provides operations on pairs of lists. The
+ * operations fall into two categories. Those in the first category,
+ * whose names do not end in "Eq", do not require that the lists have
+ * the same length. When the lists are of uneven lengths, the excess
+ * elements from the tail of the longer list are ignored. The
+ * operations in the second category, whose names have the suffix
+ * "Eq", differ from their similarly named operations in the first
+ * category only when the list arguments have unequal lengths, in
+ * which case they typically raise the UnequalLengths exception.
+ *
+ * There are three groups of functions:
+ *  * zip, map, app, all, exists, foldr and foldl raise no exception
+ *    when the argument lists are found to be of unequal length; the
+ *    excess elements from the longer list are simply disregarded.
+ *  * zipEq, mapEq, appEq, foldrEq and foldlEq raise exception
+ *    UnequalLengths when the argument lists are found to be of
+ *    unequal length.
+ *  * allEq raises no exception but returns false if the lists are
+ *    found to have unequal lengths (after traversing the lists).
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
