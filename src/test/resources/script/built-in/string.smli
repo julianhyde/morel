@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `String` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +26,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* String --------------------------------------------------------- *)
 String;
 > val it =
 >   {<=fn,<==fn,>=fn,>==fn,^=fn,collate=fn,compare=fn,concat=fn,concatWith=fn,
@@ -395,4 +397,4 @@ String.`>=`;
 (*) val toCString : string -> String.string
 (*) val fromCString : String.string -> string option
 
-(*) End built-in/string.smli
+(*) End string.smli

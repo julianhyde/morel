@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Real` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -25,7 +28,6 @@ Sys.set ("stringDepth", ~1);
 val nan = Real.posInf / Real.posInf;
 > val nan = nan : real
 
-(* Real ----------------------------------------------------------- *)
 Real;
 > val it =
 >   {/=fn,abs=fn,ceil=fn,checkFloat=fn,compare=fn,copySign=fn,floor=fn,
@@ -1122,4 +1124,4 @@ List.map (fn x => (x, Real.toString x))
   see the technical report by Gay[CITE]. *)
 (*) TODO
 
-(*) End built-in/real.smli
+(*) End real.smli

@@ -15,6 +15,8 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Bag` structure.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +25,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* Bag ------------------------------------------------------------ *)
 Bag;
 > val it =
 >   {@=fn,all=fn,app=fn,concat=fn,drop=fn,exists=fn,filter=fn,find=fn,fold=fn,
@@ -342,4 +343,4 @@ Sys.plan ();
 >   "apply2(fnValue Bag.tabulate, constant(-1), let(matchCode0 match(n, tailApply(fnCode match(true, constant(1), _, apply2(fnValue *, stack(offset 2, name n), apply(fnCode stack(offset 1, name fact), argCode apply2(fnValue -, stack(offset 2, name n), constant(1))))), argCode apply2(fnValue =, stack(offset 1, name n), constant(0)))), resultCode stack(offset 1, name fact)))"
 >   : string
 
-(*) End built-in/bag.smli
+(*) End bag.smli

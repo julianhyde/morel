@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Fn` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +26,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* Fn ------------------------------------------------------------- *)
 Fn;
 > val it =
 >   {apply=fn,const=fn,curry=fn,equal=fn,flip=fn,id=fn,notEqual=fn,o=fn,
@@ -108,4 +110,4 @@ Fn.notEqual 3 5;
 Fn.notEqual 3 3;
 > val it = false : bool
 
-(*) End built-in/fn.smli
+(*) End fn.smli

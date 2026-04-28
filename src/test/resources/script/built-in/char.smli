@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Char` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +26,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* Char ----------------------------------------------------------- *)
 Char;
 > val it =
 >   {<=fn,<==fn,>=fn,>==fn,chr=fn,compare=fn,contains=fn,fromCString=fn,
@@ -498,4 +500,4 @@ Char.compare (#"D", #"a");
 Char.compare (#"a", #"D");
 > val it = GREATER : order
 
-(*) End built-in/char.smli
+(*) End char.smli

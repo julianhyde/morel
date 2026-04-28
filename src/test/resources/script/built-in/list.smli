@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `List` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +26,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* List ----------------------------------------------------------- *)
 List;
 > val it =
 >   {@=fn,all=fn,app=fn,collate=fn,concat=fn,drop=fn,except=fn,exists=fn,
@@ -456,4 +458,4 @@ Sys.plan ();
 >   "apply2(fnValue List.collate, match(v, tailApply(fnCode match((x, y), tailApply(fnCode match(true, constant([LESS]), _, tailApply(fnCode match(true, constant([EQUAL]), _, constant([GREATER])), argCode apply2(fnValue =, stack(offset 2, name x), stack(offset 1, name y)))), argCode apply2(fnValue <, stack(offset 2, name x), stack(offset 1, name y)))), argCode stack(offset 1, name v))), tuple(tuple, tuple))"
 >   : string
 
-(*) End built-in/list.smli
+(*) End list.smli

@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Time` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -27,7 +30,6 @@ Sys.set ("timeZone", "UTC");
 Sys.set ("now", "2024-01-01T00:00:00Z");
 > val it = () : unit
 
-(* Time ----------------------------------------------------------- *)
 Time;
 > val it =
 >   {+=fn,-=fn,<=fn,<==fn,>=fn,>==fn,compare=fn,fmt=fn,fromMicroseconds=fn,
@@ -190,4 +192,4 @@ Time.fromReal (0.0/0.0);
 Time.now ();
 > val it = 1704067200000000000 : time
 
-(*) End built-in/time.smli
+(*) End time.smli

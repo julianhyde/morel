@@ -15,6 +15,8 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Relational` structure.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +25,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* Relational ----------------------------------------------------- *)
 Relational;
 > val it =
 >   {compare=fn,count=fn,empty=fn,iterate=fn,max=fn,min=fn,nonEmpty=fn,only=fn,
@@ -383,4 +384,4 @@ List.collate Relational.compare ([NONE, SOME 1], [NONE, SOME 1, NONE]);
 Vector.collate Relational.compare (Vector.fromList [1,2,3], Vector.fromList [1,2,4]);
 > val it = LESS : order
 
-(*) End built-in/relational.smli
+(*) End relational.smli

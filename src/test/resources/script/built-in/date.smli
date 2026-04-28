@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Date` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -27,7 +30,6 @@ Sys.set ("timeZone", "UTC");
 Sys.set ("now", "2024-01-01T00:00:00Z");
 > val it = () : unit
 
-(* Date ----------------------------------------------------------- *)
 Date;
 > val it =
 >   {compare=fn,date=fn,day=fn,fmt=fn,fromString=fn,fromTimeLocal=fn,
@@ -146,4 +148,4 @@ Date.compare (Date.fromTimeUniv (Time.zeroTime), Date.fromTimeUniv (Time.fromSec
 Date.fmt "%Y-%m-%d" (Date.fromTimeUniv (Time.zeroTime));
 > val it = "1970-01-01" : string
 
-(*) End built-in/date.smli
+(*) End date.smli

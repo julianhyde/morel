@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Int` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +26,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* Int ------------------------------------------------------------ *)
 Int;
 > val it =
 >   {abs=fn,compare=fn,div=fn,fromInt=fn,fromLarge=fn,fromString=fn,max=fn,
@@ -164,4 +166,4 @@ Int.toString ~345;
 (~345).toString ();
 > val it = "~345" : string
 
-(*) End built-in/int.smli
+(*) End int.smli

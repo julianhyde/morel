@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `General` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +26,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* General -------------------------------------------------------- *)
 General;
 > val it = {before=fn,exnMessage=fn,exnName=fn,ignore=fn,o=fn}
 >   : {before:'a * unit -> 'a, exnMessage:exn -> string, exnName:exn -> string,
@@ -97,4 +99,4 @@ Sys.plan ();
 >   "apply(fnValue General.ignore, argCode apply2(fnValue +, constant(1), constant(2)))"
 >   : string
 
-(*) End built-in/general.smli
+(*) End general.smli

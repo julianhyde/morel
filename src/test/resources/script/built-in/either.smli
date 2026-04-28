@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Either` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -23,7 +26,6 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(* Either --------------------------------------------------------- *)
 Either;
 > val it =
 >   {app=fn,appLeft=fn,appRight=fn,asLeft=fn,asRight=fn,fold=fn,isLeft=fn,
@@ -122,4 +124,4 @@ Either.partition;
 Either.partition [yes, ten];
 > val it = ([true],[10]) : bool list * int list
 
-(*) End built-in/either.smli
+(*) End either.smli

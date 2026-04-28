@@ -15,6 +15,9 @@
  * either express or implied.  See the License for the specific
  * language governing permissions and limitations under the
  * License.
+ *
+ * Unit tests for the built-in `Math` structure, defined
+ * by the Standard ML Basis Library.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -25,19 +28,6 @@ Sys.set ("stringDepth", ~1);
 val nan = Real.posInf / Real.posInf;
 > val nan = nan : real
 
-(* Math --------------------------------------------------------------
- *
- * The signature MATH specifies basic mathematical constants, the
- * square root function, and trigonometric, hyperbolic, exponential,
- * and logarithmic functions based on a real type. The functions
- * defined here have roughly the same semantics as their counterparts
- * in ISO C's math.h.
- *
- * In the functions below, unless specified otherwise, if any argument
- * is a NaN, the return value is a NaN. In a list of rules specifying
- * the behavior of a function in special cases, the first matching
- * rule defines the semantics.
- *)
 Math;
 > val it =
 >   {acos=fn,asin=fn,atan=fn,atan2=fn,cos=fn,cosh=fn,e=2.7182817,exp=fn,ln=fn,
@@ -380,4 +370,4 @@ List.map (fn x => (x, Math.tanh x))
 > val it = [(0,0),(~0,~0),(1,0.7615942),(inf,1),(~inf,~1),(nan,nan)]
 >   : (real * real) list
 
-(*) End built-in/math.smli
+(*) End math.smli
