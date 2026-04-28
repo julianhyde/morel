@@ -255,4 +255,4 @@ ListPair.zipEq ([], ["a", "b"]);
 > uncaught exception UnequalLengths
 >   raised at: stdIn:1.1-1.32
 
-(*) End listpair.smli
+(*) End list-pair.smli
