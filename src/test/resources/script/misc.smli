@@ -30,7 +30,7 @@
 val eLen = List.length (Sys.env());
 > val eLen = 163 : int
 
-(*) Now we have one more (due to "it").
+(*) Now we have one more (due to "eLen").
 List.length (Sys.env()) - eLen;
 > val it = 1 : int
 (*) And one more (due to "it").
@@ -121,6 +121,18 @@ in
   end
 end;
 > val it = ["a"] : string list
+
+(* -------------------------------------------------------------------
+ * Floating point is not associative.
+ *)
+let
+  val x = 1e30
+  val y = ~1e30
+  val z = 1.0
+in
+  ((x + y) + z, x + (y + z))
+end;
+> val it = (1,0) : real * real
 
 (* -------------------------------------------------------------------
  * [MOREL-311] op
