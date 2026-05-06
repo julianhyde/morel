@@ -104,7 +104,11 @@ public enum Op {
    */
   DUMMY_TYPE(true),
   APPLY_TYPE(" ", 8),
-  TUPLE_TYPE(" * ", 7),
+  // Precedence is lower than TIMES so that a tuple type that appears as an
+  // argument of another tuple type is parenthesised.
+  // For example, '((1, true), 7)' has type '(int * bool) * int', not the
+  // flat 3-tuple 'int * bool * int'.
+  TUPLE_TYPE(" * ", 6),
   COMPOSITE_TYPE,
   FUNCTION_TYPE(" -> ", 6, false),
   NAMED_TYPE(" ", 8),
