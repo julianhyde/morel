@@ -270,3 +270,11 @@ first `\n"` to prevent this. For example:
 String s = "first line\n" //
     + "second line";
 ```
+
+### English
+
+We use American English. Use "optimize" instead of "optimise", etc.
+
+### Verification
+
+Before a commit, run the `fullMake` command (in `/usr/local/bin` and on path).
