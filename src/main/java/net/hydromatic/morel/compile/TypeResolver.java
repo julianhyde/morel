@@ -80,6 +80,7 @@ import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.MultiType;
+import net.hydromatic.morel.type.ParameterizedType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -572,6 +573,56 @@ public class TypeResolver {
     // For anonymous functions and other non-Id expressions,
     // link to input ordering.
     return -1;
+  }
+
+  /**
+   * Walks an AST type and checks that every type-constructor reference has the
+   * right number of arguments. Used for type aliases, where {@link
+   * TypeToTermConverter#typeTerm} is not invoked.
+   */
+  static void checkTypeConstructorArities(
+      TypeSystem typeSystem, Ast.Type type) {
+    type.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.NamedType namedType) {
+            checkTypeConstructorArity(
+                namedType, typeSystem.lookupOpt(namedType.name));
+            super.visit(namedType);
+          }
+        });
+  }
+
+  /**
+   * Verifies that a type-constructor application has the right number of
+   * arguments. {@code type} is the registered type for {@code namedType.name},
+   * or null if the name is not yet bound (in which case the check is skipped
+   * and unification will report the error later).
+   */
+  private static void checkTypeConstructorArity(
+      Ast.NamedType namedType, @Nullable Type type) {
+    final int expectedArity;
+    if (type instanceof ForallType) {
+      expectedArity = ((ForallType) type).parameterCount;
+    } else if (type instanceof ParameterizedType) {
+      expectedArity = ((ParameterizedType) type).parameterTypes.size();
+    } else if (type == null) {
+      return;
+    } else {
+      expectedArity = 0;
+    }
+    final int actualArity = namedType.types.size();
+    if (actualArity != expectedArity) {
+      throw new CompileException(
+          format(
+              "type constructor %s given %d argument%s, wants %d",
+              namedType.name,
+              actualArity,
+              actualArity == 1 ? "" : "s",
+              expectedArity),
+          false,
+          namedType.pos);
+    }
   }
 
   /** Returns the collection kind for a function type. */
@@ -2550,11 +2601,17 @@ public class TypeResolver {
       TypeEnv env, Ast.TypeDecl typeDecl, PairList<Ast.IdPat, Term> termMap) {
     final List<Type.Key> keys = new ArrayList<>();
     for (Ast.TypeBind bind : typeDecl.binds) {
+      // Check that every type-constructor reference in the body has the right
+      // number of arguments before we materialize the key.
+      checkTypeConstructorArities(typeSystem, bind.type);
       final KeyBuilder keyBuilder = new KeyBuilder();
       bind.tyVars.forEach(keyBuilder::toTypeKey);
 
       keys.add(
-          Keys.alias(bind.name.name, toTypeKey(bind.type), ImmutableList.of()));
+          Keys.alias(
+              bind.name.name,
+              keyBuilder.toTypeKey(bind.type),
+              ImmutableList.of()));
     }
     final List<Type> types = typeSystem.typesFor(keys);
 
@@ -2804,6 +2861,7 @@ public class TypeResolver {
         case NAMED_TYPE:
           final Ast.NamedType namedType = (Ast.NamedType) type;
           final Type aliasType = typeSystem.lookupOpt(namedType.name);
+          checkTypeConstructorArity(namedType, aliasType);
           if (aliasType instanceof AliasType) {
             final Term aliasTerm = toTerm(aliasType, Subst.EMPTY);
             return reg(type, v, aliasTerm);

@@ -404,6 +404,13 @@ public class Keys {
     public Type toType(TypeSystem typeSystem) {
       final Type type = key.toType(typeSystem);
       if (type instanceof ForallType) {
+        final ForallType forallType = (ForallType) type;
+        checkArgument(
+            args.size() == forallType.parameterCount,
+            "type %s expects %s argument(s), got %s",
+            key,
+            forallType.parameterCount,
+            args.size());
         return type.substitute(typeSystem, typeSystem.typesFor(args));
       }
       throw new AssertionError();
