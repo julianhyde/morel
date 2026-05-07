@@ -853,6 +853,9 @@ fun enumerate predicate =
   from r where predicate r;
 > val enumerate = fn : ('a -> bool) -> 'a bag
 *)
+(* TODO should return non-empty list
+enumerate isEmp;
+*)
 
 (* Join inversion ------------------------------------------------- *)
 
@@ -1380,27 +1383,26 @@ fun cousin (x, y) = sib (x, y)
       andalso cousin (xp, yp);
 > val cousin = fn : string * string -> bool
 
-(*
- Round 1: (b, c), (c, e), (g, h), (j, k)
- Round 2: same
- Round 3: add (f, g), (f, h), (g, i), (i, k)
- Round 4: add (i, j), (k, k)
- *)
 from p where sib p;
 > val it = [("b","c"),("j","k"),("c","e"),("e","c"),("c","b"),("k","j")]
 >   : (string * string) bag
 
+(*
+ * Evaluating the "cousins" query:
+ * (b,c) (c,b)  (c,e) (e,c)  (j,k) (k,j)  Sib base case
+ * (f,g) (g,f)  (g,i) (i,g)               children of sib pairs
+ * (k,k)                                  child of (f,g) and (g,f)
+ *)
 from p where cousin p;
 > val it =
->   [("b","c"),("j","k"),("c","e"),("e","c"),("c","b"),("k","j"),("c","c"),
->    ("k","k"),("b","e"),("e","e"),("b","b"),("e","b"),("j","j")]
->   : (string * string) bag
+>   [("b","c"),("c","b"),("c","e"),("e","c"),("j","k"),("k","j"),("f","g"),
+>    ("g","f"),("g","i"),("i","g"),("k","k")] : (string * string) bag
 
 (* Nonmonotone relation.
  * 'cousin2' is as 'cousin', but 'orelse' has become 'and not'.
  * The graph is not stratified: there is a path with an infinite number
  * of 'not' as we traverse the cycle cousin - s2 - cousin,
- * where s2 is the expression 'notExists (...)'. *)
+ * where s2 is the expression 'not (exists ...)'. *)
 fun cousin2 (x, y) = sib (x, y)
   andalso not (
     exists xp, yp
