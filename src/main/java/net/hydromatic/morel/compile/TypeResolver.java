@@ -2666,12 +2666,19 @@ public class TypeResolver {
 
     /** Converts an AST type into a type key. */
     Type.Key toTypeKey(Ast.Type type) {
+      if (type instanceof Ast.CompositeType) {
+        // See note in {@link TypeToTermConverter#typeTerm}; reaching here
+        // would mean a stray composite type, which should already have been
+        // rejected.
+        throw new CompileException(
+            "type-application argument list `(t1, ..., tn)` "
+                + "must be followed by a type constructor name; "
+                + "use `t1 * ... * tn` for a tuple type",
+            false,
+            type.pos);
+      }
       switch (type.op) {
         case TUPLE_TYPE:
-          if (type instanceof Ast.CompositeType) {
-            final Ast.CompositeType compositeType = (Ast.CompositeType) type;
-            return Keys.tuple(toTypeKeys(compositeType.types));
-          }
           final Ast.TupleType tupleType = (Ast.TupleType) type;
           return Keys.tuple(toTypeKeys(tupleType.types));
 
@@ -2738,6 +2745,19 @@ public class TypeResolver {
 
     /** Converts an AST type into a type term. */
     Ast.Type typeTerm(Ast.Type type, Variable v) {
+      if (type instanceof Ast.CompositeType) {
+        // `(t1, ..., tn)` is only valid as the argument list of a parameterized
+        // type, e.g. `(int, string) either`. The parser briefly represents it
+        // as a composite type and {@link #type7} unwraps the list when an
+        // identifier follows; reaching this point means no identifier
+        // followed.
+        throw new CompileException(
+            "type-application argument list `(t1, ..., tn)` "
+                + "must be followed by a type constructor name; "
+                + "use `t1 * ... * tn` for a tuple type",
+            false,
+            type.pos);
+      }
       switch (type.op) {
         case EXPRESSION_TYPE:
           final Ast.ExpressionType expressionType = (Ast.ExpressionType) type;

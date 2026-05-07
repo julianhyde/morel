@@ -138,10 +138,27 @@ Y (1, true);
 Z;
 > val it = Z : bar
 
-(*) The following is syntax error:
-(*
+(*) `(t1, ..., tn)` is only valid as the argument list of a parameterized
+(*) type such as `(int, string) HashMap`. The following are all errors;
+(*) use `int * bool` for a tuple type.
 datatype bar = X of int | Y of (int, bool) | Z;
-*)
+> stdIn:1.32-1.43 Error: type-application argument list `(t1, ..., tn)` must be followed by a type constructor name; use `t1 * ... * tn` for a tuple type
+>   raised at: stdIn:1.32-1.43
+type t = (bool, int list);
+> stdIn:1.10-1.26 Error: type-application argument list `(t1, ..., tn)` must be followed by a type constructor name; use `t1 * ... * tn` for a tuple type
+>   raised at: stdIn:1.10-1.26
+type t2 = ((bool, int) list, unit);
+> stdIn:1.11-1.35 Error: type-application argument list `(t1, ..., tn)` must be followed by a type constructor name; use `t1 * ... * tn` for a tuple type
+>   raised at: stdIn:1.11-1.35
+val x : (int, int) = (1, 2);
+> stdIn:1.9-1.19 Error: type-application argument list `(t1, ..., tn)` must be followed by a type constructor name; use `t1 * ... * tn` for a tuple type
+>   raised at: stdIn:1.9-1.19
+
+(*) The valid forms.
+type t = bool * int list;
+> type t = bool * int list
+type t2 = (bool, int) list * unit;
+> type t2 = (bool,int) list * unit
 
 (*) A recursive type, without generics
 datatype inttree = Empty | Node of inttree * int * inttree;
