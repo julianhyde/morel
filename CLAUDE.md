@@ -273,7 +273,8 @@ String s = "first line\n" //
 
 ### English
 
-We use American English. Use "optimize" instead of "optimise", etc.
+We use American English. Use "optimize" instead of "optimise",
+"behavior" instead of "behaviour", etc.
 
 ### Verification
 
