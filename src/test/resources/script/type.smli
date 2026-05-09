@@ -64,6 +64,12 @@
 > val it = ((1,true),7) : (int * bool) * int
 (1,(true,7));
 > val it = (1,(true,7)) : int * (bool * int)
+fn (x: (int * bool) * int) => true;
+> val it = fn : (int * bool) * int -> bool
+fn (x: int * (bool * int)) => true;
+> val it = fn : int * (bool * int) -> bool
+fn (x: int * bool * int) => true;
+> val it = fn : int * bool * int -> bool
 
 (*) Expressions with type annotations
 1: int;
