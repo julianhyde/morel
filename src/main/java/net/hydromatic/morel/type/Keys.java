@@ -181,7 +181,7 @@ public class Keys {
       default:
         if (op == Op.TUPLE_TYPE) {
           return TypeSystem.unparseList(
-              buf, Op.TIMES, left, right, argNameTypes.values());
+              buf, Op.TUPLE_TYPE, left, right, argNameTypes.values());
         }
         // fall through
       case 1:

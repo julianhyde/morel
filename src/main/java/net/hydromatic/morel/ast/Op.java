@@ -91,7 +91,7 @@ public enum Op {
   TUPLE(true),
   LIST(true),
   RECORD(true),
-  FN(" -> ", 6, false),
+  FN(" -> ", 6, Assoc.RIGHT),
 
   // types
   TY_VAR(true),
@@ -104,13 +104,11 @@ public enum Op {
    */
   DUMMY_TYPE(true),
   APPLY_TYPE(" ", 8),
-  // Precedence is lower than TIMES so that a tuple type that appears as an
-  // argument of another tuple type is parenthesised.
-  // For example, '((1, true), 7)' has type '(int * bool) * int', not the
-  // flat 3-tuple 'int * bool * int'.
-  TUPLE_TYPE(" * ", 6),
+  // '*' is non-associative: '(t1 * t2) * t3', 't1 * (t2 * t3)' and
+  // 't1 * t2 * t3' are three distinct types in SML.
+  TUPLE_TYPE(" * ", 7, Assoc.NONE),
   COMPOSITE_TYPE,
-  FUNCTION_TYPE(" -> ", 6, false),
+  FUNCTION_TYPE(" -> ", 6, Assoc.RIGHT),
   NAMED_TYPE(" ", 8),
   ALIAS_TYPE(" ", 8),
   EXPRESSION_TYPE("typeof ", 9),
@@ -128,8 +126,8 @@ public enum Op {
   MINUS(" - ", 6),
   CARET(" ^ ", 6),
   NEGATE("~ "),
-  CONS(" :: ", 5, false),
-  AT(" @ ", 5, false),
+  CONS(" :: ", 5, Assoc.RIGHT),
+  AT(" @ ", 5, Assoc.RIGHT),
   LE(" <= ", 4),
   LT(" < ", 4),
   GE(" >= ", 4),
@@ -182,6 +180,8 @@ public enum Op {
   public final int left;
   /** Right precedence */
   public final int right;
+  /** Associativity (LEFT, RIGHT, or NONE). */
+  public final Assoc assoc;
   /** Operator name. Sometimes null, sometimes something like "op +". */
   public final @Nullable String opName;
 
@@ -202,12 +202,15 @@ public enum Op {
     BY_OP_NAME = b.build();
   }
 
+  /** Precedence for atoms; higher than any infix operator. */
+  static final int ATOM_PRECEDENCE = 99;
+
   Op() {
     this("", 0, 0);
   }
 
   Op(boolean atom) {
-    this("", 99);
+    this("", ATOM_PRECEDENCE, Assoc.LEFT);
     assert atom;
   }
 
@@ -216,21 +219,54 @@ public enum Op {
   }
 
   Op(String padded, int leftPrecedence) {
-    this(padded, leftPrecedence, true);
+    this(padded, leftPrecedence, Assoc.LEFT);
   }
 
-  Op(String padded, int precedence, boolean leftAssociative) {
+  /**
+   * Primary constructor. Each precedence level {@code p} occupies the integer
+   * pair {@code (2p, 2p+1)}. The higher (2p+1) is used on a side that requires
+   * strictly higher precedence; the lower (2p) on a side that allows the same
+   * precedence (i.e., binds the same operator). For a non-associative operator
+   * and an atom, both sides require strictly higher precedence.
+   */
+  Op(String padded, int precedence, Assoc assoc) {
     this(
         padded,
-        precedence * 2 + (leftAssociative ? 0 : 1),
-        precedence * 2 + (leftAssociative ? 1 : 0));
+        precedence * 2 + (assoc == Assoc.LEFT ? 0 : 1),
+        precedence * 2 + (assoc == Assoc.RIGHT ? 0 : 1),
+        assoc);
   }
 
+  /**
+   * Field-setter for the rare entries whose {@code (left, right)} values do not
+   * fit the {@code precedence + Assoc} encoding (e.g. {@link #COMMA}, or the
+   * no-arg ops, which use {@code (0, 0)}, and keywords like {@link #CURRENT}
+   * which use {@code (99, 99)}). Defaults associativity to {@link Assoc#LEFT}
+   * since {@code Assoc.NONE} would activate the wrap-on-equal-precedence
+   * behavior, which is not what these structural / separator operators want.
+   */
   Op(String padded, int left, int right) {
+    this(padded, left, right, Assoc.LEFT);
+  }
+
+  Op(String padded, int left, int right, Assoc assoc) {
     this.padded = requireNonNull(padded);
     this.left = left;
     this.right = right;
+    this.assoc = assoc;
     this.opName = padded.isEmpty() ? null : "op " + padded.trim();
+  }
+
+  /** Associativity of an operator. */
+  public enum Assoc {
+    /** Left-associative binary infix, e.g. {@code +}. */
+    LEFT,
+    /** Right-associative binary infix, e.g. {@code ->}. */
+    RIGHT,
+    /** Non-associative binary infix, e.g. {@code *} as a type constructor. */
+    NONE,
+    /** Atomic; not an infix operator (e.g. literals, identifiers). */
+    ATOM
   }
 
   /** Returns the name in lower case, e.g. "exists" for {@link #EXISTS}. */

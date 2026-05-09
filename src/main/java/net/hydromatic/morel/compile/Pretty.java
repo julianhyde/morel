@@ -541,14 +541,13 @@ class Pretty {
             pretty1(buf, indent2, end, depth, type, " * ", 0, 0);
           }
           final TypeVal typeVal1 = new TypeVal("", argType, "");
-          // The args are separated by the binary '*' (Op.TIMES); using
-          // Op.TIMES.left/right rather than Op.TUPLE_TYPE.left/right lets
-          // a TupleType-typed arg pick up parens via the standard
-          // precedence machinery, since TUPLE_TYPE has lower precedence
-          // than TIMES.
-          final int leftPrec1 = i == 0 ? leftPrec : Op.TIMES.right;
+          // Op.TUPLE_TYPE is non-associative, so the +1 here forces
+          // children of equal precedence (i.e. inner TupleTypes) to wrap;
+          // for example '((1, true), 7)' prints as '(int * bool) * int'
+          // rather than 'int * bool * int'.
+          final int leftPrec1 = i == 0 ? leftPrec : Op.TUPLE_TYPE.right + 1;
           final int rightPrec1 =
-              i == argTypes.size() - 1 ? rightPrec : Op.TIMES.left;
+              i == argTypes.size() - 1 ? rightPrec : Op.TUPLE_TYPE.left + 1;
           pretty1(
               buf, indent2, end, depth, type, typeVal1, leftPrec1, rightPrec1);
         }
