@@ -476,10 +476,6 @@ public class TypeSystem {
       unparseList(builder, op, 0, 0, argTypes);
       builder.append(')');
     } else {
-      // For a non-associative operator, every child of equal or lower
-      // precedence must wrap. We achieve this by bumping the inner bound
-      // one above op.left/op.right (which are equal for non-associative).
-      final int bump = op.assoc == Op.Assoc.NONE ? 1 : 0;
       forEachIndexed(
           argTypes,
           (type, i) -> {
@@ -489,8 +485,8 @@ public class TypeSystem {
             unparse(
                 builder,
                 type,
-                i == 0 ? left : op.right + bump,
-                i == argTypes.size() - 1 ? right : op.left + bump);
+                i == 0 ? left : op.right,
+                i == argTypes.size() - 1 ? right : op.left);
           });
     }
     return builder;
@@ -498,7 +494,7 @@ public class TypeSystem {
 
   static StringBuilder unparse(
       StringBuilder builder, Type.Key type, int left, int right) {
-    if (left > type.op.left || type.op.right < right) {
+    if (type.op.wraps(left, right)) {
       builder.append("(");
       unparse(builder, type, 0, 0);
       return builder.append(")");
