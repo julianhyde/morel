@@ -27,7 +27,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
@@ -106,17 +105,18 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
       Iterable<? extends R> iterable2,
       BiBiTransformer<S, R, T, U> transformer) {
     List<Object> list = new ArrayList<>();
-    Iterator<? extends S> it1 = iterable1.iterator();
-    Iterator<? extends R> it2 = iterable2.iterator();
-    while (it1.hasNext() && it2.hasNext()) {
-      transformer.apply(
-          it1.next(),
-          it2.next(),
-          (t, u) -> {
-            list.add(t);
-            list.add(u);
-          });
-    }
+    // lint:skip 1
+    Pair.forEach(
+        iterable1,
+        iterable2,
+        (s, r) ->
+            transformer.apply(
+                s,
+                r,
+                (t, u) -> {
+                  list.add(t);
+                  list.add(u);
+                }));
     return new PairLists.MutablePairList<>(list);
   }
 
