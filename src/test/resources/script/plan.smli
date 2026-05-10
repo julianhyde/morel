@@ -65,4 +65,35 @@ Plan.core ((1 + 2) + 4);
 >   {expr=PLUS (PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),INT_LITERAL 4,T_INT),
 >    value=7} : {expr:expr, value:int}
 
+(*) M2: a relational query desugars to PROJECT/FILTER over a VAR
+(*) leaf (emps), with scalar payloads reified as APPLY/FIELD/RECORD.
+Sys.set ("printDepth", 999);
+> val it = () : unit
+Sys.set ("printLength", 999);
+> val it = () : unit
+val emps = [{ename="x", deptno=10}];
+> val emps = [{deptno=10,ename="x"}] : {deptno:int, ename:string} list
+Plan.core (from e in emps where e.deptno elem [10, 20] yield {e.ename, e.deptno});
+> val it =
+>   {
+>    expr=
+>    PROJECT (
+>     FILTER (
+>      VAR ("emps",T_LIST (T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
+>      APPLY (VAR ("op elem",T_FN (T_TUPLE [T_INT,T_LIST T_INT],T_BOOL)),
+>       TUPLE [
+>        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",
+>         T_INT),LIST_LITERAL ([INT_LITERAL 10,INT_LITERAL 20],T_LIST T_INT)],
+>       T_BOOL)),
+>     E_RECORD (
+>      [
+>       ("deptno",
+>        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",
+>         T_INT)),
+>       ("ename",
+>        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",
+>         T_STRING))],T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
+>    value=[{deptno=10,ename="x"}]}
+>   : {expr:expr, value:{deptno:int, ename:string} list}
+
 (*) End plan.smli

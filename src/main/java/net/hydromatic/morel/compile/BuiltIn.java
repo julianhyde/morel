@@ -4780,8 +4780,16 @@ public enum BuiltIn {
         false,
         0,
         h ->
-            h.tyCon(Constructor.CORE_EXPR_INT_LITERAL)
-                .tyCon(Constructor.CORE_EXPR_PLUS)),
+            h.tyCon(Constructor.CORE_EXPR_APPLY)
+                .tyCon(Constructor.CORE_EXPR_FIELD)
+                .tyCon(Constructor.CORE_EXPR_FILTER)
+                .tyCon(Constructor.CORE_EXPR_INT_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_LIST_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_PLUS)
+                .tyCon(Constructor.CORE_EXPR_PROJECT)
+                .tyCon(Constructor.CORE_EXPR_RECORD)
+                .tyCon(Constructor.CORE_EXPR_TUPLE)
+                .tyCon(Constructor.CORE_EXPR_VAR)),
 
     DATE_MONTH(
         "Date",
@@ -4932,12 +4940,19 @@ public enum BuiltIn {
         false,
         0,
         h ->
-            h.tyCon(Constructor.TYPE_BOOL)
+            h.tyCon(Constructor.TYPE_BAG)
+                .tyCon(Constructor.TYPE_BOOL)
                 .tyCon(Constructor.TYPE_CHAR)
+                .tyCon(Constructor.TYPE_DATA)
+                .tyCon(Constructor.TYPE_FN)
                 .tyCon(Constructor.TYPE_INT)
+                .tyCon(Constructor.TYPE_LIST)
                 .tyCon(Constructor.TYPE_REAL)
+                .tyCon(Constructor.TYPE_RECORD)
                 .tyCon(Constructor.TYPE_STRING)
-                .tyCon(Constructor.TYPE_UNIT)),
+                .tyCon(Constructor.TYPE_TUPLE)
+                .tyCon(Constructor.TYPE_UNIT)
+                .tyCon(Constructor.TYPE_VAR)),
 
     /**
      * Universal value representation for embedded language interoperability.
@@ -5075,7 +5090,33 @@ public enum BuiltIn {
         h ->
             Keys.list(
                 Keys.apply(Keys.name("range"), ImmutableList.of(h.get(0))))),
+    CORE_EXPR_APPLY(
+        Datatype.CORE_EXPR,
+        "APPLY",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    CORE_EXPR_FIELD(
+        Datatype.CORE_EXPR,
+        "FIELD",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), STRING.key(), Keys.name("t")))),
+    CORE_EXPR_FILTER(
+        Datatype.CORE_EXPR,
+        "FILTER",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
     CORE_EXPR_INT_LITERAL(Datatype.CORE_EXPR, "INT_LITERAL", h -> INT.key()),
+    CORE_EXPR_LIST_LITERAL(
+        Datatype.CORE_EXPR,
+        "LIST_LITERAL",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.list(Keys.name("expr")), Keys.name("t")))),
     CORE_EXPR_PLUS(
         Datatype.CORE_EXPR,
         "PLUS",
@@ -5083,6 +5124,29 @@ public enum BuiltIn {
             Keys.tuple(
                 ImmutableList.of(
                     Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    CORE_EXPR_PROJECT(
+        Datatype.CORE_EXPR,
+        "PROJECT",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // ML name "E_RECORD" to avoid clashing with the `Variant` datatype's
+    // RECORD constructor.
+    CORE_EXPR_RECORD(
+        Datatype.CORE_EXPR,
+        "E_RECORD",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.list(
+                        Keys.tuple(
+                            ImmutableList.of(STRING.key(), Keys.name("expr")))),
+                    Keys.name("t")))),
+    CORE_EXPR_TUPLE(
+        Datatype.CORE_EXPR, "TUPLE", h -> Keys.list(Keys.name("expr"))),
+    CORE_EXPR_VAR(
+        Datatype.CORE_EXPR,
+        "VAR",
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("t")))),
     DATE_MONTH_APR(Datatype.DATE_MONTH, "Apr"),
     DATE_MONTH_AUG(Datatype.DATE_MONTH, "Aug"),
     DATE_MONTH_DEC(Datatype.DATE_MONTH, "Dec"),
@@ -5165,12 +5229,32 @@ public enum BuiltIn {
     // Type.t constructors use a "T_" prefix to avoid clashing with the
     // Variant datatype, which has constructors of the same logical names
     // (INT, BOOL, CHAR, REAL, STRING, UNIT).
+    TYPE_BAG(Datatype.TYPE, "T_BAG", h -> Keys.name("t")),
     TYPE_BOOL(Datatype.TYPE, "T_BOOL"),
     TYPE_CHAR(Datatype.TYPE, "T_CHAR"),
+    TYPE_DATA(
+        Datatype.TYPE,
+        "T_DATA",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(STRING.key(), Keys.list(Keys.name("t"))))),
+    TYPE_FN(
+        Datatype.TYPE,
+        "T_FN",
+        h -> Keys.tuple(ImmutableList.of(Keys.name("t"), Keys.name("t")))),
     TYPE_INT(Datatype.TYPE, "T_INT"),
+    TYPE_LIST(Datatype.TYPE, "T_LIST", h -> Keys.name("t")),
     TYPE_REAL(Datatype.TYPE, "T_REAL"),
+    TYPE_RECORD(
+        Datatype.TYPE,
+        "T_RECORD",
+        h ->
+            Keys.list(
+                Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("t"))))),
     TYPE_STRING(Datatype.TYPE, "T_STRING"),
+    TYPE_TUPLE(Datatype.TYPE, "T_TUPLE", h -> Keys.list(Keys.name("t"))),
     TYPE_UNIT(Datatype.TYPE, "T_UNIT"),
+    TYPE_VAR(Datatype.TYPE, "T_VAR", h -> INT.key()),
     VARIANT_BAG(Datatype.VARIANT, "BAG", h -> Keys.list(Keys.name("variant"))),
     VARIANT_BOOL(Datatype.VARIANT, "BOOL", h -> BOOL.key()),
     VARIANT_CHAR(Datatype.VARIANT, "CHAR", h -> CHAR.key()),

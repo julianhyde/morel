@@ -57,6 +57,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class Inliner extends EnvShuttle {
   private final Analyzer.@Nullable Analysis analysis;
 
+  /**
+   * If positive, the visitor is inside a {@code Plan.core} argument and should
+   * suppress inlining of variable values (so the reifier sees the original
+   * {@code Id} nodes and can recover variable names). Conversion of
+   * structure-member references (e.g. {@code Option.valOf}) to {@code
+   * FN_LITERAL} is still performed.
+   */
+  private int planCoreDepth = 0;
+
   /** Private constructor. */
   private Inliner(
       TypeSystem typeSystem, Environment env, Analyzer.Analysis analysis) {
@@ -85,6 +94,17 @@ public class Inliner extends EnvShuttle {
   protected Core.Exp visit(Core.Id id) {
     final Binding binding = env.getOpt(id.idPat);
     if (binding != null && !binding.parameter) {
+      // Inside Plan.core's argument, suppress inlining of user-defined
+      // values (so `emps` reifies as VAR "emps", not VALUE_LITERAL). We
+      // continue to allow conversion of built-in function references to
+      // FN_LITERAL so that, e.g., `op +` reifies as Z_PLUS_INT rather
+      // than as APPLY of VAR "op +".
+      if (planCoreDepth > 0) {
+        // Inside Plan.core's argument: leave Ids as-is so the reifier can
+        // recover their names. The reifier handles Id-form references to
+        // built-in operators (e.g. `op +`) directly.
+        return super.visit(id);
+      }
       if (binding.exp != null) {
         // For bindings from previous compile units (identified by having both
         // exp and a non-Unit value), we can inline if:
@@ -173,6 +193,24 @@ public class Inliner extends EnvShuttle {
 
   @Override
   protected Core.Exp visit(Core.Apply apply) {
+    // Plan.core's argument must keep its original variable references so the
+    // reifier (`Plans.reifyExp`) can recover names. We still recurse so
+    // that, e.g. `op +` is converted from `(#+ <op-table>)` to a
+    // FN_LITERAL of Z_PLUS_INT, but visit(Core.Id) suppresses the
+    // inline-as-VALUE_LITERAL step while planCoreDepth > 0.
+    if (isPlanCoreCall(apply.fn)) {
+      // Visit fn normally so the `(#core Plan)` form inlines to a
+      // FN_LITERAL of PLAN_CORE; visit arg with the depth counter raised
+      // so its Id nodes aren't replaced with VALUE_LITERAL.
+      Core.Exp newFn = apply.fn.accept(this);
+      planCoreDepth++;
+      try {
+        Core.Exp newArg = apply.arg.accept(this);
+        return apply.copy(newFn, newArg);
+      } finally {
+        planCoreDepth--;
+      }
+    }
     final Core.Apply apply2 = (Core.Apply) super.visit(apply);
     if (apply2.fn.op == Op.RECORD_SELECTOR
         && apply2.arg.op == Op.VALUE_LITERAL) {
@@ -200,6 +238,27 @@ public class Inliner extends EnvShuttle {
           core.nonRecValDecl(apply2.pos, fn.idPat, null, apply2.arg), fn.exp);
     }
     return apply2;
+  }
+
+  /**
+   * Returns whether {@code fn} is a reference to {@link BuiltIn#PLAN_CORE},
+   * either in pre-inlined form ({@code (#core Plan)}) or post-inlined form (a
+   * {@code FN_LITERAL} of {@code BuiltIn.PLAN_CORE}).
+   */
+  private static boolean isPlanCoreCall(Core.Exp fn) {
+    if (fn.op == Op.FN_LITERAL) {
+      return ((Core.Literal) fn).unwrap(BuiltIn.class) == BuiltIn.PLAN_CORE;
+    }
+    if (fn instanceof Core.Apply) {
+      Core.Apply fnApply = (Core.Apply) fn;
+      if (fnApply.fn instanceof Core.RecordSelector
+          && ((Core.RecordSelector) fnApply.fn).fieldName().equals("core")
+          && fnApply.arg instanceof Core.Id
+          && ((Core.Id) fnApply.arg).idPat.name.equals("Plan")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override

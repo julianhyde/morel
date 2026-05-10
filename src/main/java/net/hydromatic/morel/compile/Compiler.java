@@ -57,6 +57,7 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Comparators;
 import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
+import net.hydromatic.morel.eval.Plans;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.RowSink;
 import net.hydromatic.morel.eval.RowSinks;
@@ -491,10 +492,10 @@ public class Compiler {
           case PLAN_CORE:
             // Plan.core: returns a record `{value: 'a, expr: Core.expr}`.
             // Compile the argument once for `value`, and reify its typed
-            // Core for `expr`. Field order in the runtime tuple is
-            // alphabetical (`expr` < `value`).
+            // Core for `expr` (see Plans.reifyExp). Field order in the
+            // runtime tuple is alphabetical (`expr` < `value`).
             Code planCoreValue = compile(cx, apply.arg);
-            Object planCoreExpr = reifyCoreExpr(apply.arg);
+            Object planCoreExpr = Plans.reifyExp(apply.arg);
             return Codes.tuple(
                 ImmutableList.of(Codes.constant(planCoreExpr), planCoreValue));
           default:
@@ -608,74 +609,6 @@ public class Compiler {
     return tailPos
         ? Codes.tailApply(fnCode, argCode)
         : finishCompileApply(cx, fnCode, argCode, argType);
-  }
-
-  /**
-   * Reifies the typed Core of an expression as a runtime value of the
-   * Morel-level {@code Core.expr} datatype. Used by {@link BuiltIn#PLAN_CORE}
-   * to implement the {@code Plan.core} reifier.
-   *
-   * <p>The runtime representation of a datatype value is a list whose first
-   * element is the constructor name (per the convention used by other built-in
-   * datatypes; see {@link Codes#OPTION_NONE}).
-   */
-  private Object reifyCoreExpr(Core.Exp exp) {
-    switch (exp.op) {
-      case INT_LITERAL:
-        return ImmutableList.of(
-            BuiltIn.Constructor.CORE_EXPR_INT_LITERAL.constructor,
-            ((Core.Literal) exp).unwrap(Integer.class));
-      case APPLY:
-        Core.Apply ap = (Core.Apply) exp;
-        if (ap.fn.op == Op.FN_LITERAL) {
-          BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
-          switch (b) {
-            case Z_PLUS_INT:
-            case Z_PLUS_REAL:
-              List<Core.Exp> args = ((Core.Tuple) ap.arg).args;
-              return ImmutableList.of(
-                  BuiltIn.Constructor.CORE_EXPR_PLUS.constructor,
-                  ImmutableList.of(
-                      reifyCoreExpr(args.get(0)),
-                      reifyCoreExpr(args.get(1)),
-                      reifyType(ap.type)));
-            default:
-              break;
-          }
-        }
-        throw new UnsupportedOperationException(
-            "Plan.core: cannot yet reify APPLY (" + exp + ")");
-      default:
-        throw new UnsupportedOperationException(
-            "Plan.core: cannot yet reify " + exp.op + " (" + exp + ")");
-    }
-  }
-
-  /**
-   * Reifies a {@link Type} as a runtime value of the Morel-level {@code Type.t}
-   * datatype.
-   */
-  private Object reifyType(Type type) {
-    if (type instanceof PrimitiveType) {
-      switch ((PrimitiveType) type) {
-        case INT:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_INT.constructor);
-        case REAL:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_REAL.constructor);
-        case BOOL:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_BOOL.constructor);
-        case CHAR:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_CHAR.constructor);
-        case STRING:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_STRING.constructor);
-        case UNIT:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_UNIT.constructor);
-        default:
-          break;
-      }
-    }
-    throw new UnsupportedOperationException(
-        "Plan.core: cannot yet reify type " + type);
   }
 
   /**

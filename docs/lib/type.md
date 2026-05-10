@@ -33,7 +33,20 @@ types as ordinary values.
 ## Synopsis
 
 <pre>
-datatype <a id='t' href="#t-impl">t</a> = T_BOOL | T_CHAR | T_INT | T_REAL | T_STRING | T_UNIT
+datatype <a id='t' href="#t-impl">t</a>
+  = T_BAG of t
+  | T_BOOL
+  | T_CHAR
+  | T_DATA of string * t list
+  | T_FN of t * t
+  | T_INT
+  | T_LIST of t
+  | T_REAL
+  | T_RECORD of (string * t) list
+  | T_STRING
+  | T_TUPLE of t list
+  | T_UNIT
+  | T_VAR of int
 </pre>
 
 <a id="t-impl"></a>
@@ -42,6 +55,7 @@ datatype <a id='t' href="#t-impl">t</a> = T_BOOL | T_CHAR | T_INT | T_REAL | T_S
 is a Morel type in its resolved, post-typecheck form. The
 constructor names use a `T_` prefix to avoid clashing with the
 `Variant` datatype, which has constructors of the same logical
-names.
+names. `T_DATA` covers user-defined datatypes and built-ins like
+`option`/`ref`/`exn`; `T_VAR` carries a type-variable id.
 
 [//]: # (end:lib/type)

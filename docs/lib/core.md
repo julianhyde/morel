@@ -32,14 +32,27 @@ inspect, and pretty-print expressions as ordinary values.
 ## Synopsis
 
 <pre>
-datatype <a id='expr' href="#expr-impl">expr</a> = INT_LITERAL of int | PLUS of expr * expr * Type.t
+datatype <a id='expr' href="#expr-impl">expr</a>
+  = APPLY of expr * expr * Type.t
+  | E_RECORD of (string * expr) list * Type.t
+  | FIELD of expr * string * Type.t
+  | FILTER of expr * expr
+  | INT_LITERAL of int
+  | LIST_LITERAL of expr list * Type.t
+  | PLUS of expr * expr * Type.t
+  | PROJECT of expr * expr
+  | TUPLE of expr list
+  | VAR of string * Type.t
 </pre>
 
 <a id="expr-impl"></a>
 <h3><code><strong>datatype</strong> expr</code></h3>
 
 is a Morel expression in its typed, post-desugar internal form.
-The constructor set will grow as the planner work proceeds; for now
-only integer literals and integer/real addition are reified.
+Scalar constructors include `INT_LITERAL`, `VAR`, `APPLY`, `FIELD`,
+`E_RECORD` (E-prefixed to avoid clashing with `Variant`'s `RECORD`),
+`TUPLE`, `LIST_LITERAL`, and `PLUS`. Relational constructors include
+`FILTER` and `PROJECT`; a `from`-expression desugars to a tree of
+these.
 
 [//]: # (end:lib/core)
