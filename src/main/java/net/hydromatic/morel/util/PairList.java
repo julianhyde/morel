@@ -27,6 +27,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
@@ -93,6 +94,29 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
                   list.add(t);
                   list.add(u);
                 }));
+    return new PairLists.MutablePairList<>(list);
+  }
+
+  /**
+   * Creates a PairList by zipping two iterables and transforming each pair of
+   * elements into a pair of outputs.
+   */
+  static <S, R, T, U> PairList<T, U> fromTransformed(
+      Iterable<? extends S> iterable1,
+      Iterable<? extends R> iterable2,
+      BiBiTransformer<S, R, T, U> transformer) {
+    List<Object> list = new ArrayList<>();
+    Iterator<? extends S> it1 = iterable1.iterator();
+    Iterator<? extends R> it2 = iterable2.iterator();
+    while (it1.hasNext() && it2.hasNext()) {
+      transformer.apply(
+          it1.next(),
+          it2.next(),
+          (t, u) -> {
+            list.add(t);
+            list.add(u);
+          });
+    }
     return new PairLists.MutablePairList<>(list);
   }
 
@@ -373,6 +397,20 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
   interface BiTransformer<T, U, R> {
     /** Converts an input value to a pair of output values. */
     void apply(T t, BiConsumer<U, R> consumer);
+  }
+
+  /**
+   * Converts a pair of input values to a pair of output values.
+   *
+   * @param <S> First input value
+   * @param <T> Second input value
+   * @param <U> First output value
+   * @param <R> Second output value
+   */
+  @FunctionalInterface
+  interface BiBiTransformer<S, T, U, R> {
+    /** Converts a pair of input values to a pair of output values. */
+    void apply(S s, T t, BiConsumer<U, R> consumer);
   }
 }
 

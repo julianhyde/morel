@@ -678,6 +678,54 @@ class PairListTest {
     t.accept(Collections.emptyList(), "[]");
   }
 
+  /**
+   * Tests {@link PairList#fromTransformed(Iterable, Iterable,
+   * PairList.BiBiTransformer)}: zip two iterables and transform each pair into
+   * a pair of outputs.
+   */
+  @Test
+  void testPairListFromTransformedTwo() {
+    // Pair each name with the length of its description, computed from
+    // the parallel `descriptions` iterable.
+    final PairList.BiBiTransformer<String, String, String, Integer>
+        transformer = (name, desc, c) -> c.accept(name, desc.length());
+
+    final PairList<String, Integer> empty =
+        PairList.fromTransformed(
+            Collections.emptyList(), Collections.emptyList(), transformer);
+    assertThat(empty, hasToString("[]"));
+
+    final PairList<String, Integer> one =
+        PairList.fromTransformed(
+            Collections.singletonList("a"),
+            Collections.singletonList("hello"),
+            transformer);
+    assertThat(one, hasToString("[<a, 5>]"));
+
+    final PairList<String, Integer> three =
+        PairList.fromTransformed(
+            Arrays.asList("x", "y", "z"),
+            Arrays.asList("", "ab", "cdef"),
+            transformer);
+    assertThat(three, hasToString("[<x, 0>, <y, 2>, <z, 4>]"));
+
+    // Mismatched lengths: stop at the shorter iterable (matches Pair.forEach).
+    final PairList<String, Integer> shortRight =
+        PairList.fromTransformed(
+            Arrays.asList("a", "b", "c"),
+            Arrays.asList("xx", "yyy"),
+            transformer);
+    assertThat(shortRight, hasToString("[<a, 2>, <b, 3>]"));
+
+    // Works with non-List iterables.
+    final Iterable<String> namesIter = () -> Arrays.asList("p", "q").iterator();
+    final Iterable<String> descsIter =
+        () -> Arrays.asList("aa", "b").iterator();
+    final PairList<String, Integer> fromIter =
+        PairList.fromTransformed(namesIter, descsIter, transformer);
+    assertThat(fromIter, hasToString("[<p, 2>, <q, 1>]"));
+  }
+
   @Test
   void testAsSortedMap() {
     final PairList<String, Integer> unsortedPairList =

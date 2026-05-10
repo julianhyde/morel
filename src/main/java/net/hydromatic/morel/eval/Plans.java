@@ -19,11 +19,10 @@
 package net.hydromatic.morel.eval;
 
 import static com.google.common.collect.ImmutableList.of;
-import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.compile.BuiltIn.Constructor.*;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
 import java.util.List;
 import net.hydromatic.morel.ast.Core;
@@ -59,13 +58,10 @@ public class Plans {
    */
   private static final ImmutableList<Object> EMPTY_FROM_EXPR =
       of(
-          BuiltIn.Constructor.CORE_EXPR_LIST_LITERAL.constructor,
+          CORE_EXPR_LIST_LITERAL.constructor,
           of(
-              ImmutableList.of(
-                  of(BuiltIn.Constructor.CORE_EXPR_UNIT_LITERAL.constructor)),
-              of(
-                  BuiltIn.Constructor.TYPE_LIST.constructor,
-                  of(BuiltIn.Constructor.TYPE_UNIT.constructor))));
+              of(of(CORE_EXPR_UNIT_LITERAL.constructor)),
+              of(TYPE_LIST.constructor, of(TYPE_UNIT.constructor))));
 
   /**
    * Returns whether {@code fn} refers to the `op +` operator. Matches both the
@@ -87,51 +83,46 @@ public class Plans {
     switch (exp.op) {
       case INT_LITERAL:
         return of(
-            BuiltIn.Constructor.CORE_EXPR_INT_LITERAL.constructor,
+            CORE_EXPR_INT_LITERAL.constructor,
             ((Core.Literal) exp).unwrap(Integer.class));
 
       case UNIT_LITERAL:
-        return of(BuiltIn.Constructor.CORE_EXPR_UNIT_LITERAL.constructor);
+        return of(CORE_EXPR_UNIT_LITERAL.constructor);
 
       case ID:
         Core.Id id = (Core.Id) exp;
         return of(
-            BuiltIn.Constructor.CORE_EXPR_VAR.constructor,
-            of(id.idPat.name, reifyType(id.type)));
+            CORE_EXPR_VAR.constructor, of(id.idPat.name, reifyType(id.type)));
 
       case FN_LITERAL:
         // A bare reference to a built-in (e.g. `op elem` resolved to a
         // FN_LITERAL): reify as VAR carrying the built-in's ML name.
         BuiltIn fnBi = ((Core.Literal) exp).unwrap(BuiltIn.class);
         return of(
-            BuiltIn.Constructor.CORE_EXPR_VAR.constructor,
-            of(fnBi.mlName, reifyType(exp.type)));
+            CORE_EXPR_VAR.constructor, of(fnBi.mlName, reifyType(exp.type)));
 
       case TUPLE:
         final Core.Tuple tup = (Core.Tuple) exp;
         // Canonicalize: an empty tuple or empty record is unit.
         if (tup.args.isEmpty()) {
-          return of(BuiltIn.Constructor.CORE_EXPR_UNIT_LITERAL.constructor);
+          return of(CORE_EXPR_UNIT_LITERAL.constructor);
         }
         if (tup.type instanceof RecordType) {
           // Named-field record. argNameTypes iterates in canonical
-          // sorted-by-name order, parallel to tup.args. Pair the names
-          // with the args into a PairList and transform.
-          ImmutableMap.Builder<String, Core.Exp> nameArg =
-              ImmutableMap.builder();
-          forEach(
-              ((RecordType) tup.type).argNameTypes.keySet(),
-              tup.args,
-              nameArg::put);
+          // sorted-by-name order, parallel to tup.args. Zip the names
+          // with the reified args into a PairList in one pass.
+          PairList<String, Object> nameReified =
+              PairList.fromTransformed(
+                  ((RecordType) tup.type).argNameTypes.keySet(),
+                  tup.args,
+                  (name, e, c) -> c.accept(name, reifyExp(e)));
           ImmutableList<Object> fields =
-              PairList.viewOf(nameArg.build())
-                  .transformEager((name, e) -> of(name, reifyExp(e)));
+              nameReified.transformEager((name, reified) -> of(name, reified));
           return of(
-              BuiltIn.Constructor.CORE_EXPR_RECORD.constructor,
-              of(fields, reifyType(tup.type)));
+              CORE_EXPR_RECORD.constructor, of(fields, reifyType(tup.type)));
         } else {
           return of(
-              BuiltIn.Constructor.CORE_EXPR_TUPLE.constructor,
+              CORE_EXPR_TUPLE.constructor,
               transformEager(tup.args, Plans::reifyExp));
         }
 
@@ -142,7 +133,7 @@ public class Plans {
         if (isOpPlus(ap.fn)) {
           List<Core.Exp> args = ((Core.Tuple) ap.arg).args;
           return of(
-              BuiltIn.Constructor.CORE_EXPR_PLUS.constructor,
+              CORE_EXPR_PLUS.constructor,
               of(
                   reifyExp(args.get(0)),
                   reifyExp(args.get(1)),
@@ -152,7 +143,7 @@ public class Plans {
           BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
           if (b == BuiltIn.Z_LIST) {
             return of(
-                BuiltIn.Constructor.CORE_EXPR_LIST_LITERAL.constructor,
+                CORE_EXPR_LIST_LITERAL.constructor,
                 of(
                     transformEager(((Core.Tuple) ap.arg).args, Plans::reifyExp),
                     reifyType(ap.type)));
@@ -163,12 +154,12 @@ public class Plans {
         if (ap.fn.op == Op.RECORD_SELECTOR) {
           Core.RecordSelector sel = (Core.RecordSelector) ap.fn;
           return of(
-              BuiltIn.Constructor.CORE_EXPR_FIELD.constructor,
+              CORE_EXPR_FIELD.constructor,
               of(reifyExp(ap.arg), sel.fieldName(), reifyType(ap.type)));
         }
         // General application: APPLY(fn, arg, type).
         return of(
-            BuiltIn.Constructor.CORE_EXPR_APPLY.constructor,
+            CORE_EXPR_APPLY.constructor,
             of(reifyExp(ap.fn), reifyExp(ap.arg), reifyType(ap.type)));
 
       case FROM:
@@ -207,14 +198,14 @@ public class Plans {
           Core.Where where = (Core.Where) step;
           current =
               of(
-                  BuiltIn.Constructor.CORE_EXPR_FILTER.constructor,
+                  CORE_EXPR_FILTER.constructor,
                   of(current, reifyExp(where.exp)));
           break;
         case YIELD:
           Core.Yield yield = (Core.Yield) step;
           current =
               of(
-                  BuiltIn.Constructor.CORE_EXPR_PROJECT.constructor,
+                  CORE_EXPR_PROJECT.constructor,
                   of(current, reifyExp(yield.exp)));
           break;
         default:
@@ -324,39 +315,38 @@ public class Plans {
         // Primitive types: PrimitiveType.INT, REAL, BOOL, CHAR, STRING, UNIT.
         switch ((PrimitiveType) type) {
           case INT:
-            return of(BuiltIn.Constructor.TYPE_INT.constructor);
+            return of(TYPE_INT.constructor);
           case REAL:
-            return of(BuiltIn.Constructor.TYPE_REAL.constructor);
+            return of(TYPE_REAL.constructor);
           case BOOL:
-            return of(BuiltIn.Constructor.TYPE_BOOL.constructor);
+            return of(TYPE_BOOL.constructor);
           case CHAR:
-            return of(BuiltIn.Constructor.TYPE_CHAR.constructor);
+            return of(TYPE_CHAR.constructor);
           case STRING:
-            return of(BuiltIn.Constructor.TYPE_STRING.constructor);
+            return of(TYPE_STRING.constructor);
           case UNIT:
-            return of(BuiltIn.Constructor.TYPE_UNIT.constructor);
+            return of(TYPE_UNIT.constructor);
         }
         break;
 
       case LIST:
         return of(
-            BuiltIn.Constructor.TYPE_LIST.constructor,
-            reifyType(((ListType) type).elementType));
+            TYPE_LIST.constructor, reifyType(((ListType) type).elementType));
 
       case FUNCTION_TYPE:
         final FnType ft = (FnType) type;
         return of(
-            BuiltIn.Constructor.TYPE_FN.constructor,
+            TYPE_FN.constructor,
             of(reifyType(ft.paramType), reifyType(ft.resultType)));
 
       case TUPLE_TYPE:
         return of(
-            BuiltIn.Constructor.TYPE_TUPLE.constructor,
+            TYPE_TUPLE.constructor,
             transformEager(((TupleType) type).argTypes, Plans::reifyType));
 
       case RECORD_TYPE:
         return of(
-            BuiltIn.Constructor.TYPE_RECORD.constructor,
+            TYPE_RECORD.constructor,
             transformEager(
                 ((RecordType) type).argNameTypes.entrySet(),
                 e -> of(e.getKey(), reifyType(e.getValue()))));
@@ -364,17 +354,14 @@ public class Plans {
       case DATA_TYPE:
         DataType dt = (DataType) type;
         if (dt.name.equals("bag")) {
-          return of(
-              BuiltIn.Constructor.TYPE_BAG.constructor,
-              reifyType(dt.arguments.get(0)));
+          return of(TYPE_BAG.constructor, reifyType(dt.arguments.get(0)));
         }
         return of(
-            BuiltIn.Constructor.TYPE_DATA.constructor,
+            TYPE_DATA.constructor,
             of(dt.name, transformEager(dt.arguments, Plans::reifyType)));
 
       case TY_VAR:
-        return of(
-            BuiltIn.Constructor.TYPE_VAR.constructor, ((TypeVar) type).ordinal);
+        return of(TYPE_VAR.constructor, ((TypeVar) type).ordinal);
 
       default:
         break;
