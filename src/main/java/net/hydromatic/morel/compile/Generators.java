@@ -59,6 +59,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Implementations of {@link Generator}, and supporting methods. */
@@ -2348,13 +2349,12 @@ class Generators {
     }
     if (pat instanceof Core.RecordPat) {
       final Core.RecordPat recordPat = (Core.RecordPat) pat;
-      final Map<String, Core.Exp> expArgs = new LinkedHashMap<>();
-      final List<String> names =
-          new ArrayList<>(recordPat.type().argNameTypes.keySet());
-      for (int i = 0; i < recordPat.args.size(); i++) {
-        expArgs.put(names.get(i), patToExp(ts, recordPat.args.get(i)));
-      }
-      return core.record(ts, expArgs.entrySet());
+      return core.record(
+          ts,
+          PairList.fromTransformed(
+              recordPat.type().argNameTypes.keySet(),
+              recordPat.args,
+              (name, arg, c) -> c.accept(name, patToExp(ts, arg))));
     }
     throw new AssertionError("unexpected pattern type: " + pat.op);
   }

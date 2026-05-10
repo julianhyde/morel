@@ -111,15 +111,16 @@ public class Plans {
           // Named-field record. argNameTypes iterates in canonical
           // sorted-by-name order, parallel to tup.args. Zip the names
           // with the reified args into a PairList in one pass.
-          PairList<String, Object> nameReified =
-              PairList.fromTransformed(
+          final PairList<String, Object> fields =
+              PairList.<String, Core.Exp, String, Object>fromTransformed(
                   ((RecordType) tup.type).argNameTypes.keySet(),
                   tup.args,
                   (name, e, c) -> c.accept(name, reifyExp(e)));
-          ImmutableList<Object> fields =
-              nameReified.transformEager((name, reified) -> of(name, reified));
           return of(
-              CORE_EXPR_RECORD.constructor, of(fields, reifyType(tup.type)));
+              CORE_EXPR_RECORD.constructor,
+              of(
+                  fields.transformEager(ImmutableList::of),
+                  reifyType(tup.type)));
         } else {
           return of(
               CORE_EXPR_TUPLE.constructor,

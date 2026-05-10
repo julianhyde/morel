@@ -184,11 +184,12 @@ public class FromBuilder {
       // "from () in [()], i in [1,2]" has type "{i:int} list" not "int list".
       final boolean atom1 = this.steps.isEmpty() && lastStep.env.atom;
 
-      final PairList<String, Core.Exp> nameExps = PairList.of();
+      final PairList<String, Core.Exp> nameExps;
       boolean uselessIfLast = this.bindings.isEmpty();
       final Core.StepEnv env;
       if (pat instanceof Core.RecordPat) {
         final Core.RecordPat recordPat = (Core.RecordPat) pat;
+        nameExps = PairList.of();
         this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         forEach(
             recordPat.type().argNameTypes.keySet(),
@@ -197,16 +198,18 @@ public class FromBuilder {
         env = null;
       } else if (pat instanceof Core.TuplePat) {
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-        forEach(
-            tuplePat.args,
-            lastStep.env.bindings,
-            (arg, binding) ->
-                nameExps.add(((Core.IdPat) arg).name, core.id(binding.id)));
+        nameExps =
+            PairList.fromTransformed(
+                tuplePat.args,
+                lastStep.env.bindings,
+                (arg, binding, c) ->
+                    c.accept(((Core.IdPat) arg).name, core.id(binding.id)));
         env = null;
       } else if (!this.bindings.isEmpty()) {
         // With at least one binding, and one new variable, the output will be
         // a record type.
         final Core.IdPat idPat = (Core.IdPat) pat;
+        nameExps = PairList.of();
         this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         lastStep.env.bindings.forEach(
             b -> nameExps.add(idPat.name, core.id(b.id)));
@@ -232,16 +235,17 @@ public class FromBuilder {
               return yield_(yieldStep.exp);
             }
           }
-          nameExps.add(idPat.name, yieldStep.exp);
+          final PairList<String, Core.Exp> singleton =
+              PairList.of(idPat.name, yieldStep.exp);
           final Core.StepEnv env2 =
               Core.StepEnv.of(
                   ImmutableList.of(Binding.of(idPat)),
                   true,
                   lastStep.env.ordered);
-          return yield_(false, env2, core.record(typeSystem, nameExps), true);
+          return yield_(false, env2, core.record(typeSystem, singleton), true);
         }
         final Binding binding = lastStep.env.bindings.get(0);
-        nameExps.add(idPat.name, core.id(binding.id));
+        nameExps = PairList.of(idPat.name, core.id(binding.id));
 
         env =
             lastStep.env.withBindings(append(this.bindings, Binding.of(idPat)));
