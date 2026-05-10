@@ -488,6 +488,11 @@ public class Compiler {
             int[] ordinalSlots = ORDINAL_CODE.get();
             ordinalSlots[0]++; // signal that we are using an ordinal
             return Codes.ordinalGet(ordinalSlots);
+          case PLAN_CORE:
+            // Plan.core: reify the typed Core of the argument as a
+            // runtime value of type Core.expr. The argument is *not*
+            // compiled normally; instead we walk it and emit a constant.
+            return Codes.constant(reifyCoreExpr(apply.arg));
           default:
             if (true) {
               break;
@@ -599,6 +604,27 @@ public class Compiler {
     return tailPos
         ? Codes.tailApply(fnCode, argCode)
         : finishCompileApply(cx, fnCode, argCode, argType);
+  }
+
+  /**
+   * Reifies the typed Core of an expression as a runtime value of the
+   * Morel-level {@code Core.expr} datatype. Used by {@link BuiltIn#PLAN_CORE}
+   * to implement the {@code Plan.core} reifier.
+   *
+   * <p>The runtime representation of a datatype value is a list whose first
+   * element is the constructor name (per the convention used by other built-in
+   * datatypes; see {@link Codes#OPTION_NONE}).
+   */
+  private Object reifyCoreExpr(Core.Exp exp) {
+    switch (exp.op) {
+      case INT_LITERAL:
+        return ImmutableList.of(
+            BuiltIn.Constructor.CORE_EXPR_INT_LITERAL.constructor,
+            ((Core.Literal) exp).unwrap(Integer.class));
+      default:
+        throw new UnsupportedOperationException(
+            "Plan.core: cannot yet reify " + exp.op + " (" + exp + ")");
+    }
   }
 
   /**

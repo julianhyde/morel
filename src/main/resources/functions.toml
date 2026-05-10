@@ -900,6 +900,30 @@ is a letter (a to z or A to Z); otherwise returns `c`.
 # === Datalog structure ==============================================
 
 [[structures]]
+name = "Core"
+specified = "morel"
+description = "Reified Morel core expressions."
+overview = """
+The `Core` structure surfaces Morel's typed, post-desugar internal
+expression representation as a first-class datatype, so that
+metaprograms (such as the planner — see issue #359) can construct,
+inspect, and pretty-print expressions as ordinary values.
+"""
+
+[[types]]
+structure = "Core"
+name = "expr"
+type = "datatype expr = INT_LITERAL of int"
+specified = "morel"
+description = """
+is a Morel expression in its typed, post-desugar internal form.
+The constructor set will grow as the planner work proceeds; for now
+only the integer-literal form is reified.
+"""
+
+# === Datalog structure ==============================================
+
+[[structures]]
 name = "Datalog"
 specified = "morel"
 description = "Datalog query interface."
@@ -3270,6 +3294,39 @@ returns `v` if `opt` is `SOME v`, otherwise raises
 `Option`.
 """
 
+# === Plan structure =================================================
+
+[[structures]]
+name = "Plan"
+specified = "morel"
+description = "Reify, optimize, and run Morel expressions."
+overview = """
+The `Plan` structure is the entry point for the rule-based optimizer
+described in issue #359. In its phase-1a form it provides only a
+single primitive — `core` — which reifies the typed Core of any Morel
+expression as a runtime value of type `Core.expr`. Later phases will
+add rule-based rewriting, a MEMO, and function-to-function
+optimization.
+"""
+
+[[functions]]
+structure = "Plan"
+name = "core"
+specified = "morel"
+type = "α → Core.expr"
+prototype = "core e"
+description = """
+returns the typed Core form of `e` as a `Core.expr` value.
+
+The argument is type-checked but *not* evaluated; the compiler
+intercepts every call to `Plan.core` and emits a literal
+`Core.expr` value at the call site (analogous to `typeof`).
+
+Free variables in the argument resolve in the enclosing environment
+for type-checking, but appear in the output as `VAR` nodes — they
+are not folded to their runtime values.
+"""
+
 # === Range structure ================================================
 
 [[structures]]
@@ -5429,6 +5486,32 @@ prototype = "zeroTime"
 description = """
 denotes an empty interval and serves as the reference point for absolute
 times. It is equivalent to `fromReal(0.0)`.
+"""
+
+# === Type structure =================================================
+
+[[structures]]
+name = "Type"
+specified = "morel"
+description = "Reified Morel types."
+overview = """
+The `Type` structure surfaces Morel's resolved, post-typecheck type
+representation as a first-class datatype. It is used as a payload on
+certain `Core.expr` constructors (for example, to disambiguate
+overloaded arithmetic) and is exposed so metaprograms can inspect
+types as ordinary values.
+"""
+
+[[types]]
+structure = "Type"
+name = "t"
+type = "datatype t = T_BOOL | T_CHAR | T_INT | T_REAL | T_STRING | T_UNIT"
+specified = "morel"
+description = """
+is a Morel type in its resolved, post-typecheck form. The
+constructor names use a `T_` prefix to avoid clashing with the
+`Variant` datatype, which has constructors of the same logical
+names.
 """
 
 # === Variant structure ==============================================

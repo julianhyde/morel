@@ -2844,6 +2844,23 @@ public abstract class Codes {
       ImmutableList.of(BuiltIn.Constructor.ORDER_LESS.constructor);
 
   /**
+   * Stub for {@link BuiltIn#PLAN_CORE}. The compiler intercepts every call to
+   * {@code Plan.core} and emits a constant value at the call site, so this
+   * {@code apply} method should never run. Its presence is needed only so the
+   * inliner recognizes {@code Plan.core} as a function and rewrites {@code
+   * (#core Plan) x} to a {@code FN_LITERAL} apply (see {@link
+   * net.hydromatic.morel.compile.Inliner#visit(Core.Apply)}).
+   */
+  private static final Applicable PLAN_CORE =
+      new BaseApplicable1<Object, Object>(BuiltIn.PLAN_CORE) {
+        @Override
+        public Object apply(Object arg) {
+          throw new AssertionError(
+              "Plan.core must be intercepted at compile time");
+        }
+      };
+
+  /**
    * Converts the result of {@link Comparable#compareTo(Object)} to an {@code
    * Order} value.
    */
@@ -5328,6 +5345,7 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_MAP, OPTION_MAP)
           .put(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL)
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
+          .put(BuiltIn.PLAN_CORE, PLAN_CORE)
           .put(BuiltIn.REAL_ABS, REAL_ABS)
           .put(BuiltIn.REAL_CEIL, REAL_CEIL)
           .put(BuiltIn.REAL_CHECK_FLOAT, REAL_CHECK_FLOAT)

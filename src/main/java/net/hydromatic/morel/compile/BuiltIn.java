@@ -2736,6 +2736,21 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
   /**
+   * Function "Plan.core", of type "&alpha; &rarr; Core.expr".
+   *
+   * <p>Reifies the typed Core expression of its argument as a runtime value.
+   * The argument is type-checked but not evaluated; the compiler intercepts
+   * calls to this function and emits a literal Core.expr value at the call site
+   * (analogous to {@code typeof}).
+   */
+  PLAN_CORE(
+      "Plan",
+      "core",
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(h.get(0), ts.lookup(Datatype.CORE_EXPR)))),
+
+  /**
    * Function "Range.contains", of type "&alpha; range &rarr; &alpha; &rarr;
    * bool".
    */
@@ -4739,6 +4754,20 @@ public enum BuiltIn {
         1,
         h -> h.tyCon(Constructor.CONTINUOUS_SET_CONTINUOUS_SET)),
 
+    /**
+     * Datatype representing a Morel core expression in its typed, post-desugar
+     * internal form.
+     *
+     * <p>Reified by {@link BuiltIn#PLAN_CORE}; the constructor set will grow as
+     * the planner work proceeds (see #359).
+     */
+    CORE_EXPR(
+        "Core",
+        "expr",
+        false,
+        0,
+        h -> h.tyCon(Constructor.CORE_EXPR_INT_LITERAL)),
+
     DATE_MONTH(
         "Date",
         "month",
@@ -4878,6 +4907,24 @@ public enum BuiltIn {
                 .tyCon(Constructor.RANGE_POINT)),
 
     /**
+     * Datatype representing a Morel type in its resolved, post-typecheck form.
+     * Used as a payload on certain {@link #CORE_EXPR} constructors (e.g., to
+     * disambiguate overloaded arithmetic).
+     */
+    TYPE(
+        "Type",
+        "t",
+        false,
+        0,
+        h ->
+            h.tyCon(Constructor.TYPE_BOOL)
+                .tyCon(Constructor.TYPE_CHAR)
+                .tyCon(Constructor.TYPE_INT)
+                .tyCon(Constructor.TYPE_REAL)
+                .tyCon(Constructor.TYPE_STRING)
+                .tyCon(Constructor.TYPE_UNIT)),
+
+    /**
      * Universal value representation for embedded language interoperability.
      *
      * <pre>{@code
@@ -5013,6 +5060,7 @@ public enum BuiltIn {
         h ->
             Keys.list(
                 Keys.apply(Keys.name("range"), ImmutableList.of(h.get(0))))),
+    CORE_EXPR_INT_LITERAL(Datatype.CORE_EXPR, "INT_LITERAL", h -> INT.key()),
     DATE_MONTH_APR(Datatype.DATE_MONTH, "Apr"),
     DATE_MONTH_AUG(Datatype.DATE_MONTH, "Aug"),
     DATE_MONTH_DEC(Datatype.DATE_MONTH, "Dec"),
@@ -5092,6 +5140,15 @@ public enum BuiltIn {
         "OPEN_CLOSED",
         h -> Keys.tuple(ImmutableList.of(h.get(0), h.get(0)))),
     RANGE_POINT(Datatype.RANGE, "POINT", h -> h.get(0)),
+    // Type.t constructors use a "T_" prefix to avoid clashing with the
+    // Variant datatype, which has constructors of the same logical names
+    // (INT, BOOL, CHAR, REAL, STRING, UNIT).
+    TYPE_BOOL(Datatype.TYPE, "T_BOOL"),
+    TYPE_CHAR(Datatype.TYPE, "T_CHAR"),
+    TYPE_INT(Datatype.TYPE, "T_INT"),
+    TYPE_REAL(Datatype.TYPE, "T_REAL"),
+    TYPE_STRING(Datatype.TYPE, "T_STRING"),
+    TYPE_UNIT(Datatype.TYPE, "T_UNIT"),
     VARIANT_BAG(Datatype.VARIANT, "BAG", h -> Keys.list(Keys.name("variant"))),
     VARIANT_BOOL(Datatype.VARIANT, "BOOL", h -> BOOL.key()),
     VARIANT_CHAR(Datatype.VARIANT, "CHAR", h -> CHAR.key()),

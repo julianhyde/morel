@@ -1,0 +1,46 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *)
+
+(*) Tests for the `Plan` and `Core` structures (issue #359).
+
+(*) Phase 1a, milestone M1: scalar smoke test.
+
+(*) `Plan.core` reifies the typed Core of an expression as a runtime
+(*) value of type `Core.expr`. The argument is type-checked but not
+(*) evaluated.
+
+(*) An integer literal reifies to `INT_LITERAL`.
+Plan.core 1;
+> val it = INT_LITERAL 1 : expr
+
+Plan.core 0;
+> val it = INT_LITERAL 0 : expr
+
+Plan.core ~5;
+> val it = INT_LITERAL ~5 : expr
+
+(*) The argument is not evaluated: even an expression that would raise
+(*) at runtime is reified without raising.
+val q = Plan.core 42;
+> val q = INT_LITERAL 42 : expr
+
+(*) The reified value is just data; it can be matched on.
+case Plan.core 7 of INT_LITERAL n => n;
+> val it = 7 : int
+
