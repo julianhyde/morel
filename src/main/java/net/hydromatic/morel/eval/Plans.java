@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.eval;
 
+import static com.google.common.collect.ImmutableList.of;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -67,23 +68,23 @@ public class Plans {
   public static Object reifyExp(Core.Exp exp) {
     switch (exp.op) {
       case INT_LITERAL:
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.CORE_EXPR_INT_LITERAL.constructor,
             ((Core.Literal) exp).unwrap(Integer.class));
 
       case ID:
         Core.Id id = (Core.Id) exp;
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.CORE_EXPR_VAR.constructor,
-            ImmutableList.of(id.idPat.name, reifyType(id.type)));
+            of(id.idPat.name, reifyType(id.type)));
 
       case FN_LITERAL:
         // A bare reference to a built-in (e.g. `op elem` resolved to a
         // FN_LITERAL): reify as VAR carrying the built-in's ML name.
         BuiltIn fnBi = ((Core.Literal) exp).unwrap(BuiltIn.class);
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.CORE_EXPR_VAR.constructor,
-            ImmutableList.of(fnBi.mlName, reifyType(exp.type)));
+            of(fnBi.mlName, reifyType(exp.type)));
 
       case TUPLE:
         Core.Tuple tup = (Core.Tuple) exp;
@@ -97,12 +98,12 @@ public class Plans {
           ImmutableList<Object> fields =
               transformEager(
                   Pair.zip(recordNames, tup.args),
-                  p -> ImmutableList.of(p.left, reifyExp(p.right)));
-          return ImmutableList.of(
+                  p -> of(p.left, reifyExp(p.right)));
+          return of(
               BuiltIn.Constructor.CORE_EXPR_RECORD.constructor,
-              ImmutableList.of(fields, reifyType(tup.type)));
+              of(fields, reifyType(tup.type)));
         }
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.CORE_EXPR_TUPLE.constructor,
             transformEager(tup.args, Plans::reifyExp));
 
@@ -112,9 +113,9 @@ public class Plans {
         // or as the Id "op +") and reify as PLUS.
         if (isOpPlus(ap.fn)) {
           List<Core.Exp> args = ((Core.Tuple) ap.arg).args;
-          return ImmutableList.of(
+          return of(
               BuiltIn.Constructor.CORE_EXPR_PLUS.constructor,
-              ImmutableList.of(
+              of(
                   reifyExp(args.get(0)),
                   reifyExp(args.get(1)),
                   reifyType(ap.type)));
@@ -122,9 +123,9 @@ public class Plans {
         if (ap.fn.op == Op.FN_LITERAL) {
           BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
           if (b == BuiltIn.Z_LIST) {
-            return ImmutableList.of(
+            return of(
                 BuiltIn.Constructor.CORE_EXPR_LIST_LITERAL.constructor,
-                ImmutableList.of(
+                of(
                     transformEager(((Core.Tuple) ap.arg).args, Plans::reifyExp),
                     reifyType(ap.type)));
           }
@@ -133,16 +134,14 @@ public class Plans {
         // FIELD(r, name, t).
         if (ap.fn.op == Op.RECORD_SELECTOR) {
           Core.RecordSelector sel = (Core.RecordSelector) ap.fn;
-          return ImmutableList.of(
+          return of(
               BuiltIn.Constructor.CORE_EXPR_FIELD.constructor,
-              ImmutableList.of(
-                  reifyExp(ap.arg), sel.fieldName(), reifyType(ap.type)));
+              of(reifyExp(ap.arg), sel.fieldName(), reifyType(ap.type)));
         }
         // General application: APPLY(fn, arg, type).
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.CORE_EXPR_APPLY.constructor,
-            ImmutableList.of(
-                reifyExp(ap.fn), reifyExp(ap.arg), reifyType(ap.type)));
+            of(reifyExp(ap.fn), reifyExp(ap.arg), reifyType(ap.type)));
 
       case FROM:
         return reifyFrom((Core.From) exp);
@@ -160,13 +159,17 @@ public class Plans {
    * for steps that follow).
    */
   private static Object reifyFrom(Core.From from) {
-    Object current = null;
+    // An empty `from` (no steps) evaluates to the singleton `[()]` of type
+    // `unit list`. Reify it as a LIST_LITERAL containing a single TUPLE [].
+    Object current = emptyFromExpr();
+    boolean haveScan = false;
     for (Core.FromStep step : from.steps) {
       switch (step.op) {
         case SCAN:
           Core.Scan scan = (Core.Scan) step;
-          if (current == null) {
+          if (!haveScan) {
             current = reifyExp(scan.exp);
+            haveScan = true;
           } else {
             throw new UnsupportedOperationException(
                 "Plan.core: multi-scan `from` not yet supported");
@@ -175,16 +178,16 @@ public class Plans {
         case WHERE:
           Core.Where where = (Core.Where) step;
           current =
-              ImmutableList.of(
+              of(
                   BuiltIn.Constructor.CORE_EXPR_FILTER.constructor,
-                  ImmutableList.of(current, reifyExp(where.exp)));
+                  of(current, reifyExp(where.exp)));
           break;
         case YIELD:
           Core.Yield yield = (Core.Yield) step;
           current =
-              ImmutableList.of(
+              of(
                   BuiltIn.Constructor.CORE_EXPR_PROJECT.constructor,
-                  ImmutableList.of(current, reifyExp(yield.exp)));
+                  of(current, reifyExp(yield.exp)));
           break;
         default:
           throw new UnsupportedOperationException(
@@ -192,6 +195,23 @@ public class Plans {
       }
     }
     return current;
+  }
+
+  /**
+   * Returns the reified Core for an empty {@code from} expression: a {@code
+   * LIST_LITERAL} containing a single empty {@code TUPLE} (i.e. {@code [()]} of
+   * type {@code unit list}).
+   */
+  private static Object emptyFromExpr() {
+    Object unitTuple =
+        of(BuiltIn.Constructor.CORE_EXPR_TUPLE.constructor, ImmutableList.of());
+    Object unitListType =
+        of(
+            BuiltIn.Constructor.TYPE_LIST.constructor,
+            of(BuiltIn.Constructor.TYPE_UNIT.constructor));
+    return of(
+        BuiltIn.Constructor.CORE_EXPR_LIST_LITERAL.constructor,
+        of(ImmutableList.of(unitTuple), unitListType));
   }
 
   /**
@@ -204,59 +224,56 @@ public class Plans {
         // Primitive types: PrimitiveType.INT, REAL, BOOL, CHAR, STRING, UNIT.
         switch ((PrimitiveType) type) {
           case INT:
-            return ImmutableList.of(BuiltIn.Constructor.TYPE_INT.constructor);
+            return of(BuiltIn.Constructor.TYPE_INT.constructor);
           case REAL:
-            return ImmutableList.of(BuiltIn.Constructor.TYPE_REAL.constructor);
+            return of(BuiltIn.Constructor.TYPE_REAL.constructor);
           case BOOL:
-            return ImmutableList.of(BuiltIn.Constructor.TYPE_BOOL.constructor);
+            return of(BuiltIn.Constructor.TYPE_BOOL.constructor);
           case CHAR:
-            return ImmutableList.of(BuiltIn.Constructor.TYPE_CHAR.constructor);
+            return of(BuiltIn.Constructor.TYPE_CHAR.constructor);
           case STRING:
-            return ImmutableList.of(
-                BuiltIn.Constructor.TYPE_STRING.constructor);
+            return of(BuiltIn.Constructor.TYPE_STRING.constructor);
           case UNIT:
-            return ImmutableList.of(BuiltIn.Constructor.TYPE_UNIT.constructor);
+            return of(BuiltIn.Constructor.TYPE_UNIT.constructor);
         }
         break;
 
       case LIST:
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.TYPE_LIST.constructor,
             reifyType(((ListType) type).elementType));
 
       case FUNCTION_TYPE:
-        FnType ft = (FnType) type;
-        return ImmutableList.of(
+        final FnType ft = (FnType) type;
+        return of(
             BuiltIn.Constructor.TYPE_FN.constructor,
-            ImmutableList.of(
-                reifyType(ft.paramType), reifyType(ft.resultType)));
+            of(reifyType(ft.paramType), reifyType(ft.resultType)));
 
       case TUPLE_TYPE:
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.TYPE_TUPLE.constructor,
             transformEager(((TupleType) type).argTypes, Plans::reifyType));
 
       case RECORD_TYPE:
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.TYPE_RECORD.constructor,
             transformEager(
                 ((RecordType) type).argNameTypes.entrySet(),
-                e -> ImmutableList.of(e.getKey(), reifyType(e.getValue()))));
+                e -> of(e.getKey(), reifyType(e.getValue()))));
 
       case DATA_TYPE:
         DataType dt = (DataType) type;
         if (dt.name.equals("bag")) {
-          return ImmutableList.of(
+          return of(
               BuiltIn.Constructor.TYPE_BAG.constructor,
               reifyType(dt.arguments.get(0)));
         }
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.TYPE_DATA.constructor,
-            ImmutableList.of(
-                dt.name, transformEager(dt.arguments, Plans::reifyType)));
+            of(dt.name, transformEager(dt.arguments, Plans::reifyType)));
 
       case TY_VAR:
-        return ImmutableList.of(
+        return of(
             BuiltIn.Constructor.TYPE_VAR.constructor, ((TypeVar) type).ordinal);
 
       default:

@@ -65,6 +65,12 @@ Plan.core ((1 + 2) + 4);
 >   {expr=PLUS (PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),INT_LITERAL 4,T_INT),
 >    value=7} : {expr:expr, value:int}
 
+(*) An empty `from` is the singleton `[()]` of type `unit list`. It
+(*) reifies as a LIST_LITERAL with one empty TUPLE.
+Plan.core (from);
+> val it = {expr=LIST_LITERAL ([TUPLE []],T_LIST T_UNIT),value=[()]}
+>   : {expr:expr, value:unit list}
+
 (*) M2: a relational query desugars to PROJECT/FILTER over a VAR
 (*) leaf (emps), with scalar payloads reified as APPLY/FIELD/RECORD.
 Sys.set ("printDepth", 999);
