@@ -24,6 +24,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import java.util.ArrayList;
 import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
@@ -52,6 +53,21 @@ public class Plans {
   private Plans() {}
 
   /**
+   * Reified Core for an empty {@code from} expression: a {@code LIST_LITERAL}
+   * containing a single {@code UNIT_LITERAL} (i.e. {@code [()]} of type {@code
+   * unit list}).
+   */
+  private static final ImmutableList<Object> EMPTY_FROM_EXPR =
+      of(
+          BuiltIn.Constructor.CORE_EXPR_LIST_LITERAL.constructor,
+          of(
+              ImmutableList.of(
+                  of(BuiltIn.Constructor.CORE_EXPR_UNIT_LITERAL.constructor)),
+              of(
+                  BuiltIn.Constructor.TYPE_LIST.constructor,
+                  of(BuiltIn.Constructor.TYPE_UNIT.constructor))));
+
+  /**
    * Returns whether {@code fn} refers to the `op +` operator. Matches both the
    * {@code FN_LITERAL} forms (after Inliner conversion) and the {@code Id "op
    * +"} form (when the Plan.core path suppressed inlining).
@@ -74,6 +90,9 @@ public class Plans {
             BuiltIn.Constructor.CORE_EXPR_INT_LITERAL.constructor,
             ((Core.Literal) exp).unwrap(Integer.class));
 
+      case UNIT_LITERAL:
+        return of(BuiltIn.Constructor.CORE_EXPR_UNIT_LITERAL.constructor);
+
       case ID:
         Core.Id id = (Core.Id) exp;
         return of(
@@ -90,6 +109,10 @@ public class Plans {
 
       case TUPLE:
         final Core.Tuple tup = (Core.Tuple) exp;
+        // Canonicalize: an empty tuple or empty record is unit.
+        if (tup.args.isEmpty()) {
+          return of(BuiltIn.Constructor.CORE_EXPR_UNIT_LITERAL.constructor);
+        }
         if (tup.type instanceof RecordType) {
           // Named-field record. argNameTypes iterates in canonical
           // sorted-by-name order, parallel to tup.args. Pair the names
@@ -166,7 +189,7 @@ public class Plans {
   private static Object reifyFrom(Core.From from) {
     // An empty `from` (no steps) evaluates to the singleton `[()]` of type
     // `unit list`. Reify it as a LIST_LITERAL containing a single TUPLE [].
-    Object current = emptyFromExpr();
+    Object current = EMPTY_FROM_EXPR;
     boolean haveScan = false;
     for (Core.FromStep step : from.steps) {
       switch (step.op) {
@@ -203,20 +226,92 @@ public class Plans {
   }
 
   /**
-   * Returns the reified Core for an empty {@code from} expression: a {@code
-   * LIST_LITERAL} containing a single empty {@code TUPLE} (i.e. {@code [()]} of
-   * type {@code unit list}).
+   * Verifies that a reified {@code Core.expr} value is in canonical form.
+   * Currently checks one rule:
+   *
+   * <ul>
+   *   <li>Unit values must be reified as {@code UNIT_LITERAL}, not as {@code
+   *       TUPLE []} or {@code E_RECORD ([], _)}.
+   * </ul>
+   *
+   * <p>Reify (via {@link #reifyExp}) always produces canonical output; this
+   * method is a defensive check for hand-built or future-rule output.
+   *
+   * @throws AssertionError if any violation is found
    */
-  private static Object emptyFromExpr() {
-    Object unitTuple =
-        of(BuiltIn.Constructor.CORE_EXPR_TUPLE.constructor, ImmutableList.of());
-    Object unitListType =
-        of(
-            BuiltIn.Constructor.TYPE_LIST.constructor,
-            of(BuiltIn.Constructor.TYPE_UNIT.constructor));
-    return of(
-        BuiltIn.Constructor.CORE_EXPR_LIST_LITERAL.constructor,
-        of(ImmutableList.of(unitTuple), unitListType));
+  public static void checkCanonical(Object expr) {
+    List<String> violations = new ArrayList<>();
+    collectViolations(expr, violations);
+    if (!violations.isEmpty()) {
+      StringBuilder buf = new StringBuilder("Plan canonicality violations:");
+      for (String v : violations) {
+        buf.append('\n').append("  ").append(v);
+      }
+      throw new AssertionError(buf.toString());
+    }
+  }
+
+  /** Walks a reified {@code Core.expr} value, accumulating violations. */
+  private static void collectViolations(Object expr, List<String> out) {
+    if (!(expr instanceof List)) {
+      return;
+    }
+    List<?> list = (List<?>) expr;
+    if (list.isEmpty() || !(list.get(0) instanceof String)) {
+      return;
+    }
+    String tag = (String) list.get(0);
+    switch (tag) {
+      case "INT_LITERAL":
+      case "UNIT_LITERAL":
+      case "VAR":
+        // No sub-expressions to check.
+        break;
+      case "TUPLE":
+        List<?> tupArgs = (List<?>) list.get(1);
+        if (tupArgs.isEmpty()) {
+          out.add("TUPLE [] should be UNIT_LITERAL");
+        } else {
+          tupArgs.forEach(a -> collectViolations(a, out));
+        }
+        break;
+      case "E_RECORD":
+        List<?> recPair = (List<?>) list.get(1);
+        List<?> fields = (List<?>) recPair.get(0);
+        if (fields.isEmpty()) {
+          out.add("E_RECORD ([], _) should be UNIT_LITERAL");
+        } else {
+          for (Object f : fields) {
+            collectViolations(((List<?>) f).get(1), out);
+          }
+        }
+        break;
+      case "PLUS":
+      case "APPLY":
+        List<?> binArgs = (List<?>) list.get(1);
+        collectViolations(binArgs.get(0), out);
+        collectViolations(binArgs.get(1), out);
+        break;
+      case "FILTER":
+      case "PROJECT":
+        List<?> relArgs = (List<?>) list.get(1);
+        collectViolations(relArgs.get(0), out);
+        collectViolations(relArgs.get(1), out);
+        break;
+      case "FIELD":
+        List<?> fieldArgs = (List<?>) list.get(1);
+        collectViolations(fieldArgs.get(0), out);
+        break;
+      case "LIST_LITERAL":
+        List<?> llPair = (List<?>) list.get(1);
+        List<?> elems = (List<?>) llPair.get(0);
+        elems.forEach(e -> collectViolations(e, out));
+        break;
+      default:
+        // Unknown constructor: don't recurse. (Could be a type tag or a
+        // future Core.expr constructor.)
+        break;
+    }
   }
 
   /**

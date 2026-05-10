@@ -65,10 +65,15 @@ Plan.core ((1 + 2) + 4);
 >   {expr=PLUS (PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),INT_LITERAL 4,T_INT),
 >    value=7} : {expr:expr, value:int}
 
+(*) Unit reifies as UNIT_LITERAL — never as TUPLE [] or E_RECORD ([], _),
+(*) which would be equivalent but non-canonical.
+Plan.core ();
+> val it = {expr=UNIT_LITERAL,value=()} : {expr:expr, value:unit}
+
 (*) An empty `from` is the singleton `[()]` of type `unit list`. It
-(*) reifies as a LIST_LITERAL with one empty TUPLE.
+(*) reifies as a LIST_LITERAL with one UNIT_LITERAL.
 Plan.core (from);
-> val it = {expr=LIST_LITERAL ([TUPLE []],T_LIST T_UNIT),value=[()]}
+> val it = {expr=LIST_LITERAL ([UNIT_LITERAL],T_LIST T_UNIT),value=[()]}
 >   : {expr:expr, value:unit list}
 
 (*) M2: a relational query desugars to PROJECT/FILTER over a VAR

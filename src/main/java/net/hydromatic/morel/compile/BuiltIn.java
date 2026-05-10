@@ -4789,6 +4789,7 @@ public enum BuiltIn {
                 .tyCon(Constructor.CORE_EXPR_PROJECT)
                 .tyCon(Constructor.CORE_EXPR_RECORD)
                 .tyCon(Constructor.CORE_EXPR_TUPLE)
+                .tyCon(Constructor.CORE_EXPR_UNIT_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_VAR)),
 
     DATE_MONTH(
@@ -5143,6 +5144,7 @@ public enum BuiltIn {
                     Keys.name("t")))),
     CORE_EXPR_TUPLE(
         Datatype.CORE_EXPR, "TUPLE", h -> Keys.list(Keys.name("expr"))),
+    CORE_EXPR_UNIT_LITERAL(Datatype.CORE_EXPR, "UNIT_LITERAL"),
     CORE_EXPR_VAR(
         Datatype.CORE_EXPR,
         "VAR",

@@ -42,6 +42,7 @@ datatype <a id='expr' href="#expr-impl">expr</a>
   | PLUS of expr * expr * Type.t
   | PROJECT of expr * expr
   | TUPLE of expr list
+  | UNIT_LITERAL
   | VAR of string * Type.t
 </pre>
 
