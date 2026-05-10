@@ -200,65 +200,76 @@ public class Plans {
    * datatype.
    */
   static Object reifyType(Type type) {
-    if (type instanceof PrimitiveType) {
-      switch ((PrimitiveType) type) {
-        case INT:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_INT.constructor);
-        case REAL:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_REAL.constructor);
-        case BOOL:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_BOOL.constructor);
-        case CHAR:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_CHAR.constructor);
-        case STRING:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_STRING.constructor);
-        case UNIT:
-          return ImmutableList.of(BuiltIn.Constructor.TYPE_UNIT.constructor);
-        default:
-          break;
-      }
-    }
-    if (type instanceof ListType) {
-      return ImmutableList.of(
-          BuiltIn.Constructor.TYPE_LIST.constructor,
-          reifyType(((ListType) type).elementType));
-    }
-    if (type instanceof FnType) {
-      FnType ft = (FnType) type;
-      return ImmutableList.of(
-          BuiltIn.Constructor.TYPE_FN.constructor,
-          ImmutableList.of(reifyType(ft.paramType), reifyType(ft.resultType)));
-    }
-    if (type instanceof TupleType) {
-      ImmutableList.Builder<Object> b = ImmutableList.builder();
-      for (Type t : ((TupleType) type).argTypes) {
-        b.add(reifyType(t));
-      }
-      return ImmutableList.of(
-          BuiltIn.Constructor.TYPE_TUPLE.constructor, b.build());
-    }
-    if (type instanceof RecordType) {
-      ImmutableList.Builder<Object> b = ImmutableList.builder();
-      for (Map.Entry<String, Type> e :
-          ((RecordType) type).argNameTypes.entrySet()) {
-        b.add(ImmutableList.of(e.getKey(), reifyType(e.getValue())));
-      }
-      return ImmutableList.of(
-          BuiltIn.Constructor.TYPE_RECORD.constructor, b.build());
-    }
-    if (type instanceof DataType) {
-      DataType dt = (DataType) type;
-      ImmutableList.Builder<Object> b = ImmutableList.builder();
-      for (Type t : dt.arguments) {
-        b.add(reifyType(t));
-      }
-      return ImmutableList.of(
-          BuiltIn.Constructor.TYPE_DATA.constructor,
-          ImmutableList.of(dt.name, b.build()));
-    }
-    if (type instanceof TypeVar) {
-      return ImmutableList.of(
-          BuiltIn.Constructor.TYPE_VAR.constructor, ((TypeVar) type).ordinal);
+    switch (type.op()) {
+      case ID:
+        // Primitive types: PrimitiveType.INT, REAL, BOOL, CHAR, STRING, UNIT.
+        switch ((PrimitiveType) type) {
+          case INT:
+            return ImmutableList.of(BuiltIn.Constructor.TYPE_INT.constructor);
+          case REAL:
+            return ImmutableList.of(BuiltIn.Constructor.TYPE_REAL.constructor);
+          case BOOL:
+            return ImmutableList.of(BuiltIn.Constructor.TYPE_BOOL.constructor);
+          case CHAR:
+            return ImmutableList.of(BuiltIn.Constructor.TYPE_CHAR.constructor);
+          case STRING:
+            return ImmutableList.of(
+                BuiltIn.Constructor.TYPE_STRING.constructor);
+          case UNIT:
+            return ImmutableList.of(BuiltIn.Constructor.TYPE_UNIT.constructor);
+        }
+        break;
+
+      case LIST:
+        return ImmutableList.of(
+            BuiltIn.Constructor.TYPE_LIST.constructor,
+            reifyType(((ListType) type).elementType));
+
+      case FUNCTION_TYPE:
+        FnType ft = (FnType) type;
+        return ImmutableList.of(
+            BuiltIn.Constructor.TYPE_FN.constructor,
+            ImmutableList.of(
+                reifyType(ft.paramType), reifyType(ft.resultType)));
+
+      case TUPLE_TYPE:
+        ImmutableList.Builder<Object> tupleArgs = ImmutableList.builder();
+        for (Type t : ((TupleType) type).argTypes) {
+          tupleArgs.add(reifyType(t));
+        }
+        return ImmutableList.of(
+            BuiltIn.Constructor.TYPE_TUPLE.constructor, tupleArgs.build());
+
+      case RECORD_TYPE:
+        ImmutableList.Builder<Object> recordArgs = ImmutableList.builder();
+        for (Map.Entry<String, Type> e :
+            ((RecordType) type).argNameTypes.entrySet()) {
+          recordArgs.add(ImmutableList.of(e.getKey(), reifyType(e.getValue())));
+        }
+        return ImmutableList.of(
+            BuiltIn.Constructor.TYPE_RECORD.constructor, recordArgs.build());
+
+      case DATA_TYPE:
+        DataType dt = (DataType) type;
+        if (dt.name.equals("bag")) {
+          return ImmutableList.of(
+              BuiltIn.Constructor.TYPE_BAG.constructor,
+              reifyType(dt.arguments.get(0)));
+        }
+        ImmutableList.Builder<Object> dataArgs = ImmutableList.builder();
+        for (Type t : dt.arguments) {
+          dataArgs.add(reifyType(t));
+        }
+        return ImmutableList.of(
+            BuiltIn.Constructor.TYPE_DATA.constructor,
+            ImmutableList.of(dt.name, dataArgs.build()));
+
+      case TY_VAR:
+        return ImmutableList.of(
+            BuiltIn.Constructor.TYPE_VAR.constructor, ((TypeVar) type).ordinal);
+
+      default:
+        break;
     }
     throw new UnsupportedOperationException(
         "Plan.core: cannot yet reify type "
