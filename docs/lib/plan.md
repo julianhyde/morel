@@ -34,20 +34,19 @@ optimization.
 ## Synopsis
 
 <pre>
-val <a id='core' href="#core-impl">core</a> : 'a -> Core.expr
+val <a id='core' href="#core-impl">core</a> : 'a -> {value: 'a, expr: Core.expr}
 </pre>
 
 <a id="core-impl"></a>
 <h3><code>core</code></h3>
 
-`core e` returns the typed Core form of `e` as a `Core.expr` value.
+`core e` returns a record containing the runtime value of `e` and a
+`Core.expr` value reflecting its typed Core form.
 
-The argument is type-checked but *not* evaluated; the compiler
-intercepts every call to `Plan.core` and emits a literal
-`Core.expr` value at the call site (analogous to `typeof`).
-
-Free variables in the argument resolve in the enclosing environment
-for type-checking, but appear in the output as `VAR` nodes — they
-are not folded to their runtime values.
+The compiler intercepts every call to `Plan.core`: it compiles `e`
+once and pairs its value with the statically-derived `Core.expr`.
+Free variables in `e` resolve in the enclosing environment for
+type-checking, but appear in the reified `expr` as `VAR` nodes —
+they are not folded to their runtime values.
 
 [//]: # (end:lib/plan)

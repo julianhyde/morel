@@ -489,10 +489,14 @@ public class Compiler {
             ordinalSlots[0]++; // signal that we are using an ordinal
             return Codes.ordinalGet(ordinalSlots);
           case PLAN_CORE:
-            // Plan.core: reify the typed Core of the argument as a
-            // runtime value of type Core.expr. The argument is *not*
-            // compiled normally; instead we walk it and emit a constant.
-            return Codes.constant(reifyCoreExpr(apply.arg));
+            // Plan.core: returns a record `{value: 'a, expr: Core.expr}`.
+            // Compile the argument once for `value`, and reify its typed
+            // Core for `expr`. Field order in the runtime tuple is
+            // alphabetical (`expr` < `value`).
+            Code planCoreValue = compile(cx, apply.arg);
+            Object planCoreExpr = reifyCoreExpr(apply.arg);
+            return Codes.tuple(
+                ImmutableList.of(Codes.constant(planCoreExpr), planCoreValue));
           default:
             if (true) {
               break;
@@ -621,10 +625,57 @@ public class Compiler {
         return ImmutableList.of(
             BuiltIn.Constructor.CORE_EXPR_INT_LITERAL.constructor,
             ((Core.Literal) exp).unwrap(Integer.class));
+      case APPLY:
+        Core.Apply ap = (Core.Apply) exp;
+        if (ap.fn.op == Op.FN_LITERAL) {
+          BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
+          switch (b) {
+            case Z_PLUS_INT:
+            case Z_PLUS_REAL:
+              List<Core.Exp> args = ((Core.Tuple) ap.arg).args;
+              return ImmutableList.of(
+                  BuiltIn.Constructor.CORE_EXPR_PLUS.constructor,
+                  ImmutableList.of(
+                      reifyCoreExpr(args.get(0)),
+                      reifyCoreExpr(args.get(1)),
+                      reifyType(ap.type)));
+            default:
+              break;
+          }
+        }
+        throw new UnsupportedOperationException(
+            "Plan.core: cannot yet reify APPLY (" + exp + ")");
       default:
         throw new UnsupportedOperationException(
             "Plan.core: cannot yet reify " + exp.op + " (" + exp + ")");
     }
+  }
+
+  /**
+   * Reifies a {@link Type} as a runtime value of the Morel-level {@code Type.t}
+   * datatype.
+   */
+  private Object reifyType(Type type) {
+    if (type instanceof PrimitiveType) {
+      switch ((PrimitiveType) type) {
+        case INT:
+          return ImmutableList.of(BuiltIn.Constructor.TYPE_INT.constructor);
+        case REAL:
+          return ImmutableList.of(BuiltIn.Constructor.TYPE_REAL.constructor);
+        case BOOL:
+          return ImmutableList.of(BuiltIn.Constructor.TYPE_BOOL.constructor);
+        case CHAR:
+          return ImmutableList.of(BuiltIn.Constructor.TYPE_CHAR.constructor);
+        case STRING:
+          return ImmutableList.of(BuiltIn.Constructor.TYPE_STRING.constructor);
+        case UNIT:
+          return ImmutableList.of(BuiltIn.Constructor.TYPE_UNIT.constructor);
+        default:
+          break;
+      }
+    }
+    throw new UnsupportedOperationException(
+        "Plan.core: cannot yet reify type " + type);
   }
 
   /**

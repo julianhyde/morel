@@ -21,26 +21,48 @@
 
 (*) Phase 1a, milestone M1: scalar smoke test.
 
-(*) `Plan.core` reifies the typed Core of an expression as a runtime
-(*) value of type `Core.expr`. The argument is type-checked but not
-(*) evaluated.
+(*) `Plan.core e` returns both the runtime value of `e` and a reified
+(*) `Core.expr` representing its typed Core form.
 
 (*) An integer literal reifies to `INT_LITERAL`.
 Plan.core 1;
-> val it = INT_LITERAL 1 : expr
+> val it = {expr=INT_LITERAL 1,value=1} : {expr:expr, value:int}
 
 Plan.core 0;
-> val it = INT_LITERAL 0 : expr
+> val it = {expr=INT_LITERAL 0,value=0} : {expr:expr, value:int}
 
 Plan.core ~5;
-> val it = INT_LITERAL ~5 : expr
+> val it = {expr=INT_LITERAL ~5,value=~5} : {expr:expr, value:int}
 
-(*) The argument is not evaluated: even an expression that would raise
-(*) at runtime is reified without raising.
-val q = Plan.core 42;
-> val q = INT_LITERAL 42 : expr
+(*) The result is a record; either field can be projected out.
+val r = Plan.core 42;
+> val r = {expr=INT_LITERAL 42,value=42} : {expr:expr, value:int}
 
-(*) The reified value is just data; it can be matched on.
-case Plan.core 7 of INT_LITERAL n => n;
+#value r;
+> val it = 42 : int
+
+#expr r;
+> val it = INT_LITERAL 42 : expr
+
+(*) The reified expr is just data; it can be matched on.
+case #expr (Plan.core 7) of INT_LITERAL n => n | _ => 0;
 > val it = 7 : int
 
+(*) M1: integer addition reifies to a `PLUS` node carrying the
+(*) operand type.
+Plan.core (1 + 2);
+> val it = {expr=PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),value=3}
+>   : {expr:expr, value:int}
+
+(*) Both summands are themselves reified.
+Plan.core (3 + 4);
+> val it = {expr=PLUS (INT_LITERAL 3,INT_LITERAL 4,T_INT),value=7}
+>   : {expr:expr, value:int}
+
+(*) Nested addition reifies as nested PLUS.
+Plan.core ((1 + 2) + 4);
+> val it =
+>   {expr=PLUS (PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),INT_LITERAL 4,T_INT),
+>    value=7} : {expr:expr, value:int}
+
+(*) End plan.smli

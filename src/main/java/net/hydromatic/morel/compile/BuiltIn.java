@@ -2736,19 +2736,29 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
   /**
-   * Function "Plan.core", of type "&alpha; &rarr; Core.expr".
+   * Function "Plan.core", of type "&alpha; &rarr; {value: &alpha;, expr:
+   * Core.expr}".
    *
-   * <p>Reifies the typed Core expression of its argument as a runtime value.
-   * The argument is type-checked but not evaluated; the compiler intercepts
-   * calls to this function and emits a literal Core.expr value at the call site
-   * (analogous to {@code typeof}).
+   * <p>Returns both the runtime value and the reified typed Core of the
+   * argument. The compiler intercepts calls to this function: it compiles the
+   * argument once and pairs its value with the statically-derived {@code
+   * Core.expr}.
    */
   PLAN_CORE(
       "Plan",
       "core",
       ts ->
           ts.forallType(
-              1, h -> ts.fnType(h.get(0), ts.lookup(Datatype.CORE_EXPR)))),
+              1,
+              h ->
+                  ts.fnType(
+                      h.get(0),
+                      ts.recordType(
+                          RecordType.map(
+                              "value",
+                              h.get(0),
+                              "expr",
+                              ts.lookup(Datatype.CORE_EXPR)))))),
 
   /**
    * Function "Range.contains", of type "&alpha; range &rarr; &alpha; &rarr;
@@ -4612,10 +4622,13 @@ public enum BuiltIn {
   public static void dataTypes(TypeSystem typeSystem, List<Binding> bindings) {
     // RANGE must be registered before CONTINUOUS_SET and DISCRETE_SET, because
     // their constructors reference the range type. Pre-register it here so the
-    // dependency is satisfied regardless of alphabetical enum order.
+    // dependency is satisfied regardless of alphabetical enum order. Likewise,
+    // TYPE must be registered before CORE_EXPR, since CORE_EXPR's PLUS
+    // constructor (and others) carries a `Type.t` payload.
     defineType(typeSystem, bindings, Datatype.RANGE);
+    defineType(typeSystem, bindings, Datatype.TYPE);
     for (Datatype datatype : Datatype.values()) {
-      if (datatype != Datatype.RANGE) {
+      if (datatype != Datatype.RANGE && datatype != Datatype.TYPE) {
         defineType(typeSystem, bindings, datatype);
       }
     }
@@ -4766,7 +4779,9 @@ public enum BuiltIn {
         "expr",
         false,
         0,
-        h -> h.tyCon(Constructor.CORE_EXPR_INT_LITERAL)),
+        h ->
+            h.tyCon(Constructor.CORE_EXPR_INT_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_PLUS)),
 
     DATE_MONTH(
         "Date",
@@ -5061,6 +5076,13 @@ public enum BuiltIn {
             Keys.list(
                 Keys.apply(Keys.name("range"), ImmutableList.of(h.get(0))))),
     CORE_EXPR_INT_LITERAL(Datatype.CORE_EXPR, "INT_LITERAL", h -> INT.key()),
+    CORE_EXPR_PLUS(
+        Datatype.CORE_EXPR,
+        "PLUS",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
     DATE_MONTH_APR(Datatype.DATE_MONTH, "Apr"),
     DATE_MONTH_AUG(Datatype.DATE_MONTH, "Aug"),
     DATE_MONTH_DEC(Datatype.DATE_MONTH, "Dec"),

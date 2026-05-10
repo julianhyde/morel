@@ -32,7 +32,7 @@ inspect, and pretty-print expressions as ordinary values.
 ## Synopsis
 
 <pre>
-datatype <a id='expr' href="#expr-impl">expr</a> = INT_LITERAL of int
+datatype <a id='expr' href="#expr-impl">expr</a> = INT_LITERAL of int | PLUS of expr * expr * Type.t
 </pre>
 
 <a id="expr-impl"></a>
@@ -40,6 +40,6 @@ datatype <a id='expr' href="#expr-impl">expr</a> = INT_LITERAL of int
 
 is a Morel expression in its typed, post-desugar internal form.
 The constructor set will grow as the planner work proceeds; for now
-only the integer-literal form is reified.
+only integer literals and integer/real addition are reified.
 
 [//]: # (end:lib/core)
