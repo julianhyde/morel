@@ -19,9 +19,11 @@
 package net.hydromatic.morel.eval;
 
 import static com.google.common.collect.ImmutableList.of;
+import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
@@ -34,7 +36,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeVar;
-import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.PairList;
 
 /**
  * Helpers for the {@code Plan} structure.
@@ -87,25 +89,28 @@ public class Plans {
             of(fnBi.mlName, reifyType(exp.type)));
 
       case TUPLE:
-        Core.Tuple tup = (Core.Tuple) exp;
-        if (tup.type instanceof RecordType
-            && !(tup.type instanceof TupleType)) {
-          // Named-field record. Names and args are parallel lists in
-          // sorted-by-name order.
-          List<String> recordNames =
-              ImmutableList.copyOf(
-                  ((RecordType) tup.type).argNameTypes.keySet());
+        final Core.Tuple tup = (Core.Tuple) exp;
+        if (tup.type instanceof RecordType) {
+          // Named-field record. argNameTypes iterates in canonical
+          // sorted-by-name order, parallel to tup.args. Pair the names
+          // with the args into a PairList and transform.
+          ImmutableMap.Builder<String, Core.Exp> nameArg =
+              ImmutableMap.builder();
+          forEach(
+              ((RecordType) tup.type).argNameTypes.keySet(),
+              tup.args,
+              nameArg::put);
           ImmutableList<Object> fields =
-              transformEager(
-                  Pair.zip(recordNames, tup.args),
-                  p -> of(p.left, reifyExp(p.right)));
+              PairList.viewOf(nameArg.build())
+                  .transformEager((name, e) -> of(name, reifyExp(e)));
           return of(
               BuiltIn.Constructor.CORE_EXPR_RECORD.constructor,
               of(fields, reifyType(tup.type)));
+        } else {
+          return of(
+              BuiltIn.Constructor.CORE_EXPR_TUPLE.constructor,
+              transformEager(tup.args, Plans::reifyExp));
         }
-        return of(
-            BuiltIn.Constructor.CORE_EXPR_TUPLE.constructor,
-            transformEager(tup.args, Plans::reifyExp));
 
       case APPLY:
         Core.Apply ap = (Core.Apply) exp;
