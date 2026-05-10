@@ -18,9 +18,10 @@
  */
 package net.hydromatic.morel.eval;
 
+import static net.hydromatic.morel.util.Static.transformEager;
+
 import com.google.common.collect.ImmutableList;
 import java.util.List;
-import java.util.Map;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -32,6 +33,7 @@ import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeVar;
+import net.hydromatic.morel.util.Pair;
 
 /**
  * Helpers for the {@code Plan} structure.
@@ -87,23 +89,22 @@ public class Plans {
         Core.Tuple tup = (Core.Tuple) exp;
         if (tup.type instanceof RecordType
             && !(tup.type instanceof TupleType)) {
-          // Named-field record.
-          RecordType rt = (RecordType) tup.type;
-          ImmutableList.Builder<Object> fields = ImmutableList.builder();
-          int i = 0;
-          for (String name : rt.argNameTypes.keySet()) {
-            fields.add(ImmutableList.of(name, reifyExp(tup.args.get(i++))));
-          }
+          // Named-field record. Names and args are parallel lists in
+          // sorted-by-name order.
+          List<String> recordNames =
+              ImmutableList.copyOf(
+                  ((RecordType) tup.type).argNameTypes.keySet());
+          ImmutableList<Object> fields =
+              transformEager(
+                  Pair.zip(recordNames, tup.args),
+                  p -> ImmutableList.of(p.left, reifyExp(p.right)));
           return ImmutableList.of(
               BuiltIn.Constructor.CORE_EXPR_RECORD.constructor,
-              ImmutableList.of(fields.build(), reifyType(tup.type)));
-        }
-        ImmutableList.Builder<Object> tupArgs = ImmutableList.builder();
-        for (Core.Exp e : tup.args) {
-          tupArgs.add(reifyExp(e));
+              ImmutableList.of(fields, reifyType(tup.type)));
         }
         return ImmutableList.of(
-            BuiltIn.Constructor.CORE_EXPR_TUPLE.constructor, tupArgs.build());
+            BuiltIn.Constructor.CORE_EXPR_TUPLE.constructor,
+            transformEager(tup.args, Plans::reifyExp));
 
       case APPLY:
         Core.Apply ap = (Core.Apply) exp;
@@ -121,13 +122,11 @@ public class Plans {
         if (ap.fn.op == Op.FN_LITERAL) {
           BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
           if (b == BuiltIn.Z_LIST) {
-            ImmutableList.Builder<Object> elems = ImmutableList.builder();
-            for (Core.Exp e : ((Core.Tuple) ap.arg).args) {
-              elems.add(reifyExp(e));
-            }
             return ImmutableList.of(
                 BuiltIn.Constructor.CORE_EXPR_LIST_LITERAL.constructor,
-                ImmutableList.of(elems.build(), reifyType(ap.type)));
+                ImmutableList.of(
+                    transformEager(((Core.Tuple) ap.arg).args, Plans::reifyExp),
+                    reifyType(ap.type)));
           }
         }
         // Record-selector application becomes FIELD: (#name r) ->
@@ -233,21 +232,16 @@ public class Plans {
                 reifyType(ft.paramType), reifyType(ft.resultType)));
 
       case TUPLE_TYPE:
-        ImmutableList.Builder<Object> tupleArgs = ImmutableList.builder();
-        for (Type t : ((TupleType) type).argTypes) {
-          tupleArgs.add(reifyType(t));
-        }
         return ImmutableList.of(
-            BuiltIn.Constructor.TYPE_TUPLE.constructor, tupleArgs.build());
+            BuiltIn.Constructor.TYPE_TUPLE.constructor,
+            transformEager(((TupleType) type).argTypes, Plans::reifyType));
 
       case RECORD_TYPE:
-        ImmutableList.Builder<Object> recordArgs = ImmutableList.builder();
-        for (Map.Entry<String, Type> e :
-            ((RecordType) type).argNameTypes.entrySet()) {
-          recordArgs.add(ImmutableList.of(e.getKey(), reifyType(e.getValue())));
-        }
         return ImmutableList.of(
-            BuiltIn.Constructor.TYPE_RECORD.constructor, recordArgs.build());
+            BuiltIn.Constructor.TYPE_RECORD.constructor,
+            transformEager(
+                ((RecordType) type).argNameTypes.entrySet(),
+                e -> ImmutableList.of(e.getKey(), reifyType(e.getValue()))));
 
       case DATA_TYPE:
         DataType dt = (DataType) type;
@@ -256,13 +250,10 @@ public class Plans {
               BuiltIn.Constructor.TYPE_BAG.constructor,
               reifyType(dt.arguments.get(0)));
         }
-        ImmutableList.Builder<Object> dataArgs = ImmutableList.builder();
-        for (Type t : dt.arguments) {
-          dataArgs.add(reifyType(t));
-        }
         return ImmutableList.of(
             BuiltIn.Constructor.TYPE_DATA.constructor,
-            ImmutableList.of(dt.name, dataArgs.build()));
+            ImmutableList.of(
+                dt.name, transformEager(dt.arguments, Plans::reifyType)));
 
       case TY_VAR:
         return ImmutableList.of(
