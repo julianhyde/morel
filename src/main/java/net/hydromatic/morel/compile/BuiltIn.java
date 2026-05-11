@@ -4781,10 +4781,13 @@ public enum BuiltIn {
         0,
         h ->
             h.tyCon(Constructor.CORE_EXPR_APPLY)
+                .tyCon(Constructor.CORE_EXPR_BOOL_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_CHAR_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_FIELD)
                 .tyCon(Constructor.CORE_EXPR_FILTER)
                 .tyCon(Constructor.CORE_EXPR_INT_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_LIST_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_REAL_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_ORDER)
                 .tyCon(Constructor.CORE_EXPR_PLUS)
                 .tyCon(Constructor.CORE_EXPR_PROJECT)
@@ -5100,6 +5103,8 @@ public enum BuiltIn {
             Keys.tuple(
                 ImmutableList.of(
                     Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    CORE_EXPR_BOOL_LITERAL(Datatype.CORE_EXPR, "BOOL_LITERAL", h -> BOOL.key()),
+    CORE_EXPR_CHAR_LITERAL(Datatype.CORE_EXPR, "CHAR_LITERAL", h -> CHAR.key()),
     CORE_EXPR_FIELD(
         Datatype.CORE_EXPR,
         "FIELD",
@@ -5137,6 +5142,7 @@ public enum BuiltIn {
         "PROJECT",
         h ->
             Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    CORE_EXPR_REAL_LITERAL(Datatype.CORE_EXPR, "REAL_LITERAL", h -> REAL.key()),
     // ML name "E_RECORD" to avoid clashing with the `Variant` datatype's
     // RECORD constructor.
     CORE_EXPR_RECORD(

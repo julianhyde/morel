@@ -118,15 +118,30 @@ public class Plans {
 
     Object reifyExp(Core.Exp exp) {
       switch (exp.op) {
+          // lint: sort until '#}' where '##case '
         case INT_LITERAL:
           return iof(
               CORE_EXPR_INT_LITERAL,
               ((Core.Literal) exp).unwrap(Integer.class));
 
+        case REAL_LITERAL:
+          return iof(
+              CORE_EXPR_REAL_LITERAL, ((Core.Literal) exp).unwrap(Float.class));
+
         case STRING_LITERAL:
           return iof(
               CORE_EXPR_STRING_LITERAL,
               ((Core.Literal) exp).unwrap(String.class));
+
+        case CHAR_LITERAL:
+          return iof(
+              CORE_EXPR_CHAR_LITERAL,
+              ((Core.Literal) exp).unwrap(Character.class));
+
+        case BOOL_LITERAL:
+          return iof(
+              CORE_EXPR_BOOL_LITERAL,
+              ((Core.Literal) exp).unwrap(Boolean.class));
 
         case UNIT_LITERAL:
           return iof(CORE_EXPR_UNIT_LITERAL);
@@ -225,6 +240,7 @@ public class Plans {
       boolean haveScan = false;
       for (Core.FromStep step : from.steps) {
         switch (step.op) {
+            // lint: sort until '#}' where '##case '
           case SCAN:
             Core.Scan scan = (Core.Scan) step;
             if (!haveScan) {
@@ -261,6 +277,7 @@ public class Plans {
      */
     Object reifyType(Type type) {
       switch (type.op()) {
+          // lint: sort until '#}' where '##case '
         case ID:
           // Primitive types: PrimitiveType.INT, REAL, BOOL, CHAR, STRING, UNIT.
           switch ((PrimitiveType) type) {
@@ -338,77 +355,62 @@ public class Plans {
    * @throws AssertionError if any violation is found
    */
   public static void checkCanonical(Object expr) {
-    List<String> violations = new ArrayList<>();
-    collectViolations(expr, violations);
-    if (!violations.isEmpty()) {
+    CanonicalityChecker checker = new CanonicalityChecker();
+    checker.check(expr);
+    if (!checker.violations.isEmpty()) {
       StringBuilder buf = new StringBuilder("Plan canonicality violations:");
-      for (String v : violations) {
+      for (String v : checker.violations) {
         buf.append('\n').append("  ").append(v);
       }
       throw new AssertionError(buf.toString());
     }
   }
 
-  /** Walks a reified {@code Core.expr} value, accumulating violations. */
-  private static void collectViolations(Object expr, List<String> out) {
-    if (!(expr instanceof List)) {
-      return;
-    }
-    List<?> list = (List<?>) expr;
-    if (list.isEmpty() || !(list.get(0) instanceof String)) {
-      return;
-    }
-    String tag = (String) list.get(0);
-    switch (tag) {
-      case "INT_LITERAL":
-      case "UNIT_LITERAL":
-      case "VAR":
-        // No sub-expressions to check.
-        break;
-      case "TUPLE":
-        List<?> tupArgs = (List<?>) list.get(1);
-        if (tupArgs.isEmpty()) {
-          out.add("TUPLE [] should be UNIT_LITERAL");
-        } else {
-          tupArgs.forEach(a -> collectViolations(a, out));
+  /**
+   * Walks a reified {@code Core.expr} value tree, accumulating canonicality
+   * violations.
+   *
+   * <p>Most reified nodes have the shape {@code [tag, payload]} (with {@code
+   * tag} a string and {@code payload} either a primitive or a list of
+   * children); the generic walk descends into anything that's a List, so per-
+   * tag handling is needed only for nodes with extra checks. Currently that's
+   * just {@code TUPLE} and {@code E_RECORD}, which can't be empty.
+   */
+  private static class CanonicalityChecker {
+    final List<String> violations = new ArrayList<>();
+
+    void check(Object node) {
+      if (!(node instanceof List)) {
+        return;
+      }
+      List<?> list = (List<?>) node;
+      if (!list.isEmpty() && list.get(0) instanceof String) {
+        switch ((String) list.get(0)) {
+          case "E_RECORD":
+            // ["E_RECORD", [[fields...], type]]
+            if (list.size() == 2
+                && ((List<?>) ((List<?>) list.get(1)).get(0)).isEmpty()) {
+              violations.add("E_RECORD ([], _) should be UNIT_LITERAL");
+            }
+            break;
+          case "TUPLE":
+            // ["TUPLE", [args...]]
+            if (list.size() == 2 && ((List<?>) list.get(1)).isEmpty()) {
+              violations.add("TUPLE [] should be UNIT_LITERAL");
+            }
+            break;
+          default:
+            // No tag-specific rule.
+            break;
         }
-        break;
-      case "E_RECORD":
-        List<?> recPair = (List<?>) list.get(1);
-        List<?> fields = (List<?>) recPair.get(0);
-        if (fields.isEmpty()) {
-          out.add("E_RECORD ([], _) should be UNIT_LITERAL");
-        } else {
-          for (Object f : fields) {
-            collectViolations(((List<?>) f).get(1), out);
-          }
-        }
-        break;
-      case "PLUS":
-      case "APPLY":
-        List<?> binArgs = (List<?>) list.get(1);
-        collectViolations(binArgs.get(0), out);
-        collectViolations(binArgs.get(1), out);
-        break;
-      case "FILTER":
-      case "PROJECT":
-        List<?> relArgs = (List<?>) list.get(1);
-        collectViolations(relArgs.get(0), out);
-        collectViolations(relArgs.get(1), out);
-        break;
-      case "FIELD":
-        List<?> fieldArgs = (List<?>) list.get(1);
-        collectViolations(fieldArgs.get(0), out);
-        break;
-      case "LIST_LITERAL":
-        List<?> llPair = (List<?>) list.get(1);
-        List<?> elems = (List<?>) llPair.get(0);
-        elems.forEach(e -> collectViolations(e, out));
-        break;
-      default:
-        // Unknown constructor: don't recurse. (Could be a type tag or a
-        // future Core.expr constructor.)
-        break;
+      }
+      // Recurse into every element. Non-list elements (strings, numbers) are
+      // skipped at the top of `check`. The recursion visits all sub-structure
+      // uniformly without needing to know which positions of each constructor
+      // hold sub-expressions vs. types vs. names.
+      for (Object e : list) {
+        check(e);
+      }
     }
   }
 }

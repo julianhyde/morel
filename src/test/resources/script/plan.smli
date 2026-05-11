@@ -69,6 +69,26 @@ Plan.core ((1 + 2) + 4);
 >   {expr=PLUS (PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),INT_LITERAL 4,T_INT),
 >    value=7} : {expr:expr, value:int}
 
+(*) Other literal kinds reify to their dedicated constructors.
+Plan.core 3.14;
+> val it = {expr=REAL_LITERAL 3.14,value=3.14} : {expr:expr, value:real}
+
+Plan.core "hello";
+> val it = {expr=STRING_LITERAL "hello",value="hello"}
+>   : {expr:expr, value:string}
+
+Plan.core #"a";
+> val it = {expr=CHAR_LITERAL #"a",value=#"a"} : {expr:expr, value:char}
+
+(*) `true` and `false` reify as VAR (they are bindings in the environment,
+(*) not Op.BOOL_LITERAL nodes); the BOOL_LITERAL constructor handles
+(*) compiler-synthesized boolean literals (e.g., in `andalso` desugaring).
+Plan.core true;
+> val it = {expr=VAR ("true",T_BOOL),value=true} : {expr:expr, value:bool}
+
+Plan.core false;
+> val it = {expr=VAR ("false",T_BOOL),value=false} : {expr:expr, value:bool}
+
 (*) Unit reifies as UNIT_LITERAL — never as TUPLE [] or E_RECORD ([], _),
 (*) which would be equivalent but non-canonical.
 Plan.core ();

@@ -34,6 +34,8 @@ inspect, and pretty-print expressions as ordinary values.
 <pre>
 datatype <a id='expr' href="#expr-impl">expr</a>
   = APPLY of expr * expr * Type.t
+  | BOOL_LITERAL of bool
+  | CHAR_LITERAL of char
   | E_RECORD of (string * expr) list * Type.t
   | FIELD of expr * string * Type.t
   | FILTER of expr * expr
@@ -42,6 +44,7 @@ datatype <a id='expr' href="#expr-impl">expr</a>
   | ORDER of expr * expr
   | PLUS of expr * expr * Type.t
   | PROJECT of expr * expr
+  | REAL_LITERAL of real
   | STRING_LITERAL of string
   | TUPLE of expr list
   | UNIT_LITERAL
