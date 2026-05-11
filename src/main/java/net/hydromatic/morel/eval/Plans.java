@@ -166,6 +166,22 @@ public class Plans {
           BuiltIn fnBi = ((Core.Literal) exp).unwrap(BuiltIn.class);
           return iof(CORE_EXPR_VAR, of(fnBi.mlName, reifyType(exp.type)));
 
+        case VALUE_LITERAL:
+          // The Inliner replaces an Id whose value is statically known
+          // with a VALUE_LITERAL carrying the value. For constructor values
+          // (list whose first element is the constructor's name), reify as
+          // a VAR with that name; otherwise we lose the source identifier
+          // and fall back to a placeholder.
+          Object value = ((Core.Literal) exp).unwrap(Object.class);
+          if (value instanceof List
+              && !((List<?>) value).isEmpty()
+              && ((List<?>) value).get(0) instanceof String) {
+            return iof(
+                CORE_EXPR_VAR,
+                of((String) ((List<?>) value).get(0), reifyType(exp.type)));
+          }
+          return iof(CORE_EXPR_VAR, of("<value>", reifyType(exp.type)));
+
         case TUPLE:
           final Core.Tuple tup = (Core.Tuple) exp;
           // Canonicalize: an empty tuple or empty record is unit.
