@@ -25,6 +25,7 @@ import static net.hydromatic.morel.util.Static.allMatch;
 import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skipLast;
+import static net.hydromatic.morel.util.Static.transform;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
@@ -199,11 +200,9 @@ public class FromBuilder {
       } else if (pat instanceof Core.TuplePat) {
         final Core.TuplePat tuplePat = (Core.TuplePat) pat;
         nameExps =
-            PairList.fromTransformed(
-                tuplePat.args,
-                lastStep.env.bindings,
-                (arg, binding, c) ->
-                    c.accept(((Core.IdPat) arg).name, core.id(binding.id)));
+            PairList.fromZip(
+                transform(tuplePat.args, arg -> ((Core.IdPat) arg).name),
+                transform(lastStep.env.bindings, b -> core.id(b.id)));
         env = null;
       } else if (!this.bindings.isEmpty()) {
         // With at least one binding, and one new variable, the output will be
@@ -235,14 +234,13 @@ public class FromBuilder {
               return yield_(yieldStep.exp);
             }
           }
-          final PairList<String, Core.Exp> singleton =
-              PairList.of(idPat.name, yieldStep.exp);
+          nameExps = PairList.of(idPat.name, yieldStep.exp);
           final Core.StepEnv env2 =
               Core.StepEnv.of(
                   ImmutableList.of(Binding.of(idPat)),
                   true,
                   lastStep.env.ordered);
-          return yield_(false, env2, core.record(typeSystem, singleton), true);
+          return yield_(false, env2, core.record(typeSystem, nameExps), true);
         }
         final Binding binding = lastStep.env.bindings.get(0);
         nameExps = PairList.of(idPat.name, core.id(binding.id));

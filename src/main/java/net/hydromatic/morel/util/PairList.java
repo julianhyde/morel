@@ -81,6 +81,22 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
     return builder.build();
   }
 
+  /** Creates a PairList whose contents are a copy of a pair of collections. */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  static <T, U> PairList<T, U> fromZip(
+      Iterable<? extends T> list1, Iterable<? extends U> list2) {
+    final List<Object> list = new ArrayList<>();
+    // lint:skip 1 "should be static import"
+    Pair.forEach(
+        list1,
+        list2,
+        (t, u) -> {
+          list.add(t);
+          list.add(u);
+        });
+    return new PairLists.MutablePairList(list);
+  }
+
   /** Creates a PairList by transforming the elements of an iterable. */
   static <R, T, U> PairList<T, U> fromTransformed(
       Iterable<? extends R> iterable, BiTransformer<R, T, U> transformer) {
@@ -105,7 +121,7 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
       Iterable<? extends R> iterable2,
       BiBiTransformer<S, R, T, U> transformer) {
     List<Object> list = new ArrayList<>();
-    // lint:skip 1
+    // lint:skip 1 "should be static import"
     Pair.forEach(
         iterable1,
         iterable2,

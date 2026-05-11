@@ -23,6 +23,7 @@ import static com.google.common.collect.Iterables.getLast;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.compile.FreeFinder.freePats;
+import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -2351,10 +2352,9 @@ class Generators {
       final Core.RecordPat recordPat = (Core.RecordPat) pat;
       return core.record(
           ts,
-          PairList.fromTransformed(
+          PairList.fromZip(
               recordPat.type().argNameTypes.keySet(),
-              recordPat.args,
-              (name, arg, c) -> c.accept(name, patToExp(ts, arg))));
+              transform(recordPat.args, arg -> patToExp(ts, arg))));
     }
     throw new AssertionError("unexpected pattern type: " + pat.op);
   }

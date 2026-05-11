@@ -20,6 +20,7 @@ package net.hydromatic.morel.eval;
 
 import static com.google.common.collect.ImmutableList.of;
 import static net.hydromatic.morel.compile.BuiltIn.Constructor.*;
+import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -112,10 +113,9 @@ public class Plans {
           // sorted-by-name order, parallel to tup.args. Zip the names
           // with the reified args into a PairList in one pass.
           final PairList<String, Object> fields =
-              PairList.<String, Core.Exp, String, Object>fromTransformed(
+              PairList.fromZip(
                   ((RecordType) tup.type).argNameTypes.keySet(),
-                  tup.args,
-                  (name, e, c) -> c.accept(name, reifyExp(e)));
+                  transform(tup.args, Plans::reifyExp));
           return of(
               CORE_EXPR_RECORD.constructor,
               of(

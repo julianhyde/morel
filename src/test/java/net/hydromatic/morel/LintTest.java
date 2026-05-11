@@ -785,7 +785,7 @@ public class LintTest {
 
   /** Matches "// lint:skip" or "// lint:skip N". */
   private static final Pattern LINT_SKIP_PATTERN =
-      Pattern.compile("// lint:skip(?: (\\d+))?\\s*$");
+      Pattern.compile("// lint:skip(?: (\\d+))?\\s*");
 
   /** Returns the number of occurrences of a string in a string. */
   private static int count(String s, String sub) {
