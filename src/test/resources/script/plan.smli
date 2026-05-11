@@ -172,4 +172,24 @@ Plan.core (from e in scott.emps where e.job = "CLERK" order (e.deptno, DESC e.sa
 >   : {expr:expr,
 >      value:{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list}
 
+(*) Closure-capture: a lambda built via Plan.core captures the
+(*) values of free variables in its lexical environment, just like an
+(*) ordinary closure. The reified `expr` reflects those captured
+(*) values (the Inliner replaces VAR "n" with its bound value at the
+(*) time of Plan.core), and the runtime `value` is a closure that
+(*) does NOT see later re-bindings of `n`.
+val n = 10;
+> val n = 10 : int
+val r = Plan.core (fn x => x + n);
+> val r = {expr=FN ("x",PLUS (VAR ("x",T_INT),INT_LITERAL 10,T_INT),T_FN (T_INT,T_INT)),value=fn}
+>   : {expr:expr, value:int -> int}
+#value r 5;
+> val it = 15 : int
+(*) Shadow n with a new top-level binding. The closure still uses
+(*) the captured value of 10, so the result remains 15.
+val n = 100;
+> val n = 100 : int
+#value r 5;
+> val it = 15 : int
+
 (*) End plan.smli
