@@ -25,7 +25,9 @@ import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -79,152 +81,273 @@ public class Plans {
     return fn.op == Op.ID && ((Core.Id) fn).idPat.name.equals("op +");
   }
 
-  /** Reifies a Core expression as a {@code Core.expr} value. */
+  /**
+   * Reifies a Core expression as a {@code Core.expr} value. Sub-expressions
+   * (and sub-types) that are structurally equal share the same object — e.g.
+   * within a single call, {@code int list} appears as one cached value wherever
+   * it occurs, and {@code 1 + 2} as one cached value if it occurs twice.
+   */
   public static Object reifyExp(Core.Exp exp) {
-    switch (exp.op) {
-      case INT_LITERAL:
-        return of(
-            CORE_EXPR_INT_LITERAL.constructor,
-            ((Core.Literal) exp).unwrap(Integer.class));
-
-      case STRING_LITERAL:
-        return of(
-            CORE_EXPR_STRING_LITERAL.constructor,
-            ((Core.Literal) exp).unwrap(String.class));
-
-      case UNIT_LITERAL:
-        return of(CORE_EXPR_UNIT_LITERAL.constructor);
-
-      case ID:
-        Core.Id id = (Core.Id) exp;
-        return of(
-            CORE_EXPR_VAR.constructor, of(id.idPat.name, reifyType(id.type)));
-
-      case FN_LITERAL:
-        // A bare reference to a built-in (e.g. `op elem` resolved to a
-        // FN_LITERAL): reify as VAR carrying the built-in's ML name.
-        BuiltIn fnBi = ((Core.Literal) exp).unwrap(BuiltIn.class);
-        return of(
-            CORE_EXPR_VAR.constructor, of(fnBi.mlName, reifyType(exp.type)));
-
-      case TUPLE:
-        final Core.Tuple tup = (Core.Tuple) exp;
-        // Canonicalize: an empty tuple or empty record is unit.
-        if (tup.args.isEmpty()) {
-          return of(CORE_EXPR_UNIT_LITERAL.constructor);
-        }
-        if (tup.type instanceof RecordType) {
-          // Named-field record. argNameTypes iterates in canonical
-          // sorted-by-name order, parallel to tup.args. Zip the names
-          // with the reified args into a PairList in one pass.
-          final PairList<String, Object> fields =
-              PairList.fromZip(
-                  ((RecordType) tup.type).argNameTypes.keySet(),
-                  transform(tup.args, Plans::reifyExp));
-          return of(
-              CORE_EXPR_RECORD.constructor,
-              of(
-                  fields.transformEager(ImmutableList::of),
-                  reifyType(tup.type)));
-        } else {
-          return of(
-              CORE_EXPR_TUPLE.constructor,
-              transformEager(tup.args, Plans::reifyExp));
-        }
-
-      case APPLY:
-        Core.Apply ap = (Core.Apply) exp;
-        // Recognize `op +` (whether arrived as FN_LITERAL of Z_PLUS_INT/REAL
-        // or as the Id "op +") and reify as PLUS.
-        if (isOpPlus(ap.fn)) {
-          List<Core.Exp> args = ((Core.Tuple) ap.arg).args;
-          return of(
-              CORE_EXPR_PLUS.constructor,
-              of(
-                  reifyExp(args.get(0)),
-                  reifyExp(args.get(1)),
-                  reifyType(ap.type)));
-        }
-        if (ap.fn.op == Op.FN_LITERAL) {
-          BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
-          if (b == BuiltIn.Z_LIST) {
-            return of(
-                CORE_EXPR_LIST_LITERAL.constructor,
-                of(
-                    transformEager(((Core.Tuple) ap.arg).args, Plans::reifyExp),
-                    reifyType(ap.type)));
-          }
-        }
-        // Record-selector application becomes FIELD: (#name r) ->
-        // FIELD(r, name, t).
-        if (ap.fn.op == Op.RECORD_SELECTOR) {
-          Core.RecordSelector sel = (Core.RecordSelector) ap.fn;
-          return of(
-              CORE_EXPR_FIELD.constructor,
-              of(reifyExp(ap.arg), sel.fieldName(), reifyType(ap.type)));
-        }
-        // General application: APPLY(fn, arg, type).
-        return of(
-            CORE_EXPR_APPLY.constructor,
-            of(reifyExp(ap.fn), reifyExp(ap.arg), reifyType(ap.type)));
-
-      case FROM:
-        return reifyFrom((Core.From) exp);
-
-      default:
-        throw new UnsupportedOperationException(
-            "Plan.core: cannot yet reify " + exp.op + " (" + exp + ")");
-    }
+    return new Reifier().reifyExp(exp);
   }
 
   /**
-   * Reifies a {@link Core.From} into a relational tree of FILTER / PROJECT /
-   * VAR nodes. Each step reads the variable bound by the preceding scan via
-   * {@code VAR "<name>"}; scoping is implicit (the bound variable is in scope
-   * for steps that follow).
+   * Holds a per-call interning cache. Each {@code reifyExp} and {@code
+   * reifyType} method ends in {@link #intern}, so equal-by-structure
+   * sub-results share a single object.
    */
-  private static Object reifyFrom(Core.From from) {
-    // An empty `from` (no steps) evaluates to the singleton `[()]` of type
-    // `unit list`. Reify it as a LIST_LITERAL containing a single TUPLE [].
-    Object current = EMPTY_FROM_EXPR;
-    boolean haveScan = false;
-    for (Core.FromStep step : from.steps) {
-      switch (step.op) {
-        case SCAN:
-          Core.Scan scan = (Core.Scan) step;
-          if (!haveScan) {
-            current = reifyExp(scan.exp);
-            haveScan = true;
-          } else {
-            throw new UnsupportedOperationException(
-                "Plan.core: multi-scan `from` not yet supported");
+  private static class Reifier {
+    private final Map<Object, Object> cache = new HashMap<>();
+
+    /** Returns the canonical instance for {@code value}. */
+    @SuppressWarnings("unchecked")
+    private <T> T intern(T value) {
+      Object existing = cache.putIfAbsent(value, value);
+      return existing == null ? value : (T) existing;
+    }
+
+    Object reifyExp(Core.Exp exp) {
+      switch (exp.op) {
+        case INT_LITERAL:
+          return intern(
+              of(
+                  CORE_EXPR_INT_LITERAL.constructor,
+                  ((Core.Literal) exp).unwrap(Integer.class)));
+
+        case STRING_LITERAL:
+          return intern(
+              of(
+                  CORE_EXPR_STRING_LITERAL.constructor,
+                  ((Core.Literal) exp).unwrap(String.class)));
+
+        case UNIT_LITERAL:
+          return intern(of(CORE_EXPR_UNIT_LITERAL.constructor));
+
+        case ID:
+          Core.Id id = (Core.Id) exp;
+          return intern(
+              of(
+                  CORE_EXPR_VAR.constructor,
+                  of(id.idPat.name, reifyType(id.type))));
+
+        case FN_LITERAL:
+          // A bare reference to a built-in (e.g. `op elem` resolved to a
+          // FN_LITERAL): reify as VAR carrying the built-in's ML name.
+          BuiltIn fnBi = ((Core.Literal) exp).unwrap(BuiltIn.class);
+          return intern(
+              of(
+                  CORE_EXPR_VAR.constructor,
+                  of(fnBi.mlName, reifyType(exp.type))));
+
+        case TUPLE:
+          final Core.Tuple tup = (Core.Tuple) exp;
+          // Canonicalize: an empty tuple or empty record is unit.
+          if (tup.args.isEmpty()) {
+            return intern(of(CORE_EXPR_UNIT_LITERAL.constructor));
           }
-          break;
-        case WHERE:
-          Core.Where where = (Core.Where) step;
-          current =
+          if (tup.type instanceof RecordType) {
+            // Named-field record. argNameTypes iterates in canonical
+            // sorted-by-name order, parallel to tup.args. Zip the names
+            // with the reified args into a PairList in one pass.
+            final PairList<String, Object> fields =
+                PairList.fromZip(
+                    ((RecordType) tup.type).argNameTypes.keySet(),
+                    transform(tup.args, this::reifyExp));
+            return intern(
+                of(
+                    CORE_EXPR_RECORD.constructor,
+                    of(
+                        fields.transformEager(ImmutableList::of),
+                        reifyType(tup.type))));
+          } else {
+            return intern(
+                of(
+                    CORE_EXPR_TUPLE.constructor,
+                    transformEager(tup.args, this::reifyExp)));
+          }
+
+        case APPLY:
+          Core.Apply ap = (Core.Apply) exp;
+          // Recognize `op +` (whether arrived as FN_LITERAL of Z_PLUS_INT/REAL
+          // or as the Id "op +") and reify as PLUS.
+          if (isOpPlus(ap.fn)) {
+            List<Core.Exp> args = ((Core.Tuple) ap.arg).args;
+            return intern(
+                of(
+                    CORE_EXPR_PLUS.constructor,
+                    of(
+                        reifyExp(args.get(0)),
+                        reifyExp(args.get(1)),
+                        reifyType(ap.type))));
+          }
+          if (ap.fn.op == Op.FN_LITERAL) {
+            BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
+            if (b == BuiltIn.Z_LIST) {
+              return intern(
+                  of(
+                      CORE_EXPR_LIST_LITERAL.constructor,
+                      of(
+                          transformEager(
+                              ((Core.Tuple) ap.arg).args, this::reifyExp),
+                          reifyType(ap.type))));
+            }
+          }
+          // Record-selector application becomes FIELD: (#name r) ->
+          // FIELD(r, name, t).
+          if (ap.fn.op == Op.RECORD_SELECTOR) {
+            Core.RecordSelector sel = (Core.RecordSelector) ap.fn;
+            return intern(
+                of(
+                    CORE_EXPR_FIELD.constructor,
+                    of(reifyExp(ap.arg), sel.fieldName(), reifyType(ap.type))));
+          }
+          // General application: APPLY(fn, arg, type).
+          return intern(
               of(
-                  CORE_EXPR_FILTER.constructor,
-                  of(current, reifyExp(where.exp)));
-          break;
-        case YIELD:
-          Core.Yield yield = (Core.Yield) step;
-          current =
-              of(
-                  CORE_EXPR_PROJECT.constructor,
-                  of(current, reifyExp(yield.exp)));
-          break;
-        case ORDER:
-          Core.Order order = (Core.Order) step;
-          current =
-              of(CORE_EXPR_ORDER.constructor, of(current, reifyExp(order.exp)));
-          break;
+                  CORE_EXPR_APPLY.constructor,
+                  of(reifyExp(ap.fn), reifyExp(ap.arg), reifyType(ap.type))));
+
+        case FROM:
+          return reifyFrom((Core.From) exp);
+
         default:
           throw new UnsupportedOperationException(
-              "Plan.core: from-step " + step.op + " not yet supported");
+              "Plan.core: cannot yet reify " + exp.op + " (" + exp + ")");
       }
     }
-    return current;
+
+    /**
+     * Reifies a {@link Core.From} into a relational tree of FILTER / PROJECT /
+     * VAR nodes. Each step reads the variable bound by the preceding scan via
+     * {@code VAR "<name>"}; scoping is implicit (the bound variable is in scope
+     * for steps that follow).
+     */
+    Object reifyFrom(Core.From from) {
+      // An empty `from` (no steps) evaluates to the singleton `[()]` of type
+      // `unit list`. Reify it as a LIST_LITERAL containing a single
+      // UNIT_LITERAL.
+      Object current = intern(EMPTY_FROM_EXPR);
+      boolean haveScan = false;
+      for (Core.FromStep step : from.steps) {
+        switch (step.op) {
+          case SCAN:
+            Core.Scan scan = (Core.Scan) step;
+            if (!haveScan) {
+              current = reifyExp(scan.exp);
+              haveScan = true;
+            } else {
+              throw new UnsupportedOperationException(
+                  "Plan.core: multi-scan `from` not yet supported");
+            }
+            break;
+          case WHERE:
+            Core.Where where = (Core.Where) step;
+            current =
+                intern(
+                    of(
+                        CORE_EXPR_FILTER.constructor,
+                        of(current, reifyExp(where.exp))));
+            break;
+          case YIELD:
+            Core.Yield yield = (Core.Yield) step;
+            current =
+                intern(
+                    of(
+                        CORE_EXPR_PROJECT.constructor,
+                        of(current, reifyExp(yield.exp))));
+            break;
+          case ORDER:
+            Core.Order order = (Core.Order) step;
+            current =
+                intern(
+                    of(
+                        CORE_EXPR_ORDER.constructor,
+                        of(current, reifyExp(order.exp))));
+            break;
+          default:
+            throw new UnsupportedOperationException(
+                "Plan.core: from-step " + step.op + " not yet supported");
+        }
+      }
+      return current;
+    }
+
+    /**
+     * Reifies a {@link Type} as a runtime value of the Morel-level {@code
+     * Type.t} datatype.
+     */
+    Object reifyType(Type type) {
+      switch (type.op()) {
+        case ID:
+          // Primitive types: PrimitiveType.INT, REAL, BOOL, CHAR, STRING, UNIT.
+          switch ((PrimitiveType) type) {
+            case INT:
+              return intern(of(TYPE_INT.constructor));
+            case REAL:
+              return intern(of(TYPE_REAL.constructor));
+            case BOOL:
+              return intern(of(TYPE_BOOL.constructor));
+            case CHAR:
+              return intern(of(TYPE_CHAR.constructor));
+            case STRING:
+              return intern(of(TYPE_STRING.constructor));
+            case UNIT:
+              return intern(of(TYPE_UNIT.constructor));
+          }
+          break;
+
+        case LIST:
+          return intern(
+              of(
+                  TYPE_LIST.constructor,
+                  reifyType(((ListType) type).elementType)));
+
+        case FUNCTION_TYPE:
+          final FnType ft = (FnType) type;
+          return intern(
+              of(
+                  TYPE_FN.constructor,
+                  of(reifyType(ft.paramType), reifyType(ft.resultType))));
+
+        case TUPLE_TYPE:
+          return intern(
+              of(
+                  TYPE_TUPLE.constructor,
+                  transformEager(
+                      ((TupleType) type).argTypes, this::reifyType)));
+
+        case RECORD_TYPE:
+          return intern(
+              of(
+                  TYPE_RECORD.constructor,
+                  transformEager(
+                      ((RecordType) type).argNameTypes.entrySet(),
+                      e -> of(e.getKey(), reifyType(e.getValue())))));
+
+        case DATA_TYPE:
+          DataType dt = (DataType) type;
+          if (dt.name.equals("bag")) {
+            return intern(
+                of(TYPE_BAG.constructor, reifyType(dt.arguments.get(0))));
+          }
+          return intern(
+              of(
+                  TYPE_DATA.constructor,
+                  of(dt.name, transformEager(dt.arguments, this::reifyType))));
+
+        case TY_VAR:
+          return intern(of(TYPE_VAR.constructor, ((TypeVar) type).ordinal));
+
+        default:
+          break;
+      }
+      throw new UnsupportedOperationException(
+          "Plan.core: cannot yet reify type "
+              + type
+              + " ("
+              + type.getClass().getSimpleName()
+              + ")");
+    }
   }
 
   /**
@@ -314,75 +437,6 @@ public class Plans {
         // future Core.expr constructor.)
         break;
     }
-  }
-
-  /**
-   * Reifies a {@link Type} as a runtime value of the Morel-level {@code Type.t}
-   * datatype.
-   */
-  static Object reifyType(Type type) {
-    switch (type.op()) {
-      case ID:
-        // Primitive types: PrimitiveType.INT, REAL, BOOL, CHAR, STRING, UNIT.
-        switch ((PrimitiveType) type) {
-          case INT:
-            return of(TYPE_INT.constructor);
-          case REAL:
-            return of(TYPE_REAL.constructor);
-          case BOOL:
-            return of(TYPE_BOOL.constructor);
-          case CHAR:
-            return of(TYPE_CHAR.constructor);
-          case STRING:
-            return of(TYPE_STRING.constructor);
-          case UNIT:
-            return of(TYPE_UNIT.constructor);
-        }
-        break;
-
-      case LIST:
-        return of(
-            TYPE_LIST.constructor, reifyType(((ListType) type).elementType));
-
-      case FUNCTION_TYPE:
-        final FnType ft = (FnType) type;
-        return of(
-            TYPE_FN.constructor,
-            of(reifyType(ft.paramType), reifyType(ft.resultType)));
-
-      case TUPLE_TYPE:
-        return of(
-            TYPE_TUPLE.constructor,
-            transformEager(((TupleType) type).argTypes, Plans::reifyType));
-
-      case RECORD_TYPE:
-        return of(
-            TYPE_RECORD.constructor,
-            transformEager(
-                ((RecordType) type).argNameTypes.entrySet(),
-                e -> of(e.getKey(), reifyType(e.getValue()))));
-
-      case DATA_TYPE:
-        DataType dt = (DataType) type;
-        if (dt.name.equals("bag")) {
-          return of(TYPE_BAG.constructor, reifyType(dt.arguments.get(0)));
-        }
-        return of(
-            TYPE_DATA.constructor,
-            of(dt.name, transformEager(dt.arguments, Plans::reifyType)));
-
-      case TY_VAR:
-        return of(TYPE_VAR.constructor, ((TypeVar) type).ordinal);
-
-      default:
-        break;
-    }
-    throw new UnsupportedOperationException(
-        "Plan.core: cannot yet reify type "
-            + type
-            + " ("
-            + type.getClass().getSimpleName()
-            + ")");
   }
 }
 
