@@ -35,6 +35,7 @@ optimization.
 
 <pre>
 val <a id='core' href="#core-impl">core</a> : 'a -> {value: 'a, expr: Core.expr}
+val <a id='transform' href="#transform-impl">transform</a> : {value: 'a, expr: Core.expr} * (Core.expr -> Core.expr) -> {value: 'a, expr: Core.expr}
 </pre>
 
 <a id="core-impl"></a>
@@ -48,5 +49,18 @@ once and pairs its value with the statically-derived `Core.expr`.
 Free variables in `e` resolve in the enclosing environment for
 type-checking, but appear in the reified `expr` as `VAR` nodes —
 they are not folded to their runtime values.
+
+<a id="transform-impl"></a>
+<h3><code>transform</code></h3>
+
+`transform (planned, f)` applies `f` to the reified `expr` of `planned` and recompiles to
+produce a new planned value of the same Morel type. The transformer
+`f` must be type-preserving; the resulting `Core.expr` is unreified,
+re-typechecked against `α` in the current environment, then compiled
+and evaluated to obtain the new `value`.
+
+With `f` the identity, `Plan.transform (Plan.core e, fn x => x)`
+round-trips: the resulting record has the same `expr` and a `value`
+re-evaluated from it.
 
 [//]: # (end:lib/plan)

@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.compile.Compiler;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
@@ -2861,6 +2862,62 @@ public abstract class Codes {
       };
 
   /**
+   * Implements {@link BuiltIn#PLAN_TRANSFORM}.
+   *
+   * <p>Receives a tuple {@code (planned, f)} where {@code planned} is a record
+   * {@code {expr, value}} (alphabetical field order) and {@code f} is a
+   * function from {@code Core.expr} to {@code Core.expr}. Applies {@code f} to
+   * the reified expression, unreifies the result back to a {@link Core.Exp},
+   * compiles it with the current session's {@link TypeSystem} and {@link
+   * Environment}, evaluates it, and returns a new {@code {expr, value}} record.
+   */
+  private static final Applicable PLAN_TRANSFORM =
+      new ApplicableImpl(BuiltIn.PLAN_TRANSFORM) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          @SuppressWarnings("unchecked")
+          final List<Object> args = (List<Object>) arg;
+          @SuppressWarnings("unchecked")
+          final List<Object> planned = (List<Object>) args.get(0);
+          final Object f = args.get(1);
+          // planned is in alphabetical field order: [expr, value].
+          final Object oldExpr = planned.get(0);
+          // Apply f to the old expr. The function value may be a Closure,
+          // an Applicable, or an Applicable1.
+          final Object newExpr = applyFn(stack, f, oldExpr);
+          final Session session = stack.session;
+          if (session.typeSystem == null || session.environment == null) {
+            throw new IllegalStateException(
+                "Plan.transform requires a Session with typeSystem and "
+                    + "environment");
+          }
+          // Unreify, compile, and evaluate.
+          final Core.Exp newCoreExp =
+              Plans.unreifyExp(
+                  newExpr, session.typeSystem, session.environment);
+          final Compiler compiler = new Compiler(session.typeSystem);
+          final Code code = compiler.compile(session.environment, newCoreExp);
+          final Stack child = new Stack(session, Math.max(1, code.maxSlots()));
+          final Object newValue = code.eval(child);
+          return ImmutableList.of(newExpr, newValue);
+        }
+      };
+
+  /** Applies a function value (Closure, Applicable, or Applicable1) to arg. */
+  private static Object applyFn(Stack stack, Object fn, Object arg) {
+    if (fn instanceof Applicable) {
+      return ((Applicable) fn).apply(stack, arg);
+    }
+    if (fn instanceof Applicable1) {
+      @SuppressWarnings("unchecked")
+      Applicable1<Object, Object> a1 = (Applicable1<Object, Object>) fn;
+      return a1.apply(arg);
+    }
+    throw new IllegalStateException(
+        "Plan.transform: cannot apply non-function value " + fn);
+  }
+
+  /**
    * Converts the result of {@link Comparable#compareTo(Object)} to an {@code
    * Order} value.
    */
@@ -5346,6 +5403,7 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL)
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
           .put(BuiltIn.PLAN_CORE, PLAN_CORE)
+          .put(BuiltIn.PLAN_TRANSFORM, PLAN_TRANSFORM)
           .put(BuiltIn.REAL_ABS, REAL_ABS)
           .put(BuiltIn.REAL_CEIL, REAL_CEIL)
           .put(BuiltIn.REAL_CHECK_FLOAT, REAL_CHECK_FLOAT)

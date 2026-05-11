@@ -2761,6 +2761,35 @@ public enum BuiltIn {
                               ts.lookup(Datatype.CORE_EXPR)))))),
 
   /**
+   * Function "Plan.transform", of type "{value: &alpha;, expr: Core.expr} *
+   * (Core.expr &rarr; Core.expr) &rarr; {value: &alpha;, expr: Core.expr}".
+   *
+   * <p>Applies a transformer to the reified expression of a planned value and
+   * recompiles to produce a new planned value of the same Morel type. The
+   * transformer must be type-preserving; the runtime re-typechecks the
+   * transformed expression against the original {@code &alpha;}.
+   */
+  PLAN_TRANSFORM(
+      "Plan",
+      "transform",
+      ts ->
+          ts.forallType(
+              1,
+              h -> {
+                Type planned =
+                    ts.recordType(
+                        RecordType.map(
+                            "value",
+                            h.get(0),
+                            "expr",
+                            ts.lookup(Datatype.CORE_EXPR)));
+                Type exprType = ts.lookup(Datatype.CORE_EXPR);
+                return ts.fnType(
+                    ts.tupleType(planned, ts.fnType(exprType, exprType)),
+                    planned);
+              })),
+
+  /**
    * Function "Range.contains", of type "&alpha; range &rarr; &alpha; &rarr;
    * bool".
    */

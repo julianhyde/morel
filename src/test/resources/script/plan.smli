@@ -203,4 +203,219 @@ Plan.core (fn n => case n of 0 => "z" | _ => "nz");
 >     CASE (VAR ("n",T_INT),[(P_INT_LIT 0,STRING_LITERAL "z"),(P_WILD T_INT,STRING_LITERAL "nz")],T_STRING),
 >     T_FN (T_INT,T_STRING)),value=fn} : {expr:expr, value:int -> string}
 
+(*) Plan.transform applies a Core.expr -> Core.expr rewriter to the
+(*) reified expression and recompiles. With the identity rewriter, the
+(*) expression and value round-trip unchanged.
+val id = fn x : expr => x;
+> val id = fn : expr -> expr
+
+(*) Identity transform on an int literal.
+Plan.transform (Plan.core 42, id);
+> val it = {expr=INT_LITERAL 42,value=42} : {expr:expr, value:int}
+
+(*) Identity transform on a string literal.
+Plan.transform (Plan.core "hi", id);
+> val it = {expr=STRING_LITERAL "hi",value="hi"} : {expr:expr, value:string}
+
+(*) Identity transform on a unit literal.
+Plan.transform (Plan.core (), id);
+> val it = {expr=UNIT_LITERAL,value=()} : {expr:expr, value:unit}
+
+(*) Identity transform on an arithmetic expression: round-trips through
+(*) APPLY of `op +` over a TUPLE.
+Plan.transform (Plan.core (1 + 2), id);
+> val it = {expr=PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),value=3}
+>   : {expr:expr, value:int}
+
+(*) Identity transform on an FN: introduces a P_VAR binding seen by
+(*) the body's VAR reference.
+val r = Plan.transform (Plan.core (fn x => x + 1), id);
+> val r =
+>   {expr=FN (P_VAR ("x",T_INT),PLUS (VAR ("x",T_INT),INT_LITERAL 1,T_INT),T_FN (T_INT,T_INT)),value=fn}
+>   : {expr:expr, value:int -> int}
+#value r 41;
+> val it = 42 : int
+
+(*) Identity transform on a record: round-trips through E_RECORD.
+Plan.transform (Plan.core {a = 1, b = "x"}, id);
+> val it =
+>   {
+>    expr=
+>    E_RECORD ([("a",INT_LITERAL 1),("b",STRING_LITERAL "x")],T_RECORD [("a",T_INT),("b",T_STRING)]),
+>    value={a=1,b="x"}} : {expr:expr, value:{a:int, b:string}}
+
+(*) Identity transform on a record-field selection: round-trips through FIELD.
+Plan.transform (Plan.core (#a {a = 99, b = "x"}), id);
+> val it =
+>   {
+>    expr=
+>    FIELD (
+>     E_RECORD ([("a",INT_LITERAL 99),("b",STRING_LITERAL "x")],T_RECORD [("a",T_INT),("b",T_STRING)]),
+>     "a",T_INT),value=99} : {expr:expr, value:int}
+
+(*) Identity transform on relational chains: round-trip through
+(*) FromBuilder.
+
+(*) Empty `from` (the unit-list literal).
+Plan.transform (Plan.core (from), id);
+> val it = {expr=LIST_LITERAL ([UNIT_LITERAL],T_LIST T_UNIT),value=[()]} : {expr:expr, value:unit list}
+
+(*) Simple scan over a list literal.
+Plan.transform (Plan.core (from e in [1,2,3]), id);
+> val it = {expr=LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT),value=[1,2,3]}
+>   : {expr:expr, value:int list}
+
+(*) Scan + where: round-trips through FILTER.
+Plan.transform (Plan.core (from e in [1,2,3] where e > 1), id);
+> val it =
+>   {
+>    expr=
+>    FILTER (LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT),
+>     APPLY (VAR ("op >",T_FN (T_TUPLE [T_INT,T_INT],T_BOOL)),TUPLE [VAR ("e",T_INT),INT_LITERAL 1],T_BOOL)),
+>    value=[2,3]} : {expr:expr, value:int list}
+
+(*) Scan + yield: round-trips through PROJECT.
+Plan.transform (Plan.core (from e in [1,2,3] yield e + 10), id);
+> val it =
+>   {
+>    expr=PROJECT (LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT),PLUS (VAR ("e",T_INT),INT_LITERAL 10,T_INT)),
+>    value=[11,12,13]} : {expr:expr, value:int list}
+
+(*) Scan + take/skip: round-trips through SKIP and TAKE.
+Plan.transform (Plan.core (from e in [10,20,30,40,50] skip 1 take 2), id);
+> val it =
+>   {
+>    expr=
+>    TAKE (
+>     SKIP (LIST_LITERAL ([INT_LITERAL 10,INT_LITERAL 20,INT_LITERAL 30,INT_LITERAL 40,INT_LITERAL 50],T_LIST T_INT),
+>      INT_LITERAL 1),INT_LITERAL 2),value=[20,30]} : {expr:expr, value:int list}
+
+(*) Scan + order: round-trips through ORDER. The descending-by expression
+(*) goes through DESC ... value, reified as APPLY of DESC.
+Plan.transform (Plan.core (from e in [3,1,2] order e), id);
+> val it =
+>   {
+>    expr=
+>    ORDER (LIST_LITERAL ([INT_LITERAL 3,INT_LITERAL 1,INT_LITERAL 2],T_LIST T_INT),VAR ("e",T_INT)),
+>    value=[1,2,3]} : {expr:expr, value:int list}
+
+(*) Complex query against scott.emps with FILTER + ORDER (incl. DESC
+(*) applied to a real field). Identity round-trip recompiles the chain
+(*) and re-runs the query — the value is recomputed.
+val q =
+  Plan.transform
+    (Plan.core
+       (from e in scott.emps
+          where e.job = "CLERK"
+          order (e.deptno, DESC e.sal)),
+     id);
+> val q =
+>   {
+>    expr=
+>    ORDER (
+>     FILTER (
+>      FIELD (
+>       VAR ("scott",
+>        T_RECORD [("bonuses",T_BAG (T_RECORD [("comm",T_REAL),("ename",T_STRING),("job",T_STRING),("sal",T_REAL)])),
+>         ("depts",T_BAG (T_RECORD [("deptno",T_INT),("dname",T_STRING),("loc",T_STRING)])),
+>         ("emps",
+>          T_BAG (T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>           ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])),
+>         ("salgrades",T_BAG (T_RECORD [("grade",T_INT),("hisal",T_REAL),("losal",T_REAL)]))]),"emps",
+>       T_BAG (T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>        ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])),
+>      APPLY (VAR ("op =",T_FN (T_TUPLE [T_STRING,T_STRING],T_BOOL)),
+>       TUPLE [
+>        FIELD (
+>         VAR ("e",
+>          T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>           ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"job",T_STRING),STRING_LITERAL "CLERK"],T_BOOL)),
+>     TUPLE [
+>      FIELD (
+>       VAR ("e",
+>        T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>         ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"deptno",T_INT),
+>      APPLY (VAR ("DESC",T_FN (T_REAL,T_DATA ("descending",[T_REAL]))),
+>       FIELD (
+>        VAR ("e",
+>         T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>          ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"sal",T_REAL),T_DATA ("descending",[T_REAL]))]),
+>    value=
+>    [{comm=0,deptno=10,empno=7934,ename="MILLER",hiredate="1982-01-23",job="CLERK",mgr=7782,sal=1300},
+>     {comm=0,deptno=20,empno=7876,ename="ADAMS",hiredate="1987-05-23",job="CLERK",mgr=7788,sal=1100},
+>     {comm=0,deptno=20,empno=7369,ename="SMITH",hiredate="1980-12-17",job="CLERK",mgr=7902,sal=800},
+>     {comm=0,deptno=30,empno=7900,ename="JAMES",hiredate="1981-12-03",job="CLERK",mgr=7698,sal=950}]}
+>   : {expr:expr,
+>      value:{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list}
+
+(*) Where + yield chain over a record-typed list.
+val r =
+  Plan.transform
+    (Plan.core (from e in emps where e.deptno elem [10] yield {e.ename, e.deptno}),
+     id);
+> val r =
+>   {
+>    expr=
+>    PROJECT (
+>     FILTER (
+>      VAR ("emps",T_LIST (T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
+>      APPLY (VAR ("op elem",T_FN (T_TUPLE [T_INT,T_LIST T_INT],T_BOOL)),
+>       TUPLE [
+>        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",
+>         T_INT),LIST_LITERAL ([INT_LITERAL 10],T_LIST T_INT)],T_BOOL)),
+>     E_RECORD (
+>      [
+>       ("deptno",
+>        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",
+>         T_INT)),
+>       ("ename",
+>        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",
+>         T_STRING))],T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
+>    value=[{deptno=10,ename="x"}]}
+>   : {expr:expr, value:{deptno:int, ename:string} list}
+
+(*) Multi-scan: reifies as JOIN. Element types of e (int) and d (string)
+(*) differ, so JOIN's scan-variable matching is unambiguous.
+Plan.transform (Plan.core (from e in [1,2], d in ["a","b"]), id);
+> val it =
+>   {
+>    expr=
+>    JOIN (LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2],T_LIST T_INT),
+>     LIST_LITERAL ([STRING_LITERAL "a",STRING_LITERAL "b"],T_LIST T_STRING),BOOL_LITERAL true),
+>    value=[{d="a",e=1},{d="b",e=1},{d="a",e=2},{d="b",e=2}]}
+>   : {expr:expr, value:{d:string, e:int} list}
+
+(*) GROUP round-trip is limited: reify only captures the aggregate
+(*) function (not its argument), and implicit coercions like
+(*) `Bag.fromList` reify as bare `VAR "fromList"` whose structure
+(*) qualifier the unreifier cannot recover.
+
+(*) Scan + union: combines lists.
+Plan.transform (Plan.core (from e in [1,2] union [3,4]), id);
+> val it =
+>   {
+>    expr=
+>    UNION (LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2],T_LIST T_INT),false,
+>     [LIST_LITERAL ([INT_LITERAL 3,INT_LITERAL 4],T_LIST T_INT)]),value=[1,2,3,4]}
+>   : {expr:expr, value:int list}
+
+(*) Identity transform on a RAISE inside a lambda (so the value can be
+(*) reified without evaluating the raise). Round-trips through RAISE.
+val divZero = Plan.transform (Plan.core ((fn () => raise Empty) : unit -> int), id);
+> val divZero = {expr=FN (P_VAR ("v",T_UNIT),RAISE (VAR ("Empty",T_DATA ("exn",[])),T_INT),T_FN (T_UNIT,T_INT)),value=fn}
+>   : {expr:expr, value:unit -> int}
+
+(*) Identity transform on a CASE: introduces P_INT_LIT / P_WILD branches.
+val classify = Plan.transform (Plan.core (fn n => case n of 0 => "z" | _ => "nz"), id);
+> val classify =
+>   {
+>    expr=
+>    FN (P_VAR ("n",T_INT),
+>     CASE (VAR ("n",T_INT),[(P_INT_LIT 0,STRING_LITERAL "z"),(P_WILD T_INT,STRING_LITERAL "nz")],T_STRING),
+>     T_FN (T_INT,T_STRING)),value=fn} : {expr:expr, value:int -> string}
+(#value classify) 0;
+> val it = "z" : string
+(#value classify) 5;
+> val it = "nz" : string
+
 (*) End plan.smli

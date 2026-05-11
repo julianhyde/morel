@@ -3345,6 +3345,24 @@ type-checking, but appear in the reified `expr` as `VAR` nodes —
 they are not folded to their runtime values.
 """
 
+[[functions]]
+structure = "Plan"
+name = "transform"
+specified = "morel"
+type = "{value: α, expr: Core.expr} * (Core.expr → Core.expr) → {value: α, expr: Core.expr}"
+prototype = "transform (planned, f)"
+description = """
+applies `f` to the reified `expr` of `planned` and recompiles to
+produce a new planned value of the same Morel type. The transformer
+`f` must be type-preserving; the resulting `Core.expr` is unreified,
+re-typechecked against `α` in the current environment, then compiled
+and evaluated to obtain the new `value`.
+
+With `f` the identity, `Plan.transform (Plan.core e, fn x => x)`
+round-trips: the resulting record has the same `expr` and a `value`
+re-evaluated from it.
+"""
+
 # === Range structure ================================================
 
 [[structures]]

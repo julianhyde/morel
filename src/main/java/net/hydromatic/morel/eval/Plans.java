@@ -19,28 +19,42 @@
 package net.hydromatic.morel.eval;
 
 import static com.google.common.collect.ImmutableList.of;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.compile.BuiltIn.Constructor.*;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSortedMap;
+import java.math.BigDecimal;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
 import net.hydromatic.morel.util.PairList;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Helpers for the {@code Plan} structure.
@@ -548,6 +562,775 @@ public class Plans {
               + " ("
               + type.getClass().getSimpleName()
               + ")");
+    }
+  }
+
+  /**
+   * Inverse of {@link #reifyExp}: converts a runtime {@code Core.expr} value
+   * (nested list/tuple form) back to a typed {@link Core.Exp}.
+   *
+   * <p>{@code Plan.transform} calls this on the output of a user-supplied
+   * rewriter. The resulting {@link Core.Exp} is then compiled and evaluated
+   * with the session's type system and environment to produce a new value of
+   * the same Morel type.
+   *
+   * <p>Variable names are resolved against {@code env}: a reified {@code VAR
+   * "n"} becomes a {@link Core.Id} pointing at the binding for {@code n}.
+   * Failing such a lookup is fatal — {@code Plan.transform} requires the
+   * transformed expression to be well-typed in the current environment.
+   */
+  public static Core.Exp unreifyExp(
+      Object value, TypeSystem typeSystem, Environment env) {
+    return new Unreifier(typeSystem, env).unreifyExp(value);
+  }
+
+  /**
+   * Walker that converts reified {@code Core.expr} / {@code pat} / {@code t}
+   * values back to their Java counterparts. Uses the session's {@link
+   * TypeSystem} for type constructors and the compile-time {@link Environment}
+   * for variable lookups.
+   *
+   * <p>Maintains a stack of local scopes for variables introduced during
+   * unreification (e.g. by {@code FN}, {@code LET}, {@code CASE} branches, or
+   * from-step scans). Innermost scope wins; if not found locally, falls back to
+   * {@code env}.
+   */
+  private static class Unreifier {
+    final TypeSystem ts;
+    final Environment env;
+    final ArrayDeque<Map<String, Core.NamedPat>> localBindings =
+        new ArrayDeque<>();
+
+    Unreifier(TypeSystem ts, Environment env) {
+      this.ts = ts;
+      this.env = env;
+    }
+
+    private void pushScope() {
+      localBindings.addFirst(new HashMap<>());
+    }
+
+    private void popScope() {
+      localBindings.removeFirst();
+    }
+
+    private void bindLocal(Core.NamedPat namedPat) {
+      if (!namedPat.name.equals("_")) {
+        localBindings.peekFirst().put(namedPat.name, namedPat);
+      }
+    }
+
+    /**
+     * Bind every IdPat/AsPat contained in {@code pat} into the current scope.
+     */
+    private void bindPatVars(Core.Pat pat) {
+      if (pat instanceof Core.IdPat) {
+        bindLocal((Core.IdPat) pat);
+      } else if (pat instanceof Core.AsPat) {
+        Core.AsPat asPat = (Core.AsPat) pat;
+        bindLocal(asPat);
+        bindPatVars(asPat.pat);
+      } else if (pat instanceof Core.TuplePat) {
+        for (Core.Pat sub : ((Core.TuplePat) pat).args) {
+          bindPatVars(sub);
+        }
+      } else if (pat instanceof Core.RecordPat) {
+        for (Core.Pat sub : ((Core.RecordPat) pat).args) {
+          bindPatVars(sub);
+        }
+      } else if (pat instanceof Core.ListPat) {
+        for (Core.Pat sub : ((Core.ListPat) pat).args) {
+          bindPatVars(sub);
+        }
+      } else if (pat instanceof Core.ConPat) {
+        bindPatVars(((Core.ConPat) pat).pat);
+      }
+      // Wildcard, Con0, Literal patterns introduce no bindings.
+    }
+
+    Core.Exp unreifyExp(Object value) {
+      List<?> list = asList(value);
+      String tag = (String) list.get(0);
+      Object payload = list.size() > 1 ? list.get(1) : null;
+      switch (tag) {
+          // lint: sort until '#}' where '##case '
+        case "APPLY":
+          {
+            List<?> p = asList(payload);
+            Core.Exp fn = unreifyExp(p.get(0));
+            Core.Exp arg = unreifyExp(p.get(1));
+            Type type = unreifyType(p.get(2));
+            return core.apply(Pos.ZERO, type, fn, arg);
+          }
+
+        case "BOOL_LITERAL":
+          return core.boolLiteral((Boolean) payload);
+
+        case "CASE":
+          return unreifyCase(payload);
+
+        case "CHAR_LITERAL":
+          return core.charLiteral((Character) payload);
+
+        case "E_RECORD":
+          return unreifyRecord(payload);
+
+        case "EXCEPT":
+        case "FILTER":
+        case "GROUP":
+        case "INTERSECT":
+        case "JOIN":
+        case "ORDER":
+        case "PROJECT":
+        case "SKIP":
+        case "TAKE":
+        case "UNION":
+        case "UNORDER":
+          return unreifyFromChain(value);
+
+        case "FIELD":
+          return unreifyField(payload);
+
+        case "FN":
+          return unreifyFn(payload);
+
+        case "INT_LITERAL":
+          return core.intLiteral(toBigDecimal(payload));
+
+        case "LET":
+          return unreifyLet(payload);
+
+        case "LIST_LITERAL":
+          {
+            List<?> p = asList(payload);
+            Type type = unreifyType(p.get(1));
+            List<Core.Exp> es =
+                transformEager(asList(p.get(0)), this::unreifyExp);
+            // Build via APPLY of the Z_LIST built-in over a TUPLE.
+            Type elemType = ((ListType) type).elementType;
+            FnType fnType =
+                ts.fnType(ts.tupleType(repeat(elemType, es.size())), type);
+            Core.Literal listFn = core.functionLiteral(fnType, BuiltIn.Z_LIST);
+            Core.Exp argTuple =
+                es.isEmpty()
+                    ? core.unitLiteral()
+                    : core.tuple(ts, es.toArray(new Core.Exp[0]));
+            return core.apply(Pos.ZERO, type, listFn, argTuple);
+          }
+
+        case "PLUS":
+          {
+            // Reified PLUS is sugar for APPLY (op +, (lhs, rhs)).
+            List<?> p = asList(payload);
+            Core.Exp lhs = unreifyExp(p.get(0));
+            Core.Exp rhs = unreifyExp(p.get(1));
+            Type opType = unreifyType(p.get(2));
+            Core.Exp opPlus = resolveId("op +");
+            Core.Exp argTuple = core.tuple(ts, lhs, rhs);
+            return core.apply(Pos.ZERO, opType, opPlus, argTuple);
+          }
+
+        case "RAISE":
+          {
+            List<?> p = asList(payload);
+            Core.Exp raiseExp = unreifyExp(p.get(0));
+            Type raiseType = unreifyType(p.get(1));
+            return core.raise(Pos.ZERO, raiseType, raiseExp);
+          }
+
+        case "REAL_LITERAL":
+          return core.realLiteral((Float) payload);
+
+        case "STRING_LITERAL":
+          return core.stringLiteral((String) payload);
+
+        case "TUPLE":
+          {
+            List<Core.Exp> es =
+                transformEager(asList(payload), this::unreifyExp);
+            return core.tuple(ts, es.toArray(new Core.Exp[0]));
+          }
+
+        case "UNIT_LITERAL":
+          return core.unitLiteral();
+
+        case "VAR":
+          {
+            List<?> p = asList(payload);
+            String name = (String) p.get(0);
+            return resolveId(name);
+          }
+
+        default: // lint:skip 1 "alphabetical region ends here"
+          throw new UnsupportedOperationException(
+              "Plan.transform: cannot yet unreify " + tag);
+      }
+    }
+
+    /** Unreifies a {@code CASE} payload {@code [scrut, matches, type]}. */
+    private Core.Exp unreifyCase(Object payload) {
+      List<?> p = asList(payload);
+      Core.Exp scrut = unreifyExp(p.get(0));
+      List<?> matches = asList(p.get(1));
+      Type caseType = unreifyType(p.get(2));
+      List<Core.Match> ml = new ArrayList<>(matches.size());
+      for (Object m : matches) {
+        List<?> mp = asList(m);
+        pushScope();
+        try {
+          Core.Pat matchPat = unreifyPat(mp.get(0));
+          bindPatVars(matchPat);
+          Core.Exp matchExp = unreifyExp(mp.get(1));
+          ml.add(core.match(Pos.ZERO, matchPat, matchExp));
+        } finally {
+          popScope();
+        }
+      }
+      return core.caseOf(Pos.ZERO, caseType, scrut, ml);
+    }
+
+    /** Unreifies an {@code E_RECORD} payload {@code [fields, type]}. */
+    private Core.Exp unreifyRecord(Object payload) {
+      List<?> p = asList(payload);
+      RecordType recType = (RecordType) unreifyType(p.get(1));
+      // Fields are reified in canonical sorted-by-name order; preserve that.
+      List<Core.Exp> es =
+          transformEager(asList(p.get(0)), f -> unreifyExp(asList(f).get(1)));
+      return core.tuple(recType, es.toArray(new Core.Exp[0]));
+    }
+
+    /** Unreifies a {@code FIELD} payload {@code [record, name, type]}. */
+    private Core.Exp unreifyField(Object payload) {
+      List<?> p = asList(payload);
+      Core.Exp rec = unreifyExp(p.get(0));
+      String fieldName = (String) p.get(1);
+      Type fieldType = unreifyType(p.get(2));
+      RecordLikeType recType = (RecordLikeType) rec.type;
+      Core.RecordSelector sel = core.recordSelector(ts, recType, fieldName);
+      return core.apply(Pos.ZERO, fieldType, sel, rec);
+    }
+
+    /** Unreifies a {@code FN} payload {@code [pat, body, type]}. */
+    private Core.Exp unreifyFn(Object payload) {
+      List<?> p = asList(payload);
+      Type fnType = unreifyType(p.get(2));
+      pushScope();
+      try {
+        Core.Pat fnPat = unreifyPat(p.get(0));
+        if (!(fnPat instanceof Core.IdPat)) {
+          throw new IllegalStateException(
+              "FN's pat must be P_VAR; got " + fnPat);
+        }
+        Core.IdPat idPat = (Core.IdPat) fnPat;
+        bindLocal(idPat);
+        Core.Exp body = unreifyExp(p.get(1));
+        return core.fn((FnType) fnType, idPat, body);
+      } finally {
+        popScope();
+      }
+    }
+
+    /** Unreifies a {@code LET} payload {@code [bindings, body]}. */
+    private Core.Exp unreifyLet(Object payload) {
+      List<?> p = asList(payload);
+      List<?> bindings = asList(p.get(0));
+      pushScope();
+      try {
+        if (bindings.size() == 1) {
+          // Non-recursive: exp evaluated in outer scope; pat in body only.
+          List<?> binding = asList(bindings.get(0));
+          Core.Pat pat = unreifyPat(binding.get(0));
+          Core.Exp exp = unreifyExp(binding.get(1));
+          bindPatVars(pat);
+          Core.Exp body = unreifyExp(p.get(1));
+          Core.NonRecValDecl decl =
+              core.nonRecValDecl(Pos.ZERO, (Core.NamedPat) pat, null, exp);
+          return core.let(decl, body);
+        }
+        // Recursive: all pats in scope of all exps and body.
+        List<Core.Pat> pats = new ArrayList<>(bindings.size());
+        for (Object b : bindings) {
+          Core.Pat pat = unreifyPat(asList(b).get(0));
+          pats.add(pat);
+          bindPatVars(pat);
+        }
+        List<Core.NonRecValDecl> decls = new ArrayList<>();
+        for (int i = 0; i < bindings.size(); i++) {
+          Core.Exp exp = unreifyExp(asList(bindings.get(i)).get(1));
+          decls.add(
+              core.nonRecValDecl(
+                  Pos.ZERO, (Core.NamedPat) pats.get(i), null, exp));
+        }
+        Core.Exp body = unreifyExp(p.get(1));
+        return core.let(core.recValDecl(decls), body);
+      } finally {
+        popScope();
+      }
+    }
+
+    /**
+     * Tags that are from-chain steps (their first payload element is a
+     * recursive "previous chain").
+     */
+    private static boolean isFromStepTag(Object tag) {
+      if (!(tag instanceof String)) {
+        return false;
+      }
+      switch ((String) tag) {
+        case "EXCEPT":
+        case "FILTER":
+        case "GROUP":
+        case "INTERSECT":
+        case "JOIN":
+        case "ORDER":
+        case "PROJECT":
+        case "SKIP":
+        case "TAKE":
+        case "UNION":
+        case "UNORDER":
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    /** Element type of a {@code 'a list} or {@code 'a bag}. */
+    private static Type elementType(Type t) {
+      if (t instanceof ListType) {
+        return ((ListType) t).elementType;
+      }
+      if (t instanceof DataType && "bag".equals(((DataType) t).name)) {
+        return ((DataType) t).arguments.get(0);
+      }
+      throw new IllegalStateException("not a list/bag type: " + t);
+    }
+
+    /**
+     * Walks a reified value collecting unbound {@code VAR} names (in order of
+     * first appearance), recording each one's reified type.
+     */
+    private void collectScanCandidates(
+        Object value, LinkedHashMap<String, Object> out) {
+      if (!(value instanceof List)) {
+        return;
+      }
+      List<?> list = (List<?>) value;
+      if (list.isEmpty()) {
+        return;
+      }
+      Object head = list.get(0);
+      if ("VAR".equals(head) && list.size() > 1) {
+        List<?> p = asList(list.get(1));
+        String name = (String) p.get(0);
+        if (!isLocallyBound(name)
+            && env.getOpt(name) == null
+            && !out.containsKey(name)) {
+          out.put(name, p.get(1));
+        }
+      }
+      for (Object e : list) {
+        collectScanCandidates(e, out);
+      }
+    }
+
+    private boolean isLocallyBound(String name) {
+      for (Map<String, Core.NamedPat> scope : localBindings) {
+        if (scope.containsKey(name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /**
+     * Removes and returns the first scan-candidate whose reified type unreifies
+     * to {@code expectedType}.
+     */
+    private Core.@Nullable IdPat takeMatchingScanVar(
+        LinkedHashMap<String, Object> scanVars, Type expectedType) {
+      for (Map.Entry<String, Object> e : scanVars.entrySet()) {
+        Type t = unreifyType(e.getValue());
+        if (t.equals(expectedType)) {
+          scanVars.remove(e.getKey());
+          return core.idPat(t, e.getKey(), 0);
+        }
+      }
+      return null;
+    }
+
+    /** Unreifies a chain of from-step constructors into a {@link Core.From}. */
+    private Core.Exp unreifyFromChain(Object value) {
+      // Peel chain inner-to-outer.
+      ArrayDeque<List<?>> stepsDeque = new ArrayDeque<>();
+      Object current = value;
+      while (current instanceof List
+          && isFromStepTag(((List<?>) current).get(0))) {
+        List<?> outer = (List<?>) current;
+        stepsDeque.addFirst(outer);
+        // The "chain so far" is the first payload element of every from-step
+        // (positions: FILTER[0]=chain, PROJECT[0]=chain, JOIN[0]=chain, etc.).
+        Object payload = outer.size() > 1 ? outer.get(1) : null;
+        if (payload instanceof List && !((List<?>) payload).isEmpty()) {
+          current = ((List<?>) payload).get(0);
+        } else {
+          current = payload;
+        }
+      }
+      Core.Exp initialScan = unreifyExp(current);
+      List<List<?>> steps = new ArrayList<>(stepsDeque);
+
+      // Pre-scan all step expressions for unbound VARs (scan-bound names).
+      LinkedHashMap<String, Object> scanVars = new LinkedHashMap<>();
+      for (List<?> step : steps) {
+        collectScanCandidates(step, scanVars);
+      }
+
+      FromBuilder fb = core.fromBuilder(ts);
+      pushScope();
+      try {
+        // Bind initial scan's variable by matching type.
+        Core.IdPat initVar =
+            takeMatchingScanVar(scanVars, elementType(initialScan.type));
+        if (initVar == null) {
+          // No subsequent step uses the initial scan's element; introduce a
+          // throwaway binding with a generated name.
+          initVar = core.idPat(elementType(initialScan.type), "$scan", 0);
+        }
+        bindLocal(initVar);
+        fb.scan(initVar, initialScan);
+
+        for (List<?> step : steps) {
+          processFromStep(fb, step, scanVars);
+        }
+        return fb.build();
+      } finally {
+        popScope();
+      }
+    }
+
+    /**
+     * Processes one from-step against the builder, binding any new scan
+     * variables introduced by {@code JOIN}.
+     */
+    private void processFromStep(
+        FromBuilder fb, List<?> step, LinkedHashMap<String, Object> scanVars) {
+      String tag = (String) step.get(0);
+      Object payload = step.size() > 1 ? step.get(1) : null;
+      switch (tag) {
+          // lint: sort until '#}' where '##case '
+        case "EXCEPT":
+          {
+            List<?> p = asList(payload);
+            fb.except(
+                (Boolean) p.get(1),
+                transformEager(asList(p.get(2)), this::unreifyExp));
+            break;
+          }
+        case "FILTER":
+          fb.where(unreifyExp(asList(payload).get(1)));
+          break;
+        case "GROUP":
+          processGroup(fb, payload);
+          break;
+        case "INTERSECT":
+          {
+            List<?> p = asList(payload);
+            fb.intersect(
+                (Boolean) p.get(1),
+                transformEager(asList(p.get(2)), this::unreifyExp));
+            break;
+          }
+        case "JOIN":
+          {
+            List<?> p = asList(payload);
+            Core.Exp rightScan = unreifyExp(p.get(1));
+            Core.IdPat joinVar =
+                takeMatchingScanVar(scanVars, elementType(rightScan.type));
+            if (joinVar == null) {
+              joinVar = core.idPat(elementType(rightScan.type), "$join", 0);
+            }
+            bindLocal(joinVar);
+            Core.Exp cond = unreifyExp(p.get(2));
+            fb.scan(joinVar, rightScan, cond);
+            break;
+          }
+        case "ORDER":
+          fb.order(unreifyExp(asList(payload).get(1)));
+          break;
+        case "PROJECT":
+          fb.yield_(unreifyExp(asList(payload).get(1)));
+          break;
+        case "SKIP":
+          fb.skip(unreifyExp(asList(payload).get(1)));
+          break;
+        case "TAKE":
+          fb.take(unreifyExp(asList(payload).get(1)));
+          break;
+        case "UNION":
+          {
+            List<?> p = asList(payload);
+            fb.union(
+                (Boolean) p.get(1),
+                transformEager(asList(p.get(2)), this::unreifyExp));
+            break;
+          }
+        case "UNORDER":
+          fb.unorder();
+          break;
+        default: // lint:skip 1 "alphabetical region ends here"
+          throw new UnsupportedOperationException(
+              "Plan.transform: unsupported from-step " + tag);
+      }
+    }
+
+    /**
+     * Reconstructs a {@code GROUP} step. Note: the original aggregate argument
+     * expressions are lost in reification (only the aggregate function
+     * expression is kept), so a round-trip GROUP is only approximate.
+     */
+    private void processGroup(FromBuilder fb, Object payload) {
+      List<?> p = asList(payload);
+      List<?> keys = asList(p.get(1));
+      List<?> aggs = asList(p.get(2));
+      ImmutableSortedMap.Builder<Core.IdPat, Core.Exp> keyMap =
+          ImmutableSortedMap.naturalOrder();
+      for (Object k : keys) {
+        List<?> pair = asList(k);
+        String name = (String) pair.get(0);
+        Core.Exp ke = unreifyExp(pair.get(1));
+        keyMap.put(core.idPat(ke.type, name, 0), ke);
+      }
+      ImmutableSortedMap.Builder<Core.IdPat, Core.Aggregate> aggMap =
+          ImmutableSortedMap.naturalOrder();
+      for (Object a : aggs) {
+        List<?> pair = asList(a);
+        String name = (String) pair.get(0);
+        Core.Exp ae = unreifyExp(pair.get(1));
+        // Aggregate's argument is lost in reification; default to no arg.
+        Core.Aggregate agg =
+            core.aggregate(((FnType) ae.type).resultType, ae, null);
+        aggMap.put(core.idPat(agg.type, name, 0), agg);
+      }
+      fb.group(false, keyMap.build(), aggMap.build());
+    }
+
+    /** Looks up {@code name} first in local scopes, then in {@code env}. */
+    Core.Exp resolveId(String name) {
+      for (Map<String, Core.NamedPat> scope : localBindings) {
+        Core.NamedPat p = scope.get(name);
+        if (p != null) {
+          return core.id(p);
+        }
+      }
+      Binding b = env.getOpt(name);
+      if (b == null) {
+        throw new IllegalStateException(
+            "Plan.transform: unbound name '" + name + "'");
+      }
+      return core.id((Core.IdPat) b.id);
+    }
+
+    Core.Pat unreifyPat(Object value) {
+      List<?> list = asList(value);
+      String tag = (String) list.get(0);
+      Object payload = list.size() > 1 ? list.get(1) : null;
+      switch (tag) {
+          // lint: sort until '#}' where '##case '
+        case "P_AS":
+          {
+            List<?> p = asList(payload);
+            String name = (String) p.get(0);
+            Core.Pat inner = unreifyPat(p.get(1));
+            Type asType = unreifyType(p.get(2));
+            return core.asPat(asType, name, 0, inner);
+          }
+
+        case "P_BOOL_LIT":
+          return core.literalPat(
+              Op.BOOL_LITERAL_PAT, PrimitiveType.BOOL, (Boolean) payload);
+
+        case "P_CHAR_LIT":
+          return core.literalPat(
+              Op.CHAR_LITERAL_PAT, PrimitiveType.CHAR, (Character) payload);
+
+        case "P_CON":
+          {
+            List<?> p = asList(payload);
+            String tyCon = (String) p.get(0);
+            Core.Pat inner = unreifyPat(p.get(1));
+            Type conType = unreifyType(p.get(2));
+            return core.conPat(conType, tyCon, inner);
+          }
+
+        case "P_CON0":
+          {
+            List<?> p = asList(payload);
+            String tyCon = (String) p.get(0);
+            Type conType = unreifyType(p.get(1));
+            return core.con0Pat((DataType) conType, tyCon);
+          }
+
+        case "P_CONS":
+          {
+            List<?> p = asList(payload);
+            Core.Pat head = unreifyPat(p.get(0));
+            Core.Pat tail = unreifyPat(p.get(1));
+            Type consType = unreifyType(p.get(2));
+            return core.consPat(
+                consType, "::", core.tuplePat(ts, of(head, tail)));
+          }
+
+        case "P_INT_LIT":
+          return core.literalPat(
+              Op.INT_LITERAL_PAT, PrimitiveType.INT, toBigDecimal(payload));
+
+        case "P_LIST":
+          {
+            List<?> p = asList(payload);
+            Type listType = unreifyType(p.get(1));
+            return core.listPat(
+                listType, transformEager(asList(p.get(0)), this::unreifyPat));
+          }
+
+        case "P_REAL_LIT":
+          return core.literalPat(
+              Op.REAL_LITERAL_PAT, PrimitiveType.REAL, (Float) payload);
+
+        case "P_RECORD":
+          {
+            List<?> fields = asList(payload);
+            SortedMap<String, Type> nameTypes =
+                new TreeMap<>(RecordType.ORDERING);
+            List<Core.Pat> sub =
+                transformEager(
+                    fields,
+                    f -> {
+                      List<?> pair = asList(f);
+                      Core.Pat patArg = unreifyPat(pair.get(1));
+                      nameTypes.put((String) pair.get(0), patArg.type);
+                      return patArg;
+                    });
+            RecordType recType = (RecordType) ts.recordType(nameTypes);
+            return core.recordPat(recType, sub);
+          }
+
+        case "P_STRING_LIT":
+          return core.literalPat(
+              Op.STRING_LITERAL_PAT, PrimitiveType.STRING, (String) payload);
+
+        case "P_TUPLE":
+          return core.tuplePat(
+              ts, transformEager(asList(payload), this::unreifyPat));
+
+        case "P_VAR":
+          {
+            List<?> p = asList(payload);
+            String name = (String) p.get(0);
+            Type type = unreifyType(p.get(1));
+            return core.idPat(type, name, 0);
+          }
+
+        case "P_WILD":
+          return core.wildcardPat(unreifyType(payload));
+
+        default: // lint:skip 1 "alphabetical region ends here"
+          throw new UnsupportedOperationException(
+              "Plan.transform: cannot yet unreify pat " + tag);
+      }
+    }
+
+    Type unreifyType(Object value) {
+      List<?> list = asList(value);
+      String tag = (String) list.get(0);
+      Object payload = list.size() > 1 ? list.get(1) : null;
+      switch (tag) {
+          // lint: sort until '#}' where '##case '
+        case "T_BAG":
+          return ts.bagType(unreifyType(payload));
+
+        case "T_BOOL":
+          return PrimitiveType.BOOL;
+
+        case "T_CHAR":
+          return PrimitiveType.CHAR;
+
+        case "T_DATA":
+          {
+            List<?> p = asList(payload);
+            Type base = ts.lookup((String) p.get(0));
+            List<?> args = asList(p.get(1));
+            if (args.isEmpty()) {
+              return base;
+            }
+            return ts.apply(base, transformEager(args, this::unreifyType));
+          }
+
+        case "T_FN":
+          {
+            List<?> p = asList(payload);
+            return ts.fnType(unreifyType(p.get(0)), unreifyType(p.get(1)));
+          }
+
+        case "T_INT":
+          return PrimitiveType.INT;
+
+        case "T_LIST":
+          return ts.listType(unreifyType(payload));
+
+        case "T_REAL":
+          return PrimitiveType.REAL;
+
+        case "T_RECORD":
+          {
+            List<?> fields = asList(payload);
+            SortedMap<String, Type> m = new TreeMap<>(RecordType.ORDERING);
+            for (Object f : fields) {
+              List<?> pair = asList(f);
+              m.put((String) pair.get(0), unreifyType(pair.get(1)));
+            }
+            return ts.recordType(m);
+          }
+
+        case "T_STRING":
+          return PrimitiveType.STRING;
+
+        case "T_TUPLE":
+          return ts.tupleType(
+              transformEager(asList(payload), this::unreifyType));
+
+        case "T_UNIT":
+          return PrimitiveType.UNIT;
+
+        case "T_VAR":
+          return ts.typeVariable(((Number) payload).intValue());
+
+        default: // lint:skip 1 "alphabetical region ends here"
+          throw new UnsupportedOperationException(
+              "Plan.transform: cannot yet unreify type " + tag);
+      }
+    }
+
+    private static List<?> asList(Object o) {
+      if (!(o instanceof List)) {
+        throw new IllegalStateException(
+            "Plan.transform: expected list, got " + o);
+      }
+      return (List<?>) o;
+    }
+
+    private static BigDecimal toBigDecimal(Object o) {
+      if (o instanceof BigDecimal) {
+        return (BigDecimal) o;
+      }
+      return BigDecimal.valueOf(((Number) o).longValue());
+    }
+
+    private static List<Type> repeat(Type t, int n) {
+      List<Type> r = new ArrayList<>(n);
+      for (int i = 0; i < n; i++) {
+        r.add(t);
+      }
+      return r;
     }
   }
 
