@@ -33,21 +33,40 @@ inspect, and pretty-print expressions as ordinary values.
 
 <pre>
 datatype <a id='expr' href="#expr-impl">expr</a>
-  = APPLY of expr * expr * Type.t
+  = AND of expr list
+  | APPLY of expr * expr * Type.t
+  | AT of expr * expr * Type.t
   | BOOL_LITERAL of bool
   | CASE of expr * (pat * expr) list * Type.t
   | CHAR_LITERAL of char
+  | CONCAT of expr * expr
+  | CONS of expr * expr * Type.t
+  | DIV of expr * expr * Type.t
+  | DIVIDE of expr * expr * Type.t
+  | ELEM of expr * expr
+  | EQUALS of expr * expr
   | E_RECORD of (string * expr) list * Type.t
   | EXCEPT of expr * bool * expr list
   | FIELD of expr * string * Type.t
   | FILTER of expr * expr
   | FN of pat * expr * Type.t
-  | GROUP of expr * (string * expr) list * (string * expr) list
+  | GE of expr * expr
+  | GROUP of expr * (string * expr) list * (string * expr * expr option) list
+  | GT of expr * expr
   | INT_LITERAL of int
   | INTERSECT of expr * bool * expr list
   | JOIN of expr * expr * expr
+  | LE of expr * expr
   | LET of (pat * expr) list * expr
   | LIST_LITERAL of expr list * Type.t
+  | LT of expr * expr
+  | MINUS of expr * expr * Type.t
+  | MOD of expr * expr * Type.t
+  | NEG of expr * Type.t
+  | NOT of expr
+  | NOT_ELEM of expr * expr
+  | NOT_EQUALS of expr * expr
+  | OR of expr list
   | ORDER of expr * expr
   | PLUS of expr * expr * Type.t
   | PROJECT of expr * expr
@@ -56,6 +75,7 @@ datatype <a id='expr' href="#expr-impl">expr</a>
   | SKIP of expr * expr
   | STRING_LITERAL of string
   | TAKE of expr * expr
+  | TIMES of expr * expr * Type.t
   | TUPLE of expr list
   | UNION of expr * bool * expr list
   | UNIT_LITERAL

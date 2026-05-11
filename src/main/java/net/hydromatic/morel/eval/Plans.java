@@ -82,18 +82,210 @@ public class Plans {
               of(TYPE_LIST.constructor, of(TYPE_UNIT.constructor))));
 
   /**
-   * Returns whether {@code fn} refers to the `op +` operator. Matches both the
-   * {@code FN_LITERAL} forms (after Inliner conversion) and the {@code Id "op
-   * +"} form (when the Plan.core path suppressed inlining).
+   * Strips a trailing {@code $N} (where N is a non-empty digit run) from {@code
+   * name}. Returns {@code name} unchanged if there is no such suffix.
    */
-  private static boolean isOpPlus(Core.Exp fn) {
+  private static String stripDollarN(String name) {
+    int dollar = name.lastIndexOf('$');
+    if (dollar <= 0 || dollar == name.length() - 1) {
+      return name;
+    }
+    for (int i = dollar + 1; i < name.length(); i++) {
+      if (!Character.isDigit(name.charAt(i))) {
+        return name;
+      }
+    }
+    return name.substring(0, dollar);
+  }
+
+  /**
+   * Dedicated reify forms for common Morel operators. Each kind has a dedicated
+   * {@code Core.expr} constructor (e.g. {@code PLUS}, {@code AND}) rather than
+   * reifying as a generic {@code APPLY (VAR "op X", ...)}.
+   */
+  private enum OpKind {
+    PLUS,
+    MINUS,
+    TIMES,
+    DIVIDE,
+    DIV,
+    MOD,
+    NEG,
+    EQUALS,
+    NOT_EQUALS,
+    LT,
+    LE,
+    GT,
+    GE,
+    ELEM,
+    NOT_ELEM,
+    AND,
+    OR,
+    NOT,
+    CONS,
+    AT,
+    CONCAT
+  }
+
+  /** Returns the {@link OpKind} of a function reference, or null. */
+  private static @Nullable OpKind opKindOf(Core.Exp fn) {
     if (fn.op == Op.FN_LITERAL) {
       BuiltIn b = ((Core.Literal) fn).unwrap(BuiltIn.class);
-      return b == BuiltIn.Z_PLUS_INT
-          || b == BuiltIn.Z_PLUS_REAL
-          || b == BuiltIn.OP_PLUS;
+      switch (b) {
+          // lint: sort until '#}' where '##case '
+        case BOOL_NOT:
+        case NOT:
+          return OpKind.NOT;
+        case OP_CARET:
+          return OpKind.CONCAT;
+        case OP_CONS:
+          return OpKind.CONS;
+        case OP_DIV:
+          return OpKind.DIV;
+        case OP_ELEM:
+          return OpKind.ELEM;
+        case OP_EQ:
+          return OpKind.EQUALS;
+        case OP_GE:
+          return OpKind.GE;
+        case OP_GT:
+          return OpKind.GT;
+        case OP_LE:
+          return OpKind.LE;
+        case OP_LT:
+          return OpKind.LT;
+        case OP_MINUS:
+        case Z_MINUS_INT:
+        case Z_MINUS_REAL:
+          return OpKind.MINUS;
+        case OP_MOD:
+          return OpKind.MOD;
+        case OP_NE:
+          return OpKind.NOT_EQUALS;
+        case OP_NEGATE:
+        case Z_NEGATE_INT:
+        case Z_NEGATE_REAL:
+          return OpKind.NEG;
+        case OP_NOT_ELEM:
+          return OpKind.NOT_ELEM;
+        case OP_PLUS:
+        case Z_PLUS_INT:
+        case Z_PLUS_REAL:
+          return OpKind.PLUS;
+        case OP_TIMES:
+        case Z_TIMES_INT:
+        case Z_TIMES_REAL:
+          return OpKind.TIMES;
+        case REAL_DIVIDE:
+          return OpKind.DIVIDE;
+        default: // lint:skip 1 "alphabetical region ends here"
+          return null;
+      }
     }
-    return fn.op == Op.ID && ((Core.Id) fn).idPat.name.equals("op +");
+    if (fn.op == Op.ID) {
+      // Strip the overload `$N` suffix before matching, so e.g.
+      // "op elem$1" matches the "op elem" case.
+      switch (stripDollarN(((Core.Id) fn).idPat.name)) {
+          // lint: sort until '#}' where '##case '
+        case "not":
+          return OpKind.NOT;
+        case "op *":
+          return OpKind.TIMES;
+        case "op +":
+          return OpKind.PLUS;
+        case "op -":
+          return OpKind.MINUS;
+        case "op ::":
+          return OpKind.CONS;
+        case "op <":
+          return OpKind.LT;
+        case "op <=":
+          return OpKind.LE;
+        case "op <>":
+          return OpKind.NOT_EQUALS;
+        case "op =":
+          return OpKind.EQUALS;
+        case "op >":
+          return OpKind.GT;
+        case "op >=":
+          return OpKind.GE;
+        case "op @":
+          return OpKind.AT;
+        case "op ^":
+          return OpKind.CONCAT;
+        case "op div":
+          return OpKind.DIV;
+        case "op elem":
+          return OpKind.ELEM;
+        case "op mod":
+          return OpKind.MOD;
+        case "op notelem":
+          return OpKind.NOT_ELEM;
+        case "op ~":
+          return OpKind.NEG;
+        case "op /":
+          return OpKind.DIVIDE;
+        default: // lint:skip 1 "alphabetical region ends here"
+          return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Builds and interns a unary-constructor list (helper for OpKind dispatch).
+   */
+  private static BuiltIn.@Nullable Constructor binaryOpCon(OpKind k) {
+    switch (k) {
+        // lint: sort until '#}' where '##case '
+      case AT:
+        return CORE_EXPR_AT;
+      case CONS:
+        return CORE_EXPR_CONS;
+      case DIV:
+        return CORE_EXPR_DIV;
+      case DIVIDE:
+        return CORE_EXPR_DIVIDE;
+      case MINUS:
+        return CORE_EXPR_MINUS;
+      case MOD:
+        return CORE_EXPR_MOD;
+      case PLUS:
+        return CORE_EXPR_PLUS;
+      case TIMES:
+        return CORE_EXPR_TIMES;
+      default: // lint:skip 1 "alphabetical region ends here"
+        return null;
+    }
+  }
+
+  /**
+   * Untyped binary operators (result is bool or string): kind -> constructor.
+   */
+  private static BuiltIn.@Nullable Constructor binaryUntypedOpCon(OpKind k) {
+    switch (k) {
+        // lint: sort until '#}' where '##case '
+      case CONCAT:
+        return CORE_EXPR_CONCAT;
+      case ELEM:
+        return CORE_EXPR_ELEM;
+      case EQUALS:
+        return CORE_EXPR_EQUALS;
+      case GE:
+        return CORE_EXPR_GE;
+      case GT:
+        return CORE_EXPR_GT;
+      case LE:
+        return CORE_EXPR_LE;
+      case LT:
+        return CORE_EXPR_LT;
+      case NOT_ELEM:
+        return CORE_EXPR_NOT_ELEM;
+      case NOT_EQUALS:
+        return CORE_EXPR_NOT_EQUALS;
+      default: // lint:skip 1 "alphabetical region ends here"
+        return null;
+    }
   }
 
   /**
@@ -163,16 +355,22 @@ public class Plans {
 
         case ID:
           Core.Id id = (Core.Id) exp;
-          // Strip the "$N" overload-resolution suffix from identifier names
-          // (e.g. "op elem$1" -> "op elem"). That suffix is an internal
-          // disambiguator and varies across resolutions; canonical reified
-          // form uses the base name.
-          String idName = id.idPat.name;
-          int dollar = idName.indexOf('$');
-          if (dollar >= 0) {
-            idName = idName.substring(0, dollar);
+          // Recognize the `bool` datatype's constructors as literals.
+          if (id.type == PrimitiveType.BOOL) {
+            if (id.idPat.name.equals("true")) {
+              return iof(CORE_EXPR_BOOL_LITERAL, true);
+            }
+            if (id.idPat.name.equals("false")) {
+              return iof(CORE_EXPR_BOOL_LITERAL, false);
+            }
           }
-          return iof(CORE_EXPR_VAR, of(idName, reifyType(id.type)));
+          // Strip a trailing "$N" overload-resolution suffix (e.g.
+          // "op elem$1" -> "op elem"). That suffix is an internal
+          // disambiguator and varies across resolutions. Do NOT strip
+          // mid-string dollars on internally-generated names like "$col".
+          return iof(
+              CORE_EXPR_VAR,
+              of(stripDollarN(id.idPat.name), reifyType(id.type)));
 
         case FN_LITERAL:
           // A bare reference to a built-in (e.g. `op elem` resolved to a
@@ -221,41 +419,7 @@ public class Plans {
           }
 
         case APPLY:
-          Core.Apply ap = (Core.Apply) exp;
-          // Recognize `op +` (whether arrived as FN_LITERAL of Z_PLUS_INT/REAL
-          // or as the Id "op +") and reify as PLUS.
-          if (isOpPlus(ap.fn)) {
-            List<Core.Exp> args = ((Core.Tuple) ap.arg).args;
-            return iof(
-                CORE_EXPR_PLUS,
-                of(
-                    reifyExp(args.get(0)),
-                    reifyExp(args.get(1)),
-                    reifyType(ap.type)));
-          }
-          if (ap.fn.op == Op.FN_LITERAL) {
-            BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
-            if (b == BuiltIn.Z_LIST) {
-              return iof(
-                  CORE_EXPR_LIST_LITERAL,
-                  of(
-                      transformEager(
-                          ((Core.Tuple) ap.arg).args, this::reifyExp),
-                      reifyType(ap.type)));
-            }
-          }
-          // Record-selector application becomes FIELD: (#name r) ->
-          // FIELD(r, name, t).
-          if (ap.fn.op == Op.RECORD_SELECTOR) {
-            Core.RecordSelector sel = (Core.RecordSelector) ap.fn;
-            return iof(
-                CORE_EXPR_FIELD,
-                of(reifyExp(ap.arg), sel.fieldName(), reifyType(ap.type)));
-          }
-          // General application: APPLY(fn, arg, type).
-          return iof(
-              CORE_EXPR_APPLY,
-              of(reifyExp(ap.fn), reifyExp(ap.arg), reifyType(ap.type)));
+          return reifyApply((Core.Apply) exp);
 
         case FROM:
           return reifyFrom((Core.From) exp);
@@ -376,6 +540,102 @@ public class Plans {
     }
 
     /**
+     * Reifies an {@code APPLY}, recognizing operator forms (PLUS, EQUALS, AND,
+     * etc.), the {@code Z_LIST} sugar, and record selectors as dedicated {@code
+     * Core.expr} constructors. Falls through to a plain {@code APPLY} for
+     * general function application.
+     */
+    Object reifyApply(Core.Apply ap) {
+      OpKind kind = opKindOf(ap.fn);
+      if (kind != null) {
+        return reifyOpApply(ap, kind);
+      }
+      if (ap.fn.op == Op.FN_LITERAL) {
+        BuiltIn b = ((Core.Literal) ap.fn).unwrap(BuiltIn.class);
+        if (b == BuiltIn.Z_LIST) {
+          return iof(
+              CORE_EXPR_LIST_LITERAL,
+              of(
+                  transformEager(((Core.Tuple) ap.arg).args, this::reifyExp),
+                  reifyType(ap.type)));
+        }
+        if (b == BuiltIn.Z_ANDALSO) {
+          return reifyAndOr(ap, CORE_EXPR_AND);
+        }
+        if (b == BuiltIn.Z_ORELSE) {
+          return reifyAndOr(ap, CORE_EXPR_OR);
+        }
+      }
+      if (ap.fn.op == Op.RECORD_SELECTOR) {
+        Core.RecordSelector sel = (Core.RecordSelector) ap.fn;
+        return iof(
+            CORE_EXPR_FIELD,
+            of(reifyExp(ap.arg), sel.fieldName(), reifyType(ap.type)));
+      }
+      return iof(
+          CORE_EXPR_APPLY,
+          of(reifyExp(ap.fn), reifyExp(ap.arg), reifyType(ap.type)));
+    }
+
+    /** Reifies a binary/unary operator application. */
+    Object reifyOpApply(Core.Apply ap, OpKind kind) {
+      if (kind == OpKind.NEG) {
+        // Unary: APPLY(~, x) -> NEG(x, type).
+        return iof(CORE_EXPR_NEG, of(reifyExp(ap.arg), reifyType(ap.type)));
+      }
+      if (kind == OpKind.NOT) {
+        // Unary: APPLY(not, x) -> NOT(x).
+        return iof(CORE_EXPR_NOT, reifyExp(ap.arg));
+      }
+      // Binary: arg is a tuple (lhs, rhs).
+      List<Core.Exp> args = ((Core.Tuple) ap.arg).args;
+      Object lhs = reifyExp(args.get(0));
+      Object rhs = reifyExp(args.get(1));
+      BuiltIn.Constructor typedCon = binaryOpCon(kind);
+      if (typedCon != null) {
+        return iof(typedCon, of(lhs, rhs, reifyType(ap.type)));
+      }
+      BuiltIn.Constructor untypedCon = binaryUntypedOpCon(kind);
+      if (untypedCon != null) {
+        return iof(untypedCon, of(lhs, rhs));
+      }
+      throw new AssertionError("unmapped op kind " + kind);
+    }
+
+    /**
+     * Reifies a binary {@code andalso} / {@code orelse} application as an n-ary
+     * {@code AND} / {@code OR} node, flattening any nested same-kind
+     * applications into a single list.
+     */
+    Object reifyAndOr(Core.Apply ap, BuiltIn.Constructor con) {
+      ImmutableList.Builder<Object> args = ImmutableList.builder();
+      collectAndOr(ap, con, args);
+      return iof(con, args.build());
+    }
+
+    private void collectAndOr(
+        Core.Exp exp,
+        BuiltIn.Constructor con,
+        ImmutableList.Builder<Object> out) {
+      if (exp.op == Op.APPLY) {
+        Core.Apply a = (Core.Apply) exp;
+        if (a.fn.op == Op.FN_LITERAL) {
+          BuiltIn b = ((Core.Literal) a.fn).unwrap(BuiltIn.class);
+          boolean match =
+              con == CORE_EXPR_AND && b == BuiltIn.Z_ANDALSO
+                  || con == CORE_EXPR_OR && b == BuiltIn.Z_ORELSE;
+          if (match) {
+            List<Core.Exp> args = ((Core.Tuple) a.arg).args;
+            collectAndOr(args.get(0), con, out);
+            collectAndOr(args.get(1), con, out);
+            return;
+          }
+        }
+      }
+      out.add(reifyExp(exp));
+    }
+
+    /**
      * Reifies a {@link Core.Let} into {@code LET ([(name, value), ...], body)}.
      * Handles only single-pattern bindings (the typical case); collapses nested
      * LETs of NonRecValDecls into one if convenient.
@@ -461,7 +721,13 @@ public class Plans {
                 (k, v) -> keys.add(of(k.name, reifyExp(v))));
             ImmutableList.Builder<Object> aggs = ImmutableList.builder();
             group.aggregates.forEach(
-                (k, agg) -> aggs.add(of(k.name, reifyExp(agg.aggregate))));
+                (k, agg) -> {
+                  Object argOpt =
+                      agg.argument == null
+                          ? of("NONE")
+                          : of("SOME", reifyExp(agg.argument));
+                  aggs.add(of(k.name, reifyExp(agg.aggregate), argOpt));
+                });
             current =
                 iof(CORE_EXPR_GROUP, of(current, keys.build(), aggs.build()));
             break;
@@ -718,17 +984,56 @@ public class Plans {
             return core.apply(Pos.ZERO, type, listFn, argTuple);
           }
 
-        case "PLUS":
+        case "AND":
+          return unreifyAndOr(payload, BuiltIn.Z_ANDALSO);
+        case "AT":
+          return unreifyTypedBinary(payload, "op @");
+        case "CONCAT":
+          return unreifyUntypedBinary(payload, "op ^", PrimitiveType.STRING);
+        case "CONS":
+          return unreifyTypedBinary(payload, "op ::");
+        case "DIV":
+          return unreifyTypedBinary(payload, "op div");
+        case "DIVIDE":
+          return unreifyTypedBinary(payload, "op /");
+        case "ELEM":
+          return unreifyUntypedBinary(payload, "op elem", PrimitiveType.BOOL);
+        case "EQUALS":
+          return unreifyUntypedBinary(payload, "op =", PrimitiveType.BOOL);
+        case "GE":
+          return unreifyUntypedBinary(payload, "op >=", PrimitiveType.BOOL);
+        case "GT":
+          return unreifyUntypedBinary(payload, "op >", PrimitiveType.BOOL);
+        case "LE":
+          return unreifyUntypedBinary(payload, "op <=", PrimitiveType.BOOL);
+        case "LT":
+          return unreifyUntypedBinary(payload, "op <", PrimitiveType.BOOL);
+        case "MINUS":
+          return unreifyTypedBinary(payload, "op -");
+        case "MOD":
+          return unreifyTypedBinary(payload, "op mod");
+        case "NEG":
           {
-            // Reified PLUS is sugar for APPLY (op +, (lhs, rhs)).
             List<?> p = asList(payload);
-            Core.Exp lhs = unreifyExp(p.get(0));
-            Core.Exp rhs = unreifyExp(p.get(1));
-            Type opType = unreifyType(p.get(2));
-            Core.Exp opPlus = resolveId("op +");
-            Core.Exp argTuple = core.tuple(ts, lhs, rhs);
-            return core.apply(Pos.ZERO, opType, opPlus, argTuple);
+            Core.Exp opArg = unreifyExp(p.get(0));
+            Type opType = unreifyType(p.get(1));
+            return core.apply(Pos.ZERO, opType, resolveId("op ~"), opArg);
           }
+        case "NOT":
+          return core.apply(
+              Pos.ZERO,
+              PrimitiveType.BOOL,
+              resolveId("not"),
+              unreifyExp(payload));
+        case "NOT_ELEM":
+          return unreifyUntypedBinary(
+              payload, "op notelem", PrimitiveType.BOOL);
+        case "NOT_EQUALS":
+          return unreifyUntypedBinary(payload, "op <>", PrimitiveType.BOOL);
+        case "OR":
+          return unreifyAndOr(payload, BuiltIn.Z_ORELSE);
+        case "PLUS":
+          return unreifyTypedBinary(payload, "op +");
 
         case "RAISE":
           {
@@ -743,6 +1048,9 @@ public class Plans {
 
         case "STRING_LITERAL":
           return core.stringLiteral((String) payload);
+
+        case "TIMES":
+          return unreifyTypedBinary(payload, "op *");
 
         case "TUPLE":
           {
@@ -765,6 +1073,57 @@ public class Plans {
           throw new UnsupportedOperationException(
               "Plan.transform: cannot yet unreify " + tag);
       }
+    }
+
+    /**
+     * Unreifies a binary operator payload {@code [lhs, rhs, type]} into {@code
+     * APPLY(op, (lhs, rhs))}.
+     */
+    private Core.Exp unreifyTypedBinary(Object payload, String opName) {
+      List<?> p = asList(payload);
+      Core.Exp lhs = unreifyExp(p.get(0));
+      Core.Exp rhs = unreifyExp(p.get(1));
+      Type type = unreifyType(p.get(2));
+      return core.apply(
+          Pos.ZERO, type, resolveId(opName), core.tuple(ts, lhs, rhs));
+    }
+
+    /**
+     * Unreifies a binary operator payload {@code [lhs, rhs]} into {@code
+     * APPLY(op, (lhs, rhs))} with a fixed result type.
+     */
+    private Core.Exp unreifyUntypedBinary(
+        Object payload, String opName, Type resultType) {
+      List<?> p = asList(payload);
+      Core.Exp lhs = unreifyExp(p.get(0));
+      Core.Exp rhs = unreifyExp(p.get(1));
+      return core.apply(
+          Pos.ZERO, resultType, resolveId(opName), core.tuple(ts, lhs, rhs));
+    }
+
+    /**
+     * Unreifies an n-ary {@code AND}/{@code OR} payload (a list of exprs) into
+     * a right-leaning binary chain of {@code andalso}/{@code orelse}.
+     */
+    private Core.Exp unreifyAndOr(Object payload, BuiltIn fn) {
+      List<?> args = asList(payload);
+      if (args.isEmpty()) {
+        return fn == BuiltIn.Z_ANDALSO
+            ? core.boolLiteral(true)
+            : core.boolLiteral(false);
+      }
+      List<Core.Exp> es = transformEager(args, this::unreifyExp);
+      Core.Exp result = es.get(es.size() - 1);
+      Core.Literal opFn = core.functionLiteral(ts, fn);
+      for (int i = es.size() - 2; i >= 0; i--) {
+        result =
+            core.apply(
+                Pos.ZERO,
+                PrimitiveType.BOOL,
+                opFn,
+                core.tuple(ts, es.get(i), result));
+      }
+      return result;
     }
 
     /** Unreifies a {@code CASE} payload {@code [scrut, matches, type]}. */
@@ -1106,15 +1465,36 @@ public class Plans {
         List<?> pair = asList(a);
         String name = (String) pair.get(0);
         Core.Exp ae = unreifyExp(pair.get(1));
-        // Aggregate's argument is lost in reification; default to no arg.
+        Core.Exp argExp = unreifyOption(pair.get(2));
         Core.Aggregate agg =
-            core.aggregate(((FnType) ae.type).resultType, ae, null);
+            core.aggregate(((FnType) ae.type).resultType, ae, argExp);
         aggMap.put(core.idPat(agg.type, name, 0), agg);
       }
       fb.group(false, keyMap.build(), aggMap.build());
     }
 
-    /** Looks up {@code name} first in local scopes, then in {@code env}. */
+    /**
+     * Unreifies an {@code 'a option} value: {@code ["NONE"]} or {@code ["SOME",
+     * expr]}. Returns null for NONE.
+     */
+    private Core.@Nullable Exp unreifyOption(Object value) {
+      List<?> list = asList(value);
+      if ("SOME".equals(list.get(0))) {
+        return unreifyExp(list.get(1));
+      }
+      return null;
+    }
+
+    /**
+     * Resolves a reified {@code VAR} reference. Tries, in order:
+     *
+     * <ol>
+     *   <li>A locally-bound IdPat (from FN/CASE/LET/from-scan)
+     *   <li>A user-visible {@link Environment} binding
+     *   <li>A built-in by ML name (including internal {@code Z_*} ops, which
+     *       reified as {@code FN_LITERAL} carrying the built-in's mlName)
+     * </ol>
+     */
     Core.Exp resolveId(String name) {
       for (Map<String, Core.NamedPat> scope : localBindings) {
         Core.NamedPat p = scope.get(name);
@@ -1123,11 +1503,30 @@ public class Plans {
         }
       }
       Binding b = env.getOpt(name);
-      if (b == null) {
-        throw new IllegalStateException(
-            "Plan.transform: unbound name '" + name + "'");
+      if (b != null) {
+        return core.id((Core.IdPat) b.id);
       }
-      return core.id((Core.IdPat) b.id);
+      BuiltIn builtIn = lookupBuiltInByMlName(name);
+      if (builtIn != null) {
+        return core.functionLiteral(ts, builtIn);
+      }
+      throw new IllegalStateException(
+          "Plan.transform: unbound name '" + name + "'");
+    }
+
+    private static @Nullable BuiltIn lookupBuiltInByMlName(String mlName) {
+      BuiltIn b = BuiltIn.BY_ML_NAME.get(mlName);
+      if (b != null) {
+        return b;
+      }
+      // BY_ML_NAME omits internal ($) operators like Z_SUM_INT (mlName
+      // "sum:int"). Scan all BuiltIn values to find a match.
+      for (BuiltIn bi : BuiltIn.values()) {
+        if (bi.mlName.equals(mlName)) {
+          return bi;
+        }
+      }
+      return null;
     }
 
     Core.Pat unreifyPat(Object value) {

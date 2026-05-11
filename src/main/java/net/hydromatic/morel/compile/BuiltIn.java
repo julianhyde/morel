@@ -4653,14 +4653,18 @@ public enum BuiltIn {
     // their constructors reference the range type. Pre-register it here so the
     // dependency is satisfied regardless of alphabetical enum order. Likewise,
     // TYPE and CORE_PAT must be registered before CORE_EXPR, since CORE_EXPR's
-    // constructors carry `Type.t` and `Core.pat` payloads.
+    // constructors carry `Type.t` and `Core.pat` payloads. OPTION must be
+    // pre-registered too: CORE_EXPR's GROUP uses `expr option` for the
+    // optional aggregate argument.
     defineType(typeSystem, bindings, Datatype.RANGE);
     defineType(typeSystem, bindings, Datatype.TYPE);
     defineType(typeSystem, bindings, Datatype.CORE_PAT);
+    defineType(typeSystem, bindings, Datatype.OPTION);
     for (Datatype datatype : Datatype.values()) {
       if (datatype != Datatype.RANGE
           && datatype != Datatype.TYPE
-          && datatype != Datatype.CORE_PAT) {
+          && datatype != Datatype.CORE_PAT
+          && datatype != Datatype.OPTION) {
         defineType(typeSystem, bindings, datatype);
       }
     }
@@ -4812,29 +4816,49 @@ public enum BuiltIn {
         false,
         0,
         h ->
-            h.tyCon(Constructor.CORE_EXPR_APPLY)
+            h.tyCon(Constructor.CORE_EXPR_AND)
+                .tyCon(Constructor.CORE_EXPR_APPLY)
+                .tyCon(Constructor.CORE_EXPR_AT)
                 .tyCon(Constructor.CORE_EXPR_BOOL_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_CASE)
                 .tyCon(Constructor.CORE_EXPR_CHAR_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_CONCAT)
+                .tyCon(Constructor.CORE_EXPR_CONS)
+                .tyCon(Constructor.CORE_EXPR_DIV)
+                .tyCon(Constructor.CORE_EXPR_DIVIDE)
+                .tyCon(Constructor.CORE_EXPR_ELEM)
+                .tyCon(Constructor.CORE_EXPR_EQUALS)
+                .tyCon(Constructor.CORE_EXPR_EXCEPT)
                 .tyCon(Constructor.CORE_EXPR_FIELD)
                 .tyCon(Constructor.CORE_EXPR_FILTER)
-                .tyCon(Constructor.CORE_EXPR_EXCEPT)
                 .tyCon(Constructor.CORE_EXPR_FN)
+                .tyCon(Constructor.CORE_EXPR_GE)
                 .tyCon(Constructor.CORE_EXPR_GROUP)
+                .tyCon(Constructor.CORE_EXPR_GT)
                 .tyCon(Constructor.CORE_EXPR_INT_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_INTERSECT)
                 .tyCon(Constructor.CORE_EXPR_JOIN)
+                .tyCon(Constructor.CORE_EXPR_LE)
                 .tyCon(Constructor.CORE_EXPR_LET)
                 .tyCon(Constructor.CORE_EXPR_LIST_LITERAL)
-                .tyCon(Constructor.CORE_EXPR_REAL_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_LT)
+                .tyCon(Constructor.CORE_EXPR_MINUS)
+                .tyCon(Constructor.CORE_EXPR_MOD)
+                .tyCon(Constructor.CORE_EXPR_NEG)
+                .tyCon(Constructor.CORE_EXPR_NOT)
+                .tyCon(Constructor.CORE_EXPR_NOT_ELEM)
+                .tyCon(Constructor.CORE_EXPR_NOT_EQUALS)
+                .tyCon(Constructor.CORE_EXPR_OR)
                 .tyCon(Constructor.CORE_EXPR_ORDER)
                 .tyCon(Constructor.CORE_EXPR_PLUS)
                 .tyCon(Constructor.CORE_EXPR_PROJECT)
                 .tyCon(Constructor.CORE_EXPR_RAISE)
+                .tyCon(Constructor.CORE_EXPR_REAL_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_RECORD)
                 .tyCon(Constructor.CORE_EXPR_SKIP)
                 .tyCon(Constructor.CORE_EXPR_STRING_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_TAKE)
+                .tyCon(Constructor.CORE_EXPR_TIMES)
                 .tyCon(Constructor.CORE_EXPR_TUPLE)
                 .tyCon(Constructor.CORE_EXPR_UNION)
                 .tyCon(Constructor.CORE_EXPR_UNIT_LITERAL)
@@ -5170,9 +5194,20 @@ public enum BuiltIn {
         h ->
             Keys.list(
                 Keys.apply(Keys.name("range"), ImmutableList.of(h.get(0))))),
+    // n-ary AND: short-circuit conjunction of zero or more expressions
+    // (binary `andalso` chains flatten to one AND node).
+    CORE_EXPR_AND(Datatype.CORE_EXPR, "AND", h -> Keys.list(Keys.name("expr"))),
     CORE_EXPR_APPLY(
         Datatype.CORE_EXPR,
         "APPLY",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    // AT: list append (`op @`); left, right, list type.
+    CORE_EXPR_AT(
+        Datatype.CORE_EXPR,
+        "AT",
         h ->
             Keys.tuple(
                 ImmutableList.of(
@@ -5192,6 +5227,48 @@ public enum BuiltIn {
                                 Keys.name("pat"), Keys.name("expr")))),
                     Keys.name("t")))),
     CORE_EXPR_CHAR_LITERAL(Datatype.CORE_EXPR, "CHAR_LITERAL", h -> CHAR.key()),
+    // CONCAT: string concatenation `op ^` (string * string -> string).
+    CORE_EXPR_CONCAT(
+        Datatype.CORE_EXPR,
+        "CONCAT",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // CONS: list construction `op ::`; head, tail, list type.
+    CORE_EXPR_CONS(
+        Datatype.CORE_EXPR,
+        "CONS",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    // DIV: integer division `op div`.
+    CORE_EXPR_DIV(
+        Datatype.CORE_EXPR,
+        "DIV",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    // DIVIDE: real division `op /`.
+    CORE_EXPR_DIVIDE(
+        Datatype.CORE_EXPR,
+        "DIVIDE",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    // ELEM: membership test `op elem`.
+    CORE_EXPR_ELEM(
+        Datatype.CORE_EXPR,
+        "ELEM",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // EQUALS: equality `op =`. Operand type is recoverable from operands.
+    CORE_EXPR_EQUALS(
+        Datatype.CORE_EXPR,
+        "EQUALS",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
     // EXCEPT: input, distinct?, list of other inputs.
     CORE_EXPR_EXCEPT(
         Datatype.CORE_EXPR,
@@ -5222,8 +5299,15 @@ public enum BuiltIn {
             Keys.tuple(
                 ImmutableList.of(
                     Keys.name("pat"), Keys.name("expr"), Keys.name("t")))),
-    // GROUP: input, list of (name, key-expr) group keys, list of (name, agg)
-    // aggregates. Aggregate is reified just as its function expression.
+    // GE: greater-or-equal `op >=`.
+    CORE_EXPR_GE(
+        Datatype.CORE_EXPR,
+        "GE",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // GROUP: input, list of (name, key-expr) group keys, list of
+    // (name, agg-fn, optional argument) aggregates. Each aggregate carries
+    // its aggregate function plus the optional per-row argument expression.
     CORE_EXPR_GROUP(
         Datatype.CORE_EXPR,
         "GROUP",
@@ -5237,7 +5321,17 @@ public enum BuiltIn {
                     Keys.list(
                         Keys.tuple(
                             ImmutableList.of(
-                                STRING.key(), Keys.name("expr"))))))),
+                                STRING.key(),
+                                Keys.name("expr"),
+                                Keys.apply(
+                                    Keys.name("option"),
+                                    ImmutableList.of(Keys.name("expr"))))))))),
+    // GT: greater-than `op >`.
+    CORE_EXPR_GT(
+        Datatype.CORE_EXPR,
+        "GT",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
     CORE_EXPR_INT_LITERAL(Datatype.CORE_EXPR, "INT_LITERAL", h -> INT.key()),
     // INTERSECT: input, distinct?, list of other inputs.
     CORE_EXPR_INTERSECT(
@@ -5257,6 +5351,12 @@ public enum BuiltIn {
             Keys.tuple(
                 ImmutableList.of(
                     Keys.name("expr"), Keys.name("expr"), Keys.name("expr")))),
+    // LE: less-or-equal `op <=`.
+    CORE_EXPR_LE(
+        Datatype.CORE_EXPR,
+        "LE",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
     // LET: list of (pat, value-expr) bindings, body.
     CORE_EXPR_LET(
         Datatype.CORE_EXPR,
@@ -5276,6 +5376,50 @@ public enum BuiltIn {
             Keys.tuple(
                 ImmutableList.of(
                     Keys.list(Keys.name("expr")), Keys.name("t")))),
+    // LT: less-than `op <`.
+    CORE_EXPR_LT(
+        Datatype.CORE_EXPR,
+        "LT",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // MINUS: subtraction.
+    CORE_EXPR_MINUS(
+        Datatype.CORE_EXPR,
+        "MINUS",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    // MOD: integer modulo `op mod`.
+    CORE_EXPR_MOD(
+        Datatype.CORE_EXPR,
+        "MOD",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
+    // NEG: unary negation.
+    CORE_EXPR_NEG(
+        Datatype.CORE_EXPR,
+        "NEG",
+        h -> Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("t")))),
+    // NOT: boolean negation `not`.
+    CORE_EXPR_NOT(Datatype.CORE_EXPR, "NOT", h -> Keys.name("expr")),
+    // NOT_ELEM: non-membership `op notelem`.
+    CORE_EXPR_NOT_ELEM(
+        Datatype.CORE_EXPR,
+        "NOT_ELEM",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // NOT_EQUALS: inequality `op <>`.
+    CORE_EXPR_NOT_EQUALS(
+        Datatype.CORE_EXPR,
+        "NOT_EQUALS",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // n-ary OR: short-circuit disjunction of zero or more expressions
+    // (binary `orelse` chains flatten to one OR node).
+    CORE_EXPR_OR(Datatype.CORE_EXPR, "OR", h -> Keys.list(Keys.name("expr"))),
     CORE_EXPR_ORDER(
         Datatype.CORE_EXPR,
         "ORDER",
@@ -5326,6 +5470,14 @@ public enum BuiltIn {
         "TAKE",
         h ->
             Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // TIMES: multiplication.
+    CORE_EXPR_TIMES(
+        Datatype.CORE_EXPR,
+        "TIMES",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
     CORE_EXPR_TUPLE(
         Datatype.CORE_EXPR, "TUPLE", h -> Keys.list(Keys.name("expr"))),
     // UNION: input, distinct?, list of other inputs.

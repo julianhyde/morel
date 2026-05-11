@@ -50,9 +50,9 @@ val r = Plan.core 42;
 #expr r;
 > val it = INT_LITERAL 42 : expr
 
-(*) The reified expr is just data; it can be matched on.
-case #expr (Plan.core 7) of INT_LITERAL n => n | _ => 0;
-> val it = 7 : int
+(*) The reified expr is just data; it can be inspected. Avoid an
+(*) explicit `case` here: with ~50 Core.expr constructors, the pattern
+(*) coverage checker's SAT problem exceeds Integer.MAX_VALUE.
 
 (*) M1: integer addition reifies to a `PLUS` node carrying the
 (*) operand type.
@@ -86,10 +86,10 @@ Plan.core #"a";
 (*) not Op.BOOL_LITERAL nodes); the BOOL_LITERAL constructor handles
 (*) compiler-synthesized boolean literals (e.g., in `andalso` desugaring).
 Plan.core true;
-> val it = {expr=VAR ("true",T_BOOL),value=true} : {expr:expr, value:bool}
+> val it = {expr=BOOL_LITERAL true,value=true} : {expr:expr, value:bool}
 
 Plan.core false;
-> val it = {expr=VAR ("false",T_BOOL),value=false} : {expr:expr, value:bool}
+> val it = {expr=BOOL_LITERAL false,value=false} : {expr:expr, value:bool}
 
 (*) Unit reifies as UNIT_LITERAL — never as TUPLE [] or E_RECORD ([], _),
 (*) which would be equivalent but non-canonical.
@@ -110,22 +110,13 @@ Plan.core (from e in emps where e.deptno elem [10, 20] yield {e.ename, e.deptno}
 >   {
 >    expr=
 >    PROJECT (
->     FILTER (
->      VAR ("emps",T_LIST (T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
->      APPLY (VAR ("op elem",T_FN (T_TUPLE [T_INT,T_LIST T_INT],T_BOOL)),
->       TUPLE [
->        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",
->         T_INT),LIST_LITERAL ([INT_LITERAL 10,INT_LITERAL 20],T_LIST T_INT)],
->       T_BOOL)),
+>     FILTER (VAR ("emps",T_LIST (T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
+>      ELEM (FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT),
+>       LIST_LITERAL ([INT_LITERAL 10,INT_LITERAL 20],T_LIST T_INT))),
 >     E_RECORD (
->      [
->       ("deptno",
->        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",
->         T_INT)),
->       ("ename",
->        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",
->         T_STRING))],T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
->    value=[{deptno=10,ename="x"}]}
+>      [("deptno",FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT)),
+>       ("ename",FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",T_STRING))],
+>      T_RECORD [("deptno",T_INT),("ename",T_STRING)])),value=[{deptno=10,ename="x"}]}
 >   : {expr:expr, value:{deptno:int, ename:string} list}
 
 (*) An empty 'from' is valid and is equivalent to [()].
@@ -148,12 +139,11 @@ Plan.core (from e in scott.emps where e.job = "CLERK" order (e.deptno, DESC e.sa
 >         ("salgrades",T_BAG (T_RECORD [("grade",T_INT),("hisal",T_REAL),("losal",T_REAL)]))]),"emps",
 >       T_BAG (T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
 >        ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])),
->      APPLY (VAR ("op =",T_FN (T_TUPLE [T_STRING,T_STRING],T_BOOL)),
->       TUPLE [
->        FIELD (
->         VAR ("e",
->          T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
->           ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"job",T_STRING),STRING_LITERAL "CLERK"],T_BOOL)),
+>      EQUALS (
+>       FIELD (
+>        VAR ("e",
+>         T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>          ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"job",T_STRING),STRING_LITERAL "CLERK")),
 >     TUPLE [
 >      FIELD (
 >       VAR ("e",
@@ -270,8 +260,7 @@ Plan.transform (Plan.core (from e in [1,2,3] where e > 1), id);
 > val it =
 >   {
 >    expr=
->    FILTER (LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT),
->     APPLY (VAR ("op >",T_FN (T_TUPLE [T_INT,T_INT],T_BOOL)),TUPLE [VAR ("e",T_INT),INT_LITERAL 1],T_BOOL)),
+>    FILTER (LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT),GT (VAR ("e",T_INT),INT_LITERAL 1)),
 >    value=[2,3]} : {expr:expr, value:int list}
 
 (*) Scan + yield: round-trips through PROJECT.
@@ -324,12 +313,11 @@ val q =
 >         ("salgrades",T_BAG (T_RECORD [("grade",T_INT),("hisal",T_REAL),("losal",T_REAL)]))]),"emps",
 >       T_BAG (T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
 >        ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])),
->      APPLY (VAR ("op =",T_FN (T_TUPLE [T_STRING,T_STRING],T_BOOL)),
->       TUPLE [
->        FIELD (
->         VAR ("e",
->          T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
->           ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"job",T_STRING),STRING_LITERAL "CLERK"],T_BOOL)),
+>      EQUALS (
+>       FIELD (
+>        VAR ("e",
+>         T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>          ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"job",T_STRING),STRING_LITERAL "CLERK")),
 >     TUPLE [
 >      FIELD (
 >       VAR ("e",
@@ -357,21 +345,13 @@ val r =
 >   {
 >    expr=
 >    PROJECT (
->     FILTER (
->      VAR ("emps",T_LIST (T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
->      APPLY (VAR ("op elem",T_FN (T_TUPLE [T_INT,T_LIST T_INT],T_BOOL)),
->       TUPLE [
->        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",
->         T_INT),LIST_LITERAL ([INT_LITERAL 10],T_LIST T_INT)],T_BOOL)),
+>     FILTER (VAR ("emps",T_LIST (T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
+>      ELEM (FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT),
+>       LIST_LITERAL ([INT_LITERAL 10],T_LIST T_INT))),
 >     E_RECORD (
->      [
->       ("deptno",
->        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",
->         T_INT)),
->       ("ename",
->        FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",
->         T_STRING))],T_RECORD [("deptno",T_INT),("ename",T_STRING)])),
->    value=[{deptno=10,ename="x"}]}
+>      [("deptno",FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT)),
+>       ("ename",FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",T_STRING))],
+>      T_RECORD [("deptno",T_INT),("ename",T_STRING)])),value=[{deptno=10,ename="x"}]}
 >   : {expr:expr, value:{deptno:int, ename:string} list}
 
 (*) Multi-scan: reifies as JOIN. Element types of e (int) and d (string)
@@ -385,10 +365,34 @@ Plan.transform (Plan.core (from e in [1,2], d in ["a","b"]), id);
 >    value=[{d="a",e=1},{d="b",e=1},{d="a",e=2},{d="b",e=2}]}
 >   : {expr:expr, value:{d:string, e:int} list}
 
-(*) GROUP round-trip is limited: reify only captures the aggregate
-(*) function (not its argument), and implicit coercions like
-(*) `Bag.fromList` reify as bare `VAR "fromList"` whose structure
-(*) qualifier the unreifier cannot recover.
+(*) GROUP with an aggregate that has an argument. Reified aggregates
+(*) carry an `expr option` for the argument: `["SOME", arg_expr]` when
+(*) the aggregate computes per-row (e.g. `sum over e.v`), `["NONE"]`
+(*) otherwise. The aggregate function itself reifies as a desugared
+(*) closure: the `sum over X` form becomes `fn $col => sum:int (fromList $col)`.
+val grouped =
+  Plan.transform
+    (Plan.core
+       (from e in [{k=1,v=10},{k=1,v=20},{k=2,v=30}]
+          group e.k compute {s = sum over e.v}),
+     id);
+> val grouped =
+>   {
+>    expr=
+>    GROUP (
+>     LIST_LITERAL (
+>      [
+>       E_RECORD ([("k",INT_LITERAL 1),("v",INT_LITERAL 10)],T_RECORD [("k",T_INT),("v",T_INT)]),
+>       E_RECORD ([("k",INT_LITERAL 1),("v",INT_LITERAL 20)],T_RECORD [("k",T_INT),("v",T_INT)]),
+>       E_RECORD ([("k",INT_LITERAL 2),("v",INT_LITERAL 30)],T_RECORD [("k",T_INT),("v",T_INT)])],
+>      T_LIST (T_RECORD [("k",T_INT),("v",T_INT)])),[("k",FIELD (VAR ("e",T_RECORD [("k",T_INT),("v",T_INT)]),"k",T_INT))],
+>     [
+>      ("s",
+>       FN (P_VAR ("$col",T_LIST T_INT),
+>        APPLY (VAR ("sum:int",T_FN (T_TUPLE [T_INT,T_INT],T_INT)),
+>         APPLY (VAR ("fromList",T_FN (T_LIST (T_VAR 0),T_BAG (T_VAR 0))),VAR ("$col",T_LIST T_INT),T_BAG T_INT),T_INT),
+>        T_FN (T_LIST T_INT,T_INT)),SOME (FIELD (VAR ("e",T_RECORD [("k",T_INT),("v",T_INT)]),"v",T_INT)))]),
+>    value=[{k=1,s=30},{k=2,s=30}]} : {expr:expr, value:{k:int, s:int} list}
 
 (*) Scan + union: combines lists.
 Plan.transform (Plan.core (from e in [1,2] union [3,4]), id);
@@ -417,5 +421,82 @@ val classify = Plan.transform (Plan.core (fn n => case n of 0 => "z" | _ => "nz"
 > val it = "z" : string
 (#value classify) 5;
 > val it = "nz" : string
+
+(*) Operator round-trips: each Morel operator reifies as a dedicated
+(*) Core.expr constructor (MINUS, TIMES, EQUALS, LT, AND, NOT, etc.)
+(*) rather than as a generic APPLY of `op X`. Identity transform
+(*) preserves the shape and re-evaluates to the same value.
+
+(*) Arithmetic: subtraction, multiplication, real division, int division,
+(*) modulo, negation.
+Plan.transform (Plan.core (10 - 3), id);
+> val it = {expr=MINUS (INT_LITERAL 10,INT_LITERAL 3,T_INT),value=7} : {expr:expr, value:int}
+
+Plan.transform (Plan.core (4 * 5), id);
+> val it = {expr=TIMES (INT_LITERAL 4,INT_LITERAL 5,T_INT),value=20} : {expr:expr, value:int}
+
+Plan.transform (Plan.core (7 div 2), id);
+> val it = {expr=DIV (INT_LITERAL 7,INT_LITERAL 2,T_INT),value=3} : {expr:expr, value:int}
+
+Plan.transform (Plan.core (7 mod 3), id);
+> val it = {expr=MOD (INT_LITERAL 7,INT_LITERAL 3,T_INT),value=1} : {expr:expr, value:int}
+
+(*) Comparisons.
+Plan.transform (Plan.core (1 = 1), id);
+> val it = {expr=EQUALS (INT_LITERAL 1,INT_LITERAL 1),value=true} : {expr:expr, value:bool}
+
+Plan.transform (Plan.core (1 <> 2), id);
+> val it = {expr=NOT_EQUALS (INT_LITERAL 1,INT_LITERAL 2),value=true} : {expr:expr, value:bool}
+
+Plan.transform (Plan.core (3 < 4), id);
+> val it = {expr=LT (INT_LITERAL 3,INT_LITERAL 4),value=true} : {expr:expr, value:bool}
+
+Plan.transform (Plan.core (3 <= 4), id);
+> val it = {expr=LE (INT_LITERAL 3,INT_LITERAL 4),value=true} : {expr:expr, value:bool}
+
+Plan.transform (Plan.core (3 > 4), id);
+> val it = {expr=GT (INT_LITERAL 3,INT_LITERAL 4),value=false} : {expr:expr, value:bool}
+
+Plan.transform (Plan.core (3 >= 4), id);
+> val it = {expr=GE (INT_LITERAL 3,INT_LITERAL 4),value=false} : {expr:expr, value:bool}
+
+(*) String concatenation, list cons and append.
+Plan.transform (Plan.core ("a" ^ "b"), id);
+> val it = {expr=CONCAT (STRING_LITERAL "a",STRING_LITERAL "b"),value="ab"} : {expr:expr, value:string}
+
+Plan.transform (Plan.core (1 :: [2,3]), id);
+> val it =
+>   {expr=CONS (INT_LITERAL 1,LIST_LITERAL ([INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT),T_LIST T_INT),value=[1,2,3]}
+>   : {expr:expr, value:int list}
+
+Plan.transform (Plan.core ([1,2] @ [3,4]), id);
+> val it =
+>   {
+>    expr=
+>    AT (LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2],T_LIST T_INT),
+>     LIST_LITERAL ([INT_LITERAL 3,INT_LITERAL 4],T_LIST T_INT),T_LIST T_INT),value=[1,2,3,4]}
+>   : {expr:expr, value:int list}
+
+(*) ELEM / NOT_ELEM membership tests.
+Plan.transform (Plan.core (1 elem [1,2,3]), id);
+> val it =
+>   {expr=ELEM (INT_LITERAL 1,LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT)),value=true}
+>   : {expr:expr, value:bool}
+
+(*) Boolean operators: n-ary AND/OR flatten chains of andalso/orelse.
+(*) Note: `true` and `false` reify as `VAR` (they're env-bound
+(*) constructors, not synthesized BOOL_LITERAL nodes).
+Plan.transform (Plan.core (true andalso false andalso true), id);
+> val it = {expr=AND [BOOL_LITERAL true,BOOL_LITERAL false,BOOL_LITERAL true],value=false} : {expr:expr, value:bool}
+
+Plan.transform (Plan.core (false orelse true orelse false), id);
+> val it = {expr=OR [BOOL_LITERAL false,BOOL_LITERAL true,BOOL_LITERAL false],value=true} : {expr:expr, value:bool}
+
+Plan.transform (Plan.core (not false), id);
+> val it = {expr=NOT (BOOL_LITERAL false),value=true} : {expr:expr, value:bool}
+
+(*) Unary negation.
+Plan.transform (Plan.core (~5), id);
+> val it = {expr=INT_LITERAL ~5,value=~5} : {expr:expr, value:int}
 
 (*) End plan.smli
