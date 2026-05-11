@@ -327,6 +327,38 @@ public class Plans {
             Core.Take take = (Core.Take) step;
             current = iof(CORE_EXPR_TAKE, of(current, reifyExp(take.exp)));
             break;
+          case UNORDER:
+            current = iof(CORE_EXPR_UNORDER, current);
+            break;
+          case GROUP:
+            Core.Group group = (Core.Group) step;
+            ImmutableList.Builder<Object> keys = ImmutableList.builder();
+            group.groupExps.forEach(
+                (k, v) -> keys.add(of(k.name, reifyExp(v))));
+            ImmutableList.Builder<Object> aggs = ImmutableList.builder();
+            group.aggregates.forEach(
+                (k, agg) -> aggs.add(of(k.name, reifyExp(agg.aggregate))));
+            current =
+                iof(CORE_EXPR_GROUP, of(current, keys.build(), aggs.build()));
+            break;
+          case UNION:
+          case INTERSECT:
+          case EXCEPT:
+            Core.SetStep setStep = (Core.SetStep) step;
+            BuiltIn.Constructor setCon =
+                step.op == Op.UNION
+                    ? CORE_EXPR_UNION
+                    : step.op == Op.INTERSECT
+                        ? CORE_EXPR_INTERSECT
+                        : CORE_EXPR_EXCEPT;
+            current =
+                iof(
+                    setCon,
+                    of(
+                        current,
+                        setStep.distinct,
+                        transformEager(setStep.args, this::reifyExp)));
+            break;
           default:
             throw new UnsupportedOperationException(
                 "Plan.core: from-step " + step.op + " not yet supported");

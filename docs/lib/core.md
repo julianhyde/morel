@@ -38,10 +38,13 @@ datatype <a id='expr' href="#expr-impl">expr</a>
   | CASE of expr * (string * expr) list * Type.t
   | CHAR_LITERAL of char
   | E_RECORD of (string * expr) list * Type.t
+  | EXCEPT of expr * bool * expr list
   | FIELD of expr * string * Type.t
   | FILTER of expr * expr
   | FN of string * expr * Type.t
+  | GROUP of expr * (string * expr) list * (string * expr) list
   | INT_LITERAL of int
+  | INTERSECT of expr * bool * expr list
   | LET of (string * expr) list * expr
   | LIST_LITERAL of expr list * Type.t
   | ORDER of expr * expr
@@ -53,7 +56,9 @@ datatype <a id='expr' href="#expr-impl">expr</a>
   | STRING_LITERAL of string
   | TAKE of expr * expr
   | TUPLE of expr list
+  | UNION of expr * bool * expr list
   | UNIT_LITERAL
+  | UNORDER of expr
   | VAR of string * Type.t
 </pre>
 

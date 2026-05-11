@@ -4786,8 +4786,11 @@ public enum BuiltIn {
                 .tyCon(Constructor.CORE_EXPR_CHAR_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_FIELD)
                 .tyCon(Constructor.CORE_EXPR_FILTER)
+                .tyCon(Constructor.CORE_EXPR_EXCEPT)
                 .tyCon(Constructor.CORE_EXPR_FN)
+                .tyCon(Constructor.CORE_EXPR_GROUP)
                 .tyCon(Constructor.CORE_EXPR_INT_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_INTERSECT)
                 .tyCon(Constructor.CORE_EXPR_LET)
                 .tyCon(Constructor.CORE_EXPR_LIST_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_REAL_LITERAL)
@@ -4800,7 +4803,9 @@ public enum BuiltIn {
                 .tyCon(Constructor.CORE_EXPR_STRING_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_TAKE)
                 .tyCon(Constructor.CORE_EXPR_TUPLE)
+                .tyCon(Constructor.CORE_EXPR_UNION)
                 .tyCon(Constructor.CORE_EXPR_UNIT_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_UNORDER)
                 .tyCon(Constructor.CORE_EXPR_VAR)),
 
     DATE_MONTH(
@@ -5123,6 +5128,16 @@ public enum BuiltIn {
                             ImmutableList.of(STRING.key(), Keys.name("expr")))),
                     Keys.name("t")))),
     CORE_EXPR_CHAR_LITERAL(Datatype.CORE_EXPR, "CHAR_LITERAL", h -> CHAR.key()),
+    // EXCEPT: input, distinct?, list of other inputs.
+    CORE_EXPR_EXCEPT(
+        Datatype.CORE_EXPR,
+        "EXCEPT",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"),
+                    BOOL.key(),
+                    Keys.list(Keys.name("expr"))))),
     CORE_EXPR_FIELD(
         Datatype.CORE_EXPR,
         "FIELD",
@@ -5143,7 +5158,33 @@ public enum BuiltIn {
             Keys.tuple(
                 ImmutableList.of(
                     STRING.key(), Keys.name("expr"), Keys.name("t")))),
+    // GROUP: input, list of (name, key-expr) group keys, list of (name, agg)
+    // aggregates. Aggregate is reified just as its function expression.
+    CORE_EXPR_GROUP(
+        Datatype.CORE_EXPR,
+        "GROUP",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"),
+                    Keys.list(
+                        Keys.tuple(
+                            ImmutableList.of(STRING.key(), Keys.name("expr")))),
+                    Keys.list(
+                        Keys.tuple(
+                            ImmutableList.of(
+                                STRING.key(), Keys.name("expr"))))))),
     CORE_EXPR_INT_LITERAL(Datatype.CORE_EXPR, "INT_LITERAL", h -> INT.key()),
+    // INTERSECT: input, distinct?, list of other inputs.
+    CORE_EXPR_INTERSECT(
+        Datatype.CORE_EXPR,
+        "INTERSECT",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"),
+                    BOOL.key(),
+                    Keys.list(Keys.name("expr"))))),
     // LET: list of (name, value-expr) bindings, body.
     CORE_EXPR_LET(
         Datatype.CORE_EXPR,
@@ -5214,7 +5255,19 @@ public enum BuiltIn {
             Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
     CORE_EXPR_TUPLE(
         Datatype.CORE_EXPR, "TUPLE", h -> Keys.list(Keys.name("expr"))),
+    // UNION: input, distinct?, list of other inputs.
+    CORE_EXPR_UNION(
+        Datatype.CORE_EXPR,
+        "UNION",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"),
+                    BOOL.key(),
+                    Keys.list(Keys.name("expr"))))),
     CORE_EXPR_UNIT_LITERAL(Datatype.CORE_EXPR, "UNIT_LITERAL"),
+    // UNORDER: just the input.
+    CORE_EXPR_UNORDER(Datatype.CORE_EXPR, "UNORDER", h -> Keys.name("expr")),
     CORE_EXPR_VAR(
         Datatype.CORE_EXPR,
         "VAR",
