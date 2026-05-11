@@ -33,6 +33,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
@@ -266,20 +267,19 @@ public class Plans {
      * LETs of NonRecValDecls into one if convenient.
      */
     Object reifyLet(Core.Let let) {
-      // For now, single binding only (we don't flatten nested lets).
       Core.ValDecl decl = let.decl;
-      String name;
-      Object valueExpr;
+      ImmutableList<Object> bindings;
       if (decl instanceof Core.NonRecValDecl) {
         Core.NonRecValDecl nrd = (Core.NonRecValDecl) decl;
-        name = nrd.pat.name;
-        valueExpr = reifyExp(nrd.exp);
+        bindings = of(of(nrd.pat.name, reifyExp(nrd.exp)));
       } else {
-        // RecValDecl: skip for now, fall back to a synthetic name.
-        name = "<rec>";
-        valueExpr = iof(CORE_EXPR_UNIT_LITERAL);
+        // RecValDecl: multiple mutually-recursive bindings.
+        Core.RecValDecl rvd = (Core.RecValDecl) decl;
+        bindings =
+            transformEager(
+                rvd.list, nrd -> of(nrd.pat.name, reifyExp(nrd.exp)));
       }
-      return iof(CORE_EXPR_LET, of(of(of(name, valueExpr)), reifyExp(let.exp)));
+      return iof(CORE_EXPR_LET, of(bindings, reifyExp(let.exp)));
     }
 
     /**
@@ -423,6 +423,11 @@ public class Plans {
 
         case TY_VAR:
           return iof(TYPE_VAR, ((TypeVar) type).ordinal);
+
+        case FORALL_TYPE:
+          // Unwrap the universal quantifier; the body's type variables
+          // are reified as T_VAR with their ordinals.
+          return reifyType(((ForallType) type).type);
 
         default:
           break;
