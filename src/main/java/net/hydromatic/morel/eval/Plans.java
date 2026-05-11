@@ -319,8 +319,18 @@ public class Plans {
               current = reifyExp(scan.exp);
               haveScan = true;
             } else {
-              throw new UnsupportedOperationException(
-                  "Plan.core: multi-scan `from` not yet supported");
+              // Subsequent scans become JOINs with the existing tree. The
+              // join condition defaults to BOOL_LITERAL true (Cartesian
+              // product); a scan with an explicit `on` condition reifies
+              // that condition.
+              Object joinCond =
+                  scan.condition != null
+                      ? reifyExp(scan.condition)
+                      : iof(CORE_EXPR_BOOL_LITERAL, true);
+              current =
+                  iof(
+                      CORE_EXPR_JOIN,
+                      of(current, reifyExp(scan.exp), joinCond));
             }
             break;
           case WHERE:

@@ -4791,6 +4791,7 @@ public enum BuiltIn {
                 .tyCon(Constructor.CORE_EXPR_GROUP)
                 .tyCon(Constructor.CORE_EXPR_INT_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_INTERSECT)
+                .tyCon(Constructor.CORE_EXPR_JOIN)
                 .tyCon(Constructor.CORE_EXPR_LET)
                 .tyCon(Constructor.CORE_EXPR_LIST_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_REAL_LITERAL)
@@ -5185,6 +5186,14 @@ public enum BuiltIn {
                     Keys.name("expr"),
                     BOOL.key(),
                     Keys.list(Keys.name("expr"))))),
+    // JOIN: left, right, condition.
+    CORE_EXPR_JOIN(
+        Datatype.CORE_EXPR,
+        "JOIN",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"), Keys.name("expr"), Keys.name("expr")))),
     // LET: list of (name, value-expr) bindings, body.
     CORE_EXPR_LET(
         Datatype.CORE_EXPR,

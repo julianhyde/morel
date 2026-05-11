@@ -45,6 +45,7 @@ datatype <a id='expr' href="#expr-impl">expr</a>
   | GROUP of expr * (string * expr) list * (string * expr) list
   | INT_LITERAL of int
   | INTERSECT of expr * bool * expr list
+  | JOIN of expr * expr * expr
   | LET of (string * expr) list * expr
   | LIST_LITERAL of expr list * Type.t
   | ORDER of expr * expr
