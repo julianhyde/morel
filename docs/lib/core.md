@@ -39,8 +39,10 @@ datatype <a id='expr' href="#expr-impl">expr</a>
   | FILTER of expr * expr
   | INT_LITERAL of int
   | LIST_LITERAL of expr list * Type.t
+  | ORDER of expr * expr
   | PLUS of expr * expr * Type.t
   | PROJECT of expr * expr
+  | STRING_LITERAL of string
   | TUPLE of expr list
   | UNIT_LITERAL
   | VAR of string * Type.t

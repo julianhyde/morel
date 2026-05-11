@@ -87,6 +87,11 @@ public class Plans {
             CORE_EXPR_INT_LITERAL.constructor,
             ((Core.Literal) exp).unwrap(Integer.class));
 
+      case STRING_LITERAL:
+        return of(
+            CORE_EXPR_STRING_LITERAL.constructor,
+            ((Core.Literal) exp).unwrap(String.class));
+
       case UNIT_LITERAL:
         return of(CORE_EXPR_UNIT_LITERAL.constructor);
 
@@ -208,6 +213,11 @@ public class Plans {
               of(
                   CORE_EXPR_PROJECT.constructor,
                   of(current, reifyExp(yield.exp)));
+          break;
+        case ORDER:
+          Core.Order order = (Core.Order) step;
+          current =
+              of(CORE_EXPR_ORDER.constructor, of(current, reifyExp(order.exp)));
           break;
         default:
           throw new UnsupportedOperationException(

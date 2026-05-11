@@ -4785,9 +4785,11 @@ public enum BuiltIn {
                 .tyCon(Constructor.CORE_EXPR_FILTER)
                 .tyCon(Constructor.CORE_EXPR_INT_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_LIST_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_ORDER)
                 .tyCon(Constructor.CORE_EXPR_PLUS)
                 .tyCon(Constructor.CORE_EXPR_PROJECT)
                 .tyCon(Constructor.CORE_EXPR_RECORD)
+                .tyCon(Constructor.CORE_EXPR_STRING_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_TUPLE)
                 .tyCon(Constructor.CORE_EXPR_UNIT_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_VAR)),
@@ -5118,6 +5120,11 @@ public enum BuiltIn {
             Keys.tuple(
                 ImmutableList.of(
                     Keys.list(Keys.name("expr")), Keys.name("t")))),
+    CORE_EXPR_ORDER(
+        Datatype.CORE_EXPR,
+        "ORDER",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
     CORE_EXPR_PLUS(
         Datatype.CORE_EXPR,
         "PLUS",
@@ -5142,6 +5149,8 @@ public enum BuiltIn {
                         Keys.tuple(
                             ImmutableList.of(STRING.key(), Keys.name("expr")))),
                     Keys.name("t")))),
+    CORE_EXPR_STRING_LITERAL(
+        Datatype.CORE_EXPR, "STRING_LITERAL", h -> STRING.key()),
     CORE_EXPR_TUPLE(
         Datatype.CORE_EXPR, "TUPLE", h -> Keys.list(Keys.name("expr"))),
     CORE_EXPR_UNIT_LITERAL(Datatype.CORE_EXPR, "UNIT_LITERAL"),

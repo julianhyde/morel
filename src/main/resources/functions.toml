@@ -913,7 +913,7 @@ inspect, and pretty-print expressions as ordinary values.
 [[types]]
 structure = "Core"
 name = "expr"
-type = "datatype expr = APPLY of expr * expr * Type.t | E_RECORD of (string * expr) list * Type.t | FIELD of expr * string * Type.t | FILTER of expr * expr | INT_LITERAL of int | LIST_LITERAL of expr list * Type.t | PLUS of expr * expr * Type.t | PROJECT of expr * expr | TUPLE of expr list | UNIT_LITERAL | VAR of string * Type.t"
+type = "datatype expr = APPLY of expr * expr * Type.t | E_RECORD of (string * expr) list * Type.t | FIELD of expr * string * Type.t | FILTER of expr * expr | INT_LITERAL of int | LIST_LITERAL of expr list * Type.t | ORDER of expr * expr | PLUS of expr * expr * Type.t | PROJECT of expr * expr | STRING_LITERAL of string | TUPLE of expr list | UNIT_LITERAL | VAR of string * Type.t"
 specified = "morel"
 description = """
 is a Morel expression in its typed, post-desugar internal form.
