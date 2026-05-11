@@ -4782,17 +4782,23 @@ public enum BuiltIn {
         h ->
             h.tyCon(Constructor.CORE_EXPR_APPLY)
                 .tyCon(Constructor.CORE_EXPR_BOOL_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_CASE)
                 .tyCon(Constructor.CORE_EXPR_CHAR_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_FIELD)
                 .tyCon(Constructor.CORE_EXPR_FILTER)
+                .tyCon(Constructor.CORE_EXPR_FN)
                 .tyCon(Constructor.CORE_EXPR_INT_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_LET)
                 .tyCon(Constructor.CORE_EXPR_LIST_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_REAL_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_ORDER)
                 .tyCon(Constructor.CORE_EXPR_PLUS)
                 .tyCon(Constructor.CORE_EXPR_PROJECT)
+                .tyCon(Constructor.CORE_EXPR_RAISE)
                 .tyCon(Constructor.CORE_EXPR_RECORD)
+                .tyCon(Constructor.CORE_EXPR_SKIP)
                 .tyCon(Constructor.CORE_EXPR_STRING_LITERAL)
+                .tyCon(Constructor.CORE_EXPR_TAKE)
                 .tyCon(Constructor.CORE_EXPR_TUPLE)
                 .tyCon(Constructor.CORE_EXPR_UNIT_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_VAR)),
@@ -5104,6 +5110,18 @@ public enum BuiltIn {
                 ImmutableList.of(
                     Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
     CORE_EXPR_BOOL_LITERAL(Datatype.CORE_EXPR, "BOOL_LITERAL", h -> BOOL.key()),
+    // CASE: scrutinee, list of (pat-string, body) matches, result type.
+    CORE_EXPR_CASE(
+        Datatype.CORE_EXPR,
+        "CASE",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("expr"),
+                    Keys.list(
+                        Keys.tuple(
+                            ImmutableList.of(STRING.key(), Keys.name("expr")))),
+                    Keys.name("t")))),
     CORE_EXPR_CHAR_LITERAL(Datatype.CORE_EXPR, "CHAR_LITERAL", h -> CHAR.key()),
     CORE_EXPR_FIELD(
         Datatype.CORE_EXPR,
@@ -5117,7 +5135,26 @@ public enum BuiltIn {
         "FILTER",
         h ->
             Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // FN: parameter name (as a string, assuming IdPat), body, fn type.
+    CORE_EXPR_FN(
+        Datatype.CORE_EXPR,
+        "FN",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    STRING.key(), Keys.name("expr"), Keys.name("t")))),
     CORE_EXPR_INT_LITERAL(Datatype.CORE_EXPR, "INT_LITERAL", h -> INT.key()),
+    // LET: list of (name, value-expr) bindings, body.
+    CORE_EXPR_LET(
+        Datatype.CORE_EXPR,
+        "LET",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.list(
+                        Keys.tuple(
+                            ImmutableList.of(STRING.key(), Keys.name("expr")))),
+                    Keys.name("expr")))),
     CORE_EXPR_LIST_LITERAL(
         Datatype.CORE_EXPR,
         "LIST_LITERAL",
@@ -5142,6 +5179,12 @@ public enum BuiltIn {
         "PROJECT",
         h ->
             Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
+    // RAISE: the exception to raise, with the result type (often a type
+    // variable since raise has bottom type).
+    CORE_EXPR_RAISE(
+        Datatype.CORE_EXPR,
+        "RAISE",
+        h -> Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("t")))),
     CORE_EXPR_REAL_LITERAL(Datatype.CORE_EXPR, "REAL_LITERAL", h -> REAL.key()),
     // ML name "E_RECORD" to avoid clashing with the `Variant` datatype's
     // RECORD constructor.
@@ -5155,8 +5198,20 @@ public enum BuiltIn {
                         Keys.tuple(
                             ImmutableList.of(STRING.key(), Keys.name("expr")))),
                     Keys.name("t")))),
+    // SKIP: input, count.
+    CORE_EXPR_SKIP(
+        Datatype.CORE_EXPR,
+        "SKIP",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
     CORE_EXPR_STRING_LITERAL(
         Datatype.CORE_EXPR, "STRING_LITERAL", h -> STRING.key()),
+    // TAKE: input, count.
+    CORE_EXPR_TAKE(
+        Datatype.CORE_EXPR,
+        "TAKE",
+        h ->
+            Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
     CORE_EXPR_TUPLE(
         Datatype.CORE_EXPR, "TUPLE", h -> Keys.list(Keys.name("expr"))),
     CORE_EXPR_UNIT_LITERAL(Datatype.CORE_EXPR, "UNIT_LITERAL"),

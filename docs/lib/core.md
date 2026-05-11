@@ -35,17 +35,23 @@ inspect, and pretty-print expressions as ordinary values.
 datatype <a id='expr' href="#expr-impl">expr</a>
   = APPLY of expr * expr * Type.t
   | BOOL_LITERAL of bool
+  | CASE of expr * (string * expr) list * Type.t
   | CHAR_LITERAL of char
   | E_RECORD of (string * expr) list * Type.t
   | FIELD of expr * string * Type.t
   | FILTER of expr * expr
+  | FN of string * expr * Type.t
   | INT_LITERAL of int
+  | LET of (string * expr) list * expr
   | LIST_LITERAL of expr list * Type.t
   | ORDER of expr * expr
   | PLUS of expr * expr * Type.t
   | PROJECT of expr * expr
+  | RAISE of expr * Type.t
   | REAL_LITERAL of real
+  | SKIP of expr * expr
   | STRING_LITERAL of string
+  | TAKE of expr * expr
   | TUPLE of expr list
   | UNIT_LITERAL
   | VAR of string * Type.t

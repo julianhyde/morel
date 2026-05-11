@@ -148,7 +148,16 @@ public class Plans {
 
         case ID:
           Core.Id id = (Core.Id) exp;
-          return iof(CORE_EXPR_VAR, of(id.idPat.name, reifyType(id.type)));
+          // Strip the "$N" overload-resolution suffix from identifier names
+          // (e.g. "op elem$1" -> "op elem"). That suffix is an internal
+          // disambiguator and varies across resolutions; canonical reified
+          // form uses the base name.
+          String idName = id.idPat.name;
+          int dollar = idName.indexOf('$');
+          if (dollar >= 0) {
+            idName = idName.substring(0, dollar);
+          }
+          return iof(CORE_EXPR_VAR, of(idName, reifyType(id.type)));
 
         case FN_LITERAL:
           // A bare reference to a built-in (e.g. `op elem` resolved to a
@@ -220,10 +229,57 @@ public class Plans {
         case FROM:
           return reifyFrom((Core.From) exp);
 
+        case CASE:
+          Core.Case caseExp = (Core.Case) exp;
+          ImmutableList.Builder<Object> matches = ImmutableList.builder();
+          for (Core.Match m : caseExp.matchList) {
+            matches.add(of(m.pat.toString(), reifyExp(m.exp)));
+          }
+          return iof(
+              CORE_EXPR_CASE,
+              of(reifyExp(caseExp.exp), matches.build(), reifyType(exp.type)));
+
+        case FN:
+          Core.Fn fn = (Core.Fn) exp;
+          return iof(
+              CORE_EXPR_FN,
+              of(fn.idPat.name, reifyExp(fn.exp), reifyType(exp.type)));
+
+        case LET:
+          Core.Let let = (Core.Let) exp;
+          return reifyLet(let);
+
+        case RAISE:
+          Core.Raise raise = (Core.Raise) exp;
+          return iof(
+              CORE_EXPR_RAISE, of(reifyExp(raise.exp), reifyType(exp.type)));
+
         default:
           throw new UnsupportedOperationException(
               "Plan.core: cannot yet reify " + exp.op + " (" + exp + ")");
       }
+    }
+
+    /**
+     * Reifies a {@link Core.Let} into {@code LET ([(name, value), ...], body)}.
+     * Handles only single-pattern bindings (the typical case); collapses nested
+     * LETs of NonRecValDecls into one if convenient.
+     */
+    Object reifyLet(Core.Let let) {
+      // For now, single binding only (we don't flatten nested lets).
+      Core.ValDecl decl = let.decl;
+      String name;
+      Object valueExpr;
+      if (decl instanceof Core.NonRecValDecl) {
+        Core.NonRecValDecl nrd = (Core.NonRecValDecl) decl;
+        name = nrd.pat.name;
+        valueExpr = reifyExp(nrd.exp);
+      } else {
+        // RecValDecl: skip for now, fall back to a synthetic name.
+        name = "<rec>";
+        valueExpr = iof(CORE_EXPR_UNIT_LITERAL);
+      }
+      return iof(CORE_EXPR_LET, of(of(of(name, valueExpr)), reifyExp(let.exp)));
     }
 
     /**
@@ -262,6 +318,14 @@ public class Plans {
           case ORDER:
             Core.Order order = (Core.Order) step;
             current = iof(CORE_EXPR_ORDER, of(current, reifyExp(order.exp)));
+            break;
+          case SKIP:
+            Core.Skip skip = (Core.Skip) step;
+            current = iof(CORE_EXPR_SKIP, of(current, reifyExp(skip.exp)));
+            break;
+          case TAKE:
+            Core.Take take = (Core.Take) step;
+            current = iof(CORE_EXPR_TAKE, of(current, reifyExp(take.exp)));
             break;
           default:
             throw new UnsupportedOperationException(
