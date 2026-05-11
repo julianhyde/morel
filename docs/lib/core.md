@@ -35,18 +35,18 @@ inspect, and pretty-print expressions as ordinary values.
 datatype <a id='expr' href="#expr-impl">expr</a>
   = APPLY of expr * expr * Type.t
   | BOOL_LITERAL of bool
-  | CASE of expr * (string * expr) list * Type.t
+  | CASE of expr * (pat * expr) list * Type.t
   | CHAR_LITERAL of char
   | E_RECORD of (string * expr) list * Type.t
   | EXCEPT of expr * bool * expr list
   | FIELD of expr * string * Type.t
   | FILTER of expr * expr
-  | FN of string * expr * Type.t
+  | FN of pat * expr * Type.t
   | GROUP of expr * (string * expr) list * (string * expr) list
   | INT_LITERAL of int
   | INTERSECT of expr * bool * expr list
   | JOIN of expr * expr * expr
-  | LET of (string * expr) list * expr
+  | LET of (pat * expr) list * expr
   | LIST_LITERAL of expr list * Type.t
   | ORDER of expr * expr
   | PLUS of expr * expr * Type.t
@@ -61,6 +61,21 @@ datatype <a id='expr' href="#expr-impl">expr</a>
   | UNIT_LITERAL
   | UNORDER of expr
   | VAR of string * Type.t
+datatype <a id='pat' href="#pat-impl">pat</a>
+  = P_AS of string * pat * Type.t
+  | P_BOOL_LIT of bool
+  | P_CHAR_LIT of char
+  | P_CON of string * pat * Type.t
+  | P_CON0 of string * Type.t
+  | P_CONS of pat * pat * Type.t
+  | P_INT_LIT of int
+  | P_LIST of pat list * Type.t
+  | P_REAL_LIT of real
+  | P_RECORD of (string * pat) list
+  | P_STRING_LIT of string
+  | P_TUPLE of pat list
+  | P_VAR of string * Type.t
+  | P_WILD of Type.t
 </pre>
 
 <a id="expr-impl"></a>
@@ -71,6 +86,18 @@ Scalar constructors include `INT_LITERAL`, `VAR`, `APPLY`, `FIELD`,
 `E_RECORD` (E-prefixed to avoid clashing with `Variant`'s `RECORD`),
 `TUPLE`, `LIST_LITERAL`, and `PLUS`. Relational constructors include
 `FILTER` and `PROJECT`; a `from`-expression desugars to a tree of
-these.
+these. Binders in `FN`, `CASE`, and `LET` use the `pat` datatype.
+
+<a id="pat-impl"></a>
+<h3><code><strong>datatype</strong> pat</code></h3>
+
+is a Morel pattern in its typed, post-desugar internal form.
+`P_VAR` binds an identifier; `P_WILD` matches anything;
+`P_INT_LIT`, `P_BOOL_LIT`, `P_CHAR_LIT`, `P_REAL_LIT`, and
+`P_STRING_LIT` match literal values. `P_CON`/`P_CON0` match
+datatype constructors with and without payload; `P_CONS` matches
+list cons; `P_TUPLE`, `P_RECORD`, and `P_LIST` destructure
+composite values; `P_AS` binds a name to a value matched by a
+sub-pattern.
 
 [//]: # (end:lib/core)

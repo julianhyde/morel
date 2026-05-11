@@ -4623,12 +4623,15 @@ public enum BuiltIn {
     // RANGE must be registered before CONTINUOUS_SET and DISCRETE_SET, because
     // their constructors reference the range type. Pre-register it here so the
     // dependency is satisfied regardless of alphabetical enum order. Likewise,
-    // TYPE must be registered before CORE_EXPR, since CORE_EXPR's PLUS
-    // constructor (and others) carries a `Type.t` payload.
+    // TYPE and CORE_PAT must be registered before CORE_EXPR, since CORE_EXPR's
+    // constructors carry `Type.t` and `Core.pat` payloads.
     defineType(typeSystem, bindings, Datatype.RANGE);
     defineType(typeSystem, bindings, Datatype.TYPE);
+    defineType(typeSystem, bindings, Datatype.CORE_PAT);
     for (Datatype datatype : Datatype.values()) {
-      if (datatype != Datatype.RANGE && datatype != Datatype.TYPE) {
+      if (datatype != Datatype.RANGE
+          && datatype != Datatype.TYPE
+          && datatype != Datatype.CORE_PAT) {
         defineType(typeSystem, bindings, datatype);
       }
     }
@@ -4808,6 +4811,36 @@ public enum BuiltIn {
                 .tyCon(Constructor.CORE_EXPR_UNIT_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_UNORDER)
                 .tyCon(Constructor.CORE_EXPR_VAR)),
+
+    /**
+     * Datatype representing a Morel pattern in its typed, post-desugar internal
+     * form. Used in {@link #CORE_EXPR}'s {@code CASE}, {@code FN}, and {@code
+     * LET} constructors.
+     *
+     * <p>Literal patterns are split per-kind (P_BOOL_LIT, P_INT_LIT, …) so the
+     * datatype does not need to reference {@code Core.expr} and the
+     * registration order is unambiguous.
+     */
+    CORE_PAT(
+        "Core",
+        "pat",
+        false,
+        0,
+        h ->
+            h.tyCon(Constructor.CORE_PAT_P_AS)
+                .tyCon(Constructor.CORE_PAT_P_BOOL_LIT)
+                .tyCon(Constructor.CORE_PAT_P_CHAR_LIT)
+                .tyCon(Constructor.CORE_PAT_P_CON)
+                .tyCon(Constructor.CORE_PAT_P_CON0)
+                .tyCon(Constructor.CORE_PAT_P_CONS)
+                .tyCon(Constructor.CORE_PAT_P_INT_LIT)
+                .tyCon(Constructor.CORE_PAT_P_LIST)
+                .tyCon(Constructor.CORE_PAT_P_REAL_LIT)
+                .tyCon(Constructor.CORE_PAT_P_RECORD)
+                .tyCon(Constructor.CORE_PAT_P_STRING_LIT)
+                .tyCon(Constructor.CORE_PAT_P_TUPLE)
+                .tyCon(Constructor.CORE_PAT_P_VAR)
+                .tyCon(Constructor.CORE_PAT_P_WILD)),
 
     DATE_MONTH(
         "Date",
@@ -5116,7 +5149,7 @@ public enum BuiltIn {
                 ImmutableList.of(
                     Keys.name("expr"), Keys.name("expr"), Keys.name("t")))),
     CORE_EXPR_BOOL_LITERAL(Datatype.CORE_EXPR, "BOOL_LITERAL", h -> BOOL.key()),
-    // CASE: scrutinee, list of (pat-string, body) matches, result type.
+    // CASE: scrutinee, list of (pat, body) matches, result type.
     CORE_EXPR_CASE(
         Datatype.CORE_EXPR,
         "CASE",
@@ -5126,7 +5159,8 @@ public enum BuiltIn {
                     Keys.name("expr"),
                     Keys.list(
                         Keys.tuple(
-                            ImmutableList.of(STRING.key(), Keys.name("expr")))),
+                            ImmutableList.of(
+                                Keys.name("pat"), Keys.name("expr")))),
                     Keys.name("t")))),
     CORE_EXPR_CHAR_LITERAL(Datatype.CORE_EXPR, "CHAR_LITERAL", h -> CHAR.key()),
     // EXCEPT: input, distinct?, list of other inputs.
@@ -5151,14 +5185,14 @@ public enum BuiltIn {
         "FILTER",
         h ->
             Keys.tuple(ImmutableList.of(Keys.name("expr"), Keys.name("expr")))),
-    // FN: parameter name (as a string, assuming IdPat), body, fn type.
+    // FN: parameter pattern, body, fn type.
     CORE_EXPR_FN(
         Datatype.CORE_EXPR,
         "FN",
         h ->
             Keys.tuple(
                 ImmutableList.of(
-                    STRING.key(), Keys.name("expr"), Keys.name("t")))),
+                    Keys.name("pat"), Keys.name("expr"), Keys.name("t")))),
     // GROUP: input, list of (name, key-expr) group keys, list of (name, agg)
     // aggregates. Aggregate is reified just as its function expression.
     CORE_EXPR_GROUP(
@@ -5194,7 +5228,7 @@ public enum BuiltIn {
             Keys.tuple(
                 ImmutableList.of(
                     Keys.name("expr"), Keys.name("expr"), Keys.name("expr")))),
-    // LET: list of (name, value-expr) bindings, body.
+    // LET: list of (pat, value-expr) bindings, body.
     CORE_EXPR_LET(
         Datatype.CORE_EXPR,
         "LET",
@@ -5203,7 +5237,8 @@ public enum BuiltIn {
                 ImmutableList.of(
                     Keys.list(
                         Keys.tuple(
-                            ImmutableList.of(STRING.key(), Keys.name("expr")))),
+                            ImmutableList.of(
+                                Keys.name("pat"), Keys.name("expr")))),
                     Keys.name("expr")))),
     CORE_EXPR_LIST_LITERAL(
         Datatype.CORE_EXPR,
@@ -5281,6 +5316,64 @@ public enum BuiltIn {
         Datatype.CORE_EXPR,
         "VAR",
         h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("t")))),
+    // P_AS: name + inner pattern + type.
+    CORE_PAT_P_AS(
+        Datatype.CORE_PAT,
+        "P_AS",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    STRING.key(), Keys.name("pat"), Keys.name("t")))),
+    CORE_PAT_P_BOOL_LIT(Datatype.CORE_PAT, "P_BOOL_LIT", h -> BOOL.key()),
+    CORE_PAT_P_CHAR_LIT(Datatype.CORE_PAT, "P_CHAR_LIT", h -> CHAR.key()),
+    // P_CON: constructor name + arg pattern + type.
+    CORE_PAT_P_CON(
+        Datatype.CORE_PAT,
+        "P_CON",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    STRING.key(), Keys.name("pat"), Keys.name("t")))),
+    // P_CON0: nullary constructor name + type.
+    CORE_PAT_P_CON0(
+        Datatype.CORE_PAT,
+        "P_CON0",
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("t")))),
+    // P_CONS: head pattern + tail pattern + type.
+    CORE_PAT_P_CONS(
+        Datatype.CORE_PAT,
+        "P_CONS",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("pat"), Keys.name("pat"), Keys.name("t")))),
+    CORE_PAT_P_INT_LIT(Datatype.CORE_PAT, "P_INT_LIT", h -> INT.key()),
+    // P_LIST: list of element patterns + type.
+    CORE_PAT_P_LIST(
+        Datatype.CORE_PAT,
+        "P_LIST",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(Keys.list(Keys.name("pat")), Keys.name("t")))),
+    CORE_PAT_P_REAL_LIT(Datatype.CORE_PAT, "P_REAL_LIT", h -> REAL.key()),
+    // P_RECORD: list of (name, pat) field patterns.
+    CORE_PAT_P_RECORD(
+        Datatype.CORE_PAT,
+        "P_RECORD",
+        h ->
+            Keys.list(
+                Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("pat"))))),
+    CORE_PAT_P_STRING_LIT(Datatype.CORE_PAT, "P_STRING_LIT", h -> STRING.key()),
+    // P_TUPLE: list of positional patterns.
+    CORE_PAT_P_TUPLE(
+        Datatype.CORE_PAT, "P_TUPLE", h -> Keys.list(Keys.name("pat"))),
+    // P_VAR: variable name + type.
+    CORE_PAT_P_VAR(
+        Datatype.CORE_PAT,
+        "P_VAR",
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("t")))),
+    // P_WILD: wildcard with type.
+    CORE_PAT_P_WILD(Datatype.CORE_PAT, "P_WILD", h -> Keys.name("t")),
     DATE_MONTH_APR(Datatype.DATE_MONTH, "Apr"),
     DATE_MONTH_AUG(Datatype.DATE_MONTH, "Aug"),
     DATE_MONTH_DEC(Datatype.DATE_MONTH, "Dec"),

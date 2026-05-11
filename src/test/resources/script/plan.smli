@@ -181,7 +181,7 @@ Plan.core (from e in scott.emps where e.job = "CLERK" order (e.deptno, DESC e.sa
 val n = 10;
 > val n = 10 : int
 val r = Plan.core (fn x => x + n);
-> val r = {expr=FN ("x",PLUS (VAR ("x",T_INT),INT_LITERAL 10,T_INT),T_FN (T_INT,T_INT)),value=fn}
+> val r = {expr=FN (P_VAR ("x",T_INT),PLUS (VAR ("x",T_INT),INT_LITERAL 10,T_INT),T_FN (T_INT,T_INT)),value=fn}
 >   : {expr:expr, value:int -> int}
 #value r 5;
 > val it = 15 : int
@@ -191,5 +191,16 @@ val n = 100;
 > val n = 100 : int
 #value r 5;
 > val it = 15 : int
+
+(*) CASE under a lambda is not constant-folded; its match patterns
+(*) reify via the pat datatype's per-kind P_*_LIT and P_WILD
+(*) constructors, and the binder reifies as P_VAR.
+Plan.core (fn n => case n of 0 => "z" | _ => "nz");
+> val it =
+>   {
+>    expr=
+>    FN (P_VAR ("n",T_INT),
+>     CASE (VAR ("n",T_INT),[(P_INT_LIT 0,STRING_LITERAL "z"),(P_WILD T_INT,STRING_LITERAL "nz")],T_STRING),
+>     T_FN (T_INT,T_STRING)),value=fn} : {expr:expr, value:int -> string}
 
 (*) End plan.smli

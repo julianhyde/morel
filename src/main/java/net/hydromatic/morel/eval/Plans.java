@@ -250,7 +250,7 @@ public class Plans {
           Core.Case caseExp = (Core.Case) exp;
           ImmutableList.Builder<Object> matches = ImmutableList.builder();
           for (Core.Match m : caseExp.matchList) {
-            matches.add(of(m.pat.toString(), reifyExp(m.exp)));
+            matches.add(of(reifyPat(m.pat), reifyExp(m.exp)));
           }
           return iof(
               CORE_EXPR_CASE,
@@ -260,7 +260,7 @@ public class Plans {
           Core.Fn fn = (Core.Fn) exp;
           return iof(
               CORE_EXPR_FN,
-              of(fn.idPat.name, reifyExp(fn.exp), reifyType(exp.type)));
+              of(reifyPat(fn.idPat), reifyExp(fn.exp), reifyType(exp.type)));
 
         case LET:
           Core.Let let = (Core.Let) exp;
@@ -278,6 +278,90 @@ public class Plans {
     }
 
     /**
+     * Reifies a {@link Core.Pat} as a {@code Core.pat} value. Mirrors {@link
+     * Core.Pat}'s constructor hierarchy.
+     */
+    Object reifyPat(Core.Pat pat) {
+      switch (pat.op) {
+        case ID_PAT:
+          Core.IdPat idPat = (Core.IdPat) pat;
+          return iof(CORE_PAT_P_VAR, of(idPat.name, reifyType(idPat.type)));
+
+        case WILDCARD_PAT:
+          return iof(CORE_PAT_P_WILD, reifyType(pat.type));
+
+        case BOOL_LITERAL_PAT:
+          return iof(CORE_PAT_P_BOOL_LIT, ((Core.LiteralPat) pat).value);
+        case CHAR_LITERAL_PAT:
+          return iof(CORE_PAT_P_CHAR_LIT, ((Core.LiteralPat) pat).value);
+        case INT_LITERAL_PAT:
+          return iof(
+              CORE_PAT_P_INT_LIT,
+              ((Number) ((Core.LiteralPat) pat).value).intValue());
+        case REAL_LITERAL_PAT:
+          return iof(
+              CORE_PAT_P_REAL_LIT,
+              ((Number) ((Core.LiteralPat) pat).value).floatValue());
+        case STRING_LITERAL_PAT:
+          return iof(CORE_PAT_P_STRING_LIT, ((Core.LiteralPat) pat).value);
+
+        case CON_PAT:
+          Core.ConPat conPat = (Core.ConPat) pat;
+          return iof(
+              CORE_PAT_P_CON,
+              of(conPat.tyCon, reifyPat(conPat.pat), reifyType(pat.type)));
+
+        case CON0_PAT:
+          Core.Con0Pat con0Pat = (Core.Con0Pat) pat;
+          return iof(CORE_PAT_P_CON0, of(con0Pat.tyCon, reifyType(pat.type)));
+
+        case CONS_PAT:
+          // ConsPat: argument is a TuplePat [head, tail].
+          Core.ConPat consPat = (Core.ConPat) pat;
+          Core.TuplePat consArg = (Core.TuplePat) consPat.pat;
+          return iof(
+              CORE_PAT_P_CONS,
+              of(
+                  reifyPat(consArg.args.get(0)),
+                  reifyPat(consArg.args.get(1)),
+                  reifyType(pat.type)));
+
+        case TUPLE_PAT:
+          Core.TuplePat tuplePat = (Core.TuplePat) pat;
+          return iof(
+              CORE_PAT_P_TUPLE, transformEager(tuplePat.args, this::reifyPat));
+
+        case RECORD_PAT:
+          Core.RecordPat recordPat = (Core.RecordPat) pat;
+          // Pair field names (in canonical sorted order) with sub-patterns.
+          PairList<String, Object> recFields =
+              PairList.fromZip(
+                  recordPat.type().argNameTypes.keySet(),
+                  transform(recordPat.args, this::reifyPat));
+          return iof(
+              CORE_PAT_P_RECORD, recFields.transformEager(ImmutableList::of));
+
+        case LIST_PAT:
+          Core.ListPat listPat = (Core.ListPat) pat;
+          return iof(
+              CORE_PAT_P_LIST,
+              of(
+                  transformEager(listPat.args, this::reifyPat),
+                  reifyType(pat.type)));
+
+        case AS_PAT:
+          Core.AsPat asPat = (Core.AsPat) pat;
+          return iof(
+              CORE_PAT_P_AS,
+              of(asPat.name, reifyPat(asPat.pat), reifyType(pat.type)));
+
+        default:
+          throw new UnsupportedOperationException(
+              "Plan.core: cannot yet reify pat " + pat.op + " (" + pat + ")");
+      }
+    }
+
+    /**
      * Reifies a {@link Core.Let} into {@code LET ([(name, value), ...], body)}.
      * Handles only single-pattern bindings (the typical case); collapses nested
      * LETs of NonRecValDecls into one if convenient.
@@ -287,13 +371,13 @@ public class Plans {
       ImmutableList<Object> bindings;
       if (decl instanceof Core.NonRecValDecl) {
         Core.NonRecValDecl nrd = (Core.NonRecValDecl) decl;
-        bindings = of(of(nrd.pat.name, reifyExp(nrd.exp)));
+        bindings = of(of(reifyPat(nrd.pat), reifyExp(nrd.exp)));
       } else {
         // RecValDecl: multiple mutually-recursive bindings.
         Core.RecValDecl rvd = (Core.RecValDecl) decl;
         bindings =
             transformEager(
-                rvd.list, nrd -> of(nrd.pat.name, reifyExp(nrd.exp)));
+                rvd.list, nrd -> of(reifyPat(nrd.pat), reifyExp(nrd.exp)));
       }
       return iof(CORE_EXPR_LET, of(bindings, reifyExp(let.exp)));
     }
