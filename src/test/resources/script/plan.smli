@@ -16,8 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Tests for the `Plan` and `Core` structures.
- *)
+ * Tests for the `Plan` and `Core` structures. *)
 Sys.set ("printDepth", 999);
 > val it = () : unit
 Sys.set ("printLength", 999);
@@ -27,8 +26,8 @@ Sys.set ("lineWidth", 120);
 
 (*) Phase 1a, milestone M1: scalar smoke test.
 
-(*) `Plan.core e` returns both the runtime value of `e` and a reified
-(*) `Core.expr` representing its typed Core form.
+(* `Plan.core e` returns both the runtime value of `e` and a reified
+ * `Core.expr` representing its typed Core form. *)
 
 (*) An integer literal reifies to `INT_LITERAL`.
 Plan.core 1;
@@ -50,16 +49,11 @@ val r = Plan.core 42;
 #expr r;
 > val it = INT_LITERAL 42 : expr
 
-(*) The reified expr is just data; it can be matched on. Disabled
-(*) until the pattern-coverage SAT solver scales beyond ~30
-(*) constructors (Core.expr now has ~50); see #367.
-(*
+(* The reified expr is just data; it can be matched on. *)
 case #expr (Plan.core 7) of INT_LITERAL n => n | _ => 0;
 > val it = 7 : int
-*)
 
-(*) M1: integer addition reifies to a `PLUS` node carrying the
-(*) operand type.
+(*) Integer addition reifies to a `PLUS` node.
 Plan.core (1 + 2);
 > val it = {expr=PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),value=3}
 >   : {expr:expr, value:int}
@@ -86,27 +80,27 @@ Plan.core "hello";
 Plan.core #"a";
 > val it = {expr=CHAR_LITERAL #"a",value=#"a"} : {expr:expr, value:char}
 
-(*) `true` and `false` reify as VAR (they are bindings in the environment,
-(*) not Op.BOOL_LITERAL nodes); the BOOL_LITERAL constructor handles
-(*) compiler-synthesized boolean literals (e.g., in `andalso` desugaring).
+(* `true` and `false` reify as VAR (they are bindings in the environment,
+ * not Op.BOOL_LITERAL nodes); the BOOL_LITERAL constructor handles
+ * compiler-synthesized boolean literals (e.g., in `andalso` desugaring). *)
 Plan.core true;
 > val it = {expr=BOOL_LITERAL true,value=true} : {expr:expr, value:bool}
 
 Plan.core false;
 > val it = {expr=BOOL_LITERAL false,value=false} : {expr:expr, value:bool}
 
-(*) Unit reifies as UNIT_LITERAL — never as TUPLE [] or E_RECORD ([], _),
-(*) which would be equivalent but non-canonical.
+(* Unit reifies as UNIT_LITERAL — never as TUPLE [] or E_RECORD ([], _),
+ * which would be equivalent but non-canonical. *)
 Plan.core ();
 > val it = {expr=UNIT_LITERAL,value=()} : {expr:expr, value:unit}
 
-(*) An empty `from` is the singleton `[()]` of type `unit list`. It
-(*) reifies as a LIST_LITERAL with one UNIT_LITERAL.
+(* An empty `from` is the singleton `[()]` of type `unit list`. It
+ * reifies as a LIST_LITERAL with one UNIT_LITERAL. *)
 Plan.core (from);
 > val it = {expr=LIST_LITERAL ([UNIT_LITERAL],T_LIST T_UNIT),value=[()]} : {expr:expr, value:unit list}
 
-(*) M2: a relational query desugars to PROJECT/FILTER over a VAR
-(*) leaf (emps), with scalar payloads reified as APPLY/FIELD/RECORD.
+(* A relational query desugars to PROJECT/FILTER over a VAR
+ * leaf (emps), with scalar payloads reified as APPLY/FIELD/RECORD. *)
 val emps = [{ename="x", deptno=10}];
 > val emps = [{deptno=10,ename="x"}] : {deptno:int, ename:string} list
 Plan.core (from e in emps where e.deptno elem [10, 20] yield {e.ename, e.deptno});
@@ -123,7 +117,7 @@ Plan.core (from e in emps where e.deptno elem [10, 20] yield {e.ename, e.deptno}
 >      T_RECORD [("deptno",T_INT),("ename",T_STRING)])),value=[{deptno=10,ename="x"}]}
 >   : {expr:expr, value:{deptno:int, ename:string} list}
 
-(*) An empty 'from' is valid and is equivalent to [()].
+(*) An empty 'from' is equivalent to [()].
 Plan.core (from);
 > val it = {expr=LIST_LITERAL ([UNIT_LITERAL],T_LIST T_UNIT),value=[()]} : {expr:expr, value:unit list}
 
@@ -166,12 +160,12 @@ Plan.core (from e in scott.emps where e.job = "CLERK" order (e.deptno, DESC e.sa
 >   : {expr:expr,
 >      value:{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list}
 
-(*) Closure-capture: a lambda built via Plan.core captures the
-(*) values of free variables in its lexical environment, just like an
-(*) ordinary closure. The reified `expr` reflects those captured
-(*) values (the Inliner replaces VAR "n" with its bound value at the
-(*) time of Plan.core), and the runtime `value` is a closure that
-(*) does NOT see later re-bindings of `n`.
+(* Closure-capture: a lambda built via Plan.core captures the
+ * values of free variables in its lexical environment, just like an
+ * ordinary closure. The reified `expr` reflects those captured
+ * values (the Inliner replaces VAR "n" with its bound value at the
+ * time of Plan.core), and the runtime `value` is a closure that
+ * does NOT see later re-bindings of `n`. *)
 val n = 10;
 > val n = 10 : int
 val r = Plan.core (fn x => x + n);
@@ -179,16 +173,16 @@ val r = Plan.core (fn x => x + n);
 >   : {expr:expr, value:int -> int}
 #value r 5;
 > val it = 15 : int
-(*) Shadow n with a new top-level binding. The closure still uses
-(*) the captured value of 10, so the result remains 15.
+(* Shadow n with a new top-level binding. The closure still uses
+ * the captured value of 10, so the result remains 15. *)
 val n = 100;
 > val n = 100 : int
 #value r 5;
 > val it = 15 : int
 
-(*) CASE under a lambda is not constant-folded; its match patterns
-(*) reify via the pat datatype's per-kind P_*_LIT and P_WILD
-(*) constructors, and the binder reifies as P_VAR.
+(* CASE under a lambda is not constant-folded; its match patterns
+ * reify via the pat datatype's per-kind P_*_LIT and P_WILD
+ * constructors, and the binder reifies as P_VAR. *)
 Plan.core (fn n => case n of 0 => "z" | _ => "nz");
 > val it =
 >   {
@@ -197,9 +191,9 @@ Plan.core (fn n => case n of 0 => "z" | _ => "nz");
 >     CASE (VAR ("n",T_INT),[(P_INT_LIT 0,STRING_LITERAL "z"),(P_WILD T_INT,STRING_LITERAL "nz")],T_STRING),
 >     T_FN (T_INT,T_STRING)),value=fn} : {expr:expr, value:int -> string}
 
-(*) Plan.transform applies a Core.expr -> Core.expr rewriter to the
-(*) reified expression and recompiles. With the identity rewriter, the
-(*) expression and value round-trip unchanged.
+(* Plan.transform applies a Core.expr -> Core.expr rewriter to the
+ * reified expression and recompiles. With the identity rewriter, the
+ * expression and value round-trip unchanged. *)
 val id = fn x : expr => x;
 > val id = fn : expr -> expr
 
@@ -215,14 +209,14 @@ Plan.transform (Plan.core "hi", id);
 Plan.transform (Plan.core (), id);
 > val it = {expr=UNIT_LITERAL,value=()} : {expr:expr, value:unit}
 
-(*) Identity transform on an arithmetic expression: round-trips through
-(*) APPLY of `op +` over a TUPLE.
+(* Identity transform on an arithmetic expression: round-trips through
+ * APPLY of `op +` over a TUPLE. *)
 Plan.transform (Plan.core (1 + 2), id);
 > val it = {expr=PLUS (INT_LITERAL 1,INT_LITERAL 2,T_INT),value=3}
 >   : {expr:expr, value:int}
 
-(*) Identity transform on an FN: introduces a P_VAR binding seen by
-(*) the body's VAR reference.
+(* Identity transform on an FN: introduces a P_VAR binding seen by
+ * the body's VAR reference. *)
 val r = Plan.transform (Plan.core (fn x => x + 1), id);
 > val r =
 >   {expr=FN (P_VAR ("x",T_INT),PLUS (VAR ("x",T_INT),INT_LITERAL 1,T_INT),T_FN (T_INT,T_INT)),value=fn}
@@ -247,8 +241,9 @@ Plan.transform (Plan.core (#a {a = 99, b = "x"}), id);
 >     E_RECORD ([("a",INT_LITERAL 99),("b",STRING_LITERAL "x")],T_RECORD [("a",T_INT),("b",T_STRING)]),
 >     "a",T_INT),value=99} : {expr:expr, value:int}
 
-(*) Identity transform on relational chains: round-trip through
-(*) FromBuilder.
+(* -------------------------------------------------------------------
+ * Identity transform on relational chains: round-trip through
+ * FromBuilder. *)
 
 (*) Empty `from` (the unit-list literal).
 Plan.transform (Plan.core (from), id);
@@ -283,8 +278,8 @@ Plan.transform (Plan.core (from e in [10,20,30,40,50] skip 1 take 2), id);
 >     SKIP (LIST_LITERAL ([INT_LITERAL 10,INT_LITERAL 20,INT_LITERAL 30,INT_LITERAL 40,INT_LITERAL 50],T_LIST T_INT),
 >      INT_LITERAL 1),INT_LITERAL 2),value=[20,30]} : {expr:expr, value:int list}
 
-(*) Scan + order: round-trips through ORDER. The descending-by expression
-(*) goes through DESC ... value, reified as APPLY of DESC.
+(* Scan + order: round-trips through ORDER. The descending-by expression
+ * goes through DESC ... value, reified as APPLY of DESC. *)
 Plan.transform (Plan.core (from e in [3,1,2] order e), id);
 > val it =
 >   {
@@ -292,9 +287,9 @@ Plan.transform (Plan.core (from e in [3,1,2] order e), id);
 >    ORDER (LIST_LITERAL ([INT_LITERAL 3,INT_LITERAL 1,INT_LITERAL 2],T_LIST T_INT),VAR ("e",T_INT)),
 >    value=[1,2,3]} : {expr:expr, value:int list}
 
-(*) Complex query against scott.emps with FILTER + ORDER (incl. DESC
-(*) applied to a real field). Identity round-trip recompiles the chain
-(*) and re-runs the query — the value is recomputed.
+(* Complex query against scott.emps with FILTER + ORDER (incl. DESC
+ * applied to a real field). Identity round-trip recompiles the chain
+ * and re-runs the query — the value is recomputed. *)
 val q =
   Plan.transform
     (Plan.core
@@ -358,8 +353,8 @@ val r =
 >      T_RECORD [("deptno",T_INT),("ename",T_STRING)])),value=[{deptno=10,ename="x"}]}
 >   : {expr:expr, value:{deptno:int, ename:string} list}
 
-(*) Multi-scan: reifies as JOIN. Element types of e (int) and d (string)
-(*) differ, so JOIN's scan-variable matching is unambiguous.
+(* Multi-scan: reifies as JOIN. Element types of e (int) and d (string)
+ * differ, so JOIN's scan-variable matching is unambiguous. *)
 Plan.transform (Plan.core (from e in [1,2], d in ["a","b"]), id);
 > val it =
 >   {
@@ -369,11 +364,11 @@ Plan.transform (Plan.core (from e in [1,2], d in ["a","b"]), id);
 >    value=[{d="a",e=1},{d="b",e=1},{d="a",e=2},{d="b",e=2}]}
 >   : {expr:expr, value:{d:string, e:int} list}
 
-(*) GROUP with an aggregate that has an argument. Reified aggregates
-(*) carry an `expr option` for the argument: `["SOME", arg_expr]` when
-(*) the aggregate computes per-row (e.g. `sum over e.v`), `["NONE"]`
-(*) otherwise. The aggregate function itself reifies as a desugared
-(*) closure: the `sum over X` form becomes `fn $col => sum:int (fromList $col)`.
+(* GROUP with an aggregate that has an argument. Reified aggregates
+ * carry an `expr option` for the argument: `["SOME", arg_expr]` when
+ * the aggregate computes per-row (e.g. `sum over e.v`), `["NONE"]`
+ * otherwise. The aggregate function itself reifies as a desugared
+ * closure: the `sum over X` form becomes `fn $col => sum:int (fromList $col)`. *)
 val grouped =
   Plan.transform
     (Plan.core
@@ -407,11 +402,40 @@ Plan.transform (Plan.core (from e in [1,2] union [3,4]), id);
 >     [LIST_LITERAL ([INT_LITERAL 3,INT_LITERAL 4],T_LIST T_INT)]),value=[1,2,3,4]}
 >   : {expr:expr, value:int list}
 
-(*) Identity transform on a RAISE inside a lambda (so the value can be
-(*) reified without evaluating the raise). Round-trips through RAISE.
+(* Identity transform on a RAISE inside a lambda (so the value can be
+ * reified without evaluating the raise). Round-trips through RAISE. *)
 val divZero = Plan.transform (Plan.core ((fn () => raise Empty) : unit -> int), id);
 > val divZero = {expr=FN (P_VAR ("v",T_UNIT),RAISE (VAR ("Empty",T_DATA ("exn",[])),T_INT),T_FN (T_UNIT,T_INT)),value=fn}
 >   : {expr:expr, value:unit -> int}
+
+(* Closure-capture under Plan.transform: Plan.core captures the value
+ * of a free variable at the moment of reify (here, k = 7). The
+ * captured constant becomes INT_LITERAL 7 inside the reified expr,
+ * so rebinding `k` either before OR after the Plan.transform call
+ * has no effect on the recompiled closure. *)
+val k = 7;
+> val k = 7 : int
+val plannedK = Plan.core (fn x => x + k);
+> val plannedK =
+>   {expr=FN (P_VAR ("x",T_INT),PLUS (VAR ("x",T_INT),INT_LITERAL 7,T_INT),T_FN (T_INT,T_INT)),value=fn}
+>   : {expr:expr, value:int -> int}
+
+(* Rebind k BEFORE the transform; the captured 7 is already baked
+ * into plannedK.expr, so the transform reproduces a closure of x+7. *)
+val k = 50;
+> val k = 50 : int
+val rk = Plan.transform (plannedK, id);
+> val rk =
+>   {expr=FN (P_VAR ("x",T_INT),PLUS (VAR ("x",T_INT),INT_LITERAL 7,T_INT),T_FN (T_INT,T_INT)),value=fn}
+>   : {expr:expr, value:int -> int}
+#value rk 100;
+> val it = 107 : int
+
+(* Rebinding k AFTER the transform also leaves rk unchanged. *)
+val k = 99;
+> val k = 99 : int
+#value rk 100;
+> val it = 107 : int
 
 (*) Identity transform on a CASE: introduces P_INT_LIT / P_WILD branches.
 val classify = Plan.transform (Plan.core (fn n => case n of 0 => "z" | _ => "nz"), id);
@@ -426,13 +450,13 @@ val classify = Plan.transform (Plan.core (fn n => case n of 0 => "z" | _ => "nz"
 (#value classify) 5;
 > val it = "nz" : string
 
-(*) Operator round-trips: each Morel operator reifies as a dedicated
-(*) Core.expr constructor (MINUS, TIMES, EQUALS, LT, AND, NOT, etc.)
-(*) rather than as a generic APPLY of `op X`. Identity transform
-(*) preserves the shape and re-evaluates to the same value.
+(* Operator round-trips: each Morel operator reifies as a dedicated
+ * Core.expr constructor (MINUS, TIMES, EQUALS, LT, AND, NOT, etc.)
+ * rather than as a generic APPLY of `op X`. Identity transform
+ * preserves the shape and re-evaluates to the same value. *)
 
-(*) Arithmetic: subtraction, multiplication, real division, int division,
-(*) modulo, negation.
+(* Arithmetic: subtraction, multiplication, real division, int division,
+ * modulo, negation. *)
 Plan.transform (Plan.core (10 - 3), id);
 > val it = {expr=MINUS (INT_LITERAL 10,INT_LITERAL 3,T_INT),value=7} : {expr:expr, value:int}
 
@@ -487,9 +511,9 @@ Plan.transform (Plan.core (1 elem [1,2,3]), id);
 >   {expr=ELEM (INT_LITERAL 1,LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT)),value=true}
 >   : {expr:expr, value:bool}
 
-(*) Boolean operators: n-ary AND/OR flatten chains of andalso/orelse.
-(*) Note: `true` and `false` reify as `VAR` (they're env-bound
-(*) constructors, not synthesized BOOL_LITERAL nodes).
+(* Boolean operators: n-ary AND/OR flatten chains of andalso/orelse.
+ * Note: `true` and `false` reify as `VAR` (they're env-bound
+ * constructors, not synthesized BOOL_LITERAL nodes). *)
 Plan.transform (Plan.core (true andalso false andalso true), id);
 > val it = {expr=AND [BOOL_LITERAL true,BOOL_LITERAL false,BOOL_LITERAL true],value=false} : {expr:expr, value:bool}
 
@@ -503,22 +527,30 @@ Plan.transform (Plan.core (not false), id);
 Plan.transform (Plan.core (~5), id);
 > val it = {expr=INT_LITERAL ~5,value=~5} : {expr:expr, value:int}
 
-(*) Plan.optimize applies a list of rules (each Core.expr -> Core.expr
-(*) option) bottom-up to a planned value's reified expression, with a
-(*) fixpoint at every node. The transformed expression is then
-(*) recompiled in the session's environment.
+(* Plan.transform checks that the rewriter is type-preserving. If the
+ * rewriter returns a Core.expr of a different Morel type than the
+ * original, Plan.transform raises a runtime error rather than
+ * silently producing a wrongly-typed value. *)
+Plan.transform (Plan.core 1, fn _ => STRING_LITERAL "wrong");
+> uncaught exception Fail [Fail: Plan.transform: rewriter changed expression type from int to string]
+>   raised at: 0.0-0.0
 
-(*) Rule: merge two consecutive FILTERs into a single FILTER whose
-(*) condition is the n-ary AND of the two.
+(* Plan.optimize applies a list of rules (each Core.expr -> Core.expr
+ * option) bottom-up to a planned value's reified expression, with a
+ * fixpoint at every node. The transformed expression is then
+ * recompiled in the session's environment. *)
+
+(* Rule: merge two consecutive FILTERs into a single FILTER whose
+ * condition is the n-ary AND of the two. *)
 fun mergeFilters (FILTER (FILTER (input, c1), c2)) =
     SOME (FILTER (input, AND [c1, c2]))
   | mergeFilters _ = NONE;
 > val mergeFilters = fn : expr -> expr option
 
-(*) Apply the rule to a from-expression with two `where` clauses. The
-(*) reified form is FILTER(FILTER(source, c1), c2); the rule rewrites
-(*) it to FILTER(source, AND [c1, c2]). The value is recomputed and
-(*) remains [2].
+(* Apply the rule to a from-expression with two `where` clauses. The
+ * reified form is FILTER(FILTER(source, c1), c2); the rule rewrites
+ * it to FILTER(source, AND [c1, c2]). The value is recomputed and
+ * remains [2]. *)
 Plan.optimize
   (Plan.core (from e in [1,2,3] where e > 1 where e < 3),
    [mergeFilters]);

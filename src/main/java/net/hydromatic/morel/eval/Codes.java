@@ -2930,12 +2930,24 @@ public abstract class Codes {
                 "Plan.transform requires a Session with typeSystem and "
                     + "environment");
           }
-          // Unreify, compile, and evaluate.
-          final Core.Exp newCoreExp =
-              Plans.unreifyExp(
-                  newExpr, session.typeSystem, session.environment);
-          final Compiler compiler = new Compiler(session.typeSystem);
-          final Code code = compiler.compile(session.environment, newCoreExp);
+          // The rewriter must be type-preserving: a transformer that
+          // changes the Morel type silently would produce a wrongly-
+          // typed value at runtime, so check before recompiling.
+          final TypeSystem ts = session.typeSystem;
+          final Environment env = session.environment;
+          final Core.Exp oldCoreExp = Plans.unreifyExp(oldExpr, ts, env);
+          final Core.Exp newCoreExp = Plans.unreifyExp(newExpr, ts, env);
+          if (!oldCoreExp.type.equals(newCoreExp.type)) {
+            throw new MorelRuntimeException(
+                BuiltInExn.FAIL,
+                "Plan.transform: rewriter changed expression type from "
+                    + oldCoreExp.type
+                    + " to "
+                    + newCoreExp.type,
+                Pos.ZERO);
+          }
+          final Compiler compiler = new Compiler(ts);
+          final Code code = compiler.compile(env, newCoreExp);
           final Stack child = new Stack(session, Math.max(1, code.maxSlots()));
           final Object newValue = code.eval(child);
           return ImmutableList.of(newExpr, newValue);
