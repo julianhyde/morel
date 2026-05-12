@@ -968,14 +968,14 @@ val edges = [
 >
 > val edges : {x:int, y:int} list
 
-let
-  fun edge (x, y) = {x, y} elem edges
-  fun path (x, y) =
-    edge (x, y) orelse
-    (exists z where path (x, z) andalso edge (z, y))
-in
-  from p where path p
-end;
+fun edge (x, y) = {x, y} elem edges;
+> val edge = fn : int * int -> bool
+fun path (x, y) =
+  edge (x, y)
+  orelse (exists z where path (x, z) andalso edge (z, y));
+> val path = fn : int * int -> bool
+
+from p where path p;
 > val it = [(1,2),(2,3),(1,3)] : (int * int) bag
 
 (*) Same problem, but edges are tuples, not records.
@@ -1116,13 +1116,10 @@ end;
 
 (* The previous is equivalent to following. (Which implies a theorem
  * connecting 'exists' with 'group' and variable elimination.) *)
-let
-  fun edge (x, y) = (x, y) elem edges
-in
-  from x, z
-    where (exists y where edge (x, y) andalso edge (y, z))
-      andalso x <> z
-end;
+from x, z
+  where (exists y where edge (x, y) andalso edge (y, z))
+    andalso x <> z
+  distinct;
 > x z
 > - -
 > 4 3
@@ -1132,12 +1129,9 @@ end;
 > val it : {x:int, z:int} bag
 
 (*) Also equivalent.
-let
-  fun edge (x, y) = (x, y) elem edges
-in
-  from x, z
-    where (exists y where edge (x, y) andalso edge (y, z) andalso x <> z)
-end;
+from x, z
+  where (exists y where edge (x, y) andalso edge (y, z) andalso x <> z)
+  distinct;
 > x z
 > - -
 > 4 3
@@ -1221,6 +1215,21 @@ fun isS3 x = exists (from y where isR y andalso x < y);
 from x where isS3 x;
 > Unsafe
 *)
+
+(*) Ungrounded tuple-pattern call. The body of `tuPair` places no
+(*) constraint on its arguments, so neither component of `p` can
+(*) be grounded. morel-java reports `pattern 'p' is not grounded`;
+(*) `destructure_tuple_extents_for_fn_calls` splits `p` into
+(*) `p__1, p__2` before this point, so morel-rust reports the
+(*) same shape using the destructured component name.
+fun tuPair (a, b) = true;
+> val tuPair = fn : 'a * 'b -> bool
+from p where tuPair p;
+> stdIn:1.6 Error: pattern 'p' is not grounded
+>   raised at: stdIn:1.6
+from x, y where tuPair (x, y);
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
 
 (* Joe's bar ---------------------------------------------------------
  *
