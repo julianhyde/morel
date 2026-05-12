@@ -382,6 +382,10 @@ class PatternCoverageChecker {
       dataType.typeConstructors.forEach(
           (name, type) -> b.put(name, sat.variable(path.toVar(name))));
       this.constructorMap = b.build();
+      // Register the constructor variables as a mutually exclusive slot so
+      // the SAT solver enumerates one assignment per constructor (N) rather
+      // than over all 2^N truth-value combinations.
+      sat.slot(this.constructorMap.values());
     }
   }
 }

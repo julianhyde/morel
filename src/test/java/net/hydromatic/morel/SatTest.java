@@ -25,6 +25,8 @@ import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.core.Is.is;
 
 import com.google.common.collect.ImmutableMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.util.Sat;
 import net.hydromatic.morel.util.Sat.Term;
@@ -77,6 +79,35 @@ public class SatTest {
 
     final Map<Variable, Boolean> solve = sat.solve(falseTerm);
     assertThat("not satisfiable", solve, nullValue());
+  }
+
+  /**
+   * Mirrors the workload that the pattern-coverage checker generates for a
+   * datatype with 35 constructors (see <a
+   * href="https://github.com/hydromatic/morel/issues/367">issue #367</a>): one
+   * boolean variable per constructor, declared as a single one-hot slot. The
+   * previous brute-force solver could not even start (2^35 overflows {@link
+   * Integer#MAX_VALUE} inside {@code Lists.cartesianProduct}).
+   */
+  @Test
+  void testBigDatatype() {
+    final Sat sat = new Sat();
+    final int n = 35;
+    final List<Variable> cs = new ArrayList<>();
+    for (int i = 1; i <= n; i++) {
+      cs.add(sat.variable(String.format("C%02d", i)));
+    }
+    sat.slot(cs);
+
+    // "Is there a value not caught by C01?" — yes, any of C02..C35.
+    final Map<Variable, Boolean> solution = sat.solve(sat.not(cs.get(0)));
+
+    assertThat("satisfiable", solution, notNullValue());
+    assertThat(
+        "exactly one is true",
+        solution.values().stream().filter(b -> b).count(),
+        is(1L));
+    assertThat("C01 is false", solution.get(cs.get(0)), is(false));
   }
 }
 
