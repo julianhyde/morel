@@ -25,6 +25,7 @@ import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
@@ -33,6 +34,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import net.hydromatic.morel.ast.Core;
@@ -848,6 +850,88 @@ public class Plans {
   public static Core.Exp unreifyExp(
       Object value, TypeSystem typeSystem, Environment env) {
     return new Unreifier(typeSystem, env).unreifyExp(value);
+  }
+
+  /**
+   * Callback that evaluates a Morel rule (a {@code Core.expr -> Core.expr
+   * option} function value) against a reified {@code Core.expr}, returning the
+   * {@code option}-shaped result.
+   */
+  public interface RuleEvaluator {
+    /** Returns {@code ["NONE"]} or {@code ["SOME", newReified]}. */
+    Object evaluate(Object rule, Object reifiedExpr);
+  }
+
+  /** Names of all {@code Core.expr} constructors; populated lazily. */
+  private static final Set<String> CORE_EXPR_TAGS = computeCoreExprTags();
+
+  private static Set<String> computeCoreExprTags() {
+    ImmutableList.Builder<String> b = ImmutableList.builder();
+    for (BuiltIn.Constructor c : BuiltIn.Constructor.values()) {
+      if (c.datatype == BuiltIn.Datatype.CORE_EXPR) {
+        b.add(c.constructor);
+      }
+    }
+    return ImmutableSet.copyOf(b.build());
+  }
+
+  /**
+   * Walks a reified {@code Core.expr} value bottom-up. At every {@code
+   * Core.expr} node (identified by a tag in {@link #CORE_EXPR_TAGS}), tries
+   * each rule via {@code evaluator}. If a rule returns {@code SOME e'}, the
+   * node is replaced and rules are retried until none fire (fixpoint per node).
+   * Non-{@code Core.expr} payloads (types, pats, record field names) are
+   * skipped.
+   */
+  public static Object walkAndApplyRules(
+      Object reified, List<?> rules, RuleEvaluator evaluator) {
+    return walkAndApply(reified, rules, evaluator);
+  }
+
+  private static Object walkAndApply(
+      Object node, List<?> rules, RuleEvaluator evaluator) {
+    if (!(node instanceof List)) {
+      return node;
+    }
+    List<?> list = (List<?>) node;
+    if (list.isEmpty()) {
+      return node;
+    }
+    // Recurse into children.
+    ImmutableList.Builder<Object> b = ImmutableList.builder();
+    boolean changed = false;
+    for (Object child : list) {
+      Object newChild = walkAndApply(child, rules, evaluator);
+      if (newChild != child) {
+        changed = true;
+      }
+      b.add(newChild);
+    }
+    Object current = changed ? b.build() : node;
+    // If this is a Core.expr node, try rules.
+    if (CORE_EXPR_TAGS.contains(((List<?>) current).get(0))) {
+      return applyRulesAtNode(current, rules, evaluator);
+    }
+    return current;
+  }
+
+  private static Object applyRulesAtNode(
+      Object node, List<?> rules, RuleEvaluator evaluator) {
+    while (true) {
+      boolean changed = false;
+      for (Object rule : rules) {
+        Object result = evaluator.evaluate(rule, node);
+        List<?> resultList = (List<?>) result;
+        if ("SOME".equals(resultList.get(0))) {
+          node = resultList.get(1);
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) {
+        return node;
+      }
+    }
   }
 
   /**

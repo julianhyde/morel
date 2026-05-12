@@ -3347,6 +3347,25 @@ they are not folded to their runtime values.
 
 [[functions]]
 structure = "Plan"
+name = "optimize"
+specified = "morel"
+type = "{value: α, expr: Core.expr} * (Core.expr → Core.expr option) list → {value: α, expr: Core.expr}"
+prototype = "optimize (planned, rules)"
+description = """
+applies a list of rewrite rules to the reified `expr` of `planned`
+and recompiles to produce a new planned value. The walker descends
+into `expr` bottom-up; at every `Core.expr` node it tries each rule
+in turn. A rule returns `SOME e'` to rewrite the node, or `NONE` to
+leave it unchanged. After any rewrite the node is re-tried until no
+rule fires (fixpoint per node). The resulting `Core.expr` is
+re-typechecked against `α` in the current environment, compiled, and
+evaluated.
+
+For a one-shot deterministic rewrite, use `Plan.transform` instead.
+"""
+
+[[functions]]
+structure = "Plan"
 name = "transform"
 specified = "morel"
 type = "{value: α, expr: Core.expr} * (Core.expr → Core.expr) → {value: α, expr: Core.expr}"

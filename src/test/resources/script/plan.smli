@@ -50,9 +50,13 @@ val r = Plan.core 42;
 #expr r;
 > val it = INT_LITERAL 42 : expr
 
-(*) The reified expr is just data; it can be inspected. Avoid an
-(*) explicit `case` here: with ~50 Core.expr constructors, the pattern
-(*) coverage checker's SAT problem exceeds Integer.MAX_VALUE.
+(*) The reified expr is just data; it can be matched on. Disabled
+(*) until the pattern-coverage SAT solver scales beyond ~30
+(*) constructors (Core.expr now has ~50); see #367.
+(*
+case #expr (Plan.core 7) of INT_LITERAL n => n | _ => 0;
+> val it = 7 : int
+*)
 
 (*) M1: integer addition reifies to a `PLUS` node carrying the
 (*) operand type.
@@ -498,5 +502,31 @@ Plan.transform (Plan.core (not false), id);
 (*) Unary negation.
 Plan.transform (Plan.core (~5), id);
 > val it = {expr=INT_LITERAL ~5,value=~5} : {expr:expr, value:int}
+
+(*) Plan.optimize applies a list of rules (each Core.expr -> Core.expr
+(*) option) bottom-up to a planned value's reified expression, with a
+(*) fixpoint at every node. The transformed expression is then
+(*) recompiled in the session's environment.
+
+(*) Rule: merge two consecutive FILTERs into a single FILTER whose
+(*) condition is the n-ary AND of the two.
+fun mergeFilters (FILTER (FILTER (input, c1), c2)) =
+    SOME (FILTER (input, AND [c1, c2]))
+  | mergeFilters _ = NONE;
+> val mergeFilters = fn : expr -> expr option
+
+(*) Apply the rule to a from-expression with two `where` clauses. The
+(*) reified form is FILTER(FILTER(source, c1), c2); the rule rewrites
+(*) it to FILTER(source, AND [c1, c2]). The value is recomputed and
+(*) remains [2].
+Plan.optimize
+  (Plan.core (from e in [1,2,3] where e > 1 where e < 3),
+   [mergeFilters]);
+> val it =
+>   {
+>    expr=
+>    FILTER (LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT),
+>     AND [GT (VAR ("e",T_INT),INT_LITERAL 1),LT (VAR ("e",T_INT),INT_LITERAL 3)]),value=[2]}
+>   : {expr:expr, value:int list}
 
 (*) End plan.smli

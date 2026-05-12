@@ -2862,6 +2862,45 @@ public abstract class Codes {
       };
 
   /**
+   * Implements {@link BuiltIn#PLAN_OPTIMIZE}.
+   *
+   * <p>Receives a tuple {@code (planned, rules)} where {@code rules} is a list
+   * of rule functions ({@code Core.expr -> Core.expr option}). Walks the
+   * reified expression bottom-up and tries each rule at every {@code Core.expr}
+   * node until none fire; then unreifies, compiles, and evaluates the resulting
+   * expression.
+   */
+  private static final Applicable PLAN_OPTIMIZE =
+      new ApplicableImpl(BuiltIn.PLAN_OPTIMIZE) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          @SuppressWarnings("unchecked")
+          final List<Object> args = (List<Object>) arg;
+          @SuppressWarnings("unchecked")
+          final List<Object> planned = (List<Object>) args.get(0);
+          final List<?> rules = (List<?>) args.get(1);
+          final Object oldExpr = planned.get(0);
+          final Session session = stack.session;
+          if (session.typeSystem == null || session.environment == null) {
+            throw new IllegalStateException(
+                "Plan.optimize requires a Session with typeSystem and "
+                    + "environment");
+          }
+          final Object newExpr =
+              Plans.walkAndApplyRules(
+                  oldExpr, rules, (rule, node) -> applyFn(stack, rule, node));
+          final Core.Exp newCoreExp =
+              Plans.unreifyExp(
+                  newExpr, session.typeSystem, session.environment);
+          final Compiler compiler = new Compiler(session.typeSystem);
+          final Code code = compiler.compile(session.environment, newCoreExp);
+          final Stack child = new Stack(session, Math.max(1, code.maxSlots()));
+          final Object newValue = code.eval(child);
+          return ImmutableList.of(newExpr, newValue);
+        }
+      };
+
+  /**
    * Implements {@link BuiltIn#PLAN_TRANSFORM}.
    *
    * <p>Receives a tuple {@code (planned, f)} where {@code planned} is a record
@@ -5403,6 +5442,7 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL)
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
           .put(BuiltIn.PLAN_CORE, PLAN_CORE)
+          .put(BuiltIn.PLAN_OPTIMIZE, PLAN_OPTIMIZE)
           .put(BuiltIn.PLAN_TRANSFORM, PLAN_TRANSFORM)
           .put(BuiltIn.REAL_ABS, REAL_ABS)
           .put(BuiltIn.REAL_CEIL, REAL_CEIL)

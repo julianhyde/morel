@@ -2761,6 +2761,36 @@ public enum BuiltIn {
                               ts.lookup(Datatype.CORE_EXPR)))))),
 
   /**
+   * Function "Plan.optimize", of type "{value: &alpha;, expr: Core.expr} *
+   * (Core.expr &rarr; Core.expr option) list &rarr; {value: &alpha;, expr:
+   * Core.expr}".
+   *
+   * <p>Walks the reified expression bottom-up, applying each rule at every
+   * {@code Core.expr} node until none fire (fixpoint per node), then
+   * recompiles. A {@code rule} returns {@code SOME e'} to rewrite a node, or
+   * {@code NONE} to leave it unchanged.
+   */
+  PLAN_OPTIMIZE(
+      "Plan",
+      "optimize",
+      ts ->
+          ts.forallType(
+              1,
+              h -> {
+                Type planned =
+                    ts.recordType(
+                        RecordType.map(
+                            "value",
+                            h.get(0),
+                            "expr",
+                            ts.lookup(Datatype.CORE_EXPR)));
+                Type exprType = ts.lookup(Datatype.CORE_EXPR);
+                Type ruleType = ts.fnType(exprType, ts.option(exprType));
+                return ts.fnType(
+                    ts.tupleType(planned, ts.listType(ruleType)), planned);
+              })),
+
+  /**
    * Function "Plan.transform", of type "{value: &alpha;, expr: Core.expr} *
    * (Core.expr &rarr; Core.expr) &rarr; {value: &alpha;, expr: Core.expr}".
    *
