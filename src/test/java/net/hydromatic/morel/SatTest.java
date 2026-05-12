@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import static java.util.Collections.frequency;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -83,11 +84,10 @@ public class SatTest {
 
   /**
    * Mirrors the workload that the pattern-coverage checker generates for a
-   * datatype with 35 constructors (see <a
-   * href="https://github.com/hydromatic/morel/issues/367">issue #367</a>): one
-   * boolean variable per constructor, declared as a single one-hot slot. The
-   * previous brute-force solver could not even start (2^35 overflows {@link
-   * Integer#MAX_VALUE} inside {@code Lists.cartesianProduct}).
+   * datatype with 35 constructors: one boolean variable per constructor,
+   * declared as a single one-hot slot. The previous brute-force solver could
+   * not solve this, because 2^35 overflows {@link Integer#MAX_VALUE} inside
+   * {@code Lists.cartesianProduct}).
    */
   @Test
   void testBigDatatype() {
@@ -104,9 +104,7 @@ public class SatTest {
 
     assertThat("satisfiable", solution, notNullValue());
     assertThat(
-        "exactly one is true",
-        solution.values().stream().filter(b -> b).count(),
-        is(1L));
+        "exactly one is true", frequency(solution.values(), true), is(1));
     assertThat("C01 is false", solution.get(cs.get(0)), is(false));
   }
 }

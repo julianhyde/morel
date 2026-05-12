@@ -31,31 +31,28 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Boolean satisfiability. */
 public class Sat {
-  /** All variables, in insertion order. */
   private final Map<Integer, Variable> variablesById = new LinkedHashMap<>();
-
   private final Map<String, Variable> variablesByName = new HashMap<>();
   private int nextVariable = 0;
   /**
-   * Slots: each is a group of variables of which exactly one is true. Variables
+   * Each slot is a group of variables of which exactly one is true. Variables
    * not in any slot are searched by brute force (both {@code false} and {@code
-   * true}), so the existing two-state behaviour is preserved when no slot has
-   * been registered.
+   * true}).
    */
-  private final List<ImmutableList<Variable>> slots = new ArrayList<>();
+  private final List<List<Variable>> slots = new ArrayList<>();
 
   /**
    * Declares that {@code vars} is a "slot": exactly one of them is true in any
    * satisfying assignment. Allows {@link #solve} to enumerate {@code N}
    * candidates (one per variable in the slot) rather than {@code 2^N}.
    */
-  public ImmutableList<Variable> slot(Variable... vars) {
+  public List<Variable> slot(Variable... vars) {
     return slot(ImmutableList.copyOf(vars));
   }
 
   /** As {@link #slot(Variable...)}. */
-  public ImmutableList<Variable> slot(Iterable<? extends Variable> vars) {
-    final ImmutableList<Variable> slot = ImmutableList.copyOf(vars);
+  public List<Variable> slot(Iterable<? extends Variable> vars) {
+    final List<Variable> slot = ImmutableList.copyOf(vars);
     slots.add(slot);
     return slot;
   }
@@ -79,7 +76,7 @@ public class Sat {
     final boolean[] env = new boolean[nextVariable];
 
     final boolean[] inSlot = new boolean[nextVariable];
-    for (ImmutableList<Variable> slot : slots) {
+    for (List<Variable> slot : slots) {
       for (Variable v : slot) {
         inSlot[v.id] = true;
       }
@@ -124,7 +121,7 @@ public class Sat {
       }
       return null;
     }
-    final ImmutableList<Variable> slot = slots.get(slotIdx);
+    final List<Variable> slot = slots.get(slotIdx);
     for (Variable v : slot) {
       env[v.id] = false;
     }
@@ -214,7 +211,7 @@ public class Sat {
 
   /** Term that has a variable number of arguments ("and" or "or"). */
   abstract static class Node extends Term {
-    public final ImmutableList<Term> terms;
+    final ImmutableList<Term> terms;
 
     Node(Op op, ImmutableList<Term> terms) {
       super(op);
@@ -285,7 +282,7 @@ public class Sat {
 
   /** "Not" term. */
   static class Not extends Term {
-    public final Term term;
+    final Term term;
 
     Not(Term term) {
       super(Op.NOT);
