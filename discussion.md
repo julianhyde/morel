@@ -2737,3 +2737,273 @@ representing Morel expressions and types" and is structured as:
   a pointer back to this discussion.
 
 Ready to file from `issue.md` whenever you want.
+
+---
+
+## User
+
+Let's test that the result type of a join query is preserved by
+`Plan.core`. And while we're at it — do we have enough information in
+the reified expression to compute the output type of a join?
+
+## Assistant
+
+The static Morel type *is* preserved on the planned record's `value`
+field — `Plan.core (from e in [1,2], d in ["a","b"])` has type
+`{expr:expr, value:{d:string, e:int} list}`. But the reified `expr`
+alone is *not* enough to recompute that type.
+
+Reified JOIN is `JOIN(chain, scan_expr, join_cond)` — three args, and
+the scan variable's `IdPat` is dropped. The initial scan reifies as
+just its source expression (no `e` from `e in [...]`). We can derive
+the chain's element *type* recursively, and the new scan's element
+type, but we don't have the *field names* needed to build the output
+record `{d:string, e:int}`.
+
+The unreifier currently recovers names heuristically: it scans
+downstream steps for `VAR("d", …)` references and matches by type. For
+a bare `from e in [1,2], d in ["a","b"]` with no downstream use, both
+names are unrecoverable and fall back to `$scan` / `$join`. That's
+what `Plan.expr_type` shows today:
+`T_LIST (T_RECORD [("$join",T_STRING),("$scan",T_INT)])`.
+
+## User
+
+`SCAN` doesn't fully solve the problem. Look at 3-way joins: even if
+the first JOIN emits `{d:{i:int}, e:{j:int}}`, the second JOIN's
+"obvious" rule would give two fields on the left and one on the
+right, but we need three flat fields. JOIN needs a data structure
+that contains field names and a clue how to nest/unnest/re-nest.
+
+## Assistant
+
+Agreed — the chain "atomizes" after one scan and "record-izes" after
+two or more, and naive nesting builds `((d, e), f)` instead of
+`{d, e, f}`. Proposal: make JOIN symmetric and put the layout in the
+node:
+
+```
+JOIN(left, right, cond, layout)
+layout : [LayoutEntry; length 2]   -- positional: [0]=left, [1]=right
+LayoutEntry = INPUT name           -- output[name] = side.element
+            | FIELDS [name1, …]    -- output[name_i] = side.element[name_i]
+```
+
+Worked examples:
+
+```
+2-way:  JOIN(scan_d, scan_e, true, [INPUT d, INPUT e])
+        → {d:{i:int}, e:{j:int}}
+
+3-way:  JOIN(JOIN(scan_d, scan_e, true, [INPUT d, INPUT e]),
+             scan_f, true,
+             [FIELDS [d,e], INPUT f])
+        → {d:{i:int}, e:{j:int}, f:{k:int}}
+```
+
+The "skew" appears in the outer JOIN — left gets `FIELDS [d,e]`
+(passing existing fields up), right gets `INPUT f` (wrapping the whole
+side under a new name). Bushy reassociation just rewrites the two
+layouts in tandem with the tree shape.
+
+Properties: symmetric (both sides arbitrary chains, neither
+privileged), self-describing (`expr_type` reads the layout directly,
+no walking, no per-step accumulator), no StepEnv. Initial scans stay
+bare — the `LIST_LITERAL` at the bottom of a chain doesn't need a
+SCAN wrapper; JOIN is the only place a record gets introduced.
+
+Vocabulary considered: `WRAP/PASS`, `NEST/FLAT`, `WHOLE/FIELD`,
+`TAKE/PICK`. Settled on `INPUT name` / `FIELDS [names]` because the
+side *is* an input to the join, and "fields" reads naturally as "pull
+these fields up." Side index encoded positionally (0 = left, 1 =
+right).
+
+## User
+
+Now design GROUP. What are good examples?
+
+## Assistant
+
+Verified-by-experiment example matrix; the key surprise is that
+atomization is **syntactic** (bare vs. record), not based on binding
+count.
+
+```
+ATOM ELEMENT (bare syntax, exactly one bare contributor)
+  group e.k                                             → int list
+  group e.addr            (addr : record)               → {ct,st} list
+  group {} compute sum over e.v                         → int list
+  group {} compute collectStats over e.v                → {n,t} list
+
+RECORD ELEMENT (any record-syntax contributor, OR two+ bare)
+  group e.k compute sum over e.v                        → {k,sum} list
+  group e.deptno,e.job compute c = count                INVALID — only one bare per side
+  group {k = e.k}                                       → {k:int} list   -- record syntax never atomizes
+  group {k = e.k} compute s = sum over e.v              → {k,s} list
+
+COLLECTION ATOMIZED ("compute" with no group at all)
+  compute sum over e.v                                  → int       -- collection AND element atomized
+  compute collectStats over e.v                         → {n,t}
+  compute {s = sum over e.v}                            → {s}
+```
+
+Constraints discovered:
+- You can have at most one bare expression per side (`group e.k, e.j`
+  is a syntax error; use record syntax for multiple).
+- A bare key/agg must have a derivable label (`group e.k + 1` works
+  alone but errors with "cannot derive label" if it has to merge into
+  a record).
+- `compute s = sum …` is *not* valid — `s = …` requires `{…}`, and
+  the record makes the output non-atomic.
+
+## User
+
+Yes, draft the constructor definitions on this basis.
+
+## Assistant
+
+```
+-- Updated Core.expr from-step constructors
+
+JOIN    of expr * expr * expr * layout
+        -- (left, right, cond, layout); layout positional, length 2
+
+GROUP   of expr * key_shape * agg_shape
+        -- produces a collection
+
+COMPUTE of expr * agg_shape
+        -- (chain, aggShape); collapses chain to a single value
+        -- (the "compute without group" construct)
+
+-- New auxiliary datatypes
+
+datatype layout_entry
+  = INPUT  of string
+  | FIELDS of string list
+
+datatype key_shape
+  = K_BARE of string * expr           -- inferred-name + key expression
+  | K_REC  of (string * expr) list    -- explicit pairs; [] = `group {}`
+
+datatype agg_shape
+  = A_BARE of string * expr * expr option
+  | A_REC  of (string * expr * expr option) list
+```
+
+Type rules:
+
+```
+JOIN(L, R, cond, [le, re]) :
+  contribFrom(INPUT n,        e) = [(n, e)]
+  contribFrom(FIELDS [n1..nk], e) = [(ni, e.ni)]
+  fields = contribFrom(le, elemOf L) ++ contribFrom(re, elemOf R)
+  → kindOf(L) ⊓ kindOf(R) of (T_RECORD fields)
+
+GROUP(chain, keyShape, aggShape) :
+  contribs = (from keyShape: bare → [(n, t, bare=true)] | rec → […])
+          ++ (from aggShape: bare → [(n, codomain f, bare=true)] | rec → […])
+  element = case contribs of [(_, t, true)] => t                    -- atomize
+                           | _              => T_RECORD contribs
+  → bag of element                                                  -- GROUP forces bag
+
+COMPUTE(chain, A_BARE (_, f, _)) → codomain f                       -- scalar
+COMPUTE(chain, A_REC [])         → T_UNIT
+COMPUTE(chain, A_REC trs)        → T_RECORD [(n, codomain f) for …]
+```
+
+## User
+
+Collection kind (list vs bag) is derivable too — JOIN of a bag and a
+list produces a bag.
+
+## Assistant
+
+Right — no flag anywhere. Rules:
+
+- `JOIN(L, R)` → meet of kinds, where `bag ⊏ list`. Any bag input
+  forces bag output.
+- `FILTER`, `SKIP`, `TAKE`, `PROJECT`, `WHERE` → preserve.
+- `ORDER` → forces list; `UNORDER` → forces bag.
+- `UNION` / `INTERSECT` / `EXCEPT` → meet of operands' kinds.
+- `GROUP` → forces bag (grouping discards order).
+- `COMPUTE` → scalar, no kind.
+- `LIST_LITERAL` / `BAG_LITERAL` → carry their kind in the tag.
+
+`typeOfReified` walks the chain bottom-up returning `(kind,
+elementType)` — kind by the meet rules, element type by the
+layout/shape rules above. No new fields in any constructor.
+
+---
+
+## User
+
+Let's discuss what types can be used in a pipeline of relational
+operators. The "object" format (where a join of e and d produces a
+record with two fields, each itself a record) is awkward — does a
+3-way join produce a record with 2 fields or 3? An alternative is
+that each relation is a flat record (or tuple), so the inputs to a
+join are records with m and n fields and the output has m+n fields.
+That requires converters to/from Morel types at the pipeline edges.
+
+Field collisions aren't a real concern — Morel has already determined
+a valid record type with unique field names. At the end of the
+pipeline we map the tuple fields to that record type (or tuple, or
+scalar). Note: fields coming from a join are those of input 0
+followed by those of input 1, whereas Morel records are alphabetical;
+the boundary mapping has to deal with that.
+
+There should be a `rowType` method that returns a record. Derive
+field names by burrowing into the inputs until you hit a YIELD, a
+GROUP (with record), or a SCAN with field names. If field names
+aren't unique (e.g. `deptno` on both sides of a join), append `$N`
+to make them unique. The `$N` names are only visible internally —
+for debugging rule code. The type at the end of the pipeline is
+exactly the one the user asked for.
+
+## Assistant
+
+Locked in. The IR drops the INPUT/FIELDS layout from the earlier
+draft; rowType-by-burrow replaces it.
+
+```
+rowType : expr → [(name, type)]   -- positional during burrow,
+                                  -- alphabetized by T_RECORD at boundary
+
+JOIN(L, R, _)        : dedup(rowType L ++ rowType R)
+SCAN(name, src)      : [(name, elemType src)]
+PROJECT/YIELD(_, e)  : if e.type is RECORD => fields of e.type
+                       else                => [(synth, e.type)]
+GROUP(_, K_REC ks, A_REC as)        : keys ++ aggs
+GROUP(_, K_BARE(n,e), aggShape)     : [(n, typeOf e)] ++ aggCols(aggShape)
+GROUP(_, keyShape, A_BARE(n,f,_))   : keyCols(keyShape) ++ [(n, codomain f)]
+FILTER, ORDER, SKIP, TAKE, …        : preserve
+UNION, INTERSECT, EXCEPT            : preserve (both inputs must agree)
+```
+
+Collision rule: `dedup` keeps the first occurrence as-is; subsequent
+occurrences get `$1, $2, …` (count-of-prior-duplicates). That count
+is stable under join reassociation.
+
+Boundary mapping: at a from's edge,
+- exactly one column → atomize, drop the name, element = column type
+- otherwise → `T_RECORD(rowCols)` (T_RECORD alphabetizes its keys
+  so input ordering disappears)
+Collection kind comes from the chain (`bag ⊏ list` meet at JOIN,
+forced at ORDER/UNORDER/GROUP).
+
+Consequences:
+- `JOIN(L, R, cond)` is back to 3 args. Both children are arbitrary
+  chains; both must be rooted at `SCAN` to provide field names.
+- `INPUT`/`FIELDS` and the `layout` field are gone.
+- `key_shape`/`agg_shape` keep their shape but the atomization rule
+  moves to the boundary (no more "atomize iff one bare contributor"
+  inside `GROUP`).
+- A new `SCAN` constructor wraps every initial scan source so the
+  scan-variable name is in the IR.
+- `Plan.rowType : expr → ((string * t) list) option` — `NONE` when
+  the expression isn't a collection of records or tuples.
+
+Rewriter benefit: JOIN reordering is now `JOIN(JOIN(A,B),C) ↔
+JOIN(A,JOIN(B,C))` with no layout bookkeeping. Filter pushdown is
+expressible as `FILTER(JOIN(L,R,c), p) → JOIN(FILTER(L,p), R, c)`
+when `p`'s referenced names are a subset of `rowType(L)`.

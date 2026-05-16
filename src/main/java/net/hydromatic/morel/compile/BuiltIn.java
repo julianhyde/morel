@@ -2761,6 +2761,18 @@ public enum BuiltIn {
                               ts.lookup(Datatype.CORE_EXPR)))))),
 
   /**
+   * Function "Plan.expr_type", of type "Core.expr &rarr; Type.t".
+   *
+   * <p>Returns the reified Morel type of a reified {@code Core.expr}. Used by
+   * {@link #PLAN_TRANSFORM} to verify that the rewriter is type- preserving,
+   * and exposed to user code for inspecting reified plans.
+   */
+  PLAN_EXPR_TYPE(
+      "Plan",
+      "expr_type",
+      ts -> ts.fnType(ts.lookup(Datatype.CORE_EXPR), ts.lookup(Datatype.TYPE))),
+
+  /**
    * Function "Plan.optimize", of type "{value: &alpha;, expr: Core.expr} *
    * (Core.expr &rarr; Core.expr option) list &rarr; {value: &alpha;, expr:
    * Core.expr}".
@@ -2789,6 +2801,27 @@ public enum BuiltIn {
                 return ts.fnType(
                     ts.tupleType(planned, ts.listType(ruleType)), planned);
               })),
+
+  /**
+   * Function "Plan.row_type", of type "Core.expr &rarr; ((string * Type.t)
+   * list) option".
+   *
+   * <p>Returns the column list of a pipeline expression as {@code SOME [(name,
+   * type), ...]} in pipeline (positional) order — names derived by burrowing
+   * through the chain to {@code SCAN}, {@code PROJECT}, or {@code GROUP} steps.
+   * Returns {@code NONE} for non-pipeline expressions (anything that isn't
+   * rooted at a chain constructor).
+   */
+  PLAN_ROW_TYPE(
+      "Plan",
+      "row_type",
+      ts ->
+          ts.fnType(
+              ts.lookup(Datatype.CORE_EXPR),
+              ts.option(
+                  ts.listType(
+                      ts.tupleType(
+                          PrimitiveType.STRING, ts.lookup(Datatype.TYPE)))))),
 
   /**
    * Function "Plan.transform", of type "{value: &alpha;, expr: Core.expr} *
@@ -4885,6 +4918,7 @@ public enum BuiltIn {
                 .tyCon(Constructor.CORE_EXPR_RAISE)
                 .tyCon(Constructor.CORE_EXPR_REAL_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_RECORD)
+                .tyCon(Constructor.CORE_EXPR_SCAN)
                 .tyCon(Constructor.CORE_EXPR_SKIP)
                 .tyCon(Constructor.CORE_EXPR_STRING_LITERAL)
                 .tyCon(Constructor.CORE_EXPR_TAKE)
@@ -5486,6 +5520,13 @@ public enum BuiltIn {
                         Keys.tuple(
                             ImmutableList.of(STRING.key(), Keys.name("expr")))),
                     Keys.name("t")))),
+    // SCAN: scan-variable name, source expression. Wraps the leftmost
+    // scan of a from-chain so the variable name is preserved through
+    // reify/unreify and visible to the rowType walker.
+    CORE_EXPR_SCAN(
+        Datatype.CORE_EXPR,
+        "SCAN",
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("expr")))),
     // SKIP: input, count.
     CORE_EXPR_SKIP(
         Datatype.CORE_EXPR,

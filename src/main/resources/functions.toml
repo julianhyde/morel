@@ -3347,6 +3347,25 @@ they are not folded to their runtime values.
 
 [[functions]]
 structure = "Plan"
+name = "expr_type"
+specified = "morel"
+type = "Core.expr → Type.t"
+prototype = "expr_type e"
+description = """
+returns the Morel type of a reified `Core.expr` value, as a
+reified `Type.t`. Most constructors carry their type explicitly
+(`PLUS`, `FN`, `CASE`, etc.); composite forms (`TUPLE`, `LET`,
+from-step chains) are computed by recursing into a child;
+`JOIN` and `GROUP` change the chain element type in ways that
+depend on the scan-variable names and fall back to a full
+unreify.
+
+Used internally by `Plan.transform` to verify that the rewriter
+is type-preserving.
+"""
+
+[[functions]]
+structure = "Plan"
 name = "optimize"
 specified = "morel"
 type = "{value: α, expr: Core.expr} * (Core.expr → Core.expr option) list → {value: α, expr: Core.expr}"
@@ -3362,6 +3381,29 @@ re-typechecked against `α` in the current environment, compiled, and
 evaluated.
 
 For a one-shot deterministic rewrite, use `Plan.transform` instead.
+"""
+
+[[functions]]
+structure = "Plan"
+name = "row_type"
+specified = "morel"
+type = "Core.expr → ((string * Type.t) list) option"
+prototype = "row_type e"
+description = """
+returns the column list of a pipeline expression as
+`SOME [(name, type), ...]` in pipeline (positional) order — the
+order in which columns concatenate at `JOIN`, before any
+boundary-time alphabetization. Names are derived by burrowing
+through the chain to the first column-introducing node:
+`SCAN` contributes one column named for its scan variable;
+`JOIN` concatenates its children's column lists with `$N`-suffix
+renaming on duplicates; `PROJECT` uses the yield expression's
+field structure; `GROUP` uses its key and aggregate names.
+
+Returns `NONE` when the expression is not a pipeline expression
+(scalar, plain literal, function, etc.). Field names may be
+non-unique before deduplication, and may be the empty string for
+unnamed tuple positions.
 """
 
 [[functions]]

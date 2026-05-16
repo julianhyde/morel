@@ -2862,6 +2862,25 @@ public abstract class Codes {
       };
 
   /**
+   * Implements {@link BuiltIn#PLAN_EXPR_TYPE}. Returns the reified {@code
+   * Type.t} of a reified {@code Core.expr} value.
+   */
+  private static final Applicable PLAN_EXPR_TYPE =
+      new ApplicableImpl(BuiltIn.PLAN_EXPR_TYPE) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final Session session = stack.session;
+          if (session.typeSystem == null || session.environment == null) {
+            throw new IllegalStateException(
+                "Plan.expr_type requires a Session with typeSystem and "
+                    + "environment");
+          }
+          return Plans.typeOfReified(
+              arg, session.typeSystem, session.environment);
+        }
+      };
+
+  /**
    * Implements {@link BuiltIn#PLAN_OPTIMIZE}.
    *
    * <p>Receives a tuple {@code (planned, rules)} where {@code rules} is a list
@@ -2901,6 +2920,30 @@ public abstract class Codes {
       };
 
   /**
+   * Implements {@link BuiltIn#PLAN_ROW_TYPE}. Returns the column list of a
+   * pipeline expression as {@code SOME [(name, type), ...]} in pipeline order,
+   * or {@code NONE} for non-pipeline expressions.
+   */
+  private static final Applicable PLAN_ROW_TYPE =
+      new ApplicableImpl(BuiltIn.PLAN_ROW_TYPE) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final Session session = stack.session;
+          if (session.typeSystem == null || session.environment == null) {
+            throw new IllegalStateException(
+                "Plan.row_type requires a Session with typeSystem and "
+                    + "environment");
+          }
+          List<Object> cols =
+              Plans.rowType(arg, session.typeSystem, session.environment);
+          if (cols == null) {
+            return ImmutableList.of("NONE");
+          }
+          return ImmutableList.of("SOME", cols);
+        }
+      };
+
+  /**
    * Implements {@link BuiltIn#PLAN_TRANSFORM}.
    *
    * <p>Receives a tuple {@code (planned, f)} where {@code planned} is a record
@@ -2924,6 +2967,14 @@ public abstract class Codes {
           // Apply f to the old expr. The function value may be a Closure,
           // an Applicable, or an Applicable1.
           final Object newExpr = applyFn(stack, f, oldExpr);
+          // Identity-transform fast path: no rewrite happened, so reuse the
+          // original closure value rather than re-reifying and recompiling.
+          // Also rescues round-trips of captured values whose shape the
+          // reifier cannot represent (e.g. closures embedded as
+          // VALUE_LITERALs).
+          if (newExpr.equals(oldExpr)) {
+            return planned;
+          }
           final Session session = stack.session;
           if (session.typeSystem == null || session.environment == null) {
             throw new IllegalStateException(
@@ -2935,17 +2986,18 @@ public abstract class Codes {
           // typed value at runtime, so check before recompiling.
           final TypeSystem ts = session.typeSystem;
           final Environment env = session.environment;
-          final Core.Exp oldCoreExp = Plans.unreifyExp(oldExpr, ts, env);
-          final Core.Exp newCoreExp = Plans.unreifyExp(newExpr, ts, env);
-          if (!oldCoreExp.type.equals(newCoreExp.type)) {
+          final Object oldType = Plans.typeOfReified(oldExpr, ts, env);
+          final Object newType = Plans.typeOfReified(newExpr, ts, env);
+          if (!oldType.equals(newType)) {
             throw new MorelRuntimeException(
                 BuiltInExn.FAIL,
-                "Plan.transform: rewriter changed expression type from "
-                    + oldCoreExp.type
-                    + " to "
-                    + newCoreExp.type,
+                format(
+                    "Plan.transform: rewriter changed expression type from %s to %s",
+                    Plans.unreifyType(oldType, ts),
+                    Plans.unreifyType(newType, ts)),
                 Pos.ZERO);
           }
+          final Core.Exp newCoreExp = Plans.unreifyExp(newExpr, ts, env);
           final Compiler compiler = new Compiler(ts);
           final Code code = compiler.compile(env, newCoreExp);
           final Stack child = new Stack(session, Math.max(1, code.maxSlots()));
@@ -5454,7 +5506,9 @@ public abstract class Codes {
           .put(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL)
           .put(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF)
           .put(BuiltIn.PLAN_CORE, PLAN_CORE)
+          .put(BuiltIn.PLAN_EXPR_TYPE, PLAN_EXPR_TYPE)
           .put(BuiltIn.PLAN_OPTIMIZE, PLAN_OPTIMIZE)
+          .put(BuiltIn.PLAN_ROW_TYPE, PLAN_ROW_TYPE)
           .put(BuiltIn.PLAN_TRANSFORM, PLAN_TRANSFORM)
           .put(BuiltIn.REAL_ABS, REAL_ABS)
           .put(BuiltIn.REAL_CEIL, REAL_CEIL)
