@@ -204,6 +204,8 @@ In Standard ML but not in Morel:
                                 existential quantification (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
     | <b>forall</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step<sub>1</sub></i> ... <i>step<sub>t</sub></i> <b>require</b> <i>exp</i>
                                 universal quantification (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
+    | <i>exp</i> <i>expAttr<sub>1</sub></i> ... <i>expAttr<sub>n</sub></i>
+                                attributed expression (n &ge; 1, see <a href="#attributes">Attributes</a>)
 <i>exprow</i> &rarr; [ <i>exp</i> <b>with</b> ] <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
                                 expression row
 <i>exprowItem</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i>
@@ -277,6 +279,9 @@ In Standard ML but not in Morel:
     | <b>datatype</b> <i>datbind</i>          data type
     | <b>signature</b> <i>sigbind</i>         signature
     | <b>over</b> <i>id</i>                   overloaded name
+    | <i>dec</i> <i>declAttr<sub>1</sub></i> ... <i>declAttr<sub>n</sub></i>
+                                attributed declaration (n &ge; 1, see <a href="#attributes">Attributes</a>)
+    | <i>floatingAttr</i>             floating attribute (see <a href="#attributes">Attributes</a>)
     | <i>empty</i>
     | <i>dec<sub>1</sub></i> [<b>;</b>] <i>dec<sub>2</sub></i>             sequence
 <i>valbind</i> &rarr; <i>pat</i> <b>=</b> <i>exp</i> [ <b>and</b> <i>valbind</i> ]*
@@ -412,6 +417,63 @@ pretty-printing signatures but does not yet support:
 * Signature inclusion (`include`)
 
 These features may be added in future versions.
+
+### Attributes
+
+Attributes carry structured metadata on declarations and
+expressions. They are inspired by OCaml's `[@attr]` /
+`[@@attr]` / `[@@@attr]` annotations and are parsed but
+otherwise inert: the compiler ignores them and they do not
+affect evaluation. Tooling and future compiler passes can
+walk the parse tree (e.g. via `Sys.parseTree`) to consult
+them.
+
+<pre>
+<i>expAttr</i> &rarr; '<b>[@</b>' <i>id</i> [ <i>exp</i> ] <b>]</b>
+                                expression attribute
+<i>declAttr</i> &rarr; '<b>[@@</b>' <i>id</i> [ <i>exp</i> ] <b>]</b>
+                                declaration attribute
+<i>floatingAttr</i> &rarr; '<b>[@@@</b>' <i>id</i> [ <i>exp</i> ] <b>]</b>
+                                floating attribute
+</pre>
+
+The optional *exp* after the attribute name is the
+attribute's payload — any Morel expression (string literal,
+integer, tuple, list, etc.).
+
+Each attribute form has a different attachment level:
+
+* `[@id]` attaches to the immediately preceding *atomic*
+  expression (a literal, identifier, parenthesised
+  expression, list literal, etc.). The attribute therefore
+  binds more tightly than any infix operator: `1 + 2 [@a]`
+  attaches `[@a]` to `2`, not to the sum. Wrap the
+  expression in parentheses to widen the scope:
+  `(1 + 2) [@a]`.
+
+* `[@@id]` attaches to the immediately preceding
+  declaration: `val x = 1 [@@deprecated]`.
+
+* `[@@@id]` stands alone as a top-level statement and is
+  considered to attach to the enclosing file or structure:
+  `[@@@warning "-32"]`.
+
+Multiple attributes of the same form may be chained:
+`val x = 1 [@@a] [@@b]`.
+
+**Doc comments.** A comment of the form `(** text *)`
+appearing immediately above a declaration desugars to the
+declaration attribute `[@@doc "text"]`. The text is captured
+verbatim — the language does not prescribe markdown or any
+other format. `(**)` and `(***)` remain ordinary empty /
+single-star block comments and do *not* desugar.
+
+```sml
+(** Returns the n-th Fibonacci number. *)
+fun fib n =
+  if n < 2 then n
+  else fib (n - 1) + fib (n - 2)
+```
 
 ### Notation
 

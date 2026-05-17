@@ -22,8 +22,8 @@
  *   [@@@a]  floating           (stands alone as a structure item)
  *   (** *)  doc-comment sugar  (immediately above a decl)
  *
- * Attributes are parsed but otherwise inert at the moment; the
- * .smli tests inspect the parser output via Sys.parseTree.
+ * Attributes are parsed but are (for now, at least) otherwise inert;
+ * tests inspect the parser output via Sys.parseTree.
  *)
 Sys.set ("lineWidth", 78);
 > val it = () : unit
@@ -32,9 +32,7 @@ Sys.set ("printLength", 999);
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
-(*) ============================================================
-(*) Expression-level [@id]: attaches to an atom-level expression.
-(*) ============================================================
+(* --- Expression-level [@id] (attaches to an atom) --------------- *)
 Sys.parseTree "1 [@a];";
 > val it = "(attributedExp (int_literal 1) (attribute @a))" : string
 
@@ -49,10 +47,7 @@ Sys.parseTree "1 [@since 42];";
 >   "(attributedExp (int_literal 1) (attribute @since (int_literal 42)))"
 >   : string
 
-(*) ============================================================
-(*) Precedence: [@id] binds at atom level, so the attribute
-(*) attaches to the closest atom, NOT the surrounding infix.
-(*) ============================================================
+(* --- Precedence: [@id] binds at atom level ---------------------- *)
 Sys.parseTree "1 + 2 [@a];";
 > val it =
 >   "(plus (int_literal 1) (attributedExp (int_literal 2) (attribute @a)))"
@@ -84,9 +79,7 @@ Sys.parseTree "[1, 2] [@a];";
 >   "(attributedExp (list (int_literal 1) (int_literal 2)) (attribute @a))"
 >   : string
 
-(*) ============================================================
-(*) Declaration-level [@@id]: attaches to a declaration.
-(*) ============================================================
+(* --- Declaration-level [@@id] ----------------------------------- *)
 Sys.parseTree "val x = 1 [@@a];";
 > val it =
 >   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@a))"
@@ -110,9 +103,7 @@ Sys.parseTree "val x = 1 [@@deprecated \"use y instead\"];";
 >   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@deprecated (string_literal \"use y instead\")))"
 >   : string
 
-(*) ============================================================
-(*) Floating [@@@id]: stands alone as a top-level statement.
-(*) ============================================================
+(* --- Floating [@@@id] (stands alone) ---------------------------- *)
 Sys.parseTree "[@@@a];";
 > val it = "(floatingAttrDecl (attribute @@@a))" : string
 
@@ -121,9 +112,7 @@ Sys.parseTree "[@@@warning 32];";
 > val it = "(floatingAttrDecl (attribute @@@warning (int_literal 32)))"
 >   : string
 
-(*) ============================================================
-(*) Doc-comment sugar: (** text *) above a decl ==> [@@doc "text"].
-(*) ============================================================
+(* --- Doc-comment sugar: (** text *) ==> [@@doc "text"] ---------- *)
 Sys.parseTree "(** Hello world. *) val x = 1;";
 > val it =
 >   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" Hello world. \")))"
@@ -141,15 +130,13 @@ Sys.parseTree "(** Returns x. *) fun id x = x;";
 >   "(attributedDecl (fun (funBind (funMatch id (idPat x) (id x)))) (attribute @@doc (string_literal \" Returns x. \")))"
 >   : string
 
-(*) (**) and (***) remain ordinary comments and do NOT desugar.
+(*) Empty/single-star comments remain ordinary and do NOT desugar.
 Sys.parseTree "(**) val x = 1;";
 > val it = "(val (valBind (idPat x) (int_literal 1)))" : string
 Sys.parseTree "(***) val x = 1;";
 > val it = "(val (valBind (idPat x) (int_literal 1)))" : string
 
-(*) ============================================================
-(*) Attributes are otherwise inert: they evaluate normally.
-(*) ============================================================
+(* --- Attributes are inert: code evaluates normally -------------- *)
 val x = 1 [@@deprecated];
 > val x = 1 : int
 fun double n = n * 2 [@@inline];
@@ -176,3 +163,4 @@ triple 7;
 "a" ^ (***) "b";
 > val it = "ab" : string
 
+(*) End attribute.smli
