@@ -587,6 +587,123 @@ public class Ast {
     }
   }
 
+  /**
+   * Kind of attribute syntax used.
+   *
+   * <ul>
+   *   <li>{@link #EXP} - {@code [@a]} - attaches to an expression or type.
+   *   <li>{@link #DECL} - {@code [@@a]} - attaches to a declaration.
+   *   <li>{@link #FLOATING} - {@code [@@@a]} - attaches to the enclosing
+   *       structure or file.
+   * </ul>
+   */
+  public enum AttributeKind {
+    EXP,
+    DECL,
+    FLOATING
+  }
+
+  /** Single attribute, e.g. {@code [@a]} or {@code [@@deprecated "msg"]}. */
+  public static class Attribute extends AstNode {
+    public final AttributeKind kind;
+    public final String name;
+    public final @Nullable Exp payload;
+
+    Attribute(Pos pos, AttributeKind kind, String name, @Nullable Exp payload) {
+      super(pos, Op.ATTRIBUTE);
+      this.kind = requireNonNull(kind);
+      this.name = requireNonNull(name);
+      this.payload = payload;
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(kind, name, payload);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj
+          || obj instanceof Attribute
+              && kind == ((Attribute) obj).kind
+              && name.equals(((Attribute) obj).name)
+              && java.util.Objects.equals(payload, ((Attribute) obj).payload);
+    }
+
+    @Override
+    public Attribute accept(Shuttle shuttle) {
+      return this;
+    }
+
+    @Override
+    public void accept(Visitor visitor) {}
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append("[");
+      switch (kind) {
+        case EXP:
+          w.append("@");
+          break;
+        case DECL:
+          w.append("@@");
+          break;
+        case FLOATING:
+          w.append("@@@");
+          break;
+      }
+      w.append(name);
+      if (payload != null) {
+        w.append(" ").append(payload, 0, 0);
+      }
+      return w.append("]");
+    }
+  }
+
+  /** Expression with one or more attached attributes, e.g. {@code e [@a]}. */
+  public static class AttributedExp extends Exp {
+    public final Exp exp;
+    public final List<Attribute> attributes;
+
+    AttributedExp(Pos pos, Exp exp, ImmutableList<Attribute> attributes) {
+      super(pos, Op.ATTRIBUTED_EXP);
+      this.exp = requireNonNull(exp);
+      this.attributes = requireNonNull(attributes);
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(exp, attributes);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj
+          || obj instanceof AttributedExp
+              && exp.equals(((AttributedExp) obj).exp)
+              && attributes.equals(((AttributedExp) obj).attributes);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(exp, left, 0);
+      for (Attribute a : attributes) {
+        w.append(" ").append(a, 0, 0);
+      }
+      return w;
+    }
+  }
+
   /** Parse tree for a named type (e.g. "int" or "(int, string) list"). */
   public static class NamedType extends Type {
     public final List<Type> types;
@@ -1481,6 +1598,91 @@ public class Ast {
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.appendAll(funBinds, "fun ", " and ", "");
+    }
+  }
+
+  /** Declaration with one or more attached {@code [@@attr]} attributes. */
+  public static class AttributedDecl extends Decl {
+    public final Decl decl;
+    public final List<Attribute> attributes;
+
+    AttributedDecl(Pos pos, Decl decl, ImmutableList<Attribute> attributes) {
+      super(pos, Op.ATTRIBUTED_DECL);
+      this.decl = requireNonNull(decl);
+      this.attributes = requireNonNull(attributes);
+      checkArgument(!attributes.isEmpty());
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(decl, attributes);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj
+          || obj instanceof AttributedDecl
+              && decl.equals(((AttributedDecl) obj).decl)
+              && attributes.equals(((AttributedDecl) obj).attributes);
+    }
+
+    @Override
+    public Decl accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(decl, 0, 0);
+      for (Attribute a : attributes) {
+        w.append(" ").append(a, 0, 0);
+      }
+      return w;
+    }
+  }
+
+  /**
+   * Floating attribute {@code [@@@attr]} that stands alone as a declaration
+   * (e.g. at the top of a structure or file).
+   */
+  public static class FloatingAttrDecl extends Decl {
+    public final Attribute attribute;
+
+    FloatingAttrDecl(Pos pos, Attribute attribute) {
+      super(pos, Op.FLOATING_ATTR_DECL);
+      this.attribute = requireNonNull(attribute);
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(attribute);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj
+          || obj instanceof FloatingAttrDecl
+              && attribute.equals(((FloatingAttrDecl) obj).attribute);
+    }
+
+    @Override
+    public Decl accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(attribute, 0, 0);
     }
   }
 

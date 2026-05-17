@@ -837,6 +837,8 @@ Exp expression9() :
   Exp arg;
   Id id;
   String fieldName;
+  List<Attribute> attrs = null;
+  Attribute attr;
 }
 {
   e = atom()
@@ -893,7 +895,36 @@ Exp expression9() :
       }
     )
   )*
-  { return e; }
+  (
+    attr = expAttribute() {
+      if (attrs == null) attrs = new ArrayList<Attribute>();
+      attrs.add(attr);
+    }
+  )*
+  {
+    if (attrs != null) {
+      e = ast.attributedExp(e.pos.plus(pos()), e, attrs);
+    }
+    return e;
+  }
+}
+
+/** Parses an expression attribute, e.g. {@code [@deprecated]}. Attaches
+ *  to atom-level expressions. Maps to OCaml's {@code [@id payload?]}. */
+Attribute expAttribute() :
+{
+  final Span span;
+  final Id id;
+  Exp payload = null;
+}
+{
+  <LBRACKET_AT> { span = Span.of(pos()); }
+  id = identifier()
+  [ payload = expression() ]
+  <RBRACKET> {
+    return ast.attribute(
+        span.end(this), Ast.AttributeKind.EXP, id.name, payload);
+  }
 }
 
 /** Parses an expression of precedence level 8 (function application). */
@@ -1998,12 +2029,70 @@ Ast.Type namedType() : {}
 
 AstNode statement() :
 {
-  final AstNode n;
+  AstNode n;
+  Decl d;
+  Attribute attr;
+  List<Attribute> declAttrs = null;
 }
 {
-  n = expression() { return n; }
+  /* Floating attribute: stands alone as a top-level statement.
+     [@@@id payload?]  ==>  FloatingAttrDecl */
+  attr = floatingAttribute() {
+    return ast.floatingAttrDecl(attr.pos, attr);
+  }
 |
-  n = decl() { return n; }
+  /* A decl, optionally followed by one or more [@@id] attributes. */
+  d = decl()
+  (
+    attr = declAttribute() {
+      if (declAttrs == null) declAttrs = new ArrayList<Attribute>();
+      declAttrs.add(attr);
+    }
+  )*
+  {
+    if (declAttrs != null) {
+      return ast.attributedDecl(d.pos.plus(pos()), d, declAttrs);
+    }
+    return d;
+  }
+|
+  n = expression() { return n; }
+}
+
+/** Parses a declaration attribute, e.g. {@code [@@deprecated]}. Attaches
+ *  to declarations. Maps to OCaml's {@code [@@id payload?]}. */
+Attribute declAttribute() :
+{
+  final Span span;
+  final Id id;
+  Exp payload = null;
+}
+{
+  <LBRACKET_AT_AT> { span = Span.of(pos()); }
+  id = identifier()
+  [ payload = expression() ]
+  <RBRACKET> {
+    return ast.attribute(
+        span.end(this), Ast.AttributeKind.DECL, id.name, payload);
+  }
+}
+
+/** Parses a floating attribute, e.g. {@code [@@@warning "-32"]}. Stands
+ *  alone as a structure or file item. Maps to OCaml's {@code [@@@id payload?]}. */
+Attribute floatingAttribute() :
+{
+  final Span span;
+  final Id id;
+  Exp payload = null;
+}
+{
+  <LBRACKET_AT_AT_AT> { span = Span.of(pos()); }
+  id = identifier()
+  [ payload = expression() ]
+  <RBRACKET> {
+    return ast.attribute(
+        span.end(this), Ast.AttributeKind.FLOATING, id.name, payload);
+  }
 }
 
 AstNode statementSemicolon() :
@@ -2134,6 +2223,9 @@ AstNode statementEof() :
     | < RPAREN: ")">
     | < LBRACE: "{" >
     | < RBRACE: "}" >
+    | < LBRACKET_AT_AT_AT: "[@@@" >
+    | < LBRACKET_AT_AT: "[@@" >
+    | < LBRACKET_AT: "[@" >
     | < LBRACKET: "[" >
     | < RBRACKET: "]" >
     | < SEMICOLON: ";" >

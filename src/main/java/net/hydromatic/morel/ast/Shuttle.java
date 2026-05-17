@@ -103,6 +103,24 @@ public class Shuttle {
         annotatedExp.type.accept(this));
   }
 
+  protected Ast.Exp visit(Ast.AttributedExp attributedExp) {
+    return ast.attributedExp(
+        attributedExp.pos,
+        attributedExp.exp.accept(this),
+        attributedExp.attributes);
+  }
+
+  protected Ast.Decl visit(Ast.AttributedDecl attributedDecl) {
+    return ast.attributedDecl(
+        attributedDecl.pos,
+        attributedDecl.decl.accept(this),
+        attributedDecl.attributes);
+  }
+
+  protected Ast.Decl visit(Ast.FloatingAttrDecl floatingAttrDecl) {
+    return floatingAttrDecl;
+  }
+
   protected Ast.Exp visit(Ast.If ifThenElse) {
     return ast.ifThenElse(
         ifThenElse.pos,
