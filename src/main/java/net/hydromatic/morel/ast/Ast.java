@@ -627,7 +627,7 @@ public class Ast {
           || obj instanceof Attribute
               && kind == ((Attribute) obj).kind
               && name.equals(((Attribute) obj).name)
-              && java.util.Objects.equals(payload, ((Attribute) obj).payload);
+              && Objects.equals(payload, ((Attribute) obj).payload);
     }
 
     @Override

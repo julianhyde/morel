@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -2041,7 +2042,11 @@ AstNode statement() :
     return ast.floatingAttrDecl(attr.pos, attr);
   }
 |
-  /* A decl, optionally followed by one or more [@@id] attributes. */
+  /* A decl, optionally with leading doc-comment sugar and/or
+     trailing [@@id] attributes. */
+  {
+    declAttrs = collectLeadingDocComments();
+  }
   d = decl()
   (
     attr = declAttribute() {
@@ -2050,13 +2055,46 @@ AstNode statement() :
     }
   )*
   {
-    if (declAttrs != null) {
+    if (declAttrs != null && !declAttrs.isEmpty()) {
       return ast.attributedDecl(d.pos.plus(pos()), d, declAttrs);
     }
     return d;
   }
 |
   n = expression() { return n; }
+}
+
+/** Walks the {@code specialToken} chain on the next lookahead token and
+ *  returns one {@code [@@doc "..."]} attribute per doc comment found,
+ *  in source order. Returns an empty list if there are none. */
+JAVACODE List<Attribute> collectLeadingDocComments() {
+  Token tok = getToken(1);
+  if (tok == null) {
+    return new ArrayList<Attribute>();
+  }
+  // The specialToken chain is most-recent-first; collect and reverse.
+  List<Token> docs = new ArrayList<Token>();
+  Token s = tok.specialToken;
+  while (s != null) {
+    if (s.kind == DOC_COMMENT) {
+      docs.add(s);
+    }
+    s = s.specialToken;
+  }
+  if (docs.isEmpty()) {
+    return new ArrayList<Attribute>();
+  }
+  Collections.reverse(docs);
+  List<Attribute> attrs = new ArrayList<Attribute>();
+  for (Token t : docs) {
+    String image = t.image;
+    // image is "(** content *)"; strip the markers.
+    String content = image.substring(3, image.length() - 2);
+    Pos p = pos(t);
+    Exp payload = ast.stringLiteral(p, content);
+    attrs.add(ast.attribute(p, Ast.AttributeKind.DECL, "doc", payload));
+  }
+  return attrs;
 }
 
 /** Parses a declaration attribute, e.g. {@code [@@deprecated]}. Attaches
@@ -2303,9 +2341,23 @@ of the 'normal states'.
 
 /* COMMENTS */
 
+<DEFAULT> SPECIAL_TOKEN :
+{
+    /* Treat (**) and (***) as ordinary (empty / single-star) block
+       comments, matching OCaml's special-case. These longer matches
+       must win over the "(**" doc-comment opener below. */
+    < EMPTY_BLOCK_COMMENT: "(**)" >
+|
+    < SINGLE_STAR_COMMENT: "(***)" >
+}
+
 <DEFAULT> MORE :
 {
     "(*)" { pushState(); } : IN_LINE_COMMENT
+|
+    /* (** starts a doc comment; content runs to *) and is captured as a
+       SPECIAL_TOKEN named DOC_COMMENT. */
+    "(**" { pushState(); } : IN_DOC_COMMENT
 |
     "(*" { pushState(); } : IN_COMMENT
 }
@@ -2329,7 +2381,20 @@ SPECIAL_TOKEN :
     <END_COMMENT: "*)" > { popState(); }
 }
 
-<IN_COMMENT, IN_LINE_COMMENT>
+<IN_DOC_COMMENT> MORE :
+{
+    "(*)" { pushState(); } : IN_LINE_COMMENT
+|
+    "(*" { pushState(); } : IN_COMMENT
+}
+
+<IN_DOC_COMMENT>
+SPECIAL_TOKEN :
+{
+    <DOC_COMMENT: "*)" > { popState(); }
+}
+
+<IN_COMMENT, IN_LINE_COMMENT, IN_DOC_COMMENT>
 MORE :
 {
     < ~[] >

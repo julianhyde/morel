@@ -2591,6 +2591,18 @@ public class TypeResolver {
         map.put(node, toTerm(PrimitiveType.UNIT));
         return node;
 
+      case ATTRIBUTED_DECL:
+        // Attributes are inert: type-check the inner decl, discard the
+        // wrapper. (Tooling that wants the attributes can use Sys.parseTree
+        // on the original source.)
+        return deduceDeclType(env, ((Ast.AttributedDecl) node).decl, termMap);
+
+      case FLOATING_ATTR_DECL:
+        // Floating attributes evaluate to unit; they carry no runtime
+        // semantics yet.
+        map.put(node, toTerm(PrimitiveType.UNIT));
+        return node;
+
       default:
         throw new AssertionError(
             "cannot deduce type for " + node.op + " [" + node + "]");
