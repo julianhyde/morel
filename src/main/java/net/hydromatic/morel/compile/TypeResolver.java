@@ -701,6 +701,9 @@ public class TypeResolver {
   }
 
   private Ast.Exp deduceExpType(TypeEnv env, Ast.Exp node, Variable v) {
+    if (node instanceof Ast.AttributedExp) {
+      return deduceExpType(env, ((Ast.AttributedExp) node).exp, v);
+    }
     final List<Ast.Exp> args2;
     final Variable v2;
     final PairList<Ast.IdPat, Term> termMap;
