@@ -39,6 +39,7 @@ val <a id='set' href="#set-impl">set</a> : string * 'a -> unit
 val <a id='show' href="#show-impl">show</a> : string -> string option
 val <a id='showAll' href="#showAll-impl">showAll</a> : unit -> string * string option list
 val <a id='unset' href="#unset-impl">unset</a> : string -> unit
+val <a id='parseTree' href="#parseTree-impl">parseTree</a> : string -> string
 val <a id='file' href="#file-impl">file</a> : {...}
 </pre>
 
@@ -85,6 +86,14 @@ as a string, or `NONE` if unset.
 <h3><code>unset</code></h3>
 
 `unset property` clears the current the value of `property`.
+
+<a id="parseTree-impl"></a>
+<h3><code>parseTree</code></h3>
+
+`parseTree s` parses `s` as a top-level Morel statement and returns a parenthesized
+S-expression-style dump of the resulting abstract syntax tree. Useful for
+testing parser behaviour (e.g. operator precedence and attribute attachment)
+from `.smli` scripts. Raises `Error` if the string does not parse.
 
 <a id="file-impl"></a>
 <h3><code>file</code></h3>
