@@ -137,9 +137,13 @@ Sys.parseTree "(***) val x = 1";
 > val it = "(val (valBind (idPat x) (int_literal 1)))" : string
 
 (*) Multi-line doc comment: content (including newlines) is captured
-(*) verbatim. Matches OCaml: no stripping of leading `*` or whitespace.
-(*) A literal newline in a string literal becomes ASCII 10, so the
-(*) multi-line string below feeds Sys.parseTree a multi-line source.
+(*) verbatim, matching OCaml. The two forms below use, respectively,
+(*) `\n` escapes and real newlines in the source string; both produce
+(*) the same parse tree.
+Sys.parseTree "(** First line\n * Second line\n * Third line *) val x = 1";
+> val it =
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" First line\n * Second line\n * Third line \")))"
+>   : string
 Sys.parseTree "(** First line
  * Second line
  * Third line *) val x = 1";
@@ -147,10 +151,8 @@ Sys.parseTree "(** First line
 >   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" First line\n * Second line\n * Third line \")))"
 >   : string
 
-(*) Body-on-its-own-lines style (opening `(**` on its own line).
-Sys.parseTree "(**
- * Body lines
- *) val x = 1";
+(*) Body-on-its-own-lines style: opening `(**` on its own line.
+Sys.parseTree "(**\n * Body lines\n *) val x = 1";
 > val it =
 >   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \"\n * Body lines\n \")))"
 >   : string
