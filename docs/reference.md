@@ -444,7 +444,7 @@ integer, tuple, list, etc.).
 Each attribute form has a different attachment level:
 
 * `[@id]` attaches to the immediately preceding *atomic*
-  expression (a literal, identifier, parenthesised
+  expression (a literal, identifier, parenthesized
   expression, list literal, etc.). The attribute therefore
   binds more tightly than any infix operator: `1 + 2 [@a]`
   attaches `[@a]` to `2`, not to the sum. Wrap the

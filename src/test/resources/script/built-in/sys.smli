@@ -305,22 +305,22 @@ env ();
 Sys.parseTree;
 > val it = fn : string -> string
 
-(*) Atoms and literals.
-Sys.parseTree "42;";
+(*) Atoms and literals. A trailing `;` is optional.
+Sys.parseTree "42";
 > val it = "(int_literal 42)" : string
-Sys.parseTree "\"hi\";";
+Sys.parseTree "\"hi\"";
 > val it = "(string_literal \"hi\")" : string
-Sys.parseTree "x;";
+Sys.parseTree "x";
 > val it = "(id x)" : string
 
 (*) Infix and application.
-Sys.parseTree "1 + 2;";
+Sys.parseTree "1 + 2";
 > val it = "(plus (int_literal 1) (int_literal 2))" : string
-Sys.parseTree "f x;";
+Sys.parseTree "f x";
 > val it = "(apply (id f) (id x))" : string
 
 (*) Declaration.
-Sys.parseTree "val x = 1 + 2;";
+Sys.parseTree "val x = 1 + 2";
 > val it =
 >   "(val (valBind (idPat x) (plus (int_literal 1) (int_literal 2))))"
 >   : string
@@ -330,7 +330,7 @@ Sys.parseTree "";
 > val it = "()" : string
 
 (*) Attributes are reflected in the parse tree.
-Sys.parseTree "1 [@a];";
+Sys.parseTree "1 [@a]";
 > val it = "(attributedExp (int_literal 1) (attribute @a))" : string
 
 (*) val plan : unit -> string

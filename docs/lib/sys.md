@@ -92,7 +92,7 @@ as a string, or `NONE` if unset.
 
 `parseTree s` parses `s` as a top-level Morel statement and returns a parenthesized
 S-expression-style dump of the resulting abstract syntax tree. Useful for
-testing parser behaviour (e.g. operator precedence and attribute attachment)
+testing parser behavior (e.g. operator precedence and attribute attachment)
 from `.smli` scripts. Raises `Error` if the string does not parse.
 
 <a id="file-impl"></a>
