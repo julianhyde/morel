@@ -44,8 +44,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -838,46 +839,46 @@ Exp expression9() :
   Exp arg;
   Id id;
   String fieldName;
-  Attribute attr;
+  final List<Attribute> attrs = new ArrayList<Attribute>();
 }
 {
   e = atom()
   (
-    /* When parsing a function argument (inArg=true), skip the
-       DOT chain for non-identifier receivers such as tuple literals. For
-       example, in "CLOSED (3,7).contains 5", the "(3,7)" is a non-Id atom
-       being passed as an argument; suppressing the DOT here lets expression8
-       attach ".contains 5" to the full "CLOSED (3,7)" application instead. */
+    // When parsing a function argument (inArg=true), skip the
+    // DOT chain for non-identifier receivers such as tuple literals. For
+    // example, in "CLOSED (3,7).contains 5", the "(3,7)" is a non-Id atom
+    // being passed as an argument; suppressing the DOT here lets expression8
+    // attach ".contains 5" to the full "CLOSED (3,7)" application instead.
     LOOKAHEAD({ getToken(1).kind == DOT && !(inArg && !isId(e)) })
     <DOT>
     ( id = identifier() { fieldName = id.name; }
     | <NATURAL_LITERAL> { fieldName = token.image; }
     )
     (
-      /* x.f arg -- postfix method call (paren or bare-atom arg form).
-         Both forms share the same action; the LOOKAHEAD distinguishes
-         them from the field-projection case and from each other.
-
-         When the next token is "(":
-           - Blocked for uppercase-initial receivers (isModule), so that
-             "Char.compare(...)" is not consumed as a postfix call.
-           - For a bare-Id receiver, only fires when fieldName is a
-             known method; otherwise "(arg)" belongs to
-             expression8's application level (e.g. "p.adjacent(n-1)").
-           - For non-Id receivers, always fires; atom() handles all three
-             sub-forms: "()" unit, "(e)" single arg, "(e1,e2)" tuple.
-             Staying inside the DOT loop enables chaining:
-               xs.drop(1).length ()
-               ≡ PostfixApp(PostfixApp(xs,"drop",1),"length",())
-
-         When the next token is not "(":
-           - Only fires for non-Id receivers (isId(e) = false), which
-             occur after a prior PostfixApp or field-projection step.
-             Bare-Id receivers fall through to field projection;
-             TypeResolver rewrites those later if appropriate.
-           - getToken(2) != DOT prevents consuming an identifier that is
-             itself followed by "." as a postfix arg (e.g. "expr.fn Id.g"
-             must not consume "Id"). */
+      // x.f arg -- postfix method call (paren or bare-atom arg form).
+      // Both forms share the same action; the LOOKAHEAD distinguishes
+      // them from the field-projection case and from each other.
+      //
+      // When the next token is "(":
+      //   - Blocked for uppercase-initial receivers (isModule), so that
+      //     "Char.compare(...)" is not consumed as a postfix call.
+      //   - For a bare-Id receiver, only fires when fieldName is a
+      //     known method; otherwise "(arg)" belongs to
+      //     expression8's application level (e.g. "p.adjacent(n-1)").
+      //   - For non-Id receivers, always fires; atom() handles all three
+      //     sub-forms: "()" unit, "(e)" single arg, "(e1,e2)" tuple.
+      //     Staying inside the DOT loop enables chaining:
+      //       xs.drop(1).length ()
+      //       ≡ PostfixApp(PostfixApp(xs,"drop",1),"length",())
+      //
+      // When the next token is not "(":
+      //   - Only fires for non-Id receivers (isId(e) = false), which
+      //     occur after a prior PostfixApp or field-projection step.
+      //     Bare-Id receivers fall through to field projection;
+      //     TypeResolver rewrites those later if appropriate.
+      //   - getToken(2) != DOT prevents consuming an identifier that is
+      //     itself followed by "." as a postfix arg (e.g. "expr.fn Id.g"
+      //     must not consume "Id").
       LOOKAHEAD({
           isAtomStart()
           && !isModule(e)
@@ -888,24 +889,19 @@ Exp expression9() :
       arg = atom()
       { e = ast.postfixApp(pos(), e, fieldName, arg); }
     |
-      /* x.f -- field projection, existing behaviour */
       {
         final Exp s = ast.recordSelector(pos(), fieldName);
         e = ast.apply(s, e);
       }
     )
   )*
-  [
-    attr = expAttribute() {
-      final List<Attribute> attrs = new ArrayList<Attribute>();
-      attrs.add(attr);
+  ( expAttribute(attrs) )*
+  {
+    if (!attrs.isEmpty()) {
+      e = ast.attributedExp(e.pos.plus(pos()), e, attrs);
     }
-    (
-      attr = expAttribute() { attrs.add(attr); }
-    )*
-    { e = ast.attributedExp(e.pos.plus(pos()), e, attrs); }
-  ]
-  { return e; }
+    return e;
+  }
 }
 
 /** Parses an attribute name, e.g. {@code deprecated}, {@code foo.bar}. */
@@ -922,8 +918,9 @@ String attributeName() :
   { return b.toString(); }
 }
 
-/** Parses an expression attribute, e.g. {@code [@deprecated]}. */
-Attribute expAttribute() :
+/** Parses an expression / type attribute, e.g. {@code [@deprecated]},
+ *  and appends the parsed {@link Attribute} to {@code attrs}. */
+void expAttribute(List<Attribute> attrs) :
 {
   final Span span;
   final String name;
@@ -940,11 +937,13 @@ Attribute expAttribute() :
   )
   <RBRACKET> {
     if (typePayload != null) {
-      return ast.attributeWithType(
-          span.end(this), Ast.AttributeKind.EXP, name, typePayload);
+      attrs.add(
+          ast.attributeWithType(
+              span.end(this), Ast.AttributeKind.EXP, name, typePayload));
+    } else {
+      attrs.add(
+          ast.attribute(span.end(this), Ast.AttributeKind.EXP, name, payload));
     }
-    return ast.attribute(
-        span.end(this), Ast.AttributeKind.EXP, name, payload);
   }
 }
 
@@ -1990,7 +1989,7 @@ Ast.Type atomicType() :
 Ast.Type type7() :
 {
   Type t;
-  Attribute attr;
+  final List<Attribute> attrs = new ArrayList<Attribute>();
 }
 {
   t = atomicType()
@@ -2003,18 +2002,13 @@ Ast.Type type7() :
       t = ast.namedType(t.pos.plus(pos()), types, token.image);
     }
   )*
-  [
-    // One or more attributes
-    attr = expAttribute() {
-      final List<Attribute> attrs = new ArrayList<Attribute>();
-      attrs.add(attr);
+  ( expAttribute(attrs) )*
+  {
+    if (!attrs.isEmpty()) {
+      t = ast.attributedType(t.pos.plus(pos()), t, attrs);
     }
-    (
-      attr = expAttribute() { attrs.add(attr); }
-    )*
-    { t = ast.attributedType(t.pos.plus(pos()), t, attrs); }
-  ]
-  { return t; }
+    return t;
+  }
 }
 
 Ast.Type type6() :
@@ -2065,7 +2059,7 @@ AstNode statement() :
   AstNode n;
   Decl d;
   Attribute attr;
-  List<Attribute> declAttrs;
+  final List<Attribute> declAttrs = new ArrayList<Attribute>();
 }
 {
   // Floating attribute, e.g. [@@@id payload?]. Treat as top-level statement.
@@ -2076,32 +2070,12 @@ AstNode statement() :
   // A declaration can be preceded by a doc-comment (which is desugared to
   // an attribute) and leading [@@id] attributes, and followed by trailing
   // [@@id] attributes.
-  {
-    declAttrs = collectLeadingDocComments();
-  }
-  // Leading [@@id] attributes. Defer allocating the list until we see one.
-  [
-    {
-      if (declAttrs == null) {
-        declAttrs = new ArrayList<Attribute>();
-      }
-    }
-    declAttribute(declAttrs)
-    ( declAttribute(declAttrs) )*
-  ]
+  { collectLeadingDocComments(declAttrs); }
+  ( declAttribute(declAttrs) )*
   d = decl()
-  // Trailing [@@id] attributes. Same deferred allocation.
-  [
-    {
-      if (declAttrs == null) {
-        declAttrs = new ArrayList<Attribute>();
-      }
-    }
-    declAttribute(declAttrs)
-    ( declAttribute(declAttrs) )*
-  ]
+  ( declAttribute(declAttrs) )*
   {
-    if (declAttrs != null) {
+    if (!declAttrs.isEmpty()) {
       return ast.attributedDecl(d.pos.plus(pos()), d, declAttrs);
     }
     return d;
@@ -2111,31 +2085,23 @@ AstNode statement() :
 }
 
 /** Walks the {@code specialToken} chain on the next lookahead token and
- *  returns one {@code [@@doc "..."]} attribute per doc comment found,
- *  in source order. Returns {@code null} if there are none — the
- *  common case for which we avoid allocating an empty list. */
-JAVACODE List<Attribute> collectLeadingDocComments() {
+ *  appends one {@code [@@doc "..."]} attribute per doc comment found,
+ *  in source order, to {@code attrs}. */
+JAVACODE void collectLeadingDocComments(List<Attribute> attrs) {
   Token tok = getToken(1);
   if (tok == null) {
-    return null;
+    return;
   }
-  // The specialToken chain is most-recent-first; collect and reverse.
-  List<Token> docs = null;
+  // The specialToken chain is most-recent-first; collect into a stack
+  // and pop in source order.
+  Deque<Token> docs = new ArrayDeque<Token>();
   Token s = tok.specialToken;
   while (s != null) {
     if (s.kind == DOC_COMMENT) {
-      if (docs == null) {
-        docs = new ArrayList<Token>();
-      }
-      docs.add(s);
+      docs.push(s);
     }
     s = s.specialToken;
   }
-  if (docs == null) {
-    return null;
-  }
-  Collections.reverse(docs);
-  List<Attribute> attrs = new ArrayList<Attribute>();
   for (Token t : docs) {
     String image = t.image;
     // image is "(** content *)"; strip the markers.
@@ -2144,7 +2110,6 @@ JAVACODE List<Attribute> collectLeadingDocComments() {
     Exp payload = ast.stringLiteral(p, content);
     attrs.add(ast.attribute(p, Ast.AttributeKind.DECL, "doc", payload));
   }
-  return attrs;
 }
 
 /** Parses a declaration attribute, e.g. {@code [@@deprecated]}, and
