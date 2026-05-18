@@ -895,8 +895,6 @@ Exp expression9() :
       }
     )
   )*
-  /* Trailing [@attr] attributes are rare. Defer allocating the list
-     until we have seen the first one. */
   [
     attr = expAttribute() {
       final List<Attribute> attrs = new ArrayList<Attribute>();
@@ -910,9 +908,7 @@ Exp expression9() :
   { return e; }
 }
 
-/** Parses an attribute name: one or more dot-separated identifiers,
- *  e.g. {@code deprecated}, {@code foo.bar}. Mirrors OCaml's
- *  dotted attribute identifiers. */
+/** Parses an attribute name, e.g. {@code deprecated}, {@code foo.bar}. */
 String attributeName() :
 {
   Id id;
@@ -926,10 +922,7 @@ String attributeName() :
   { return b.toString(); }
 }
 
-/** Parses an expression attribute, e.g. {@code [@deprecated]}. Attaches
- *  to atom-level expressions. Maps to OCaml's {@code [@id payload?]},
- *  where {@code payload} is either an expression (default) or a type
- *  (introduced by {@code :}). */
+/** Parses an expression attribute, e.g. {@code [@deprecated]}. */
 Attribute expAttribute() :
 {
   final Span span;
@@ -2010,8 +2003,8 @@ Ast.Type type7() :
       t = ast.namedType(t.pos.plus(pos()), types, token.image);
     }
   )*
-  /* Defer allocating the list until we have seen the first attribute. */
   [
+    // One or more attributes
     attr = expAttribute() {
       final List<Attribute> attrs = new ArrayList<Attribute>();
       attrs.add(attr);
@@ -2090,14 +2083,18 @@ AstNode statement() :
   }
   (
     attr = declAttribute() {
-      if (declAttrs == null) declAttrs = new ArrayList<Attribute>();
+      if (declAttrs == null) {
+        declAttrs = new ArrayList<Attribute>();
+      }
       declAttrs.add(attr);
     }
   )*
   d = decl()
   (
     attr = declAttribute() {
-      if (declAttrs == null) declAttrs = new ArrayList<Attribute>();
+      if (declAttrs == null) {
+        declAttrs = new ArrayList<Attribute>();
+      }
       declAttrs.add(attr);
     }
   )*
@@ -2125,7 +2122,9 @@ JAVACODE List<Attribute> collectLeadingDocComments() {
   Token s = tok.specialToken;
   while (s != null) {
     if (s.kind == DOC_COMMENT) {
-      if (docs == null) docs = new ArrayList<Token>();
+      if (docs == null) {
+        docs = new ArrayList<Token>();
+      }
       docs.add(s);
     }
     s = s.specialToken;
