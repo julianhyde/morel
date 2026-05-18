@@ -927,24 +927,28 @@ public class Plans {
      */
     Object rewriteToPositional(
         Object expr, Iterable<? extends Binding> bindings, String rootName) {
-      Map<String, Integer> nameToIdx = new HashMap<>();
-      ImmutableList.Builder<Object> tupleTypes = ImmutableList.builder();
+      Set<String> namesInRow = new HashSet<>();
+      ImmutableList.Builder<Object> rowFields = ImmutableList.builder();
       int i = 0;
       Object atomizedType = null;
       for (Binding b : bindings) {
         String name = b.id.name;
-        nameToIdx.put(name, i);
+        namesInRow.add(name);
         Object reified = reifyType(b.id.type);
-        tupleTypes.add(reified);
+        rowFields.add(of(name, reified));
         atomizedType = reified;
         i++;
       }
       if (i == 0) {
         return expr;
       }
+      // Row type: 1-binding chains atomize (row = column type). Otherwise
+      // a T_RECORD in pipeline (insertion) order — explicitly NOT
+      // alphabetized, so reassociation and reorders don't shuffle field
+      // positions in the IR. Field access is by name, never by ordinal.
       Object rowType =
-          i == 1 ? atomizedType : iof(TYPE_TUPLE, tupleTypes.build());
-      return rewriteVarRefs(expr, nameToIdx, rootName, rowType, i == 1);
+          i == 1 ? atomizedType : iof(TYPE_RECORD, rowFields.build());
+      return rewriteVarRefs(expr, namesInRow, rootName, rowType, i == 1);
     }
 
     /**
@@ -963,7 +967,7 @@ public class Plans {
     /** Recursive walker for {@link #rewriteToPositional}. */
     private Object rewriteVarRefs(
         Object expr,
-        Map<String, Integer> nameToIdx,
+        Set<String> namesInRow,
         String rootName,
         Object rowType,
         boolean atomized) {
@@ -979,15 +983,16 @@ public class Plans {
         List<?> payload = (List<?>) list.get(1);
         if (payload.size() == 2 && payload.get(0) instanceof String) {
           String name = (String) payload.get(0);
-          Integer idx = nameToIdx.get(name);
-          if (idx != null) {
+          if (namesInRow.contains(name)) {
             Object type = payload.get(1);
             if (atomized) {
               return iof(CORE_EXPR_VAR, of(rootName, type));
             }
+            // Field access by NAME (not ordinal). The row type is a
+            // T_RECORD preserving pipeline-order, but FIELD doesn't
+            // depend on order — it just looks up by name.
             Object rootVar = iof(CORE_EXPR_VAR, of(rootName, rowType));
-            return iof(
-                CORE_EXPR_FIELD, of(rootVar, String.valueOf(idx + 1), type));
+            return iof(CORE_EXPR_FIELD, of(rootVar, name, type));
           }
         }
       }
@@ -996,7 +1001,7 @@ public class Plans {
       boolean changed = false;
       for (Object child : list) {
         Object newChild =
-            rewriteVarRefs(child, nameToIdx, rootName, rowType, atomized);
+            rewriteVarRefs(child, namesInRow, rootName, rowType, atomized);
         if (newChild != child) {
           changed = true;
         }
@@ -1258,10 +1263,12 @@ public class Plans {
         return typeOfReified(((List<?>) list.get(1)).get(0), typeSystem, env);
       case "JOIN":
         {
-          // Element type: tuple of column types in input-0 followed by
-          // input-1 order; if there is exactly one column the tuple
-          // atomizes. Collection kind is the meet of the two children's
-          // kinds (any bag forces bag).
+          // Element type: T_RECORD with fields in input-0 then input-1
+          // order — explicitly NOT alphabetized, so JOIN reassociation
+          // doesn't shuffle field positions in the IR. If there's exactly
+          // one column the record atomizes to that column's type.
+          // Collection kind is the meet of the two children's kinds (any
+          // bag forces bag).
           List<Object> joinCols = rowType(value, typeSystem, env);
           if (joinCols == null) {
             return reifyType(unreifyExp(value, typeSystem, env).type);
@@ -1270,15 +1277,12 @@ public class Plans {
           boolean joinOrdered =
               isList(joinPayload.get(0), typeSystem, env)
                   && isList(joinPayload.get(1), typeSystem, env);
-          ImmutableList.Builder<Object> tupleTypes = ImmutableList.builder();
-          for (Object col : joinCols) {
-            tupleTypes.add(((List<?>) col).get(1));
+          Object joinElem;
+          if (joinCols.size() == 1) {
+            joinElem = ((List<?>) joinCols.get(0)).get(1);
+          } else {
+            joinElem = of(TYPE_RECORD.constructor, joinCols);
           }
-          List<Object> types = tupleTypes.build();
-          Object joinElem =
-              types.size() == 1
-                  ? types.get(0)
-                  : of(TYPE_TUPLE.constructor, types);
           return collectionOfKind(joinOrdered, joinElem);
         }
       case "LE":
@@ -1714,7 +1718,9 @@ public class Plans {
         return expr;
       }
       Object tag = list.get(0);
-      // FIELD(VAR(root, _), "N", T) — multi-binding case.
+      // FIELD(VAR(root, _), "name", T) — multi-binding case. Look up by
+      // name; the field name in the IR IS the scan-variable name, so the
+      // substitution is simply VAR(name, T).
       if (!atomized
           && "FIELD".equals(tag)
           && list.size() > 1
@@ -1724,16 +1730,11 @@ public class Plans {
             && isVarOf(payload.get(0), rootName)
             && payload.get(1) instanceof String) {
           String fieldName = (String) payload.get(1);
-          try {
-            int idx = Integer.parseInt(fieldName);
-            if (idx >= 1 && idx <= bindings.size()) {
-              Binding target = bindings.get(idx - 1);
+          for (Binding b : bindings) {
+            if (b.id.name.equals(fieldName)) {
               return of(
-                  CORE_EXPR_VAR.constructor,
-                  of(target.id.name, payload.get(2)));
+                  CORE_EXPR_VAR.constructor, of(fieldName, payload.get(2)));
             }
-          } catch (NumberFormatException ignored) {
-            // Not an ordinal field — fall through to recurse.
           }
         }
       }
