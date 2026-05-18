@@ -429,37 +429,46 @@ walk the parse tree (e.g. via `Sys.parseTree`) to consult
 them.
 
 <pre>
-<i>expAttr</i> &rarr; '<b>[@</b>' <i>id</i> [ <i>exp</i> ] <b>]</b>
-                                expression attribute
-<i>declAttr</i> &rarr; '<b>[@@</b>' <i>id</i> [ <i>exp</i> ] <b>]</b>
+<i>expAttr</i> &rarr; '<b>[@</b>' <i>attrName</i> [ <i>payload</i> ] <b>]</b>
+                                expression / type attribute
+<i>declAttr</i> &rarr; '<b>[@@</b>' <i>attrName</i> [ <i>payload</i> ] <b>]</b>
                                 declaration attribute
-<i>floatingAttr</i> &rarr; '<b>[@@@</b>' <i>id</i> [ <i>exp</i> ] <b>]</b>
+<i>floatingAttr</i> &rarr; '<b>[@@@</b>' <i>attrName</i> [ <i>payload</i> ] <b>]</b>
                                 floating attribute
+<i>attrName</i> &rarr; <i>id</i> [ <b>.</b> <i>id</i> ]*
+                                dotted attribute name
+<i>payload</i> &rarr; <i>exp</i>                      expression payload
+    | <b>:</b> <i>type</i>                    type payload
 </pre>
 
-The optional *exp* after the attribute name is the
-attribute's payload — any Morel expression (string literal,
-integer, tuple, list, etc.).
+The optional *payload* after the attribute name is either an
+expression (any Morel expression — literal, tuple, list, etc.) or,
+if introduced by `:`, a type.
 
 Each attribute form has a different attachment level:
 
 * `[@id]` attaches to the immediately preceding *atomic*
-  expression (a literal, identifier, parenthesized
-  expression, list literal, etc.). The attribute therefore
-  binds more tightly than any infix operator: `1 + 2 [@a]`
-  attaches `[@a]` to `2`, not to the sum. Wrap the
-  expression in parentheses to widen the scope:
+  expression (a literal, identifier, parenthesized expression,
+  list literal, etc.) or to an atomic type. The attribute binds
+  more tightly than any infix operator: `1 + 2 [@a]` attaches
+  `[@a]` to `2`, not to the sum; `int -> string [@a]` attaches
+  to `string`. Wrap in parentheses to widen the scope:
   `(1 + 2) [@a]`.
 
-* `[@@id]` attaches to the immediately preceding
-  declaration: `val x = 1 [@@deprecated]`.
+* `[@@id]` attaches to a declaration and may appear either
+  before or after the declaration (or both); leading and
+  trailing attributes are merged. Example: `[@@deprecated] val
+  x = 1` and `val x = 1 [@@deprecated]` are equivalent.
 
 * `[@@@id]` stands alone as a top-level statement and is
   considered to attach to the enclosing file or structure:
   `[@@@warning "-32"]`.
 
-Multiple attributes of the same form may be chained:
-`val x = 1 [@@a] [@@b]`.
+Multiple attributes of the same form may be chained: `val x = 1
+[@@a] [@@b]`. Attribute names may be dotted (`[@foo.bar]`).
+
+Morel does **not** support OCaml's pattern payload form
+(`[@a? pat]`); use an expression payload instead.
 
 **Doc comments.** A comment of the form `(** text *)`
 appearing immediately above a declaration desugars to the

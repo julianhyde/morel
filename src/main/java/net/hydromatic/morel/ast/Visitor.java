@@ -55,6 +55,10 @@ public class Visitor {
     attributedDecl.decl.accept(this);
   }
 
+  protected void visit(Ast.AttributedType attributedType) {
+    attributedType.type.accept(this);
+  }
+
   protected void visit(Ast.FloatingAttrDecl floatingAttrDecl) {}
 
   protected void visit(Ast.If anIf) {

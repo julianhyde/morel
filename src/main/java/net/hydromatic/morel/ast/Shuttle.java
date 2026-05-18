@@ -117,6 +117,13 @@ public class Shuttle {
         attributedDecl.attributes);
   }
 
+  protected Ast.Type visit(Ast.AttributedType attributedType) {
+    return ast.attributedType(
+        attributedType.pos,
+        attributedType.type.accept(this),
+        attributedType.attributes);
+  }
+
   protected Ast.Decl visit(Ast.FloatingAttrDecl floatingAttrDecl) {
     return floatingAttrDecl;
   }

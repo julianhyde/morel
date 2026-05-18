@@ -603,22 +603,36 @@ public class Ast {
     FLOATING
   }
 
-  /** Single attribute, e.g. {@code [@a]} or {@code [@@deprecated "msg"]}. */
+  /**
+   * Single attribute, e.g. {@code [@a]}, {@code [@@deprecated "msg"]}, or
+   * {@code [@a: int]}. At most one of {@link #payload} and {@link #typePayload}
+   * is non-null.
+   */
   public static class Attribute extends AstNode {
     public final AttributeKind kind;
     public final String name;
     public final @Nullable Exp payload;
+    public final @Nullable Type typePayload;
 
-    Attribute(Pos pos, AttributeKind kind, String name, @Nullable Exp payload) {
+    Attribute(
+        Pos pos,
+        AttributeKind kind,
+        String name,
+        @Nullable Exp payload,
+        @Nullable Type typePayload) {
       super(pos, Op.ATTRIBUTE);
       this.kind = requireNonNull(kind);
       this.name = requireNonNull(name);
       this.payload = payload;
+      this.typePayload = typePayload;
+      checkArgument(
+          payload == null || typePayload == null,
+          "an attribute carries at most one payload");
     }
 
     @Override
     public int hashCode() {
-      return hash(kind, name, payload);
+      return hash(kind, name, payload, typePayload);
     }
 
     @Override
@@ -627,7 +641,8 @@ public class Ast {
           || obj instanceof Attribute
               && kind == ((Attribute) obj).kind
               && name.equals(((Attribute) obj).name)
-              && Objects.equals(payload, ((Attribute) obj).payload);
+              && Objects.equals(payload, ((Attribute) obj).payload)
+              && Objects.equals(typePayload, ((Attribute) obj).typePayload);
     }
 
     @Override
@@ -655,6 +670,8 @@ public class Ast {
       w.append(name);
       if (payload != null) {
         w.append(" ").append(payload, 0, 0);
+      } else if (typePayload != null) {
+        w.append(": ").append(typePayload, 0, 0);
       }
       return w.append("]");
     }
@@ -697,6 +714,51 @@ public class Ast {
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
       w.append(exp, left, 0);
+      for (Attribute a : attributes) {
+        w.append(" ").append(a, 0, 0);
+      }
+      return w;
+    }
+  }
+
+  /** Type with one or more attached {@code [@a]} attributes. */
+  public static class AttributedType extends Type {
+    public final Type type;
+    public final List<Attribute> attributes;
+
+    AttributedType(Pos pos, Type type, ImmutableList<Attribute> attributes) {
+      super(pos, Op.ATTRIBUTED_TYPE);
+      this.type = requireNonNull(type);
+      this.attributes = requireNonNull(attributes);
+      checkArgument(!attributes.isEmpty());
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(type, attributes);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj
+          || obj instanceof AttributedType
+              && type.equals(((AttributedType) obj).type)
+              && attributes.equals(((AttributedType) obj).attributes);
+    }
+
+    @Override
+    public Type accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(type, left, 0);
       for (Attribute a : attributes) {
         w.append(" ").append(a, 0, 0);
       }

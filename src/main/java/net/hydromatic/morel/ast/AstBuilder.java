@@ -567,7 +567,12 @@ public enum AstBuilder {
 
   public Ast.Attribute attribute(
       Pos pos, Ast.AttributeKind kind, String name, Ast.@Nullable Exp payload) {
-    return new Ast.Attribute(pos, kind, name, payload);
+    return new Ast.Attribute(pos, kind, name, payload, null);
+  }
+
+  public Ast.Attribute attributeWithType(
+      Pos pos, Ast.AttributeKind kind, String name, Ast.Type typePayload) {
+    return new Ast.Attribute(pos, kind, name, null, typePayload);
   }
 
   public Ast.AttributedExp attributedExp(
@@ -578,6 +583,11 @@ public enum AstBuilder {
   public Ast.AttributedDecl attributedDecl(
       Pos pos, Ast.Decl decl, Iterable<? extends Ast.Attribute> attributes) {
     return new Ast.AttributedDecl(pos, decl, ImmutableList.copyOf(attributes));
+  }
+
+  public Ast.AttributedType attributedType(
+      Pos pos, Ast.Type type, Iterable<? extends Ast.Attribute> attributes) {
+    return new Ast.AttributedType(pos, type, ImmutableList.copyOf(attributes));
   }
 
   public Ast.FloatingAttrDecl floatingAttrDecl(Pos pos, Ast.Attribute a) {

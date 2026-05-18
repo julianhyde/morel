@@ -910,21 +910,48 @@ Exp expression9() :
   }
 }
 
+/** Parses an attribute name: one or more dot-separated identifiers,
+ *  e.g. {@code deprecated}, {@code foo.bar}. Mirrors OCaml's
+ *  dotted attribute identifiers. */
+String attributeName() :
+{
+  Id id;
+  StringBuilder b;
+}
+{
+  id = identifier() { b = new StringBuilder(id.name); }
+  (
+    <DOT> id = identifier() { b.append('.').append(id.name); }
+  )*
+  { return b.toString(); }
+}
+
 /** Parses an expression attribute, e.g. {@code [@deprecated]}. Attaches
- *  to atom-level expressions. Maps to OCaml's {@code [@id payload?]}. */
+ *  to atom-level expressions. Maps to OCaml's {@code [@id payload?]},
+ *  where {@code payload} is either an expression (default) or a type
+ *  (introduced by {@code :}). */
 Attribute expAttribute() :
 {
   final Span span;
-  final Id id;
+  final String name;
   Exp payload = null;
+  Type typePayload = null;
 }
 {
   <LBRACKET_AT> { span = Span.of(pos()); }
-  id = identifier()
-  [ payload = expression() ]
+  name = attributeName()
+  (
+    <COLON> typePayload = type()
+  |
+    [ payload = expression() ]
+  )
   <RBRACKET> {
+    if (typePayload != null) {
+      return ast.attributeWithType(
+          span.end(this), Ast.AttributeKind.EXP, name, typePayload);
+    }
     return ast.attribute(
-        span.end(this), Ast.AttributeKind.EXP, id.name, payload);
+        span.end(this), Ast.AttributeKind.EXP, name, payload);
   }
 }
 
@@ -1970,6 +1997,8 @@ Ast.Type atomicType() :
 Ast.Type type7() :
 {
   Type t;
+  Attribute attr;
+  List<Attribute> attrs = null;
 }
 {
   t = atomicType()
@@ -1982,7 +2011,18 @@ Ast.Type type7() :
       t = ast.namedType(t.pos.plus(pos()), types, token.image);
     }
   )*
-  { return t; }
+  (
+    attr = expAttribute() {
+      if (attrs == null) attrs = new ArrayList<Attribute>();
+      attrs.add(attr);
+    }
+  )*
+  {
+    if (attrs != null) {
+      t = ast.attributedType(t.pos.plus(pos()), t, attrs);
+    }
+    return t;
+  }
 }
 
 Ast.Type type6() :
@@ -2042,11 +2082,19 @@ AstNode statement() :
     return ast.floatingAttrDecl(attr.pos, attr);
   }
 |
-  /* A decl, optionally with leading doc-comment sugar and/or
-     trailing [@@id] attributes. */
+  /* A decl, optionally with leading doc-comment sugar, leading
+     [@@id] attributes, and/or trailing [@@id] attributes.
+     OCaml allows declaration attributes either before or after the
+     decl; we accept and merge both. */
   {
     declAttrs = collectLeadingDocComments();
   }
+  (
+    attr = declAttribute() {
+      if (declAttrs == null) declAttrs = new ArrayList<Attribute>();
+      declAttrs.add(attr);
+    }
+  )*
   d = decl()
   (
     attr = declAttribute() {
@@ -2102,16 +2150,25 @@ JAVACODE List<Attribute> collectLeadingDocComments() {
 Attribute declAttribute() :
 {
   final Span span;
-  final Id id;
+  final String name;
   Exp payload = null;
+  Type typePayload = null;
 }
 {
   <LBRACKET_AT_AT> { span = Span.of(pos()); }
-  id = identifier()
-  [ payload = expression() ]
+  name = attributeName()
+  (
+    <COLON> typePayload = type()
+  |
+    [ payload = expression() ]
+  )
   <RBRACKET> {
+    if (typePayload != null) {
+      return ast.attributeWithType(
+          span.end(this), Ast.AttributeKind.DECL, name, typePayload);
+    }
     return ast.attribute(
-        span.end(this), Ast.AttributeKind.DECL, id.name, payload);
+        span.end(this), Ast.AttributeKind.DECL, name, payload);
   }
 }
 
@@ -2120,16 +2177,25 @@ Attribute declAttribute() :
 Attribute floatingAttribute() :
 {
   final Span span;
-  final Id id;
+  final String name;
   Exp payload = null;
+  Type typePayload = null;
 }
 {
   <LBRACKET_AT_AT_AT> { span = Span.of(pos()); }
-  id = identifier()
-  [ payload = expression() ]
+  name = attributeName()
+  (
+    <COLON> typePayload = type()
+  |
+    [ payload = expression() ]
+  )
   <RBRACKET> {
+    if (typePayload != null) {
+      return ast.attributeWithType(
+          span.end(this), Ast.AttributeKind.FLOATING, name, typePayload);
+    }
     return ast.attribute(
-        span.end(this), Ast.AttributeKind.FLOATING, id.name, payload);
+        span.end(this), Ast.AttributeKind.FLOATING, name, payload);
   }
 }
 

@@ -103,6 +103,19 @@ Sys.parseTree "val x = 1 [@@deprecated \"use y instead\"]";
 >   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@deprecated (string_literal \"use y instead\")))"
 >   : string
 
+(*) Leading [@@id] before a decl (matches OCaml; both before and
+(*) after positions are accepted and merged).
+Sys.parseTree "[@@a] val x = 1";
+> val it =
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@a))"
+>   : string
+
+(*) Leading and trailing combined; order preserved.
+Sys.parseTree "[@@a] val x = 1 [@@b]";
+> val it =
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@a) (attribute @@b))"
+>   : string
+
 (* --- Floating [@@@id] (stands alone) ---------------------------- *)
 Sys.parseTree "[@@@a]";
 > val it = "(floatingAttrDecl (attribute @@@a))" : string
@@ -110,6 +123,47 @@ Sys.parseTree "[@@@a]";
 (*) With a payload.
 Sys.parseTree "[@@@warning 32]";
 > val it = "(floatingAttrDecl (attribute @@@warning (int_literal 32)))"
+>   : string
+
+(* --- Attributes on types ---------------------------------------- *)
+(*) The attribute attaches at the atom level (after any type-application
+(*) chain), so it binds tighter than `*` or `->`.
+Sys.parseTree "type distance = real [@unit]";
+> val it = "(type_decl type distance = real [@unit])" : string
+
+(*) On a function type, the attribute attaches to the result type's atom.
+Sys.parseTree "type t = int -> int [@a]";
+> val it = "(type_decl type t = int -> (int [@a]))" : string
+
+(*) Inside a value annotation.
+Sys.parseTree "val x : int [@a] = 1";
+> val it =
+>   "(val (valBind (annotatedPat (idPat x) (attributedType (named int) (attribute @a))) (int_literal 1)))"
+>   : string
+
+(* --- Dotted attribute names ------------------------------------- *)
+Sys.parseTree "1 [@foo.bar]";
+> val it = "(attributedExp (int_literal 1) (attribute @foo.bar))" : string
+Sys.parseTree "val x = 1 [@@deriving.show]";
+> val it =
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@deriving.show))"
+>   : string
+Sys.parseTree "[@@@a.b.c]";
+> val it = "(floatingAttrDecl (attribute @@@a.b.c))" : string
+
+(* --- Type payload `[@a: typ]` ----------------------------------- *)
+(*) An attribute payload may be a type rather than an expression,
+(*) introduced by `:`. Mirrors OCaml's PTyp payload form.
+Sys.parseTree "1 [@a: int]";
+> val it = "(attributedExp (int_literal 1) (attribute @a : (named int)))"
+>   : string
+Sys.parseTree "val x = 1 [@@a: int list]";
+> val it =
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@a : (named list (named int))))"
+>   : string
+Sys.parseTree "[@@@a: int -> string]";
+> val it =
+>   "(floatingAttrDecl (attribute @@@a : (fnType (named int) (named string))))"
 >   : string
 
 (* --- Doc-comment sugar: (** text *) ==> [@@doc "text"] ---------- *)

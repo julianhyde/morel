@@ -201,6 +201,9 @@ public class AstDumper {
       if (a.payload != null) {
         b.append(' ');
         dump(b, a.payload);
+      } else if (a.typePayload != null) {
+        b.append(" : ");
+        dump(b, a.typePayload);
       }
       b.append(')');
       return true;
@@ -270,6 +273,17 @@ public class AstDumper {
       dump(b, t.paramType);
       b.append(' ');
       dump(b, t.resultType);
+      b.append(')');
+      return true;
+    }
+    if (node instanceof Ast.AttributedType) {
+      final Ast.AttributedType t = (Ast.AttributedType) node;
+      b.append("(attributedType ");
+      dump(b, t.type);
+      for (Ast.Attribute a : t.attributes) {
+        b.append(' ');
+        dump(b, a);
+      }
       b.append(')');
       return true;
     }
