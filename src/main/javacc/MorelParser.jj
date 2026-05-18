@@ -2065,39 +2065,41 @@ AstNode statement() :
   AstNode n;
   Decl d;
   Attribute attr;
-  List<Attribute> declAttrs = null;
+  List<Attribute> declAttrs;
 }
 {
-  /* Floating attribute: stands alone as a top-level statement.
-     [@@@id payload?]  ==>  FloatingAttrDecl */
+  // Floating attribute, e.g. [@@@id payload?]. Treat as top-level statement.
   attr = floatingAttribute() {
     return ast.floatingAttrDecl(attr.pos, attr);
   }
 |
-  /* A decl, optionally with leading doc-comment sugar, leading
-     [@@id] attributes, and/or trailing [@@id] attributes.
-     OCaml allows declaration attributes either before or after the
-     decl; we accept and merge both. */
+  // A declaration can be preceded by a doc-comment (which is desugared to
+  // an attribute) and leading [@@id] attributes, and followed by trailing
+  // [@@id] attributes.
   {
     declAttrs = collectLeadingDocComments();
   }
-  (
-    attr = declAttribute() {
+  // Leading [@@id] attributes. Defer allocating the list until we see one.
+  [
+    {
       if (declAttrs == null) {
         declAttrs = new ArrayList<Attribute>();
       }
-      declAttrs.add(attr);
     }
-  )*
+    declAttribute(declAttrs)
+    ( declAttribute(declAttrs) )*
+  ]
   d = decl()
-  (
-    attr = declAttribute() {
+  // Trailing [@@id] attributes. Same deferred allocation.
+  [
+    {
       if (declAttrs == null) {
         declAttrs = new ArrayList<Attribute>();
       }
-      declAttrs.add(attr);
     }
-  )*
+    declAttribute(declAttrs)
+    ( declAttribute(declAttrs) )*
+  ]
   {
     if (declAttrs != null) {
       return ast.attributedDecl(d.pos.plus(pos()), d, declAttrs);
@@ -2145,9 +2147,10 @@ JAVACODE List<Attribute> collectLeadingDocComments() {
   return attrs;
 }
 
-/** Parses a declaration attribute, e.g. {@code [@@deprecated]}. Attaches
- *  to declarations. Maps to OCaml's {@code [@@id payload?]}. */
-Attribute declAttribute() :
+/** Parses a declaration attribute, e.g. {@code [@@deprecated]}, and
+ *  appends the parsed {@link Attribute} to {@code attrs}. Maps to
+ *  OCaml's {@code [@@id payload?]}. */
+void declAttribute(List<Attribute> attrs) :
 {
   final Span span;
   final String name;
@@ -2164,11 +2167,13 @@ Attribute declAttribute() :
   )
   <RBRACKET> {
     if (typePayload != null) {
-      return ast.attributeWithType(
-          span.end(this), Ast.AttributeKind.DECL, name, typePayload);
+      attrs.add(
+          ast.attributeWithType(
+              span.end(this), Ast.AttributeKind.DECL, name, typePayload));
+    } else {
+      attrs.add(
+          ast.attribute(span.end(this), Ast.AttributeKind.DECL, name, payload));
     }
-    return ast.attribute(
-        span.end(this), Ast.AttributeKind.DECL, name, payload);
   }
 }
 
