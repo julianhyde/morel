@@ -109,11 +109,21 @@ Plan.core (from e in emps where e.deptno elem [10, 20] yield {e.ename, e.deptno}
 >    expr=
 >    PROJECT (
 >     FILTER (SCAN ("e",VAR ("emps",T_LIST (T_RECORD [("deptno",T_INT),("ename",T_STRING)]))),
->      ELEM (FIELD (VAR ("$0",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT),
+>      ELEM (
+>       FIELD (
+>        FIELD (VAR ("$0",T_RECORD [("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)])]),"e",
+>         T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT),
 >       LIST_LITERAL ([INT_LITERAL 10,INT_LITERAL 20],T_LIST T_INT))),
 >     E_RECORD (
->      [("deptno",FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT)),
->       ("ename",FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",T_STRING))],
+>      [
+>       ("deptno",
+>        FIELD (
+>         FIELD (VAR ("$0",T_RECORD [("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)])]),"e",
+>          T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT)),
+>       ("ename",
+>        FIELD (
+>         FIELD (VAR ("$0",T_RECORD [("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)])]),"e",
+>          T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",T_STRING))],
 >      T_RECORD [("deptno",T_INT),("ename",T_STRING)])),value=[{deptno=10,ename="x"}]}
 >   : {expr:expr, value:{deptno:int, ename:string} list}
 
@@ -140,17 +150,32 @@ Plan.core (from e in scott.emps where e.job = "CLERK" order (e.deptno, DESC e.sa
 >         ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]))),
 >      EQUALS (
 >       FIELD (
->        VAR ("$0",
+>        FIELD (
+>         VAR ("$0",
+>          T_RECORD [
+>           ("e",
+>            T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>             ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])]),"e",
 >         T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
 >          ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"job",T_STRING),STRING_LITERAL "CLERK")),
 >     TUPLE [
 >      FIELD (
->       VAR ("e",
+>       FIELD (
+>        VAR ("$0",
+>         T_RECORD [
+>          ("e",
+>           T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>            ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])]),"e",
 >        T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
 >         ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"deptno",T_INT),
 >      APPLY (VAR ("DESC",T_FN (T_REAL,T_DATA ("descending",[T_REAL]))),
 >       FIELD (
->        VAR ("e",
+>        FIELD (
+>         VAR ("$0",
+>          T_RECORD [
+>           ("e",
+>            T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>             ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])]),"e",
 >         T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
 >          ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"sal",T_REAL),T_DATA ("descending",[T_REAL]))]),
 >    value=
@@ -261,7 +286,7 @@ Plan.transform (Plan.core (from e in [1,2,3] where e > 1), id);
 >   {
 >    expr=
 >    FILTER (SCAN ("e",LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT)),
->     GT (VAR ("$0",T_INT),INT_LITERAL 1)),value=[2,3]} : {expr:expr, value:int list}
+>     GT (FIELD (VAR ("$0",T_RECORD [("e",T_INT)]),"e",T_INT),INT_LITERAL 1)),value=[2,3]} : {expr:expr, value:int list}
 
 (*) Scan + yield: round-trips through PROJECT.
 Plan.transform (Plan.core (from e in [1,2,3] yield e + 10), id);
@@ -269,7 +294,8 @@ Plan.transform (Plan.core (from e in [1,2,3] yield e + 10), id);
 >   {
 >    expr=
 >    PROJECT (SCAN ("e",LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT)),
->     PLUS (VAR ("e",T_INT),INT_LITERAL 10,T_INT)),value=[11,12,13]} : {expr:expr, value:int list}
+>     PLUS (FIELD (VAR ("$0",T_RECORD [("e",T_INT)]),"e",T_INT),INT_LITERAL 10,T_INT)),value=[11,12,13]}
+>   : {expr:expr, value:int list}
 
 (*) Scan + take/skip: round-trips through SKIP and TAKE.
 Plan.transform (Plan.core (from e in [10,20,30,40,50] skip 1 take 2), id);
@@ -285,8 +311,10 @@ Plan.transform (Plan.core (from e in [10,20,30,40,50] skip 1 take 2), id);
  * goes through DESC ... value, reified as APPLY of DESC. *)
 Plan.transform (Plan.core (from e in [3,1,2] order e), id);
 > val it =
->   {expr=ORDER (SCAN ("e",LIST_LITERAL ([INT_LITERAL 3,INT_LITERAL 1,INT_LITERAL 2],T_LIST T_INT)),VAR ("e",T_INT)),
->    value=[1,2,3]} : {expr:expr, value:int list}
+>   {
+>    expr=
+>    ORDER (SCAN ("e",LIST_LITERAL ([INT_LITERAL 3,INT_LITERAL 1,INT_LITERAL 2],T_LIST T_INT)),
+>     FIELD (VAR ("$0",T_RECORD [("e",T_INT)]),"e",T_INT)),value=[1,2,3]} : {expr:expr, value:int list}
 
 (* Complex query against scott.emps with FILTER + ORDER (incl. DESC
  * applied to a real field). Identity round-trip recompiles the chain
@@ -316,17 +344,32 @@ val q =
 >         ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]))),
 >      EQUALS (
 >       FIELD (
->        VAR ("$0",
+>        FIELD (
+>         VAR ("$0",
+>          T_RECORD [
+>           ("e",
+>            T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>             ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])]),"e",
 >         T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
 >          ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"job",T_STRING),STRING_LITERAL "CLERK")),
 >     TUPLE [
 >      FIELD (
->       VAR ("e",
+>       FIELD (
+>        VAR ("$0",
+>         T_RECORD [
+>          ("e",
+>           T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>            ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])]),"e",
 >        T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
 >         ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"deptno",T_INT),
 >      APPLY (VAR ("DESC",T_FN (T_REAL,T_DATA ("descending",[T_REAL]))),
 >       FIELD (
->        VAR ("e",
+>        FIELD (
+>         VAR ("$0",
+>          T_RECORD [
+>           ("e",
+>            T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
+>             ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)])]),"e",
 >         T_RECORD [("comm",T_REAL),("deptno",T_INT),("empno",T_INT),("ename",T_STRING),("hiredate",T_STRING),
 >          ("job",T_STRING),("mgr",T_INT),("sal",T_REAL)]),"sal",T_REAL),T_DATA ("descending",[T_REAL]))]),
 >    value=
@@ -347,11 +390,20 @@ val r =
 >    expr=
 >    PROJECT (
 >     FILTER (SCAN ("e",VAR ("emps",T_LIST (T_RECORD [("deptno",T_INT),("ename",T_STRING)]))),
->      ELEM (FIELD (VAR ("$0",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT),
->       LIST_LITERAL ([INT_LITERAL 10],T_LIST T_INT))),
+>      ELEM (
+>       FIELD (
+>        FIELD (VAR ("$0",T_RECORD [("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)])]),"e",
+>         T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT),LIST_LITERAL ([INT_LITERAL 10],T_LIST T_INT))),
 >     E_RECORD (
->      [("deptno",FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT)),
->       ("ename",FIELD (VAR ("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",T_STRING))],
+>      [
+>       ("deptno",
+>        FIELD (
+>         FIELD (VAR ("$0",T_RECORD [("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)])]),"e",
+>          T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"deptno",T_INT)),
+>       ("ename",
+>        FIELD (
+>         FIELD (VAR ("$0",T_RECORD [("e",T_RECORD [("deptno",T_INT),("ename",T_STRING)])]),"e",
+>          T_RECORD [("deptno",T_INT),("ename",T_STRING)]),"ename",T_STRING))],
 >      T_RECORD [("deptno",T_INT),("ename",T_STRING)])),value=[{deptno=10,ename="x"}]}
 >   : {expr:expr, value:{deptno:int, ename:string} list}
 
@@ -386,14 +438,20 @@ val grouped =
 >        E_RECORD ([("k",INT_LITERAL 1),("v",INT_LITERAL 20)],T_RECORD [("k",T_INT),("v",T_INT)]),
 >        E_RECORD ([("k",INT_LITERAL 2),("v",INT_LITERAL 30)],T_RECORD [("k",T_INT),("v",T_INT)])],
 >       T_LIST (T_RECORD [("k",T_INT),("v",T_INT)]))),
->     [("k",FIELD (VAR ("e",T_RECORD [("k",T_INT),("v",T_INT)]),"k",T_INT))],
+>     [
+>      ("k",
+>       FIELD (
+>        FIELD (VAR ("$0",T_RECORD [("e",T_RECORD [("k",T_INT),("v",T_INT)])]),"e",T_RECORD [("k",T_INT),("v",T_INT)]),"k",
+>        T_INT))],
 >     [
 >      ("s",
 >       FN (P_VAR ("$col",T_LIST T_INT),
 >        APPLY (VAR ("sum:int",T_FN (T_TUPLE [T_INT,T_INT],T_INT)),
 >         APPLY (VAR ("fromList",T_FN (T_LIST (T_VAR 0),T_BAG (T_VAR 0))),VAR ("$col",T_LIST T_INT),T_BAG T_INT),T_INT),
->        T_FN (T_LIST T_INT,T_INT)),SOME (FIELD (VAR ("e",T_RECORD [("k",T_INT),("v",T_INT)]),"v",T_INT)))]),
->    value=[{k=1,s=30},{k=2,s=30}]} : {expr:expr, value:{k:int, s:int} list}
+>        T_FN (T_LIST T_INT,T_INT)),
+>       SOME (FIELD (
+>        FIELD (VAR ("$0",T_RECORD [("e",T_RECORD [("k",T_INT),("v",T_INT)])]),"e",T_RECORD [("k",T_INT),("v",T_INT)]),"v",
+>        T_INT)))]),value=[{k=1,s=30},{k=2,s=30}]} : {expr:expr, value:{k:int, s:int} list}
 
 (*) Scan + union: combines lists.
 Plan.transform (Plan.core (from e in [1,2] union [3,4]), id);
@@ -615,7 +673,7 @@ Plan.expr_type (#expr (Plan.core (1, "a")));
 > val it = T_TUPLE [T_INT,T_STRING] : t
 
 Plan.expr_type (#expr (Plan.core (from e in [1,2,3] where e > 1)));
-> val it = T_LIST T_INT : t
+> val it = T_LIST (T_RECORD [("e",T_INT)]) : t
 
 (* Plan.optimize applies a list of rules (each Core.expr -> Core.expr
  * option) bottom-up to a planned value's reified expression, firing
@@ -640,8 +698,8 @@ Plan.optimize
 >   {
 >    expr=
 >    FILTER (SCAN ("e",LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT)),
->     AND [GT (VAR ("$0",T_INT),INT_LITERAL 1),LT (VAR ("$0",T_INT),INT_LITERAL 3)]),value=[2]}
->   : {expr:expr, value:int list}
+>     AND [GT (FIELD (VAR ("$0",T_RECORD [("e",T_INT)]),"e",T_INT),INT_LITERAL 1),
+>      LT (FIELD (VAR ("$0",T_RECORD [("e",T_INT)]),"e",T_INT),INT_LITERAL 3)]),value=[2]} : {expr:expr, value:int list}
 
 (* Plan.row_type returns the column list of a pipeline expression as
  * SOME [(name, type), ...] in pipeline (positional) order; for
@@ -709,6 +767,13 @@ fun pushFilterLeft (FILTER (JOIN (l, r, c), p)) =
 Plan.optimize
   (Plan.core (from e in [1,2,3], d in ["a","b"] where e > 1),
    [pushFilterLeft]);
-> java.lang.UnsupportedOperationException
+> val it =
+>   {
+>    expr=
+>    JOIN (
+>     FILTER (SCAN ("e",LIST_LITERAL ([INT_LITERAL 1,INT_LITERAL 2,INT_LITERAL 3],T_LIST T_INT)),
+>      GT (FIELD (VAR ("$0",T_RECORD [("e",T_INT),("d",T_STRING)]),"e",T_INT),INT_LITERAL 1)),
+>     SCAN ("d",LIST_LITERAL ([STRING_LITERAL "a",STRING_LITERAL "b"],T_LIST T_STRING)),BOOL_LITERAL true),
+>    value=[{d="a",e=2},{d="b",e=2},{d="a",e=3},{d="b",e=3}]} : {expr:expr, value:{d:string, e:int} list}
 
 (*) End plan.smli

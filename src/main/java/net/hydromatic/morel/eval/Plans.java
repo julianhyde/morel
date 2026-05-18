@@ -705,16 +705,28 @@ public class Plans {
             break;
           case GROUP:
             Core.Group group = (Core.Group) step;
+            // GROUP keys reference pre-group scan-bound names. Each agg
+            // argument (`agg over expr`) does too. Rewrite both with
+            // $0-positional refs against prevBindings.
+            final List<Binding> groupPrev = prevBindings;
             ImmutableList.Builder<Object> keys = ImmutableList.builder();
             group.groupExps.forEach(
-                (k, v) -> keys.add(of(k.name, reifyExp(v))));
+                (k, v) ->
+                    keys.add(
+                        of(
+                            k.name,
+                            rewriteToPositional(
+                                reifyExp(v), groupPrev, "$0"))));
             ImmutableList.Builder<Object> aggs = ImmutableList.builder();
             group.aggregates.forEach(
                 (k, agg) -> {
                   Object argOpt =
                       agg.argument == null
                           ? of("NONE")
-                          : of("SOME", reifyExp(agg.argument));
+                          : of(
+                              "SOME",
+                              rewriteToPositional(
+                                  reifyExp(agg.argument), groupPrev, "$0"));
                   aggs.add(of(k.name, reifyExp(agg.aggregate), argOpt));
                 });
             current =
@@ -725,7 +737,11 @@ public class Plans {
             break;
           case ORDER:
             Core.Order order = (Core.Order) step;
-            current = iof(CORE_EXPR_ORDER, of(current, reifyExp(order.exp)));
+            // ORDER's key expression references scan-bound names; rewrite
+            // to $0-positional form.
+            Object orderExp =
+                rewriteToPositional(reifyExp(order.exp), prevBindings, "$0");
+            current = iof(CORE_EXPR_ORDER, of(current, orderExp));
             break;
           case SCAN:
             Core.Scan scan = (Core.Scan) step;
@@ -773,9 +789,10 @@ public class Plans {
             break;
           case WHERE:
             Core.Where where = (Core.Where) step;
-            // FILTER's predicate uses positional references to its input:
-            // a single VAR("$0", T) for an atomized 1-col row, or
-            // FIELD(VAR("$0", T_TUPLE [...]), "N", T) for an N-col row.
+            // FILTER's predicate references the chain's row as $0. With
+            // the IR's "never atomize" rule, $0 always has T_RECORD type;
+            // a scan-var "e" becomes FIELD(VAR("$0", T_RECORD [...]),
+            // "e", T).
             Object predExpr = reifyExp(where.exp);
             Object predRewritten =
                 rewriteToPositional(predExpr, where.env.bindings, "$0");
@@ -783,7 +800,13 @@ public class Plans {
             break;
           case YIELD:
             Core.Yield yield = (Core.Yield) step;
-            current = iof(CORE_EXPR_PROJECT, of(current, reifyExp(yield.exp)));
+            // YIELD's body references pre-yield scan-bound names; rewrite
+            // to $0-positional form. The output row's binding names come
+            // from the yield's record-type structure (or a synthetic name
+            // for bare yields), handled downstream by rowType.
+            Object yieldExp =
+                rewriteToPositional(reifyExp(yield.exp), prevBindings, "$0");
+            current = iof(CORE_EXPR_PROJECT, of(current, yieldExp));
             break;
           default:
             throw new UnsupportedOperationException(
@@ -930,25 +953,22 @@ public class Plans {
       Set<String> namesInRow = new HashSet<>();
       ImmutableList.Builder<Object> rowFields = ImmutableList.builder();
       int i = 0;
-      Object atomizedType = null;
       for (Binding b : bindings) {
-        String name = b.id.name;
-        namesInRow.add(name);
-        Object reified = reifyType(b.id.type);
-        rowFields.add(of(name, reified));
-        atomizedType = reified;
+        namesInRow.add(b.id.name);
+        rowFields.add(of(b.id.name, reifyType(b.id.type)));
         i++;
       }
       if (i == 0) {
         return expr;
       }
-      // Row type: 1-binding chains atomize (row = column type). Otherwise
-      // a T_RECORD in pipeline (insertion) order — explicitly NOT
-      // alphabetized, so reassociation and reorders don't shuffle field
-      // positions in the IR. Field access is by name, never by ordinal.
-      Object rowType =
-          i == 1 ? atomizedType : iof(TYPE_RECORD, rowFields.build());
-      return rewriteVarRefs(expr, namesInRow, rootName, rowType, i == 1);
+      // Row type is always T_RECORD with fields in pipeline (insertion)
+      // order — even for 1-binding chains. Atomization happens only at
+      // the Morel boundary (when the from-builder materializes a single-
+      // scan result), not in the IR; keeping the predicate shape uniform
+      // means rewrite rules like filter-pushdown don't have to special-
+      // case row width.
+      Object rowType = iof(TYPE_RECORD, rowFields.build());
+      return rewriteVarRefs(expr, namesInRow, rootName, rowType);
     }
 
     /**
@@ -966,11 +986,7 @@ public class Plans {
 
     /** Recursive walker for {@link #rewriteToPositional}. */
     private Object rewriteVarRefs(
-        Object expr,
-        Set<String> namesInRow,
-        String rootName,
-        Object rowType,
-        boolean atomized) {
+        Object expr, Set<String> namesInRow, String rootName, Object rowType) {
       if (!(expr instanceof List)) {
         return expr;
       }
@@ -985,12 +1001,8 @@ public class Plans {
           String name = (String) payload.get(0);
           if (namesInRow.contains(name)) {
             Object type = payload.get(1);
-            if (atomized) {
-              return iof(CORE_EXPR_VAR, of(rootName, type));
-            }
-            // Field access by NAME (not ordinal). The row type is a
-            // T_RECORD preserving pipeline-order, but FIELD doesn't
-            // depend on order — it just looks up by name.
+            // FIELD access by name. The row type is T_RECORD in pipeline
+            // order; FIELD doesn't depend on order, just looks up by name.
             Object rootVar = iof(CORE_EXPR_VAR, of(rootName, rowType));
             return iof(CORE_EXPR_FIELD, of(rootVar, name, type));
           }
@@ -1000,8 +1012,7 @@ public class Plans {
       ImmutableList.Builder<Object> b = ImmutableList.builder();
       boolean changed = false;
       for (Object child : list) {
-        Object newChild =
-            rewriteVarRefs(child, namesInRow, rootName, rowType, atomized);
+        Object newChild = rewriteVarRefs(child, namesInRow, rootName, rowType);
         if (newChild != child) {
           changed = true;
         }
@@ -1265,10 +1276,8 @@ public class Plans {
         {
           // Element type: T_RECORD with fields in input-0 then input-1
           // order — explicitly NOT alphabetized, so JOIN reassociation
-          // doesn't shuffle field positions in the IR. If there's exactly
-          // one column the record atomizes to that column's type.
-          // Collection kind is the meet of the two children's kinds (any
-          // bag forces bag).
+          // doesn't shuffle field positions in the IR. Collection kind
+          // is the meet of the two children's kinds (any bag forces bag).
           List<Object> joinCols = rowType(value, typeSystem, env);
           if (joinCols == null) {
             return reifyType(unreifyExp(value, typeSystem, env).type);
@@ -1277,12 +1286,7 @@ public class Plans {
           boolean joinOrdered =
               isList(joinPayload.get(0), typeSystem, env)
                   && isList(joinPayload.get(1), typeSystem, env);
-          Object joinElem;
-          if (joinCols.size() == 1) {
-            joinElem = ((List<?>) joinCols.get(0)).get(1);
-          } else {
-            joinElem = of(TYPE_RECORD.constructor, joinCols);
-          }
+          Object joinElem = of(TYPE_RECORD.constructor, joinCols);
           return collectionOfKind(joinOrdered, joinElem);
         }
       case "LE":
@@ -1330,8 +1334,22 @@ public class Plans {
       case "REAL_LITERAL":
         return R_REAL;
       case "SCAN":
-        // SCAN(name, source) — type is the source's collection type.
-        return typeOfReified(((List<?>) list.get(1)).get(1), typeSystem, env);
+        {
+          // SCAN(name, source) — the IR's row is a 1-field record
+          // {name: source.elem}. (Boundary-atomization to the scalar
+          // happens only when the from-builder materializes a single-
+          // scan result for Morel; the IR uniformly sees records.)
+          List<?> scanPayload = (List<?>) list.get(1);
+          String scanName = (String) scanPayload.get(0);
+          Object srcType = typeOfReified(scanPayload.get(1), typeSystem, env);
+          Object scanElem =
+              of(
+                  TYPE_RECORD.constructor,
+                  ImmutableList.of(of(scanName, elementOfCollection(srcType))));
+          boolean scanOrdered =
+              TYPE_LIST.constructor.equals(((List<?>) srcType).get(0));
+          return collectionOfKind(scanOrdered, scanElem);
+        }
       case "SKIP":
         return typeOfReified(((List<?>) list.get(1)).get(0), typeSystem, env);
       case "STRING_LITERAL":
@@ -1702,14 +1720,11 @@ public class Plans {
       if (bindings.isEmpty()) {
         return expr;
       }
-      return walkSubstitute(expr, bindings, rootName, bindings.size() == 1);
+      return walkSubstitute(expr, bindings, rootName);
     }
 
     private Object walkSubstitute(
-        Object expr,
-        List<Binding> bindings,
-        String rootName,
-        boolean atomized) {
+        Object expr, List<Binding> bindings, String rootName) {
       if (!(expr instanceof List)) {
         return expr;
       }
@@ -1718,11 +1733,9 @@ public class Plans {
         return expr;
       }
       Object tag = list.get(0);
-      // FIELD(VAR(root, _), "name", T) — multi-binding case. Look up by
-      // name; the field name in the IR IS the scan-variable name, so the
-      // substitution is simply VAR(name, T).
-      if (!atomized
-          && "FIELD".equals(tag)
+      // FIELD(VAR(root, _), "name", T): the field name in the IR IS the
+      // scan-variable name, so the substitution is simply VAR(name, T).
+      if ("FIELD".equals(tag)
           && list.size() > 1
           && list.get(1) instanceof List) {
         List<?> payload = (List<?>) list.get(1);
@@ -1738,23 +1751,11 @@ public class Plans {
           }
         }
       }
-      // VAR(root, T) — atomized case.
-      if (atomized
-          && "VAR".equals(tag)
-          && list.size() > 1
-          && list.get(1) instanceof List) {
-        List<?> payload = (List<?>) list.get(1);
-        if (payload.size() == 2 && rootName.equals(payload.get(0))) {
-          Binding target = bindings.get(0);
-          return of(
-              CORE_EXPR_VAR.constructor, of(target.id.name, payload.get(1)));
-        }
-      }
       // Recurse.
       ImmutableList.Builder<Object> b = ImmutableList.builder();
       boolean changed = false;
       for (Object child : list) {
-        Object newChild = walkSubstitute(child, bindings, rootName, atomized);
+        Object newChild = walkSubstitute(child, bindings, rootName);
         if (newChild != child) {
           changed = true;
         }
@@ -2376,11 +2377,15 @@ public class Plans {
           }
         case "ORDER":
           p = asList(step.get(1));
-          fb.order(unreifyExp(p.get(1)));
+          Object orderRewritten =
+              substituteRootToLexical(p.get(1), fb.stepEnv().bindings, "$0");
+          fb.order(unreifyExp(orderRewritten));
           break;
         case "PROJECT":
           p = asList(step.get(1));
-          fb.yield_(unreifyExp(p.get(1)));
+          Object projectRewritten =
+              substituteRootToLexical(p.get(1), fb.stepEnv().bindings, "$0");
+          fb.yield_(unreifyExp(projectRewritten));
           break;
         case "SKIP":
           p = asList(step.get(1));
@@ -2411,12 +2416,18 @@ public class Plans {
       List<?> p = asList(payload);
       List<?> keys = asList(p.get(1));
       List<?> aggs = asList(p.get(2));
+      // Pre-group bindings — the scope keys and agg arguments reference
+      // via $0. Capture before any binding shifts; GROUP is the only step
+      // we reach here so fb.stepEnv() reflects pre-group state.
+      List<Binding> preGroup = fb.stepEnv().bindings;
       ImmutableSortedMap.Builder<Core.IdPat, Core.Exp> keyMap =
           ImmutableSortedMap.naturalOrder();
       for (Object k : keys) {
         List<?> pair = asList(k);
         String name = (String) pair.get(0);
-        Core.Exp ke = unreifyExp(pair.get(1));
+        Object keyRewritten =
+            substituteRootToLexical(pair.get(1), preGroup, "$0");
+        Core.Exp ke = unreifyExp(keyRewritten);
         keyMap.put(core.idPat(ke.type, name, 0), ke);
       }
       ImmutableSortedMap.Builder<Core.IdPat, Core.Aggregate> aggMap =
@@ -2425,24 +2436,21 @@ public class Plans {
         List<?> pair = asList(a);
         String name = (String) pair.get(0);
         Core.Exp ae = unreifyExp(pair.get(1));
-        Core.Exp argExp = unreifyOption(pair.get(2));
+        Object argReified = pair.get(2);
+        Core.Exp argExp;
+        List<?> argList = asList(argReified);
+        if ("SOME".equals(argList.get(0))) {
+          Object argRewritten =
+              substituteRootToLexical(argList.get(1), preGroup, "$0");
+          argExp = unreifyExp(argRewritten);
+        } else {
+          argExp = null;
+        }
         Core.Aggregate agg =
             core.aggregate(((FnType) ae.type).resultType, ae, argExp);
         aggMap.put(core.idPat(agg.type, name, 0), agg);
       }
       fb.group(false, keyMap.build(), aggMap.build());
-    }
-
-    /**
-     * Unreifies an {@code 'a option} value: {@code ["NONE"]} or {@code ["SOME",
-     * expr]}. Returns null for NONE.
-     */
-    private Core.@Nullable Exp unreifyOption(Object value) {
-      List<?> list = asList(value);
-      if ("SOME".equals(list.get(0))) {
-        return unreifyExp(list.get(1));
-      }
-      return null;
     }
 
     /**
