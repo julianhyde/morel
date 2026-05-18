@@ -89,9 +89,11 @@ In Morel but not Standard ML:
   whose first parameter is named `self`
 * identifiers and type names may be quoted
   (for example, <code>\`an identifier\`</code>)
-* `with` functional update for record values
+* `with` functional update for record values (from OCaml)
 * overloaded functions may be declared using `over` and `inst`
+* attributes (`[@attr]` / `[@@attr]` / `[@@@attr]`) based on OCaml
 * `(*)` line comments (syntax as SML/NJ and MLton)
+* `(**` ... `*)` doc comments (from OCaml)
 
 In Standard ML but not in Morel:
 * `word` constant
@@ -205,7 +207,7 @@ In Standard ML but not in Morel:
     | <b>forall</b> [ <i>scan<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>scan<sub>s</sub></i> ] <i>step<sub>1</sub></i> ... <i>step<sub>t</sub></i> <b>require</b> <i>exp</i>
                                 universal quantification (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
     | <i>exp</i> <i>expAttr<sub>1</sub></i> ... <i>expAttr<sub>n</sub></i>
-                                attributed expression (n &ge; 1, see <a href="#attributes">Attributes</a>)
+                                attributed expression (n &ge; 1)
 <i>exprow</i> &rarr; [ <i>exp</i> <b>with</b> ] <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
                                 expression row
 <i>exprowItem</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i>
@@ -267,6 +269,8 @@ In Standard ML but not in Morel:
     | <i>typ<sub>1</sub></i> '<b>*</b>' ... '<b>*</b>' <i>typ<sub>n</sub></i>     tuple (n &ge; 2)
     | <b>{</b> [ <i>typrow</i> ] <b>}</b>            record
     | <b>typeof</b> <i>exp</i>                expression type
+    | <i>typ</i> <i>expAttr<sub>1</sub></i> ... <i>expAttr<sub>n</sub></i>
+                                attributed type (n &ge; 1)
 <i>typrow</i> &rarr; <i>lab</i> : <i>typ</i> [, <i>typrow</i>]   type row
 </pre>
 
@@ -280,8 +284,8 @@ In Standard ML but not in Morel:
     | <b>signature</b> <i>sigbind</i>         signature
     | <b>over</b> <i>id</i>                   overloaded name
     | <i>dec</i> <i>declAttr<sub>1</sub></i> ... <i>declAttr<sub>n</sub></i>
-                                attributed declaration (n &ge; 1, see <a href="#attributes">Attributes</a>)
-    | <i>floatingAttr</i>             floating attribute (see <a href="#attributes">Attributes</a>)
+                                attributed declaration (n &ge; 1)
+    | <i>floatingAttr</i>              floating attribute
     | <i>empty</i>
     | <i>dec<sub>1</sub></i> [<b>;</b>] <i>dec<sub>2</sub></i>             sequence
 <i>valbind</i> &rarr; <i>pat</i> <b>=</b> <i>exp</i> [ <b>and</b> <i>valbind</i> ]*
@@ -309,6 +313,21 @@ In Standard ML but not in Morel:
     | '<b>(</b>' <i>val</i> [<b>,</b> <i>val</i>]* '<b>)</b>'
 <i>vars</i> &rarr; <i>var</i>
     | '<b>(</b>' <i>var</i> [<b>,</b> <i>var</i>]* '<b>)</b>'
+</pre>
+
+### Attributes
+
+<pre>
+<i>expAttr</i> &rarr; '<b>[@</b>' <i>attrName</i> [ <i>payload</i> ] '<b>]</b>'
+                                expression / type attribute
+<i>declAttr</i> &rarr; '<b>[@@</b>' <i>attrName</i> [ <i>payload</i> ] '<b>]</b>'
+                                declaration attribute
+<i>floatingAttr</i> &rarr; '<b>[@@@</b>' <i>attrName</i> [ <i>payload</i> ] '<b>]</b>'
+                                floating attribute
+<i>attrName</i> &rarr; <i>id</i> [ <b>.</b> <i>id</i> ]*
+                                dotted attribute name
+<i>payload</i> &rarr; <i>exp</i>                   expression payload
+    | <b>:</b> <i>type</i>                    type payload
 </pre>
 
 ### Modules
@@ -417,72 +436,6 @@ pretty-printing signatures but does not yet support:
 * Signature inclusion (`include`)
 
 These features may be added in future versions.
-
-### Attributes
-
-Attributes carry structured metadata on declarations and
-expressions. They are inspired by OCaml's `[@attr]` /
-`[@@attr]` / `[@@@attr]` annotations and are parsed but
-otherwise inert: the compiler ignores them and they do not
-affect evaluation. Tooling and future compiler passes can
-walk the parse tree (e.g. via `Sys.parseTree`) to consult
-them.
-
-<pre>
-<i>expAttr</i> &rarr; '<b>[@</b>' <i>attrName</i> [ <i>payload</i> ] <b>]</b>
-                                expression / type attribute
-<i>declAttr</i> &rarr; '<b>[@@</b>' <i>attrName</i> [ <i>payload</i> ] <b>]</b>
-                                declaration attribute
-<i>floatingAttr</i> &rarr; '<b>[@@@</b>' <i>attrName</i> [ <i>payload</i> ] <b>]</b>
-                                floating attribute
-<i>attrName</i> &rarr; <i>id</i> [ <b>.</b> <i>id</i> ]*
-                                dotted attribute name
-<i>payload</i> &rarr; <i>exp</i>                      expression payload
-    | <b>:</b> <i>type</i>                    type payload
-</pre>
-
-The optional *payload* after the attribute name is either an
-expression (any Morel expression — literal, tuple, list, etc.) or,
-if introduced by `:`, a type.
-
-Each attribute form has a different attachment level:
-
-* `[@id]` attaches to the immediately preceding *atomic*
-  expression (a literal, identifier, parenthesized expression,
-  list literal, etc.) or to an atomic type. The attribute binds
-  more tightly than any infix operator: `1 + 2 [@a]` attaches
-  `[@a]` to `2`, not to the sum; `int -> string [@a]` attaches
-  to `string`. Wrap in parentheses to widen the scope:
-  `(1 + 2) [@a]`.
-
-* `[@@id]` attaches to a declaration and may appear either
-  before or after the declaration (or both); leading and
-  trailing attributes are merged. Example: `[@@deprecated] val
-  x = 1` and `val x = 1 [@@deprecated]` are equivalent.
-
-* `[@@@id]` stands alone as a top-level statement and is
-  considered to attach to the enclosing file or structure:
-  `[@@@warning "-32"]`.
-
-Multiple attributes of the same form may be chained: `val x = 1
-[@@a] [@@b]`. Attribute names may be dotted (`[@foo.bar]`).
-
-Morel does **not** support OCaml's pattern payload form
-(`[@a? pat]`); use an expression payload instead.
-
-**Doc comments.** A comment of the form `(** text *)`
-appearing immediately above a declaration desugars to the
-declaration attribute `[@@doc "text"]`. The text is captured
-verbatim — the language does not prescribe markdown or any
-other format. `(**)` and `(***)` remain ordinary empty /
-single-star block comments and do *not* desugar.
-
-```sml
-(** Returns the n-th Fibonacci number. *)
-fun fib n =
-  if n < 2 then n
-  else fib (n - 1) + fib (n - 2)
-```
 
 ### Notation
 
