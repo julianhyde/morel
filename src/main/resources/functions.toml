@@ -5031,7 +5031,7 @@ environment.
 """
 
 [[functions]]
-ordinal = 212
+ordinal = 210
 structure = "Sys"
 name = "clearEnv"
 specified = "morel"
@@ -5042,7 +5042,7 @@ restores the environment to the initial environment.
 """
 
 [[functions]]
-ordinal = 213
+ordinal = 211
 structure = "Sys"
 name = "env, env"
 specified = "morel"
@@ -5053,6 +5053,7 @@ prints the environment.
 """
 
 [[functions]]
+ordinal = 212
 structure = "Sys"
 name = "file"
 specified = "morel"
@@ -5064,7 +5065,7 @@ depend on the files and directories under the configured directory.
 """
 
 [[functions]]
-ordinal = 273
+ordinal = 213
 structure = "Sys"
 name = "parseTree"
 specified = "morel"
