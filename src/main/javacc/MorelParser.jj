@@ -838,7 +838,6 @@ Exp expression9() :
   Exp arg;
   Id id;
   String fieldName;
-  List<Attribute> attrs = null;
   Attribute attr;
 }
 {
@@ -896,18 +895,19 @@ Exp expression9() :
       }
     )
   )*
-  (
+  /* Trailing [@attr] attributes are rare. Defer allocating the list
+     until we have seen the first one. */
+  [
     attr = expAttribute() {
-      if (attrs == null) attrs = new ArrayList<Attribute>();
+      final List<Attribute> attrs = new ArrayList<Attribute>();
       attrs.add(attr);
     }
-  )*
-  {
-    if (attrs != null) {
-      e = ast.attributedExp(e.pos.plus(pos()), e, attrs);
-    }
-    return e;
-  }
+    (
+      attr = expAttribute() { attrs.add(attr); }
+    )*
+    { e = ast.attributedExp(e.pos.plus(pos()), e, attrs); }
+  ]
+  { return e; }
 }
 
 /** Parses an attribute name: one or more dot-separated identifiers,
@@ -1998,7 +1998,6 @@ Ast.Type type7() :
 {
   Type t;
   Attribute attr;
-  List<Attribute> attrs = null;
 }
 {
   t = atomicType()
@@ -2011,18 +2010,18 @@ Ast.Type type7() :
       t = ast.namedType(t.pos.plus(pos()), types, token.image);
     }
   )*
-  (
+  /* Defer allocating the list until we have seen the first attribute. */
+  [
     attr = expAttribute() {
-      if (attrs == null) attrs = new ArrayList<Attribute>();
+      final List<Attribute> attrs = new ArrayList<Attribute>();
       attrs.add(attr);
     }
-  )*
-  {
-    if (attrs != null) {
-      t = ast.attributedType(t.pos.plus(pos()), t, attrs);
-    }
-    return t;
-  }
+    (
+      attr = expAttribute() { attrs.add(attr); }
+    )*
+    { t = ast.attributedType(t.pos.plus(pos()), t, attrs); }
+  ]
+  { return t; }
 }
 
 Ast.Type type6() :
@@ -2103,7 +2102,7 @@ AstNode statement() :
     }
   )*
   {
-    if (declAttrs != null && !declAttrs.isEmpty()) {
+    if (declAttrs != null) {
       return ast.attributedDecl(d.pos.plus(pos()), d, declAttrs);
     }
     return d;
@@ -2114,23 +2113,25 @@ AstNode statement() :
 
 /** Walks the {@code specialToken} chain on the next lookahead token and
  *  returns one {@code [@@doc "..."]} attribute per doc comment found,
- *  in source order. Returns an empty list if there are none. */
+ *  in source order. Returns {@code null} if there are none — the
+ *  common case for which we avoid allocating an empty list. */
 JAVACODE List<Attribute> collectLeadingDocComments() {
   Token tok = getToken(1);
   if (tok == null) {
-    return new ArrayList<Attribute>();
+    return null;
   }
   // The specialToken chain is most-recent-first; collect and reverse.
-  List<Token> docs = new ArrayList<Token>();
+  List<Token> docs = null;
   Token s = tok.specialToken;
   while (s != null) {
     if (s.kind == DOC_COMMENT) {
+      if (docs == null) docs = new ArrayList<Token>();
       docs.add(s);
     }
     s = s.specialToken;
   }
-  if (docs.isEmpty()) {
-    return new ArrayList<Attribute>();
+  if (docs == null) {
+    return null;
   }
   Collections.reverse(docs);
   List<Attribute> attrs = new ArrayList<Attribute>();
