@@ -2354,14 +2354,24 @@ TOKEN_MGR_DECLS : {
 /*
 Lexical states:
 
-DEFAULT:
-IN_COMMENT:
-IN_LINE_COMMENT:
+DEFAULT:        the normal state.
+IN_COMMENT:     inside a non-documentation block comment, "(* ... *)".
+IN_LINE_COMMENT: inside a line comment, "(*) ... <nl>".
+IN_DOC_COMMENT: inside a documentation comment, "(** ... *)". On the
+                terminating "*)" we emit a DOC_COMMENT special token
+                whose image is the whole comment, including markers.
+IN_DOC_NESTED:  inside a "(* ... *)" block nested in a doc comment.
+                Unlike IN_COMMENT we do NOT emit an END_COMMENT
+                special token when the inner "*)" matches, because
+                doing so would flush the doc comment's accumulator.
+                Instead we just popState and let the chars accumulate
+                into the eventual DOC_COMMENT image.
+IN_DOC_LINE:    inside a "(*) ... <nl>" line comment nested in a doc
+                comment. As with IN_DOC_NESTED, no special token is
+                emitted on terminator; we just popState.
 
-DEFAULT is the normal state.
-
-After a comment has completed, the lexer returns to the previous state, one
-of the 'normal states'.
+After a comment has completed, the lexer returns to the previous state.
+Nesting works correctly even at arbitrary depth.
 */
 
 /* WHITE SPACE */
@@ -2419,9 +2429,9 @@ SPECIAL_TOKEN :
 
 <IN_DOC_COMMENT> MORE :
 {
-    "(*)" { pushState(); } : IN_LINE_COMMENT
+    "(*)" { pushState(); } : IN_DOC_LINE
 |
-    "(*" { pushState(); } : IN_COMMENT
+    "(*" { pushState(); } : IN_DOC_NESTED
 }
 
 <IN_DOC_COMMENT>
@@ -2430,7 +2440,30 @@ SPECIAL_TOKEN :
     <DOC_COMMENT: "*)" > { popState(); }
 }
 
-<IN_COMMENT, IN_LINE_COMMENT, IN_DOC_COMMENT>
+/* A block comment nested inside a doc comment. Same shape as
+   IN_COMMENT but we don't emit a token on close, so the chars
+   continue to accumulate into the enclosing doc comment's image. */
+<IN_DOC_NESTED> MORE :
+{
+    "(*)" { pushState(); } : IN_DOC_LINE
+|
+    "(*" { pushState(); }
+|
+    "*)" { popState(); }
+}
+
+/* A line comment nested inside a doc comment. Same shape as
+   IN_LINE_COMMENT but we don't emit a token on the newline. */
+<IN_DOC_LINE> MORE :
+{
+    "\n" { popState(); }
+|
+    "\r\n" { popState(); }
+|
+    "\r" { popState(); }
+}
+
+<IN_COMMENT, IN_LINE_COMMENT, IN_DOC_COMMENT, IN_DOC_NESTED, IN_DOC_LINE>
 MORE :
 {
     < ~[] >

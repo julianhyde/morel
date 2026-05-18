@@ -190,6 +190,24 @@ Sys.parseTree "(**) val x = 1";
 Sys.parseTree "(***) val x = 1";
 > val it = "(val (valBind (idPat x) (int_literal 1)))" : string
 
+(*) A doc comment may contain nested block comments, even multiple
+(*) levels deep; they are captured verbatim as part of the doc text.
+Sys.parseTree "(** outer (* nested *) end *) val x = 1";
+> val it =
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" outer (* nested *) end \")))"
+>   : string
+Sys.parseTree "(** outer (* one (* two *) *) end *) val x = 1";
+> val it =
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" outer (* one (* two *) *) end \")))"
+>   : string
+
+(*) Line comments nested inside a doc comment are also captured;
+(*) the embedded newline becomes part of the doc text.
+Sys.parseTree "(** outer (*) line\n  rest *) val x = 1";
+> val it =
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" outer (*) line\n  rest \")))"
+>   : string
+
 (* Multi-line doc comment: content (including newlines) is captured
  * verbatim, matching OCaml. The two forms below use, respectively,
  * `\n` escapes and real newlines in the source string; both produce
