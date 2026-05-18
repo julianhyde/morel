@@ -136,10 +136,11 @@ Sys.parseTree "(**) val x = 1";
 Sys.parseTree "(***) val x = 1";
 > val it = "(val (valBind (idPat x) (int_literal 1)))" : string
 
-(*) Multi-line doc comment: content (including newlines) is captured
-(*) verbatim, matching OCaml. The two forms below use, respectively,
-(*) `\n` escapes and real newlines in the source string; both produce
-(*) the same parse tree.
+(* Multi-line doc comment: content (including newlines) is captured
+ * verbatim, matching OCaml. The two forms below use, respectively,
+ * `\n` escapes and real newlines in the source string; both produce
+ * the same parse tree.
+ *)
 Sys.parseTree "(** First line\n * Second line\n * Third line *) val x = 1";
 > val it =
 >   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" First line\n * Second line\n * Third line \")))"
