@@ -71,7 +71,8 @@ sig
    * whether its first argument is less than, equal to, or greater than the
    * second.
    *)
-  val compare : char * char -> `order` [@@method] [@@prototype "compare (c1, c2)"]
+  val compare : char * char -> `order`
+      [@@method] [@@prototype "compare (c1, c2)"]
 
   (**
    * returns true if `c1` is less than `c2` in the character ordering.
@@ -189,10 +190,12 @@ sig
 
   (* Returns a string corresponding to the C-language representation of
    * the character. *)
-  val toCString : char -> (*String.*)string [@@method] [@@prototype "toCString c"]
+  val toCString : char -> (*String.*)string
+      [@@method] [@@prototype "toCString c"]
 
   (* Scans a C-language character escape sequence from a string. *)
-  val fromCString : (*String.*)string -> char option [@@prototype "fromCString s"]
+  val fromCString : (*String.*)string -> char option
+      [@@prototype "fromCString s"]
 end
 
 (*) End char.sig

@@ -53,7 +53,8 @@ sig
    *
    * <p>ignoring possible side effects of the function *f*.
    *)
-  val map    : ('a * 'b -> 'c)   -> 'a list * 'b list -> 'c list [@@prototype "map f (l1, l2)"]
+  val map    : ('a * 'b -> 'c)   -> 'a list * 'b list -> 'c list
+      [@@prototype "map f (l1, l2)"]
   (**
    * applies the function *f* to the list of pairs of
    * elements generated from left to right from the lists *l1* and *l2*. If
@@ -64,21 +65,24 @@ sig
    *
    * <p>ignoring possible side effects of the function *f*.
    *)
-  val app    : ('a * 'b -> unit) -> 'a list * 'b list -> unit [@@prototype "app f (l1, l2)"]
+  val app    : ('a * 'b -> unit) -> 'a list * 'b list -> unit
+      [@@prototype "app f (l1, l2)"]
   (**
    * provides short-circuit testing of a predicate over a pair of lists.
    *
    * <p>It is equivalent to:
    * <pre>List.all f (zip (l1, l2))</pre>
    *)
-  val all    : ('a * 'b -> bool) -> 'a list * 'b list -> bool [@@prototype "all f (l1, l2)"]
+  val all    : ('a * 'b -> bool) -> 'a list * 'b list -> bool
+      [@@prototype "all f (l1, l2)"]
   (**
    * provides short-circuit testing of a predicate over a pair of lists.
    *
    * <p>It is equivalent to:
    * <pre>List.exists f (zip (l1, l2))</pre>
    *)
-  val `exists` : ('a * 'b -> bool) -> 'a list * 'b list -> bool [@@prototype "exists f (l1, l2)"]
+  val `exists` : ('a * 'b -> bool) -> 'a list * 'b list -> bool
+      [@@prototype "exists f (l1, l2)"]
   (**
    * returns the result of folding the function *f*
    * in the specified direction over the pair of lists *l1* and *l2*
@@ -89,7 +93,8 @@ sig
    * where *f'* is `fn ((a,b),c) => f(a,b,c)` and ignoring possible
    * side effects of the function *f*.
    *)
-  val foldr  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c [@@prototype "foldr f init (l1, l2)"]
+  val foldr  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c
+      [@@prototype "foldr f init (l1, l2)"]
   (**
    * returns the result of folding the function *f*
    * in the specified direction over the pair of lists *l1* and *l2*
@@ -100,7 +105,8 @@ sig
    * where *f'* is `fn ((a,b),c) => f(a,b,c)` and ignoring possible
    * side effects of the function *f*.
    *)
-  val foldl  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c [@@prototype "foldl f init (l1, l2)"]
+  val foldl  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c
+      [@@prototype "foldl f init (l1, l2)"]
   (**
    * returns `true` if *l1* and *l2* have equal length
    * and all pairs of elements satisfy the predicate *f*. That is, the
@@ -127,7 +133,8 @@ sig
    * </pre>
    *)
 
-  val allEq    : ('a * 'b -> bool) -> 'a list * 'b list -> bool [@@prototype "allEq f (l1, l2)"]
+  val allEq    : ('a * 'b -> bool) -> 'a list * 'b list -> bool
+      [@@prototype "allEq f (l1, l2)"]
   (**
    * is raised by those functions that require arguments
    * of identical length.
@@ -142,7 +149,8 @@ sig
    * lengths, `zipEq` raises the exception `UnequalLengths`.
    *)
 
-  val zipEq    : ('a list * 'b list) -> ('a * 'b) list [@@prototype "zipEq (l1, l2)"]
+  val zipEq    : ('a list * 'b list) -> ('a * 'b) list
+      [@@prototype "zipEq (l1, l2)"]
   (**
    * maps the function *f* over the list of pairs of
    * elements generated from left to right from the lists *l1* and *l2*,
@@ -153,7 +161,8 @@ sig
    *
    * <p>ignoring possible side effects of the function *f*.
    *)
-  val mapEq    : ('a * 'b -> 'c) -> 'a list * 'b list -> 'c list [@@prototype "mapEq f (l1, l2)"]
+  val mapEq    : ('a * 'b -> 'c) -> 'a list * 'b list -> 'c list
+      [@@prototype "mapEq f (l1, l2)"]
   (**
    * applies the function *f* to the list of pairs of
    * elements generated from left to right from the lists *l1* and *l2*. If
@@ -164,7 +173,8 @@ sig
    *
    * <p>ignoring possible side effects of the function *f*.
    *)
-  val appEq    : ('a * 'b -> unit) -> 'a list * 'b list -> unit [@@prototype "appEq f (l1, l2)"]
+  val appEq    : ('a * 'b -> unit) -> 'a list * 'b list -> unit
+      [@@prototype "appEq f (l1, l2)"]
   (**
    * returns the result of folding the function
    * *f* in the specified direction over the pair of lists *l1* and *l2*
@@ -175,7 +185,8 @@ sig
    * where *f'* is `fn ((a,b),c) => f(a,b,c)` and ignoring possible
    * side effects of the function *f*.
    *)
-  val foldrEq  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c [@@prototype "foldrEq f init (l1, l2)"]
+  val foldrEq  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c
+      [@@prototype "foldrEq f init (l1, l2)"]
   (**
    * returns the result of folding the function
    * *f* in the specified direction over the pair of lists *l1* and *l2*
@@ -186,7 +197,8 @@ sig
    * where *f'* is `fn ((a,b),c) => f(a,b,c)` and ignoring possible
    * side effects of the function *f*.
    *)
-  val foldlEq  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c [@@prototype "foldlEq f init (l1, l2)"]
+  val foldlEq  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c
+      [@@prototype "foldlEq f init (l1, l2)"]
 
 (*
    These functions process pairs (xs, ys) of lists.

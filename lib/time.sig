@@ -100,7 +100,8 @@ sig
    * returns `LESS`, `EQUAL`, or `GREATER` depending on whether `t1` is less than,
    * equal to, or greater than `t2`.
    *)
-  val compare : time * time -> `order` [@@method] [@@prototype "compare (t1, t2)"]
+  val compare : time * time -> `order`
+      [@@method] [@@prototype "compare (t1, t2)"]
 
   (** returns `true` if `t1` is less than `t2`. *)
   val `<` : time * time -> bool [@@method] [@@prototype "t1 < t2"]

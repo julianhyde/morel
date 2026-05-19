@@ -59,13 +59,15 @@ sig
    * function `f` into a binary function. This function is the inverse of
    * `curry`.
    *)
-  val uncurry  : ('a -> 'b -> 'c) -> ('a * 'b -> 'c) [@@prototype "ucurry f (x, y)"]
+  val uncurry  : ('a -> 'b -> 'c) -> ('a * 'b -> 'c)
+      [@@prototype "ucurry f (x, y)"]
 
   (**
    * is equivalent to `f (y, x)`; i.e., `flip f` flips the argument order
    * of the binary function `f`.
    *)
-  val flip     : ('a * 'b -> 'c) -> ('b * 'a -> 'c) [@@prototype "flip f (x, y)"]
+  val flip     : ('a * 'b -> 'c) -> ('b * 'a -> 'c)
+      [@@prototype "flip f (x, y)"]
 
   (**
    * returns the `n`-fold composition of `f`. If `n` is zero, then

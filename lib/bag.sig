@@ -75,7 +75,8 @@ sig
    * tl b)` otherwise (applying `hd` and `tl` simultaneously so that they
    * choose/remove the same arbitrary element).
    *)
-  val getItem : 'a bag -> ('a * 'a bag) option [@@method] [@@prototype "getItem b"]
+  val getItem : 'a bag -> ('a * 'a bag) option
+      [@@method] [@@prototype "getItem b"]
 
   (**
    * returns an arbitrary `i` elements of the bag `b`. Raises
@@ -117,7 +118,8 @@ sig
    *
    * <pre>((map valOf) o (filter isSome) o (map f)) b</pre>
    *)
-  val mapPartial : ('a -> 'b option) -> 'a bag -> 'b bag [@@prototype "mapPartial f b"]
+  val mapPartial : ('a -> 'b option) -> 'a bag -> 'b bag
+      [@@prototype "mapPartial f b"]
 
   (**
    * applies `f` to each element `x` of the bag `b`, in
@@ -138,14 +140,18 @@ sig
    * `x` for which `f x` evaluated to `true`, and `neg` is the bag of those
    * for which `f x` evaluated to `false`.
    *)
-  val partition : ('a -> bool) -> 'a bag -> 'a bag * 'a bag [@@prototype "partition f b"]
+  val partition : ('a -> bool) -> 'a bag -> 'a bag * 'a bag
+      [@@prototype "partition f b"]
 
   (**
    * returns `f(xn, ... , f(x2,
    * f(x1, init))...)` (for some arbitrary reordering of the elements `xi`)
    * or `init` if the bag is empty.
    *)
-  val fold : ('a * 'b -> 'b) -> 'b -> 'a bag -> 'b [@@prototype "fold f init (bag [x1, x2, ..., xn])"]
+  val fold : ('a * 'b -> 'b)
+             -> 'b
+             -> 'a bag
+             -> 'b [@@prototype "fold f init (bag [x1, x2, ..., xn])"]
 
   (**
    * applies `f` to each element `x` of the bag `b`, in

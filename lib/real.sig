@@ -167,7 +167,8 @@ sig
    * returns true if and only if `signBit r1` equals
    * `signBit r2`.
    *)
-  val sameSign : real * real -> bool [@@method] [@@prototype "sameSign (r1, r2)"]
+  val sameSign : real * real -> bool
+      [@@method] [@@prototype "sameSign (r1, r2)"]
 
   (**
    * returns `x` with the sign of `y`, even if `y` is
@@ -244,7 +245,8 @@ sig
    * returns true if x and y are unordered, i.e., at
    * least one of x and y is NaN.
    *)
-  val unordered : real * real -> bool [@@method] [@@prototype "unordered (x, y)"]
+  val unordered : real * real -> bool
+      [@@method] [@@prototype "unordered (x, y)"]
 
   (** returns true if x is neither NaN nor an infinity. *)
   val isFinite : real -> bool [@@method] [@@prototype "isFinite x"]
@@ -268,7 +270,8 @@ sig
    * returns `{man, exp}`, where `man` and `exp` are the
    * mantissa and exponent of r, respectively.
    *)
-  val toManExp : real -> {man : real, exp : int} [@@method] [@@prototype "toManExp r"]
+  val toManExp : real -> {man : real, exp : int}
+      [@@method] [@@prototype "toManExp r"]
 
   (**
    * returns `{man, exp}`, where `man` and `exp` are the
@@ -281,7 +284,8 @@ sig
    * fractional and integral parts of `r`, respectively. Specifically,
    * `whole` is integral, and `abs frac` < 1.0.
    *)
-  val split : real -> {whole : real, frac : real} [@@method] [@@prototype "split r"]
+  val split : real -> {whole : real, frac : real}
+      [@@method] [@@prototype "split r"]
 
   (**
    * returns the fractional parts of `r`; `realMod` is

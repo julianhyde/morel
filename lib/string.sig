@@ -55,14 +55,16 @@ sig
    * `i` < 0 or `j` < 0 or |`s`| < `i` + `j`. Note that, if defined,
    * `extract` returns the empty string when `i` = |`s`|.
    *)
-  val extract : string * int * int option -> string [@@method] [@@prototype "extract (s, i, NONE)"]
+  val extract : string * int * int option -> string
+      [@@method] [@@prototype "extract (s, i, NONE)"]
 
   (**
    * returns the substring `s`[`i`..`i`+`j`-1], i.e.,
    * the substring of size `j` starting at index `i`. This is equivalent to
    * `extract(s, i, SOME j)`.
    *)
-  val substring : string * int * int -> string [@@method] [@@prototype "substring (s, i, j)"]
+  val substring : string * int * int -> string
+      [@@method] [@@prototype "substring (s, i, j)"]
 
   (**
    * is the concatenation of the strings `s` and `t`. This raises
@@ -81,7 +83,8 @@ sig
    * `l` using the string `s` as a separator. This raises `Size` if the
    * size of the resulting string would be greater than `maxSize`.
    *)
-  val concatWith : string -> string list -> string [@@prototype "concatWith s l"]
+  val concatWith : string -> string list -> string
+      [@@prototype "concatWith s l"]
 
   (** is the string of size one containing the character `c`. *)
   val str : char -> string [@@prototype "str c"]
@@ -108,7 +111,8 @@ sig
    * character in `s` by `f`. It is equivalent to `concat(List.map f
    * (explode s))`.
    *)
-  val translate : (char -> string) -> string -> string [@@prototype "translate f s"]
+  val translate : (char -> string) -> string -> string
+      [@@prototype "translate f s"]
 
   (**
    * returns a list of tokens derived from `s` from left to
@@ -122,7 +126,8 @@ sig
    * `"|abc||def"` contains two tokens `"abc"` and `"def"`, whereas it
    * contains the four fields `""`, `"abc"`, `""` and `"def"`.
    *)
-  val tokens : (char -> bool) -> string -> string list [@@prototype "tokens f s"]
+  val tokens : (char -> bool) -> string -> string list
+      [@@prototype "tokens f s"]
 
   (**
    * returns a list of fields derived from `s` from left to
@@ -136,7 +141,8 @@ sig
    * `"|abc||def"` contains two tokens `"abc"` and `"def"`, whereas it
    * contains the four fields `""`, `"abc"`, `""` and `"def"`.
    *)
-  val fields : (char -> bool) -> string -> string list [@@prototype "fields f s"]
+  val fields : (char -> bool) -> string -> string list
+      [@@prototype "fields f s"]
 
   (**
    * returns `true` if the string `s1` is a prefix of the
@@ -165,13 +171,15 @@ sig
    * `LESS`, `EQUAL`, or `GREATER`, if `s` is less than, equal to, or
    * greater than `t`, respectively.
    *)
-  val compare : string * string -> `order` [@@method] [@@prototype "compare (s, t)"]
+  val compare : string * string -> `order`
+      [@@method] [@@prototype "compare (s, t)"]
 
   (**
    * performs lexicographic comparison of the two
    * strings using the given ordering `f` on characters.
    *)
-  val collate : (char * char -> `order`) -> string * string -> `order` [@@prototype "collate (f, (s, t))"]
+  val collate : (char * char -> `order`) -> string * string -> `order`
+      [@@prototype "collate (f, (s, t))"]
 
   (** returns true if `s` is less than `t` in the string ordering. *)
   val `<`  : string * string -> bool [@@prototype "s < t"] [@@syntax "infix"]

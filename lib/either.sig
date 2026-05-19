@@ -37,22 +37,26 @@ sig
   datatype ('left, 'right) either = INL of 'left | INR of 'right
 
   (** returns true if `sm` is a left value. *)
-  val isLeft  : ('left, 'right) either -> bool [@@method] [@@prototype "isLeft sm"]
+  val isLeft  : ('left, 'right) either -> bool
+      [@@method] [@@prototype "isLeft sm"]
 
   (** returns true if `sm` is a right value. *)
-  val isRight : ('left, 'right) either -> bool [@@method] [@@prototype "isRight sm"]
+  val isRight : ('left, 'right) either -> bool
+      [@@method] [@@prototype "isRight sm"]
 
   (**
    * returns `SOME (x)` if `sm` is a left value with contents `x`,
    * otherwise it returns `NONE`.
    *)
-  val asLeft  : ('left, 'right) either -> 'left option [@@method] [@@prototype "asLeft sm"]
+  val asLeft  : ('left, 'right) either -> 'left option
+      [@@method] [@@prototype "asLeft sm"]
 
   (**
    * returns `SOME (x)` if `sm` is a right value with contents `x`,
    * otherwise it returns `NONE`.
    *)
-  val asRight : ('left, 'right) either -> 'right option [@@method] [@@prototype "asRight sm"]
+  val asRight : ('left, 'right) either -> 'right option
+      [@@method] [@@prototype "asRight sm"]
 
   (**
    * maps `fl` over the contents of left values and `fr` over the contents
@@ -87,12 +91,14 @@ sig
   (**
    * applies `f` to the contents of left values and ignores right values.
    *)
-  val appLeft  : ('left -> unit) -> ('left, 'right) either -> unit [@@prototype "appLeft f sm"]
+  val appLeft  : ('left -> unit) -> ('left, 'right) either -> unit
+      [@@prototype "appLeft f sm"]
 
   (**
    * applies `f` to the contents of right values and ignores left values.
    *)
-  val appRight : ('right -> unit) -> ('left, 'right) either -> unit [@@prototype "appRight f sm"]
+  val appRight : ('right -> unit) -> ('left, 'right) either -> unit
+      [@@prototype "appRight f sm"]
 
   (**
    * computes `fx (v, init)`, where `v` is the contents of `sm` and `fx`
@@ -109,7 +115,8 @@ sig
    * partitions the list of sum values into a list of left values and a
    * list of right values.
    *)
-  val partition : (('left, 'right) either) list -> ('left list * 'right list) [@@prototype "partition sms"]
+  val partition : (('left, 'right) either) list -> ('left list * 'right list)
+      [@@prototype "partition sms"]
 end
 
 (*) End either.sig

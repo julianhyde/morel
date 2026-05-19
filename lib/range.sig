@@ -70,7 +70,8 @@ sig
    *
    * The ordering is implicit, derived from the type `α`.
    *)
-  val contains : 'a discrete_set -> 'a -> bool [@@method] [@@prototype "contains ds x"]
+  val contains : 'a discrete_set -> 'a -> bool
+      [@@method] [@@prototype "contains ds x"]
 
   (**
    * enumerates all values in the discrete set `ds` and returns them as a bag.
@@ -108,7 +109,8 @@ sig
    * val it = CONTINUOUS_SET [AT_MOST 1.0,CLOSED_OPEN (3.0,7.0)] : real continuous_set
    * ```
    *)
-  val continuousSetOf : 'a range list -> 'a continuous_set [@@prototype "continuousSetOf ranges"]
+  val continuousSetOf : 'a range list -> 'a continuous_set
+      [@@prototype "continuousSetOf ranges"]
 
   (**
    * normalizes `ranges` into a `discrete_set`. Overlapping and adjacent
@@ -124,16 +126,19 @@ sig
    * val it = [0,1,2,4,5,6,8,9,10] : int list
    * ```
    *)
-  val discreteSetOf : 'a range list -> 'a discrete_set [@@prototype "discreteSetOf ranges"]
+  val discreteSetOf : 'a range list -> 'a discrete_set
+      [@@prototype "discreteSetOf ranges"]
 
   (** returns the list of ranges in the discrete set `ds`. *)
-  val ranges : 'a discrete_set -> 'a range list [@@method] [@@prototype "ranges ds"]
+  val ranges : 'a discrete_set -> 'a range list
+      [@@method] [@@prototype "ranges ds"]
 
   (**
    * returns the complement of discrete set `ds`: a discrete set containing all
    * values of the element type not in `ds`.
    *)
-  val complement : 'a discrete_set -> 'a discrete_set [@@method] [@@prototype "complement ds"]
+  val complement : 'a discrete_set -> 'a discrete_set
+      [@@method] [@@prototype "complement ds"]
 end
 
 (*) End range.sig

@@ -70,7 +70,8 @@ sig
    * `listUpdate (prevList, newList)` each iteration, terminating the
    * iteration when it returns `newList`.
    *)
-  val iterate : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag [@@method] [@@prototype "iterate initialList listUpdate"]
+  val iterate : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
+      [@@method] [@@prototype "iterate initialList listUpdate"]
 
   (**
    * returns the greatest element of `list`. Often used with

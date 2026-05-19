@@ -72,7 +72,8 @@ sig
    * the `i`<sup>th</sup> element of `vec` is set to `x`. Raises
    * `Subscript` if `i` < 0 or `size vec` &le; `i`.
    *)
-  val update : 'a vector * int * 'a -> 'a vector [@@prototype "update (vec, i, x)"]
+  val update : 'a vector * int * 'a -> 'a vector
+      [@@prototype "update (vec, i, x)"]
 
   (**
    * returns the vector that is the concatenation of the vectors
@@ -107,7 +108,8 @@ sig
    * <p>It is equivalent to
    * <pre>fromList (List.map f (foldri (fn (i,a,l) => (i,a)::l) [] vec))</pre>
    *)
-  val mapi : (int * 'a -> 'b) -> 'a vector -> 'b vector [@@prototype "mapi f vec"]
+  val mapi : (int * 'a -> 'b) -> 'a vector -> 'b vector
+      [@@prototype "mapi f vec"]
 
   (**
    * applies the function `f` to the elements of the argument
@@ -123,26 +125,30 @@ sig
    * element) pairs of vector `vec`, left to right, using the initial value
    * `init`.
    *)
-  val foldli : (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b [@@prototype "foldli f init vec"]
+  val foldli : (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b
+      [@@prototype "foldli f init vec"]
 
   (**
    * folds the function `f` over all the (index,
    * element) pairs of vector `vec`, right to left, using the initial value
    * `init`.
    *)
-  val foldri : (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b [@@prototype "foldri f init vec"]
+  val foldri : (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b
+      [@@prototype "foldri f init vec"]
 
   (**
    * folds the function `f` over all the elements of
    * vector `vec`, left to right, using the initial value `init`.
    *)
-  val foldl : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b [@@prototype "foldl f init vec"]
+  val foldl : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b
+      [@@prototype "foldl f init vec"]
 
   (**
    * folds the function `f` over all the elements of
    * vector `vec`, right to left, using the initial value `init`.
    *)
-  val foldr : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b [@@prototype "foldr f init vec"]
+  val foldr : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b
+      [@@prototype "foldr f init vec"]
 
   (**
    * applies `f` to each element `x` and element index `i` of
@@ -150,7 +156,8 @@ sig
    * `true`. It returns `SOME (i, x)` if such an `x` exists; otherwise it
    * returns `NONE`.
    *)
-  val findi : (int * 'a -> bool) -> 'a vector -> (int * 'a) option [@@prototype "findi f vec"]
+  val findi : (int * 'a -> bool) -> 'a vector -> (int * 'a) option
+      [@@prototype "findi f vec"]
 
   (**
    * applies `f` to each element `x` of the vector `vec`, from
@@ -179,7 +186,8 @@ sig
    * performs lexicographic comparison of the two
    * vectors using the given ordering `f` on elements.
    *)
-  val collate : ('a * 'a -> `order`) -> 'a vector * 'a vector -> `order` [@@prototype "collate f (v1, v2)"]
+  val collate : ('a * 'a -> `order`) -> 'a vector * 'a vector -> `order`
+      [@@prototype "collate f (v1, v2)"]
 end
 
 (*) End vector.sig

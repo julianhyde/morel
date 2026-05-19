@@ -50,14 +50,18 @@ sig
    * returns `LESS`, `EQUAL`, or `GREATER` depending on whether `d1` is less
    * than, equal to, or greater than `d2` (comparing instants in time).
    *)
-  val compare : date * date -> `order` [@@method] [@@prototype "compare (d1, d2)"]
+  val compare : date * date -> `order`
+      [@@method] [@@prototype "compare (d1, d2)"]
 
   (**
    * constructs a date from the given fields. If `offset` is `NONE`, the date
    * is in local time; if `SOME t`, the date is in the timezone with offset `t`
    * from UTC.
    *)
-  val date : {day:int, hour:int, minute:int, month:month, offset:time option, second:int, year:int} -> date [@@prototype "date {year, month, day, hour, minute, second, offset}"]
+  val date : {day:int, hour:int, minute:int, month:month,
+              offset:time option, second:int, year:int}
+             -> date
+      [@@prototype "date {year, month, day, hour, minute, second, offset}"]
 
   (** returns the day of the month of `d`, in the range `[1, 31]`. *)
   val day : date -> int [@@method] [@@prototype "day d"]

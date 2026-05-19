@@ -70,7 +70,8 @@ sig
    * getItem` has the type `(int, char list) StringCvt.reader` and can be
    * used to scan decimal integers from lists of characters.
    *)
-  val getItem : 'a list -> ('a * 'a list) option [@@method] [@@prototype "getItem l"]
+  val getItem : 'a list -> ('a * 'a list) option
+      [@@method] [@@prototype "getItem l"]
 
   (**
    * returns the `i`(th) element of the list `l`, counting
@@ -106,7 +107,8 @@ sig
   val concat : 'a list list -> 'a list [@@prototype "concat l"]
 
   (** returns `(rev l1) @ l2`. *)
-  val revAppend : 'a list * 'a list -> 'a list [@@method] [@@prototype "revAppend (l1, l2)"]
+  val revAppend : 'a list * 'a list -> 'a list
+      [@@method] [@@prototype "revAppend (l1, l2)"]
 
   (** applies `f` to the elements of `l`, from left to right. *)
   val app : ('a -> unit) -> 'a list -> unit [@@prototype "app f l"]
@@ -125,7 +127,8 @@ sig
    *
    * <pre>((map valOf) o (filter isSome) o (map f)) b</pre>
    *)
-  val mapPartial : ('a -> 'b option) -> 'a list -> 'b list [@@prototype "mapPartial f l"]
+  val mapPartial : ('a -> 'b option) -> 'a list -> 'b list
+      [@@prototype "mapPartial f l"]
 
   (**
    * applies `f` to each element `x` of the list `l`, from left
@@ -155,13 +158,19 @@ sig
    * returns `f(xn, ... , f(x2, f(x1,
    * init))...)` or `init` if the list is empty.
    *)
-  val foldl : ('a * 'b -> 'b) -> 'b -> 'a list -> 'b [@@prototype "foldl f init [x1, x2, ..., xn]"]
+  val foldl : ('a * 'b -> 'b)
+              -> 'b
+              -> 'a list
+              -> 'b [@@prototype "foldl f init [x1, x2, ..., xn]"]
 
   (**
    * returns `f(x1, f(x2, ..., f(xn,
    * init)...))` or `init` if the list is empty.
    *)
-  val foldr : ('a * 'b -> 'b) -> 'b -> 'a list -> 'b [@@prototype "foldr f init [x1, x2, ..., xn]"]
+  val foldr : ('a * 'b -> 'b)
+              -> 'b
+              -> 'a list
+              -> 'b [@@prototype "foldr f init [x1, x2, ..., xn]"]
 
   (**
    * applies `f` to each element `x` of the list `l`, from
@@ -196,14 +205,16 @@ sig
    * returns the list that is the concatenation of all the lists
    * in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
    *)
-  val `except` : 'a list list -> 'a list [@@specified "morel"] [@@prototype "except l"]
+  val `except` : 'a list list -> 'a list
+      [@@specified "morel"] [@@prototype "except l"]
 
   (**
    * returns the list that is the concatenation of all the
    * lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @
    * ln`
    *)
-  val `intersect` : 'a list list -> 'a list [@@specified "morel"] [@@prototype "intersect l"]
+  val `intersect` : 'a list list -> 'a list
+      [@@specified "morel"] [@@prototype "intersect l"]
 
   (**
    * applies the function `f` to the elements of the argument
