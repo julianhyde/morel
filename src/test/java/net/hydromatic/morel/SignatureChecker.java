@@ -158,49 +158,31 @@ public class SignatureChecker {
   }
 
   /**
-   * Returns the canonical structure name for the given {@code .sig} filename.
-   * For example, {@code "integer.sig"} → {@code "Int"}, {@code "ieeereal.sig"}
-   * → {@code "IEEEReal"}, etc.
+   * Returns the canonical structure name for the given {@code .sig} filename:
+   * the inverse of {@code Generation.toKebab}. Splits the stem at hyphens and
+   * title-cases each segment; e.g. {@code "list-pair.sig"} → {@code
+   * "ListPair"}. The {@code "ieee"} segment is the lone exception — it
+   * uppercases to {@code "IEEE"} rather than {@code "Ieee"}, so {@code
+   * "ieee-real.sig"} → {@code "IEEEReal"}.
    */
   public static @Nullable String structureFromSigFileName(String fileName) {
     if (!fileName.endsWith(".sig")) {
       return null;
     }
     final String stem = fileName.substring(0, fileName.length() - 4);
-    return SIG_STEM_TO_STRUCTURE.get(stem);
-  }
-
-  /** Mapping from .sig file stem to structure name. */
-  private static final Map<String, String> SIG_STEM_TO_STRUCTURE;
-
-  static {
-    final Map<String, String> m = new LinkedHashMap<>();
-    m.put("bool", "Bool");
-    m.put("char", "Char");
-    m.put("either", "Either");
-    m.put("fn", "Fn");
-    m.put("general", "General");
-    m.put("int", "Int");
-    m.put("list", "List");
-    m.put("list-pair", "ListPair");
-    m.put("math", "Math");
-    m.put("option", "Option");
-    m.put("real", "Real");
-    m.put("string", "String");
-    m.put("variant", "Variant");
-    m.put("vector", "Vector");
-    m.put("bag", "Bag");
-    m.put("datalog", "Datalog");
-    m.put("date", "Date");
-    m.put("ieee-real", "IEEEReal");
-    m.put("int-inf", "IntInf");
-    m.put("interact", "Interact");
-    m.put("range", "Range");
-    m.put("relational", "Relational");
-    m.put("string-cvt", "StringCvt");
-    m.put("sys", "Sys");
-    m.put("time", "Time");
-    SIG_STEM_TO_STRUCTURE = m;
+    final StringBuilder sb = new StringBuilder();
+    for (String segment : stem.split("-")) {
+      if (segment.isEmpty()) {
+        continue;
+      }
+      if (segment.equals("ieee")) {
+        sb.append("IEEE");
+      } else {
+        sb.append(Character.toUpperCase(segment.charAt(0)));
+        sb.append(segment, 1, segment.length());
+      }
+    }
+    return sb.length() == 0 ? null : sb.toString();
   }
 
   public ParseResult parseSpecsAndMeta(File file) throws IOException {
