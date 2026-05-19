@@ -41,21 +41,21 @@ sig
   val fromReal : real -> time
 
   (* converts the time value t to a real number representing seconds. *)
-  val toReal : time -> real
+  val toReal : time -> real [@@method]
 
   (* returns the number of whole seconds in t, truncated toward zero. *)
-  val toSeconds : time -> int
+  val toSeconds : time -> int [@@method]
 
   (* returns the number of whole milliseconds in t, truncated toward
    * zero. *)
-  val toMilliseconds : time -> int
+  val toMilliseconds : time -> int [@@method]
 
   (* returns the number of whole microseconds in t, truncated toward
    * zero. *)
-  val toMicroseconds : time -> int
+  val toMicroseconds : time -> int [@@method]
 
   (* returns the number of whole nanoseconds in t. *)
-  val toNanoseconds : time -> int
+  val toNanoseconds : time -> int [@@method]
 
   (* returns the time value corresponding to n seconds. *)
   val fromSeconds : int -> time
@@ -70,26 +70,26 @@ sig
   val fromNanoseconds : int -> time
 
   (* returns the sum of the two time values t1 and t2. *)
-  val `+` : time * time -> time
+  val `+` : time * time -> time [@@method]
 
   (* returns the difference of the two time values t1 and t2. *)
-  val `-` : time * time -> time
+  val `-` : time * time -> time [@@method]
 
   (* returns LESS, EQUAL, or GREATER depending on whether t1 is less
    * than, equal to, or greater than t2. *)
-  val compare : time * time -> `order`
+  val compare : time * time -> `order` [@@method]
 
   (* returns true if t1 is less than t2. *)
-  val `<` : time * time -> bool
+  val `<` : time * time -> bool [@@method]
 
   (* returns true if t1 is less than or equal to t2. *)
-  val `<=` : time * time -> bool
+  val `<=` : time * time -> bool [@@method]
 
   (* returns true if t1 is greater than t2. *)
-  val `>` : time * time -> bool
+  val `>` : time * time -> bool [@@method]
 
   (* returns true if t1 is greater than or equal to t2. *)
-  val `>=` : time * time -> bool
+  val `>=` : time * time -> bool [@@method]
 
   (* returns the current time. *)
   val now : unit -> time
@@ -101,7 +101,7 @@ sig
 
   (* formats t as a decimal number of seconds with 3 fractional
    * digits. Equivalent to fmt 3 t. *)
-  val toString : time -> string
+  val toString : time -> string [@@method]
 
   (* parses a time value from the string s, which should be a decimal
    * number of seconds. Returns SOME t if successful, NONE otherwise. *)

@@ -33,7 +33,7 @@ sig
   val maxOrd : int
 
   (* Returns the ordinal number (code point) of the character c. *)
-  val ord : char -> int
+  val ord : char -> int [@@method]
 
   (* Returns the character with ordinal number i; raises Chr if i < 0
    * or i > maxOrd. *)
@@ -41,14 +41,14 @@ sig
 
   (* Returns the character immediately following c in the ordering, or
    * raises Chr if c = maxChar. *)
-  val succ : char -> char
+  val succ : char -> char [@@method]
 
   (* Returns the character immediately preceding c in the ordering, or
    * raises Chr if c = minChar. *)
-  val pred : char -> char
+  val pred : char -> char [@@method]
 
   (* Returns the lexicographic ordering of the two characters. *)
-  val compare : char * char -> `order`
+  val compare : char * char -> `order` [@@method]
 
   (* Lexicographic comparison of characters. *)
   val `<`  : char * char -> bool
@@ -63,52 +63,52 @@ sig
   val notContains : string -> char -> bool
 
   (* Returns true if c is a (seven-bit) ASCII character. *)
-  val isAscii : char -> bool
+  val isAscii : char -> bool [@@method]
 
   (* Returns the lowercase letter corresponding to c if c is uppercase,
    * otherwise returns c. *)
-  val toLower : char -> char
+  val toLower : char -> char [@@method]
 
   (* Returns the uppercase letter corresponding to c if c is lowercase,
    * otherwise returns c. *)
-  val toUpper : char -> char
+  val toUpper : char -> char [@@method]
 
   (* Returns true if c is a letter (uppercase or lowercase). *)
-  val isAlpha : char -> bool
+  val isAlpha : char -> bool [@@method]
 
   (* Returns true if c is alphanumeric (a letter or decimal digit). *)
-  val isAlphaNum : char -> bool
+  val isAlphaNum : char -> bool [@@method]
 
   (* Returns true if c is a control character. *)
-  val isCntrl : char -> bool
+  val isCntrl : char -> bool [@@method]
 
   (* Returns true if c is a decimal digit [0-9]. *)
-  val isDigit : char -> bool
+  val isDigit : char -> bool [@@method]
 
   (* Returns true if c is a graphical character (printable and not a space). *)
-  val isGraph : char -> bool
+  val isGraph : char -> bool [@@method]
 
   (* Returns true if c is a hexadecimal digit [0-9a-fA-F]. *)
-  val isHexDigit : char -> bool
+  val isHexDigit : char -> bool [@@method]
 
   (* Returns true if c is a lowercase letter. *)
-  val isLower : char -> bool
+  val isLower : char -> bool [@@method]
 
   (* Returns true if c is a printable character (including space). *)
-  val isPrint : char -> bool
+  val isPrint : char -> bool [@@method]
 
   (* Returns true if c is a whitespace character. *)
-  val isSpace : char -> bool
+  val isSpace : char -> bool [@@method]
 
   (* Returns true if c is a punctuation character (graphical but not
    * alphanumeric). *)
-  val isPunct : char -> bool
+  val isPunct : char -> bool [@@method]
 
   (* Returns true if c is an uppercase letter. *)
-  val isUpper : char -> bool
+  val isUpper : char -> bool [@@method]
 
   (* Returns a printable string representation of the character. *)
-  val toString : char -> (*String.*)string
+  val toString : char -> (*String.*)string [@@method]
 (*
   val scan       : (Char.char, 'a) StringCvt.reader
                    -> (char, 'a) StringCvt.reader
@@ -118,7 +118,7 @@ sig
 
   (* Returns a string corresponding to the C-language representation of
    * the character. *)
-  val toCString : char -> (*String.*)string
+  val toCString : char -> (*String.*)string [@@method]
 
   (* Scans a C-language character escape sequence from a string. *)
   val fromCString : (*String.*)string -> char option

@@ -33,43 +33,43 @@ sig
    * with group, for example
    *   from e in emps
    *   group e.deptno compute countId = count *)
-  val count : 'a bag -> int
+  val count : 'a bag -> int [@@method]
 
   (* returns whether the bag (or list) is empty, for example
    *   from d in depts
    *   where empty (from e where e.deptno = d.deptno) *)
-  val empty : 'a bag -> bool
+  val empty : 'a bag -> bool [@@method]
 
   (* computes a fixed point, starting with initialList and calling
    * listUpdate (prevList, newList) each iteration, terminating when
    * the result equals the previous result. *)
-  val iterate : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
+  val iterate : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag [@@method]
 
   (* returns the greatest element. Often used with group, for example
    *   from e in emps
    *   group e.deptno compute maxId = max of e.id *)
-  val max : 'a bag -> 'a
+  val max : 'a bag -> 'a [@@method]
 
   (* returns the least element. Often used with group, for example
    *   from e in emps
    *   group e.deptno compute minId = min of e.id *)
-  val min : 'a bag -> 'a
+  val min : 'a bag -> 'a [@@method]
 
   (* returns whether the bag (or list) has at least one element, for
    * example
    *   from d in depts
    *   where nonEmpty (from e where e.deptno = d.deptno) *)
-  val nonEmpty : 'a bag -> bool
+  val nonEmpty : 'a bag -> bool [@@method]
 
   (* returns the sole element of a bag (or list); raises Empty if the
    * collection is empty, Size if it has more than one element. *)
-  val only : 'a bag -> 'a
+  val only : 'a bag -> 'a [@@method]
 
   (* returns the sum of the elements. Often used with group, for
    * example
    *   from e in emps
    *   group e.deptno compute sumId = sum of e.id *)
-  val sum : 'a bag -> 'a
+  val sum : 'a bag -> 'a [@@method]
 end
 
 (*) End relational.sig

@@ -34,11 +34,11 @@ sig
   val tabulate : int * (int -> 'a) -> 'a vector
 
   (* Returns the number of elements in a vector. *)
-  val length : 'a vector -> int
+  val length : 'a vector -> int [@@method]
 
   (* Returns the i(th) element of the vector vec.
    * Raises Subscript if the index is out of bounds. *)
-  val sub : 'a vector * int -> 'a
+  val sub : 'a vector * int -> 'a [@@method]
 
   (* Returns a new vector, identical to vec, except the i(th) element
    * of vec is set to x. *)

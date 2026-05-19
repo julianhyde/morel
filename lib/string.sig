@@ -27,19 +27,19 @@ sig
   val maxSize : int
 
   (* Returns the character count in a string. *)
-  val size : string -> int
+  val size : string -> int [@@method]
 
   (* Returns the i(th) character of s, counting from zero.
    * Raises Subscript if the index is out of bounds. *)
-  val sub : string * int -> char
+  val sub : string * int -> char [@@method]
 
   (* Returns substrings from a starting index, optionally with a
    * specified length. Raises Subscript for invalid indices or lengths. *)
-  val extract : string * int * int option -> string
+  val extract : string * int * int option -> string [@@method]
 
   (* Returns the substring of size j starting at index i.
    * Equivalent to extract(s, i, SOME j). *)
-  val substring : string * int * int -> string
+  val substring : string * int * int -> string [@@method]
 
   (* Concatenation of the strings s and t.
    * Raises Size if the result exceeds maxSize. *)
@@ -61,7 +61,7 @@ sig
   val implode : char list -> string
 
   (* Returns the list of characters in the string s. *)
-  val explode : string -> char list
+  val explode : string -> char list [@@method]
 
   (* Applies f to each element of s from left to right, returning
    * the resulting string. *)
@@ -90,7 +90,7 @@ sig
 
   (* Does a lexicographic comparison of the two strings returning
    * an order value. *)
-  val compare : string * string -> `order`
+  val compare : string * string -> `order` [@@method]
 
   (* Performs lexicographic comparison of the two strings using the
    * given ordering f on characters. *)

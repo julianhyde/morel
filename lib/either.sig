@@ -25,16 +25,16 @@ sig
   datatype ('left, 'right) either = INL of 'left | INR of 'right
 
   (* Tests whether the value is a left variant. *)
-  val isLeft  : ('left, 'right) either -> bool
+  val isLeft  : ('left, 'right) either -> bool [@@method]
 
   (* Tests whether the value is a right variant. *)
-  val isRight : ('left, 'right) either -> bool
+  val isRight : ('left, 'right) either -> bool [@@method]
 
   (* Extracts left value as option; returns SOME if left, NONE otherwise. *)
-  val asLeft  : ('left, 'right) either -> 'left option
+  val asLeft  : ('left, 'right) either -> 'left option [@@method]
 
   (* Extracts right value as option; returns SOME if right, NONE otherwise. *)
-  val asRight : ('left, 'right) either -> 'right option
+  val asRight : ('left, 'right) either -> 'right option [@@method]
 
   (* Applies left function to left values, right function to right values. *)
   val map : ('ldom -> 'lrng) * ('rdom -> 'rrng)
@@ -65,7 +65,7 @@ sig
            -> 'b -> ('left, 'right) either -> 'b
 
   (* Extracts contents when both variants contain the same type. *)
-  val proj : ('a, 'a) either -> 'a
+  val proj : ('a, 'a) either -> 'a [@@method]
 
   (* Separates list of either values into left and right components. *)
   val partition : (('left, 'right) either) list -> ('left list * 'right list)

@@ -21,8 +21,8 @@
 signature BOOL =
 sig
   datatype bool = `false` | `true`
-  val not : bool -> bool
-  val toString : bool -> string
+  val not : bool -> bool [@@method]
+  val toString : bool -> string [@@method]
 (*
   val scan       : (char, 'a) StringCvt.reader
                      -> (bool, 'a) StringCvt.reader

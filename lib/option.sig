@@ -27,15 +27,15 @@ sig
 
   (* Returns the value v if opt is SOME(v); otherwise returns the default
    * value a. Provides a default value when an option is empty. *)
-  val getOpt : 'a option * 'a -> 'a
+  val getOpt : 'a option * 'a -> 'a [@@method]
 
   (* Returns true if opt is SOME(v); otherwise returns false.
    * Checks whether an option contains a value. *)
-  val isSome : 'a option -> bool
+  val isSome : 'a option -> bool [@@method]
 
   (* Returns v if opt is SOME(v); otherwise raises the Option exception.
    * Extracts the value from an option or fails. *)
-  val valOf : 'a option -> 'a
+  val valOf : 'a option -> 'a [@@method]
 
   (* Returns SOME(a) if f(a) is true and NONE otherwise.
    * Wraps a value in SOME only if it satisfies a predicate. *)

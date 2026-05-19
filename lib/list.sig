@@ -24,45 +24,45 @@ sig
   exception Empty
 
   (* Returns true if the list is empty. *)
-  val null : 'a list -> bool
+  val null : 'a list -> bool [@@method]
 
   (* Returns the number of elements in the list. *)
-  val length : 'a list -> int
+  val length : 'a list -> int [@@method]
 
   (* Returns the concatenation of two lists. *)
   val @ : 'a list * 'a list -> 'a list
 
   (* Returns the first element; raises Empty if the list is nil. *)
-  val hd : 'a list -> 'a
+  val hd : 'a list -> 'a [@@method]
 
   (* Returns all but the first element; raises Empty if the list is nil. *)
-  val tl : 'a list -> 'a list
+  val tl : 'a list -> 'a list [@@method]
 
   (* Returns the last element; raises Empty if the list is nil. *)
-  val last : 'a list -> 'a
+  val last : 'a list -> 'a [@@method]
 
   (* Returns NONE if the list is empty, SOME(hd, tl) otherwise. *)
-  val getItem : 'a list -> ('a * 'a list) option
+  val getItem : 'a list -> ('a * 'a list) option [@@method]
 
   (* Returns the i-th element (0-indexed); raises Subscript if out of bounds. *)
-  val nth : 'a list * int -> 'a
+  val nth : 'a list * int -> 'a [@@method]
 
   (* Returns the first i elements; raises Subscript if i < 0 or
    * i > length. *)
-  val `take` : 'a list * int -> 'a list
+  val `take` : 'a list * int -> 'a list [@@method]
 
   (* Returns the list after dropping the first i elements; raises
    * Subscript if out of bounds. *)
-  val drop : 'a list * int -> 'a list
+  val drop : 'a list * int -> 'a list [@@method]
 
   (* Returns the list with elements in reverse order. *)
-  val rev : 'a list -> 'a list
+  val rev : 'a list -> 'a list [@@method]
 
   (* Returns the concatenation of all lists in order. *)
   val concat : 'a list list -> 'a list
 
   (* Returns (rev l1) @ l2. *)
-  val revAppend : 'a list * 'a list -> 'a list
+  val revAppend : 'a list * 'a list -> 'a list [@@method]
 
   (* Applies a function to each element from left to right for side effects. *)
   val app : ('a -> unit) -> 'a list -> unit

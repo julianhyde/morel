@@ -37,7 +37,7 @@ sig
 
   (* returns LESS, EQUAL, or GREATER depending on whether d1 is less
    * than, equal to, or greater than d2 (comparing instants in time). *)
-  val compare : date * date -> `order`
+  val compare : date * date -> `order` [@@method]
 
   (* constructs a date from the given fields. If offset is NONE, the
    * date is in local time; if SOME t, the date is in the timezone
@@ -45,7 +45,7 @@ sig
   val date : {day:int, hour:int, minute:int, month:month, offset:time option, second:int, year:int} -> date
 
   (* returns the day of the month of d, in the range [1, 31]. *)
-  val day : date -> int
+  val day : date -> int [@@method]
 
   (* formats d using the strftime-style format string s. Recognized
    * format codes include %Y (4-digit year), %m (2-digit month), %d
@@ -65,40 +65,40 @@ sig
   val fromTimeUniv : time -> date
 
   (* returns the hour of d, in the range [0, 23]. *)
-  val hour : date -> int
+  val hour : date -> int [@@method]
 
   (* returns SOME true if d is in daylight saving time, SOME false if
    * not, or NONE if the information is not available. *)
-  val isDst : date -> bool option
+  val isDst : date -> bool option [@@method]
 
   (* returns the offset of the local timezone from UTC as a time value
    * (nanoseconds). *)
   val localOffset : unit -> time
 
   (* returns the minute of d, in the range [0, 59]. *)
-  val minute : date -> int
+  val minute : date -> int [@@method]
 
   (* returns the month of d. *)
-  val month : date -> month
+  val month : date -> month [@@method]
 
   (* returns the second of d, in the range [0, 59]. *)
-  val second : date -> int
+  val second : date -> int [@@method]
 
   (* formats d as a string in the format "Www Mmm DD HH:MM:SS YYYY",
    * for example "Thu Jan 1 00:00:00 1970". *)
-  val toString : date -> string
+  val toString : date -> string [@@method]
 
   (* converts d to a time value (nanoseconds since the Unix epoch). *)
-  val toTime : date -> time
+  val toTime : date -> time [@@method]
 
   (* returns the day of the week of d. *)
-  val weekDay : date -> weekday
+  val weekDay : date -> weekday [@@method]
 
   (* returns the year of d. *)
-  val year : date -> int
+  val year : date -> int [@@method]
 
   (* returns the day of the year of d, in the range [0, 365]. *)
-  val yearDay : date -> int
+  val yearDay : date -> int [@@method]
 end
 
 (*) End date.sig

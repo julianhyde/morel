@@ -68,7 +68,7 @@ sig
   (* Returns remainder x - n×y where n = trunc(x/y). Same sign as x,
    * absolute value less than |y|. Returns NaN if x is infinity or y is
    * zero; returns x if y is infinity. *)
-  val rem : real * real -> real
+  val rem : real * real -> real [@@method]
 
   (* Return a×b+c and a×b−c respectively. May use single instruction with
    * different rounding than sequential operations. *)
@@ -86,30 +86,30 @@ sig
    * - abs (±0.0) = +0.0
    * - abs (±infinity) = +infinity
    * - abs (±NaN) = +NaN *)
-  val abs : real -> real
+  val abs : real -> real [@@method]
 
   (* If exactly one argument is NaN, they return the other argument.
    * If both arguments are NaN, they return NaN. *)
-  val min : real * real -> real
-  val max : real * real -> real
+  val min : real * real -> real [@@method]
+  val max : real * real -> real [@@method]
 
   (* Returns −1 for negative, 0 for zero, 1 for positive.
    * Raises Domain exception on NaN. *)
-  val sign : real -> int
+  val sign : real -> int [@@method]
 
   (* Returns true if and only if the sign of r (infinities, zeros, and NaN
    * included) is negative. *)
-  val signBit : real -> bool
+  val signBit : real -> bool [@@method]
 
   (* Returns true if and only if signBit r1 equals signBit r2. *)
-  val sameSign : real * real -> bool
+  val sameSign : real * real -> bool [@@method]
 
   (* Returns x with the sign of y, even if y is NaN. *)
-  val copySign : real * real -> real
+  val copySign : real * real -> real [@@method]
 
   (* Returns LESS, EQUAL, or GREATER; raises IEEEReal.Unordered on
    * unordered arguments. *)
-  val compare : real * real -> `order`
+  val compare : real * real -> `order` [@@method]
 
   (* Behaves similarly to compare except that the values it returns have
    * the extended type IEEEReal.real_order and it returns
@@ -146,17 +146,17 @@ sig
 
   (* Returns true if x and y are unordered, i.e., at least one of x and y
    * is NaN. *)
-  val unordered : real * real -> bool
+  val unordered : real * real -> bool [@@method]
 
   (* Returns true if x is neither NaN nor an infinity. *)
-  val isFinite : real -> bool
+  val isFinite : real -> bool [@@method]
 
   (* Returns true if x is NaN. *)
-  val isNan : real -> bool
+  val isNan : real -> bool [@@method]
 
   (* Returns true if x is normal, i.e., neither zero, subnormal,
    * infinite nor NaN. *)
-  val isNormal : real -> bool
+  val isNormal : real -> bool [@@method]
 
   (* Returns the IEEEReal.float_class to which x belongs. *)
 (*
@@ -167,7 +167,7 @@ sig
    * 1.0 ≤ man × radix < radix. For ±0, man is ±0 and exp is 0;
    * for ±infinity, man is ±infinity with unspecified exp;
    * for NaN, man is NaN with unspecified exp. *)
-  val toManExp : real -> {man : real, exp : int}
+  val toManExp : real -> {man : real, exp : int} [@@method]
 
   (* Returns man × radix^exp. Note that, even if man is a non-zero,
    * finite real value, the result can be zero or infinity because
@@ -177,10 +177,10 @@ sig
   (* Returns {whole, frac} where whole is integral, |frac| < 1.0,
    * both have r's sign, and r = whole + frac. For ±infinity:
    * whole is ±infinity, frac is ±0; for NaN: both are NaN. *)
-  val split : real -> {whole : real, frac : real}
+  val split : real -> {whole : real, frac : real} [@@method]
 
   (* Equivalent to #frac o split. *)
-  val realMod : real -> real
+  val realMod : real -> real [@@method]
 
   (* Returns the next representable real after r in the direction of t.
    * If t is less than r, returns the largest representable floating-point
@@ -191,22 +191,22 @@ sig
 
   (* Raises Overflow if x is an infinity, and raises Div if x is NaN.
    * Otherwise, it returns its argument. *)
-  val checkFloat : real -> real
+  val checkFloat : real -> real [@@method]
 
   (* Convert to integer-valued reals using floor, ceiling, truncation
    * toward zero, or nearest integer (ties to even) respectively.
    * Return NaN or infinity unchanged. *)
-  val realFloor : real -> real
-  val realCeil : real -> real
-  val realTrunc : real -> real
-  val realRound : real -> real
+  val realFloor : real -> real [@@method]
+  val realCeil : real -> real [@@method]
+  val realTrunc : real -> real [@@method]
+  val realRound : real -> real [@@method]
 
   (* Convert to int type using corresponding rounding modes.
    * Raise Overflow on overflow; raise Domain on NaN. *)
-  val floor : real -> int
-  val ceil : real -> int
-  val trunc : real -> int
-  val round : real -> int
+  val floor : real -> int [@@method]
+  val ceil : real -> int [@@method]
+  val trunc : real -> int [@@method]
+  val round : real -> int [@@method]
 
   (* Convert the argument x to an integral type using the specified
    * rounding mode. They raise Overflow if the result is not representable,
@@ -240,7 +240,7 @@ sig
 *)
 
   (* Equivalent to fmt (StringCvt.GEN NONE) r. *)
-  val toString : real -> string
+  val toString : real -> string [@@method]
 
   (* Parse real numbers from character sources, accepting formats like
    * [+~-]?(digits.digits | .digits)(e|E)[+~-]?digits and non-finite

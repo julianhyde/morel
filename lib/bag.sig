@@ -27,7 +27,7 @@ sig
   val nil : 'a bag
 
   (* returns true if the bag b is empty. *)
-  val null : 'a bag -> bool
+  val null : 'a bag -> bool [@@method]
 
   (* creates a new bag from l, whose length is length l and whose
    * elements are the same as those of l. Raises Size if maxLen < n. *)
@@ -35,33 +35,33 @@ sig
 
   (* creates a new bag from b, whose length is length b and whose
    * elements are the same as those of b. Raises Size if maxLen < n. *)
-  val toList : 'a bag -> 'a list
+  val toList : 'a bag -> 'a list [@@method]
 
   (* returns the number of elements in the bag b. *)
-  val length : 'a bag -> int
+  val length : 'a bag -> int [@@method]
 
   (* returns the bag that is the concatenation of b1 and b2. *)
   val `@` : 'a bag * 'a bag -> 'a bag
 
   (* returns an arbitrary element of bag b. Raises Empty if b is nil. *)
-  val hd : 'a bag -> 'a
+  val hd : 'a bag -> 'a [@@method]
 
   (* returns all but one arbitrary element of bag b. Raises Empty if b
    * is nil. *)
-  val tl : 'a bag -> 'a bag
+  val tl : 'a bag -> 'a bag [@@method]
 
   (* returns NONE if the bag b is empty, and SOME (hd b, tl b)
    * otherwise (applying hd and tl simultaneously so that they
    * choose/remove the same arbitrary element). *)
-  val getItem : 'a bag -> ('a * 'a bag) option
+  val getItem : 'a bag -> ('a * 'a bag) option [@@method]
 
   (* returns an arbitrary i elements of the bag b. Raises Subscript if
    * i length l. We have take(b, length b) = b. *)
-  val `take` : 'a bag * int -> 'a bag
+  val `take` : 'a bag * int -> 'a bag [@@method]
 
   (* returns what is left after dropping an arbitrary i elements of
    * the bag b. Raises Subscript if i length l. *)
-  val drop : 'a bag * int -> 'a bag
+  val drop : 'a bag * int -> 'a bag [@@method]
 
   (* returns the bag that is the concatenation of all the bags in b. *)
   val concat : 'a bag list -> 'a bag
@@ -116,7 +116,7 @@ sig
   (* returns the ith element of the bag b, counting from 0. Raises
    * Subscript if i = length b. We have nth(b,0) = hd b, ignoring
    * exceptions. *)
-  val nth : 'a bag * int -> 'a
+  val nth : 'a bag * int -> 'a [@@method]
 end
 
 (*) End bag.sig

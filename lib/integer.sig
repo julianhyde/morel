@@ -59,14 +59,14 @@ sig
 
   (* Integer division truncated toward zero; raises Div on division by
    * zero. *)
-  val quot : int * int -> int
+  val quot : int * int -> int [@@method]
 
   (* Remainder operation; result has same sign as dividend; raises Div
    * on division by zero. *)
-  val rem : int * int -> int
+  val rem : int * int -> int [@@method]
 
   (* Returns the ordering of two integers. *)
-  val compare : int * int -> `order`
+  val compare : int * int -> `order` [@@method]
 (*
   val <  : int * int -> bool
   val <= : int * int -> bool
@@ -76,25 +76,25 @@ sig
   val ~ : int -> int
 *)
   (* Returns the absolute value; raises Overflow on minInt for bounded types. *)
-  val abs : int -> int
+  val abs : int -> int [@@method]
 
   (* Returns the smaller of two integers. *)
-  val min : int * int -> int
+  val min : int * int -> int [@@method]
 
   (* Returns the larger of two integers. *)
-  val max : int * int -> int
+  val max : int * int -> int [@@method]
 
   (* Returns -1, 0, or 1 when the argument is negative, zero, or positive. *)
-  val sign : int -> (*Int.*)int
+  val sign : int -> (*Int.*)int [@@method]
 
   (* Returns true if both arguments have the same sign. *)
-  val sameSign : int * int -> bool
+  val sameSign : int * int -> bool [@@method]
 
 (*
   val fmt      : StringCvt.radix -> int -> string
 *)
   (* Converts an integer to its decimal string representation. *)
-  val toString : int -> string
+  val toString : int -> string [@@method]
 (*
   val scan       : StringCvt.radix
                      -> (char, 'a) StringCvt.reader

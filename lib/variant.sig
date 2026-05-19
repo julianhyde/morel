@@ -83,7 +83,7 @@ sig
    * The output is a valid Standard ML expression that can be parsed
    * back into the same variant using the parse function.
    *)
-  val print : variant -> string
+  val print : variant -> string [@@method]
 end
 
 (*) End variant.sig

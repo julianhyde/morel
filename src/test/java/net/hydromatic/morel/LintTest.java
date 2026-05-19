@@ -1693,6 +1693,19 @@ public class LintTest {
               structure, name, singular(section), tomlImpl, spec.implemented));
     }
 
+    // Check method flag (functions only).
+    if (section.equals("functions")) {
+      final boolean tomlMethod = Boolean.TRUE.equals(entry.get("method"));
+      if (tomlMethod != spec.method) {
+        errors.add(
+            format(
+                "%s.%s (function): method mismatch — TOML=%s, .sig=%s%n"
+                    + "  (add or remove [@@method] on the val spec, "
+                    + "or method = true in functions.toml)",
+                structure, name, tomlMethod, spec.method));
+      }
+    }
+
     // Check type (functions only; types/exceptions are matched by name only
     // for now — types have richer structure that needs richer comparison).
     if (section.equals("functions")) {
