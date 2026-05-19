@@ -20,13 +20,18 @@
  *)
 signature BOOL =
 sig
+  (** is the type of boolean values `true` and `false`. *)
   datatype bool = `false` | `true`
+  (** returns the logical inverse of `b`. *)
   val not : bool -> bool [@@method] [@@prototype "not b"] [@@syntax "prefix"]
+  (**
+   * returns the string representation of `b`, either "true" or "false".
+   *)
   val toString : bool -> string [@@method] [@@prototype "toString b"]
-(*
-  val scan       : (char, 'a) StringCvt.reader
-                     -> (bool, 'a) StringCvt.reader
-*)
+  (**
+   * scans a `bool` value from the string `s`. Returns `SOME (true)` if
+   * `s` is "true", `SOME (false)` if `s` is "false", and `NONE` otherwise.
+   *)
   val fromString : string -> bool option [@@prototype "fromString s"]
 end
 

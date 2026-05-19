@@ -213,6 +213,7 @@ class SignatureChecker {
       final String prototype = stringAttribute(attrs, "prototype", null);
       final String syntax = stringAttribute(attrs, "syntax", null);
       final String extra = stringAttribute(attrs, "extra", null);
+      final String description = stringAttribute(attrs, "doc", null);
       if (inner.op == Op.SPEC_VAL) {
         final Ast.ValSpec valSpec = (Ast.ValSpec) inner;
         final AstTypeStringifier stringifier = new AstTypeStringifier();
@@ -226,7 +227,8 @@ class SignatureChecker {
                 specified,
                 prototype,
                 syntax,
-                extra));
+                extra,
+                description));
       } else if (inner.op == Op.SPEC_TYPE) {
         final Ast.TypeSpec typeSpec = (Ast.TypeSpec) inner;
         specs.add(
@@ -239,7 +241,8 @@ class SignatureChecker {
                 specified,
                 null,
                 null,
-                null));
+                null,
+                description));
       } else if (inner.op == Op.SPEC_DATATYPE) {
         final Ast.DatatypeSpec datatypeSpec = (Ast.DatatypeSpec) inner;
         specs.add(
@@ -252,7 +255,8 @@ class SignatureChecker {
                 specified,
                 null,
                 null,
-                null));
+                null,
+                description));
       } else if (inner.op == Op.SPEC_EXCEPTION) {
         final Ast.ExceptionSpec exnSpec = (Ast.ExceptionSpec) inner;
         specs.add(
@@ -265,7 +269,8 @@ class SignatureChecker {
                 specified,
                 null,
                 null,
-                null));
+                null,
+                description));
       }
     }
     return specs;
@@ -446,6 +451,11 @@ class SignatureChecker {
     final @Nullable String syntax;
     /** Extra text from {@code [@@extra "..."]}, or null. */
     final @Nullable String extra;
+    /**
+     * Description text from a leading {@code (** ... *)} doc-comment (desugared
+     * to {@code [@@doc "..."]}), or null.
+     */
+    final @Nullable String description;
 
     SpecInfo(
         SpecKind kind,
@@ -456,7 +466,8 @@ class SignatureChecker {
         String specified,
         @Nullable String prototype,
         @Nullable String syntax,
-        @Nullable String extra) {
+        @Nullable String extra,
+        @Nullable String description) {
       this.kind = kind;
       this.name = name;
       this.type = type;
@@ -466,10 +477,21 @@ class SignatureChecker {
       this.prototype = prototype;
       this.syntax = syntax;
       this.extra = extra;
+      this.description = description;
     }
 
     SpecInfo(SpecKind kind, String name, String type, boolean implemented) {
-      this(kind, name, type, implemented, false, "basis", null, null, null);
+      this(
+          kind,
+          name,
+          type,
+          implemented,
+          false,
+          "basis",
+          null,
+          null,
+          null,
+          null);
     }
   }
 

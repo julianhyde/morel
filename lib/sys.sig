@@ -22,46 +22,54 @@ signature SYS =
 sig
   [@@@specified "morel"]
 
-  (* restores the environment to the initial environment. *)
+  (** restores the environment to the initial environment. *)
   val clearEnv : unit -> unit [@@prototype "clearEnv ()"]
 
-  (* returns the environment as a list of (name, type) pairs. *)
+  (** prints the environment. *)
   val env : unit -> (string * string) list [@@prototype "env ()"]
 
-  (* is a view of the file system as a record. The fields of the
-   * record depend on the files and directories under the configured
-   * directory; the type expands progressively at the boundary
-   * between Morel and the file system. *)
+  (**
+   * is a view of the file system as a record. The fields of the record
+   * depend on the files and directories under the configured directory.
+   *)
   val file : {} [@@prototype "file"]
 
-  (* parses s as a top-level Morel statement and returns a
-   * parenthesized S-expression-style dump of the resulting abstract
-   * syntax tree. Useful for testing parser behavior (e.g. operator
-   * precedence and attribute attachment) from .smli scripts. Raises *)
+  (**
+   * parses `s` as a top-level Morel statement and returns a parenthesized
+   * S-expression-style dump of the resulting abstract syntax tree. Useful for
+   * testing parser behavior (e.g. operator precedence and attribute attachment)
+   * from `.smli` scripts. Raises `Error` if the string does not parse.
+   *)
   val parseTree : string -> string [@@prototype "parseTree s"]
 
-  (* prints the plan of the most recently executed expression. *)
+  (** prints the plan of the most recently executed expression. *)
   val plan : unit -> string [@@prototype "plan ()"]
 
-  (* re-plans the most recently executed expression and returns the
-   * Core representation at the specified phase. The phase argument
-   * can be "0" (initial), "-1" (final), or a specific pass number. *)
+  (**
+   * re-plans the most recently executed expression and returns the Core
+   * representation at the specified phase. The phase argument can be "0" (initial),
+   * "-1" (final), or a specific pass number.
+   *)
   val planEx : string -> string [@@prototype "planEx phase"]
 
-  (* sets the value of property to value. *)
+  (** sets the value of `property` to `value`. *)
   val set : string * 'a -> unit
       [@@prototype "set (property, value)"]
       [@@extra "(See [Properties](#properties) below.)"]
 
-  (* returns the current the value of property, as a string, or NONE
-   * if unset. *)
+  (**
+   * returns the current the value of `property`, as a
+   * string, or `NONE` if unset.
+   *)
   val show : string -> string option [@@prototype "show property"]
 
-  (* returns a list of all properties and their current value as a
-   * string, or NONE if unset. *)
+  (**
+   * returns a list of all properties and their current value
+   * as a string, or `NONE` if unset.
+   *)
   val showAll : unit -> (string * string option) list [@@prototype "showAll ()"]
 
-  (* clears the current the value of property. *)
+  (** clears the current the value of `property`. *)
   val unset : string -> unit [@@prototype "unset property"]
 end
 

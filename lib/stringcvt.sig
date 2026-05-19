@@ -24,6 +24,10 @@ sig
   (* specifies the numeric base: binary (2), octal (8), decimal (10),
    * or hexadecimal (16). *)
 (*
+  (**
+   * specifies the numeric base: binary (2), octal (8), decimal (10), or
+   * hexadecimal (16).
+   *)
   datatype radix = BIN | OCT | DEC | HEX
 *)
 
@@ -31,11 +35,17 @@ sig
    * 'a from a stream of type 'b, returning the value and the
    * remaining stream, or NONE at end of input. *)
 (*
+  (**
+   * is the type of a scanning function that reads one value of type `'a`
+   * from a stream of type `'b`, returning the value and the remaining
+   * stream, or `NONE` at end of input.
+   *)
   type ('a, 'b) reader = 'b -> ('a * 'b) option
 *)
 
   (* specifies the format for converting real numbers to strings. *)
 (*
+  (** specifies the format for converting real numbers to strings. *)
   datatype realfmt = SCI of int option | FIX of int option | GEN of int option | EXACT
 *)
 end

@@ -22,11 +22,13 @@ signature INTERACT =
 sig
   [@@@specified "morel"]
 
-  (* loads source text from the file named f. *)
+  (** loads source text from the file named `f`. *)
   val use : string -> unit [@@prototype "use f"]
 
-  (* loads source text from the file named f, without printing to
-   * stdout. *)
+  (**
+   * loads source text from the file named `f`, without
+   * printing to stdout.
+   *)
   val useSilently : string -> unit [@@prototype "useSilently f"]
 end
 

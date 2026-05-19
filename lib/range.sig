@@ -22,46 +22,103 @@ signature RANGE =
 sig
   [@@@specified "morel"]
 
-  (* represents a set of values as a normalized list of
-   * non-overlapping, non-adjacent ranges. *)
+  (**
+   * represents a set of values as a normalized list of non-overlapping,
+   * non-adjacent ranges.
+   *)
   eqtype 'a continuous_set
 
-  (* represents a set of discrete values as a normalized list of
-   * non-overlapping, non-adjacent ranges. *)
+  (**
+   * represents a set of discrete values as a normalized list of
+   * non-overlapping, non-adjacent ranges.
+   *)
   eqtype 'a discrete_set
 
-  (* represents a contiguous interval of values of an ordered type. *)
+  (**
+   * represents a contiguous interval of values of an ordered type.
+   *
+   * The constructors and their meanings are:
+   * * `ALL`: all values (equivalent to (−∞, +∞))
+   * * `AT_LEAST v`: `x >= v`
+   * * `AT_MOST v`: `x <= v`
+   * * `CLOSED (lo, hi)`: `x >= lo andalso x <= hi`
+   * * `CLOSED_OPEN (lo, hi)`: `x >= lo andalso x < hi`
+   * * `GREATER_THAN v`: `x > v`
+   * * `LESS_THAN v`: `x < v`
+   * * `OPEN (lo, hi)`: `x > lo andalso x < hi`
+   * * `OPEN_CLOSED (lo, hi)`: `x > lo andalso x <= hi`
+   * * `POINT v`: `x = v`
+   *)
   datatype 'a range = ALL | AT_LEAST of 'a | AT_MOST of 'a | CLOSED of 'a * 'a | CLOSED_OPEN of 'a * 'a | GREATER_THAN of 'a | LESS_THAN of 'a | OPEN of 'a * 'a | OPEN_CLOSED of 'a * 'a | POINT of 'a
 
-  (* returns true if x is a member of discrete set ds. *)
+  (**
+   * returns `true` if `x` is a member of discrete set `ds`.
+   *
+   * The ordering is implicit, derived from the type `α`.
+   *)
   val contains : 'a discrete_set -> 'a -> bool [@@method] [@@prototype "contains ds x"]
 
-  (* enumerates all values in the discrete set ds and returns them as
-   * a bag. The element type must be discrete (e.g., int, char, bool).
-   * Raises an exception if any range is unbounded below and the type
-   * has no minimum value (e.g., LESS_THAN 5 : int range). *)
+  (**
+   * enumerates all values in the discrete set `ds` and returns them as a bag.
+   * The element type must be discrete (e.g., `int`, `char`, `bool`).
+   * Raises an exception if any range is unbounded below and the type has no
+   * minimum value (e.g., `LESS_THAN 5 : int range`).
+   *)
   val toBag : 'a discrete_set -> 'a bag [@@method] [@@prototype "toBag ds"]
 
-  (* enumerates all values in the discrete set ds and returns them as
-   * a list, in ascending order. The element type must be discrete
-   * (e.g., int, char, bool). Raises an exception if any range is
-   * unbounded below and the type has no minimum value (e.g., *)
+  (**
+   * enumerates all values in the discrete set `ds` and returns them as a
+   * list, in ascending order. The element type must be discrete (e.g.,
+   * `int`, `char`, `bool`).
+   * Raises an exception if any range is unbounded below and the type has no
+   * minimum value (e.g., `LESS_THAN 5 : int range`).
+   *)
   val toList : 'a discrete_set -> 'a list [@@method] [@@prototype "toList ds"]
 
-  (* normalizes ranges into a continuous_set. Overlapping and adjacent
-   * ranges are merged, and the result is sorted by lower bound. *)
+  (**
+   * normalizes `ranges` into a `continuous_set`. Overlapping and adjacent
+   * ranges are merged, and the result is sorted by lower bound.
+   *
+   * The ordering is implicit, derived from the element type.
+   *
+   * ```
+   * - val cs = Range.continuousSetOf [OPEN (1.0, 3.0), AT_LEAST 7.0];
+   * val cs = CONTINUOUS_SET [OPEN (1.0,3.0),AT_LEAST 7.0] : real continuous_set
+   * - cs.contains 2.0;
+   * val it = true : bool
+   * - cs.contains 1.0;
+   * val it = false : bool
+   * - cs.contains 8.5;
+   * val it = true : bool
+   * - cs.complement ();
+   * val it = CONTINUOUS_SET [AT_MOST 1.0,CLOSED_OPEN (3.0,7.0)] : real continuous_set
+   * ```
+   *)
   val continuousSetOf : 'a range list -> 'a continuous_set [@@prototype "continuousSetOf ranges"]
 
-  (* normalizes ranges into a discrete_set. Overlapping and adjacent
-   * ranges are merged (treating adjacent discrete values as
-   * mergeable), and the result is sorted by lower bound. *)
+  (**
+   * normalizes `ranges` into a `discrete_set`. Overlapping and adjacent
+   * ranges are merged (treating adjacent discrete values as mergeable), and
+   * the result is sorted by lower bound.
+   *
+   * The ordering and discreteness are implicit, derived from the element type.
+   *
+   * ```
+   * - val evens = Range.discreteSetOf [CLOSED (0, 2), CLOSED (4, 6), CLOSED (8, 10)];
+   * val evens = DISCRETE_SET [CLOSED (0,2),CLOSED (4,6),CLOSED (8,10)] : int discrete_set
+   * - evens.toList ();
+   * val it = [0,1,2,4,5,6,8,9,10] : int list
+   * ```
+   *)
   val discreteSetOf : 'a range list -> 'a discrete_set [@@prototype "discreteSetOf ranges"]
 
-  (* returns the list of ranges in the discrete set ds. *)
+  (** returns the list of ranges in the discrete set `ds`. *)
   val ranges : 'a discrete_set -> 'a range list [@@method] [@@prototype "ranges ds"]
 
-  (* returns the complement of discrete set ds: a discrete set
-   * containing all values of the element type not in ds. *)
+  (**
+   * returns the complement of discrete set `ds`: a discrete set containing all
+   * values of the element type not in `ds`.
+   *)
   val complement : 'a discrete_set -> 'a discrete_set [@@method] [@@prototype "complement ds"]
 end
 

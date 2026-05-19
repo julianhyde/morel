@@ -1567,7 +1567,9 @@ public class LintTest {
       }
     }
 
-    // Cache parsed .sig specs.
+    // Cache parsed .sig specs, keyed by "kind/name" so the lookup
+    // distinguishes a type and function that happen to share a name (e.g.
+    // `type month` and `val month`).
     final SignatureChecker checker = new SignatureChecker();
     final Map<String, Map<String, SignatureChecker.SpecInfo>> sigSpecsByStruct =
         new HashMap<>();
@@ -1579,7 +1581,7 @@ public class LintTest {
         for (SignatureChecker.SpecInfo info : infos) {
           // Last-wins for overloaded names — same convention as
           // SignatureChecker uses on the BuiltIn side.
-          byName.put(info.name, info);
+          byName.put(info.kind + "/" + info.name, info);
         }
       }
       sigSpecsByStruct.put(e.getKey(), byName);
@@ -1701,7 +1703,8 @@ public class LintTest {
       return;
     }
 
-    final SignatureChecker.SpecInfo spec = sigSpecs.get(name);
+    final SignatureChecker.SpecKind kind = kindOf(section);
+    final SignatureChecker.SpecInfo spec = sigSpecs.get(kind + "/" + name);
     if (spec == null) {
       errors.add(
           format(
@@ -1748,6 +1751,27 @@ public class LintTest {
               singular(section),
               tomlSpecified,
               spec.specified));
+    }
+
+    // Check description (functions/types/exceptions). The .sig side may
+    // carry a multi-line `(** ... *)` doc-comment whose body has a ` *`
+    // prefix on each continuation line — strip those before comparing.
+    // The TOML side is plain triple-quoted text (only whitespace collapse).
+    final String tomlDescRaw = (String) entry.get("description");
+    if (tomlDescRaw != null && spec.description != null) {
+      final String tomlNorm = collapseWs(tomlDescRaw);
+      final String sigNorm =
+          collapseWs(stripDocCommentPrefix(spec.description));
+      if (!tomlNorm.equals(sigNorm)) {
+        errors.add(
+            format(
+                "%s.%s (%s): description mismatch%n  TOML: %s%n  .sig: %s",
+                structure,
+                name,
+                singular(section),
+                truncate(tomlNorm),
+                truncate(sigNorm)));
+      }
     }
 
     // Check extra (functions only). TOML `extra` may include a trailing
@@ -1910,6 +1934,26 @@ public class LintTest {
     }
   }
 
+  /** Collapses whitespace runs to single spaces and trims. */
+  private static String collapseWs(String s) {
+    return s.replaceAll("\\s+", " ").trim();
+  }
+
+  /**
+   * Strips the leading {@code " * "} (or bare {@code " *"} on empty lines) from
+   * each line of a multi-line doc-comment body. Matches only at line start with
+   * required following whitespace or end-of-line, so it does not strip markdown
+   * emphasis like {@code *foo*} that happens to be at line start.
+   */
+  private static String stripDocCommentPrefix(String s) {
+    return s.replaceAll("(?m)^[ \\t]*\\*(?:[ \\t]+|$)", "");
+  }
+
+  /** Truncates a string for error-message display. */
+  private static String truncate(String s) {
+    return s.length() > 100 ? s.substring(0, 97) + "..." : s;
+  }
+
   /** Returns the first non-null argument. */
   private static <T> T firstNonNull(T a, T b, T c) {
     if (a != null) {
@@ -1919,6 +1963,20 @@ public class LintTest {
       return b;
     }
     return c;
+  }
+
+  /** Maps a TOML section name to the equivalent SpecKind. */
+  private static SignatureChecker.SpecKind kindOf(String section) {
+    switch (section) {
+      case "functions":
+        return SignatureChecker.SpecKind.FUNCTION;
+      case "types":
+        return SignatureChecker.SpecKind.TYPE;
+      case "exceptions":
+        return SignatureChecker.SpecKind.EXCEPTION;
+      default:
+        throw new IllegalArgumentException("unknown section: " + section);
+    }
   }
 
   private static String singular(String section) {

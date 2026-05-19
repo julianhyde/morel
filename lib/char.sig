@@ -20,91 +20,155 @@
  *)
 signature CHAR =
 sig
+  (** is the type of characters. *)
   eqtype char
   eqtype string
 
-  (* The least character in the ordering. *)
+  (**
+   * is the minimal (most negative) character representable by
+   * `char`. If a value is `NONE`, `char` can represent all negative
+   * integers, within the limits of the heap size. If `precision` is `SOME
+   * (n)`, then we have `minChar` = -2<sup>(n-1)</sup>.
+   *)
   val minChar : char [@@prototype "minChar"]
 
-  (* The greatest character in the ordering. *)
+  (** is the greatest character in the ordering `<`. *)
   val maxChar : char [@@prototype "maxChar"]
 
-  (* The ordinal number of the largest character; equal to ord maxChar. *)
+  (** is the greatest character code; it equals `ord maxChar`. *)
   val maxOrd : int [@@prototype "maxOrd"]
 
-  (* Returns the ordinal number (code point) of the character c. *)
+  (** returns the code of character `c`. *)
   val ord : char -> int [@@method] [@@prototype "ord c"]
 
-  (* Returns the character with ordinal number i; raises Chr if i < 0
-   * or i > maxOrd. *)
+  (**
+   * returns the character whose code is `i`. Raises `Chr` if `i` <
+   * 0 or `i` > `maxOrd`.
+   *)
   val chr : int -> char [@@prototype "chr i"]
 
-  (* Returns the character immediately following c in the ordering, or
-   * raises Chr if c = maxChar. *)
+  (**
+   * returns the character immediately following `c`, or raises
+   * `Chr` if `c` = `maxChar`
+   *)
   val succ : char -> char [@@method] [@@prototype "succ c"]
 
-  (* Returns the character immediately preceding c in the ordering, or
-   * raises Chr if c = minChar. *)
+  (**
+   * returns the predecessor of `c`. Raises `Subscript` if `c` is
+   * `minOrd`.
+   *)
   val pred : char -> char [@@method] [@@prototype "pred c"]
 
-  (* Returns the lexicographic ordering of the two characters. *)
+  (**
+   * returns `LESS`, `EQUAL`, or `GREATER` according to
+   * whether its first argument is less than, equal to, or greater than the
+   * second.
+   *)
   val compare : char * char -> `order` [@@method] [@@prototype "compare (c1, c2)"]
 
-  (* Lexicographic comparison of characters. *)
+  (**
+   * returns true if `c1` is less than `c2` in the character ordering.
+   *)
   val `<`  : char * char -> bool [@@prototype "c1 < c2"] [@@syntax "infix"]
+  (**
+   * returns true if `c1` is less than or equal to `c2` in the character
+   * ordering.
+   *)
   val `<=` : char * char -> bool [@@prototype "c1 <= c2"] [@@syntax "infix"]
+  (**
+   * returns true if `c1` is greater than `c2` in the character ordering.
+   *)
   val `>`  : char * char -> bool [@@prototype "c1 > c2"] [@@syntax "infix"]
+  (**
+   * returns true if `c1` is greater than or equal to `c2` in the character
+   * ordering.
+   *)
   val `>=` : char * char -> bool [@@prototype "c1 >= c2"] [@@syntax "infix"]
 
-  (* Returns true if the character c occurs in the string s. *)
+  (**
+   * returns true if character `c` occurs in the string `s`;
+   * false otherwise. The function, when applied to `s`, builds a table and
+   * returns a function which uses table lookup to decide whether a given
+   * character is in the string or not. Hence it is relatively expensive to
+   * compute `val p = contains s` but very fast to compute `p(c)` for any
+   * given character.
+   *)
   val contains : string -> char -> bool [@@prototype "contains s c"]
 
-  (* Returns true if the character c does not occur in the string s. *)
+  (**
+   * returns true if character `c` does not occur in the
+   * string `s`; false otherwise. Works by construction of a lookup table
+   * in the same way as `Char.contains`.
+   *)
   val notContains : string -> char -> bool [@@prototype "notContains s c"]
 
-  (* Returns true if c is a (seven-bit) ASCII character. *)
+  (** returns true if 0 ≤ `ord c` ≤ 127 `c`. *)
   val isAscii : char -> bool [@@method] [@@prototype "isAscii c"]
 
-  (* Returns the lowercase letter corresponding to c if c is uppercase,
-   * otherwise returns c. *)
+  (**
+   * returns the lowercase letter corresponding to `c`, if `c`
+   * is a letter (a to z or A to Z); otherwise returns `c`.
+   *)
   val toLower : char -> char [@@method] [@@prototype "toLower c"]
 
-  (* Returns the uppercase letter corresponding to c if c is lowercase,
-   * otherwise returns c. *)
+  (**
+   * returns the uppercase letter corresponding to `c`, if `c`
+   * is a letter (a to z or A to Z); otherwise returns `c`.
+   *)
   val toUpper : char -> char [@@method] [@@prototype "toUpper c"]
 
-  (* Returns true if c is a letter (uppercase or lowercase). *)
+  (** returns true if `c` is a letter (lowercase or uppercase). *)
   val isAlpha : char -> bool [@@method] [@@prototype "isAlpha c"]
 
-  (* Returns true if c is alphanumeric (a letter or decimal digit). *)
+  (**
+   * returns true if `c` is alphanumeric (a letter or a
+   * decimal digit).
+   *)
   val isAlphaNum : char -> bool [@@method] [@@prototype "isAlphaNum c"]
 
-  (* Returns true if c is a control character. *)
+  (**
+   * returns true if `c` is a control character, that is, if
+   * `not (isPrint c)`.
+   *)
   val isCntrl : char -> bool [@@method] [@@prototype "isCntrl c"]
 
-  (* Returns true if c is a decimal digit [0-9]. *)
+  (** returns true if `c` is a decimal digit (0 to 9). *)
   val isDigit : char -> bool [@@method] [@@prototype "isDigit c"]
 
-  (* Returns true if c is a graphical character (printable and not a space). *)
+  (**
+   * returns true if `c` is a graphical character, that is, it
+   * is printable and not a whitespace character.
+   *)
   val isGraph : char -> bool [@@method] [@@prototype "isGraph c"]
 
-  (* Returns true if c is a hexadecimal digit [0-9a-fA-F]. *)
+  (** returns true if `c` is a hexadecimal digit. *)
   val isHexDigit : char -> bool [@@method] [@@prototype "isHexDigit c"]
 
-  (* Returns true if c is a lowercase letter. *)
+  (**
+   * returns true if `c` is a hexadecimal digit (0 to 9 or a to
+   * f or A to F).
+   *)
   val isLower : char -> bool [@@method] [@@prototype "isLower c"]
 
-  (* Returns true if c is a printable character (including space). *)
+  (**
+   * returns true if `c` is a printable character (space or
+   * visible).
+   *)
   val isPrint : char -> bool [@@method] [@@prototype "isPrint c"]
 
-  (* Returns true if c is a whitespace character. *)
+  (**
+   * returns true if `c` is a whitespace character (blank,
+   * newline, tab, vertical tab, new page).
+   *)
   val isSpace : char -> bool [@@method] [@@prototype "isSpace c"]
 
-  (* Returns true if c is a punctuation character (graphical but not
-   * alphanumeric). *)
+  (**
+   * returns true if `c` is a punctuation character, that is,
+   * graphical but not alphanumeric.
+   *)
   val isPunct : char -> bool [@@method] [@@prototype "isPunct c"]
 
-  (* Returns true if c is an uppercase letter. *)
+  (** returns true if `c` is an uppercase letter (A to Z). *)
   val isUpper : char -> bool [@@method] [@@prototype "isUpper c"]
 
   (* Returns a printable string representation of the character. *)

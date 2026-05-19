@@ -24,22 +24,33 @@ sig
   (* is a record type representing a decimal approximation of a
    * floating-point number. *)
 (*
+  (**
+   * is a record type representing a decimal approximation of a
+   * floating-point number.
+   *)
   type decimal_approx
 *)
 
   (* classifies a floating-point value. *)
 (*
+  (** classifies a floating-point value. *)
   datatype float_class = NAN | INF | ZERO | NORMAL | SUBNORMAL
 *)
 
   (* is like order but adds UNORDERED for comparisons involving NaN. *)
 (*
+  (**
+   * is like `order` but adds `UNORDERED` for comparisons involving NaN.
+   *)
   datatype real_order = LESS | EQUAL | GREATER | UNORDERED
 *)
 
   (* specifies the IEEE 754 rounding mode for floating-point
    * operations. *)
 (*
+  (**
+   * specifies the IEEE 754 rounding mode for floating-point operations.
+   *)
   datatype rounding_mode = TO_NEAREST | TO_NEGINF | TO_POSINF | TO_ZERO
 *)
 end

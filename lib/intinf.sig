@@ -23,6 +23,7 @@ sig
 
   (* is the type of arbitrary-precision integers. *)
 (*
+  (** is the type of arbitrary-precision integers. *)
   eqtype int
 *)
 end
