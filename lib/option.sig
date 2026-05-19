@@ -22,6 +22,12 @@
  *)
 signature OPTION =
 sig
+
+  [@@@description "Optional values."]
+  [@@@overview "The `Option` structure provides the `option` type `'a option` whose
+values are either `NONE` (absent) or `SOME v` (present), along with
+operations for creating, examining, and transforming optional values."]
+
   (**
    * The type `option` provides a distinction between some value and no
    * value, and is often used for representing the result of partially

@@ -27,6 +27,12 @@
 signature VARIANT =
 sig
   [@@@specified "morel"]
+
+  [@@@description "Dynamically-typed variant values."]
+  [@@@overview "The `Variant` structure provides operations for working with the
+`variant` type, which can hold values of any type in a dynamically-typed
+fashion."]
+
   (** is a dynamically-typed value that can hold any Morel value. *)
   datatype variant =
       UNIT

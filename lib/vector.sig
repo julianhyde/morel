@@ -20,6 +20,12 @@
  *)
 signature VECTOR =
 sig
+
+  [@@@description "Immutable fixed-length arrays."]
+  [@@@overview "The `Vector` structure provides the `vector` type and operations for
+creating, examining, and transforming immutable fixed-length sequences
+of elements."]
+
   (**
    * is the type of immutable fixed-length arrays with elements of type
    * `'a`.

@@ -20,6 +20,10 @@
  *)
 signature BOOL =
 sig
+
+  [@@@description "Boolean values and operations."]
+  [@@@overview "The `Bool` structure provides the boolean type and associated operations."]
+
   (** is the type of boolean values `true` and `false`. *)
   datatype bool = `false` | `true`
   (** returns the logical inverse of `b`. *)

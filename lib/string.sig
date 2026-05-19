@@ -20,6 +20,12 @@
  *)
 signature STRING =
 sig
+
+  [@@@description "String operations."]
+  [@@@overview "The `String` structure provides the `string` type and a comprehensive
+set of operations for constructing, examining, searching, and converting
+strings."]
+
   (** is the type of character strings. *)
   eqtype string
   eqtype char

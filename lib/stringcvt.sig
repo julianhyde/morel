@@ -21,6 +21,11 @@
 signature STRING_CVT =
 sig
 
+  [@@@description "String conversion utilities and types."]
+  [@@@overview "The `StringCvt` structure provides types and utilities to support
+formatted string scanning and conversion, including numeric radix
+specifiers and reader types."]
+
   (* specifies the numeric base: binary (2), octal (8), decimal (10),
    * or hexadecimal (16). *)
 (*

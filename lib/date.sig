@@ -21,6 +21,12 @@
 signature DATE =
 sig
 
+  [@@@description "Calendar date and time values."]
+  [@@@overview "The `Date` structure provides an abstract type for calendar dates and
+times, with fields for year, month, day, hour, minute, and second. Dates
+can be constructed from `Time.time` values, decomposed into fields,
+formatted as strings, and compared."]
+
   (**
    * is an equality type representing a calendar date and time of day,
    * with an associated timezone offset.

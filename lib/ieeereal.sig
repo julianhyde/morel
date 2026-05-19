@@ -21,6 +21,11 @@
 signature IEEE_REAL =
 sig
 
+  [@@@description "IEEE 754 floating-point definitions."]
+  [@@@overview "The `IEEEReal` structure provides types and constants related to
+IEEE 754 floating-point arithmetic, including rounding modes,
+floating-point classes, and a decimal approximation record type."]
+
   (* is a record type representing a decimal approximation of a
    * floating-point number. *)
 (*

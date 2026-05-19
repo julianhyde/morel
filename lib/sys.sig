@@ -22,6 +22,11 @@ signature SYS =
 sig
   [@@@specified "morel"]
 
+  [@@@description "System interface utilities."]
+  [@@@overview "The `Sys` structure provides functions for interacting with the Morel
+execution environment, such as reading properties and managing the
+environment."]
+
   (** restores the environment to the initial environment. *)
   val clearEnv : unit -> unit [@@prototype "clearEnv ()"]
 

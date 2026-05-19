@@ -20,6 +20,12 @@
  *)
 signature MATH =
 sig
+
+  [@@@description "Mathematical functions for real numbers."]
+  [@@@overview "The `Math` structure provides standard mathematical functions operating
+on `real` values, including trigonometric, logarithmic, exponential,
+and rounding operations, along with mathematical constants."]
+
   type real
 
   (** is the constant pi (3.141592653...). *)

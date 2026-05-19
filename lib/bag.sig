@@ -21,6 +21,13 @@
 signature BAG =
 sig
   [@@@specified "morel"]
+
+  [@@@description "Unordered collection of elements with duplicates."]
+  [@@@overview "The `Bag` structure provides operations on bags (also known as
+multisets), which are unordered collections that may contain duplicate
+elements. Unlike lists, bags do not maintain element order; unlike sets,
+bags track multiplicity."]
+
   (* a multiset of values of type 'a, an equality type if 'a is. *)
   eqtype 'a bag
 

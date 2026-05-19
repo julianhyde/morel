@@ -21,6 +21,11 @@
 signature INT_INF =
 sig
 
+  [@@@description "Arbitrary-precision integer operations."]
+  [@@@overview "The `IntInf` structure provides arithmetic and conversion operations for
+arbitrary-precision integers. Operations are analogous to those in `Int`
+but operate on unbounded values."]
+
   (* is the type of arbitrary-precision integers. *)
 (*
   (** is the type of arbitrary-precision integers. *)

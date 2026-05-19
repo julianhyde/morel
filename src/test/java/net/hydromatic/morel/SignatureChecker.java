@@ -135,10 +135,28 @@ class SignatureChecker {
    * with {@link SpecInfo#implemented} set to {@code false}.
    */
   Map<String, List<SpecInfo>> parseSpecs(File file) throws IOException {
+    return parseSpecsAndMeta(file).specs;
+  }
+
+  /** Result of parsing a .sig file. */
+  static class ParseResult {
+    final Map<String, List<SpecInfo>> specs;
+    /** Per-structure floating-attribute payloads (name → payload). */
+    final Map<String, Map<String, String>> structureMeta;
+
+    ParseResult(
+        Map<String, List<SpecInfo>> specs,
+        Map<String, Map<String, String>> structureMeta) {
+      this.specs = specs;
+      this.structureMeta = structureMeta;
+    }
+  }
+
+  ParseResult parseSpecsAndMeta(File file) throws IOException {
     final String content =
         Files.asCharSource(file, StandardCharsets.UTF_8).read();
     final Map<String, List<SpecInfo>> result = new LinkedHashMap<>();
-    final Map<String, String> specifiedByStructure = new HashMap<>();
+    final Map<String, Map<String, String>> structureMeta = new HashMap<>();
     ml(content)
         .withParser(
             parser -> {
@@ -152,23 +170,24 @@ class SignatureChecker {
                 final Ast.SignatureDecl decl = (Ast.SignatureDecl) node;
                 for (Ast.SignatureBind bind : decl.binds) {
                   final String structure = structureName(bind);
-                  // Find structure-level [@@@specified "X"] if present.
-                  String defaultSpecified = "basis";
+                  // Collect all structure-level floating attrs.
+                  final Map<String, String> meta = new HashMap<>();
                   for (Ast.Spec spec : bind.specs) {
                     if (spec.op == Op.FLOATING_ATTR_SPEC) {
                       final Ast.FloatingAttrSpec f =
                           (Ast.FloatingAttrSpec) spec;
-                      if ("specified".equals(f.attribute.name)
-                          && f.attribute.payload instanceof Ast.Literal) {
+                      if (f.attribute.payload instanceof Ast.Literal) {
                         final Object v =
                             ((Ast.Literal) f.attribute.payload).value;
                         if (v instanceof String) {
-                          defaultSpecified = (String) v;
+                          meta.put(f.attribute.name, (String) v);
                         }
                       }
                     }
                   }
-                  specifiedByStructure.put(structure, defaultSpecified);
+                  structureMeta.put(structure, meta);
+                  final String defaultSpecified =
+                      meta.getOrDefault("specified", "basis");
                   result
                       .computeIfAbsent(structure, k -> new ArrayList<>())
                       .addAll(specsFromBind(structure, bind, defaultSpecified));
@@ -188,7 +207,7 @@ class SignatureChecker {
       final String structure = result.keySet().iterator().next();
       result.get(structure).addAll(commentedSpecs(content));
     }
-    return result;
+    return new ParseResult(result, structureMeta);
   }
 
   private List<SpecInfo> specsFromBind(

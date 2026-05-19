@@ -20,6 +20,12 @@
  *)
 signature CHAR =
 sig
+
+  [@@@description "Character values and operations."]
+  [@@@overview "The `Char` structure provides the character type and associated
+operations for examining and converting characters. Characters are
+identified by their Unicode code points."]
+
   (** is the type of characters. *)
   eqtype char
   eqtype string

@@ -20,6 +20,11 @@
  *)
 signature INTEGER =
 sig
+
+  [@@@description "Fixed-precision integer operations."]
+  [@@@overview "The `Int` structure provides arithmetic, comparison, and conversion
+operations for the default fixed-precision integer type."]
+
   (** is the type of fixed-precision integers. *)
   eqtype int
 

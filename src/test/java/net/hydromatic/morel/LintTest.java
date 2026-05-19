@@ -1573,11 +1573,12 @@ public class LintTest {
     final SignatureChecker checker = new SignatureChecker();
     final Map<String, Map<String, SignatureChecker.SpecInfo>> sigSpecsByStruct =
         new HashMap<>();
+    final Map<String, Map<String, String>> sigMetaByStruct = new HashMap<>();
     for (Map.Entry<String, File> e : sigByStructure.entrySet()) {
-      final Map<String, List<SignatureChecker.SpecInfo>> parsed =
-          checker.parseSpecs(e.getValue());
+      final SignatureChecker.ParseResult parsed =
+          checker.parseSpecsAndMeta(e.getValue());
       final Map<String, SignatureChecker.SpecInfo> byName = new HashMap<>();
-      for (List<SignatureChecker.SpecInfo> infos : parsed.values()) {
+      for (List<SignatureChecker.SpecInfo> infos : parsed.specs.values()) {
         for (SignatureChecker.SpecInfo info : infos) {
           // Last-wins for overloaded names — same convention as
           // SignatureChecker uses on the BuiltIn side.
@@ -1585,6 +1586,7 @@ public class LintTest {
         }
       }
       sigSpecsByStruct.put(e.getKey(), byName);
+      sigMetaByStruct.putAll(parsed.structureMeta);
     }
 
     // Group TOML entries by (structure + name) — last write wins for
@@ -1594,6 +1596,8 @@ public class LintTest {
         new LinkedHashMap<>();
     // structure → effective specified (from [[structures]]).
     final Map<String, String> structureSpecifiedDefaults = new HashMap<>();
+    // structure → raw [[structures]] map (for description/overview check).
+    final Map<String, Map<String, Object>> tomlStructures = new HashMap<>();
     final TomlMapper mapper = new TomlMapper();
     try (MappingIterator<Object> it =
         mapper.readerForMapOf(Object.class).readValues(Generation.getFile())) {
@@ -1601,6 +1605,7 @@ public class LintTest {
         @SuppressWarnings("unchecked")
         final Map<String, Object> row = (Map<String, Object>) it.nextValue();
         collectStructureDefaults(row, structureSpecifiedDefaults);
+        collectStructures(row, tomlStructures);
         collectTomlRows(row, "functions", tomlByKey);
         collectTomlRows(row, "types", tomlByKey);
         collectTomlRows(row, "exceptions", tomlByKey);
@@ -1620,6 +1625,10 @@ public class LintTest {
           builtInKeys,
           errors);
     }
+
+    // Check structure-level description / overview against the .sig's
+    // [@@@description "..."] / [@@@overview "..."] floating attributes.
+    checkStructureMeta(tomlStructures, sigMetaByStruct, errors);
 
     if (!errors.isEmpty()) {
       fail(
@@ -1641,6 +1650,65 @@ public class LintTest {
         continue;
       }
       defaults.put(name, (String) s.getOrDefault("specified", "basis"));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void collectStructures(
+      Map<String, Object> row, Map<String, Map<String, Object>> structures) {
+    final Object obj = row.get("structures");
+    if (!(obj instanceof List)) {
+      return;
+    }
+    for (Map<String, Object> s : (List<Map<String, Object>>) obj) {
+      final String name = (String) s.get("name");
+      if (name != null) {
+        structures.put(name, s);
+      }
+    }
+  }
+
+  private static void checkStructureMeta(
+      Map<String, Map<String, Object>> tomlStructures,
+      Map<String, Map<String, String>> sigMetaByStruct,
+      List<String> errors) {
+    for (Map.Entry<String, Map<String, Object>> e : tomlStructures.entrySet()) {
+      final String name = e.getKey();
+      final Map<String, Object> toml = e.getValue();
+      final Map<String, String> sig = sigMetaByStruct.get(name);
+      if (sig == null) {
+        continue; // structure has no .sig file
+      }
+      for (String field : new String[] {"description", "overview"}) {
+        final String tomlV = (String) toml.get(field);
+        final String sigV = sig.get(field);
+        if (tomlV == null && sigV == null) {
+          continue;
+        }
+        if (tomlV == null && sigV != null) {
+          errors.add(
+              format(
+                  "structure %s: .sig has [@@@%s \"...\"], TOML has none",
+                  name, field));
+          continue;
+        }
+        if (tomlV != null && sigV == null) {
+          errors.add(
+              format(
+                  "structure %s: TOML has %s, .sig has no [@@@%s \"...\"]",
+                  name, field, field));
+          continue;
+        }
+        if (!collapseWs(tomlV).equals(collapseWs(sigV))) {
+          errors.add(
+              format(
+                  "structure %s: %s mismatch%n  TOML: %s%n  .sig: %s",
+                  name,
+                  field,
+                  truncate(collapseWs(tomlV)),
+                  truncate(collapseWs(sigV))));
+        }
+      }
     }
   }
 

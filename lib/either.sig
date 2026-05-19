@@ -22,6 +22,13 @@
 signature EITHER =
 sig
   [@@@specified "basis+"]
+
+  [@@@description "Values that are one of two types."]
+  [@@@overview "The `Either` structure provides a polymorphic disjoint-sum type
+`('left, 'right) either` whose values are either `INL v` (left) or
+`INR v` (right), along with operations for examining and transforming
+such values."]
+
   (**
    * is the type of disjoint-sum values; `INL v` represents a left value and
    * `INR v` represents a right value.

@@ -21,6 +21,13 @@
 signature TIME =
 sig
 
+  [@@@description "Time values and operations."]
+  [@@@overview "The `Time` structure provides an abstract type for representing both absolute
+times and time intervals, with functions for conversion, arithmetic, comparison,
+formatting, and parsing. Time values are measured in nanoseconds internally,
+and conversions to/from seconds, milliseconds, microseconds, and nanoseconds
+are provided."]
+
   (**
    * is an equality type representing both absolute times (relative to the Unix
    * epoch, 1970-01-01T00:00:00Z) and time durations. Both absolute times and

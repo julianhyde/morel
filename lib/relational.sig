@@ -22,6 +22,11 @@ signature RELATIONAL =
 sig
   [@@@specified "morel"]
 
+  [@@@description "Relational algebra operations for Morel queries."]
+  [@@@overview "The `Relational` structure provides aggregation, comparison, and set
+operations that are used in Morel `from` expressions. These functions
+extend Standard ML with relational-algebra capabilities."]
+
   (**
    * wraps a value so that it sorts in descending order when used with
    * `Relational.compare`.
