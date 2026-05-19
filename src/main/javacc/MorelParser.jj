@@ -1706,8 +1706,10 @@ void signatureBind(List<SignatureBind> list) :
   }
 }
 
-/** Parses a specification, possibly with leading doc-comments and
- *  {@code [@@id]} attributes. */
+/** Parses a specification, with an optional leading doc-comment and
+ *  zero or more postfix {@code [@@id]} attributes (matching OCaml's
+ *  attribute convention: every {@code [@@id]} attaches to the
+ *  immediately preceding declaration). */
 Ast.Spec attributedSpec() :
 {
   final List<Attribute> attrs = new ArrayList<Attribute>();
@@ -1715,7 +1717,6 @@ Ast.Spec attributedSpec() :
 }
 {
   { collectLeadingDocComments(attrs); }
-  ( declAttribute(attrs) )*
   spec = spec()
   ( declAttribute(attrs) )*
   {
