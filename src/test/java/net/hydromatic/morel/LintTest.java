@@ -71,6 +71,21 @@ public class LintTest {
   private static final ThreadLocal<@Nullable String> THREAD_FILE_NAME =
       new ThreadLocal<>();
 
+  /**
+   * Snapshot of the {@code lib/*.sig} model. Loaded once for the test class;
+   * shared across all tests in {@link LintTest} so we parse each signature file
+   * only once.
+   */
+  private static final Generation.Model MODEL;
+
+  static {
+    try {
+      MODEL = Generation.loadModel();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   /** Matches a class/enum/interface declaration. Captures the type name. */
   private static final Pattern CLASS_DECL_PAT =
       Pattern.compile("(?:^|\\W)(?:class|enum|interface)\\s+([A-Z][\\w$]*)\\b");
@@ -1302,7 +1317,6 @@ public class LintTest {
     final List<File> mdFiles = new ArrayList<>();
     collectMdFiles(docsDir, mdFiles);
     mdFiles.sort(Comparator.comparing(File::getPath));
-    final Generation.Model model = Generation.loadModel();
     for (File file : mdFiles) {
       final String relPath = docsDir.toURI().relativize(file.toURI()).getPath();
       final File genFile = new File(targetDocsDir, relPath);
@@ -1322,7 +1336,7 @@ public class LintTest {
           if (line.startsWith("[//]: # (start:")) {
             final String key = line.substring(15, line.length() - 1);
             emit = false;
-            Generation.generateSection(model, key, pw);
+            Generation.generateSection(MODEL, key, pw);
           }
         }
       }
@@ -1369,8 +1383,7 @@ public class LintTest {
    */
   @Test
   void testBuiltInsDocumented() throws IOException {
-    final Set<String> documented =
-        Generation.functionNames(Generation.loadModel());
+    final Set<String> documented = Generation.functionNames(MODEL);
     final Set<String> missing = new TreeSet<>();
     for (BuiltIn builtIn : BuiltIn.values()) {
       final String structure = builtIn.structure;
@@ -1412,8 +1425,7 @@ public class LintTest {
    */
   @Test
   void testMethodConsistent() throws IOException {
-    final Set<String> sigMethod =
-        Generation.methodNames(Generation.loadModel());
+    final Set<String> sigMethod = Generation.methodNames(MODEL);
     final List<String> errors = new ArrayList<>();
     for (BuiltIn builtIn : BuiltIn.values()) {
       final String structure = builtIn.structure;
@@ -1448,8 +1460,7 @@ public class LintTest {
    */
   @Test
   void testDatatypesDocumented() throws IOException {
-    final Set<List<String>> documented =
-        Generation.typeNames(Generation.loadModel());
+    final Set<List<String>> documented = Generation.typeNames(MODEL);
     final List<String> missing = new ArrayList<>();
     for (BuiltIn.Datatype datatype : BuiltIn.Datatype.values()) {
       final String structure = datatype.structure;
@@ -1501,8 +1512,7 @@ public class LintTest {
     final File baseDir = TestUtils.getBaseDir(TestUtils.class);
     final File libDir = new File(baseDir, "docs/lib");
     final List<String> missing = new ArrayList<>();
-    for (String structureName :
-        Generation.structureNames(Generation.loadModel())) {
+    for (String structureName : Generation.structureNames(MODEL)) {
       final String fileName = Generation.toKebab(structureName) + ".md";
       if (!new File(libDir, fileName).exists()) {
         missing.add(fileName);

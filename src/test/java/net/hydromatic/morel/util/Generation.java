@@ -25,6 +25,7 @@ import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
 import java.io.File;
 import java.io.IOException;
@@ -57,8 +58,8 @@ public class Generation {
    */
   public static Set<String> functionNames(Model model) {
     final Set<String> names = new HashSet<>();
-    for (List<FnDef> fns : model.functionsByStructure().values()) {
-      for (FnDef fn : fns) {
+    for (StrDef str : impl(model).structures.values()) {
+      for (FnDef fn : str.functions) {
         names.add(fn.structure + "." + fn.canonicalName());
       }
     }
@@ -71,8 +72,8 @@ public class Generation {
    */
   public static Set<String> methodNames(Model model) {
     final Set<String> names = new HashSet<>();
-    for (List<FnDef> fns : model.functionsByStructure().values()) {
-      for (FnDef fn : fns) {
+    for (StrDef str : impl(model).structures.values()) {
+      for (FnDef fn : str.functions) {
         if (fn.method) {
           names.add(fn.structure + "." + fn.canonicalName());
         }
@@ -91,9 +92,6 @@ public class Generation {
     checkArgument(libDir.isDirectory(), "lib directory not found: %s", libDir);
     final SignatureChecker checker = new SignatureChecker();
     final Map<String, StrDef> structures = new TreeMap<>();
-    final Map<String, List<FnDef>> fnsByStructure = new LinkedHashMap<>();
-    final Map<String, List<TyDef>> tysByStructure = new LinkedHashMap<>();
-    final Map<String, List<ExnDef>> exnsByStructure = new LinkedHashMap<>();
     final File @Nullable [] files =
         libDir.listFiles((d, n) -> n.endsWith(".sig"));
     requireNonNull(files, "no .sig files under lib/");
@@ -106,13 +104,6 @@ public class Generation {
       final SignatureChecker.ParseResult parsed = checker.parseSpecsAndMeta(f);
       final Map<String, String> meta =
           parsed.structureMeta.getOrDefault(structure, Collections.emptyMap());
-      structures.put(
-          structure,
-          new StrDef(
-              structure,
-              meta.getOrDefault("description", ""),
-              meta.getOrDefault("overview", ""),
-              meta.getOrDefault("specified", "basis")));
       final List<FnDef> fns = new ArrayList<>();
       final List<TyDef> tys = new ArrayList<>();
       final List<ExnDef> exns = new ArrayList<>();
@@ -155,70 +146,42 @@ public class Generation {
             break;
         }
       }
-      fnsByStructure.put(structure, fns);
-      tysByStructure.put(structure, tys);
-      exnsByStructure.put(structure, exns);
+      structures.put(
+          structure,
+          new StrDef(
+              structure,
+              meta.getOrDefault("description", ""),
+              meta.getOrDefault("overview", ""),
+              meta.getOrDefault("specified", "basis"),
+              fns,
+              tys,
+              exns));
     }
-    return new ModelImpl(
-        structures, fnsByStructure, tysByStructure, exnsByStructure);
+    return new ModelImpl(structures);
   }
 
   /**
-   * Immutable snapshot of all structures, types, exceptions, and functions
-   * loaded from {@code lib/*.sig}. Callers obtain a Model via {@link
-   * #loadModel()} and pass it to the generation/lookup methods.
+   * Opaque handle to the snapshot of all structures (each with its functions,
+   * types, and exceptions) loaded from {@code lib/*.sig}. Callers obtain a
+   * Model via {@link #loadModel()} and pass it to the generation/lookup
+   * methods; the fields are not part of the public API.
    */
-  public interface Model {
-    /** Structures, sorted by name. */
-    Map<String, StrDef> structures();
+  public interface Model {}
 
-    /** Per-structure function lists in physical .sig file order. */
-    Map<String, List<FnDef>> functionsByStructure();
+  /**
+   * Backing data for {@link Model}; accessed via downcast within Generation.
+   */
+  private static class ModelImpl implements Model {
+    final Map<String, StrDef> structures;
 
-    /** Per-structure type lists in physical .sig file order. */
-    Map<String, List<TyDef>> typesByStructure();
-
-    /** Per-structure exception lists in physical .sig file order. */
-    Map<String, List<ExnDef>> exceptionsByStructure();
+    ModelImpl(Map<String, StrDef> structures) {
+      this.structures = structures;
+    }
   }
 
-  /** Default implementation of {@link Model}. */
-  private static class ModelImpl implements Model {
-    private final Map<String, StrDef> structures;
-    private final Map<String, List<FnDef>> functionsByStructure;
-    private final Map<String, List<TyDef>> typesByStructure;
-    private final Map<String, List<ExnDef>> exceptionsByStructure;
-
-    ModelImpl(
-        Map<String, StrDef> structures,
-        Map<String, List<FnDef>> fnsByStructure,
-        Map<String, List<TyDef>> tysByStructure,
-        Map<String, List<ExnDef>> exnsByStructure) {
-      this.structures = structures;
-      this.functionsByStructure = fnsByStructure;
-      this.typesByStructure = tysByStructure;
-      this.exceptionsByStructure = exnsByStructure;
-    }
-
-    @Override
-    public Map<String, StrDef> structures() {
-      return structures;
-    }
-
-    @Override
-    public Map<String, List<FnDef>> functionsByStructure() {
-      return functionsByStructure;
-    }
-
-    @Override
-    public Map<String, List<TyDef>> typesByStructure() {
-      return typesByStructure;
-    }
-
-    @Override
-    public Map<String, List<ExnDef>> exceptionsByStructure() {
-      return exceptionsByStructure;
-    }
+  /** Returns the {@link ModelImpl} fields backing {@code model}. */
+  private static ModelImpl impl(Model model) {
+    return (ModelImpl) model;
   }
 
   /**
@@ -302,7 +265,7 @@ public class Generation {
 
   /** Returns the list of structure names, sorted. */
   public static List<String> structureNames(Model model) {
-    return new ArrayList<>(model.structures().keySet());
+    return new ArrayList<>(impl(model).structures.keySet());
   }
 
   /**
@@ -311,8 +274,8 @@ public class Generation {
    */
   public static Set<List<String>> typeNames(Model model) {
     final Set<List<String>> names = new HashSet<>();
-    for (List<TyDef> tys : model.typesByStructure().values()) {
-      for (TyDef ty : tys) {
+    for (StrDef str : impl(model).structures.values()) {
+      for (TyDef ty : str.types) {
         names.add(Arrays.asList(ty.structure, ty.name));
       }
     }
@@ -344,10 +307,11 @@ public class Generation {
 
   private static void generateStructureIndexImpl(
       Model model, PrintWriter pw, String linkPrefix, boolean checkSort) {
+    final ModelImpl m = impl(model);
     // Structures are sorted alphabetically by TreeMap.
     if (checkSort) {
       final List<String> structureNames =
-          new ArrayList<>(model.structures().keySet());
+          new ArrayList<>(m.structures.keySet());
       if (!Ordering.natural().isOrdered(structureNames)) {
         fail(
             "Structure names are not sorted\n"
@@ -358,33 +322,24 @@ public class Generation {
     pw.printf("%n");
     final Tabulator tabulator = new Tabulator(pw, -1, -1);
     tabulator.header("Structure", "Description");
-    for (StrDef strDef : model.structures().values()) {
+    for (StrDef strDef : m.structures.values()) {
       final String kebab = toKebab(strDef.name);
       final String link =
           "[" + strDef.name + "](" + linkPrefix + kebab + ".md)";
       final String linkBase = linkPrefix + kebab + ".md";
       final LinkedHashSet<String> members = new LinkedHashSet<>();
-      for (TyDef ty :
-          model
-              .typesByStructure()
-              .getOrDefault(strDef.name, Collections.emptyList())) {
+      for (TyDef ty : strDef.types) {
         members.add(ty.name);
       }
-      for (ExnDef e :
-          model
-              .exceptionsByStructure()
-              .getOrDefault(strDef.name, Collections.emptyList())) {
+      for (ExnDef e : strDef.exceptions) {
         members.add(e.name);
       }
-      for (FnDef fn :
-          model
-              .functionsByStructure()
-              .getOrDefault(strDef.name, Collections.emptyList())) {
+      for (FnDef fn : strDef.functions) {
         members.add(fn.canonicalName());
       }
       final String memberList =
           members.stream()
-              .map(m -> "[`" + m + "`](" + linkBase + "#" + m + "-impl)")
+              .map(mn -> "[`" + mn + "`](" + linkBase + "#" + mn + "-impl)")
               .collect(Collectors.joining(", "));
       tabulator.row(link, munge(strDef.description) + "<br>" + memberList);
     }
@@ -542,12 +497,25 @@ public class Generation {
     final String description;
     final String overview;
     final String specified;
+    final ImmutableList<FnDef> functions;
+    final ImmutableList<TyDef> types;
+    final ImmutableList<ExnDef> exceptions;
 
-    StrDef(String name, String description, String overview, String specified) {
+    StrDef(
+        String name,
+        String description,
+        String overview,
+        String specified,
+        Iterable<FnDef> functions,
+        Iterable<TyDef> types,
+        Iterable<ExnDef> exceptions) {
       this.name = requireNonNull(name, "name");
       this.description = requireNonNull(description, "description");
       this.overview = requireNonNull(overview, "overview");
       this.specified = requireNonNull(specified, "specified");
+      this.functions = ImmutableList.copyOf(functions);
+      this.types = ImmutableList.copyOf(types);
+      this.exceptions = ImmutableList.copyOf(exceptions);
     }
   }
 
@@ -620,25 +588,16 @@ public class Generation {
       this.pw = pw;
       this.strDef =
           requireNonNull(
-              model.structures().get(structure),
+              impl(model).structures.get(structure),
               "structure not found: " + structure);
-      this.tyDefs =
-          model
-              .typesByStructure()
-              .getOrDefault(structure, Collections.emptyList());
-      this.exnDefs =
-          model
-              .exceptionsByStructure()
-              .getOrDefault(structure, Collections.emptyList());
+      this.tyDefs = strDef.types;
+      this.exnDefs = strDef.exceptions;
       // Within the structure's doc page, basis-specified functions are
       // listed first, then a "Morel extensions" section. Preserve physical
       // .sig file order within each group.
       this.basisFns = new ArrayList<>();
       this.morelFns = new ArrayList<>();
-      for (FnDef fn :
-          model
-              .functionsByStructure()
-              .getOrDefault(structure, Collections.emptyList())) {
+      for (FnDef fn : strDef.functions) {
         if ("morel".equals(fn.specified)) {
           morelFns.add(fn);
         } else {
