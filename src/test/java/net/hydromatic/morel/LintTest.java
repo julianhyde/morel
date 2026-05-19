@@ -1383,7 +1383,6 @@ public class LintTest {
    */
   @Test
   void testBuiltInsDocumented() {
-    final Set<String> documented = Generation.functionNames(MODEL);
     final Set<String> missing = new TreeSet<>();
     for (BuiltIn builtIn : BuiltIn.values()) {
       final String structure = builtIn.structure;
@@ -1400,9 +1399,8 @@ public class LintTest {
           && ("nil".equals(builtIn.mlName) || "op ::".equals(builtIn.mlName))) {
         continue;
       }
-      final String key = structure + "." + builtIn.mlName;
-      if (!documented.contains(key)) {
-        missing.add(key);
+      if (!MODEL.containsFunction(structure, builtIn.mlName)) {
+        missing.add(structure + "." + builtIn.mlName);
       }
     }
     if (!missing.isEmpty()) {
@@ -1425,7 +1423,6 @@ public class LintTest {
    */
   @Test
   void testMethodConsistent() {
-    final Set<String> sigMethod = Generation.methodNames(MODEL);
     final List<String> errors = new ArrayList<>();
     for (BuiltIn builtIn : BuiltIn.values()) {
       final String structure = builtIn.structure;
@@ -1434,14 +1431,16 @@ public class LintTest {
           || structure.equals("Test")) {
         continue;
       }
+      final boolean sigHasMethod =
+          MODEL.containsMethod(structure, builtIn.mlName);
       final String key = structure + "." + builtIn.mlName;
-      if (builtIn.method && !sigMethod.contains(key)) {
+      if (builtIn.method && !sigHasMethod) {
         errors.add(
             "BuiltIn "
                 + key
                 + " has method=true but .sig has no [@@method]"
                 + " on the corresponding val spec");
-      } else if (!builtIn.method && sigMethod.contains(key)) {
+      } else if (!builtIn.method && sigHasMethod) {
         errors.add(".sig has [@@method] for " + key + " but BuiltIn does not");
       }
     }
@@ -1460,16 +1459,14 @@ public class LintTest {
    */
   @Test
   void testDatatypesDocumented() {
-    final Set<String> documented = Generation.typeNames(MODEL);
     final List<String> missing = new ArrayList<>();
     for (BuiltIn.Datatype datatype : BuiltIn.Datatype.values()) {
       final String structure = datatype.structure;
       if (structure.equals("$")) {
         continue;
       }
-      final String key = structure + "." + datatype.mlName();
-      if (!documented.contains(key)) {
-        missing.add(key);
+      if (!MODEL.containsType(structure, datatype.mlName())) {
+        missing.add(structure + "." + datatype.mlName());
       }
     }
     if (!missing.isEmpty()) {
@@ -1513,7 +1510,7 @@ public class LintTest {
     final File baseDir = TestUtils.getBaseDir(TestUtils.class);
     final File libDir = new File(baseDir, "docs/lib");
     final List<String> missing = new ArrayList<>();
-    for (String structureName : Generation.structureNames(MODEL)) {
+    for (String structureName : MODEL.structureNames()) {
       final String fileName = Generation.toKebab(structureName) + ".md";
       if (!new File(libDir, fileName).exists()) {
         missing.add(fileName);

@@ -53,36 +53,6 @@ public class Generation {
   private Generation() {}
 
   /**
-   * Returns the set of "Structure.name" keys for all functions declared in any
-   * {@code lib/*.sig} file.
-   */
-  public static Set<String> functionNames(Model model) {
-    final Set<String> names = new HashSet<>();
-    for (StrDef str : impl(model).structures.values()) {
-      for (FnDef fn : str.functions) {
-        names.add(fn.structure + "." + fn.canonicalName());
-      }
-    }
-    return names;
-  }
-
-  /**
-   * Returns the set of "Structure.name" keys for functions annotated {@code
-   * [@@method]} in their {@code lib/*.sig}.
-   */
-  public static Set<String> methodNames(Model model) {
-    final Set<String> names = new HashSet<>();
-    for (StrDef str : impl(model).structures.values()) {
-      for (FnDef fn : str.functions) {
-        if (fn.method) {
-          names.add(fn.structure + "." + fn.canonicalName());
-        }
-      }
-    }
-    return names;
-  }
-
-  /**
    * Loads the data model of all structures, types, exceptions, and functions
    * from the {@code lib/*.sig} files. The result is immutable; callers should
    * hold the model and pass it to the methods that consume it.
@@ -161,21 +131,89 @@ public class Generation {
   }
 
   /**
-   * Opaque handle to the snapshot of all structures (each with its functions,
-   * types, and exceptions) loaded from {@code lib/*.sig}. Callers obtain a
-   * Model via {@link #loadModel()} and pass it to the generation/lookup
-   * methods; the fields are not part of the public API.
+   * Handle to the snapshot of all structures (each with its functions, types,
+   * and exceptions) loaded from {@code lib/*.sig}. Callers obtain a Model via
+   * {@link #loadModel()} and use the probe / iteration methods on it; the
+   * underlying data is not part of the public API.
    */
-  public interface Model {}
+  public interface Model {
+    /** Names of all structures, in sorted order. */
+    Set<String> structureNames();
+
+    /**
+     * True if structure {@code s} has a {@code val} spec named {@code name}.
+     */
+    boolean containsFunction(String s, String name);
+
+    /**
+     * True if structure {@code s} has a {@code val} spec named {@code name}
+     * annotated with {@code [@@method]}.
+     */
+    boolean containsMethod(String s, String name);
+
+    /**
+     * True if structure {@code s} has a {@code type}, {@code eqtype}, or {@code
+     * datatype} spec named {@code name}.
+     */
+    boolean containsType(String s, String name);
+  }
 
   /**
-   * Backing data for {@link Model}; accessed via downcast within Generation.
+   * Backing data for {@link Model}; field access is via the {@code impl(model)}
+   * downcast within Generation.
    */
   private static class ModelImpl implements Model {
     final Map<String, StrDef> structures;
 
     ModelImpl(Map<String, StrDef> structures) {
       this.structures = structures;
+    }
+
+    @Override
+    public Set<String> structureNames() {
+      return structures.keySet();
+    }
+
+    @Override
+    public boolean containsFunction(String s, String name) {
+      final StrDef str = structures.get(s);
+      if (str == null) {
+        return false;
+      }
+      for (FnDef fn : str.functions) {
+        if (fn.canonicalName().equals(name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    @Override
+    public boolean containsMethod(String s, String name) {
+      final StrDef str = structures.get(s);
+      if (str == null) {
+        return false;
+      }
+      for (FnDef fn : str.functions) {
+        if (fn.method && fn.canonicalName().equals(name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    @Override
+    public boolean containsType(String s, String name) {
+      final StrDef str = structures.get(s);
+      if (str == null) {
+        return false;
+      }
+      for (TyDef ty : str.types) {
+        if (ty.name.equals(name)) {
+          return true;
+        }
+      }
+      return false;
     }
   }
 
@@ -261,28 +299,6 @@ public class Generation {
     }
     parts.add(s.substring(start));
     return parts;
-  }
-
-  /** Returns the list of structure names, sorted. */
-  public static List<String> structureNames(Model model) {
-    return new ArrayList<>(impl(model).structures.keySet());
-  }
-
-  /**
-   * Returns the set of {@code "Structure.name"} keys for all {@code type},
-   * {@code eqtype}, and {@code datatype} declarations in any {@code lib/*.sig}.
-   * Matches the shape returned by {@link #functionNames} and {@link
-   * #methodNames} so callers can do membership checks with a single string
-   * concatenation per query.
-   */
-  public static Set<String> typeNames(Model model) {
-    final Set<String> names = new HashSet<>();
-    for (StrDef str : impl(model).structures.values()) {
-      for (TyDef ty : str.types) {
-        names.add(ty.structure + "." + ty.name);
-      }
-    }
-    return names;
   }
 
   /**
@@ -408,7 +424,7 @@ public class Generation {
         if (key.startsWith("lib/")) {
           final String kebab = key.substring(4);
           final String structureName =
-              structureNames(model).stream()
+              model.structureNames().stream()
                   .filter(n -> toKebab(n).equals(kebab))
                   .findFirst()
                   .orElseThrow(
