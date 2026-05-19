@@ -1382,7 +1382,7 @@ public class LintTest {
    * not}, {@code abs}) are also excluded.
    */
   @Test
-  void testBuiltInsDocumented() throws IOException {
+  void testBuiltInsDocumented() {
     final Set<String> documented = Generation.functionNames(MODEL);
     final Set<String> missing = new TreeSet<>();
     for (BuiltIn builtIn : BuiltIn.values()) {
@@ -1424,7 +1424,7 @@ public class LintTest {
    * {@code Test}) are excluded.
    */
   @Test
-  void testMethodConsistent() throws IOException {
+  void testMethodConsistent() {
     final Set<String> sigMethod = Generation.methodNames(MODEL);
     final List<String> errors = new ArrayList<>();
     for (BuiltIn builtIn : BuiltIn.values()) {
@@ -1509,7 +1509,7 @@ public class LintTest {
    * functions.toml} there is a corresponding {@code docs/lib/{name}.md} file.
    */
   @Test
-  void testStructureDocs() throws IOException {
+  void testStructureDocs() {
     final File baseDir = TestUtils.getBaseDir(TestUtils.class);
     final File libDir = new File(baseDir, "docs/lib");
     final List<String> missing = new ArrayList<>();
