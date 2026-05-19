@@ -261,6 +261,7 @@ public class SignatureChecker {
 
   private List<SpecInfo> specsFromBind(
       String structure, Ast.SignatureBind bind, String defaultSpecified) {
+    requireNonNull(defaultSpecified, "defaultSpecified");
     final List<SpecInfo> specs = new ArrayList<>();
     for (Ast.Spec spec : bind.specs) {
       final List<Ast.Attribute> attrs;
@@ -277,7 +278,9 @@ public class SignatureChecker {
       }
       final boolean method = hasAttribute(attrs, "method");
       final String specified =
-          stringAttribute(attrs, "specified", defaultSpecified);
+          requireNonNull(
+              stringAttribute(attrs, "specified", defaultSpecified),
+              "specified");
       final String prototype = stringAttribute(attrs, "prototype", null);
       final String syntax = stringAttribute(attrs, "syntax", null);
       final String extra = stringAttribute(attrs, "extra", null);
@@ -587,18 +590,18 @@ public class SignatureChecker {
         String displayType,
         String typeDecl,
         @Nullable String exceptionType) {
-      this.kind = kind;
-      this.name = name;
-      this.type = type;
+      this.kind = requireNonNull(kind, "kind");
+      this.name = requireNonNull(name, "name");
+      this.type = requireNonNull(type, "type");
       this.implemented = implemented;
       this.method = method;
-      this.specified = specified;
+      this.specified = requireNonNull(specified, "specified");
       this.prototype = prototype;
       this.syntax = syntax;
       this.extra = extra;
       this.description = description;
-      this.displayType = displayType;
-      this.typeDecl = typeDecl;
+      this.displayType = requireNonNull(displayType, "displayType");
+      this.typeDecl = requireNonNull(typeDecl, "typeDecl");
       this.exceptionType = exceptionType;
     }
 
