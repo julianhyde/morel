@@ -1459,16 +1459,17 @@ public class LintTest {
    * corresponding {@code [[types]]} entry in {@code functions.toml}.
    */
   @Test
-  void testDatatypesDocumented() throws IOException {
-    final Set<List<String>> documented = Generation.typeNames(MODEL);
+  void testDatatypesDocumented() {
+    final Set<String> documented = Generation.typeNames(MODEL);
     final List<String> missing = new ArrayList<>();
     for (BuiltIn.Datatype datatype : BuiltIn.Datatype.values()) {
       final String structure = datatype.structure;
       if (structure.equals("$")) {
         continue;
       }
-      if (!documented.contains(Arrays.asList(structure, datatype.mlName()))) {
-        missing.add(structure + "." + datatype.mlName());
+      final String key = structure + "." + datatype.mlName();
+      if (!documented.contains(key)) {
+        missing.add(key);
       }
     }
     if (!missing.isEmpty()) {

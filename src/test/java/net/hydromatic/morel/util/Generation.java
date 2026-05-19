@@ -269,14 +269,17 @@ public class Generation {
   }
 
   /**
-   * Returns the set of {@code (structure, name)} pairs for all {@code type},
+   * Returns the set of {@code "Structure.name"} keys for all {@code type},
    * {@code eqtype}, and {@code datatype} declarations in any {@code lib/*.sig}.
+   * Matches the shape returned by {@link #functionNames} and {@link
+   * #methodNames} so callers can do membership checks with a single string
+   * concatenation per query.
    */
-  public static Set<List<String>> typeNames(Model model) {
-    final Set<List<String>> names = new HashSet<>();
+  public static Set<String> typeNames(Model model) {
+    final Set<String> names = new HashSet<>();
     for (StrDef str : impl(model).structures.values()) {
       for (TyDef ty : str.types) {
-        names.add(Arrays.asList(ty.structure, ty.name));
+        names.add(ty.structure + "." + ty.name);
       }
     }
     return names;
