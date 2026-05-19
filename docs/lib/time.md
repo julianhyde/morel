@@ -25,10 +25,10 @@ License.
 
 [//]: # (start:lib/time)
 The `Time` structure provides an abstract type for representing both absolute
-times and time intervals, with functions for conversion, arithmetic, comparison,
-formatting, and parsing. Time values are measured in nanoseconds internally,
-and conversions to/from seconds, milliseconds, microseconds, and nanoseconds
-are provided.
+ times and time intervals, with functions for conversion, arithmetic, comparison,
+ formatting, and parsing. Time values are measured in nanoseconds internally,
+ and conversions to/from seconds, milliseconds, microseconds, and nanoseconds
+ are provided.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/time.html).*
 
@@ -67,27 +67,27 @@ val <a id='fromString' href="#fromString-impl">fromString</a> : string -> time o
 <h3><code><strong>type</strong> time</code></h3>
 
 is an equality type representing both absolute times (relative to the Unix
-epoch, 1970-01-01T00:00:00Z) and time durations. Both absolute times and
-intervals are represented identically; the interpretation is contextual.
-Negative values represent times before the epoch or negative intervals.
+ epoch, 1970-01-01T00:00:00Z) and time durations. Both absolute times and
+ intervals are represented identically; the interpretation is contextual.
+ Negative values represent times before the epoch or negative intervals.
 
 <a id="Time-impl"></a>
 <h3><code><strong>exception</strong> Time</code></h3>
 
 is raised when a conversion produces a value that cannot be represented as a
-`time` value (for example, when `fromReal` is called with `NaN` or infinity).
+ `time` value (for example, when `fromReal` is called with `NaN` or infinity).
 
 <a id="zeroTime-impl"></a>
 <h3><code>zeroTime</code></h3>
 
 `zeroTime` denotes an empty interval and serves as the reference point for absolute
-times. It is equivalent to `fromReal(0.0)`.
+ times. It is equivalent to `fromReal(0.0)`.
 
 <a id="fromReal-impl"></a>
 <h3><code>fromReal</code></h3>
 
 `fromReal r` converts `r` (measured in seconds) to a `time` value.
-Raises `Time` if `r` is `NaN`, infinite, or otherwise not representable.
+ Raises `Time` if `r` is `NaN`, infinite, or otherwise not representable.
 
 <a id="toReal-impl"></a>
 <h3><code>toReal</code></h3>
@@ -148,7 +148,7 @@ Raises `Time` if `r` is `NaN`, infinite, or otherwise not representable.
 <h3><code>compare</code></h3>
 
 `compare (t1, t2)` (or `t1.compare t2`) returns `LESS`, `EQUAL`, or `GREATER` depending on whether `t1` is less than,
-equal to, or greater than `t2`.
+ equal to, or greater than `t2`.
 
 <a id="<-impl"></a>
 <h3><code><</code></h3>
@@ -179,19 +179,19 @@ equal to, or greater than `t2`.
 <h3><code>fmt</code></h3>
 
 `fmt n t` formats `t` as a decimal number of seconds with `n` fractional digits.
-For example, `fmt 3 (fromReal 1.5)` returns `"1.500"`. Negative time
-values are formatted with a leading `~`.
+ For example, `fmt 3 (fromReal 1.5)` returns `"1.500"`. Negative time
+ values are formatted with a leading `~`.
 
 <a id="toString-impl"></a>
 <h3><code>toString</code></h3>
 
 `toString t` (or `t.toString ()`) formats `t` as a decimal number of seconds with 3 fractional digits.
-Equivalent to `fmt 3 t`.
+ Equivalent to `fmt 3 t`.
 
 <a id="fromString-impl"></a>
 <h3><code>fromString</code></h3>
 
 `fromString s` parses a time value from the string `s`, which should be a decimal number
-of seconds. Returns `SOME t` if successful, `NONE` otherwise.
+ of seconds. Returns `SOME t` if successful, `NONE` otherwise.
 
 [//]: # (end:lib/time)

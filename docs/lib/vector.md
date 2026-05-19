@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/vector)
 The `Vector` structure provides the `vector` type and operations for
-creating, examining, and transforming immutable fixed-length sequences
-of elements.
+ creating, examining, and transforming immutable fixed-length sequences
+ of elements.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/vector.html).*
 
@@ -61,32 +61,32 @@ val <a id='collate' href="#collate-impl">collate</a> : ('a * 'a -> order) -> 'a 
 <h3><code><strong>type</strong> 'a vector</code></h3>
 
 is the type of immutable fixed-length arrays with elements of type
-`'a`.
+ `'a`.
 
 <a id="maxLen-impl"></a>
 <h3><code>maxLen</code></h3>
 
 `maxLen` returns the maximum length of vectors supported in this
-implementation.
+ implementation.
 
 <a id="fromList-impl"></a>
 <h3><code>fromList</code></h3>
 
 `fromList l` creates a new vector from `l`, whose length is `length l`
-and with the `i`<sup>th</sup> element of `l` used as the
-`i`<sup>th</sup> element of the vector. Raises `Size` if `maxLen` <
-`n`.
+ and with the `i`<sup>th</sup> element of `l` used as the
+ `i`<sup>th</sup> element of the vector. Raises `Size` if `maxLen` <
+ `n`.
 
 <a id="tabulate-impl"></a>
 <h3><code>tabulate</code></h3>
 
 `tabulate (n, f)` returns a vector of length `n` equal to `[f(0),
-f(1), ..., f(n-1)]`, created from left to right. This is equivalent
-to the expression
+ f(1), ..., f(n-1)]`, created from left to right. This is equivalent
+ to the expression
 
-<pre>fromList (List.tabulate (n, f))</pre>
+ <pre>fromList (List.tabulate (n, f))</pre>
 
-Raises `Size` if `n` < 0 or `maxLen` < `n`.
+ Raises `Size` if `n` < 0 or `maxLen` < `n`.
 
 <a id="length-impl"></a>
 <h3><code>length</code></h3>
@@ -97,120 +97,128 @@ Raises `Size` if `n` < 0 or `maxLen` < `n`.
 <h3><code>sub</code></h3>
 
 `sub (vec, i)` (or `vec.sub i`) returns the `i`<sup>th</sup> element of vector `vec`.
-Raises `Subscript` if `i` < 0 or `size vec` &le; `i`.
+ Raises `Subscript` if `i` < 0 or `size vec` &le; `i`.
 
 <a id="update-impl"></a>
 <h3><code>update</code></h3>
 
 `update (vec, i, x)` returns a new vector, identical to `vec`, except
-the `i`<sup>th</sup> element of `vec` is set to `x`. Raises
-`Subscript` if `i` < 0 or `size vec` &le; `i`.
+ the `i`<sup>th</sup> element of `vec` is set to `x`. Raises
+ `Subscript` if `i` < 0 or `size vec` &le; `i`.
 
 <a id="concat-impl"></a>
 <h3><code>concat</code></h3>
 
 `concat l` returns the vector that is the concatenation of the vectors
-in the list `l`.  Raises `Size` if the total length of these vectors
-exceeds `maxLen`
+ in the list `l`.  Raises `Size` if the total length of these vectors
+ exceeds `maxLen`
 
 <a id="appi-impl"></a>
 <h3><code>appi</code></h3>
 
 `appi f vec` applies the function `f` to the elements of a vector in
-left to right order (i.e., in order of increasing indices).
+ left to right order (i.e., in order of increasing indices).
+
+
 
 It is equivalent to
-<pre>List.app f (foldri (fn (i,a,l) => (i,a)::l) [] vec)</pre>
+ <pre>List.app f (foldri (fn (i,a,l) => (i,a)::l) [] vec)</pre>
 
 <a id="app-impl"></a>
 <h3><code>app</code></h3>
 
 `app f vec` applies the function `f` to the elements of a vector in
-left to right order (i.e., in order of increasing indices).
+ left to right order (i.e., in order of increasing indices).
+
+
 
 It is equivalent to
-<pre>List.app f (foldr (fn (a,l) => a::l) [] vec)</pre>
+ <pre>List.app f (foldr (fn (a,l) => a::l) [] vec)</pre>
 
 <a id="mapi-impl"></a>
 <h3><code>mapi</code></h3>
 
 `mapi f vec` applies the function `f` to the elements of the argument
-vector `vec`, supplying the vector index and element as arguments to
-each call.
+ vector `vec`, supplying the vector index and element as arguments to
+ each call.
+
+
 
 It is equivalent to
-<pre>fromList (List.map f (foldri (fn (i,a,l) => (i,a)::l) [] vec))</pre>
+ <pre>fromList (List.map f (foldri (fn (i,a,l) => (i,a)::l) [] vec))</pre>
 
 <a id="map-impl"></a>
 <h3><code>map</code></h3>
 
 `map f vec` applies the function `f` to the elements of the argument
-vector `vec`.
+ vector `vec`.
+
+
 
 It is equivalent to
-<pre>fromList (List.map f (foldr (fn (a,l) => a::l) [] vec))</pre>
+ <pre>fromList (List.map f (foldr (fn (a,l) => a::l) [] vec))</pre>
 
 <a id="foldli-impl"></a>
 <h3><code>foldli</code></h3>
 
 `foldli f init vec` folds the function `f` over all the (index,
-element) pairs of vector `vec`, left to right, using the initial value
-`init`.
+ element) pairs of vector `vec`, left to right, using the initial value
+ `init`.
 
 <a id="foldri-impl"></a>
 <h3><code>foldri</code></h3>
 
 `foldri f init vec` folds the function `f` over all the (index,
-element) pairs of vector `vec`, right to left, using the initial value
-`init`.
+ element) pairs of vector `vec`, right to left, using the initial value
+ `init`.
 
 <a id="foldl-impl"></a>
 <h3><code>foldl</code></h3>
 
 `foldl f init vec` folds the function `f` over all the elements of
-vector `vec`, left to right, using the initial value `init`.
+ vector `vec`, left to right, using the initial value `init`.
 
 <a id="foldr-impl"></a>
 <h3><code>foldr</code></h3>
 
 `foldr f init vec` folds the function `f` over all the elements of
-vector `vec`, right to left, using the initial value `init`.
+ vector `vec`, right to left, using the initial value `init`.
 
 <a id="findi-impl"></a>
 <h3><code>findi</code></h3>
 
 `findi f vec` applies `f` to each element `x` and element index `i` of
-the vector `vec`, from left to right, until `f(i, x)` evaluates to
-`true`. It returns `SOME (i, x)` if such an `x` exists; otherwise it
-returns `NONE`.
+ the vector `vec`, from left to right, until `f(i, x)` evaluates to
+ `true`. It returns `SOME (i, x)` if such an `x` exists; otherwise it
+ returns `NONE`.
 
 <a id="find-impl"></a>
 <h3><code>find</code></h3>
 
 `find f vec` applies `f` to each element `x` of the vector `vec`, from
-left to right, until `f(x)` evaluates to `true`. It returns `SOME (x)`
-if such an `x` exists; otherwise it returns `NONE`.
+ left to right, until `f(x)` evaluates to `true`. It returns `SOME (x)`
+ if such an `x` exists; otherwise it returns `NONE`.
 
 <a id="exists-impl"></a>
 <h3><code>exists</code></h3>
 
 `exists f vec` applies `f` to each element `x` of the vector `vec`,
-from left to right (i.e., increasing indices), until `f(x)` evaluates
-to `true`; it returns `true` if such an `x` exists and `false`
-otherwise.
+ from left to right (i.e., increasing indices), until `f(x)` evaluates
+ to `true`; it returns `true` if such an `x` exists and `false`
+ otherwise.
 
 <a id="all-impl"></a>
 <h3><code>all</code></h3>
 
 `all f vec` applies `f` to each element `x` of the vector `vec`, from
-left to right, until `f(x)` evaluates to `false`. It returns `false`
-if such an `x` exists; otherwise it returns `true`. It is equivalent
-to `not(exists (not o f) vec)`.
+ left to right, until `f(x)` evaluates to `false`. It returns `false`
+ if such an `x` exists; otherwise it returns `true`. It is equivalent
+ to `not(exists (not o f) vec)`.
 
 <a id="collate-impl"></a>
 <h3><code>collate</code></h3>
 
 `collate f (v1, v2)` performs lexicographic comparison of the two
-vectors using the given ordering `f` on elements.
+ vectors using the given ordering `f` on elements.
 
 [//]: # (end:lib/vector)

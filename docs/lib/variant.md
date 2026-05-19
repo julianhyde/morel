@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/variant)
 The `Variant` structure provides operations for working with the
-`variant` type, which can hold values of any type in a dynamically-typed
-fashion.
+ `variant` type, which can hold values of any type in a dynamically-typed
+ fashion.
 
 ## Synopsis
 
@@ -61,16 +61,16 @@ is a dynamically-typed value that can hold any Morel value.
 
 `parse s` parses a variant from its string representation.
 
-The string is in the format produced by the `print` function,
-and therefore `parse (print v) = v` for all variant values `v`.
+ The string is in the format produced by the `print` function,
+ and therefore `parse (print v) = v` for all variant values `v`.
 
 <a id="print-impl"></a>
 <h3><code>print</code></h3>
 
 `print v` (or `v.print ()`) converts a variant to a string.
 
-For example,
-`print (BOOL true)` returns `"BOOL true"`;
-`print (LIST [INT 1, INT 2])` returns `"LIST [INT 1, INT 2]"`.
+ For example,
+ `print (BOOL true)` returns `"BOOL true"`;
+ `print (LIST [INT 1, INT 2])` returns `"LIST [INT 1, INT 2]"`.
 
 [//]: # (end:lib/variant)

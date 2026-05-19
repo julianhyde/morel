@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/sys)
 The `Sys` structure provides functions for interacting with the Morel
-execution environment, such as reading properties and managing the
-environment.
+ execution environment, such as reading properties and managing the
+ environment.
 
 ## Synopsis
 
@@ -57,15 +57,15 @@ val <a id='unset' href="#unset-impl">unset</a> : string -> unit
 <h3><code>file</code></h3>
 
 `file` is a view of the file system as a record. The fields of the record
-depend on the files and directories under the configured directory.
+ depend on the files and directories under the configured directory.
 
 <a id="parseTree-impl"></a>
 <h3><code>parseTree</code></h3>
 
 `parseTree s` parses `s` as a top-level Morel statement and returns a parenthesized
-S-expression-style dump of the resulting abstract syntax tree. Useful for
-testing parser behavior (e.g. operator precedence and attribute attachment)
-from `.smli` scripts. Raises `Error` if the string does not parse.
+ S-expression-style dump of the resulting abstract syntax tree. Useful for
+ testing parser behavior (e.g. operator precedence and attribute attachment)
+ from `.smli` scripts. Raises `Error` if the string does not parse.
 
 <a id="plan-impl"></a>
 <h3><code>plan</code></h3>
@@ -76,8 +76,8 @@ from `.smli` scripts. Raises `Error` if the string does not parse.
 <h3><code>planEx</code></h3>
 
 `planEx phase` re-plans the most recently executed expression and returns the Core
-representation at the specified phase. The phase argument can be "0" (initial),
-"-1" (final), or a specific pass number.
+ representation at the specified phase. The phase argument can be "0" (initial),
+ "-1" (final), or a specific pass number.
 
 <a id="set-impl"></a>
 <h3><code>set</code></h3>
@@ -88,13 +88,13 @@ representation at the specified phase. The phase argument can be "0" (initial),
 <h3><code>show</code></h3>
 
 `show property` returns the current the value of `property`, as a
-string, or `NONE` if unset.
+ string, or `NONE` if unset.
 
 <a id="showAll-impl"></a>
 <h3><code>showAll</code></h3>
 
 `showAll ()` returns a list of all properties and their current value
-as a string, or `NONE` if unset.
+ as a string, or `NONE` if unset.
 
 <a id="unset-impl"></a>
 <h3><code>unset</code></h3>

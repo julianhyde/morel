@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/relational)
 The `Relational` structure provides aggregation, comparison, and set
-operations that are used in Morel `from` expressions. These functions
-extend Standard ML with relational-algebra capabilities.
+ operations that are used in Morel `from` expressions. These functions
+ extend Standard ML with relational-algebra capabilities.
 
 ## Synopsis
 
@@ -48,78 +48,78 @@ val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
 <h3><code><strong>datatype</strong> 'a descending</code></h3>
 
 wraps a value so that it sorts in descending order when used with
-`Relational.compare`.
+ `Relational.compare`.
 
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>
 
 `compare (x, y)` returns `LESS`, `EQUAL`, or `GREATER` according to
-whether its first argument is less than, equal to, or greater than the
-second.
+ whether its first argument is less than, equal to, or greater than the
+ second.
 
-Comparisons are based on the structure of the type `α`.
-Primitive types are compared using their natural order;
-Option types compare with NONE last;
-Tuple types compare lexicographically;
-Record types compare lexicographically, with the fields
-compared in alphabetical order;
-List values compare lexicographically;
-Bag values compare lexicographically, the elements appearing
-in an order that is arbitrary but is consistent for each
-particular value.
+ Comparisons are based on the structure of the type `α`.
+ Primitive types are compared using their natural order;
+ Option types compare with NONE last;
+ Tuple types compare lexicographically;
+ Record types compare lexicographically, with the fields
+ compared in alphabetical order;
+ List values compare lexicographically;
+ Bag values compare lexicographically, the elements appearing
+ in an order that is arbitrary but is consistent for each
+ particular value.
 
 <a id="count-impl"></a>
 <h3><code>count</code></h3>
 
 `count list` (or `list.count ()`) returns the number of elements in `list`. Often used with
-`group`, for example `from e in emps group e.deptno compute countId =
-count`.
+ `group`, for example `from e in emps group e.deptno compute countId =
+ count`.
 
 <a id="empty-impl"></a>
 <h3><code>empty</code></h3>
 
 `empty list` (or `list.empty ()`) returns whether the list is empty, for example `from d in
-depts where empty (from e where e.deptno = d.deptno)`.
+ depts where empty (from e where e.deptno = d.deptno)`.
 
 <a id="iterate-impl"></a>
 <h3><code>iterate</code></h3>
 
 `iterate initialList listUpdate` (or `initialList.iterate listUpdate`) computes a fixed point, starting with `initialList` and calling
-`listUpdate (prevList, newList)` each iteration, terminating the
-iteration when it returns `newList`.
+ `listUpdate (prevList, newList)` each iteration, terminating the
+ iteration when it returns `newList`.
 
 <a id="max-impl"></a>
 <h3><code>max</code></h3>
 
 `max list` (or `list.max ()`) returns the greatest element of `list`. Often used with
-`group`, for example `from e in emps group e.deptno compute maxId =
-max of e.id`.
+ `group`, for example `from e in emps group e.deptno compute maxId =
+ max of e.id`.
 
 <a id="min-impl"></a>
 <h3><code>min</code></h3>
 
 `min list` (or `list.min ()`) returns the least element of `list`. Often used with
-`group`, for example `from e in emps group e.deptno compute minId =
-min of e.id`.
+ `group`, for example `from e in emps group e.deptno compute minId =
+ min of e.id`.
 
 <a id="nonEmpty-impl"></a>
 <h3><code>nonEmpty</code></h3>
 
 `nonEmpty list` (or `list.nonEmpty ()`) returns whether the list has at least one element, for
-example `from d in depts where nonEmpty (from e where e.deptno =
-d.deptno)`.
+ example `from d in depts where nonEmpty (from e where e.deptno =
+ d.deptno)`.
 
 <a id="only-impl"></a>
 <h3><code>only</code></h3>
 
 `only list` (or `list.only ()`) returns the sole element of list, for example `from e in
-emps yield only (from d where d.deptno = e.deptno)`.
+ emps yield only (from d where d.deptno = e.deptno)`.
 
 <a id="sum-impl"></a>
 <h3><code>sum</code></h3>
 
 `sum list` (or `list.sum ()`) returns the sum of the elements of `list`. Often used with
-`group`, for example `from e in emps group e.deptno compute sumId =
-sum of e.id`.
+ `group`, for example `from e in emps group e.deptno compute sumId =
+ sum of e.id`.
 
 [//]: # (end:lib/relational)

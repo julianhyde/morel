@@ -2132,12 +2132,12 @@ JAVACODE void collectLeadingDocComments(List<Attribute> attrs) {
   for (Token t : docs) {
     String image = t.image;
     // image is "(** content *)"; strip the markers, then strip the leading
-    // " * " (or bare " *") prefix from each continuation line in OCaml's
-    // doc-comment style. The trailing whitespace (or end-of-line)
-    // requirement means a leading "*foo*" (markdown emphasis) is left
-    // intact.
+    // whitespace and a single '*' from each continuation line, matching
+    // ocamldoc's -stars behavior: any whitespace before the asterisk is
+    // dropped along with the asterisk, but whitespace AFTER the asterisk
+    // is preserved.
     String content = image.substring(3, image.length() - 2);
-    content = content.replaceAll("(?m)^[ \\t]*\\*(?:[ \\t]+|$)", "");
+    content = content.replaceAll("(?m)^[ \\t]*\\*", "");
     Pos p = pos(t);
     Exp payload = ast.stringLiteral(p, content);
     attrs.add(ast.attribute(p, Ast.AttributeKind.DECL, "doc", payload));

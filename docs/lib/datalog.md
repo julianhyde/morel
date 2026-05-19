@@ -25,7 +25,7 @@ License.
 
 [//]: # (start:lib/datalog)
 The `Datalog` structure provides functions to parse, validate, translate,
-and execute Datalog programs within Morel.
+ and execute Datalog programs within Morel.
 
 ## Synopsis
 
@@ -44,12 +44,12 @@ val <a id='validate' href="#validate-impl">validate</a> : string -> string
 <h3><code>translate</code></h3>
 
 `translate program` translates a Datalog program to Morel source code, returning `SOME
-code` if valid or `NONE` if invalid.
+ code` if valid or `NONE` if invalid.
 
 <a id="validate-impl"></a>
 <h3><code>validate</code></h3>
 
 `validate program` validates a Datalog program and returns type information or error
-message.
+ message.
 
 [//]: # (end:lib/datalog)

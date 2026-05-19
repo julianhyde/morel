@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/char)
 The `Char` structure provides the character type and associated
-operations for examining and converting characters. Characters are
-identified by their Unicode code points.
+ operations for examining and converting characters. Characters are
+ identified by their Unicode code points.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/char.html).*
 
@@ -85,9 +85,9 @@ is the type of characters.
 <h3><code>minChar</code></h3>
 
 `minChar` is the minimal (most negative) character representable by
-`char`. If a value is `NONE`, `char` can represent all negative
-integers, within the limits of the heap size. If `precision` is `SOME
-(n)`, then we have `minChar` = -2<sup>(n-1)</sup>.
+ `char`. If a value is `NONE`, `char` can represent all negative
+ integers, within the limits of the heap size. If `precision` is `SOME
+ (n)`, then we have `minChar` = -2<sup>(n-1)</sup>.
 
 <a id="maxChar-impl"></a>
 <h3><code>maxChar</code></h3>
@@ -108,26 +108,26 @@ integers, within the limits of the heap size. If `precision` is `SOME
 <h3><code>chr</code></h3>
 
 `chr i` returns the character whose code is `i`. Raises `Chr` if `i` <
-0 or `i` > `maxOrd`.
+ 0 or `i` > `maxOrd`.
 
 <a id="succ-impl"></a>
 <h3><code>succ</code></h3>
 
 `succ c` (or `c.succ ()`) returns the character immediately following `c`, or raises
-`Chr` if `c` = `maxChar`
+ `Chr` if `c` = `maxChar`
 
 <a id="pred-impl"></a>
 <h3><code>pred</code></h3>
 
 `pred c` (or `c.pred ()`) returns the predecessor of `c`. Raises `Subscript` if `c` is
-`minOrd`.
+ `minOrd`.
 
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>
 
 `compare (c1, c2)` (or `c1.compare c2`) returns `LESS`, `EQUAL`, or `GREATER` according to
-whether its first argument is less than, equal to, or greater than the
-second.
+ whether its first argument is less than, equal to, or greater than the
+ second.
 
 <a id="<-impl"></a>
 <h3><code><</code></h3>
@@ -138,7 +138,7 @@ second.
 <h3><code><=</code></h3>
 
 `c1 <= c2` returns true if `c1` is less than or equal to `c2` in the character
-ordering.
+ ordering.
 
 <a id=">-impl"></a>
 <h3><code>></code></h3>
@@ -149,24 +149,24 @@ ordering.
 <h3><code>>=</code></h3>
 
 `c1 >= c2` returns true if `c1` is greater than or equal to `c2` in the character
-ordering.
+ ordering.
 
 <a id="contains-impl"></a>
 <h3><code>contains</code></h3>
 
 `contains s c` returns true if character `c` occurs in the string `s`;
-false otherwise. The function, when applied to `s`, builds a table and
-returns a function which uses table lookup to decide whether a given
-character is in the string or not. Hence it is relatively expensive to
-compute `val p = contains s` but very fast to compute `p(c)` for any
-given character.
+ false otherwise. The function, when applied to `s`, builds a table and
+ returns a function which uses table lookup to decide whether a given
+ character is in the string or not. Hence it is relatively expensive to
+ compute `val p = contains s` but very fast to compute `p(c)` for any
+ given character.
 
 <a id="notContains-impl"></a>
 <h3><code>notContains</code></h3>
 
 `notContains s c` returns true if character `c` does not occur in the
-string `s`; false otherwise. Works by construction of a lookup table
-in the same way as `Char.contains`.
+ string `s`; false otherwise. Works by construction of a lookup table
+ in the same way as `Char.contains`.
 
 <a id="isAscii-impl"></a>
 <h3><code>isAscii</code></h3>
@@ -177,13 +177,13 @@ in the same way as `Char.contains`.
 <h3><code>toLower</code></h3>
 
 `toLower c` (or `c.toLower ()`) returns the lowercase letter corresponding to `c`, if `c`
-is a letter (a to z or A to Z); otherwise returns `c`.
+ is a letter (a to z or A to Z); otherwise returns `c`.
 
 <a id="toUpper-impl"></a>
 <h3><code>toUpper</code></h3>
 
 `toUpper c` (or `c.toUpper ()`) returns the uppercase letter corresponding to `c`, if `c`
-is a letter (a to z or A to Z); otherwise returns `c`.
+ is a letter (a to z or A to Z); otherwise returns `c`.
 
 <a id="isAlpha-impl"></a>
 <h3><code>isAlpha</code></h3>
@@ -194,13 +194,13 @@ is a letter (a to z or A to Z); otherwise returns `c`.
 <h3><code>isAlphaNum</code></h3>
 
 `isAlphaNum c` (or `c.isAlphaNum ()`) returns true if `c` is alphanumeric (a letter or a
-decimal digit).
+ decimal digit).
 
 <a id="isCntrl-impl"></a>
 <h3><code>isCntrl</code></h3>
 
 `isCntrl c` (or `c.isCntrl ()`) returns true if `c` is a control character, that is, if
-`not (isPrint c)`.
+ `not (isPrint c)`.
 
 <a id="isDigit-impl"></a>
 <h3><code>isDigit</code></h3>
@@ -211,7 +211,7 @@ decimal digit).
 <h3><code>isGraph</code></h3>
 
 `isGraph c` (or `c.isGraph ()`) returns true if `c` is a graphical character, that is, it
-is printable and not a whitespace character.
+ is printable and not a whitespace character.
 
 <a id="isHexDigit-impl"></a>
 <h3><code>isHexDigit</code></h3>
@@ -222,25 +222,25 @@ is printable and not a whitespace character.
 <h3><code>isLower</code></h3>
 
 `isLower c` (or `c.isLower ()`) returns true if `c` is a hexadecimal digit (0 to 9 or a to
-f or A to F).
+ f or A to F).
 
 <a id="isPrint-impl"></a>
 <h3><code>isPrint</code></h3>
 
 `isPrint c` (or `c.isPrint ()`) returns true if `c` is a printable character (space or
-visible).
+ visible).
 
 <a id="isSpace-impl"></a>
 <h3><code>isSpace</code></h3>
 
 `isSpace c` (or `c.isSpace ()`) returns true if `c` is a whitespace character (blank,
-newline, tab, vertical tab, new page).
+ newline, tab, vertical tab, new page).
 
 <a id="isPunct-impl"></a>
 <h3><code>isPunct</code></h3>
 
 `isPunct c` (or `c.isPunct ()`) returns true if `c` is a punctuation character, that is,
-graphical but not alphanumeric.
+ graphical but not alphanumeric.
 
 <a id="isUpper-impl"></a>
 <h3><code>isUpper</code></h3>

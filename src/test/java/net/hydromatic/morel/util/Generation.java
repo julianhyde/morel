@@ -838,8 +838,6 @@ public class Generation {
 
     static String processDesc(String desc) {
       return desc.trim()
-          // Strip trailing whitespace from every line.
-          .replaceAll("(?m)[ \\t]+$", "")
           .replace(
               "\n" //
                   + "\n" //
@@ -855,7 +853,10 @@ public class Generation {
                   + "\n" //
                   + "\n",
               "\n" //
-                  + "\n");
+                  + "\n")
+          // Strip trailing whitespace from every line (after <p> rewrites,
+          // which can otherwise leave a stranded leading-space-only line).
+          .replaceAll("(?m)[ \\t]+$", "");
     }
 
     static String toSml(String type) {

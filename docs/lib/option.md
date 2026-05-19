@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/option)
 The `Option` structure provides the `option` type `'a option` whose
-values are either `NONE` (absent) or `SOME v` (present), along with
-operations for creating, examining, and transforming optional values.
+ values are either `NONE` (absent) or `SOME v` (present), along with
+ operations for creating, examining, and transforming optional values.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/option.html).*
 
@@ -53,9 +53,9 @@ val <a id='composePartial' href="#composePartial-impl">composePartial</a> : ('a 
 <h3><code><strong>datatype</strong> 'a option</code></h3>
 
 The type `option` provides a distinction between some value and no
-value, and is often used for representing the result of partially
-defined functions. It can be viewed as a typed version of the C
-convention of returning a NULL pointer to indicate no value.
+ value, and is often used for representing the result of partially
+ defined functions. It can be viewed as a typed version of the C
+ convention of returning a NULL pointer to indicate no value.
 
 <a id="Option-impl"></a>
 <h3><code><strong>exception</strong> Option</code></h3>
@@ -66,19 +66,19 @@ is raised by `valOf` when applied to `NONE`.
 <h3><code>getOpt</code></h3>
 
 `getOpt (opt, a)` (or `opt.getOpt a`) returns `v` if `opt` is `SOME (v)`; otherwise
-returns `a`.
+ returns `a`.
 
 <a id="isSome-impl"></a>
 <h3><code>isSome</code></h3>
 
 `isSome opt` (or `opt.isSome ()`) returns `true` if `opt` is `SOME v`; otherwise returns
-`false`.
+ `false`.
 
 <a id="valOf-impl"></a>
 <h3><code>valOf</code></h3>
 
 `valOf opt` (or `opt.valOf ()`) returns `v` if `opt` is `SOME v`, otherwise raises
-`Option`.
+ `Option`.
 
 <a id="filter-impl"></a>
 <h3><code>filter</code></h3>
@@ -94,7 +94,7 @@ returns `a`.
 <h3><code>app</code></h3>
 
 `app f opt` applies the function `f` to the value `v` if `opt` is
-`SOME v`, and otherwise does nothing.
+ `SOME v`, and otherwise does nothing.
 
 <a id="map-impl"></a>
 <h3><code>map</code></h3>
@@ -110,12 +110,12 @@ returns `a`.
 <h3><code>compose</code></h3>
 
 `compose (f, g) a` returns `NONE` if `g(a)` is `NONE`; otherwise, if
-`g(a)` is `SOME v`, it returns `SOME (f v)`.
+ `g(a)` is `SOME v`, it returns `SOME (f v)`.
 
 <a id="composePartial-impl"></a>
 <h3><code>composePartial</code></h3>
 
 `composePartial (f, g) a` returns `NONE` if `g(a)` is `NONE`;
-otherwise, if `g(a)` is `SOME v`, returns `f(v)`.
+ otherwise, if `g(a)` is `SOME v`, returns `f(v)`.
 
 [//]: # (end:lib/option)

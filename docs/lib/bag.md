@@ -25,9 +25,9 @@ License.
 
 [//]: # (start:lib/bag)
 The `Bag` structure provides operations on bags (also known as
-multisets), which are unordered collections that may contain duplicate
-elements. Unlike lists, bags do not maintain element order; unlike sets,
-bags track multiplicity.
+ multisets), which are unordered collections that may contain duplicate
+ elements. Unlike lists, bags do not maintain element order; unlike sets,
+ bags track multiplicity.
 
 ## Synopsis
 
@@ -78,15 +78,15 @@ val <a id='nth' href="#nth-impl">nth</a> : 'a bag * int -> 'a
 <h3><code>fromList</code></h3>
 
 `fromList l` creates a new bag from `l`, whose length is `length l`
-and whose elements are the same as those of `l`. Raises `Size` if
-`maxLen` < `n`.
+ and whose elements are the same as those of `l`. Raises `Size` if
+ `maxLen` < `n`.
 
 <a id="toList-impl"></a>
 <h3><code>toList</code></h3>
 
 `toList b` (or `b.toList ()`) creates a new bag from `b`, whose length is `length b` and
-whose elements are the same as those of `b`. Raises `Size` if `maxLen`
-< `n`.
+ whose elements are the same as those of `b`. Raises `Size` if `maxLen`
+ < `n`.
 
 <a id="length-impl"></a>
 <h3><code>length</code></h3>
@@ -102,34 +102,36 @@ whose elements are the same as those of `b`. Raises `Size` if `maxLen`
 <h3><code>hd</code></h3>
 
 `hd b` (or `b.hd ()`) returns an arbitrary element of bag `b`. Raises `Empty` if `b`
-is `nil`.
+ is `nil`.
 
 <a id="tl-impl"></a>
 <h3><code>tl</code></h3>
 
 `tl b` (or `b.tl ()`) returns all but one arbitrary element of bag `b`. Raises
-`Empty` if `b` is `nil`.
+ `Empty` if `b` is `nil`.
 
 <a id="getItem-impl"></a>
 <h3><code>getItem</code></h3>
 
 `getItem b` (or `b.getItem ()`) returns `NONE` if the bag `b` is empty, and `SOME (hd b,
-tl b)` otherwise (applying `hd` and `tl` simultaneously so that they
-choose/remove the same arbitrary element).
+ tl b)` otherwise (applying `hd` and `tl` simultaneously so that they
+ choose/remove the same arbitrary element).
 
 <a id="take-impl"></a>
 <h3><code>take</code></h3>
 
 `take (b, i)` (or `b.take i`) returns an arbitrary `i` elements of the bag `b`. Raises
-`Subscript` if `i` < 0 or `i` > `length l`. We have `take(b, length
-b)` = `b`.
+ `Subscript` if `i` < 0 or `i` > `length l`. We have `take(b, length
+ b)` = `b`.
 
 <a id="drop-impl"></a>
 <h3><code>drop</code></h3>
 
 `drop (b, i)` (or `b.drop i`) returns what is left after dropping an arbitrary `i`
-elements of the bag `b`. Raises `Subscript` if `i` < 0 or `i` >
-`length l`.
+ elements of the bag `b`. Raises `Subscript` if `i` < 0 or `i` >
+ `length l`.
+
+
 
 We have `drop(b, length b)` = `[]`.
 
@@ -147,78 +149,78 @@ We have `drop(b, length b)` = `[]`.
 <h3><code>map</code></h3>
 
 `map f b` applies `f` to each element of `b`, returning the bag of
-results. This is equivalent to:
+ results. This is equivalent to:
 
-<pre>fromList (List.map f (foldr (fn (a,l) => a::l) [] b))</pre>
+ <pre>fromList (List.map f (foldr (fn (a,l) => a::l) [] b))</pre>
 
 <a id="mapPartial-impl"></a>
 <h3><code>mapPartial</code></h3>
 
 `mapPartial f b` applies `f` to each element of `b`, returning a bag
-of results, with `SOME` stripped, where `f` was defined. `f` is not
-defined for an element of `b` if `f` applied to the element returns
-`NONE`. The above expression is equivalent to:
+ of results, with `SOME` stripped, where `f` was defined. `f` is not
+ defined for an element of `b` if `f` applied to the element returns
+ `NONE`. The above expression is equivalent to:
 
-<pre>((map valOf) o (filter isSome) o (map f)) b</pre>
+ <pre>((map valOf) o (filter isSome) o (map f)) b</pre>
 
 <a id="find-impl"></a>
 <h3><code>find</code></h3>
 
 `find f b` applies `f` to each element `x` of the bag `b`, in
-arbitrary order, until `f x` evaluates to `true`. It returns `SOME
-(x)` if such an `x` exists; otherwise it returns `NONE`.
+ arbitrary order, until `f x` evaluates to `true`. It returns `SOME
+ (x)` if such an `x` exists; otherwise it returns `NONE`.
 
 <a id="filter-impl"></a>
 <h3><code>filter</code></h3>
 
 `filter f b` applies `f` to each element `x` of `b` and returns the
-bag of those `x` for which `f x` evaluated to `true`.
+ bag of those `x` for which `f x` evaluated to `true`.
 
 <a id="partition-impl"></a>
 <h3><code>partition</code></h3>
 
 `partition f b` applies `f` to each element `x` of `b`, in arbitrary
-order, and returns a pair `(pos, neg)` where `pos` is the bag of those
-`x` for which `f x` evaluated to `true`, and `neg` is the bag of those
-for which `f x` evaluated to `false`.
+ order, and returns a pair `(pos, neg)` where `pos` is the bag of those
+ `x` for which `f x` evaluated to `true`, and `neg` is the bag of those
+ for which `f x` evaluated to `false`.
 
 <a id="fold-impl"></a>
 <h3><code>fold</code></h3>
 
 `fold f init (bag [x1, x2, ..., xn])` returns `f(xn, ... , f(x2,
-f(x1, init))...)` (for some arbitrary reordering of the elements `xi`)
-or `init` if the bag is empty.
+ f(x1, init))...)` (for some arbitrary reordering of the elements `xi`)
+ or `init` if the bag is empty.
 
 <a id="exists-impl"></a>
 <h3><code>exists</code></h3>
 
 `exists f b` applies `f` to each element `x` of the bag `b`, in
-arbitrary order, until `f(x)` evaluates to `true`; it returns `true`
-if such an `x` exists and `false` otherwise.
+ arbitrary order, until `f(x)` evaluates to `true`; it returns `true`
+ if such an `x` exists and `false` otherwise.
 
 <a id="all-impl"></a>
 <h3><code>all</code></h3>
 
 `all f b` applies `f` to each element `x` of the bag `b`, in arbitrary
-order, until `f(x)` evaluates to `false`; it returns `false` if such
-an `x` exists and `true` otherwise. It is equivalent to `not(exists
-(not o f) b))`.
+ order, until `f(x)` evaluates to `false`; it returns `false` if such
+ an `x` exists and `true` otherwise. It is equivalent to `not(exists
+ (not o f) b))`.
 
 <a id="tabulate-impl"></a>
 <h3><code>tabulate</code></h3>
 
 `tabulate (n, f)` returns a bag of length `n` equal to `[f(0), f(1),
-..., f(n-1)]`. This is equivalent to the expression:
+ ..., f(n-1)]`. This is equivalent to the expression:
 
-<pre>fromList (List.tabulate (n, f))</pre>
+ <pre>fromList (List.tabulate (n, f))</pre>
 
-Raises `Size` if `n` < 0.
+ Raises `Size` if `n` < 0.
 
 <a id="nth-impl"></a>
 <h3><code>nth</code></h3>
 
 `nth (b, i)` (or `b.nth i`) returns the `i`th element of the bag `b`, counting from 0. Raises
-`Subscript` if `i` < 0 or `i` >= `length b`. We have `nth(b,0) = hd
-b`, ignoring exceptions.
+ `Subscript` if `i` < 0 or `i` >= `length b`. We have `nth(b,0) = hd
+ b`, ignoring exceptions.
 
 [//]: # (end:lib/bag)

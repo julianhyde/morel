@@ -57,6 +57,6 @@ is the type of boolean values `true` and `false`.
 <h3><code>fromString</code></h3>
 
 `fromString s` scans a `bool` value from the string `s`. Returns `SOME (true)` if
-`s` is "true", `SOME (false)` if `s` is "false", and `NONE` otherwise.
+ `s` is "true", `SOME (false)` if `s` is "false", and `NONE` otherwise.
 
 [//]: # (end:lib/bool)
