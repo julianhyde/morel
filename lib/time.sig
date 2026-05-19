@@ -18,15 +18,16 @@
  *
  * The TIME signature, per the Standard ML Basis Library.
  *)
+(**
+ * The `Time` structure provides an abstract type for representing both absolute
+ * times and time intervals, with functions for conversion, arithmetic, comparison,
+ * formatting, and parsing. Time values are measured in nanoseconds internally,
+ * and conversions to/from seconds, milliseconds, microseconds, and nanoseconds
+ * are provided.
+ *)
+[@@description "Time values and operations."]
 signature TIME =
 sig
-
-  [@@@description "Time values and operations."]
-  [@@@overview "The `Time` structure provides an abstract type for representing both absolute
-times and time intervals, with functions for conversion, arithmetic, comparison,
-formatting, and parsing. Time values are measured in nanoseconds internally,
-and conversions to/from seconds, milliseconds, microseconds, and nanoseconds
-are provided."]
 
   (**
    * is an equality type representing both absolute times (relative to the Unix

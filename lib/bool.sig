@@ -18,11 +18,10 @@
  *
  * The BOOL signature, per the Standard ML Basis Library.
  *)
+(** The `Bool` structure provides the boolean type and associated operations. *)
+[@@description "Boolean values and operations."]
 signature BOOL =
 sig
-
-  [@@@description "Boolean values and operations."]
-  [@@@overview "The `Bool` structure provides the boolean type and associated operations."]
 
   (** is the type of boolean values `true` and `false`. *)
   datatype bool = `false` | `true`

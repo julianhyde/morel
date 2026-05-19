@@ -18,14 +18,15 @@
  *
  * The LIST_PAIR signature, per the Standard ML Basis Library.
  *)
+(**
+ * The `ListPair` structure provides operations for working with two lists
+ * simultaneously. Operations whose names do not end in `Eq` silently
+ * ignore excess elements of the longer list; those ending in `Eq` raise
+ * `UnequalLengths` when the lists differ in length.
+ *)
+[@@description "Operations on pairs of lists."]
 signature LIST_PAIR =
 sig
-
-  [@@@description "Operations on pairs of lists."]
-  [@@@overview "The `ListPair` structure provides operations for working with two lists
-simultaneously. Operations whose names do not end in `Eq` silently
-ignore excess elements of the longer list; those ending in `Eq` raise
-`UnequalLengths` when the lists differ in length."]
 
   (**
    * combines the two lists *l1* and *l2* into a list of

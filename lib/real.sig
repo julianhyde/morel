@@ -18,13 +18,14 @@
  *
  * The REAL signature, per the Standard ML Basis Library.
  *)
+(**
+ * The `Real` structure provides arithmetic, comparison, conversion, and
+ * classification operations for IEEE 754 double-precision floating-point
+ * numbers.
+ *)
+[@@description "Floating-point number operations."]
 signature REAL =
 sig
-
-  [@@@description "Floating-point number operations."]
-  [@@@overview "The `Real` structure provides arithmetic, comparison, conversion, and
-classification operations for IEEE 754 double-precision floating-point
-numbers."]
 
   (**
    * is the type of IEEE 754 double-precision floating-point numbers.

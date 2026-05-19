@@ -80,8 +80,13 @@ public class SignatureChecker {
         .withParser(
             parser -> {
               try {
-                final AstNode node = parser.statementSemicolonOrEof();
+                AstNode node = parser.statementSemicolonOrEof();
                 assertThat(node, notNullValue());
+                // Unwrap an optional AttributedDecl carrying
+                // structure-level attributes.
+                if (node instanceof Ast.AttributedDecl) {
+                  node = ((Ast.AttributedDecl) node).decl;
+                }
                 assertThat(
                     "File: " + file.getName(),
                     node,
@@ -207,8 +212,21 @@ public class SignatureChecker {
         .withParser(
             parser -> {
               try {
-                final AstNode node = parser.statementSemicolonOrEof();
-                assertThat(node, notNullValue());
+                final AstNode rawNode = parser.statementSemicolonOrEof();
+                assertThat(rawNode, notNullValue());
+                // A .sig file may wrap the `signature ... = sig ... end` in
+                // an AttributedDecl carrying structure-level attributes
+                // ([@@specified], [@@description], (** overview *)).
+                final List<Ast.Attribute> declAttrs;
+                final AstNode node;
+                if (rawNode instanceof Ast.AttributedDecl) {
+                  final Ast.AttributedDecl ad = (Ast.AttributedDecl) rawNode;
+                  declAttrs = ad.attributes;
+                  node = ad.decl;
+                } else {
+                  declAttrs = Collections.emptyList();
+                  node = rawNode;
+                }
                 assertThat(
                     "File: " + file.getName(),
                     node,
@@ -216,7 +234,11 @@ public class SignatureChecker {
                 final Ast.SignatureDecl decl = (Ast.SignatureDecl) node;
                 for (Ast.SignatureBind bind : decl.binds) {
                   final String structure = structureName(bind);
-                  // Collect all structure-level floating attrs.
+                  // Structure-level metadata: prefer attributes on the
+                  // signature decl ([@@specified], [@@description], and
+                  // [@@doc] from the leading (** overview *) comment).
+                  // Fall back to the [@@@...] floating-attribute form for
+                  // backwards compatibility.
                   final Map<String, String> meta = new HashMap<>();
                   for (Ast.Spec spec : bind.specs) {
                     if (spec.op == Op.FLOATING_ATTR_SPEC) {
@@ -228,6 +250,18 @@ public class SignatureChecker {
                         if (v instanceof String) {
                           meta.put(f.attribute.name, (String) v);
                         }
+                      }
+                    }
+                  }
+                  for (Ast.Attribute a : declAttrs) {
+                    if (a.payload instanceof Ast.Literal) {
+                      final Object v = ((Ast.Literal) a.payload).value;
+                      if (v instanceof String) {
+                        // `(** overview *)` is desugared to [@@doc "..."];
+                        // store it under "overview" for the doc generator.
+                        final String key =
+                            "doc".equals(a.name) ? "overview" : a.name;
+                        meta.put(key, (String) v);
                       }
                     }
                   }

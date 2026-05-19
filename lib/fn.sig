@@ -19,13 +19,14 @@
  * The FN signature, a proposed addition to the standard basis
  * library.
  *)
+(**
+ * The `Fn` structure provides combinators for working with function values,
+ * including application, composition, currying, and fixpoint operators.
+ *)
+[@@description "Higher-order function combinators."]
+[@@specified "basis+"]
 signature FN =
 sig
-  [@@@specified "basis+"]
-
-  [@@@description "Higher-order function combinators."]
-  [@@@overview "The `Fn` structure provides combinators for working with function values,
-including application, composition, currying, and fixpoint operators."]
 
   (**
    * returns the value `x`. (`id` is the polymorphic identity function.)

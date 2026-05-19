@@ -18,13 +18,14 @@
  *
  * The INTERACT signature, a Morel extension.
  *)
+(**
+ * The `Interact` structure provides functions for interacting with the
+ * Morel REPL, such as loading source files.
+ *)
+[@@description "Interactive session utilities."]
+[@@specified "morel"]
 signature INTERACT =
 sig
-  [@@@specified "morel"]
-
-  [@@@description "Interactive session utilities."]
-  [@@@overview "The `Interact` structure provides functions for interacting with the
-Morel REPL, such as loading source files."]
 
   (** loads source text from the file named `f`. *)
   val use : string -> unit [@@prototype "use f"]

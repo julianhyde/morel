@@ -18,13 +18,14 @@
  *
  * The MATH signature, per the Standard ML Basis Library.
  *)
+(**
+ * The `Math` structure provides standard mathematical functions operating
+ * on `real` values, including trigonometric, logarithmic, exponential,
+ * and rounding operations, along with mathematical constants.
+ *)
+[@@description "Mathematical functions for real numbers."]
 signature MATH =
 sig
-
-  [@@@description "Mathematical functions for real numbers."]
-  [@@@overview "The `Math` structure provides standard mathematical functions operating
-on `real` values, including trigonometric, logarithmic, exponential,
-and rounding operations, along with mathematical constants."]
 
   type real
 

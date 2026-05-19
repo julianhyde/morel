@@ -18,22 +18,23 @@
  *
  * The RANGE signature, a Morel extension.
  *)
+(**
+ * The `Range` structure represents contiguous intervals of values of an
+ * ordered type, including open, closed, and half-open intervals, as well as
+ * unbounded intervals.
+ *
+ * A range is a value of the `'a range` datatype, which has ten constructors:
+ * `ALL`, `AT_LEAST`, `AT_MOST`, `CLOSED`, `CLOSED_OPEN`, `GREATER_THAN`,
+ * `LESS_THAN`, `OPEN`, `OPEN_CLOSED`, and `POINT`.
+ *
+ * Naming conventions follow Guava and standard mathematical notation:
+ * CLOSED endpoints are inclusive `[a, b]`;
+ * OPEN endpoints are exclusive `(a, b)`.
+ *)
+[@@description "Operations on ranges of ordered values."]
+[@@specified "morel"]
 signature RANGE =
 sig
-  [@@@specified "morel"]
-
-  [@@@description "Operations on ranges of ordered values."]
-  [@@@overview "The `Range` structure represents contiguous intervals of values of an
-ordered type, including open, closed, and half-open intervals, as well as
-unbounded intervals.
-
-A range is a value of the `'a range` datatype, which has ten constructors:
-`ALL`, `AT_LEAST`, `AT_MOST`, `CLOSED`, `CLOSED_OPEN`, `GREATER_THAN`,
-`LESS_THAN`, `OPEN`, `OPEN_CLOSED`, and `POINT`.
-
-Naming conventions follow Guava and standard mathematical notation:
-CLOSED endpoints are inclusive `[a, b]`;
-OPEN endpoints are exclusive `(a, b)`."]
 
   (**
    * represents a set of values as a normalized list of non-overlapping,

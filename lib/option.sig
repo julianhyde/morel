@@ -20,13 +20,14 @@
  * There is no OPTION signature, but we define it here for
  * validation purposes.
  *)
+(**
+ * The `Option` structure provides the `option` type `'a option` whose
+ * values are either `NONE` (absent) or `SOME v` (present), along with
+ * operations for creating, examining, and transforming optional values.
+ *)
+[@@description "Optional values."]
 signature OPTION =
 sig
-
-  [@@@description "Optional values."]
-  [@@@overview "The `Option` structure provides the `option` type `'a option` whose
-values are either `NONE` (absent) or `SOME v` (present), along with
-operations for creating, examining, and transforming optional values."]
 
   (**
    * The type `option` provides a distinction between some value and no

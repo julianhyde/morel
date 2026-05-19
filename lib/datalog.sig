@@ -18,13 +18,14 @@
  *
  * The DATALOG signature, a Morel extension.
  *)
+(**
+ * The `Datalog` structure provides functions to parse, validate, translate,
+ * and execute Datalog programs within Morel.
+ *)
+[@@description "Datalog query interface."]
+[@@specified "morel"]
 signature DATALOG =
 sig
-  [@@@specified "morel"]
-
-  [@@@description "Datalog query interface."]
-  [@@@overview "The `Datalog` structure provides functions to parse, validate, translate,
-and execute Datalog programs within Morel."]
 
   (**
    * executes a Datalog program and returns formatted output as a variant.

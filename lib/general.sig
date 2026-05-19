@@ -18,14 +18,15 @@
  *
  * The INTEGER signature, per the Standard ML Basis Library.
  *)
+(**
+ * The `General` structure provides the fundamental types `unit`, `exn`,
+ * and `order`, the standard exceptions raised by the runtime, and a few
+ * utility functions. Its contents are available without qualification in
+ * every Morel program.
+ *)
+[@@description "Basic types, exceptions, and utility functions."]
 signature GENERAL =
 sig
-
-  [@@@description "Basic types, exceptions, and utility functions."]
-  [@@@overview "The `General` structure provides the fundamental types `unit`, `exn`,
-and `order`, the standard exceptions raised by the runtime, and a few
-utility functions. Its contents are available without qualification in
-every Morel program."]
 
   (**
    * is the type that contains the single value `()`. It is used as the

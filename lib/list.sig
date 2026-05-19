@@ -18,14 +18,15 @@
  *
  * The LIST signature, per the Standard ML Basis Library.
  *)
+(**
+ * The `List` structure provides the `list` type and a comprehensive
+ * set of operations for constructing, examining, and transforming
+ * singly-linked lists. Many operations are provided in both left-to-right
+ * and right-to-left variants.
+ *)
+[@@description "Polymorphic singly-linked lists."]
 signature LIST =
 sig
-
-  [@@@description "Polymorphic singly-linked lists."]
-  [@@@overview "The `List` structure provides the `list` type and a comprehensive
-set of operations for constructing, examining, and transforming
-singly-linked lists. Many operations are provided in both left-to-right
-and right-to-left variants."]
 
   (** is the type of polymorphic singly-linked lists. *)
   datatype 'a list = nil | `::` of 'a * 'a list
